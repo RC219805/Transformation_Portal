@@ -1,6 +1,8 @@
 """PBR Map File Writer for Lux Depth V3.
 
-Handles atomic writing of PBR maps (normal, roughness, AO) using shared atomic write primitives.
+Handles atomic writing of PBR maps
+(normal, roughness, AO) using shared
+atomic write primitives.
 """
 
 import logging
@@ -16,7 +18,11 @@ logger = logging.getLogger(__name__)
 
 
 def write_pbr_maps(
-    normal_map: np.ndarray, roughness_map: np.ndarray, ao_map: np.ndarray, output_dir: Path, base_name: str
+    normal_map: np.ndarray,
+    roughness_map: np.ndarray,
+    ao_map: np.ndarray,
+    output_dir: Path,
+    base_name: str,
 ) -> Dict[str, Path]:
     """Write PBR maps to disk with atomic operations.
 
@@ -62,7 +68,7 @@ def write_pbr_maps(
             elif map_data.ndim == 3 and map_data.shape[2] == 3:
                 pil_image = Image.fromarray(map_data, "RGB")
             else:
-                raise ValueError(f"Invalid map shape for {map_type}: {map_data.shape}")
+                raise ValueError("Invalid map shape for" f" {map_type}:" f" {map_data.shape}")
 
             # Use shared atomic write helper
             atomic_write_pil_png(output_path, pil_image, optimize=True)

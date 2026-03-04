@@ -11,12 +11,19 @@ All presets are tuned for Lux Depth V3 with Depth Anything V3 metric models
 on Apple Silicon (MPS) or CUDA GPUs.
 
 Example:
-    >>> from transformation_portal.lux_depth_v3.pbr_presets import STANDARD_QUALITY
-    >>> from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
+    >>> from transformation_portal.lux_depth_v3.pbr_presets import (
+    ...     STANDARD_QUALITY,
+    ... )
+    >>> from transformation_portal.lux_depth_v3.orchestrator import (
+    ...     EnhanceOrchestrator,
+    ... )
     >>> orchestrator = EnhanceOrchestrator(STANDARD_QUALITY, output_root)
 """
 
-from transformation_portal.lux_depth_v3.config import EnhanceConfig, ModelVariant
+from transformation_portal.lux_depth_v3.config import (
+    EnhanceConfig,
+    ModelVariant,
+)
 
 # Standard Quality - Balanced preset for typical real estate imagery
 # Throughput: ~200-250 images/hour
@@ -201,7 +208,8 @@ def get_preset(name: str) -> EnhanceConfig:
     """Get preset configuration by name.
 
     Args:
-        name: Preset name (standard, premium, draft, wood, metal, glass, stone, fabric)
+        name: Preset name (standard, premium, draft,
+            wood, metal, glass, stone, fabric)
 
     Returns:
         EnhanceConfig instance
@@ -229,6 +237,7 @@ def list_presets() -> list[str]:
 
     Example:
         >>> list_presets()
-        ['standard', 'premium', 'draft', 'wood', 'metal', 'glass', 'stone', 'fabric']
+        ['standard', 'premium', 'draft', 'wood',
+         'metal', 'glass', 'stone', 'fabric']
     """
     return list(PRESETS.keys())

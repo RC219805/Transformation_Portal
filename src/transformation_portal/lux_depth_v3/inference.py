@@ -5,7 +5,9 @@ Multi-backend support following V2 architecture patterns:
 - CoreML (ANE optimization if V3 models exist)
 - Auto-detection of optimal backend for hardware
 
-Supports standard image formats (JPG, PNG, TIFF) and RAW camera files (CR2, NEF, ARW, DNG).
+Supports standard image formats (JPG, PNG,
+TIFF) and RAW camera files (CR2, NEF, ARW,
+DNG).
 """
 
 from __future__ import annotations
@@ -15,14 +17,19 @@ import time
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
+from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, Dict, Optional, Union
 
 import numpy as np
 from PIL import Image
 
-from transformation_portal.core.security.model_lock import is_model_lock_strict_enabled, resolve_model_lock_revision
+from transformation_portal.core.security.model_lock import (
+    is_model_lock_strict_enabled,
+    resolve_model_lock_revision,
+)
 
-from .config import DA3Config, ModelVariant  # noqa: F401 - Used in docstring examples
+# noqa: F401 - Used in docstring examples
+from .config import DA3Config, ModelVariant  # noqa: F401
 from .raw_loader import is_raw_file
 
 if TYPE_CHECKING:
@@ -99,7 +106,10 @@ class DA3InferenceEngine:
     """
 
     def __init__(
-        self, config: Union[DA3Config, str] = "cpu", commercial_use: bool = True, validate_license_strict: bool = False
+        self,
+        config: Union[DA3Config, str] = "cpu",
+        commercial_use: bool = True,
+        validate_license_strict: bool = False,
     ):
         """Initialize inference engine.
 
@@ -124,7 +134,9 @@ class DA3InferenceEngine:
             device_str = config
             device_config = DeviceConfig(device=device_str)
             config = DA3Config(device=device_config)
-            logger.debug(f"Auto-constructed DA3Config with device={device_str}")
+            logger.debug(
+                "Auto-constructed DA3Config" f" with device={device_str}",
+            )
 
         self.config = config
         self.commercial_use = commercial_use
@@ -143,7 +155,7 @@ class DA3InferenceEngine:
         self._resolved_model_id: Optional[str] = None
 
         logger.info(
-            "Initialized DA3InferenceEngine (variant=%s, backend=%s, device=%s)",
+            "Initialized DA3InferenceEngine" " (variant=%s, backend=%s," " device=%s)",
             config.model_variant.name,
             self.backend.name,
             self.device,
@@ -156,7 +168,9 @@ class DA3InferenceEngine:
         # Phase 3: Check if CoreML is explicitly requested via config
         use_coreml = getattr(self.config.device, "use_coreml", False)
         if use_coreml and self._should_use_coreml():
-            logger.info("CoreML backend enabled via config (5x speedup on Apple Silicon)")
+            logger.info(
+                "CoreML backend enabled via config" " (5x speedup on Apple Silicon)",
+            )
             return ModelBackend.COREML
 
         # Explicit device override
@@ -182,10 +196,10 @@ class DA3InferenceEngine:
         if TORCH_AVAILABLE:
             return ModelBackend.PYTORCH_CPU
 
-        raise RuntimeError("No backend available. Install torch with: pip install torch")
+        raise RuntimeError("No backend available." " Install torch with: pip install torch")
 
     def _should_use_coreml(self) -> bool:
-        """Check if CoreML should be used based on hardware and dependencies."""
+        """Check if CoreML should be used."""
         import platform
 
         # Only on macOS with Apple Silicon
@@ -197,7 +211,9 @@ class DA3InferenceEngine:
 
         # CoreML tools must be available
         if not COREML_AVAILABLE:
-            logger.warning("CoreML requested but coremltools not available. Install: pip install coremltools")
+            logger.warning(
+                "CoreML requested but coremltools" " not available. Install:" " pip install coremltools",
+            )
             return False
 
         if not TORCH_AVAILABLE:
@@ -235,14 +251,17 @@ class DA3InferenceEngine:
     def _load_pytorch_model(self) -> None:
         """Load PyTorch model using transformers pipeline.
 
-        Note: Depth Anything V3 models may not be available in transformers format yet.
-        DA3 Nested models require custom depth-anything-3 library.
-        Falls back to V2 metric models if V3 models are not found.
+        Note: Depth Anything V3 models may not
+        be available in transformers format yet.
+        DA3 Nested models require custom
+        depth-anything-3 library.
+        Falls back to V2 metric models if V3
+        models are not found.
         """
         if not TORCH_AVAILABLE:
-            raise ImportError("torch required for PyTorch backend. Install with: pip install torch")
+            raise ImportError("torch required for PyTorch" " backend. Install with:" " pip install torch")
         if not TRANSFORMERS_AVAILABLE:
-            raise ImportError("transformers required for PyTorch backend. " "Install with: pip install transformers")
+            raise ImportError("transformers required for PyTorch" " backend. Install with:" " pip install transformers")
 
         # Get HuggingFace model ID from config
         model_id = self.config.model_variant.value.huggingface_id
@@ -278,7 +297,10 @@ class DA3InferenceEngine:
             torch_dtype = None
             if use_fp16 and self.device in ("mps", "cuda"):
                 torch_dtype = torch.float16
-                logger.info("Enabling FP16 for %s (1.3-1.5x speedup, 2x memory reduction)", self.device)
+                logger.info(
+                    "Enabling FP16 for %s" " (1.3-1.5x speedup," " 2x memory reduction)",
+                    self.device,
+                )
 
             # Use transformers pipeline for simplicity
             self.model = pipeline(
@@ -292,7 +314,9 @@ class DA3InferenceEngine:
             # Additional FP16 optimization for MPS
             if use_fp16 and self.device == "mps" and hasattr(self.model.model, "half"):
                 self.model.model = self.model.model.half()
-                logger.debug("Applied half precision to model for MPS backend")
+                logger.debug(
+                    "Applied half precision to" " model for MPS backend",
+                )
 
             logger.info("Loaded PyTorch model: %s", model_id)
 
@@ -300,7 +324,11 @@ class DA3InferenceEngine:
             # Try fallback to V2 metric model
             fallback_model = v3_to_v2_fallback.get(model_id)
             if fallback_model:
-                logger.warning("V3 model %s not available, falling back to V2: %s", model_id, fallback_model)
+                logger.warning(
+                    "V3 model %s not available," " falling back to V2: %s",
+                    model_id,
+                    fallback_model,
+                )
                 try:
                     fallback_revision = resolve_model_lock_revision(
                         fallback_model,
@@ -325,7 +353,14 @@ class DA3InferenceEngine:
                     )
 
                     # Additional FP16 optimization for MPS
-                    if use_fp16 and self.device == "mps" and hasattr(self.model.model, "half"):
+                    if (
+                        use_fp16
+                        and self.device == "mps"
+                        and hasattr(
+                            self.model.model,
+                            "half",
+                        )
+                    ):
                         self.model.model = self.model.model.half()
 
                     logger.info("Loaded fallback V2 model: %s", fallback_model)
@@ -335,10 +370,13 @@ class DA3InferenceEngine:
 
                     return
                 except Exception as fallback_error:
-                    logger.error("Fallback model also failed: %s", fallback_error)
+                    logger.error(
+                        "Fallback model also" " failed: %s",
+                        fallback_error,
+                    )
 
             logger.error("Failed to load PyTorch model: %s", e)
-            raise RuntimeError(f"Failed to load model {model_id} (and fallback): {e}") from e
+            raise RuntimeError(f"Failed to load model" f" {model_id}" f" (and fallback): {e}") from e
 
     def _is_da3_model(self, model_id: str) -> bool:
         """Check if model ID is a DA3 Nested model."""
@@ -352,8 +390,11 @@ class DA3InferenceEngine:
             cd depth-anything-3
             pip install -e .
 
-        DA3 uses a different API than transformers:
-            - DepthAnything3.from_pretrained() instead of AutoModelForDepthEstimation
+        DA3 uses a different API than
+        transformers:
+            - DepthAnything3.from_pretrained()
+              instead of
+              AutoModelForDepthEstimation
             - Different inference interface
         """
         try:
@@ -363,27 +404,56 @@ class DA3InferenceEngine:
             try:
                 from depth_anything_3 import DepthAnything3
             except ImportError as e:
+                sep = "=" * 60
                 error_msg = (
-                    f"\n{'='*80}\n"
-                    f"ERROR: DA3 model '{model_id}' requires custom library installation.\n\n"
-                    f"DA3 Nested models use a different API than transformers and require:\n"
-                    f"  1. Clone: git clone https://github.com/ByteDance-Seed/depth-anything-3\n"
-                    f"  2. Install: cd depth-anything-3 && pip install -e .\n\n"
-                    f"The DA3 Nested Giant model combines:\n"
-                    f"  - Giant model for any-view depth\n"
-                    f"  - Metric Large model for metric-scale reconstruction\n"
-                    f"  - 1.40B parameters\n"
-                    f"  - Full capabilities: relative depth, metric depth, pose estimation, 3D Gaussians\n\n"
-                    f"FALLBACK OPTIONS:\n"
-                    f"  - Use DA2 model: depth-anything/Depth-Anything-V2-Large-hf (compatible with transformers)\n"
-                    f"  - Use DA2 metric: depth-anything/Depth-Anything-V2-Metric-Indoor-Large-hf\n\n"
+                    f"\n{sep}\n"
+                    "ERROR: DA3 model"
+                    f" '{model_id}' requires"
+                    " custom library"
+                    " installation.\n\n"
+                    "DA3 Nested models use a"
+                    " different API than"
+                    " transformers and"
+                    " require:\n"
+                    "  1. Clone: git clone"
+                    " https://github.com/"
+                    "ByteDance-Seed/"
+                    "depth-anything-3\n"
+                    "  2. Install: cd"
+                    " depth-anything-3 &&"
+                    " pip install -e .\n\n"
+                    "The DA3 Nested Giant model"
+                    " combines:\n"
+                    "  - Giant model for"
+                    " any-view depth\n"
+                    "  - Metric Large model for"
+                    " metric-scale"
+                    " reconstruction\n"
+                    "  - 1.40B parameters\n"
+                    "  - Full capabilities:"
+                    " relative depth, metric"
+                    " depth, pose estimation,"
+                    " 3D Gaussians\n\n"
+                    "FALLBACK OPTIONS:\n"
+                    "  - Use DA2 model:"
+                    " depth-anything/"
+                    "Depth-Anything-V2-"
+                    "Large-hf\n"
+                    "  - Use DA2 metric:"
+                    " depth-anything/"
+                    "Depth-Anything-V2-"
+                    "Metric-Indoor-Large-hf"
+                    "\n\n"
                     f"Original error: {e}\n"
-                    f"{'='*80}\n"
+                    f"{sep}\n"
                 )
                 logger.error(error_msg)
                 raise ImportError(error_msg) from e
 
-        logger.info(f"Loading DA3 model: {model_id} (using depth-anything-3 library)")
+        logger.info(
+            "Loading DA3 model: %s" " (using depth-anything-3 library)",
+            model_id,
+        )
         strict_enabled = is_model_lock_strict_enabled(None)
         model_revision = resolve_model_lock_revision(
             model_id,
@@ -394,20 +464,31 @@ class DA3InferenceEngine:
 
         try:
             try:
-                self.model = DepthAnything3.from_pretrained(model_id, revision=model_revision)
+                self.model = DepthAnything3.from_pretrained(
+                    model_id,
+                    revision=model_revision,
+                )
             except TypeError:
                 if model_revision and strict_enabled:
                     raise
                 self.model = DepthAnything3.from_pretrained(model_id)
-            self.model.to(self.device)
-            self.model.eval()
+            self.model.to(self.device)  # type: ignore[union-attr]
+            self.model.eval()  # type: ignore[union-attr]
             logger.info("✓ DA3 model loaded successfully")
-            logger.info("DA3 custom API integration active (depth-anything-3 backend)")
+            logger.info(
+                "DA3 custom API integration" " active (depth-anything-3" " backend)",
+            )
         except Exception as e:
             error_msg = (
-                f"Failed to load DA3 model '{model_id}': {e}\n"
-                f"Verify the model ID is correct. Recommended DA3 model:\n"
-                f"  depth-anything/da3nested-giant-large (1.40B params, metric + relative depth)\n"
+                "Failed to load DA3 model"
+                f" '{model_id}': {e}\n"
+                "Verify the model ID is"
+                " correct. Recommended"
+                " DA3 model:\n"
+                "  depth-anything/"
+                "da3nested-giant-large"
+                " (1.40B params, metric +"
+                " relative depth)\n"
             )
             logger.error(error_msg)
             raise RuntimeError(error_msg) from e
@@ -419,7 +500,7 @@ class DA3InferenceEngine:
         Provides 5x inference speedup on Apple Silicon (400ms → 80ms on M4).
         """
         if not COREML_AVAILABLE:
-            raise ImportError("coremltools required for CoreML backend. " "Install with: pip install coremltools")
+            raise ImportError("coremltools required for" " CoreML backend. Install with:" " pip install coremltools")
 
         from .coreml_backend import CoreMLDepthEstimator
 
@@ -430,7 +511,9 @@ class DA3InferenceEngine:
             logger.info(f"Loading CoreML model: {model_id}")
             self.model = CoreMLDepthEstimator(model_id)
 
-            logger.info("✓ CoreML model loaded with ANE acceleration (5x speedup)")
+            logger.info(
+                "CoreML model loaded with" " ANE acceleration (5x speedup)",
+            )
 
         except Exception as e:
             logger.error(f"CoreML model loading failed: {e}")
@@ -441,14 +524,28 @@ class DA3InferenceEngine:
             self.device = "mps"
             self._load_pytorch_model()
 
-    def predict(self, image: Union[np.ndarray, "Image.Image", Path, str, "ImageInput"]) -> DepthResult:
+    def predict(
+        self,
+        image: Union[
+            np.ndarray,
+            "Image.Image",
+            Path,
+            str,
+            "ImageInput",
+        ],
+    ) -> DepthResult:
         """Run depth inference on an image (main API).
 
         Accepts multiple input types for flexibility:
-        - np.ndarray: Direct numpy array (HxWx3/HxWx4/HxW, uint8/uint16/float32/float64)
-        - PIL.Image.Image: PIL Image object (any mode)
-        - Path/str: File path (delegates to infer_from_path)
-        - ImageInput: Path wrapper from input_manager
+        - np.ndarray: Direct numpy array
+          (HxWx3/HxWx4/HxW,
+          uint8/uint16/float32/float64)
+        - PIL.Image.Image: PIL Image object
+          (any mode)
+        - Path/str: File path
+          (delegates to infer_from_path)
+        - ImageInput: Path wrapper from
+          input_manager
 
         Args:
             image: Input image (numpy array, PIL Image, path, or ImageInput)
@@ -476,17 +573,21 @@ class DA3InferenceEngine:
         if isinstance(image, (np.ndarray, Image.Image)):
             return self.infer(image)
 
-        raise TypeError(f"Expected np.ndarray, PIL.Image, Path, str, or ImageInput, got {type(image)}")
+        raise TypeError("Expected np.ndarray, PIL.Image," " Path, str, or ImageInput," f" got {type(image)}")
 
     def infer(self, image: Union[np.ndarray, "Image.Image"]) -> DepthResult:
         """Run depth inference on an image.
 
-        Accepts multiple input types for flexibility:
-        - np.ndarray: Direct numpy array (HxWx3/HxWx4/HxW, uint8/uint16/float32/float64)
-        - PIL.Image.Image: PIL Image object (any mode)
+        Accepts multiple input types:
+        - np.ndarray: Direct numpy array
+          (HxWx3/HxWx4/HxW,
+          uint8/uint16/float32/float64)
+        - PIL.Image.Image: PIL Image object
+          (any mode)
 
         Args:
-            image: Input image as numpy array or PIL Image
+            image: Input image as numpy array
+                or PIL Image
 
         Returns:
             DepthResult with depth map and metadata
@@ -501,7 +602,8 @@ class DA3InferenceEngine:
 
         # Normalize input to canonical uint8 RGB numpy + PIL Image
         if isinstance(image, Image.Image):
-            # PIL Image input: convert to RGB (drop alpha, convert grayscale/palette)
+            # PIL Image input: convert to RGB
+            # (drop alpha, convert grayscale/palette)
             pil_image = image.convert("RGB")
             # Canonical original_image: uint8 RGB numpy
             original_image = np.array(pil_image, dtype=np.uint8)
@@ -516,9 +618,10 @@ class DA3InferenceEngine:
                     gray = np.clip(image, 0, 1) * 255
                     gray = gray.astype(np.uint8)
                 elif image.dtype == np.uint16:
-                    gray = (image / 256).astype(np.uint8)  # Scale 16-bit → 8-bit
+                    # Scale 16-bit -> 8-bit
+                    gray = (image / 256).astype(np.uint8)
                 else:
-                    raise ValueError(f"Unsupported grayscale dtype: {image.dtype}")
+                    raise ValueError("Unsupported grayscale" f" dtype: {image.dtype}")
 
                 # Convert grayscale to RGB by repeating channel
                 rgb_uint8 = np.stack([gray, gray, gray], axis=-1)
@@ -540,7 +643,7 @@ class DA3InferenceEngine:
                         # Scale 16-bit → 8-bit
                         rgb_uint8 = (image / 256).astype(np.uint8)
                     else:
-                        raise ValueError(f"Unsupported RGB dtype: {image.dtype}")
+                        raise ValueError("Unsupported RGB" f" dtype: {image.dtype}")
 
                     pil_image = Image.fromarray(rgb_uint8, mode="RGB")
                     original_image = rgb_uint8
@@ -555,7 +658,7 @@ class DA3InferenceEngine:
                     elif image.dtype == np.uint16:
                         rgba = (image / 256).astype(np.uint8)
                     else:
-                        raise ValueError(f"Unsupported RGBA dtype: {image.dtype}")
+                        raise ValueError("Unsupported RGBA" f" dtype: {image.dtype}")
 
                     # Drop alpha channel
                     rgb_uint8 = rgba[:, :, :3]
@@ -564,17 +667,25 @@ class DA3InferenceEngine:
 
                 else:
                     raise ValueError(
-                        f"Expected 3 or 4 channels, got {c}. " f"Supported: HxWx3 (RGB), HxWx4 (RGBA), HxW (grayscale)"
+                        f"Expected 3 or 4 channels,"
+                        f" got {c}. Supported:"
+                        " HxWx3 (RGB),"
+                        " HxWx4 (RGBA),"
+                        " HxW (grayscale)"
                     )
 
             else:
                 raise ValueError(
-                    f"Expected 2D (grayscale) or 3D (RGB/RGBA) array, got shape {image.shape}. "
-                    f"Batched inputs not supported—process images one at a time."
+                    "Expected 2D (grayscale) or"
+                    " 3D (RGB/RGBA) array, got"
+                    f" shape {image.shape}."
+                    " Batched inputs not"
+                    " supported—process images"
+                    " one at a time."
                 )
 
         else:
-            raise TypeError(f"Expected numpy array or PIL.Image, got {type(image)}")
+            raise TypeError("Expected numpy array or" f" PIL.Image, got {type(image)}")
 
         # Run inference based on backend
         start_time = time.time()
@@ -585,7 +696,8 @@ class DA3InferenceEngine:
             image_float32 = original_image.astype(np.float32) / 255.0
             result = self._estimate_depth_coreml(image_float32)
         else:
-            # PyTorch path: pass PIL Image (DA3 and transformers both accept PIL)
+            # PyTorch path: pass PIL Image
+            # (DA3 and transformers both accept PIL)
             result = self._estimate_depth_pytorch(pil_image)
 
         inference_time_ms = (time.time() - start_time) * 1000
@@ -604,7 +716,8 @@ class DA3InferenceEngine:
             result["metadata"]["using_fallback"] = True
             result["metadata"]["fallback_model"] = self._fallback_model_id
 
-        # CRITICAL: original_image is now ALWAYS uint8 RGB regardless of input type
+        # CRITICAL: original_image is now ALWAYS
+        # uint8 RGB regardless of input type
         return DepthResult(
             depth_map=result["depth"],
             original_image=original_image,  # Canonical uint8 RGB numpy
@@ -614,10 +727,13 @@ class DA3InferenceEngine:
     def infer_from_path(self, image_path: Path) -> DepthResult:
         """Run depth inference on an image file.
 
-        Supports standard image formats (JPG, PNG, TIFF) and RAW camera files (CR2, NEF, ARW, DNG).
+        Supports standard image formats
+        (JPG, PNG, TIFF) and RAW camera files
+        (CR2, NEF, ARW, DNG).
 
         Args:
-            image_path: Path to input image (standard or RAW format)
+            image_path: Path to input image
+                (standard or RAW format)
 
         Returns:
             DepthResult with depth map and metadata
@@ -625,8 +741,19 @@ class DA3InferenceEngine:
         if is_raw_file(image_path):
             from .ingest_adapter import decode_for_lux_depth
 
-            logger.debug("Routing RAW input through canonical ingest contract: %s", image_path.name)
-            decoded = decode_for_lux_depth(image_path, self.config)
+            logger.debug(
+                "Routing RAW input through" " canonical ingest contract:" " %s",
+                image_path.name,
+            )
+            ingest_cfg = SimpleNamespace(
+                raw_ingest_mode="auto",
+                raw_wb_mode="camera",
+                raw_demosaic="AHD",
+            )
+            decoded = decode_for_lux_depth(
+                image_path,
+                ingest_cfg,  # type: ignore[arg-type]
+            )
             image_np = (np.clip(decoded, 0.0, 1.0) * 255.0).astype(np.uint8)
         else:
             image = Image.open(image_path).convert("RGB")
@@ -657,7 +784,10 @@ class DA3InferenceEngine:
 
         if is_da3_model:
             # DA3 models use inference() method with list of images
-            prediction = self.model.inference([image])
+            assert self.model is not None
+            prediction = self.model.inference(  # type: ignore[union-attr]
+                [image],
+            )
             # DA3 returns Prediction object with .depth attribute (1, H, W)
             depth_raw = prediction.depth[0]  # Remove batch dimension
 
@@ -666,6 +796,7 @@ class DA3InferenceEngine:
                 depth_raw = depth_raw.cpu().numpy()
         elif hasattr(self.model, "__call__"):
             # Transformers pipeline models
+            assert self.model is not None
             prediction = self.model(image)
             depth_raw = prediction["depth"]
 
@@ -680,11 +811,16 @@ class DA3InferenceEngine:
         # Normalize to [0, 1]
         depth_min = depth_raw.min()
         depth_max = depth_raw.max()
-        depth_normalized = (depth_raw - depth_min) / (depth_max - depth_min + 1e-8)
+        depth_range = depth_max - depth_min + 1e-8
+        depth_normalized = (depth_raw - depth_min) / depth_range
 
         return {
-            "depth": depth_normalized.astype(np.float32),
-            "depth_raw": depth_raw.astype(np.float32),
+            "depth": depth_normalized.astype(
+                np.float32,
+            ),
+            "depth_raw": depth_raw.astype(
+                np.float32,
+            ),
             "metadata": {
                 "shape": depth_normalized.shape,
             },
@@ -716,11 +852,16 @@ class DA3InferenceEngine:
         # Normalize to [0, 1]
         depth_min = depth_raw.min()
         depth_max = depth_raw.max()
-        depth_normalized = (depth_raw - depth_min) / (depth_max - depth_min + 1e-8)
+        depth_range = depth_max - depth_min + 1e-8
+        depth_normalized = (depth_raw - depth_min) / depth_range
 
         return {
-            "depth": depth_normalized.astype(np.float32),
-            "depth_raw": depth_raw.astype(np.float32),
+            "depth": depth_normalized.astype(
+                np.float32,
+            ),
+            "depth_raw": depth_raw.astype(
+                np.float32,
+            ),
             "metadata": {
                 "shape": depth_normalized.shape,
             },

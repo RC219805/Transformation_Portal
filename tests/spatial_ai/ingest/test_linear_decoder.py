@@ -814,6 +814,42 @@ class TestColorMatrixSelection:
         assert result.shape == (9,)
         assert np.allclose(result, np.eye(3).reshape(9))
 
+    def test_3x4_color_matrix_is_contracted_to_3x3(self):
+        """LibRaw/rawpy 3x4 color_matrix should be accepted via deterministic 3x3 contraction."""
+        matrix_3x4 = np.array(
+            [
+                [1.0, 0.1, 0.2, 0.9],
+                [0.3, 1.1, 0.4, 0.8],
+                [0.5, 0.6, 1.2, 0.7],
+            ],
+            dtype=np.float64,
+        )
+
+        result = self.decoder._select_valid_color_matrix(matrix_3x4, None)
+
+        assert result is not None
+        assert result.shape == (9,)
+        assert np.allclose(result, matrix_3x4[:, :3].reshape(9))
+
+    def test_4x3_rgb_xyz_matrix_fallback_is_contracted_to_3x3(self):
+        """LibRaw/rawpy 4x3 rgb_xyz_matrix fallback should be accepted via deterministic 3x3 contraction."""
+        invalid_primary = np.zeros((3, 3), dtype=np.float64)  # Force fallback path
+        matrix_4x3 = np.array(
+            [
+                [0.9, 0.1, 0.2],
+                [0.3, 1.0, 0.4],
+                [0.5, 0.6, 1.1],
+                [0.7, 0.8, 0.9],
+            ],
+            dtype=np.float64,
+        )
+
+        result = self.decoder._select_valid_color_matrix(invalid_primary, matrix_4x3)
+
+        assert result is not None
+        assert result.shape == (9,)
+        assert np.allclose(result, matrix_4x3[:3, :].reshape(9))
+
     def test_3x3_zero_ndarray_falls_back(self):
         """A (3, 3) all-zero array must still trigger fallback."""
         valid_fallback = [0.4, 0.3, 0.3, 0.2, 0.6, 0.2, 0.05, 0.1, 0.85]

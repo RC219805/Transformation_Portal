@@ -1,7 +1,8 @@
 """Orchestrator for V3 depth + V2 enhancement pipeline.
 
 Two-stage pipeline:
-1. Stage A (V3): Generate depth assets using DA3 (Inference -> Post-Processing -> Write)
+1. Stage A (V3): Generate depth assets using
+   DA3 (Inference -> Post-Processing -> Write)
 2. Stage B (V2): Consume depth assets -> V2 Subprocess -> Output
 
 Improvements implemented (per requirements):
@@ -44,12 +45,17 @@ except ImportError:
     XXHASH_AVAILABLE = False
     xxhash = None  # type: ignore
 
-from ..depth.backends.protocol import LicenseRestrictionError
+from ..depth.backends.protocol import (
+    DepthBackend,
+    LicenseRestrictionError,
+)
 
 # Backend registry for depth estimation
 from ..depth.backends.registry import DepthBackendRegistry
 from ..ingest.canonical_json import dump_json, dumps_json
-from ..spatial_ai.reconstruction.contracts import LicenseRestrictionError as ReconstructionLicenseRestrictionError
+from ..spatial_ai.reconstruction.contracts import (  # noqa: E501
+    LicenseRestrictionError as ReconstructionLicenseRestrictionError,
+)
 from .batch_stats import compute_batch_runtime_stats, detect_runtime_outliers
 from .camera_metadata_loader import load_scene_cameras, load_sidecar_payload
 
@@ -67,7 +73,6 @@ from .manifest import (
     ConfigFingerprint,
     DepthMetadata,
     InputMetadata,
-    MaterialsV3Metadata,
     ReproMetadata,
     TimingMetadata,
     V2Metadata,
@@ -78,7 +83,11 @@ from .manifest import (
 from .pbr import generate_pbr_maps
 from .pbr_writer import write_pbr_maps
 from .postprocessing import Postprocessor
-from .provenance import ExiftoolNotFoundError, ProvenanceError, capture_provenance
+from .provenance import (
+    ExiftoolNotFoundError,
+    ProvenanceError,
+    capture_provenance,
+)
 from .reconstruction_runner import (
     diagnostics_artifact_path,
     manifest_artifact_path,
@@ -96,8 +105,15 @@ from .scene_integrity import (
     verify_scene_integrity,
     write_scene_manifest,
 )
-from .scene_preflight import validate_scene_preflight, write_scene_preflight_artifact
-from .security import HashMode, sanitize_file_stem, sanitize_path_component_nonlossy
+from .scene_preflight import (
+    validate_scene_preflight,
+    write_scene_preflight_artifact,
+)
+from .security import (
+    HashMode,
+    sanitize_file_stem,
+    sanitize_path_component_nonlossy,
+)
 from .v2_runner import V2Runner, find_v2_report
 
 logger = logging.getLogger(__name__)
@@ -106,7 +122,12 @@ logger = logging.getLogger(__name__)
 class ApexStrictGateError(RuntimeError):
     """Raised when APEX strict quality gates are violated."""
 
-    def __init__(self, code: str, message: str, details: Optional[Dict[str, Any]] = None):
+    def __init__(
+        self,
+        code: str,
+        message: str,
+        details: Optional[Dict[str, Any]] = None,
+    ):
         self.code = code
         self.details = details or {}
         super().__init__(f"[{code}] {message}")
@@ -136,7 +157,7 @@ def _log_dependency_status() -> dict:
         logger.debug(f"torch {version} available")
     except ImportError:
         status["torch"] = False
-        logger.info("torch not available - ML features disabled. Install: pip install torch")
+        logger.info("torch not available - ML features" " disabled. Install:" " pip install torch")
 
     # Check transformers
     try:
@@ -147,7 +168,7 @@ def _log_dependency_status() -> dict:
         logger.debug(f"transformers {version} available")
     except ImportError:
         status["transformers"] = False
-        logger.info("transformers not available - depth models disabled. Install: pip install transformers")
+        logger.info("transformers not available -" " depth models disabled." " Install:" " pip install transformers")
 
     # Check coremltools (optional)
     try:
@@ -158,7 +179,7 @@ def _log_dependency_status() -> dict:
         logger.debug(f"coremltools {version} available")
     except ImportError:
         status["coremltools"] = False
-        logger.debug("coremltools not available (optional). Install: pip install coremltools")
+        logger.debug("coremltools not available" " (optional). Install:" " pip install coremltools")
 
     # Check scikit-image (optional for some features)
     try:
@@ -169,32 +190,38 @@ def _log_dependency_status() -> dict:
         logger.debug(f"scikit-image {version} available")
     except ImportError:
         status["scikit-image"] = False
-        logger.debug("scikit-image not available (optional for advanced filtering)")
+        logger.debug("scikit-image not available" " (optional for advanced" " filtering)")
 
     # Check numba (optional performance enhancement)
     try:
         import numba
 
         status["numba"] = True
-        logger.debug(f"numba {numba.__version__} available - performance optimizations enabled")
+        logger.debug(
+            "numba %s available -" " performance optimizations" " enabled",
+            numba.__version__,
+        )
     except ImportError:
         status["numba"] = False
-        logger.debug("numba not available - using NumPy fallback (30-50% slower for some operations)")
+        logger.debug("numba not available - using" " NumPy fallback (30-50%% slower" " for some operations)")
 
     # Check HF_TOKEN for model downloads
     hf_token = os.environ.get("HF_TOKEN")
     status["hf_token"] = bool(hf_token)
     if hf_token:
-        logger.debug("HF_TOKEN present - authenticated model downloads enabled")
+        logger.debug("HF_TOKEN present - authenticated" " model downloads enabled")
     else:
-        logger.debug("HF_TOKEN not set - using unauthenticated downloads (rate limits apply, slower warm starts)")
-        logger.debug("  Set HF_TOKEN for faster downloads: export HF_TOKEN=<your_token>")
+        logger.debug("HF_TOKEN not set - using" " unauthenticated downloads" " (rate limits apply, slower" " warm starts)")
+        logger.debug("  Set HF_TOKEN for faster" " downloads: export" " HF_TOKEN=<your_token>")
 
     return status
 
 
 @lru_cache(maxsize=128)
-def _load_manifest_cached(manifest_path: str, mtime: float) -> CombinedManifest:
+def _load_manifest_cached(
+    manifest_path: str,
+    mtime: float,
+) -> CombinedManifest:
     """Cache manifests by path + modification time.
 
     Reduces I/O by 15-20% by avoiding redundant manifest loads during:
@@ -212,7 +239,11 @@ def _load_manifest_cached(manifest_path: str, mtime: float) -> CombinedManifest:
     return CombinedManifest.load(Path(manifest_path))
 
 
-def make_output_key(input_path: Path, input_root: Path, use_xxhash: bool = XXHASH_AVAILABLE) -> Path:
+def make_output_key(
+    input_path: Path,
+    input_root: Path,
+    use_xxhash: bool = XXHASH_AVAILABLE,
+) -> Path:
     """Compute a stable, sanitized output key for a given input image.
 
     The final key preserves the relative directory shape under ``input_root``
@@ -238,14 +269,19 @@ def make_output_key(input_path: Path, input_root: Path, use_xxhash: bool = XXHAS
     ext = relpath.suffix
 
     sanitized_parts = [sanitize_path_component_nonlossy(p) for p in rel_dir.parts]
-    ext_label = sanitize_path_component_nonlossy(ext.lstrip(".").lower() if ext else "noext")
+    ext_label = sanitize_path_component_nonlossy(
+        ext.lstrip(".").lower() if ext else "noext",
+    )
 
     hash_input = relpath.as_posix().encode("utf-8")
 
     if use_xxhash and XXHASH_AVAILABLE:
         hash_suffix = xxhash.xxh64(hash_input).hexdigest()[:8]
     else:
-        hash_suffix = hashlib.sha1(hash_input, usedforsecurity=False).hexdigest()[:8]
+        hash_suffix = hashlib.sha1(
+            hash_input,
+            usedforsecurity=False,
+        ).hexdigest()[:8]
 
     stem_sanitized = sanitize_path_component_nonlossy(name)
     key_name = f"{stem_sanitized}_{ext_label}_{hash_suffix}"
@@ -271,21 +307,27 @@ def _load_run_card_validator(schema_path_str: str) -> Any:
     """Build cached Draft202012 validator for run card schema."""
     try:
         import jsonschema
-    except ImportError as exc:  # pragma: no cover - dependency is pinned, guard for runtime safety
-        raise RuntimeError("jsonschema dependency is required for run card schema validation") from exc
+    except ImportError as exc:  # pragma: no cover
+        raise RuntimeError("jsonschema dependency is required" " for run card schema validation") from exc
 
     schema = _load_run_card_schema(schema_path_str)
     try:
         jsonschema.Draft202012Validator.check_schema(schema)
     except jsonschema.exceptions.SchemaError as exc:
-        raise RuntimeError(f"Run card schema is invalid: {exc.message}") from exc
+        raise RuntimeError("Run card schema is invalid:" f" {exc.message}") from exc
     return jsonschema.Draft202012Validator(schema)
 
 
-def _validate_run_card_payload(payload: Dict[str, Any], schema_path: Path) -> None:
+def _validate_run_card_payload(
+    payload: Dict[str, Any],
+    schema_path: Path,
+) -> None:
     """Validate run card payload against run_card.v1 schema."""
     validator = _load_run_card_validator(str(schema_path))
-    errors = sorted(validator.iter_errors(payload), key=lambda error: list(error.path))
+    errors = sorted(
+        validator.iter_errors(payload),
+        key=lambda error: list(error.path),
+    )
     if not errors:
         return
 
@@ -293,14 +335,20 @@ def _validate_run_card_payload(payload: Dict[str, Any], schema_path: Path) -> No
     for error in errors:
         path = ".".join(str(p) for p in error.path) or "<root>"
         formatted.append(f"{path}: {error.message}")
-    raise RuntimeError("Run card schema validation failed: " + "; ".join(formatted))
+    raise RuntimeError("Run card schema validation" " failed: " + "; ".join(formatted))
 
 
 def _validate_run_card_backend_semantics(payload: Dict[str, Any]) -> None:
     """Validate backend resolution semantics for run-card transparency."""
     backend_selection = payload.get("backend_selection")
     backend_summary = payload.get("backend_summary")
-    if not isinstance(backend_selection, dict) or not isinstance(backend_summary, dict):
+    if not isinstance(
+        backend_selection,
+        dict,
+    ) or not isinstance(
+        backend_summary,
+        dict,
+    ):
         return
 
     final_backends_used = backend_summary.get("final_backends_used")
@@ -315,7 +363,10 @@ def _validate_run_card_backend_semantics(payload: Dict[str, Any]) -> None:
         if success_count > 0:
             raise RuntimeError(
                 "Run card backend semantics validation failed: "
-                "backend_summary.final_backends_used must be non-empty when success_count > 0."
+                "backend_summary"
+                ".final_backends_used must be"
+                " non-empty when"
+                " success_count > 0."
             )
         return
 
@@ -323,26 +374,32 @@ def _validate_run_card_backend_semantics(payload: Dict[str, Any]) -> None:
     if not isinstance(primary_backend, str) or not primary_backend:
         raise RuntimeError(
             "Run card backend semantics validation failed: "
-            "backend_summary.final_backends_used[0] must be a non-empty string."
+            "backend_summary"
+            ".final_backends_used[0]"
+            " must be a non-empty string."
         )
 
     summary_primary = backend_summary.get("primary_backend")
     if summary_primary != primary_backend:
         raise RuntimeError(
             "Run card backend semantics validation failed: "
-            "backend_summary.primary_backend must equal backend_summary.final_backends_used[0]."
+            "backend_summary.primary_backend"
+            " must equal backend_summary"
+            ".final_backends_used[0]."
         )
 
     resolved = backend_selection.get("resolved")
     if not isinstance(resolved, str) or not resolved:
         raise RuntimeError(
-            "Run card backend semantics validation failed: " "backend_selection.resolved must be a non-empty string."
+            "Run card backend semantics" " validation failed:" " backend_selection.resolved" " must be a non-empty string."
         )
 
     if resolved != primary_backend:
         raise RuntimeError(
             "Run card backend semantics validation failed: "
-            "backend_selection.resolved must match backend_summary.final_backends_used[0]."
+            "backend_selection.resolved"
+            " must match backend_summary"
+            ".final_backends_used[0]."
         )
 
     logical_backend = backend_selection.get("logical_backend")
@@ -354,29 +411,43 @@ def _validate_run_card_backend_semantics(payload: Dict[str, Any]) -> None:
     if not isinstance(logical_backend, str) or not logical_backend:
         raise RuntimeError(
             "Run card backend semantics validation failed: "
-            "backend_selection.logical_backend must be a non-empty string when wrapper semantics are declared."
+            "backend_selection"
+            ".logical_backend must be a"
+            " non-empty string when wrapper"
+            " semantics are declared."
         )
     if not isinstance(resolved_engine, str) or not resolved_engine:
         raise RuntimeError(
             "Run card backend semantics validation failed: "
-            "backend_selection.resolved_engine must be a non-empty string when wrapper semantics are declared."
+            "backend_selection"
+            ".resolved_engine must be a"
+            " non-empty string when wrapper"
+            " semantics are declared."
         )
     if logical_backend == resolved_engine:
         raise RuntimeError(
             "Run card backend semantics validation failed: "
-            "backend_selection.logical_backend and backend_selection.resolved_engine must differ."
+            "backend_selection"
+            ".logical_backend and"
+            " backend_selection"
+            ".resolved_engine must differ."
         )
     if resolved_engine != primary_backend:
         raise RuntimeError(
             "Run card backend semantics validation failed: "
-            "backend_selection.resolved_engine must match backend_summary.final_backends_used[0]."
+            "backend_selection"
+            ".resolved_engine must match"
+            " backend_summary"
+            ".final_backends_used[0]."
         )
 
     fallback_images = backend_summary.get("fallback_images")
     if isinstance(fallback_images, int) and fallback_images != 0:
         raise RuntimeError(
             "Run card backend semantics validation failed: "
-            "wrapper semantics are only valid when backend_summary.fallback_images == 0."
+            "wrapper semantics are only"
+            " valid when backend_summary"
+            ".fallback_images == 0."
         )
 
 
@@ -453,15 +524,23 @@ def _infer_artifact_type(relative_path: str) -> str:
     return "artifact"
 
 
-def _v2_log_filename(output_key_name: str, batch_id: Optional[str] = None) -> str:
+def _v2_log_filename(
+    output_key_name: str,
+    batch_id: Optional[str] = None,
+) -> str:
     """Build deterministic, batch-scoped V2 log filename."""
     filename = f"v2_{output_key_name}"
     if batch_id:
-        filename += f"__{sanitize_path_component_nonlossy(str(batch_id))}"
+        filename += "__" + sanitize_path_component_nonlossy(
+            str(batch_id),
+        )
     return f"{filename}.log"
 
 
-def _build_artifact_index(output_root: Path, artifact_paths: List[Path]) -> List[Dict[str, Any]]:
+def _build_artifact_index(
+    output_root: Path,
+    artifact_paths: List[Path],
+) -> List[Dict[str, Any]]:
     """Build deterministic artifact index with size and SHA256."""
     root_resolved = output_root.resolve()
     index_by_relative_path: Dict[str, Dict[str, Any]] = {}
@@ -472,7 +551,11 @@ def _build_artifact_index(output_root: Path, artifact_paths: List[Path]) -> List
         except FileNotFoundError:
             continue
         except OSError as exc:
-            logger.debug(f"Skipping artifact path due to resolution error ({candidate}): {exc}")
+            logger.debug(
+                "Skipping artifact path due" " to resolution error" " (%s): %s",
+                candidate,
+                exc,
+            )
             continue
 
         if not resolved.is_file():
@@ -481,7 +564,10 @@ def _build_artifact_index(output_root: Path, artifact_paths: List[Path]) -> List
         try:
             relative_path = resolved.relative_to(root_resolved).as_posix()
         except ValueError:
-            logger.debug(f"Skipping artifact outside output root: {resolved}")
+            logger.debug(
+                "Skipping artifact outside" " output root: %s",
+                resolved,
+            )
             continue
 
         if relative_path in index_by_relative_path:
@@ -499,14 +585,19 @@ def _build_artifact_index(output_root: Path, artifact_paths: List[Path]) -> List
     return [index_by_relative_path[path] for path in sorted(index_by_relative_path)]
 
 
-def _compute_artifact_merkle_root(artifact_index: List[Dict[str, Any]]) -> str:
-    """Compute deterministic run-card Merkle root over artifact SHA256 digests."""
-    sorted_artifacts = sorted(artifact_index, key=lambda item: item["relative_path"])
+def _compute_artifact_merkle_root(
+    artifact_index: List[Dict[str, Any]],
+) -> str:
+    """Compute deterministic Merkle root over artifact SHA256."""
+    sorted_artifacts = sorted(
+        artifact_index,
+        key=lambda item: item["relative_path"],
+    )
     leaves = []
     for artifact in sorted_artifacts:
         digest = artifact.get("sha256")
         if not isinstance(digest, str) or len(digest) != 64:
-            raise RuntimeError(f"Invalid artifact sha256 in run card index: {digest!r}")
+            raise RuntimeError("Invalid artifact sha256 in" f" run card index: {digest!r}")
         leaves.append(bytes.fromhex(digest))
 
     return hashlib.sha256(b"".join(leaves)).hexdigest()
@@ -518,16 +609,25 @@ class EnhanceOrchestrator:
     Attributes:
         config: Enhancement configuration
         output_root: Base directory for all outputs
-        verify_outputs: If True, verify cached outputs exist on disk before skipping (defensive check)
+        verify_outputs: If True, verify cached
+            outputs exist on disk before
+            skipping (defensive check)
     """
 
-    def __init__(self, config: EnhanceConfig, output_root: Path, verify_outputs: bool = True):
+    def __init__(
+        self,
+        config: EnhanceConfig,
+        output_root: Path,
+        verify_outputs: bool = True,
+    ):
         """Initialize the orchestrator.
 
         Args:
             config: Enhancement configuration object
             output_root: Base directory to store outputs and manifests
-            verify_outputs: Whether to verify cached outputs exist before skipping (default: True)
+            verify_outputs: Whether to verify
+                cached outputs exist before
+                skipping (default: True)
         """
         # Log dependency status on first initialization
         _log_dependency_status()
@@ -537,7 +637,7 @@ class EnhanceOrchestrator:
         self.verify_outputs = verify_outputs
 
         if config.hash_mode == HashMode.NEVER:
-            logger.warning("Hash mode set to 'never' - manifests will lack integrity verification.")
+            logger.warning("Hash mode set to 'never'" " - manifests will lack" " integrity verification.")
 
         # Create output directories
         self.depth_dir = self.output_root / "depth"
@@ -563,11 +663,15 @@ class EnhanceOrchestrator:
         # Note: zones_dir intentionally NOT created here
         # Will be created on-demand when zoning features are implemented
 
-        # Initialize V3 Configuration (Priority: User Override > Preset > Default)
+        # Initialize V3 Configuration
+        # (Priority: User Override > Preset > Default)
         if config.preset is not None:
             da3_config = DA3Config.from_preset(config.preset)
             if config.model_variant is not None:
-                logger.info(f"Overriding preset model with user choice: {config.model_variant.value.display_name}")
+                logger.info(
+                    "Overriding preset model" " with user choice: %s",
+                    config.model_variant.value.display_name,
+                )
                 da3_config.model_variant = config.model_variant
             else:
                 config.model_variant = da3_config.model_variant
@@ -579,39 +683,54 @@ class EnhanceOrchestrator:
         da3_config.device.device = config.depth_device
 
         # Initialize Depth Backend via Registry (ADR-019)
+        self.depth_backend: Optional[DepthBackend] = None
         self._initialize_depth_backend()
 
-        # Initialize Postprocessor (FIX: Ensures refine_edges/bilateral settings from preset are applied)
+        # Initialize Postprocessor
+        # (FIX: Ensures refine_edges/bilateral
+        # settings from preset are applied)
         self.postprocessor = Postprocessor(da3_config.postprocessing)
 
         # Initialize Materials V3 Engine (if enabled)
+        self.materials_v3_engine: Optional[Any] = None
         if config.enable_materials_v3:
             from .materials_v3 import MaterialsV3Engine
 
             self.materials_v3_engine = MaterialsV3Engine(config)
             logger.info("Materials V3 surface-aware finishing enabled")
-        else:
-            self.materials_v3_engine = None
-
         # Initialize V2 Runner and Environment (with fail-fast validation)
+        self.v2_runner: Optional[V2Runner] = None
         if config.enable_v2 and config.v2_preset is not None:
             self.v2_runner = V2Runner()
             # Fail-fast: Validate V2 script exists before processing
             if not self.v2_runner.script_path.exists():
                 raise FileNotFoundError(
-                    f"V2 enhancement script not found: {self.v2_runner.script_path}\n"
-                    f"Required location: scripts/enhance_image.py in repository root\n"
-                    f"\nOptions:\n"
-                    f"  1. Create the V2 enhancement script at the expected location\n"
-                    f"  2. Set enable_v2=False for PBR-only workflows\n"
-                    f"  3. Set v2_preset=None to skip V2 stage"
+                    "V2 enhancement script"
+                    " not found:"
+                    f" {self.v2_runner.script_path}"
+                    "\nRequired location:"
+                    " scripts/enhance_image.py"
+                    " in repository root"
+                    "\n\nOptions:\n"
+                    "  1. Create the V2"
+                    " enhancement script at"
+                    " the expected location\n"
+                    "  2. Set enable_v2=False"
+                    " for PBR-only workflows\n"
+                    "  3. Set v2_preset=None"
+                    " to skip V2 stage"
                 )
-            logger.info(f"V2 enhancement enabled with script: {self.v2_runner.script_path}")
+            logger.info(
+                "V2 enhancement enabled" " with script: %s",
+                self.v2_runner.script_path,
+            )
         else:
-            self.v2_runner = None
-            logger.info("V2 enhancement disabled (PBR-only mode)")
+            logger.info(
+                "V2 enhancement disabled" " (PBR-only mode)",
+            )
 
-        # Adjusted path logic for src/transformation_portal/lux_depth_v3 location
+        # Adjusted path logic for
+        # src/transformation_portal/lux_depth_v3
         repo_root = Path(__file__).resolve().parent.parent.parent.parent
         git_rev = get_git_revision(repo_root)
         self.v3_git = git_rev
@@ -635,7 +754,10 @@ class EnhanceOrchestrator:
                 self.max_workers = min(2, cpu_count())
             # Store GPU-specific limit separately for inference stage
             self.max_gpu_workers = max_gpu_workers_override if max_gpu_workers_override is not None else self.max_workers
-            logger.debug(f"GPU/MPS device detected - limiting workers to {self.max_workers} for VRAM management")
+            logger.debug(
+                "GPU/MPS device detected -" " limiting workers to %d" " for VRAM management",
+                self.max_workers,
+            )
         else:
             # CPU backend: moderate parallelism for I/O-bound operations
             if max_workers_override is not None:
@@ -645,17 +767,52 @@ class EnhanceOrchestrator:
             self.max_gpu_workers = self.max_workers
 
         self._use_parallel = config.enable_parallel_processing
-        logger.debug(f"Parallel processing: {'enabled' if self._use_parallel else 'disabled'} (workers={self.max_workers})")
+        _par_label = "enabled" if self._use_parallel else "disabled"
+        logger.debug(
+            "Parallel processing: %s" " (workers=%d)",
+            _par_label,
+            self.max_workers,
+        )
 
         # Phase 2: Content-addressable depth cache (opt-in)
         self.depth_cache = (
-            DepthCache(self.output_root, max_size_gb=config.depth_cache_max_size_gb) if config.enable_depth_cache else None
+            DepthCache(
+                self.output_root,
+                max_size_gb=(config.depth_cache_max_size_gb),
+            )
+            if config.enable_depth_cache
+            else None
         )
         if self.depth_cache:
-            logger.info(f"Depth cache enabled: {self.depth_cache.cache_dir}")
+            logger.info(
+                "Depth cache enabled: %s",
+                self.depth_cache.cache_dir,
+            )
 
         # Injectable seam for lightweight reconstruction tests.
         self.run_scene_reconstruction_fn: Callable[..., Path] = run_scene_reconstruction
+
+        # Per-batch / per-image state (set during enhance_batch)
+        self._backend_metadata: BackendSelectionMetadata = BackendSelectionMetadata(
+            requested_backend=None,
+            resolved_backend="pending",
+            resolution_status="pending",
+            resolution_reason=None,
+            model_id="",
+            device=config.depth_device,
+            attempts=[],
+        )
+        self._active_batch_id: Optional[str] = None
+        self._active_backend_metadata: Optional[BackendSelectionMetadata] = None
+        self._active_depth_attempts: List[Dict[str, Any]] = []
+        self._active_selected_attempt_index: Optional[int] = None
+
+    @property
+    def _model_variant(self) -> ModelVariant:
+        """Return model_variant; guaranteed set after __init__."""
+        mv = self.config.model_variant
+        assert mv is not None, "model_variant must be set"
+        return mv
 
     def _initialize_depth_backend(self) -> None:
         """Initialize depth backend using registry (ADR-019).
@@ -671,7 +828,13 @@ class EnhanceOrchestrator:
         self._depth_registry = DepthBackendRegistry()
         self._depth_backend_cache: Dict[str, Any] = {}
 
-        allow_synthetic = bool(self.config.allow_synthetic_fallback) or os.getenv("TP_ALLOW_SYNTHETIC_FALLBACK") == "1"
+        allow_synthetic = (
+            bool(self.config.allow_synthetic_fallback)
+            or os.getenv(
+                "TP_ALLOW_SYNTHETIC_FALLBACK",
+            )
+            == "1"
+        )
         candidate_chain: List[str] = [requested]
         for fallback_backend in ("da3", "da2"):
             if fallback_backend not in candidate_chain:
@@ -688,23 +851,29 @@ class EnhanceOrchestrator:
 
             for index, backend_id in enumerate(candidate_chain):
                 try:
-                    candidate_backend = self._depth_registry.get_backend(backend_id, self.config)
+                    candidate_backend = self._depth_registry.get_backend(
+                        backend_id,
+                        self.config,
+                    )
                     candidate_backend.ensure_available()
                     backend = candidate_backend
                     resolved = backend_id
                     if index == 0:
                         status = "success"
-                        reason = f"{candidate_backend.name} backend ready"
+                        reason = f"{candidate_backend.name}" " backend ready"
                     elif backend_id == "synthetic":
                         status = "synthetic_fallback"
-                        reason = f"Test environment synthetic fallback after: {init_errors}"
+                        reason = "Test environment" " synthetic fallback" f" after: {init_errors}"
                     else:
                         status = "fallback"
                         requested_error = init_errors.get(requested, "unknown error")
-                        reason = f"Requested '{requested}' unavailable: {requested_error}. Selected '{backend_id}'"
+                        reason = (
+                            f"Requested '{requested}'" " unavailable:" f" {requested_error}." " Selected" f" '{backend_id}'"
+                        )
                     break
                 except LicenseRestrictionError:
-                    # Never bypass explicit license restrictions on requested backend.
+                    # Never bypass explicit license
+                    # restrictions on requested backend.
                     if index == 0:
                         raise
                     init_errors[backend_id] = "license_restriction"
@@ -713,20 +882,35 @@ class EnhanceOrchestrator:
                     if index == 0:
                         raise
                     init_errors[backend_id] = "unknown_backend"
-                except (ImportError, FileNotFoundError, RuntimeError) as backend_error:
+                except (
+                    ImportError,
+                    FileNotFoundError,
+                    RuntimeError,
+                ) as backend_error:
                     init_errors[backend_id] = str(backend_error)
-                except Exception as backend_error:  # pragma: no cover - defensive hardening
+                except Exception as backend_error:  # pragma: no cover
                     init_errors[backend_id] = str(backend_error)
 
             if backend is None or resolved is None:
                 if not allow_synthetic:
                     raise RuntimeError(
-                        f"No depth backend available from candidates {candidate_chain}. "
-                        f"Errors: {init_errors}. Install ML dependencies (torch, transformers) or "
-                        "explicitly enable synthetic fallback for testing "
-                        "(config.allow_synthetic_fallback=True or TP_ALLOW_SYNTHETIC_FALLBACK=1)."
+                        "No depth backend"
+                        " available from"
+                        " candidates"
+                        f" {candidate_chain}."
+                        f" Errors: {init_errors}."
+                        " Install ML deps"
+                        " (torch, transformers)"
+                        " or explicitly enable"
+                        " synthetic fallback for"
+                        " testing (config"
+                        ".allow_synthetic_fallback"
+                        "=True or TP_ALLOW_"
+                        "SYNTHETIC_FALLBACK=1)."
                     )
-                raise RuntimeError(f"No depth backend available from candidates {candidate_chain}. Errors: {init_errors}")
+                raise RuntimeError(
+                    "No depth backend" " available from" " candidates" f" {candidate_chain}." f" Errors: {init_errors}"
+                )
 
             self.depth_backend = backend
             self._depth_backend_cache[resolved] = backend
@@ -735,15 +919,20 @@ class EnhanceOrchestrator:
                 resolved_backend=resolved,
                 resolution_status=status,
                 resolution_reason=reason,
-                model_id=self.config.model_variant.value.huggingface_id,
+                model_id=(self._model_variant.value.huggingface_id),
                 device=self.config.depth_device,
                 attempts=[],
             )
             self._active_backend_metadata = self._backend_metadata
-            self._active_depth_attempts: List[Dict[str, Any]] = []
-            self._active_selected_attempt_index: Optional[int] = None
+            self._active_depth_attempts = []
+            self._active_selected_attempt_index = None
 
-            logger.info(f"Depth backend: requested={requested} resolved={resolved} device={self.config.depth_device}")
+            logger.info(
+                "Depth backend:" " requested=%s" " resolved=%s device=%s",
+                requested,
+                resolved,
+                self.config.depth_device,
+            )
 
         except LicenseRestrictionError as e:
             logger.error(f"License restriction: {e}")
@@ -752,38 +941,69 @@ class EnhanceOrchestrator:
             logger.error(f"Backend initialization failed: {e}")
             raise
 
-    def _resolve_runtime_backend_chain(self, primary_backend_id: str) -> List[str]:
-        """Resolve ordered runtime fallback chain for per-image depth attempts."""
+    def _resolve_runtime_backend_chain(
+        self,
+        primary_backend_id: str,
+    ) -> List[str]:
+        """Resolve ordered runtime fallback chain."""
         chain: List[str] = [primary_backend_id]
-        configured_chain = getattr(self.config, "depth_operational_fallback_chain", ("da3", "da2"))
+        configured_chain = getattr(
+            self.config,
+            "depth_operational_fallback_chain",
+            ("da3", "da2"),
+        )
         for backend_id in configured_chain:
             if backend_id and backend_id not in chain:
                 chain.append(backend_id)
 
-        allow_synthetic = bool(self.config.allow_synthetic_fallback) or os.getenv("TP_ALLOW_SYNTHETIC_FALLBACK") == "1"
+        allow_synthetic = (
+            bool(self.config.allow_synthetic_fallback)
+            or os.getenv(
+                "TP_ALLOW_SYNTHETIC_FALLBACK",
+            )
+            == "1"
+        )
         if allow_synthetic and "synthetic" not in chain:
             chain.append("synthetic")
         return chain
 
     @staticmethod
-    def _expected_output_depth_units_for_backend(backend_id: str) -> str:
-        """Return expected output depth units for cache-key partitioning."""
+    def _expected_output_depth_units_for_backend(
+        backend_id: str,
+    ) -> str:
+        """Return expected output depth units."""
         return "meters" if backend_id == "depth_pro" else "relative"
 
-    def _build_depth_cache_fingerprint(self, backend_id: str) -> str:
-        """Build backend-scoped cache fingerprint for depth reuse safety."""
+    def _build_depth_cache_fingerprint(
+        self,
+        backend_id: str,
+    ) -> str:
+        """Build backend-scoped cache fingerprint."""
         base_fp = self.compute_config_fingerprint().depth_only().to_sha256()
-        expected_units = self._expected_output_depth_units_for_backend(backend_id)
-        payload = f"{base_fp}|backend={backend_id}|units={expected_units}"
+        expected_units = self._expected_output_depth_units_for_backend(
+            backend_id,
+        )
+        payload = f"{base_fp}|backend={backend_id}" f"|units={expected_units}"
         return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
-    def _get_or_create_depth_backend(self, backend_id: str):
-        """Fetch backend instance from cache or registry and ensure availability."""
+    def _get_or_create_depth_backend(
+        self,
+        backend_id: str,
+    ) -> Any:
+        """Fetch backend from cache or registry."""
         # Respect an already-initialized active backend when it matches the
         # requested backend id. This keeps injected test doubles stable and
         # avoids unnecessary registry lookups.
         active_backend = getattr(self, "depth_backend", None)
-        if active_backend is not None and getattr(active_backend, "name", None) == backend_id:
+        if (
+            active_backend is not None
+            and getattr(
+                active_backend,
+                "name",
+                None,
+            )
+            == backend_id
+        ):
             self._depth_backend_cache[backend_id] = active_backend
             return active_backend
 
@@ -797,8 +1017,10 @@ class EnhanceOrchestrator:
         return backend
 
     @staticmethod
-    def _infer_operational_error_code(error: Exception) -> str:
-        """Map backend runtime exceptions to stable operational error codes."""
+    def _infer_operational_error_code(
+        error: Exception,
+    ) -> str:
+        """Map backend exceptions to error codes."""
         if isinstance(error, ImportError):
             return "BACKEND_IMPORT_ERROR"
         if isinstance(error, FileNotFoundError):
@@ -818,7 +1040,7 @@ class EnhanceOrchestrator:
         attempts: List[Dict[str, Any]],
         result_metadata: Optional[Dict[str, Any]] = None,
     ) -> BackendSelectionMetadata:
-        """Build per-image backend selection metadata including attempt provenance."""
+        """Build per-image backend selection metadata."""
         requested = self._backend_metadata.requested_backend or self._backend_metadata.resolved_backend
         resolution_status = "success" if selected_backend == requested else "fallback"
         resolution_reason: Optional[str] = None
@@ -826,19 +1048,29 @@ class EnhanceOrchestrator:
             failed = [attempt for attempt in attempts if attempt.get("status") == "failed"]
             if failed:
                 first_failure = failed[0]
-                failure_kind = first_failure.get("failure_kind", "operational")
-                failure_code = first_failure.get("error_code", "UNKNOWN")
+                failure_kind = first_failure.get(
+                    "failure_kind",
+                    "operational",
+                )
+                failure_code = first_failure.get(
+                    "error_code",
+                    "UNKNOWN",
+                )
                 resolution_reason = (
-                    f"Fallback from '{requested}' to '{selected_backend}' " f"after {failure_kind} failure ({failure_code})"
+                    f"Fallback from"
+                    f" '{requested}' to"
+                    f" '{selected_backend}'"
+                    f" after {failure_kind}"
+                    f" failure ({failure_code})"
                 )
             else:
-                resolution_reason = f"Fallback from '{requested}' to '{selected_backend}'"
+                resolution_reason = f"Fallback from" f" '{requested}'" f" to '{selected_backend}'"
 
         metadata = result_metadata or {}
         model_id = (
             metadata.get("resolved_model_id")
             or metadata.get("requested_model_id")
-            or self.config.model_variant.value.huggingface_id
+            or (self._model_variant.value.huggingface_id)
         )
 
         return BackendSelectionMetadata(
@@ -853,7 +1085,7 @@ class EnhanceOrchestrator:
 
     def compute_config_fingerprint(self) -> ConfigFingerprint:
         return ConfigFingerprint(
-            model_variant=self.config.model_variant.value.name,
+            model_variant=self._model_variant.value.name,
             depth_quantization=self.config.depth_quantization,
             depth_device=self.config.depth_device,
             preset=self.config.preset.value if self.config.preset else None,
@@ -863,7 +1095,7 @@ class EnhanceOrchestrator:
         )
 
     def _build_run_card_config_fingerprint(self) -> Dict[str, Any]:
-        """Build run-card config fingerprint from effective user intent + resolution."""
+        """Build run-card config fingerprint."""
         from .ingest_adapter import raw_ingest_summary
 
         base = self.compute_config_fingerprint()
@@ -872,7 +1104,7 @@ class EnhanceOrchestrator:
         preset_requested = getattr(self.config, "preset_requested", None) or (
             self.config.preset.value if self.config.preset else None
         )
-        preset_resolved = self.config.preset.value if self.config.preset else f"quality_tier:{self.config.quality_tier}"
+        preset_resolved = self.config.preset.value if self.config.preset else ("quality_tier:" f"{self.config.quality_tier}")
 
         requested_backend = self._backend_metadata.requested_backend or "auto"
         resolved_backend = self._backend_metadata.resolved_backend
@@ -898,14 +1130,21 @@ class EnhanceOrchestrator:
             "strict_segmentation": bool(self.config.strict_backend),
             "apex_strict_mode": self._is_apex_tier(),
             "raw_ingest_profile": str(raw_summary.get("profile", "")),
-            "raw_ingest_settings_hash": str(raw_summary.get("settings_hash", "")),
+            "raw_ingest_settings_hash": str(
+                raw_summary.get(
+                    "settings_hash",
+                    "",
+                ),
+            ),
         }
         canonical_json = json.dumps(payload, sort_keys=True, separators=(",", ":"))
         return {
             **payload,
             "hash_algorithm": "sha256",
             "canonical_json": canonical_json,
-            "sha256": hashlib.sha256(canonical_json.encode("utf-8")).hexdigest(),
+            "sha256": hashlib.sha256(
+                canonical_json.encode("utf-8"),
+            ).hexdigest(),
         }
 
     def _extract_v2_depth_handoff_status(
@@ -913,29 +1152,48 @@ class EnhanceOrchestrator:
         v2_result: Optional[Dict[str, Any]],
         v2_report_path: Optional[Path],
     ) -> Optional[bool]:
-        """Return whether V2 consumed depth-map input (True/False) when determinable."""
+        """Return whether V2 consumed depth-map input."""
         if isinstance(v2_result, dict):
             if isinstance(v2_result.get("depth_consumed"), bool):
                 return bool(v2_result.get("depth_consumed"))
             stage_metadata = v2_result.get("stage_metadata")
             if isinstance(stage_metadata, dict) and "has_depth" in stage_metadata:
-                return bool(stage_metadata.get("has_depth"))
-            if isinstance(v2_result.get("depth_map"), str):
+                return bool(
+                    stage_metadata.get("has_depth"),
+                )
+            if isinstance(
+                v2_result.get("depth_map"),
+                str,
+            ):
                 return True
             if "depth_map" in v2_result and v2_result.get("depth_map") is None:
                 return False
 
         if v2_report_path and v2_report_path.exists():
             try:
-                with open(v2_report_path, "r", encoding="utf-8") as report_file:
+                with open(
+                    v2_report_path,
+                    "r",
+                    encoding="utf-8",
+                ) as report_file:
                     report_payload = json.load(report_file)
             except Exception as exc:
-                logger.debug(f"Failed to parse V2 report for depth handoff check ({v2_report_path}): {exc}")
+                logger.debug(
+                    "Failed to parse V2" " report for depth" " handoff check" " (%s): %s",
+                    v2_report_path,
+                    exc,
+                )
             else:
                 if isinstance(report_payload.get("depth_consumed"), bool):
                     return bool(report_payload.get("depth_consumed"))
                 stage_metadata = report_payload.get("stage_metadata")
-                if isinstance(stage_metadata, dict) and "has_depth" in stage_metadata:
+                if (
+                    isinstance(
+                        stage_metadata,
+                        dict,
+                    )
+                    and "has_depth" in stage_metadata
+                ):
                     return bool(stage_metadata.get("has_depth"))
                 if isinstance(report_payload.get("depth_map"), str):
                     return True
@@ -951,7 +1209,7 @@ class EnhanceOrchestrator:
         v2_result: Optional[Dict[str, Any]],
         v2_report_path: Optional[Path],
     ) -> None:
-        """Enforce that V2 consumes depth when depth artifacts were produced."""
+        """Enforce V2 consumes depth when produced."""
         if not depth_path or not depth_path.exists():
             return
 
@@ -962,8 +1220,11 @@ class EnhanceOrchestrator:
             return
 
         message = (
-            "V2 depth handoff failed: depth artifact exists but V2 reported depth_consumed=false. "
-            "This indicates stem-resolution drift."
+            "V2 depth handoff failed: depth"
+            " artifact exists but V2 reported"
+            " depth_consumed=false. This"
+            " indicates stem-resolution"
+            " drift."
         )
         details = {
             "depth_path": str(depth_path),
@@ -971,7 +1232,11 @@ class EnhanceOrchestrator:
             "depth_consumed": depth_consumed,
         }
         if self._is_apex_tier():
-            raise ApexStrictGateError("APEX_V2_DEPTH_HANDOFF_MISSING", message, details=details)
+            raise ApexStrictGateError(
+                "APEX_V2_DEPTH_HANDOFF_MISSING",
+                message,
+                details=details,
+            )
         logger.warning("%s details=%s", message, details)
 
     def _capture_backend_metadata(self) -> BackendSelectionMetadata:
@@ -992,7 +1257,7 @@ class EnhanceOrchestrator:
                 resolved_backend="da3",
                 resolution_status="success",
                 resolution_reason=None,
-                model_id=self.config.model_variant.value.huggingface_id,
+                model_id=self._model_variant.value.huggingface_id,
                 device=self.config.depth_device,
                 attempts=[],
             ),
@@ -1010,10 +1275,13 @@ class EnhanceOrchestrator:
 
         Args:
             image_path: Path to the image file
-            manifest_exists: Whether a manifest exists (for IF_MANIFEST_EXISTS mode)
-            saved_hash: Previously saved hash from manifest (for IF_MANIFEST_EXISTS mode)
-            for_manifest_write: If True, compute hash for writing manifest (establishes baseline).
-                              If False, compute hash for comparison only.
+            manifest_exists: Whether a manifest
+                exists (for IF_MANIFEST_EXISTS)
+            saved_hash: Previously saved hash
+                from manifest
+            for_manifest_write: If True, compute
+                hash for writing manifest.
+                If False, compute for comparison.
 
         Returns:
             SHA256 hash string, or None if hash not computed
@@ -1027,7 +1295,8 @@ class EnhanceOrchestrator:
         # IF_MANIFEST_EXISTS: behavior depends on context
         if self.config.hash_mode == HashMode.IF_MANIFEST_EXISTS:
             if for_manifest_write:
-                # Writing manifest: always compute hash to establish/update baseline
+                # Writing manifest: always compute
+                # hash to establish/update baseline
                 pass  # Fall through to compute hash
             else:
                 # Reading for comparison: only compute if we have a baseline
@@ -1035,18 +1304,26 @@ class EnhanceOrchestrator:
                     # No baseline exists - skip comparison
                     return None
 
-        # ALWAYS or IF_MANIFEST_EXISTS (when baseline exists or writing manifest)
+        # ALWAYS or IF_MANIFEST_EXISTS
+        # (when baseline exists or writing manifest)
         try:
             return compute_file_sha256(image_path)
         except Exception as e:
             logger.error(f"Hash computation failed for {image_path}: {e}")
             raise IOError(f"Hash computation failed: {e}") from e
 
-    def should_skip_depth(self, depth_path: Path, manifest_path: Path, image_input: ImageInput) -> bool:
+    def should_skip_depth(
+        self,
+        depth_path: Path,
+        manifest_path: Path,
+        image_input: ImageInput,
+    ) -> bool:
         """Determine whether to skip depth computation.
 
-        Uses stored config fingerprint for comparison rather than reconstructing
-        from partial fields. This ensures any config change invalidates the cache.
+        Uses stored config fingerprint for
+        comparison rather than reconstructing
+        from partial fields. This ensures any
+        config change invalidates the cache.
 
         Args:
             depth_path: Path to the depth output file
@@ -1054,7 +1331,8 @@ class EnhanceOrchestrator:
             image_input: Input image information
 
         Returns:
-            True if depth step can be skipped (cached result is valid), False otherwise
+            True if depth step can be skipped,
+                False otherwise
         """
         if not depth_path.exists() or not manifest_path.exists():
             return False
@@ -1071,15 +1349,23 @@ class EnhanceOrchestrator:
             saved_hash = manifest.input.image_sha256 if manifest.input else None
             if saved_hash and self.config.hash_mode != HashMode.NEVER:
                 current_hash = self._compute_or_skip_hash(
-                    image_input.path, manifest_exists=True, saved_hash=saved_hash, for_manifest_write=False
+                    image_input.path,
+                    manifest_exists=True,
+                    saved_hash=saved_hash,
+                    for_manifest_write=False,
                 )
                 if current_hash and current_hash != saved_hash:
-                    logger.info(f"Input image changed - regenerating depth: {image_input.path}")
+                    logger.info(
+                        "Input image changed" " - regenerating" " depth: %s",
+                        image_input.path,
+                    )
                     return False
 
             # Config Fingerprint Check - use stored fingerprint directly
             if not manifest.config_fingerprint:
-                logger.debug("No config fingerprint in manifest - regenerating depth")
+                logger.debug(
+                    "No config fingerprint" " in manifest -" " regenerating depth",
+                )
                 return False
 
             # Compare stored depth config fingerprint with current config
@@ -1116,16 +1402,23 @@ class EnhanceOrchestrator:
             return False
 
     def should_skip_v2(
-        self, v2_report_path: Optional[Path], manifest_path: Path, image_input: ImageInput, depth_was_skipped: bool
+        self,
+        v2_report_path: Optional[Path],
+        manifest_path: Path,
+        image_input: ImageInput,
+        depth_was_skipped: bool,
     ) -> bool:
         """Determine whether to skip V2 enhancement stage.
 
-        V2 skip logic is independent of PBR generation. V2 enhancement is a separate
-        stage from PBR map generation, and should be evaluated based on V2 config
-        changes and output existence.
+        V2 skip logic is independent of PBR
+        generation. V2 enhancement is a separate
+        stage from PBR map generation, and should
+        be evaluated based on V2 config changes
+        and output existence.
 
-        Uses stored config fingerprint for comparison and performs defensive
-        output existence checks if enabled.
+        Uses stored config fingerprint for
+        comparison and performs defensive output
+        existence checks if enabled.
 
         Args:
             v2_report_path: Path to V2 report file
@@ -1134,7 +1427,8 @@ class EnhanceOrchestrator:
             depth_was_skipped: Whether depth step was skipped
 
         Returns:
-            True if V2 stage can be skipped (cached result is valid), False otherwise
+            True if V2 stage can be skipped,
+                False otherwise
         """
         if not v2_report_path or not v2_report_path.exists() or not manifest_path.exists():
             return False
@@ -1149,7 +1443,9 @@ class EnhanceOrchestrator:
 
             # Config Fingerprint Check - use stored fingerprint directly
             if not manifest.config_fingerprint:
-                logger.debug("No config fingerprint in manifest - regenerating V2")
+                logger.debug(
+                    "No config fingerprint" " in manifest -" " regenerating V2",
+                )
                 return False
 
             # Compare V2/PBR config using stored fingerprint's SHA256
@@ -1169,13 +1465,13 @@ class EnhanceOrchestrator:
             if not manifest.v2 or manifest.v2.status != "ok":
                 return False
 
-            # Defensive output existence check for V2 report
+            # Defensive output check for V2 report
             if self.verify_outputs and v2_report_path:
                 if not v2_report_path.exists():
                     logger.debug(f"V2 report missing: {v2_report_path}")
                     return False
 
-            # Defensive output existence check for PBR assets (only if they exist in manifest)
+            # Defensive output check for PBR assets
             if self.verify_outputs and manifest.pbr_assets:
                 pbr_outputs = manifest.pbr_assets
                 for label, filepath in pbr_outputs.items():
@@ -1218,22 +1514,28 @@ class EnhanceOrchestrator:
             skip_depth: Whether to skip depth computation
 
         Returns:
-            Tuple of (depth_metadata, depth_runtime_s, pbr_assets, materials_v3_result,
-                     materials_v3_runtime_s, enhanced_image_path,
-                     backend_selection_metadata, depth_attempts)
+            Tuple of (depth_metadata,
+                depth_runtime_s, pbr_assets,
+                materials_v3_result,
+                materials_v3_runtime_s,
+                enhanced_image_path,
+                backend_selection_metadata,
+                depth_attempts)
         """
         depth_runtime_s = 0.0
         depth_metadata = None
         pbr_assets = None
         materials_v3_result = None
         materials_v3_runtime_s = 0.0
-        enhanced_image_path = None  # Will be set if Materials V3 produces enhanced_image
+        # Will be set if Materials V3 produces enhanced_image
+        enhanced_image_path = None
         depth_attempts: List[Dict[str, Any]] = []
         active_backend_metadata = self._backend_metadata
         self._active_selected_attempt_index = None
 
         if not skip_depth:
-            # Lazy preprocessing: Only validate and preprocess if we're running depth
+            # Lazy preprocessing: Only validate
+            # and preprocess if running depth
             from .preprocessing import preprocess_image, validate_image_format
 
             # Check for strict verification flag (forward-compatible)
@@ -1248,32 +1550,68 @@ class EnhanceOrchestrator:
                 try:
                     with Image.open(validated_path) as img_verify:
                         img_verify.verify()
-                    logger.debug(f"Strict verification passed: {validated_path.name}")
+                    logger.debug(
+                        "Strict verification" " passed: %s",
+                        validated_path.name,
+                    )
                 except Exception as e:
-                    logger.error(f"Strict verification failed: {validated_path.name} - {e}")
-                    raise ValueError(f"Image failed strict verification: {validated_path}") from e
+                    logger.error(
+                        "Strict verification" " failed: %s - %s",
+                        validated_path.name,
+                        e,
+                    )
+                    raise ValueError("Image failed strict" " verification:" f" {validated_path}") from e
 
-            preprocessed_array, original_shape = preprocess_image(validated_path, raw_config=self.config)
+            preprocessed_array, original_shape = preprocess_image(
+                validated_path,
+                raw_config=self.config,
+            )
 
-            logger.info(f"Stage A: Generating depth for {output_key}...")
+            logger.info(
+                "Stage A: Generating" " depth for %s...",
+                output_key,
+            )
             t0 = time.time()
             try:
                 # Phase 2: Check content-addressable depth cache
                 image_sha256 = None
                 if self.depth_cache:
-                    image_sha256 = self._compute_or_skip_hash(image_input.path, manifest_exists=False, for_manifest_write=True)
+                    image_sha256 = self._compute_or_skip_hash(
+                        image_input.path,
+                        manifest_exists=False,
+                        for_manifest_write=True,
+                    )
 
-                # 1. Inference with per-image backend attempt/fallback state machine.
+                # 1. Inference with per-image
+                # backend attempt/fallback.
                 from PIL import Image
 
-                preprocessed_uint8 = (np.clip(preprocessed_array, 0, 1) * 255).astype(np.uint8)
+                preprocessed_uint8 = (
+                    np.clip(
+                        preprocessed_array,
+                        0,
+                        1,
+                    )
+                    * 255
+                ).astype(np.uint8)
                 pil_image = Image.fromarray(preprocessed_uint8)
-                attempt_chain = self._resolve_runtime_backend_chain(self.depth_backend.name)
+                _primary_backend_name = (
+                    getattr(
+                        self.depth_backend,
+                        "name",
+                        None,
+                    )
+                    or self.config.depth_backend
+                    or "da3"
+                )
+                attempt_chain = self._resolve_runtime_backend_chain(
+                    _primary_backend_name,
+                )
 
                 result = None
                 depth_map = None
                 depth_validity_metrics = None
-                selected_backend_id = self.depth_backend.name
+                selected_backend_id = _primary_backend_name
                 selected_attempt_index: Optional[int] = None
                 last_error: Optional[Exception] = None
 
@@ -1295,16 +1633,26 @@ class EnhanceOrchestrator:
                         attempt_cache_fp_hash = None
                         cached_depth = None
                         if self.depth_cache and image_sha256:
-                            attempt_cache_fp_hash = self._build_depth_cache_fingerprint(backend_id)
-                            cached_depth = self.depth_cache.get(image_sha256, attempt_cache_fp_hash)
+                            attempt_cache_fp_hash = self._build_depth_cache_fingerprint(
+                                backend_id,
+                            )
+                            cached_depth = self.depth_cache.get(
+                                image_sha256,
+                                attempt_cache_fp_hash,
+                            )
                             if cached_depth is not None:
-                                logger.info("Cache hit: using cached depth for %s (backend=%s)", output_key, backend_id)
+                                logger.info(
+                                    "Cache hit: using" " cached depth for" " %s (backend=%s)",
+                                    output_key,
+                                    backend_id,
+                                )
                         attempt_record["cached"] = bool(cached_depth is not None)
 
                         if cached_depth is not None:
                             from ..depth.backends.protocol import DepthResult
 
-                            # No inference runs on cache hit; mark device provenance explicitly.
+                            # No inference runs on cache hit;
+                            # mark device provenance.
                             attempt_record["device"] = "cache"
                             cache_metadata: Dict[str, Any] = {
                                 "cached": True,
@@ -1313,13 +1661,13 @@ class EnhanceOrchestrator:
                                 "device": "cache",
                             }
                             if image_sha256 and attempt_cache_fp_hash:
-                                cache_metadata["cache_key"] = f"{image_sha256}_{attempt_cache_fp_hash}"
+                                cache_metadata["cache_key"] = f"{image_sha256}" "_" f"{attempt_cache_fp_hash}"
 
                             result_candidate = DepthResult(
                                 depth_map=cached_depth,
                                 original_image=preprocessed_uint8,
                                 metadata=cache_metadata,
-                                depth_units="meters" if backend_id == "depth_pro" else "relative",
+                                depth_units=("meters" if backend_id == "depth_pro" else "relative"),
                                 backend_id=backend_id,
                                 device="cache",
                                 dtype="float32",
@@ -1329,10 +1677,18 @@ class EnhanceOrchestrator:
                             backend = self._get_or_create_depth_backend(backend_id)
                             self.depth_backend = backend
                             resolved_backend_device = getattr(backend, "_device", None) or getattr(backend, "device", None)
-                            if isinstance(resolved_backend_device, str) and resolved_backend_device:
+                            if (
+                                isinstance(
+                                    resolved_backend_device,
+                                    str,
+                                )
+                                and resolved_backend_device
+                            ):
                                 attempt_record["device"] = resolved_backend_device
                             result_candidate = backend.compute(pil_image)
-                            result_candidate = self.postprocessor.process(result_candidate)
+                            result_candidate = self.postprocessor.process(
+                                result_candidate,
+                            )
                             if self.depth_cache and image_sha256 and attempt_cache_fp_hash:
                                 self.depth_cache.store(image_sha256, attempt_cache_fp_hash, result_candidate.depth_map)
 
@@ -1340,17 +1696,34 @@ class EnhanceOrchestrator:
                         if isinstance(result_device, str) and result_device:
                             attempt_record["device"] = result_device
 
-                        # CRITICAL FIX (#2): Resize depth map back to original dimensions
+                        # CRITICAL FIX (#2): Resize depth
+                        # back to original dimensions
                         depth_candidate = (
-                            result_candidate.depth_map if hasattr(result_candidate, "depth_map") else result_candidate.depth
+                            result_candidate.depth_map
+                            if hasattr(
+                                result_candidate,
+                                "depth_map",
+                            )
+                            else result_candidate.depth
                         )
                         current_shape = depth_candidate.shape[:2]
                         if current_shape != original_shape:
                             from PIL import Image as PILImage
 
-                            logger.debug(f"Resizing depth map from {current_shape} back to original {original_shape}")
-                            # Preserve raw numeric depth semantics (relative or metric) during resize.
-                            depth_pil = PILImage.fromarray(np.asarray(depth_candidate, dtype=np.float32), mode="F")
+                            logger.debug(
+                                "Resizing depth map" " from %s back to" " original %s",
+                                current_shape,
+                                original_shape,
+                            )
+                            # Preserve raw numeric depth
+                            # semantics during resize.
+                            depth_pil = PILImage.fromarray(
+                                np.asarray(
+                                    depth_candidate,
+                                    dtype=np.float32,
+                                ),
+                                mode="F",
+                            )
                             depth_pil_resized = depth_pil.resize(
                                 (original_shape[1], original_shape[0]),
                                 PILImage.Resampling.BILINEAR,
@@ -1359,25 +1732,50 @@ class EnhanceOrchestrator:
                             if hasattr(result_candidate, "depth_map"):
                                 result_candidate.depth_map = depth_candidate
                             else:
-                                result_candidate.depth = depth_candidate
+                                object.__setattr__(
+                                    result_candidate,
+                                    "depth",
+                                    depth_candidate,
+                                )
 
-                        result_metadata = dict(getattr(result_candidate, "metadata", None) or {})
+                        result_metadata = dict(
+                            getattr(
+                                result_candidate,
+                                "metadata",
+                                None,
+                            )
+                            or {},
+                        )
                         attempt_record["model_id"] = (
                             result_metadata.get("resolved_model_id")
                             or result_metadata.get("requested_model_id")
-                            or self.config.model_variant.value.huggingface_id
+                            or self._model_variant.value.huggingface_id
                         )
                         attempt_record["source_depth_units"] = result_metadata.get(
                             "source_depth_units",
-                            getattr(result_candidate, "depth_units", None) or "unknown",
+                            getattr(
+                                result_candidate,
+                                "depth_units",
+                                None,
+                            )
+                            or "unknown",
                         )
                         attempt_record["output_depth_units"] = result_metadata.get(
                             "output_depth_units",
-                            getattr(result_candidate, "depth_units", None) or "unknown",
+                            getattr(
+                                result_candidate,
+                                "depth_units",
+                                None,
+                            )
+                            or "unknown",
                         )
-                        attempt_record["output_normalization"] = result_metadata.get("output_normalization", "unknown")
+                        attempt_record["output_normalization"] = result_metadata.get(
+                            "output_normalization",
+                            "unknown",
+                        )
 
-                        # 2b. APEX depth validity gate (plateau/saturation guardrails)
+                        # 2b. APEX depth validity gate
+                        # (plateau/saturation guardrails)
                         gate_result = self._enforce_apex_depth_validity_gate(
                             depth_candidate,
                             depth_units=getattr(result_candidate, "depth_units", None),
@@ -1386,7 +1784,13 @@ class EnhanceOrchestrator:
                         attempt_record.update(
                             {
                                 "status": "success",
-                                "apex_gate_passed": bool(gate_result is None or gate_result.get("passed", False)),
+                                "apex_gate_passed": bool(
+                                    gate_result is None
+                                    or gate_result.get(
+                                        "passed",
+                                        False,
+                                    )
+                                ),
                             }
                         )
                         attempt_record["duration_s"] = time.time() - attempt_start
@@ -1432,7 +1836,7 @@ class EnhanceOrchestrator:
                         has_next = attempt_index + 1 < len(attempt_chain)
                         if self.config.allow_semantic_fallback and has_next:
                             logger.warning(
-                                "Semantic gate failed on backend=%s code=%s; attempting fallback backend.",
+                                "Semantic gate" " failed on" " backend=%s" " code=%s;" " attempting" " fallback.",
                                 backend_id,
                                 semantic_error.code,
                             )
@@ -1457,7 +1861,7 @@ class EnhanceOrchestrator:
                         has_next = attempt_index + 1 < len(attempt_chain)
                         if has_next:
                             logger.warning(
-                                "Operational depth failure on backend=%s code=%s; attempting fallback backend.",
+                                "Operational depth" " failure on" " backend=%s" " code=%s;" " attempting" " fallback.",
                                 backend_id,
                                 error_code,
                             )
@@ -1467,13 +1871,20 @@ class EnhanceOrchestrator:
                 if result is None or depth_map is None:
                     if last_error is not None:
                         raise last_error
-                    raise RuntimeError("Depth inference failed before producing a result.")
+                    raise RuntimeError(
+                        "Depth inference failed" " before producing a" " result.",
+                    )
 
                 depth_runtime_s = time.time() - t0
                 active_backend_metadata = self._build_backend_metadata_for_attempts(
                     selected_backend_id,
                     depth_attempts,
-                    result_metadata=getattr(result, "metadata", None) or {},
+                    result_metadata=getattr(
+                        result,
+                        "metadata",
+                        None,
+                    )
+                    or {},
                 )
                 self._active_backend_metadata = active_backend_metadata
                 self._active_depth_attempts = depth_attempts
@@ -1505,26 +1916,66 @@ class EnhanceOrchestrator:
                     logger.debug(f"Saved float depth: {float_depth_path}")
 
                 # Capture backend metadata dynamically (ADR-019)
+                _backend = self.depth_backend
                 license_str = (
-                    self.depth_backend.license_type.value if hasattr(self.depth_backend, "license_type") else "unknown"
+                    _backend.license_type.value if _backend is not None and hasattr(_backend, "license_type") else "unknown"
                 )
                 stats = {
-                    "backend": self.depth_backend.name,
+                    "backend": (_backend.name if _backend is not None else "unknown"),
                     "license": license_str,
                     "non_commercial_ok": self.config.non_commercial_ok,
                     "dtype": "uint16",
                     "shape": list(result.depth.shape[:2]),
                     "representation": "depth",
                     "convention": "higher_is_farther",
-                    "unit": result.depth_units if hasattr(result, "depth_units") else "relative",
-                    "depth_png_path": str(depth_path),
-                    "depth_float_path": str(float_depth_path) if getattr(self.config, "save_float_depth", False) else None,
-                    "depth_float_dtype": "float32" if getattr(self.config, "save_float_depth", False) else None,
+                    "unit": (
+                        result.depth_units
+                        if hasattr(
+                            result,
+                            "depth_units",
+                        )
+                        else "relative"
+                    ),
+                    "depth_png_path": str(
+                        depth_path,
+                    ),
+                    "depth_float_path": (
+                        str(float_depth_path)
+                        if getattr(
+                            self.config,
+                            "save_float_depth",
+                            False,
+                        )
+                        else None
+                    ),
+                    "depth_float_dtype": (
+                        "float32"
+                        if getattr(
+                            self.config,
+                            "save_float_depth",
+                            False,
+                        )
+                        else None
+                    ),
                     "depth_float_shape": (
-                        list(result.depth.shape[:2]) if getattr(self.config, "save_float_depth", False) else None
+                        list(
+                            result.depth.shape[:2],
+                        )
+                        if getattr(
+                            self.config,
+                            "save_float_depth",
+                            False,
+                        )
+                        else None
                     ),
                     "canonical_depth_path": (
-                        str(float_depth_path) if getattr(self.config, "save_float_depth", False) else str(depth_path)
+                        str(float_depth_path)
+                        if getattr(
+                            self.config,
+                            "save_float_depth",
+                            False,
+                        )
+                        else str(depth_path)
                     ),
                     "attempts": depth_attempts,
                 }
@@ -1533,18 +1984,28 @@ class EnhanceOrchestrator:
 
                 # Merge inference provenance into depth stats
                 _md = getattr(result, "metadata", None) or {}
-                for _k in ("requested_model_id", "resolved_model_id", "resolved_model_source"):
+                for _k in (
+                    "requested_model_id",
+                    "resolved_model_id",
+                    "resolved_model_source",
+                ):
                     if _k in _md:
                         stats[_k] = _md[_k]
-                for _k in ("source_depth_units", "output_depth_units", "output_normalization"):
+                for _k in (
+                    "source_depth_units",
+                    "output_depth_units",
+                    "output_normalization",
+                ):
                     if _k in _md:
                         stats[_k] = _md[_k]
 
-                # CRITICAL FIX: Use resolved backend name, not config default
-                # This ensures depth.model matches what actually ran (backend_selection.resolved_backend)
-                # ADR-023 compliance: identity must match execution reality
+                # CRITICAL FIX: Use resolved backend
+                # name, not config default. This ensures
+                # depth.model matches what actually ran
+                # (backend_selection.resolved_backend).
+                # ADR-023: identity must match execution.
                 resolved_backend = active_backend_metadata
-                model_name = resolved_backend.resolved_backend if resolved_backend else self.config.model_variant.value.name
+                model_name = resolved_backend.resolved_backend if resolved_backend else (self._model_variant.value.name)
 
                 depth_metadata = DepthMetadata(
                     model=model_name,
@@ -1586,50 +2047,100 @@ class EnhanceOrchestrator:
                 elif self.config.depth_fallback == "skip":
                     self._active_backend_metadata = active_backend_metadata
                     self._active_depth_attempts = depth_attempts
-                    return None, 0.0, None, None, 0.0, None, active_backend_metadata, depth_attempts
+                    return (
+                        None,
+                        0.0,
+                        None,
+                        None,
+                        0.0,
+                        None,
+                        active_backend_metadata,
+                        depth_attempts,
+                    )
                 elif self.config.depth_fallback == "v2-auto":
-                    logger.info("V2 fallback mode: V3 failed, will attempt V2 with independent depth")
+                    logger.info(
+                        "V2 fallback mode:" " V3 failed, will" " attempt V2 with" " independent depth",
+                    )
                     if depth_path.exists():
                         depth_path.unlink()
                     self._active_backend_metadata = active_backend_metadata
                     self._active_depth_attempts = depth_attempts
-                    return None, 0.0, None, None, 0.0, None, active_backend_metadata, depth_attempts
+                    return (
+                        None,
+                        0.0,
+                        None,
+                        None,
+                        0.0,
+                        None,
+                        active_backend_metadata,
+                        depth_attempts,
+                    )
                 else:
-                    raise ValueError(f"Unsupported depth_fallback mode: {self.config.depth_fallback}") from e
+                    raise ValueError("Unsupported" " depth_fallback" " mode:" f" {self.config.depth_fallback}") from e
         else:
             # Depth was skipped - load from cache
-            # CRITICAL FIX: Preserve Materials V3 metadata from previous run
+            # Preserve Materials V3 metadata
+            # from previous run
             if manifest_path.exists():
                 try:
-                    m = CombinedManifest.load(manifest_path)
+                    m = CombinedManifest.load(
+                        manifest_path,
+                    )
                     depth_metadata = m.depth
-                    pbr_assets = getattr(m, "pbr_assets", None)
-                    if getattr(m, "backend_selection", None) is not None:
-                        active_backend_metadata = m.backend_selection
-                        depth_attempts = list(m.backend_selection.attempts or [])
+                    pbr_assets = getattr(
+                        m,
+                        "pbr_assets",
+                        None,
+                    )
+                    if (
+                        getattr(
+                            m,
+                            "backend_selection",
+                            None,
+                        )
+                        is not None
+                    ):
+                        _bs = m.backend_selection
+                        assert _bs is not None
+                        active_backend_metadata = _bs
+                        depth_attempts = list(
+                            _bs.attempts or [],
+                        )
                         self._active_backend_metadata = active_backend_metadata
                         self._active_depth_attempts = depth_attempts
-                        success_attempts = [attempt for attempt in depth_attempts if attempt.get("status") == "success"]
+                        success_attempts = [a for a in depth_attempts if a.get("status") == "success"]
                         if success_attempts:
-                            self._active_selected_attempt_index = int(success_attempts[-1].get("attempt", 0))
+                            self._active_selected_attempt_index = int(
+                                success_attempts[-1].get("attempt", 0),
+                            )
 
-                    # Preserve Materials V3 result from previous run
+                    # Preserve Materials V3
+                    # result from previous run
                     if hasattr(m, "materials_v3") and m.materials_v3:
-                        logger.info("Preserving Materials V3 metadata from previous run (depth was cached)")
-                        materials_v3_result = {
-                            "materials_v3_response_plan": m.materials_v3.response_plan,
-                            "materials_v3_pixel_ops": m.materials_v3.pixel_ops,
-                            "materials_v3_metadata": {"version": m.materials_v3.version},
-                            # Note: enhanced_image and material_masks are not persisted to manifest
-                            # This is intentional - only the response plan and telemetry are preserved
-                        }
-                        materials_v3_runtime_s = (
-                            m.materials_v3.runtime_seconds if hasattr(m.materials_v3, "runtime_seconds") else 0.0
+                        logger.info(
+                            "Preserving Materials" " V3 metadata from" " previous run" " (depth was cached)",
                         )
+                        materials_v3_result = {
+                            "materials_v3_response_plan": (m.materials_v3.response_plan),
+                            "materials_v3_pixel_ops": (m.materials_v3.pixel_ops),
+                            "materials_v3_metadata": {
+                                "version": (m.materials_v3.version),
+                            },
+                        }
+                        _rt = getattr(
+                            m.materials_v3,
+                            "runtime_seconds",
+                            None,
+                        )
+                        materials_v3_runtime_s = float(_rt) if _rt is not None else 0.0
                 except Exception as e:
-                    logger.debug(f"Failed to load previous manifest metadata: {e}")
+                    logger.debug(
+                        "Failed to load" " previous manifest" " metadata: %s",
+                        e,
+                    )
 
-            # PBR generation with cached depth (if enabled but not previously generated)
+            # PBR generation with cached depth
+            # (if enabled but not previously generated)
             if self.config.generate_pbr and (pbr_assets is None or not self._verify_pbr_outputs(pbr_assets)):
                 logger.info("Generating PBR maps from cached depth...")
                 try:
@@ -1650,7 +2161,11 @@ class EnhanceOrchestrator:
             depth_attempts,
         )
 
-    def _generate_pbr_stage(self, depth: Any, output_key: Path) -> Optional[dict]:
+    def _generate_pbr_stage(
+        self,
+        depth: Any,
+        output_key: Path,
+    ) -> Optional[dict]:
         """Generate PBR maps from depth data.
 
         Args:
@@ -1658,7 +2173,8 @@ class EnhanceOrchestrator:
             output_key: Output key for artifact naming
 
         Returns:
-            Dictionary with PBR asset paths and metadata, or None if disabled/failed
+            Dictionary with PBR asset paths
+                and metadata, or None
         """
         if not self.config.generate_pbr:
             return None
@@ -1681,11 +2197,19 @@ class EnhanceOrchestrator:
             sanitized_stem = output_key.stem if output_key.suffix else output_key.name
 
             pbr_paths = write_pbr_maps(
-                normal_map=normal_map, roughness_map=roughness_map, ao_map=ao_map, output_dir=pbr_dir, base_name=sanitized_stem
+                normal_map=normal_map,
+                roughness_map=roughness_map,
+                ao_map=ao_map,
+                output_dir=pbr_dir,
+                base_name=sanitized_stem,
             )
 
             pbr_runtime = time.time() - pbr_t0
-            logger.info(f"PBR maps generated in {pbr_runtime:.2f}s: {list(pbr_paths.keys())}")
+            logger.info(
+                "PBR maps generated in" " %.2fs: %s",
+                pbr_runtime,
+                list(pbr_paths.keys()),
+            )
 
             # Store paths for manifest
             pbr_assets = {
@@ -1697,7 +2221,7 @@ class EnhanceOrchestrator:
                     "normal_strength": pbr_config.normal_strength,
                     "normal_blur_radius": pbr_config.normal_blur_radius,
                     "roughness_strength": pbr_config.roughness_strength,
-                    "roughness_blur_radius": pbr_config.roughness_blur_radius,
+                    "roughness_blur_radius": (pbr_config.roughness_blur_radius),
                     "ao_strength": pbr_config.ao_strength,
                     "ao_blur_radius": pbr_config.ao_blur_radius,
                     "ao_bias": pbr_config.ao_bias,
@@ -1709,23 +2233,39 @@ class EnhanceOrchestrator:
             logger.warning(f"PBR generation failed (non-blocking): {pbr_error}")
             return None
 
-    def _expected_materials_v3_enhanced_path(self, output_key: Path) -> Path:
-        """Return canonical Materials V3 enhanced-image handoff path for V2."""
+    def _expected_materials_v3_enhanced_path(
+        self,
+        output_key: Path,
+    ) -> Path:
+        """Return canonical Materials V3 enhanced path."""
         temp_dir = self.output_root / "temp"
         extension = ".tif" if (self.config.emit_master16 or self.config.emit_upscaled16) else ".png"
-        return temp_dir / f"{output_key.stem}_materials_v3_enhanced{extension}"
+        return temp_dir / f"{output_key.stem}" f"_materials_v3_enhanced" f"{extension}"
 
-    def _segmentation_mask_artifact_path(self, output_key: Path) -> Path:
-        """Return canonical persistent segmentation mask artifact path."""
-        return self.segmentation_dir / output_key.parent / f"{output_key.stem}_materials_v3_masks.npz"
+    def _segmentation_mask_artifact_path(
+        self,
+        output_key: Path,
+    ) -> Path:
+        """Return canonical segmentation mask path."""
+        return self.segmentation_dir / output_key.parent / (f"{output_key.stem}" "_materials_v3_masks.npz")
 
-    def _persist_material_masks_artifact(self, masks: Dict[str, np.ndarray], output_key: Path) -> Optional[Path]:
-        """Persist material masks under segmentation/ as deterministic artifacts."""
+    def _persist_material_masks_artifact(
+        self,
+        masks: Dict[str, np.ndarray],
+        output_key: Path,
+    ) -> Optional[Path]:
+        """Persist material masks as artifacts."""
         if not masks:
             return None
-        target_dir = self._segmentation_mask_artifact_path(output_key).parent
+        target_dir = self._segmentation_mask_artifact_path(
+            output_key,
+        ).parent
         target_dir.mkdir(parents=True, exist_ok=True)
-        return self._serialize_material_masks(masks, output_key, target_dir)
+        return self._serialize_material_masks(
+            masks,
+            output_key,
+            target_dir,
+        )
 
     def _run_materials_v3_stage(
         self,
@@ -1734,7 +2274,7 @@ class EnhanceOrchestrator:
         depth_map: np.ndarray,
         output_key: Path,
     ) -> tuple[Optional[dict], float, Optional[Path]]:
-        """Run Materials V3 stage and persist canonical enhanced-image handoff artifact."""
+        """Run Materials V3 stage and persist artifacts."""
         if not self.materials_v3_engine:
             return None, 0.0, None
 
@@ -1744,23 +2284,45 @@ class EnhanceOrchestrator:
         enhanced_image_path: Optional[Path] = None
 
         try:
-            # APEX strict gate: enforce segmentation prerequisites before running Materials V3.
+            # APEX strict gate: enforce segmentation
+            # prerequisites before Materials V3.
             self._enforce_apex_materials_gate()
 
-            from .segmentation_backend import get_last_segmentation_runtime_metadata, segment_materials
+            from .segmentation_backend import (
+                get_last_segmentation_runtime_metadata,
+                segment_materials,
+            )
 
-            # Convert preprocessed float32 [0,1] to uint8 [0,255] for segmentation backend.
-            preprocessed_uint8_for_seg = (np.clip(preprocessed_array, 0, 1) * 255).astype(np.uint8)
-            segmentation_result = {"materials": segment_materials(preprocessed_uint8_for_seg, self.config)}
+            # Convert float32 [0,1] to uint8 [0,255]
+            # for segmentation backend.
+            preprocessed_uint8_for_seg = (
+                np.clip(
+                    preprocessed_array,
+                    0,
+                    1,
+                )
+                * 255
+            ).astype(np.uint8)
+            segmentation_result = {
+                "materials": segment_materials(
+                    preprocessed_uint8_for_seg,
+                    self.config,
+                ),
+            }
             segmentation_runtime = get_last_segmentation_runtime_metadata()
             if segmentation_runtime:
                 segmentation_result["segmentation_metadata"] = segmentation_runtime
-            self._enforce_apex_materials_gate(segmentation_result)
+            self._enforce_apex_materials_gate(
+                segmentation_result,
+            )
 
             if segmentation_result.get("materials"):
                 logger.info(
-                    f"Material segmentation: {len(segmentation_result['materials'])} "
-                    f"materials detected using {self.config.material_segmentation_backend} backend"
+                    "Material segmentation:" " %d materials detected" " using %s backend",
+                    len(
+                        segmentation_result["materials"],
+                    ),
+                    self.config.material_segmentation_backend,
                 )
 
             materials_v3_result = self.materials_v3_engine.process(
@@ -1775,10 +2337,26 @@ class EnhanceOrchestrator:
                 if isinstance(material_masks, dict) and material_masks:
                     mask_artifact_path = self._persist_material_masks_artifact(material_masks, output_key)
                     if mask_artifact_path:
-                        materials_v3_metadata = materials_v3_result.setdefault("materials_v3_metadata", {})
-                        segmentation_metadata = materials_v3_metadata.get("segmentation_metadata")
-                        segmentation_metadata = dict(segmentation_metadata) if isinstance(segmentation_metadata, dict) else {}
-                        segmentation_metadata["mask_artifact_path"] = str(mask_artifact_path)
+                        materials_v3_metadata = materials_v3_result.setdefault(
+                            "materials_v3_metadata",
+                            {},
+                        )
+                        segmentation_metadata = materials_v3_metadata.get(
+                            "segmentation_metadata",
+                        )
+                        segmentation_metadata = (
+                            dict(
+                                segmentation_metadata,
+                            )
+                            if isinstance(
+                                segmentation_metadata,
+                                dict,
+                            )
+                            else {}
+                        )
+                        segmentation_metadata["mask_artifact_path"] = str(
+                            mask_artifact_path,
+                        )
                         segmentation_metadata["mask_artifact_format"] = "npz"
                         materials_v3_metadata["segmentation_metadata"] = segmentation_metadata
 
@@ -1788,51 +2366,110 @@ class EnhanceOrchestrator:
 
                     temp_dir = self.output_root / "temp"
                     temp_dir.mkdir(parents=True, exist_ok=True)
-                    enhanced_image_path = self._expected_materials_v3_enhanced_path(output_key)
+                    enhanced_image_path = self._expected_materials_v3_enhanced_path(
+                        output_key,
+                    )
 
                     if self.config.emit_master16 or self.config.emit_upscaled16:
                         import tifffile
 
-                        enhanced_uint16 = (np.clip(enhanced_image, 0, 1) * 65535 + 0.5).astype(np.uint16)
-                        with atomic_temp_file(enhanced_image_path, suffix=".tif", create_file=False) as temp_path:
+                        enhanced_uint16 = (
+                            np.clip(
+                                enhanced_image,
+                                0,
+                                1,
+                            )
+                            * 65535
+                            + 0.5
+                        ).astype(np.uint16)
+                        with atomic_temp_file(
+                            enhanced_image_path,
+                            suffix=".tif",
+                            create_file=False,
+                        ) as temp_path:
                             tifffile.imwrite(
                                 temp_path,
                                 enhanced_uint16,
                                 photometric="rgb",
                                 compression="lzw",
-                                metadata={"software": "Transformation Portal v3"},
+                                metadata={
+                                    "software": ("Transformation" " Portal v3"),
+                                },
                             )
+                        n_ops = len(
+                            materials_v3_result.get(
+                                "materials_v3_pixel_ops",
+                                {},
+                            ).get("applied", []),
+                        )
                         logger.info(
-                            f"Materials V3 enhanced image with "
-                            f"{len(materials_v3_result.get('materials_v3_pixel_ops', {}).get('applied', []))} "
-                            f"pixel operations - saved to {enhanced_image_path} (16-bit TIFF) for V2 stage"
+                            "Materials V3 enhanced"
+                            " image with %d pixel"
+                            " operations - saved"
+                            " to %s (16-bit TIFF)"
+                            " for V2 stage",
+                            n_ops,
+                            enhanced_image_path,
                         )
                     else:
-                        enhanced_uint8 = (np.clip(enhanced_image, 0, 1) * 255).astype(np.uint8)
+                        enhanced_uint8 = (
+                            np.clip(
+                                enhanced_image,
+                                0,
+                                1,
+                            )
+                            * 255
+                        ).astype(np.uint8)
                         enhanced_image_path = atomic_write_pil_png(
-                            enhanced_image_path, PILImage.fromarray(enhanced_uint8), optimize=True
+                            enhanced_image_path,
+                            PILImage.fromarray(
+                                enhanced_uint8,
+                            ),
+                            optimize=True,
+                        )
+                        n_ops_8 = len(
+                            materials_v3_result.get(
+                                "materials_v3_pixel_ops",
+                                {},
+                            ).get("applied", []),
                         )
                         logger.info(
-                            f"Materials V3 enhanced image with "
-                            f"{len(materials_v3_result.get('materials_v3_pixel_ops', {}).get('applied', []))} "
-                            f"pixel operations - saved to {enhanced_image_path} (8-bit PNG) for V2 stage"
+                            "Materials V3 enhanced"
+                            " image with %d pixel"
+                            " operations - saved"
+                            " to %s (8-bit PNG)"
+                            " for V2 stage",
+                            n_ops_8,
+                            enhanced_image_path,
                         )
                 else:
-                    logger.debug("Materials V3 did not return enhanced_image, using original image")
+                    logger.debug(
+                        "Materials V3 did not" " return enhanced_image" ", using original" " image",
+                    )
 
+                n_applied = len(
+                    materials_v3_result.get(
+                        "materials_v3_pixel_ops",
+                        {},
+                    ).get("applied", []),
+                )
                 logger.info(
-                    f"Materials V3 completed in {runtime_s:.3f}s: "
-                    f"{len(materials_v3_result.get('materials_v3_pixel_ops', {}).get('applied', []))} "
-                    f"operations applied"
+                    "Materials V3 completed" " in %.3fs: %d" " operations applied",
+                    runtime_s,
+                    n_applied,
                 )
 
             return materials_v3_result, runtime_s, enhanced_image_path
 
         except ApexStrictGateError:
-            # Hard-fail in apex strict mode: do not silently continue with no-op Materials V3.
+            # Hard-fail in apex strict mode.
             raise
         except Exception as e:
-            logger.warning(f"Materials V3 processing failed: {e}", exc_info=True)
+            logger.warning(
+                "Materials V3 processing" " failed: %s",
+                e,
+                exc_info=True,
+            )
             return None, time.time() - t_materials_start, None
 
     def _ensure_apex_canonical_materials_execution(
@@ -1846,33 +2483,56 @@ class EnhanceOrchestrator:
         materials_v3_runtime_s: float,
         enhanced_image_path: Optional[Path],
     ) -> tuple[Optional[dict], float, Optional[Path]]:
-        """Ensure APEX strict mode has canonical Materials->V2 handoff artifacts."""
+        """Ensure APEX strict mode has artifacts."""
         if not self._is_apex_materials_gate_enabled():
-            return materials_v3_result, materials_v3_runtime_s, enhanced_image_path
+            return (
+                materials_v3_result,
+                materials_v3_runtime_s,
+                enhanced_image_path,
+            )
 
         if not depth_path.exists():
-            return materials_v3_result, materials_v3_runtime_s, enhanced_image_path
+            return (
+                materials_v3_result,
+                materials_v3_runtime_s,
+                enhanced_image_path,
+            )
 
-        expected_path = self._expected_materials_v3_enhanced_path(output_key)
+        expected_path = self._expected_materials_v3_enhanced_path(
+            output_key,
+        )
         expected_path_resolved = expected_path.resolve()
         enhanced_resolved = enhanced_image_path.resolve() if enhanced_image_path else None
         has_canonical_enhanced = bool(
             enhanced_image_path and enhanced_image_path.exists() and enhanced_resolved == expected_path_resolved
         )
-        has_masks = bool(materials_v3_result and materials_v3_result.get("material_masks"))
+        has_masks = bool(
+            materials_v3_result
+            and materials_v3_result.get(
+                "material_masks",
+            )
+        )
 
         if has_canonical_enhanced and has_masks:
-            return materials_v3_result, materials_v3_runtime_s, enhanced_image_path
+            return (
+                materials_v3_result,
+                materials_v3_runtime_s,
+                enhanced_image_path,
+            )
 
         logger.info(
-            "APEX strict mode: depth was reused but canonical Materials V3 handoff was incomplete; "
-            "recomputing Materials V3 stage from cached depth."
+            "APEX strict mode: depth"
+            " was reused but canonical"
+            " Materials V3 handoff was"
+            " incomplete; recomputing"
+            " Materials V3 stage from"
+            " cached depth.",
         )
 
         if self.materials_v3_engine is None:
             raise ApexStrictGateError(
                 "APEX_MATERIALS_ENGINE_MISSING",
-                "APEX strict mode requires Materials V3 engine for canonical cached-depth handoff.",
+                "APEX strict mode requires" " Materials V3 engine for" " canonical cached-depth" " handoff.",
             )
 
         from .preprocessing import preprocess_image, validate_image_format
@@ -1883,7 +2543,7 @@ class EnhanceOrchestrator:
         if depth_for_materials is None:
             raise ApexStrictGateError(
                 "APEX_MATERIALS_CACHED_DEPTH_MISSING",
-                "APEX strict mode could not reload cached depth required for Materials V3 recomputation.",
+                "APEX strict mode could not" " reload cached depth for" " Materials V3 recomputation.",
                 details={
                     "depth_path": str(depth_path),
                     "float_depth_path": str(float_depth_path),
@@ -1896,27 +2556,47 @@ class EnhanceOrchestrator:
             recomputed_enhanced_path,
         ) = self._run_materials_v3_stage(
             preprocessed_array=preprocessed_array,
-            depth_map=np.asarray(depth_for_materials, dtype=np.float32),
+            depth_map=np.asarray(
+                depth_for_materials,
+                dtype=np.float32,
+            ),
             output_key=output_key,
         )
 
-        has_recomputed_masks = bool(recomputed_result and recomputed_result.get("material_masks"))
+        has_recomputed_masks = bool(
+            recomputed_result
+            and recomputed_result.get(
+                "material_masks",
+            )
+        )
         has_recomputed_enhanced = bool(recomputed_enhanced_path and recomputed_enhanced_path.exists())
         resolved_recomputed = recomputed_enhanced_path.resolve() if recomputed_enhanced_path else None
 
         if not has_recomputed_masks or not has_recomputed_enhanced or resolved_recomputed != expected_path_resolved:
             raise ApexStrictGateError(
                 "APEX_V2_CANONICAL_STEM_DIVERGENCE",
-                "APEX strict mode could not establish canonical Materials V3 handoff for V2.",
+                "APEX strict mode could not" " establish canonical" " Materials V3 handoff" " for V2.",
                 details={
-                    "expected_v2_input": str(expected_path),
-                    "recomputed_v2_input": str(recomputed_enhanced_path) if recomputed_enhanced_path else None,
-                    "has_material_masks": has_recomputed_masks,
-                    "has_enhanced_image": has_recomputed_enhanced,
+                    "expected_v2_input": str(
+                        expected_path,
+                    ),
+                    "recomputed_v2_input": (
+                        str(
+                            recomputed_enhanced_path,
+                        )
+                        if recomputed_enhanced_path
+                        else None
+                    ),
+                    "has_material_masks": (has_recomputed_masks),
+                    "has_enhanced_image": (has_recomputed_enhanced),
                 },
             )
 
-        return recomputed_result, recomputed_runtime, recomputed_enhanced_path
+        return (
+            recomputed_result,
+            recomputed_runtime,
+            recomputed_enhanced_path,
+        )
 
     def _enforce_apex_v2_canonical_input_preflight(
         self,
@@ -1927,7 +2607,7 @@ class EnhanceOrchestrator:
         enhanced_image_path: Optional[Path],
         materials_v3_result: Optional[dict],
     ) -> None:
-        """Fail early when APEX strict cached fast-path would violate canonical handoff."""
+        """Fail early when APEX strict violates handoff."""
         if not self._is_apex_materials_gate_enabled():
             return
         if not depth_path or not depth_path.exists():
@@ -1937,25 +2617,39 @@ class EnhanceOrchestrator:
         expected_path_resolved = expected_path.resolve()
         actual_path_resolved = Path(v2_input_path).resolve()
         enhanced_path_resolved = enhanced_image_path.resolve() if enhanced_image_path else None
-        has_masks = bool(materials_v3_result and materials_v3_result.get("material_masks"))
+        has_masks = bool(
+            materials_v3_result
+            and materials_v3_result.get(
+                "material_masks",
+            )
+        )
 
         if actual_path_resolved == expected_path_resolved and expected_path.exists() and has_masks:
             return
 
         raise ApexStrictGateError(
             "APEX_V2_CANONICAL_STEM_DIVERGENCE",
-            "APEX strict mode forbids fast-path stem divergence before V2 handoff.",
+            "APEX strict mode forbids" " fast-path stem divergence" " before V2 handoff.",
             details={
-                "expected_v2_input": str(expected_path),
-                "actual_v2_input": str(v2_input_path),
-                "enhanced_image_path": str(enhanced_image_path) if enhanced_image_path else None,
+                "expected_v2_input": str(
+                    expected_path,
+                ),
+                "actual_v2_input": str(
+                    v2_input_path,
+                ),
+                "enhanced_image_path": (str(enhanced_image_path) if enhanced_image_path else None),
                 "enhanced_image_matches_expected": bool(enhanced_path_resolved == expected_path_resolved),
-                "expected_input_exists": expected_path.exists(),
-                "has_material_masks": has_masks,
+                "expected_input_exists": (expected_path.exists()),
+                "has_material_masks": (has_masks),
             },
         )
 
-    def _serialize_material_masks(self, masks: Dict[str, np.ndarray], output_key: Path, output_dir: Path) -> Optional[Path]:
+    def _serialize_material_masks(
+        self,
+        masks: Dict[str, np.ndarray],
+        output_key: Path,
+        output_dir: Path,
+    ) -> Optional[Path]:
         """Serialize material masks to compressed NPZ file.
 
         File format: {output_key.stem}_materials_v3_masks.npz
@@ -1988,18 +2682,34 @@ class EnhanceOrchestrator:
             for mat_name in sorted(masks):
                 mask = masks[mat_name]
                 if not isinstance(mask, np.ndarray):
-                    logger.warning(f"Invalid mask type for {mat_name}: {type(mask)}, skipping serialization")
+                    logger.warning(
+                        "Invalid mask type" " for %s: %s," " skipping",
+                        mat_name,
+                        type(mask),
+                    )
                     return None
                 if mask.dtype not in (np.float32, np.float64):
-                    logger.warning(f"Invalid mask dtype for {mat_name}: {mask.dtype} (expected float32/float64), skipping")
+                    logger.warning(
+                        "Invalid mask dtype" " for %s: %s" " (expected float32" "/float64)," " skipping",
+                        mat_name,
+                        mask.dtype,
+                    )
                     return None
                 if mask.ndim != 2:
-                    logger.warning(f"Invalid mask shape for {mat_name}: {mask.shape} (expected 2D), skipping")
+                    logger.warning(
+                        "Invalid mask shape" " for %s: %s" " (expected 2D)," " skipping",
+                        mat_name,
+                        mask.shape,
+                    )
                     return None
                 ordered_masks[mat_name] = mask
 
             fixed_zip_datetime = (1980, 1, 1, 0, 0, 0)
-            with atomic_temp_file(mask_path, suffix=".npz", create_file=False) as temp_path:
+            with atomic_temp_file(
+                mask_path,
+                suffix=".npz",
+                create_file=False,
+            ) as temp_path:
                 with open(temp_path, "wb") as f:
                     with zipfile.ZipFile(
                         f,
@@ -2012,7 +2722,8 @@ class EnhanceOrchestrator:
                             payload = io.BytesIO()
                             np.lib.format.write_array(payload, mask, allow_pickle=False)
 
-                            # Use fixed entry metadata so NPZ bytes remain stable across runs.
+                            # Fixed entry metadata for
+                            # stable NPZ bytes.
                             zip_info = zipfile.ZipInfo(filename=f"{mat_name}.npy", date_time=fixed_zip_datetime)
                             zip_info.compress_type = zipfile.ZIP_DEFLATED
                             zip_info.create_system = 0
@@ -2025,26 +2736,44 @@ class EnhanceOrchestrator:
                 file_size_mb = temp_path.stat().st_size / (1024 * 1024)
                 if file_size_mb > 100:
                     logger.warning(
-                        f"Mask file unexpectedly large: {file_size_mb:.1f}MB. " f"Rejecting for safety (size limit: 100MB)"
+                        "Mask file large:" " %.1fMB." " Rejecting (limit" " 100MB)",
+                        file_size_mb,
                     )
-                    raise _MaskSerializationRejected("mask_file_too_large")
+                    raise _MaskSerializationRejected(
+                        "mask_file_too_large",
+                    )
 
             # Verify final file exists
             if not mask_path.exists():
-                logger.warning(f"Mask serialization failed: file not created at {mask_path}")
+                logger.warning(
+                    "Mask serialization" " failed: file not" " created at %s",
+                    mask_path,
+                )
                 return None
 
-            logger.info(f"Serialized {len(ordered_masks)} material masks to {mask_path.name} ({file_size_mb:.2f}MB)")
+            logger.info(
+                "Serialized %d material" " masks to %s (%.2fMB)",
+                len(ordered_masks),
+                mask_path.name,
+                file_size_mb,
+            )
             return mask_path
 
         except _MaskSerializationRejected:
             return None
         except Exception as e:
-            logger.warning(f"Failed to serialize material masks: {e}", exc_info=True)
+            logger.warning(
+                "Failed to serialize" " material masks: %s",
+                e,
+                exc_info=True,
+            )
             return None
 
-    def _persisted_material_mask_artifact_path(self, materials_v3_result: Optional[dict]) -> Optional[Path]:
-        """Return persisted mask artifact path from Materials V3 metadata when available."""
+    def _persisted_material_mask_artifact_path(
+        self,
+        materials_v3_result: Optional[dict],
+    ) -> Optional[Path]:
+        """Return persisted mask artifact path."""
         if not isinstance(materials_v3_result, dict):
             return None
 
@@ -2064,7 +2793,10 @@ class EnhanceOrchestrator:
         if artifact_path.exists():
             return artifact_path
 
-        logger.warning(f"Persisted mask artifact path missing on disk, will fall back to temp serialization: {artifact_path}")
+        logger.warning(
+            "Persisted mask artifact" " path missing on disk," " will fall back to temp" " serialization: %s",
+            artifact_path,
+        )
         return None
 
     def _run_v2_stage(
@@ -2086,8 +2818,10 @@ class EnhanceOrchestrator:
             v2_log_path: Path for V2 subprocess log
             manifest_path: Path for manifest JSON
             skip_depth: Whether depth was skipped
-            materials_v3_result: Materials V3 result with material_masks (optional)
-                If provided, masks will be serialized to disk and passed to V2 subprocess.
+            materials_v3_result: Materials V3
+                result with material_masks.
+                If provided, masks are
+                serialized and passed to V2.
 
         Returns:
             Tuple of (v2_result, v2_runtime_s, v2_report_path)
@@ -2105,11 +2839,18 @@ class EnhanceOrchestrator:
             self._enforce_v2_depth_handoff(depth_path=depth_path, v2_result=None, v2_report_path=v2_report_path)
             return {"status": "ok"}, 0.0, v2_report_path
 
-        # Use persisted segmentation artifact when available; otherwise serialize temp masks for V2 subprocess.
-        masks_path: Optional[Path] = self._persisted_material_mask_artifact_path(materials_v3_result)
+        # Use persisted segmentation artifact
+        # when available; otherwise serialize
+        # temp masks for V2 subprocess.
+        masks_path: Optional[Path] = self._persisted_material_mask_artifact_path(
+            materials_v3_result,
+        )
         cleanup_temp_masks = False
         if masks_path:
-            logger.info(f"Reusing persisted material masks for V2 subprocess: {masks_path.name}")
+            logger.info(
+                "Reusing persisted material" " masks for V2: %s",
+                masks_path.name,
+            )
         elif materials_v3_result and materials_v3_result.get("material_masks"):
             temp_dir = self.output_root / "temp"
             masks_path = self._serialize_material_masks(
@@ -2119,9 +2860,14 @@ class EnhanceOrchestrator:
             )
             if masks_path:
                 cleanup_temp_masks = True
-                logger.info(f"Material masks serialized for V2 subprocess: {masks_path.name}")
+                logger.info(
+                    "Material masks serialized" " for V2: %s",
+                    masks_path.name,
+                )
             else:
-                logger.warning("Failed to serialize material masks, V2 will run without them")
+                logger.warning(
+                    "Failed to serialize" " material masks, V2" " will run without" " them",
+                )
 
         # V2 runner: Execute subprocess with optional masks
         # depth_dir=None triggers independent depth generation in V2
@@ -2130,12 +2876,13 @@ class EnhanceOrchestrator:
                 input_path=image_input.path,
                 depth_dir=self.depth_dir if (depth_path and depth_path.exists()) else None,
                 output_dir=self.v2_dir,
-                preset=self.config.v2_preset,
+                preset=(self.config.v2_preset or "default"),
                 device=self.config.v2_device,
                 upscaler_backend=self.config.v2_upscaler_backend,
                 log_file=v2_log_path,
                 timeout=self.config.v2_timeout,
-                masks_file=masks_path,  # Pass explicit NPZ file path (Option B: eliminates naming coupling)
+                # Pass explicit NPZ file path
+                masks_file=masks_path,
             )
             v2_runtime_s = v2_result.get("runtime_s", 0.0)
             report_path_value = v2_result.get("report_path")
@@ -2149,13 +2896,20 @@ class EnhanceOrchestrator:
             return v2_result, v2_runtime_s, v2_report_path
 
         finally:
-            # Clean up temporary mask file (guaranteed cleanup even if V2 fails)
+            # Clean up temporary mask file
             if cleanup_temp_masks and masks_path and masks_path.exists():
                 try:
                     masks_path.unlink()
-                    logger.debug(f"Cleaned up temporary masks: {masks_path.name}")
+                    logger.debug(
+                        "Cleaned up temporary" " masks: %s",
+                        masks_path.name,
+                    )
                 except Exception as cleanup_error:
-                    logger.warning(f"Failed to clean up temporary masks {masks_path}: {cleanup_error}")
+                    logger.warning(
+                        "Failed to clean up" " temporary masks" " %s: %s",
+                        masks_path,
+                        cleanup_error,
+                    )
 
     def _write_manifest(
         self,
@@ -2173,22 +2927,23 @@ class EnhanceOrchestrator:
         materials_v3_runtime_s: float = 0.0,
         backend_selection_metadata: Optional[BackendSelectionMetadata] = None,
     ) -> None:
-        """Write combined manifest with all pipeline metadata.
+        """Write combined manifest with metadata.
 
         Args:
-            manifest_path: Path for manifest JSON
-            image_input: Input image information
+            manifest_path: Path for manifest
+            image_input: Input image info
             depth_metadata: Depth stage metadata
-            v2_result: V2 stage result dictionary
+            v2_result: V2 stage result dict
             v2_report_path: Path to V2 report
             pbr_assets: PBR asset metadata
-            depth_runtime_s: Depth stage runtime
+            depth_runtime_s: Depth runtime
             v2_runtime_s: V2 stage runtime
-            pipeline_start_time: Pipeline start timestamp
-            pipeline_end_time: Pipeline end timestamp
-            materials_v3_result: Materials V3 result (optional)
-            materials_v3_runtime_s: Materials V3 runtime (optional)
-            backend_selection_metadata: Per-image backend selection provenance
+            pipeline_start_time: Start time
+            pipeline_end_time: End time
+            materials_v3_result: V3 result
+            materials_v3_runtime_s: V3 runtime
+            backend_selection_metadata:
+                Per-image backend provenance
         """
         # --- PROVENANCE CAPTURE (audit-grade) ---
         # Capture provenance sidecar for RAW/TIFF inputs at ingestion point
@@ -2209,11 +2964,20 @@ class EnhanceOrchestrator:
 
             raw_summary = raw_ingest_summary(self.config)
 
-            # Capture CLI args from environment if available (set by CLI runner)
-            # Use shlex for proper shell-quoting aware parsing
+            # Capture CLI args from environment
+            # if available (set by CLI runner)
             import shlex
 
-            cli_args = shlex.split(os.environ.get("TP_CLI_ARGS", "")) if "TP_CLI_ARGS" in os.environ else None
+            cli_args = (
+                shlex.split(
+                    os.environ.get(
+                        "TP_CLI_ARGS",
+                        "",
+                    ),
+                )
+                if "TP_CLI_ARGS" in os.environ
+                else None
+            )
 
             # Capture provenance metadata
             # For RAW/TIFF: require exiftool (audit-grade)
@@ -2225,58 +2989,97 @@ class EnhanceOrchestrator:
                 repo_root=Path.cwd(),  # Repository root for git SHA
                 require_exiftool=is_audit_input,
                 ingest_profile=str(raw_summary.get("profile", "")),
-                ingest_settings_hash=str(raw_summary.get("settings_hash", "")),
+                ingest_settings_hash=str(
+                    raw_summary.get(
+                        "settings_hash",
+                        "",
+                    ),
+                ),
             )
 
             # Write provenance sidecar
             provenance.write_sidecar(provenance_sidecar_path)
 
         except ExiftoolNotFoundError as e:
-            # Hard fail if exiftool is not available for RAW/TIFF (audit requirement)
-            logger.error(f"Provenance capture failed: exiftool not available for RAW/TIFF input")
+            # Hard fail if exiftool missing
+            # for RAW/TIFF (audit requirement)
+            logger.error(
+                "Provenance capture failed:" " exiftool not available" " for RAW/TIFF input",
+            )
             raise RuntimeError(
-                f"Audit-grade provenance for RAW/TIFF requires exiftool. "
-                f"Install with: apt-get install libimage-exiftool-perl (Ubuntu/Debian) "
-                f"or brew install exiftool (macOS)"
+                "Audit-grade provenance for"
+                " RAW/TIFF requires exiftool."
+                " Install with: apt-get"
+                " install"
+                " libimage-exiftool-perl"
+                " (Ubuntu/Debian) or brew"
+                " install exiftool (macOS)"
             ) from e
         except ProvenanceError as e:
-            # Hard fail on any provenance error (no silent drops)
-            logger.error(f"Provenance capture failed: {e}")
-            raise RuntimeError(f"Provenance capture failed: {e}") from e
+            # Hard fail on provenance error
+            logger.error(
+                "Provenance capture" " failed: %s",
+                e,
+            )
+            raise RuntimeError("Provenance capture" f" failed: {e}") from e
         except Exception as e:
             # Catch-all for unexpected errors
-            logger.error(f"Unexpected error during provenance capture: {e}")
-            raise RuntimeError(f"Provenance capture failed unexpectedly: {e}") from e
+            logger.error(
+                "Unexpected error during" " provenance capture: %s",
+                e,
+            )
+            raise RuntimeError("Provenance capture failed" f" unexpectedly: {e}") from e
 
         # V2 metadata
-        # Determine V2 input/output bit depth based on emit flags and actual Materials V3 enhancement usage
-        materials_v3_enhanced_image = materials_v3_result.get("enhanced_image") if materials_v3_result else None
-        v2_input_bit_depth = (
-            16 if (self.config.emit_master16 or self.config.emit_upscaled16) and materials_v3_enhanced_image is not None else 8
+        # Determine V2 I/O bit depth based on
+        # emit flags and Materials V3 enhancement
+        materials_v3_enhanced_image = (
+            materials_v3_result.get(
+                "enhanced_image",
+            )
+            if materials_v3_result
+            else None
         )
-        v2_output_bit_depth = 16 if (self.config.emit_master16 or self.config.emit_upscaled16) else 8
-        v2_report_path_value = str(v2_report_path) if v2_report_path else v2_result.get("report_path", "")
+        _emit_16 = self.config.emit_master16 or self.config.emit_upscaled16
+        v2_input_bit_depth = 16 if _emit_16 and materials_v3_enhanced_image is not None else 8
+        v2_output_bit_depth = 16 if _emit_16 else 8
+        v2_report_path_value = (
+            str(v2_report_path)
+            if v2_report_path
+            else v2_result.get(
+                "report_path",
+                "",
+            )
+        )
         v2_output_paths = []
         v2_output_value = v2_result.get("output")
         if isinstance(v2_output_value, str) and v2_output_value:
             v2_output_paths.append(v2_output_value)
         depth_handoff_state = self._extract_v2_depth_handoff_status(v2_result=v2_result, v2_report_path=v2_report_path)
 
+        _strict_depth = (
+            bool(depth_handoff_state)
+            if depth_handoff_state is not None
+            else bool(
+                depth_metadata is not None
+                and Path(
+                    depth_metadata.depth_path,
+                ).exists()
+            )
+        )
         v2_metadata = V2Metadata(
-            preset=self.config.v2_preset,
-            strict_depth=(
-                bool(depth_handoff_state)
-                if depth_handoff_state is not None
-                else bool(depth_metadata is not None and Path(depth_metadata.depth_path).exists())
-            ),
+            preset=(self.config.v2_preset or "default"),
+            strict_depth=_strict_depth,
             output_dir="v2/",
             report_path=v2_report_path_value,
             status=v2_result["status"],
             runtime_seconds=v2_runtime_s,
-            output_paths=v2_output_paths or None,
-            error_message=v2_result.get("error"),
-            input_bit_depth=v2_input_bit_depth,
-            output_bit_depth=v2_output_bit_depth,
+            output_paths=(v2_output_paths or None),
+            error_message=v2_result.get(
+                "error",
+            ),
+            input_bit_depth=(v2_input_bit_depth),
+            output_bit_depth=(v2_output_bit_depth),
         )
 
         # Materials V3 metadata
@@ -2284,7 +3087,8 @@ class EnhanceOrchestrator:
         if materials_v3_result:
             from .manifest import MaterialsV3Metadata
 
-            # Determine bit depth based on emit flags and actual enhanced image generation
+            # Determine bit depth based on
+            # emit flags and enhanced image
             materials_v3_bit_depth = None
             if materials_v3_enhanced_image is not None:
                 materials_v3_bit_depth = 16 if (self.config.emit_master16 or self.config.emit_upscaled16) else 8
@@ -2342,23 +3146,31 @@ class EnhanceOrchestrator:
             start_time=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(pipeline_start_time)),
             end_time=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(pipeline_end_time)),
             # ADR-023 Phase 3: Backend selection metadata
-            backend_selection=backend_selection_metadata or self._active_backend_metadata or self._backend_metadata,
+            backend_selection=(backend_selection_metadata or self._active_backend_metadata or self._backend_metadata),
         )
         manifest.write(manifest_path)
 
     def enhance_image(
-        self, image_input: ImageInput, input_root: Optional[Path] = None, _precomputed_paths: Optional[Dict[str, Path]] = None
+        self,
+        image_input: ImageInput,
+        input_root: Optional[Path] = None,
+        _precomputed_paths: Optional[Dict[str, Path]] = None,
     ) -> Dict[str, Any]:
         """Run full enhancement pipeline on a single image.
 
-        Orchestrates the depth computation, PBR generation, V2 enhancement,
-        and manifest writing stages. Implements lazy preprocessing - validation
-        and preprocessing only run if depth computation is needed (not cached).
+        Orchestrates depth computation,
+        PBR generation, V2 enhancement,
+        and manifest writing stages.
+        Implements lazy preprocessing -
+        validation and preprocessing only
+        run if depth is needed (not cached).
 
         Args:
             image_input: Input image information
             input_root: Base directory for relative path calculation
-            _precomputed_paths: Internal - pre-computed paths from parallel preprocessing
+            _precomputed_paths: Internal -
+                pre-computed paths from
+                parallel preprocessing
 
         Returns:
             Dictionary with processing status and output paths
@@ -2371,13 +3183,22 @@ class EnhanceOrchestrator:
         self._active_depth_attempts = []
         self._active_selected_attempt_index = None
 
-        # PERFORMANCE FIX (#4): Use pre-computed paths from parallel batch if available
+        # PERFORMANCE FIX (#4): Use pre-computed
+        # paths from parallel batch if available
         if _precomputed_paths:
             output_key = _precomputed_paths["output_key"]
             depth_path = _precomputed_paths["depth_path"]
             manifest_path = _precomputed_paths["manifest_path"]
-            skip_depth = _precomputed_paths.get("should_skip", False)
-            logger.info(f"Processing {output_key} (using precomputed paths)...")
+            skip_depth = bool(
+                _precomputed_paths.get(
+                    "should_skip",
+                    False,
+                ),
+            )
+            logger.info(
+                "Processing %s" " (using precomputed" " paths)...",
+                output_key,
+            )
         else:
             # Generate output key for consistent artifact naming
             use_xxhash = getattr(self.config, "use_xxhash", False)
@@ -2393,7 +3214,11 @@ class EnhanceOrchestrator:
             manifest_path = self.manifests_dir / output_key.parent / f"{output_key.name}_combined.json"
 
             # Determine skip logic
-            skip_depth = not self.config.force_depth and self.should_skip_depth(depth_path, manifest_path, image_input)
+            skip_depth = not self.config.force_depth and self.should_skip_depth(
+                depth_path,
+                manifest_path,
+                image_input,
+            )
 
         # Always compute these paths (not part of skip logic)
         float_depth_path = self.depth_dir / output_key.parent / f"{output_key.name}_depth.npy"
@@ -2433,9 +3258,9 @@ class EnhanceOrchestrator:
                     "status": "skipped",
                     "reason": "Depth computation failed",
                     "image": str(image_input.path),
-                    "backend": backend_selection_metadata.resolved_backend if backend_selection_metadata else None,
+                    "backend": (backend_selection_metadata.resolved_backend if backend_selection_metadata else None),
                     "fallback_used": bool(
-                        backend_selection_metadata and backend_selection_metadata.resolution_status != "success"
+                        backend_selection_metadata and (backend_selection_metadata.resolution_status != "success")
                     ),
                     "attempts": depth_attempts,
                     "selected_attempt_index": None,
@@ -2446,13 +3271,14 @@ class EnhanceOrchestrator:
         if depth_metadata is not None and depth_attempts:
             if selected_attempt_index is None or selected_attempt_index < 0 or selected_attempt_index >= len(depth_attempts):
                 raise RuntimeError(
-                    "Depth attempt invariant violated: selected_attempt_index is out of range for attempt history."
+                    "Depth attempt invariant" " violated:" " selected_attempt_index" " is out of range for" " attempt history."
                 )
-            selected_attempt_backend = depth_attempts[selected_attempt_index].get("backend")
+            _sai = int(selected_attempt_index)
+            selected_attempt_backend = depth_attempts[_sai].get("backend")
             resolved_backend = backend_selection_metadata.resolved_backend if backend_selection_metadata else None
             if selected_attempt_backend != resolved_backend:
                 raise RuntimeError(
-                    "Depth attempt invariant violated: selected attempt backend does not match resolved backend."
+                    "Depth attempt invariant" " violated: selected" " attempt backend does" " not match resolved" " backend."
                 )
 
         (
@@ -2470,10 +3296,14 @@ class EnhanceOrchestrator:
         )
 
         # --- STAGE B: V2 ENHANCEMENT ---
-        # Use enhanced image from Materials V3 if available, otherwise use original
+        # Use enhanced image from Materials V3
+        # if available, otherwise use original
         v2_input_path = enhanced_image_path if enhanced_image_path else image_input.path
         if enhanced_image_path:
-            logger.info(f"V2 stage using Materials V3 enhanced image: {enhanced_image_path}")
+            logger.info(
+                "V2 stage using Materials" " V3 enhanced image: %s",
+                enhanced_image_path,
+            )
 
         self._enforce_apex_v2_canonical_input_preflight(
             depth_path=depth_path if depth_metadata else None,
@@ -2507,9 +3337,15 @@ class EnhanceOrchestrator:
         if enhanced_image_path and enhanced_image_path.exists():
             try:
                 enhanced_image_path.unlink()
-                logger.debug(f"Cleaned up temporary enhanced image: {enhanced_image_path}")
+                logger.debug(
+                    "Cleaned up temporary" " enhanced image: %s",
+                    enhanced_image_path,
+                )
             except Exception as e:
-                logger.warning(f"Failed to clean up temporary enhanced image: {e}")
+                logger.warning(
+                    "Failed to clean up" " temporary enhanced" " image: %s",
+                    e,
+                )
 
         # --- MANIFEST WRITING ---
         self._write_manifest(
@@ -2541,16 +3377,21 @@ class EnhanceOrchestrator:
         return {
             "status": "ok",
             "image": str(image_input.path),
-            "backend": backend_selection_metadata.resolved_backend if backend_selection_metadata else None,
-            "fallback_used": bool(backend_selection_metadata and backend_selection_metadata.resolution_status != "success"),
-            "model_id": backend_selection_metadata.model_id if backend_selection_metadata else None,
-            "device": backend_selection_metadata.device if backend_selection_metadata else None,
+            "backend": (backend_selection_metadata.resolved_backend if backend_selection_metadata else None),
+            "fallback_used": bool(backend_selection_metadata and (backend_selection_metadata.resolution_status != "success")),
+            "model_id": (backend_selection_metadata.model_id if backend_selection_metadata else None),
+            "device": (backend_selection_metadata.device if backend_selection_metadata else None),
             "attempts": depth_attempts,
             "selected_attempt_index": selected_attempt_index,
             "depth_path": str(depth_path) if depth_metadata else None,
             "depth_float_path": (
                 str(float_depth_path)
-                if getattr(self.config, "save_float_depth", False) and float_depth_path.exists()
+                if getattr(
+                    self.config,
+                    "save_float_depth",
+                    False,
+                )
+                and float_depth_path.exists()
                 else None
             ),
             "manifest": str(manifest_path),
@@ -2581,9 +3422,19 @@ class EnhanceOrchestrator:
         return True
 
     def _is_apex_materials_gate_enabled(self) -> bool:
-        """Return True when apex + Materials V3 strict gate should be enforced."""
-        return str(getattr(self.config, "quality_tier", "")).lower() == "apex" and bool(
-            getattr(self.config, "enable_materials_v3", False)
+        """Check if apex + Materials V3 gate is on."""
+        return str(
+            getattr(
+                self.config,
+                "quality_tier",
+                "",
+            ),
+        ).lower() == "apex" and bool(
+            getattr(
+                self.config,
+                "enable_materials_v3",
+                False,
+            ),
         )
 
     def _is_apex_tier(self) -> bool:
@@ -2749,21 +3600,70 @@ class EnhanceOrchestrator:
         depth_map: np.ndarray,
         depth_units: Optional[str] = None,
     ) -> Optional[Dict[str, Any]]:
-        """APEX-only depth quality gate to prevent plateau/saturation degradation."""
+        """APEX-only depth quality gate."""
         if not self._is_apex_tier():
             return None
 
         metrics = self._compute_depth_validity_metrics(depth_map, depth_units=depth_units)
 
+        _cfg = self.config
         thresholds = {
-            "finite_pct_min": float(getattr(self.config, "apex_depth_min_finite_pct", 0.999)),
-            "upper_iqr_min": float(getattr(self.config, "apex_depth_min_upper_iqr", 1e-4)),
-            "saturation_high_fraction_max": float(getattr(self.config, "apex_depth_max_high_saturation_fraction", 0.02)),
-            "saturation_low_fraction_max": float(getattr(self.config, "apex_depth_max_low_saturation_fraction", 0.02)),
-            "gradient_energy_min": float(getattr(self.config, "apex_depth_min_gradient_energy", 5e-4)),
-            "saturation_high_value": float(getattr(self.config, "apex_depth_saturation_high_value", 0.999)),
-            "saturation_low_value": float(getattr(self.config, "apex_depth_saturation_low_value", 0.001)),
-            "hist_bins": int(getattr(self.config, "apex_depth_hist_bins", 64)),
+            "finite_pct_min": float(
+                getattr(
+                    _cfg,
+                    "apex_depth_min_finite_pct",
+                    0.999,
+                ),
+            ),
+            "upper_iqr_min": float(
+                getattr(
+                    _cfg,
+                    "apex_depth_min_upper_iqr",
+                    1e-4,
+                ),
+            ),
+            "saturation_high_fraction_max": float(
+                getattr(
+                    _cfg,
+                    "apex_depth_max_high_" "saturation_fraction",
+                    0.02,
+                ),
+            ),
+            "saturation_low_fraction_max": float(
+                getattr(
+                    _cfg,
+                    "apex_depth_max_low_" "saturation_fraction",
+                    0.02,
+                ),
+            ),
+            "gradient_energy_min": float(
+                getattr(
+                    _cfg,
+                    "apex_depth_min_" "gradient_energy",
+                    5e-4,
+                ),
+            ),
+            "saturation_high_value": float(
+                getattr(
+                    _cfg,
+                    "apex_depth_saturation" "_high_value",
+                    0.999,
+                ),
+            ),
+            "saturation_low_value": float(
+                getattr(
+                    _cfg,
+                    "apex_depth_saturation" "_low_value",
+                    0.001,
+                ),
+            ),
+            "hist_bins": int(
+                getattr(
+                    _cfg,
+                    "apex_depth_hist_bins",
+                    64,
+                ),
+            ),
         }
 
         finite_fail = float(metrics.get("finite_pct") or 0.0) < thresholds["finite_pct_min"]
@@ -2807,7 +3707,11 @@ class EnhanceOrchestrator:
         warnings: List[str] = []
         if low_gradient:
             warnings.append("APEX_DEPTH_GRADIENT_LOW")
-            logger.warning("APEX depth validity warning: low gradient energy (metrics=%s, thresholds=%s)", metrics, thresholds)
+            logger.warning(
+                "APEX depth validity" " warning: low gradient" " energy (metrics=%s," " thresholds=%s)",
+                metrics,
+                thresholds,
+            )
         warnings = sorted(warnings)
 
         return {
@@ -2818,7 +3722,10 @@ class EnhanceOrchestrator:
             "thresholds": thresholds,
         }
 
-    def _enforce_apex_materials_gate(self, segmentation_result: Optional[Dict[str, Any]] = None) -> None:
+    def _enforce_apex_materials_gate(
+        self,
+        segmentation_result: Optional[Dict[str, Any]] = None,
+    ) -> None:
         """Enforce APEX strict Materials V3 gate.
 
         Gate policy (apex + materials_v3 only):
@@ -2833,23 +3740,36 @@ class EnhanceOrchestrator:
         if not bool(getattr(self.config, "enable_material_segmentation", False)):
             raise ApexStrictGateError(
                 "APEX_MATERIALS_SEGMENTATION_DISABLED",
-                "APEX strict gate violated: Materials V3 in apex tier requires segmentation enabled "
-                "(set --enable-segmentation on).",
+                "APEX strict gate violated:"
+                " Materials V3 in apex tier"
+                " requires segmentation"
+                " enabled (set"
+                " --enable-segmentation"
+                " on).",
             )
 
         backend_name = str(getattr(self.config, "material_segmentation_backend", "stub")).lower()
         if backend_name == "stub":
             raise ApexStrictGateError(
                 "APEX_MATERIALS_STUB_BACKEND",
-                "APEX strict gate violated: Materials V3 in apex tier cannot use stub segmentation backend "
-                "(set --segmentation-backend efficientsam or sam2).",
+                "APEX strict gate violated:"
+                " Materials V3 in apex tier"
+                " cannot use stub"
+                " segmentation backend"
+                " (set"
+                " --segmentation-backend"
+                " efficientsam or sam2).",
             )
 
         if not bool(getattr(self.config, "strict_backend", False)):
             raise ApexStrictGateError(
                 "APEX_MATERIALS_STRICT_SEGMENTATION_REQUIRED",
-                "APEX strict gate violated: Materials V3 in apex tier requires strict segmentation backend mode "
-                "(set --strict-segmentation).",
+                "APEX strict gate violated:"
+                " Materials V3 in apex tier"
+                " requires strict"
+                " segmentation backend mode"
+                " (set"
+                " --strict-segmentation).",
             )
 
         if segmentation_result is None:
@@ -2859,11 +3779,19 @@ class EnhanceOrchestrator:
         if not materials:
             raise ApexStrictGateError(
                 "APEX_MATERIALS_EMPTY_SEGMENTATION",
-                "APEX strict gate violated: segmentation produced no material masks; "
-                "failing instead of continuing with 0 Materials V3 operations.",
+                "APEX strict gate violated:"
+                " segmentation produced no"
+                " material masks; failing"
+                " instead of continuing"
+                " with 0 Materials V3"
+                " operations.",
             )
 
-    def _load_cached_depth(self, depth_path: Path, float_depth_path: Path):
+    def _load_cached_depth(
+        self,
+        depth_path: Path,
+        float_depth_path: Path,
+    ) -> Optional[np.ndarray]:
         """Load cached depth data, preferring float precision.
 
         Args:
@@ -2874,7 +3802,8 @@ class EnhanceOrchestrator:
             Depth array (numpy), or None if loading fails
         """
 
-        # Prefer float depth for better PBR quality (avoid quantization artifacts)
+        # Prefer float depth for better PBR
+        # quality (avoid quantization artifacts)
         if float_depth_path.exists():
             try:
                 depth_data = np.load(str(float_depth_path))
@@ -2890,7 +3819,7 @@ class EnhanceOrchestrator:
 
                 depth_data = read_depth_u16_png(depth_path)
 
-                # Robust normalization - handle both uint16 and pre-normalized float
+                # Robust normalization
                 depth_data = np.asarray(depth_data)
                 if depth_data.dtype == np.uint16:
                     # Reader returned uint16 - normalize once
@@ -2911,9 +3840,11 @@ class EnhanceOrchestrator:
         return None
 
     def _parallel_preprocess_batch(
-        self, image_inputs: List[ImageInput], input_root: Optional[Path] = None
+        self,
+        image_inputs: List[ImageInput],
+        input_root: Optional[Path] = None,
     ) -> List[Dict[str, Any]]:
-        """Parallel preprocessing: validation, output key generation, skip logic.
+        """Parallel preprocessing.
 
         Phase 2: I/O-bound operations parallelized with ThreadPoolExecutor.
 
@@ -2934,12 +3865,26 @@ class EnhanceOrchestrator:
                     results.append(result)
                 except Exception as e:
                     img = futures[future]
-                    logger.error(f"Preprocessing failed for {img.path}: {e}")
-                    results.append({"status": "error", "image_input": img, "error": str(e)})
+                    logger.error(
+                        "Preprocessing failed" " for %s: %s",
+                        img.path,
+                        e,
+                    )
+                    results.append(
+                        {
+                            "status": "error",
+                            "image_input": img,
+                            "error": str(e),
+                        }
+                    )
 
             return results
 
-    def _preprocess_single(self, image_input: ImageInput, input_root: Optional[Path]) -> Dict[str, Any]:
+    def _preprocess_single(
+        self,
+        image_input: ImageInput,
+        input_root: Optional[Path],
+    ) -> Dict[str, Any]:
         """Preprocess single image: generate paths and check skip logic.
 
         Args:
@@ -2972,7 +3917,9 @@ class EnhanceOrchestrator:
         }
 
     def enhance_batch_parallel(
-        self, image_inputs: List[ImageInput], input_root: Optional[Path] = None
+        self,
+        image_inputs: List[ImageInput],
+        input_root: Optional[Path] = None,
     ) -> List[Dict[str, Any]]:
         """Process batch of images with parallel I/O operations.
 
@@ -2990,10 +3937,17 @@ class EnhanceOrchestrator:
         """
         if not self._use_parallel or len(image_inputs) < 4:
             # Fall back to sequential for small batches
-            logger.debug(f"Using sequential processing (batch size: {len(image_inputs)})")
+            logger.debug(
+                "Using sequential" " processing" " (batch size: %d)",
+                len(image_inputs),
+            )
             return [self.enhance_image(img, input_root) for img in image_inputs]
 
-        logger.info(f"Parallel batch processing: {len(image_inputs)} images with {self.max_workers} workers")
+        logger.info(
+            "Parallel batch processing:" " %d images with %d workers",
+            len(image_inputs),
+            self.max_workers,
+        )
 
         # Phase 1: Parallel preprocessing (I/O-bound)
         preprocessed = self._parallel_preprocess_batch(image_inputs, input_root)
@@ -3017,11 +3971,37 @@ class EnhanceOrchestrator:
                 result = self.enhance_image(item["image_input"], input_root, _precomputed_paths=precomputed)
                 results.append(result)
             except Exception as e:
-                logger.error(f"Enhancement failed for {item['image_input'].path}: {e}")
-                error_payload: Dict[str, Any] = {"status": "error", "image": str(item["image_input"].path), "error": str(e)}
-                error_payload["backend"] = getattr(self, "_active_backend_metadata", self._backend_metadata).resolved_backend
-                error_payload["attempts"] = list(getattr(self, "_active_depth_attempts", []) or [])
-                error_payload["selected_attempt_index"] = getattr(self, "_active_selected_attempt_index", None)
+                logger.error(
+                    "Enhancement failed" " for %s: %s",
+                    item["image_input"].path,
+                    e,
+                )
+                error_payload: Dict[str, Any] = {
+                    "status": "error",
+                    "image": str(
+                        item["image_input"].path,
+                    ),
+                    "error": str(e),
+                }
+                _abm = getattr(
+                    self,
+                    "_active_backend_metadata",
+                    self._backend_metadata,
+                )
+                error_payload["backend"] = _abm.resolved_backend
+                error_payload["attempts"] = list(
+                    getattr(
+                        self,
+                        "_active_depth_attempts",
+                        [],
+                    )
+                    or [],
+                )
+                error_payload["selected_attempt_index"] = getattr(
+                    self,
+                    "_active_selected_attempt_index",
+                    None,
+                )
                 if isinstance(e, ApexStrictGateError):
                     error_payload["error_code"] = e.code
                     error_payload["error_details"] = e.details
@@ -3029,7 +4009,11 @@ class EnhanceOrchestrator:
 
         return results
 
-    def enhance_batch(self, input_dir: Path, image_extensions: Optional[List[str]] = None) -> List[Dict[str, Any]]:
+    def enhance_batch(
+        self,
+        input_dir: Path,
+        image_extensions: Optional[List[str]] = None,
+    ) -> List[Dict[str, Any]]:
         """Process a batch of images with accurate execution timestamps.
 
         Args:
@@ -3050,10 +4034,11 @@ class EnhanceOrchestrator:
         self._active_batch_id = batch_id
         logger.info(f"Batch {batch_id}: Scanning {input_dir}")
 
-        # ADR-023 Phase 3: Capture backend selection metadata and log truth line
+        # ADR-023 Phase 3: Capture backend
+        # selection metadata and log truth line
         backend_metadata = self._capture_backend_metadata()
         logger.info(
-            "Backend selection: requested=%s resolved=%s status=%s device=%s model=%s",
+            "Backend selection:" " requested=%s" " resolved=%s" " status=%s device=%s" " model=%s",
             backend_metadata.requested_backend or "auto",
             backend_metadata.resolved_backend,
             backend_metadata.resolution_status,
@@ -3065,11 +4050,13 @@ class EnhanceOrchestrator:
         self._backend_metadata = backend_metadata
 
         # Use input discovery to exclude depth artifacts and derived outputs
-        # ROBUSTNESS FIX (#6): Pass output_root to explicitly exclude output directory
+        # ROBUSTNESS FIX (#6): Pass output_root
+        # to explicitly exclude output directory
         discovery_config = DiscoveryConfig(strict_mode=self.config.strict_inputs)
         images = discover_images(input_dir, discovery_config, image_extensions, output_dir=self.output_root)
 
-        # Inert scene-group bridge: preserve existing per-image behavior and order.
+        # Inert scene-group bridge: preserve
+        # existing per-image behavior and order.
         sorted_images = sorted(images)
         scene_groups = build_scene_groups(
             sorted_images,
@@ -3079,7 +4066,10 @@ class EnhanceOrchestrator:
         image_inputs = [ImageInput(img) for scene in scene_groups for img in scene.images]
 
         if self._use_parallel and len(image_inputs) >= 4:
-            logger.info(f"Using parallel batch processing for {len(image_inputs)} images")
+            logger.info(
+                "Using parallel batch" " processing for %d" " images",
+                len(image_inputs),
+            )
             results = self.enhance_batch_parallel(image_inputs, input_root=input_dir)
         else:
             # Sequential processing (original behavior)
@@ -3089,12 +4079,32 @@ class EnhanceOrchestrator:
                     results.append(self.enhance_image(img_input, input_root=input_dir))
                 except Exception as e:
                     logger.error(f"Failed {img_input.path}: {e}")
-                    error_payload: Dict[str, Any] = {"status": "error", "image": str(img_input.path), "error": str(e)}
-                    error_payload["backend"] = getattr(
-                        self, "_active_backend_metadata", self._backend_metadata
-                    ).resolved_backend
-                    error_payload["attempts"] = list(getattr(self, "_active_depth_attempts", []) or [])
-                    error_payload["selected_attempt_index"] = getattr(self, "_active_selected_attempt_index", None)
+                    error_payload: Dict[str, Any] = {
+                        "status": "error",
+                        "image": str(
+                            img_input.path,
+                        ),
+                        "error": str(e),
+                    }
+                    _abm = getattr(
+                        self,
+                        "_active_backend_metadata",
+                        self._backend_metadata,
+                    )
+                    error_payload["backend"] = _abm.resolved_backend
+                    error_payload["attempts"] = list(
+                        getattr(
+                            self,
+                            "_active_depth_attempts",
+                            [],
+                        )
+                        or [],
+                    )
+                    error_payload["selected_attempt_index"] = getattr(
+                        self,
+                        "_active_selected_attempt_index",
+                        None,
+                    )
                     if isinstance(e, ApexStrictGateError):
                         error_payload["error_code"] = e.code
                         error_payload["error_details"] = e.details
@@ -3113,7 +4123,8 @@ class EnhanceOrchestrator:
         runtime_stats = compute_batch_runtime_stats(runtimes)
 
         # Detect runtime outliers (images taking >5× median time)
-        # PERFORMANCE FIX (#3): Compute median once, pass to all outlier checks (O(n) instead of O(n²))
+        # PERFORMANCE FIX (#3): Compute median
+        # once, pass to all outlier checks
         median_runtime = runtime_stats.get("median", 0.0)
         outliers = []
         for r in results:
@@ -3134,7 +4145,7 @@ class EnhanceOrchestrator:
             batch_id=batch_id,
             start_time=batch_start_utc,
             end_time=batch_end_utc,
-            config={"model": self.config.model_variant.value.name},
+            config={"model": self._model_variant.value.name},
             results=results,
             stats={
                 **runtime_stats,
@@ -3161,7 +4172,9 @@ class EnhanceOrchestrator:
         return results
 
     @staticmethod
-    def _result_image_key(path_value: str) -> Optional[str]:
+    def _result_image_key(
+        path_value: Any,
+    ) -> Optional[str]:
         """Normalize result image path for lookup joins."""
         if not isinstance(path_value, str) or not path_value:
             return None
@@ -3185,8 +4198,13 @@ class EnhanceOrchestrator:
             )
         if not bool(getattr(self.config, "accept_research_tools_license", False)):
             raise ReconstructionLicenseRestrictionError(
-                "Scene reconstruction requires accept_research_tools_license=True "
-                "to acknowledge research-only tool licensing constraints."
+                "Scene reconstruction"
+                " requires"
+                " accept_research_tools"
+                "_license=True to"
+                " acknowledge research-only"
+                " tool licensing"
+                " constraints."
             )
 
         sidecar_value = getattr(self.config, "cameras_sidecar_path", None)
@@ -3196,7 +4214,9 @@ class EnhanceOrchestrator:
 
         result_by_path: Dict[str, Dict[str, Any]] = {}
         for result in results:
-            path_key = self._result_image_key(result.get("image"))
+            path_key = self._result_image_key(
+                result.get("image"),
+            )
             if path_key:
                 result_by_path[path_key] = result
 
@@ -3206,11 +4226,11 @@ class EnhanceOrchestrator:
 
             scene_results: List[Dict[str, Any]] = []
             for image_path in scene.images:
-                result = result_by_path.get(str(Path(image_path).resolve()))
-                if not isinstance(result, dict) or result.get("status") != "ok":
+                img_result = result_by_path.get(str(Path(image_path).resolve()))
+                if not isinstance(img_result, dict) or img_result.get("status") != "ok":
                     scene_results = []
                     break
-                scene_results.append(result)
+                scene_results.append(img_result)
             if not scene_results:
                 continue
 
@@ -3221,43 +4241,56 @@ class EnhanceOrchestrator:
                 sidecar_payload=sidecar_payload,
             )
             if not cameras:
-                logger.info("Skipping reconstruction for scene %s: cameras unavailable", scene.scene_id)
+                logger.info(
+                    "Skipping reconstruction" " for scene %s:" " cameras unavailable",
+                    scene.scene_id,
+                )
                 continue
             camera_sources = {camera.provenance.source for camera in cameras}
             if len(camera_sources) > 1:
                 logger.warning(
-                    "Skipping reconstruction for scene %s: mixed camera sources %s",
+                    "Skipping reconstruction" " for scene %s: mixed" " camera sources %s",
                     scene.scene_id,
                     sorted(camera_sources),
                 )
                 continue
             if any(camera.provenance.confidence == "low" for camera in cameras):
                 logger.warning(
-                    "Skipping reconstruction for scene %s: low-confidence camera provenance detected",
+                    "Skipping reconstruction" " for scene %s:" " low-confidence camera" " provenance detected",
                     scene.scene_id,
                 )
                 continue
             try:
                 dataset_health = check_camera_geometry_sanity(cameras)
-                threshold_raw = os.getenv("TP_RECONSTRUCTION_RISK_THRESHOLD", "0.65")
+                threshold_raw: Optional[str] = os.getenv(
+                    "TP_RECONSTRUCTION" "_RISK_THRESHOLD",
+                    "0.65",
+                )
+                risk_threshold: float = 0.65
                 try:
-                    risk_threshold = float(threshold_raw)
+                    risk_threshold = float(
+                        threshold_raw or "0.65",
+                    )
                 except ValueError:
                     logger.warning(
-                        "Invalid TP_RECONSTRUCTION_RISK_THRESHOLD=%r; using default 0.65",
+                        "Invalid TP_RECONSTRUCTION" "_RISK_THRESHOLD=%r;" " using default 0.65",
                         threshold_raw,
                     )
                     risk_threshold = 0.65
                 risk_score = float(dataset_health["risk_score"])
                 if risk_score > risk_threshold:
                     message = (
-                        f"Dataset risk score {risk_score:.3f} exceeds threshold "
-                        f"{risk_threshold:.3f} for scene {scene.scene_id}"
+                        f"Dataset risk score"
+                        f" {risk_score:.3f}"
+                        f" exceeds threshold"
+                        f" {risk_threshold:.3f}"
+                        f" for scene"
+                        f" {scene.scene_id}"
                     )
                     triage_report = build_dataset_triage_report(scene.scene_id, dataset_health)
                     scene_results[0]["reconstruction_risk_gate_message"] = message
                     scene_results[0]["reconstruction_risk_gate_triage"] = triage_report
-                    health_with_triage = dict(dataset_health)
+                    health_with_triage: Dict[str, Any] = dict(dataset_health)
                     health_with_triage["triage"] = triage_report
                     scene_results[0]["reconstruction_dataset_health"] = health_with_triage
                     logger.warning("RECONSTRUCTION_DATASET_RISK_GATE: %s\n%s", message, triage_report)
@@ -3265,7 +4298,7 @@ class EnhanceOrchestrator:
                 cameras, camera_normalization = normalize_camera_poses(cameras)
             except ValueError as exc:
                 logger.warning(
-                    "Skipping reconstruction for scene %s: camera geometry validation failed (%s)",
+                    "Skipping reconstruction" " for scene %s: camera" " geometry validation" " failed (%s)",
                     scene.scene_id,
                     exc,
                 )
@@ -3279,7 +4312,7 @@ class EnhanceOrchestrator:
             scene_results[0]["reconstruction_preflight_path"] = str(preflight_path)
             if not preflight_result.valid:
                 logger.warning(
-                    "Skipping reconstruction for scene %s: preflight failed (%s)",
+                    "Skipping reconstruction" " for scene %s: preflight" " failed (%s)",
                     scene.scene_id,
                     preflight_result.reason,
                 )
@@ -3290,7 +4323,13 @@ class EnhanceOrchestrator:
                 dataset_root=dataset_root,
                 cameras=cameras,
                 metadata={
-                    "grouping_mode": str(getattr(self.config, "grouping_mode", "single")),
+                    "grouping_mode": str(
+                        getattr(
+                            self.config,
+                            "grouping_mode",
+                            "single",
+                        ),
+                    ),
                     "camera_normalization": camera_normalization,
                     "dataset_health": dataset_health,
                 },
@@ -3298,8 +4337,17 @@ class EnhanceOrchestrator:
 
             segmentation_artifact_paths = tuple(
                 Path(path_value)
-                for path_value in (result.get("segmentation_mask_path") for result in scene_results)
-                if isinstance(path_value, str) and path_value
+                for path_value in (
+                    result.get(
+                        "segmentation_mask_path",
+                    )
+                    for result in scene_results
+                )
+                if isinstance(
+                    path_value,
+                    str,
+                )
+                and path_value
             )
             scene_manifest = build_scene_manifest(
                 context=context,
@@ -3310,18 +4358,45 @@ class EnhanceOrchestrator:
             input_hashes = scene_manifest.get("input_hashes", {})
             artifact_index_entries: List[Dict[str, Any]] = []
             if isinstance(input_hashes, dict):
-                for relative_path in sorted(input_hashes):
-                    digest = input_hashes.get(relative_path)
-                    if isinstance(relative_path, str) and relative_path and isinstance(digest, str) and len(digest) == 64:
+                for relative_path in sorted(
+                    input_hashes,
+                ):
+                    digest = input_hashes.get(
+                        relative_path,
+                    )
+                    if (
+                        isinstance(
+                            relative_path,
+                            str,
+                        )
+                        and relative_path
+                        and isinstance(
+                            digest,
+                            str,
+                        )
+                        and len(digest) == 64
+                    ):
                         artifact_index_entries.append({"relative_path": relative_path, "sha256": digest})
             artifact_index_by_relative_path = {
                 entry["relative_path"]: entry for entry in artifact_index_entries if isinstance(entry, dict)
             }
             run_card_merkle_root = _compute_artifact_merkle_root(artifact_index_entries)
             reconstruction_config = {
-                "iterations": int(getattr(self.config, "reconstruction_iterations", 1000)),
+                "iterations": int(
+                    getattr(
+                        self.config,
+                        "reconstruction_iterations",
+                        1000,
+                    ),
+                ),
                 "tier": reconstruction_tier,
-                "grouping_mode": str(getattr(self.config, "grouping_mode", "single")),
+                "grouping_mode": str(
+                    getattr(
+                        self.config,
+                        "grouping_mode",
+                        "single",
+                    ),
+                ),
             }
 
             try:
@@ -3339,24 +4414,56 @@ class EnhanceOrchestrator:
                     scene_manifest=scene_manifest,
                     output_dir=reconstruction_output_dir,
                 )
-                scene_results[0]["reconstruction_scene_manifest_path"] = str(scene_manifest_path)
-                scene_results[0]["reconstruction_scene_fingerprint"] = scene_fingerprint
-                if bool(getattr(self.config, "emit_scene_debug_bundle", False)):
+                scene_results[0]["reconstruction_scene" "_manifest_path"] = str(
+                    scene_manifest_path,
+                )
+                scene_results[0]["reconstruction_scene" "_fingerprint"] = scene_fingerprint
+                if bool(
+                    getattr(
+                        self.config,
+                        "emit_scene_debug_bundle",
+                        False,
+                    ),
+                ):
                     debug_paths = write_scene_debug_bundle(
                         context=context,
-                        segmentation_artifact_paths=segmentation_artifact_paths,
+                        segmentation_artifact_paths=(segmentation_artifact_paths),
                         scene_manifest=scene_manifest,
-                        output_dir=reconstruction_output_dir,
+                        output_dir=(reconstruction_output_dir),
                     )
                     debug_scene_manifest = debug_paths.get("scene_manifest_path")
-                    if isinstance(debug_scene_manifest, Path) and debug_scene_manifest.exists():
-                        scene_results[0]["reconstruction_debug_manifest_path"] = str(debug_scene_manifest)
+                    if (
+                        isinstance(
+                            debug_scene_manifest,
+                            Path,
+                        )
+                        and debug_scene_manifest.exists()
+                    ):
+                        scene_results[0]["reconstruction_debug" "_manifest_path"] = str(
+                            debug_scene_manifest,
+                        )
                     debug_cameras = debug_paths.get("cameras_path")
-                    if isinstance(debug_cameras, Path) and debug_cameras.exists():
-                        scene_results[0]["reconstruction_debug_cameras_path"] = str(debug_cameras)
+                    if (
+                        isinstance(
+                            debug_cameras,
+                            Path,
+                        )
+                        and debug_cameras.exists()
+                    ):
+                        scene_results[0]["reconstruction_debug" "_cameras_path"] = str(
+                            debug_cameras,
+                        )
                     debug_preview = debug_paths.get("reprojection_preview_path")
-                    if isinstance(debug_preview, Path) and debug_preview.exists():
-                        scene_results[0]["reconstruction_debug_preview_path"] = str(debug_preview)
+                    if (
+                        isinstance(
+                            debug_preview,
+                            Path,
+                        )
+                        and debug_preview.exists()
+                    ):
+                        scene_results[0]["reconstruction_debug" "_preview_path"] = str(
+                            debug_preview,
+                        )
 
                 report_path = self._maybe_use_reconstruction_cache(
                     scene_id=scene.scene_id,
@@ -3381,7 +4488,11 @@ class EnhanceOrchestrator:
             if not isinstance(report_path, Path):
                 report_path = Path(str(report_path))
             if not report_path.exists():
-                logger.warning("Scene reconstruction returned missing report path for %s: %s", scene.scene_id, report_path)
+                logger.warning(
+                    "Scene reconstruction" " returned missing" " report path for" " %s: %s",
+                    scene.scene_id,
+                    report_path,
+                )
                 continue
 
             scene_results[0]["reconstruction_report_path"] = str(report_path)
@@ -3390,14 +4501,18 @@ class EnhanceOrchestrator:
             if manifest_path.exists():
                 scene_results[0]["reconstruction_manifest_path"] = str(manifest_path)
             else:
-                logger.warning("Reconstruction manifest missing for %s: %s", scene.scene_id, manifest_path)
+                logger.warning(
+                    "Reconstruction manifest" " missing for %s: %s",
+                    scene.scene_id,
+                    manifest_path,
+                )
             diagnostics_path = diagnostics_artifact_path(scene_id=scene.scene_id, output_dir=reconstruction_output_dir)
             if diagnostics_path.exists():
                 scene_results[0]["reconstruction_diagnostics_path"] = str(diagnostics_path)
             else:
                 logger.warning("Scene diagnostics missing for %s: %s", scene.scene_id, diagnostics_path)
             logger.info(
-                "Scene reconstruction completed: scene_id=%s report=%s diagnostics=%s",
+                "Scene reconstruction" " completed:" " scene_id=%s" " report=%s" " diagnostics=%s",
                 scene.scene_id,
                 report_path,
                 diagnostics_path,
@@ -3410,9 +4525,12 @@ class EnhanceOrchestrator:
         scene_fingerprint: str,
         run_card_merkle_root: str,
     ) -> Optional[Path]:
-        """Use cached content-addressed reconstruction report when stamps match."""
+        """Use cached reconstruction report."""
         cache_dir = self.reconstruction_dir / scene_fingerprint
-        report_path = cache_dir / f"{sanitize_path_component_nonlossy(scene_id)}_reconstruction_report.json"
+        _sid = sanitize_path_component_nonlossy(
+            scene_id,
+        )
+        report_path = cache_dir / f"{_sid}_reconstruction" f"_report.json"
         if not report_path.exists():
             return None
         try:
@@ -3427,9 +4545,11 @@ class EnhanceOrchestrator:
         return report_path
 
     def _collect_run_card_artifact_paths(
-        self, results: List[Dict[str, Any]], batch_manifest_path: Optional[Path] = None
+        self,
+        results: List[Dict[str, Any]],
+        batch_manifest_path: Optional[Path] = None,
     ) -> List[Path]:
-        """Collect deterministic artifact paths associated with the current batch."""
+        """Collect artifact paths for the batch."""
         artifact_paths: List[Path] = []
         batch_id: Optional[str] = None
 
@@ -3485,7 +4605,11 @@ class EnhanceOrchestrator:
                     try:
                         combined_manifest = CombinedManifest.load(manifest_path)
                     except Exception as exc:
-                        logger.debug(f"Skipping artifact extraction for unreadable manifest {manifest_path}: {exc}")
+                        logger.debug(
+                            "Skipping artifact" " extraction for" " unreadable manifest" " %s: %s",
+                            manifest_path,
+                            exc,
+                        )
                     else:
                         if combined_manifest.depth and combined_manifest.depth.depth_path:
                             artifact_paths.append(Path(combined_manifest.depth.depth_path))
@@ -3495,10 +4619,18 @@ class EnhanceOrchestrator:
                             artifact_paths.append(report_path)
                             if report_path.exists():
                                 try:
-                                    with open(report_path, "r", encoding="utf-8") as report_file:
+                                    with open(
+                                        report_path,
+                                        "r",
+                                        encoding="utf-8",
+                                    ) as report_file:
                                         report_payload = json.load(report_file)
                                 except Exception as exc:
-                                    logger.debug(f"Failed to parse V2 report for artifact indexing ({report_path}): {exc}")
+                                    logger.debug(
+                                        "Failed to parse" " V2 report for" " artifact indexing" " (%s): %s",
+                                        report_path,
+                                        exc,
+                                    )
                                 else:
                                     for field in ("output", "depth_map"):
                                         value = report_payload.get(field)
@@ -3511,10 +4643,20 @@ class EnhanceOrchestrator:
                                     artifact_paths.append(Path(value))
 
                         if combined_manifest.materials_v3 and isinstance(
-                            combined_manifest.materials_v3.segmentation_metadata, dict
+                            combined_manifest.materials_v3.segmentation_metadata,
+                            dict,
                         ):
-                            mask_artifact_path = combined_manifest.materials_v3.segmentation_metadata.get("mask_artifact_path")
-                            if isinstance(mask_artifact_path, str) and mask_artifact_path:
+                            seg_md = combined_manifest.materials_v3.segmentation_metadata
+                            mask_artifact_path = seg_md.get(
+                                "mask_artifact_path",
+                            )
+                            if (
+                                isinstance(
+                                    mask_artifact_path,
+                                    str,
+                                )
+                                and mask_artifact_path
+                            ):
                                 artifact_paths.append(Path(mask_artifact_path))
 
             depth_value = result.get("depth_path")
@@ -3530,8 +4672,11 @@ class EnhanceOrchestrator:
 
         return artifact_paths
 
-    def _compute_backend_summary(self, results: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """Compute concise backend fallback summary for run-card telemetry."""
+    def _compute_backend_summary(
+        self,
+        results: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        """Backend fallback summary for run-card."""
         requested_backend = self._backend_metadata.requested_backend or "auto"
         observed_ok_backends = {
             str(result.get("backend")) for result in results if result.get("status") == "ok" and result.get("backend")
@@ -3614,7 +4759,9 @@ class EnhanceOrchestrator:
             "device": self._backend_metadata.device,
             "model_id": self._backend_metadata.model_id,
         }
-        # Explicit wrapper semantics when logical backend delegates to a different runtime engine.
+        # Explicit wrapper semantics when
+        # logical backend delegates to a
+        # different runtime engine.
         if self._backend_metadata.resolved_backend != backend_selection_resolved and backend_summary["fallback_images"] == 0:
             backend_selection["logical_backend"] = self._backend_metadata.resolved_backend
             backend_selection["resolved_engine"] = backend_selection_resolved
@@ -3640,7 +4787,7 @@ class EnhanceOrchestrator:
             "artifact_merkle_root": artifact_merkle_root,
         }
 
-        def _json_default(obj: Any):
+        def _json_default(obj: Any) -> Any:
             # --- ConfigFingerprint ---
             if isinstance(obj, ConfigFingerprint):
                 fingerprint_payload = {
@@ -3657,7 +4804,11 @@ class EnhanceOrchestrator:
                     **fingerprint_payload,
                     "hash_algorithm": "sha256",
                     "canonical_json": canonical_json,
-                    "sha256": hashlib.sha256(canonical_json.encode("utf-8")).hexdigest(),
+                    "sha256": hashlib.sha256(
+                        canonical_json.encode(
+                            "utf-8",
+                        ),
+                    ).hexdigest(),
                 }
 
             # --- Enum handling ---
@@ -3677,7 +4828,13 @@ class EnhanceOrchestrator:
                 return obj.to_dict()
 
             # --- Controlled __dict__ fallback (avoid deep recursion) ---
-            if hasattr(obj, "__dict__") and not isinstance(obj, (np.ndarray,)):
+            if hasattr(
+                obj,
+                "__dict__",
+            ) and not isinstance(
+                obj,
+                (np.ndarray,),
+            ):
                 return {k: v for k, v in vars(obj).items() if not k.startswith("_")}
 
             # --- Final deterministic fallback ---
@@ -3686,7 +4843,7 @@ class EnhanceOrchestrator:
         schema_path = _run_card_schema_path()
         if not schema_path.exists():
             logger.warning(
-                "Run card schema not found at %s; skipping run card emission for batch_id=%s",
+                "Run card schema not found" " at %s; skipping run card" " emission for" " batch_id=%s",
                 schema_path,
                 batch_id,
             )
@@ -3717,7 +4874,12 @@ class EnhanceOrchestrator:
                 )
         except Exception:
             logger.exception(
-                "Run card emission failed for batch_id=%s (schema: %s, output: %s). Continuing without run card.",
+                "Run card emission failed"
+                " for batch_id=%s"
+                " (schema: %s,"
+                " output: %s)."
+                " Continuing without"
+                " run card.",
                 batch_id,
                 schema_path,
                 run_card_path,

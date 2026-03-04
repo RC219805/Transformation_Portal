@@ -14,7 +14,16 @@ from bisect import bisect_left
 from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, AsyncGenerator, Deque, Dict, List, Optional
+from typing import (
+    Any,
+    AsyncGenerator,
+    Callable,
+    Deque,
+    Dict,
+    List,
+    Mapping,
+    Optional,
+)
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exception_handlers import request_validation_exception_handler as fastapi_request_validation_exception_handler
@@ -23,7 +32,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.trustedhost import TrustedHostMiddleware
-from starlette.responses import StreamingResponse
+from starlette.responses import Response, StreamingResponse
 
 # ----------------------------
 # In-memory job store (MVP)
@@ -86,7 +95,10 @@ def _normalize_root_path(value: str | Path) -> Path:
 
 def _env_path_roots(name: str, default: List[Path]) -> List[Path]:
     raw = os.getenv(name)
-    values = [str(path) for path in default] if raw is None else [item.strip() for item in raw.split(",") if item.strip()]
+    if raw is None:
+        values = [str(path) for path in default]
+    else:
+        values = [item.strip() for item in raw.split(",") if item.strip()]
 
     roots: List[Path] = []
     invalid_values: List[str] = []
@@ -99,7 +111,11 @@ def _env_path_roots(name: str, default: List[Path]) -> List[Path]:
         if root not in roots:
             roots.append(root)
     if invalid_values:
-        LOGGER.warning("%s ignored invalid roots: %s", name, ", ".join(sorted(set(invalid_values))))
+        LOGGER.warning(
+            "%s ignored invalid roots: %s",
+            name,
+            ", ".join(sorted(set(invalid_values))),
+        )
     if raw is not None and not roots:
         raise RuntimeError(f"{name} is set but contains no valid roots")
     if not roots:
@@ -117,7 +133,10 @@ def _resolve_untrusted_request_path(path_value: str) -> Path:
     return Path(os.path.realpath(candidate))
 
 
-def _is_within_allowed_roots(candidate: Path, allowed_roots: List[Path]) -> bool:
+def _is_within_allowed_roots(
+    candidate: Path,
+    allowed_roots: List[Path],
+) -> bool:
     candidate_real = os.path.realpath(candidate)
     for root in allowed_roots:
         root_real = os.path.realpath(root)
@@ -130,7 +149,10 @@ def _is_within_allowed_roots(candidate: Path, allowed_roots: List[Path]) -> bool
     return False
 
 
-def _validate_path_against_roots(path_value: str, allowed_roots: List[Path]) -> str:
+def _validate_path_against_roots(
+    path_value: str,
+    allowed_roots: List[Path],
+) -> str:
     try:
         resolved = _resolve_untrusted_request_path(path_value)
     except (OSError, RuntimeError, ValueError) as exc:
@@ -146,14 +168,32 @@ STATUS_LOG_LIMIT = 250
 EVENT_QUEUE_MAXSIZE = 512
 HEARTBEAT_SECONDS = 15
 JOB_RETENTION_SECONDS = _env_int("TP_JOB_RETENTION_SECONDS", 3600, minimum=1)
-CLEANUP_INTERVAL_SECONDS = _env_int("TP_CLEANUP_INTERVAL_SECONDS", 60, minimum=1)
-CANCEL_GRACE_SECONDS = _env_float("TP_CANCEL_GRACE_SECONDS", 5.0, minimum=0.1)
+CLEANUP_INTERVAL_SECONDS = _env_int(
+    "TP_CLEANUP_INTERVAL_SECONDS",
+    60,
+    minimum=1,
+)
+CANCEL_GRACE_SECONDS = _env_float(
+    "TP_CANCEL_GRACE_SECONDS",
+    5.0,
+    minimum=0.1,
+)
 JOB_LIST_LIMIT = _env_int("TP_JOB_LIST_LIMIT", 200, minimum=1)
 MAX_INDEXED_ARTIFACTS = _env_int("TP_MAX_INDEXED_ARTIFACTS", 200, minimum=1)
 PROGRESS_RE = re.compile(r"progress=(\d{1,3})%")
-DEFAULT_ALLOWED_ORIGINS = ["http://localhost", "http://localhost:3000", "http://127.0.0.1:8000"]
-ALLOWED_ORIGINS = _env_csv("TP_ALLOWED_ORIGINS", DEFAULT_ALLOWED_ORIGINS)
-TRUSTED_HOSTS = _env_csv("TP_TRUSTED_HOSTS", ["localhost", "127.0.0.1", "::1", "testserver"])
+DEFAULT_ALLOWED_ORIGINS = [
+    "http://localhost",
+    "http://localhost:3000",
+    "http://127.0.0.1:8000",
+]
+ALLOWED_ORIGINS = _env_csv(
+    "TP_ALLOWED_ORIGINS",
+    DEFAULT_ALLOWED_ORIGINS,
+)
+TRUSTED_HOSTS = _env_csv(
+    "TP_TRUSTED_HOSTS",
+    ["localhost", "127.0.0.1", "::1", "testserver"],
+)
 ENABLE_TRUSTED_HOSTS = _env_bool("TP_ENABLE_TRUSTED_HOSTS", True)
 API_KEY_HEADER = os.getenv("TP_API_KEY_HEADER", "x-api-key").strip().lower() or "x-api-key"
 API_KEY_SECRET = os.getenv("TP_API_KEY", "").strip()
@@ -169,8 +209,14 @@ DEFAULT_ALLOWED_PATH_ROOTS = [
     REPO_ROOT,
     Path(tempfile.gettempdir()).resolve(),
 ]
-ALLOWED_INPUT_ROOTS = _env_path_roots("TP_ALLOWED_INPUT_ROOTS", DEFAULT_ALLOWED_PATH_ROOTS)
-ALLOWED_OUTPUT_ROOTS = _env_path_roots("TP_ALLOWED_OUTPUT_ROOTS", DEFAULT_ALLOWED_PATH_ROOTS)
+ALLOWED_INPUT_ROOTS = _env_path_roots(
+    "TP_ALLOWED_INPUT_ROOTS",
+    DEFAULT_ALLOWED_PATH_ROOTS,
+)
+ALLOWED_OUTPUT_ROOTS = _env_path_roots(
+    "TP_ALLOWED_OUTPUT_ROOTS",
+    DEFAULT_ALLOWED_PATH_ROOTS,
+)
 ALLOWED_PATH_ROOTS = list(dict.fromkeys([*ALLOWED_INPUT_ROOTS, *ALLOWED_OUTPUT_ROOTS]))
 ENABLE_API_DOCS = _env_bool("TP_ENABLE_API_DOCS", False)
 READY_VERBOSE = _env_bool("TP_READY_VERBOSE", False)
@@ -217,7 +263,7 @@ PRESET_CATALOG: Dict[str, List[Dict[str, Any]]] = {
             "name": "depth-anything-v3.1-research-m4",
             "label": "v3.1-m4 (Experimental)",
             "stability": "experimental",
-            "description": "Research-only preset requiring non-commercial acknowledgments",
+            "description": "Research-only preset" " requiring non-commercial" " acknowledgments",
             "is_research": True,
         },
     ],
@@ -288,7 +334,12 @@ ARCHIVE_GATE_DEFAULT_COMMANDS = {
     "archive-gate-c": "mets-export",
 }
 ARCHIVE_GATE_ALLOWED_COMMANDS = {
-    "archive-gate-a": {"fixity-scan", "fixity-verify", "manifest-build", "rights-apply"},
+    "archive-gate-a": {
+        "fixity-scan",
+        "fixity-verify",
+        "manifest-build",
+        "rights-apply",
+    },
     "archive-gate-b": {"bag-build", "bag-validate", "dedup-plan"},
     "archive-gate-c": {"mets-export", "prov-export", "stac-export"},
 }
@@ -296,6 +347,16 @@ ALLOWED_QUALITY = {"standard", "premium", "apex"}
 ALLOWED_BACKENDS = {"da3", "depth_pro"}
 ALLOWED_SEGMENTATION_BACKENDS = {"stub", "efficientsam", "sam2"}
 ALLOWED_SAM2_MODEL_SIZES = {"base", "large"}
+ALLOWED_GROUPING_MODES = {"single", "parent_dir"}
+ALLOWED_RECONSTRUCTION_TIERS = {
+    "apex_research",
+    "apex_research_ultra",
+    "experimental",
+}
+ALLOWED_RAW_INGEST_MODES = {"auto", "force_rawpy", "force_preview"}
+ALLOWED_RAW_WB_MODES = {"camera"}
+ALLOWED_RAW_DEMOSAIC = {"AHD"}
+ALLOWED_LOG_LEVELS = {"DEBUG", "INFO", "WARNING", "ERROR"}
 DEPTH_BACKEND_ALIASES = {
     "depth_anything_v3": "da3",
     "depth-anything-v3": "da3",
@@ -309,6 +370,12 @@ VALIDATION_REASON_CODES = {
     "Invalid depth_backend": "invalid_depth_backend",
     "Invalid segmentation_backend": "invalid_segmentation_backend",
     "Invalid sam2_model_size": "invalid_sam2_model_size",
+    "Invalid reconstruction_tier": "invalid_reconstruction_tier",
+    "Invalid raw_ingest_mode": "invalid_raw_ingest_mode",
+    "Invalid raw_wb_mode": "invalid_raw_wb_mode",
+    "Invalid raw_demosaic": "invalid_raw_demosaic",
+    "Invalid log_level": "invalid_log_level",
+    "verbose and quiet are mutually exclusive": "conflicting_log_verbosity_flags",
     "Archive governance runner unavailable": "archive_runner_unavailable",
     "Invalid archive_command": "invalid_archive_command",
     "Invalid archive integer option": "invalid_archive_integer_option",
@@ -320,11 +387,20 @@ def _now() -> float:
 
 
 def _sse(event: str, data: Dict[str, Any]) -> str:
-    # SSE payload format: event type + JSON data, terminated by double newline
-    return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False, separators=(',', ':'))}\n\n"
+    # SSE payload: event type + JSON data, double newline.
+    payload = json.dumps(
+        data,
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+    return f"event: {event}\ndata: {payload}\n\n"
 
 
-def _error_obj(code: str, message: str, details: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+def _error_obj(
+    code: str,
+    message: str,
+    details: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
     return {"code": code, "message": message, "details": details or {}}
 
 
@@ -345,11 +421,16 @@ def _error_response(
     message: str,
     details: Optional[Dict[str, Any]] = None,
     schema: str = "tp.orchestrator.error.v1",
-    headers: Optional[Dict[str, str]] = None,
+    headers: Optional[Mapping[str, str]] = None,
 ) -> JSONResponse:
     return JSONResponse(
         status_code=status_code,
-        content=_api_envelope(schema, success=False, data=None, error=_error_obj(code, message, details)),
+        content=_api_envelope(
+            schema,
+            success=False,
+            data=None,
+            error=_error_obj(code, message, details),
+        ),
         headers=headers,
     )
 
@@ -533,22 +614,33 @@ def _enforce_content_length_limit(request: Request) -> Optional[JSONResponse]:
             return _error_response(
                 400,
                 code="INVALID_ARGUMENT",
-                message="invalid Content-Length header",
-                details={"path": request.url.path, "field": "content-length"},
+                message=("invalid Content-Length header. " "Please ensure the header is a valid integer."),
+                details={
+                    "path": request.url.path,
+                    "field": "content-length",
+                },
             )
-        return JSONResponse(status_code=400, content={"detail": "invalid Content-Length header"})
+        return JSONResponse(
+            status_code=400,
+            content={"detail": "invalid Content-Length header"},
+        )
 
     if size > MAX_REQUEST_BYTES:
         if _is_api_v1_path(request.url.path):
             return _error_response(
                 413,
                 code="REQUEST_TOO_LARGE",
-                message=f"request body too large (max {MAX_REQUEST_BYTES} bytes)",
-                details={"path": request.url.path, "max_request_bytes": MAX_REQUEST_BYTES},
+                message=(f"request body too large" f" (max {MAX_REQUEST_BYTES} bytes)"),
+                details={
+                    "path": request.url.path,
+                    "max_request_bytes": MAX_REQUEST_BYTES,
+                },
             )
         return JSONResponse(
             status_code=413,
-            content={"detail": f"request body too large (max {MAX_REQUEST_BYTES} bytes)"},
+            content={
+                "detail": (f"request body too large" f" (max {MAX_REQUEST_BYTES} bytes)"),
+            },
         )
     return None
 
@@ -556,10 +648,18 @@ def _enforce_content_length_limit(request: Request) -> Optional[JSONResponse]:
 def _install_stream_body_limit(request: Request) -> None:
     if request.method not in {"POST", "PUT", "PATCH"}:
         return
-    if getattr(request.state, "_tp_body_limit_installed", False):
+    if getattr(
+        request.state,
+        "_tp_body_limit_installed",
+        False,
+    ):
         return
 
-    original_receive = getattr(request, "_receive", None)
+    original_receive = getattr(
+        request,
+        "_receive",
+        None,
+    )
     if original_receive is None:
         return
 
@@ -567,13 +667,17 @@ def _install_stream_body_limit(request: Request) -> None:
         message = await original_receive()
         if message.get("type") == "http.request":
             body = message.get("body", b"") or b""
-            consumed = getattr(request.state, "_tp_body_bytes_received", 0)
+            consumed = getattr(
+                request.state,
+                "_tp_body_bytes_received",
+                0,
+            )
             consumed += len(body)
             request.state._tp_body_bytes_received = consumed
             if consumed > MAX_REQUEST_BYTES:
                 raise HTTPException(
                     status_code=413,
-                    detail=f"request body too large (max {MAX_REQUEST_BYTES} bytes)",
+                    detail=(f"request body too large" f" (max {MAX_REQUEST_BYTES} bytes)"),
                 )
         return message
 
@@ -607,7 +711,11 @@ def _sanitized_child_env() -> Dict[str, str]:
     return child_env
 
 
-async def _publish_event(job_id: str, event: str, data: Dict[str, Any]) -> None:
+async def _publish_event(
+    job_id: str,
+    event: str,
+    data: Dict[str, Any],
+) -> None:
     subscribers = EVENT_SUBSCRIBERS.get(job_id)
     if not subscribers:
         return
@@ -631,7 +739,10 @@ async def _publish_event(job_id: str, event: str, data: Dict[str, Any]) -> None:
         subscribers.pop(subscriber_id, None)
 
 
-async def _terminate_process(proc: asyncio.subprocess.Process, grace_seconds: float = CANCEL_GRACE_SECONDS) -> None:
+async def _terminate_process(
+    proc: asyncio.subprocess.Process,
+    grace_seconds: float = CANCEL_GRACE_SECONDS,
+) -> None:
     if proc.returncode is not None:
         return
     try:
@@ -666,7 +777,9 @@ def _job_output_dir(job: Job) -> Optional[Path]:
     args = job.request.get("args")
     if not isinstance(args, dict):
         return None
-    output_dir = str(_pick(args, "output_dir", "outputDir", default="")).strip()
+    output_dir = str(
+        _pick(args, "output_dir", "outputDir", default=""),
+    ).strip()
     if not output_dir:
         return None
     return Path(output_dir).expanduser()
@@ -674,9 +787,25 @@ def _job_output_dir(job: Job) -> Optional[Path]:
 
 def _infer_artifact_type(path: Path) -> str:
     suffix = path.suffix.lower()
-    if suffix in {".json", ".yaml", ".yml", ".txt", ".md", ".log", ".csv"}:
+    if suffix in {
+        ".json",
+        ".yaml",
+        ".yml",
+        ".txt",
+        ".md",
+        ".log",
+        ".csv",
+    }:
         return "metadata"
-    if suffix in {".png", ".jpg", ".jpeg", ".tif", ".tiff", ".webp", ".exr"}:
+    if suffix in {
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".tif",
+        ".tiff",
+        ".webp",
+        ".exr",
+    }:
         return "image"
     if suffix in {".zip", ".tar", ".gz", ".tgz", ".bag"}:
         return "archive"
@@ -686,10 +815,20 @@ def _infer_artifact_type(path: Path) -> str:
 def _index_job_artifacts(job: Job) -> List[Dict[str, Any]]:
     output_dir = _job_output_dir(job)
     if output_dir is None:
-        job.artifacts = {"output_dir": None, "items": [], "indexed_count": 0, "truncated": False}
+        job.artifacts = {
+            "output_dir": None,
+            "items": [],
+            "indexed_count": 0,
+            "truncated": False,
+        }
         return []
     if not output_dir.exists() or not output_dir.is_dir():
-        job.artifacts = {"output_dir": str(output_dir), "items": [], "indexed_count": 0, "truncated": False}
+        job.artifacts = {
+            "output_dir": str(output_dir),
+            "items": [],
+            "indexed_count": 0,
+            "truncated": False,
+        }
         return []
 
     selected: List[tuple[tuple[str, str], str, Path]] = []
@@ -766,13 +905,23 @@ def _serialize_job(job: Job, *, include_logs: bool = True) -> Dict[str, Any]:
     return data
 
 
-def _path_arg(args: Dict[str, Any], *keys: str, default: str, allowed_roots: List[Path]) -> str:
+def _path_arg(
+    args: Dict[str, Any],
+    *keys: str,
+    default: str,
+    allowed_roots: List[Path],
+) -> str:
     value = _pick(args, *keys, default=default)
     text = str(value or "").strip()
     return _validate_path_against_roots(text or default, allowed_roots)
 
 
-def _int_arg(args: Dict[str, Any], *keys: str, default: int, minimum: int = 0) -> int:
+def _int_arg(
+    args: Dict[str, Any],
+    *keys: str,
+    default: int,
+    minimum: int = 0,
+) -> int:
     value = _pick(args, *keys, default=None)
     if value is None:
         return default
@@ -785,12 +934,25 @@ def _int_arg(args: Dict[str, Any], *keys: str, default: int, minimum: int = 0) -
     return parsed
 
 
-def _archive_gate_argv(pipeline: str, args: Dict[str, Any], input_dir: str, output_dir: str) -> List[str]:
+def _archive_gate_argv(
+    pipeline: str,
+    args: Dict[str, Any],
+    input_dir: str,
+    output_dir: str,
+) -> List[str]:
     if not ARCHIVE_GOVERNANCE_SCRIPT.is_file():
         raise ValueError("Archive governance runner unavailable")
 
     default_command = ARCHIVE_GATE_DEFAULT_COMMANDS[pipeline]
-    command = str(_pick(args, "archive_command", "archiveCommand", default=default_command) or "").strip()
+    command = str(
+        _pick(
+            args,
+            "archive_command",
+            "archiveCommand",
+            default=default_command,
+        )
+        or ""
+    ).strip()
     if command not in ARCHIVE_GATE_ALLOWED_COMMANDS[pipeline]:
         raise ValueError("Invalid archive_command")
 
@@ -806,8 +968,20 @@ def _archive_gate_argv(pipeline: str, args: Dict[str, Any], input_dir: str, outp
             default=str(Path(input_dir) / "archive_index_normalized.csv.gz"),
             allowed_roots=ALLOWED_INPUT_ROOTS,
         )
-        archive_root = _path_arg(args, "archive_root", "archiveRoot", default=input_dir, allowed_roots=ALLOWED_INPUT_ROOTS)
-        out_dir = _path_arg(args, "out_dir", "outDir", default=output_dir, allowed_roots=ALLOWED_OUTPUT_ROOTS)
+        archive_root = _path_arg(
+            args,
+            "archive_root",
+            "archiveRoot",
+            default=input_dir,
+            allowed_roots=ALLOWED_INPUT_ROOTS,
+        )
+        out_dir = _path_arg(
+            args,
+            "out_dir",
+            "outDir",
+            default=output_dir,
+            allowed_roots=ALLOWED_OUTPUT_ROOTS,
+        )
         workers = _int_arg(args, "workers", default=1, minimum=1)
 
         argv.extend(
@@ -827,10 +1001,12 @@ def _archive_gate_argv(pipeline: str, args: Dict[str, Any], input_dir: str, outp
             argv.append("--strict" if _as_bool(strict) else "--no-strict")
         strict_identity = _pick(args, "strict_identity", "strictIdentity")
         if strict_identity is not None:
-            argv.append("--strict-identity" if _as_bool(strict_identity) else "--no-strict-identity")
+            flag = "--strict-identity" if _as_bool(strict_identity) else "--no-strict-identity"
+            argv.append(flag)
         validate_schemas = _pick(args, "validate_schemas", "validateSchemas")
         if validate_schemas is not None:
-            argv.append("--validate-schemas" if _as_bool(validate_schemas, default=True) else "--no-validate-schemas")
+            flag = "--validate-schemas" if _as_bool(validate_schemas, default=True) else "--no-validate-schemas"
+            argv.append(flag)
 
     elif command == "fixity-verify":
         hash_manifest = _path_arg(
@@ -840,7 +1016,13 @@ def _archive_gate_argv(pipeline: str, args: Dict[str, Any], input_dir: str, outp
             default=str(Path(output_dir) / "hash_manifest.csv.gz"),
             allowed_roots=ALLOWED_OUTPUT_ROOTS,
         )
-        archive_root = _path_arg(args, "archive_root", "archiveRoot", default=input_dir, allowed_roots=ALLOWED_INPUT_ROOTS)
+        archive_root = _path_arg(
+            args,
+            "archive_root",
+            "archiveRoot",
+            default=input_dir,
+            allowed_roots=ALLOWED_INPUT_ROOTS,
+        )
         report_path = _path_arg(
             args,
             "report_path",
@@ -848,7 +1030,13 @@ def _archive_gate_argv(pipeline: str, args: Dict[str, Any], input_dir: str, outp
             default=str(Path(output_dir) / "verification_report.json"),
             allowed_roots=ALLOWED_OUTPUT_ROOTS,
         )
-        verify_sample = _int_arg(args, "verify_sample", "verifySample", default=0, minimum=0)
+        verify_sample = _int_arg(
+            args,
+            "verify_sample",
+            "verifySample",
+            default=0,
+            minimum=0,
+        )
         workers = _int_arg(args, "workers", default=1, minimum=1)
 
         argv.extend(
@@ -881,8 +1069,20 @@ def _archive_gate_argv(pipeline: str, args: Dict[str, Any], input_dir: str, outp
             default=str(Path(output_dir) / "hash_manifest.csv.gz"),
             allowed_roots=ALLOWED_OUTPUT_ROOTS,
         )
-        archive_root = _path_arg(args, "archive_root", "archiveRoot", default=input_dir, allowed_roots=ALLOWED_INPUT_ROOTS)
-        out_jsonl = _path_arg(args, "out_jsonl", "outJsonl", default=manifest_default, allowed_roots=ALLOWED_OUTPUT_ROOTS)
+        archive_root = _path_arg(
+            args,
+            "archive_root",
+            "archiveRoot",
+            default=input_dir,
+            allowed_roots=ALLOWED_INPUT_ROOTS,
+        )
+        out_jsonl = _path_arg(
+            args,
+            "out_jsonl",
+            "outJsonl",
+            default=manifest_default,
+            allowed_roots=ALLOWED_OUTPUT_ROOTS,
+        )
         out_summary = _path_arg(
             args,
             "out_summary",
@@ -890,7 +1090,15 @@ def _archive_gate_argv(pipeline: str, args: Dict[str, Any], input_dir: str, outp
             default=str(Path(output_dir) / "archive_manifest_v2.summary.json"),
             allowed_roots=ALLOWED_OUTPUT_ROOTS,
         )
-        collection_id = str(_pick(args, "collection_id", "collectionId", default="UNSPECIFIED") or "UNSPECIFIED").strip()
+        collection_id = str(
+            _pick(
+                args,
+                "collection_id",
+                "collectionId",
+                default="UNSPECIFIED",
+            )
+            or "UNSPECIFIED"
+        ).strip()
         owner = str(_pick(args, "owner", default="UNSPECIFIED") or "UNSPECIFIED").strip()
 
         argv.extend(
@@ -913,7 +1121,11 @@ def _archive_gate_argv(pipeline: str, args: Dict[str, Any], input_dir: str, outp
         )
         rights_jsonl = _pick(args, "rights_jsonl", "rightsJsonl")
         if rights_jsonl:
-            argv.extend(["--rights-jsonl", _validate_path_against_roots(str(rights_jsonl), ALLOWED_INPUT_ROOTS)])
+            validated = _validate_path_against_roots(
+                str(rights_jsonl),
+                ALLOWED_INPUT_ROOTS,
+            )
+            argv.extend(["--rights-jsonl", validated])
 
     elif command == "rights-apply":
         manifest_jsonl = _path_arg(
@@ -966,7 +1178,13 @@ def _archive_gate_argv(pipeline: str, args: Dict[str, Any], input_dir: str, outp
             default=rights_manifest_default,
             allowed_roots=ALLOWED_OUTPUT_ROOTS,
         )
-        archive_root = _path_arg(args, "archive_root", "archiveRoot", default=input_dir, allowed_roots=ALLOWED_INPUT_ROOTS)
+        archive_root = _path_arg(
+            args,
+            "archive_root",
+            "archiveRoot",
+            default=input_dir,
+            allowed_roots=ALLOWED_INPUT_ROOTS,
+        )
         bag_dir = _path_arg(
             args,
             "bag_dir",
@@ -982,9 +1200,19 @@ def _archive_gate_argv(pipeline: str, args: Dict[str, Any], input_dir: str, outp
             allowed_roots=ALLOWED_OUTPUT_ROOTS,
         )
         source_organization = str(
-            _pick(args, "source_organization", "sourceOrganization", default="UNSPECIFIED") or "UNSPECIFIED"
+            _pick(
+                args,
+                "source_organization",
+                "sourceOrganization",
+                default="UNSPECIFIED",
+            )
+            or "UNSPECIFIED"
         ).strip()
-        validate_with_bagit = _pick(args, "validate_with_bagit_python", "validateWithBagitPython")
+        validate_with_bagit = _pick(
+            args,
+            "validate_with_bagit_python",
+            "validateWithBagitPython",
+        )
         if validate_with_bagit is None:
             validate_with_bagit = _pick(args, "sign")
 
@@ -1020,11 +1248,22 @@ def _archive_gate_argv(pipeline: str, args: Dict[str, Any], input_dir: str, outp
             default=str(Path(output_dir) / "bag_validate_report.json"),
             allowed_roots=ALLOWED_OUTPUT_ROOTS,
         )
-        validate_with_bagit = _pick(args, "validate_with_bagit_python", "validateWithBagitPython")
+        validate_with_bagit = _pick(
+            args,
+            "validate_with_bagit_python",
+            "validateWithBagitPython",
+        )
         if validate_with_bagit is None:
             validate_with_bagit = _pick(args, "sign")
 
-        argv.extend(["--bag-dir", bag_dir, "--report-json", report_json])
+        argv.extend(
+            [
+                "--bag-dir",
+                bag_dir,
+                "--report-json",
+                report_json,
+            ]
+        )
         if _as_bool(validate_with_bagit, default=False):
             argv.append("--validate-with-bagit-python")
 
@@ -1087,7 +1326,15 @@ def _archive_gate_argv(pipeline: str, args: Dict[str, Any], input_dir: str, outp
             default=str(Path(output_dir) / "mets_summary.json"),
             allowed_roots=ALLOWED_OUTPUT_ROOTS,
         )
-        href_prefix = str(_pick(args, "href_prefix", "hrefPrefix", default="data") or "data").strip()
+        href_prefix = str(
+            _pick(
+                args,
+                "href_prefix",
+                "hrefPrefix",
+                default="data",
+            )
+            or "data"
+        ).strip()
 
         argv.extend(
             [
@@ -1124,7 +1371,15 @@ def _archive_gate_argv(pipeline: str, args: Dict[str, Any], input_dir: str, outp
             default=str(Path(output_dir) / "prov_summary.json"),
             allowed_roots=ALLOWED_OUTPUT_ROOTS,
         )
-        datetime_field = str(_pick(args, "datetime_field", "datetimeField", default="modified_utc") or "modified_utc").strip()
+        datetime_field = str(
+            _pick(
+                args,
+                "datetime_field",
+                "datetimeField",
+                default="modified_utc",
+            )
+            or "modified_utc"
+        ).strip()
 
         argv.extend(
             [
@@ -1175,8 +1430,20 @@ def _archive_gate_argv(pipeline: str, args: Dict[str, Any], input_dir: str, outp
             default=str(Path(output_dir) / "stac_summary.json"),
             allowed_roots=ALLOWED_OUTPUT_ROOTS,
         )
-        datetime_field = str(_pick(args, "datetime_field", "datetimeField", default="modified_utc") or "modified_utc").strip()
-        require_stac = _pick(args, "require_stac", "requireStac")
+        datetime_field = str(
+            _pick(
+                args,
+                "datetime_field",
+                "datetimeField",
+                default="modified_utc",
+            )
+            or "modified_utc"
+        ).strip()
+        require_stac = _pick(
+            args,
+            "require_stac",
+            "requireStac",
+        )
 
         argv.extend(
             [
@@ -1195,7 +1462,8 @@ def _archive_gate_argv(pipeline: str, args: Dict[str, Any], input_dir: str, outp
             ]
         )
         if require_stac is not None:
-            argv.append("--require-stac" if _as_bool(require_stac, default=False) else "--no-require-stac")
+            flag = "--require-stac" if _as_bool(require_stac, default=False) else "--no-require-stac"
+            argv.append(flag)
 
     return argv
 
@@ -1213,34 +1481,158 @@ def _argv_from_request(payload: Dict[str, Any]) -> List[str]:
     if pipeline not in ALLOWED_PIPELINES:
         raise ValueError("Unsupported pipeline")
 
-    input_dir_raw = str(_pick(args, "input_dir", "inputDir", default="")).strip()
-    output_dir_raw = str(_pick(args, "output_dir", "outputDir", default="")).strip()
+    input_dir_raw = str(
+        _pick(args, "input_dir", "inputDir", default=""),
+    ).strip()
+    output_dir_raw = str(
+        _pick(args, "output_dir", "outputDir", default=""),
+    ).strip()
     if not input_dir_raw or not output_dir_raw:
         raise ValueError("input_dir and output_dir are required")
-    input_dir = _validate_path_against_roots(input_dir_raw, ALLOWED_INPUT_ROOTS)
-    output_dir = _validate_path_against_roots(output_dir_raw, ALLOWED_OUTPUT_ROOTS)
+    input_dir = _validate_path_against_roots(
+        input_dir_raw,
+        ALLOWED_INPUT_ROOTS,
+    )
+    output_dir = _validate_path_against_roots(
+        output_dir_raw,
+        ALLOWED_OUTPUT_ROOTS,
+    )
 
     def onoff(b: Any) -> str:
         return "on" if _as_bool(b) else "off"
 
-    argv = [pipeline, "--input-dir", input_dir, "--output-dir", output_dir]
+    argv = [
+        pipeline,
+        "--input-dir",
+        input_dir,
+        "--output-dir",
+        output_dir,
+    ]
 
     if _as_bool(_pick(args, "overwrite", default=False)):
         argv.append("--overwrite")
 
     # Pipeline-specific argument building
     if pipeline == "lux-depth-v3":
-        quality = str(_pick(args, "quality_tier", "qualityTier", default="standard") or "standard").strip().lower()
-        backend = _canonical_depth_backend(_pick(args, "depth_backend", "depthBackend", default="da3"))
+        quality = (
+            str(
+                _pick(
+                    args,
+                    "quality_tier",
+                    "qualityTier",
+                    default="standard",
+                )
+                or "standard"
+            )
+            .strip()
+            .lower()
+        )
+        backend = _canonical_depth_backend(
+            _pick(
+                args,
+                "depth_backend",
+                "depthBackend",
+                default="da3",
+            )
+        )
         preset = str(_pick(args, "preset", default="premium") or "premium").strip() or "premium"
         depth_device_raw = _pick(args, "depth_device", "depthDevice")
         depth_device = str(depth_device_raw).strip() if depth_device_raw is not None else ""
-        segmentation_backend = (
-            str(_pick(args, "segmentation_backend", "segmentationBackend", default="stub") or "stub").strip().lower()
+        save_float_depth = _pick(
+            args,
+            "save_float_depth",
+            "saveFloatDepth",
+            default=False,
         )
-        sam2_model_size = str(_pick(args, "sam2_model_size", "sam2ModelSize", default="base") or "base").strip().lower()
-        enable_segmentation = _pick(args, "enable_segmentation", "enableSegmentation", default=False)
-        strict_segmentation = _pick(args, "strict_segmentation", "strictSegmentation", default=False)
+        segmentation_backend = (
+            str(
+                _pick(
+                    args,
+                    "segmentation_backend",
+                    "segmentationBackend",
+                    default="stub",
+                )
+                or "stub"
+            )
+            .strip()
+            .lower()
+        )
+        sam2_model_size = (
+            str(
+                _pick(
+                    args,
+                    "sam2_model_size",
+                    "sam2ModelSize",
+                    default="base",
+                )
+                or "base"
+            )
+            .strip()
+            .lower()
+        )
+        sam2_checkpoint_path_raw = _pick(
+            args,
+            "sam2_checkpoint_path",
+            "sam2CheckpointPath",
+        )
+        enable_segmentation = _pick(
+            args,
+            "enable_segmentation",
+            "enableSegmentation",
+            default=False,
+        )
+        strict_segmentation = _pick(
+            args,
+            "strict_segmentation",
+            "strictSegmentation",
+            default=False,
+        )
+        enable_reconstruction = _pick(
+            args,
+            "enable_reconstruction",
+            "enableReconstruction",
+            default=False,
+        )
+        grouping_mode = (
+            str(
+                _pick(
+                    args,
+                    "grouping_mode",
+                    "groupingMode",
+                    default="single",
+                )
+                or "single"
+            )
+            .strip()
+            .lower()
+        )
+        cameras_sidecar_path_raw = _pick(
+            args,
+            "cameras_sidecar_path",
+            "camerasSidecarPath",
+        )
+        reconstruction_iterations_raw = _pick(
+            args,
+            "reconstruction_iterations",
+            "reconstructionIterations",
+        )
+        reconstruction_tier = _pick(
+            args,
+            "reconstruction_tier",
+            "reconstructionTier",
+        )
+        emit_scene_debug_bundle = _pick(
+            args,
+            "emit_scene_debug_bundle",
+            "emitSceneDebugBundle",
+            default=False,
+        )
+        raw_ingest_mode = _pick(args, "raw_ingest_mode", "rawIngestMode")
+        raw_wb_mode = _pick(args, "raw_wb_mode", "rawWbMode")
+        raw_demosaic = _pick(args, "raw_demosaic", "rawDemosaic")
+        max_workers_raw = _pick(args, "max_workers", "maxWorkers")
+        max_gpu_workers_raw = _pick(args, "max_gpu_workers", "maxGpuWorkers")
+        log_level_raw = _pick(args, "log_level", "logLevel")
 
         if quality not in ALLOWED_QUALITY:
             raise ValueError("Invalid quality_tier")
@@ -1250,6 +1642,79 @@ def _argv_from_request(payload: Dict[str, Any]) -> List[str]:
             raise ValueError("Invalid segmentation_backend")
         if segmentation_backend == "sam2" and sam2_model_size not in ALLOWED_SAM2_MODEL_SIZES:
             raise ValueError("Invalid sam2_model_size")
+        if grouping_mode not in ALLOWED_GROUPING_MODES:
+            raise ValueError("Invalid grouping_mode")
+
+        reconstruction_tier_value = ""
+        if reconstruction_tier is not None and str(reconstruction_tier).strip():
+            reconstruction_tier_value = str(reconstruction_tier).strip().lower()
+            if reconstruction_tier_value not in ALLOWED_RECONSTRUCTION_TIERS:
+                raise ValueError("Invalid reconstruction_tier")
+
+        raw_ingest_mode_value = ""
+        if raw_ingest_mode is not None and str(raw_ingest_mode).strip():
+            raw_ingest_mode_value = str(raw_ingest_mode).strip().lower()
+            if raw_ingest_mode_value not in ALLOWED_RAW_INGEST_MODES:
+                raise ValueError("Invalid raw_ingest_mode")
+
+        raw_wb_mode_value = ""
+        if raw_wb_mode is not None and str(raw_wb_mode).strip():
+            raw_wb_mode_value = str(raw_wb_mode).strip().lower()
+            if raw_wb_mode_value not in ALLOWED_RAW_WB_MODES:
+                raise ValueError("Invalid raw_wb_mode")
+
+        raw_demosaic_value = ""
+        if raw_demosaic is not None and str(raw_demosaic).strip():
+            raw_demosaic_value = str(raw_demosaic).strip().upper()
+            if raw_demosaic_value not in ALLOWED_RAW_DEMOSAIC:
+                raise ValueError("Invalid raw_demosaic")
+
+        log_level_value = ""
+        if log_level_raw is not None and str(log_level_raw).strip():
+            log_level_value = str(log_level_raw).strip().upper()
+            if log_level_value not in ALLOWED_LOG_LEVELS:
+                raise ValueError("Invalid log_level")
+
+        def _parse_optional_positive_int(
+            value: Any,
+            field_name: str,
+        ) -> Optional[int]:
+            if value is None or (isinstance(value, str) and not value.strip()):
+                return None
+            try:
+                parsed = int(value)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(f"Invalid {field_name}") from exc
+            if parsed < 1:
+                raise ValueError(f"Invalid {field_name}")
+            return parsed
+
+        reconstruction_iterations = _parse_optional_positive_int(
+            reconstruction_iterations_raw,
+            "reconstruction_iterations",
+        )
+        max_workers = _parse_optional_positive_int(
+            max_workers_raw,
+            "max_workers",
+        )
+        max_gpu_workers = _parse_optional_positive_int(
+            max_gpu_workers_raw,
+            "max_gpu_workers",
+        )
+
+        sam2_checkpoint_path = ""
+        if sam2_checkpoint_path_raw is not None and str(sam2_checkpoint_path_raw).strip():
+            sam2_checkpoint_path = _validate_path_against_roots(
+                str(sam2_checkpoint_path_raw),
+                ALLOWED_INPUT_ROOTS,
+            )
+
+        cameras_sidecar_path = ""
+        if cameras_sidecar_path_raw is not None and str(cameras_sidecar_path_raw).strip():
+            cameras_sidecar_path = _validate_path_against_roots(
+                str(cameras_sidecar_path_raw),
+                ALLOWED_INPUT_ROOTS,
+            )
 
         argv.extend(
             [
@@ -1264,15 +1729,33 @@ def _argv_from_request(payload: Dict[str, Any]) -> List[str]:
                 "--segmentation-backend",
                 segmentation_backend,
                 "--materials-v3",
-                onoff(_pick(args, "materials_v3", "materials", default=False)),
+                onoff(
+                    _pick(
+                        args,
+                        "materials_v3",
+                        "materials",
+                        default=False,
+                    )
+                ),
                 "--pbr",
                 onoff(_pick(args, "pbr", default=False)),
+                "--save-float-depth",
+                onoff(save_float_depth),
                 "--cache-depth",
-                onoff(_pick(args, "cache_depth", "cacheDepth", default=False)),
+                onoff(
+                    _pick(
+                        args,
+                        "cache_depth",
+                        "cacheDepth",
+                        default=False,
+                    )
+                ),
             ]
         )
         if segmentation_backend == "sam2":
             argv.extend(["--sam2-model-size", sam2_model_size])
+        if segmentation_backend == "sam2" and sam2_checkpoint_path:
+            argv.extend(["--sam2-checkpoint-path", sam2_checkpoint_path])
         if _as_bool(strict_segmentation, default=False):
             argv.append("--strict-segmentation")
 
@@ -1282,15 +1765,50 @@ def _argv_from_request(payload: Dict[str, Any]) -> List[str]:
         argv.extend(
             [
                 "--emit-master16",
-                onoff(_pick(args, "emit_master16", "emitMaster16", default=True)),
+                onoff(
+                    _pick(
+                        args,
+                        "emit_master16",
+                        "emitMaster16",
+                        default=True,
+                    )
+                ),
                 "--emit-upscaled16",
-                onoff(_pick(args, "emit_upscaled16", "emitUpscaled16", default=True)),
+                onoff(
+                    _pick(
+                        args,
+                        "emit_upscaled16",
+                        "emitUpscaled16",
+                        default=True,
+                    )
+                ),
                 "--emit-marketing",
-                onoff(_pick(args, "emit_marketing", "emitMarketing", default=False)),
+                onoff(
+                    _pick(
+                        args,
+                        "emit_marketing",
+                        "emitMarketing",
+                        default=False,
+                    )
+                ),
                 "--emit-report",
-                onoff(_pick(args, "emit_report", "emitReport", default=True)),
+                onoff(
+                    _pick(
+                        args,
+                        "emit_report",
+                        "emitReport",
+                        default=True,
+                    )
+                ),
                 "--emit-run-card",
-                onoff(_pick(args, "emit_run_card", "emitRunCard", default=True)),
+                onoff(
+                    _pick(
+                        args,
+                        "emit_run_card",
+                        "emitRunCard",
+                        default=True,
+                    )
+                ),
             ]
         )
 
@@ -1304,7 +1822,14 @@ def _argv_from_request(payload: Dict[str, Any]) -> List[str]:
             if v2_preset:
                 argv.extend(["--v2-preset", str(v2_preset)])
 
-        if _as_bool(_pick(args, "non_commercial_ok", "nonCommercialOk", default=False)):
+        if _as_bool(
+            _pick(
+                args,
+                "non_commercial_ok",
+                "nonCommercialOk",
+                default=False,
+            )
+        ):
             argv.extend(["--non-commercial-ok", "true"])
         if _as_bool(
             _pick(
@@ -1314,9 +1839,124 @@ def _argv_from_request(payload: Dict[str, Any]) -> List[str]:
                 default=False,
             )
         ):
-            argv.extend(["--accept-apple-depth-pro-research-license", "true"])
+            argv.extend(
+                [
+                    "--accept-apple-depth-pro-research-license",
+                    "true",
+                ]
+            )
+        if _as_bool(
+            _pick(
+                args,
+                "accept_research_tools_license",
+                "acceptResearchToolsLicense",
+                default=False,
+            )
+        ):
+            argv.extend(["--accept-research-tools-license", "true"])
+
+        argv.extend(
+            [
+                "--enable-reconstruction",
+                onoff(enable_reconstruction),
+            ]
+        )
+        argv.extend(["--grouping-mode", grouping_mode])
+        if cameras_sidecar_path:
+            argv.extend(["--cameras-sidecar-path", cameras_sidecar_path])
+        if reconstruction_iterations is not None:
+            argv.extend(
+                [
+                    "--reconstruction-iterations",
+                    str(reconstruction_iterations),
+                ]
+            )
+        if reconstruction_tier_value:
+            argv.extend(
+                [
+                    "--reconstruction-tier",
+                    reconstruction_tier_value,
+                ]
+            )
+        argv.extend(
+            [
+                "--emit-scene-debug-bundle",
+                onoff(emit_scene_debug_bundle),
+            ]
+        )
+
+        if _as_bool(
+            _pick(
+                args,
+                "force_depth",
+                "forceDepth",
+                default=False,
+            )
+        ):
+            argv.append("--force-depth")
+        if _as_bool(
+            _pick(
+                args,
+                "strict_inputs",
+                "strictInputs",
+                default=False,
+            )
+        ):
+            argv.append("--strict-inputs")
+        if _as_bool(
+            _pick(
+                args,
+                "verify_images",
+                "verifyImages",
+                default=False,
+            )
+        ):
+            argv.append("--verify-images")
+        if _as_bool(
+            _pick(
+                args,
+                "allow_semantic_fallback",
+                "allowSemanticFallback",
+                default=False,
+            )
+        ):
+            argv.append("--allow-semantic-fallback")
+
+        if raw_ingest_mode_value:
+            argv.extend(["--raw-ingest-mode", raw_ingest_mode_value])
+        if raw_wb_mode_value:
+            argv.extend(["--raw-wb-mode", raw_wb_mode_value])
+        if raw_demosaic_value:
+            argv.extend(["--raw-demosaic", raw_demosaic_value])
+
+        if max_workers is not None:
+            argv.extend(["--max-workers", str(max_workers)])
+        if max_gpu_workers is not None:
+            argv.extend(["--max-gpu-workers", str(max_gpu_workers)])
+
+        verbose_enabled = _as_bool(_pick(args, "verbose", default=False))
+        quiet_enabled = _as_bool(_pick(args, "quiet", default=False))
+        if verbose_enabled and quiet_enabled:
+            print(
+                "Error: --verbose and --quiet cannot both be enabled.\n"
+                "Use --verbose for detailed output"
+                " or --quiet for minimal output.",
+                file=sys.stderr,
+            )
+            raise ValueError("verbose and quiet are mutually exclusive")
+        if verbose_enabled:
+            argv.append("--verbose")
+        if quiet_enabled:
+            argv.append("--quiet")
+        if log_level_value:
+            argv.extend(["--log-level", log_level_value])
     elif pipeline in ARCHIVE_GATE_PIPELINES:
-        argv = _archive_gate_argv(str(pipeline), args, input_dir, output_dir)
+        argv = _archive_gate_argv(
+            str(pipeline),
+            args,
+            input_dir,
+            output_dir,
+        )
 
     return argv
 
@@ -1338,12 +1978,20 @@ app.add_middleware(
     allow_origins=ALLOWED_ORIGINS,
     allow_credentials=False,
     allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["Content-Type", "Accept", "Authorization", API_KEY_HEADER],
+    allow_headers=[
+        "Content-Type",
+        "Accept",
+        "Authorization",
+        API_KEY_HEADER,
+    ],
 )
 
 
 @app.exception_handler(StarletteHTTPException)
-async def http_exception_handler(request: Request, exc: StarletteHTTPException) -> JSONResponse:
+async def http_exception_handler(
+    request: Request,
+    exc: StarletteHTTPException,
+) -> JSONResponse:
     if _is_api_v1_path(request.url.path):
         detail = exc.detail
         message = detail if isinstance(detail, str) and detail.strip() else "request failed"
@@ -1356,26 +2004,41 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException) 
             headers=exc.headers,
         )
 
-    return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail}, headers=exc.headers)
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail},
+        headers=exc.headers,
+    )
 
 
 @app.exception_handler(RequestValidationError)
-async def request_validation_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+async def request_validation_handler(
+    request: Request,
+    exc: RequestValidationError,
+) -> JSONResponse:
     if _is_api_v1_path(request.url.path):
         return _error_response(
             400,
             code="INVALID_ARGUMENT",
             message="request validation failed",
-            details={"path": request.url.path, "errors": exc.errors()},
+            details={
+                "path": request.url.path,
+                "errors": exc.errors(),
+            },
         )
-    return await fastapi_request_validation_exception_handler(request, exc)
+    return await fastapi_request_validation_exception_handler(
+        request,
+        exc,
+    )
 
 
 @app.on_event("startup")
 async def startup() -> None:
     if _job_api_key_enforced() and not API_KEY_SECRET:
         LOGGER.warning(
-            "TP_ENFORCE_JOB_API_KEY is enabled but TP_API_KEY is unset; /v1/jobs endpoints will return AUTH_CONFIGURATION_ERROR."
+            "TP_ENFORCE_JOB_API_KEY is enabled but"
+            " TP_API_KEY is unset; /v1/jobs endpoints"
+            " will return AUTH_CONFIGURATION_ERROR."
         )
     cleanup_task = getattr(app.state, "cleanup_task", None)
     if cleanup_task is None or cleanup_task.done():
@@ -1395,7 +2058,10 @@ async def shutdown() -> None:
 
 
 @app.middleware("http")
-async def security_layer(request: Request, call_next):
+async def security_layer(
+    request: Request,
+    call_next: Callable[[Request], Any],
+) -> Response:
     maybe_error = _enforce_content_length_limit(request)
     if maybe_error is not None:
         return maybe_error
@@ -1407,7 +2073,7 @@ async def security_layer(request: Request, call_next):
             return _error_response(
                 503,
                 code="AUTH_CONFIGURATION_ERROR",
-                message="job endpoint authentication is enforced but TP_API_KEY is not configured",
+                message=("job endpoint authentication is" " enforced but TP_API_KEY is not" " configured"),
                 details={"path": request.url.path, "env": "TP_API_KEY"},
             )
         if not _has_valid_api_key(request):
@@ -1436,10 +2102,13 @@ async def security_layer(request: Request, call_next):
 
 
 @app.get("/")
-async def serve_ui():
+async def serve_ui() -> Response:
     """Serves the single-file UI."""
     if not PORTAL_HTML.exists():
-        raise HTTPException(status_code=500, detail="portal.html is missing")
+        raise HTTPException(
+            status_code=500,
+            detail="portal.html is missing",
+        )
     return FileResponse(str(PORTAL_HTML))
 
 
@@ -1485,15 +2154,28 @@ async def list_presets(pipeline: Optional[str] = None) -> JSONResponse:
             400,
             code="INVALID_ARGUMENT",
             message=f"Unsupported pipeline '{pipeline}'",
-            details={"field": "pipeline", "allowed": sorted(PRESET_CATALOG.keys())},
+            details={
+                "field": "pipeline",
+                "allowed": sorted(PRESET_CATALOG.keys()),
+            },
         )
 
+    data: Dict[str, Any]
     if pipeline is None:
         data = {
-            "pipelines": [{"pipeline": pipeline_name, "presets": presets} for pipeline_name, presets in PRESET_CATALOG.items()]
+            "pipelines": [
+                {
+                    "pipeline": pipeline_name,
+                    "presets": presets,
+                }
+                for pipeline_name, presets in PRESET_CATALOG.items()
+            ],
         }
     else:
-        data = {"pipeline": pipeline, "presets": PRESET_CATALOG[pipeline]}
+        data = {
+            "pipeline": pipeline,
+            "presets": PRESET_CATALOG[pipeline],
+        }
 
     return JSONResponse(
         _api_envelope(
@@ -1510,7 +2192,10 @@ async def create_job(payload: Dict[str, Any]) -> JSONResponse:
     try:
         argv = _argv_from_request(payload)
     except ValueError as exc:
-        reason_code = VALIDATION_REASON_CODES.get(str(exc), "invalid_request")
+        reason_code = VALIDATION_REASON_CODES.get(
+            str(exc),
+            "invalid_request",
+        )
         return _error_response(
             400,
             code="INVALID_ARGUMENT",
@@ -1526,7 +2211,10 @@ async def create_job(payload: Dict[str, Any]) -> JSONResponse:
                 429,
                 code="RATE_LIMITED",
                 message="too many active jobs; try again later",
-                details={"active_jobs": active_jobs, "max_concurrent_jobs": MAX_CONCURRENT_JOBS},
+                details={
+                    "active_jobs": active_jobs,
+                    "max_concurrent_jobs": MAX_CONCURRENT_JOBS,
+                },
             )
         jid = "job_" + uuid.uuid4().hex[:8]
         job = Job(id=jid, created_at=_now(), request=payload)
@@ -1539,7 +2227,11 @@ async def create_job(payload: Dict[str, Any]) -> JSONResponse:
         _api_envelope(
             "tp.orchestrator.job.v1",
             success=True,
-            data={"id": jid, "state": job.state, "events_url": f"/v1/jobs/{jid}/events"},
+            data={
+                "id": jid,
+                "state": job.state,
+                "events_url": f"/v1/jobs/{jid}/events",
+            },
             error=None,
         )
     )
@@ -1549,14 +2241,22 @@ async def create_job(payload: Dict[str, Any]) -> JSONResponse:
 async def list_jobs(limit: int = JOB_LIST_LIMIT) -> JSONResponse:
     _cleanup_expired_jobs(_now())
     bounded_limit = max(1, min(limit, JOB_LIST_LIMIT))
-    jobs_sorted = sorted(JOBS.values(), key=lambda item: item.created_at, reverse=True)
+    jobs_sorted = sorted(
+        JOBS.values(),
+        key=lambda item: item.created_at,
+        reverse=True,
+    )
     serialized = [_serialize_job(job) for job in jobs_sorted[:bounded_limit]]
 
     return JSONResponse(
         _api_envelope(
             "tp.orchestrator.jobs.v1",
             success=True,
-            data={"jobs": serialized, "total": len(JOBS), "returned": len(serialized)},
+            data={
+                "jobs": serialized,
+                "total": len(JOBS),
+                "returned": len(serialized),
+            },
             error=None,
         )
     )
@@ -1567,7 +2267,12 @@ async def get_job(job_id: str) -> JSONResponse:
     _cleanup_expired_jobs(_now())
     job = JOBS.get(job_id)
     if not job:
-        return _error_response(404, code="NOT_FOUND", message="job not found", details={"job_id": job_id})
+        return _error_response(
+            404,
+            code="NOT_FOUND",
+            message="job not found",
+            details={"job_id": job_id},
+        )
     return JSONResponse(
         _api_envelope(
             "tp.orchestrator.job_status.v1",
@@ -1582,7 +2287,12 @@ async def get_job(job_id: str) -> JSONResponse:
 async def cancel_job(job_id: str) -> JSONResponse:
     job = JOBS.get(job_id)
     if not job:
-        return _error_response(404, code="NOT_FOUND", message="job not found", details={"job_id": job_id})
+        return _error_response(
+            404,
+            code="NOT_FOUND",
+            message="job not found",
+            details={"job_id": job_id},
+        )
     await _request_cancel(job)
     return JSONResponse(
         _api_envelope(
@@ -1595,19 +2305,36 @@ async def cancel_job(job_id: str) -> JSONResponse:
 
 
 @app.get("/v1/jobs/{job_id}/events")
-async def job_events(request: Request, job_id: str):
+async def job_events(
+    request: Request,
+    job_id: str,
+) -> Response:
     job = JOBS.get(job_id)
     if not job:
-        return _error_response(404, code="NOT_FOUND", message="job not found", details={"job_id": job_id})
+        return _error_response(
+            404,
+            code="NOT_FOUND",
+            message="job not found",
+            details={"job_id": job_id},
+        )
 
     subscribers = EVENT_SUBSCRIBERS.setdefault(job_id, {})
     subscriber_id = uuid.uuid4().hex
-    q: asyncio.Queue[Dict[str, Any]] = asyncio.Queue(maxsize=EVENT_QUEUE_MAXSIZE)
+    q: asyncio.Queue[Dict[str, Any]] = asyncio.Queue(
+        maxsize=EVENT_QUEUE_MAXSIZE,
+    )
     subscribers[subscriber_id] = q
 
     async def gen() -> AsyncGenerator[str, None]:
         try:
-            yield _sse("state", {"id": job_id, "state": job.state, "progress": job.progress})
+            yield _sse(
+                "state",
+                {
+                    "id": job_id,
+                    "state": job.state,
+                    "progress": job.progress,
+                },
+            )
             if job.finished_at is not None:
                 yield _sse(
                     "done",
@@ -1643,20 +2370,27 @@ async def job_events(request: Request, job_id: str):
             subscribers_for_job = EVENT_SUBSCRIBERS.get(job_id)
             if subscribers_for_job is not None:
                 subscribers_for_job.pop(subscriber_id, None)
-                if not subscribers_for_job and JOBS.get(job_id, None) and JOBS[job_id].finished_at is not None:
+                if not subscribers_for_job and JOBS.get(job_id) and JOBS[job_id].finished_at is not None:
                     EVENT_SUBSCRIBERS.pop(job_id, None)
 
     return StreamingResponse(
         gen(),
         media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+        },
     )
 
 
 async def _run_job(job: Job, argv: List[str]) -> None:
     job.state = "running"
     job.started_at = _now()
-    await _publish_event(job.id, "state", {"id": job.id, "state": job.state})
+    await _publish_event(
+        job.id,
+        "state",
+        {"id": job.id, "state": job.state},
+    )
 
     try:
         # NO SHELL EXECUTION.
@@ -1673,20 +2407,33 @@ async def _run_job(job: Job, argv: List[str]) -> None:
 
         while True:
             if job.cancel_requested and proc.returncode is None and (job.terminate_task is None or job.terminate_task.done()):
-                job.terminate_task = asyncio.create_task(_terminate_process(proc))
+                job.terminate_task = asyncio.create_task(
+                    _terminate_process(proc),
+                )
 
             raw_line = await proc.stdout.readline()
             if not raw_line:
                 break
 
-            line = raw_line.decode("utf-8", errors="replace").rstrip("\n")
+            line = raw_line.decode(
+                "utf-8",
+                errors="replace",
+            ).rstrip("\n")
             job.add_log(line)
-            await _publish_event(job.id, "log", {"id": job.id, "line": line})
+            await _publish_event(
+                job.id,
+                "log",
+                {"id": job.id, "line": line},
+            )
 
             pct = _extract_progress_percent(line)
             if pct is not None and pct != job.progress:
                 job.progress = pct
-                await _publish_event(job.id, "progress", {"id": job.id, "progress": job.progress})
+                await _publish_event(
+                    job.id,
+                    "progress",
+                    {"id": job.id, "progress": job.progress},
+                )
 
         rc = await proc.wait()
         job.exit_code = int(rc)
@@ -1711,9 +2458,16 @@ async def _run_job(job: Job, argv: List[str]) -> None:
         )
         msg = f"runner_error: {job.error['message']}"
         job.add_log(msg)
-        await _publish_event(job.id, "log", {"id": job.id, "line": msg})
+        await _publish_event(
+            job.id,
+            "log",
+            {"id": job.id, "line": msg},
+        )
     except Exception as exc:
-        LOGGER.exception("Unhandled runner exception for job %s", job.id)
+        LOGGER.exception(
+            "Unhandled runner exception for job %s",
+            job.id,
+        )
         job.state = "failed"
         job.exit_code = 1
         job.error = _error_obj(
@@ -1723,7 +2477,11 @@ async def _run_job(job: Job, argv: List[str]) -> None:
         )
         msg = "runner_error: unexpected runner failure"
         job.add_log(msg)
-        await _publish_event(job.id, "log", {"id": job.id, "line": msg})
+        await _publish_event(
+            job.id,
+            "log",
+            {"id": job.id, "line": msg},
+        )
     finally:
         if job.terminate_task is not None:
             try:
@@ -1734,7 +2492,11 @@ async def _run_job(job: Job, argv: List[str]) -> None:
         job.finished_at = _now()
         indexed_artifacts = _index_job_artifacts(job)
         for artifact in indexed_artifacts:
-            await _publish_event(job.id, "artifact", {"id": job.id, **artifact})
+            await _publish_event(
+                job.id,
+                "artifact",
+                {"id": job.id, **artifact},
+            )
 
         await _publish_event(
             job.id,

@@ -1,4 +1,4 @@
-"""Canonical normalization helpers for ingest machine/provenance JSON payloads."""
+"""Canonical normalization helpers for ingest JSON."""
 
 from __future__ import annotations
 
@@ -13,7 +13,15 @@ from .canonical_json import canonicalize_json
 DEFAULT_NORMALIZATION_PROFILE = "ingest_v1"
 
 _SUPPORTED_PROFILES = frozenset({DEFAULT_NORMALIZATION_PROFILE})
-_VOLATILE_PROVENANCE_FIELDS = frozenset({"run_id", "timestamps", "host", "toolchain", "git_commit"})
+_VOLATILE_PROVENANCE_FIELDS = frozenset(
+    {
+        "run_id",
+        "timestamps",
+        "host",
+        "toolchain",
+        "git_commit",
+    }
+)
 _VOLATILE_MACHINE_DATA_FIELDS = frozenset(
     {
         "elapsed_seconds",
@@ -27,21 +35,27 @@ _VOLATILE_MACHINE_DATA_FIELDS = frozenset(
 
 
 def canonical_json_bytes(payload: Any) -> bytes:
-    """Serialize JSON-compatible payload with deterministic key/whitespace rules."""
+    """Serialize payload with deterministic rules."""
     return canonicalize_json(payload)
 
 
 def _validate_profile(profile: str) -> None:
     if profile not in _SUPPORTED_PROFILES:
         supported = ", ".join(sorted(_SUPPORTED_PROFILES))
-        raise ValueError(f"Unsupported normalization profile: {profile}. Supported profiles: {supported}")
+        raise ValueError(f"Unsupported normalization profile: " f"{profile}. Supported: {supported}")
 
 
 def _looks_like_provenance_payload(payload: Mapping[str, Any]) -> bool:
-    return {"file_integrity", "exif", "pipeline_config"}.issubset(payload.keys())
+    return {
+        "file_integrity",
+        "exif",
+        "pipeline_config",
+    }.issubset(payload.keys())
 
 
-def _strip_provenance_volatile_fields(payload: MutableMapping[str, Any]) -> None:
+def _strip_provenance_volatile_fields(
+    payload: MutableMapping[str, Any],
+) -> None:
     for field in _VOLATILE_PROVENANCE_FIELDS:
         payload.pop(field, None)
 
@@ -78,7 +92,11 @@ def _normalize_in_place(payload: Any) -> None:
             _normalize_in_place(item)
 
 
-def normalize_machine_payload(payload: Mapping[str, Any], *, profile: str = DEFAULT_NORMALIZATION_PROFILE) -> dict[str, Any]:
+def normalize_machine_payload(
+    payload: Mapping[str, Any],
+    *,
+    profile: str = DEFAULT_NORMALIZATION_PROFILE,
+) -> dict[str, Any]:
     """Return normalized payload for deterministic comparisons."""
     _validate_profile(profile)
     normalized = copy.deepcopy(dict(payload))
@@ -86,8 +104,12 @@ def normalize_machine_payload(payload: Mapping[str, Any], *, profile: str = DEFA
     return normalized
 
 
-def normalize_machine_json_bytes(raw_json: str | bytes, *, profile: str = DEFAULT_NORMALIZATION_PROFILE) -> bytes:
-    """Normalize a JSON object from raw bytes/string into canonical serialized bytes."""
+def normalize_machine_json_bytes(
+    raw_json: str | bytes,
+    *,
+    profile: str = DEFAULT_NORMALIZATION_PROFILE,
+) -> bytes:
+    """Normalize JSON from raw bytes/string into canonical bytes."""
     _validate_profile(profile)
     if isinstance(raw_json, bytes):
         parsed = json.loads(raw_json.decode("utf-8"))
@@ -99,7 +121,11 @@ def normalize_machine_json_bytes(raw_json: str | bytes, *, profile: str = DEFAUL
     return canonical_json_bytes(normalized)
 
 
-def normalized_payload_sha256(payload: Mapping[str, Any], *, profile: str = DEFAULT_NORMALIZATION_PROFILE) -> str:
+def normalized_payload_sha256(
+    payload: Mapping[str, Any],
+    *,
+    profile: str = DEFAULT_NORMALIZATION_PROFILE,
+) -> str:
     """Compute SHA256 hex digest over normalized canonical JSON bytes."""
     normalized = normalize_machine_payload(payload, profile=profile)
     return hashlib.sha256(canonical_json_bytes(normalized)).hexdigest()

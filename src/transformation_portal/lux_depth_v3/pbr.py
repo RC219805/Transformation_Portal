@@ -9,7 +9,7 @@ All operations use NumPy/SciPy/Pillow only - no OpenCV dependency.
 """
 
 from dataclasses import dataclass
-from typing import Tuple
+from typing import Any, Tuple
 
 import numpy as np
 from scipy import ndimage
@@ -23,8 +23,10 @@ class PBRConfig:
     """
 
     # Normal map parameters
-    normal_strength: float = 1.0  # Gradient multiplier (higher = more pronounced)
-    normal_blur_radius: int = 0  # Pre-blur depth before gradient (0 = disabled)
+    # Gradient multiplier (higher = more pronounced)
+    normal_strength: float = 1.0
+    # Pre-blur depth before gradient (0 = disabled)
+    normal_blur_radius: int = 0
 
     # Roughness map parameters
     roughness_strength: float = 1.0  # Detail multiplier
@@ -85,11 +87,17 @@ def _laplacian(depth: np.ndarray) -> np.ndarray:
     Returns:
         Laplacian response, same shape as input
     """
-    laplacian_kernel = np.array([[0, 1, 0], [1, -4, 1], [0, 1, 0]], dtype=np.float32)
+    laplacian_kernel = np.array(
+        [[0, 1, 0], [1, -4, 1], [0, 1, 0]],
+        dtype=np.float32,
+    )
     return ndimage.convolve(depth, laplacian_kernel, mode="reflect")
 
 
-def generate_pbr_maps(depth: np.ndarray, config: PBRConfig = PBRConfig()) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+def generate_pbr_maps(
+    depth: np.ndarray,
+    config: PBRConfig = PBRConfig(),
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Generate PBR maps from depth data.
 
     Args:
@@ -131,7 +139,10 @@ def generate_pbr_maps(depth: np.ndarray, config: PBRConfig = PBRConfig()) -> Tup
     # 1. NORMAL MAP
     # Pre-blur depth if requested
     if config.normal_blur_radius > 0:
-        depth_for_normals = _box_blur_gray(depth_normalized, config.normal_blur_radius)
+        depth_for_normals = _box_blur_gray(
+            depth_normalized,
+            config.normal_blur_radius,
+        )
     else:
         depth_for_normals = depth_normalized
 
@@ -144,7 +155,8 @@ def generate_pbr_maps(depth: np.ndarray, config: PBRConfig = PBRConfig()) -> Tup
 
     # Build normal vectors: N = (-dx, -dy, 1)
     normals = np.stack(
-        [-grad_x_scaled, -grad_y_scaled, np.ones_like(grad_x)], axis=-1  # X component  # Y component  # Z component (up)
+        [-grad_x_scaled, -grad_y_scaled, np.ones_like(grad_x)],
+        axis=-1,
     )
 
     # Normalize to unit length
@@ -172,7 +184,7 @@ def generate_pbr_maps(depth: np.ndarray, config: PBRConfig = PBRConfig()) -> Tup
     # Apply strength AFTER normalization using power curve
     # Validate strength parameter
     if config.roughness_strength < 0:
-        raise ValueError(f"roughness_strength must be non-negative, got {config.roughness_strength}")
+        raise ValueError("roughness_strength must be" " non-negative, got" f" {config.roughness_strength}")
 
     # strength > 1.0 increases roughness response (brighter, more pronounced)
     # strength < 1.0 reduces roughness response (darker, less pronounced)
@@ -180,8 +192,17 @@ def generate_pbr_maps(depth: np.ndarray, config: PBRConfig = PBRConfig()) -> Tup
     # Use power curve: output = input^(1/strength)
     # For strength=2.0: sqrt(input) - spreads values up (increases mean)
     # For strength=0.5: input^2 - concentrates values down (decreases mean)
-    if config.roughness_strength > 0 and abs(config.roughness_strength - 1.0) > 1e-9:
-        roughness = np.power(roughness, 1.0 / config.roughness_strength)
+    if (
+        config.roughness_strength > 0
+        and abs(
+            config.roughness_strength - 1.0,
+        )
+        > 1e-9
+    ):
+        roughness = np.power(
+            roughness,
+            1.0 / config.roughness_strength,
+        )
     elif config.roughness_strength == 0:
         # Special case: zero strength means no roughness
         roughness = np.zeros_like(roughness)
@@ -205,7 +226,7 @@ def generate_pbr_maps(depth: np.ndarray, config: PBRConfig = PBRConfig()) -> Tup
     # Apply AO strength AFTER normalization using scale-and-clip
     # Validate strength parameter
     if config.ao_strength < 0:
-        raise ValueError(f"ao_strength must be non-negative, got {config.ao_strength}")
+        raise ValueError("ao_strength must be non-negative," f" got {config.ao_strength}")
 
     # strength > 1.0 increases occlusion (darker shadows)
     # strength < 1.0 reduces occlusion (lighter)
@@ -225,11 +246,13 @@ def generate_pbr_maps(depth: np.ndarray, config: PBRConfig = PBRConfig()) -> Tup
 
 
 # Phase 3: GPU-accelerated batching
-# Deferred torch import keeps CPU-only/CI environments from crashing at module import time.
+# Deferred torch import keeps CPU-only/CI
+# environments from crashing at module
+# import time.
 TORCH_AVAILABLE = False
 _TORCH_IMPORT_ATTEMPTED = False
-torch = None  # type: ignore
-F = None  # type: ignore
+torch: Any = None
+F: Any = None
 
 
 def _ensure_torch_for_batching() -> bool:
@@ -244,17 +267,23 @@ def _ensure_torch_for_batching() -> bool:
         import torch as torch_module
         import torch.nn.functional as functional_module
 
-        torch = torch_module  # type: ignore[assignment]
-        F = functional_module  # type: ignore[assignment]
+        torch = torch_module  # pyright: ignore[assignment]
+        F = functional_module  # pyright: ignore[assignment]
         TORCH_AVAILABLE = True
-    except Exception:  # pragma: no cover - optional dependency/runtime specific
+    except Exception:  # pragma: no cover
         TORCH_AVAILABLE = False
 
     return TORCH_AVAILABLE
 
 
-def generate_pbr_maps_batched(depth_maps: list, config: PBRConfig = PBRConfig(), device: str = "cpu") -> list:
-    """Generate PBR maps for batch of depth maps using GPU acceleration (Phase 3).
+def generate_pbr_maps_batched(
+    depth_maps: list,
+    config: PBRConfig = PBRConfig(),
+    device: str = "cpu",
+) -> list:
+    """Generate PBR maps for batch using GPU.
+
+    Phase 3 GPU acceleration.
 
     Provides 30% speedup over sequential generation by batching convolutions
     on GPU (MPS/CUDA). Falls back to CPU numpy if torch unavailable.
@@ -286,6 +315,7 @@ def generate_pbr_maps_batched(depth_maps: list, config: PBRConfig = PBRConfig(),
 
     # Validate device
     try:
+        assert torch is not None
         test_tensor = torch.zeros(1)
         test_result = test_tensor.to(device)
         # Verify the result is actually a tensor, not a mock
@@ -308,37 +338,66 @@ def generate_pbr_maps_batched(depth_maps: list, config: PBRConfig = PBRConfig(),
         depth_norm = np.clip(depth_norm, 0.0, 1.0)
 
         # Convert to tensor (B, C, H, W)
+        assert torch is not None
         tensor = torch.from_numpy(depth_norm).float().unsqueeze(0).unsqueeze(0)
         depth_tensors.append(tensor)
 
     # Stack into batch
     try:
-        depth_batch = torch.cat(depth_tensors, dim=0).to(device)  # (B, 1, H, W)
-        # Verify we got a real tensor, not a mock
+        assert torch is not None
+        depth_batch = torch.cat(  # (B, 1, H, W)
+            depth_tensors,
+            dim=0,
+        ).to(device)
+        # Verify we got a real tensor, not mock
         if not hasattr(depth_batch, "shape"):
-            raise RuntimeError("torch.cat returned invalid result (mock detected)")
+            raise RuntimeError("torch.cat returned invalid" " result (mock detected)")
         batch_size = depth_batch.shape[0]
     except (RuntimeError, TypeError, AttributeError):
         # torch operations failed (likely mocked), fall back to CPU
         return [generate_pbr_maps(depth, config) for depth in depth_maps]
 
+    assert torch is not None
+    assert F is not None
+    _avg_pool2d = getattr(F, "avg_pool2d")
+    _conv2d = getattr(F, "conv2d")
+    _normalize = getattr(F, "normalize")
     with torch.no_grad():
         # Sobel kernels for gradients
-        sobel_x = torch.tensor([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], dtype=torch.float32)
-        sobel_y = torch.tensor([[-1, -2, -1], [0, 0, 0], [1, 2, 1]], dtype=torch.float32)
+        sobel_x = torch.tensor(
+            [[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]],
+            dtype=torch.float32,
+        )
+        sobel_y = torch.tensor(
+            [[-1, -2, -1], [0, 0, 0], [1, 2, 1]],
+            dtype=torch.float32,
+        )
         sobel_x = sobel_x.view(1, 1, 3, 3).to(device)
         sobel_y = sobel_y.view(1, 1, 3, 3).to(device)
 
         # Pre-blur for normals if requested
         if config.normal_blur_radius > 0:
             kernel_size = 2 * config.normal_blur_radius + 1
-            depth_for_normals = F.avg_pool2d(depth_batch, kernel_size=kernel_size, stride=1, padding=kernel_size // 2)
+            depth_for_normals = _avg_pool2d(
+                depth_batch,
+                kernel_size=kernel_size,
+                stride=1,
+                padding=kernel_size // 2,
+            )
         else:
             depth_for_normals = depth_batch
 
         # Compute gradients (batched)
-        grad_x = F.conv2d(depth_for_normals, sobel_x, padding=1)
-        grad_y = F.conv2d(depth_for_normals, sobel_y, padding=1)
+        grad_x = _conv2d(
+            depth_for_normals,
+            sobel_x,
+            padding=1,
+        )
+        grad_y = _conv2d(
+            depth_for_normals,
+            sobel_y,
+            padding=1,
+        )
 
         # 1. NORMAL MAP
         grad_x_scaled = grad_x * config.normal_strength
@@ -346,24 +405,43 @@ def generate_pbr_maps_batched(depth_maps: list, config: PBRConfig = PBRConfig(),
 
         # Build normal vectors
         normals = torch.stack(
-            [-grad_x_scaled[:, 0], -grad_y_scaled[:, 0], torch.ones_like(grad_x[:, 0])], dim=1
+            [-grad_x_scaled[:, 0], -grad_y_scaled[:, 0], torch.ones_like(grad_x[:, 0])],
+            dim=1,
         )  # (B, 3, H, W)
 
         # Normalize to unit length
-        normals = F.normalize(normals, dim=1)
+        normals = _normalize(normals, dim=1)
 
         # Map to [0, 255]
         normal_maps = ((normals + 1.0) * 127.5).clamp(0, 255)
 
         # 2. ROUGHNESS MAP
-        laplacian_kernel = torch.tensor([[0, 1, 0], [1, -4, 1], [0, 1, 0]], dtype=torch.float32).view(1, 1, 3, 3).to(device)
+        laplacian_kernel = (
+            torch.tensor(
+                [[0, 1, 0], [1, -4, 1], [0, 1, 0]],
+                dtype=torch.float32,
+            )
+            .view(1, 1, 3, 3)
+            .to(device)
+        )
 
-        detail = torch.abs(F.conv2d(depth_batch, laplacian_kernel, padding=1))
+        detail = torch.abs(
+            _conv2d(
+                depth_batch,
+                laplacian_kernel,
+                padding=1,
+            )
+        )
 
         # Blur
         if config.roughness_blur_radius > 0:
             kernel_size = 2 * config.roughness_blur_radius + 1
-            roughness = F.avg_pool2d(detail, kernel_size=kernel_size, stride=1, padding=kernel_size // 2)
+            roughness = _avg_pool2d(
+                detail,
+                kernel_size=kernel_size,
+                stride=1,
+                padding=kernel_size // 2,
+            )
         else:
             roughness = detail
 
@@ -376,8 +454,17 @@ def generate_pbr_maps_batched(depth_maps: list, config: PBRConfig = PBRConfig(),
                 roughness_normalized[i, 0] = (r - r_min) / (r_max - r_min)
 
         # Apply strength
-        if config.roughness_strength > 0 and abs(config.roughness_strength - 1.0) > 1e-9:
-            roughness_normalized = torch.pow(roughness_normalized, 1.0 / config.roughness_strength)
+        if (
+            config.roughness_strength > 0
+            and abs(
+                config.roughness_strength - 1.0,
+            )
+            > 1e-9
+        ):
+            roughness_normalized = torch.pow(
+                roughness_normalized,
+                1.0 / config.roughness_strength,
+            )
         elif config.roughness_strength == 0:
             roughness_normalized = torch.zeros_like(roughness_normalized)
 
@@ -389,7 +476,12 @@ def generate_pbr_maps_batched(depth_maps: list, config: PBRConfig = PBRConfig(),
         # Blur
         if config.ao_blur_radius > 0:
             kernel_size = 2 * config.ao_blur_radius + 1
-            occlusion = F.avg_pool2d(grad_mag, kernel_size=kernel_size, stride=1, padding=kernel_size // 2)
+            occlusion = _avg_pool2d(
+                grad_mag,
+                kernel_size=kernel_size,
+                stride=1,
+                padding=kernel_size // 2,
+            )
         else:
             occlusion = grad_mag
 
@@ -402,9 +494,17 @@ def generate_pbr_maps_batched(depth_maps: list, config: PBRConfig = PBRConfig(),
                 occlusion_normalized[i, 0] = (occ - occ_min) / (occ_max - occ_min)
 
         # Apply strength and bias
-        occlusion_normalized = torch.clamp(occlusion_normalized * config.ao_strength, 0.0, 1.0)
+        occlusion_normalized = torch.clamp(
+            occlusion_normalized * config.ao_strength,
+            0.0,
+            1.0,
+        )
         ao = 1.0 - occlusion_normalized
-        ao = torch.clamp(ao * (1.0 - config.ao_bias) + config.ao_bias, 0.0, 1.0)
+        ao = torch.clamp(
+            ao * (1.0 - config.ao_bias) + config.ao_bias,
+            0.0,
+            1.0,
+        )
         ao_maps = (ao * 255).clamp(0, 255)
 
     # Convert back to numpy

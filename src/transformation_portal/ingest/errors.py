@@ -16,7 +16,8 @@ class IngestExitCode(IntEnum):
     """Stable ingest contract exit codes.
 
     Expansion policy:
-    - Numeric values are wire-level contract and must not be renumbered or reused.
+    - Numeric values are wire-level contract and
+      must not be renumbered or reused.
     - Add new codes with strictly increasing integer values.
     """
 
@@ -120,7 +121,7 @@ _PRIORITY_BY_EXIT_CODE = {
     IngestExitCode.SCHEMA_DRIFT: PRIORITY_SCHEMA_DRIFT,
     IngestExitCode.GAMMA_VIOLATION: PRIORITY_GAMMA_VIOLATION,
     IngestExitCode.BIT_DEPTH_VIOLATION: PRIORITY_BIT_DEPTH_VIOLATION,
-    IngestExitCode.SCHEMA_VALIDATION_FAILED: PRIORITY_SCHEMA_VALIDATION_FAILURE,
+    IngestExitCode.SCHEMA_VALIDATION_FAILED: (PRIORITY_SCHEMA_VALIDATION_FAILURE),
     IngestExitCode.OTHER_FAILURE: PRIORITY_OTHER_FAILURE,
 }
 

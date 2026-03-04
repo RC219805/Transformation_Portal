@@ -13,7 +13,10 @@ from .pixel_ops_decider import decide_pixel_ops
 from .pixel_ops_registry import OP_REGISTRY
 
 
-def compute_edge_signals(mask_np: np.ndarray, rgb_np: np.ndarray) -> Dict[str, float]:
+def compute_edge_signals(
+    mask_np: np.ndarray,
+    rgb_np: np.ndarray,
+) -> Dict[str, float]:
     """Computes objective boundary metrics using image gradients."""
     if mask_np is None or mask_np.sum() == 0:
         return {"boundary_pixels": 0, "edge_alignment": 0.0}
@@ -46,10 +49,18 @@ def compute_edge_signals(mask_np: np.ndarray, rgb_np: np.ndarray) -> Dict[str, f
     # 3. Compute Alignment (Mean gradient magnitude at boundary)
     alignment_score = float(np.mean(grad_mag[boundary_mask]))
 
-    return {"boundary_pixels": boundary_pixels_count, "edge_alignment": round(alignment_score, 4)}
+    return {
+        "boundary_pixels": boundary_pixels_count,
+        "edge_alignment": round(alignment_score, 4),
+    }
 
 
-def _decide_refinement(material_key: str, stats: Dict, edge_signals: Dict, config: Any) -> Dict[str, Any]:
+def _decide_refinement(
+    material_key: str,
+    stats: Dict,
+    edge_signals: Dict,
+    config: Any,
+) -> Dict[str, Any]:
     """Decision Block A: EfficientSAM Refinement Gate."""
     canary_set = {"glass", "foliage", "water"}
 
@@ -80,19 +91,35 @@ def _decide_refinement(material_key: str, stats: Dict, edge_signals: Dict, confi
     elif stats["mean_conf"] >= ambiguity_threshold:
         reason = "confidence_already_high"
 
-    return {"should_refine_edges": should_refine, "eligible": eligible, "reason": reason, "strategy": "canary"}
+    return {
+        "should_refine_edges": should_refine,
+        "eligible": eligible,
+        "reason": reason,
+        "strategy": "canary",
+    }
 
 
-def _decide_pixel_ops(material_key: str, stats: Dict, config: Any) -> Dict[str, Any]:
+def _decide_pixel_ops(
+    material_key: str,
+    stats: Dict,
+    config: Any,
+) -> Dict[str, Any]:
     """Decision Block B: Pixel Ops Gate."""
     return decide_pixel_ops(material_key, stats, config, registry=OP_REGISTRY)
 
 
-def generate_response_plan(per_class_stats: Dict[str, Any], rgb_image: np.ndarray, config: Any) -> Dict[str, Any]:
+def generate_response_plan(
+    per_class_stats: Dict[str, Any],
+    rgb_image: np.ndarray,
+    config: Any,
+) -> Dict[str, Any]:
     """Generates Schema v3.1 Response Plan."""
-    plan = {
+    plan: Dict[str, Any] = {
         "version": "v3.1",
-        "config_summary": {"strategy": str(config.refinement_strategy), "min_coverage": config.min_coverage_px},
+        "config_summary": {
+            "strategy": str(config.refinement_strategy),
+            "min_coverage": config.min_coverage_px,
+        },
         "per_class": {},
         "summary": {
             "present_classes": [],
@@ -102,7 +129,7 @@ def generate_response_plan(per_class_stats: Dict[str, Any], rgb_image: np.ndarra
         },
     }
 
-    histogram = {}
+    histogram: Dict[str, int] = {}
     for mat_key, stats in per_class_stats.items():
         if not stats.get("present", False):
             continue

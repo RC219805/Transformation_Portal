@@ -1,6 +1,7 @@
 """Synthetic depth backend for testing and CI environments.
 
-This backend provides deterministic, fast depth estimation without ML dependencies.
+This backend provides deterministic, fast depth
+estimation without ML dependencies.
 It uses luminance-based depth approximation: brighter pixels = closer depth.
 
 Design rationale:
@@ -55,7 +56,7 @@ class SyntheticDepthBackend:
             config: Optional configuration (unused, for compatibility)
         """
         self._config = config
-        logger.debug("SyntheticDepthBackend initialized (no ML dependencies required)")
+        logger.debug("SyntheticDepthBackend initialized" " (no ML dependencies required)")
 
     def ensure_available(self) -> None:
         """Check backend availability.
@@ -63,7 +64,6 @@ class SyntheticDepthBackend:
         Synthetic backend is always available (no external dependencies).
         """
         # Always available - no ML deps required
-        pass
 
     @classmethod
     def required_packages(cls) -> list[str]:

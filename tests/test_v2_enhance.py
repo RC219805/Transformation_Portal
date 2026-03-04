@@ -243,6 +243,33 @@ class TestEnhanceImage:
             context = call_args[0][0]
             assert context.get_artifact("depth_map") is not None
 
+    def test_enhance_image_with_mismatched_depth_dimensions(self, tmp_path):
+        """Depth map should be resized to match image dimensions before tone mapping."""
+        input_path = tmp_path / "input.png"
+        image = np.random.randint(0, 256, (80, 100, 3), dtype=np.uint8)
+        Image.fromarray(image, mode="RGB").save(input_path)
+
+        depth_path = tmp_path / "depth.png"
+        depth_data = np.random.randint(0, 256, (82, 108), dtype=np.uint8)
+        Image.fromarray(depth_data, mode="L").save(depth_path)
+
+        output_path = tmp_path / "output.png"
+        config = V2EnhancementConfig(
+            preset="default",
+            enhancement_strength=0.7,
+            clarity_strength=0.0,
+            material_strength=0.0,
+        )
+
+        report = enhance_image(input_path, output_path, depth_map_path=depth_path, config=config)
+
+        assert report["status"] == "success"
+        assert report["depth_consumed"] is True
+        assert output_path.exists()
+
+        output_image = Image.open(output_path)
+        assert output_image.size == (100, 80)
+
     def test_enhance_image_depth_consumed_prefers_stage_metadata(self, tmp_path):
         """Test that depth_consumed follows stage metadata when present."""
         input_path = tmp_path / "input.png"

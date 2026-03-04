@@ -10,7 +10,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence
 
-from .errors import IngestError, IngestExitCode, OtherIngestFailure, aggregate_errors
+from .errors import (
+    IngestError,
+    IngestExitCode,
+    OtherIngestFailure,
+    aggregate_errors,
+)
 from .provenance import capture_provenance
 from .sidecar import write_sidecar
 from .validator import validate_schema_errors
@@ -106,17 +111,24 @@ class MetadataExtractionService:
         start = self._clock()
         try:
             if not req.input_path.exists():
-                error = OtherIngestFailure(f"Input not found: {req.input_path}")
+                not_found_err = OtherIngestFailure(f"Input not found: {req.input_path}")
                 return ExtractResult(
                     path=req.input_path,
                     success=False,
                     output_path=None,
                     elapsed_seconds=self._clock() - start,
-                    error=error,
+                    error=not_found_err,
                 )
 
             output_path = self._derive_output_path(req)
-            config_dict = req.config_dict if req.config_dict is not None else {"mode": "metadata_service", "phase": "3.7"}
+            config_dict = (
+                req.config_dict
+                if req.config_dict is not None
+                else {
+                    "mode": "metadata_service",
+                    "phase": "3.7",
+                }
+            )
 
             sidecar = self._capture_provenance(
                 input_path=req.input_path,
@@ -140,14 +152,14 @@ class MetadataExtractionService:
                 elapsed_seconds=self._clock() - start,
                 error=error,
             )
-        except Exception as exc:  # noqa: BLE001 - service API returns typed failures
-            error = OtherIngestFailure(str(exc))
+        except Exception as exc:  # noqa: BLE001
+            wrapped_error = OtherIngestFailure(str(exc))
             return ExtractResult(
                 path=req.input_path,
                 success=False,
                 output_path=None,
                 elapsed_seconds=self._clock() - start,
-                error=error,
+                error=wrapped_error,
             )
 
     def validate(self, req: ValidateRequest) -> ValidateResult:
@@ -159,23 +171,35 @@ class MetadataExtractionService:
                 strict_mode=req.strict,
             )
             dominant_error = aggregate_errors(errors)
-            return ValidateResult(success=dominant_error is None, errors=errors, dominant_error=dominant_error)
-        except IngestError as error:
-            return ValidateResult(success=False, errors=[error], dominant_error=error)
-        except Exception as exc:  # noqa: BLE001 - service API returns typed failures
-            error = OtherIngestFailure(str(exc))
-            return ValidateResult(success=False, errors=[error], dominant_error=error)
+            return ValidateResult(
+                success=dominant_error is None,
+                errors=errors,
+                dominant_error=dominant_error,
+            )
+        except IngestError as ie:
+            return ValidateResult(
+                success=False,
+                errors=[ie],
+                dominant_error=ie,
+            )
+        except Exception as exc:  # noqa: BLE001
+            wrapped = OtherIngestFailure(str(exc))
+            return ValidateResult(
+                success=False,
+                errors=[wrapped],
+                dominant_error=wrapped,
+            )
 
     def batch_extract(self, req: BatchExtractRequest) -> BatchExtractResult:
         """Run extract for each file and aggregate typed outcomes."""
         start = self._clock()
         paths = list(req.input_paths)
         if req.deterministic_order:
-            paths = sorted(paths, key=lambda path: str(path))
+            paths = sorted(paths, key=str)
 
         items: List[BatchItemResult] = []
         errors: List[IngestError] = []
-        by_exit = Counter()
+        by_exit: Counter[IngestExitCode] = Counter()
         success_count = 0
         failure_count = 0
 
@@ -274,11 +298,11 @@ class MetadataExtractionService:
                 candidate = base_path.with_name(f"{input_path.name}.provenance.json")
                 if candidate in seen:
                     digest = self._stable_path_digest(input_path)
-                    candidate = base_path.with_name(f"{input_path.name}.{digest}.provenance.json")
+                    candidate = base_path.with_name(f"{input_path.name}" f".{digest}.provenance.json")
                     counter = 0
                     while candidate in seen:
                         counter += 1
-                        candidate = base_path.with_name(f"{input_path.name}.{digest}.{counter}.provenance.json")
+                        candidate = base_path.with_name(f"{input_path.name}" f".{digest}.{counter}" ".provenance.json")
             seen.add(candidate)
             chosen_paths.append(candidate)
 
@@ -289,7 +313,10 @@ class MetadataExtractionService:
             canonical_path = input_path.resolve(strict=False).as_posix()
         except (OSError, RuntimeError):
             canonical_path = input_path.absolute().as_posix()
-        return hashlib.blake2s(canonical_path.encode("utf-8"), digest_size=4).hexdigest()
+        return hashlib.blake2s(
+            canonical_path.encode("utf-8"),
+            digest_size=4,
+        ).hexdigest()
 
     def _common_input_root(self, paths: Sequence[Path]) -> Optional[Path]:
         if not paths:

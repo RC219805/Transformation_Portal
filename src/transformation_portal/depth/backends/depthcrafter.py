@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING, Deque, Optional, Union
 import numpy as np
 from PIL import Image
 
-from .protocol import DepthResult, LicenseType, StatefulBackend
+from .protocol import DepthResult, LicenseType
 
 if TYPE_CHECKING:
     from ...lux_depth_v3.config import EnhanceConfig
@@ -88,7 +88,9 @@ class DepthCrafterBackend:
         self._max_buffer_size = max_buffer_size
 
         # Temporal state
-        self._temporal_buffer: Deque[np.ndarray] = deque(maxlen=max_buffer_size)
+        self._temporal_buffer: Deque[np.ndarray] = deque(
+            maxlen=max_buffer_size,
+        )
         self._ema_state: Optional[np.ndarray] = None
 
         # Checkpoint availability (lazy-checked)
@@ -151,7 +153,10 @@ class DepthCrafterBackend:
         return image
 
     @classmethod
-    def _to_rgb_uint8_array(cls, image: Union[Image.Image, np.ndarray]) -> np.ndarray:
+    def _to_rgb_uint8_array(
+        cls,
+        image: Union[Image.Image, np.ndarray],
+    ) -> np.ndarray:
         """Convert PIL/numpy image to an RGB uint8 numpy array."""
         if isinstance(image, Image.Image):
             pil_image = image.convert("RGB")
@@ -165,7 +170,11 @@ class DepthCrafterBackend:
         """Return checkpoint path from config or default location."""
         checkpoint_path = None
         if self._config is not None:
-            checkpoint_path = getattr(self._config, "depthcrafter_checkpoint_path", None)
+            checkpoint_path = getattr(
+                self._config,
+                "depthcrafter_checkpoint_path",
+                None,
+            )
 
         if checkpoint_path is None:
             checkpoint_path = "checkpoints/depthcrafter_v1.pt"
@@ -214,7 +223,7 @@ class DepthCrafterBackend:
             "fallback_mode": is_synthetic,
             "synthetic": is_synthetic,
             "confidence": 0.0 if is_synthetic else 1.0,
-            "availability": "missing_checkpoint" if is_synthetic else "available",
+            "availability": ("missing_checkpoint" if is_synthetic else "available"),
         }
 
         return DepthResult(
@@ -250,8 +259,9 @@ class DepthCrafterBackend:
             if not self._MODEL_INFERENCE_IMPLEMENTED:
                 if not self._model_inference_warning_emitted:
                     logger.info(
-                        "DepthCrafter checkpoint found at %s, but model inference "
-                        "is not implemented yet. Falling back to synthetic depth.",
+                        "DepthCrafter checkpoint found at %s, "
+                        "but model inference is not implemented "
+                        "yet. Falling back to synthetic depth.",
                         self._checkpoint_path(),
                     )
                     self._model_inference_warning_emitted = True
@@ -261,7 +271,7 @@ class DepthCrafterBackend:
             except Exception as e:
                 self._checkpoint_available = False
                 logger.warning(
-                    "DepthCrafter model inference failed: %s. " "Falling back to synthetic depth.",
+                    "DepthCrafter model inference failed: " "%s. Falling back to synthetic depth.",
                     e,
                 )
 

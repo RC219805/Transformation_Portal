@@ -1,4 +1,6 @@
-"""Input discovery with hygiene filters to prevent processing depth artifacts as RGB inputs.
+"""Input discovery with hygiene filters.
+
+Prevents processing depth artifacts as RGB inputs.
 
 This module provides intelligent input discovery that excludes:
 - Depth maps (*_depth.png, *_depthpro_depth16.png)
@@ -31,7 +33,8 @@ class DiscoveryConfig:
     """Input discovery configuration.
 
     Attributes:
-        exclude_path_patterns: Path segments to exclude (matched anywhere in path).
+        exclude_path_patterns: Path segments to exclude
+            (matched anywhere in path).
         exclude_stem_suffixes: Filename suffixes to exclude (before extension).
         exclude_hidden: Skip hidden files/directories (starting with '.').
         strict_mode: Fail with error if excluded files found (validation mode).
@@ -66,15 +69,20 @@ class DiscoveryConfig:
 
 
 def discover_images(
-    input_dir: Path, config: DiscoveryConfig, image_extensions: List[str] | None = None, output_dir: Optional[Path] = None
+    input_dir: Path,
+    config: DiscoveryConfig,
+    image_extensions: List[str] | None = None,
+    output_dir: Optional[Path] = None,
 ) -> List[Path]:
-    """Discover valid RGB input images while excluding depth artifacts and outputs.
+    """Discover valid RGB images, excluding artifacts.
 
     Args:
         input_dir: Directory to scan for images (recursive).
         config: Discovery configuration with exclusion patterns.
-        image_extensions: File extensions to include (default: standard + RAW formats).
-        output_dir: Output directory to explicitly exclude (if subdirectory of input_dir).
+        image_extensions: File extensions to include
+            (default: standard + RAW formats).
+        output_dir: Output directory to explicitly
+            exclude (if subdirectory of input_dir).
 
     Returns:
         List of valid image paths to process.
@@ -84,30 +92,56 @@ def discover_images(
 
     Example:
         >>> config = DiscoveryConfig(strict_mode=False)
-        >>> images = discover_images(Path("./input"), config, output_dir=Path("./input/output"))
+        >>> images = discover_images(
+        ...     Path("./input"), config,
+        ...     output_dir=Path("./input/output"),
+        ... )
         INFO: Discovered 17 images, excluded 3 artifacts
     """
     if image_extensions is None:
         # Default: standard image formats + RAW camera formats
-        # Use set to avoid duplicates (.tif/.tiff appear in both standard and RAW)
-        standard_exts = [".jpg", ".jpeg", ".png", ".tif", ".tiff", ".webp", ".bmp"]
+        # Use set to avoid duplicates
+        # (.tif/.tiff appear in both standard and RAW)
+        standard_exts = [
+            ".jpg",
+            ".jpeg",
+            ".png",
+            ".tif",
+            ".tiff",
+            ".webp",
+            ".bmp",
+        ]
         raw_exts = sorted(RAW_EXTENSIONS)
         image_extensions = sorted(set(standard_exts + raw_exts))
 
-    logger.debug(f"Scanning {input_dir} for images with extensions: {image_extensions}")
-    logger.debug(f"Exclude path patterns: {config.exclude_path_patterns}")
+    logger.debug(
+        "Scanning %s for images with extensions: %s",
+        input_dir,
+        image_extensions,
+    )
+    logger.debug(
+        "Exclude path patterns: %s",
+        config.exclude_path_patterns,
+    )
     logger.debug(f"Exclude stem suffixes: {config.exclude_stem_suffixes}")
 
-    # Exclude only true descendants of output_dir (avoid prefix false positives such as out vs out2)
+    # Exclude only true descendants of output_dir
+    # (avoid prefix false positives such as out vs out2)
     output_dir_resolved: Optional[Path] = None
     if output_dir:
         try:
             resolved_candidate = output_dir.expanduser().resolve()
             if not resolved_candidate.is_dir():
-                logger.warning(f"Output directory exclusion skipped: {resolved_candidate} is not a directory")
+                logger.warning(
+                    "Output directory exclusion " "skipped: %s is not a directory",
+                    resolved_candidate,
+                )
             else:
                 output_dir_resolved = resolved_candidate
-                logger.debug(f"Output directory to exclude: {output_dir_resolved}")
+                logger.debug(
+                    "Output directory to exclude: %s",
+                    output_dir_resolved,
+                )
         except Exception as e:
             logger.warning(f"Failed to normalize output_dir: {e}")
 
@@ -129,10 +163,18 @@ def discover_images(
                 if candidate_resolved.is_relative_to(output_dir_resolved):
                     reason = "in output directory"
                     excluded_artifacts.append((candidate, reason))
-                    logger.debug(f"Skipped artifact: {candidate.name} (matched: {reason})")
+                    logger.debug(
+                        "Skipped artifact: %s " "(matched: %s)",
+                        candidate.name,
+                        reason,
+                    )
                     continue
             except Exception as e:
-                logger.debug(f"Failed to check output dir for {candidate}: {e}")
+                logger.debug(
+                    "Failed to check output " "dir for %s: %s",
+                    candidate,
+                    e,
+                )
 
         # Check extension (case-insensitive)
         if candidate.suffix.lower() not in allowed_exts:
@@ -142,10 +184,14 @@ def discover_images(
         if config.exclude_hidden and any(part.startswith(".") for part in candidate.parts):
             reason = "hidden file/directory"
             excluded_artifacts.append((candidate, reason))
-            logger.debug(f"Skipped artifact: {candidate.name} (matched: {reason})")
+            logger.debug(
+                "Skipped artifact: %s (matched: %s)",
+                candidate.name,
+                reason,
+            )
             continue
 
-        # Check for excluded path patterns (case-insensitive)
+        # Check for excluded path patterns
         candidate_str = candidate.as_posix().lower()
         matched_pattern = None
         for pattern in config.exclude_path_patterns:
@@ -156,10 +202,14 @@ def discover_images(
         if matched_pattern:
             reason = f"path pattern: {matched_pattern}"
             excluded_artifacts.append((candidate, reason))
-            logger.debug(f"Skipped artifact: {candidate.name} (matched: {reason})")
+            logger.debug(
+                "Skipped artifact: %s (matched: %s)",
+                candidate.name,
+                reason,
+            )
             continue
 
-        # Check for excluded stem suffixes (case-insensitive)
+        # Check for excluded stem suffixes
         stem_lower = candidate.stem.lower()
         matched_suffix = None
         for suffix in config.exclude_stem_suffixes:
@@ -170,18 +220,26 @@ def discover_images(
         if matched_suffix:
             reason = f"stem suffix: {matched_suffix}"
             excluded_artifacts.append((candidate, reason))
-            logger.debug(f"Skipped artifact: {candidate.name} (matched: {reason})")
+            logger.debug(
+                "Skipped artifact: %s (matched: %s)",
+                candidate.name,
+                reason,
+            )
             continue
 
         # Valid image
         valid_images.append(candidate)
 
     # Summary logging
-    logger.info(f"Discovered {len(valid_images)} images, excluded {len(excluded_artifacts)} artifacts")
+    logger.info(
+        "Discovered %d images, excluded %d artifacts",
+        len(valid_images),
+        len(excluded_artifacts),
+    )
 
     # Strict mode: fail if artifacts found
     if config.strict_mode and excluded_artifacts:
-        error_msg = f"Strict mode: {len(excluded_artifacts)} excluded artifacts found in {input_dir}"
+        error_msg = f"Strict mode: {len(excluded_artifacts)} " f"excluded artifacts found in {input_dir}"
         logger.error(error_msg)
         for artifact, reason in excluded_artifacts[:10]:  # Show first 10
             logger.error(f"  - {artifact.name} ({reason})")

@@ -19,12 +19,12 @@ from __future__ import annotations
 import hashlib
 import logging
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Dict, List, Optional, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
 
 import numpy as np
 from PIL import Image
 
-from .protocol import DepthResult, LicenseType, StatefulBackend
+from .protocol import DepthResult, LicenseType
 
 if TYPE_CHECKING:
     from ...lux_depth_v3.config import EnhanceConfig
@@ -59,7 +59,8 @@ class TemporalPostFilterConfig:
     when DepthCrafter is unavailable or running in synthetic fallback mode.
 
     Attributes:
-        mode: Filter mode ("ema" for exponential moving average, "off" to disable).
+        mode: Filter mode ("ema" for exponential
+            moving average, "off" to disable).
         alpha: EMA smoothing factor (0.0–1.0). Lower = stronger smoothing.
     """
 
@@ -98,7 +99,10 @@ class TemporalPostFilter:
 
     def get_config(self) -> TemporalPostFilterConfig:
         """Return a copy of the active filter configuration."""
-        return TemporalPostFilterConfig(mode=self._config.mode, alpha=self._config.alpha)
+        return TemporalPostFilterConfig(
+            mode=self._config.mode,
+            alpha=self._config.alpha,
+        )
 
     def has_state(self) -> bool:
         """Whether EMA state is initialized."""
@@ -203,10 +207,14 @@ class DepthEnsembleBackend:
 
         Args:
             config: EnhanceConfig for license validation and device settings.
-            models: List of ModelConfig for ensemble. If None, uses default 3-model config.
-            fusion_method: Fusion algorithm ("variance_weighted").
-            max_variance_threshold: Max acceptable variance (>threshold flags warning).
-            temporal_post_filter: Optional post-fusion temporal filter config (ADR-026 §2.2).
+            models: List of ModelConfig for ensemble.
+                If None, uses default 3-model config.
+            fusion_method: Fusion algorithm
+                ("variance_weighted").
+            max_variance_threshold: Max acceptable
+                variance (>threshold flags warning).
+            temporal_post_filter: Optional post-fusion
+                temporal filter config (ADR-026 §2.2).
         """
         self._config = config
         self._fusion_method = fusion_method
@@ -220,12 +228,15 @@ class DepthEnsembleBackend:
             self._models = models
 
         # Lazy-loaded backends
-        self._backends: Dict[str, any] = {}
+        self._backends: Dict[str, Any] = {}
 
         # Validate ensemble configuration
         self._validate_ensemble()
 
-    def _get_default_models(self, config: Optional["EnhanceConfig"]) -> List[ModelConfig]:
+    def _get_default_models(
+        self,
+        config: Optional["EnhanceConfig"],
+    ) -> List[ModelConfig]:
         """Get default 3-model ensemble configuration from ADR-026.
 
         Returns:
@@ -235,7 +246,15 @@ class DepthEnsembleBackend:
             ModelConfig(
                 name="depth_pro",
                 weight=0.5,  # Primary model
-                checkpoint=getattr(config, "depth_pro_checkpoint_path", None) if config else None,
+                checkpoint=(
+                    getattr(
+                        config,
+                        "depth_pro_checkpoint_path",
+                        None,
+                    )
+                    if config
+                    else None
+                ),
                 device="auto",
             ),
             ModelConfig(
@@ -264,13 +283,19 @@ class DepthEnsembleBackend:
         enabled_models = [m for m in self._models if m.enabled]
         if len(enabled_models) < 2:
             logger.warning(
-                f"Ensemble has <2 enabled models ({len(enabled_models)}). " "Consider using single-model backend instead."
+                f"Ensemble has <2 enabled models "
+                f"({len(enabled_models)}). "
+                "Consider using single-model backend "
+                "instead."
             )
 
         # Validate weights sum to 1.0
         total_weight = sum(m.weight for m in enabled_models)
         if abs(total_weight - 1.0) > 1e-6:
-            logger.warning(f"Model weights sum to {total_weight}, not 1.0. " "Normalizing weights automatically.")
+            logger.warning(
+                "Model weights sum to %s, not 1.0. " "Normalizing weights automatically.",
+                total_weight,
+            )
             # Normalize weights
             for model in enabled_models:
                 model.weight /= total_weight
@@ -292,7 +317,11 @@ class DepthEnsembleBackend:
         Raises:
             RuntimeError: If inference fails.
         """
-        logger.info(f"Running depth ensemble with {len([m for m in self._models if m.enabled])} models")
+        enabled_count = len([m for m in self._models if m.enabled])
+        logger.info(
+            "Running depth ensemble with %d models",
+            enabled_count,
+        )
 
         # Get per-model predictions
         model_results = self._run_models(image, device)
@@ -309,13 +338,14 @@ class DepthEnsembleBackend:
         }
 
         # Quality gate: warn if high variance
-        if fused_result.variance_map.mean() > self._max_variance_threshold:
+        if fused_result.variance_map is not None and fused_result.variance_map.mean() > self._max_variance_threshold:
+            var_mean = fused_result.variance_map.mean()
             logger.warning(
-                f"High inter-model variance ({fused_result.variance_map.mean():.3f} "
-                f"> threshold {self._max_variance_threshold}). "
-                "Review depth map manually for quality."
+                "High inter-model variance " "(%.3f > threshold %s). " "Review depth map manually " "for quality.",
+                var_mean,
+                self._max_variance_threshold,
             )
-            fused_result.warnings.append(f"High variance: {fused_result.variance_map.mean():.3f}")
+            fused_result.warnings.append(f"High variance: {var_mean:.3f}")
 
         # ADR-026 §2.2: Apply optional post-fusion temporal filter (video only)
         if self._temporal_post_filter.enabled:
@@ -360,15 +390,22 @@ class DepthEnsembleBackend:
                 results[model_config.name] = result
 
             except Exception as e:
-                logger.error(f"Model {model_config.name} failed: {e}. " "Excluding from ensemble.")
+                logger.error(
+                    "Model %s failed: %s. " "Excluding from ensemble.",
+                    model_config.name,
+                    e,
+                )
                 # Continue with remaining models
 
         if not results:
-            raise RuntimeError("All ensemble models failed. Cannot compute depth.")
+            raise RuntimeError("All ensemble models failed. " "Cannot compute depth.")
 
         return results
 
-    def _get_backend(self, model_config: ModelConfig):
+    def _get_backend(
+        self,
+        model_config: ModelConfig,
+    ) -> Any:
         """Get or create backend for model.
 
         Args:
@@ -432,17 +469,24 @@ class DepthEnsembleBackend:
         # Step 2: Compute per-pixel statistics
         # depth_stack: (N, H, W)
         names = list(aligned_depths.keys())
-        depth_stack = np.stack([aligned_depths[n] for n in names], axis=0).astype(np.float32)
+        depth_stack = np.stack(
+            [aligned_depths[n] for n in names],
+            axis=0,
+        ).astype(np.float32)
         mean_map = np.mean(depth_stack, axis=0)  # (H, W)
         variance_map = np.var(depth_stack, axis=0)  # (H, W)
 
         # Step 3: Compute per-model confidence maps (ACTUALLY adaptive)
         #
         # Key idea:
-        # - A single "inv_variance" map applied to every model cancels algebraically in the fusion ratio.
-        # - We need *per-model* per-pixel confidences that downweight outliers.
+        # - A single "inv_variance" map applied to
+        #   every model cancels algebraically in the
+        #   fusion ratio.
+        # - We need *per-model* per-pixel confidences
+        #   that downweight outliers.
         #
-        # We compute a normalized squared deviation (z^2) and convert it to a confidence:
+        # We compute a normalized squared deviation
+        # (z^2) and convert it to a confidence:
         #   z2_i = (d_i - mean)^2 / (var + eps)
         #   conf_i = exp(-0.5 * z2_i)
         #
@@ -461,9 +505,10 @@ class DepthEnsembleBackend:
         # A synthetic depth signal must not distort variance-weighted fusion.
         for i, name in enumerate(names):
             result_meta = model_results[name].metadata
-            if result_meta.get("synthetic") or result_meta.get("fallback_mode"):
+            is_synthetic = result_meta.get("synthetic") or result_meta.get("fallback_mode")
+            if is_synthetic:
                 logger.info(
-                    "Model '%s' is in synthetic/fallback mode; " "setting ensemble confidence to 0.",
+                    "Model '%s' is in synthetic/fallback" " mode; setting ensemble " "confidence to 0.",
                     name,
                 )
                 conf[i] = 0.0
@@ -476,7 +521,12 @@ class DepthEnsembleBackend:
         model_weights = {k: v / total_weight for k, v in model_weights.items()}
 
         # Build base weight tensor aligned to the same model order
-        base_w = np.array([model_weights.get(n, 0.0) for n in names], dtype=np.float32)[:, None, None]  # (N,1,1)
+        base_w = np.array(
+            [model_weights.get(n, 0.0) for n in names],
+            dtype=np.float32,
+        )[
+            :, None, None
+        ]  # (N,1,1)
 
         # Effective per-pixel weights
         w_eff = base_w * conf  # (N,H,W)
@@ -492,10 +542,15 @@ class DepthEnsembleBackend:
         model_agreement = 1.0 / (1.0 + mean_variance)
 
         # Select primary model for metadata (Depth Pro if available)
-        primary_result = model_results.get("depth_pro", next(iter(model_results.values())))
+        primary_result = model_results.get(
+            "depth_pro",
+            next(iter(model_results.values())),
+        )
 
-        # Store a compact "effective weight" summary per model (scalar), for observability.
-        # This avoids huge per-pixel maps in the result while still showing who contributed.
+        # Store a compact "effective weight" summary
+        # per model (scalar), for observability. This
+        # avoids huge per-pixel maps in the result
+        # while still showing who contributed.
         per_model_effective_weight = {names[i]: float(np.mean(w_eff[i])) for i in range(len(names))}
 
         # Build ensemble result
@@ -522,7 +577,10 @@ class DepthEnsembleBackend:
             model_agreement=model_agreement,
         )
 
-    def _align_depth_maps(self, model_results: Dict[str, DepthResult]) -> Dict[str, np.ndarray]:
+    def _align_depth_maps(
+        self,
+        model_results: Dict[str, DepthResult],
+    ) -> Dict[str, np.ndarray]:
         """Align all depth maps to common metric scale.
 
         Uses Depth Pro as reference if available (metric depth).
@@ -547,8 +605,13 @@ class DepthEnsembleBackend:
                     aligned[name] = result.depth_map
                 else:
                     # Convert relative to metric (approximate)
-                    # Note: This is a heuristic. Ideally, we'd have camera intrinsics.
-                    logger.warning(f"Model {name} outputs relative depth. " "Scaling to metric is approximate.")
+                    # Note: This is a heuristic.
+                    # Ideally, we'd have camera
+                    # intrinsics.
+                    logger.warning(
+                        "Model %s outputs relative " "depth. Scaling to metric " "is approximate.",
+                        name,
+                    )
                     # Simple scaling: assume depth range 0-10 meters
                     aligned[name] = result.depth_map * 10.0
         else:
@@ -562,7 +625,11 @@ class DepthEnsembleBackend:
                 vmax = np.percentile(depth, 99)
                 if vmax <= vmin:
                     vmax = vmin + 1e-6
-                aligned[name] = np.clip((depth - vmin) / (vmax - vmin), 0.0, 1.0).astype(np.float32)
+                aligned[name] = np.clip(
+                    (depth - vmin) / (vmax - vmin),
+                    0.0,
+                    1.0,
+                ).astype(np.float32)
 
         return aligned
 
@@ -622,7 +689,7 @@ class DepthEnsembleBackend:
 
         if available_count < 2:
             raise RuntimeError(
-                f"Ensemble requires ≥2 models, but only {available_count} available. " "Cannot initialize ensemble."
+                f"Ensemble requires ≥2 models, but " f"only {available_count} available. " "Cannot initialize ensemble."
             )
 
         logger.info(f"Ensemble initialized with {available_count} models")
@@ -631,9 +698,12 @@ class DepthEnsembleBackend:
     def required_packages(cls) -> list[str]:
         """Return additional required import modules for ensemble.
 
-        Per the DepthBackend protocol, torch is assumed and should not be listed here.
-        The ensemble additionally requires ``transformers`` (for DA3). Depth Pro and
-        DepthCrafter remain optional and will degrade gracefully if unavailable.
+        Per the DepthBackend protocol, torch is
+        assumed and should not be listed here.
+        The ensemble additionally requires
+        ``transformers`` (for DA3). Depth Pro and
+        DepthCrafter remain optional and will degrade
+        gracefully if unavailable.
 
         Returns:
             List of required module names.
@@ -655,10 +725,17 @@ class DepthEnsembleBackend:
 
         # Reset stateful sub-backends
         for backend in self._backends.values():
-            if hasattr(backend, "reset_state"):
-                backend.reset_state(sequence_id)
-            elif hasattr(backend, "reset_temporal_state"):
-                backend.reset_temporal_state()
+            reset = getattr(backend, "reset_state", None)
+            if reset is not None:
+                reset(sequence_id)
+                continue
+            reset_temporal = getattr(
+                backend,
+                "reset_temporal_state",
+                None,
+            )
+            if reset_temporal is not None:
+                reset_temporal()
 
         logger.debug(
             "Ensemble state reset (sequence_id=%s)",

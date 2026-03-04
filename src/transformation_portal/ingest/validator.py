@@ -114,7 +114,7 @@ def validate_schema_errors(
 
 
 def classify_validation_exit_code(error: object) -> int:
-    """Classify a validation error into a contract-aligned integer exit code."""
+    """Classify a validation error into an exit code."""
     return int(classify_validation_error_typed(error).exit_code)
 
 
@@ -124,7 +124,7 @@ def classify_validation_error(error: object) -> int:
 
 
 def classify_validation_errors(errors: List[Any]) -> int:
-    """Classify validation errors to a single integer exit code (compat API)."""
+    """Classify validation errors to a single exit code."""
     if not errors:
         return EXIT_SUCCESS
 
@@ -142,12 +142,12 @@ class SchemaValidationError(Exception):
 
 
 def aggregate_exit_codes(exit_codes: Iterable[int]) -> int:
-    """Aggregate multiple exit codes using ingest contract severity precedence."""
+    """Aggregate exit codes using severity precedence."""
     observed = set()
     for code in exit_codes:
         # Reject lossy coercion for non-integral numeric values
         # (e.g. 0.9 -> 0 or 1.9 -> 1).
-        if isinstance(code, float) and not code.is_integer():
+        if isinstance(code, float) and not float(code).is_integer():
             observed.add(EXIT_OTHER_FAILURE)
             continue
 
@@ -215,15 +215,16 @@ def validate_schema(
     elif isinstance(data, dict):
         data_dict = data
     else:
-        raise ValueError(f"Invalid data type: {type(data)}. Expected dict, str, or Path.")
+        raise ValueError("Invalid data type: " f"{type(data)}. Expected dict, " "str, or Path.")
 
     # Select schema class
+    schema_class: type
     if schema_type == "provenance":
         schema_class = ProvenanceSidecar
     elif schema_type == "manifest":
         schema_class = IngestManifest
     else:
-        raise ValueError(f"Invalid schema_type: {schema_type}. Must be 'provenance' or 'manifest'.")
+        raise ValueError(f"Invalid schema_type: {schema_type}." " Must be 'provenance' or 'manifest'.")
 
     errors = []
 
@@ -232,7 +233,7 @@ def validate_schema(
     if not schema_version:
         errors.append("Missing required field: schema_version")
     elif schema_version != "1.0.1":
-        errors.append(f"Unsupported schema version: {schema_version}. " f"This validator supports version 1.0.1 only.")
+        errors.append(f"Unsupported schema version: " f"{schema_version}. This validator " "supports version 1.0.1 only.")
 
     # Validate with Pydantic (includes drift detection via extra="forbid")
     try:
@@ -278,12 +279,17 @@ def validate_no_8bit_conversion(
         # Check for 8-bit conversion
         if expected_dtype in ["uint16", "float32", "float64"]:
             if actual_dtype in ["uint8", "int8"]:
-                return f"8-bit conversion detected: expected {expected_dtype}, " f"got {actual_dtype}"
+                return "8-bit conversion detected: " f"expected {expected_dtype}, " f"got {actual_dtype}"
 
         # Check for range violations
         if expected_dtype == "uint16":
             if image_data.max() <= 255:
-                return "8-bit range detected in uint16 image: " f"max value is {image_data.max()} (expected > 255 for 16-bit)"
+                return (
+                    "8-bit range detected in "
+                    "uint16 image: max value is "
+                    f"{image_data.max()} "
+                    "(expected > 255 for 16-bit)"
+                )
 
         return None
 
@@ -335,7 +341,10 @@ def validate_linear_gamma(
 
         if shadow_ratio < 0.2 - tolerance:
             return (
-                f"Non-linear gamma detected: only {shadow_ratio:.1%} of pixels " f"in shadow range (expected ≥ 20% for linear)"
+                "Non-linear gamma detected: "
+                f"only {shadow_ratio:.1%} of pixels "
+                "in shadow range "
+                "(expected ≥ 20% for linear)"
             )
 
         return None
@@ -368,7 +377,11 @@ def validate_ingest_contract(
         ValueError: If 8-bit conversion or gamma violations detected
     """
     # Validate sidecar schema
-    errors = validate_schema(sidecar_path, schema_type="provenance", strict_mode=strict_mode)
+    errors = validate_schema(
+        sidecar_path,
+        schema_type="provenance",
+        strict_mode=strict_mode,
+    )
 
     if errors:
         raise SchemaValidationError(errors)
@@ -376,7 +389,10 @@ def validate_ingest_contract(
     # Validate image data if provided
     if image_data is not None:
         # Check 8-bit conversion
-        conversion_error = validate_no_8bit_conversion(image_data, expected_dtype="uint16")
+        conversion_error = validate_no_8bit_conversion(
+            image_data,
+            expected_dtype="uint16",
+        )
         if conversion_error:
             raise ValueError(f"8-bit conversion violation: {conversion_error}")
 
@@ -401,7 +417,11 @@ def validate_manifest_file(
     Raises:
         SchemaValidationError: If schema validation fails
     """
-    errors = validate_schema(manifest_path, schema_type="manifest", strict_mode=strict_mode)
+    errors = validate_schema(
+        manifest_path,
+        schema_type="manifest",
+        strict_mode=strict_mode,
+    )
 
     if errors:
         raise SchemaValidationError(errors)

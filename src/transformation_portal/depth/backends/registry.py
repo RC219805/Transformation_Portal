@@ -1,6 +1,7 @@
 """Depth backend registry with license governance.
 
-Factory for selecting depth backends by name with multi-layer license enforcement.
+Factory for selecting depth backends by name
+with multi-layer license enforcement.
 See ADR-019 for architectural rationale.
 """
 
@@ -26,7 +27,9 @@ class DepthBackendRegistry:
     - Helpful error messages
 
     Usage:
-        >>> from transformation_portal.depth.backends import DepthBackendRegistry
+        >>> from transformation_portal.depth.backends import (
+        ...     DepthBackendRegistry,
+        ... )
         >>> from transformation_portal.lux_depth_v3 import EnhanceConfig
         >>>
         >>> config = EnhanceConfig(
@@ -40,7 +43,7 @@ class DepthBackendRegistry:
     # Registered backends (populated by register_backend)
     _backends: Dict[str, Type[DepthBackend]] = {}
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize registry and ensure built-in backends are registered."""
         self._ensure_builtins_registered()
 
@@ -69,7 +72,9 @@ class DepthBackendRegistry:
             if "depth_pro" not in self._backends:
                 self._backends["depth_pro"] = DepthProBackend
         except ImportError:
-            logger.debug("DepthProBackend not available (missing dependencies)")
+            logger.debug(
+                "DepthProBackend not available" " (missing dependencies)",
+            )
 
         # Synthetic backend is always available (no ML dependencies)
         try:
@@ -87,7 +92,9 @@ class DepthBackendRegistry:
             if "depthcrafter" not in self._backends:
                 self._backends["depthcrafter"] = DepthCrafterBackend
         except ImportError:
-            logger.debug("DepthCrafterBackend not available (missing dependencies)")
+            logger.debug(
+                "DepthCrafterBackend not available" " (missing dependencies)",
+            )
 
         # Ensemble backend (ADR-026)
         try:
@@ -96,7 +103,9 @@ class DepthBackendRegistry:
             if "ensemble" not in self._backends:
                 self._backends["ensemble"] = DepthEnsembleBackend
         except ImportError:
-            logger.debug("DepthEnsembleBackend not available (missing dependencies)")
+            logger.debug(
+                "DepthEnsembleBackend not available" " (missing dependencies)",
+            )
 
     @classmethod
     def register_backend(cls, backend_class: Type[DepthBackend]) -> None:
@@ -112,7 +121,8 @@ class DepthBackendRegistry:
         """List all registered backends with metadata.
 
         Returns:
-            Dict mapping backend name to metadata (license_type, requires_checkpoint).
+            Dict mapping backend name to metadata
+            (license_type, requires_checkpoint).
         """
         return {
             name: {
@@ -122,10 +132,14 @@ class DepthBackendRegistry:
             for name, cls in self._backends.items()
         }
 
-    def get_backend_class(self, backend_id: str) -> Optional[Type[DepthBackend]]:
+    def get_backend_class(
+        self,
+        backend_id: str,
+    ) -> Optional[Type[DepthBackend]]:
         """Get backend class by ID without instantiation.
 
-        Public API for introspection/dependency checking without creating instances.
+        Public API for introspection/dependency
+        checking without creating instances.
 
         Args:
             backend_id: Backend identifier (e.g., "da3", "depth_pro").
@@ -166,7 +180,8 @@ class DepthBackendRegistry:
 
         Args:
             backend_name: Backend identifier (e.g., "depth_pro").
-            config: EnhanceConfig for license validation and backend configuration.
+            config: EnhanceConfig for license
+                validation and backend configuration.
 
         Returns:
             Instantiated backend.
@@ -178,7 +193,7 @@ class DepthBackendRegistry:
         backend_cls = self._backends.get(backend_name)
         if backend_cls is None:
             available = ", ".join(sorted(self._backends.keys())) or "(none)"
-            raise ValueError(f"Unknown depth backend: '{backend_name}'. " f"Available backends: {available}")
+            raise ValueError(f"Unknown depth backend:" f" '{backend_name}'." f" Available backends: {available}")
 
         # Layer 2: License enforcement at factory level
         self._validate_license(backend_name, backend_cls, config)
@@ -209,7 +224,7 @@ class DepthBackendRegistry:
             return  # Commercial backends have no restrictions
 
         if config is None:
-            raise LicenseRestrictionError(f"Backend '{backend_name}' requires EnhanceConfig for license validation.")
+            raise LicenseRestrictionError(f"Backend '{backend_name}' requires" " EnhanceConfig for license" " validation.")
 
         # Check non_commercial_ok flag
         if not getattr(config, "non_commercial_ok", False):
@@ -225,14 +240,25 @@ class DepthBackendRegistry:
 
         # Depth Pro specific: require explicit Apple license acceptance
         if backend_name == "depth_pro":
-            if not getattr(config, "accept_apple_depth_pro_research_license", False):
+            accept_apple = getattr(
+                config,
+                "accept_apple_depth_pro_research_license",
+                False,
+            )
+            if not accept_apple:
                 raise LicenseRestrictionError(
-                    "Backend 'depth_pro' requires explicit license acceptance.\n\n"
-                    "Set accept_apple_depth_pro_research_license=True to acknowledge:\n"
-                    "  - Apple Machine Learning Research License (AMLR)\n"
+                    "Backend 'depth_pro' requires"
+                    " explicit license acceptance.\n\n"
+                    "Set accept_apple_depth_pro"
+                    "_research_license=True to"  # noqa: E501
+                    " acknowledge:\n"
+                    "  - Apple Machine Learning"
+                    " Research License (AMLR)\n"
                     "  - Research and non-commercial use only\n"
                     "  - No commercial exploitation or deployment\n\n"
-                    "License details: https://github.com/apple/ml-depth-pro/blob/main/LICENSE\n\n"
+                    "License details: https://"
+                    "github.com/apple/ml-depth"
+                    "-pro/blob/main/LICENSE\n\n"
                     "Required config:\n"
                     "  config = EnhanceConfig(\n"
                     "      non_commercial_ok=True,\n"
@@ -244,7 +270,9 @@ class DepthBackendRegistry:
         if backend_name == "ensemble":
             if not getattr(config, "accept_research_tools_license", False):
                 raise LicenseRestrictionError(
-                    "Backend 'ensemble' requires APEX Research Ultra license acceptance.\n\n"
+                    "Backend 'ensemble' requires"
+                    " APEX Research Ultra license"
+                    " acceptance.\n\n"
                     "Set accept_research_tools_license=True to acknowledge:\n"
                     "  - APEX Research Ultra (ADR-026) umbrella license\n"
                     "  - Research and non-commercial use only\n"
@@ -262,7 +290,11 @@ class DepthBackendRegistry:
                     "  )"
                 )
 
-        logger.info(f"License validation passed for '{backend_name}' " f"(non_commercial_ok={config.non_commercial_ok})")
+        logger.info(
+            "License validation passed for" " '%s' (non_commercial_ok=%s)",
+            backend_name,
+            config.non_commercial_ok,
+        )
 
 
 # Global registry instance for convenience

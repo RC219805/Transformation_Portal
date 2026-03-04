@@ -9,7 +9,9 @@ from typing import Optional, Tuple
 
 import numpy as np
 
-from transformation_portal.spatial_ai.reconstruction.contracts import CameraParams
+from transformation_portal.spatial_ai.reconstruction.contracts import (  # noqa: E501
+    CameraParams,
+)
 
 from .scene_context import CameraProvenance, CameraWithProvenance
 from .scene_groups import SceneGroup, normalize_relative_path
@@ -57,11 +59,18 @@ def load_sidecar_payload(sidecar_path: Optional[Path]) -> Optional[dict]:
         with open(sidecar_path, "r", encoding="utf-8") as f:
             payload = json.load(f)
     except Exception as exc:
-        logger.warning("Failed to load camera sidecar %s: %s", sidecar_path, exc)
+        logger.warning(
+            "Failed to load camera sidecar" " %s: %s",
+            sidecar_path,
+            exc,
+        )
         return None
 
     if not isinstance(payload, dict):
-        logger.warning("Invalid camera sidecar format (root must be object): %s", sidecar_path)
+        logger.warning(
+            "Invalid camera sidecar format" " (root must be object): %s",
+            sidecar_path,
+        )
         return None
 
     if payload.get("schema") != SCENE_CAMERA_SCHEMA:
@@ -75,7 +84,10 @@ def load_sidecar_payload(sidecar_path: Optional[Path]) -> Optional[dict]:
 
     scenes = payload.get("scenes")
     if not isinstance(scenes, dict):
-        logger.warning("Invalid camera sidecar: 'scenes' must be an object (%s)", sidecar_path)
+        logger.warning(
+            "Invalid camera sidecar:" " 'scenes' must be an" " object (%s)",
+            sidecar_path,
+        )
         return None
 
     return payload
@@ -93,7 +105,10 @@ def load_scene_cameras(
     a valid camera bundle for the requested scene.
     """
     if sidecar_path is None:
-        logger.debug("No camera sidecar path configured; scene reconstruction disabled for %s", scene.scene_id)
+        logger.debug(
+            "No camera sidecar path" " configured; scene" " reconstruction disabled" " for %s",
+            scene.scene_id,
+        )
         return None
 
     payload = sidecar_payload if sidecar_payload is not None else load_sidecar_payload(sidecar_path)
@@ -103,20 +118,36 @@ def load_scene_cameras(
 
     scene_entry = scenes.get(scene.scene_id)
     if not isinstance(scene_entry, dict):
-        logger.debug("No camera entry for scene_id=%s in %s", scene.scene_id, sidecar_path)
+        logger.debug(
+            "No camera entry for" " scene_id=%s in %s",
+            scene.scene_id,
+            sidecar_path,
+        )
         return None
 
     entry_images = scene_entry.get("images")
     entry_cameras = scene_entry.get("cameras")
-    if not isinstance(entry_images, list) or not isinstance(entry_cameras, list):
-        logger.warning("Invalid camera scene entry for %s: requires 'images' and 'cameras' arrays", scene.scene_id)
+    if not isinstance(entry_images, list) or not isinstance(
+        entry_cameras,
+        list,
+    ):
+        logger.warning(
+            "Invalid camera scene entry" " for %s: requires 'images'" " and 'cameras' arrays",
+            scene.scene_id,
+        )
         return None
 
-    normalized_scene_images = [normalize_relative_path(p, dataset_root).lstrip("./") for p in scene.images]
+    normalized_scene_images = [
+        normalize_relative_path(
+            p,
+            dataset_root,
+        ).lstrip("./")
+        for p in scene.images
+    ]
     normalized_entry_images = [_normalize_sidecar_image(str(p)) for p in entry_images]
     if normalized_entry_images != normalized_scene_images:
         logger.warning(
-            "Camera sidecar image ordering mismatch for scene %s: sidecar_order=%s, required_order=%s",
+            "Camera sidecar image ordering" " mismatch for scene %s:" " sidecar_order=%s," " required_order=%s",
             scene.scene_id,
             normalized_entry_images,
             normalized_scene_images,
@@ -135,7 +166,11 @@ def load_scene_cameras(
     try:
         camera_params = tuple(_camera_from_dict(camera_data) for camera_data in entry_cameras)
     except Exception as exc:
-        logger.warning("Invalid camera parameters for scene %s: %s", scene.scene_id, exc)
+        logger.warning(
+            "Invalid camera parameters" " for scene %s: %s",
+            scene.scene_id,
+            exc,
+        )
         return None
 
     source_file = str(sidecar_path.resolve())

@@ -8,10 +8,18 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 from .errors import IngestError, IngestExitCode
-from .metadata_service import BatchExtractResult, BatchItemResult, ExtractResult, ValidateResult
+from .metadata_service import (
+    BatchExtractResult,
+    BatchItemResult,
+    ExtractResult,
+    ValidateResult,
+)
 
 MACHINE_SCHEMA_VERSION = "tp.meta.machine.v1"
-_CANONICAL_JSON_KWARGS: Dict[str, Any] = {"sort_keys": True, "ensure_ascii": True}
+_CANONICAL_JSON_KWARGS: Dict[str, Any] = {
+    "sort_keys": True,
+    "ensure_ascii": True,
+}
 
 
 def _ensure_json_safe(value: Any, *, path: str = "$") -> None:
@@ -45,15 +53,19 @@ def error_to_dict(error: IngestError) -> Dict[str, Any]:
     }
 
 
-def extract_result_to_dict(result: ExtractResult, *, preset: Optional[str] = None) -> Dict[str, Any]:
-    """Serialize single-item extract result (includes volatile elapsed_seconds telemetry)."""
+def extract_result_to_dict(
+    result: ExtractResult,
+    *,
+    preset: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Serialize single-item extract result."""
     return {
         "input_path": str(result.path),
         "success": result.success,
-        "output_path": str(result.output_path) if result.output_path is not None else None,
+        "output_path": (str(result.output_path) if result.output_path is not None else None),
         "elapsed_seconds": result.elapsed_seconds,
         "preset": preset,
-        "error": error_to_dict(result.error) if result.error is not None else None,
+        "error": (error_to_dict(result.error) if result.error is not None else None),
     }
 
 
@@ -69,18 +81,20 @@ def validate_result_to_dict(
         "strict": strict,
         "success": result.success,
         "errors": [error_to_dict(error) for error in result.errors],
-        "dominant_error": error_to_dict(result.dominant_error) if result.dominant_error is not None else None,
+        "dominant_error": (error_to_dict(result.dominant_error) if result.dominant_error is not None else None),
     }
 
 
-def batch_item_to_dict(item: BatchItemResult) -> Dict[str, Any]:
-    """Serialize a single batch item result (includes volatile elapsed_seconds telemetry)."""
+def batch_item_to_dict(
+    item: BatchItemResult,
+) -> Dict[str, Any]:
+    """Serialize a single batch item result."""
     return {
         "path": str(item.path),
         "success": item.success,
-        "output_path": str(item.output_path) if item.output_path is not None else None,
+        "output_path": (str(item.output_path) if item.output_path is not None else None),
         "elapsed_seconds": item.elapsed_seconds,
-        "error": error_to_dict(item.error) if item.error is not None else None,
+        "error": (error_to_dict(item.error) if item.error is not None else None),
     }
 
 
@@ -123,7 +137,7 @@ def batch_result_to_dict(
         "success": result.success,
         "items": [batch_item_to_dict(item) for item in result.items],
         "summary_counts": summary_counts,
-        "dominant_error": error_to_dict(result.dominant_error) if result.dominant_error is not None else None,
+        "dominant_error": (error_to_dict(result.dominant_error) if result.dominant_error is not None else None),
     }
 
 

@@ -21,7 +21,7 @@ import datetime
 import re
 from typing import Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, validator
+from pydantic import BaseModel, ConfigDict, field_validator, validator
 
 
 class ToolchainVersion(BaseModel):
@@ -80,11 +80,13 @@ class IngestTimestamps(BaseModel):
     exiftool_extract_duration_sec: Optional[float] = None
 
     @validator("ingest_start", "ingest_end")
-    def validate_iso_format(cls, v):
-        """Ensure timestamps are valid ISO 8601 format with timezone.
+    @classmethod
+    def validate_iso_format(cls, v: str) -> str:
+        """Ensure timestamps are valid ISO 8601 with tz.
 
         Rejects naive timestamps (no timezone).
-        Requires either 'Z' suffix or explicit offset (e.g., '+00:00', '-08:00').
+        Requires either 'Z' suffix or explicit
+        offset (e.g., '+00:00', '-08:00').
         """
         try:
             # Parse timestamp
@@ -123,7 +125,8 @@ class FileIntegrity(BaseModel):
     mime_type: Optional[str] = None
 
     @validator("sha256")
-    def validate_sha256(cls, v):
+    @classmethod
+    def validate_sha256(cls, v: str) -> str:
         """Ensure SHA256 is 64 hex characters."""
         if not (len(v) == 64 and all(c in "0123456789abcdef" for c in v.lower())):
             raise ValueError(f"Invalid SHA256 hash: {v}")
@@ -254,7 +257,8 @@ class PipelineConfig(BaseModel):
     custom_params: Optional[Dict[str, Any]] = None
 
     @validator("config_sha256")
-    def validate_sha256(cls, v):
+    @classmethod
+    def validate_sha256(cls, v: str) -> str:
         """Ensure config SHA256 is valid."""
         if not (len(v) == 64 and all(c in "0123456789abcdef" for c in v.lower())):
             raise ValueError(f"Invalid config SHA256: {v}")
@@ -296,14 +300,24 @@ class ProvenanceSidecar(BaseModel):
     run_id: str  # UUID v4 (only non-deterministic field by design)
 
     @validator("schema_version")
-    def validate_schema_version(cls, v):
+    @classmethod
+    def validate_schema_version(
+        cls,
+        v: str,
+    ) -> str:
         """Ensure schema version is supported."""
         if v != "1.0.1":
-            raise ValueError(f"Unsupported ProvenanceSidecar schema version: {v}. " f"This code supports version 1.0.1 only.")
+            raise ValueError(
+                "Unsupported ProvenanceSidecar " f"schema version: {v}. This code " "supports version 1.0.1 only."
+            )
         return v
 
     @validator("git_commit")
-    def validate_git_commit(cls, v):
+    @classmethod
+    def validate_git_commit(
+        cls,
+        v: Optional[str],
+    ) -> Optional[str]:
         """Validate git commit SHA format if present."""
         if v is not None:
             if not (len(v) == 40 and all(c in "0123456789abcdef" for c in v.lower())):
@@ -364,14 +378,19 @@ class IngestManifest(BaseModel):
     ingest_duration_sec: float
 
     @validator("schema_version")
-    def validate_schema_version(cls, v):
+    @classmethod
+    def validate_schema_version(
+        cls,
+        v: str,
+    ) -> str:
         """Ensure schema version is supported."""
         if v != "1.0.1":
-            raise ValueError(f"Unsupported IngestManifest schema version: {v}. " f"This code supports version 1.0.1 only.")
+            raise ValueError("Unsupported IngestManifest " f"schema version: {v}. This code " "supports version 1.0.1 only.")
         return v
 
     @validator("status")
-    def validate_status(cls, v):
+    @classmethod
+    def validate_status(cls, v: str) -> str:
         """Ensure status is one of allowed values."""
         allowed = {"success", "error", "skipped"}
         if v not in allowed:

@@ -808,7 +808,10 @@ class LinearDecoder:
           3. None           — caller must raise ColorSpaceError
 
         A matrix is valid if it:
-          - Has shape (3, 3) or (9,) — (3, 3) is the common rawpy return type
+          - Has shape (3, 3), (3, 4), (4, 3), or (9,)
+            - (3, 4) and (4, 3) are common LibRaw/rawpy metadata layouts.
+            - They are deterministically contracted to 3×3 by dropping the
+              trailing channel row/column before flattening.
           - Contains no NaN or Inf values
           - Has L2 norm >= 1e-6 (rejects zero-filled and near-zero garbage)
 
@@ -831,9 +834,17 @@ class LinearDecoder:
                 arr = np.asarray(matrix, dtype=np.float64)
             except Exception:
                 return None
-            # Accept (3, 3) arrays (common rawpy return shape) or flat length-9
+            # Accept common LibRaw/rawpy matrix layouts and reduce to 3x3.
             if arr.shape == (3, 3):
                 arr = arr.reshape(9)
+            elif arr.shape == (3, 4):
+                # Camera -> XYZ with an extra channel column (often second green).
+                # Keep first 3 columns for deterministic 3x3 canonicalization.
+                arr = arr[:, :3].reshape(9)
+            elif arr.shape == (4, 3):
+                # Camera channel rows with an extra row (often second green).
+                # Keep first 3 rows for deterministic 3x3 canonicalization.
+                arr = arr[:3, :].reshape(9)
             elif arr.ndim == 1 and arr.size == 9:
                 pass
             else:
