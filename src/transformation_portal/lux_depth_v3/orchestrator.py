@@ -82,6 +82,7 @@ from .provenance import ExiftoolNotFoundError, ProvenanceError, capture_provenan
 from .reconstruction_runner import diagnostics_artifact_path, manifest_artifact_path, run_scene_reconstruction
 from .scene_context import SceneContext
 from .scene_groups import build_scene_groups
+from .scene_integrity import build_scene_manifest, compute_scene_fingerprint, verify_scene_integrity, write_scene_manifest
 from .scene_preflight import validate_scene_preflight, write_scene_preflight_artifact
 from .security import HashMode, sanitize_file_stem, sanitize_path_component_nonlossy
 from .v2_runner import V2Runner, find_v2_report
@@ -412,6 +413,8 @@ def _infer_artifact_type(relative_path: str) -> str:
         return "pbr_aux"
 
     if rel.startswith("reconstruction/"):
+        if name.endswith("_scene_manifest.json"):
+            return "reconstruction_scene_manifest"
         if name.endswith("_manifest.json"):
             return "reconstruction_manifest_json"
         if name.endswith("_reconstruction_report.json"):
@@ -3215,13 +3218,63 @@ class EnhanceOrchestrator:
                 metadata={"grouping_mode": str(getattr(self.config, "grouping_mode", "single"))},
             )
 
+            segmentation_artifact_paths = tuple(
+                Path(path_value)
+                for path_value in (result.get("segmentation_mask_path") for result in scene_results)
+                if isinstance(path_value, str) and path_value
+            )
+            scene_manifest = build_scene_manifest(
+                context=context,
+                output_root=self.output_root,
+                segmentation_artifact_paths=segmentation_artifact_paths,
+                camera_sidecar_path=sidecar_path,
+            )
+            artifact_index_entries = _build_artifact_index(
+                self.output_root,
+                self._collect_run_card_artifact_paths(results),
+            )
+            artifact_index_by_relative_path = {
+                entry["relative_path"]: entry for entry in artifact_index_entries if isinstance(entry, dict)
+            }
+            run_card_merkle_root = _compute_artifact_merkle_root(artifact_index_entries)
+            reconstruction_config = {
+                "iterations": int(getattr(self.config, "reconstruction_iterations", 1000)),
+                "tier": reconstruction_tier,
+                "grouping_mode": str(getattr(self.config, "grouping_mode", "single")),
+            }
+
             try:
-                report_path = self.run_scene_reconstruction_fn(
-                    context=context,
-                    output_dir=self.reconstruction_dir,
-                    iterations=int(getattr(self.config, "reconstruction_iterations", 1000)),
-                    tier=reconstruction_tier,
+                verify_scene_integrity(
+                    scene_manifest=scene_manifest,
+                    artifact_index=artifact_index_by_relative_path,
                 )
+                scene_fingerprint = compute_scene_fingerprint(
+                    scene_manifest=scene_manifest,
+                    artifact_index=artifact_index_by_relative_path,
+                    reconstruction_config=reconstruction_config,
+                )
+                reconstruction_output_dir = self.reconstruction_dir / scene_fingerprint
+                scene_manifest_path = write_scene_manifest(
+                    scene_manifest=scene_manifest,
+                    output_dir=reconstruction_output_dir,
+                )
+                scene_results[0]["reconstruction_scene_manifest_path"] = str(scene_manifest_path)
+                scene_results[0]["reconstruction_scene_fingerprint"] = scene_fingerprint
+
+                report_path = self._maybe_use_reconstruction_cache(
+                    scene_id=scene.scene_id,
+                    scene_fingerprint=scene_fingerprint,
+                    run_card_merkle_root=run_card_merkle_root,
+                )
+                if report_path is None:
+                    report_path = self.run_scene_reconstruction_fn(
+                        context=context,
+                        output_dir=reconstruction_output_dir,
+                        iterations=reconstruction_config["iterations"],
+                        tier=reconstruction_tier,
+                        scene_fingerprint=scene_fingerprint,
+                        run_card_merkle_root=run_card_merkle_root,
+                    )
             except (LicenseRestrictionError, ReconstructionLicenseRestrictionError):
                 raise
             except Exception as exc:
@@ -3236,12 +3289,12 @@ class EnhanceOrchestrator:
 
             scene_results[0]["reconstruction_report_path"] = str(report_path)
             scene_results[0]["reconstruction_scene_id"] = scene.scene_id
-            manifest_path = manifest_artifact_path(scene_id=scene.scene_id, output_dir=self.reconstruction_dir)
+            manifest_path = manifest_artifact_path(scene_id=scene.scene_id, output_dir=reconstruction_output_dir)
             if manifest_path.exists():
                 scene_results[0]["reconstruction_manifest_path"] = str(manifest_path)
             else:
                 logger.warning("Reconstruction manifest missing for %s: %s", scene.scene_id, manifest_path)
-            diagnostics_path = diagnostics_artifact_path(scene_id=scene.scene_id, output_dir=self.reconstruction_dir)
+            diagnostics_path = diagnostics_artifact_path(scene_id=scene.scene_id, output_dir=reconstruction_output_dir)
             if diagnostics_path.exists():
                 scene_results[0]["reconstruction_diagnostics_path"] = str(diagnostics_path)
             else:
@@ -3252,6 +3305,29 @@ class EnhanceOrchestrator:
                 report_path,
                 diagnostics_path,
             )
+
+    def _maybe_use_reconstruction_cache(
+        self,
+        *,
+        scene_id: str,
+        scene_fingerprint: str,
+        run_card_merkle_root: str,
+    ) -> Optional[Path]:
+        """Use cached content-addressed reconstruction report when stamps match."""
+        cache_dir = self.reconstruction_dir / scene_fingerprint
+        report_path = cache_dir / f"{sanitize_path_component_nonlossy(scene_id)}_reconstruction_report.json"
+        if not report_path.exists():
+            return None
+        try:
+            payload = json.loads(report_path.read_text(encoding="utf-8"))
+        except Exception:
+            return None
+        if payload.get("scene_fingerprint") != scene_fingerprint:
+            return None
+        if payload.get("run_card_merkle_root") != run_card_merkle_root:
+            return None
+        logger.info("Reconstruction cache hit for scene_id=%s at %s", scene_id, report_path)
+        return report_path
 
     def _collect_run_card_artifact_paths(
         self, results: List[Dict[str, Any]], batch_manifest_path: Optional[Path] = None
@@ -3273,6 +3349,7 @@ class EnhanceOrchestrator:
                 "v2_output_path",
                 "segmentation_mask_path",
                 "reconstruction_preflight_path",
+                "reconstruction_scene_manifest_path",
                 "reconstruction_manifest_path",
                 "reconstruction_report_path",
                 "reconstruction_diagnostics_path",

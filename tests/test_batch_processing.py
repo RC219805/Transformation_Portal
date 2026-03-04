@@ -377,6 +377,9 @@ class TestEnhanceBatch:
                     input_dir / "scene_a" / "view_1.jpg",
                     input_dir / "scene_b" / "solo.jpg",
                 ]
+                for image_path in discovered:
+                    image_path.parent.mkdir(parents=True, exist_ok=True)
+                    image_path.write_bytes(b"scene")
                 expected_order = sorted(discovered)
 
                 from transformation_portal.lux_depth_v3.scene_groups import build_scene_groups
@@ -443,12 +446,23 @@ class TestEnhanceBatch:
                 assert orchestrator.run_scene_reconstruction_fn.call_count == 1
                 called_scene = orchestrator.run_scene_reconstruction_fn.call_args.kwargs["context"]
                 assert called_scene.scene_id == eligible_scene.scene_id
+                called_scene_fingerprint = orchestrator.run_scene_reconstruction_fn.call_args.kwargs["scene_fingerprint"]
+                called_merkle_root = orchestrator.run_scene_reconstruction_fn.call_args.kwargs["run_card_merkle_root"]
+                assert isinstance(called_scene_fingerprint, str) and len(called_scene_fingerprint) == 64
+                assert isinstance(called_merkle_root, str) and len(called_merkle_root) == 64
                 assert [result["image"] for result in results] == [str(path) for path in expected_order]
                 reconstruction_paths = [
                     result.get("reconstruction_report_path") for result in results if result.get("reconstruction_report_path")
                 ]
                 assert len(reconstruction_paths) == 1
                 assert Path(reconstruction_paths[0]).exists()
+                scene_manifest_paths = [
+                    result.get("reconstruction_scene_manifest_path")
+                    for result in results
+                    if result.get("reconstruction_scene_manifest_path")
+                ]
+                assert len(scene_manifest_paths) == 1
+                assert Path(scene_manifest_paths[0]).exists()
 
     def test_enhance_batch_raises_reconstruction_license_restriction_when_not_acknowledged(self, batch_temp_workspace):
         """Reconstruction must fail closed when non-commercial license flags are not acknowledged."""

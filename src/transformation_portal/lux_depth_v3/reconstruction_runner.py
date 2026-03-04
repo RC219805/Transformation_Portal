@@ -143,6 +143,8 @@ def run_scene_reconstruction(
     output_dir: Path,
     iterations: int = 1000,
     tier: str = "apex_research",
+    scene_fingerprint: str | None = None,
+    run_card_merkle_root: str | None = None,
 ) -> Path:
     """Run reconstruction for a single scene and persist deterministic report."""
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -196,6 +198,10 @@ def run_scene_reconstruction(
         "scene_scale": scale_metadata,
         "diagnostics_path": str(diagnostics_path),
     }
+    if isinstance(scene_fingerprint, str) and scene_fingerprint:
+        payload["scene_fingerprint"] = scene_fingerprint
+    if isinstance(run_card_merkle_root, str) and run_card_merkle_root:
+        payload["run_card_merkle_root"] = run_card_merkle_root
     if camera_provenance_files:
         payload["camera_provenance_files"] = camera_provenance_files
 

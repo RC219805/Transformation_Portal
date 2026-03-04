@@ -101,6 +101,8 @@ def test_run_scene_reconstruction_normalizes_scale_and_writes_metadata(tmp_path:
             output_dir=tmp_path / "out",
             iterations=123,
             tier="apex_research",
+            scene_fingerprint="f" * 64,
+            run_card_merkle_root="e" * 64,
         )
 
     payload = json.loads(report_path.read_text(encoding="utf-8"))
@@ -118,6 +120,8 @@ def test_run_scene_reconstruction_normalizes_scale_and_writes_metadata(tmp_path:
     assert diagnostics_path.exists()
     assert payload["diagnostics_path"] == str(diagnostics_path)
     assert payload["scene_scale"]["method"] == "median_baseline"
+    assert payload["scene_fingerprint"] == "f" * 64
+    assert payload["run_card_merkle_root"] == "e" * 64
     assert pytest.approx(payload["scene_scale"]["scale_factor"], rel=1e-6) == 0.25
     assert pytest.approx(payload["scene_scale"]["baseline_before"], rel=1e-6) == 4.0
     assert pytest.approx(payload["scene_scale"]["baseline_after"], rel=1e-6) == 1.0
