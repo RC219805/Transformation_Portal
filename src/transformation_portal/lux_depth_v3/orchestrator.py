@@ -31,7 +31,7 @@ from enum import Enum
 from functools import lru_cache
 from multiprocessing import cpu_count
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 import numpy as np
 
@@ -50,6 +50,7 @@ from ..depth.backends.protocol import LicenseRestrictionError
 from ..depth.backends.registry import DepthBackendRegistry
 from ..ingest.canonical_json import dump_json, dumps_json
 from .batch_stats import compute_batch_runtime_stats, detect_runtime_outliers
+from .camera_metadata_loader import load_scene_cameras
 
 # Note: Imports adjusted to relative for package context compatibility
 from .config import DA3Config, EnhanceConfig, ModelVariant
@@ -77,6 +78,7 @@ from .pbr import generate_pbr_maps
 from .pbr_writer import write_pbr_maps
 from .postprocessing import Postprocessor
 from .provenance import ExiftoolNotFoundError, ProvenanceError, capture_provenance
+from .reconstruction_runner import run_scene_reconstruction
 from .scene_groups import build_scene_groups
 from .security import HashMode, sanitize_file_stem, sanitize_path_component_nonlossy
 from .v2_runner import V2Runner, find_v2_report
@@ -406,6 +408,11 @@ def _infer_artifact_type(relative_path: str) -> str:
             return "pbr_ao"
         return "pbr_aux"
 
+    if rel.startswith("reconstruction/"):
+        if name.endswith("_reconstruction_report.json"):
+            return "reconstruction_report"
+        return "reconstruction_aux"
+
     return "artifact"
 
 
@@ -501,11 +508,19 @@ class EnhanceOrchestrator:
         self.manifests_dir = self.output_root / "manifests"
         self.logs_dir = self.output_root / "logs"
         self.segmentation_dir = self.output_root / "segmentation"
+        self.reconstruction_dir = self.output_root / "reconstruction"
         # zones/ directory reserved for future zone-based processing
         # Only created when zoning features are enabled
         self.zones_dir = self.output_root / "zones"
 
-        for d in [self.depth_dir, self.v2_dir, self.manifests_dir, self.logs_dir, self.segmentation_dir]:
+        for d in [
+            self.depth_dir,
+            self.v2_dir,
+            self.manifests_dir,
+            self.logs_dir,
+            self.segmentation_dir,
+            self.reconstruction_dir,
+        ]:
             d.mkdir(parents=True, exist_ok=True)
 
         # Note: zones_dir intentionally NOT created here
@@ -601,6 +616,9 @@ class EnhanceOrchestrator:
         )
         if self.depth_cache:
             logger.info(f"Depth cache enabled: {self.depth_cache.cache_dir}")
+
+        # Injectable seam for lightweight reconstruction tests.
+        self.run_scene_reconstruction_fn: Callable[..., Path] = run_scene_reconstruction
 
     def _initialize_depth_backend(self) -> None:
         """Initialize depth backend using registry (ADR-019).
@@ -3006,7 +3024,11 @@ class EnhanceOrchestrator:
 
         # Inert scene-group bridge: preserve existing per-image behavior and order.
         sorted_images = sorted(images)
-        scene_groups = build_scene_groups(sorted_images)
+        scene_groups = build_scene_groups(
+            sorted_images,
+            dataset_root=input_dir,
+            grouping_mode=getattr(self.config, "grouping_mode", "single"),
+        )
         image_inputs = [ImageInput(img) for scene in scene_groups for img in scene.images]
 
         if self._use_parallel and len(image_inputs) >= 4:
@@ -3030,6 +3052,9 @@ class EnhanceOrchestrator:
                         error_payload["error_code"] = e.code
                         error_payload["error_details"] = e.details
                     results.append(error_payload)
+
+        if getattr(self.config, "enable_reconstruction", False):
+            self._run_scene_reconstruction_stage(scene_groups=scene_groups, results=results, dataset_root=input_dir)
 
         # Capture accurate batch end time
         batch_end_time = time.time()
@@ -3088,6 +3113,75 @@ class EnhanceOrchestrator:
 
         return results
 
+    @staticmethod
+    def _result_image_key(path_value: str) -> Optional[str]:
+        """Normalize result image path for lookup joins."""
+        if not isinstance(path_value, str) or not path_value:
+            return None
+        try:
+            return str(Path(path_value).resolve())
+        except Exception:
+            return None
+
+    def _run_scene_reconstruction_stage(
+        self,
+        *,
+        scene_groups: List[Any],
+        results: List[Dict[str, Any]],
+        dataset_root: Path,
+    ) -> None:
+        """Run gated scene-level reconstruction for eligible grouped scenes."""
+        sidecar_value = getattr(self.config, "cameras_sidecar_path", None)
+        sidecar_path = Path(sidecar_value) if isinstance(sidecar_value, str) and sidecar_value else None
+
+        result_by_path: Dict[str, Dict[str, Any]] = {}
+        for result in results:
+            path_key = self._result_image_key(result.get("image"))
+            if path_key:
+                result_by_path[path_key] = result
+
+        for scene in scene_groups:
+            if len(scene.images) < 2:
+                continue
+
+            scene_results: List[Dict[str, Any]] = []
+            for image_path in scene.images:
+                result = result_by_path.get(str(Path(image_path).resolve()))
+                if not isinstance(result, dict) or result.get("status") != "ok":
+                    scene_results = []
+                    break
+                scene_results.append(result)
+            if not scene_results:
+                continue
+
+            cameras = load_scene_cameras(scene=scene, dataset_root=dataset_root, sidecar_path=sidecar_path)
+            if not cameras:
+                logger.info("Skipping reconstruction for scene %s: cameras unavailable", scene.scene_id)
+                continue
+
+            try:
+                report_path = self.run_scene_reconstruction_fn(
+                    scene=scene,
+                    cameras=cameras,
+                    dataset_root=dataset_root,
+                    output_dir=self.reconstruction_dir,
+                    iterations=int(getattr(self.config, "reconstruction_iterations", 1000)),
+                    tier=str(getattr(self.config, "reconstruction_tier", "apex_research")),
+                )
+            except Exception as exc:
+                logger.warning("Scene reconstruction failed for %s: %s", scene.scene_id, exc)
+                continue
+
+            if not isinstance(report_path, Path):
+                report_path = Path(str(report_path))
+            if not report_path.exists():
+                logger.warning("Scene reconstruction returned missing report path for %s: %s", scene.scene_id, report_path)
+                continue
+
+            scene_results[0]["reconstruction_report_path"] = str(report_path)
+            scene_results[0]["reconstruction_scene_id"] = scene.scene_id
+            logger.info("Scene reconstruction completed: scene_id=%s report=%s", scene.scene_id, report_path)
+
     def _collect_run_card_artifact_paths(
         self, results: List[Dict[str, Any]], batch_manifest_path: Optional[Path] = None
     ) -> List[Path]:
@@ -3102,7 +3196,13 @@ class EnhanceOrchestrator:
                 batch_id = batch_name[len("batch_") :]
 
         for result in results:
-            for direct_path_key in ("v2_log_path", "v2_report_path", "v2_output_path", "segmentation_mask_path"):
+            for direct_path_key in (
+                "v2_log_path",
+                "v2_report_path",
+                "v2_output_path",
+                "segmentation_mask_path",
+                "reconstruction_report_path",
+            ):
                 direct_path_value = result.get(direct_path_key)
                 if isinstance(direct_path_value, str) and direct_path_value:
                     candidate = Path(direct_path_value)

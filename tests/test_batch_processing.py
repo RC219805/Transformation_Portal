@@ -4,6 +4,7 @@ These tests verify that batch processing correctly computes runtime statistics
 and handles partial failures gracefully.
 """
 
+import json
 import tempfile
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -328,10 +329,177 @@ class TestEnhanceBatch:
                 ):
                     results = orchestrator.enhance_batch(batch_temp_workspace["input_dir"])
 
-                mock_build_scene_groups.assert_called_once_with(expected_order)
+                mock_build_scene_groups.assert_called_once_with(
+                    expected_order,
+                    dataset_root=batch_temp_workspace["input_dir"],
+                    grouping_mode="single",
+                )
                 called_order = [call.args[0].path for call in mock_enhance_image.call_args_list]
                 assert called_order == expected_order
                 assert [result["image"] for result in results] == [str(path) for path in expected_order]
+
+    def test_enhance_batch_runs_scene_reconstruction_when_gated(self, batch_temp_workspace):
+        """Reconstruction runs exactly once for eligible grouped scenes with explicit camera sidecar."""
+        config = EnhanceConfig(
+            model_variant=ModelVariant.METRIC_LARGE,
+            enable_v2=False,
+            enable_parallel_processing=False,
+            emit_run_card=False,
+            enable_reconstruction=True,
+            grouping_mode="parent_dir",
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+            sidecar_path = tmpdir_path / "scene_cameras.json"
+            config.cameras_sidecar_path = str(sidecar_path)
+
+            with patch("transformation_portal.lux_depth_v3.orchestrator.DepthBackendRegistry") as mock_registry_class:
+                mock_backend = Mock()
+                mock_backend.ensure_available.return_value = None
+                mock_backend.name = "da3"
+
+                mock_registry = Mock()
+                mock_registry.get_backend.return_value = mock_backend
+                mock_registry_class.return_value = mock_registry
+
+                orchestrator = EnhanceOrchestrator(
+                    config=config,
+                    output_root=tmpdir_path,
+                )
+
+                input_dir = batch_temp_workspace["input_dir"]
+                discovered = [
+                    input_dir / "scene_a" / "view_2.jpg",
+                    input_dir / "scene_a" / "view_1.jpg",
+                    input_dir / "scene_b" / "solo.jpg",
+                ]
+                expected_order = sorted(discovered)
+
+                from transformation_portal.lux_depth_v3.scene_groups import build_scene_groups
+
+                scene_groups = build_scene_groups(expected_order, dataset_root=input_dir, grouping_mode="parent_dir")
+                eligible_scene = next(scene for scene in scene_groups if len(scene.images) == 2)
+
+                sidecar_payload = {
+                    "schema": "tp.scene_cameras.v1",
+                    "scenes": {
+                        eligible_scene.scene_id: {
+                            "images": [
+                                str(path.resolve().relative_to(input_dir.resolve()).as_posix())
+                                for path in eligible_scene.images
+                            ],
+                            "cameras": [
+                                {
+                                    "intrinsics": [[1000.0, 0.0, 32.0], [0.0, 1000.0, 32.0], [0.0, 0.0, 1.0]],
+                                    "extrinsics": [
+                                        [1.0, 0.0, 0.0, 0.0],
+                                        [0.0, 1.0, 0.0, 0.0],
+                                        [0.0, 0.0, 1.0, 0.0],
+                                        [0.0, 0.0, 0.0, 1.0],
+                                    ],
+                                    "width": 64,
+                                    "height": 64,
+                                },
+                                {
+                                    "intrinsics": [[1000.0, 0.0, 32.0], [0.0, 1000.0, 32.0], [0.0, 0.0, 1.0]],
+                                    "extrinsics": [
+                                        [1.0, 0.0, 0.0, 0.1],
+                                        [0.0, 1.0, 0.0, 0.0],
+                                        [0.0, 0.0, 1.0, 0.0],
+                                        [0.0, 0.0, 0.0, 1.0],
+                                    ],
+                                    "width": 64,
+                                    "height": 64,
+                                },
+                            ],
+                        }
+                    },
+                }
+                sidecar_path.write_text(json.dumps(sidecar_payload), encoding="utf-8")
+
+                def _mock_enhance_image(image_input, input_root=None):  # noqa: ARG001
+                    return {
+                        "status": "ok",
+                        "image": str(image_input.path),
+                        "runtime_s": 1.0,
+                    }
+
+                def _mock_run_scene_reconstruction_fn(**kwargs):
+                    report_path = orchestrator.reconstruction_dir / f"{kwargs['scene'].scene_id}_reconstruction_report.json"
+                    report_path.write_text("{}", encoding="utf-8")
+                    return report_path
+
+                with (
+                    patch("transformation_portal.lux_depth_v3.orchestrator.discover_images", return_value=discovered),
+                    patch.object(orchestrator, "enhance_image", side_effect=_mock_enhance_image),
+                ):
+                    orchestrator.run_scene_reconstruction_fn = Mock(side_effect=_mock_run_scene_reconstruction_fn)
+                    results = orchestrator.enhance_batch(input_dir)
+
+                assert orchestrator.run_scene_reconstruction_fn.call_count == 1
+                called_scene = orchestrator.run_scene_reconstruction_fn.call_args.kwargs["scene"]
+                assert called_scene.scene_id == eligible_scene.scene_id
+                assert [result["image"] for result in results] == [str(path) for path in expected_order]
+                reconstruction_paths = [
+                    result.get("reconstruction_report_path") for result in results if result.get("reconstruction_report_path")
+                ]
+                assert len(reconstruction_paths) == 1
+                assert Path(reconstruction_paths[0]).exists()
+
+    def test_enhance_batch_skips_scene_reconstruction_when_cameras_absent(self, batch_temp_workspace):
+        """Reconstruction gate must skip multi-view scene when explicit sidecar is absent."""
+        config = EnhanceConfig(
+            model_variant=ModelVariant.METRIC_LARGE,
+            enable_v2=False,
+            enable_parallel_processing=False,
+            emit_run_card=False,
+            enable_reconstruction=True,
+            grouping_mode="parent_dir",
+            cameras_sidecar_path=None,
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+
+            with patch("transformation_portal.lux_depth_v3.orchestrator.DepthBackendRegistry") as mock_registry_class:
+                mock_backend = Mock()
+                mock_backend.ensure_available.return_value = None
+                mock_backend.name = "da3"
+
+                mock_registry = Mock()
+                mock_registry.get_backend.return_value = mock_backend
+                mock_registry_class.return_value = mock_registry
+
+                orchestrator = EnhanceOrchestrator(
+                    config=config,
+                    output_root=tmpdir_path,
+                )
+
+                input_dir = batch_temp_workspace["input_dir"]
+                discovered = [
+                    input_dir / "scene_a" / "view_1.jpg",
+                    input_dir / "scene_a" / "view_2.jpg",
+                ]
+                expected_order = sorted(discovered)
+
+                def _mock_enhance_image(image_input, input_root=None):  # noqa: ARG001
+                    return {
+                        "status": "ok",
+                        "image": str(image_input.path),
+                        "runtime_s": 1.0,
+                    }
+
+                with (
+                    patch("transformation_portal.lux_depth_v3.orchestrator.discover_images", return_value=discovered),
+                    patch.object(orchestrator, "enhance_image", side_effect=_mock_enhance_image),
+                ):
+                    orchestrator.run_scene_reconstruction_fn = Mock()
+                    results = orchestrator.enhance_batch(input_dir)
+
+                assert [result["image"] for result in results] == [str(path) for path in expected_order]
+                assert orchestrator.run_scene_reconstruction_fn.call_count == 0
+                assert not any(result.get("reconstruction_report_path") for result in results)
 
     def test_batch_manifest_structure(self, batch_temp_workspace):
         """Test that batch manifest has correct structure."""
