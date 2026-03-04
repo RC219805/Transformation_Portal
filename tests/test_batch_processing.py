@@ -427,7 +427,7 @@ class TestEnhanceBatch:
                     }
 
                 def _mock_run_scene_reconstruction_fn(**kwargs):
-                    report_path = orchestrator.reconstruction_dir / f"{kwargs['scene'].scene_id}_reconstruction_report.json"
+                    report_path = orchestrator.reconstruction_dir / f"{kwargs['context'].scene_id}_reconstruction_report.json"
                     report_path.write_text("{}", encoding="utf-8")
                     return report_path
 
@@ -439,7 +439,7 @@ class TestEnhanceBatch:
                     results = orchestrator.enhance_batch(input_dir)
 
                 assert orchestrator.run_scene_reconstruction_fn.call_count == 1
-                called_scene = orchestrator.run_scene_reconstruction_fn.call_args.kwargs["scene"]
+                called_scene = orchestrator.run_scene_reconstruction_fn.call_args.kwargs["context"]
                 assert called_scene.scene_id == eligible_scene.scene_id
                 assert [result["image"] for result in results] == [str(path) for path in expected_order]
                 reconstruction_paths = [

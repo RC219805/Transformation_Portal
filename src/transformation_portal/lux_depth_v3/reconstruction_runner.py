@@ -4,13 +4,11 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Tuple
-
-from transformation_portal.spatial_ai.reconstruction.contracts import CameraParams
 
 from ..ingest.canonical_json import dumps_json
 from .io_atomic import atomic_write_bytes
-from .scene_groups import SceneGroup, normalize_relative_path
+from .scene_context import SceneContext
+from .scene_groups import normalize_relative_path
 from .security import sanitize_path_component_nonlossy
 
 logger = logging.getLogger(__name__)
@@ -18,9 +16,7 @@ logger = logging.getLogger(__name__)
 
 def run_scene_reconstruction(
     *,
-    scene: SceneGroup,
-    cameras: Tuple[CameraParams, ...],
-    dataset_root: Path,
+    context: SceneContext,
     output_dir: Path,
     iterations: int = 1000,
     tier: str = "apex_research",
@@ -33,24 +29,24 @@ def run_scene_reconstruction(
 
     builder = SceneBuilder(tier=tier)
     reconstructed_scene = builder.build_from_images(
-        image_paths=list(scene.images),
-        cameras=list(cameras),
+        image_paths=list(context.images),
+        cameras=list(context.cameras),
         iterations=iterations,
         gamma=1.0,
     )
 
     payload = {
         "schema": "tp.reconstruction_report.v1",
-        "scene_id": scene.scene_id,
-        "num_views": len(scene.images),
-        "images": [normalize_relative_path(path, dataset_root) for path in scene.images],
+        "scene_id": context.scene_id,
+        "num_views": len(context.images),
+        "images": [normalize_relative_path(path, context.dataset_root) for path in context.images],
         "rmse": float(reconstructed_scene.rmse),
         "iteration": int(reconstructed_scene.iteration),
         "convergence": reconstructed_scene.convergence,
         "num_gaussians": int(reconstructed_scene.splats.num_gaussians),
     }
 
-    safe_scene_id = sanitize_path_component_nonlossy(scene.scene_id)
+    safe_scene_id = sanitize_path_component_nonlossy(context.scene_id)
     report_path = output_dir / f"{safe_scene_id}_reconstruction_report.json"
     report_bytes = (
         dumps_json(

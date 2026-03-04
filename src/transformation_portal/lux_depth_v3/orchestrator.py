@@ -80,6 +80,7 @@ from .pbr_writer import write_pbr_maps
 from .postprocessing import Postprocessor
 from .provenance import ExiftoolNotFoundError, ProvenanceError, capture_provenance
 from .reconstruction_runner import run_scene_reconstruction
+from .scene_context import SceneContext
 from .scene_groups import build_scene_groups
 from .security import HashMode, sanitize_file_stem, sanitize_path_component_nonlossy
 from .v2_runner import V2Runner, find_v2_report
@@ -3172,11 +3173,15 @@ class EnhanceOrchestrator:
                 logger.info("Skipping reconstruction for scene %s: cameras unavailable", scene.scene_id)
                 continue
 
+            context = SceneContext.build(
+                scene=scene,
+                dataset_root=dataset_root,
+                cameras=cameras,
+            )
+
             try:
                 report_path = self.run_scene_reconstruction_fn(
-                    scene=scene,
-                    cameras=cameras,
-                    dataset_root=dataset_root,
+                    context=context,
                     output_dir=self.reconstruction_dir,
                     iterations=int(getattr(self.config, "reconstruction_iterations", 1000)),
                     tier=reconstruction_tier,

@@ -50,6 +50,11 @@ def _compute_scene_id(images: Tuple[Path, ...], dataset_root: Path) -> str:
     return hashlib.sha1(payload, usedforsecurity=False).hexdigest()[:12]
 
 
+def compute_scene_id(images: Tuple[Path, ...], dataset_root: Path) -> str:
+    """Public wrapper for deterministic scene identifier derivation."""
+    return _compute_scene_id(images, dataset_root)
+
+
 def _group_key(path: Path, dataset_root: Path) -> str:
     """Group key for parent-directory grouping mode."""
     normalized = normalize_relative_path(path, dataset_root)
@@ -79,7 +84,7 @@ def build_scene_groups(
             group_images = (img,)
             groups.append(
                 SceneGroup(
-                    scene_id=_compute_scene_id(group_images, dataset_root),
+                    scene_id=compute_scene_id(group_images, dataset_root),
                     images=group_images,
                 )
             )
@@ -93,7 +98,7 @@ def build_scene_groups(
             grouped_images = tuple(grouped_iter)
             groups.append(
                 SceneGroup(
-                    scene_id=_compute_scene_id(grouped_images, dataset_root),
+                    scene_id=compute_scene_id(grouped_images, dataset_root),
                     images=grouped_images,
                 )
             )
