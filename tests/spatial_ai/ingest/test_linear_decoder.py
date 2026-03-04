@@ -499,7 +499,7 @@ class TestRAWDemosaicDeterminism:
         # 1. Valid DNG file with camera matrix
         # 2. Cross-platform hash validation
         # 3. Baseline reference hashes
-        pytest.skip("RAW determinism test requires DNG fixture - tracked in PR #946" " documentation for Phase II validation")
+        pytest.skip("RAW determinism test requires DNG fixture - tracked in PR #946 documentation for Phase II validation")
 
 
 class TestADR023Compliance:

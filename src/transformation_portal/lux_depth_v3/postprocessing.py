@@ -15,7 +15,7 @@ from scipy.ndimage import median_filter
 from .config import PostprocessingConfig
 
 if TYPE_CHECKING:
-    from ..depth.backends.protocol import DepthResult
+    from .inference import DepthResult
 
 logger = logging.getLogger(__name__)
 
@@ -337,7 +337,7 @@ class Postprocessor:
 
         # Keep import lazy at module scope
         # while ensuring runtime availability.
-        from ..depth.backends.protocol import DepthResult
+        from .inference import DepthResult
 
         return DepthResult(
             depth_map=fused,

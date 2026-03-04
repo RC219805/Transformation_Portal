@@ -9,7 +9,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
 # Project information
 project = "Transformation Portal"
-copyright = "2026, Transformation Portal Contributors"
+copyright = "2026, Transformation Portal Contributors"  # pylint: disable=redefined-builtin
 author = "Transformation Portal Contributors"
 release = "2.0.0"
 
