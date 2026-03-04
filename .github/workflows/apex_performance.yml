@@ -137,7 +137,7 @@ jobs:
 
       - name: Upload Results
         if: always()
-        uses: actions/upload-artifact@6f51ac03b9356f520e9adb1b1b7802705f340c2b # v4.5.0
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: apex-results-${{ matrix.workflow_version }}-${{ matrix.zone }}
           path: ${{ env.APEX_RESULTS_DIR }}/
@@ -323,7 +323,7 @@ jobs:
 
       - name: Upload Ledger Artifact
         if: always()
-        uses: actions/upload-artifact@6f51ac03b9356f520e9adb1b1b7802705f340c2b # v4.5.0
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: apex-ledger
           path: ${{ env.APEX_LEDGER_DB }}

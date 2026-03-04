@@ -57,7 +57,7 @@ jobs:
 
       - name: Upload stress test logs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: stress-test-logs
           path: |
@@ -124,7 +124,7 @@ jobs:
           fi
 
       - name: Upload benchmark results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: benchmark-results
           path: benchmark-results.json
@@ -197,7 +197,7 @@ jobs:
 
       - name: Upload memory profile
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: memory-profile
           path: |
@@ -246,7 +246,7 @@ jobs:
           fi
 
       - name: Upload SBOM and audit reports
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: dependency-audit
           path: |
