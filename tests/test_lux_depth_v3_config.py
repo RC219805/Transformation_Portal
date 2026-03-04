@@ -73,6 +73,22 @@ class TestEnhanceConfig:
         assert hasattr(config, "v2_timeout")
         assert config.v2_timeout == 300  # int type
 
+    def test_enhance_config_has_reconstruction_fields(self):
+        """Test that Phase B reconstruction config fields are present with safe defaults."""
+        config = EnhanceConfig()
+        assert hasattr(config, "enable_reconstruction")
+        assert config.enable_reconstruction is False
+        assert hasattr(config, "grouping_mode")
+        assert config.grouping_mode == "single"
+        assert hasattr(config, "cameras_sidecar_path")
+        assert config.cameras_sidecar_path is None
+        assert hasattr(config, "reconstruction_iterations")
+        assert config.reconstruction_iterations == 1000
+        assert hasattr(config, "reconstruction_tier")
+        assert config.reconstruction_tier == "apex_research"
+        assert hasattr(config, "emit_scene_debug_bundle")
+        assert config.emit_scene_debug_bundle is False
+
     @pytest.mark.parametrize("mode", ["fail", "skip", "v2-auto"])
     def test_enhance_config_accepts_valid_depth_fallback(self, mode):
         """Test that EnhanceConfig can be instantiated with valid depth_fallback values."""

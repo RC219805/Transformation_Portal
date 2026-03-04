@@ -170,6 +170,95 @@ def _verify_config_fingerprint(run_card_payload: dict[str, Any], errors: list[st
         errors.append("config_fingerprint.sha256 mismatch: " f"got={sha256_hex}, expected={recomputed_sha}")
 
 
+def _verify_reconstruction_scene_manifests(
+    run_card_payload: dict[str, Any],
+    *,
+    run_card_root: Path,
+    artifact_index_by_relative_path: dict[str, dict[str, Any]],
+    errors: list[str],
+) -> None:
+    manifest_artifacts = [
+        artifact
+        for artifact in run_card_payload.get("artifact_index", [])
+        if isinstance(artifact, dict) and artifact.get("artifact_type") == "reconstruction_scene_manifest"
+    ]
+    if not manifest_artifacts:
+        return
+
+    try:
+        from transformation_portal.lux_depth_v3.scene_integrity import verify_scene_integrity
+    except Exception as exc:  # pragma: no cover - import guard for script-only environments
+        errors.append(f"Unable to import reconstruction scene integrity helpers: {exc}")
+        return
+
+    for artifact in manifest_artifacts:
+        relative_path = artifact.get("relative_path")
+        if not isinstance(relative_path, str) or not relative_path:
+            errors.append("reconstruction_scene_manifest artifact is missing relative_path")
+            continue
+        manifest_path = run_card_root / relative_path
+        payload, load_error = _load_json(manifest_path)
+        if load_error:
+            errors.append(load_error)
+            continue
+        if not isinstance(payload, dict):
+            errors.append(f"Reconstruction scene manifest root must be a JSON object: {manifest_path}")
+            continue
+        try:
+            verify_scene_integrity(
+                payload,
+                artifact_index=artifact_index_by_relative_path,
+                base_dir=run_card_root,
+            )
+        except Exception as exc:
+            errors.append(f"Reconstruction scene manifest validation failed ({relative_path}): {exc}")
+
+
+def _verify_reconstruction_diagnostics(
+    run_card_payload: dict[str, Any],
+    *,
+    run_card_root: Path,
+    errors: list[str],
+) -> None:
+    diagnostics_artifacts = [
+        artifact
+        for artifact in run_card_payload.get("artifact_index", [])
+        if isinstance(artifact, dict) and artifact.get("artifact_type") == "reconstruction_diagnostics"
+    ]
+    if not diagnostics_artifacts:
+        return
+
+    for artifact in diagnostics_artifacts:
+        relative_path = artifact.get("relative_path")
+        if not isinstance(relative_path, str) or not relative_path:
+            errors.append("reconstruction_diagnostics artifact is missing relative_path")
+            continue
+        diagnostics_path = run_card_root / relative_path
+        payload, load_error = _load_json(diagnostics_path)
+        if load_error:
+            errors.append(load_error)
+            continue
+        if not isinstance(payload, dict):
+            errors.append(f"Reconstruction diagnostics root must be a JSON object: {diagnostics_path}")
+            continue
+        if payload.get("schema") != "tp.reconstruction_diagnostics.v1":
+            errors.append(f"Reconstruction diagnostics schema mismatch ({relative_path})")
+            continue
+        cameras = payload.get("cameras")
+        if not isinstance(cameras, list):
+            errors.append(f"Reconstruction diagnostics cameras must be a list ({relative_path})")
+            continue
+        if payload.get("camera_count") != len(cameras):
+            errors.append(f"Reconstruction diagnostics camera_count mismatch ({relative_path})")
+        for index, camera in enumerate(cameras):
+            if not isinstance(camera, dict):
+                errors.append(f"Reconstruction diagnostics camera entry must be object ({relative_path} #{index})")
+                continue
+            for field in ("reprojection_p50", "reprojection_p95", "reprojection_p99"):
+                if field not in camera:
+                    errors.append(f"Reconstruction diagnostics missing {field} ({relative_path} #{index})")
+
+
 def verify_run_card_integrity(
     run_card_path: Path,
     *,
@@ -235,6 +324,26 @@ def verify_run_card_integrity(
             errors.append(
                 "artifact_merkle_root mismatch: " f"expected={expected_merkle_root}, recomputed={recomputed_merkle_root}"
             )
+
+    artifact_index_by_relative_path = {}
+    for artifact in artifact_index:
+        if not isinstance(artifact, dict):
+            continue
+        relative_path = artifact.get("relative_path")
+        if not isinstance(relative_path, str) or not relative_path:
+            continue
+        artifact_index_by_relative_path[relative_path] = artifact
+    _verify_reconstruction_scene_manifests(
+        run_card_payload,
+        run_card_root=run_card_path.parent,
+        artifact_index_by_relative_path=artifact_index_by_relative_path,
+        errors=errors,
+    )
+    _verify_reconstruction_diagnostics(
+        run_card_payload,
+        run_card_root=run_card_path.parent,
+        errors=errors,
+    )
 
     _verify_backend_semantics(run_card_payload, errors)
     _verify_config_fingerprint(run_card_payload, errors)

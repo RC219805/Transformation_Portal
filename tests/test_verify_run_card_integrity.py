@@ -123,6 +123,18 @@ def _write_json(path: Path, payload: dict, *, canonical: bool = True) -> None:
         path.write_text(json.dumps(payload), encoding="utf-8")
 
 
+def _artifact_entry(*, output_root: Path, file_path: Path, artifact_type: str) -> dict:
+    relative = file_path.resolve().relative_to(output_root.resolve()).as_posix()
+    data = file_path.read_bytes()
+    return {
+        "artifact_type": artifact_type,
+        "path": relative,
+        "relative_path": relative,
+        "size_bytes": len(data),
+        "sha256": hashlib.sha256(data).hexdigest(),
+    }
+
+
 def test_verify_run_card_integrity_accepts_valid_payload(tmp_path: Path):
     module = _load_script_module("verify_run_card_integrity_script", "scripts/verify_run_card_integrity.py")
     run_card_path = tmp_path / "run_card_valid.json"
@@ -229,6 +241,239 @@ def test_verify_run_card_integrity_reports_invalid_json(tmp_path: Path):
 
     errors = module.verify_run_card_integrity(run_card_path)
     assert any("Invalid JSON" in error for error in errors)
+
+
+def test_verify_run_card_integrity_validates_reconstruction_scene_manifest(tmp_path: Path):
+    module = _load_script_module("verify_run_card_integrity_script_scene_manifest", "scripts/verify_run_card_integrity.py")
+    output_root = tmp_path / "output"
+    run_card_path = output_root / "run_card_valid.json"
+    reconstruction_dir = output_root / "reconstruction"
+    segmentation_dir = output_root / "segmentation"
+    reconstruction_dir.mkdir(parents=True, exist_ok=True)
+    segmentation_dir.mkdir(parents=True, exist_ok=True)
+
+    segmentation_artifact = segmentation_dir / "scene_a_masks.npz"
+    segmentation_artifact.write_bytes(b"segmentation")
+    image_a = output_root / "input" / "scene_a" / "view_1.jpg"
+    image_b = output_root / "input" / "scene_a" / "view_2.jpg"
+    image_a.parent.mkdir(parents=True, exist_ok=True)
+    image_a.write_bytes(b"a")
+    image_b.write_bytes(b"b")
+
+    scene_manifest_path = reconstruction_dir / "scene_a_scene_manifest.json"
+    scene_manifest_payload = {
+        "schema": "tp.scene_manifest.v1",
+        "scene_id": "scene_a",
+        "images": [
+            {
+                "path": str(image_a.resolve()),
+                "relative_path": "scene_a/view_1.jpg",
+                "sha256": hashlib.sha256(b"a").hexdigest(),
+            },
+            {
+                "path": str(image_b.resolve()),
+                "relative_path": "scene_a/view_2.jpg",
+                "sha256": hashlib.sha256(b"b").hexdigest(),
+            },
+        ],
+        "cameras": [
+            {"signature": "a" * 12, "source": "sidecar", "confidence": "high", "file": None},
+            {"signature": "b" * 12, "source": "sidecar", "confidence": "high", "file": None},
+        ],
+        "segmentation_artifacts": [
+            {
+                "path": str(segmentation_artifact.resolve()),
+                "relative_path": "segmentation/scene_a_masks.npz",
+                "sha256": hashlib.sha256(b"segmentation").hexdigest(),
+            }
+        ],
+        "inputs": ["segmentation/scene_a_masks.npz"],
+        "input_hashes": {"segmentation/scene_a_masks.npz": hashlib.sha256(b"segmentation").hexdigest()},
+    }
+    scene_manifest_path.write_text(json.dumps(scene_manifest_payload, sort_keys=True, separators=(",", ":")), encoding="utf-8")
+
+    payload = _valid_run_card_payload(module)
+    artifact_index = sorted(
+        [
+            _artifact_entry(output_root=output_root, file_path=segmentation_artifact, artifact_type="segmentation_mask_npz"),
+            _artifact_entry(
+                output_root=output_root, file_path=scene_manifest_path, artifact_type="reconstruction_scene_manifest"
+            ),
+        ],
+        key=lambda entry: entry["relative_path"],
+    )
+    payload["artifact_index"] = artifact_index
+    payload["artifact_merkle_root"] = module.compute_artifact_merkle_root(artifact_index)
+    _write_json(run_card_path, payload)
+
+    errors = module.verify_run_card_integrity(run_card_path)
+    assert errors == []
+
+
+def test_verify_run_card_integrity_rejects_reconstruction_scene_manifest_hash_drift(tmp_path: Path):
+    module = _load_script_module(
+        "verify_run_card_integrity_script_scene_manifest_drift", "scripts/verify_run_card_integrity.py"
+    )
+    output_root = tmp_path / "output"
+    run_card_path = output_root / "run_card_invalid_scene_manifest.json"
+    reconstruction_dir = output_root / "reconstruction"
+    segmentation_dir = output_root / "segmentation"
+    reconstruction_dir.mkdir(parents=True, exist_ok=True)
+    segmentation_dir.mkdir(parents=True, exist_ok=True)
+
+    segmentation_artifact = segmentation_dir / "scene_a_masks.npz"
+    segmentation_artifact.write_bytes(b"segmentation")
+    image_a = output_root / "input" / "scene_a" / "view_1.jpg"
+    image_b = output_root / "input" / "scene_a" / "view_2.jpg"
+    image_a.parent.mkdir(parents=True, exist_ok=True)
+    image_a.write_bytes(b"a")
+    image_b.write_bytes(b"b")
+
+    scene_manifest_path = reconstruction_dir / "scene_a_scene_manifest.json"
+    scene_manifest_payload = {
+        "schema": "tp.scene_manifest.v1",
+        "scene_id": "scene_a",
+        "images": [
+            {
+                "path": str(image_a.resolve()),
+                "relative_path": "scene_a/view_1.jpg",
+                "sha256": hashlib.sha256(b"a").hexdigest(),
+            },
+            {
+                "path": str(image_b.resolve()),
+                "relative_path": "scene_a/view_2.jpg",
+                "sha256": hashlib.sha256(b"b").hexdigest(),
+            },
+        ],
+        "cameras": [
+            {"signature": "a" * 12, "source": "sidecar", "confidence": "high", "file": None},
+            {"signature": "b" * 12, "source": "sidecar", "confidence": "high", "file": None},
+        ],
+        "segmentation_artifacts": [
+            {
+                "path": str(segmentation_artifact.resolve()),
+                "relative_path": "segmentation/scene_a_masks.npz",
+                "sha256": "0" * 64,
+            }
+        ],
+        "inputs": ["segmentation/scene_a_masks.npz"],
+        "input_hashes": {"segmentation/scene_a_masks.npz": "0" * 64},
+    }
+    scene_manifest_path.write_text(json.dumps(scene_manifest_payload, sort_keys=True, separators=(",", ":")), encoding="utf-8")
+
+    payload = _valid_run_card_payload(module)
+    artifact_index = sorted(
+        [
+            _artifact_entry(output_root=output_root, file_path=segmentation_artifact, artifact_type="segmentation_mask_npz"),
+            _artifact_entry(
+                output_root=output_root, file_path=scene_manifest_path, artifact_type="reconstruction_scene_manifest"
+            ),
+        ],
+        key=lambda entry: entry["relative_path"],
+    )
+    payload["artifact_index"] = artifact_index
+    payload["artifact_merkle_root"] = module.compute_artifact_merkle_root(artifact_index)
+    _write_json(run_card_path, payload)
+
+    errors = module.verify_run_card_integrity(run_card_path)
+    assert any("Reconstruction scene manifest validation failed" in error for error in errors)
+
+
+def test_verify_run_card_integrity_validates_reconstruction_diagnostics(tmp_path: Path):
+    module = _load_script_module("verify_run_card_integrity_script_diagnostics", "scripts/verify_run_card_integrity.py")
+    output_root = tmp_path / "output"
+    run_card_path = output_root / "run_card_diagnostics.json"
+    reconstruction_dir = output_root / "reconstruction"
+    reconstruction_dir.mkdir(parents=True, exist_ok=True)
+
+    diagnostics_path = reconstruction_dir / "scene_a_reconstruction_diagnostics.json"
+    diagnostics_payload = {
+        "schema": "tp.reconstruction_diagnostics.v1",
+        "scene_id": "scene_a",
+        "scene_fingerprint": "f" * 64,
+        "camera_count": 2,
+        "total_points": 12,
+        "global_rmse": 0.25,
+        "cameras": [
+            {
+                "camera_id": "cam_00",
+                "points_observed": 6,
+                "reprojection_rmse": 0.25,
+                "reprojection_max": 0.25,
+                "reprojection_p50": 0.25,
+                "reprojection_p95": 0.25,
+                "reprojection_p99": 0.25,
+            },
+            {
+                "camera_id": "cam_01",
+                "points_observed": 6,
+                "reprojection_rmse": 0.25,
+                "reprojection_max": 0.25,
+                "reprojection_p50": 0.25,
+                "reprojection_p95": 0.25,
+                "reprojection_p99": 0.25,
+            },
+        ],
+    }
+    diagnostics_path.write_text(json.dumps(diagnostics_payload, sort_keys=True, separators=(",", ":")), encoding="utf-8")
+
+    payload = _valid_run_card_payload(module)
+    artifact_index = sorted(
+        [
+            _artifact_entry(output_root=output_root, file_path=diagnostics_path, artifact_type="reconstruction_diagnostics"),
+        ],
+        key=lambda entry: entry["relative_path"],
+    )
+    payload["artifact_index"] = artifact_index
+    payload["artifact_merkle_root"] = module.compute_artifact_merkle_root(artifact_index)
+    _write_json(run_card_path, payload)
+
+    errors = module.verify_run_card_integrity(run_card_path)
+    assert errors == []
+
+
+def test_verify_run_card_integrity_rejects_reconstruction_diagnostics_missing_percentiles(tmp_path: Path):
+    module = _load_script_module(
+        "verify_run_card_integrity_script_diagnostics_missing", "scripts/verify_run_card_integrity.py"
+    )
+    output_root = tmp_path / "output"
+    run_card_path = output_root / "run_card_diagnostics_invalid.json"
+    reconstruction_dir = output_root / "reconstruction"
+    reconstruction_dir.mkdir(parents=True, exist_ok=True)
+
+    diagnostics_path = reconstruction_dir / "scene_a_reconstruction_diagnostics.json"
+    diagnostics_payload = {
+        "schema": "tp.reconstruction_diagnostics.v1",
+        "scene_id": "scene_a",
+        "scene_fingerprint": "f" * 64,
+        "camera_count": 1,
+        "total_points": 10,
+        "global_rmse": 0.2,
+        "cameras": [
+            {
+                "camera_id": "cam_00",
+                "points_observed": 10,
+                "reprojection_rmse": 0.2,
+                "reprojection_max": 0.2,
+                "reprojection_p50": 0.2,
+            }
+        ],
+    }
+    diagnostics_path.write_text(json.dumps(diagnostics_payload, sort_keys=True, separators=(",", ":")), encoding="utf-8")
+
+    payload = _valid_run_card_payload(module)
+    artifact_index = sorted(
+        [
+            _artifact_entry(output_root=output_root, file_path=diagnostics_path, artifact_type="reconstruction_diagnostics"),
+        ],
+        key=lambda entry: entry["relative_path"],
+    )
+    payload["artifact_index"] = artifact_index
+    payload["artifact_merkle_root"] = module.compute_artifact_merkle_root(artifact_index)
+    _write_json(run_card_path, payload)
+
+    errors = module.verify_run_card_integrity(run_card_path)
+    assert any("missing reprojection_p95" in error or "missing reprojection_p99" in error for error in errors)
 
 
 pytestmark = [

@@ -31,7 +31,7 @@ from enum import Enum
 from functools import lru_cache
 from multiprocessing import cpu_count
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 import numpy as np
 
@@ -49,7 +49,9 @@ from ..depth.backends.protocol import LicenseRestrictionError
 # Backend registry for depth estimation
 from ..depth.backends.registry import DepthBackendRegistry
 from ..ingest.canonical_json import dump_json, dumps_json
+from ..spatial_ai.reconstruction.contracts import LicenseRestrictionError as ReconstructionLicenseRestrictionError
 from .batch_stats import compute_batch_runtime_stats, detect_runtime_outliers
+from .camera_metadata_loader import load_scene_cameras, load_sidecar_payload
 
 # Note: Imports adjusted to relative for package context compatibility
 from .config import DA3Config, EnhanceConfig, ModelVariant
@@ -77,7 +79,24 @@ from .pbr import generate_pbr_maps
 from .pbr_writer import write_pbr_maps
 from .postprocessing import Postprocessor
 from .provenance import ExiftoolNotFoundError, ProvenanceError, capture_provenance
-from .scene_groups import build_scene_groups
+from .reconstruction_runner import (
+    diagnostics_artifact_path,
+    manifest_artifact_path,
+    run_scene_reconstruction,
+    write_scene_debug_bundle,
+)
+from .scene_context import SceneContext
+from .scene_groups import SceneGroup, build_scene_groups
+from .scene_integrity import (
+    build_dataset_triage_report,
+    build_scene_manifest,
+    check_camera_geometry_sanity,
+    compute_scene_fingerprint,
+    normalize_camera_poses,
+    verify_scene_integrity,
+    write_scene_manifest,
+)
+from .scene_preflight import validate_scene_preflight, write_scene_preflight_artifact
 from .security import HashMode, sanitize_file_stem, sanitize_path_component_nonlossy
 from .v2_runner import V2Runner, find_v2_report
 
@@ -406,6 +425,31 @@ def _infer_artifact_type(relative_path: str) -> str:
             return "pbr_ao"
         return "pbr_aux"
 
+    if rel.startswith("reconstruction/"):
+        if "/debug/" in rel:
+            if name == "scene_manifest.json":
+                return "reconstruction_debug_scene_manifest_json"
+            if name == "cameras.json":
+                return "reconstruction_debug_cameras_json"
+            if name == "reprojection_preview.png":
+                return "reconstruction_debug_preview_png"
+            if name.endswith("_overlay.png"):
+                return "reconstruction_debug_overlay_png"
+            return "reconstruction_debug_aux"
+        if name.endswith("_scene_manifest.json"):
+            return "reconstruction_scene_manifest"
+        if name.endswith("_manifest.json"):
+            return "reconstruction_manifest_json"
+        if name.endswith("_reconstruction_report.json"):
+            return "reconstruction_report"
+        if name.endswith("_preflight.json"):
+            return "reconstruction_preflight_json"
+        if name.endswith("_reconstruction_diagnostics.json"):
+            return "reconstruction_diagnostics"
+        if name.endswith("_diagnostics.json"):
+            return "reconstruction_diagnostics_json"
+        return "reconstruction_aux"
+
     return "artifact"
 
 
@@ -501,11 +545,19 @@ class EnhanceOrchestrator:
         self.manifests_dir = self.output_root / "manifests"
         self.logs_dir = self.output_root / "logs"
         self.segmentation_dir = self.output_root / "segmentation"
+        self.reconstruction_dir = self.output_root / "reconstruction"
         # zones/ directory reserved for future zone-based processing
         # Only created when zoning features are enabled
         self.zones_dir = self.output_root / "zones"
 
-        for d in [self.depth_dir, self.v2_dir, self.manifests_dir, self.logs_dir, self.segmentation_dir]:
+        for d in [
+            self.depth_dir,
+            self.v2_dir,
+            self.manifests_dir,
+            self.logs_dir,
+            self.segmentation_dir,
+            self.reconstruction_dir,
+        ]:
             d.mkdir(parents=True, exist_ok=True)
 
         # Note: zones_dir intentionally NOT created here
@@ -601,6 +653,9 @@ class EnhanceOrchestrator:
         )
         if self.depth_cache:
             logger.info(f"Depth cache enabled: {self.depth_cache.cache_dir}")
+
+        # Injectable seam for lightweight reconstruction tests.
+        self.run_scene_reconstruction_fn: Callable[..., Path] = run_scene_reconstruction
 
     def _initialize_depth_backend(self) -> None:
         """Initialize depth backend using registry (ADR-019).
@@ -3006,7 +3061,11 @@ class EnhanceOrchestrator:
 
         # Inert scene-group bridge: preserve existing per-image behavior and order.
         sorted_images = sorted(images)
-        scene_groups = build_scene_groups(sorted_images)
+        scene_groups = build_scene_groups(
+            sorted_images,
+            dataset_root=input_dir,
+            grouping_mode=getattr(self.config, "grouping_mode", "single"),
+        )
         image_inputs = [ImageInput(img) for scene in scene_groups for img in scene.images]
 
         if self._use_parallel and len(image_inputs) >= 4:
@@ -3030,6 +3089,9 @@ class EnhanceOrchestrator:
                         error_payload["error_code"] = e.code
                         error_payload["error_details"] = e.details
                     results.append(error_payload)
+
+        if getattr(self.config, "enable_reconstruction", False):
+            self._run_scene_reconstruction_stage(scene_groups=scene_groups, results=results, dataset_root=input_dir)
 
         # Capture accurate batch end time
         batch_end_time = time.time()
@@ -3088,6 +3150,272 @@ class EnhanceOrchestrator:
 
         return results
 
+    @staticmethod
+    def _result_image_key(path_value: str) -> Optional[str]:
+        """Normalize result image path for lookup joins."""
+        if not isinstance(path_value, str) or not path_value:
+            return None
+        try:
+            return str(Path(path_value).resolve())
+        except Exception:
+            return None
+
+    def _run_scene_reconstruction_stage(
+        self,
+        *,
+        scene_groups: List[SceneGroup],
+        results: List[Dict[str, Any]],
+        dataset_root: Path,
+    ) -> None:
+        """Run gated scene-level reconstruction for eligible grouped scenes."""
+        if not bool(getattr(self.config, "non_commercial_ok", False)):
+            raise ReconstructionLicenseRestrictionError(
+                "Scene reconstruction requires non_commercial_ok=True due to "
+                "Inria 3D Gaussian Splatting non-commercial license terms."
+            )
+        if not bool(getattr(self.config, "accept_research_tools_license", False)):
+            raise ReconstructionLicenseRestrictionError(
+                "Scene reconstruction requires accept_research_tools_license=True "
+                "to acknowledge research-only tool licensing constraints."
+            )
+
+        sidecar_value = getattr(self.config, "cameras_sidecar_path", None)
+        sidecar_path = Path(sidecar_value) if isinstance(sidecar_value, str) and sidecar_value else None
+        sidecar_payload = load_sidecar_payload(sidecar_path)
+        reconstruction_tier = str(getattr(self.config, "reconstruction_tier", "apex_research"))
+
+        result_by_path: Dict[str, Dict[str, Any]] = {}
+        for result in results:
+            path_key = self._result_image_key(result.get("image"))
+            if path_key:
+                result_by_path[path_key] = result
+
+        for scene in scene_groups:
+            if len(scene.images) < 2:
+                continue
+
+            scene_results: List[Dict[str, Any]] = []
+            for image_path in scene.images:
+                result = result_by_path.get(str(Path(image_path).resolve()))
+                if not isinstance(result, dict) or result.get("status") != "ok":
+                    scene_results = []
+                    break
+                scene_results.append(result)
+            if not scene_results:
+                continue
+
+            cameras = load_scene_cameras(
+                scene=scene,
+                dataset_root=dataset_root,
+                sidecar_path=sidecar_path,
+                sidecar_payload=sidecar_payload,
+            )
+            if not cameras:
+                logger.info("Skipping reconstruction for scene %s: cameras unavailable", scene.scene_id)
+                continue
+            camera_sources = {camera.provenance.source for camera in cameras}
+            if len(camera_sources) > 1:
+                logger.warning(
+                    "Skipping reconstruction for scene %s: mixed camera sources %s",
+                    scene.scene_id,
+                    sorted(camera_sources),
+                )
+                continue
+            if any(camera.provenance.confidence == "low" for camera in cameras):
+                logger.warning(
+                    "Skipping reconstruction for scene %s: low-confidence camera provenance detected",
+                    scene.scene_id,
+                )
+                continue
+            try:
+                dataset_health = check_camera_geometry_sanity(cameras)
+                threshold_raw = os.getenv("TP_RECONSTRUCTION_RISK_THRESHOLD", "0.65")
+                try:
+                    risk_threshold = float(threshold_raw)
+                except ValueError:
+                    logger.warning(
+                        "Invalid TP_RECONSTRUCTION_RISK_THRESHOLD=%r; using default 0.65",
+                        threshold_raw,
+                    )
+                    risk_threshold = 0.65
+                risk_score = float(dataset_health["risk_score"])
+                if risk_score > risk_threshold:
+                    message = (
+                        f"Dataset risk score {risk_score:.3f} exceeds threshold "
+                        f"{risk_threshold:.3f} for scene {scene.scene_id}"
+                    )
+                    triage_report = build_dataset_triage_report(scene.scene_id, dataset_health)
+                    scene_results[0]["reconstruction_risk_gate_message"] = message
+                    scene_results[0]["reconstruction_risk_gate_triage"] = triage_report
+                    health_with_triage = dict(dataset_health)
+                    health_with_triage["triage"] = triage_report
+                    scene_results[0]["reconstruction_dataset_health"] = health_with_triage
+                    logger.warning("RECONSTRUCTION_DATASET_RISK_GATE: %s\n%s", message, triage_report)
+                    continue
+                cameras, camera_normalization = normalize_camera_poses(cameras)
+            except ValueError as exc:
+                logger.warning(
+                    "Skipping reconstruction for scene %s: camera geometry validation failed (%s)",
+                    scene.scene_id,
+                    exc,
+                )
+                continue
+            preflight_result = validate_scene_preflight(scene=scene, cameras=cameras)
+            preflight_path = write_scene_preflight_artifact(
+                scene_id=scene.scene_id,
+                result=preflight_result,
+                output_dir=self.reconstruction_dir,
+            )
+            scene_results[0]["reconstruction_preflight_path"] = str(preflight_path)
+            if not preflight_result.valid:
+                logger.warning(
+                    "Skipping reconstruction for scene %s: preflight failed (%s)",
+                    scene.scene_id,
+                    preflight_result.reason,
+                )
+                continue
+
+            context = SceneContext.build(
+                scene=scene,
+                dataset_root=dataset_root,
+                cameras=cameras,
+                metadata={
+                    "grouping_mode": str(getattr(self.config, "grouping_mode", "single")),
+                    "camera_normalization": camera_normalization,
+                    "dataset_health": dataset_health,
+                },
+            )
+
+            segmentation_artifact_paths = tuple(
+                Path(path_value)
+                for path_value in (result.get("segmentation_mask_path") for result in scene_results)
+                if isinstance(path_value, str) and path_value
+            )
+            scene_manifest = build_scene_manifest(
+                context=context,
+                output_root=self.output_root,
+                segmentation_artifact_paths=segmentation_artifact_paths,
+                camera_sidecar_path=sidecar_path,
+            )
+            input_hashes = scene_manifest.get("input_hashes", {})
+            artifact_index_entries: List[Dict[str, Any]] = []
+            if isinstance(input_hashes, dict):
+                for relative_path in sorted(input_hashes):
+                    digest = input_hashes.get(relative_path)
+                    if isinstance(relative_path, str) and relative_path and isinstance(digest, str) and len(digest) == 64:
+                        artifact_index_entries.append({"relative_path": relative_path, "sha256": digest})
+            artifact_index_by_relative_path = {
+                entry["relative_path"]: entry for entry in artifact_index_entries if isinstance(entry, dict)
+            }
+            run_card_merkle_root = _compute_artifact_merkle_root(artifact_index_entries)
+            reconstruction_config = {
+                "iterations": int(getattr(self.config, "reconstruction_iterations", 1000)),
+                "tier": reconstruction_tier,
+                "grouping_mode": str(getattr(self.config, "grouping_mode", "single")),
+            }
+
+            try:
+                verify_scene_integrity(
+                    scene_manifest=scene_manifest,
+                    artifact_index=artifact_index_by_relative_path,
+                )
+                scene_fingerprint = compute_scene_fingerprint(
+                    scene_manifest=scene_manifest,
+                    artifact_index=artifact_index_by_relative_path,
+                    reconstruction_config=reconstruction_config,
+                )
+                reconstruction_output_dir = self.reconstruction_dir / scene_fingerprint
+                scene_manifest_path = write_scene_manifest(
+                    scene_manifest=scene_manifest,
+                    output_dir=reconstruction_output_dir,
+                )
+                scene_results[0]["reconstruction_scene_manifest_path"] = str(scene_manifest_path)
+                scene_results[0]["reconstruction_scene_fingerprint"] = scene_fingerprint
+                if bool(getattr(self.config, "emit_scene_debug_bundle", False)):
+                    debug_paths = write_scene_debug_bundle(
+                        context=context,
+                        segmentation_artifact_paths=segmentation_artifact_paths,
+                        scene_manifest=scene_manifest,
+                        output_dir=reconstruction_output_dir,
+                    )
+                    debug_scene_manifest = debug_paths.get("scene_manifest_path")
+                    if isinstance(debug_scene_manifest, Path) and debug_scene_manifest.exists():
+                        scene_results[0]["reconstruction_debug_manifest_path"] = str(debug_scene_manifest)
+                    debug_cameras = debug_paths.get("cameras_path")
+                    if isinstance(debug_cameras, Path) and debug_cameras.exists():
+                        scene_results[0]["reconstruction_debug_cameras_path"] = str(debug_cameras)
+                    debug_preview = debug_paths.get("reprojection_preview_path")
+                    if isinstance(debug_preview, Path) and debug_preview.exists():
+                        scene_results[0]["reconstruction_debug_preview_path"] = str(debug_preview)
+
+                report_path = self._maybe_use_reconstruction_cache(
+                    scene_id=scene.scene_id,
+                    scene_fingerprint=scene_fingerprint,
+                    run_card_merkle_root=run_card_merkle_root,
+                )
+                if report_path is None:
+                    report_path = self.run_scene_reconstruction_fn(
+                        context=context,
+                        output_dir=reconstruction_output_dir,
+                        iterations=reconstruction_config["iterations"],
+                        tier=reconstruction_tier,
+                        scene_fingerprint=scene_fingerprint,
+                        run_card_merkle_root=run_card_merkle_root,
+                    )
+            except ReconstructionLicenseRestrictionError:
+                raise
+            except Exception as exc:
+                logger.warning("Scene reconstruction failed for %s: %s", scene.scene_id, exc)
+                continue
+
+            if not isinstance(report_path, Path):
+                report_path = Path(str(report_path))
+            if not report_path.exists():
+                logger.warning("Scene reconstruction returned missing report path for %s: %s", scene.scene_id, report_path)
+                continue
+
+            scene_results[0]["reconstruction_report_path"] = str(report_path)
+            scene_results[0]["reconstruction_scene_id"] = scene.scene_id
+            manifest_path = manifest_artifact_path(scene_id=scene.scene_id, output_dir=reconstruction_output_dir)
+            if manifest_path.exists():
+                scene_results[0]["reconstruction_manifest_path"] = str(manifest_path)
+            else:
+                logger.warning("Reconstruction manifest missing for %s: %s", scene.scene_id, manifest_path)
+            diagnostics_path = diagnostics_artifact_path(scene_id=scene.scene_id, output_dir=reconstruction_output_dir)
+            if diagnostics_path.exists():
+                scene_results[0]["reconstruction_diagnostics_path"] = str(diagnostics_path)
+            else:
+                logger.warning("Scene diagnostics missing for %s: %s", scene.scene_id, diagnostics_path)
+            logger.info(
+                "Scene reconstruction completed: scene_id=%s report=%s diagnostics=%s",
+                scene.scene_id,
+                report_path,
+                diagnostics_path,
+            )
+
+    def _maybe_use_reconstruction_cache(
+        self,
+        *,
+        scene_id: str,
+        scene_fingerprint: str,
+        run_card_merkle_root: str,
+    ) -> Optional[Path]:
+        """Use cached content-addressed reconstruction report when stamps match."""
+        cache_dir = self.reconstruction_dir / scene_fingerprint
+        report_path = cache_dir / f"{sanitize_path_component_nonlossy(scene_id)}_reconstruction_report.json"
+        if not report_path.exists():
+            return None
+        try:
+            payload = json.loads(report_path.read_text(encoding="utf-8"))
+        except Exception:
+            return None
+        if payload.get("scene_fingerprint") != scene_fingerprint:
+            return None
+        if payload.get("run_card_merkle_root") != run_card_merkle_root:
+            return None
+        logger.info("Reconstruction cache hit for scene_id=%s at %s", scene_id, report_path)
+        return report_path
+
     def _collect_run_card_artifact_paths(
         self, results: List[Dict[str, Any]], batch_manifest_path: Optional[Path] = None
     ) -> List[Path]:
@@ -3102,7 +3430,20 @@ class EnhanceOrchestrator:
                 batch_id = batch_name[len("batch_") :]
 
         for result in results:
-            for direct_path_key in ("v2_log_path", "v2_report_path", "v2_output_path", "segmentation_mask_path"):
+            for direct_path_key in (
+                "v2_log_path",
+                "v2_report_path",
+                "v2_output_path",
+                "segmentation_mask_path",
+                "reconstruction_preflight_path",
+                "reconstruction_scene_manifest_path",
+                "reconstruction_debug_manifest_path",
+                "reconstruction_debug_cameras_path",
+                "reconstruction_debug_preview_path",
+                "reconstruction_manifest_path",
+                "reconstruction_report_path",
+                "reconstruction_diagnostics_path",
+            ):
                 direct_path_value = result.get(direct_path_key)
                 if isinstance(direct_path_value, str) and direct_path_value:
                     candidate = Path(direct_path_value)
