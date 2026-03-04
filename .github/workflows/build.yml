@@ -372,7 +372,7 @@ jobs:
         run: |
           set -euo pipefail
           echo "Running flake8..."
-          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics --exclude=.venv,__pycache__,.git,.tox,.mypy_cache,.pytest_cache,build,dist,*.egg-info
 
           echo "Running pylint..."
           event_name="${{ github.event_name }}"
