@@ -88,6 +88,7 @@ from .reconstruction_runner import (
 from .scene_context import SceneContext
 from .scene_groups import SceneGroup, build_scene_groups
 from .scene_integrity import (
+    build_dataset_triage_report,
     build_scene_manifest,
     check_camera_geometry_sanity,
     compute_scene_fingerprint,
@@ -3235,9 +3236,13 @@ class EnhanceOrchestrator:
                         f"Dataset risk score {risk_score:.3f} exceeds threshold "
                         f"{risk_threshold:.3f} for scene {scene.scene_id}"
                     )
+                    triage_report = build_dataset_triage_report(scene.scene_id, dataset_health)
                     scene_results[0]["reconstruction_risk_gate_message"] = message
-                    scene_results[0]["reconstruction_dataset_health"] = dataset_health
-                    logger.warning("RECONSTRUCTION_DATASET_RISK_GATE: %s", message)
+                    scene_results[0]["reconstruction_risk_gate_triage"] = triage_report
+                    health_with_triage = dict(dataset_health)
+                    health_with_triage["triage"] = triage_report
+                    scene_results[0]["reconstruction_dataset_health"] = health_with_triage
+                    logger.warning("RECONSTRUCTION_DATASET_RISK_GATE: %s\n%s", message, triage_report)
                     continue
                 cameras, camera_normalization = normalize_camera_poses(cameras)
             except ValueError as exc:

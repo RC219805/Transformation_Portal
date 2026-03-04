@@ -850,6 +850,11 @@ class TestEnhanceBatch:
                 assert orchestrator.run_scene_reconstruction_fn.call_count == 0
                 risk_messages = [result.get("reconstruction_risk_gate_message") for result in results]
                 assert any(isinstance(message, str) and "exceeds threshold" in message for message in risk_messages)
+                triage_reports = [result.get("reconstruction_risk_gate_triage") for result in results]
+                assert any(
+                    isinstance(report, str) and report.startswith("Scene ") and "dataset triage" in report
+                    for report in triage_reports
+                )
 
     def test_enhance_batch_skips_scene_reconstruction_when_preflight_invalid(self, batch_temp_workspace):
         """Reconstruction gate must skip scenes when scene preflight validation fails."""

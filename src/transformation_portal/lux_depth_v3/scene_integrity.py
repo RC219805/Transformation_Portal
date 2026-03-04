@@ -309,12 +309,41 @@ def summarize_dataset_health(
     risk_score = float(1.0 - (0.6 * connectivity + 0.4 * avg_overlap))
     risk_score = float(np.clip(risk_score, 0.0, 1.0))
     return {
+        "camera_count": int(num_cameras),
         "largest_component": int(largest_component),
         "num_components": int(components),
         "weak_edges": int(weak_edges),
         "avg_overlap": avg_overlap,
+        "average_overlap": avg_overlap,
         "risk_score": risk_score,
     }
+
+
+def build_dataset_triage_report(scene_id: str, health: Mapping[str, Any]) -> str:
+    """Build actionable dataset-quality guidance when risk gate rejects reconstruction."""
+    issues: list[str] = []
+
+    camera_count = int(health.get("camera_count", 0))
+    largest_component = int(health.get("largest_component", camera_count))
+    average_overlap = float(health.get("average_overlap", health.get("avg_overlap", 0.0)))
+    weak_edges = int(health.get("weak_edges", 0))
+
+    if camera_count > 0 and largest_component < camera_count:
+        issues.append(
+            f"Camera graph disconnected ({largest_component}/{camera_count} connected). " "Capture additional bridging images."
+        )
+    if average_overlap < 0.15:
+        issues.append(
+            f"Low average overlap ({average_overlap:.2f}). " "Increase view overlap to ~60-80% between adjacent shots."
+        )
+    if camera_count > 0 and weak_edges > camera_count // 2:
+        issues.append(
+            f"Many weak connections ({weak_edges} weak edges). " "Images may be blurred, poorly exposed, or lack texture."
+        )
+    if not issues:
+        issues.append("Dataset passed basic connectivity checks but still appears unstable.")
+
+    return f"Scene {scene_id} dataset triage:\n - " + "\n - ".join(issues)
 
 
 def check_camera_geometry_sanity(

@@ -10,6 +10,7 @@ from transformation_portal.lux_depth_v3.manifest import compute_file_sha256
 from transformation_portal.lux_depth_v3.scene_context import CameraProvenance, CameraWithProvenance, SceneContext
 from transformation_portal.lux_depth_v3.scene_groups import SceneGroup, compute_scene_id
 from transformation_portal.lux_depth_v3.scene_integrity import (
+    build_dataset_triage_report,
     build_scene_manifest,
     check_camera_geometry_sanity,
     compute_scene_fingerprint,
@@ -277,3 +278,20 @@ def test_build_scene_manifest_includes_dataset_health_hash(tmp_path: Path):
     assert "dataset_health" in scene_manifest
     assert "dataset_health_hash" in scene_manifest
     assert len(str(scene_manifest["dataset_health_hash"])) == 64
+
+
+def test_build_dataset_triage_report_includes_actionable_guidance():
+    report = build_dataset_triage_report(
+        "scene-123",
+        {
+            "camera_count": 12,
+            "largest_component": 5,
+            "average_overlap": 0.08,
+            "weak_edges": 9,
+        },
+    )
+
+    assert report.startswith("Scene scene-123 dataset triage:")
+    assert "Capture additional bridging images" in report
+    assert "Increase view overlap" in report
+    assert "Many weak connections" in report
