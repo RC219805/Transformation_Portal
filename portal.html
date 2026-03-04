@@ -66,8 +66,8 @@
         }
 
         progress {
-            appearance: none;
             -webkit-appearance: none;
+            appearance: none;
             border: none;
             height: 6px;
             border-radius: 3px;
@@ -243,6 +243,10 @@
                                 </div>
                             </label>
                         </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="sam2CheckpointPath">SAM2 Checkpoint Path (Optional)</label>
+                            <input type="text" id="sam2CheckpointPath" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors" placeholder="./models/sam2/sam2.1_hiera_large.pt" autocomplete="off" spellcheck="false" />
+                        </div>
                     </div>
 
                     <!-- Archive Gate Fields -->
@@ -311,6 +315,43 @@
                         </div>
                     </div>
 
+                    <div class="mt-6 border-t border-slate-200 dark:border-slate-800 pt-6">
+                        <p class="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-3">Advanced Flags</p>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+                            <label class="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                                <input type="checkbox" id="saveFloatDepth" class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 dark:bg-slate-900" />
+                                <span class="text-[11px] font-mono select-none truncate text-slate-600 dark:text-slate-300">save_float_depth</span>
+                            </label>
+                            <label class="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                                <input type="checkbox" id="forceDepth" class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 dark:bg-slate-900" />
+                                <span class="text-[11px] font-mono select-none truncate text-slate-600 dark:text-slate-300">force_depth</span>
+                            </label>
+                            <label class="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                                <input type="checkbox" id="strictInputs" class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 dark:bg-slate-900" />
+                                <span class="flex items-center gap-2 min-w-0">
+                                    <span class="text-[11px] font-mono select-none truncate text-slate-600 dark:text-slate-300">strict_inputs</span>
+                                    <span class="shrink-0 rounded border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-amber-700 dark:text-amber-400">Debug</span>
+                                </span>
+                            </label>
+                            <label class="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                                <input type="checkbox" id="verifyImages" class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 dark:bg-slate-900" />
+                                <span class="text-[11px] font-mono select-none truncate text-slate-600 dark:text-slate-300">verify_images</span>
+                            </label>
+                            <label class="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                                <input type="checkbox" id="allowSemanticFallback" class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 dark:bg-slate-900" />
+                                <span class="text-[11px] font-mono select-none truncate text-slate-600 dark:text-slate-300">allow_semantic_fallback</span>
+                            </label>
+                            <label class="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                                <input type="checkbox" id="verboseFlag" class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 dark:bg-slate-900" />
+                                <span class="text-[11px] font-mono select-none truncate text-slate-600 dark:text-slate-300">verbose</span>
+                            </label>
+                            <label class="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                                <input type="checkbox" id="quietFlag" class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 dark:bg-slate-900" />
+                                <span class="text-[11px] font-mono select-none truncate text-slate-600 dark:text-slate-300">quiet</span>
+                            </label>
+                        </div>
+                    </div>
+
                     <!-- Native Emit Checkboxes -->
                     <div class="mt-6 grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3">
                         <label class="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
@@ -347,6 +388,103 @@
                                 <input type="checkbox" id="licenseApple" class="w-4 h-4 mt-0.5 rounded text-amber-600 focus:ring-amber-500 border-amber-300 dark:border-amber-700 dark:bg-slate-900" />
                                 <span class="text-[12px] leading-tight select-none text-slate-700 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-white transition-colors">I accept the <strong>Apple Depth Pro Research License</strong> terms.</span>
                             </label>
+                            <label class="flex items-start gap-3 cursor-pointer group">
+                                <input type="checkbox" id="licenseResearchTools" class="w-4 h-4 mt-0.5 rounded text-amber-600 focus:ring-amber-500 border-amber-300 dark:border-amber-700 dark:bg-slate-900" />
+                                <span class="text-[12px] leading-tight select-none text-slate-700 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-white transition-colors">I accept the <strong>Research Tools License</strong> terms required for scene reconstruction.</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="mt-6 border-t border-slate-200 dark:border-slate-800 pt-6 space-y-4">
+                        <p class="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Reconstruction & Runtime</p>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <label class="flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 px-4 py-3.5 cursor-pointer group transition-colors">
+                                <span class="flex items-center gap-2 text-[12px] font-medium select-none text-slate-700 dark:text-slate-300">
+                                    <span>Enable Reconstruction</span>
+                                    <span class="shrink-0 rounded border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-amber-700 dark:text-amber-400">Experimental</span>
+                                </span>
+                                <div class="relative inline-flex items-center">
+                                    <input type="checkbox" id="enableReconstruction" role="switch" class="sr-only peer" />
+                                    <div class="w-9 h-5 rounded-full transition-colors duration-200 ease-in-out peer-focus-visible:ring-2 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-indigo-500 bg-slate-300 dark:bg-slate-600 peer-checked:bg-indigo-600"></div>
+                                    <div class="absolute left-[2px] top-[2px] bg-white w-4 h-4 rounded-full transition-transform duration-200 ease-in-out peer-checked:translate-x-4 shadow-sm"></div>
+                                </div>
+                            </label>
+                            <label class="flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 px-4 py-3.5 cursor-pointer group transition-colors">
+                                <span class="text-[12px] font-medium select-none text-slate-700 dark:text-slate-300">Emit Scene Debug Bundle</span>
+                                <div class="relative inline-flex items-center">
+                                    <input type="checkbox" id="emitSceneDebugBundle" role="switch" class="sr-only peer" />
+                                    <div class="w-9 h-5 rounded-full transition-colors duration-200 ease-in-out peer-focus-visible:ring-2 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-indigo-500 bg-slate-300 dark:bg-slate-600 peer-checked:bg-indigo-600"></div>
+                                    <div class="absolute left-[2px] top-[2px] bg-white w-4 h-4 rounded-full transition-transform duration-200 ease-in-out peer-checked:translate-x-4 shadow-sm"></div>
+                                </div>
+                            </label>
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="groupingMode">Grouping Mode</label>
+                                <select id="groupingMode" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors cursor-pointer">
+                                    <option value="single" selected>single</option>
+                                    <option value="parent_dir">parent_dir</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="reconstructionIterations">Reconstruction Iterations</label>
+                                <input type="number" id="reconstructionIterations" min="1" step="1" value="1000" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors" />
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="camerasSidecarPath">Cameras Sidecar Path (Optional)</label>
+                                <input type="text" id="camerasSidecarPath" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors" placeholder="./manifests/scene_cameras.json" autocomplete="off" spellcheck="false" />
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="reconstructionTier">Reconstruction Tier</label>
+                                <input type="text" id="reconstructionTier" value="apex_research" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors" autocomplete="off" spellcheck="false" />
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            <div>
+                                <label class="flex items-center gap-2 text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="rawIngestMode">
+                                    <span>RAW Ingest Mode</span>
+                                    <span class="shrink-0 rounded border border-indigo-300 dark:border-indigo-700 bg-indigo-50 dark:bg-indigo-900/20 px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-indigo-700 dark:text-indigo-400">Advanced</span>
+                                </label>
+                                <select id="rawIngestMode" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors cursor-pointer">
+                                    <option value="auto" selected>auto</option>
+                                    <option value="force_rawpy">force_rawpy</option>
+                                    <option value="force_preview">force_preview</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="rawWbMode">RAW WB Mode</label>
+                                <select id="rawWbMode" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors cursor-pointer">
+                                    <option value="camera" selected>camera</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="rawDemosaic">RAW Demosaic</label>
+                                <select id="rawDemosaic" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors cursor-pointer">
+                                    <option value="AHD" selected>AHD</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            <div>
+                                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="maxWorkers">Max Workers (Optional)</label>
+                                <input type="number" id="maxWorkers" min="1" step="1" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors" placeholder="auto" />
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="maxGpuWorkers">Max GPU Workers (Optional)</label>
+                                <input type="number" id="maxGpuWorkers" min="1" step="1" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors" placeholder="auto" />
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="logLevel">Log Level (Optional)</label>
+                                <select id="logLevel" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors cursor-pointer">
+                                    <option value="" selected>(default)</option>
+                                    <option value="DEBUG">DEBUG</option>
+                                    <option value="INFO">INFO</option>
+                                    <option value="WARNING">WARNING</option>
+                                    <option value="ERROR">ERROR</option>
+                                </select>
+                            </div>
                         </div>
                     </div>
                 </fieldset>
@@ -361,10 +499,28 @@
                             <button id="exportBtn" type="button" class="text-[11px] font-semibold uppercase tracking-widest text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors focus:outline-none">Export JSON</button>
                             <span class="text-slate-300 dark:text-slate-700">|</span>
                             <button id="copyCliBtn" type="button" class="text-[11px] font-semibold uppercase tracking-widest text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors focus:outline-none">Copy CLI</button>
-                            <input type="file" id="fileInput" accept=".json" class="hidden" />
+                            <input type="file" id="fileInput" accept=".json" title="Import JSON configuration" class="hidden" />
                         </div>
                     </div>
-                    <textarea id="cliPreview" readonly class="w-full min-h-[140px] rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 p-4 text-[12px] font-mono leading-relaxed text-slate-600 dark:text-slate-300 overflow-y-auto custom-scrollbar resize-y focus:outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
+                    <textarea id="cliPreview" readonly title="Generated CLI command preview" class="w-full min-h-[140px] rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 p-4 text-[12px] font-mono leading-relaxed text-slate-600 dark:text-slate-300 overflow-y-auto custom-scrollbar resize-y focus:outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
+
+                    <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <section class="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/70 p-4">
+                            <h4 class="text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Pre-Run Validation</h4>
+                            <ul id="preRunWarnings" class="mt-2 space-y-1 text-[12px] text-amber-700 dark:text-amber-300"></ul>
+                            <p id="preRunWarningsEmpty" class="mt-2 text-[12px] text-emerald-700 dark:text-emerald-300">No pre-run warnings.</p>
+                        </section>
+                        <section class="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/70 p-4">
+                            <div class="flex items-center justify-between gap-2">
+                                <h4 class="text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Expected Outputs</h4>
+                                <span class="inline-flex items-center gap-2 text-[10px] font-mono text-slate-500 dark:text-slate-400">
+                                    <span id="datasetHealthIndicator" class="status-dot"></span>
+                                    <span id="datasetHealthText">Dataset health: unknown</span>
+                                </span>
+                            </div>
+                            <ul id="expectedOutputsList" class="mt-2 space-y-1 text-[12px] text-slate-700 dark:text-slate-300"></ul>
+                        </section>
+                    </div>
                     
                     <div class="mt-6 border-t border-slate-200 dark:border-slate-800 pt-6">
                         <button id="runJobBtn" type="button" class="w-full rounded-xl px-6 py-3.5 text-[14px] font-semibold text-white shadow-md transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed bg-indigo-600 hover:bg-indigo-700 dark:focus:ring-offset-slate-900">
@@ -398,6 +554,17 @@
                     <div class="flex items-center justify-between mb-4 pb-3 border-b border-slate-200 dark:border-slate-800">
                         <h2 class="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Artifacts</h2>
                         <span id="artifactMeta" class="text-[11px] text-slate-500 dark:text-slate-400 font-mono">No job selected</span>
+                    </div>
+                    <div id="runCardActions" class="hidden mb-3 items-center gap-2">
+                        <button id="viewRunCardBtn" type="button" class="rounded-lg border border-slate-300 dark:border-slate-700 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                            View JSON
+                        </button>
+                        <button id="copyRunCardPathBtn" type="button" class="rounded-lg border border-slate-300 dark:border-slate-700 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                            Copy Path
+                        </button>
+                        <button id="copyRunCardFingerprintBtn" type="button" class="rounded-lg border border-slate-300 dark:border-slate-700 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                            Copy Fingerprint
+                        </button>
                     </div>
                     <div class="max-h-[220px] overflow-y-auto custom-scrollbar pr-1">
                         <ul id="artifactList" class="space-y-2"></ul>
@@ -481,17 +648,47 @@
                     enable: false,
                     backend: 'stub',
                     sam2ModelSize: 'base',
+                    sam2CheckpointPath: '',
                     strict: false
                 },
                 flags: {
-                    materials: true, pbr: true, cache: true, overwrite: false, enableV2: false
+                    materials: true,
+                    pbr: true,
+                    cache: true,
+                    overwrite: false,
+                    enableV2: false,
+                    saveFloatDepth: false,
+                    forceDepth: false,
+                    strictInputs: false,
+                    verifyImages: false,
+                    allowSemanticFallback: false,
+                    verbose: false,
+                    quiet: false
                 },
                 v2Preset: 'default',
                 emits: {
                     master16: true, upscaled16: true, marketing: false, report: true, runCard: true
                 },
                 gate: { dedup: true, sign: true },
-                licenses: { nonCommercialOk: false, acceptApple: false }
+                licenses: { nonCommercialOk: false, acceptApple: false, acceptResearchTools: false },
+                reconstruction: {
+                    enable: false,
+                    groupingMode: 'single',
+                    camerasSidecarPath: '',
+                    iterations: 1000,
+                    tier: 'apex_research',
+                    emitSceneDebugBundle: false
+                },
+                raw: {
+                    ingestMode: 'auto',
+                    wbMode: 'camera',
+                    demosaic: 'AHD'
+                },
+                runtime: {
+                    maxWorkers: '',
+                    maxGpuWorkers: '',
+                    logLevel: ''
+                }
             },
             jobs: [],
             selectedJobId: null,
@@ -517,6 +714,7 @@
                 enable: document.getElementById('enableSegmentation'),
                 backend: document.getElementById('segmentationBackend'),
                 sam2ModelSize: document.getElementById('sam2ModelSize'),
+                sam2CheckpointPath: document.getElementById('sam2CheckpointPath'),
                 strict: document.getElementById('strictSegmentation')
             },
 
@@ -525,7 +723,14 @@
                 pbr: document.getElementById('flagPBR'),
                 cache: document.getElementById('flagCache'),
                 overwrite: document.getElementById('flagOverwrite'),
-                enableV2: document.getElementById('flagEnableV2')
+                enableV2: document.getElementById('flagEnableV2'),
+                saveFloatDepth: document.getElementById('saveFloatDepth'),
+                forceDepth: document.getElementById('forceDepth'),
+                strictInputs: document.getElementById('strictInputs'),
+                verifyImages: document.getElementById('verifyImages'),
+                allowSemanticFallback: document.getElementById('allowSemanticFallback'),
+                verbose: document.getElementById('verboseFlag'),
+                quiet: document.getElementById('quietFlag')
             },
             v2Preset: document.getElementById('v2Preset'),
 
@@ -539,7 +744,26 @@
 
             licenses: {
                 nonCommercialOk: document.getElementById('licenseNonCommercial'),
-                acceptApple: document.getElementById('licenseApple')
+                acceptApple: document.getElementById('licenseApple'),
+                acceptResearchTools: document.getElementById('licenseResearchTools')
+            },
+            reconstruction: {
+                enable: document.getElementById('enableReconstruction'),
+                groupingMode: document.getElementById('groupingMode'),
+                camerasSidecarPath: document.getElementById('camerasSidecarPath'),
+                iterations: document.getElementById('reconstructionIterations'),
+                tier: document.getElementById('reconstructionTier'),
+                emitSceneDebugBundle: document.getElementById('emitSceneDebugBundle')
+            },
+            raw: {
+                ingestMode: document.getElementById('rawIngestMode'),
+                wbMode: document.getElementById('rawWbMode'),
+                demosaic: document.getElementById('rawDemosaic')
+            },
+            runtime: {
+                maxWorkers: document.getElementById('maxWorkers'),
+                maxGpuWorkers: document.getElementById('maxGpuWorkers'),
+                logLevel: document.getElementById('logLevel')
             },
 
             gateDedup: document.getElementById('gateDedup'),
@@ -554,6 +778,11 @@
             exportBtn: document.getElementById('exportBtn'),
             fileInput: document.getElementById('fileInput'),
             runJobBtn: document.getElementById('runJobBtn'),
+            preRunWarnings: document.getElementById('preRunWarnings'),
+            preRunWarningsEmpty: document.getElementById('preRunWarningsEmpty'),
+            expectedOutputsList: document.getElementById('expectedOutputsList'),
+            datasetHealthIndicator: document.getElementById('datasetHealthIndicator'),
+            datasetHealthText: document.getElementById('datasetHealthText'),
 
             jobList: document.getElementById('jobList'),
             emptyQueueState: document.getElementById('emptyQueueState'),
@@ -561,6 +790,10 @@
             artifactList: document.getElementById('artifactList'),
             artifactMeta: document.getElementById('artifactMeta'),
             emptyArtifactState: document.getElementById('emptyArtifactState'),
+            runCardActions: document.getElementById('runCardActions'),
+            viewRunCardBtn: document.getElementById('viewRunCardBtn'),
+            copyRunCardPathBtn: document.getElementById('copyRunCardPathBtn'),
+            copyRunCardFingerprintBtn: document.getElementById('copyRunCardFingerprintBtn'),
             logPane: document.getElementById('logPane'),
             logStatusIndicator: document.getElementById('logStatusIndicator'),
             clearLogsBtn: document.getElementById('clearLogsBtn'),
@@ -717,7 +950,8 @@
                     artifact_type: String(item.artifact_type || 'file'),
                     path: String(item.path),
                     relative_path: String(item.relative_path || item.path),
-                    size_bytes: typeof item.size_bytes === 'number' ? item.size_bytes : null
+                    size_bytes: typeof item.size_bytes === 'number' ? item.size_bytes : null,
+                    sha256: typeof item.sha256 === 'string' ? item.sha256 : ''
                 }));
         }
 
@@ -729,9 +963,41 @@
                 existing.artifact_type = artifact.artifact_type || existing.artifact_type;
                 existing.relative_path = artifact.relative_path || existing.relative_path;
                 existing.size_bytes = artifact.size_bytes ?? existing.size_bytes;
+                existing.sha256 = artifact.sha256 || existing.sha256;
                 return;
             }
             job.artifacts.push(artifact);
+        }
+
+        function getRunCardArtifact(job) {
+            if (!job || !Array.isArray(job.artifacts)) return null;
+            return job.artifacts.find((artifact) => {
+                const type = String(artifact.artifact_type || '').toLowerCase();
+                const relPath = String(artifact.relative_path || artifact.path || '').toLowerCase();
+                return type === 'run_card' || relPath.includes('run_card');
+            }) || null;
+        }
+
+        function updateRunCardActions(job) {
+            if (!els.runCardActions) return;
+            const runCard = getRunCardArtifact(job);
+            if (!runCard) {
+                els.runCardActions.classList.add('hidden');
+                els.runCardActions.classList.remove('flex');
+                return;
+            }
+            const runCardPath = String(runCard.relative_path || runCard.path || '');
+            const runCardSha = String(runCard.sha256 || '');
+            if (els.viewRunCardBtn) els.viewRunCardBtn.dataset.path = runCardPath;
+            if (els.copyRunCardPathBtn) els.copyRunCardPathBtn.dataset.path = runCardPath;
+            if (els.copyRunCardFingerprintBtn) {
+                els.copyRunCardFingerprintBtn.dataset.fingerprint = runCardSha;
+                els.copyRunCardFingerprintBtn.disabled = !runCardSha;
+                els.copyRunCardFingerprintBtn.classList.toggle('opacity-50', !runCardSha);
+                els.copyRunCardFingerprintBtn.classList.toggle('cursor-not-allowed', !runCardSha);
+            }
+            els.runCardActions.classList.remove('hidden');
+            els.runCardActions.classList.add('flex');
         }
 
         function renderArtifactPanel() {
@@ -742,6 +1008,7 @@
             if (!selected) {
                 els.artifactMeta.textContent = 'No job selected';
                 els.artifactList.innerHTML = '';
+                updateRunCardActions(null);
                 if (els.emptyArtifactState) els.emptyArtifactState.style.display = 'block';
                 return;
             }
@@ -751,6 +1018,7 @@
 
             if (artifacts.length === 0) {
                 els.artifactList.innerHTML = '';
+                updateRunCardActions(selected);
                 if (els.emptyArtifactState) els.emptyArtifactState.style.display = 'block';
                 return;
             }
@@ -775,6 +1043,7 @@
             });
             els.artifactList.innerHTML = '';
             els.artifactList.appendChild(fragment);
+            updateRunCardActions(selected);
         }
 
         function selectJob(jobId) {
@@ -1002,6 +1271,7 @@
         const LUX_DEPTH_BACKENDS = new Set(['da3', 'depth_pro']);
         const LUX_SEGMENTATION_BACKENDS = new Set(['stub', 'efficientsam', 'sam2']);
         const SAM2_MODEL_SIZES = new Set(['base', 'large']);
+        const LUX_GROUPING_MODES = new Set(['single', 'parent_dir']);
 
         function parseBoolLike(value, defaultValue = false) {
             if (value === null || value === undefined) return defaultValue;
@@ -1051,6 +1321,33 @@
             return 'base';
         }
 
+        function _resolveGroupingMode(value) {
+            const normalized = String(value || '').trim().toLowerCase();
+            if (LUX_GROUPING_MODES.has(normalized)) return normalized;
+            return 'single';
+        }
+
+        function _parsePositiveIntOrNull(value) {
+            if (value === null || value === undefined) return null;
+            const text = String(value).trim();
+            if (!text) return null;
+            const parsed = Number.parseInt(text, 10);
+            if (!Number.isFinite(parsed) || parsed < 1) return null;
+            return parsed;
+        }
+
+        function _normalizeVerboseQuietFlags(flags, notify = false) {
+            if (!flags) return false;
+            flags.verbose = parseBoolLike(flags.verbose, false);
+            flags.quiet = parseBoolLike(flags.quiet, false);
+            if (!flags.verbose || !flags.quiet) return false;
+            flags.quiet = false;
+            if (notify) {
+                createToast('verbose and quiet are mutually exclusive; disabled quiet.', 'info');
+            }
+            return true;
+        }
+
         function syncSegmentationControlState(config) {
             if (!els.segmentation.sam2ModelSize || !els.segmentation.backend) return;
             const backend = _resolveSegmentationBackend(config.segmentation?.backend);
@@ -1087,6 +1384,10 @@
                     config.segmentation?.sam2ModelSize || 'base'
                 )
             );
+            const sam2CheckpointPath = _textOrFallback(
+                els.segmentation.sam2CheckpointPath ? els.segmentation.sam2CheckpointPath.value : config.segmentation?.sam2CheckpointPath,
+                config.segmentation?.sam2CheckpointPath || ''
+            );
             const strictSegmentation = els.segmentation.strict
                 ? Boolean(els.segmentation.strict.checked)
                 : parseBoolLike(config.segmentation?.strict, false);
@@ -1104,6 +1405,27 @@
             const enableV2 = els.flags.enableV2
                 ? Boolean(els.flags.enableV2.checked)
                 : parseBoolLike(config.flags?.enableV2, false);
+            const saveFloatDepth = els.flags.saveFloatDepth
+                ? Boolean(els.flags.saveFloatDepth.checked)
+                : parseBoolLike(config.flags?.saveFloatDepth, false);
+            const forceDepth = els.flags.forceDepth
+                ? Boolean(els.flags.forceDepth.checked)
+                : parseBoolLike(config.flags?.forceDepth, false);
+            const strictInputs = els.flags.strictInputs
+                ? Boolean(els.flags.strictInputs.checked)
+                : parseBoolLike(config.flags?.strictInputs, false);
+            const verifyImages = els.flags.verifyImages
+                ? Boolean(els.flags.verifyImages.checked)
+                : parseBoolLike(config.flags?.verifyImages, false);
+            const allowSemanticFallback = els.flags.allowSemanticFallback
+                ? Boolean(els.flags.allowSemanticFallback.checked)
+                : parseBoolLike(config.flags?.allowSemanticFallback, false);
+            const verbose = els.flags.verbose
+                ? Boolean(els.flags.verbose.checked)
+                : parseBoolLike(config.flags?.verbose, false);
+            const quiet = els.flags.quiet
+                ? Boolean(els.flags.quiet.checked)
+                : parseBoolLike(config.flags?.quiet, false);
 
             const emitMaster16 = els.emits.master16
                 ? Boolean(els.emits.master16.checked)
@@ -1127,6 +1449,57 @@
             const acceptApple = els.licenses.acceptApple
                 ? Boolean(els.licenses.acceptApple.checked)
                 : parseBoolLike(config.licenses?.acceptApple, false);
+            const acceptResearchTools = els.licenses.acceptResearchTools
+                ? Boolean(els.licenses.acceptResearchTools.checked)
+                : parseBoolLike(config.licenses?.acceptResearchTools, false);
+
+            const enableReconstruction = els.reconstruction.enable
+                ? Boolean(els.reconstruction.enable.checked)
+                : parseBoolLike(config.reconstruction?.enable, false);
+            const groupingMode = _resolveGroupingMode(
+                _textOrFallback(
+                    els.reconstruction.groupingMode ? els.reconstruction.groupingMode.value : config.reconstruction?.groupingMode,
+                    config.reconstruction?.groupingMode || 'single'
+                )
+            );
+            const camerasSidecarPath = _textOrFallback(
+                els.reconstruction.camerasSidecarPath ? els.reconstruction.camerasSidecarPath.value : config.reconstruction?.camerasSidecarPath,
+                config.reconstruction?.camerasSidecarPath || ''
+            );
+            const reconstructionIterations = _parsePositiveIntOrNull(
+                els.reconstruction.iterations ? els.reconstruction.iterations.value : config.reconstruction?.iterations
+            );
+            const reconstructionTier = _textOrFallback(
+                els.reconstruction.tier ? els.reconstruction.tier.value : config.reconstruction?.tier,
+                config.reconstruction?.tier || 'apex_research'
+            );
+            const emitSceneDebugBundle = els.reconstruction.emitSceneDebugBundle
+                ? Boolean(els.reconstruction.emitSceneDebugBundle.checked)
+                : parseBoolLike(config.reconstruction?.emitSceneDebugBundle, false);
+
+            const rawIngestMode = _textOrFallback(
+                els.raw.ingestMode ? els.raw.ingestMode.value : config.raw?.ingestMode,
+                config.raw?.ingestMode || 'auto'
+            );
+            const rawWbMode = _textOrFallback(
+                els.raw.wbMode ? els.raw.wbMode.value : config.raw?.wbMode,
+                config.raw?.wbMode || 'camera'
+            );
+            const rawDemosaic = _textOrFallback(
+                els.raw.demosaic ? els.raw.demosaic.value : config.raw?.demosaic,
+                config.raw?.demosaic || 'AHD'
+            );
+
+            const maxWorkers = _parsePositiveIntOrNull(
+                els.runtime.maxWorkers ? els.runtime.maxWorkers.value : config.runtime?.maxWorkers
+            );
+            const maxGpuWorkers = _parsePositiveIntOrNull(
+                els.runtime.maxGpuWorkers ? els.runtime.maxGpuWorkers.value : config.runtime?.maxGpuWorkers
+            );
+            const logLevel = _textOrFallback(
+                els.runtime.logLevel ? els.runtime.logLevel.value : config.runtime?.logLevel,
+                config.runtime?.logLevel || ''
+            );
 
             const args = {
                 preset,
@@ -1138,6 +1511,7 @@
                 strict_segmentation: strictSegmentation,
                 materials_v3: materialsV3,
                 pbr,
+                save_float_depth: saveFloatDepth,
                 cache_depth: cacheDepth,
                 enable_v2: enableV2,
                 v2_preset: v2Preset,
@@ -1147,9 +1521,29 @@
                 emit_report: emitReport,
                 emit_run_card: emitRunCard,
                 non_commercial_ok: nonCommercialOk,
-                accept_apple_depth_pro_research_license: acceptApple
+                accept_apple_depth_pro_research_license: acceptApple,
+                accept_research_tools_license: acceptResearchTools,
+                enable_reconstruction: enableReconstruction,
+                grouping_mode: groupingMode,
+                reconstruction_tier: reconstructionTier,
+                emit_scene_debug_bundle: emitSceneDebugBundle,
+                force_depth: forceDepth,
+                strict_inputs: strictInputs,
+                verify_images: verifyImages,
+                allow_semantic_fallback: allowSemanticFallback,
+                raw_ingest_mode: rawIngestMode,
+                raw_wb_mode: rawWbMode,
+                raw_demosaic: rawDemosaic,
+                verbose,
+                quiet
             };
             if (depthDevice) args.depth_device = depthDevice;
+            if (sam2CheckpointPath) args.sam2_checkpoint_path = sam2CheckpointPath;
+            if (camerasSidecarPath) args.cameras_sidecar_path = camerasSidecarPath;
+            if (reconstructionIterations !== null) args.reconstruction_iterations = reconstructionIterations;
+            if (maxWorkers !== null) args.max_workers = maxWorkers;
+            if (maxGpuWorkers !== null) args.max_gpu_workers = maxGpuWorkers;
+            if (logLevel) args.log_level = logLevel;
             return args;
         }
 
@@ -1245,21 +1639,50 @@
             c.segmentation.enable = parseBoolLike(c.segmentation.enable, false);
             c.segmentation.backend = _resolveSegmentationBackend(c.segmentation.backend);
             c.segmentation.sam2ModelSize = _resolveSam2ModelSize(c.segmentation.sam2ModelSize);
+            c.segmentation.sam2CheckpointPath = _textOrFallback(c.segmentation.sam2CheckpointPath, '');
             c.segmentation.strict = parseBoolLike(c.segmentation.strict, false);
+            c.flags = c.flags || {};
             c.flags.materials = parseBoolLike(c.flags.materials, false);
             c.flags.pbr = parseBoolLike(c.flags.pbr, false);
             c.flags.cache = parseBoolLike(c.flags.cache, false);
             c.flags.overwrite = parseBoolLike(c.flags.overwrite, false);
             c.flags.enableV2 = parseBoolLike(c.flags.enableV2, false);
+            c.flags.saveFloatDepth = parseBoolLike(c.flags.saveFloatDepth, false);
+            c.flags.forceDepth = parseBoolLike(c.flags.forceDepth, false);
+            c.flags.strictInputs = parseBoolLike(c.flags.strictInputs, false);
+            c.flags.verifyImages = parseBoolLike(c.flags.verifyImages, false);
+            c.flags.allowSemanticFallback = parseBoolLike(c.flags.allowSemanticFallback, false);
+            c.flags.verbose = parseBoolLike(c.flags.verbose, false);
+            c.flags.quiet = parseBoolLike(c.flags.quiet, false);
+            _normalizeVerboseQuietFlags(c.flags, false);
+            c.emits = c.emits || {};
             c.emits.master16 = parseBoolLike(c.emits.master16, true);
             c.emits.upscaled16 = parseBoolLike(c.emits.upscaled16, true);
             c.emits.marketing = parseBoolLike(c.emits.marketing, false);
             c.emits.report = parseBoolLike(c.emits.report, true);
             c.emits.runCard = parseBoolLike(c.emits.runCard, true);
+            c.gate = c.gate || {};
             c.gate.dedup = parseBoolLike(c.gate.dedup, true);
             c.gate.sign = parseBoolLike(c.gate.sign, true);
+            c.licenses = c.licenses || {};
             c.licenses.nonCommercialOk = parseBoolLike(c.licenses.nonCommercialOk, false);
             c.licenses.acceptApple = parseBoolLike(c.licenses.acceptApple, false);
+            c.licenses.acceptResearchTools = parseBoolLike(c.licenses.acceptResearchTools, false);
+            c.reconstruction = c.reconstruction || {};
+            c.reconstruction.enable = parseBoolLike(c.reconstruction.enable, false);
+            c.reconstruction.groupingMode = _resolveGroupingMode(c.reconstruction.groupingMode);
+            c.reconstruction.camerasSidecarPath = _textOrFallback(c.reconstruction.camerasSidecarPath, '');
+            c.reconstruction.iterations = _parsePositiveIntOrNull(c.reconstruction.iterations) || 1000;
+            c.reconstruction.tier = _textOrFallback(c.reconstruction.tier, 'apex_research');
+            c.reconstruction.emitSceneDebugBundle = parseBoolLike(c.reconstruction.emitSceneDebugBundle, false);
+            c.raw = c.raw || {};
+            c.raw.ingestMode = _textOrFallback(c.raw.ingestMode, 'auto');
+            c.raw.wbMode = _textOrFallback(c.raw.wbMode, 'camera');
+            c.raw.demosaic = _textOrFallback(c.raw.demosaic, 'AHD');
+            c.runtime = c.runtime || {};
+            c.runtime.maxWorkers = _parsePositiveIntOrNull(c.runtime.maxWorkers) || '';
+            c.runtime.maxGpuWorkers = _parsePositiveIntOrNull(c.runtime.maxGpuWorkers) || '';
+            c.runtime.logLevel = _textOrFallback(c.runtime.logLevel, '');
             applyPipelinePresetOptions(state.pipeline);
             if (els.presetSelect) els.presetSelect.value = c.preset;
             if (els.inputDir) els.inputDir.value = c.inputDir;
@@ -1269,10 +1692,23 @@
             if (els.depthDevice) els.depthDevice.value = c.depthDevice;
             if (els.segmentation.backend) els.segmentation.backend.value = c.segmentation.backend;
             if (els.segmentation.sam2ModelSize) els.segmentation.sam2ModelSize.value = c.segmentation.sam2ModelSize;
+            if (els.segmentation.sam2CheckpointPath) els.segmentation.sam2CheckpointPath.value = c.segmentation.sam2CheckpointPath;
             if (els.v2Preset) {
                 els.v2Preset.value = c.v2Preset;
                 els.v2Preset.disabled = !c.flags.enableV2;
             }
+            if (els.reconstruction.groupingMode) els.reconstruction.groupingMode.value = c.reconstruction.groupingMode;
+            if (els.reconstruction.camerasSidecarPath) els.reconstruction.camerasSidecarPath.value = c.reconstruction.camerasSidecarPath;
+            if (els.reconstruction.iterations) els.reconstruction.iterations.value = String(c.reconstruction.iterations);
+            if (els.reconstruction.tier) els.reconstruction.tier.value = c.reconstruction.tier;
+            if (els.raw.ingestMode) els.raw.ingestMode.value = c.raw.ingestMode;
+            if (els.raw.wbMode) els.raw.wbMode.value = c.raw.wbMode;
+            if (els.raw.demosaic) els.raw.demosaic.value = c.raw.demosaic;
+            if (els.runtime.maxWorkers) els.runtime.maxWorkers.value = c.runtime.maxWorkers === '' ? '' : String(c.runtime.maxWorkers);
+            if (els.runtime.maxGpuWorkers) {
+                els.runtime.maxGpuWorkers.value = c.runtime.maxGpuWorkers === '' ? '' : String(c.runtime.maxGpuWorkers);
+            }
+            if (els.runtime.logLevel) els.runtime.logLevel.value = c.runtime.logLevel;
 
             const safeSyncCheck = (el, val) => {
                 if (el) {
@@ -1288,6 +1724,13 @@
             safeSyncCheck(els.flags.cache, c.flags.cache);
             safeSyncCheck(els.flags.overwrite, c.flags.overwrite);
             safeSyncCheck(els.flags.enableV2, c.flags.enableV2);
+            safeSyncCheck(els.flags.saveFloatDepth, c.flags.saveFloatDepth);
+            safeSyncCheck(els.flags.forceDepth, c.flags.forceDepth);
+            safeSyncCheck(els.flags.strictInputs, c.flags.strictInputs);
+            safeSyncCheck(els.flags.verifyImages, c.flags.verifyImages);
+            safeSyncCheck(els.flags.allowSemanticFallback, c.flags.allowSemanticFallback);
+            safeSyncCheck(els.flags.verbose, c.flags.verbose);
+            safeSyncCheck(els.flags.quiet, c.flags.quiet);
             safeSyncCheck(els.segmentation.enable, c.segmentation.enable);
             safeSyncCheck(els.segmentation.strict, c.segmentation.strict);
 
@@ -1302,6 +1745,9 @@
 
             safeSyncCheck(els.licenses.nonCommercialOk, c.licenses.nonCommercialOk);
             safeSyncCheck(els.licenses.acceptApple, c.licenses.acceptApple);
+            safeSyncCheck(els.licenses.acceptResearchTools, c.licenses.acceptResearchTools);
+            safeSyncCheck(els.reconstruction.enable, c.reconstruction.enable);
+            safeSyncCheck(els.reconstruction.emitSceneDebugBundle, c.reconstruction.emitSceneDebugBundle);
             syncSegmentationControlState(c);
 
             renderCLI();
@@ -1339,6 +1785,97 @@
             return { pipeline: p, args };
         }
 
+        function renderPreRunDiagnostics(payload) {
+            if (!payload) return;
+
+            const warnings = [];
+            const expectedOutputs = [];
+            let healthState = 'good';
+            let healthLabel = 'good';
+
+            if (payload.pipeline === 'lux-depth-v3') {
+                const args = payload.args || {};
+                const reconstructionEnabled = parseBoolLike(args.enable_reconstruction, false);
+                const sidecarPath = String(args.cameras_sidecar_path || '').trim();
+                const groupingMode = String(args.grouping_mode || 'single').trim().toLowerCase();
+                const rawIngestMode = String(args.raw_ingest_mode || '').trim().toLowerCase();
+                const strictInputs = parseBoolLike(args.strict_inputs, false);
+                const segmentationEnabled = parseBoolLike(args.enable_segmentation, false);
+
+                expectedOutputs.push('Depth maps');
+                if (parseBoolLike(args.pbr, false)) expectedOutputs.push('PBR maps');
+                if (segmentationEnabled) expectedOutputs.push('Segmentation masks');
+                if (parseBoolLike(args.enable_v2, false)) expectedOutputs.push('V2 enhanced outputs');
+                if (reconstructionEnabled) expectedOutputs.push('Reconstruction report bundle');
+                if (parseBoolLike(args.emit_run_card, false)) expectedOutputs.push('Run card JSON');
+
+                if (reconstructionEnabled && !sidecarPath) {
+                    warnings.push('Camera sidecar path is missing; reconstruction may fail.');
+                    healthState = 'risk';
+                    healthLabel = 'reconstruction risk';
+                }
+                if (reconstructionEnabled && groupingMode === 'single') {
+                    warnings.push('Reconstruction enabled with grouping mode "single"; overlap may be weak.');
+                    if (healthState !== 'risk') {
+                        healthState = 'warn';
+                        healthLabel = 'weak overlap';
+                    }
+                }
+                if (rawIngestMode === 'force_rawpy') {
+                    warnings.push('RAW ingest mode force_rawpy is experimental and may increase runtime.');
+                    if (healthState === 'good') {
+                        healthState = 'warn';
+                        healthLabel = 'raw ingest stress';
+                    }
+                }
+                if (strictInputs) {
+                    warnings.push('strict_inputs is enabled; malformed inputs will fail fast.');
+                }
+                if (parseBoolLike(args.materials_v3, false) && !segmentationEnabled) {
+                    warnings.push('Materials V3 is enabled while segmentation is off.');
+                    if (healthState === 'good') {
+                        healthState = 'warn';
+                        healthLabel = 'config mismatch';
+                    }
+                }
+            } else {
+                expectedOutputs.push('Archive governance outputs');
+                expectedOutputs.push('Pipeline execution logs');
+                healthLabel = 'n/a (archive pipeline)';
+            }
+
+            if (els.preRunWarnings) {
+                els.preRunWarnings.innerHTML = '';
+                warnings.forEach((warning) => {
+                    const li = document.createElement('li');
+                    li.className = 'leading-relaxed';
+                    li.textContent = `WARNING: ${warning}`;
+                    els.preRunWarnings.appendChild(li);
+                });
+            }
+            if (els.preRunWarningsEmpty) {
+                els.preRunWarningsEmpty.style.display = warnings.length === 0 ? 'block' : 'none';
+            }
+
+            if (els.expectedOutputsList) {
+                els.expectedOutputsList.innerHTML = '';
+                expectedOutputs.forEach((item) => {
+                    const li = document.createElement('li');
+                    li.className = 'leading-relaxed';
+                    li.textContent = `- ${item}`;
+                    els.expectedOutputsList.appendChild(li);
+                });
+            }
+
+            if (els.datasetHealthIndicator) {
+                const healthClass = healthState === 'good' ? 'ready' : healthState === 'warn' ? 'running' : 'offline';
+                els.datasetHealthIndicator.className = `status-dot ${healthClass}`;
+            }
+            if (els.datasetHealthText) {
+                els.datasetHealthText.textContent = `Dataset health: ${healthLabel}`;
+            }
+        }
+
         function renderCLI() {
             if (!els.cliPreview) return;
             const payload = generatePayload();
@@ -1351,25 +1888,29 @@
                 `  --output-dir ${q(payload.args.output_dir)}`
             ];
 
-                if (payload.pipeline === 'lux-depth-v3') {
-                    cliLines.push(`  --preset ${q(payload.args.preset)}`);
-                    cliLines.push(`  --quality-tier ${q(payload.args.quality_tier)}`);
-                    cliLines.push(`  --depth-backend ${q(payload.args.depth_backend)}`);
-                    if (payload.args.depth_device) {
-                        cliLines.push(`  --depth-device ${q(payload.args.depth_device)}`);
-                    }
-                    cliLines.push(`  --materials-v3 ${onoff(payload.args.materials_v3)}`);
-                    cliLines.push(`  --enable-segmentation ${onoff(payload.args.enable_segmentation)}`);
-                    cliLines.push(`  --segmentation-backend ${q(payload.args.segmentation_backend)}`);
-                    if (payload.args.segmentation_backend === 'sam2') {
-                        cliLines.push(`  --sam2-model-size ${q(payload.args.sam2_model_size)}`);
-                    }
-                    if (parseBoolLike(payload.args.strict_segmentation, false)) {
-                        cliLines.push(`  --strict-segmentation`);
-                    }
-                    cliLines.push(`  --pbr ${onoff(payload.args.pbr)}`);
-                    cliLines.push(`  --cache-depth ${onoff(payload.args.cache_depth)}`);
-                    cliLines.push(`  --emit-master16 ${onoff(payload.args.emit_master16)}`);
+            if (payload.pipeline === 'lux-depth-v3') {
+                cliLines.push(`  --preset ${q(payload.args.preset)}`);
+                cliLines.push(`  --quality-tier ${q(payload.args.quality_tier)}`);
+                cliLines.push(`  --depth-backend ${q(payload.args.depth_backend)}`);
+                if (payload.args.depth_device) {
+                    cliLines.push(`  --depth-device ${q(payload.args.depth_device)}`);
+                }
+                cliLines.push(`  --materials-v3 ${onoff(payload.args.materials_v3)}`);
+                cliLines.push(`  --enable-segmentation ${onoff(payload.args.enable_segmentation)}`);
+                cliLines.push(`  --segmentation-backend ${q(payload.args.segmentation_backend)}`);
+                if (payload.args.segmentation_backend === 'sam2') {
+                    cliLines.push(`  --sam2-model-size ${q(payload.args.sam2_model_size)}`);
+                }
+                if (payload.args.sam2_checkpoint_path) {
+                    cliLines.push(`  --sam2-checkpoint-path ${q(payload.args.sam2_checkpoint_path)}`);
+                }
+                if (parseBoolLike(payload.args.strict_segmentation, false)) {
+                    cliLines.push(`  --strict-segmentation`);
+                }
+                cliLines.push(`  --pbr ${onoff(payload.args.pbr)}`);
+                cliLines.push(`  --save-float-depth ${onoff(payload.args.save_float_depth)}`);
+                cliLines.push(`  --cache-depth ${onoff(payload.args.cache_depth)}`);
+                cliLines.push(`  --emit-master16 ${onoff(payload.args.emit_master16)}`);
                 cliLines.push(`  --emit-upscaled16 ${onoff(payload.args.emit_upscaled16)}`);
                 cliLines.push(`  --emit-marketing ${onoff(payload.args.emit_marketing)}`);
                 cliLines.push(`  --emit-report ${onoff(payload.args.emit_report)}`);
@@ -1383,6 +1924,35 @@
                 if (parseBoolLike(payload.args.accept_apple_depth_pro_research_license, false)) {
                     cliLines.push(`  --accept-apple-depth-pro-research-license "true"`);
                 }
+                if (parseBoolLike(payload.args.accept_research_tools_license, false)) {
+                    cliLines.push(`  --accept-research-tools-license "true"`);
+                }
+
+                cliLines.push(`  --enable-reconstruction ${onoff(payload.args.enable_reconstruction)}`);
+                cliLines.push(`  --grouping-mode ${q(payload.args.grouping_mode)}`);
+                if (payload.args.cameras_sidecar_path) {
+                    cliLines.push(`  --cameras-sidecar-path ${q(payload.args.cameras_sidecar_path)}`);
+                }
+                if (payload.args.reconstruction_iterations) {
+                    cliLines.push(`  --reconstruction-iterations ${q(payload.args.reconstruction_iterations)}`);
+                }
+                if (payload.args.reconstruction_tier) {
+                    cliLines.push(`  --reconstruction-tier ${q(payload.args.reconstruction_tier)}`);
+                }
+                cliLines.push(`  --emit-scene-debug-bundle ${onoff(payload.args.emit_scene_debug_bundle)}`);
+
+                if (parseBoolLike(payload.args.force_depth, false)) cliLines.push(`  --force-depth`);
+                if (parseBoolLike(payload.args.strict_inputs, false)) cliLines.push(`  --strict-inputs`);
+                if (payload.args.raw_ingest_mode) cliLines.push(`  --raw-ingest-mode ${q(payload.args.raw_ingest_mode)}`);
+                if (payload.args.raw_wb_mode) cliLines.push(`  --raw-wb-mode ${q(payload.args.raw_wb_mode)}`);
+                if (payload.args.raw_demosaic) cliLines.push(`  --raw-demosaic ${q(payload.args.raw_demosaic)}`);
+                if (payload.args.max_workers) cliLines.push(`  --max-workers ${q(payload.args.max_workers)}`);
+                if (payload.args.max_gpu_workers) cliLines.push(`  --max-gpu-workers ${q(payload.args.max_gpu_workers)}`);
+                if (parseBoolLike(payload.args.verify_images, false)) cliLines.push(`  --verify-images`);
+                if (parseBoolLike(payload.args.allow_semantic_fallback, false)) cliLines.push(`  --allow-semantic-fallback`);
+                if (parseBoolLike(payload.args.verbose, false)) cliLines.push(`  --verbose`);
+                if (parseBoolLike(payload.args.quiet, false)) cliLines.push(`  --quiet`);
+                if (payload.args.log_level) cliLines.push(`  --log-level ${q(payload.args.log_level)}`);
             } else {
                 if (parseBoolLike(payload.args.dedup, false)) cliLines.push(`  --dedup "on"`);
                 if (parseBoolLike(payload.args.sign, false)) cliLines.push(`  --sign "true"`);
@@ -1394,6 +1964,7 @@
             );
 
             els.cliPreview.textContent = cli.join('\n');
+            renderPreRunDiagnostics(payload);
         }
 
         function bindInputs() {
@@ -1426,6 +1997,20 @@
                         el.setAttribute('aria-checked', e.target.checked);
                     }
                     if (key === 'enableV2' && els.v2Preset) els.v2Preset.disabled = !e.target.checked;
+                    if (category === 'flags' && (key === 'verbose' || key === 'quiet') && e.target.checked) {
+                        const otherKey = key === 'verbose' ? 'quiet' : 'verbose';
+                        if (parseBoolLike(state.config.flags[otherKey], false)) {
+                            state.config.flags[otherKey] = false;
+                            const otherEl = els.flags[otherKey];
+                            if (otherEl) {
+                                otherEl.checked = false;
+                                if (otherEl.hasAttribute('role') && otherEl.getAttribute('role') === 'switch') {
+                                    otherEl.setAttribute('aria-checked', false);
+                                }
+                            }
+                            createToast(`verbose and quiet are mutually exclusive; disabled ${otherKey}.`, 'info');
+                        }
+                    }
                     renderCLI();
                 });
             };
@@ -1439,15 +2024,35 @@
             safeBindText(els.depthDevice, null, 'depthDevice');
             safeBindText(els.segmentation.backend, 'segmentation', 'backend');
             safeBindText(els.segmentation.sam2ModelSize, 'segmentation', 'sam2ModelSize');
+            safeBindInput(els.segmentation.sam2CheckpointPath, 'segmentation', 'sam2CheckpointPath');
             safeBindInput(els.v2Preset, null, 'v2Preset');
+            safeBindText(els.reconstruction.groupingMode, 'reconstruction', 'groupingMode');
+            safeBindInput(els.reconstruction.camerasSidecarPath, 'reconstruction', 'camerasSidecarPath');
+            safeBindInput(els.reconstruction.iterations, 'reconstruction', 'iterations');
+            safeBindInput(els.reconstruction.tier, 'reconstruction', 'tier');
+            safeBindText(els.raw.ingestMode, 'raw', 'ingestMode');
+            safeBindText(els.raw.wbMode, 'raw', 'wbMode');
+            safeBindText(els.raw.demosaic, 'raw', 'demosaic');
+            safeBindInput(els.runtime.maxWorkers, 'runtime', 'maxWorkers');
+            safeBindInput(els.runtime.maxGpuWorkers, 'runtime', 'maxGpuWorkers');
+            safeBindText(els.runtime.logLevel, 'runtime', 'logLevel');
 
             safeBindCheck(els.flags.materials, 'flags', 'materials');
             safeBindCheck(els.flags.pbr, 'flags', 'pbr');
             safeBindCheck(els.flags.cache, 'flags', 'cache');
             safeBindCheck(els.flags.overwrite, 'flags', 'overwrite');
             safeBindCheck(els.flags.enableV2, 'flags', 'enableV2');
+            safeBindCheck(els.flags.saveFloatDepth, 'flags', 'saveFloatDepth');
+            safeBindCheck(els.flags.forceDepth, 'flags', 'forceDepth');
+            safeBindCheck(els.flags.strictInputs, 'flags', 'strictInputs');
+            safeBindCheck(els.flags.verifyImages, 'flags', 'verifyImages');
+            safeBindCheck(els.flags.allowSemanticFallback, 'flags', 'allowSemanticFallback');
+            safeBindCheck(els.flags.verbose, 'flags', 'verbose');
+            safeBindCheck(els.flags.quiet, 'flags', 'quiet');
             safeBindCheck(els.segmentation.enable, 'segmentation', 'enable');
             safeBindCheck(els.segmentation.strict, 'segmentation', 'strict');
+            safeBindCheck(els.reconstruction.enable, 'reconstruction', 'enable');
+            safeBindCheck(els.reconstruction.emitSceneDebugBundle, 'reconstruction', 'emitSceneDebugBundle');
 
             safeBindCheck(els.emits.master16, 'emits', 'master16');
             safeBindCheck(els.emits.upscaled16, 'emits', 'upscaled16');
@@ -1460,6 +2065,7 @@
 
             safeBindCheck(els.licenses.nonCommercialOk, 'licenses', 'nonCommercialOk');
             safeBindCheck(els.licenses.acceptApple, 'licenses', 'acceptApple');
+            safeBindCheck(els.licenses.acceptResearchTools, 'licenses', 'acceptResearchTools');
 
             if (els.segmentation.backend) {
                 els.segmentation.backend.addEventListener('change', () => {
@@ -1668,7 +2274,8 @@
                     artifact_type: String(parsed.artifact_type || 'file'),
                     path: String(parsed.path || ''),
                     relative_path: String(parsed.relative_path || parsed.path || ''),
-                    size_bytes: typeof parsed.size_bytes === 'number' ? parsed.size_bytes : null
+                    size_bytes: typeof parsed.size_bytes === 'number' ? parsed.size_bytes : null,
+                    sha256: typeof parsed.sha256 === 'string' ? parsed.sha256 : ''
                 });
                 renderArtifactPanel();
                 return;
@@ -1932,6 +2539,10 @@
 
             if (payload.pipeline === 'lux-depth-v3') {
                 const args = payload.args;
+                if (parseBoolLike(args.verbose, false) && parseBoolLike(args.quiet, false)) {
+                    createToast('verbose and quiet are mutually exclusive; disable one flag.', 'error');
+                    return;
+                }
                 if (args.depth_backend === 'depth_pro' && (!parseBoolLike(args.non_commercial_ok, false) || !parseBoolLike(args.accept_apple_depth_pro_research_license, false))) {
                     createToast('Depth Pro requires acknowledgment of research/non-commercial licenses.', 'error');
                     return;
@@ -1951,6 +2562,16 @@
                     }
                     if (!parseBoolLike(args.strict_segmentation, false)) {
                         createToast('APEX + Materials V3 requires strict segmentation.', 'error');
+                        return;
+                    }
+                }
+                if (parseBoolLike(args.enable_reconstruction, false)) {
+                    if (!parseBoolLike(args.non_commercial_ok, false)) {
+                        createToast('Scene reconstruction requires non-commercial acknowledgment.', 'error');
+                        return;
+                    }
+                    if (!parseBoolLike(args.accept_research_tools_license, false)) {
+                        createToast('Scene reconstruction requires research-tools license acknowledgment.', 'error');
                         return;
                     }
                 }
@@ -2165,6 +2786,10 @@
                     c.segmentation.enable = parseBoolLike(data.args.enable_segmentation, c.segmentation.enable);
                     c.segmentation.backend = _resolveSegmentationBackend(data.args.segmentation_backend || c.segmentation.backend);
                     c.segmentation.sam2ModelSize = _resolveSam2ModelSize(data.args.sam2_model_size || c.segmentation.sam2ModelSize);
+                    c.segmentation.sam2CheckpointPath = _textOrFallback(
+                        data.args.sam2_checkpoint_path,
+                        c.segmentation.sam2CheckpointPath
+                    );
                     c.segmentation.strict = parseBoolLike(data.args.strict_segmentation, c.segmentation.strict);
 
                     c.flags.materials = parseBoolLike(data.args.materials_v3, c.flags.materials);
@@ -2172,6 +2797,17 @@
                     c.flags.cache = parseBoolLike(data.args.cache_depth, c.flags.cache);
                     c.flags.overwrite = parseBoolLike(data.args.overwrite, c.flags.overwrite);
                     c.flags.enableV2 = parseBoolLike(data.args.enable_v2, c.flags.enableV2);
+                    c.flags.saveFloatDepth = parseBoolLike(data.args.save_float_depth, c.flags.saveFloatDepth);
+                    c.flags.forceDepth = parseBoolLike(data.args.force_depth, c.flags.forceDepth);
+                    c.flags.strictInputs = parseBoolLike(data.args.strict_inputs, c.flags.strictInputs);
+                    c.flags.verifyImages = parseBoolLike(data.args.verify_images, c.flags.verifyImages);
+                    c.flags.allowSemanticFallback = parseBoolLike(
+                        data.args.allow_semantic_fallback,
+                        c.flags.allowSemanticFallback
+                    );
+                    c.flags.verbose = parseBoolLike(data.args.verbose, c.flags.verbose);
+                    c.flags.quiet = parseBoolLike(data.args.quiet, c.flags.quiet);
+                    _normalizeVerboseQuietFlags(c.flags, true);
                     c.v2Preset = data.args.v2_preset || c.v2Preset;
 
                     c.emits.master16 = parseBoolLike(data.args.emit_master16, c.emits.master16);
@@ -2190,6 +2826,44 @@
                         data.args.accept_apple_depth_pro_research_license,
                         c.licenses.acceptApple
                     );
+                    c.licenses.acceptResearchTools = parseBoolLike(
+                        data.args.accept_research_tools_license,
+                        c.licenses.acceptResearchTools
+                    );
+
+                    c.reconstruction = c.reconstruction || {};
+                    c.reconstruction.enable = parseBoolLike(
+                        data.args.enable_reconstruction,
+                        c.reconstruction.enable
+                    );
+                    c.reconstruction.groupingMode = _resolveGroupingMode(
+                        data.args.grouping_mode || c.reconstruction.groupingMode
+                    );
+                    c.reconstruction.camerasSidecarPath = _textOrFallback(
+                        data.args.cameras_sidecar_path,
+                        c.reconstruction.camerasSidecarPath
+                    );
+                    c.reconstruction.iterations = _parsePositiveIntOrNull(
+                        data.args.reconstruction_iterations
+                    ) || c.reconstruction.iterations;
+                    c.reconstruction.tier = _textOrFallback(
+                        data.args.reconstruction_tier,
+                        c.reconstruction.tier
+                    );
+                    c.reconstruction.emitSceneDebugBundle = parseBoolLike(
+                        data.args.emit_scene_debug_bundle,
+                        c.reconstruction.emitSceneDebugBundle
+                    );
+
+                    c.raw = c.raw || {};
+                    c.raw.ingestMode = _textOrFallback(data.args.raw_ingest_mode, c.raw.ingestMode);
+                    c.raw.wbMode = _textOrFallback(data.args.raw_wb_mode, c.raw.wbMode);
+                    c.raw.demosaic = _textOrFallback(data.args.raw_demosaic, c.raw.demosaic);
+
+                    c.runtime = c.runtime || {};
+                    c.runtime.maxWorkers = _parsePositiveIntOrNull(data.args.max_workers) || c.runtime.maxWorkers;
+                    c.runtime.maxGpuWorkers = _parsePositiveIntOrNull(data.args.max_gpu_workers) || c.runtime.maxGpuWorkers;
+                    c.runtime.logLevel = _textOrFallback(data.args.log_level, c.runtime.logLevel);
                 }
                 updateUIFromState();
                 void fetchPresetsForPipeline(state.pipeline, true);
@@ -2203,6 +2877,62 @@
         if (els.copyCliBtn) els.copyCliBtn.addEventListener('click', async () => {
             await copyToClipboard(els.cliPreview.textContent);
         });
+
+        if (els.viewRunCardBtn) els.viewRunCardBtn.addEventListener('click', async () => {
+            const runCardPath = String(els.viewRunCardBtn.dataset.path || '').trim();
+            if (!runCardPath) {
+                createToast('Run card path is not available for this job.', 'error');
+                return;
+            }
+            const safeRunCardPath = /run[_-]?card.*\.json$/i.test(runCardPath) && !runCardPath.includes('..');
+            if (runCardPath.startsWith('/')) {
+                if (safeRunCardPath) {
+                    window.open(runCardPath, '_blank', 'noopener,noreferrer');
+                    return;
+                }
+                await copyToClipboard(runCardPath);
+                createToast('Run card path is not eligible for direct browser open; path copied instead.', 'info');
+                return;
+            }
+            if (/^https?:\/\//i.test(runCardPath)) {
+                try {
+                    const runCardUrl = new URL(runCardPath);
+                    const sameOrigin = runCardUrl.origin === window.location.origin;
+                    const safeUrlPath = /run[_-]?card.*\.json$/i.test(runCardUrl.pathname) && !runCardUrl.pathname.includes('..');
+                    if (sameOrigin && safeUrlPath) {
+                        window.open(runCardUrl.toString(), '_blank', 'noopener,noreferrer');
+                        return;
+                    }
+                } catch {
+                    // Fall through to copy behavior below.
+                }
+                await copyToClipboard(runCardPath);
+                createToast('Run card URL is not eligible for direct browser open; path copied instead.', 'info');
+                return;
+            }
+            await copyToClipboard(runCardPath);
+            createToast('Run card path copied. Open it from the workspace.', 'info');
+        });
+
+        if (els.copyRunCardPathBtn) els.copyRunCardPathBtn.addEventListener('click', async () => {
+            const runCardPath = String(els.copyRunCardPathBtn.dataset.path || '').trim();
+            if (!runCardPath) {
+                createToast('Run card path is not available for this job.', 'error');
+                return;
+            }
+            await copyToClipboard(runCardPath);
+        });
+
+        if (els.copyRunCardFingerprintBtn) {
+            els.copyRunCardFingerprintBtn.addEventListener('click', async () => {
+                const fingerprint = String(els.copyRunCardFingerprintBtn.dataset.fingerprint || '').trim();
+                if (!fingerprint) {
+                    createToast('No run card fingerprint available for this job.', 'error');
+                    return;
+                }
+                await copyToClipboard(fingerprint);
+            });
+        }
 
         if (els.clearLogsBtn) els.clearLogsBtn.addEventListener('click', () => {
             if (els.logPane) els.logPane.textContent = '';

@@ -21,7 +21,7 @@ def _fake_ingest_payload_factory(input_path: Path) -> dict[str, Any]:
     file_bytes = input_path.read_bytes()
     source_name = input_path.name
     return {
-        "schema_version": "1.0.1",
+        "schema_version": "1.0.2",
         "file_integrity": {
             "sha256": hashlib.sha256(file_bytes).hexdigest(),
             "size_bytes": len(file_bytes),

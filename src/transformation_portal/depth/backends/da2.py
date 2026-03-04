@@ -16,6 +16,7 @@ from PIL import Image
 from .protocol import DepthResult, LicenseType
 
 if TYPE_CHECKING:
+    from ...depth.models.depth_anything_v2 import DepthAnythingV2Model  # noqa: F401
     from ...lux_depth_v3.config import EnhanceConfig
 
 logger = logging.getLogger(__name__)
@@ -31,7 +32,7 @@ class DA2Backend:
     def __init__(self, config: Optional["EnhanceConfig"] = None):
         self._config = config
         self._device = self._resolve_device(config)
-        self._model = None
+        self._model: Optional[DepthAnythingV2Model] = None
 
     def _resolve_device(self, config: Optional["EnhanceConfig"]) -> str:
         requested: Optional[str] = None
@@ -44,12 +45,16 @@ class DA2Backend:
             import torch
 
             if requested == "cuda":
-                logger.warning("Requested DA2 device=cuda but DA2 adapter only supports cpu/mps; falling back to cpu.")
+                logger.warning(
+                    "Requested DA2 device=cuda" " but DA2 adapter only supports" " cpu/mps; falling back to cpu.",
+                )
                 return "cpu"
             if requested == "mps":
                 if torch.backends.mps.is_available():
                     return "mps"
-                logger.warning("Requested DA2 device=mps but MPS is unavailable; falling back to cpu.")
+                logger.warning(
+                    "Requested DA2 device=mps" " but MPS is unavailable;" " falling back to cpu.",
+                )
                 return "cpu"
             if requested == "cpu":
                 return "cpu"
@@ -73,18 +78,26 @@ class DA2Backend:
         try:
             import transformers  # noqa: F401
         except ImportError as exc:
-            raise ImportError("transformers package not installed for DA2 backend.") from exc
+            raise ImportError(
+                "transformers package not installed" " for DA2 backend.",
+            ) from exc
 
         try:
             import torch  # noqa: F401
         except ImportError as exc:
-            raise ImportError("torch package not installed for DA2 backend.") from exc
+            raise ImportError(
+                "torch package not installed" " for DA2 backend.",
+            ) from exc
 
     def _load_model(self) -> None:
         if self._model is not None:
             return
 
-        from ...depth.models.depth_anything_v2 import DepthAnythingV2Model, ModelBackend, ModelVariant
+        from ...depth.models.depth_anything_v2 import DepthAnythingV2Model as DepthAnythingV2Model  # noqa: F811
+        from ...depth.models.depth_anything_v2 import (
+            ModelBackend,
+            ModelVariant,
+        )
 
         if self._device == "mps":
             backend = ModelBackend.PYTORCH_MPS
@@ -98,7 +111,10 @@ class DA2Backend:
             backend=backend,
             device=model_device,
         )
-        logger.info("Loaded DA2 backend: variant=SMALL device=%s", model_device)
+        logger.info(
+            "Loaded DA2 backend:" " variant=SMALL device=%s",
+            model_device,
+        )
 
     def compute(
         self,
@@ -111,21 +127,29 @@ class DA2Backend:
         if device is not None:
             requested_device = str(device).lower()
             if requested_device not in {"cpu", "mps", "cuda"}:
-                logger.warning("Unknown DA2 override device=%s; falling back to cpu.", requested_device)
+                logger.warning(
+                    "Unknown DA2 override" " device=%s;" " falling back to cpu.",
+                    requested_device,
+                )
                 requested_device = "cpu"
             if requested_device == "cuda":
-                logger.warning("Requested DA2 override device=cuda but only cpu/mps are supported; using cpu.")
+                logger.warning(
+                    "Requested DA2 override" " device=cuda but only" " cpu/mps are supported;" " using cpu.",
+                )
                 requested_device = "cpu"
             if requested_device != self._device:
                 self._device = requested_device
                 self._model = None
 
         self._load_model()
+        assert self._model is not None
 
         if isinstance(image, np.ndarray):
             image_np = image
             if image_np.max() <= 1.0:
-                image_pil = Image.fromarray((np.clip(image_np, 0, 1) * 255).astype(np.uint8))
+                image_pil = Image.fromarray(
+                    (np.clip(image_np, 0, 1) * 255).astype(np.uint8),
+                )
             else:
                 image_pil = Image.fromarray(image_np.astype(np.uint8))
         else:

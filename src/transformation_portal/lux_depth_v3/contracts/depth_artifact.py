@@ -22,7 +22,6 @@ Example:
 from __future__ import annotations
 
 import hashlib
-import json
 import logging
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
@@ -136,8 +135,10 @@ class DepthProvenance:
 
     Attributes:
         model_id: HuggingFace model ID or internal identifier
-        license_tier: License classification (COMMERCIAL, NON_COMMERCIAL, EXPERIMENTAL)
-        checkpoint_sha256: SHA-256 hash of model weights (first 16 chars sufficient)
+        license_tier: License classification
+            (COMMERCIAL, NON_COMMERCIAL, EXPERIMENTAL)
+        checkpoint_sha256: SHA-256 hash of model weights
+            (first 16 chars sufficient)
         preset: Pipeline preset name used
         device: Inference device (cpu, mps, cuda)
         runtime_version: transformation_portal version
@@ -152,7 +153,11 @@ class DepthProvenance:
     preset: Optional[str] = None
     device: str = "cpu"
     runtime_version: str = "3.0.0"
-    timestamp_utc: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    timestamp_utc: str = field(
+        default_factory=lambda: datetime.now(
+            timezone.utc,
+        ).isoformat(),
+    )
     request_id: Optional[str] = None
     downgrade_events: Tuple[str, ...] = field(default_factory=tuple)
 
@@ -230,13 +235,17 @@ class DepthArtifact:
         if not isinstance(self.depth_map, np.ndarray):
             raise TypeError("depth_map must be a numpy array")
         if self.depth_map.ndim != 2:
-            raise ValueError(f"depth_map must be 2D, got shape {self.depth_map.shape}")
+            raise ValueError("depth_map must be 2D, " f"got shape {self.depth_map.shape}")
         if self.depth_map.dtype != np.float32:
             logger.warning(
                 "depth_map dtype is %s, converting to float32",
                 self.depth_map.dtype,
             )
-            object.__setattr__(self, "depth_map", self.depth_map.astype(np.float32))
+            object.__setattr__(
+                self,
+                "depth_map",
+                self.depth_map.astype(np.float32),
+            )
 
         # Optional arrays validation
         if self.metric_map_m is not None:
@@ -244,7 +253,10 @@ class DepthArtifact:
                 raise TypeError("metric_map_m must be a numpy array")
             if self.metric_map_m.shape != self.depth_map.shape:
                 raise ValueError(
-                    f"metric_map_m shape {self.metric_map_m.shape} " f"must match depth_map shape {self.depth_map.shape}"
+                    f"metric_map_m shape "
+                    f"{self.metric_map_m.shape} "
+                    "must match depth_map "
+                    f"shape {self.depth_map.shape}"
                 )
 
         if self.confidence is not None:
@@ -252,7 +264,7 @@ class DepthArtifact:
                 raise TypeError("confidence must be a numpy array")
             if self.confidence.shape != self.depth_map.shape:
                 raise ValueError(
-                    f"confidence shape {self.confidence.shape} " f"must match depth_map shape {self.depth_map.shape}"
+                    f"confidence shape " f"{self.confidence.shape} " "must match depth_map " f"shape {self.depth_map.shape}"
                 )
 
         # Provenance validation
@@ -297,7 +309,7 @@ class DepthArtifact:
             "finite_pct": float(valid_mask.mean() * 100),
             "min": float(valid_depth.min()) if valid_depth.size > 0 else None,
             "max": float(valid_depth.max()) if valid_depth.size > 0 else None,
-            "mean": float(valid_depth.mean()) if valid_depth.size > 0 else None,
+            "mean": (float(valid_depth.mean()) if valid_depth.size > 0 else None),
             "std": float(valid_depth.std()) if valid_depth.size > 0 else None,
         }
 
@@ -328,7 +340,7 @@ class DepthArtifact:
             "has_confidence": self.has_confidence,
             "has_intrinsics": self.has_intrinsics,
             "provenance": self.provenance.to_dict(),
-            "intrinsics": self.intrinsics.to_dict() if self.intrinsics else None,
+            "intrinsics": (self.intrinsics.to_dict() if self.intrinsics else None),
             "stats": self.compute_stats(),
             "metadata": self.metadata,
         }
@@ -401,12 +413,14 @@ class DepthArtifactWriter:
             # Save metric depth if available
             if artifact.has_metric_depth:
                 metric_path = self.output_dir / f"{stem}_depth_metric.npy"
+                assert artifact.metric_map_m is not None
                 np.save(metric_path, artifact.metric_map_m)
                 paths["depth_metric"] = metric_path
 
             # Save confidence if available
             if artifact.has_confidence:
                 conf_path = self.output_dir / f"{stem}_confidence.npy"
+                assert artifact.confidence is not None
                 np.save(conf_path, artifact.confidence)
                 paths["confidence"] = conf_path
 

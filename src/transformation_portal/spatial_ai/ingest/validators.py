@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 
 # Supported schema versions (semantic versioning)
-SUPPORTED_SCHEMA_VERSIONS = ["1.0.0", "1.0.1"]  # Can add compatible versions here
+SUPPORTED_SCHEMA_VERSIONS = ["1.0.0", "1.0.2"]  # Can add compatible versions here
 CURRENT_SCHEMA_VERSION = "1.0.0"
 
 

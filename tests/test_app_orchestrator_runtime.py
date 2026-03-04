@@ -365,6 +365,16 @@ def test_portal_resumes_blocked_streams_after_api_key_update() -> None:
     assert "resumeBlockedJobStreamsAfterAuthUpdate();" in bind_body
 
 
+def test_portal_verbose_quiet_conflict_is_notified_and_blocked() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+    bind_body = _extract_js_function_body(content, "bindInputs")
+    submit_body = _extract_js_function_body(content, "submitJob")
+
+    assert "verbose and quiet are mutually exclusive; disabled" in bind_body
+    assert "verbose and quiet are mutually exclusive; disable one flag." in submit_body
+
+
 def test_lux_cli_parity_links_portal_canonical_args_and_backend_argv() -> None:
     portal_html = Path(__file__).resolve().parents[1] / "portal.html"
     content = portal_html.read_text(encoding="utf-8")
@@ -379,9 +389,11 @@ def test_lux_cli_parity_links_portal_canonical_args_and_backend_argv() -> None:
         "enable_segmentation": "--enable-segmentation",
         "segmentation_backend": "--segmentation-backend",
         "sam2_model_size": "--sam2-model-size",
+        "sam2_checkpoint_path": "--sam2-checkpoint-path",
         "strict_segmentation": "--strict-segmentation",
         "materials_v3": "--materials-v3",
         "pbr": "--pbr",
+        "save_float_depth": "--save-float-depth",
         "cache_depth": "--cache-depth",
         "enable_v2": "--enable-v2",
         "v2_preset": "--v2-preset",
@@ -392,6 +404,25 @@ def test_lux_cli_parity_links_portal_canonical_args_and_backend_argv() -> None:
         "emit_run_card": "--emit-run-card",
         "non_commercial_ok": "--non-commercial-ok",
         "accept_apple_depth_pro_research_license": "--accept-apple-depth-pro-research-license",
+        "accept_research_tools_license": "--accept-research-tools-license",
+        "enable_reconstruction": "--enable-reconstruction",
+        "grouping_mode": "--grouping-mode",
+        "cameras_sidecar_path": "--cameras-sidecar-path",
+        "reconstruction_iterations": "--reconstruction-iterations",
+        "reconstruction_tier": "--reconstruction-tier",
+        "emit_scene_debug_bundle": "--emit-scene-debug-bundle",
+        "force_depth": "--force-depth",
+        "strict_inputs": "--strict-inputs",
+        "raw_ingest_mode": "--raw-ingest-mode",
+        "raw_wb_mode": "--raw-wb-mode",
+        "raw_demosaic": "--raw-demosaic",
+        "max_workers": "--max-workers",
+        "max_gpu_workers": "--max-gpu-workers",
+        "verify_images": "--verify-images",
+        "allow_semantic_fallback": "--allow-semantic-fallback",
+        "verbose": "--verbose",
+        "quiet": "--quiet",
+        "log_level": "--log-level",
     }
 
     for key, flag in arg_to_flag.items():
@@ -410,9 +441,11 @@ def test_lux_cli_parity_links_portal_canonical_args_and_backend_argv() -> None:
             "enable_segmentation": True,
             "segmentation_backend": "sam2",
             "sam2_model_size": "large",
+            "sam2_checkpoint_path": "./models/sam2/sam2.1_hiera_large.pt",
             "strict_segmentation": True,
             "materials_v3": True,
             "pbr": True,
+            "save_float_depth": True,
             "cache_depth": False,
             "emit_master16": True,
             "emit_upscaled16": False,
@@ -423,11 +456,31 @@ def test_lux_cli_parity_links_portal_canonical_args_and_backend_argv() -> None:
             "v2_preset": "default",
             "non_commercial_ok": True,
             "accept_apple_depth_pro_research_license": True,
+            "accept_research_tools_license": True,
+            "enable_reconstruction": True,
+            "grouping_mode": "parent_dir",
+            "cameras_sidecar_path": "./manifests/scene_cameras.json",
+            "reconstruction_iterations": 1500,
+            "reconstruction_tier": "apex_research",
+            "emit_scene_debug_bundle": True,
+            "force_depth": True,
+            "strict_inputs": True,
+            "raw_ingest_mode": "force_rawpy",
+            "raw_wb_mode": "camera",
+            "raw_demosaic": "AHD",
+            "max_workers": 6,
+            "max_gpu_workers": 2,
+            "verify_images": True,
+            "allow_semantic_fallback": True,
+            "verbose": True,
+            "quiet": False,
+            "log_level": "DEBUG",
         },
     }
     argv = orchestrator_app._argv_from_request(payload)
 
-    for flag in arg_to_flag.values():
+    expected_present_flags = {flag for key, flag in arg_to_flag.items() if key != "quiet"}
+    for flag in expected_present_flags:
         assert flag in argv, f"backend argv missing flag '{flag}'"
 
     assert _flag_value(argv, "--preset") == "depth-anything-v3.1-research-m4"
@@ -437,9 +490,11 @@ def test_lux_cli_parity_links_portal_canonical_args_and_backend_argv() -> None:
     assert _flag_value(argv, "--enable-segmentation") == "on"
     assert _flag_value(argv, "--segmentation-backend") == "sam2"
     assert _flag_value(argv, "--sam2-model-size") == "large"
+    assert _flag_value(argv, "--sam2-checkpoint-path").endswith("models/sam2/sam2.1_hiera_large.pt")
     assert "--strict-segmentation" in argv
     assert _flag_value(argv, "--materials-v3") == "on"
     assert _flag_value(argv, "--pbr") == "on"
+    assert _flag_value(argv, "--save-float-depth") == "on"
     assert _flag_value(argv, "--cache-depth") == "off"
     assert _flag_value(argv, "--emit-master16") == "on"
     assert _flag_value(argv, "--emit-upscaled16") == "off"
@@ -450,6 +505,40 @@ def test_lux_cli_parity_links_portal_canonical_args_and_backend_argv() -> None:
     assert _flag_value(argv, "--v2-preset") == "default"
     assert _flag_value(argv, "--non-commercial-ok") == "true"
     assert _flag_value(argv, "--accept-apple-depth-pro-research-license") == "true"
+    assert _flag_value(argv, "--accept-research-tools-license") == "true"
+    assert _flag_value(argv, "--enable-reconstruction") == "on"
+    assert _flag_value(argv, "--grouping-mode") == "parent_dir"
+    assert _flag_value(argv, "--cameras-sidecar-path").endswith("manifests/scene_cameras.json")
+    assert _flag_value(argv, "--reconstruction-iterations") == "1500"
+    assert _flag_value(argv, "--reconstruction-tier") == "apex_research"
+    assert _flag_value(argv, "--emit-scene-debug-bundle") == "on"
+    assert "--force-depth" in argv
+    assert "--strict-inputs" in argv
+    assert _flag_value(argv, "--raw-ingest-mode") == "force_rawpy"
+    assert _flag_value(argv, "--raw-wb-mode") == "camera"
+    assert _flag_value(argv, "--raw-demosaic") == "AHD"
+    assert _flag_value(argv, "--max-workers") == "6"
+    assert _flag_value(argv, "--max-gpu-workers") == "2"
+    assert "--verify-images" in argv
+    assert "--allow-semantic-fallback" in argv
+    assert "--verbose" in argv
+    assert "--quiet" not in argv
+    assert _flag_value(argv, "--log-level") == "DEBUG"
+
+
+def test_argv_rejects_verbose_and_quiet_combination() -> None:
+    payload: Dict[str, object] = {
+        "pipeline": "lux-depth-v3",
+        "args": {
+            "input_dir": "./input_images",
+            "output_dir": "./output/lux_depth_v3_apex_verify",
+            "verbose": True,
+            "quiet": True,
+        },
+    }
+
+    with pytest.raises(ValueError, match="verbose and quiet are mutually exclusive"):
+        orchestrator_app._argv_from_request(payload)
 
 
 def test_lux_ui_backend_and_direct_cli_paths_share_config_fingerprint(tmp_path: Path) -> None:
@@ -578,6 +667,92 @@ def test_argv_normalization_ignores_sam2_model_size_when_backend_is_not_sam2() -
     assert "--sam2-model-size" not in argv
 
 
+def test_argv_normalization_ignores_sam2_checkpoint_path_when_backend_is_not_sam2() -> None:
+    payload: Dict[str, object] = {
+        "pipeline": "lux-depth-v3",
+        "args": {
+            "input_dir": "./input_images",
+            "output_dir": "./output",
+            "segmentation_backend": "stub",
+            "sam2_checkpoint_path": "./models/sam2/sam2.1_hiera_large.pt",
+        },
+    }
+
+    argv = orchestrator_app._argv_from_request(payload)
+    assert _flag_value(argv, "--segmentation-backend") == "stub"
+    assert "--sam2-checkpoint-path" not in argv
+
+
+def test_argv_rejects_invalid_raw_ingest_mode() -> None:
+    payload: Dict[str, object] = {
+        "pipeline": "lux-depth-v3",
+        "args": {
+            "input_dir": "./input_images",
+            "output_dir": "./output",
+            "raw_ingest_mode": "bad_mode",
+        },
+    }
+
+    with pytest.raises(ValueError, match="Invalid raw_ingest_mode"):
+        orchestrator_app._argv_from_request(payload)
+
+
+def test_argv_rejects_invalid_raw_wb_mode() -> None:
+    payload: Dict[str, object] = {
+        "pipeline": "lux-depth-v3",
+        "args": {
+            "input_dir": "./input_images",
+            "output_dir": "./output",
+            "raw_wb_mode": "daylight",
+        },
+    }
+
+    with pytest.raises(ValueError, match="Invalid raw_wb_mode"):
+        orchestrator_app._argv_from_request(payload)
+
+
+def test_argv_rejects_invalid_raw_demosaic() -> None:
+    payload: Dict[str, object] = {
+        "pipeline": "lux-depth-v3",
+        "args": {
+            "input_dir": "./input_images",
+            "output_dir": "./output",
+            "raw_demosaic": "VNG",
+        },
+    }
+
+    with pytest.raises(ValueError, match="Invalid raw_demosaic"):
+        orchestrator_app._argv_from_request(payload)
+
+
+def test_argv_rejects_invalid_reconstruction_tier() -> None:
+    payload: Dict[str, object] = {
+        "pipeline": "lux-depth-v3",
+        "args": {
+            "input_dir": "./input_images",
+            "output_dir": "./output",
+            "reconstruction_tier": "invalid_tier",
+        },
+    }
+
+    with pytest.raises(ValueError, match="Invalid reconstruction_tier"):
+        orchestrator_app._argv_from_request(payload)
+
+
+def test_argv_rejects_invalid_log_level() -> None:
+    payload: Dict[str, object] = {
+        "pipeline": "lux-depth-v3",
+        "args": {
+            "input_dir": "./input_images",
+            "output_dir": "./output",
+            "log_level": "TRACE",
+        },
+    }
+
+    with pytest.raises(ValueError, match="Invalid log_level"):
+        orchestrator_app._argv_from_request(payload)
+
+
 def test_portal_segmentation_defaults_align_with_cli_defaults() -> None:
     portal_html = Path(__file__).resolve().parents[1] / "portal.html"
     content = portal_html.read_text(encoding="utf-8")
@@ -585,6 +760,28 @@ def test_portal_segmentation_defaults_align_with_cli_defaults() -> None:
     assert "backend: 'stub'," in content
     assert "sam2ModelSize: 'base'," in content
     assert "strict: false" in content
+
+
+def test_portal_surfaces_pre_run_diagnostics_and_expected_outputs() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+    render_cli_body = _extract_js_function_body(content, "renderCLI")
+
+    assert 'id="preRunWarnings"' in content
+    assert 'id="expectedOutputsList"' in content
+    assert 'id="datasetHealthText"' in content
+    assert "renderPreRunDiagnostics(payload);" in render_cli_body
+
+
+def test_portal_exposes_run_card_quick_actions() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+
+    assert 'id="runCardActions"' in content
+    assert 'id="viewRunCardBtn"' in content
+    assert 'id="copyRunCardPathBtn"' in content
+    assert 'id="copyRunCardFingerprintBtn"' in content
+    assert "Run card path is not eligible for direct browser open; path copied instead." in content
 
 
 def test_argv_archive_gate_a_defaults_to_fixity_scan_runner() -> None:

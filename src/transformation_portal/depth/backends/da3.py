@@ -18,7 +18,8 @@ from PIL import Image
 from .protocol import DepthResult, LicenseType
 
 if TYPE_CHECKING:
-    from ...lux_depth_v3.config import EnhanceConfig
+    from ...lux_depth_v3.config import EnhanceConfig, ModelVariant
+    from ...lux_depth_v3.inference import DA3InferenceEngine
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +41,9 @@ class DA3Backend:
         See: https://github.com/DepthAnything/Depth-Anything-V3
 
     Example:
-        >>> from transformation_portal.depth.backends import DepthBackendRegistry
+        >>> from transformation_portal.depth.backends import (
+        ...     DepthBackendRegistry
+        ... )
         >>> from transformation_portal.lux_depth_v3 import EnhanceConfig
         >>>
         >>> config = EnhanceConfig(depth_device="mps")
@@ -63,7 +66,7 @@ class DA3Backend:
                 If None, uses defaults (CPU device).
         """
         self._config = config
-        self._engine = None
+        self._engine: Optional[DA3InferenceEngine] = None
         self._device = self._resolve_device(config)
         self._model_variant = self._resolve_model_variant(config)
 
@@ -83,11 +86,11 @@ class DA3Backend:
             elif torch.cuda.is_available():
                 return "cuda"
         except ImportError:
-            logger.debug("PyTorch not installed; falling back to CPU for DA3Backend.")
+            logger.debug("PyTorch not installed;" " falling back to CPU for DA3Backend.")
 
         return "cpu"
 
-    def _resolve_model_variant(self, config: Optional["EnhanceConfig"]):
+    def _resolve_model_variant(self, config: Optional["EnhanceConfig"]) -> "ModelVariant":
         """Resolve model variant from config."""
         if config is not None:
             variant = getattr(config, "model_variant", None)
@@ -111,24 +114,24 @@ class DA3Backend:
         # Check transformers
         try:
             import transformers  # noqa: F401
-        except ImportError:
+        except ImportError as exc:
             raise ImportError(
                 "transformers package not installed.\n\n"
                 "Install with:\n"
                 "  pip install transformers\n\n"
                 "See: https://huggingface.co/docs/transformers"
-            )
+            ) from exc
 
         # Check torch
         try:
             import torch  # noqa: F401
-        except ImportError:
+        except ImportError as exc:
             raise ImportError(
                 "torch package not installed.\n\n"
                 "Install with:\n"
                 "  pip install torch\n\n"
                 "See: https://pytorch.org/get-started/locally/"
-            )
+            ) from exc
 
         logger.debug("DA3 backend dependencies available")
 
@@ -136,7 +139,8 @@ class DA3Backend:
     def required_packages(cls) -> list[str]:
         """Return required import module names for DA3 backend.
 
-        DA3 requires transformers (HuggingFace Transformers) for model inference.
+        DA3 requires transformers (HuggingFace Transformers)
+        for model inference.
         torch is handled by the APEX runner and not listed here.
 
         Returns:
@@ -145,12 +149,13 @@ class DA3Backend:
         return ["transformers"]
 
     def _infer_source_depth_units(self, metadata: dict) -> str:
-        """Infer source model depth unit semantics from resolved model metadata."""
+        """Infer source depth unit semantics from metadata."""
         resolved_model_id = str(metadata.get("resolved_model_id", "")).lower()
         requested_model_id = str(metadata.get("requested_model_id", "")).lower()
         model_hint = resolved_model_id or requested_model_id
 
-        if any(token in model_hint for token in ("metric", "da3nested", "nested-giant")):
+        depth_tokens = ("metric", "da3nested", "nested-giant")
+        if any(token in model_hint for token in depth_tokens):
             return "meters"
         return "relative"
 
@@ -184,13 +189,19 @@ class DA3Backend:
         # Convert image to format expected by DA3InferenceEngine
         if isinstance(image, np.ndarray):
             # DA3InferenceEngine.predict() accepts PIL.Image (after PR #841)
-            image_pil = Image.fromarray((image * 255).astype(np.uint8) if image.max() <= 1.0 else image.astype(np.uint8))
+            if image.max() <= 1.0:
+                arr = (image * 255).astype(np.uint8)
+            else:
+                arr = image.astype(np.uint8)
+            image_pil = Image.fromarray(arr)
             image_array = image
         else:
             image_pil = image.convert("RGB")
             image_array = np.array(image_pil)
 
         # Run inference
+        if self._engine is None:
+            raise RuntimeError("DA3 engine failed to initialize")
         result = self._engine.predict(image_pil)
 
         source_depth_units = self._infer_source_depth_units(result.metadata)
@@ -201,7 +212,7 @@ class DA3Backend:
 
         warnings = []
         if source_depth_units == "meters":
-            warnings.append("source metric depth normalized to relative [0,1] for unified pipeline output")
+            warnings.append("source metric depth normalized to" " relative [0,1] for unified" " pipeline output")
 
         # Convert to unified DepthResult
         return DepthResult(
@@ -240,7 +251,10 @@ class DA3Backend:
             image_hash = hashlib.sha256(image.tobytes()).hexdigest()[:16]
 
         # Model identifier
-        model_name = self._model_variant.value.name if hasattr(self._model_variant, "value") else "metric_large"
+        if hasattr(self._model_variant, "value"):
+            model_name = self._model_variant.value.name
+        else:
+            model_name = "metric_large"
 
         return f"da3_{model_name}_{image_hash}_{self._device}_v1"
 
@@ -251,14 +265,24 @@ class DA3Backend:
 
         # Build DA3Config
         device_config = DeviceConfig(device=device)
-        da3_config = DA3Config(model_variant=self._model_variant, device=device_config)
+        da3_config = DA3Config(
+            model_variant=self._model_variant,
+            device=device_config,
+        )
 
         # Initialize engine
-        commercial_use = not getattr(self._config, "non_commercial_ok", False) if self._config else True
+        if self._config:
+            commercial_use = not getattr(self._config, "non_commercial_ok", False)
+        else:
+            commercial_use = True
         self._engine = DA3InferenceEngine(
             config=da3_config,
             commercial_use=commercial_use,
             validate_license_strict=False,  # DA3 has no license restrictions
         )
 
-        logger.info(f"Loaded DA3 backend: model={self._model_variant.value.name} device={device}")
+        logger.info(
+            "Loaded DA3 backend: model=%s device=%s",
+            self._model_variant.value.name,
+            device,
+        )

@@ -223,6 +223,15 @@ class EnhancementStage(Stage):
         if depth_map is None or self.enhancement_strength == 0:
             return image
 
+        image_height, image_width = image.shape[:2]
+        if depth_map.shape != (image_height, image_width):
+            self.logger.warning(
+                "Depth map shape %s does not match image shape %s; resizing depth map for tone mapping",
+                depth_map.shape,
+                (image_height, image_width),
+            )
+            depth_map = self._resize_depth_map(depth_map, (image_height, image_width))
+
         # Adaptive depth-based tone mapping
         # Use percentiles to adapt to actual depth distribution
         depth_median = float(np.median(depth_map))
@@ -273,6 +282,20 @@ class EnhancementStage(Stage):
         result = image * adjustment[:, :, np.newaxis]
 
         return np.clip(result, 0, 1)
+
+    @staticmethod
+    def _resize_depth_map(depth_map: np.ndarray, target_shape: tuple[int, int]) -> np.ndarray:
+        """Resize depth map to match target (height, width)."""
+        from PIL import Image
+
+        target_height, target_width = target_shape
+        depth_array = np.asarray(depth_map, dtype=np.float32)
+        if depth_array.ndim != 2:
+            raise ValueError(f"Depth map must be 2D (H, W), got shape {depth_array.shape}")
+
+        depth_image = Image.fromarray(depth_array, mode="F")
+        resized = depth_image.resize((target_width, target_height), Image.Resampling.BILINEAR)
+        return np.asarray(resized, dtype=np.float32)
 
     def _apply_clarity(self, image: np.ndarray, strength: float) -> np.ndarray:
         """Apply clarity enhancement (local contrast)."""

@@ -19,8 +19,10 @@ Provenance Contract:
 - Colocated sidecar JSON files for audit trail
 
 Policy Boundaries:
-- RAW/TIFF inputs: require_exiftool=True (audit-grade, hard-fail on missing exiftool)
-- JPG/PNG inputs: require_exiftool=False (best-effort, skip EXIF if unavailable)
+- RAW/TIFF inputs: require_exiftool=True
+  (audit-grade, hard-fail on missing exiftool)
+- JPG/PNG inputs: require_exiftool=False
+  (best-effort, skip EXIF if unavailable)
 - Enforcement via capture_provenance(require_exiftool=...) parameter
 """
 
@@ -49,25 +51,17 @@ PROVENANCE_SCHEMA_VERSION = "1.0.0"
 class ProvenanceError(Exception):
     """Base exception for provenance capture failures."""
 
-    pass
-
 
 class ExiftoolNotFoundError(ProvenanceError):
     """Raised when exiftool is not available."""
-
-    pass
 
 
 class MissingRequiredFieldError(ProvenanceError):
     """Raised when required provenance field is missing."""
 
-    pass
-
 
 class SchemaValidationError(ProvenanceError):
     """Raised when schema validation fails."""
-
-    pass
 
 
 def _check_exiftool_available() -> bool:
@@ -82,6 +76,7 @@ def _check_exiftool_available() -> bool:
             capture_output=True,
             text=True,
             timeout=5,
+            check=False,
         )
         return result.returncode == 0
     except (FileNotFoundError, subprocess.TimeoutExpired):
@@ -100,6 +95,7 @@ def get_exiftool_version() -> Optional[str]:
             capture_output=True,
             text=True,
             timeout=5,
+            check=False,
         )
         if result.returncode == 0:
             return result.stdout.strip()
@@ -133,7 +129,9 @@ def extract_exif_metadata(image_path: Path) -> Dict[str, Any]:
     if not _check_exiftool_available():
         raise ExiftoolNotFoundError(
             "exiftool not found in PATH. "
-            "Install with: apt-get install libimage-exiftool-perl (Ubuntu/Debian) "
+            "Install with: apt-get install"
+            " libimage-exiftool-perl"
+            " (Ubuntu/Debian) "
             "or brew install exiftool (macOS)"
         )
 
@@ -146,22 +144,23 @@ def extract_exif_metadata(image_path: Path) -> Dict[str, Any]:
             capture_output=True,
             text=True,
             timeout=30,
+            check=False,
         )
 
         if result.returncode != 0:
-            raise ProvenanceError(f"exiftool failed with code {result.returncode}: {result.stderr}")
+            raise ProvenanceError("exiftool failed with code" f" {result.returncode}:" f" {result.stderr}")
 
         # Parse JSON output (exiftool returns a list with one dict per file)
         metadata_list = json.loads(result.stdout)
         if not metadata_list:
-            raise ProvenanceError(f"exiftool returned no metadata for {image_path}")
+            raise ProvenanceError("exiftool returned no" f" metadata for {image_path}")
 
         return metadata_list[0]
 
     except json.JSONDecodeError as e:
-        raise ProvenanceError(f"Failed to parse exiftool JSON output: {e}") from e
+        raise ProvenanceError("Failed to parse exiftool" f" JSON output: {e}") from e
     except subprocess.TimeoutExpired as e:
-        raise ProvenanceError(f"exiftool timed out after 30s") from e
+        raise ProvenanceError("exiftool timed out after 30s") from e
 
 
 def get_toolchain_versions() -> Dict[str, Optional[str]]:
@@ -196,6 +195,7 @@ def get_toolchain_versions() -> Dict[str, Optional[str]]:
             capture_output=True,
             text=True,
             timeout=5,
+            check=False,
         )
         if result.returncode == 0:
             # Extract version from first line: "Version: ImageMagick 7.1.0-..."
@@ -231,6 +231,7 @@ def get_git_commit_sha(repo_root: Optional[Path] = None) -> Optional[str]:
             capture_output=True,
             text=True,
             timeout=5,
+            check=False,
         )
         if result.returncode == 0:
             return result.stdout.strip()
@@ -261,10 +262,12 @@ class InputFileMetadata:
 class IngestContext:
     """Context information about the ingestion process.
 
-    This captures information about the processing environment and configuration.
+    This captures information about the
+    processing environment and configuration.
 
     Determinism Contract:
-    - ingest_timestamp_utc is NONDETERMINISTIC by design (captures actual ingest time)
+    - ingest_timestamp_utc is NONDETERMINISTIC
+      by design (captures actual ingest time)
     - All other fields are deterministic (same input + config → same value)
     """
 
@@ -289,7 +292,8 @@ class ProvenanceMetadata:
 
     Schema version: 1.0.0
 
-    This is the top-level provenance record that gets written to the sidecar JSON.
+    This is the top-level provenance record
+    that gets written to the sidecar JSON.
     All required fields are enforced at write time.
 
     Determinism Contract:
@@ -321,7 +325,7 @@ class ProvenanceMetadata:
         # Validate schema version
         if self.schema_version != PROVENANCE_SCHEMA_VERSION:
             raise SchemaValidationError(
-                f"Schema version mismatch: expected {PROVENANCE_SCHEMA_VERSION}, " f"got {self.schema_version}"
+                "Schema version mismatch:" f" expected {PROVENANCE_SCHEMA_VERSION}," f" got {self.schema_version}"
             )
 
         # Validate input metadata fields
@@ -330,28 +334,32 @@ class ProvenanceMetadata:
         if not self.input.file_sha256:
             raise MissingRequiredFieldError("input.file_sha256 is required")
         if self.input.file_size_bytes <= 0:
-            raise MissingRequiredFieldError("input.file_size_bytes must be positive")
+            raise MissingRequiredFieldError("input.file_size_bytes" " must be positive")
         if not self.input.file_mtime_utc:
             raise MissingRequiredFieldError("input.file_mtime_utc is required")
 
-        # Validate EXIF metadata is present (can be empty dict for files without EXIF)
+        # Validate EXIF metadata is present
+        # (can be empty dict for files without EXIF)
         if self.exif is None:
             raise MissingRequiredFieldError("exif metadata is required")
 
         # Validate toolchain has required tools
         if "python_version" not in self.toolchain or not self.toolchain["python_version"]:
-            raise MissingRequiredFieldError("toolchain.python_version is required")
-        # Note: exiftool_version is only required for audit-grade RAW/TIFF provenance
-        # For non-audit inputs, exiftool_version may be None
-        # Enforcement is via require_exiftool parameter in capture_provenance()
+            raise MissingRequiredFieldError("toolchain.python_version" " is required")
+        # Note: exiftool_version is only required
+        # for audit-grade RAW/TIFF provenance.
+        # For non-audit inputs, exiftool_version
+        # may be None. Enforcement is via
+        # require_exiftool parameter in
+        # capture_provenance()
 
         # Validate ingest context
         if not self.ingest_context.config_fingerprint:
-            raise MissingRequiredFieldError("ingest_context.config_fingerprint is required")
+            raise MissingRequiredFieldError("ingest_context" ".config_fingerprint" " is required")
         if not self.ingest_context.ingest_timestamp_utc:
-            raise MissingRequiredFieldError("ingest_context.ingest_timestamp_utc is required")
+            raise MissingRequiredFieldError("ingest_context" ".ingest_timestamp_utc" " is required")
         if not self.ingest_context.host_os:
-            raise MissingRequiredFieldError("ingest_context.host_os is required")
+            raise MissingRequiredFieldError("ingest_context.host_os" " is required")
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize to dictionary with deterministic key ordering.
@@ -491,15 +499,21 @@ def capture_provenance(
         cli_args: Command-line arguments (optional)
         repo_root: Repository root for git SHA capture (optional)
         require_exiftool: If True, hard-fail when exiftool unavailable.
-                         If False, skip EXIF extraction and continue (default: True)
+                         If False, skip EXIF
+                         extraction and continue
+                         (default: True)
         ingest_profile: Optional canonical ingest profile identifier.
-        ingest_settings_hash: Optional SHA-256 digest of canonical ingest settings.
+        ingest_settings_hash: Optional SHA-256
+                         digest of canonical
+                         ingest settings.
 
     Returns:
         ProvenanceMetadata instance ready for writing
 
     Raises:
-        ExiftoolNotFoundError: If exiftool is not available and require_exiftool=True
+        ExiftoolNotFoundError: If exiftool is
+            not available and
+            require_exiftool=True
         FileNotFoundError: If image file doesn't exist
         ProvenanceError: If provenance capture fails
     """
@@ -512,7 +526,10 @@ def capture_provenance(
     # Get file stats
     stat = image_path.stat()
     file_size_bytes = stat.st_size
-    file_mtime_utc = datetime.datetime.fromtimestamp(stat.st_mtime, tz=datetime.timezone.utc).isoformat()
+    file_mtime_utc = datetime.datetime.fromtimestamp(
+        stat.st_mtime,
+        tz=datetime.timezone.utc,
+    ).isoformat()
 
     # Extract EXIF metadata
     # If exiftool not required and unavailable, use empty dict

@@ -39,7 +39,7 @@ def _fake_capture_provenance(
 ) -> dict[str, Any]:
     file_bytes = input_path.read_bytes()
     return {
-        "schema_version": "1.0.1",
+        "schema_version": "1.0.2",
         "file_integrity": {
             "sha256": hashlib.sha256(file_bytes).hexdigest(),
             "size_bytes": len(file_bytes),

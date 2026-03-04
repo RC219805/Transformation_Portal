@@ -7,7 +7,11 @@ from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from .normalize_machine_json import DEFAULT_NORMALIZATION_PROFILE, canonical_json_bytes, normalize_machine_payload
+from .normalize_machine_json import (
+    DEFAULT_NORMALIZATION_PROFILE,
+    canonical_json_bytes,
+    normalize_machine_payload,
+)
 from .provenance import capture_provenance
 
 BATCH_MANIFEST_SCHEMA = "tp.ingest.batch_manifest.v1"
@@ -40,7 +44,11 @@ SUPPORTED_BATCH_EXTENSIONS = frozenset(
 IngestPayloadFactory = Callable[[Path], Mapping[str, Any]]
 
 
-def discover_batch_inputs(input_dir: Path, *, recursive: bool = True) -> list[Path]:
+def discover_batch_inputs(
+    input_dir: Path,
+    *,
+    recursive: bool = True,
+) -> list[Path]:
     """Discover supported inputs in deterministic lexicographic order."""
     if recursive:
         candidates = input_dir.rglob("*")
@@ -57,7 +65,10 @@ def _default_ingest_payload_factory(profile: str) -> IngestPayloadFactory:
         sidecar = capture_provenance(
             input_path=path,
             cli_args=["--batch-normalization-profile", profile],
-            config_dict={"mode": "ingest_batch", "normalization_profile": profile},
+            config_dict={
+                "mode": "ingest_batch",
+                "normalization_profile": profile,
+            },
             preset="batch",
         )
         return sidecar.model_dump()
@@ -70,7 +81,10 @@ def _normalized_relpath(input_relative_path: Path) -> Path:
     return input_relative_path.with_name(filename)
 
 
-def _batch_root_projection(items: Sequence[Mapping[str, str]], profile: str) -> dict[str, Any]:
+def _batch_root_projection(
+    items: Sequence[Mapping[str, str]],
+    profile: str,
+) -> dict[str, Any]:
     return {
         "normalization_profile": profile,
         "items": [
@@ -83,8 +97,12 @@ def _batch_root_projection(items: Sequence[Mapping[str, str]], profile: str) -> 
     }
 
 
-def compute_batch_root_sha256(items: Sequence[Mapping[str, str]], *, profile: str) -> str:
-    """Compute deterministic pre-Merkle batch root from normalized-item digests.
+def compute_batch_root_sha256(
+    items: Sequence[Mapping[str, str]],
+    *,
+    profile: str,
+) -> str:
+    """Compute deterministic pre-Merkle batch root.
 
     The helper enforces deterministic ordering by sorting on
     ``relative_path`` (with ``normalized_json_sha256`` as a stable
@@ -92,7 +110,10 @@ def compute_batch_root_sha256(items: Sequence[Mapping[str, str]], *, profile: st
     """
     ordered_items = sorted(
         items,
-        key=lambda item: (item["relative_path"], item["normalized_json_sha256"]),
+        key=lambda item: (
+            item["relative_path"],
+            item["normalized_json_sha256"],
+        ),
     )
     projection = _batch_root_projection(ordered_items, profile)
     return hashlib.sha256(canonical_json_bytes(projection)).hexdigest()
@@ -107,7 +128,7 @@ def run_ingest_batch(
     recursive: bool = True,
     manifest_filename: str = BATCH_MANIFEST_FILENAME,
 ) -> dict[str, Any]:
-    """Run batch ingest normalization and emit deterministic manifest output."""
+    """Run batch ingest normalization and emit deterministic manifest."""
     if not input_dir.exists() or not input_dir.is_dir():
         raise ValueError(f"Input directory not found: {input_dir}")
     if not manifest_filename.endswith(".json"):
@@ -124,10 +145,16 @@ def run_ingest_batch(
         raw_payload = ingest_fn(input_path)
         if not isinstance(raw_payload, Mapping):
             raise TypeError(
-                f"ingest_payload_factory must return a mapping payload, got {type(raw_payload).__name__} for {input_path}"
+                "ingest_payload_factory must return"
+                " a mapping payload, got "
+                f"{type(raw_payload).__name__}"
+                f" for {input_path}"
             )
 
-        normalized_payload = normalize_machine_payload(dict(raw_payload), profile=profile)
+        normalized_payload = normalize_machine_payload(
+            dict(raw_payload),
+            profile=profile,
+        )
         normalized_bytes = canonical_json_bytes(normalized_payload)
         normalized_sha256 = hashlib.sha256(normalized_bytes).hexdigest()
 

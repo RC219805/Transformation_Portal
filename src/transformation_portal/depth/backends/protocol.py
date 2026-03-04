@@ -33,8 +33,6 @@ class LicenseRestrictionError(Exception):
     Provides actionable error messages with license URLs.
     """
 
-    pass
-
 
 @dataclass
 class DepthResult:
@@ -46,11 +44,14 @@ class DepthResult:
     Attributes:
         depth_map: Depth values, shape (H, W). For relative depth, values
             are in [0, 1]. For metric depth, values are in meters.
-        original_image: Input image as numpy array, shape (H, W, 3), RGB [0-255].
+        original_image: Input image as numpy array,
+            shape (H, W, 3), RGB [0-255].
         metadata: Backend-specific metadata (provenance, timing, etc.).
         depth_units: "relative" (0-1 normalized) or "meters" (absolute scale).
-        focal_length_px: Focal length in pixels (metric depth backends only).
-        field_of_view_deg: Horizontal field of view in degrees (metric depth only).
+        focal_length_px: Focal length in pixels
+            (metric depth backends only).
+        field_of_view_deg: Horizontal field of view
+            in degrees (metric depth only).
         backend_id: Identifier of the backend that produced this result.
         device: Device used for inference (cpu, cuda, mps).
         dtype: Data type used for inference (float32, float16, bfloat16).
@@ -144,7 +145,8 @@ class DepthBackend(Protocol):
     to be compatible with DepthBackendRegistry.
 
     Attributes:
-        name: Unique backend identifier (e.g., "depth_pro", "depth_anything_v3").
+        name: Unique backend identifier
+            (e.g., "depth_pro", "depth_anything_v3").
         license_type: License classification for governance.
         requires_checkpoint: Whether backend requires external checkpoint file.
 
@@ -165,6 +167,11 @@ class DepthBackend(Protocol):
     license_type: LicenseType
     requires_checkpoint: bool
 
+    def __init__(
+        self,
+        config: Any = None,
+    ) -> None: ...
+
     def compute(
         self,
         image: Union[Image.Image, np.ndarray],
@@ -183,7 +190,6 @@ class DepthBackend(Protocol):
             RuntimeError: If inference fails.
             LicenseRestrictionError: If license requirements not met.
         """
-        ...
 
     def get_cache_key(self, image: Union[Image.Image, np.ndarray]) -> str:
         """Generate deterministic cache key for this image.
@@ -199,7 +205,6 @@ class DepthBackend(Protocol):
         Returns:
             Cache key string.
         """
-        ...
 
     def ensure_available(self) -> None:
         """Ensure backend dependencies and resources are available.
@@ -208,7 +213,6 @@ class DepthBackend(Protocol):
             ImportError: If required packages are not installed.
             FileNotFoundError: If checkpoint is missing.
         """
-        ...
 
     @classmethod
     def required_packages(cls) -> list[str]:
@@ -227,7 +231,6 @@ class DepthBackend(Protocol):
             >>> DA3Backend.required_packages()
             ['transformers']
         """
-        ...
 
 
 class StatefulBackend(Protocol):
@@ -235,7 +238,8 @@ class StatefulBackend(Protocol):
 
     Backends that accumulate state across frames (e.g., temporal filters,
     video trackers) must implement this protocol so the orchestrator can
-    reset state at sequence boundaries and prevent cross-sequence contamination.
+    reset state at sequence boundaries and prevent
+    cross-sequence contamination.
 
     See ADR-026 §2.3 for sequence lifecycle requirements.
 
@@ -256,4 +260,3 @@ class StatefulBackend(Protocol):
                 If provided, backends may use it for logging or
                 provenance tracking. None means "anonymous reset".
         """
-        ...

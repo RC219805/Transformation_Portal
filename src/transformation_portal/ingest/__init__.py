@@ -9,10 +9,12 @@ Components:
 - validator: Schema validation with drift detection
 - sidecar: Deterministic sidecar JSON writing
 
-Contract version: 1.0.1
+Contract version: 1.0.2
 """
 
 from __future__ import annotations
+
+from typing import Any
 
 __all__ = [
     "IngestManifest",
@@ -53,7 +55,7 @@ __all__ = [
 
 
 # Lazy imports to avoid circular dependencies
-def __getattr__(name: str):
+def __getattr__(name: str) -> Any:
     if name == "IngestManifest":
         from .schemas import IngestManifest
 

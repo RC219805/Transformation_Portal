@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- **Ingest Contract v1.0.2:** Bumped ingest schema version from `1.0.1` to `1.0.2` for schema-governance compliance on `schemas.py` updates.
+- **Ingest Contract Documentation:** Updated `docs/apex/ingest_contract.md` to reflect schema version `1.0.2`.
 - **Ingest Contract v1.0.1:** Bumped ingest schema version from `1.0.0` to `1.0.1` for metadata normalization semantics hardening.
 - **EXIF Normalization Semantics:** `ExifMetadata` now normalizes real-world EXIF string forms (for example `"4.5 mm"` and `"8 8 8"`) into numeric schema types before strict validation.
 - **rawpy/libraw Toolchain Capture:** Ingest provenance now tolerates `rawpy` version shape differences (`rawpy.version.version`, `rawpy.__version__`, tuple-style `libraw_version`) without contract shape changes.

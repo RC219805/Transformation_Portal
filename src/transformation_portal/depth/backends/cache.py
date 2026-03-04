@@ -92,7 +92,7 @@ class DepthCacheWriter:
             "backend_id": result.backend_id,
             "device": result.device,
             "dtype": result.dtype,
-            "input_size": list(result.input_size) if result.input_size else None,
+            "input_size": (list(result.input_size) if result.input_size else None),
             "focal_length_px": result.focal_length_px,
             "field_of_view_deg": result.field_of_view_deg,
             "timestamp_utc": datetime.now(timezone.utc).isoformat(),
@@ -133,7 +133,7 @@ class DepthCacheWriter:
             try:
                 return self._read_enhanced(npz_path, json_path)
             except Exception as e:
-                logger.warning(f"Failed to read enhanced cache {npz_path}: {e}")
+                logger.warning("Failed to read enhanced" f" cache {npz_path}: {e}")
 
         # Fallback to legacy format
         npy_path = self.cache_dir / f"{cache_key}.npy"

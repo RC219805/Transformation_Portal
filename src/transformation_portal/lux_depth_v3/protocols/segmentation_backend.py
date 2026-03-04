@@ -1,4 +1,6 @@
-"""SegmentationBackend Protocol - Unified interface for material segmentation backends.
+"""SegmentationBackend Protocol.
+
+Unified interface for material segmentation backends.
 
 This module defines the protocol (interface) that all segmentation backends
 must implement for Materials V3. This enables:
@@ -16,14 +18,19 @@ Example
 
 .. code-block:: python
 
-    from transformation_portal.lux_depth_v3.protocols import SegmentationBackend
+    from transformation_portal.lux_depth_v3.protocols import (
+        SegmentationBackend,
+    )
 
     class MySegmentationBackend(SegmentationBackend):
         def load(self, device: str = "auto") -> None:
             ...
 
-        def segment(self, image: np.ndarray) -> Dict[str, Tuple[np.ndarray, float]]:
-            # Returns material names mapped to (mask, confidence) tuples
+        def segment(
+            self, image: np.ndarray,
+        ) -> Dict[str, Tuple[np.ndarray, float]]:
+            # Returns material names mapped to
+            # (mask, confidence) tuples
             return {
                 "glass": (mask_array, 0.87),
                 "water": (mask_array, 0.64),
@@ -94,8 +101,10 @@ class SegmentationBackend(Protocol):
             def load(self, device: str = "auto") -> None:
                 # Load model weights...
 
-            def segment(self, image: np.ndarray) -> Dict[str, Tuple[np.ndarray, float]]:
-                # Run segmentation and return material masks with confidence scores
+            def segment(
+                self, image: np.ndarray,
+            ) -> Dict[str, Tuple[np.ndarray, float]]:
+                # Return material masks with confidence
                 return {
                     "glass": (mask_array, 0.87),  # 87% confidence
                     "water": (mask_array, 0.64),  # 64% confidence
@@ -111,7 +120,7 @@ class SegmentationBackend(Protocol):
         - Memory usage
         - Model identifier
         """
-        ...
+        return None  # type: ignore[return-value]
 
     def load(
         self,
@@ -133,9 +142,12 @@ class SegmentationBackend(Protocol):
             FileNotFoundError: If weights_path specified but not found
             RuntimeError: If model loading fails
         """
-        ...
+        return None
 
-    def segment(self, image: np.ndarray) -> Dict[str, Tuple[np.ndarray, float]]:
+    def segment(
+        self,
+        image: np.ndarray,
+    ) -> Dict[str, Tuple[np.ndarray, float]]:
         """Run material segmentation on an image.
 
         Args:
@@ -153,10 +165,11 @@ class SegmentationBackend(Protocol):
             }
 
             For stub backend, returns empty dict.
-            For real backends, returns detected materials only (omits non-detected).
+            For real backends, returns detected
+            materials only (omits non-detected).
 
         Raises:
             RuntimeError: If model not loaded or inference fails
             ValueError: If image format is invalid
         """
-        ...
+        return None  # type: ignore[return-value]

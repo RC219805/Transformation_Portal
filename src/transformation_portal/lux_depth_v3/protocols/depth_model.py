@@ -17,7 +17,9 @@ Example
 
 .. code-block:: python
 
-    from transformation_portal.lux_depth_v3.protocols import DepthModel, BackendRole
+    from transformation_portal.lux_depth_v3.protocols import (
+        DepthModel, BackendRole,
+    )
 
     class MyDepthBackend(DepthModel):
         def load(self, device: str, weights_path: Optional[Path]) -> None:
@@ -33,7 +35,16 @@ import logging
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from pathlib import Path
-from typing import Callable, Dict, Iterator, List, Optional, Protocol, Type, runtime_checkable
+from typing import (
+    Callable,
+    Dict,
+    Iterator,
+    List,
+    Optional,
+    Protocol,
+    Type,
+    runtime_checkable,
+)
 
 import numpy as np
 
@@ -91,7 +102,9 @@ class BackendInfo:
     model_id: str
     role: BackendRole
     license_tier: LicenseTier
-    capabilities: frozenset[BackendCapability] = field(default_factory=lambda: frozenset({BackendCapability.RELATIVE_DEPTH}))
+    capabilities: frozenset[BackendCapability] = field(
+        default_factory=lambda: frozenset({BackendCapability.RELATIVE_DEPTH}),
+    )
     min_version: Optional[str] = None
     checkpoint_size_mb: Optional[float] = None
     description: str = ""
@@ -156,7 +169,7 @@ class DepthModel(Protocol):
         - Capabilities for feature detection
         - Role for use-case matching
         """
-        ...
+        return None  # type: ignore[return-value]
 
     def load(
         self,
@@ -181,7 +194,7 @@ class DepthModel(Protocol):
             FileNotFoundError: If weights_path specified but not found
             RuntimeError: If model loading fails
         """
-        ...
+        return None
 
     def predict(self, image: np.ndarray) -> DepthArtifact:
         """Run depth inference on a single image.
@@ -196,7 +209,7 @@ class DepthModel(Protocol):
             RuntimeError: If model not loaded or inference fails
             ValueError: If image format is invalid
         """
-        ...
+        return None  # type: ignore[return-value]
 
     # Optional methods (check hasattr before calling)
 
@@ -220,7 +233,7 @@ class DepthModel(Protocol):
             Check hasattr(backend, 'stream_video') before calling.
             Not all backends support video streaming.
         """
-        ...
+        return None  # type: ignore[return-value]
 
     def predict_batch(
         self,
@@ -241,7 +254,7 @@ class DepthModel(Protocol):
             Check hasattr(backend, 'predict_batch') before calling.
             Not all backends support batch inference.
         """
-        ...
+        return None  # type: ignore[return-value]
 
 
 class DepthModelRegistry:
@@ -298,8 +311,10 @@ class DepthModelRegistry:
 
         if missing_or_invalid:
             raise TypeError(
-                f"{backend_class.__name__} does not implement DepthModel protocol "
-                f"(missing or non-callable: {', '.join(missing_or_invalid)})"
+                f"{backend_class.__name__} does not "
+                "implement DepthModel protocol "
+                "(missing or non-callable: "
+                f"{', '.join(missing_or_invalid)})"
             )
 
         reg_name = name or backend_class.__name__
@@ -315,7 +330,8 @@ class DepthModelRegistry:
 
         Args:
             role: Filter by backend role
-            commercial_only: If True, only return commercially-licensed backends
+            commercial_only: If True, only return
+                commercially-licensed backends
 
         Returns:
             List of BackendInfo for matching backends
@@ -347,15 +363,18 @@ class DepthModelRegistry:
         Args:
             name: Specific backend name (takes precedence over role)
             role: Backend role to match
-            commercial_only: If True, only return commercially-licensed backends
-            use_cache: If True, return cached instance if available
+            commercial_only: If True, only return
+                commercially-licensed backends
+            use_cache: If True, return cached instance
+                if available
 
         Returns:
             DepthModel instance
 
         Raises:
             KeyError: If no matching backend found
-            ValueError: If commercial_only is True and the selected backend is not commercially licensed
+            ValueError: If commercial_only and the
+                selected backend is not commercial
         """
         # Direct name lookup
         if name is not None:
@@ -369,7 +388,7 @@ class DepthModelRegistry:
 
             if commercial_only and not instance.info.is_commercial_safe():
                 raise ValueError(
-                    f"Backend '{name}' requires non-commercial license " f"(tier: {instance.info.license_tier.value})"
+                    f"Backend '{name}' requires " "non-commercial license " f"(tier: {instance.info.license_tier.value})"
                 )
 
             if use_cache:
@@ -378,9 +397,12 @@ class DepthModelRegistry:
 
         # Role-based lookup
         if role is not None:
-            candidates = self.list_backends(role=role, commercial_only=commercial_only)
+            candidates = self.list_backends(
+                role=role,
+                commercial_only=commercial_only,
+            )
             if not candidates:
-                raise KeyError(f"No backend found for role={role.name}, commercial_only={commercial_only}")
+                raise KeyError(f"No backend found for " f"role={role.name}, " f"commercial_only={commercial_only}")
 
             # Return first matching (priority order determined by registration)
             for info in candidates:

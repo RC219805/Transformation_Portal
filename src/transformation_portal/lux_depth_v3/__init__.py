@@ -1,8 +1,9 @@
 """Lux Depth V3 Pipeline - Public API.
 
 This module intentionally exposes all public symbols lazily so importing
-``transformation_portal.lux_depth_v3`` does not eagerly load optional ML stacks.
-That keeps CLI/help/test import paths stable in CPU-only or partially provisioned
+``transformation_portal.lux_depth_v3`` does not eagerly
+load optional ML stacks.  That keeps CLI/help/test import
+paths stable in CPU-only or partially provisioned
 environments.
 """
 

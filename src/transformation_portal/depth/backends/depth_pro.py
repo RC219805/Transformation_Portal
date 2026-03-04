@@ -21,6 +21,7 @@ from .protocol import DepthResult, LicenseRestrictionError, LicenseType
 
 if TYPE_CHECKING:
     from ...lux_depth_v3.config import EnhanceConfig
+    from ...stage_graph.stages.depth_pro import DepthProStage
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +43,9 @@ class DepthProBackend:
         - accept_apple_depth_pro_research_license: Accept Apple AMLR license
 
     Example:
-        >>> from transformation_portal.depth.backends import DepthBackendRegistry
+        >>> from transformation_portal.depth.backends import (  # noqa: E501
+        ...     DepthBackendRegistry,
+        ... )
         >>> from transformation_portal.lux_depth_v3 import EnhanceConfig
         >>>
         >>> config = EnhanceConfig(
@@ -62,10 +65,10 @@ class DepthProBackend:
     requires_checkpoint = True
 
     # Checkpoint configuration
-    CHECKPOINT_URL = "https://ml-site.cdn-apple.com/models/depth-pro/depth_pro.pt"
+    CHECKPOINT_URL = "https://ml-site.cdn-apple.com/" "models/depth-pro/depth_pro.pt"
     DEFAULT_CHECKPOINT = Path("checkpoints/depth_pro.pt")
     # Actual SHA256 of the checkpoint (verified against downloaded file)
-    EXPECTED_SHA256 = "3eb35ca68168ad3d14cb150f8947a4edf85589941661fdb2686259c80685c0ce"
+    EXPECTED_SHA256 = "3eb35ca68168ad3d14cb150f8947a4edf85589941661fdb" "2686259c80685c0ce"
 
     def __init__(self, config: Optional["EnhanceConfig"] = None):
         """Initialize Depth Pro backend.
@@ -75,9 +78,10 @@ class DepthProBackend:
                 If None, uses defaults (not recommended).
         """
         self._config = config
-        self._stage = None
+        self._stage: Optional["DepthProStage"] = None
         self._device = self._resolve_device(config)
         self._checkpoint_path = self._resolve_checkpoint_path(config)
+        self._checkpoint_hash_cached: Optional[str] = None
 
     def _resolve_device(self, config: Optional["EnhanceConfig"]) -> str:
         """Resolve device from config or auto-detect."""
@@ -95,11 +99,14 @@ class DepthProBackend:
             elif torch.cuda.is_available():
                 return "cuda"
         except ImportError:
-            logger.debug("PyTorch is not installed; falling back to CPU for DepthProBackend.")
+            logger.debug("PyTorch is not installed;" " falling back to CPU for DepthProBackend.")
 
         return "cpu"
 
-    def _resolve_checkpoint_path(self, config: Optional["EnhanceConfig"]) -> Path:
+    def _resolve_checkpoint_path(
+        self,
+        config: Optional["EnhanceConfig"],
+    ) -> Path:
         """Resolve checkpoint path from config, env var, or default.
 
         Resolution order:
@@ -131,13 +138,14 @@ class DepthProBackend:
         # Check depth_pro package
         try:
             import depth_pro  # noqa: F401
-        except ImportError:
+        except ImportError as exc:
             raise ImportError(
                 "depth_pro package not installed.\n\n"
                 "Install with:\n"
                 "  pip install depth-pro\n\n"
-                "See: https://github.com/apple/ml-depth-pro"
-            )
+                "See: https://github.com/apple/"
+                "ml-depth-pro"
+            ) from exc
 
         # Check checkpoint file
         if not self._checkpoint_path.exists():
@@ -145,10 +153,14 @@ class DepthProBackend:
                 f"Depth Pro checkpoint not found: {self._checkpoint_path}\n\n"
                 f"Download checkpoint (1.9 GB) with:\n"
                 f"  mkdir -p {self._checkpoint_path.parent}\n"
-                f"  curl -L {self.CHECKPOINT_URL} -o {self._checkpoint_path}\n\n"
+                f"  curl -L {self.CHECKPOINT_URL}"
+                f" -o {self._checkpoint_path}\n\n"
                 f"Or set path via:\n"
-                f"  - Config: depth_pro_checkpoint_path='path/to/checkpoint.pt'\n"
-                f"  - Env: TRANSFORMATION_PORTAL_DEPTH_PRO_CHECKPOINT='path/to/checkpoint.pt'"
+                f"  - Config: depth_pro_checkpoint_path="
+                f"'path/to/checkpoint.pt'\n"
+                f"  - Env: TRANSFORMATION_PORTAL_DEPTH"
+                f"_PRO_CHECKPOINT="
+                f"'path/to/checkpoint.pt'"
             )
 
     @classmethod
@@ -192,11 +204,16 @@ class DepthProBackend:
         # Lazy-load stage
         if self._stage is None:
             self._load_stage()
+            assert self._stage is not None
 
         # Convert image to format expected by DepthProStage
         if isinstance(image, np.ndarray):
             image_array = image
-            image_pil = Image.fromarray((image * 255).astype(np.uint8) if image.max() <= 1.0 else image.astype(np.uint8))
+            if image.max() <= 1.0:
+                arr = (image * 255).astype(np.uint8)
+            else:
+                arr = image.astype(np.uint8)
+            image_pil = Image.fromarray(arr)
         else:
             image_pil = image.convert("RGB")
             image_array = np.array(image_pil)
@@ -214,7 +231,7 @@ class DepthProBackend:
         result = self._stage.compute(context)
 
         if result.status != StageStatus.COMPLETED:
-            raise RuntimeError(f"Depth Pro inference failed: {result.error}\n" f"Traceback:\n{result.error_traceback}")
+            raise RuntimeError(f"Depth Pro inference failed: " f"{result.error}\n" f"Traceback:\n{result.error_traceback}")
 
         # Extract depth and metadata
         depth_map = result.artifacts.get("depth_map")
@@ -263,7 +280,10 @@ class DepthProBackend:
             image_hash = hashlib.sha256(image.tobytes()).hexdigest()[:16]
 
         # Get checkpoint hash (expensive, but cached in stage)
-        ckpt_hash = self._get_checkpoint_hash()[:16] if self._checkpoint_path.exists() else "no_ckpt"
+        if self._checkpoint_path.exists():
+            ckpt_hash = self._get_checkpoint_hash()[:16]
+        else:
+            ckpt_hash = "no_ckpt"
 
         return f"depthpro_{ckpt_hash}_{image_hash}_{self._device}_v1"
 
@@ -294,19 +314,26 @@ class DepthProBackend:
             )
 
         if not getattr(self._config, "non_commercial_ok", False):
-            raise LicenseRestrictionError("Depth Pro requires non_commercial_ok=True in config.")
+            raise LicenseRestrictionError("Depth Pro requires " "non_commercial_ok=True in config.")
 
-        if not getattr(self._config, "accept_apple_depth_pro_research_license", False):
-            raise LicenseRestrictionError("Depth Pro requires accept_apple_depth_pro_research_license=True in config.")
+        if not getattr(
+            self._config,
+            "accept_apple_depth_pro_research_license",
+            False,
+        ):
+            raise LicenseRestrictionError("Depth Pro requires " "accept_apple_depth_pro_research" "_license=True in config.")
 
         logger.debug("Runtime license validation passed for depth_pro")
 
     def _get_checkpoint_hash(self) -> str:
         """Get SHA256 of checkpoint file (cached)."""
-        if not hasattr(self, "_checkpoint_hash_cached"):
+        if self._checkpoint_hash_cached is None:
             h = hashlib.sha256()
             with open(self._checkpoint_path, "rb") as f:
-                for chunk in iter(lambda: f.read(1024 * 1024), b""):
+                for chunk in iter(
+                    lambda: f.read(1024 * 1024),
+                    b"",
+                ):
                     h.update(chunk)
             self._checkpoint_hash_cached = h.hexdigest()
         return self._checkpoint_hash_cached

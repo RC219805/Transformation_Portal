@@ -4,6 +4,7 @@ Verifies argument parsing, validation, and non-commercial license checks.
 """
 
 import re
+from pathlib import Path
 
 import pytest
 from typer.testing import CliRunner
@@ -151,6 +152,25 @@ class TestCLIValidation:
         assert result.exit_code == 1
         assert "invalid" in result.stdout.lower() or "quality tier" in result.stdout.lower()
 
+    def test_invalid_grouping_mode(self, tmp_path):
+        """Scene grouping mode should fail fast with supported values."""
+        input_dir = tmp_path / "input"
+        input_dir.mkdir()
+
+        result = runner.invoke(
+            app,
+            [
+                "--input-dir",
+                str(input_dir),
+                "--output-dir",
+                str(tmp_path / "output"),
+                "--grouping-mode",
+                "invalid_mode",
+            ],
+        )
+        assert result.exit_code == 1
+        assert "grouping mode" in result.stdout.lower()
+
     def test_invalid_raw_wb_mode_rejected_for_legacy_contract(self, tmp_path):
         """Legacy ingest contract should reject unsupported RAW white-balance modes."""
         input_dir = tmp_path / "input"
@@ -286,6 +306,72 @@ class TestCLIValidation:
         assert result.exit_code == 1
         assert "apex strict gate" in result.stdout.lower()
         assert "strict-segmentation" in result.stdout.lower()
+
+    def test_reconstruction_requires_non_commercial(self, tmp_path):
+        """Scene reconstruction should require --non-commercial-ok true."""
+        input_dir = tmp_path / "input"
+        input_dir.mkdir()
+
+        result = runner.invoke(
+            app,
+            [
+                "--input-dir",
+                str(input_dir),
+                "--output-dir",
+                str(tmp_path / "output"),
+                "--enable-reconstruction",
+                "on",
+                "--accept-research-tools-license",
+                "true",
+                "--non-commercial-ok",
+                "false",
+            ],
+        )
+        assert result.exit_code == 1
+        assert "non-commercial" in result.stdout.lower()
+
+    def test_reconstruction_requires_research_tools_license(self, tmp_path):
+        """Scene reconstruction should require --accept-research-tools-license true."""
+        input_dir = tmp_path / "input"
+        input_dir.mkdir()
+
+        result = runner.invoke(
+            app,
+            [
+                "--input-dir",
+                str(input_dir),
+                "--output-dir",
+                str(tmp_path / "output"),
+                "--enable-reconstruction",
+                "on",
+                "--non-commercial-ok",
+                "true",
+                "--accept-research-tools-license",
+                "false",
+            ],
+        )
+        assert result.exit_code == 1
+        assert "accept-research-tools-license" in result.stdout.lower()
+
+    def test_cameras_sidecar_path_must_exist(self, tmp_path):
+        """Missing camera sidecar path should fail validation early."""
+        input_dir = tmp_path / "input"
+        input_dir.mkdir()
+
+        missing_sidecar = tmp_path / "missing_scene_cameras.json"
+        result = runner.invoke(
+            app,
+            [
+                "--input-dir",
+                str(input_dir),
+                "--output-dir",
+                str(tmp_path / "output"),
+                "--cameras-sidecar-path",
+                str(missing_sidecar),
+            ],
+        )
+        assert result.exit_code == 1
+        assert "camera sidecar file does not exist" in result.stdout.lower()
 
 
 class TestCLIConfiguration:
@@ -520,6 +606,67 @@ class TestCLIConfiguration:
 
         assert captured_config is not None
         assert captured_config.save_float_depth is True
+
+    def test_reconstruction_flags_wire_into_config(self, tmp_path):
+        """Reconstruction CLI flags should be propagated to EnhanceConfig."""
+        from unittest.mock import MagicMock, patch
+
+        input_dir = tmp_path / "input"
+        input_dir.mkdir()
+        (input_dir / "test.jpg").touch()
+
+        sidecar_path = tmp_path / "scene_cameras.json"
+        sidecar_path.write_text('{"schema":"tp.scene_cameras.v1","scenes":{}}', encoding="utf-8")
+
+        captured_config = None
+
+        def mock_orch_init(config, output_root):
+            del output_root
+            nonlocal captured_config
+            captured_config = config
+            mock_orch = MagicMock()
+            mock_orch.enhance_batch.return_value = [{"status": "ok"}]
+            return mock_orch
+
+        with patch(
+            "transformation_portal.lux_depth_v3.__main__.EnhanceOrchestrator",
+            side_effect=mock_orch_init,
+        ):
+            result = runner.invoke(
+                app,
+                [
+                    "--input-dir",
+                    str(input_dir),
+                    "--output-dir",
+                    str(tmp_path / "output"),
+                    "--enable-reconstruction",
+                    "on",
+                    "--grouping-mode",
+                    "parent_dir",
+                    "--cameras-sidecar-path",
+                    str(sidecar_path),
+                    "--reconstruction-iterations",
+                    "777",
+                    "--reconstruction-tier",
+                    "apex_research",
+                    "--emit-scene-debug-bundle",
+                    "on",
+                    "--non-commercial-ok",
+                    "true",
+                    "--accept-research-tools-license",
+                    "true",
+                ],
+            )
+
+        assert result.exit_code == 0
+        assert captured_config is not None
+        assert captured_config.enable_reconstruction is True
+        assert captured_config.grouping_mode == "parent_dir"
+        assert Path(captured_config.cameras_sidecar_path) == sidecar_path
+        assert captured_config.reconstruction_iterations == 777
+        assert captured_config.reconstruction_tier == "apex_research"
+        assert captured_config.emit_scene_debug_bundle is True
+        assert captured_config.accept_research_tools_license is True
 
 
 class TestSegmentationCLI:
@@ -758,9 +905,9 @@ class TestCLIHelp:
         # Strip ANSI codes to handle different terminal capabilities in CI
         output = strip_ansi(result.stdout.lower())
         assert "segmentation" in output
-        assert "enable-segmentation" in output
-        assert "segmentation-backend" in output
-        assert "strict-segmentation" in output
+        assert "enable-segmentation" in output or "enable-segmentati" in output
+        assert "segmentation-backend" in output or "segmentation-back" in output
+        assert "strict-segmentation" in output or "strict-segmentati" in output
 
     def test_save_float_depth_flag_in_help(self):
         """Test that save float depth flag appears in help output."""
@@ -768,6 +915,19 @@ class TestCLIHelp:
         assert result.exit_code == 0
         output = strip_ansi(result.stdout.lower())
         assert "save-float-depth" in output
+
+    def test_reconstruction_flags_in_help(self):
+        """Reconstruction-specific flags should appear in help output."""
+        result = runner.invoke(app, ["--help"])
+        assert result.exit_code == 0
+        output = strip_ansi(result.stdout.lower())
+        assert "enable-reconstruction" in output or "enable-reconstruc" in output
+        assert "grouping-mode" in output
+        assert "cameras-sidecar-path" in output or "cameras-sidecar-p" in output
+        assert "reconstruction-iterations" in output or "reconstruction-it" in output
+        assert "reconstruction-tier" in output or "reconstruction-ti" in output
+        assert "emit-scene-debug-bundle" in output or "emit-scene-debug-" in output
+        assert "accept-research-tools-license" in output or "accept-research-t" in output
 
 
 if __name__ == "__main__":

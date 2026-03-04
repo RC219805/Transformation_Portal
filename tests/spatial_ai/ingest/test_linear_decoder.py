@@ -20,7 +20,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from hypothesis import assume, given
+from hypothesis import given
 from hypothesis import strategies as st
 from PIL import Image
 
@@ -384,8 +384,6 @@ class TestColorSpaceValidation:
 
     def test_color_space_error_handling(self):
         """Test that ColorSpaceError has proper attributes and message."""
-        from pathlib import Path
-
         # Test ColorSpaceError construction
         error = ColorSpaceError(
             input_path=Path("/test/image.CR2"),
@@ -501,7 +499,7 @@ class TestRAWDemosaicDeterminism:
         # 1. Valid DNG file with camera matrix
         # 2. Cross-platform hash validation
         # 3. Baseline reference hashes
-        pytest.skip("RAW determinism test requires DNG fixture - " "tracked in PR #946 documentation for Phase II validation")
+        pytest.skip("RAW determinism test requires DNG fixture - tracked in PR #946 documentation for Phase II validation")
 
 
 class TestADR023Compliance:
@@ -734,9 +732,7 @@ class TestRawColorSpaceDiagnostics:
 class TestColorMatrixSelection:
     """Regression tests for zero color_matrix fallback (ingest hardening)."""
 
-    def setup_method(self):
-        """Setup decoder instance for each test."""
-        self.decoder = LinearDecoder()
+    decoder = LinearDecoder()
 
     def test_zero_color_matrix_falls_back_to_rgb_xyz(self):
         """Zero-filled color_matrix must not be used; rgb_xyz_matrix is the fallback."""
@@ -814,6 +810,42 @@ class TestColorMatrixSelection:
         assert result.shape == (9,)
         assert np.allclose(result, np.eye(3).reshape(9))
 
+    def test_3x4_color_matrix_is_contracted_to_3x3(self):
+        """LibRaw/rawpy 3x4 color_matrix should be accepted via deterministic 3x3 contraction."""
+        matrix_3x4 = np.array(
+            [
+                [1.0, 0.1, 0.2, 0.9],
+                [0.3, 1.1, 0.4, 0.8],
+                [0.5, 0.6, 1.2, 0.7],
+            ],
+            dtype=np.float64,
+        )
+
+        result = self.decoder._select_valid_color_matrix(matrix_3x4, None)
+
+        assert result is not None
+        assert result.shape == (9,)
+        assert np.allclose(result, matrix_3x4[:, :3].reshape(9))
+
+    def test_4x3_rgb_xyz_matrix_fallback_is_contracted_to_3x3(self):
+        """LibRaw/rawpy 4x3 rgb_xyz_matrix fallback should be accepted via deterministic 3x3 contraction."""
+        invalid_primary = np.zeros((3, 3), dtype=np.float64)  # Force fallback path
+        matrix_4x3 = np.array(
+            [
+                [0.9, 0.1, 0.2],
+                [0.3, 1.0, 0.4],
+                [0.5, 0.6, 1.1],
+                [0.7, 0.8, 0.9],
+            ],
+            dtype=np.float64,
+        )
+
+        result = self.decoder._select_valid_color_matrix(invalid_primary, matrix_4x3)
+
+        assert result is not None
+        assert result.shape == (9,)
+        assert np.allclose(result, matrix_4x3[:3, :].reshape(9))
+
     def test_3x3_zero_ndarray_falls_back(self):
         """A (3, 3) all-zero array must still trigger fallback."""
         valid_fallback = [0.4, 0.3, 0.3, 0.2, 0.6, 0.2, 0.05, 0.1, 0.85]
@@ -846,9 +878,7 @@ class TestColorMatrixSelection:
 class TestColorMatrixSelectionProperties:
     """Property-based tests for _select_valid_color_matrix invariants."""
 
-    def setup_method(self):
-        """Setup decoder instance for each test."""
-        self.decoder = LinearDecoder()
+    decoder = LinearDecoder()
 
     # Constrained strategy: values always have norm >= 1e-6, avoiding assume() discards
     _matrix_st = st.lists(
@@ -877,10 +907,32 @@ class TestColorMatrixSelectionProperties:
         assert result is not None
         assert np.allclose(result, rgb_arr)
 
-    @given(st.lists(st.floats(min_value=1e-3, max_value=10.0, allow_nan=False, allow_infinity=False), min_size=0, max_size=20))
+    _wrong_len_matrix_st = st.one_of(
+        st.lists(
+            st.floats(
+                min_value=1e-3,
+                max_value=10.0,
+                allow_nan=False,
+                allow_infinity=False,
+            ),
+            min_size=0,
+            max_size=8,
+        ),
+        st.lists(
+            st.floats(
+                min_value=1e-3,
+                max_value=10.0,
+                allow_nan=False,
+                allow_infinity=False,
+            ),
+            min_size=10,
+            max_size=20,
+        ),
+    )
+
+    @given(_wrong_len_matrix_st)
     def test_wrong_length_color_matrix_triggers_fallback(self, bad_matrix):
         """Flat color_matrix with length != 9 must be ignored."""
-        assume(len(bad_matrix) != 9)
         valid_fallback = [0.5, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.5]
 
         result = self.decoder._select_valid_color_matrix(bad_matrix, valid_fallback)
@@ -925,14 +977,10 @@ class TestColorMatrixSelectionProperties:
 class TestRawMetadataValidation:
     """Unit tests for _validate_raw_metadata — no rawpy install required."""
 
-    def setup_method(self):
-        """Setup decoder instance for each test."""
-        self.decoder = LinearDecoder()
+    decoder = LinearDecoder()
 
     def _make_raw(self, *, wb=None, bl=None, raw_image_shape=None):
         """Build a minimal mock rawpy object with configurable attributes."""
-        import types
-
         raw = types.SimpleNamespace()
         if wb is not None:
             raw.camera_whitebalance = wb

@@ -10,22 +10,21 @@ Provides robust, atomic depth map I/O with 16-bit precision:
 from __future__ import annotations
 
 import logging
-import os
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import numpy as np
 
 from .io_atomic import atomic_temp_file
 
 try:
-    import cv2
+    import cv2 as opencv
 
     HAS_CV2 = True
 except ImportError:
     HAS_CV2 = False
-    cv2 = None  # type: ignore
+    opencv = None  # type: ignore
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +50,11 @@ class DepthWriteStats:
 
 
 def atomic_write_depth_u16_png_with_stats(
-    output_path: Path, depth_map: np.ndarray, method: str = "u16", debug_verify: bool = False, **kwargs
+    output_path: Path,
+    depth_map: np.ndarray,
+    method: str = "u16",
+    debug_verify: bool = False,
+    **kwargs: Any,
 ) -> tuple[Path, Optional[Path], DepthWriteStats]:
     """Atomically write depth map as 16-bit PNG with statistics.
 
@@ -74,16 +77,17 @@ def atomic_write_depth_u16_png_with_stats(
         IOError: If write or verification fails
     """
     if not HAS_CV2:
-        raise ImportError("opencv-python required for depth_writer. Install with: pip install opencv-python")
+        raise ImportError("opencv-python required for" " depth_writer. Install with:" " pip install opencv-python")
 
     # Normalize legacy/config values
-    # EnhanceConfig defaults to "none", which means "default behavior" (u16 for this writer)
+    # EnhanceConfig defaults to "none", which
+    # means "default behavior" (u16 for this writer)
     if method in (None, "", "none"):
         method = "u16"
 
     # Validate method
     if method != "u16":
-        raise ValueError(f"Unsupported depth quantization method: {method!r}. Only 'u16' is supported.")
+        raise ValueError("Unsupported depth quantization" f" method: {method!r}." " Only 'u16' is supported.")
 
     # 1. Calculate statistics on original data
     stats = DepthWriteStats(
@@ -102,12 +106,23 @@ def atomic_write_depth_u16_png_with_stats(
     depth_u16 = (depth_clipped * 65535.0).astype(np.uint16)
 
     # 3. Atomic Write using shared helper
-    # cv2.imwrite requires a file path, so we use atomic_temp_file context manager
+    # cv2.imwrite requires a file path, so we
+    # use atomic_temp_file context manager
     try:
-        # cv2.imwrite is path-based and creates file with umask permissions
-        with atomic_temp_file(output_path, suffix=".png", create_file=False) as temp_path:
+        # cv2.imwrite is path-based and creates
+        # file with umask permissions
+        with atomic_temp_file(
+            output_path,
+            suffix=".png",
+            create_file=False,
+        ) as temp_path:
             # Use explicit PNG compression parameters
-            success = cv2.imwrite(str(temp_path), depth_u16, [cv2.IMWRITE_PNG_COMPRESSION, 3])  # Compression level 0-9
+            # Compression level 0-9
+            success = opencv.imwrite(
+                str(temp_path),
+                depth_u16,
+                [opencv.IMWRITE_PNG_COMPRESSION, 3],
+            )
             if not success:
                 raise IOError(f"cv2.imwrite returned False for {temp_path}")
             # atomic_temp_file will handle os.replace on success
@@ -120,13 +135,16 @@ def atomic_write_depth_u16_png_with_stats(
     verification_path = None
     if debug_verify:
         # Read back and compare
-        check_img = cv2.imread(str(output_path), cv2.IMREAD_UNCHANGED)
+        check_img = opencv.imread(str(output_path), opencv.IMREAD_UNCHANGED)
         if check_img is None:
-            raise IOError(f"Verification failed: Could not read back {output_path}")
+            raise IOError(f"Verification failed:" f" Could not read back" f" {output_path}")
 
         # Check for bit-exactness
         if not np.array_equal(depth_u16, check_img):
-            logger.warning(f"Verification WARNING: Readback of {output_path} does not match written data!")
+            logger.warning(
+                "Verification WARNING:" " Readback of %s does not" " match written data!",
+                output_path,
+            )
             # Note: Compression shouldn't change pixel values for PNG
         else:
             logger.debug(f"Verification successful for {output_path}")
@@ -156,7 +174,7 @@ def read_depth_u16_png(depth_path: Path) -> np.ndarray:
     # Prefer opencv for performance, fallback to PIL for CI compatibility
     if HAS_CV2:
         # Read raw 16-bit with opencv
-        img_u16 = cv2.imread(str(depth_path), cv2.IMREAD_UNCHANGED)
+        img_u16 = opencv.imread(str(depth_path), opencv.IMREAD_UNCHANGED)
         if img_u16 is None:
             raise IOError(f"Failed to read depth map: {depth_path}")
         img_f32 = img_u16.astype(np.float32) / 65535.0
@@ -164,7 +182,10 @@ def read_depth_u16_png(depth_path: Path) -> np.ndarray:
         # Fallback to PIL (CI-compatible)
         from PIL import Image
 
-        logger.debug(f"Using PIL fallback for PNG read (opencv not available): {depth_path}")
+        logger.debug(
+            "Using PIL fallback for PNG read" " (opencv not available): %s",
+            depth_path,
+        )
         img = Image.open(depth_path)
         img_array = np.array(img)
 

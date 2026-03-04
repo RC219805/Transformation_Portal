@@ -10,9 +10,12 @@ from __future__ import annotations
 import importlib.util
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple
 
 from .security import HashMode
+
+if TYPE_CHECKING:
+    from .pbr import PBRConfig
 
 _XXHASH_AVAILABLE = importlib.util.find_spec("xxhash") is not None
 
@@ -25,7 +28,8 @@ class ModelVariant(Enum):
         cd depth-anything-3
         pip install -e .
 
-    ⚠️  LICENSE: DA3NESTED-GIANT-LARGE-1.1 is CC BY-NC 4.0 (non-commercial use only).
+    ⚠️  LICENSE: DA3NESTED-GIANT-LARGE-1.1 is
+    CC BY-NC 4.0 (non-commercial use only).
     """
 
     METRIC_LARGE = type(
@@ -33,7 +37,7 @@ class ModelVariant(Enum):
         (),
         {
             "name": "depth-anything-v3-metric-large",
-            "display_name": "Depth Anything V3 Metric Large (DA3 Nested Giant)",
+            "display_name": ("Depth Anything V3 Metric Large" " (DA3 Nested Giant)"),
             "huggingface_id": "depth-anything/DA3NESTED-GIANT-LARGE-1.1",
         },
     )()
@@ -43,7 +47,7 @@ class ModelVariant(Enum):
         {
             "name": "depth-anything-v3-metric-base",
             "display_name": "Depth Anything V3 Metric Base",
-            "huggingface_id": "depth-anything/Depth-Anything-V3-Metric-Base-hf",
+            "huggingface_id": ("depth-anything/" "Depth-Anything-V3-Metric-Base-hf"),
         },
     )()
     METRIC_SMALL = type(
@@ -52,7 +56,7 @@ class ModelVariant(Enum):
         {
             "name": "depth-anything-v3-metric-small",
             "display_name": "Depth Anything V3 Metric Small",
-            "huggingface_id": "depth-anything/Depth-Anything-V3-Metric-Small-hf",
+            "huggingface_id": ("depth-anything/" "Depth-Anything-V3-Metric-Small-hf"),
         },
     )()
 
@@ -72,8 +76,12 @@ class DeviceConfig:
 
     device: str = "cpu"
     dtype: str = "float32"
-    use_fp16: bool = True  # Enable FP16 for MPS/CUDA (1.3-1.5x speedup, 2x memory reduction)
-    use_coreml: bool = False  # Phase 3: CoreML ANE acceleration for Apple Silicon (5x speedup, opt-in)
+    # Enable FP16 for MPS/CUDA
+    # (1.3-1.5x speedup, 2x memory reduction)
+    use_fp16: bool = True
+    # Phase 3: CoreML ANE acceleration for
+    # Apple Silicon (5x speedup, opt-in)
+    use_coreml: bool = False
 
 
 @dataclass
@@ -99,14 +107,16 @@ class DA3Config:
 
     model_variant: ModelVariant = ModelVariant.METRIC_LARGE
     device: DeviceConfig = field(default_factory=DeviceConfig)
-    postprocessing: PostprocessingConfig = field(default_factory=PostprocessingConfig)
+    postprocessing: PostprocessingConfig = field(
+        default_factory=PostprocessingConfig,
+    )
 
     @classmethod
     def from_preset(cls, preset: Preset) -> DA3Config:
         """Create configuration from preset.
 
         Presets provide different quality/performance tradeoffs:
-        - ARCHITECTURAL_INTERIOR: High quality for interior architectural renders
+        - ARCHITECTURAL_INTERIOR: High quality for interior architectural renders.
         - ARCHITECTURAL_EXTERIOR: Balanced for exterior scenes
         - LUXURY_ESTATE: Premium quality for luxury real estate
         - DEFAULT: Standard balanced configuration
@@ -159,7 +169,9 @@ class EnhanceConfig:
     # Depth configuration
     model_variant: Optional[ModelVariant] = None
     preset: Optional[Preset] = None
-    # Raw preset string from CLI/user input (captured even when preset does not map to Preset enum)
+    # Raw preset string from CLI/user input
+    # (captured even when preset does not map
+    # to Preset enum)
     preset_requested: Optional[str] = None
     depth_device: str = "cpu"
     depth_quantization: str = "none"
@@ -175,48 +187,91 @@ class EnhanceConfig:
     force_v2: bool = False
     non_commercial_ok: bool = False
     verify_depth_writes: bool = True
-    strict_inputs: bool = False  # Fail if depth artifacts found in input directory (validation mode)
+    # Fail if depth artifacts found in input
+    # directory (validation mode)
+    strict_inputs: bool = False
 
     # License acceptance flags (for research-only models)
-    accept_apple_depth_pro_research_license: bool = False  # Apple AMLR license for Depth Pro
-    accept_research_tools_license: bool = False  # Umbrella flag for APEX Research Ultra (ADR-026)
+    # Apple AMLR license for Depth Pro
+    accept_apple_depth_pro_research_license: bool = False
+    # Umbrella flag for APEX Research Ultra
+    # (ADR-026)
+    accept_research_tools_license: bool = False
 
     # Spatial AI Foundation (ADR-026 Phase I)
-    spatial_ai_linear_ingest: bool = False  # Enable linear light preservation (float32, gamma=1.0)
-    raw_ingest_mode: str = "auto"  # RAW decode policy: auto, force_rawpy, force_preview (debug env-gated)
-    raw_wb_mode: str = "camera"  # RAW white-balance mode (legacy_linear_srgb currently supports "camera" only)
-    raw_demosaic: str = "AHD"  # RAW demosaic algorithm (legacy_linear_srgb currently supports "AHD" only)
+    # Enable linear light preservation
+    # (float32, gamma=1.0)
+    spatial_ai_linear_ingest: bool = False
+    # RAW decode policy: auto, force_rawpy,
+    # force_preview (debug env-gated)
+    raw_ingest_mode: str = "auto"
+    # RAW white-balance mode
+    # (legacy_linear_srgb: "camera" only)
+    raw_wb_mode: str = "camera"
+    # RAW demosaic algorithm
+    # (legacy_linear_srgb: "AHD" only)
+    raw_demosaic: str = "AHD"
 
     # Depth backend selection
-    depth_backend: Optional[str] = None  # None = auto (DA3), "depth_pro", or "ensemble"
-    depth_pro_checkpoint_path: Optional[str] = None  # Path to depth_pro.pt checkpoint
+    # None = auto (DA3), "depth_pro",
+    # or "ensemble"
+    depth_backend: Optional[str] = None
+    # Path to depth_pro.pt checkpoint
+    depth_pro_checkpoint_path: Optional[str] = None
 
     # Fallback configuration
     depth_fallback: str = "fail"  # Options: "fail", "skip", "v2-auto"
     v2_timeout: int = 300
-    allow_synthetic_fallback: bool = False  # Allow synthetic depth backend when no ML deps (test/CI only)
-    allow_semantic_fallback: bool = False  # Allow backend fallback after APEX semantic-gate failures
+    # Allow synthetic depth backend when no
+    # ML deps (test/CI only)
+    allow_synthetic_fallback: bool = False
+    # Allow backend fallback after APEX
+    # semantic-gate failures
+    allow_semantic_fallback: bool = False
     depth_operational_fallback_chain: Tuple[str, ...] = ("da3", "da2")
 
     # Hash mode
     hash_mode: HashMode = HashMode.IF_MANIFEST_EXISTS
 
     # Performance optimizations (Phase 1)
-    enable_manifest_cache: bool = True  # LRU cache for manifest loading (15-20% I/O reduction)
-    chunked_hashing: bool = True  # Chunked SHA-256 for large files (90% memory reduction)
+    # LRU cache for manifest loading
+    # (15-20% I/O reduction)
+    enable_manifest_cache: bool = True
+    # Chunked SHA-256 for large files
+    # (90% memory reduction)
+    chunked_hashing: bool = True
 
-    # Performance optimizations (Phase 2: Parallelization)
-    enable_parallel_processing: bool = True  # Parallel I/O for batch workflows (3-5x throughput)
-    max_parallel_workers: Optional[int] = None  # Auto-detect if None (default: cpu_count - 1)
-    enable_depth_cache: bool = False  # Content-addressable depth cache (opt-in, requires storage)
-    depth_cache_max_size_gb: float = 10.0  # Maximum cache size before LRU eviction
+    # Performance optimizations (Phase 2:
+    # Parallelization)
+    # Parallel I/O for batch workflows
+    # (3-5x throughput)
+    enable_parallel_processing: bool = True
+    # Auto-detect if None
+    # (default: cpu_count - 1)
+    max_parallel_workers: Optional[int] = None
+    # Content-addressable depth cache
+    # (opt-in, requires storage)
+    enable_depth_cache: bool = False
+    # Maximum cache size before LRU eviction
+    depth_cache_max_size_gb: float = 10.0
 
-    # Performance optimizations (Phase 3: Advanced optimizations)
-    use_coreml_backend: bool = False  # CoreML ANE for Apple Silicon (5x depth inference, requires conversion)
-    enable_pbr_gpu_batching: bool = False  # GPU-accelerated PBR map batching (30% speedup, opt-in)
-    use_msgpack_manifests: bool = False  # MessagePack binary format (60% smaller, 3x faster, less readable)
-    # xxHash for output keys (5x faster than SHA-1, auto-enabled when available)
-    use_xxhash: bool = field(default_factory=lambda: _XXHASH_AVAILABLE)
+    # Performance optimizations (Phase 3:
+    # Advanced optimizations)
+    # CoreML ANE for Apple Silicon
+    # (5x depth inference, requires conversion)
+    use_coreml_backend: bool = False
+    # GPU-accelerated PBR map batching
+    # (30% speedup, opt-in)
+    enable_pbr_gpu_batching: bool = False
+    # MessagePack binary format
+    # (60% smaller, 3x faster, less readable)
+    use_msgpack_manifests: bool = False
+    # xxHash for output keys
+    # (5x faster than SHA-1, auto-enabled
+    # when available)
+    use_xxhash: bool = field(
+        default_factory=lambda: _XXHASH_AVAILABLE,
+    )
 
     # Float depth saving for high-precision PBR
     save_float_depth: bool = False
@@ -244,31 +299,57 @@ class EnhanceConfig:
     apex_depth_min_gradient_energy: float = 5e-4
     apex_depth_hist_bins: int = 64
 
-    enable_materials_v3: bool = False  # Materials V3 surface-aware finishing
-    apply_pixel_ops: bool = True  # Apply pixel operations in Materials V3 (requires enable_materials_v3=True)
+    # Materials V3 surface-aware finishing
+    enable_materials_v3: bool = False
+    # Apply pixel operations in Materials V3
+    # (requires enable_materials_v3=True)
+    apply_pixel_ops: bool = True
 
     # Materials V3 configuration
-    refinement_strategy: str = "canary"  # EfficientSAM refinement strategy (canary, disabled)
-    min_coverage_px: int = 500  # Minimum material coverage in pixels
-    min_mean_conf: float = 0.2  # Minimum mean confidence for material detection
-    glass_response_enabled: bool = True  # Enable glass material response
+    # EfficientSAM refinement strategy
+    # (canary, disabled)
+    refinement_strategy: str = "canary"
+    # Minimum material coverage in pixels
+    min_coverage_px: int = 500
+    # Minimum mean confidence for material
+    # detection
+    min_mean_conf: float = 0.2
+    # Enable glass material response
+    glass_response_enabled: bool = True
 
-    # Materials V3 Pixel Ops - Feathering Configuration (A3)
-    mask_feather_sigma_default: float = 3.0  # Default Gaussian blur sigma for mask feathering
-    mask_feather_sigma_overrides: Dict[str, float] = field(default_factory=dict)  # Material-specific overrides
-    mask_feather_disabled_materials: list[str] = field(default_factory=list)  # Materials with feathering disabled
+    # Materials V3 Pixel Ops - Feathering
+    # Configuration (A3)
+    # Default Gaussian blur sigma for
+    # mask feathering
+    mask_feather_sigma_default: float = 3.0
+    # Material-specific overrides
+    mask_feather_sigma_overrides: Dict[str, float] = field(default_factory=dict)
+    # Materials with feathering disabled
+    mask_feather_disabled_materials: list[str] = field(default_factory=list)
 
-    # Materials V3 Phase B - Sky Bootstrap Configuration
-    sky_top_region_fraction: float = 0.5  # Top fraction of image to consider for sky (default: upper 50%)
-    sky_gradient_threshold: float = 0.05  # Maximum gradient magnitude for smooth sky regions
-    sky_brightness_threshold: float = 0.4  # Minimum brightness threshold for sky pixels
+    # Materials V3 Phase B - Sky Bootstrap
+    # Top fraction of image to consider for
+    # sky (default: upper 50%)
+    sky_top_region_fraction: float = 0.5
+    # Maximum gradient magnitude for smooth
+    # sky regions
+    sky_gradient_threshold: float = 0.05
+    # Minimum brightness threshold for sky
+    sky_brightness_threshold: float = 0.4
 
     # Materials V3 segmentation backend (Phase 3)
-    enable_material_segmentation: bool = False  # Enable automatic material segmentation
-    material_segmentation_backend: str = "stub"  # Options: stub, efficientsam, sam2
-    strict_backend: bool = False  # If True, raise on backend errors instead of falling back to stub
-    sam2_model_size: str = "base"  # SAM2 variant when material_segmentation_backend="sam2": base or large
-    sam2_checkpoint_path: Optional[str] = None  # Optional SAM2 checkpoint override path
+    # Enable automatic material segmentation
+    enable_material_segmentation: bool = False
+    # Options: stub, efficientsam, sam2
+    material_segmentation_backend: str = "stub"
+    # If True, raise on backend errors
+    # instead of falling back to stub
+    strict_backend: bool = False
+    # SAM2 variant when backend="sam2":
+    # base or large
+    sam2_model_size: str = "base"
+    # Optional SAM2 checkpoint override path
+    sam2_checkpoint_path: Optional[str] = None
 
     # Emit flags (deliverables)
     emit_master16: bool = False  # Emit master 16-bit output
@@ -280,17 +361,20 @@ class EnhanceConfig:
     # Phase B1: optional scene-level reconstruction (off by default)
     enable_reconstruction: bool = False
     grouping_mode: str = "single"  # Options: single, parent_dir
-    cameras_sidecar_path: Optional[str] = None  # Path to tp.scene_cameras.v1 sidecar JSON
+    # Path to tp.scene_cameras.v1 sidecar JSON
+    cameras_sidecar_path: Optional[str] = None
     reconstruction_iterations: int = 1000
     reconstruction_tier: str = "apex_research"
-    emit_scene_debug_bundle: bool = False  # Emit per-scene debug bundle for reconstruction triage
+    # Emit per-scene debug bundle for
+    # reconstruction triage
+    emit_scene_debug_bundle: bool = False
 
     @property
     def enable_pbr(self) -> bool:
         """Alias for generate_pbr (backward compatibility)."""
         return self.generate_pbr
 
-    def to_pbr_config(self):
+    def to_pbr_config(self) -> PBRConfig:
         """Convert EnhanceConfig to PBRConfig.
 
         Returns:
