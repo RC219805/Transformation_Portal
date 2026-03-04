@@ -1,8 +1,20 @@
 # ADR-042: Scene Group Contract for Multi-View Reconstruction
 
-Status: Proposed  
-Date: 2026-03-04  
-Owner: @RC219805
+**Status:** Proposed
+**Date:** 2026-03-04
+**Owner:** @RC219805
+
+## Executive Summary
+
+This ADR defines the scene-group contract for future multi-view reconstruction in
+`lux_depth_v3` while preserving current per-image behavior by default.
+
+The contract standardizes:
+- immutable `SceneGroup` shape (`scene_id`, ordered `images`, optional `cameras`)
+- deterministic `scene_id` generation and ordering invariants
+- camera resolution precedence (`explicit > EXIF > synthetic`)
+- reconstruction eligibility requirements and failure handling
+- explicit reconstruction feature gate (`lux_depth_v3.enable_reconstruction=false` by default)
 
 ## Context
 
@@ -84,12 +96,18 @@ algorithm above MUST be used unless explicitly configured otherwise.
 
 ## Validity Requirements
 
-When reconstruction is enabled, a scene is reconstruction-eligible only if:
+When reconstruction is enabled, reconstruction eligibility is evaluated
+**after camera resolution** using the precedence policy in this ADR.
+
+A scene is reconstruction-eligible only if:
 - `len(scene.images) >= 2`
 - `scene.cameras is not None`
 - `len(scene.cameras) == len(scene.images)`
 
 If eligibility is not met, per-image pipeline behavior continues and reconstruction is skipped.
+
+Missing camera metadata alone does not make a scene ineligible; synthetic
+camera fallback may satisfy eligibility if a valid camera tuple is produced.
 
 ## Camera Source Precedence
 
@@ -106,7 +124,7 @@ Rule:
 | Condition | Behavior |
 |---|---|
 | Single image scene | Process image normally; skip reconstruction |
-| Missing cameras | Fallback to synthetic camera parameters |
+| Missing camera metadata | Resolve synthetic camera parameters; continue if valid cameras are produced |
 | Invalid camera set | Mark scene invalid, emit warning, skip reconstruction |
 
 ## Pipeline Stage Order
@@ -177,6 +195,19 @@ Minimum coverage:
 - camera precedence resolution
 - reconstruction eligibility gating
 - failure-mode behavior (skip/fallback/warn)
+
+## Success Metrics
+
+- Determinism: identical input scene sets generate identical `scene_id` values across machines.
+- Compatibility: with `enable_reconstruction=false`, output ordering and count remain unchanged vs current pipeline.
+- Eligibility correctness: reconstruction runs only for scenes meeting contract requirements.
+- Failure isolation: invalid scenes do not break batch processing and are explicitly reported in logs/metadata.
+
+## References
+
+- [PR #1110: scene-group scaffold + orchestration seam](https://github.com/RC219805/Transformation_Portal/pull/1110)
+- [Scene grouping scaffold](../../src/transformation_portal/lux_depth_v3/scene_groups.py)
+- [ADR Directory Guidance](README.md)
 
 ## Follow-up
 
