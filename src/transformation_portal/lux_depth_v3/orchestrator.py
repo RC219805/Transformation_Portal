@@ -3132,6 +3132,17 @@ class EnhanceOrchestrator:
         dataset_root: Path,
     ) -> None:
         """Run gated scene-level reconstruction for eligible grouped scenes."""
+        if not bool(getattr(self.config, "non_commercial_ok", False)):
+            raise LicenseRestrictionError(
+                "Scene reconstruction requires non_commercial_ok=True due to "
+                "Inria 3D Gaussian Splatting non-commercial license terms."
+            )
+        if not bool(getattr(self.config, "accept_research_tools_license", False)):
+            raise LicenseRestrictionError(
+                "Scene reconstruction requires accept_research_tools_license=True "
+                "to acknowledge research-only tool licensing constraints."
+            )
+
         sidecar_value = getattr(self.config, "cameras_sidecar_path", None)
         sidecar_path = Path(sidecar_value) if isinstance(sidecar_value, str) and sidecar_value else None
         reconstruction_tier = str(getattr(self.config, "reconstruction_tier", "apex_research"))
@@ -3160,17 +3171,6 @@ class EnhanceOrchestrator:
             if not cameras:
                 logger.info("Skipping reconstruction for scene %s: cameras unavailable", scene.scene_id)
                 continue
-
-            if not bool(getattr(self.config, "non_commercial_ok", False)):
-                raise LicenseRestrictionError(
-                    "Scene reconstruction requires non_commercial_ok=True due to "
-                    "Inria 3D Gaussian Splatting non-commercial license terms."
-                )
-            if not bool(getattr(self.config, "accept_research_tools_license", False)):
-                raise LicenseRestrictionError(
-                    "Scene reconstruction requires accept_research_tools_license=True "
-                    "to acknowledge research-only tool licensing constraints."
-                )
 
             try:
                 report_path = self.run_scene_reconstruction_fn(

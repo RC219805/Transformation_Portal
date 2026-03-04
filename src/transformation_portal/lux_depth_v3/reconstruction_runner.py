@@ -10,7 +10,7 @@ from transformation_portal.spatial_ai.reconstruction.contracts import CameraPara
 
 from ..ingest.canonical_json import dumps_json
 from .io_atomic import atomic_write_bytes
-from .scene_groups import SceneGroup, _normalize_relative_path
+from .scene_groups import SceneGroup, normalize_relative_path
 from .security import sanitize_path_component_nonlossy
 
 logger = logging.getLogger(__name__)
@@ -43,7 +43,7 @@ def run_scene_reconstruction(
         "schema": "tp.reconstruction_report.v1",
         "scene_id": scene.scene_id,
         "num_views": len(scene.images),
-        "images": [_normalize_relative_path(path, dataset_root) for path in scene.images],
+        "images": [normalize_relative_path(path, dataset_root) for path in scene.images],
         "rmse": float(reconstructed_scene.rmse),
         "iteration": int(reconstructed_scene.iteration),
         "convergence": reconstructed_scene.convergence,

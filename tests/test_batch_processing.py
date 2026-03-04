@@ -544,6 +544,61 @@ class TestEnhanceBatch:
 
                 assert orchestrator.run_scene_reconstruction_fn.call_count == 0
 
+    def test_enhance_batch_raises_when_research_tools_license_not_acknowledged(self, batch_temp_workspace):
+        """Reconstruction must fail when research-tools license acknowledgement is missing."""
+        config = EnhanceConfig(
+            model_variant=ModelVariant.METRIC_LARGE,
+            enable_v2=False,
+            enable_parallel_processing=False,
+            emit_run_card=False,
+            enable_reconstruction=True,
+            grouping_mode="parent_dir",
+            non_commercial_ok=True,
+            accept_research_tools_license=False,
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+            sidecar_path = tmpdir_path / "scene_cameras.json"
+            config.cameras_sidecar_path = str(sidecar_path)
+
+            with patch("transformation_portal.lux_depth_v3.orchestrator.DepthBackendRegistry") as mock_registry_class:
+                mock_backend = Mock()
+                mock_backend.ensure_available.return_value = None
+                mock_backend.name = "da3"
+
+                mock_registry = Mock()
+                mock_registry.get_backend.return_value = mock_backend
+                mock_registry_class.return_value = mock_registry
+
+                orchestrator = EnhanceOrchestrator(
+                    config=config,
+                    output_root=tmpdir_path,
+                )
+
+                input_dir = batch_temp_workspace["input_dir"]
+                discovered = [
+                    input_dir / "scene_a" / "view_2.jpg",
+                    input_dir / "scene_a" / "view_1.jpg",
+                ]
+
+                def _mock_enhance_image(image_input, input_root=None):  # noqa: ARG001
+                    return {
+                        "status": "ok",
+                        "image": str(image_input.path),
+                        "runtime_s": 1.0,
+                    }
+
+                with (
+                    patch("transformation_portal.lux_depth_v3.orchestrator.discover_images", return_value=discovered),
+                    patch.object(orchestrator, "enhance_image", side_effect=_mock_enhance_image),
+                ):
+                    orchestrator.run_scene_reconstruction_fn = Mock()
+                    with pytest.raises(LicenseRestrictionError, match="accept_research_tools_license=True"):
+                        orchestrator.enhance_batch(input_dir)
+
+                assert orchestrator.run_scene_reconstruction_fn.call_count == 0
+
     def test_enhance_batch_skips_scene_reconstruction_when_cameras_absent(self, batch_temp_workspace):
         """Reconstruction gate must skip multi-view scene when explicit sidecar is absent."""
         config = EnhanceConfig(
@@ -554,6 +609,8 @@ class TestEnhanceBatch:
             enable_reconstruction=True,
             grouping_mode="parent_dir",
             cameras_sidecar_path=None,
+            non_commercial_ok=True,
+            accept_research_tools_license=True,
         )
 
         with tempfile.TemporaryDirectory() as tmpdir:

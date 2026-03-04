@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+from functools import lru_cache
 from pathlib import Path
 from typing import Optional, Tuple
 
@@ -11,7 +12,7 @@ import numpy as np
 
 from transformation_portal.spatial_ai.reconstruction.contracts import CameraParams
 
-from .scene_groups import SceneGroup, _normalize_relative_path
+from .scene_groups import SceneGroup, normalize_relative_path
 
 logger = logging.getLogger(__name__)
 
@@ -48,20 +49,10 @@ def _camera_from_dict(camera_data: dict) -> CameraParams:
     )
 
 
-def load_scene_cameras(
-    scene: SceneGroup,
-    dataset_root: Path,
-    sidecar_path: Optional[Path],
-) -> Optional[Tuple[CameraParams, ...]]:
-    """Load cameras for a scene from explicit sidecar metadata.
-
-    Returns None when sidecar is missing, invalid, or does not contain
-    a valid camera bundle for the requested scene.
-    """
-    if sidecar_path is None:
-        logger.debug("No camera sidecar path configured; scene reconstruction disabled for %s", scene.scene_id)
-        return None
-
+@lru_cache(maxsize=8)
+def _load_sidecar_payload_cached(sidecar_path_str: str) -> Optional[dict]:
+    """Load and validate sidecar root payload once per unique path string."""
+    sidecar_path = Path(sidecar_path_str)
     try:
         with open(sidecar_path, "r", encoding="utf-8") as f:
             payload = json.load(f)
@@ -87,6 +78,28 @@ def load_scene_cameras(
         logger.warning("Invalid camera sidecar: 'scenes' must be an object (%s)", sidecar_path)
         return None
 
+    return payload
+
+
+def load_scene_cameras(
+    scene: SceneGroup,
+    dataset_root: Path,
+    sidecar_path: Optional[Path],
+) -> Optional[Tuple[CameraParams, ...]]:
+    """Load cameras for a scene from explicit sidecar metadata.
+
+    Returns None when sidecar is missing, invalid, or does not contain
+    a valid camera bundle for the requested scene.
+    """
+    if sidecar_path is None:
+        logger.debug("No camera sidecar path configured; scene reconstruction disabled for %s", scene.scene_id)
+        return None
+
+    payload = _load_sidecar_payload_cached(str(sidecar_path.resolve()))
+    if payload is None:
+        return None
+    scenes = payload["scenes"]
+
     scene_entry = scenes.get(scene.scene_id)
     if not isinstance(scene_entry, dict):
         logger.debug("No camera entry for scene_id=%s in %s", scene.scene_id, sidecar_path)
@@ -98,7 +111,7 @@ def load_scene_cameras(
         logger.warning("Invalid camera scene entry for %s: requires 'images' and 'cameras' arrays", scene.scene_id)
         return None
 
-    normalized_scene_images = [_normalize_relative_path(p, dataset_root).lstrip("./") for p in scene.images]
+    normalized_scene_images = [normalize_relative_path(p, dataset_root).lstrip("./") for p in scene.images]
     normalized_entry_images = [_normalize_sidecar_image(str(p)) for p in entry_images]
     if normalized_entry_images != normalized_scene_images:
         logger.warning(

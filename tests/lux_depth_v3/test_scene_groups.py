@@ -32,3 +32,4 @@ def test_scene_groups_parent_dir_mode_groups_deterministically():
     assert groups[1].images == (Path("scene_b/img1.png"), Path("scene_b/img2.png"))
     assert len(groups[0].scene_id) == 12
     assert len(groups[1].scene_id) == 12
+    assert groups[0].scene_id != groups[1].scene_id

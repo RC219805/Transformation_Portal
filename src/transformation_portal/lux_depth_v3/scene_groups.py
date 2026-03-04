@@ -38,16 +38,21 @@ def _normalize_relative_path(path: Path, dataset_root: Path) -> str:
     return rel.as_posix().lower()
 
 
+def normalize_relative_path(path: Path, dataset_root: Path) -> str:
+    """Public wrapper for stable path normalization used across scene modules."""
+    return _normalize_relative_path(path, dataset_root)
+
+
 def _compute_scene_id(images: Tuple[Path, ...], dataset_root: Path) -> str:
     """Compute deterministic scene id from normalized relative image paths."""
-    normalized = [_normalize_relative_path(p, dataset_root) for p in images]
+    normalized = [normalize_relative_path(p, dataset_root) for p in images]
     payload = "\n".join(sorted(normalized)).encode("utf-8")
     return hashlib.sha1(payload, usedforsecurity=False).hexdigest()[:12]
 
 
 def _group_key(path: Path, dataset_root: Path) -> str:
     """Group key for parent-directory grouping mode."""
-    normalized = _normalize_relative_path(path, dataset_root)
+    normalized = normalize_relative_path(path, dataset_root)
     if "/" not in normalized:
         return ""
     return normalized.rsplit("/", 1)[0]
@@ -82,7 +87,7 @@ def build_scene_groups(
 
     if mode == "parent_dir":
         # Stable ordering regardless of caller order.
-        sorted_images = sorted(image_list, key=lambda p: _normalize_relative_path(p, dataset_root))
+        sorted_images = sorted(image_list, key=lambda p: normalize_relative_path(p, dataset_root))
         groups: List[SceneGroup] = []
         for _, grouped_iter in groupby(sorted_images, key=lambda p: _group_key(p, dataset_root)):
             grouped_images = tuple(grouped_iter)
