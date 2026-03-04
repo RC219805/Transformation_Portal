@@ -8,7 +8,6 @@ Phase C1 design rule:
 from __future__ import annotations
 
 import hashlib
-import json
 import logging
 import os
 from pathlib import Path
@@ -17,6 +16,7 @@ from typing import TYPE_CHECKING, Any, Dict
 import numpy as np
 from PIL import Image
 
+from transformation_portal.ingest.canonical_json import canonicalize_json
 from transformation_portal.spatial_ai.ingest import contracts as ingest_contracts
 
 from .raw_loader import is_raw_file
@@ -78,8 +78,7 @@ def raw_ingest_summary(config: "EnhanceConfig") -> Dict[str, Any]:
         "preview_escape_env": RAW_PREVIEW_ESCAPE_ENV,
         "preview_escape_enabled": _preview_escape_enabled(),
     }
-    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), allow_nan=False).encode("utf-8")
-    payload["settings_hash"] = hashlib.sha256(canonical).hexdigest()
+    payload["settings_hash"] = hashlib.sha256(canonicalize_json(payload)).hexdigest()
     return payload
 
 
