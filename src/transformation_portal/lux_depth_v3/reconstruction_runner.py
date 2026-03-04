@@ -30,9 +30,15 @@ def run_scene_reconstruction(
     builder = SceneBuilder(tier=tier)
     reconstructed_scene = builder.build_from_images(
         image_paths=list(context.images),
-        cameras=list(context.cameras),
+        cameras=[camera.params for camera in context.cameras],
         iterations=iterations,
         gamma=1.0,
+    )
+
+    camera_sources = [camera.provenance.source for camera in context.cameras]
+    camera_confidences = [camera.provenance.confidence for camera in context.cameras]
+    camera_provenance_files = sorted(
+        {camera.provenance.file for camera in context.cameras if isinstance(camera.provenance.file, str)}
     )
 
     payload = {
@@ -40,11 +46,15 @@ def run_scene_reconstruction(
         "scene_id": context.scene_id,
         "num_views": len(context.images),
         "images": [normalize_relative_path(path, context.dataset_root) for path in context.images],
+        "camera_sources": camera_sources,
+        "camera_confidences": camera_confidences,
         "rmse": float(reconstructed_scene.rmse),
         "iteration": int(reconstructed_scene.iteration),
         "convergence": reconstructed_scene.convergence,
         "num_gaussians": int(reconstructed_scene.splats.num_gaussians),
     }
+    if camera_provenance_files:
+        payload["camera_provenance_files"] = camera_provenance_files
 
     safe_scene_id = sanitize_path_component_nonlossy(context.scene_id)
     report_path = output_dir / f"{safe_scene_id}_reconstruction_report.json"

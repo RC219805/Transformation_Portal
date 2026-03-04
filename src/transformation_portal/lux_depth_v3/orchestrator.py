@@ -3172,6 +3172,20 @@ class EnhanceOrchestrator:
             if not cameras:
                 logger.info("Skipping reconstruction for scene %s: cameras unavailable", scene.scene_id)
                 continue
+            camera_sources = {camera.provenance.source for camera in cameras}
+            if len(camera_sources) > 1:
+                logger.warning(
+                    "Skipping reconstruction for scene %s: mixed camera sources %s",
+                    scene.scene_id,
+                    sorted(camera_sources),
+                )
+                continue
+            if any(camera.provenance.confidence == "low" for camera in cameras):
+                logger.warning(
+                    "Skipping reconstruction for scene %s: low-confidence camera provenance detected",
+                    scene.scene_id,
+                )
+                continue
 
             context = SceneContext.build(
                 scene=scene,

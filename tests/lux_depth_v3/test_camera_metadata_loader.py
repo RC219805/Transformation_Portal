@@ -43,10 +43,13 @@ def test_load_scene_cameras_from_explicit_sidecar(tmp_path: Path):
 
     assert cameras is not None
     assert len(cameras) == 2
-    assert cameras[0].intrinsics.shape == (3, 3)
-    assert cameras[0].extrinsics.shape == (4, 4)
-    assert cameras[0].intrinsics.dtype == np.float32
-    assert cameras[0].extrinsics.dtype == np.float32
+    assert cameras[0].params.intrinsics.shape == (3, 3)
+    assert cameras[0].params.extrinsics.shape == (4, 4)
+    assert cameras[0].params.intrinsics.dtype == np.float32
+    assert cameras[0].params.extrinsics.dtype == np.float32
+    assert cameras[0].provenance.source == "sidecar"
+    assert cameras[0].provenance.confidence == "high"
+    assert cameras[0].provenance.file == str(sidecar_path.resolve())
 
 
 def test_load_scene_cameras_returns_none_without_sidecar(tmp_path: Path):

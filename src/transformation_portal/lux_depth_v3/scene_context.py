@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, Literal, Optional, Tuple
 
 import numpy as np
 
@@ -12,6 +12,26 @@ from .scene_groups import SceneGroup, compute_scene_id
 
 if TYPE_CHECKING:
     from transformation_portal.spatial_ai.reconstruction.contracts import CameraParams
+
+CameraSource = Literal["sidecar", "exif", "synthetic", "sfm"]
+CameraConfidence = Literal["high", "medium", "low"]
+
+
+@dataclass(frozen=True)
+class CameraProvenance:
+    """Origin and trust metadata for a camera calibration entry."""
+
+    source: CameraSource
+    confidence: CameraConfidence
+    file: Optional[str] = None
+
+
+@dataclass(frozen=True)
+class CameraWithProvenance:
+    """Camera parameters paired with provenance metadata."""
+
+    params: "CameraParams"
+    provenance: CameraProvenance
 
 
 @dataclass(frozen=True)
@@ -25,7 +45,7 @@ class SceneContext:
     scene_id: str
     dataset_root: Path
     images: Tuple[Path, ...]
-    cameras: Tuple["CameraParams", ...]
+    cameras: Tuple[CameraWithProvenance, ...]
     segmentation_masks: Optional[Dict[str, np.ndarray]] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
 
@@ -35,7 +55,7 @@ class SceneContext:
         *,
         scene: SceneGroup,
         dataset_root: Path,
-        cameras: Tuple["CameraParams", ...],
+        cameras: Tuple[CameraWithProvenance, ...],
         segmentation_masks: Optional[Dict[str, np.ndarray]] = None,
         metadata: Optional[Dict[str, Any]] = None,
     ) -> "SceneContext":

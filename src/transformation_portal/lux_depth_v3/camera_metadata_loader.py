@@ -12,6 +12,7 @@ import numpy as np
 
 from transformation_portal.spatial_ai.reconstruction.contracts import CameraParams
 
+from .scene_context import CameraProvenance, CameraWithProvenance
 from .scene_groups import SceneGroup, normalize_relative_path
 
 logger = logging.getLogger(__name__)
@@ -85,7 +86,7 @@ def load_scene_cameras(
     scene: SceneGroup,
     dataset_root: Path,
     sidecar_path: Optional[Path],
-) -> Optional[Tuple[CameraParams, ...]]:
+) -> Optional[Tuple[CameraWithProvenance, ...]]:
     """Load cameras for a scene from explicit sidecar metadata.
 
     Returns None when sidecar is missing, invalid, or does not contain
@@ -132,9 +133,20 @@ def load_scene_cameras(
         return None
 
     try:
-        cameras = tuple(_camera_from_dict(camera_data) for camera_data in entry_cameras)
+        camera_params = tuple(_camera_from_dict(camera_data) for camera_data in entry_cameras)
     except Exception as exc:
         logger.warning("Invalid camera parameters for scene %s: %s", scene.scene_id, exc)
         return None
 
-    return cameras
+    source_file = str(sidecar_path.resolve())
+    return tuple(
+        CameraWithProvenance(
+            params=params,
+            provenance=CameraProvenance(
+                source="sidecar",
+                confidence="high",
+                file=source_file,
+            ),
+        )
+        for params in camera_params
+    )

@@ -3,23 +3,30 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from transformation_portal.lux_depth_v3.scene_context import SceneContext
+from transformation_portal.lux_depth_v3.scene_context import CameraProvenance, CameraWithProvenance, SceneContext
 from transformation_portal.lux_depth_v3.scene_groups import SceneGroup, compute_scene_id
 from transformation_portal.spatial_ai.reconstruction.contracts import CameraParams
 
 
-def _camera(tx: float = 0.0) -> CameraParams:
+def _camera(tx: float = 0.0) -> CameraWithProvenance:
     intrinsics = np.array(
         [[1000.0, 0.0, 32.0], [0.0, 1000.0, 32.0], [0.0, 0.0, 1.0]],
         dtype=np.float32,
     )
     extrinsics = np.eye(4, dtype=np.float32)
     extrinsics[0, 3] = tx
-    return CameraParams(
-        intrinsics=intrinsics,
-        extrinsics=extrinsics,
-        width=64,
-        height=64,
+    return CameraWithProvenance(
+        params=CameraParams(
+            intrinsics=intrinsics,
+            extrinsics=extrinsics,
+            width=64,
+            height=64,
+        ),
+        provenance=CameraProvenance(
+            source="sidecar",
+            confidence="high",
+            file="/tmp/scene_cameras.json",
+        ),
     )
 
 
@@ -43,6 +50,7 @@ def test_scene_context_build_validates_and_builds(tmp_path: Path):
     assert context.scene_id == scene.scene_id
     assert context.images == images
     assert len(context.cameras) == 2
+    assert context.cameras[0].provenance.source == "sidecar"
 
 
 def test_scene_context_build_raises_on_camera_count_mismatch(tmp_path: Path):
