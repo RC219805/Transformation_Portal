@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-import json
 import logging
 from pathlib import Path
 from typing import Tuple
 
 from transformation_portal.spatial_ai.reconstruction.contracts import CameraParams
 
+from ..ingest.canonical_json import dumps_json
 from .io_atomic import atomic_write_bytes
 from .scene_groups import SceneGroup, _normalize_relative_path
 from .security import sanitize_path_component_nonlossy
@@ -53,7 +53,7 @@ def run_scene_reconstruction(
     safe_scene_id = sanitize_path_component_nonlossy(scene.scene_id)
     report_path = output_dir / f"{safe_scene_id}_reconstruction_report.json"
     report_bytes = (
-        json.dumps(
+        dumps_json(
             payload,
             sort_keys=True,
             separators=(",", ":"),
