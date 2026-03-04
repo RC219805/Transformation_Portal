@@ -180,7 +180,12 @@ def compute_scene_fingerprint(
     artifact_index: Mapping[str, Mapping[str, Any]],
     reconstruction_config: Mapping[str, Any],
 ) -> str:
-    """Compute deterministic scene fingerprint from content-addressed inputs."""
+    """Compute deterministic scene fingerprint from canonical digest fields.
+
+    Fingerprints intentionally avoid hashing the full scene manifest structure so
+    unrelated manifest field additions/formatting changes do not perturb cache
+    keys. Only identity-bearing, content-addressed inputs are included.
+    """
     indexed_artifacts: Dict[str, str] = {}
     for relative_path in sorted(scene_manifest.get("inputs", [])):
         index_entry = artifact_index.get(relative_path)
@@ -202,13 +207,19 @@ def compute_scene_fingerprint(
     camera_signatures = [
         camera.get("signature") for camera in scene_manifest.get("cameras", []) if isinstance(camera, Mapping)
     ]
+    segmentation_sha256 = {
+        str(entry.get("relative_path") or entry.get("path")): str(entry.get("sha256"))
+        for entry in scene_manifest.get("segmentation_artifacts", [])
+        if isinstance(entry, Mapping) and (entry.get("relative_path") or entry.get("path")) and entry.get("sha256")
+    }
 
     payload = {
         "schema": SCENE_FINGERPRINT_SCHEMA,
         "scene_id": scene_manifest.get("scene_id"),
-        "image_hashes": image_hashes,
-        "camera_signatures": camera_signatures,
-        "artifacts": indexed_artifacts,
+        "images": image_hashes,
+        "segmentation_sha256": segmentation_sha256,
+        "camera_sha256": camera_signatures,
+        "artifact_hashes": indexed_artifacts,
         "reconstruction_config": dict(reconstruction_config),
     }
     canonical = dumps_json(

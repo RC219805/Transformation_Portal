@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 from pathlib import Path
 
 import numpy as np
@@ -146,3 +147,50 @@ def test_scene_fingerprint_rejects_missing_artifact_index_entries(tmp_path: Path
             artifact_index={},
             reconstruction_config={"iterations": 1000, "tier": "apex_research"},
         )
+
+
+def test_scene_fingerprint_ignores_non_identity_manifest_fields(tmp_path: Path):
+    output_root = tmp_path / "output"
+    segmentation_artifact = output_root / "segmentation" / "scene_a_masks.npz"
+    segmentation_artifact.parent.mkdir(parents=True, exist_ok=True)
+    segmentation_artifact.write_bytes(b"segmentation")
+
+    sidecar_path = tmp_path / "scene_cameras.json"
+    sidecar_path.write_text('{"schema":"tp.scene_cameras.v1","scenes":{}}', encoding="utf-8")
+
+    context = _context(tmp_path, sidecar_path)
+    scene_manifest = build_scene_manifest(
+        context=context,
+        output_root=output_root,
+        segmentation_artifact_paths=(segmentation_artifact,),
+        camera_sidecar_path=sidecar_path,
+    )
+
+    relative_seg_path = "segmentation/scene_a_masks.npz"
+    artifact_index = {
+        relative_seg_path: {
+            "sha256": compute_file_sha256(segmentation_artifact),
+        }
+    }
+    reconstruction_config = {
+        "iterations": 321,
+        "tier": "apex_research",
+        "grouping_mode": "parent_dir",
+    }
+    baseline_fp = compute_scene_fingerprint(
+        scene_manifest=scene_manifest,
+        artifact_index=artifact_index,
+        reconstruction_config=reconstruction_config,
+    )
+
+    mutated_manifest = copy.deepcopy(scene_manifest)
+    mutated_manifest["grouping_mode"] = "single"  # non-identity field (already covered by reconstruction_config)
+    mutated_manifest["debug_note"] = "irrelevant metadata"
+    mutated_manifest["camera_sidecar"]["path"] = str(Path(mutated_manifest["camera_sidecar"]["path"])) + ".alt"
+    mutated_fp = compute_scene_fingerprint(
+        scene_manifest=mutated_manifest,
+        artifact_index=artifact_index,
+        reconstruction_config=reconstruction_config,
+    )
+
+    assert baseline_fp == mutated_fp
