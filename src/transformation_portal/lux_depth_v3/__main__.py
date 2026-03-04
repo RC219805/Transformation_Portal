@@ -426,6 +426,16 @@ def main(
         print(error_msg, file=sys.stdout)
         raise typer.Exit(code=1)
 
+    raw_ingest_mode_normalized = raw_ingest_mode.strip().lower()
+    valid_raw_ingest_modes = ("auto", "force_rawpy", "force_preview")
+    if raw_ingest_mode_normalized not in valid_raw_ingest_modes:
+        error_msg = f"Invalid --raw-ingest-mode '{raw_ingest_mode}'. " "Supported modes are: auto|force_rawpy|force_preview"
+        logger.error(error_msg)
+        print(error_msg, file=sys.stdout)
+        raise typer.Exit(code=1)
+
+    raw_ingest_mode = raw_ingest_mode_normalized
+
     # Build configuration
     logger.info(f"Configuring pipeline with quality tier: {quality_tier}")
 

@@ -191,6 +191,26 @@ class TestCLIValidation:
         assert "raw-demosaic" in result.stdout.lower()
         assert "legacy_linear_srgb" in result.stdout.lower()
 
+    def test_invalid_raw_ingest_mode_rejected(self, tmp_path):
+        """RAW ingest mode should fail fast with clear supported values."""
+        input_dir = tmp_path / "input"
+        input_dir.mkdir()
+
+        result = runner.invoke(
+            app,
+            [
+                "--input-dir",
+                str(input_dir),
+                "--output-dir",
+                str(tmp_path / "output"),
+                "--raw-ingest-mode",
+                "bad_mode",
+            ],
+        )
+        assert result.exit_code == 1
+        assert "raw-ingest-mode" in result.stdout.lower()
+        assert "auto|force_rawpy|force_preview" in result.stdout
+
     def test_apex_materials_v3_requires_segmentation_enabled(self, tmp_path):
         """APEX strict gate should require explicit segmentation when Materials V3 is on."""
         input_dir = tmp_path / "input"
