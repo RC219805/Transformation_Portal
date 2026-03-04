@@ -248,6 +248,21 @@ def main(
         "--strict-inputs",
         help="Fail if depth artifacts or derived outputs found in input directory (validation mode)",
     ),
+    raw_ingest_mode: str = typer.Option(
+        "auto",
+        "--raw-ingest-mode",
+        help="RAW decode mode: auto, force_rawpy, or force_preview (preview requires TP_ALLOW_RAW_PREVIEW=1).",
+    ),
+    raw_wb_mode: str = typer.Option(
+        "camera",
+        "--raw-wb-mode",
+        help="RAW white-balance mode for canonical ingest contract: camera, auto, or none.",
+    ),
+    raw_demosaic: str = typer.Option(
+        "AHD",
+        "--raw-demosaic",
+        help="RAW demosaic algorithm name passed to canonical ingest contract (default: AHD).",
+    ),
     # Performance Tuning (Forward-Compatible)
     max_workers: Optional[int] = typer.Option(
         None,
@@ -437,6 +452,9 @@ def main(
         emit_report=enable_emit_report,
         emit_run_card=enable_emit_run_card,
         strict_inputs=strict_inputs,
+        raw_ingest_mode=raw_ingest_mode,
+        raw_wb_mode=raw_wb_mode,
+        raw_demosaic=raw_demosaic,
         allow_semantic_fallback=allow_semantic_fallback,
     )
 

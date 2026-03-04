@@ -89,6 +89,16 @@ class TestEnhanceConfig:
         assert hasattr(config, "emit_scene_debug_bundle")
         assert config.emit_scene_debug_bundle is False
 
+    def test_enhance_config_has_raw_ingest_fields(self):
+        """Test that Phase C RAW ingest knobs are present with safe defaults."""
+        config = EnhanceConfig()
+        assert hasattr(config, "raw_ingest_mode")
+        assert config.raw_ingest_mode == "auto"
+        assert hasattr(config, "raw_wb_mode")
+        assert config.raw_wb_mode == "camera"
+        assert hasattr(config, "raw_demosaic")
+        assert config.raw_demosaic == "AHD"
+
     @pytest.mark.parametrize("mode", ["fail", "skip", "v2-auto"])
     def test_enhance_config_accepts_valid_depth_fallback(self, mode):
         """Test that EnhanceConfig can be instantiated with valid depth_fallback values."""

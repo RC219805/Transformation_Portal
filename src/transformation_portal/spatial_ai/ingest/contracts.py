@@ -27,6 +27,19 @@ class IngestOptions:
     tensor_role: str = "xyz_d50_linear_fp32"
     wb_mode: Literal["none", "camera", "auto"] = "camera"
     demosaic: str = field(default="AHD")
+    no_auto_bright: bool = True
+    no_auto_scale: bool = True
+    gamma_mode: Literal["linear"] = "linear"
+
+
+def _validate_deterministic_raw_policy(opts: IngestOptions) -> None:
+    """Require deterministic RAW decode semantics for all contracts."""
+    if not opts.no_auto_bright:
+        raise ValueError("decode_contract requires no_auto_bright=True for deterministic ingest.")
+    if not opts.no_auto_scale:
+        raise ValueError("decode_contract requires no_auto_scale=True for deterministic ingest.")
+    if opts.gamma_mode != "linear":
+        raise ValueError("decode_contract requires gamma_mode='linear' for deterministic ingest.")
 
 
 def decode_contract(input_path: Path | str, opts: IngestOptions) -> np.ndarray:
@@ -36,6 +49,8 @@ def decode_contract(input_path: Path | str, opts: IngestOptions) -> np.ndarray:
       Fails closed if FTZ/DAZ are enabled. Requires rawpy.
     - legacy_linear_srgb: routes to LinearDecoder (Phase I, not certified).
     """
+    _validate_deterministic_raw_policy(opts)
+
     if opts.contract == "camera_native_linear":
         if opts.tensor_role != "xyz_d50_linear_fp32":
             raise ValueError("camera_native_linear requires tensor_role='xyz_d50_linear_fp32' for Phase II certification.")
@@ -49,6 +64,10 @@ def decode_contract(input_path: Path | str, opts: IngestOptions) -> np.ndarray:
         return tensor
 
     if opts.contract == "legacy_linear_srgb":
+        if opts.wb_mode != "camera":
+            raise ValueError("legacy_linear_srgb currently supports wb_mode='camera' only.")
+        if opts.demosaic.strip().upper() != "AHD":
+            raise ValueError("legacy_linear_srgb currently supports demosaic='AHD' only.")
         from .linear_decoder import LinearDecoder
 
         result = LinearDecoder(gamma=1.0, strict_ingest=True).decode(input_path)

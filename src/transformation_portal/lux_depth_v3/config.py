@@ -183,6 +183,9 @@ class EnhanceConfig:
 
     # Spatial AI Foundation (ADR-026 Phase I)
     spatial_ai_linear_ingest: bool = False  # Enable linear light preservation (float32, gamma=1.0)
+    raw_ingest_mode: str = "auto"  # RAW decode policy: auto, force_rawpy, force_preview (debug env-gated)
+    raw_wb_mode: str = "camera"  # RAW white-balance mode for canonical ingest contract
+    raw_demosaic: str = "AHD"  # RAW demosaic algorithm for canonical ingest contract
 
     # Depth backend selection
     depth_backend: Optional[str] = None  # None = auto (DA3), "depth_pro", or "ensemble"

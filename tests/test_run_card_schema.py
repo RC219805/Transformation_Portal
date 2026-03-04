@@ -39,6 +39,8 @@ def _valid_run_card_payload() -> dict:
             "device_requested": "cpu",
             "device_resolved": "cpu",
             "quality_tier": "premium",
+            "raw_ingest_profile": "tp.raw_ingest.deterministic_v1",
+            "raw_ingest_settings_hash": "e" * 64,
             "strict_inputs": False,
             "strict_segmentation": False,
             "apex_strict_mode": False,
@@ -538,3 +540,5 @@ def test_config_fingerprint_uses_raw_preset_requested_when_enum_unset():
 
     assert fingerprint["preset_requested"] == "premium"
     assert fingerprint["preset_resolved"] == "quality_tier:apex"
+    assert fingerprint["raw_ingest_profile"] == "tp.raw_ingest.deterministic_v1"
+    assert len(fingerprint["raw_ingest_settings_hash"]) == 64

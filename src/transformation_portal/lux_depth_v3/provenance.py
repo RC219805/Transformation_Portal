@@ -275,6 +275,8 @@ class IngestContext:
     host_machine: str
     cli_args: Optional[list] = None
     working_directory: Optional[str] = None
+    ingest_profile: Optional[str] = None
+    ingest_settings_hash: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize to dictionary."""
@@ -476,6 +478,8 @@ def capture_provenance(
     cli_args: Optional[list] = None,
     repo_root: Optional[Path] = None,
     require_exiftool: bool = True,
+    ingest_profile: Optional[str] = None,
+    ingest_settings_hash: Optional[str] = None,
 ) -> ProvenanceMetadata:
     """Capture complete provenance metadata for an input file.
 
@@ -488,6 +492,8 @@ def capture_provenance(
         repo_root: Repository root for git SHA capture (optional)
         require_exiftool: If True, hard-fail when exiftool unavailable.
                          If False, skip EXIF extraction and continue (default: True)
+        ingest_profile: Optional canonical ingest profile identifier.
+        ingest_settings_hash: Optional SHA-256 digest of canonical ingest settings.
 
     Returns:
         ProvenanceMetadata instance ready for writing
@@ -549,6 +555,8 @@ def capture_provenance(
         host_machine=host_machine,
         cli_args=cli_args,
         working_directory=str(Path.cwd()),
+        ingest_profile=ingest_profile,
+        ingest_settings_hash=ingest_settings_hash,
     )
 
     provenance = ProvenanceMetadata(
