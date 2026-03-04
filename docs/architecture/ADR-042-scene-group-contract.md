@@ -45,6 +45,8 @@ Define a scene-group contract as the canonical handoff boundary between per-imag
 
 ### SceneGroup structure
 
+Target Phase B contract shape:
+
 ```python
 @dataclass(frozen=True)
 class SceneGroup:
@@ -52,6 +54,12 @@ class SceneGroup:
     images: Tuple[Path, ...]
     cameras: Optional[Tuple[CameraParams, ...]] = None
 ```
+
+Current Phase A/Phase A.6 scaffold shape (already implemented) includes only:
+- `scene_id`
+- `images`
+
+The optional `cameras` field is introduced in Phase B.
 
 Field semantics:
 - `scene_id`: deterministic scene identifier
@@ -61,8 +69,8 @@ Field semantics:
 ## Deterministic Ordering
 
 Grouping must preserve deterministic ordering:
-- input image discovery order is normalized via `sorted(input_images)`
-- grouping logic must not reorder image paths within a scene
+- orchestrators MUST normalize input discovery order before grouping (for example `images = sorted(images)`)
+- `build_scene_groups` MUST treat incoming `images` as already normalized and MUST NOT reorder image paths within a scene
 - `scene_id` derivation must be deterministic for equivalent input sets
 
 ### Scene Identifier Generation
@@ -79,10 +87,13 @@ Algorithm:
 Reference:
 
 ```python
-scene_id = sha1(
+import hashlib
+
+scene_id = hashlib.sha1(
     "\n".join(
         sorted(str(path.relative_to(dataset_root).as_posix()) for path in images)
-    ).encode("utf-8")
+    ).encode("utf-8"),
+    usedforsecurity=False,
 ).hexdigest()[:12]
 ```
 
@@ -162,6 +173,9 @@ Constraint:
 Scene-level reconstruction is controlled by configuration flag:
 
 `lux_depth_v3.enable_reconstruction`
+
+Status:
+- this flag is part of the Phase B implementation plan and is not present in current Phase A/Phase A.6 code
 
 Default value:
 - `enable_reconstruction = false`
