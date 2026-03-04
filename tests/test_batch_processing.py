@@ -179,8 +179,6 @@ class TestEnhanceBatch:
                         batch_manifests = list(manifests_dir.glob("batch_*.json"))
                         if batch_manifests:
                             # Verify batch manifest has runtime stats
-                            import json
-
                             with open(batch_manifests[0]) as f:
                                 manifest = json.load(f)
 
@@ -547,8 +545,6 @@ class TestEnhanceBatch:
                     if manifests_dir.exists():
                         batch_manifests = list(manifests_dir.glob("batch_*.json"))
                         if batch_manifests:
-                            import json
-
                             with open(batch_manifests[0]) as f:
                                 manifest = json.load(f)
 
