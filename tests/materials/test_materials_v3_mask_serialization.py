@@ -8,6 +8,9 @@ Tests the complete flow:
 5. Temporary masks cleaned up after V2 completes
 """
 
+# pytest fixture injection uses function args that match fixture names.
+# pylint: disable=redefined-outer-name
+
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 

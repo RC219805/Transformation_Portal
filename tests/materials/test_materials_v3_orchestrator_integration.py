@@ -165,7 +165,7 @@ def test_run_materials_v3_stage_persists_mask_artifact_and_sets_metadata(tmp_pat
 
     with np.load(mask_artifact_path) as data:
         assert set(data.files) == {"glass"}
-        loaded_mask = data["glass"]
+        loaded_mask = np.asarray(data["glass"])
 
     assert loaded_mask.shape == glass_mask.shape
     assert loaded_mask.dtype == np.float32
