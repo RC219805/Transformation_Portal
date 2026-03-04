@@ -14,14 +14,20 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Optional, Tuple, Union
+from types import SimpleNamespace
+from typing import Any, Optional, Tuple, Union
 
 import numpy as np
 from PIL import Image
 
-from .raw_loader import RAW_EXTENSIONS, is_raw_file, load_raw_as_pil
+from .raw_loader import RAW_EXTENSIONS, is_raw_file
 
 logger = logging.getLogger(__name__)
+
+try:
+    import cv2 as _opencv  # type: ignore
+except ImportError:
+    _opencv = None  # type: ignore[assignment]
 
 # Supported image formats (standard + RAW)
 SUPPORTED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".tiff", ".tif", ".webp", ".bmp"} | RAW_EXTENSIONS
@@ -66,7 +72,7 @@ def validate_image_format(image_path: Union[str, Path]) -> Path:
         # RAW files require different validation (PIL can't open them)
         if is_raw_file(image_path):
             # For RAW, just check file is readable
-            # Full validation happens during load_raw_as_pil()
+            # Full validation happens during canonical ingest decode.
             with open(image_path, "rb") as f:
                 # Read first few bytes to ensure file is readable
                 header = f.read(16)
@@ -89,7 +95,7 @@ def validate_image_format(image_path: Union[str, Path]) -> Path:
 
 
 def preprocess_image(
-    image: Union[np.ndarray, Path, str], target_size: Optional[int] = None
+    image: Union[np.ndarray, Path, str], target_size: Optional[int] = None, raw_config: Optional[Any] = None
 ) -> Tuple[np.ndarray, Tuple[int, int]]:
     """Preprocess image for depth inference.
 
@@ -105,6 +111,8 @@ def preprocess_image(
     Args:
         image: Input as numpy array, Path, or str
         target_size: Optional target size for long edge (maintains aspect)
+        raw_config: Optional config object with RAW ingest knobs (raw_ingest_mode,
+            raw_wb_mode, raw_demosaic). Uses deterministic defaults when omitted.
 
     Returns:
         Tuple of:
@@ -119,17 +127,19 @@ def preprocess_image(
     if isinstance(image, (str, Path)):
         image_path = validate_image_format(image)
 
-        # PIL-first fallback pattern: try PIL, fallback to RAW only if needed
-        try:
-            pil_img = Image.open(image_path).convert("RGB")
-        except (Image.UnidentifiedImageError, OSError, ValueError):
-            # PIL failed - try RAW only if extension suggests RAW and rawpy available
-            if is_raw_file(image_path):
-                logger.debug(f"PIL failed, loading as RAW: {image_path.name}")
-                pil_img = load_raw_as_pil(image_path, use_camera_wb=True, half_size=False)
-            else:
-                # Re-raise original error if not a RAW file
-                raise
+        # Phase C1: RAW ingest is routed through canonical spatial_ai.ingest contract.
+        if is_raw_file(image_path):
+            from .ingest_adapter import decode_for_lux_depth
+
+            ingest_cfg = raw_config or SimpleNamespace(
+                raw_ingest_mode="auto",
+                raw_wb_mode="camera",
+                raw_demosaic="AHD",
+            )
+            decoded_rgb = decode_for_lux_depth(image_path, ingest_cfg)
+            return preprocess_from_linear_ingest(decoded_rgb, target_size=target_size)
+
+        pil_img = Image.open(image_path).convert("RGB")
     elif isinstance(image, np.ndarray):
         # Convert numpy array to PIL for consistent processing
         if image.ndim == 2:
@@ -174,6 +184,38 @@ def preprocess_image(
     img_array = _enforce_dimension_multiple(img_array, DIMENSION_MULTIPLE)
 
     return img_array, (original_h, original_w)
+
+
+def preprocess_from_linear_ingest(
+    image: np.ndarray,
+    target_size: Optional[int] = None,
+) -> Tuple[np.ndarray, Tuple[int, int]]:
+    """Preprocess canonical decoded ingest tensors for depth inference.
+
+    Args:
+        image: Decoded float32 HxWx3 tensor.
+        target_size: Optional target size for long edge.
+
+    Returns:
+        Tuple of processed image array and original (H, W).
+    """
+    if image.ndim != 3 or image.shape[2] != 3:
+        raise ValueError(f"Decoded ingest tensor must be (H, W, 3), got: {image.shape}")
+
+    img_array = np.asarray(image, dtype=np.float32)
+    original_h, original_w = img_array.shape[:2]
+
+    # Canonical depth path expects [0,1] RGB floats.
+    img_array = np.clip(img_array, 0.0, 1.0)
+
+    if target_size is not None:
+        image_uint8 = (img_array * 255.0).astype(np.uint8)
+        pil_img = Image.fromarray(image_uint8, mode="RGB")
+        pil_img = _resize_keep_aspect(pil_img, target_size)
+        img_array = np.asarray(pil_img, dtype=np.float32) / 255.0
+
+    img_array = _enforce_dimension_multiple(img_array, DIMENSION_MULTIPLE)
+    return img_array.astype(np.float32), (original_h, original_w)
 
 
 def _resize_keep_aspect(pil_img: Image.Image, target_size: int) -> Image.Image:
@@ -450,19 +492,17 @@ def preprocess_image_linear(
             new_h = int(h * (target_size / w))
 
         # Resize using high-quality interpolation
-        # Use cv2 to avoid lossy float32→uint8→float32 conversion
-        try:
-            import cv2
-        except ImportError as e:
+        # Use OpenCV to avoid lossy float32→uint8→float32 conversion.
+        if _opencv is None:
             raise ImportError(
                 "OpenCV (cv2) is required for resizing in linear space for APEX pipeline. "
                 "Install with: pip install opencv-python\n"
                 "Or: pip install -e '.[cv2]'"
-            ) from e
+            )
 
-        # cv2.resize preserves dtype (float32 stays float32)
+        # OpenCV resize preserves dtype (float32 stays float32).
         # Use INTER_LANCZOS4 for high-quality resampling
-        img_array = cv2.resize(img_array, (new_w, new_h), interpolation=cv2.INTER_LANCZOS4)
+        img_array = _opencv.resize(img_array, (new_w, new_h), interpolation=_opencv.INTER_LANCZOS4)
 
         # Clip to [0, 1] after resize (interpolation can introduce small out-of-range values)
         img_array = np.clip(img_array, 0.0, 1.0)

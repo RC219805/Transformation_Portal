@@ -234,6 +234,48 @@ def test_verify_run_card_integrity_rejects_config_fingerprint_hash_mismatch(tmp_
     assert any("config_fingerprint.sha256 mismatch" in error for error in errors)
 
 
+def test_verify_run_card_integrity_accepts_config_fingerprint_with_raw_ingest_fields(tmp_path: Path):
+    module = _load_script_module("verify_run_card_integrity_script_raw_ingest", "scripts/verify_run_card_integrity.py")
+    run_card_path = tmp_path / "run_card_raw_ingest_fingerprint.json"
+    payload = _valid_run_card_payload(module)
+    config_fingerprint = payload["config_fingerprint"]
+    config_fingerprint["raw_ingest_profile"] = "tp.raw_ingest.deterministic_v1"
+    config_fingerprint["raw_ingest_settings_hash"] = "e" * 64
+
+    fields = (
+        "model_variant",
+        "depth_quantization",
+        "depth_device",
+        "preset",
+        "v2_preset",
+        "v2_device",
+        "v2_upscaler_backend",
+        "preset_requested",
+        "preset_resolved",
+        "backend_requested",
+        "backend_resolved",
+        "device_requested",
+        "device_resolved",
+        "quality_tier",
+        "strict_inputs",
+        "strict_segmentation",
+        "apex_strict_mode",
+        "raw_ingest_profile",
+        "raw_ingest_settings_hash",
+    )
+    canonical_json = json.dumps(
+        {field: config_fingerprint.get(field) for field in fields},
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    config_fingerprint["canonical_json"] = canonical_json
+    config_fingerprint["sha256"] = hashlib.sha256(canonical_json.encode("utf-8")).hexdigest()
+    _write_json(run_card_path, payload)
+
+    errors = module.verify_run_card_integrity(run_card_path)
+    assert errors == []
+
+
 def test_verify_run_card_integrity_reports_invalid_json(tmp_path: Path):
     module = _load_script_module("verify_run_card_integrity_script_invalid_json", "scripts/verify_run_card_integrity.py")
     run_card_path = tmp_path / "run_card_invalid.json"

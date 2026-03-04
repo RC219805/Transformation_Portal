@@ -23,7 +23,7 @@ from PIL import Image
 from transformation_portal.core.security.model_lock import is_model_lock_strict_enabled, resolve_model_lock_revision
 
 from .config import DA3Config, ModelVariant  # noqa: F401 - Used in docstring examples
-from .raw_loader import is_raw_file, load_raw_as_pil
+from .raw_loader import is_raw_file
 
 if TYPE_CHECKING:
     from .input_manager import ImageInput
@@ -622,19 +622,15 @@ class DA3InferenceEngine:
         Returns:
             DepthResult with depth map and metadata
         """
-        # PIL-first fallback pattern: try PIL, fallback to RAW only if needed
-        try:
-            image = Image.open(image_path).convert("RGB")
-        except (Image.UnidentifiedImageError, OSError, ValueError):
-            # PIL failed - try RAW only if extension suggests RAW and rawpy available
-            if is_raw_file(image_path):
-                logger.debug(f"PIL failed, loading as RAW for inference: {image_path.name}")
-                image = load_raw_as_pil(image_path, use_camera_wb=True, half_size=False)
-            else:
-                # Re-raise original error if not a RAW file
-                raise
+        if is_raw_file(image_path):
+            from .ingest_adapter import decode_for_lux_depth
 
-        image_np = np.array(image)
+            logger.debug("Routing RAW input through canonical ingest contract: %s", image_path.name)
+            decoded = decode_for_lux_depth(image_path, self.config)
+            image_np = (np.clip(decoded, 0.0, 1.0) * 255.0).astype(np.uint8)
+        else:
+            image = Image.open(image_path).convert("RGB")
+            image_np = np.array(image)
 
         # Run inference
         return self.infer(image_np)

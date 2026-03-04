@@ -157,8 +157,14 @@ def _verify_config_fingerprint(run_card_payload: dict[str, Any], errors: list[st
         "strict_segmentation",
         "apex_strict_mode",
     )
+    optional_fields = (
+        "raw_ingest_profile",
+        "raw_ingest_settings_hash",
+    )
+    present_optional_fields = tuple(field for field in optional_fields if field in config_fingerprint)
+    fingerprint_fields = (*fields, *present_optional_fields)
     expected_canonical_json = json.dumps(
-        {field: config_fingerprint.get(field) for field in fields},
+        {field: config_fingerprint.get(field) for field in fingerprint_fields},
         sort_keys=True,
         separators=(",", ":"),
     )

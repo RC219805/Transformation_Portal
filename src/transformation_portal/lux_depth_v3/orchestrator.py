@@ -864,7 +864,10 @@ class EnhanceOrchestrator:
 
     def _build_run_card_config_fingerprint(self) -> Dict[str, Any]:
         """Build run-card config fingerprint from effective user intent + resolution."""
+        from .ingest_adapter import raw_ingest_summary
+
         base = self.compute_config_fingerprint()
+        raw_summary = raw_ingest_summary(self.config)
 
         preset_requested = getattr(self.config, "preset_requested", None) or (
             self.config.preset.value if self.config.preset else None
@@ -894,6 +897,8 @@ class EnhanceOrchestrator:
             "strict_inputs": bool(self.config.strict_inputs),
             "strict_segmentation": bool(self.config.strict_backend),
             "apex_strict_mode": self._is_apex_tier(),
+            "raw_ingest_profile": str(raw_summary.get("profile", "")),
+            "raw_ingest_settings_hash": str(raw_summary.get("settings_hash", "")),
         }
         canonical_json = json.dumps(payload, sort_keys=True, separators=(",", ":"))
         return {
@@ -1248,7 +1253,7 @@ class EnhanceOrchestrator:
                     logger.error(f"Strict verification failed: {validated_path.name} - {e}")
                     raise ValueError(f"Image failed strict verification: {validated_path}") from e
 
-            preprocessed_array, original_shape = preprocess_image(validated_path)
+            preprocessed_array, original_shape = preprocess_image(validated_path, raw_config=self.config)
 
             logger.info(f"Stage A: Generating depth for {output_key}...")
             t0 = time.time()
@@ -1873,7 +1878,7 @@ class EnhanceOrchestrator:
         from .preprocessing import preprocess_image, validate_image_format
 
         validated_path = validate_image_format(image_input.path)
-        preprocessed_array, _ = preprocess_image(validated_path)
+        preprocessed_array, _ = preprocess_image(validated_path, raw_config=self.config)
         depth_for_materials = self._load_cached_depth(depth_path, float_depth_path)
         if depth_for_materials is None:
             raise ApexStrictGateError(
@@ -2200,6 +2205,9 @@ class EnhanceOrchestrator:
             # Get config fingerprint for provenance
             config_fp = self.compute_config_fingerprint()
             config_fp_str = f"sha256:{config_fp.to_sha256()}"
+            from .ingest_adapter import raw_ingest_summary
+
+            raw_summary = raw_ingest_summary(self.config)
 
             # Capture CLI args from environment if available (set by CLI runner)
             # Use shlex for proper shell-quoting aware parsing
@@ -2216,6 +2224,8 @@ class EnhanceOrchestrator:
                 cli_args=cli_args,
                 repo_root=Path.cwd(),  # Repository root for git SHA
                 require_exiftool=is_audit_input,
+                ingest_profile=str(raw_summary.get("profile", "")),
+                ingest_settings_hash=str(raw_summary.get("settings_hash", "")),
             )
 
             # Write provenance sidecar

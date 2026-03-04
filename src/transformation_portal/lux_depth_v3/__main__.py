@@ -248,6 +248,21 @@ def main(
         "--strict-inputs",
         help="Fail if depth artifacts or derived outputs found in input directory (validation mode)",
     ),
+    raw_ingest_mode: str = typer.Option(
+        "auto",
+        "--raw-ingest-mode",
+        help="RAW decode mode: auto, force_rawpy, or force_preview (preview requires TP_ALLOW_RAW_PREVIEW=1).",
+    ),
+    raw_wb_mode: str = typer.Option(
+        "camera",
+        "--raw-wb-mode",
+        help="RAW white-balance mode for legacy_linear_srgb ingest contract (currently only 'camera' is supported).",
+    ),
+    raw_demosaic: str = typer.Option(
+        "AHD",
+        "--raw-demosaic",
+        help="RAW demosaic algorithm for legacy_linear_srgb ingest contract (currently only 'AHD' is supported).",
+    ),
     # Performance Tuning (Forward-Compatible)
     max_workers: Optional[int] = typer.Option(
         None,
@@ -396,6 +411,31 @@ def main(
             print(error_msg, file=sys.stdout)
             raise typer.Exit(code=1)
 
+    # Phase C1 contract guardrails for legacy_linear_srgb ingest contract.
+    raw_wb_mode_normalized = raw_wb_mode.strip().lower()
+    if raw_wb_mode_normalized != "camera":
+        error_msg = f"Invalid --raw-wb-mode '{raw_wb_mode}'. " "legacy_linear_srgb currently supports only: camera"
+        logger.error(error_msg)
+        print(error_msg, file=sys.stdout)
+        raise typer.Exit(code=1)
+
+    raw_demosaic_normalized = raw_demosaic.strip().upper()
+    if raw_demosaic_normalized != "AHD":
+        error_msg = f"Invalid --raw-demosaic '{raw_demosaic}'. " "legacy_linear_srgb currently supports only: AHD"
+        logger.error(error_msg)
+        print(error_msg, file=sys.stdout)
+        raise typer.Exit(code=1)
+
+    raw_ingest_mode_normalized = raw_ingest_mode.strip().lower()
+    valid_raw_ingest_modes = ("auto", "force_rawpy", "force_preview")
+    if raw_ingest_mode_normalized not in valid_raw_ingest_modes:
+        error_msg = f"Invalid --raw-ingest-mode '{raw_ingest_mode}'. " "Supported modes are: auto|force_rawpy|force_preview"
+        logger.error(error_msg)
+        print(error_msg, file=sys.stdout)
+        raise typer.Exit(code=1)
+
+    raw_ingest_mode = raw_ingest_mode_normalized
+
     # Build configuration
     logger.info(f"Configuring pipeline with quality tier: {quality_tier}")
 
@@ -437,6 +477,9 @@ def main(
         emit_report=enable_emit_report,
         emit_run_card=enable_emit_run_card,
         strict_inputs=strict_inputs,
+        raw_ingest_mode=raw_ingest_mode,
+        raw_wb_mode=raw_wb_mode_normalized,
+        raw_demosaic=raw_demosaic_normalized,
         allow_semantic_fallback=allow_semantic_fallback,
     )
 

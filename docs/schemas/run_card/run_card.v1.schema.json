@@ -107,6 +107,14 @@
           "type": "string",
           "minLength": 1
         },
+        "raw_ingest_profile": {
+          "type": "string",
+          "minLength": 1
+        },
+        "raw_ingest_settings_hash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
         "strict_inputs": {
           "type": "boolean"
         },
