@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import logging
-from functools import lru_cache
 from pathlib import Path
 from typing import Optional, Tuple
 
@@ -50,10 +49,10 @@ def _camera_from_dict(camera_data: dict) -> CameraParams:
     )
 
 
-@lru_cache(maxsize=8)
-def _load_sidecar_payload_cached(sidecar_path_str: str) -> Optional[dict]:
-    """Load and validate sidecar root payload once per unique path string."""
-    sidecar_path = Path(sidecar_path_str)
+def load_sidecar_payload(sidecar_path: Optional[Path]) -> Optional[dict]:
+    """Load and validate sidecar root payload from disk."""
+    if sidecar_path is None:
+        return None
     try:
         with open(sidecar_path, "r", encoding="utf-8") as f:
             payload = json.load(f)
@@ -86,6 +85,7 @@ def load_scene_cameras(
     scene: SceneGroup,
     dataset_root: Path,
     sidecar_path: Optional[Path],
+    sidecar_payload: Optional[dict] = None,
 ) -> Optional[Tuple[CameraWithProvenance, ...]]:
     """Load cameras for a scene from explicit sidecar metadata.
 
@@ -96,7 +96,7 @@ def load_scene_cameras(
         logger.debug("No camera sidecar path configured; scene reconstruction disabled for %s", scene.scene_id)
         return None
 
-    payload = _load_sidecar_payload_cached(str(sidecar_path.resolve()))
+    payload = sidecar_payload if sidecar_payload is not None else load_sidecar_payload(sidecar_path)
     if payload is None:
         return None
     scenes = payload["scenes"]

@@ -27,6 +27,13 @@ DEFAULT_MIN_PAIR_FRACTION = 0.3
 DEFAULT_WEAK_OVERLAP_THRESHOLD = 0.25
 
 
+def _camera_center_from_extrinsics(extrinsics: np.ndarray) -> np.ndarray:
+    """Return camera center C from world-to-camera extrinsics [R|t]."""
+    rotation = np.asarray(extrinsics[:3, :3], dtype=np.float32)
+    translation = np.asarray(extrinsics[:3, 3], dtype=np.float32)
+    return (-rotation.T @ translation).astype(np.float32)
+
+
 def scene_manifest_artifact_path(*, scene_id: str, output_dir: Path) -> Path:
     """Compute deterministic scene-manifest artifact path."""
     safe_scene_id = sanitize_path_component_nonlossy(scene_id)
@@ -207,9 +214,7 @@ def _frustum_overlap_score_pair(
 ) -> float:
     """Fast geometric proxy that estimates whether two cameras observe the same scene."""
     rotation_a = np.asarray(first.params.extrinsics[:3, :3], dtype=np.float32)
-    translation_a = np.asarray(first.params.extrinsics[:3, 3], dtype=np.float32)
     rotation_b = np.asarray(second.params.extrinsics[:3, :3], dtype=np.float32)
-    translation_b = np.asarray(second.params.extrinsics[:3, 3], dtype=np.float32)
 
     forward_axis = np.array([0.0, 0.0, 1.0], dtype=np.float32)
     forward_a = rotation_a.T @ forward_axis
@@ -221,8 +226,8 @@ def _frustum_overlap_score_pair(
     forward_a = forward_a / norm_a
     forward_b = forward_b / norm_b
 
-    center_a = -rotation_a.T @ translation_a
-    center_b = -rotation_b.T @ translation_b
+    center_a = _camera_center_from_extrinsics(first.params.extrinsics)
+    center_b = _camera_center_from_extrinsics(second.params.extrinsics)
     baseline = center_b - center_a
     baseline_norm = float(np.linalg.norm(baseline))
     if baseline_norm <= 1e-6:
@@ -357,7 +362,7 @@ def check_camera_geometry_sanity(
     if len(cameras) < 2:
         raise ValueError("Reconstruction requires >=2 cameras")
 
-    translations: list[np.ndarray] = []
+    centers: list[np.ndarray] = []
     for camera in cameras:
         intrinsics = np.asarray(camera.params.intrinsics, dtype=np.float32)
         rotation = np.asarray(camera.params.extrinsics[:3, :3], dtype=np.float32)
@@ -370,17 +375,17 @@ def check_camera_geometry_sanity(
         focal_length_x = float(intrinsics[0, 0])
         if focal_length_x <= 0.0 or focal_length_x > MAX_FOCAL_LENGTH:
             raise ValueError("Suspicious focal length")
-        translations.append(translation)
+        centers.append(_camera_center_from_extrinsics(camera.params.extrinsics))
 
-    stacked_translations = np.stack(translations).astype(np.float32)
-    spread = float(np.linalg.norm(stacked_translations.max(axis=0) - stacked_translations.min(axis=0)))
+    stacked_centers = np.stack(centers).astype(np.float32)
+    spread = float(np.linalg.norm(stacked_centers.max(axis=0) - stacked_centers.min(axis=0)))
     if spread < MIN_BASELINE:
         raise ValueError("All cameras occupy same position")
 
     baselines = [
-        float(np.linalg.norm(stacked_translations[i] - stacked_translations[j]))
-        for i in range(len(stacked_translations))
-        for j in range(i + 1, len(stacked_translations))
+        float(np.linalg.norm(stacked_centers[i] - stacked_centers[j]))
+        for i in range(len(stacked_centers))
+        for j in range(i + 1, len(stacked_centers))
     ]
     baseline_array = np.asarray(baselines, dtype=np.float32)
     if float(np.median(baseline_array)) < MIN_BASELINE:
@@ -426,9 +431,9 @@ def normalize_camera_poses(
     if len(cameras) < 2:
         raise ValueError("Degenerate camera baseline during normalization")
 
-    translations = np.stack([camera.params.extrinsics[:3, 3].astype(np.float32) for camera in cameras]).astype(np.float32)
-    center = translations.mean(axis=0).astype(np.float32)
-    centered = translations - center
+    centers = np.stack([_camera_center_from_extrinsics(camera.params.extrinsics) for camera in cameras]).astype(np.float32)
+    center = centers.mean(axis=0).astype(np.float32)
+    centered = centers - center
     baselines = [
         float(np.linalg.norm(centered[i] - centered[j])) for i in range(len(centered)) for j in range(i + 1, len(centered))
     ]
@@ -437,12 +442,13 @@ def normalize_camera_poses(
         raise ValueError("Degenerate camera baseline during normalization")
 
     scale = float(1.0 / median_baseline)
-    normalized_translations = (centered * scale).astype(np.float32)
+    normalized_centers = (centered * scale).astype(np.float32)
 
     normalized_cameras: list[CameraWithProvenance] = []
-    for camera, translation in zip(cameras, normalized_translations):
+    for camera, camera_center in zip(cameras, normalized_centers):
         extrinsics = np.asarray(camera.params.extrinsics, dtype=np.float32).copy()
-        extrinsics[:3, 3] = translation
+        rotation = np.asarray(extrinsics[:3, :3], dtype=np.float32)
+        extrinsics[:3, 3] = (-rotation @ camera_center).astype(np.float32)
         distortion = (
             np.asarray(camera.params.distortion, dtype=np.float32).copy() if camera.params.distortion is not None else None
         )

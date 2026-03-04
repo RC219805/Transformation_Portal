@@ -20,13 +20,23 @@ from transformation_portal.spatial_ai.reconstruction.contracts import CameraPara
 pytestmark = pytest.mark.ml
 
 
-def _camera_with_provenance(tx: float) -> CameraWithProvenance:
+def _camera_with_provenance(
+    tx: float,
+    *,
+    rotation: np.ndarray | None = None,
+    ty: float = 0.0,
+    tz: float = 0.0,
+) -> CameraWithProvenance:
     intrinsics = np.array(
         [[1000.0, 0.0, 32.0], [0.0, 1000.0, 32.0], [0.0, 0.0, 1.0]],
         dtype=np.float32,
     )
     extrinsics = np.eye(4, dtype=np.float32)
+    if rotation is not None:
+        extrinsics[:3, :3] = rotation
     extrinsics[0, 3] = tx
+    extrinsics[1, 3] = ty
+    extrinsics[2, 3] = tz
     return CameraWithProvenance(
         params=CameraParams(
             intrinsics=intrinsics,
@@ -98,7 +108,10 @@ def test_run_scene_reconstruction_normalizes_scale_and_writes_metadata(tmp_path:
             _ = kwargs
             return reconstructed_scene
 
-    with patch("transformation_portal.spatial_ai.reconstruction.scene_builder.SceneBuilder", FakeSceneBuilder):
+    with patch(
+        "transformation_portal.lux_depth_v3.reconstruction_runner._build_scene_builder",
+        return_value=FakeSceneBuilder("apex_research"),
+    ):
         report_path = run_scene_reconstruction(
             context=context,
             output_dir=tmp_path / "out",
@@ -168,8 +181,11 @@ def test_run_scene_reconstruction_raises_on_degenerate_camera_baseline(tmp_path:
             return reconstructed_scene
 
     with (
-        patch("transformation_portal.spatial_ai.reconstruction.scene_builder.SceneBuilder", FakeSceneBuilder),
-        pytest.raises(ValueError, match="median camera baseline"),
+        patch(
+            "transformation_portal.lux_depth_v3.reconstruction_runner._build_scene_builder",
+            return_value=FakeSceneBuilder("apex_research"),
+        ),
+        pytest.raises(ValueError, match="Invalid median camera baseline for normalization"),
     ):
         run_scene_reconstruction(
             context=context,
@@ -177,6 +193,42 @@ def test_run_scene_reconstruction_raises_on_degenerate_camera_baseline(tmp_path:
             iterations=50,
             tier="apex_research",
         )
+
+
+def test_run_scene_reconstruction_uses_camera_centers_for_baseline(tmp_path: Path):
+    rotation_90_z = np.array(
+        [[0.0, -1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]],
+        dtype=np.float32,
+    )
+    cameras_with_provenance = (
+        _camera_with_provenance(1.0),
+        _camera_with_provenance(1.0, rotation=rotation_90_z),
+    )
+    context = _context_with_cameras(tmp_path, cameras=cameras_with_provenance)
+    reconstructed_scene = _scene_from_cameras(cameras=[camera.params for camera in cameras_with_provenance])
+
+    class FakeSceneBuilder:
+        def __init__(self, tier: str):
+            self.tier = tier
+
+        def build_from_images(self, **kwargs):  # noqa: ANN003
+            _ = kwargs
+            return reconstructed_scene
+
+    with patch(
+        "transformation_portal.lux_depth_v3.reconstruction_runner._build_scene_builder",
+        return_value=FakeSceneBuilder("apex_research"),
+    ):
+        report_path = run_scene_reconstruction(
+            context=context,
+            output_dir=tmp_path / "out",
+            iterations=75,
+            tier="apex_research",
+        )
+
+    payload = json.loads(report_path.read_text(encoding="utf-8"))
+    assert pytest.approx(payload["scene_scale"]["baseline_before"], rel=1e-6) == np.sqrt(2.0)
+    assert pytest.approx(payload["scene_scale"]["baseline_after"], rel=1e-6) == 1.0
 
 
 def test_write_scene_debug_bundle_writes_manifest_cameras_and_inputs(tmp_path: Path):

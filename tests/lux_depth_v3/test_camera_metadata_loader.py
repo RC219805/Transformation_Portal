@@ -84,3 +84,32 @@ def test_load_scene_cameras_returns_none_on_image_mismatch(tmp_path: Path):
 
     scene = SceneGroup(scene_id="scene-a", images=(image_a, image_b))
     assert load_scene_cameras(scene=scene, dataset_root=dataset_root, sidecar_path=sidecar_path) is None
+
+
+def test_load_scene_cameras_recovers_after_sidecar_created(tmp_path: Path):
+    dataset_root = tmp_path / "dataset"
+    image_a = dataset_root / "scene_a" / "img1.jpg"
+    image_b = dataset_root / "scene_a" / "img2.jpg"
+    image_a.parent.mkdir(parents=True, exist_ok=True)
+    image_a.write_bytes(b"a")
+    image_b.write_bytes(b"b")
+
+    sidecar_path = tmp_path / "cameras.json"
+    scene = SceneGroup(scene_id="scene-a", images=(image_a, image_b))
+
+    assert load_scene_cameras(scene=scene, dataset_root=dataset_root, sidecar_path=sidecar_path) is None
+
+    sidecar_payload = {
+        "schema": SCENE_CAMERA_SCHEMA,
+        "scenes": {
+            "scene-a": {
+                "images": ["scene_a/img1.jpg", "scene_a/img2.jpg"],
+                "cameras": [_camera_payload(1280, 720), _camera_payload(1280, 720)],
+            }
+        },
+    }
+    sidecar_path.write_text(json.dumps(sidecar_payload), encoding="utf-8")
+
+    cameras = load_scene_cameras(scene=scene, dataset_root=dataset_root, sidecar_path=sidecar_path)
+    assert cameras is not None
+    assert len(cameras) == 2

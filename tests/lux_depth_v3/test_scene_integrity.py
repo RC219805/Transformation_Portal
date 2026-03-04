@@ -20,13 +20,24 @@ from transformation_portal.lux_depth_v3.scene_integrity import (
 from transformation_portal.spatial_ai.reconstruction.contracts import CameraParams
 
 
-def _camera(tx: float, sidecar_path: Path) -> CameraWithProvenance:
+def _camera(
+    tx: float,
+    sidecar_path: Path,
+    *,
+    rotation: np.ndarray | None = None,
+    ty: float = 0.0,
+    tz: float = 0.0,
+) -> CameraWithProvenance:
     intrinsics = np.array(
         [[1000.0, 0.0, 32.0], [0.0, 1000.0, 32.0], [0.0, 0.0, 1.0]],
         dtype=np.float32,
     )
     extrinsics = np.eye(4, dtype=np.float32)
+    if rotation is not None:
+        extrinsics[:3, :3] = rotation
     extrinsics[0, 3] = tx
+    extrinsics[1, 3] = ty
+    extrinsics[2, 3] = tz
     return CameraWithProvenance(
         params=CameraParams(
             intrinsics=intrinsics,
@@ -235,6 +246,23 @@ def test_check_camera_geometry_sanity_rejects_disconnected_overlap_graph(tmp_pat
         check_camera_geometry_sanity((first, second, disconnected))
 
 
+def test_check_camera_geometry_sanity_uses_camera_centers_from_extrinsics(tmp_path: Path):
+    sidecar_path = tmp_path / "scene_cameras.json"
+    sidecar_path.write_text('{"schema":"tp.scene_cameras.v1","scenes":{}}', encoding="utf-8")
+    rotation_90_z = np.array(
+        [[0.0, -1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]],
+        dtype=np.float32,
+    )
+    cameras = (
+        _camera(1.0, sidecar_path),
+        _camera(1.0, sidecar_path, rotation=rotation_90_z),
+    )
+
+    health = check_camera_geometry_sanity(cameras)
+    assert health["camera_count"] == 2
+    assert float(health["pair_overlap_fraction"]) > 0.0
+
+
 def test_normalize_camera_poses_centers_and_scales_baseline(tmp_path: Path):
     sidecar_path = tmp_path / "scene_cameras.json"
     sidecar_path.write_text('{"schema":"tp.scene_cameras.v1","scenes":{}}', encoding="utf-8")
@@ -249,6 +277,31 @@ def test_normalize_camera_poses_centers_and_scales_baseline(tmp_path: Path):
     assert metadata["method"] == "centered_median_baseline"
     assert pytest.approx(float(metadata["scale"]), rel=1e-6) == 0.25
     assert pytest.approx(float(metadata["median_baseline"]), rel=1e-6) == 4.0
+
+
+def test_normalize_camera_poses_respects_rotated_extrinsics(tmp_path: Path):
+    sidecar_path = tmp_path / "scene_cameras.json"
+    sidecar_path.write_text('{"schema":"tp.scene_cameras.v1","scenes":{}}', encoding="utf-8")
+    rotation_90_z = np.array(
+        [[0.0, -1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]],
+        dtype=np.float32,
+    )
+    cameras = (
+        _camera(1.0, sidecar_path),
+        _camera(1.0, sidecar_path, rotation=rotation_90_z),
+    )
+
+    normalized, metadata = normalize_camera_poses(cameras)
+
+    def _camera_center(camera: CameraWithProvenance) -> np.ndarray:
+        rotation = np.asarray(camera.params.extrinsics[:3, :3], dtype=np.float32)
+        translation = np.asarray(camera.params.extrinsics[:3, 3], dtype=np.float32)
+        return -rotation.T @ translation
+
+    centers = [_camera_center(camera) for camera in normalized]
+    baseline = float(np.linalg.norm(centers[0] - centers[1]))
+    assert pytest.approx(baseline, rel=1e-6) == 1.0
+    assert metadata["method"] == "centered_median_baseline"
 
 
 def test_build_scene_manifest_includes_dataset_health_hash(tmp_path: Path):

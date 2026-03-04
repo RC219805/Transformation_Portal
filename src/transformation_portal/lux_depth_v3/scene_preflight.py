@@ -46,13 +46,19 @@ class ScenePreflightResult:
 
 
 def _camera_centers(cameras: Tuple[CameraWithProvenance, ...]) -> list[np.ndarray]:
-    return [camera.params.extrinsics[:3, 3].astype(np.float32) for camera in cameras]
+    centers: list[np.ndarray] = []
+    for camera in cameras:
+        rotation = np.asarray(camera.params.extrinsics[:3, :3], dtype=np.float32)
+        translation = np.asarray(camera.params.extrinsics[:3, 3], dtype=np.float32)
+        centers.append((-rotation.T @ translation).astype(np.float32))
+    return centers
 
 
 def _camera_forward_vectors(cameras: Tuple[CameraWithProvenance, ...]) -> list[np.ndarray]:
     vectors: list[np.ndarray] = []
     for camera in cameras:
-        forward = camera.params.extrinsics[:3, 2].astype(np.float32)
+        rotation = np.asarray(camera.params.extrinsics[:3, :3], dtype=np.float32)
+        forward = rotation.T @ np.array([0.0, 0.0, 1.0], dtype=np.float32)
         norm = float(np.linalg.norm(forward))
         if norm <= 1e-8 or not np.isfinite(norm):
             vectors.append(np.array([0.0, 0.0, 0.0], dtype=np.float32))

@@ -30,9 +30,16 @@ logger = logging.getLogger(__name__)
 RECONSTRUCTION_DIAGNOSTICS_SCHEMA = "tp.reconstruction_diagnostics.v1"
 
 
+def _camera_center_from_extrinsics(extrinsics: np.ndarray) -> np.ndarray:
+    """Return camera center C from world-to-camera extrinsics [R|t]."""
+    rotation = np.asarray(extrinsics[:3, :3], dtype=np.float32)
+    translation = np.asarray(extrinsics[:3, 3], dtype=np.float32)
+    return (-rotation.T @ translation).astype(np.float32)
+
+
 def _median_camera_baseline(scene: Scene3D) -> float:
     """Compute median pairwise camera-center distance."""
-    centers = [camera.extrinsics[:3, 3].astype(np.float32) for camera in scene.cameras]
+    centers = [_camera_center_from_extrinsics(camera.extrinsics) for camera in scene.cameras]
     if len(centers) < 2:
         raise ValueError("Scale normalization requires at least 2 cameras")
     baselines = [float(np.linalg.norm(a - b)) for a, b in combinations(centers, 2)]
@@ -296,6 +303,13 @@ def _load_union_mask(mask_artifact_path: Path) -> np.ndarray | None:
     return union_mask
 
 
+def _build_scene_builder(*, tier: str):
+    """Lazy-load SceneBuilder to keep heavy ML deps out of module import."""
+    from transformation_portal.spatial_ai.reconstruction.scene_builder import SceneBuilder
+
+    return SceneBuilder(tier=tier)
+
+
 def run_scene_reconstruction(
     *,
     context: SceneContext,
@@ -308,9 +322,6 @@ def run_scene_reconstruction(
     """Run reconstruction for a single scene and persist deterministic report."""
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Lazy import keeps heavy ML dependencies out of default code path.
-    from transformation_portal.spatial_ai.reconstruction.scene_builder import SceneBuilder
-
     manifest = build_reconstruction_manifest(
         context=context,
         iterations=int(iterations),
@@ -321,7 +332,7 @@ def run_scene_reconstruction(
 
     iterations_value = int(loaded_manifest.reconstruction_parameters.get("iterations", iterations))
     tier_value = str(loaded_manifest.reconstruction_parameters.get("tier", tier))
-    builder = SceneBuilder(tier=tier_value)
+    builder = _build_scene_builder(tier=tier_value)
     reconstructed_scene = builder.build_from_images(
         image_paths=list(manifest_image_paths(loaded_manifest)),
         cameras=[camera.params for camera in loaded_manifest.cameras],

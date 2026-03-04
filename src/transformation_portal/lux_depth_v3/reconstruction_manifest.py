@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Tuple, cast
@@ -194,8 +195,6 @@ def _camera_from_payload(payload: Dict[str, Any]) -> CameraWithProvenance:
 
 def json_loads(raw: str) -> Dict[str, Any]:
     """Load JSON payload and validate top-level object type."""
-    import json
-
     payload = json.loads(raw)
     if not isinstance(payload, dict):
         raise ValueError("Reconstruction manifest root must be a JSON object")

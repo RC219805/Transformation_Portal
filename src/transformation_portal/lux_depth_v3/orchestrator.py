@@ -51,7 +51,7 @@ from ..depth.backends.registry import DepthBackendRegistry
 from ..ingest.canonical_json import dump_json, dumps_json
 from ..spatial_ai.reconstruction.contracts import LicenseRestrictionError as ReconstructionLicenseRestrictionError
 from .batch_stats import compute_batch_runtime_stats, detect_runtime_outliers
-from .camera_metadata_loader import load_scene_cameras
+from .camera_metadata_loader import load_scene_cameras, load_sidecar_payload
 
 # Note: Imports adjusted to relative for package context compatibility
 from .config import DA3Config, EnhanceConfig, ModelVariant
@@ -3181,6 +3181,7 @@ class EnhanceOrchestrator:
 
         sidecar_value = getattr(self.config, "cameras_sidecar_path", None)
         sidecar_path = Path(sidecar_value) if isinstance(sidecar_value, str) and sidecar_value else None
+        sidecar_payload = load_sidecar_payload(sidecar_path)
         reconstruction_tier = str(getattr(self.config, "reconstruction_tier", "apex_research"))
 
         result_by_path: Dict[str, Dict[str, Any]] = {}
@@ -3203,7 +3204,12 @@ class EnhanceOrchestrator:
             if not scene_results:
                 continue
 
-            cameras = load_scene_cameras(scene=scene, dataset_root=dataset_root, sidecar_path=sidecar_path)
+            cameras = load_scene_cameras(
+                scene=scene,
+                dataset_root=dataset_root,
+                sidecar_path=sidecar_path,
+                sidecar_payload=sidecar_payload,
+            )
             if not cameras:
                 logger.info("Skipping reconstruction for scene %s: cameras unavailable", scene.scene_id)
                 continue
@@ -3291,10 +3297,13 @@ class EnhanceOrchestrator:
                 segmentation_artifact_paths=segmentation_artifact_paths,
                 camera_sidecar_path=sidecar_path,
             )
-            artifact_index_entries = _build_artifact_index(
-                self.output_root,
-                self._collect_run_card_artifact_paths(results),
-            )
+            input_hashes = scene_manifest.get("input_hashes", {})
+            artifact_index_entries: List[Dict[str, Any]] = []
+            if isinstance(input_hashes, dict):
+                for relative_path in sorted(input_hashes):
+                    digest = input_hashes.get(relative_path)
+                    if isinstance(relative_path, str) and relative_path and isinstance(digest, str) and len(digest) == 64:
+                        artifact_index_entries.append({"relative_path": relative_path, "sha256": digest})
             artifact_index_by_relative_path = {
                 entry["relative_path"]: entry for entry in artifact_index_entries if isinstance(entry, dict)
             }
@@ -3353,7 +3362,7 @@ class EnhanceOrchestrator:
                         scene_fingerprint=scene_fingerprint,
                         run_card_merkle_root=run_card_merkle_root,
                     )
-            except (LicenseRestrictionError, ReconstructionLicenseRestrictionError):
+            except ReconstructionLicenseRestrictionError:
                 raise
             except Exception as exc:
                 logger.warning("Scene reconstruction failed for %s: %s", scene.scene_id, exc)
