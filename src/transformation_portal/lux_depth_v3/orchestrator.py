@@ -20,10 +20,12 @@ from __future__ import annotations
 
 import datetime
 import hashlib
+import io
 import json
 import logging
 import os
 import time
+import zipfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from enum import Enum
 from functools import lru_cache
@@ -1936,9 +1938,26 @@ class EnhanceOrchestrator:
                     return None
                 ordered_masks[mat_name] = mask
 
+            fixed_zip_datetime = (1980, 1, 1, 0, 0, 0)
             with atomic_temp_file(mask_path, suffix=".npz", create_file=False) as temp_path:
                 with open(temp_path, "wb") as f:
-                    np.savez_compressed(f, **ordered_masks)
+                    with zipfile.ZipFile(
+                        f,
+                        mode="w",
+                        compression=zipfile.ZIP_DEFLATED,
+                        compresslevel=9,
+                        strict_timestamps=True,
+                    ) as archive:
+                        for mat_name, mask in ordered_masks.items():
+                            payload = io.BytesIO()
+                            np.lib.format.write_array(payload, mask, allow_pickle=False)
+
+                            # Use fixed entry metadata so NPZ bytes remain stable across runs.
+                            zip_info = zipfile.ZipInfo(filename=f"{mat_name}.npy", date_time=fixed_zip_datetime)
+                            zip_info.compress_type = zipfile.ZIP_DEFLATED
+                            zip_info.create_system = 0
+                            zip_info.external_attr = 0
+                            archive.writestr(zip_info, payload.getvalue(), compress_type=zipfile.ZIP_DEFLATED, compresslevel=9)
                     f.flush()
                     os.fsync(f.fileno())
 
@@ -1963,6 +1982,30 @@ class EnhanceOrchestrator:
         except Exception as e:
             logger.warning(f"Failed to serialize material masks: {e}", exc_info=True)
             return None
+
+    def _persisted_material_mask_artifact_path(self, materials_v3_result: Optional[dict]) -> Optional[Path]:
+        """Return persisted mask artifact path from Materials V3 metadata when available."""
+        if not isinstance(materials_v3_result, dict):
+            return None
+
+        materials_v3_metadata = materials_v3_result.get("materials_v3_metadata")
+        if not isinstance(materials_v3_metadata, dict):
+            return None
+
+        segmentation_metadata = materials_v3_metadata.get("segmentation_metadata")
+        if not isinstance(segmentation_metadata, dict):
+            return None
+
+        mask_artifact_path = segmentation_metadata.get("mask_artifact_path")
+        if not isinstance(mask_artifact_path, str) or not mask_artifact_path:
+            return None
+
+        artifact_path = Path(mask_artifact_path)
+        if artifact_path.exists():
+            return artifact_path
+
+        logger.warning(f"Persisted mask artifact path missing on disk, will fall back to temp serialization: {artifact_path}")
+        return None
 
     def _run_v2_stage(
         self,
@@ -2002,18 +2045,20 @@ class EnhanceOrchestrator:
             self._enforce_v2_depth_handoff(depth_path=depth_path, v2_result=None, v2_report_path=v2_report_path)
             return {"status": "ok"}, 0.0, v2_report_path
 
-        # Serialize material masks to disk for V2 subprocess (if available)
-        # Masks are saved to temp/ directory and cleaned up after V2 completes
-        masks_path = None
-        temp_dir = self.output_root / "temp"
-
-        if materials_v3_result and materials_v3_result.get("material_masks"):
+        # Use persisted segmentation artifact when available; otherwise serialize temp masks for V2 subprocess.
+        masks_path: Optional[Path] = self._persisted_material_mask_artifact_path(materials_v3_result)
+        cleanup_temp_masks = False
+        if masks_path:
+            logger.info(f"Reusing persisted material masks for V2 subprocess: {masks_path.name}")
+        elif materials_v3_result and materials_v3_result.get("material_masks"):
+            temp_dir = self.output_root / "temp"
             masks_path = self._serialize_material_masks(
                 materials_v3_result["material_masks"],
                 output_key,
                 temp_dir,
             )
             if masks_path:
+                cleanup_temp_masks = True
                 logger.info(f"Material masks serialized for V2 subprocess: {masks_path.name}")
             else:
                 logger.warning("Failed to serialize material masks, V2 will run without them")
@@ -2045,7 +2090,7 @@ class EnhanceOrchestrator:
 
         finally:
             # Clean up temporary mask file (guaranteed cleanup even if V2 fails)
-            if masks_path and masks_path.exists():
+            if cleanup_temp_masks and masks_path and masks_path.exists():
                 try:
                     masks_path.unlink()
                     logger.debug(f"Cleaned up temporary masks: {masks_path.name}")
