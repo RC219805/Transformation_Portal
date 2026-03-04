@@ -312,13 +312,6 @@ projects/*
 # -----------------------------------------------------------------------------
 Architectural_Plans/**/*.pdf
 
-# PDF extraction artifacts
-picacho_architectural/
-picacho_construction/
-artifact_store/
-
-# Generated exports
-*.xlsx
 external/
 .cas/
 tmp_tensor.npy
