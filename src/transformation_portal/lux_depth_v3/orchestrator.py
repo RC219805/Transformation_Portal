@@ -359,6 +359,11 @@ def _infer_artifact_type(relative_path: str) -> str:
     rel = relative_path.lower()
     name = Path(rel).name
 
+    if rel.startswith("segmentation/"):
+        if name.endswith(".npz"):
+            return "segmentation_mask_npz"
+        return "segmentation_aux"
+
     if rel.startswith("depth/"):
         if name.endswith("_metadata.json"):
             return "depth_metadata"
@@ -488,11 +493,12 @@ class EnhanceOrchestrator:
         self.v2_dir = self.output_root / "v2"
         self.manifests_dir = self.output_root / "manifests"
         self.logs_dir = self.output_root / "logs"
+        self.segmentation_dir = self.output_root / "segmentation"
         # zones/ directory reserved for future zone-based processing
         # Only created when zoning features are enabled
         self.zones_dir = self.output_root / "zones"
 
-        for d in [self.depth_dir, self.v2_dir, self.manifests_dir, self.logs_dir]:
+        for d in [self.depth_dir, self.v2_dir, self.manifests_dir, self.logs_dir, self.segmentation_dir]:
             d.mkdir(parents=True, exist_ok=True)
 
         # Note: zones_dir intentionally NOT created here
@@ -1642,6 +1648,18 @@ class EnhanceOrchestrator:
         extension = ".tif" if (self.config.emit_master16 or self.config.emit_upscaled16) else ".png"
         return temp_dir / f"{output_key.stem}_materials_v3_enhanced{extension}"
 
+    def _segmentation_mask_artifact_path(self, output_key: Path) -> Path:
+        """Return canonical persistent segmentation mask artifact path."""
+        return self.segmentation_dir / output_key.parent / f"{output_key.stem}_materials_v3_masks.npz"
+
+    def _persist_material_masks_artifact(self, masks: Dict[str, np.ndarray], output_key: Path) -> Optional[Path]:
+        """Persist material masks under segmentation/ as deterministic artifacts."""
+        if not masks:
+            return None
+        target_dir = self._segmentation_mask_artifact_path(output_key).parent
+        target_dir.mkdir(parents=True, exist_ok=True)
+        return self._serialize_material_masks(masks, output_key, target_dir)
+
     def _run_materials_v3_stage(
         self,
         *,
@@ -1686,6 +1704,17 @@ class EnhanceOrchestrator:
             runtime_s = time.time() - t_materials_start
 
             if materials_v3_result:
+                material_masks = materials_v3_result.get("material_masks")
+                if isinstance(material_masks, dict) and material_masks:
+                    mask_artifact_path = self._persist_material_masks_artifact(material_masks, output_key)
+                    if mask_artifact_path:
+                        materials_v3_metadata = materials_v3_result.setdefault("materials_v3_metadata", {})
+                        segmentation_metadata = materials_v3_metadata.get("segmentation_metadata")
+                        segmentation_metadata = dict(segmentation_metadata) if isinstance(segmentation_metadata, dict) else {}
+                        segmentation_metadata["mask_artifact_path"] = str(mask_artifact_path)
+                        segmentation_metadata["mask_artifact_format"] = "npz"
+                        materials_v3_metadata["segmentation_metadata"] = segmentation_metadata
+
                 enhanced_image = materials_v3_result.get("enhanced_image")
                 if enhanced_image is not None:
                     from PIL import Image as PILImage
@@ -2390,6 +2419,16 @@ class EnhanceOrchestrator:
             backend_selection_metadata=backend_selection_metadata,
         )
 
+        segmentation_mask_path: Optional[str] = None
+        if materials_v3_result:
+            materials_v3_metadata = materials_v3_result.get("materials_v3_metadata")
+            if isinstance(materials_v3_metadata, dict):
+                segmentation_metadata = materials_v3_metadata.get("segmentation_metadata")
+                if isinstance(segmentation_metadata, dict):
+                    mask_artifact_path = segmentation_metadata.get("mask_artifact_path")
+                    if isinstance(mask_artifact_path, str) and mask_artifact_path:
+                        segmentation_mask_path = mask_artifact_path
+
         return {
             "status": "ok",
             "image": str(image_input.path),
@@ -2409,6 +2448,7 @@ class EnhanceOrchestrator:
             "v2_log_path": str(v2_log_path) if v2_log_path.exists() else None,
             "v2_report_path": str(v2_report_path) if v2_report_path else None,
             "v2_output_path": v2_output_path,
+            "segmentation_mask_path": segmentation_mask_path,
             "runtime_s": pipeline_end_time - pipeline_start_time,
         }
 
@@ -3016,7 +3056,7 @@ class EnhanceOrchestrator:
                 batch_id = batch_name[len("batch_") :]
 
         for result in results:
-            for direct_path_key in ("v2_log_path", "v2_report_path", "v2_output_path"):
+            for direct_path_key in ("v2_log_path", "v2_report_path", "v2_output_path", "segmentation_mask_path"):
                 direct_path_value = result.get(direct_path_key)
                 if isinstance(direct_path_value, str) and direct_path_value:
                     candidate = Path(direct_path_value)
@@ -3072,6 +3112,13 @@ class EnhanceOrchestrator:
                             for key, value in combined_manifest.pbr_assets.items():
                                 if key.endswith("_path") and isinstance(value, str) and value:
                                     artifact_paths.append(Path(value))
+
+                        if combined_manifest.materials_v3 and isinstance(
+                            combined_manifest.materials_v3.segmentation_metadata, dict
+                        ):
+                            mask_artifact_path = combined_manifest.materials_v3.segmentation_metadata.get("mask_artifact_path")
+                            if isinstance(mask_artifact_path, str) and mask_artifact_path:
+                                artifact_paths.append(Path(mask_artifact_path))
 
             depth_value = result.get("depth_path")
             if depth_value:

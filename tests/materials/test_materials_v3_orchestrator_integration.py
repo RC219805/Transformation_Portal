@@ -112,6 +112,66 @@ def test_materials_v3_process_integration(tmp_path, mock_depth_backend, mock_da3
     assert "timing_ms" in pixel_ops
 
 
+def test_run_materials_v3_stage_persists_mask_artifact_and_sets_metadata(tmp_path, mock_depth_backend, mock_da3_available):
+    """Materials V3 stage should persist segmentation mask artifacts and merge metadata."""
+    config = EnhanceConfig(
+        enable_materials_v3=True,
+        apply_pixel_ops=True,
+        depth_device="cpu",
+        enable_v2=False,
+    )
+    orchestrator = EnhanceOrchestrator(config, tmp_path)
+
+    preprocessed_array = np.zeros((8, 8, 3), dtype=np.float32)
+    depth_map = np.ones((8, 8), dtype=np.float32)
+    glass_mask = np.ones((8, 8), dtype=np.float32)
+    output_key = Path("nested/image_01")
+
+    materials_result = {
+        "enhanced_image": None,
+        "materials_v3_response_plan": {"per_class": {}},
+        "materials_v3_pixel_ops": {"applied": [], "blocked": []},
+        "materials_v3_metadata": {
+            "version": "3.1",
+            "segmentation_metadata": {"clip_runtime": {"weights_source": "cache_path"}},
+        },
+        "material_masks": {"glass": glass_mask},
+    }
+
+    with patch(
+        "transformation_portal.lux_depth_v3.segmentation_backend.segment_materials", return_value={"glass": glass_mask}
+    ):
+        with patch(
+            "transformation_portal.lux_depth_v3.segmentation_backend.get_last_segmentation_runtime_metadata",
+            return_value={"clip_runtime": {"weights_source": "cache_path"}},
+        ):
+            with patch.object(orchestrator.materials_v3_engine, "process", return_value=materials_result):
+                result, _, enhanced_path = orchestrator._run_materials_v3_stage(
+                    preprocessed_array=preprocessed_array,
+                    depth_map=depth_map,
+                    output_key=output_key,
+                )
+
+    assert result is materials_result
+    assert enhanced_path is None
+
+    segmentation_metadata = result["materials_v3_metadata"]["segmentation_metadata"]
+    assert segmentation_metadata["clip_runtime"]["weights_source"] == "cache_path"
+    assert segmentation_metadata["mask_artifact_format"] == "npz"
+
+    mask_artifact_path = Path(segmentation_metadata["mask_artifact_path"])
+    assert mask_artifact_path == orchestrator._segmentation_mask_artifact_path(output_key)
+    assert mask_artifact_path.exists()
+
+    with np.load(mask_artifact_path) as data:
+        assert set(data.files) == {"glass"}
+        loaded_mask = data["glass"]
+
+    assert loaded_mask.shape == glass_mask.shape
+    assert loaded_mask.dtype == np.float32
+    assert np.array_equal(loaded_mask, glass_mask)
+
+
 def test_materials_v3_manifest_integration(tmp_path, mock_depth_backend, mock_da3_available):
     """Test that Materials V3 results can be stored in manifest."""
     from transformation_portal.lux_depth_v3.manifest import CombinedManifest, MaterialsV3Metadata

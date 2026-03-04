@@ -6,6 +6,7 @@ import hashlib
 from pathlib import Path
 from types import SimpleNamespace
 
+import numpy as np
 import pytest
 
 from transformation_portal.lux_depth_v3.config import EnhanceConfig, ModelVariant
@@ -230,6 +231,51 @@ def test_collect_run_card_artifacts_includes_v2_deliverables(tmp_path: Path):
     assert "v2/image_01_stale.tif" not in relative_paths
     assert "v2/image_01_stale_report.json" not in relative_paths
     assert "logs/v2_image_01.log" not in relative_paths
+
+
+def test_collect_run_card_artifacts_includes_segmentation_mask_artifact(tmp_path: Path):
+    from transformation_portal.lux_depth_v3.manifest import CombinedManifest, MaterialsV3Metadata
+
+    output_root = tmp_path / "output"
+    manifests_dir = output_root / "manifests"
+    logs_dir = output_root / "logs"
+    v2_dir = output_root / "v2"
+    segmentation_dir = output_root / "segmentation"
+
+    manifests_dir.mkdir(parents=True, exist_ok=True)
+    logs_dir.mkdir(parents=True, exist_ok=True)
+    v2_dir.mkdir(parents=True, exist_ok=True)
+    segmentation_dir.mkdir(parents=True, exist_ok=True)
+
+    mask_artifact = segmentation_dir / "image_01_materials_v3_masks.npz"
+    np.savez_compressed(mask_artifact, glass=np.ones((2, 2), dtype=np.float32))
+
+    manifest_path = manifests_dir / "image_01_combined.json"
+    CombinedManifest(
+        materials_v3=MaterialsV3Metadata(
+            enabled=True,
+            segmentation_metadata={
+                "mask_artifact_path": str(mask_artifact),
+                "mask_artifact_format": "npz",
+            },
+        )
+    ).save(manifest_path)
+
+    orch = object.__new__(EnhanceOrchestrator)
+    orch.manifests_dir = manifests_dir
+    orch.logs_dir = logs_dir
+    orch.v2_dir = v2_dir
+
+    result = {
+        "status": "ok",
+        "manifest": str(manifest_path),
+    }
+    artifact_paths = orch._collect_run_card_artifact_paths([result])
+    artifact_index = _build_artifact_index(output_root, artifact_paths)
+    artifacts_by_path = {entry["relative_path"]: entry for entry in artifact_index}
+
+    assert "segmentation/image_01_materials_v3_masks.npz" in artifacts_by_path
+    assert artifacts_by_path["segmentation/image_01_materials_v3_masks.npz"]["artifact_type"] == "segmentation_mask_npz"
 
 
 def test_apex_v2_depth_handoff_missing_raises_strict_gate(tmp_path: Path):
