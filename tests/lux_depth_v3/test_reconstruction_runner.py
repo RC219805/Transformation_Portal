@@ -7,7 +7,11 @@ from unittest.mock import patch
 import numpy as np
 import pytest
 
-from transformation_portal.lux_depth_v3.reconstruction_runner import diagnostics_artifact_path, run_scene_reconstruction
+from transformation_portal.lux_depth_v3.reconstruction_runner import (
+    diagnostics_artifact_path,
+    manifest_artifact_path,
+    run_scene_reconstruction,
+)
 from transformation_portal.lux_depth_v3.scene_context import CameraProvenance, CameraWithProvenance, SceneContext
 from transformation_portal.lux_depth_v3.scene_groups import SceneGroup, compute_scene_id
 from transformation_portal.spatial_ai.reconstruction.contracts import CameraParams, GaussianSplat, Scene3D
@@ -100,9 +104,17 @@ def test_run_scene_reconstruction_normalizes_scale_and_writes_metadata(tmp_path:
         )
 
     payload = json.loads(report_path.read_text(encoding="utf-8"))
+    manifest_path = manifest_artifact_path(scene_id=context.scene_id, output_dir=tmp_path / "out")
+    manifest_payload = json.loads(manifest_path.read_text(encoding="utf-8"))
     diagnostics_path = diagnostics_artifact_path(scene_id=context.scene_id, output_dir=tmp_path / "out")
     diagnostics_payload = json.loads(diagnostics_path.read_text(encoding="utf-8"))
 
+    assert manifest_path.exists()
+    assert payload["manifest_path"] == str(manifest_path)
+    assert manifest_payload["schema"] == "tp.reconstruction_manifest.v1"
+    assert manifest_payload["scene_id"] == context.scene_id
+    assert len(manifest_payload["images"]) == 2
+    assert len(manifest_payload["image_hashes"]) == 2
     assert diagnostics_path.exists()
     assert payload["diagnostics_path"] == str(diagnostics_path)
     assert payload["scene_scale"]["method"] == "median_baseline"

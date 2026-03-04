@@ -13,8 +13,15 @@ from transformation_portal.spatial_ai.reconstruction.contracts import Scene3D
 
 from ..ingest.canonical_json import dumps_json
 from .io_atomic import atomic_write_bytes
+from .reconstruction_manifest import (
+    ReconstructionManifest,
+    build_reconstruction_manifest,
+    load_reconstruction_manifest,
+    manifest_image_paths,
+    reconstruction_manifest_path,
+    write_reconstruction_manifest,
+)
 from .scene_context import SceneContext
-from .scene_groups import normalize_relative_path
 from .security import sanitize_path_component_nonlossy
 
 logger = logging.getLogger(__name__)
@@ -64,6 +71,11 @@ def diagnostics_artifact_path(*, scene_id: str, output_dir: Path) -> Path:
     return output_dir / f"{safe_scene_id}_diagnostics.json"
 
 
+def manifest_artifact_path(*, scene_id: str, output_dir: Path) -> Path:
+    """Compute deterministic reconstruction manifest artifact path for a scene."""
+    return reconstruction_manifest_path(scene_id=scene_id, output_dir=output_dir)
+
+
 def _scene_geometry_stats(scene: Scene3D) -> Dict[str, float | int | list[float]]:
     """Compute compact geometry diagnostics for diffable scene introspection."""
     positions = scene.splats.positions
@@ -81,7 +93,7 @@ def _scene_geometry_stats(scene: Scene3D) -> Dict[str, float | int | list[float]
 def _write_scene_diagnostics(
     *,
     scene: Scene3D,
-    context: SceneContext,
+    manifest: ReconstructionManifest,
     output_dir: Path,
     scale_metadata: Dict[str, float | str],
 ) -> Path:
@@ -90,18 +102,18 @@ def _write_scene_diagnostics(
     baseline_array = np.asarray(baselines, dtype=np.float32)
     diagnostics_payload: Dict[str, object] = {
         "schema": "tp.scene_diagnostics.v1",
-        "scene_id": context.scene_id,
+        "scene_id": manifest.scene_id,
         "inputs": {
-            "image_count": len(context.images),
-            "grouping_mode": context.metadata.get("grouping_mode"),
+            "image_count": len(manifest.images),
+            "grouping_mode": manifest.reconstruction_parameters.get("grouping_mode"),
         },
         "cameras": {
             "count": len(scene.cameras),
             "baseline_median": float(np.median(baseline_array)),
             "baseline_min": float(np.min(baseline_array)),
             "baseline_max": float(np.max(baseline_array)),
-            "sources": [camera.provenance.source for camera in context.cameras],
-            "confidences": [camera.provenance.confidence for camera in context.cameras],
+            "sources": [camera.provenance.source for camera in manifest.cameras],
+            "confidences": [camera.provenance.confidence for camera in manifest.cameras],
         },
         "geometry": _scene_geometry_stats(scene),
         "scale": scale_metadata,
@@ -111,7 +123,7 @@ def _write_scene_diagnostics(
             "convergence": scene.convergence,
         },
     }
-    diagnostics_path = diagnostics_artifact_path(scene_id=context.scene_id, output_dir=output_dir)
+    diagnostics_path = diagnostics_artifact_path(scene_id=manifest.scene_id, output_dir=output_dir)
     diagnostics_bytes = (
         dumps_json(
             diagnostics_payload,
@@ -138,32 +150,43 @@ def run_scene_reconstruction(
     # Lazy import keeps heavy ML dependencies out of default code path.
     from transformation_portal.spatial_ai.reconstruction.scene_builder import SceneBuilder
 
-    builder = SceneBuilder(tier=tier)
+    manifest = build_reconstruction_manifest(
+        context=context,
+        iterations=int(iterations),
+        tier=str(tier),
+    )
+    manifest_path = write_reconstruction_manifest(manifest=manifest, output_dir=output_dir)
+    loaded_manifest = load_reconstruction_manifest(manifest_path=manifest_path)
+
+    iterations_value = int(loaded_manifest.reconstruction_parameters.get("iterations", iterations))
+    tier_value = str(loaded_manifest.reconstruction_parameters.get("tier", tier))
+    builder = SceneBuilder(tier=tier_value)
     reconstructed_scene = builder.build_from_images(
-        image_paths=list(context.images),
-        cameras=[camera.params for camera in context.cameras],
-        iterations=iterations,
+        image_paths=list(manifest_image_paths(loaded_manifest)),
+        cameras=[camera.params for camera in loaded_manifest.cameras],
+        iterations=iterations_value,
         gamma=1.0,
     )
     scale_metadata = _normalize_scene_scale(reconstructed_scene)
     diagnostics_path = _write_scene_diagnostics(
         scene=reconstructed_scene,
-        context=context,
+        manifest=loaded_manifest,
         output_dir=output_dir,
         scale_metadata=scale_metadata,
     )
 
-    camera_sources = [camera.provenance.source for camera in context.cameras]
-    camera_confidences = [camera.provenance.confidence for camera in context.cameras]
+    camera_sources = [camera.provenance.source for camera in loaded_manifest.cameras]
+    camera_confidences = [camera.provenance.confidence for camera in loaded_manifest.cameras]
     camera_provenance_files = sorted(
-        {camera.provenance.file for camera in context.cameras if isinstance(camera.provenance.file, str)}
+        {camera.provenance.file for camera in loaded_manifest.cameras if isinstance(camera.provenance.file, str)}
     )
 
     payload = {
         "schema": "tp.reconstruction_report.v1",
-        "scene_id": context.scene_id,
-        "num_views": len(context.images),
-        "images": [normalize_relative_path(path, context.dataset_root) for path in context.images],
+        "scene_id": loaded_manifest.scene_id,
+        "num_views": len(loaded_manifest.images),
+        "images": list(loaded_manifest.images),
+        "manifest_path": str(manifest_path),
         "camera_sources": camera_sources,
         "camera_confidences": camera_confidences,
         "rmse": float(reconstructed_scene.rmse),
@@ -176,7 +199,7 @@ def run_scene_reconstruction(
     if camera_provenance_files:
         payload["camera_provenance_files"] = camera_provenance_files
 
-    safe_scene_id = sanitize_path_component_nonlossy(context.scene_id)
+    safe_scene_id = sanitize_path_component_nonlossy(loaded_manifest.scene_id)
     report_path = output_dir / f"{safe_scene_id}_reconstruction_report.json"
     report_bytes = (
         dumps_json(
