@@ -5,7 +5,7 @@
 
 # ML and deep learning libraries (optional)
 # Known-good pinned inference stack for SAM2 + CLIP determinism:
-# torch==2.10.0, torchvision==0.25.0, sam2==1.1.0, open-clip-torch==3.2.0
+# torch==2.10.0, torchvision==0.25.0, sam2==1.1.0, open-clip-torch==3.3.0
 torch==2.10.0               # Pinned for known-good SAM2/CLIP determinism stack
 diffusers>=0.36.0,<1
 controlnet-aux>=0.0.6,<1
@@ -48,7 +48,7 @@ efficientsam==1.0.0       # EfficientVIT SAM model zoo (~133MB weights on first 
 sam2==1.1.0                 # Pinned with torch==2.10.0/open-clip==3.2.0 for deterministic SAM2 masks
 
 # CLIP - material classification via text embeddings (MIT license, commercial-safe)
-open-clip-torch==3.2.0    # OpenCLIP for zero-shot material classification
+open-clip-torch==3.3.0    # OpenCLIP for zero-shot material classification
 
 # Note: V1 (heuristic-based) works without these dependencies
 # V2 (model-backed) auto-activates when dependencies installed
