@@ -62,6 +62,8 @@ jobs:
         run: |
           python - <<'PY'
           import json, os, random, sys, textwrap, time, urllib.error, urllib.request
+          from datetime import datetime, timezone
+          from email.utils import parsedate_to_datetime
           RESPONSE_FILE = os.environ["RESPONSE_FILE"]
           OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
@@ -116,6 +118,27 @@ jobs:
               Body:
               {body}
               """)
+          def compute_backoff_seconds(attempt):
+              return min(20.0, 2 ** attempt + random.uniform(0.1, 1.0))
+
+          def compute_retry_wait_seconds(exc, attempt):
+              retry_after = ""
+              if getattr(exc, "headers", None):
+                  retry_after = exc.headers.get("Retry-After", "").strip()
+              if retry_after:
+                  try:
+                      return max(0.0, min(30.0, float(retry_after)))
+                  except ValueError:
+                      try:
+                          retry_at = parsedate_to_datetime(retry_after)
+                          if retry_at.tzinfo is None:
+                              retry_at = retry_at.replace(tzinfo=timezone.utc)
+                          delta = (retry_at - datetime.now(timezone.utc)).total_seconds()
+                          return max(0.0, min(30.0, delta))
+                      except Exception:
+                          pass
+              return compute_backoff_seconds(attempt)
+
           def call_openai_with_retries(api_key, prompt_text, max_retries=3):
               payload = {
                   "model": "gpt-4o-mini",
@@ -140,7 +163,7 @@ jobs:
                   except urllib.error.HTTPError as exc:
                       if exc.code == 429:
                           if attempt < max_retries:
-                              wait = min(20.0, 2 ** attempt + random.uniform(0.1, 1.0))
+                              wait = compute_retry_wait_seconds(exc, attempt)
                               print(
                                   f"::warning::Issue Summarizer rate limited "
                                   f"(attempt {attempt}/{max_retries}); retrying in {wait:.1f}s."
@@ -150,7 +173,7 @@ jobs:
                           raise RuntimeError("rate_limited") from exc
                       # Retry 5xx responses only; 4xx are treated as terminal.
                       if 500 <= exc.code <= 599 and attempt < max_retries:
-                          wait = min(20.0, 2 ** attempt + random.uniform(0.1, 1.0))
+                          wait = compute_retry_wait_seconds(exc, attempt)
                           print(
                               f"::warning::Issue Summarizer server error HTTP {exc.code} "
                               f"(attempt {attempt}/{max_retries}); retrying in {wait:.1f}s."
@@ -160,7 +183,7 @@ jobs:
                       raise RuntimeError(f"http_{exc.code}") from exc
                   except urllib.error.URLError as exc:
                       if attempt < max_retries:
-                          wait = min(20.0, 2 ** attempt + random.uniform(0.1, 1.0))
+                          wait = compute_backoff_seconds(attempt)
                           print(
                               f"::warning::Issue Summarizer network error "
                               f"(attempt {attempt}/{max_retries}); retrying in {wait:.1f}s."
