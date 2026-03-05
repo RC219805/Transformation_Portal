@@ -207,6 +207,10 @@ def _run_collect_with_torch_stub(markexpr: str, target: str) -> tuple[subprocess
             pythonpath_prefix=[str(stub_root)],
             json_report_file=report_file,
         )
+        if result.returncode not in {0, 5}:
+            # Preserve subprocess failure context for caller-side assertions.
+            # Avoid masking return-code diagnostics with downstream parse errors.
+            return result, -1
         selected = _parse_selected_count(
             output=result.stdout,
             stderr=result.stderr,
@@ -227,6 +231,10 @@ def _run_collect_with_torch_blocker(markexpr: str, target: str) -> tuple[subproc
             pythonpath_prefix=[str(blocker_root)],
             json_report_file=report_file,
         )
+        if result.returncode not in {0, 5}:
+            # Preserve subprocess failure context for caller-side assertions.
+            # Avoid masking return-code diagnostics with downstream parse errors.
+            return result, -1
         selected = _parse_selected_count(
             output=result.stdout,
             stderr=result.stderr,

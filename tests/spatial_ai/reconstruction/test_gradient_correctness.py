@@ -13,6 +13,8 @@ from typing import Callable, Sequence
 import pytest
 
 torch = pytest.importorskip("torch", reason="torch required for gradient correctness checks")
+# Keep this in the slow lane intentionally: finite-difference checks are a
+# correctness backstop and should not inflate fast-ML PR feedback time.
 pytestmark = [pytest.mark.ml, pytest.mark.slow]
 
 from transformation_portal.spatial_ai.reconstruction.gaussian_rasterizer import (  # pylint: disable=wrong-import-position
