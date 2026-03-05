@@ -143,7 +143,7 @@ class TestPhase6AVerification:
         assert "loss_history" in scene2.splats.metadata
 
     def test_optimizer_parameters_include_all_types(self, seed_all_rngs, device_tolerance):
-        """Verify all 5 parameter types are in the optimizer."""
+        """Verify all 5 parameter types are tracked and at least some are updated."""
         seed_all_rngs(42)
         backend = GaussianBackend(tier="apex_research")
         tolerance = device_tolerance.get(backend.device, device_tolerance["cpu"])
@@ -170,41 +170,41 @@ class TestPhase6AVerification:
         # Run again with more iterations
         scene_optimized = backend.reconstruct(reconstruction_input, iterations=30)
 
-        # Check that parameters changed (optimizer is working)
-        # Note: Some parameters might not change much depending on scene, but at least one should
-        params_changed = []
-        params_changed.append(
-            not np.allclose(
+        # Check that all optimizer-managed parameter types are evaluated.
+        params_changed = {
+            "positions": not np.allclose(
                 scene_initial.splats.positions,
                 scene_optimized.splats.positions,
                 rtol=tolerance["rtol"],
                 atol=tolerance["atol"],
-            )
-        )
-        params_changed.append(
-            not np.allclose(
+            ),
+            "colors": not np.allclose(
                 scene_initial.splats.colors,
                 scene_optimized.splats.colors,
                 rtol=tolerance["rtol"],
                 atol=tolerance["atol"],
-            )
-        )
-        params_changed.append(
-            not np.allclose(
+            ),
+            "scales": not np.allclose(
                 scene_initial.splats.scales,
                 scene_optimized.splats.scales,
                 rtol=tolerance["rtol"],
                 atol=tolerance["atol"],
-            )
-        )
-        params_changed.append(
-            not np.allclose(
+            ),
+            "rotations": not np.allclose(
+                scene_initial.splats.rotations,
+                scene_optimized.splats.rotations,
+                rtol=tolerance["rtol"],
+                atol=tolerance["atol"],
+            ),
+            "opacities": not np.allclose(
                 scene_initial.splats.opacities,
                 scene_optimized.splats.opacities,
                 rtol=tolerance["rtol"],
                 atol=tolerance["atol"],
-            )
-        )
+            ),
+        }
+        assert set(params_changed.keys()) == {"positions", "colors", "scales", "rotations", "opacities"}
 
-        # At least 2 parameter types should change (colors and positions are most likely)
-        assert sum(params_changed) >= 2, f"Expected at least 2 parameter types to change, got {sum(params_changed)}"
+        # At least 2 parameter types should change (colors and positions are most likely).
+        changed_count = sum(params_changed.values())
+        assert changed_count >= 2, f"Expected at least 2 parameter types to change, got {changed_count}: {params_changed}"

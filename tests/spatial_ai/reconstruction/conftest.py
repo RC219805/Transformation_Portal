@@ -12,7 +12,7 @@ import pytest
 def _import_torch():
     try:
         import torch  # type: ignore
-    except ImportError as exc:  # pragma: no cover - exercised in no-torch lanes
+    except (ImportError, OSError, RuntimeError) as exc:  # pragma: no cover - exercised in no-torch/broken-torch lanes
         pytest.skip(f"torch required for reconstruction ML fixture: {exc}")
     return torch
 
