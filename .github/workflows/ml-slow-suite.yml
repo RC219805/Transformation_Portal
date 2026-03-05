@@ -1,0 +1,127 @@
+name: ML Slow Suite
+
+on:
+  schedule:
+    # Daily slow-lane ML coverage; non-blocking for PR workflows.
+    - cron: "30 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  ml-slow:
+    name: Slow ML Tests (nightly)
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Cache pip packages
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-ml-slow-${{ hashFiles('requirements-ci.txt') }}
+
+      - name: Cache ML models
+        id: cache-models
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cache/huggingface
+            models
+          key: ${{ runner.os }}-models-v4-${{ hashFiles('requirements-ci.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-models-v4-
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip wheel setuptools
+          python -m pip install "torch==2.10.0+cpu" "torchvision==0.25.0+cpu" --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install -r requirements-ci.txt
+          python -m pip install -e . --no-deps
+
+      - name: Run slow ML suite
+        run: |
+          mkdir -p test-results
+          python -m pytest -v tests/ \
+            -m "ml and slow" \
+            --durations=40 --durations-min=1.0 \
+            --json-report \
+            --json-report-file=test-results/ml-slow-suite.json \
+            --maxfail=5 \
+            --tb=short
+        env:
+          TRANSFORMERS_OFFLINE: ${{ steps.cache-models.outputs.cache-hit == 'true' && '1' || '0' }}
+          HF_HUB_OFFLINE: ${{ steps.cache-models.outputs.cache-hit == 'true' && '1' || '0' }}
+          OMP_NUM_THREADS: 1
+          MKL_NUM_THREADS: 1
+          OPENBLAS_NUM_THREADS: 1
+          NUMEXPR_NUM_THREADS: 1
+          VECLIB_MAXIMUM_THREADS: 1
+          TP_RECON_PERF_METRICS_FILE: test-results/reconstruction_performance_metrics.json
+
+      - name: Publish suite summary
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          summary_path = Path("test-results/ml-slow-suite.json")
+          out = Path(os.environ["GITHUB_STEP_SUMMARY"])
+
+          if not summary_path.exists():
+              out.write_text("# ML Slow Suite\n\nNo pytest JSON report produced.\n", encoding="utf-8")
+              raise SystemExit(0)
+
+          payload = json.loads(summary_path.read_text(encoding="utf-8"))
+          summary = payload.get("summary", {})
+
+          lines = [
+              "# ML Slow Suite",
+              "",
+              f"- collected: {summary.get('collected', 'n/a')}",
+              f"- deselected: {summary.get('deselected', 0)}",
+              f"- passed: {summary.get('passed', 0)}",
+              f"- failed: {summary.get('failed', 0)}",
+              f"- skipped: {summary.get('skipped', 0)}",
+          ]
+
+          metrics_file = Path("test-results/reconstruction_performance_metrics.json")
+          if metrics_file.exists():
+              lines.append("- reconstruction performance metrics: captured")
+          else:
+              lines.append("- reconstruction performance metrics: not produced")
+
+          out.write_text("\n".join(lines) + "\n", encoding="utf-8")
+          PY
+
+      - name: Upload slow-suite artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ml-slow-suite-artifacts
+          path: test-results/
+          retention-days: 14
+
+      - name: Create issue on nightly failure
+        if: failure() && github.event_name == 'schedule'
+        uses: actions/github-script@v8
+        with:
+          script: |
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: '🚨 ML Slow Suite failed',
+              body: `Nightly slow-ML suite failed.\n\nRun: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+              labels: ['nightly-failure', 'ML', 'automated']
+            })
