@@ -4,7 +4,7 @@
 #
 #    pip-compile --output-file=all.txt all.in
 #
-accelerate==1.12.0
+accelerate==1.13.0
     # via -r requirements/ml.in
 aiofiles==23.2.1
     # via -r requirements/base.in
