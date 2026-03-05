@@ -24,8 +24,9 @@ class ModelVariant(Enum):
     """Depth Anything V3 model variants.
 
     Note: DA3 models require custom library installation:
-        git clone https://github.com/ByteDance/depth-anything-3
+        git clone https://github.com/ByteDance-Seed/depth-anything-3
         cd depth-anything-3
+        # macOS: ensure xformers is not required in default dependencies
         pip install -e .
 
     ⚠️  LICENSE: DA3NESTED-GIANT-LARGE-1.1 is

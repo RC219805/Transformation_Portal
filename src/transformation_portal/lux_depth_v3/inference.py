@@ -388,6 +388,7 @@ class DA3InferenceEngine:
         DA3 Nested models require custom library installation:
             git clone https://github.com/ByteDance-Seed/depth-anything-3
             cd depth-anything-3
+            # macOS: ensure xformers is not required in default deps
             pip install -e .
 
         DA3 uses a different API than
@@ -419,9 +420,15 @@ class DA3InferenceEngine:
                     " https://github.com/"
                     "ByteDance-Seed/"
                     "depth-anything-3\n"
-                    "  2. Install: cd"
-                    " depth-anything-3 &&"
-                    " pip install -e .\n\n"
+                    "  2. Enter repo: cd"
+                    " depth-anything-3\n"
+                    "  3. macOS: remove"
+                    " xformers from default"
+                    " dependencies (or use a"
+                    " fork/branch that already"
+                    " removed it)\n"
+                    "  4. Install: pip"
+                    " install -e .\n\n"
                     "The DA3 Nested Giant model"
                     " combines:\n"
                     "  - Giant model for"
