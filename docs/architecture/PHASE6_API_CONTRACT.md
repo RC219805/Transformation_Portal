@@ -44,7 +44,7 @@ Invariants:
 
 Runtime validation hooks:
 
-- `GaussianBackend._optimize_splats(...)` validates payload once before optimization.
+- `GaussianBackend._optimize(...)` validates payload once before optimization.
 - `GaussianBackend.render_view(...)` validates rendered output before numpy conversion.
 
 Test coverage:

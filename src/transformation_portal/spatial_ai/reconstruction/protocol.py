@@ -90,9 +90,9 @@ def validate_backend_rasterizer_payload(
         extrinsics.device,
     }
     if len(devices) != 1:
+        sorted_devices = [str(device) for device in sorted(devices, key=str)]
         raise ValueError(
-            "Backend↔rasterizer contract requires all tensors on one device. "
-            f"Found devices: {[str(device) for device in devices]}."
+            "Backend↔rasterizer contract requires all tensors on one device. " f"Found devices: {sorted_devices}."
         )
 
     if len(image_size) != 2 or not all(isinstance(value, int) for value in image_size):

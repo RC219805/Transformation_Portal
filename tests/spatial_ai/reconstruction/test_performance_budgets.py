@@ -27,9 +27,12 @@ from transformation_portal.spatial_ai.reconstruction.gaussian_rasterizer import 
 FORWARD_BUDGET_MS = {"p50": 80.0, "p95": 150.0, "max": 220.0}
 BACKWARD_BUDGET_MS = {"p50": 220.0, "p95": 420.0, "max": 650.0}
 METRICS_ENV_VAR = "TP_RECON_PERF_METRICS_FILE"
+FIXTURE_SEED = 20260305
 
 
 def _build_fixture(num_gaussians: int = 96, image_size: tuple[int, int] = (64, 64)):
+    torch.manual_seed(FIXTURE_SEED)
+    np.random.seed(FIXTURE_SEED)
     h, w = image_size
     positions = torch.randn(num_gaussians, 3, dtype=torch.float32)
     positions[:, 2] = positions[:, 2].abs() + 3.0
