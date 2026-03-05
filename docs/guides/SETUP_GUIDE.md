@@ -48,6 +48,8 @@ Install the core packages required for basic image processing:
 
 ```bash
 pip install -r requirements.txt
+# or from repo root (preferred for contributors):
+make install-core
 ```
 
 This installs:
@@ -67,6 +69,9 @@ pip install diffusers transformers controlnet-aux huggingface-hub
 
 # Or use the convenience extras:
 pip install -e ".[ml]"
+
+# Contributor workflow with constraints:
+make install-ml
 ```
 
 **Platform-specific notes:**

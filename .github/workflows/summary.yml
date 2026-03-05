@@ -28,13 +28,19 @@ jobs:
       ISSUE_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number || '' }}
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       GH_TOKEN: ${{ github.token }}
-      # marker used to detect previously-posted diagnostic comments
-      DIAGNOSTIC_MARKER: "<!-- ai-summarizer-missing-key -->"
-      # short, non-sensitive message to post when key is missing
-      DIAGNOSTIC_MSG: |
+      # Marker used to deduplicate fallback diagnostic comments.
+      DIAGNOSTIC_MARKER: "<!-- ai-summarizer-diagnostic -->"
+      DIAGNOSTIC_MSG_MISSING_KEY: |
         AI summarizer skipped: OPENAI_API_KEY is not configured in CI.
         Repository maintainers can enable automated summaries by configuring the `OPENAI_API_KEY` secret.
-        <!-- ai-summarizer-missing-key -->
+        <!-- ai-summarizer-diagnostic -->
+      DIAGNOSTIC_MSG_RATE_LIMIT: |
+        AI summarizer skipped after bounded retries due to OpenAI rate limiting.
+        This is non-blocking and intentionally does not fail CI.
+        <!-- ai-summarizer-diagnostic -->
+      DIAGNOSTIC_MSG_FAILURE: |
+        AI summarization failed: an internal error occurred. See CI logs for details.
+        <!-- ai-summarizer-diagnostic -->
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -55,13 +61,15 @@ jobs:
           EVENT_NAME: '${{ github.event_name }}'
         run: |
           python - <<'PY'
-          import json, os, sys, textwrap, urllib.error, urllib.request
+          import json, os, random, sys, textwrap, time, urllib.error, urllib.request
+          from datetime import datetime, timezone
+          from email.utils import parsedate_to_datetime
           RESPONSE_FILE = os.environ["RESPONSE_FILE"]
           OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
           # When the key is missing, write only a short, safe message and exit 0
           if not OPENAI_API_KEY:
-              msg = os.environ["DIAGNOSTIC_MSG"]
+              msg = os.environ["DIAGNOSTIC_MSG_MISSING_KEY"]
               with open(RESPONSE_FILE, "w", encoding="utf-8") as f:
                   f.write(msg)
               # DEBUG: print only the non-sensitive message to runner logs
@@ -110,33 +118,99 @@ jobs:
               Body:
               {body}
               """)
-          try:
+          def compute_backoff_seconds(attempt):
+              return min(20.0, 2 ** attempt + random.uniform(0.1, 1.0))
+
+          def compute_retry_wait_seconds(exc, attempt):
+              retry_after = ""
+              if getattr(exc, "headers", None):
+                  retry_after = exc.headers.get("Retry-After", "").strip()
+              if retry_after:
+                  try:
+                      return max(0.0, min(30.0, float(retry_after)))
+                  except ValueError:
+                      try:
+                          retry_at = parsedate_to_datetime(retry_after)
+                          if retry_at.tzinfo is None:
+                              retry_at = retry_at.replace(tzinfo=timezone.utc)
+                          delta = (retry_at - datetime.now(timezone.utc)).total_seconds()
+                          return max(0.0, min(30.0, delta))
+                      except Exception:
+                          pass
+              return compute_backoff_seconds(attempt)
+
+          def call_openai_with_retries(api_key, prompt_text, max_retries=3):
               payload = {
                   "model": "gpt-4o-mini",
-                  "messages": [{"role": "user", "content": prompt}],
+                  "messages": [{"role": "user", "content": prompt_text}],
                   "max_tokens": 160,
                   "temperature": 0.2,
               }
-              req = urllib.request.Request(
-                  "https://api.openai.com/v1/chat/completions",
-                  data=json.dumps(payload).encode("utf-8"),
-                  headers={
-                      "Authorization": f"Bearer {OPENAI_API_KEY}",
-                      "Content-Type": "application/json",
-                  },
-                  method="POST",
-              )
-              with urllib.request.urlopen(req, timeout=45) as resp:
-                  response_json = json.loads(resp.read().decode("utf-8"))
+              body = json.dumps(payload).encode("utf-8")
+              for attempt in range(1, max_retries + 1):
+                  req = urllib.request.Request(
+                      "https://api.openai.com/v1/chat/completions",
+                      data=body,
+                      headers={
+                          "Authorization": f"Bearer {api_key}",
+                          "Content-Type": "application/json",
+                      },
+                      method="POST",
+                  )
+                  try:
+                      with urllib.request.urlopen(req, timeout=45) as resp:
+                          return json.loads(resp.read().decode("utf-8"))
+                  except urllib.error.HTTPError as exc:
+                      if exc.code == 429:
+                          if attempt < max_retries:
+                              wait = compute_retry_wait_seconds(exc, attempt)
+                              print(
+                                  f"::warning::Issue Summarizer rate limited "
+                                  f"(attempt {attempt}/{max_retries}); retrying in {wait:.1f}s."
+                              )
+                              time.sleep(wait)
+                              continue
+                          raise RuntimeError("rate_limited") from exc
+                      # Retry 5xx responses only; 4xx are treated as terminal.
+                      if 500 <= exc.code <= 599 and attempt < max_retries:
+                          wait = compute_retry_wait_seconds(exc, attempt)
+                          print(
+                              f"::warning::Issue Summarizer server error HTTP {exc.code} "
+                              f"(attempt {attempt}/{max_retries}); retrying in {wait:.1f}s."
+                          )
+                          time.sleep(wait)
+                          continue
+                      raise RuntimeError(f"http_{exc.code}") from exc
+                  except urllib.error.URLError as exc:
+                      if attempt < max_retries:
+                          wait = compute_backoff_seconds(attempt)
+                          print(
+                              f"::warning::Issue Summarizer network error "
+                              f"(attempt {attempt}/{max_retries}); retrying in {wait:.1f}s."
+                          )
+                          time.sleep(wait)
+                          continue
+                      raise RuntimeError("network_error") from exc
+              raise RuntimeError("unknown_error")
+
+          try:
+              response_json = call_openai_with_retries(OPENAI_API_KEY, prompt, max_retries=3)
               summary = (
                   response_json.get("choices", [{}])[0]
                   .get("message", {})
                   .get("content", "")
                   .strip()
               )
-          except Exception as e:
-              # Write a short friendly failure message (no secrets) and log only minimal error classification.
-              summary = "AI summarization failed: an internal error occurred. See CI logs for details."
+          except RuntimeError as e:
+              if str(e) == "rate_limited":
+                  summary = os.environ["DIAGNOSTIC_MSG_RATE_LIMIT"]
+              else:
+                  summary = os.environ["DIAGNOSTIC_MSG_FAILURE"]
+              print("::warning::Issue Summarizer OpenAI request failed (non-blocking). See job logs for details.")
+              print("Detailed error classification (exception type only):", file=sys.stderr)
+              print(f"Exception type: {type(e).__name__}", file=sys.stderr)
+          except Exception as e:  # pragma: no cover - defensive fallback in CI runtime
+              summary = os.environ["DIAGNOSTIC_MSG_FAILURE"]
               print("::warning::Issue Summarizer OpenAI request failed (non-blocking). See job logs for details.")
               print("Detailed error classification (exception type only):", file=sys.stderr)
               print(f"Exception type: {type(e).__name__}", file=sys.stderr)
@@ -174,12 +248,14 @@ jobs:
             exit 0
           fi
 
-          # Check existing comments for the marker so we only post once
-          echo "Checking existing comments for diagnostic marker..."
-          EXISTING=$(gh api "repos/$REPO/issues/$ISSUE_NUMBER/comments" --jq '.[].body' 2>/dev/null || echo "")
-          if echo "$EXISTING" | grep -Fq "$MARKER"; then
-            echo "A diagnostic comment has already been posted; skipping to avoid duplicates."
-            exit 0
+          # Only deduplicate when the current comment is a diagnostic fallback.
+          if grep -Fq "$MARKER" "$RESPONSE_FILE"; then
+            echo "Checking existing comments for diagnostic marker..."
+            EXISTING=$(gh api "repos/$REPO/issues/$ISSUE_NUMBER/comments" --jq '.[].body' 2>/dev/null || echo "")
+            if echo "$EXISTING" | grep -Fq "$MARKER"; then
+              echo "A diagnostic comment has already been posted; skipping duplicate diagnostic."
+              exit 0
+            fi
           fi
 
           # Post the comment using --body-file to avoid quoting issues.
