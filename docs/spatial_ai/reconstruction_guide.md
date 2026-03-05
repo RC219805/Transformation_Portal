@@ -662,6 +662,13 @@ from transformation_portal.spatial_ai.reconstruction import (
     LicenseRestrictionError,
 )
 
+from transformation_portal.spatial_ai.reconstruction.protocol import (
+    CONTRACT_VERSION,
+    validate_backend_rasterizer_payload,
+    validate_rasterizer_output,
+)
+
 help(SceneBuilder)
 help(GeometricValidator)
+print("backend-rasterizer contract:", CONTRACT_VERSION)
 ```

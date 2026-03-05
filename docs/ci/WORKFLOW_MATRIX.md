@@ -2,7 +2,7 @@
 
 **Purpose**: Canonical reference for all GitHub Actions workflows
 **Owner**: Transformation Portal Architect
-**Last Updated**: 2026-02-04
+**Last Updated**: 2026-03-05
 
 ---
 
@@ -17,6 +17,7 @@
 | **Dependency Submission** | `dependency-submission.yml` | Push to main | ❌ No | Dependency graph | Submit dependencies to GitHub |
 | **Performance Monitor** | `performance-monitor.yml` | Schedule (nightly) | ❌ No | Performance regression | Benchmark tracking |
 | **Nightly** | `nightly.yml` | Schedule | ❌ No | Extended test suite | ML tests, integration tests |
+| **ML Slow Suite** | `ml-slow-suite.yml` | Schedule, manual dispatch | ❌ No | Slow-lane ML verification | `pytest -m "ml and slow"`, duration report, artifacts |
 | **Python App** | `python-app.yml` | PR, push to main | ⚠️ Unknown | Legacy/duplicate? | Needs audit |
 | **Enforcement** | `enforcement.yml` | PR, push to main | ⚠️ Unknown | Policy enforcement | Needs audit |
 | **Summary** | `summary.yml` | Workflow completion | ❌ No | Reporting | Aggregate workflow results |

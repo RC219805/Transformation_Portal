@@ -36,6 +36,7 @@ import torch
 
 from .contracts import CameraParams, GaussianSplat, LicenseRestrictionError, ReconstructionInput, Scene3D
 from .gaussian_rasterizer import compute_rgb_loss, render_gaussians, render_gaussians_fast
+from .protocol import validate_backend_rasterizer_payload, validate_rasterizer_output
 
 logger = logging.getLogger(__name__)
 
@@ -525,6 +526,20 @@ class GaussianBackend:
             logger.info(f"Optimization device: {device}")
             logger.info(f"Tensor device: {positions.device} (positions sample)")
 
+            # Validate backend↔rasterizer tensor interface once up front.
+            if cameras:
+                first_camera = cameras[0]
+                validate_backend_rasterizer_payload(
+                    positions=positions,
+                    colors=colors,
+                    scales=scales,
+                    rotations=rotations,
+                    opacities=opacities,
+                    intrinsics=torch.from_numpy(first_camera.intrinsics).to(device),
+                    extrinsics=torch.from_numpy(first_camera.extrinsics).to(device),
+                    image_size=(first_camera.height, first_camera.width),
+                )
+
             # Optimizer (Adam with learning rate from defaults)
             optimizer = torch.optim.Adam(
                 [
@@ -707,6 +722,7 @@ class GaussianBackend:
                 use_rotation=False,  # Phase 6A: isotropic Gaussians
                 device=device,
             )
+        validate_rasterizer_output(rendered=rendered, image_size=image_size)
 
         # Convert back to numpy
         rendered_np = rendered.cpu().numpy().astype(np.float32)
