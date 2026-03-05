@@ -6,6 +6,7 @@ NOTE: DA3 Nested models (e.g., depth-anything/da3nested-giant-large)
 require custom library installation:
     git clone https://github.com/ByteDance-Seed/depth-anything-3
     cd depth-anything-3
+    # macOS: ensure xformers is not required in default dependencies
     pip install -e .
 """
 
