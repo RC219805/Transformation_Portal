@@ -145,9 +145,8 @@ class TestPyPIWorkflows:
         ), "Should use recent setup-python action"
 
         # upload-artifact: require v4+
-        assert (
-            "actions/upload-artifact@v5" in content or "actions/upload-artifact@v4" in content
-        ), "Should use recent upload-artifact action"
+        m = re.search(r"actions/upload-artifact@v(\d+)", content)
+        assert m and int(m.group(1)) >= 4, "Should use recent upload-artifact action (v4+)"
 
     def test_submit_pypi_has_package_verification(self, workflows_dir):
         """Test that submit-pypi.yml verifies package contents."""
