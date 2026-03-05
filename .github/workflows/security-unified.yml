@@ -33,9 +33,8 @@ on:
     inputs:
       full_scan:
         description: 'Run full security scan including all dependencies'
-        required: false
-        default: 'false'
         type: boolean
+        default: false
 
 permissions:
   contents: read
