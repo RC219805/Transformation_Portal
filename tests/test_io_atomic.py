@@ -158,6 +158,18 @@ class TestAtomicWriteBytes:
         # 0o044 = group read (0o040) | others read (0o004)
         assert stat_info.st_mode & 0o044 != 0, f"File has restrictive permissions: {oct(stat_info.st_mode)}"
 
+    def test_respects_process_umask(self, tmp_path):
+        """Should honor process umask instead of forcing fixed permissions."""
+        output_path = tmp_path / "umask.bin"
+        original_umask = os.umask(0o077)
+        try:
+            atomic_write_bytes(output_path, b"test data")
+        finally:
+            os.umask(original_umask)
+
+        mode = output_path.stat().st_mode & 0o777
+        assert mode == 0o600
+
 
 @pytest.mark.skipif(not HAS_PIL, reason="Pillow not installed")
 class TestAtomicWritePilPng:

@@ -28,6 +28,13 @@ except ImportError:
     Image = None  # type: ignore
 
 
+def _current_default_file_mode() -> int:
+    """Return the process default file mode derived from current umask."""
+    current_umask = os.umask(0)
+    os.umask(current_umask)
+    return 0o666 & ~current_umask
+
+
 @contextmanager
 def atomic_temp_file(output_path: Path, suffix: str = ".tmp", prefix: str = ".tmp_", create_file: bool = False):
     """Context manager for atomic temp file creation.
@@ -74,9 +81,8 @@ def atomic_temp_file(output_path: Path, suffix: str = ".tmp", prefix: str = ".tm
             # Close FD immediately - caller will use path directly
             os.close(temp_fd)
 
-            # Fix permissions: mkstemp creates 0600, restore to umask-based
-            # This ensures shared pipelines can read the output
-            os.chmod(temp_path, 0o644)
+            # mkstemp creates mode 0600; normalize to current umask policy.
+            os.chmod(temp_path, _current_default_file_mode())
 
             yield temp_path
 
@@ -214,8 +220,8 @@ def atomic_write_with_fd(output_path: Path, writer_func, suffix: str = ".tmp") -
             except OSError:
                 pass  # Already closed by writer
 
-        # Fix permissions: mkstemp creates 0600, restore to umask-based
-        os.chmod(temp_path, 0o644)
+        # mkstemp creates mode 0600; normalize to current umask policy.
+        os.chmod(temp_path, _current_default_file_mode())
 
         # Atomic rename
         os.replace(temp_path, output_path)

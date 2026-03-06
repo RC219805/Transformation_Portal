@@ -41,7 +41,7 @@ def sanitize_file_stem(stem: str) -> str:
 def sanitize_path_component_nonlossy(component: str) -> str:
     """Sanitize path component without losing information.
 
-    STUB: Basic implementation - similar to sanitize_file_stem.
+    Converts path separators to a stable delimiter and strips traversal segments.
 
     Args:
         component: Path component to sanitize
@@ -49,10 +49,22 @@ def sanitize_path_component_nonlossy(component: str) -> str:
     Returns:
         Sanitized path component
     """
-    # Similar to file stem but preserve more characters for paths
-    sanitized = re.sub(r'[<>:"|?*\x00-\x1f]', "_", component)
-    sanitized = sanitized.strip(". ")
-    return sanitized or "unnamed"
+    # Normalize separators first so we can safely flatten to one component.
+    normalized = component.replace("\\", "/")
+    raw_parts = [part for part in normalized.split("/") if part not in ("", ".", "..")]
+
+    sanitized_parts = []
+    for part in raw_parts:
+        sanitized = re.sub(r'[<>:"|?*\x00-\x1f]', "_", part)
+        sanitized = sanitized.strip(". ")
+        if sanitized:
+            sanitized_parts.append(sanitized)
+
+    if not sanitized_parts:
+        return "unnamed"
+
+    # Join flattened parts with a deterministic delimiter to preserve ordering.
+    return "__".join(sanitized_parts)
 
 
 def validate_device_spec(device: str) -> str:

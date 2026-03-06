@@ -100,6 +100,8 @@ def test_import_security():
     assert sanitize_file_stem("test_file") == "test_file"
     assert sanitize_file_stem("test/file") == "test_file"
     assert sanitize_path_component_nonlossy("valid_path") == "valid_path"
+    assert sanitize_path_component_nonlossy("foo/../../escape") == "foo__escape"
+    assert sanitize_path_component_nonlossy(r"windows\\..\\escape") == "windows__escape"
 
     # Test validation functions
     assert validate_device_spec("cpu") == "cpu"

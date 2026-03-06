@@ -8,6 +8,7 @@ Validates:
 5. Graceful fallback to sequential processing
 """
 
+import logging
 import tempfile
 import time
 from pathlib import Path
@@ -484,7 +485,7 @@ class TestThreadSafety:
         stats = cache.stats()
         assert stats["entry_count"] == 10
 
-    def test_depth_cache_concurrent_same_key(self, tmp_path):
+    def test_depth_cache_concurrent_same_key(self, tmp_path, caplog):
         """Test depth cache handles concurrent writes to same key (last write wins)."""
         import threading
 
@@ -500,15 +501,17 @@ class TestThreadSafety:
             except Exception as e:
                 exceptions.append(e)
 
-        # Spawn 10 threads writing same key with different values
-        threads = [threading.Thread(target=store_depth, args=(i,)) for i in range(10)]
-        for t in threads:
-            t.start()
-        for t in threads:
-            t.join()
+        with caplog.at_level(logging.WARNING, logger="transformation_portal.lux_depth_v3.depth_cache"):
+            # Spawn 10 threads writing same key with different values
+            threads = [threading.Thread(target=store_depth, args=(i,)) for i in range(10)]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join()
 
         # Verify: no exceptions, one cache entry exists
         assert len(exceptions) == 0, f"Exceptions during concurrent same-key stores: {exceptions}"
+        assert not any("Failed to cache depth" in rec.message for rec in caplog.records)
         stats = cache.stats()
         assert stats["entry_count"] == 1
 
