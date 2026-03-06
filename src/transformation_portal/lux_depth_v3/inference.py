@@ -546,14 +546,11 @@ class DA3InferenceEngine:
         """Run depth inference on an image (main API).
 
         Accepts multiple input types for flexibility:
-        - np.ndarray: Direct numpy array
-          (HxWx3/HxWx4/HxW,
-          uint8/uint16/float32/float64)
-        - PIL.Image.Image: PIL image object
-          (any mode)
-        - Path/str: File path
-          (delegates to :meth:`infer_from_path`)
-        - ImageInput: Path wrapper from input_manager
+
+        * ``np.ndarray``: Direct numpy array (``HxWx3``/``HxWx4``/``HxW``; ``uint8``/``uint16``/``float32``/``float64``).
+        * ``PIL.Image.Image``: PIL image object (any mode).
+        * ``Path``/``str``: File path (delegates to :meth:`infer_from_path`).
+        * ``ImageInput``: Path wrapper from input_manager.
 
         Args:
             image: Input image (numpy array, PIL image, path, or ImageInput).
@@ -587,15 +584,12 @@ class DA3InferenceEngine:
         """Run depth inference on an image.
 
         Accepts multiple input types:
-        - np.ndarray: Direct numpy array
-          (HxWx3/HxWx4/HxW,
-          uint8/uint16/float32/float64)
-        - PIL.Image.Image: PIL image object
-          (any mode)
+
+        * ``np.ndarray``: Direct numpy array (``HxWx3``/``HxWx4``/``HxW``; ``uint8``/``uint16``/``float32``/``float64``).
+        * ``PIL.Image.Image``: PIL image object (any mode).
 
         Args:
-            image: Input image as numpy array
-                or PIL image.
+            image: Input image as numpy array or PIL image.
 
         Returns:
             DepthResult with depth map and metadata.

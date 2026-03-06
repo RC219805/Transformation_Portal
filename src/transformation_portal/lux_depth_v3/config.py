@@ -117,11 +117,11 @@ class DA3Config:
         """Create configuration from preset.
 
         Presets provide different quality/performance tradeoffs:
-        - ARCHITECTURAL_INTERIOR: High quality for
-          interior architectural renders.
-        - ARCHITECTURAL_EXTERIOR: Balanced for exterior scenes
-        - LUXURY_ESTATE: Premium quality for luxury real estate
-        - DEFAULT: Standard balanced configuration
+
+        * ``ARCHITECTURAL_INTERIOR``: High quality for interior architectural renders.
+        * ``ARCHITECTURAL_EXTERIOR``: Balanced for exterior scenes.
+        * ``LUXURY_ESTATE``: Premium quality for luxury real estate.
+        * ``DEFAULT``: Standard balanced configuration.
         """
         # Define preset-specific configurations
         if preset == Preset.ARCHITECTURAL_INTERIOR:
