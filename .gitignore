@@ -200,6 +200,20 @@ input_images/**/*.jpeg
 input_images/**/*.png
 input_images/**/*.tif
 input_images/**/*.tiff
+input_images/**/*.[3][fF][rR]
+input_images/**/*.[aA][rR][wW]
+input_images/**/*.[cC][rR][2]
+input_images/**/*.[cC][rR][wW]
+input_images/**/*.[dD][nN][gG]
+input_images/**/*.[iI][iI][qQ]
+input_images/**/*.[nN][eE][fF]
+input_images/**/*.[nN][rR][wW]
+input_images/**/*.[oO][rR][fF]
+input_images/**/*.[pP][eE][fF]
+input_images/**/*.[rR][aA][fF]
+input_images/**/*.[rR][wW][2]
+input_images/**/*.[sS][rR][2]
+input_images/**/*.[sS][rR][fF]
 !input_images/.gitkeep
 
 # -----------------------------------------------------------------------------
