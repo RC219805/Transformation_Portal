@@ -3601,11 +3601,10 @@ class EnhanceOrchestrator:
         pipeline_start_time = time.time()
         # Reset per-image active state up front so early exceptions cannot leak
         # stale attempt/backend data from a previous image.
-        self._active_backend_metadata = getattr(
-            self,
-            "_backend_metadata",
-            self._capture_backend_metadata(),
-        )
+        if hasattr(self, "_backend_metadata"):
+            self._active_backend_metadata = self._backend_metadata
+        else:
+            self._active_backend_metadata = self._capture_backend_metadata()
         self._active_depth_attempts = []
         self._active_selected_attempt_index = None
 
@@ -4214,7 +4213,7 @@ class EnhanceOrchestrator:
             is None
         ) or (float(metrics["saturation_low_fraction"]) > (effective_low_saturation_max + comparison_epsilon))
         low_gradient = (metrics.get("gradient_energy") is None) or (
-            float(metrics["gradient_energy"]) <= (thresholds["gradient_energy_min"] + comparison_epsilon)
+            float(metrics["gradient_energy"]) < (thresholds["gradient_energy_min"] - comparison_epsilon)
         )
 
         failure_codes: List[str] = []

@@ -280,6 +280,35 @@ def _make_depth_result(width: int = 64, height: int = 64):
     )
 
 
+def test_enhance_image_reuses_initialized_backend_metadata_without_recapture(tmp_path, mock_da3_available):
+    """enhance_image should not recapture backend metadata when metadata already exists."""
+    from PIL import Image
+
+    from transformation_portal.lux_depth_v3.input_manager import ImageInput
+
+    test_image = tmp_path / "backend_metadata_reuse.png"
+    Image.new("RGB", (64, 64), color="white").save(test_image)
+
+    config = EnhanceConfig(
+        depth_backend="da3",
+        depth_device="cpu",
+        enable_v2=False,
+    )
+    orchestrator = EnhanceOrchestrator(config, tmp_path)
+    orchestrator.postprocessor = Mock(process=lambda result: result)
+
+    with patch.object(orchestrator.depth_backend, "compute", return_value=_make_depth_result()):
+        with patch.object(
+            orchestrator,
+            "_capture_backend_metadata",
+            side_effect=AssertionError("should not recapture backend metadata"),
+        ) as capture_mock:
+            result = orchestrator.enhance_image(ImageInput(path=test_image))
+
+    assert result["status"] == "ok"
+    capture_mock.assert_not_called()
+
+
 def test_runtime_operational_failure_falls_back_to_da2_with_attempt_provenance(tmp_path):
     """Operational failure should fallback to DA2 and persist attempts in metadata."""
     import json

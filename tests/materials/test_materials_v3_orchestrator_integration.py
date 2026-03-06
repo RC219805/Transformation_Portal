@@ -675,6 +675,35 @@ def test_apex_depth_validity_gate_returns_thresholds_and_metrics_on_pass(tmp_pat
     assert verdict["failure_codes"] == []
 
 
+def test_apex_depth_validity_gate_gradient_epsilon_ignores_small_positive_jitter(
+    tmp_path, mock_depth_backend, mock_da3_available
+):
+    """Gradient warning should ignore values slightly above threshold within epsilon tolerance."""
+    config = EnhanceConfig(
+        quality_tier="apex",
+        depth_device="cpu",
+        enable_v2=False,
+        apex_depth_min_gradient_energy=5e-4,
+        apex_depth_threshold_epsilon=1e-4,
+    )
+    orchestrator = EnhanceOrchestrator(config, tmp_path)
+
+    metrics = {
+        "finite_pct": 1.0,
+        "upper_iqr": 0.2,
+        "saturation_high_fraction": 0.01,
+        "saturation_low_fraction": 0.01,
+        "gradient_energy": 5.5e-4,  # threshold + epsilon/2
+        "gate_normalization": {"scaled": False, "mode": "identity_relative"},
+    }
+    with patch.object(orchestrator, "_compute_depth_validity_metrics", return_value=metrics):
+        verdict = orchestrator._enforce_apex_depth_validity_gate(np.ones((8, 8), dtype=np.float32), depth_units="relative")
+
+    assert verdict is not None
+    assert verdict["passed"] is True
+    assert "APEX_DEPTH_GRADIENT_LOW" not in verdict["warnings"]
+
+
 def test_apex_depth_validity_gate_noop_outside_apex(tmp_path, mock_depth_backend, mock_da3_available):
     """Depth validity gate should be inactive for non-APEX tiers."""
     config = EnhanceConfig(
