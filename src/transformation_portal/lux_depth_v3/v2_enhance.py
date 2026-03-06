@@ -134,10 +134,21 @@ def find_depth_map(depth_dir: Path, image_stem: str) -> Optional[Path]:
             f"{stem}_depth_f32.png",
             f"{stem}.png",
         ]
+
+        # Fast path: direct children of depth_dir.
         for pattern in patterns:
             depth_path = depth_dir / pattern
             if depth_path.exists():
                 logger.debug(f"Found depth map: {depth_path}")
+                return depth_path
+
+        # Fallback: recursive search for nested output_key
+        # directories. Sort for deterministic selection.
+        for pattern in patterns:
+            recursive_matches = sorted(depth_dir.glob(f"**/{pattern}"))
+            if recursive_matches:
+                depth_path = recursive_matches[0]
+                logger.debug(f"Found nested depth map: {depth_path}")
                 return depth_path
 
     logger.warning(

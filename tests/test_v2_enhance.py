@@ -94,6 +94,18 @@ class TestFindDepthMap:
         found = find_depth_map(depth_dir, "750Picacho_Pool_master16__tiff_eb4924f8_materials_v3_enhanced")
         assert found == depth_path
 
+    def test_find_depth_map_recurses_nested_depth_outputs(self, tmp_path):
+        """Depth lookup should find sidecars in nested output_key directories."""
+        depth_dir = tmp_path / "depth"
+        nested_dir = depth_dir / "scene_a"
+        nested_dir.mkdir(parents=True)
+
+        depth_path = nested_dir / "test_image_depth.png"
+        depth_path.touch()
+
+        found = find_depth_map(depth_dir, "test_image")
+        assert found == depth_path
+
     def test_find_depth_map_no_directory(self):
         """Test behavior when depth_dir is None or doesn't exist."""
         assert find_depth_map(None, "test") is None
