@@ -94,6 +94,45 @@ def test_force_preview_mode_requires_explicit_env_escape(monkeypatch: pytest.Mon
         _ = decode_for_lux_depth(raw_path, _raw_cfg("force_preview"))
 
 
+def test_force_preview_wraps_preview_decode_failures(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    raw_path = tmp_path / "scene_04.dng"
+    raw_path.write_bytes(b"phase_c1_fake_raw_payload")
+    monkeypatch.setenv("TP_ALLOW_RAW_PREVIEW", "1")
+
+    def fail_preview_decode(*_args, **_kwargs):
+        raise OSError("cannot identify image file")
+
+    monkeypatch.setattr("transformation_portal.lux_depth_v3.ingest_adapter.Image.open", fail_preview_decode)
+
+    with pytest.raises(RawIngestError, match="RAW preview decode failed") as exc_info:
+        _ = decode_for_lux_depth(raw_path, _raw_cfg("force_preview"))
+
+    assert "cannot identify image file" in str(exc_info.value)
+
+
+def test_auto_mode_preview_fallback_wraps_preview_decode_failures(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    raw_path = tmp_path / "scene_05.dng"
+    raw_path.write_bytes(b"phase_c1_fake_raw_payload")
+    monkeypatch.setenv("TP_ALLOW_RAW_PREVIEW", "1")
+
+    def fail_decode_contract(*_args, **_kwargs):
+        raise RuntimeError("canonical decode failed")
+
+    def fail_preview_decode(*_args, **_kwargs):
+        raise OSError("cannot identify image file")
+
+    monkeypatch.setattr("transformation_portal.spatial_ai.ingest.contracts.decode_contract", fail_decode_contract)
+    monkeypatch.setattr("transformation_portal.lux_depth_v3.ingest_adapter.Image.open", fail_preview_decode)
+
+    with pytest.raises(RawIngestError, match="RAW preview decode failed") as exc_info:
+        _ = decode_for_lux_depth(raw_path, _raw_cfg("auto"))
+
+    assert "cannot identify image file" in str(exc_info.value)
+
+
 def test_capture_provenance_records_ingest_digest_fields(tmp_path: Path) -> None:
     image_path = tmp_path / "frame.png"
     Image.new("RGB", (16, 16), color=(120, 80, 40)).save(image_path)

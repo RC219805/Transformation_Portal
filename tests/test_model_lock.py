@@ -264,6 +264,58 @@ def test_da3_inference_pipeline_load_uses_pinned_revision_in_strict_mode(
     assert captured["task"] == "depth-estimation"
     assert captured["model"] == model_id
     assert captured["revision"] == pinned
+    assert captured["device"] == "cpu"
+
+
+def test_da3_inference_pipeline_load_uses_mps_device_string(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from transformation_portal.lux_depth_v3 import inference as da3_inference
+    from transformation_portal.lux_depth_v3.config import DA3Config, DeviceConfig
+    from transformation_portal.lux_depth_v3.config import ModelVariant as DA3ModelVariant
+
+    manifest_path = tmp_path / "model_lock.yaml"
+    model_id = "depth-anything/Depth-Anything-V3-Metric-Base-hf"
+    pinned = "6" * 40
+    _write_manifest(manifest_path, {model_id: {"revision": pinned}})
+
+    monkeypatch.setenv("TP_MODEL_LOCK_MANIFEST", str(manifest_path))
+    monkeypatch.setenv("TP_STRICT_MODEL_LOCK", "1")
+    monkeypatch.setattr(da3_inference, "TRANSFORMERS_AVAILABLE", True)
+    monkeypatch.setattr(da3_inference, "TORCH_AVAILABLE", True)
+    monkeypatch.setattr(
+        da3_inference.DA3InferenceEngine,
+        "_auto_detect_backend",
+        lambda self: da3_inference.ModelBackend.PYTORCH_MPS,
+    )
+
+    captured: dict[str, str | int | None] = {}
+
+    class _FakeModel:
+        pass
+
+    class _FakePipeline:
+        def __init__(self) -> None:
+            self.model = _FakeModel()
+
+    def _fake_pipeline(*, task: str, model: str, revision: str | None = None, **kwargs):
+        captured["task"] = task
+        captured["model"] = model
+        captured["revision"] = revision
+        captured["device"] = kwargs.get("device")
+        return _FakePipeline()
+
+    monkeypatch.setattr(da3_inference, "pipeline", _fake_pipeline)
+
+    config = DA3Config(
+        model_variant=DA3ModelVariant.METRIC_BASE,
+        device=DeviceConfig(device="mps", use_fp16=False),
+    )
+    engine = da3_inference.DA3InferenceEngine(config)
+    engine._load_pytorch_model()
+
+    assert captured["task"] == "depth-estimation"
+    assert captured["model"] == model_id
+    assert captured["revision"] == pinned
+    assert captured["device"] == "mps"
 
 
 def test_da3_inference_strict_mode_rejects_revisionless_da3_fallback(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
