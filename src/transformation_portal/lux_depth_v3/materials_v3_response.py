@@ -24,8 +24,16 @@ def compute_edge_signals(
     # 1. Extract Boundary (Morphological Edge approx 3px wide)
     binary_mask = (mask_np > 0.5).astype(int)
     struct = scipy.ndimage.generate_binary_structure(2, 2)
-    dilated = scipy.ndimage.binary_dilation(binary_mask, structure=struct, iterations=1)
-    eroded = scipy.ndimage.binary_erosion(binary_mask, structure=struct, iterations=1)
+    dilated = scipy.ndimage.binary_dilation(
+        binary_mask,
+        structure=struct,
+        iterations=1,
+    )
+    eroded = scipy.ndimage.binary_erosion(
+        binary_mask,
+        structure=struct,
+        iterations=1,
+    )
     boundary_mask = (dilated ^ eroded).astype(bool)
 
     boundary_pixels_count = int(np.sum(boundary_mask))

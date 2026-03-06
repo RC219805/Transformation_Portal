@@ -117,10 +117,11 @@ class DA3Config:
         """Create configuration from preset.
 
         Presets provide different quality/performance tradeoffs:
-        - ARCHITECTURAL_INTERIOR: High quality for interior architectural renders.
-        - ARCHITECTURAL_EXTERIOR: Balanced for exterior scenes
-        - LUXURY_ESTATE: Premium quality for luxury real estate
-        - DEFAULT: Standard balanced configuration
+
+        * ``ARCHITECTURAL_INTERIOR``: High quality for interior architectural renders.
+        * ``ARCHITECTURAL_EXTERIOR``: Balanced for exterior scenes.
+        * ``LUXURY_ESTATE``: Premium quality for luxury real estate.
+        * ``DEFAULT``: Standard balanced configuration.
         """
         # Define preset-specific configurations
         if preset == Preset.ARCHITECTURAL_INTERIOR:
@@ -295,9 +296,16 @@ class EnhanceConfig:
     apex_depth_min_upper_iqr: float = 1e-4
     apex_depth_max_high_saturation_fraction: float = 0.02
     apex_depth_max_low_saturation_fraction: float = 0.02
+    # Additional saturation tolerance applied only
+    # when gate normalization scales metric depth
+    # via percentile_1_99.
+    apex_depth_scaled_saturation_margin: float = 0.0025
     apex_depth_saturation_high_value: float = 0.999
     apex_depth_saturation_low_value: float = 0.001
     apex_depth_min_gradient_energy: float = 5e-4
+    # Numeric epsilon used for threshold comparisons
+    # to avoid edge-case float jitter.
+    apex_depth_threshold_epsilon: float = 1e-6
     apex_depth_hist_bins: int = 64
 
     # Materials V3 surface-aware finishing
@@ -324,7 +332,9 @@ class EnhanceConfig:
     # mask feathering
     mask_feather_sigma_default: float = 3.0
     # Material-specific overrides
-    mask_feather_sigma_overrides: Dict[str, float] = field(default_factory=dict)
+    mask_feather_sigma_overrides: Dict[str, float] = field(
+        default_factory=dict,
+    )
     # Materials with feathering disabled
     mask_feather_disabled_materials: list[str] = field(default_factory=list)
 

@@ -544,6 +544,58 @@ def test_apex_depth_validity_gate_rejects_low_saturation(tmp_path, mock_depth_ba
         orchestrator._enforce_apex_depth_validity_gate(depth)
 
 
+def test_apex_depth_validity_gate_allows_scaled_metric_near_low_saturation_limit_with_margin(
+    tmp_path, mock_depth_backend, mock_da3_available
+):
+    """Scaled metric normalization gets a small saturation margin to avoid false rejects."""
+    config = EnhanceConfig(
+        quality_tier="apex",
+        depth_device="cpu",
+        enable_v2=False,
+    )
+    orchestrator = EnhanceOrchestrator(config, tmp_path)
+
+    metrics = {
+        "finite_pct": 1.0,
+        "upper_iqr": 0.2,
+        "saturation_high_fraction": 0.01,
+        "saturation_low_fraction": 0.0221,
+        "gradient_energy": 0.001,
+        "gate_normalization": {"scaled": True, "mode": "percentile_1_99"},
+    }
+    with patch.object(orchestrator, "_compute_depth_validity_metrics", return_value=metrics):
+        verdict = orchestrator._enforce_apex_depth_validity_gate(np.ones((8, 8), dtype=np.float32), depth_units="meters")
+
+    assert verdict is not None
+    assert verdict["passed"] is True
+    assert verdict["thresholds"]["saturation_low_fraction_max"] == pytest.approx(0.02)
+    assert verdict["thresholds"]["saturation_low_fraction_max_effective"] == pytest.approx(0.0225)
+
+
+def test_apex_depth_validity_gate_rejects_scaled_metric_beyond_low_saturation_margin(
+    tmp_path, mock_depth_backend, mock_da3_available
+):
+    """Scaled metric normalization still fails when low saturation exceeds effective margin."""
+    config = EnhanceConfig(
+        quality_tier="apex",
+        depth_device="cpu",
+        enable_v2=False,
+    )
+    orchestrator = EnhanceOrchestrator(config, tmp_path)
+
+    metrics = {
+        "finite_pct": 1.0,
+        "upper_iqr": 0.2,
+        "saturation_high_fraction": 0.01,
+        "saturation_low_fraction": 0.023,
+        "gradient_energy": 0.001,
+        "gate_normalization": {"scaled": True, "mode": "percentile_1_99"},
+    }
+    with patch.object(orchestrator, "_compute_depth_validity_metrics", return_value=metrics):
+        with pytest.raises(RuntimeError, match="APEX_DEPTH_SATURATION_LOW"):
+            orchestrator._enforce_apex_depth_validity_gate(np.ones((8, 8), dtype=np.float32), depth_units="meters")
+
+
 def test_apex_depth_validity_gate_rejects_nonfinite(tmp_path, mock_depth_backend, mock_da3_available):
     """APEX depth gate should fail when finite percentage is below floor."""
     config = EnhanceConfig(
@@ -621,6 +673,35 @@ def test_apex_depth_validity_gate_returns_thresholds_and_metrics_on_pass(tmp_pat
     assert "metrics" in verdict
     assert "failure_codes" in verdict
     assert verdict["failure_codes"] == []
+
+
+def test_apex_depth_validity_gate_gradient_epsilon_ignores_small_positive_jitter(
+    tmp_path, mock_depth_backend, mock_da3_available
+):
+    """Gradient warning should ignore values slightly above threshold within epsilon tolerance."""
+    config = EnhanceConfig(
+        quality_tier="apex",
+        depth_device="cpu",
+        enable_v2=False,
+        apex_depth_min_gradient_energy=5e-4,
+        apex_depth_threshold_epsilon=1e-4,
+    )
+    orchestrator = EnhanceOrchestrator(config, tmp_path)
+
+    metrics = {
+        "finite_pct": 1.0,
+        "upper_iqr": 0.2,
+        "saturation_high_fraction": 0.01,
+        "saturation_low_fraction": 0.01,
+        "gradient_energy": 5.5e-4,  # threshold + epsilon/2
+        "gate_normalization": {"scaled": False, "mode": "identity_relative"},
+    }
+    with patch.object(orchestrator, "_compute_depth_validity_metrics", return_value=metrics):
+        verdict = orchestrator._enforce_apex_depth_validity_gate(np.ones((8, 8), dtype=np.float32), depth_units="relative")
+
+    assert verdict is not None
+    assert verdict["passed"] is True
+    assert "APEX_DEPTH_GRADIENT_LOW" not in verdict["warnings"]
 
 
 def test_apex_depth_validity_gate_noop_outside_apex(tmp_path, mock_depth_backend, mock_da3_available):

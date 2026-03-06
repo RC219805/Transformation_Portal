@@ -150,7 +150,7 @@ try:
     import typer
 except ImportError:
     print(
-        "Error: typer not installed." " Install with: pip install typer",
+        "Error: typer not installed." + " Install with: pip install typer",
         file=sys.stderr,
     )
     sys.exit(1)
@@ -208,7 +208,7 @@ def main(
     output_dir: Path = typer.Option(
         ...,
         "--output-dir",
-        help="Output directory for all artifacts" " (depth, PBR, enhanced images," " manifests)",
+        help=("Output directory for all artifacts" " (depth, PBR, enhanced images," " manifests)"),
     ),
     # Preset and Quality
     preset: str = typer.Option(
@@ -264,7 +264,7 @@ def main(
     enable_segmentation: str = typer.Option(
         "off",
         "--enable-segmentation",
-        help="Enable automatic material" " segmentation: on/off (default: off)",
+        help=("Enable automatic material" " segmentation: on/off" " (default: off)"),
     ),
     segmentation_backend: str = typer.Option(
         "stub",
@@ -274,17 +274,17 @@ def main(
     sam2_model_size: str = typer.Option(
         "base",
         "--sam2-model-size",
-        help="SAM2 model size (base|large)" " when --segmentation-backend sam2",
+        help=("SAM2 model size (base|large)" " when --segmentation-backend sam2"),
     ),
     sam2_checkpoint_path: Optional[Path] = typer.Option(
         None,
         "--sam2-checkpoint-path",
-        help="Optional path to SAM2 checkpoint" " (.pt) when" " --segmentation-backend sam2",
+        help=("Optional path to SAM2 checkpoint" " (.pt) when" " --segmentation-backend sam2"),
     ),
     strict_segmentation: bool = typer.Option(
         False,
         "--strict-segmentation",
-        help="Fail on segmentation backend" " errors instead of falling" " back to stub",
+        help=("Fail on segmentation backend" " errors instead of falling" " back to stub"),
     ),
     # Caching
     cache_depth: str = typer.Option(
@@ -344,12 +344,12 @@ def main(
     non_commercial_ok: str = typer.Option(
         "false",
         "--non-commercial-ok",
-        help="Acknowledge non-commercial license" " restrictions (CC BY-NC 4.0):" " true/false",
+        help=("Acknowledge non-commercial license" " restrictions (CC BY-NC 4.0):" " true/false"),
     ),
     accept_apple_depth_pro_research_license: str = typer.Option(
         "false",
         "--accept-apple-depth-pro-research-license",
-        help="Accept Apple Depth Pro research" " license (AMLR): true/false",
+        help=("Accept Apple Depth Pro research" " license (AMLR): true/false"),
     ),
     accept_research_tools_license: str = typer.Option(
         "false",
@@ -381,7 +381,7 @@ def main(
         1000,
         "--reconstruction-iterations",
         min=1,
-        help="Iteration budget for" " reconstruction optimization" " (default: 1000)",
+        help=("Iteration budget for" " reconstruction optimization" " (default: 1000)"),
     ),
     reconstruction_tier: str = typer.Option(
         "apex_research",
@@ -418,7 +418,7 @@ def main(
         "camera",
         "--raw-wb-mode",
         help=(
-            "RAW white-balance mode for" " legacy_linear_srgb ingest contract" " (currently only 'camera' is" " supported)."
+            "RAW white-balance mode for" " legacy_linear_srgb ingest" " contract (currently only" " 'camera' is supported)."
         ),
     ),
     raw_demosaic: str = typer.Option(
@@ -604,7 +604,7 @@ def main(
 
     # Validate SAM2 size option only when SAM2 backend is selected.
     if segmentation_backend.lower() == "sam2" and sam2_model_size.lower() not in ["base", "large"]:
-        error_msg = "Invalid --sam2-model-size. Must be one of: base, large"
+        error_msg = "Invalid --sam2-model-size." " Must be one of: base, large"
         logger.error(error_msg)
         print(error_msg, file=sys.stdout)
         raise typer.Exit(code=1)

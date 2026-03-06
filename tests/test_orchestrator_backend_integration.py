@@ -280,6 +280,35 @@ def _make_depth_result(width: int = 64, height: int = 64):
     )
 
 
+def test_enhance_image_reuses_initialized_backend_metadata_without_recapture(tmp_path, mock_da3_available):
+    """enhance_image should not recapture backend metadata when metadata already exists."""
+    from PIL import Image
+
+    from transformation_portal.lux_depth_v3.input_manager import ImageInput
+
+    test_image = tmp_path / "backend_metadata_reuse.png"
+    Image.new("RGB", (64, 64), color="white").save(test_image)
+
+    config = EnhanceConfig(
+        depth_backend="da3",
+        depth_device="cpu",
+        enable_v2=False,
+    )
+    orchestrator = EnhanceOrchestrator(config, tmp_path)
+    orchestrator.postprocessor = Mock(process=lambda result: result)
+
+    with patch.object(orchestrator.depth_backend, "compute", return_value=_make_depth_result()):
+        with patch.object(
+            orchestrator,
+            "_capture_backend_metadata",
+            side_effect=AssertionError("should not recapture backend metadata"),
+        ) as capture_mock:
+            result = orchestrator.enhance_image(ImageInput(path=test_image))
+
+    assert result["status"] == "ok"
+    capture_mock.assert_not_called()
+
+
 def test_runtime_operational_failure_falls_back_to_da2_with_attempt_provenance(tmp_path):
     """Operational failure should fallback to DA2 and persist attempts in metadata."""
     import json
@@ -325,7 +354,10 @@ def test_runtime_operational_failure_falls_back_to_da2_with_attempt_provenance(t
     assert len(result["attempts"]) >= 2
     assert result["attempts"][0]["failure_kind"] == "operational"
     assert result["attempts"][0]["error_code"] == "CUDA_HARDCODED_IN_BACKEND"
+    assert result["attempts"][0]["model_id"] == config.model_variant.value.huggingface_id
     assert result["attempts"][1]["status"] == "success"
+    assert result["attempts"][1]["model_id"] == "depth-anything/Depth-Anything-V2-Small-hf"
+    assert result["model_id"] == "depth-anything/Depth-Anything-V2-Small-hf"
     assert result["selected_attempt_index"] == 1
     selected_attempt_index = result["selected_attempt_index"]
     assert any(
@@ -337,6 +369,7 @@ def test_runtime_operational_failure_falls_back_to_da2_with_attempt_provenance(t
     backend_selection = manifest["backend_selection"]
     assert backend_selection["resolved_backend"] == "da2"
     assert backend_selection["resolution_status"] == "fallback"
+    assert backend_selection["model_id"] == "depth-anything/Depth-Anything-V2-Small-hf"
     assert len(backend_selection["attempts"]) >= 2
     assert backend_selection["attempts"][0]["failure_kind"] == "operational"
 
@@ -400,7 +433,10 @@ def test_runtime_semantic_fallback_retries_when_enabled(tmp_path):
     assert len(result["attempts"]) == 2
     assert result["attempts"][0]["failure_kind"] == "semantic"
     assert result["attempts"][0]["error_code"] == "APEX_DEPTH_PLATEAU"
+    assert result["attempts"][0]["model_id"] == config.model_variant.value.huggingface_id
     assert result["attempts"][1]["status"] == "success"
+    assert result["attempts"][1]["model_id"] == "depth-anything/Depth-Anything-V2-Small-hf"
+    assert result["model_id"] == "depth-anything/Depth-Anything-V2-Small-hf"
     assert result["selected_attempt_index"] == 1
     selected_attempt_index = result["selected_attempt_index"]
     assert any(
@@ -412,6 +448,7 @@ def test_runtime_semantic_fallback_retries_when_enabled(tmp_path):
     backend_selection = manifest["backend_selection"]
     assert backend_selection["resolved_backend"] == "da2"
     assert backend_selection["resolution_status"] == "fallback"
+    assert backend_selection["model_id"] == "depth-anything/Depth-Anything-V2-Small-hf"
     assert backend_selection["attempts"][0]["failure_kind"] == "semantic"
 
 
@@ -669,6 +706,8 @@ def test_runtime_multilevel_operational_fallback_chain_is_deterministic(tmp_path
     depth_pro_backend = Mock()
     depth_pro_backend.name = "depth_pro"
     depth_pro_backend.license_type = Mock(value="research_only")
+    depth_pro_backend._checkpoint_path = Path("/tmp/depth_pro_custom.pt")
+    depth_pro_backend._checkpoint_hash_cached = "A" * 64
     depth_pro_backend.ensure_available.return_value = None
     depth_pro_backend.compute.side_effect = FileNotFoundError("depth_pro checkpoint not found")
 
@@ -700,6 +739,14 @@ def test_runtime_multilevel_operational_fallback_chain_is_deterministic(tmp_path
     assert result["backend"] == "da2"
     assert [attempt["attempt"] for attempt in result["attempts"]] == [0, 1, 2]
     assert [attempt["backend"] for attempt in result["attempts"]] == ["depth_pro", "da3", "da2"]
+    assert [attempt["model_id"] for attempt in result["attempts"]] == [
+        "apple/ml-depth-pro",
+        config.model_variant.value.huggingface_id,
+        "depth-anything/Depth-Anything-V2-Small-hf",
+    ]
+    assert result["attempts"][0]["model_artifact_filename"] == "depth_pro_custom.pt"
+    assert result["attempts"][0]["model_artifact_sha256"] == "a" * 64
+    assert result["model_id"] == "depth-anything/Depth-Anything-V2-Small-hf"
     assert result["selected_attempt_index"] == 2
 
     manifest = json.loads(Path(result["manifest"]).read_text())
@@ -708,3 +755,6 @@ def test_runtime_multilevel_operational_fallback_chain_is_deterministic(tmp_path
     assert attempts[0]["failure_kind"] == "operational"
     assert attempts[1]["failure_kind"] == "operational"
     assert attempts[2]["status"] == "success"
+    assert attempts[0]["model_artifact_filename"] == "depth_pro_custom.pt"
+    assert attempts[0]["model_artifact_sha256"] == "a" * 64
+    assert manifest["backend_selection"]["model_id"] == "depth-anything/Depth-Anything-V2-Small-hf"

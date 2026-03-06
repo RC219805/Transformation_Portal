@@ -542,3 +542,119 @@ def test_config_fingerprint_uses_raw_preset_requested_when_enum_unset():
     assert fingerprint["preset_resolved"] == "quality_tier:apex"
     assert fingerprint["raw_ingest_profile"] == "tp.raw_ingest.deterministic_v1"
     assert len(fingerprint["raw_ingest_settings_hash"]) == 64
+
+
+def test_resolve_run_card_backend_model_id_prefers_selected_attempt_model():
+    orch = object.__new__(EnhanceOrchestrator)
+    orch._backend_metadata = SimpleNamespace(
+        resolved_backend="da3",
+        model_id="depth-anything/DA3NESTED-GIANT-LARGE-1.1",
+    )
+    orch._depth_backend_cache = {}
+    orch.config = EnhanceConfig(model_variant=ModelVariant.METRIC_LARGE)
+
+    results = [
+        {
+            "status": "ok",
+            "backend": "da2",
+            "model_id": "depth-anything/DA3NESTED-GIANT-LARGE-1.1",
+            "selected_attempt_index": 2,
+            "attempts": [
+                {
+                    "attempt": 0,
+                    "backend": "depth_pro",
+                    "status": "failed",
+                    "model_id": "apple/ml-depth-pro",
+                },
+                {
+                    "attempt": 1,
+                    "backend": "da3",
+                    "status": "failed",
+                    "model_id": "depth-anything/DA3NESTED-GIANT-LARGE-1.1",
+                },
+                {
+                    "attempt": 2,
+                    "backend": "da2",
+                    "status": "success",
+                    "model_id": "depth-anything/Depth-Anything-V2-Small-hf",
+                },
+            ],
+        },
+    ]
+
+    model_id = orch._resolve_run_card_backend_model_id(results, "da2")
+    assert model_id == "depth-anything/Depth-Anything-V2-Small-hf"
+
+
+def test_run_card_schema_accepts_backend_model_artifact_fields():
+    pytest.importorskip("jsonschema")
+    payload = _valid_run_card_payload()
+    payload["backend_selection"]["model_artifact_filename"] = "depth_pro.pt"
+    payload["backend_selection"]["model_artifact_sha256"] = "f" * 64
+
+    _validate_run_card_payload(payload, _run_card_schema_path())
+
+
+def test_run_card_schema_rejects_invalid_backend_model_artifact_sha256():
+    pytest.importorskip("jsonschema")
+    payload = _valid_run_card_payload()
+    payload["backend_selection"]["model_artifact_sha256"] = "invalid-sha"
+
+    with pytest.raises(RuntimeError, match="model_artifact_sha256"):
+        _validate_run_card_payload(payload, _run_card_schema_path())
+
+
+def test_resolve_backend_model_id_depth_pro_uses_canonical_identifier():
+    orch = object.__new__(EnhanceOrchestrator)
+    backend = SimpleNamespace(
+        _checkpoint_path=Path("/tmp/depth_pro_custom.pt"),
+        model_id="apple/ml-depth-pro:depth_pro_custom.pt",
+    )
+
+    model_id = orch._resolve_backend_model_id(
+        "depth_pro",
+        result_metadata={"model_id": "apple/ml-depth-pro:depth_pro_custom.pt"},
+        backend=backend,
+    )
+
+    assert model_id == "apple/ml-depth-pro"
+
+
+def test_resolve_run_card_backend_model_artifact_prefers_selected_attempt():
+    orch = object.__new__(EnhanceOrchestrator)
+    orch._backend_metadata = SimpleNamespace(
+        resolved_backend="depth_pro",
+        model_id="apple/ml-depth-pro",
+    )
+    orch._depth_backend_cache = {}
+
+    results = [
+        {
+            "status": "ok",
+            "backend": "depth_pro",
+            "selected_attempt_index": 1,
+            "attempts": [
+                {
+                    "attempt": 0,
+                    "backend": "depth_pro",
+                    "status": "failed",
+                    "model_artifact_filename": "depth_pro_old.pt",
+                    "model_artifact_sha256": "a" * 64,
+                },
+                {
+                    "attempt": 1,
+                    "backend": "depth_pro",
+                    "status": "success",
+                    "model_artifact_filename": "depth_pro.pt",
+                    "model_artifact_sha256": "B" * 64,
+                },
+            ],
+        },
+    ]
+
+    artifact = orch._resolve_run_card_backend_model_artifact(results, "depth_pro")
+
+    assert artifact == {
+        "model_artifact_filename": "depth_pro.pt",
+        "model_artifact_sha256": "b" * 64,
+    }

@@ -184,6 +184,19 @@
             "null"
           ]
         },
+        "model_artifact_filename": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "model_artifact_sha256": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[a-f0-9]{64}$"
+        },
         "logical_backend": {
           "type": [
             "string",

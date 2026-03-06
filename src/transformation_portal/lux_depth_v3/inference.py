@@ -169,7 +169,7 @@ class DA3InferenceEngine:
         use_coreml = getattr(self.config.device, "use_coreml", False)
         if use_coreml and self._should_use_coreml():
             logger.info(
-                "CoreML backend enabled via config" " (5x speedup on Apple Silicon)",
+                "CoreML backend enabled via" " config (5x speedup on" " Apple Silicon)",
             )
             return ModelBackend.COREML
 
@@ -196,7 +196,7 @@ class DA3InferenceEngine:
         if TORCH_AVAILABLE:
             return ModelBackend.PYTORCH_CPU
 
-        raise RuntimeError("No backend available." " Install torch with: pip install torch")
+        raise RuntimeError("No backend available." " Install torch with:" " pip install torch")
 
     def _should_use_coreml(self) -> bool:
         """Check if CoreML should be used."""
@@ -315,7 +315,7 @@ class DA3InferenceEngine:
             if use_fp16 and self.device == "mps" and hasattr(self.model.model, "half"):
                 self.model.model = self.model.model.half()
                 logger.debug(
-                    "Applied half precision to" " model for MPS backend",
+                    "Applied half precision to" + " model for MPS backend",
                 )
 
             logger.info("Loaded PyTorch model: %s", model_id)
@@ -325,7 +325,7 @@ class DA3InferenceEngine:
             fallback_model = v3_to_v2_fallback.get(model_id)
             if fallback_model:
                 logger.warning(
-                    "V3 model %s not available," " falling back to V2: %s",
+                    "V3 model %s not available," + " falling back to V2: %s",
                     model_id,
                     fallback_model,
                 )
@@ -371,7 +371,7 @@ class DA3InferenceEngine:
                     return
                 except Exception as fallback_error:
                     logger.error(
-                        "Fallback model also" " failed: %s",
+                        "Fallback model also" + " failed: %s",
                         fallback_error,
                     )
 
@@ -455,10 +455,12 @@ class DA3InferenceEngine:
                     f"{sep}\n"
                 )
                 logger.error(error_msg)
-                raise ImportError(error_msg) from e
+                raise ImportError(
+                    error_msg,
+                ) from e
 
         logger.info(
-            "Loading DA3 model: %s" " (using depth-anything-3 library)",
+            "Loading DA3 model: %s" + " (using depth-anything-3 library)",
             model_id,
         )
         strict_enabled = is_model_lock_strict_enabled(None)
@@ -519,7 +521,7 @@ class DA3InferenceEngine:
             self.model = CoreMLDepthEstimator(model_id)
 
             logger.info(
-                "CoreML model loaded with" " ANE acceleration (5x speedup)",
+                "CoreML model loaded with" " ANE acceleration" " (5x speedup)",
             )
 
         except Exception as e:
@@ -544,10 +546,11 @@ class DA3InferenceEngine:
         """Run depth inference on an image (main API).
 
         Accepts multiple input types for flexibility:
-        - np.ndarray: Direct numpy array (HxWx3/HxWx4/HxW, uint8/uint16/float32/float64)
-        - PIL.Image.Image: PIL image object (any mode)
-        - Path/str: File path (delegates to :meth:`infer_from_path`)
-        - ImageInput: Path wrapper from input_manager
+
+        * ``np.ndarray``: Direct numpy array (``HxWx3``/``HxWx4``/``HxW``; ``uint8``/``uint16``/``float32``/``float64``).
+        * ``PIL.Image.Image``: PIL image object (any mode).
+        * ``Path``/``str``: File path (delegates to :meth:`infer_from_path`).
+        * ``ImageInput``: Path wrapper from input_manager.
 
         Args:
             image: Input image (numpy array, PIL image, path, or ImageInput).
@@ -581,8 +584,9 @@ class DA3InferenceEngine:
         """Run depth inference on an image.
 
         Accepts multiple input types:
-        - np.ndarray: Direct numpy array (HxWx3/HxWx4/HxW, uint8/uint16/float32/float64)
-        - PIL.Image.Image: PIL image object (any mode)
+
+        * ``np.ndarray``: Direct numpy array (``HxWx3``/``HxWx4``/``HxW``; ``uint8``/``uint16``/``float32``/``float64``).
+        * ``PIL.Image.Image``: PIL image object (any mode).
 
         Args:
             image: Input image as numpy array or PIL image.
