@@ -13,9 +13,10 @@ Quick reference for common workflows and commands in this repo.
 - `make test-integration` run DA3/HuggingFace model-loading integration (`tests/test_da3_inference_integration.py`) with `TP_RUN_HF_MODEL_TESTS=1` (downloads models from HF Hub unless offline; typically requires `HF_TOKEN`).
 - `make test-structure` run codebase structure validation.
 - `make test-utils` run performance/error utility tests.
+- `make test-orchestrator-contract` run portal orchestrator contract tests (`tests/test_app_orchestrator_runtime.py` and `tests/test_app_orchestrator_contract_http.py`).
 - `make clean` remove Python caches and build/test artifacts.
 - `make lint` run flake8 + pylint (non-blocking).
-- `make ci` run local CI checks (lint + test-fast).
+- `make ci` run local CI checks (lint + check-json-serialization + check-piptools-cache + test-fast + test-orchestrator-contract).
 - `make ci-full` run comprehensive local CI (`./scripts/local_ci_check.sh`).
 - `make ci-quick` run quick local CI (`./scripts/local_ci_check.sh --quick`).
 - `make pre-commit` run pre-commit checks.
@@ -24,6 +25,8 @@ Quick reference for common workflows and commands in this repo.
 - `make fix-quality` auto-fix quality issues (`scripts/auto_fix_quality.py --fix-all`).
 - `make check-quality` dry-run quality auto-fix checks (`scripts/auto_fix_quality.py --dry-run`).
 - `make validate-ci` validate GitHub Actions configs.
+- `make check-json-serialization` fail when raw `json.dump`/`json.dumps` usage is detected outside approved modules.
+- `make check-piptools-cache` fail if `requirements/.pip-tools-cache` is tracked in git.
 - `make organize-docs` move markdown files into `docs/` (repo hygiene).
 - `make check-docs` dry-run docs organization.
 - `make lock` regenerate all requirements lockfiles.
@@ -40,6 +43,7 @@ Quick reference for common workflows and commands in this repo.
 - `./scripts/pipelines/process_source_tiffs_individual.sh` per-image APEX V2 enhancement commands (manual execution).
 - `./scripts/test_v2_integration.sh` validate end-to-end lux-depth-v3 + V2 stage integration (`--verbose`, `--clean` available).
 - `./scripts/validate_dependency_constraints.sh` enforce dependency pinning rules used by repo policy (`--verbose` available).
+- `./scripts/pipelines/run_fixity_cycle.sh` run archive hash-manifest scan + verification cycle for fixity evidence (`--archive-index` and `--archive-root` required).
 - `./scripts/diagnostics/full_chain_determinism_trial.sh` run Phase 4C/4D/4E determinism checks (`--input-root` or `--capture-metadata`).
 - `./scripts/setup/auto-organize-install.sh` install repository file-organization guardrails and pre-commit hook.
 - `./scripts/setup/pre-commit-check.sh` run root-file placement validation manually (also used by the hook).
