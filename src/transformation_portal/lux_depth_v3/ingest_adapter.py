@@ -114,8 +114,20 @@ def raw_ingest_summary(
 
 
 def _decode_preview_rgb(path: Path) -> np.ndarray:
-    preview = Image.open(path).convert("RGB")
-    return np.asarray(preview, dtype=np.float32) / 255.0
+    try:
+        # Best-effort preview path for containers PIL can decode.
+        # Camera RAW formats typically require contract decode path.
+        with Image.open(path) as preview_image:
+            preview = preview_image.convert("RGB")
+        return np.asarray(preview, dtype=np.float32) / 255.0
+    except Exception as exc:
+        raise RawIngestError(
+            "RAW preview decode failed for"
+            f" {path.name}. The preview escape hatch"
+            " requires a preview-decodable container"
+            " or a dedicated RAW preview extractor."
+            f" Underlying error: {exc}"
+        ) from exc
 
 
 def decode_for_lux_depth(

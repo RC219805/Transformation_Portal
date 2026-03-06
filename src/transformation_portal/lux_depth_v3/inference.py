@@ -236,6 +236,14 @@ class DA3InferenceEngine:
             return "coreml"
         return "cpu"
 
+    def _transformers_device_arg(self) -> Union[int, str]:
+        """Map internal device choice to transformers.pipeline device argument."""
+        if self.device == "mps":
+            return "mps"
+        if self.device == "cuda":
+            return 0
+        return "cpu"
+
     def _load_model(self) -> None:
         """Load model based on backend (lazy loading)."""
         if self._model_loaded:
@@ -290,7 +298,7 @@ class DA3InferenceEngine:
 
         try:
             # Determine device argument for transformers pipeline
-            device_arg = self.device if self.device != "mps" else 0
+            device_arg = self._transformers_device_arg()
 
             # Determine dtype for FP16 optimization
             use_fp16 = getattr(self.config.device, "use_fp16", True)
@@ -336,7 +344,7 @@ class DA3InferenceEngine:
                         strict=None,
                         context="DA3InferenceEngine(fallback_model)",
                     )
-                    device_arg = self.device if self.device != "mps" else 0
+                    device_arg = self._transformers_device_arg()
 
                     # Determine dtype for FP16 optimization
                     use_fp16 = getattr(self.config.device, "use_fp16", True)
