@@ -16,7 +16,7 @@ Quick reference for common workflows and commands in this repo.
 - `make test-orchestrator-contract` run portal orchestrator contract tests (`tests/test_app_orchestrator_runtime.py` and `tests/test_app_orchestrator_contract_http.py`).
 - `make clean` remove Python caches and build/test artifacts.
 - `make lint` run flake8 + pylint (non-blocking).
-- `make ci` run local CI checks (lint + test-fast).
+- `make ci` run local CI checks (lint + check-json-serialization + check-piptools-cache + test-fast + test-orchestrator-contract).
 - `make ci-full` run comprehensive local CI (`./scripts/local_ci_check.sh`).
 - `make ci-quick` run quick local CI (`./scripts/local_ci_check.sh --quick`).
 - `make pre-commit` run pre-commit checks.
