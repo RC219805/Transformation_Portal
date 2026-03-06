@@ -21,6 +21,8 @@ Thread Safety:
 from __future__ import annotations
 
 import logging
+import os
+import tempfile
 import threading
 from pathlib import Path
 from typing import Optional
@@ -146,13 +148,21 @@ class DepthCache:
                         # Recalculate after eviction, again accounting for current file
                         self._approximate_size_gb = self._cache_size_gb() + depth_size_gb - old_size_gb
 
-            # Atomic write: write to temp file, then rename
-            # Note: numpy.save() adds .npy extension automatically, so use base name without extension
-            temp_base = self.cache_dir / f"{cache_key}.tmp"
-            np.save(str(temp_base), depth)
-            # numpy.save created temp_base.npy, rename to final path
-            temp_path = temp_base.with_suffix(".tmp.npy")
-            temp_path.replace(cache_path)
+            # Atomic write: use a unique temporary filename per write to avoid
+            # same-key writer races in concurrent execution.
+            temp_fd, temp_path_str = tempfile.mkstemp(
+                suffix=".npy",
+                dir=self.cache_dir,
+                prefix=f"{cache_key}.tmp_",
+            )
+            temp_path = Path(temp_path_str)
+            try:
+                os.close(temp_fd)
+                with temp_path.open("wb") as temp_file:
+                    np.save(temp_file, depth)
+                temp_path.replace(cache_path)
+            finally:
+                temp_path.unlink(missing_ok=True)
 
             logger.debug(f"Cached depth: {cache_key} ({depth.nbytes / 1024:.1f}KB)")
         except Exception as e:

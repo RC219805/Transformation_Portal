@@ -112,3 +112,13 @@ def test_write_scene_preflight_artifact_is_deterministic(tmp_path: Path):
     assert payload["schema"] == "tp.scene_preflight.v1"
     assert payload["scene_id"] == scene_id
     assert payload["valid"] is True
+
+
+def test_preflight_artifact_path_flattens_traversal_segments(tmp_path: Path):
+    path = preflight_artifact_path(
+        scene_id="foo/../../escape",
+        output_dir=tmp_path,
+    )
+
+    # Sanitization must keep output within the requested directory.
+    assert path.parent == tmp_path
