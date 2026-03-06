@@ -38,7 +38,9 @@ class RawIngestError(RuntimeError):
 def _normalized_ingest_mode(config: "EnhanceConfig") -> str:
     mode = str(getattr(config, "raw_ingest_mode", "auto")).strip().lower()
     if mode not in {"auto", "force_rawpy", "force_preview"}:
-        raise ValueError("raw_ingest_mode must be one of:" " auto, force_rawpy, force_preview")
+        raise ValueError(
+            "raw_ingest_mode must be one of:" " auto, force_rawpy, force_preview",
+        )
     return mode
 
 

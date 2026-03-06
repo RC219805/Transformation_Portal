@@ -15,7 +15,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, Optional, Tuple, Union
+from typing import Any, Optional, Tuple, Union, cast
 
 import numpy as np
 from PIL import Image
@@ -95,7 +95,9 @@ def validate_image_format(image_path: Union[str, Path]) -> Path:
 
 
 def preprocess_image(
-    image: Union[np.ndarray, Path, str], target_size: Optional[int] = None, raw_config: Optional[Any] = None
+    image: Union[np.ndarray, Path, str],
+    target_size: Optional[int] = None,
+    raw_config: Optional[Any] = None,
 ) -> Tuple[np.ndarray, Tuple[int, int]]:
     """Preprocess image for depth inference.
 
@@ -111,8 +113,10 @@ def preprocess_image(
     Args:
         image: Input as numpy array, Path, or str
         target_size: Optional target size for long edge (maintains aspect)
-        raw_config: Optional config object with RAW ingest knobs (raw_ingest_mode,
-            raw_wb_mode, raw_demosaic). Uses deterministic defaults when omitted.
+        raw_config: Optional config object with RAW ingest knobs (
+            raw_ingest_mode,
+            raw_wb_mode, raw_demosaic
+        ). Uses deterministic defaults when omitted.
 
     Returns:
         Tuple of:
@@ -127,7 +131,8 @@ def preprocess_image(
     if isinstance(image, (str, Path)):
         image_path = validate_image_format(image)
 
-        # Phase C1: RAW ingest is routed through canonical spatial_ai.ingest contract.
+        # Phase C1: RAW ingest is routed through canonical
+        # spatial_ai.ingest contract.
         if is_raw_file(image_path):
             from .ingest_adapter import decode_for_lux_depth
 
@@ -135,8 +140,8 @@ def preprocess_image(
                 raw_ingest_mode="auto",
                 raw_wb_mode="camera",
                 raw_demosaic="AHD",
-            )
-            decoded_rgb = decode_for_lux_depth(image_path, ingest_cfg)
+            )  # type: ignore[arg-type]
+            decoded_rgb = decode_for_lux_depth(image_path, cast(Any, ingest_cfg))
             return preprocess_from_linear_ingest(decoded_rgb, target_size=target_size)
 
         pil_img = Image.open(image_path).convert("RGB")
@@ -168,7 +173,7 @@ def preprocess_image(
         raise TypeError(f"Image must be np.ndarray, Path, or str. Got: {type(image)}")
 
     # Save original dimensions
-    original_h, original_w = pil_img.size[1], pil_img.size[0]  # PIL uses (W, H)
+    original_h, original_w = (pil_img.size[1], pil_img.size[0])  # PIL uses (W, H)
 
     # Convert to RGB (handles grayscale, RGBA)
     pil_img = pil_img.convert("RGB")
@@ -277,7 +282,11 @@ def _enforce_dimension_multiple(img_array: np.ndarray, multiple: int) -> np.ndar
             pad_h = new_h - h
             pad_top = pad_h // 2
             pad_bottom = pad_h - pad_top
-            img_array = np.pad(img_array, ((pad_top, pad_bottom), (0, 0), (0, 0)), mode="edge")
+            img_array = np.pad(
+                img_array,
+                ((pad_top, pad_bottom), (0, 0), (0, 0)),
+                mode="edge",
+            )
 
         # Handle width dimension
         if new_w < w:
@@ -289,7 +298,11 @@ def _enforce_dimension_multiple(img_array: np.ndarray, multiple: int) -> np.ndar
             pad_w = new_w - w
             pad_left = pad_w // 2
             pad_right = pad_w - pad_left
-            img_array = np.pad(img_array, ((0, 0), (pad_left, pad_right), (0, 0)), mode="edge")
+            img_array = np.pad(
+                img_array,
+                ((0, 0), (pad_left, pad_right), (0, 0)),
+                mode="edge",
+            )
 
         logger.debug(f"Enforced dimension multiple: ({h}, {w}) → ({new_h}, {new_w})")
 
@@ -340,7 +353,8 @@ def preprocess_image_linear(
 
     Raises:
         FileNotFoundError: If path doesn't exist
-        ValueError: If image invalid, gamma-encoded, unsupported format, or violates format boundary
+        ValueError: If image invalid, gamma-encoded, unsupported format,
+            or violates format boundary
         DtypeViolationError: If dtype is uint8/uint16 after conversion
         RangeViolationError: If values outside [0, 1]
         LinearityViolationError: If gamma encoding detected
@@ -362,7 +376,12 @@ def preprocess_image_linear(
         >>> img, orig_shape = preprocess_image_linear("photo.jpg", apex_strict_formats=False)
         >>> # Allowed but may violate linear-light preservation
     """
-    from .linear_verify import DtypeViolationError, LinearityViolationError, RangeViolationError, verify_linear_ingest
+    from .linear_verify import (
+        DtypeViolationError,
+        LinearityViolationError,
+        RangeViolationError,
+        verify_linear_ingest,
+    )
     from .raw_loader import load_raw_as_rgb
 
     # Load image preserving bit depth and linearity
@@ -384,7 +403,8 @@ def preprocess_image_linear(
                 "Reason: JPEG/PNG are typically gamma-encoded (display-referred), "
                 "violating linear-light preservation requirements.\n"
                 "Use preprocess_image() for JPEG/PNG, or explicitly set "
-                "apex_strict_formats=False if you understand the data-fidelity tradeoffs."
+                "apex_strict_formats=False if you understand the "
+                "data-fidelity tradeoffs."
             )
 
         # Handle RAW files with linear output
@@ -411,14 +431,18 @@ def preprocess_image_linear(
                     import tifffile
                 except ImportError as e:
                     raise ImportError(
-                        "tifffile is required for linear TIFF processing in APEX pipeline. "
+                        "tifffile is required for linear TIFF processing "
+                        "in APEX pipeline. "
                         "Install with: pip install tifffile\n"
                         "Or: pip install -e '.[tiff]'"
                     ) from e
 
                 # Load TIFF preserving bit depth
                 tiff_array = tifffile.imread(str(image_path))
-                original_h, original_w = tiff_array.shape[0], tiff_array.shape[1]  # NumPy: (H, W, C)
+                original_h, original_w = (
+                    tiff_array.shape[0],
+                    tiff_array.shape[1],
+                )  # NumPy: (H, W, C)
 
                 # Normalize based on dtype
                 if tiff_array.dtype == np.uint8:
@@ -502,7 +526,7 @@ def preprocess_image_linear(
 
         # OpenCV resize preserves dtype (float32 stays float32).
         # Use INTER_LANCZOS4 for high-quality resampling
-        img_array = _opencv.resize(img_array, (new_w, new_h), interpolation=_opencv.INTER_LANCZOS4)
+        img_array = _opencv.resize(img_array, (new_w, new_h), interpolation=_opencv.INTER_LANCZOS4)  # type: ignore[assignment]
 
         # Clip to [0, 1] after resize (interpolation can introduce small out-of-range values)
         img_array = np.clip(img_array, 0.0, 1.0)
@@ -520,7 +544,7 @@ def preprocess_image_linear(
 # Keep legacy stubs for backward compatibility (not yet used by V3 orchestrator)
 
 
-def normalize_exif_orientation(input_path: Path, output_path: Path):
+def normalize_exif_orientation(input_path: Path, output_path: Path) -> None:
     """Normalize EXIF orientation by rotating image to upright position.
 
     STUB: Not implemented. Not required for V3 depth inference.

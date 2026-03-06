@@ -133,7 +133,7 @@ def discover_images(
             resolved_candidate = output_dir.expanduser().resolve()
             if not resolved_candidate.is_dir():
                 logger.warning(
-                    "Output directory exclusion " "skipped: %s is not a directory",
+                    "Output directory exclusion " + "skipped: %s is not a directory",
                     resolved_candidate,
                 )
             else:
@@ -164,14 +164,14 @@ def discover_images(
                     reason = "in output directory"
                     excluded_artifacts.append((candidate, reason))
                     logger.debug(
-                        "Skipped artifact: %s " "(matched: %s)",
+                        "Skipped artifact: %s " + "(matched: %s)",
                         candidate.name,
                         reason,
                     )
                     continue
             except Exception as e:
                 logger.debug(
-                    "Failed to check output " "dir for %s: %s",
+                    "Failed to check output " + "dir for %s: %s",
                     candidate,
                     e,
                 )
@@ -239,7 +239,7 @@ def discover_images(
 
     # Strict mode: fail if artifacts found
     if config.strict_mode and excluded_artifacts:
-        error_msg = f"Strict mode: {len(excluded_artifacts)} " f"excluded artifacts found in {input_dir}"
+        error_msg = f"Strict mode: {len(excluded_artifacts)} " + f"excluded artifacts found in {input_dir}"
         logger.error(error_msg)
         for artifact, reason in excluded_artifacts[:10]:  # Show first 10
             logger.error(f"  - {artifact.name} ({reason})")

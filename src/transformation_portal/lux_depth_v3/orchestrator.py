@@ -32,7 +32,7 @@ from enum import Enum
 from functools import lru_cache
 from multiprocessing import cpu_count
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, cast
 
 import numpy as np
 
@@ -157,7 +157,9 @@ def _log_dependency_status() -> dict:
         logger.debug(f"torch {version} available")
     except ImportError:
         status["torch"] = False
-        logger.info("torch not available - ML features" " disabled. Install:" " pip install torch")
+        logger.info(
+            "torch not available - ML features" " disabled. Install:" " pip install torch",
+        )
 
     # Check transformers
     try:
@@ -168,7 +170,9 @@ def _log_dependency_status() -> dict:
         logger.debug(f"transformers {version} available")
     except ImportError:
         status["transformers"] = False
-        logger.info("transformers not available -" " depth models disabled." " Install:" " pip install transformers")
+        logger.info(
+            "transformers not available -" " depth models disabled." " Install:" " pip install transformers",
+        )
 
     # Check coremltools (optional)
     try:
@@ -179,7 +183,9 @@ def _log_dependency_status() -> dict:
         logger.debug(f"coremltools {version} available")
     except ImportError:
         status["coremltools"] = False
-        logger.debug("coremltools not available" " (optional). Install:" " pip install coremltools")
+        logger.debug(
+            "coremltools not available" " (optional). Install:" " pip install coremltools",
+        )
 
     # Check scikit-image (optional for some features)
     try:
@@ -190,7 +196,9 @@ def _log_dependency_status() -> dict:
         logger.debug(f"scikit-image {version} available")
     except ImportError:
         status["scikit-image"] = False
-        logger.debug("scikit-image not available" " (optional for advanced" " filtering)")
+        logger.debug(
+            "scikit-image not available" " (optional for advanced" " filtering)",
+        )
 
     # Check numba (optional performance enhancement)
     try:
@@ -198,21 +206,29 @@ def _log_dependency_status() -> dict:
 
         status["numba"] = True
         logger.debug(
-            "numba %s available -" " performance optimizations" " enabled",
+            "numba %s available -" + " performance optimizations" + " enabled",
             numba.__version__,
         )
     except ImportError:
         status["numba"] = False
-        logger.debug("numba not available - using" " NumPy fallback (30-50%% slower" " for some operations)")
+        logger.debug(
+            "numba not available - using" " NumPy fallback (30-50%% slower" " for some operations)",
+        )
 
     # Check HF_TOKEN for model downloads
     hf_token = os.environ.get("HF_TOKEN")
     status["hf_token"] = bool(hf_token)
     if hf_token:
-        logger.debug("HF_TOKEN present - authenticated" " model downloads enabled")
+        logger.debug(
+            "HF_TOKEN present - authenticated" " model downloads enabled",
+        )
     else:
-        logger.debug("HF_TOKEN not set - using" " unauthenticated downloads" " (rate limits apply, slower" " warm starts)")
-        logger.debug("  Set HF_TOKEN for faster" " downloads: export" " HF_TOKEN=<your_token>")
+        logger.debug(
+            "HF_TOKEN not set - using" " unauthenticated downloads" " (rate limits apply, slower" " warm starts)",
+        )
+        logger.debug(
+            "  Set HF_TOKEN for faster" " downloads: export" " HF_TOKEN=<your_token>",
+        )
 
     return status
 
@@ -286,7 +302,9 @@ def make_output_key(
     stem_sanitized = sanitize_path_component_nonlossy(name)
     key_name = f"{stem_sanitized}_{ext_label}_{hash_suffix}"
 
-    return Path(*sanitized_parts, key_name) if sanitized_parts else Path(key_name)
+    if sanitized_parts:
+        return Path(*sanitized_parts, key_name)
+    return Path(key_name)
 
 
 def _run_card_schema_path() -> Path:
@@ -308,13 +326,17 @@ def _load_run_card_validator(schema_path_str: str) -> Any:
     try:
         import jsonschema
     except ImportError as exc:  # pragma: no cover
-        raise RuntimeError("jsonschema dependency is required" " for run card schema validation") from exc
+        raise RuntimeError(
+            "jsonschema dependency is required" " for run card schema validation",
+        ) from exc
 
     schema = _load_run_card_schema(schema_path_str)
     try:
         jsonschema.Draft202012Validator.check_schema(schema)
     except jsonschema.exceptions.SchemaError as exc:
-        raise RuntimeError("Run card schema is invalid:" f" {exc.message}") from exc
+        raise RuntimeError(
+            "Run card schema is invalid:" f" {exc.message}",
+        ) from exc
     return jsonschema.Draft202012Validator(schema)
 
 
@@ -335,7 +357,9 @@ def _validate_run_card_payload(
     for error in errors:
         path = ".".join(str(p) for p in error.path) or "<root>"
         formatted.append(f"{path}: {error.message}")
-    raise RuntimeError("Run card schema validation" " failed: " + "; ".join(formatted))
+    raise RuntimeError(
+        "Run card schema validation" " failed: " + "; ".join(formatted),
+    )
 
 
 def _validate_run_card_backend_semantics(payload: Dict[str, Any]) -> None:
@@ -565,7 +589,7 @@ def _build_artifact_index(
             relative_path = resolved.relative_to(root_resolved).as_posix()
         except ValueError:
             logger.debug(
-                "Skipping artifact outside" " output root: %s",
+                "Skipping artifact outside" + " output root: %s",
                 resolved,
             )
             continue
@@ -637,7 +661,9 @@ class EnhanceOrchestrator:
         self.verify_outputs = verify_outputs
 
         if config.hash_mode == HashMode.NEVER:
-            logger.warning("Hash mode set to 'never'" " - manifests will lack" " integrity verification.")
+            logger.warning(
+                "Hash mode set to 'never'" " - manifests will lack" " integrity verification.",
+            )
 
         # Create output directories
         self.depth_dir = self.output_root / "depth"
@@ -669,7 +695,7 @@ class EnhanceOrchestrator:
             da3_config = DA3Config.from_preset(config.preset)
             if config.model_variant is not None:
                 logger.info(
-                    "Overriding preset model" " with user choice: %s",
+                    "Overriding preset model" + " with user choice: %s",
                     config.model_variant.value.display_name,
                 )
                 da3_config.model_variant = config.model_variant
@@ -721,12 +747,12 @@ class EnhanceOrchestrator:
                     " to skip V2 stage"
                 )
             logger.info(
-                "V2 enhancement enabled" " with script: %s",
+                "V2 enhancement enabled" + " with script: %s",
                 self.v2_runner.script_path,
             )
         else:
             logger.info(
-                "V2 enhancement disabled" " (PBR-only mode)",
+                "V2 enhancement disabled" + " (PBR-only mode)",
             )
 
         # Adjusted path logic for
@@ -769,7 +795,7 @@ class EnhanceOrchestrator:
         self._use_parallel = config.enable_parallel_processing
         _par_label = "enabled" if self._use_parallel else "disabled"
         logger.debug(
-            "Parallel processing: %s" " (workers=%d)",
+            "Parallel processing: %s" + " (workers=%d)",
             _par_label,
             self.max_workers,
         )
@@ -858,7 +884,10 @@ class EnhanceOrchestrator:
                         reason = "Test environment" " synthetic fallback" f" after: {init_errors}"
                     else:
                         status = "fallback"
-                        requested_error = init_errors.get(requested, "unknown error")
+                        requested_error = init_errors.get(
+                            requested,
+                            "unknown error",
+                        )
                         reason = (
                             f"Requested '{requested}'" " unavailable:" f" {requested_error}." " Selected" f" '{backend_id}'"
                         )
@@ -911,7 +940,10 @@ class EnhanceOrchestrator:
                 resolved_backend=resolved,
                 resolution_status=status,
                 resolution_reason=reason,
-                model_id=(self._model_variant.value.huggingface_id),
+                model_id=self._resolve_backend_model_id(
+                    resolved,
+                    backend=backend,
+                ),
                 device=self.config.depth_device,
                 attempts=[],
             )
@@ -978,6 +1010,221 @@ class EnhanceOrchestrator:
         payload = f"{base_fp}|backend={backend_id}" f"|units={expected_units}"
         return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
+    def _default_model_id_for_backend(self, backend_id: str) -> str:
+        """Return canonical backend model identifier for provenance."""
+        normalized_backend = str(backend_id or "").strip().lower()
+        if normalized_backend == "depth_pro":
+            return "apple/ml-depth-pro"
+        if normalized_backend == "da2":
+            return "depth-anything/Depth-Anything-V2-Small-hf"
+        if normalized_backend == "da3":
+            return self._model_variant.value.huggingface_id
+        if normalized_backend == "depthcrafter":
+            return "tencent/depthcrafter"
+        if normalized_backend == "ensemble":
+            return "ensemble/multi-backend"
+        if normalized_backend == "synthetic":
+            return "synthetic/depth-analytic-v1"
+        return normalized_backend or self._model_variant.value.huggingface_id
+
+    def _derive_model_id_from_backend_instance(
+        self,
+        backend_id: str,
+        backend: Optional[Any],
+    ) -> Optional[str]:
+        """Best-effort model id extraction from backend instance."""
+        if backend is None:
+            return None
+
+        for attr_name in ("model_id", "_model_id"):
+            candidate = getattr(backend, attr_name, None)
+            if isinstance(candidate, str) and candidate.strip():
+                return candidate.strip()
+
+        model_variant = getattr(backend, "_model_variant", None)
+        if model_variant is not None:
+            variant_value = getattr(model_variant, "value", None)
+            hf_id = getattr(variant_value, "huggingface_id", None)
+            if isinstance(hf_id, str) and hf_id.strip():
+                return hf_id.strip()
+            if isinstance(variant_value, str) and variant_value.strip():
+                return variant_value.strip()
+
+        backend_model = getattr(backend, "_model", None)
+        model_variant = getattr(backend_model, "variant", None)
+        variant_value = getattr(model_variant, "value", None)
+        if isinstance(variant_value, str) and variant_value.strip():
+            return variant_value.strip()
+
+        if str(backend_id).strip().lower() == "depth_pro":
+            return "apple/ml-depth-pro"
+
+        return None
+
+    def _resolve_backend_model_id(
+        self,
+        backend_id: str,
+        *,
+        result_metadata: Optional[Dict[str, Any]] = None,
+        backend: Optional[Any] = None,
+    ) -> str:
+        """Resolve stable model id for provenance and run-card semantics."""
+        normalized_backend = str(backend_id).strip().lower()
+        if normalized_backend == "depth_pro":
+            # Keep depth_pro model identity canonical across environments.
+            return "apple/ml-depth-pro"
+
+        metadata = result_metadata or {}
+        for key in ("resolved_model_id", "requested_model_id", "model_id"):
+            candidate = metadata.get(key)
+            if isinstance(candidate, str) and candidate.strip():
+                return candidate.strip()
+
+        from_backend = self._derive_model_id_from_backend_instance(
+            backend_id,
+            backend,
+        )
+        if from_backend:
+            return from_backend
+
+        return self._default_model_id_for_backend(backend_id)
+
+    @staticmethod
+    def _normalize_sha256(value: Any) -> Optional[str]:
+        """Normalize SHA-256 digest to lowercase hex."""
+        if not isinstance(value, str):
+            return None
+        digest = value.strip().lower()
+        if len(digest) == 64 and all(ch in "0123456789abcdef" for ch in digest):
+            return digest
+        return None
+
+    def _resolve_backend_model_artifact(
+        self,
+        backend_id: str,
+        *,
+        result_metadata: Optional[Dict[str, Any]] = None,
+        backend: Optional[Any] = None,
+    ) -> Dict[str, Optional[str]]:
+        """Resolve backend model artifact identity fields."""
+        artifact_filename: Optional[str] = None
+        artifact_sha256: Optional[str] = None
+
+        if str(backend_id).strip().lower() != "depth_pro":
+            return {
+                "model_artifact_filename": None,
+                "model_artifact_sha256": None,
+            }
+
+        metadata = result_metadata or {}
+        checkpoint_meta = metadata.get("checkpoint")
+        if isinstance(checkpoint_meta, dict):
+            path_value = checkpoint_meta.get("path")
+            if isinstance(path_value, str) and path_value.strip():
+                artifact_filename = Path(path_value).name
+            artifact_sha256 = self._normalize_sha256(checkpoint_meta.get("sha256"))
+
+        if artifact_filename is None and backend is not None:
+            checkpoint_path = getattr(backend, "_checkpoint_path", None)
+            if checkpoint_path is not None:
+                try:
+                    artifact_filename = Path(checkpoint_path).name
+                except TypeError:
+                    artifact_filename = None
+
+        if artifact_sha256 is None and backend is not None:
+            artifact_sha256 = self._normalize_sha256(
+                getattr(backend, "_checkpoint_hash_cached", None),
+            )
+
+        checkpoint_meta_present = isinstance(checkpoint_meta, dict)
+        if artifact_sha256 is None and checkpoint_meta_present and backend is not None:
+            checkpoint_hash_getter = getattr(backend, "_get_checkpoint_hash", None)
+            if callable(checkpoint_hash_getter):
+                try:
+                    artifact_sha256 = self._normalize_sha256(checkpoint_hash_getter())
+                except Exception:  # pragma: no cover - best-effort provenance enrichment
+                    artifact_sha256 = None
+
+        return {
+            "model_artifact_filename": artifact_filename,
+            "model_artifact_sha256": artifact_sha256,
+        }
+
+    @staticmethod
+    def _extract_model_id_from_attempts(
+        selected_backend: str,
+        attempts: List[Dict[str, Any]],
+        *,
+        selected_attempt_index: Optional[int] = None,
+    ) -> Optional[str]:
+        """Extract selected backend model id from attempt history."""
+        if selected_attempt_index is not None and 0 <= selected_attempt_index < len(attempts):
+            selected_attempt = attempts[selected_attempt_index]
+            if selected_attempt.get("backend") == selected_backend:
+                selected_attempt_model = selected_attempt.get("model_id")
+                if isinstance(selected_attempt_model, str) and selected_attempt_model.strip():
+                    return selected_attempt_model.strip()
+
+        for attempt in attempts:
+            if attempt.get("backend") != selected_backend:
+                continue
+            if attempt.get("status") != "success":
+                continue
+            attempt_model = attempt.get("model_id")
+            if isinstance(attempt_model, str) and attempt_model.strip():
+                return attempt_model.strip()
+
+        return None
+
+    @staticmethod
+    def _extract_model_artifact_from_attempts(
+        selected_backend: str,
+        attempts: List[Dict[str, Any]],
+        *,
+        selected_attempt_index: Optional[int] = None,
+    ) -> Dict[str, Optional[str]]:
+        """Extract selected backend model artifact identity from attempt history."""
+
+        def _normalize_digest(value: Any) -> Optional[str]:
+            if not isinstance(value, str):
+                return None
+            digest = value.strip().lower()
+            if len(digest) == 64 and all(ch in "0123456789abcdef" for ch in digest):
+                return digest
+            return None
+
+        def _extract_from_attempt(attempt: Dict[str, Any]) -> Dict[str, Optional[str]]:
+            raw_filename = attempt.get("model_artifact_filename")
+            artifact_filename = raw_filename.strip() if isinstance(raw_filename, str) and raw_filename.strip() else None
+            return {
+                "model_artifact_filename": artifact_filename,
+                "model_artifact_sha256": _normalize_digest(
+                    attempt.get("model_artifact_sha256"),
+                ),
+            }
+
+        if selected_attempt_index is not None and 0 <= selected_attempt_index < len(attempts):
+            selected_attempt = attempts[selected_attempt_index]
+            if selected_attempt.get("backend") == selected_backend:
+                selected_artifact = _extract_from_attempt(selected_attempt)
+                if selected_artifact["model_artifact_filename"] or selected_artifact["model_artifact_sha256"]:
+                    return selected_artifact
+
+        for attempt in attempts:
+            if attempt.get("backend") != selected_backend:
+                continue
+            if attempt.get("status") != "success":
+                continue
+            selected_artifact = _extract_from_attempt(attempt)
+            if selected_artifact["model_artifact_filename"] or selected_artifact["model_artifact_sha256"]:
+                return selected_artifact
+
+        return {
+            "model_artifact_filename": None,
+            "model_artifact_sha256": None,
+        }
+
     def _get_or_create_depth_backend(
         self,
         backend_id: str,
@@ -1031,6 +1278,7 @@ class EnhanceOrchestrator:
         selected_backend: str,
         attempts: List[Dict[str, Any]],
         result_metadata: Optional[Dict[str, Any]] = None,
+        selected_attempt_index: Optional[int] = None,
     ) -> BackendSelectionMetadata:
         """Build per-image backend selection metadata."""
         requested = self._backend_metadata.requested_backend or self._backend_metadata.resolved_backend
@@ -1058,12 +1306,18 @@ class EnhanceOrchestrator:
             else:
                 resolution_reason = f"Fallback from" f" '{requested}'" f" to '{selected_backend}'"
 
-        metadata = result_metadata or {}
-        model_id = (
-            metadata.get("resolved_model_id")
-            or metadata.get("requested_model_id")
-            or (self._model_variant.value.huggingface_id)
+        model_id = self._extract_model_id_from_attempts(
+            selected_backend,
+            attempts,
+            selected_attempt_index=selected_attempt_index,
         )
+        if not model_id:
+            backend_cache = getattr(self, "_depth_backend_cache", {})
+            model_id = self._resolve_backend_model_id(
+                selected_backend,
+                result_metadata=result_metadata,
+                backend=backend_cache.get(selected_backend),
+            )
 
         return BackendSelectionMetadata(
             requested_backend=requested,
@@ -1096,7 +1350,7 @@ class EnhanceOrchestrator:
         preset_requested = getattr(self.config, "preset_requested", None) or (
             self.config.preset.value if self.config.preset else None
         )
-        preset_resolved = self.config.preset.value if self.config.preset else ("quality_tier:" f"{self.config.quality_tier}")
+        preset_resolved = self.config.preset.value if self.config.preset else f"quality_tier:{self.config.quality_tier}"
 
         requested_backend = self._backend_metadata.requested_backend or "auto"
         resolved_backend = self._backend_metadata.resolved_backend
@@ -1129,7 +1383,11 @@ class EnhanceOrchestrator:
                 ),
             ),
         }
-        canonical_json = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+        canonical_json = json.dumps(
+            payload,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
         return {
             **payload,
             "hash_algorithm": "sha256",
@@ -1205,7 +1463,10 @@ class EnhanceOrchestrator:
         if not depth_path or not depth_path.exists():
             return
 
-        depth_consumed = self._extract_v2_depth_handoff_status(v2_result=v2_result, v2_report_path=v2_report_path)
+        depth_consumed = self._extract_v2_depth_handoff_status(
+            v2_result=v2_result,
+            v2_report_path=v2_report_path,
+        )
         if depth_consumed is None:
             return
         if depth_consumed:
@@ -1249,7 +1510,7 @@ class EnhanceOrchestrator:
                 resolved_backend="da3",
                 resolution_status="success",
                 resolution_reason=None,
-                model_id=self._model_variant.value.huggingface_id,
+                model_id=self._default_model_id_for_backend("da3"),
                 device=self.config.depth_device,
                 attempts=[],
             ),
@@ -1384,7 +1645,9 @@ class EnhanceOrchestrator:
 
                 d = read_depth_u16_png(depth_path)
                 if d.ndim != 2:
-                    logger.debug(f"Depth file has invalid dimensions: {d.ndim}")
+                    logger.debug(
+                        "Depth file has invalid" f" dimensions: {d.ndim}",
+                    )
                     return False
 
             logger.debug(f"Resuming with existing depth: {depth_path}")
@@ -1552,7 +1815,9 @@ class EnhanceOrchestrator:
                         validated_path.name,
                         e,
                     )
-                    raise ValueError("Image failed strict" " verification:" f" {validated_path}") from e
+                    raise ValueError(
+                        "Image failed strict" " verification:" f" {validated_path}",
+                    ) from e
 
             preprocessed_array, original_shape = preprocess_image(
                 validated_path,
@@ -1609,9 +1874,17 @@ class EnhanceOrchestrator:
 
                 for attempt_index, backend_id in enumerate(attempt_chain):
                     attempt_start = time.time()
+                    attempt_artifact = self._resolve_backend_model_artifact(
+                        backend_id,
+                        backend=self._depth_backend_cache.get(backend_id),
+                    )
                     attempt_record: Dict[str, Any] = {
                         "attempt": attempt_index,
                         "backend": backend_id,
+                        "model_id": self._resolve_backend_model_id(
+                            backend_id,
+                            backend=self._depth_backend_cache.get(backend_id),
+                        ),
                         "device": self.config.depth_device,
                         "status": "started",
                         "failure_kind": None,
@@ -1619,11 +1892,20 @@ class EnhanceOrchestrator:
                         "error_message": None,
                         "apex_gate_passed": None,
                         "cached": False,
+                        "model_artifact_filename": attempt_artifact.get(
+                            "model_artifact_filename",
+                        ),
+                        "model_artifact_sha256": attempt_artifact.get(
+                            "model_artifact_sha256",
+                        ),
                     }
 
                     try:
                         attempt_cache_fp_hash = None
                         cached_depth = None
+                        backend_instance = self._depth_backend_cache.get(
+                            backend_id,
+                        )
                         if self.depth_cache and image_sha256:
                             attempt_cache_fp_hash = self._build_depth_cache_fingerprint(
                                 backend_id,
@@ -1638,7 +1920,9 @@ class EnhanceOrchestrator:
                                     output_key,
                                     backend_id,
                                 )
-                        attempt_record["cached"] = bool(cached_depth is not None)
+                        attempt_record["cached"] = bool(
+                            cached_depth is not None,
+                        )
 
                         if cached_depth is not None:
                             from ..depth.backends.protocol import DepthResult
@@ -1653,7 +1937,7 @@ class EnhanceOrchestrator:
                                 "device": "cache",
                             }
                             if image_sha256 and attempt_cache_fp_hash:
-                                cache_metadata["cache_key"] = f"{image_sha256}" "_" f"{attempt_cache_fp_hash}"
+                                cache_metadata["cache_key"] = f"{image_sha256}" f"_{attempt_cache_fp_hash}"
 
                             result_candidate = DepthResult(
                                 depth_map=cached_depth,
@@ -1666,8 +1950,17 @@ class EnhanceOrchestrator:
                                 input_size=original_shape,
                             )
                         else:
-                            backend = self._get_or_create_depth_backend(backend_id)
+                            backend = self._get_or_create_depth_backend(
+                                backend_id,
+                            )
+                            backend_instance = backend
                             self.depth_backend = backend
+                            attempt_record.update(
+                                self._resolve_backend_model_artifact(
+                                    backend_id,
+                                    backend=backend_instance,
+                                ),
+                            )
                             resolved_backend_device = getattr(backend, "_device", None) or getattr(backend, "device", None)
                             if (
                                 isinstance(
@@ -1677,14 +1970,24 @@ class EnhanceOrchestrator:
                                 and resolved_backend_device
                             ):
                                 attempt_record["device"] = resolved_backend_device
-                            result_candidate = backend.compute(pil_image)
-                            result_candidate = self.postprocessor.process(
-                                result_candidate,
-                            )
+                            result_candidate = cast(
+                                Any,
+                                self.postprocessor.process(
+                                    backend.compute(pil_image),
+                                ),
+                            )  # type: ignore  # noqa: E501
                             if self.depth_cache and image_sha256 and attempt_cache_fp_hash:
-                                self.depth_cache.store(image_sha256, attempt_cache_fp_hash, result_candidate.depth_map)
+                                self.depth_cache.store(
+                                    image_sha256,
+                                    attempt_cache_fp_hash,
+                                    result_candidate.depth_map,
+                                )
 
-                        result_device = getattr(result_candidate, "device", None)
+                        result_device = getattr(
+                            result_candidate,
+                            "device",
+                            None,
+                        )
                         if isinstance(result_device, str) and result_device:
                             attempt_record["device"] = result_device
 
@@ -1717,10 +2020,16 @@ class EnhanceOrchestrator:
                                 mode="F",
                             )
                             depth_pil_resized = depth_pil.resize(
-                                (original_shape[1], original_shape[0]),
+                                (
+                                    original_shape[1],
+                                    original_shape[0],
+                                ),
                                 PILImage.Resampling.BILINEAR,
                             )
-                            depth_candidate = np.array(depth_pil_resized, dtype=np.float32)
+                            depth_candidate = np.array(
+                                depth_pil_resized,
+                                dtype=np.float32,
+                            )
                             if hasattr(result_candidate, "depth_map"):
                                 result_candidate.depth_map = depth_candidate
                             else:
@@ -1738,10 +2047,17 @@ class EnhanceOrchestrator:
                             )
                             or {},
                         )
-                        attempt_record["model_id"] = (
-                            result_metadata.get("resolved_model_id")
-                            or result_metadata.get("requested_model_id")
-                            or self._model_variant.value.huggingface_id
+                        attempt_record["model_id"] = self._resolve_backend_model_id(
+                            backend_id,
+                            result_metadata=result_metadata,
+                            backend=backend_instance,
+                        )
+                        attempt_record.update(
+                            self._resolve_backend_model_artifact(
+                                backend_id,
+                                result_metadata=result_metadata,
+                                backend=backend_instance,
+                            ),
                         )
                         attempt_record["source_depth_units"] = result_metadata.get(
                             "source_depth_units",
@@ -1770,7 +2086,11 @@ class EnhanceOrchestrator:
                         # (plateau/saturation guardrails)
                         gate_result = self._enforce_apex_depth_validity_gate(
                             depth_candidate,
-                            depth_units=getattr(result_candidate, "depth_units", None),
+                            depth_units=getattr(
+                                result_candidate,
+                                "depth_units",
+                                None,
+                            ),
                         )
 
                         attempt_record.update(
@@ -1836,7 +2156,9 @@ class EnhanceOrchestrator:
                         raise
 
                     except Exception as operational_error:
-                        error_code = self._infer_operational_error_code(operational_error)
+                        error_code = self._infer_operational_error_code(
+                            operational_error,
+                        )
                         attempt_record.update(
                             {
                                 "status": "failed",
@@ -1871,12 +2193,15 @@ class EnhanceOrchestrator:
                 active_backend_metadata = self._build_backend_metadata_for_attempts(
                     selected_backend_id,
                     depth_attempts,
-                    result_metadata=getattr(
-                        result,
-                        "metadata",
-                        None,
-                    )
-                    or {},
+                    result_metadata=(
+                        getattr(
+                            result,
+                            "metadata",
+                            None,
+                        )
+                        or {}
+                    ),
+                    selected_attempt_index=(selected_attempt_index),
                 )
                 self._active_backend_metadata = active_backend_metadata
                 self._active_depth_attempts = depth_attempts
@@ -1959,7 +2284,7 @@ class EnhanceOrchestrator:
                             False,
                         )
                         else None
-                    ),
+                    ),  # noqa: E501
                     "canonical_depth_path": (
                         str(float_depth_path)
                         if getattr(
@@ -1997,7 +2322,7 @@ class EnhanceOrchestrator:
                 # (backend_selection.resolved_backend).
                 # ADR-023: identity must match execution.
                 resolved_backend = active_backend_metadata
-                model_name = resolved_backend.resolved_backend if resolved_backend else (self._model_variant.value.name)
+                model_name = resolved_backend.resolved_backend if resolved_backend else self._model_variant.value.name
 
                 depth_metadata = DepthMetadata(
                     model=model_name,
@@ -2014,7 +2339,7 @@ class EnhanceOrchestrator:
                         {
                             "model": depth_metadata.model,
                             "depth_path": depth_metadata.depth_path,
-                            "runtime_seconds": depth_metadata.runtime_seconds,
+                            "runtime_seconds": (depth_metadata.runtime_seconds),
                             "scaling": depth_metadata.scaling,
                             "stats": depth_metadata.stats,
                         },
@@ -2032,7 +2357,11 @@ class EnhanceOrchestrator:
             except Exception as e:
                 logger.error(f"Depth failed: {e}")
                 if isinstance(e, ApexStrictGateError):
-                    logger.error("APEX strict gate failure: code=%s details=%s", e.code, e.details)
+                    logger.error(
+                        "APEX strict gate failure:" " code=%s details=%s",
+                        e.code,
+                        e.details,
+                    )
                     raise
                 if self.config.depth_fallback == "fail":
                     raise
@@ -2068,7 +2397,9 @@ class EnhanceOrchestrator:
                         depth_attempts,
                     )
                 else:
-                    raise ValueError("Unsupported" " depth_fallback" " mode:" f" {self.config.depth_fallback}") from e
+                    raise ValueError(
+                        "Unsupported" " depth_fallback" " mode:" f" {self.config.depth_fallback}",
+                    ) from e
         else:
             # Depth was skipped - load from cache
             # Preserve Materials V3 metadata
@@ -2133,14 +2464,28 @@ class EnhanceOrchestrator:
 
             # PBR generation with cached depth
             # (if enabled but not previously generated)
-            if self.config.generate_pbr and (pbr_assets is None or not self._verify_pbr_outputs(pbr_assets)):
+            if self.config.generate_pbr and (
+                pbr_assets is None
+                or not self._verify_pbr_outputs(
+                    pbr_assets,
+                )
+            ):
                 logger.info("Generating PBR maps from cached depth...")
                 try:
-                    depth_data_for_pbr = self._load_cached_depth(depth_path, float_depth_path)
+                    depth_data_for_pbr = self._load_cached_depth(
+                        depth_path,
+                        float_depth_path,
+                    )
                     if depth_data_for_pbr is not None:
-                        pbr_assets = self._generate_pbr_stage(depth_data_for_pbr, output_key)
+                        pbr_assets = self._generate_pbr_stage(
+                            depth_data_for_pbr,
+                            output_key,
+                        )
                 except Exception as pbr_error:
-                    logger.warning(f"PBR generation from cache failed: {pbr_error}")
+                    logger.warning(
+                        "PBR generation from" " cache failed: %s",
+                        pbr_error,
+                    )
 
         return (
             depth_metadata,
@@ -2222,7 +2567,10 @@ class EnhanceOrchestrator:
             return pbr_assets
 
         except Exception as pbr_error:
-            logger.warning(f"PBR generation failed (non-blocking): {pbr_error}")
+            logger.warning(
+                "PBR generation failed" " (non-blocking): %s",
+                pbr_error,
+            )
             return None
 
     def _expected_materials_v3_enhanced_path(
@@ -2239,7 +2587,7 @@ class EnhanceOrchestrator:
         output_key: Path,
     ) -> Path:
         """Return canonical segmentation mask path."""
-        return self.segmentation_dir / output_key.parent / (f"{output_key.stem}" "_materials_v3_masks.npz")
+        return self.segmentation_dir / output_key.parent / f"{output_key.stem}" "_materials_v3_masks.npz"
 
     def _persist_material_masks_artifact(
         self,
@@ -2327,7 +2675,10 @@ class EnhanceOrchestrator:
             if materials_v3_result:
                 material_masks = materials_v3_result.get("material_masks")
                 if isinstance(material_masks, dict) and material_masks:
-                    mask_artifact_path = self._persist_material_masks_artifact(material_masks, output_key)
+                    mask_artifact_path = self._persist_material_masks_artifact(
+                        material_masks,
+                        output_key,
+                    )
                     if mask_artifact_path:
                         materials_v3_metadata = materials_v3_result.setdefault(
                             "materials_v3_metadata",
@@ -2530,8 +2881,14 @@ class EnhanceOrchestrator:
         from .preprocessing import preprocess_image, validate_image_format
 
         validated_path = validate_image_format(image_input.path)
-        preprocessed_array, _ = preprocess_image(validated_path, raw_config=self.config)
-        depth_for_materials = self._load_cached_depth(depth_path, float_depth_path)
+        preprocessed_array, _ = preprocess_image(
+            validated_path,
+            raw_config=self.config,
+        )
+        depth_for_materials = self._load_cached_depth(
+            depth_path,
+            float_depth_path,
+        )
         if depth_for_materials is None:
             raise ApexStrictGateError(
                 "APEX_MATERIALS_CACHED_DEPTH_MISSING",
@@ -2605,7 +2962,9 @@ class EnhanceOrchestrator:
         if not depth_path or not depth_path.exists():
             return
 
-        expected_path = self._expected_materials_v3_enhanced_path(output_key)
+        expected_path = self._expected_materials_v3_enhanced_path(
+            output_key,
+        )
         expected_path_resolved = expected_path.resolve()
         actual_path_resolved = Path(v2_input_path).resolve()
         enhanced_path_resolved = enhanced_image_path.resolve() if enhanced_image_path else None
@@ -2632,7 +2991,7 @@ class EnhanceOrchestrator:
                 "enhanced_image_path": (str(enhanced_image_path) if enhanced_image_path else None),
                 "enhanced_image_matches_expected": bool(enhanced_path_resolved == expected_path_resolved),
                 "expected_input_exists": (expected_path.exists()),
-                "has_material_masks": (has_masks),
+                "has_material_masks": has_masks,
             },
         )
 
@@ -2712,15 +3071,27 @@ class EnhanceOrchestrator:
                     ) as archive:
                         for mat_name, mask in ordered_masks.items():
                             payload = io.BytesIO()
-                            np.lib.format.write_array(payload, mask, allow_pickle=False)
+                            np.lib.format.write_array(
+                                payload,
+                                mask,
+                                allow_pickle=False,
+                            )
 
                             # Fixed entry metadata for
                             # stable NPZ bytes.
-                            zip_info = zipfile.ZipInfo(filename=f"{mat_name}.npy", date_time=fixed_zip_datetime)
+                            zip_info = zipfile.ZipInfo(
+                                filename=f"{mat_name}.npy",
+                                date_time=fixed_zip_datetime,
+                            )
                             zip_info.compress_type = zipfile.ZIP_DEFLATED
                             zip_info.create_system = 0
                             zip_info.external_attr = 0
-                            archive.writestr(zip_info, payload.getvalue(), compress_type=zipfile.ZIP_DEFLATED, compresslevel=9)
+                            archive.writestr(
+                                zip_info,
+                                payload.getvalue(),
+                                compress_type=zipfile.ZIP_DEFLATED,
+                                compresslevel=9,
+                            )
                     f.flush()
                     os.fsync(f.fileno())
 
@@ -2744,7 +3115,7 @@ class EnhanceOrchestrator:
                 return None
 
             logger.info(
-                "Serialized %d material" " masks to %s (%.2fMB)",
+                "Serialized %d material" + " masks to %s (%.2fMB)",
                 len(ordered_masks),
                 mask_path.name,
                 file_size_mb,
@@ -2755,7 +3126,7 @@ class EnhanceOrchestrator:
             return None
         except Exception as e:
             logger.warning(
-                "Failed to serialize" " material masks: %s",
+                "Failed to serialize" + " material masks: %s",
                 e,
                 exc_info=True,
             )
@@ -2769,11 +3140,15 @@ class EnhanceOrchestrator:
         if not isinstance(materials_v3_result, dict):
             return None
 
-        materials_v3_metadata = materials_v3_result.get("materials_v3_metadata")
+        materials_v3_metadata = materials_v3_result.get(
+            "materials_v3_metadata",
+        )
         if not isinstance(materials_v3_metadata, dict):
             return None
 
-        segmentation_metadata = materials_v3_metadata.get("segmentation_metadata")
+        segmentation_metadata = materials_v3_metadata.get(
+            "segmentation_metadata",
+        )
         if not isinstance(segmentation_metadata, dict):
             return None
 
@@ -2824,11 +3199,20 @@ class EnhanceOrchestrator:
             return {"status": "skipped"}, 0.0, None
 
         v2_report_path = find_v2_report(self.v2_dir, output_key.name)
-        skip_v2 = not self.config.force_v2 and self.should_skip_v2(v2_report_path, manifest_path, image_input, skip_depth)
+        skip_v2 = not self.config.force_v2 and self.should_skip_v2(
+            v2_report_path,
+            manifest_path,
+            image_input,
+            skip_depth,
+        )
 
         if skip_v2:
             logger.info("V2 outputs valid, skipping.")
-            self._enforce_v2_depth_handoff(depth_path=depth_path, v2_result=None, v2_report_path=v2_report_path)
+            self._enforce_v2_depth_handoff(
+                depth_path=depth_path,
+                v2_result=None,
+                v2_report_path=v2_report_path,
+            )
             return {"status": "ok"}, 0.0, v2_report_path
 
         # Use persisted segmentation artifact
@@ -2840,7 +3224,7 @@ class EnhanceOrchestrator:
         cleanup_temp_masks = False
         if masks_path:
             logger.info(
-                "Reusing persisted material" " masks for V2: %s",
+                "Reusing persisted material" + " masks for V2: %s",
                 masks_path.name,
             )
         elif materials_v3_result and materials_v3_result.get("material_masks"):
@@ -2853,7 +3237,7 @@ class EnhanceOrchestrator:
             if masks_path:
                 cleanup_temp_masks = True
                 logger.info(
-                    "Material masks serialized" " for V2: %s",
+                    "Material masks serialized" + " for V2: %s",
                     masks_path.name,
                 )
             else:
@@ -2866,7 +3250,7 @@ class EnhanceOrchestrator:
         try:
             v2_result = self.v2_runner.run(
                 input_path=image_input.path,
-                depth_dir=self.depth_dir if (depth_path and depth_path.exists()) else None,
+                depth_dir=(self.depth_dir if (depth_path and depth_path.exists()) else None),
                 output_dir=self.v2_dir,
                 preset=(self.config.v2_preset or "default"),
                 device=self.config.v2_device,
@@ -2883,7 +3267,11 @@ class EnhanceOrchestrator:
             else:
                 v2_report_path = find_v2_report(self.v2_dir, output_key.name)
 
-            self._enforce_v2_depth_handoff(depth_path=depth_path, v2_result=v2_result, v2_report_path=v2_report_path)
+            self._enforce_v2_depth_handoff(
+                depth_path=depth_path,
+                v2_result=v2_result,
+                v2_report_path=v2_report_path,
+            )
 
             return v2_result, v2_runtime_s, v2_report_path
 
@@ -2893,12 +3281,12 @@ class EnhanceOrchestrator:
                 try:
                     masks_path.unlink()
                     logger.debug(
-                        "Cleaned up temporary" " masks: %s",
+                        "Cleaned up temporary" + " masks: %s",
                         masks_path.name,
                     )
                 except Exception as cleanup_error:
                     logger.warning(
-                        "Failed to clean up" " temporary masks" " %s: %s",
+                        "Failed to clean up" + " temporary masks" + " %s: %s",
                         masks_path,
                         cleanup_error,
                     )
@@ -2978,9 +3366,12 @@ class EnhanceOrchestrator:
                 image_path=image_input.path,
                 config_fingerprint=config_fp_str,
                 cli_args=cli_args,
-                repo_root=Path.cwd(),  # Repository root for git SHA
+                # Repository root for git SHA
+                repo_root=Path.cwd(),
                 require_exiftool=is_audit_input,
-                ingest_profile=str(raw_summary.get("profile", "")),
+                ingest_profile=str(
+                    raw_summary.get("profile", ""),
+                ),
                 ingest_settings_hash=str(
                     raw_summary.get(
                         "settings_hash",
@@ -3010,17 +3401,21 @@ class EnhanceOrchestrator:
         except ProvenanceError as e:
             # Hard fail on provenance error
             logger.error(
-                "Provenance capture" " failed: %s",
+                "Provenance capture" + " failed: %s",
                 e,
             )
-            raise RuntimeError("Provenance capture" f" failed: {e}") from e
+            raise RuntimeError(
+                "Provenance capture" f" failed: {e}",
+            ) from e
         except Exception as e:
             # Catch-all for unexpected errors
             logger.error(
-                "Unexpected error during" " provenance capture: %s",
+                "Unexpected error during" + " provenance capture: %s",
                 e,
             )
-            raise RuntimeError("Provenance capture failed" f" unexpectedly: {e}") from e
+            raise RuntimeError(
+                "Provenance capture failed" f" unexpectedly: {e}",
+            ) from e
 
         # V2 metadata
         # Determine V2 I/O bit depth based on
@@ -3047,7 +3442,10 @@ class EnhanceOrchestrator:
         v2_output_value = v2_result.get("output")
         if isinstance(v2_output_value, str) and v2_output_value:
             v2_output_paths.append(v2_output_value)
-        depth_handoff_state = self._extract_v2_depth_handoff_status(v2_result=v2_result, v2_report_path=v2_report_path)
+        depth_handoff_state = self._extract_v2_depth_handoff_status(
+            v2_result=v2_result,
+            v2_report_path=v2_report_path,
+        )
 
         _strict_depth = (
             bool(depth_handoff_state)
@@ -3087,10 +3485,26 @@ class EnhanceOrchestrator:
 
             materials_v3_metadata = MaterialsV3Metadata(
                 enabled=True,
-                version=materials_v3_result.get("materials_v3_metadata", {}).get("version", "3.1"),
-                response_plan=materials_v3_result.get("materials_v3_response_plan"),
-                pixel_ops=materials_v3_result.get("materials_v3_pixel_ops"),
-                segmentation_metadata=materials_v3_result.get("materials_v3_metadata", {}).get("segmentation_metadata"),
+                version=materials_v3_result.get(
+                    "materials_v3_metadata",
+                    {},
+                ).get("version", "3.1"),
+                response_plan=(
+                    materials_v3_result.get(
+                        "materials_v3_response_plan",
+                    )
+                ),
+                pixel_ops=(
+                    materials_v3_result.get(
+                        "materials_v3_pixel_ops",
+                    )
+                ),
+                segmentation_metadata=(
+                    materials_v3_result.get(
+                        "materials_v3_metadata",
+                        {},
+                    ).get("segmentation_metadata")
+                ),
                 runtime_seconds=materials_v3_runtime_s,
                 output_bit_depth=materials_v3_bit_depth,
             )
@@ -3104,10 +3518,16 @@ class EnhanceOrchestrator:
                 if m.input:
                     saved_hash = m.input.image_sha256
             except Exception as e:
-                logger.debug(f"Failed to load previous hash from manifest: {e}")
+                logger.debug(
+                    "Failed to load previous" " hash from manifest: %s",
+                    e,
+                )
 
         input_sha = self._compute_or_skip_hash(
-            image_input.path, manifest_exists=manifest_exists, saved_hash=saved_hash, for_manifest_write=True
+            image_input.path,
+            manifest_exists=manifest_exists,
+            saved_hash=saved_hash,
+            for_manifest_write=True,
         )
 
         manifest = CombinedManifest(
@@ -3124,7 +3544,11 @@ class EnhanceOrchestrator:
                 depth_seconds=depth_runtime_s,
                 v2_seconds=v2_runtime_s,
                 total_seconds=pipeline_end_time - pipeline_start_time,
-                timestamp_utc=datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                timestamp_utc=(
+                    datetime.datetime.now(
+                        datetime.timezone.utc,
+                    ).isoformat()
+                ),
             ),
             pbr_assets=pbr_assets,
             repro=ReproMetadata(
@@ -3135,9 +3559,15 @@ class EnhanceOrchestrator:
             config_fingerprint=self.compute_config_fingerprint(),
             environment=self.environment,
             # Accurate batch execution timestamps (ISO 8601 format)
-            start_time=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(pipeline_start_time)),
-            end_time=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(pipeline_end_time)),
-            # ADR-023 Phase 3: Backend selection metadata
+            start_time=time.strftime(
+                "%Y-%m-%dT%H:%M:%SZ",
+                time.gmtime(pipeline_start_time),
+            ),
+            end_time=time.strftime(
+                "%Y-%m-%dT%H:%M:%SZ",
+                time.gmtime(pipeline_end_time),
+            ),
+            # ADR-023 Phase 3: Backend selection
             backend_selection=(backend_selection_metadata or self._active_backend_metadata or self._backend_metadata),
         )
         manifest.write(manifest_path)
@@ -3171,7 +3601,11 @@ class EnhanceOrchestrator:
         pipeline_start_time = time.time()
         # Reset per-image active state up front so early exceptions cannot leak
         # stale attempt/backend data from a previous image.
-        self._active_backend_metadata = getattr(self, "_backend_metadata", self._capture_backend_metadata())
+        self._active_backend_metadata = getattr(
+            self,
+            "_backend_metadata",
+            self._capture_backend_metadata(),
+        )
         self._active_depth_attempts = []
         self._active_selected_attempt_index = None
 
@@ -3188,16 +3622,24 @@ class EnhanceOrchestrator:
                 ),
             )
             logger.info(
-                "Processing %s" " (using precomputed" " paths)...",
+                "Processing %s" + " (using precomputed" + " paths)...",
                 output_key,
             )
         else:
             # Generate output key for consistent artifact naming
             use_xxhash = getattr(self.config, "use_xxhash", False)
             output_key = (
-                make_output_key(image_input.path, input_root, use_xxhash=use_xxhash)
+                make_output_key(
+                    image_input.path,
+                    input_root,
+                    use_xxhash=use_xxhash,
+                )
                 if input_root
-                else Path(sanitize_file_stem(image_input.path.stem))
+                else Path(
+                    sanitize_file_stem(
+                        image_input.path.stem,
+                    ),
+                )
             )
             logger.info(f"Processing {output_key}...")
 
@@ -3215,7 +3657,14 @@ class EnhanceOrchestrator:
         # Always compute these paths (not part of skip logic)
         float_depth_path = self.depth_dir / output_key.parent / f"{output_key.name}_depth.npy"
         active_batch_id = getattr(self, "_active_batch_id", None)
-        v2_log_path = self.logs_dir / output_key.parent / _v2_log_filename(output_key.name, active_batch_id)
+        v2_log_path = (
+            self.logs_dir
+            / output_key.parent
+            / _v2_log_filename(
+                output_key.name,
+                active_batch_id,
+            )
+        )
 
         # Ensure output directories exist
         for p in [depth_path, manifest_path, v2_log_path]:
@@ -3259,7 +3708,11 @@ class EnhanceOrchestrator:
                 }
 
         # Runtime invariant checks for attempt-selection consistency.
-        selected_attempt_index = getattr(self, "_active_selected_attempt_index", None)
+        selected_attempt_index = getattr(
+            self,
+            "_active_selected_attempt_index",
+            None,
+        )
         if depth_metadata is not None and depth_attempts:
             if selected_attempt_index is None or selected_attempt_index < 0 or selected_attempt_index >= len(depth_attempts):
                 raise RuntimeError(
@@ -3293,7 +3746,7 @@ class EnhanceOrchestrator:
         v2_input_path = enhanced_image_path if enhanced_image_path else image_input.path
         if enhanced_image_path:
             logger.info(
-                "V2 stage using Materials" " V3 enhanced image: %s",
+                "V2 stage using Materials" + " V3 enhanced image: %s",
                 enhanced_image_path,
             )
 
@@ -3306,8 +3759,8 @@ class EnhanceOrchestrator:
         )
 
         v2_result, v2_runtime_s, v2_report_path = self._run_v2_stage(
-            image_input=ImageInput(path=v2_input_path) if enhanced_image_path else image_input,
-            depth_path=depth_path if depth_metadata else None,
+            image_input=(ImageInput(path=v2_input_path) if enhanced_image_path else image_input),
+            depth_path=(depth_path if depth_metadata else None),
             output_key=output_key,
             v2_log_path=v2_log_path,
             manifest_path=manifest_path,
@@ -3330,12 +3783,12 @@ class EnhanceOrchestrator:
             try:
                 enhanced_image_path.unlink()
                 logger.debug(
-                    "Cleaned up temporary" " enhanced image: %s",
+                    "Cleaned up temporary" + " enhanced image: %s",
                     enhanced_image_path,
                 )
             except Exception as e:
                 logger.warning(
-                    "Failed to clean up" " temporary enhanced" " image: %s",
+                    "Failed to clean up" + " temporary enhanced" + " image: %s",
                     e,
                 )
 
@@ -3358,12 +3811,24 @@ class EnhanceOrchestrator:
 
         segmentation_mask_path: Optional[str] = None
         if materials_v3_result:
-            materials_v3_metadata = materials_v3_result.get("materials_v3_metadata")
+            materials_v3_metadata = materials_v3_result.get(
+                "materials_v3_metadata",
+            )
             if isinstance(materials_v3_metadata, dict):
-                segmentation_metadata = materials_v3_metadata.get("segmentation_metadata")
+                segmentation_metadata = materials_v3_metadata.get(
+                    "segmentation_metadata",
+                )
                 if isinstance(segmentation_metadata, dict):
-                    mask_artifact_path = segmentation_metadata.get("mask_artifact_path")
-                    if isinstance(mask_artifact_path, str) and mask_artifact_path:
+                    mask_artifact_path = segmentation_metadata.get(
+                        "mask_artifact_path",
+                    )
+                    if (
+                        isinstance(
+                            mask_artifact_path,
+                            str,
+                        )
+                        and mask_artifact_path
+                    ):
                         segmentation_mask_path = mask_artifact_path
 
         return {
@@ -3375,7 +3840,7 @@ class EnhanceOrchestrator:
             "device": (backend_selection_metadata.device if backend_selection_metadata else None),
             "attempts": depth_attempts,
             "selected_attempt_index": selected_attempt_index,
-            "depth_path": str(depth_path) if depth_metadata else None,
+            "depth_path": (str(depth_path) if depth_metadata else None),
             "depth_float_path": (
                 str(float_depth_path)
                 if getattr(
@@ -3387,14 +3852,17 @@ class EnhanceOrchestrator:
                 else None
             ),
             "manifest": str(manifest_path),
-            "v2_log_path": str(v2_log_path) if v2_log_path.exists() else None,
-            "v2_report_path": str(v2_report_path) if v2_report_path else None,
+            "v2_log_path": (str(v2_log_path) if v2_log_path.exists() else None),
+            "v2_report_path": (str(v2_report_path) if v2_report_path else None),
             "v2_output_path": v2_output_path,
             "segmentation_mask_path": segmentation_mask_path,
-            "runtime_s": pipeline_end_time - pipeline_start_time,
+            "runtime_s": (pipeline_end_time - pipeline_start_time),
         }
 
-    def _verify_pbr_outputs(self, pbr_assets: Optional[Dict[str, Any]]) -> bool:
+    def _verify_pbr_outputs(
+        self,
+        pbr_assets: Optional[Dict[str, Any]],
+    ) -> bool:
         """Verify that all PBR output files exist on disk.
 
         Args:
@@ -3431,7 +3899,16 @@ class EnhanceOrchestrator:
 
     def _is_apex_tier(self) -> bool:
         """Return True when APEX quality tier is active."""
-        return str(getattr(self.config, "quality_tier", "")).lower() == "apex"
+        return (
+            str(
+                getattr(
+                    self.config,
+                    "quality_tier",
+                    "",
+                ),
+            ).lower()
+            == "apex"
+        )
 
     def _normalize_depth_for_gate(
         self,
@@ -3497,7 +3974,11 @@ class EnhanceOrchestrator:
                 "mode": "invalid_percentiles",
             }
 
-        gate = np.clip((raw - p1) / (p99 - p1), 0.0, 1.0).astype(np.float32, copy=False)
+        gate = np.clip(
+            (raw - p1) / (p99 - p1),
+            0.0,
+            1.0,
+        ).astype(np.float32, copy=False)
         gate[~finite_mask] = 0.0
         return gate, {
             "finite_count": finite_count,
@@ -3522,7 +4003,10 @@ class EnhanceOrchestrator:
         preserving raw-unit diagnostics in the payload.
         """
         raw_depth = np.asarray(depth_map, dtype=np.float32)
-        gate_depth, normalization = self._normalize_depth_for_gate(raw_depth, depth_units=depth_units)
+        gate_depth, normalization = self._normalize_depth_for_gate(
+            raw_depth,
+            depth_units=depth_units,
+        )
 
         depth = gate_depth
         raw_finite_mask = np.isfinite(raw_depth)
@@ -3556,10 +4040,26 @@ class EnhanceOrchestrator:
         raw_p95 = float(np.percentile(raw_vals, 95.0)) if raw_vals.size else None
         raw_upper_iqr = (raw_p95 - raw_p75) if (raw_p75 is not None and raw_p95 is not None) else None
 
-        saturation_high_value = float(getattr(self.config, "apex_depth_saturation_high_value", 0.999))
-        saturation_low_value = float(getattr(self.config, "apex_depth_saturation_low_value", 0.001))
-        saturation_high_fraction = float((vals >= saturation_high_value).mean())
-        saturation_low_fraction = float((vals <= saturation_low_value).mean())
+        saturation_high_value = float(
+            getattr(
+                self.config,
+                "apex_depth_saturation_high_value",
+                0.999,
+            ),
+        )
+        saturation_low_value = float(
+            getattr(
+                self.config,
+                "apex_depth_saturation_low_value",
+                0.001,
+            ),
+        )
+        saturation_high_fraction = float(
+            (vals >= saturation_high_value).mean(),
+        )
+        saturation_low_fraction = float(
+            (vals <= saturation_low_value).mean(),
+        )
 
         grad_y, grad_x = np.gradient(depth)
         grad_mag = np.hypot(grad_x, grad_y)
@@ -3567,7 +4067,11 @@ class EnhanceOrchestrator:
         gradient_energy = float(np.mean(np.abs(grad_mag))) if grad_mag.size else 0.0
 
         hist_bins = int(getattr(self.config, "apex_depth_hist_bins", 64))
-        hist, _ = np.histogram(np.clip(vals, 0.0, 1.0), bins=hist_bins, range=(0.0, 1.0))
+        hist, _ = np.histogram(
+            np.clip(vals, 0.0, 1.0),
+            bins=hist_bins,
+            range=(0.0, 1.0),
+        )
         unique_hist_bins = int(np.count_nonzero(hist))
 
         return {
@@ -3596,7 +4100,10 @@ class EnhanceOrchestrator:
         if not self._is_apex_tier():
             return None
 
-        metrics = self._compute_depth_validity_metrics(depth_map, depth_units=depth_units)
+        metrics = self._compute_depth_validity_metrics(
+            depth_map,
+            depth_units=depth_units,
+        )
 
         _cfg = self.config
         thresholds = {
@@ -3617,35 +4124,35 @@ class EnhanceOrchestrator:
             "saturation_high_fraction_max": float(
                 getattr(
                     _cfg,
-                    "apex_depth_max_high_" "saturation_fraction",
+                    "apex_depth_max_high_" + "saturation_fraction",
                     0.02,
                 ),
             ),
             "saturation_low_fraction_max": float(
                 getattr(
                     _cfg,
-                    "apex_depth_max_low_" "saturation_fraction",
+                    "apex_depth_max_low_" + "saturation_fraction",
                     0.02,
                 ),
             ),
             "gradient_energy_min": float(
                 getattr(
                     _cfg,
-                    "apex_depth_min_" "gradient_energy",
+                    "apex_depth_min_" + "gradient_energy",
                     5e-4,
                 ),
             ),
             "saturation_high_value": float(
                 getattr(
                     _cfg,
-                    "apex_depth_saturation" "_high_value",
+                    "apex_depth_saturation" + "_high_value",
                     0.999,
                 ),
             ),
             "saturation_low_value": float(
                 getattr(
                     _cfg,
-                    "apex_depth_saturation" "_low_value",
+                    "apex_depth_saturation" + "_low_value",
                     0.001,
                 ),
             ),
@@ -3657,17 +4164,57 @@ class EnhanceOrchestrator:
                 ),
             ),
         }
+        comparison_epsilon = max(
+            float(
+                getattr(
+                    _cfg,
+                    "apex_depth_threshold_epsilon",
+                    1e-6,
+                ),
+            ),
+            0.0,
+        )
+        scaled_saturation_margin = max(
+            float(
+                getattr(
+                    _cfg,
+                    "apex_depth_scaled_saturation_margin",
+                    0.0,
+                ),
+            ),
+            0.0,
+        )
+        gate_normalization = metrics.get("gate_normalization")
+        normalization_scaled = bool(
+            isinstance(gate_normalization, dict) and gate_normalization.get("scaled"),
+        )
+        effective_high_saturation_max = thresholds["saturation_high_fraction_max"] + (
+            scaled_saturation_margin if normalization_scaled else 0.0
+        )
+        effective_low_saturation_max = thresholds["saturation_low_fraction_max"] + (
+            scaled_saturation_margin if normalization_scaled else 0.0
+        )
+        thresholds["comparison_epsilon"] = comparison_epsilon
+        thresholds["scaled_saturation_margin"] = scaled_saturation_margin if normalization_scaled else 0.0
+        thresholds["saturation_high_fraction_max_effective"] = effective_high_saturation_max
+        thresholds["saturation_low_fraction_max_effective"] = effective_low_saturation_max
 
-        finite_fail = float(metrics.get("finite_pct") or 0.0) < thresholds["finite_pct_min"]
+        finite_fail = float(metrics.get("finite_pct") or 0.0) < (thresholds["finite_pct_min"] - comparison_epsilon)
         plateau_fail = (metrics.get("upper_iqr") is None) or (float(metrics["upper_iqr"]) <= thresholds["upper_iqr_min"])
-        high_saturation_fail = (metrics.get("saturation_high_fraction") is None) or (
-            float(metrics["saturation_high_fraction"]) >= thresholds["saturation_high_fraction_max"]
-        )
-        low_saturation_fail = (metrics.get("saturation_low_fraction") is None) or (
-            float(metrics["saturation_low_fraction"]) >= thresholds["saturation_low_fraction_max"]
-        )
+        high_saturation_fail = (
+            metrics.get(
+                "saturation_high_fraction",
+            )
+            is None
+        ) or (float(metrics["saturation_high_fraction"]) > (effective_high_saturation_max + comparison_epsilon))
+        low_saturation_fail = (
+            metrics.get(
+                "saturation_low_fraction",
+            )
+            is None
+        ) or (float(metrics["saturation_low_fraction"]) > (effective_low_saturation_max + comparison_epsilon))
         low_gradient = (metrics.get("gradient_energy") is None) or (
-            float(metrics["gradient_energy"]) <= thresholds["gradient_energy_min"]
+            float(metrics["gradient_energy"]) <= (thresholds["gradient_energy_min"] + comparison_epsilon)
         )
 
         failure_codes: List[str] = []
@@ -3692,7 +4239,7 @@ class EnhanceOrchestrator:
             }
             raise ApexStrictGateError(
                 failure_codes[0] if len(failure_codes) == 1 else "APEX_DEPTH_INVALID",
-                "APEX depth validity gate failed: " + ", ".join(failure_codes),
+                "APEX depth validity gate" " failed: " + ", ".join(failure_codes),
                 details=details,
             )
 
@@ -3729,7 +4276,13 @@ class EnhanceOrchestrator:
         if not self._is_apex_materials_gate_enabled():
             return
 
-        if not bool(getattr(self.config, "enable_material_segmentation", False)):
+        if not bool(
+            getattr(
+                self.config,
+                "enable_material_segmentation",
+                False,
+            ),
+        ):
             raise ApexStrictGateError(
                 "APEX_MATERIALS_SEGMENTATION_DISABLED",
                 "APEX strict gate violated:"
@@ -3740,7 +4293,13 @@ class EnhanceOrchestrator:
                 " on).",
             )
 
-        backend_name = str(getattr(self.config, "material_segmentation_backend", "stub")).lower()
+        backend_name = str(
+            getattr(
+                self.config,
+                "material_segmentation_backend",
+                "stub",
+            ),
+        ).lower()
         if backend_name == "stub":
             raise ApexStrictGateError(
                 "APEX_MATERIALS_STUB_BACKEND",
@@ -3799,10 +4358,16 @@ class EnhanceOrchestrator:
         if float_depth_path.exists():
             try:
                 depth_data = np.load(str(float_depth_path))
-                logger.debug(f"Loaded float depth from: {float_depth_path}")
+                logger.debug(
+                    "Loaded float depth" " from: %s",
+                    float_depth_path,
+                )
                 return depth_data
             except Exception as e:
-                logger.warning(f"Failed to load float depth: {e}")
+                logger.warning(
+                    "Failed to load float" " depth: %s",
+                    e,
+                )
 
         # Fall back to quantized depth image
         if depth_path.exists():
@@ -3824,10 +4389,16 @@ class EnhanceOrchestrator:
                     if maxv > 1.5:
                         depth_data /= 65535.0
 
-                logger.debug(f"Loaded quantized depth from: {depth_path}")
+                logger.debug(
+                    "Loaded quantized depth" " from: %s",
+                    depth_path,
+                )
                 return depth_data
             except Exception as e:
-                logger.warning(f"Failed to load depth image: {e}")
+                logger.warning(
+                    "Failed to load depth" " image: %s",
+                    e,
+                )
 
         return None
 
@@ -3848,7 +4419,14 @@ class EnhanceOrchestrator:
             List of preprocessing results with skip flags and paths
         """
         with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
-            futures = {executor.submit(self._preprocess_single, img, input_root): img for img in image_inputs}
+            futures = {
+                executor.submit(
+                    self._preprocess_single,
+                    img,
+                    input_root,
+                ): img
+                for img in image_inputs
+            }
 
             results = []
             for future in as_completed(futures):
@@ -3858,7 +4436,7 @@ class EnhanceOrchestrator:
                 except Exception as e:
                     img = futures[future]
                     logger.error(
-                        "Preprocessing failed" " for %s: %s",
+                        "Preprocessing failed" + " for %s: %s",
                         img.path,
                         e,
                     )
@@ -3888,16 +4466,28 @@ class EnhanceOrchestrator:
         """
         use_xxhash = getattr(self.config, "use_xxhash", False)
         output_key = (
-            make_output_key(image_input.path, input_root, use_xxhash=use_xxhash)
+            make_output_key(
+                image_input.path,
+                input_root,
+                use_xxhash=use_xxhash,
+            )
             if input_root
-            else Path(sanitize_file_stem(image_input.path.stem))
+            else Path(
+                sanitize_file_stem(
+                    image_input.path.stem,
+                ),
+            )
         )
 
         depth_path = self.depth_dir / output_key.parent / f"{output_key.name}_depth.png"
         manifest_path = self.manifests_dir / output_key.parent / f"{output_key.name}_combined.json"
 
         # Check skip logic (uses cached manifest loading from Phase 1)
-        should_skip = not self.config.force_depth and self.should_skip_depth(depth_path, manifest_path, image_input)
+        should_skip = not self.config.force_depth and self.should_skip_depth(
+            depth_path,
+            manifest_path,
+            image_input,
+        )
 
         return {
             "status": "ok",
@@ -3930,19 +4520,22 @@ class EnhanceOrchestrator:
         if not self._use_parallel or len(image_inputs) < 4:
             # Fall back to sequential for small batches
             logger.debug(
-                "Using sequential" " processing" " (batch size: %d)",
+                "Using sequential" + " processing" + " (batch size: %d)",
                 len(image_inputs),
             )
             return [self.enhance_image(img, input_root) for img in image_inputs]
 
         logger.info(
-            "Parallel batch processing:" " %d images with %d workers",
+            "Parallel batch processing:" + " %d images with %d workers",
             len(image_inputs),
             self.max_workers,
         )
 
         # Phase 1: Parallel preprocessing (I/O-bound)
-        preprocessed = self._parallel_preprocess_batch(image_inputs, input_root)
+        preprocessed = self._parallel_preprocess_batch(
+            image_inputs,
+            input_root,
+        )
 
         # Phase 2: Sequential depth inference (GPU-bound, avoid contention)
         # PERFORMANCE FIX (#4): Pass precomputed paths to avoid redundant I/O
@@ -3960,11 +4553,15 @@ class EnhanceOrchestrator:
                     "manifest_path": item["manifest_path"],
                     "should_skip": item["should_skip"],
                 }
-                result = self.enhance_image(item["image_input"], input_root, _precomputed_paths=precomputed)
+                result = self.enhance_image(
+                    item["image_input"],
+                    input_root,
+                    _precomputed_paths=precomputed,
+                )
                 results.append(result)
             except Exception as e:
                 logger.error(
-                    "Enhancement failed" " for %s: %s",
+                    "Enhancement failed" + " for %s: %s",
                     item["image_input"].path,
                     e,
                 )
@@ -4027,11 +4624,18 @@ class EnhanceOrchestrator:
 
         # Capture accurate batch start time
         batch_start_time = time.time()
-        batch_start_utc = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(batch_start_time))
+        batch_start_utc = time.strftime(
+            "%Y-%m-%dT%H:%M:%SZ",
+            time.gmtime(batch_start_time),
+        )
 
         batch_id = datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S")
         self._active_batch_id = batch_id
-        logger.info(f"Batch {batch_id}: Scanning {input_dir}")
+        logger.info(
+            "Batch %s: Scanning %s",
+            batch_id,
+            input_dir,
+        )
 
         # ADR-023 Phase 3: Capture backend
         # selection metadata and log truth line
@@ -4046,13 +4650,21 @@ class EnhanceOrchestrator:
         )
 
         # Store backend metadata for use in _write_manifest
-        self._backend_metadata = backend_metadata
+        # pylint: disable=attribute-defined-outside-init
+        self._backend_metadata = backend_metadata  # type: ignore[attr-defined]
 
         # Use input discovery to exclude depth artifacts and derived outputs
         # ROBUSTNESS FIX (#6): Pass output_root
         # to explicitly exclude output directory
-        discovery_config = DiscoveryConfig(strict_mode=self.config.strict_inputs)
-        images = discover_images(input_dir, discovery_config, image_extensions, output_dir=self.output_root)
+        discovery_config = DiscoveryConfig(
+            strict_mode=self.config.strict_inputs,
+        )
+        images = discover_images(
+            input_dir,
+            discovery_config,
+            image_extensions,
+            output_dir=self.output_root,
+        )
 
         # Inert scene-group bridge: preserve
         # existing per-image behavior and order.
@@ -4066,18 +4678,30 @@ class EnhanceOrchestrator:
 
         if self._use_parallel and len(image_inputs) >= 4:
             logger.info(
-                "Using parallel batch" " processing for %d" " images",
+                "Using parallel batch" + " processing for %d" + " images",
                 len(image_inputs),
             )
-            results = self.enhance_batch_parallel(image_inputs, input_root=input_dir)
+            results = self.enhance_batch_parallel(
+                image_inputs,
+                input_root=input_dir,
+            )
         else:
             # Sequential processing (original behavior)
             results = []
             for img_input in image_inputs:
                 try:
-                    results.append(self.enhance_image(img_input, input_root=input_dir))
+                    results.append(
+                        self.enhance_image(
+                            img_input,
+                            input_root=input_dir,
+                        ),
+                    )
                 except Exception as e:
-                    logger.error(f"Failed {img_input.path}: {e}")
+                    logger.error(
+                        "Failed %s: %s",
+                        img_input.path,
+                        e,
+                    )
                     error_payload: Dict[str, Any] = {
                         "status": "error",
                         "image": str(
@@ -4117,11 +4741,18 @@ class EnhanceOrchestrator:
                     results.append(error_payload)
 
         if getattr(self.config, "enable_reconstruction", False):
-            self._run_scene_reconstruction_stage(scene_groups=scene_groups, results=results, dataset_root=input_dir)
+            self._run_scene_reconstruction_stage(
+                scene_groups=scene_groups,
+                results=results,
+                dataset_root=input_dir,
+            )
 
         # Capture accurate batch end time
         batch_end_time = time.time()
-        batch_end_utc = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(batch_end_time))
+        batch_end_utc = time.strftime(
+            "%Y-%m-%dT%H:%M:%SZ",
+            time.gmtime(batch_end_time),
+        )
 
         # Write batch summary with accurate timestamps
         # Extract runtime_s from successful results for statistics computation
@@ -4137,7 +4768,12 @@ class EnhanceOrchestrator:
             if r.get("status") == "ok":
                 runtime_s = r.get("runtime_s", 0.0)
                 image_name = r.get("image", "unknown")
-                outlier_result = detect_runtime_outliers(image_name, runtime_s, runtimes, median=median_runtime)
+                outlier_result = detect_runtime_outliers(
+                    image_name,
+                    runtime_s,
+                    runtimes,
+                    median=median_runtime,
+                )
                 if outlier_result:
                     warning_msg, outlier_meta = outlier_result
                     outliers.append(
@@ -4197,12 +4833,27 @@ class EnhanceOrchestrator:
         dataset_root: Path,
     ) -> None:
         """Run gated scene-level reconstruction for eligible grouped scenes."""
-        if not bool(getattr(self.config, "non_commercial_ok", False)):
+        if not bool(
+            getattr(
+                self.config,
+                "non_commercial_ok",
+                False,
+            ),
+        ):
             raise ReconstructionLicenseRestrictionError(
-                "Scene reconstruction requires non_commercial_ok=True due to "
-                "Inria 3D Gaussian Splatting non-commercial license terms."
+                "Scene reconstruction requires"
+                " non_commercial_ok=True due"
+                " to Inria 3D Gaussian"
+                " Splatting non-commercial"
+                " license terms."
             )
-        if not bool(getattr(self.config, "accept_research_tools_license", False)):
+        if not bool(
+            getattr(
+                self.config,
+                "accept_research_tools_license",
+                False,
+            ),
+        ):
             raise ReconstructionLicenseRestrictionError(
                 "Scene reconstruction"
                 " requires"
@@ -4216,7 +4867,13 @@ class EnhanceOrchestrator:
         sidecar_value = getattr(self.config, "cameras_sidecar_path", None)
         sidecar_path = Path(sidecar_value) if isinstance(sidecar_value, str) and sidecar_value else None
         sidecar_payload = load_sidecar_payload(sidecar_path)
-        reconstruction_tier = str(getattr(self.config, "reconstruction_tier", "apex_research"))
+        reconstruction_tier = str(
+            getattr(
+                self.config,
+                "reconstruction_tier",
+                "apex_research",
+            ),
+        )
 
         result_by_path: Dict[str, Dict[str, Any]] = {}
         for result in results:
@@ -4232,7 +4889,9 @@ class EnhanceOrchestrator:
 
             scene_results: List[Dict[str, Any]] = []
             for image_path in scene.images:
-                img_result = result_by_path.get(str(Path(image_path).resolve()))
+                img_result = result_by_path.get(
+                    str(Path(image_path).resolve()),
+                )
                 if not isinstance(img_result, dict) or img_result.get("status") != "ok":
                     scene_results = []
                     break
@@ -4269,7 +4928,7 @@ class EnhanceOrchestrator:
             try:
                 dataset_health = check_camera_geometry_sanity(cameras)
                 threshold_raw: Optional[str] = os.getenv(
-                    "TP_RECONSTRUCTION" "_RISK_THRESHOLD",
+                    "TP_RECONSTRUCTION" + "_RISK_THRESHOLD",
                     "0.65",
                 )
                 risk_threshold: float = 0.65
@@ -4279,7 +4938,7 @@ class EnhanceOrchestrator:
                     )
                 except ValueError:
                     logger.warning(
-                        "Invalid TP_RECONSTRUCTION" "_RISK_THRESHOLD=%r;" " using default 0.65",
+                        "Invalid" " TP_RECONSTRUCTION" "_RISK_THRESHOLD=%r;" " using default 0.65",
                         threshold_raw,
                     )
                     risk_threshold = 0.65
@@ -4293,13 +4952,20 @@ class EnhanceOrchestrator:
                         f" for scene"
                         f" {scene.scene_id}"
                     )
-                    triage_report = build_dataset_triage_report(scene.scene_id, dataset_health)
-                    scene_results[0]["reconstruction_risk_gate_message"] = message
-                    scene_results[0]["reconstruction_risk_gate_triage"] = triage_report
+                    triage_report = build_dataset_triage_report(
+                        scene.scene_id,
+                        dataset_health,
+                    )
+                    scene_results[0]["reconstruction_risk" "_gate_message"] = message
+                    scene_results[0]["reconstruction_risk" "_gate_triage"] = triage_report
                     health_with_triage: Dict[str, Any] = dict(dataset_health)
                     health_with_triage["triage"] = triage_report
-                    scene_results[0]["reconstruction_dataset_health"] = health_with_triage
-                    logger.warning("RECONSTRUCTION_DATASET_RISK_GATE: %s\n%s", message, triage_report)
+                    scene_results[0]["reconstruction" "_dataset_health"] = health_with_triage
+                    logger.warning(
+                        "RECONSTRUCTION_DATASET" "_RISK_GATE: %s\n%s",
+                        message,
+                        triage_report,
+                    )
                     continue
                 cameras, camera_normalization = normalize_camera_poses(cameras)
             except ValueError as exc:
@@ -4309,7 +4975,10 @@ class EnhanceOrchestrator:
                     exc,
                 )
                 continue
-            preflight_result = validate_scene_preflight(scene=scene, cameras=cameras)
+            preflight_result = validate_scene_preflight(
+                scene=scene,
+                cameras=cameras,
+            )
             preflight_path = write_scene_preflight_artifact(
                 scene_id=scene.scene_id,
                 result=preflight_result,
@@ -4382,11 +5051,18 @@ class EnhanceOrchestrator:
                         )
                         and len(digest) == 64
                     ):
-                        artifact_index_entries.append({"relative_path": relative_path, "sha256": digest})
+                        artifact_index_entries.append(
+                            {
+                                "relative_path": (relative_path),
+                                "sha256": digest,
+                            },
+                        )
             artifact_index_by_relative_path = {
                 entry["relative_path"]: entry for entry in artifact_index_entries if isinstance(entry, dict)
             }
-            run_card_merkle_root = _compute_artifact_merkle_root(artifact_index_entries)
+            run_card_merkle_root = _compute_artifact_merkle_root(
+                artifact_index_entries,
+            )
             reconstruction_config = {
                 "iterations": int(
                     getattr(
@@ -4420,9 +5096,7 @@ class EnhanceOrchestrator:
                     scene_manifest=scene_manifest,
                     output_dir=reconstruction_output_dir,
                 )
-                scene_results[0]["reconstruction_scene" "_manifest_path"] = str(
-                    scene_manifest_path,
-                )
+                scene_results[0]["reconstruction_scene" "_manifest_path"] = str(scene_manifest_path)
                 scene_results[0]["reconstruction_scene" "_fingerprint"] = scene_fingerprint
                 if bool(
                     getattr(
@@ -4437,7 +5111,9 @@ class EnhanceOrchestrator:
                         scene_manifest=scene_manifest,
                         output_dir=(reconstruction_output_dir),
                     )
-                    debug_scene_manifest = debug_paths.get("scene_manifest_path")
+                    debug_scene_manifest = debug_paths.get(
+                        "scene_manifest_path",
+                    )
                     if (
                         isinstance(
                             debug_scene_manifest,
@@ -4448,7 +5124,9 @@ class EnhanceOrchestrator:
                         scene_results[0]["reconstruction_debug" "_manifest_path"] = str(
                             debug_scene_manifest,
                         )
-                    debug_cameras = debug_paths.get("cameras_path")
+                    debug_cameras = debug_paths.get(
+                        "cameras_path",
+                    )
                     if (
                         isinstance(
                             debug_cameras,
@@ -4459,7 +5137,9 @@ class EnhanceOrchestrator:
                         scene_results[0]["reconstruction_debug" "_cameras_path"] = str(
                             debug_cameras,
                         )
-                    debug_preview = debug_paths.get("reprojection_preview_path")
+                    debug_preview = debug_paths.get(
+                        "reprojection_preview" "_path",
+                    )
                     if (
                         isinstance(
                             debug_preview,
@@ -4488,7 +5168,11 @@ class EnhanceOrchestrator:
             except ReconstructionLicenseRestrictionError:
                 raise
             except Exception as exc:
-                logger.warning("Scene reconstruction failed for %s: %s", scene.scene_id, exc)
+                logger.warning(
+                    "Scene reconstruction" " failed for %s: %s",
+                    scene.scene_id,
+                    exc,
+                )
                 continue
 
             if not isinstance(report_path, Path):
@@ -4503,20 +5187,30 @@ class EnhanceOrchestrator:
 
             scene_results[0]["reconstruction_report_path"] = str(report_path)
             scene_results[0]["reconstruction_scene_id"] = scene.scene_id
-            manifest_path = manifest_artifact_path(scene_id=scene.scene_id, output_dir=reconstruction_output_dir)
+            manifest_path = manifest_artifact_path(
+                scene_id=scene.scene_id,
+                output_dir=reconstruction_output_dir,
+            )
             if manifest_path.exists():
                 scene_results[0]["reconstruction_manifest_path"] = str(manifest_path)
             else:
                 logger.warning(
-                    "Reconstruction manifest" " missing for %s: %s",
+                    "Reconstruction manifest" + " missing for %s: %s",
                     scene.scene_id,
                     manifest_path,
                 )
-            diagnostics_path = diagnostics_artifact_path(scene_id=scene.scene_id, output_dir=reconstruction_output_dir)
+            diagnostics_path = diagnostics_artifact_path(
+                scene_id=scene.scene_id,
+                output_dir=(reconstruction_output_dir),
+            )
             if diagnostics_path.exists():
-                scene_results[0]["reconstruction_diagnostics_path"] = str(diagnostics_path)
+                scene_results[0]["reconstruction" "_diagnostics_path"] = str(diagnostics_path)
             else:
-                logger.warning("Scene diagnostics missing for %s: %s", scene.scene_id, diagnostics_path)
+                logger.warning(
+                    "Scene diagnostics" " missing for %s: %s",
+                    scene.scene_id,
+                    diagnostics_path,
+                )
             logger.info(
                 "Scene reconstruction" " completed:" " scene_id=%s" " report=%s" " diagnostics=%s",
                 scene.scene_id,
@@ -4536,7 +5230,7 @@ class EnhanceOrchestrator:
         _sid = sanitize_path_component_nonlossy(
             scene_id,
         )
-        report_path = cache_dir / f"{_sid}_reconstruction" f"_report.json"
+        report_path = cache_dir / f"{_sid}_reconstruction_report.json"
         if not report_path.exists():
             return None
         try:
@@ -4547,7 +5241,11 @@ class EnhanceOrchestrator:
             return None
         if payload.get("run_card_merkle_root") != run_card_merkle_root:
             return None
-        logger.info("Reconstruction cache hit for scene_id=%s at %s", scene_id, report_path)
+        logger.info(
+            "Reconstruction cache hit" " for scene_id=%s at %s",
+            scene_id,
+            report_path,
+        )
         return report_path
 
     def _collect_run_card_artifact_paths(
@@ -4592,7 +5290,9 @@ class EnhanceOrchestrator:
                 if manifest_path.exists():
                     artifact_paths.append(manifest_path)
 
-                    provenance_sidecar_path = manifest_path.with_name(f"{manifest_path.stem}_provenance.json")
+                    provenance_sidecar_path = manifest_path.with_name(
+                        f"{manifest_path.stem}" "_provenance.json",
+                    )
                     if provenance_sidecar_path.exists():
                         artifact_paths.append(provenance_sidecar_path)
 
@@ -4600,16 +5300,31 @@ class EnhanceOrchestrator:
                     manifest_name = manifest_path.stem
                     output_key_name = manifest_name.removesuffix("_combined")
                     try:
-                        manifest_relative_parent = manifest_path.resolve().relative_to(self.manifests_dir.resolve()).parent
+                        manifest_relative_parent = (
+                            manifest_path.resolve()
+                            .relative_to(
+                                self.manifests_dir.resolve(),
+                            )
+                            .parent
+                        )
                     except ValueError:
                         manifest_relative_parent = Path(".")
-                    v2_log_path = self.logs_dir / manifest_relative_parent / _v2_log_filename(output_key_name, batch_id)
+                    v2_log_path = (
+                        self.logs_dir
+                        / manifest_relative_parent
+                        / _v2_log_filename(
+                            output_key_name,
+                            batch_id,
+                        )
+                    )
 
                     if v2_log_path.exists():
                         artifact_paths.append(v2_log_path)
 
                     try:
-                        combined_manifest = CombinedManifest.load(manifest_path)
+                        combined_manifest = CombinedManifest.load(
+                            manifest_path,
+                        )
                     except Exception as exc:
                         logger.debug(
                             "Skipping artifact" " extraction for" " unreadable manifest" " %s: %s",
@@ -4618,10 +5333,16 @@ class EnhanceOrchestrator:
                         )
                     else:
                         if combined_manifest.depth and combined_manifest.depth.depth_path:
-                            artifact_paths.append(Path(combined_manifest.depth.depth_path))
+                            artifact_paths.append(
+                                Path(
+                                    combined_manifest.depth.depth_path,
+                                ),
+                            )
 
                         if combined_manifest.v2 and combined_manifest.v2.report_path:
-                            report_path = Path(combined_manifest.v2.report_path)
+                            report_path = Path(
+                                combined_manifest.v2.report_path,
+                            )
                             artifact_paths.append(report_path)
                             if report_path.exists():
                                 try:
@@ -4630,7 +5351,9 @@ class EnhanceOrchestrator:
                                         "r",
                                         encoding="utf-8",
                                     ) as report_file:
-                                        report_payload = json.load(report_file)
+                                        report_payload = json.load(
+                                            report_file,
+                                        )
                                 except Exception as exc:
                                     logger.debug(
                                         "Failed to parse" " V2 report for" " artifact indexing" " (%s): %s",
@@ -4645,7 +5368,14 @@ class EnhanceOrchestrator:
 
                         if combined_manifest.pbr_assets:
                             for key, value in combined_manifest.pbr_assets.items():
-                                if key.endswith("_path") and isinstance(value, str) and value:
+                                if (
+                                    key.endswith("_path")
+                                    and isinstance(
+                                        value,
+                                        str,
+                                    )
+                                    and value
+                                ):
                                     artifact_paths.append(Path(value))
 
                         if combined_manifest.materials_v3 and isinstance(
@@ -4669,7 +5399,9 @@ class EnhanceOrchestrator:
             if depth_value:
                 depth_path = Path(depth_value)
                 artifact_paths.append(depth_path)
-                depth_metadata_path = depth_path.with_name(f"{depth_path.stem}_metadata.json")
+                depth_metadata_path = depth_path.with_name(
+                    f"{depth_path.stem}" "_metadata.json",
+                )
                 if depth_metadata_path.exists():
                     artifact_paths.append(depth_metadata_path)
                 float_depth_path = depth_path.with_suffix(".npy")
@@ -4691,7 +5423,11 @@ class EnhanceOrchestrator:
         final_backends_used: List[str] = []
         if preferred_backend in observed_ok_backends:
             final_backends_used.append(preferred_backend)
-            final_backends_used.extend(sorted(observed_ok_backends - {preferred_backend}))
+            final_backends_used.extend(
+                sorted(
+                    observed_ok_backends - {preferred_backend},
+                ),
+            )
         else:
             final_backends_used.extend(sorted(observed_ok_backends))
         primary_backend = final_backends_used[0] if final_backends_used else None
@@ -4726,6 +5462,90 @@ class EnhanceOrchestrator:
             "operational_fallback_images": operational_fallback_images,
         }
 
+    def _resolve_run_card_backend_model_id(
+        self,
+        results: List[Dict[str, Any]],
+        backend_selection_resolved: Optional[str],
+    ) -> str:
+        """Resolve run-card backend model_id from selected backend attempts."""
+        resolved_backend = str(
+            backend_selection_resolved or self._backend_metadata.resolved_backend or "",
+        ).strip()
+        if resolved_backend:
+            for result in results:
+                if result.get("status") != "ok":
+                    continue
+                if result.get("backend") != resolved_backend:
+                    continue
+                attempts = result.get("attempts")
+                if isinstance(attempts, list) and attempts:
+                    selected_attempt_index = result.get(
+                        "selected_attempt_index",
+                    )
+                    normalized_selected_index = (
+                        int(selected_attempt_index)
+                        if isinstance(
+                            selected_attempt_index,
+                            int,
+                        )
+                        else None
+                    )
+                    attempt_model_id = self._extract_model_id_from_attempts(
+                        resolved_backend,
+                        attempts,
+                        selected_attempt_index=normalized_selected_index,
+                    )
+                    if attempt_model_id:
+                        return attempt_model_id
+                model_id = result.get("model_id")
+                if isinstance(model_id, str) and model_id.strip():
+                    return model_id.strip()
+            backend_cache = getattr(self, "_depth_backend_cache", {})
+            return self._resolve_backend_model_id(
+                resolved_backend,
+                backend=backend_cache.get(resolved_backend),
+            )
+        return self._backend_metadata.model_id
+
+    def _resolve_run_card_backend_model_artifact(
+        self,
+        results: List[Dict[str, Any]],
+        backend_selection_resolved: Optional[str],
+    ) -> Dict[str, Optional[str]]:
+        """Resolve run-card backend model artifact identity from selected attempts."""
+        resolved_backend = str(
+            backend_selection_resolved or self._backend_metadata.resolved_backend or "",
+        ).strip()
+        if not resolved_backend:
+            return {
+                "model_artifact_filename": None,
+                "model_artifact_sha256": None,
+            }
+
+        for result in results:
+            if result.get("status") != "ok":
+                continue
+            if result.get("backend") != resolved_backend:
+                continue
+            attempts = result.get("attempts")
+            if not isinstance(attempts, list) or not attempts:
+                continue
+            selected_attempt_index = result.get("selected_attempt_index")
+            normalized_selected_index = int(selected_attempt_index) if isinstance(selected_attempt_index, int) else None
+            attempt_artifact = self._extract_model_artifact_from_attempts(
+                resolved_backend,
+                attempts,
+                selected_attempt_index=normalized_selected_index,
+            )
+            if attempt_artifact["model_artifact_filename"] or attempt_artifact["model_artifact_sha256"]:
+                return attempt_artifact
+
+        backend_cache = getattr(self, "_depth_backend_cache", {})
+        return self._resolve_backend_model_artifact(
+            resolved_backend,
+            backend=backend_cache.get(resolved_backend),
+        )
+
     def _emit_run_card(
         self,
         batch_id: str,
@@ -4748,8 +5568,14 @@ class EnhanceOrchestrator:
 
         run_card_path = self.output_root / f"run_card_{batch_id}.json"
 
-        artifact_paths = self._collect_run_card_artifact_paths(results, batch_manifest_path=batch_manifest_path)
-        artifact_index = _build_artifact_index(self.output_root, artifact_paths)
+        artifact_paths = self._collect_run_card_artifact_paths(
+            results,
+            batch_manifest_path=batch_manifest_path,
+        )
+        artifact_index = _build_artifact_index(
+            self.output_root,
+            artifact_paths,
+        )
         artifact_merkle_root = _compute_artifact_merkle_root(artifact_index)
         backend_summary = self._compute_backend_summary(results)
         requested_backend = self._backend_metadata.requested_backend or "auto"
@@ -4758,12 +5584,25 @@ class EnhanceOrchestrator:
             if backend_summary["final_backends_used"]
             else (self._backend_metadata.resolved_backend)
         )
+        backend_model_artifact = self._resolve_run_card_backend_model_artifact(
+            results,
+            backend_selection_resolved,
+        )
 
         backend_selection: Dict[str, Any] = {
             "requested": requested_backend,
             "resolved": backend_selection_resolved,
             "device": self._backend_metadata.device,
-            "model_id": self._backend_metadata.model_id,
+            "model_id": self._resolve_run_card_backend_model_id(
+                results,
+                backend_selection_resolved,
+            ),
+            "model_artifact_filename": backend_model_artifact.get(
+                "model_artifact_filename",
+            ),
+            "model_artifact_sha256": backend_model_artifact.get(
+                "model_artifact_sha256",
+            ),
         }
         # Explicit wrapper semantics when
         # logical backend delegates to a
@@ -4805,7 +5644,11 @@ class EnhanceOrchestrator:
                     "v2_device": obj.v2_device,
                     "v2_upscaler_backend": obj.v2_upscaler_backend,
                 }
-                canonical_json = json.dumps(fingerprint_payload, sort_keys=True, separators=(",", ":"))
+                canonical_json = json.dumps(
+                    fingerprint_payload,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                )
                 return {
                     **fingerprint_payload,
                     "hash_algorithm": "sha256",
@@ -4827,7 +5670,7 @@ class EnhanceOrchestrator:
 
             # --- Dataclass-safe conversion ---
             if hasattr(obj, "__dataclass_fields__"):
-                return {k: getattr(obj, k) for k in obj.__dataclass_fields__.keys()}
+                return {k: getattr(obj, k) for k in obj.__dataclass_fields__}
 
             # --- Explicit to_dict support ---
             if hasattr(obj, "to_dict") and callable(obj.to_dict):
@@ -4892,4 +5735,7 @@ class EnhanceOrchestrator:
             )
             return
 
-        logger.info(f"✅ Run card emitted: {run_card_path}")
+        logger.info(
+            "Run card emitted: %s",
+            run_card_path,
+        )
