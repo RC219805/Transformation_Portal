@@ -1,6 +1,5 @@
 # Legacy docs/ root files grandfathered during the cleanup transition.
 # Keep this list in sync with the tracked repo baseline until the cleanup PR lands.
-docs/.DS_Store
 docs/750_PICACHO_RESOLUTION.md
 docs/ADMIN_BRANCH_PROTECTION_UPDATE.md
 docs/ADR-019_FINAL_CHECKLIST.md

@@ -147,6 +147,10 @@ def _changed_docs_files() -> tuple[list[DocChange] | None, list[str]]:
 
 
 def _all_docs_files() -> list[str]:
+    code, output, _stderr = _run_git(["ls-files", "--", "docs"])
+    if code == 0:
+        return sorted(line.replace("\\", "/") for line in output.splitlines() if line.strip())
+
     docs_root = REPO_ROOT / "docs"
     if not docs_root.exists():
         return []

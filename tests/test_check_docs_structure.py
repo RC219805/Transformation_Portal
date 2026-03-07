@@ -75,6 +75,43 @@ def test_changed_docs_files_returns_empty_when_git_succeeds_without_docs(monkeyp
     assert errors == []
 
 
+def test_all_docs_files_prefers_tracked_git_files(monkeypatch) -> None:
+    monkeypatch.setattr(
+        check_docs_structure,
+        "_run_git",
+        lambda args: (
+            (0, "docs/README.md\ndocs/quick_references/QUALITY_CONTROL_QUICKREF.md\n", "")
+            if args == ["ls-files", "--", "docs"]
+            else (1, "", "unexpected")
+        ),
+    )
+
+    assert check_docs_structure._all_docs_files() == [
+        "docs/README.md",
+        "docs/quick_references/QUALITY_CONTROL_QUICKREF.md",
+    ]
+
+
+def test_all_docs_files_falls_back_to_filesystem_when_git_ls_files_fails(monkeypatch, tmp_path) -> None:
+    docs_root = tmp_path / "docs"
+    docs_root.mkdir()
+    (docs_root / "README.md").write_text("readme\n", encoding="utf-8")
+    cli_dir = docs_root / "cli"
+    cli_dir.mkdir()
+    (cli_dir / "CLI_REFERENCE.md").write_text("cli\n", encoding="utf-8")
+    monkeypatch.setattr(check_docs_structure, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(
+        check_docs_structure,
+        "_run_git",
+        lambda _args: (1, "", "fatal: not a git repository"),
+    )
+
+    assert check_docs_structure._all_docs_files() == [
+        "docs/README.md",
+        "docs/cli/CLI_REFERENCE.md",
+    ]
+
+
 def test_main_fails_closed_in_ci_when_changed_file_detection_fails(monkeypatch) -> None:
     monkeypatch.setattr(
         check_docs_structure,
