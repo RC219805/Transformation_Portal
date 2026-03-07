@@ -264,9 +264,9 @@ If you find the custom agents could be improved:
 
 - **Repository Documentation**: `/docs/`
 - **Copilot Instructions**: `../.github/copilot-instructions.md`
-- **Architecture Guide**: `/docs/ARCHITECTURE.md`
+- **Architecture Guide**: `/docs/architecture/ARCHITECTURE.md`
 - **Pipeline Operations**: `/docs/PIPELINE_OPERATIONS_GUIDE.md`
-- **Performance Guide**: `/docs/PERFORMANCE_OPTIMIZATION.md`
+- **Performance Guide**: `/docs/performance/PERFORMANCE_OPTIMIZATION.md`
 
 ---
 

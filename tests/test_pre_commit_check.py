@@ -1,0 +1,58 @@
+from __future__ import annotations
+
+import shutil
+import stat
+import subprocess
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
+def _copy_repo_script(repo_root: Path) -> Path:
+    source = REPO_ROOT / "scripts" / "setup" / "pre-commit-check.sh"
+    destination = repo_root / "scripts" / "setup" / "pre-commit-check.sh"
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(source, destination)
+    destination.chmod(destination.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+    return destination
+
+
+def _run(cmd: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, check=False)
+
+
+def _init_repo(repo_root: Path) -> None:
+    result = _run(["git", "init", "-q"], repo_root)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def _write(path: Path, content: str = "test\n") -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding="utf-8")
+
+
+def test_missing_root_allowlist_behaves_like_zero_legacy_entries(tmp_path: Path) -> None:
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    _init_repo(repo_root)
+    _copy_repo_script(repo_root)
+
+    _write(repo_root / "README.md")
+    _write(repo_root / "legacy.md")
+    add_result = _run(["git", "add", "README.md", "legacy.md", "scripts/setup/pre-commit-check.sh"], repo_root)
+    assert add_result.returncode == 0, add_result.stdout + add_result.stderr
+
+    result = _run(
+        [
+            "bash",
+            "scripts/setup/pre-commit-check.sh",
+            "--all",
+            "--legacy-allowlist",
+            "scripts/governance/does-not-exist.txt",
+        ],
+        repo_root,
+    )
+
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "legacy.md" in result.stdout
+    assert "grandfathered" not in result.stdout

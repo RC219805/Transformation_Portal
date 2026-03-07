@@ -237,6 +237,6 @@ If you encounter any issues with the restructuring, please:
 
 ## Related Documentation
 
-- [README.md](README.md) - Main project documentation
-- [ARCHITECTURE.md](docs/ARCHITECTURE.md) - System architecture
-- [Depth Pipeline README](docs/depth_pipeline/DEPTH_PIPELINE_README.md) - Depth processing documentation
+- [README.md](../../README.md) - Main project documentation
+- [ARCHITECTURE.md](../architecture/ARCHITECTURE.md) - System architecture
+- [Depth Pipeline README](../depth_pipeline/DEPTH_PIPELINE_README.md) - Depth processing documentation

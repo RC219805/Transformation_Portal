@@ -70,4 +70,4 @@ Use this as a template for creating your own depth model plugins:
 4. Implement `estimate_depth()` for depth estimation
 5. Use `@plugin` decorator for auto-registration
 
-See [docs/PLUGIN_DEVELOPMENT.md](../../../docs/PLUGIN_DEVELOPMENT.md) for complete guide.
+See [docs/PLUGIN_DEVELOPMENT.md](../../../docs/guides/PLUGIN_DEVELOPMENT.md) for complete guide.

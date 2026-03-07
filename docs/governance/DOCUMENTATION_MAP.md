@@ -2,7 +2,7 @@
 
 **Purpose:** Single source of truth for finding documentation in Transformation Portal.
 
-**Last Updated:** 2026-03-01
+**Last Updated:** 2026-03-07
 **Maintainer:** Repository Architect
 
 ---
@@ -12,10 +12,10 @@
 | Topic | Canonical Document | Purpose |
 |-------|-------------------|---------|
 | **First Steps** | [README.md](../../README.md) | Project overview, installation, quick start |
-| **Setup & Installation** | [docs/guides/SETUP_GUIDE.md](../guides/SETUP_GUIDE.md) | Detailed installation for all tiers |
+| **Setup & Installation** | [SETUP_GUIDE.md](../guides/SETUP_GUIDE.md) | Detailed installation for all tiers |
 | **Contributing** | [CONTRIBUTING.md](../../CONTRIBUTING.md) | How to contribute code, docs, issues |
 | **Security** | [SECURITY.md](../../SECURITY.md) | Security policy, reporting vulnerabilities |
-| **Security Hardening Report** | [security_best_practices_report.md](../../security_best_practices_report.md) | Security findings and remediation status |
+| **Security Hardening Report** | [security_best_practices_report.md](security_best_practices_report.md) | Security findings and remediation status |
 
 ---
 
@@ -30,8 +30,8 @@
 | **Determinism Harness Spec (SPEC-DH-001)** | [docs/architecture/specifications/SPEC-DH-001.md](../architecture/specifications/SPEC-DH-001.md) | ✅ LOCKED (Phase II) |
 | **Certified Bounded Determinism Analysis (ANALYSIS-DH-001)** | [docs/architecture/analysis/ANALYSIS-DH-001.md](../architecture/analysis/ANALYSIS-DH-001.md) | ✅ Informative (Phase II) |
 | **API Reference** | [docs/api/](../api/) | ✅ Stable (Sphinx) |
-| **Code Quality Standards** | [docs/CODE_QUALITY_STANDARDS.md](../CODE_QUALITY_STANDARDS.md) | ✅ Stable |
-| **Custom Agents** | [docs/CUSTOM_AGENT_GUIDE.md](../CUSTOM_AGENT_GUIDE.md) | ✅ Stable |
+| **Code Quality Standards** | [CODE_QUALITY_STANDARDS.md](../guides/CODE_QUALITY_STANDARDS.md) | ✅ Stable |
+| **Custom Agents** | [CUSTOM_AGENT_GUIDE.md](../guides/CUSTOM_AGENT_GUIDE.md) | ✅ Stable |
 | **TODO Inventory** | [docs/analysis/TODO_INVENTORY.md](../analysis/TODO_INVENTORY.md) | ✅ Stable (v2.0.0) |
 | **TODO Quick Reference** | [docs/architecture/TODO_INVENTORY_QUICK_REF.md](../architecture/TODO_INVENTORY_QUICK_REF.md) | ✅ Stable (v2.0.0) |
 
@@ -41,41 +41,41 @@
 |-------|-------------------|--------|
 | **CI/CD Workflows** | [docs/ci_cd/CI_CD_WORKFLOWS.md](../ci_cd/CI_CD_WORKFLOWS.md) | ✅ Stable |
 | **Workflow Reference** | [.github/workflows/build.yml](../../.github/workflows/build.yml) | ✅ Stable (Primary CI) |
-| **Branch Protection** | [docs/BRANCH_PROTECTION_SETUP.md](../BRANCH_PROTECTION_SETUP.md) | ✅ Stable |
+| **Branch Protection** | [BRANCH_PROTECTION_SETUP.md](../ci/BRANCH_PROTECTION_SETUP.md) | ✅ Stable |
 
 ### Pipelines & Processing
 
 | Topic | Canonical Document | Status |
 |-------|-------------------|--------|
 | **Luxury Estate Pipeline** | [docs/pipeline/LUXURY_ESTATE_PIPELINE_README.md](../pipeline/LUXURY_ESTATE_PIPELINE_README.md) | ✅ Stable |
-| **PBR Processing** | [docs/PBR_PROCESSOR_QUICKSTART.md](../PBR_PROCESSOR_QUICKSTART.md) | ✅ Stable |
-| **Lux Depth V3 CLI** | [docs/LUX_DEPTH_V3_CLI_GUIDE.md](../LUX_DEPTH_V3_CLI_GUIDE.md) | ✅ Stable |
-| **Lux Depth V3 Troubleshooting** | [docs/LUX_DEPTH_V3_TROUBLESHOOTING.md](../LUX_DEPTH_V3_TROUBLESHOOTING.md) | ✅ Stable |
-| **Elite Pipeline** | [docs/ELITE_PIPELINE_GUIDE.md](../ELITE_PIPELINE_GUIDE.md) | ✅ Stable |
+| **PBR Processing** | [PBR_PROCESSOR_QUICKSTART.md](../guides/PBR_PROCESSOR_QUICKSTART.md) | ✅ Stable |
+| **Lux Depth V3 CLI** | [LUX_DEPTH_V3_CLI_GUIDE.md](../cli/LUX_DEPTH_V3_CLI_GUIDE.md) | ✅ Stable |
+| **Lux Depth V3 Troubleshooting** | [LUX_DEPTH_V3_TROUBLESHOOTING.md](../guides/LUX_DEPTH_V3_TROUBLESHOOTING.md) | ✅ Stable |
+| **Elite Pipeline** | [ELITE_PIPELINE_GUIDE.md](../guides/ELITE_PIPELINE_GUIDE.md) | ✅ Stable |
 
 ### Quick References
 
 | Topic | Canonical Document | Status |
 |-------|-------------------|--------|
 | **CLI Reference** | [docs/cli/CLI_REFERENCE.md](../cli/CLI_REFERENCE.md) | ✅ Stable |
-| **PBR Presets** | [docs/PBR_PRESETS_QUICK_REFERENCE.md](../PBR_PRESETS_QUICK_REFERENCE.md) | ✅ Stable |
-| **Agent Quick Ref** | [docs/AGENT_QUICK_REFERENCE.md](../AGENT_QUICK_REFERENCE.md) | ✅ Stable |
+| **PBR Presets** | [PBR_PRESETS_QUICK_REFERENCE.md](../reference/PBR_PRESETS_QUICK_REFERENCE.md) | ✅ Stable |
+| **Agent Quick Ref** | [AGENT_QUICK_REFERENCE.md](../reference/AGENT_QUICK_REFERENCE.md) | ✅ Stable |
 
 ---
 
 ## 🗂️ Specialized Topics
 
 ### Format Support
-- **File Formats:** [docs/SUPPORTED_FILE_FORMATS.md](../SUPPORTED_FILE_FORMATS.md)
-- **TIFF Handling:** [docs/TIFF_FIX_QUICKREF.md](../TIFF_FIX_QUICKREF.md)
+- **File Formats:** [SUPPORTED_FILE_FORMATS.md](../guides/SUPPORTED_FILE_FORMATS.md)
+- **TIFF Handling:** [TIFF_FIX_QUICKREF.md](../reference/TIFF_FIX_QUICKREF.md)
 
 ### Advanced Features
-- **Temporal Architecture:** [docs/TEMPORAL_ARCHITECTURE_QUICKREF.md](../TEMPORAL_ARCHITECTURE_QUICKREF.md)
-- **RAG System:** [docs/RAG_SYSTEM_COMPLETE_GUIDE.md](../RAG_SYSTEM_COMPLETE_GUIDE.md)
-- **VFX Extensions:** [docs/VFX_EXTENSION_GUIDE.md](../VFX_EXTENSION_GUIDE.md)
+- **Temporal Architecture:** [TEMPORAL_ARCHITECTURE_QUICKREF.md](../architecture/TEMPORAL_ARCHITECTURE_QUICKREF.md)
+- **RAG System:** [RAG_SYSTEM_COMPLETE_GUIDE.md](../guides/RAG_SYSTEM_COMPLETE_GUIDE.md)
+- **VFX Extensions:** [VFX_EXTENSION_GUIDE.md](../guides/VFX_EXTENSION_GUIDE.md)
 
 ### Troubleshooting
-- **General Troubleshooting:** [docs/TROUBLESHOOTING.md](../TROUBLESHOOTING.md)
+- **General Troubleshooting:** [TROUBLESHOOTING.md](../guides/TROUBLESHOOTING.md)
 - **Known Issues:** [docs/incidents/](../incidents/)
 
 ---
@@ -96,45 +96,22 @@ docs/
 ├── historical/               ← Historical execution artifacts
 ├── pipeline/                 ← Pipeline-specific documentation
 ├── pr_archive/               ← PR-specific archives
-└── quick_references/         ← Cheat sheets and quick refs
+└── reference/                ← Cheat sheets and quick refs
 ```
 
 ---
 
-## 🚫 Deprecated Documentation
+## Canonical Topology
 
-The following docs are **deprecated** and will be removed:
+Legacy root-level duplicates have been retired. Canonical documentation now lives only in approved subdirectories such as:
 
-### Duplicate Architecture Docs → Use [docs/architecture/ARCHITECTURE.md](../architecture/ARCHITECTURE.md)
-- ~~docs/ARCHITECTURE.md~~ (legacy root-level location)
-- ~~docs/ARCHITECTURE_PHILOSOPHY.md~~ (merged into ARCHITECTURE.md)
-- ~~docs/ARCHITECTURAL_CONTEXT_INTEGRATION.md~~ (superseded)
-- ~~docs/ARCHITECTURAL_WORKFLOW.md~~ (moved to ci/)
-
-### Duplicate Quality Docs → Use [docs/CODE_QUALITY_STANDARDS.md](../CODE_QUALITY_STANDARDS.md)
-- ~~docs/CODEBASE_QUALITY_STANDARDS.md~~ (duplicate)
-- ~~docs/CODE_QUALITY_BASELINE.md~~ (superseded)
-- ~~docs/CODE_QUALITY_SYSTEM.md~~ (merged)
-- ~~docs/QUALITY_CONTROL_SYSTEM.md~~ (merged)
-
-### Duplicate CI Docs → Use [docs/ci/README.md](../ci/README.md)
-- ~~docs/CI_FIXES_COMPLETED.md~~ (archived)
-- ~~docs/CI_003_COMPLETION.md~~ (archived)
-- ~~docs/CI_CD_FIXES_REPORT.md~~ (archived)
-- ~~docs/CI_SECURITY_FIXES.md~~ (archived)
-
-### Session/Status Reports → Moved to [docs/archive/](../archive/)
-- ~~docs/COMMIT_SUMMARY.md~~
-- ~~docs/FILES_CHANGED.md~~
-- ~~docs/FILES_COMMITTED.md~~
-- ~~docs/PUSH_SUMMARY.md~~
-- ~~docs/STATUS.md~~
-- ~~docs/SUMMARY.md~~
-- ~~docs/TASK_COMPLETION_SUMMARY.md~~
-
-### Project-Specific (750 Picacho) → Moved to [docs/projects/750_picacho/](../projects/750_picacho/)
-- ~~docs/750_PICACHO_RESOLUTION.md~~
-- ~~docs/ENHANCEMENT_PLAN_750Picacho_Kitchen.md~~
+- [architecture/](../architecture/)
+- [ci/](../ci/)
+- [cli/](../cli/)
+- [guides/](../guides/)
+- [historical/](../historical/)
+- [performance/](../performance/)
+- [reference/](../reference/)
 
 ---
 

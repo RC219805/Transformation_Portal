@@ -197,6 +197,22 @@ def test_main_all_mode_allows_known_legacy_violation(monkeypatch, tmp_path) -> N
     assert check_docs_structure.main() == 0
 
 
+def test_main_all_mode_with_missing_allowlist_treats_baseline_as_empty(monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr(
+        check_docs_structure,
+        "_all_docs_files",
+        lambda: ["docs/README.md", "docs/ILLEGAL.md"],
+    )
+    missing_allowlist = tmp_path / "missing_docs_legacy.txt"
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["check_docs_structure.py", "--all", "--legacy-allowlist", str(missing_allowlist)],
+    )
+
+    assert check_docs_structure.main() == 1
+
+
 def test_main_changed_only_still_blocks_touched_legacy_file(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(
         check_docs_structure,

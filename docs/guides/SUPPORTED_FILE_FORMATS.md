@@ -459,9 +459,9 @@ python material_response.py --input photo.jpg --output enhanced.tiff
 
 - [README.md](README.md) - Main documentation
 - [DEPTH_PIPELINE_README.md](DEPTH_PIPELINE_README.md) - Depth processing specifics (overview)
-- [docs/depth_pipeline/DEPTH_PIPELINE_README.md](docs/depth_pipeline/DEPTH_PIPELINE_README.md) - Depth pipeline configuration and advanced documentation
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) - System architecture
-- [tests/TEST_STATUS.md](tests/TEST_STATUS.md) - Test coverage
+- [docs/depth_pipeline/DEPTH_PIPELINE_README.md](../depth_pipeline/DEPTH_PIPELINE_README.md) - Depth pipeline configuration and advanced documentation
+- [docs/architecture/ARCHITECTURE.md](../architecture/ARCHITECTURE.md) - System architecture
+- [tests/TEST_STATUS.md](../../tests/TEST_STATUS.md) - Test coverage
 
 ---
 

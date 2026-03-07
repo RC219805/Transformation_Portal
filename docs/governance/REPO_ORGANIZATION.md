@@ -175,7 +175,7 @@ This guarantees a consistent ordering of operations and a single point of contro
 
 The pre-commit hook (`scripts/setup/pre-commit-check.sh`) prevents commits with misplaced files.
 
-Repo-wide audits use the same checker in `--all` mode, with `scripts/governance/root_structure_legacy_allowlist.txt` carrying the temporary baseline of grandfathered root files until the cleanup PR removes them.
+Repo-wide audits use the same checker in `--all` mode with no grandfathered root-file baseline.
 
 ### How It Works
 

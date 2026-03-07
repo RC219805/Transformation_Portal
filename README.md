@@ -313,7 +313,7 @@ paths = PBRProcessor.from_cached_depth(
 - **Memory-only mode**: No file I/O overhead
 - **Iterative tuning**: 2x faster when testing multiple presets
 
-See [PBR Processor Quick Start](docs/PBR_PROCESSOR_QUICKSTART.md) for detailed guide.
+See [PBR Processor Quick Start](docs/guides/PBR_PROCESSOR_QUICKSTART.md) for detailed guide.
 
 ---
 
@@ -539,7 +539,7 @@ Once ML dependencies (torch/transformers, ~5GB) and model caching are deployed:
 - Phase 2 adds real measurements and enforcement once infrastructure is ready
 - Prevents false failures during scaffold validation phase
 
-See [APEX Real Pipeline Integration Plan](docs/APEX_REAL_PIPELINE_INTEGRATION.md) and [ADR-024](docs/decisions/ADR-024-performance-regression-authority-canonicalization.md) for details.
+See [APEX Real Pipeline Integration Plan](docs/guides/APEX_REAL_PIPELINE_INTEGRATION.md) and [ADR-024](docs/decisions/ADR-024-performance-regression-authority-canonicalization.md) for details.
 
 ### Legacy Performance Ledger (Ad-hoc Analysis)
 
@@ -582,17 +582,17 @@ The Documentation Map is your single source of truth for finding guides, referen
 ### Essential Docs
 - **[DOCUMENTATION_MAP.md](docs/governance/DOCUMENTATION_MAP.md)** - Complete documentation index
 - **[API Documentation](docs/api/)** - Full API reference (Sphinx)
-- **[SETUP_GUIDE.md](docs/SETUP_GUIDE.md)** - Detailed installation
-- **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** - System architecture
+- **[SETUP_GUIDE.md](docs/guides/SETUP_GUIDE.md)** - Detailed installation
+- **[ARCHITECTURE.md](docs/architecture/ARCHITECTURE.md)** - System architecture
 - **[CONTRIBUTING.md](CONTRIBUTING.md)** - How to contribute
 
 ### Quick Links
 - **API Reference:** [docs/api/](docs/api/)
 - **Pipelines:** [docs/pipeline/](docs/pipeline/)
 - **CI/CD:** [docs/ci/](docs/ci/)
-- **Troubleshooting:** [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)
-- **Lux Depth V3 CLI Guide:** [docs/LUX_DEPTH_V3_CLI_GUIDE.md](docs/LUX_DEPTH_V3_CLI_GUIDE.md)
-- **Lux Depth V3 Troubleshooting:** [docs/LUX_DEPTH_V3_TROUBLESHOOTING.md](docs/LUX_DEPTH_V3_TROUBLESHOOTING.md)
+- **Troubleshooting:** [docs/TROUBLESHOOTING.md](docs/guides/TROUBLESHOOTING.md)
+- **Lux Depth V3 CLI Guide:** [docs/LUX_DEPTH_V3_CLI_GUIDE.md](docs/cli/LUX_DEPTH_V3_CLI_GUIDE.md)
+- **Lux Depth V3 Troubleshooting:** [docs/LUX_DEPTH_V3_TROUBLESHOOTING.md](docs/guides/LUX_DEPTH_V3_TROUBLESHOOTING.md)
 
 ---
 

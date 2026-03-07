@@ -33,5 +33,5 @@ These files will be removed in v0.2.0 (estimated Q1 2026). If you depend on any 
 ## Need Help?
 
 If you're unsure which version to use or need help migrating, see:
-- [Migration Guide](../../docs/REFACTORING_2025.md)
+- [Migration Guide](../../docs/guides/REFACTORING_2025.md)
 - [Tools README](../README.md)

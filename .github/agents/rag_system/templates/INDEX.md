@@ -436,8 +436,8 @@ All code modification templates use this JSON schema:
 ### Repository Documentation
 - [Main README](../../../../README.md)
 - [Depth Pipeline Guide](../../../../docs/depth_pipeline/DEPTH_PIPELINE_README.md)
-- [Architecture](../../../../docs/ARCHITECTURE.md)
-- [Performance Guide](../../../../docs/PERFORMANCE_OPTIMIZATION.md)
+- [Architecture](../../../../docs/architecture/ARCHITECTURE.md)
+- [Performance Guide](../../../../docs/performance/PERFORMANCE_OPTIMIZATION.md)
 
 ---
 

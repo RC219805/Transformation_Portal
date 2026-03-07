@@ -92,5 +92,5 @@ Approved top-level directories:
 
 - CI enforces structural topology with `scripts/governance/check_docs_structure.py`.
 - CI runs a strict changed-doc validation plus a repo-wide docs topology scan.
-- Until the cleanup PR removes the remaining legacy debt, repo-wide CI uses `scripts/governance/docs_structure_legacy_allowlist.txt` as an explicit baseline snapshot instead of silently ignoring existing root-level `docs/` files.
-- Changed-doc validation still fails immediately if a legacy root-level `docs/*` file is touched without being relocated.
+- Repo-wide docs validation runs with no grandfathered exceptions.
+- Changed-doc validation fails immediately for any root-level `docs/*` violation.

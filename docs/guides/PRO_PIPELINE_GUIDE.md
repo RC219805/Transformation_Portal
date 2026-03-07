@@ -468,8 +468,8 @@ A: Not directly. Extract frames, process with batch mode, then reassemble. Or us
 
 **Documentation:**
 - Full Pipeline Documentation: `docs/PIPELINE_OPERATIONS_GUIDE.md`
-- Architecture Guide: `docs/ARCHITECTURE.md`
-- Performance Tips: `docs/PERFORMANCE_OPTIMIZATION.md`
+- Architecture Guide: `docs/architecture/ARCHITECTURE.md`
+- Performance Tips: `docs/performance/PERFORMANCE_OPTIMIZATION.md`
 
 **Getting Help:**
 - GitHub Issues: https://github.com/RC219805/Transformation_Portal/issues

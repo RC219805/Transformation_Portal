@@ -81,8 +81,8 @@ tools/deprecated/             # Archived versions (NEW)
 
 **Created Comprehensive Guides:**
 - `docs/REFACTORING_2025.md` - Complete refactoring details
-- `docs/ARCHITECTURE.md` - Design principles and organization
-- `docs/PERFORMANCE_OPTIMIZATION.md` - Performance best practices
+- `docs/architecture/ARCHITECTURE.md` - Design principles and organization
+- `docs/performance/PERFORMANCE_OPTIMIZATION.md` - Performance best practices
 - `docs/depth_pipeline/` - Depth processing documentation
 - `docs/workflow/` - Workflow guides
 - `docs/processing/` - Processing logs
@@ -205,7 +205,7 @@ tools that don't properly handle symlinks.
 ### For Developers
 
 **Immediate:**
-1. Familiarize with new structure (`docs/ARCHITECTURE.md`)
+1. Familiarize with new structure (`docs/architecture/ARCHITECTURE.md`)
 2. Follow new organization for new code
 3. Use lazy imports where appropriate
 
@@ -299,7 +299,7 @@ tools that don't properly handle symlinks.
 
 ### Questions?
 - See [docs/REFACTORING_2025.md](REFACTORING_2025.md) for detailed migration guide
-- See [docs/ARCHITECTURE.md](ARCHITECTURE.md) for design principles
+- See [docs/architecture/ARCHITECTURE.md](ARCHITECTURE.md) for design principles
 - Open GitHub issue for specific questions
 
 ### Found an Issue?
@@ -308,7 +308,7 @@ tools that don't properly handle symlinks.
 - Create new issue with details
 
 ### Want to Contribute?
-- See [docs/ARCHITECTURE.md#contributing](ARCHITECTURE.md#contributing)
+- See [docs/architecture/ARCHITECTURE.md#contributing](ARCHITECTURE.md#contributing)
 - Follow new structure for contributions
 - Update tests and documentation
 

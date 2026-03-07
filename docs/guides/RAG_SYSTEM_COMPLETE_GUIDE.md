@@ -384,7 +384,7 @@ python cli.py search "known term" --top-k 10
 
 ### Documentation
 - [RAG System README](.github/agents/rag_system/README.md)
-- [Architecture Overview](docs/ARCHITECTURE.md)
+- [Architecture Overview](../architecture/ARCHITECTURE.md)
 - [API Reference](.github/agents/rag_system/API.md)
 
 ### References

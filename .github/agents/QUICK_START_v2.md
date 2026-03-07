@@ -361,7 +361,7 @@ Track your productivity improvements:
 ## 📚 Documentation
 
 - **Full Enhancement Guide**: [AGENT_ENHANCEMENTS_v2.md](AGENT_ENHANCEMENTS_v2.md)
-- **Custom Agent Guide**: [../../docs/CUSTOM_AGENT_GUIDE.md](../../docs/CUSTOM_AGENT_GUIDE.md)
+- **Custom Agent Guide**: [../../docs/CUSTOM_AGENT_GUIDE.md](../../docs/guides/CUSTOM_AGENT_GUIDE.md)
 - **RAG System Docs**: [rag_system/README.md](rag_system/README.md)
 - **Advanced Features**: [rag_system/ADVANCED_FEATURES_INTEGRATION.md](ADVANCED_FEATURES_INTEGRATION.md)
 
@@ -385,4 +385,4 @@ The Transformation Portal Specialist is now your intelligent development partner
 **Version**: 2.0
 **Status**: ✅ Production Ready
 **Compatibility**: All Transformation Portal versions
-**Support**: See [Custom Agent Guide](../../docs/CUSTOM_AGENT_GUIDE.md)
+**Support**: See [Custom Agent Guide](../../docs/guides/CUSTOM_AGENT_GUIDE.md)

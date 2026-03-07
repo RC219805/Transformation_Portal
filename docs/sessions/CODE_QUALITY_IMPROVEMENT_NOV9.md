@@ -41,7 +41,7 @@ __all__ = ["DepthAnythingV2Model", ...]
    - Runs before every commit
    - Checks: markdown limit, flake8, whitespace, imports
 
-2. **`docs/CODE_QUALITY_STANDARDS.md`**
+2. **`docs/guides/CODE_QUALITY_STANDARDS.md`**
    - Comprehensive quality documentation
    - All Pylint warnings cataloged
    - Remediation plan with phases

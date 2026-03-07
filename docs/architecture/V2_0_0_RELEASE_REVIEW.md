@@ -1149,7 +1149,7 @@ Target:    >5 images/sec ✅ PASS
 |------|------|--------|
 | `README.md` | 45 KB | Updated ✅ |
 | `examples/README.md` | 25 KB | Updated ✅ |
-| `docs/PBR_PROCESSOR_QUICKSTART.md` | 48 KB | New ✅ |
+| `docs/guides/PBR_PROCESSOR_QUICKSTART.md` | 48 KB | New ✅ |
 | `docs/PBR_ENHANCE_CONFIG_GUIDE.md` | 42 KB | Updated ✅ |
 | `docs/PBR_PRESETS_QUICK_REFERENCE.md` | 18 KB | New ✅ |
 | `PBR_PRODUCTION_VALIDATION_REPORT.md` | 38 KB | New ✅ |

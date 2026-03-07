@@ -59,7 +59,7 @@ From `PBR_REVIEW_AND_OPTIMIZATION_SUMMARY.md`, the following next actions were r
    - Performance comparison table
    - Batch processing examples
 
-4. **docs/PBR_PROCESSOR_QUICKSTART.md** (NEW, 480 lines)
+4. **docs/guides/PBR_PROCESSOR_QUICKSTART.md** (NEW, 480 lines)
    - 5-minute tutorial
    - 4 common use cases
    - All 8 presets documented
@@ -197,7 +197,7 @@ From `PBR_REVIEW_AND_OPTIMIZATION_SUMMARY.md`, the following next actions were r
 ### New Files (4)
 
 1. `tests/test_pbr_processor.py` - 710 lines (Integration tests)
-2. `docs/PBR_PROCESSOR_QUICKSTART.md` - 480 lines (Quick start guide)
+2. `docs/guides/PBR_PROCESSOR_QUICKSTART.md` - 480 lines (Quick start guide)
 3. `PBR_PRODUCTION_VALIDATION_REPORT.md` - 480 lines (Validation report)
 4. `PBR_IMPLEMENTATION_COMPLETE.md` - 310 lines (Implementation summary)
 

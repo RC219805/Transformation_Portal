@@ -1228,9 +1228,9 @@ processor.batch_process("input/", "output/", preset="signature")
 ## Additional Resources
 
 - **Main README:** [README.md](../README.md) - Project overview and features
-- **Depth Pipeline:** [DEPTH_PIPELINE_README.md](../DEPTH_PIPELINE_README.md) - Technical details
-- **Architecture:** [docs/ARCHITECTURE.md](ARCHITECTURE.md) - System design
-- **Performance:** [docs/PERFORMANCE_OPTIMIZATION.md](PERFORMANCE_OPTIMIZATION.md) - Optimization guide
+- **Depth Pipeline:** [DEPTH_PIPELINE_README.md](../depth_pipeline/DEPTH_PIPELINE_README.md) - Technical details
+- **Architecture:** [docs/architecture/ARCHITECTURE.md](../architecture/ARCHITECTURE.md) - System design
+- **Performance:** [docs/performance/PERFORMANCE_OPTIMIZATION.md](../performance/PERFORMANCE_OPTIMIZATION.md) - Optimization guide
 - **Examples:** [examples/](../examples/) - Code examples
 - **Tests:** [tests/](../tests/) - Test suite for reference
 

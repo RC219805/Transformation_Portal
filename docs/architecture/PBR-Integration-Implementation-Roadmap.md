@@ -216,7 +216,7 @@
 - [ ] Update documentation
   - [ ] `docs/migration/DEPTH_MODULE_MIGRATION.md`
   - [ ] `README.md` with deprecation notices
-  - [ ] `docs/ARCHITECTURE.md` with new structure
+  - [ ] `docs/architecture/ARCHITECTURE.md` with new structure
   - [ ] `docs/depth_pipeline/DEPTH_PIPELINE_README.md` rewrite
 - [ ] Create migration guide
   - [ ] Before/after code examples

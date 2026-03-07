@@ -29,8 +29,8 @@ The repository's main reader-facing documentation is **largely accurate and well
 6. 📋 **PR_SUMMARY_LUX_DEPTH_V3.md** - PR summary doc
 
 ### Architecture & Technical Documentation
-7. ✅ **docs/ARCHITECTURE.md** (483 lines) - System architecture
-8. ✅ **docs/PERFORMANCE_OPTIMIZATION.md** (319 lines) - Performance guide
+7. ✅ **docs/architecture/ARCHITECTURE.md** (483 lines) - System architecture
+8. ✅ **docs/performance/PERFORMANCE_OPTIMIZATION.md** (319 lines) - Performance guide
 9. ✅ **docs/BEST_PRACTICES.md** - Project-specific best practices
 10. ✅ **docs/depth_pipeline/DEPTH_PIPELINE_README.md** - Depth pipeline guide
 11. ✅ **docs/version_history/changelog.md** - Version history
@@ -248,7 +248,7 @@ All workflows follow least-privilege principle:
 - Token scope limited to specific jobs where needed
 ```
 
-**Files to Create/Update**: `docs/CI_CD_WORKFLOWS.md` or `docs/ARCHITECTURE.md`
+**Files to Create/Update**: `docs/CI_CD_WORKFLOWS.md` or `docs/architecture/ARCHITECTURE.md`
 
 ---
 

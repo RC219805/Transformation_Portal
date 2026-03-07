@@ -1482,7 +1482,7 @@ if __name__ == "__main__":
 ## Documentation Updates Required
 
 1. **README.md:** Update quickstart to use `depth_canonical`
-2. **docs/ARCHITECTURE.md:** Document new module structure
+2. **docs/architecture/ARCHITECTURE.md:** Document new module structure
 3. **docs/depth_pipeline/DEPTH_PIPELINE_README.md:** Rewrite for unified API
 4. **docs/migration/DEPTH_MODULE_MIGRATION.md:** Step-by-step migration guide
 5. **docs/API_REFERENCE.md:** Full API documentation for `depth_canonical`

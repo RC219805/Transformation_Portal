@@ -222,4 +222,4 @@ depth = np.nan_to_num(depth, nan=0.0, posinf=1.0, neginf=0.0)
 
 - [PBR Integration Architecture](../architecture/ADR-001-PBR-Integration-Architecture.md)
 - [PBR Implementation Review](../architecture/PBR_IMPLEMENTATION_REVIEW_2026-02-01.md)
-- [PBR Configuration Guide](../PBR_ENHANCE_CONFIG_GUIDE.md)
+- [PBR Configuration Guide](../guides/PBR_ENHANCE_CONFIG_GUIDE.md)

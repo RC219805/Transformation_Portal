@@ -471,5 +471,5 @@ def old_function():
 ## Questions?
 
 - See [CONTRIBUTING.md](../../CONTRIBUTING.md) for contribution guidelines
-- See [TROUBLESHOOTING.md](../TROUBLESHOOTING.md) for common issues
+- See [TROUBLESHOOTING.md](../guides/TROUBLESHOOTING.md) for common issues
 - Open an issue on GitHub for specific questions
