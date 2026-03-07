@@ -117,12 +117,13 @@ Only these files should remain in the repository root:
 
 - **Core documentation**: `README.md`, `LICENSE`, `CONTRIBUTING.md`, `SECURITY.md`, `CHANGELOG.md`
 - **Build configuration**: `Makefile`, `pyproject.toml`, `setup.py`
-- **Dependency management**: `requirements*.txt`, `Pipfile`, `poetry.lock`
+- **Dependency management**: `requirements*.txt`, `requirements-lint.txt`, `Pipfile`, `poetry.lock`
 - **Testing configuration**: `pytest.ini`, `tox.ini`, `.coveragerc`
 - **Linting configuration**: `.pylintrc`, `.flake8`, `mypy.ini`
 - **Docker**: `Dockerfile`, `docker-compose.yml`
-- **Git**: `.gitignore`, `.gitattributes`
+- **Git**: `.gitignore`, `.gitattributes`, `.git-blame-ignore-revs`, `.pre-commit-config.yaml`
 - **Governance metadata**: `.architect_directive_status.yml`, `AGENTS.md`
+- **Runtime entrypoints**: `app.py`, `portal.html`
 - **Organization system**: `.auto-organize.sh` (policy doc now lives under `docs/governance/`)
 
 ### Root Directory Limits
@@ -137,7 +138,7 @@ To keep `.auto-organize.sh` focused and maintainable, the organization system is
   Ensures that only approved files live in the repository root. Moves stray Markdown, scripts, or data into their proper subdirectories and flags anything that doesn’t match known patterns.
 
 - **`organize_docs.sh`**
-  Organizes documentation into the appropriate `docs/` subfolders (guides, architecture, API, deployment, version history). Ensures the root only contains the main `README.md` and the small set of top-level docs.
+  Scans current root-level documentation and `docs/` topology violations, classifies each file into an approved destination, and supports both report-only (`--dry-run`) and mutating (`--apply`) modes.
 
 - **`organize_scripts.sh`**
   Places scripts under `scripts/setup/`, `scripts/automation/`, or `scripts/utilities/` depending on their purpose (installation, automation, utilities). Helps keep `scripts/` discoverable and clean.
@@ -173,6 +174,8 @@ This guarantees a consistent ordering of operations and a single point of contro
 ## Pre-Commit Hook
 
 The pre-commit hook (`scripts/setup/pre-commit-check.sh`) prevents commits with misplaced files.
+
+Repo-wide audits use the same checker in `--all` mode, with `scripts/governance/root_structure_legacy_allowlist.txt` carrying the temporary baseline of grandfathered root files until the cleanup PR removes them.
 
 ### How It Works
 

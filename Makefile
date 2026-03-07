@@ -130,10 +130,8 @@ clean:
 lint:
 	@echo "Installing package for linting..."
 	@$(PY) -m pip install -q -e . || echo "Warning: Package installation failed"
-	@echo "Running flake8 critical checks..."
-	@$(PY) -m flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics --exclude=.venv,__pycache__,.git,.tox,.mypy_cache,.pytest_cache,build,dist,*.egg-info,deprecated,scripts,examples || true
-	@echo "Running pylint (non-blocking)..."
-	@$(PY) -m pylint $(shell git ls-files '*.py' | grep -v -e '/deprecated/' -e 'src/transformation_portal/' -e 'src/luxury_tiff_batch_processor/' -e 'scripts/' -e 'examples/' || echo '') || true
+	@echo "Running advisory lint via shared policy..."
+	@PYTHON_BIN="$(PY)" ./scripts/lint_runner.sh advisory
 
 ci: lint check-json-serialization check-piptools-cache test-fast test-orchestrator-contract
 	@echo "✅ Local CI checks completed successfully."
@@ -151,25 +149,18 @@ ci-quick:
 # Pre-commit checks
 pre-commit:
 	@echo "Running pre-commit checks..."
-	@./scripts/pre_commit_hook.sh
+	@pre-commit run --all-files
 
 # Install git hooks
 install-hooks:
 	@echo "Installing git pre-commit hook..."
-	@cp scripts/pre_commit_hook.sh .git/hooks/pre-commit
-	@chmod +x .git/hooks/pre-commit
-	@echo "✓ Pre-commit hook installed at .git/hooks/pre-commit"
+	@pre-commit install
+	@echo "✓ Pre-commit hook installed via pre-commit"
 
 # Quality check (all validations)
 quality-check: lint validate-ci
-	@echo "Running documentation structure check..."
-	@MD_COUNT=$$(find . -maxdepth 1 -name "*.md" -type f | wc -l | tr -d ' '); \
-	if [ $$MD_COUNT -gt 10 ]; then \
-		echo "⚠ Too many markdown files in root: $$MD_COUNT (max: 10)"; \
-		echo "💡 Run 'make organize-docs' to fix"; \
-	else \
-		echo "✓ Markdown file count OK ($$MD_COUNT/10)"; \
-	fi
+	@echo "Running root file placement check..."
+	@./scripts/setup/pre-commit-check.sh --all
 	@echo "✅ Quality checks completed."
 
 # Auto-fix quality issues
@@ -198,7 +189,7 @@ check-piptools-cache:
 # Organize documentation
 organize-docs:
 	@echo "Organizing documentation files..."
-	@./scripts/organize_docs.sh
+	@./scripts/organize_docs.sh --apply
 
 # Organize documentation (dry-run)
 check-docs:

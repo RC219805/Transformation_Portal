@@ -73,16 +73,26 @@ FAILED=0
 # ============================================================================
 # 1. ENVIRONMENT SETUP
 # ============================================================================
-echo -e "\n${BLUE}[1/7] Environment Setup${NC}"
+echo -e "\n${BLUE}[1/6] Environment Setup${NC}"
 echo -e "${YELLOW}→ Checking required tools...${NC}"
 
 # Check for required commands
-for cmd in git flake8 pylint pytest; do
+for cmd in git; do
     if command -v $cmd >/dev/null 2>&1; then
         echo -e "${GREEN}  ✓ $cmd${NC}"
     else
         echo -e "${RED}  ✗ $cmd not found${NC}"
         echo -e "${YELLOW}  💡 Install with: pip install $cmd${NC}"
+        FAILED=1
+    fi
+done
+
+for module in flake8 pylint pytest; do
+    if "$PYTHON" -m "$module" --version >/dev/null 2>&1; then
+        echo -e "${GREEN}  ✓ $module ($PYTHON)${NC}"
+    else
+        echo -e "${RED}  ✗ $module not available for $PYTHON${NC}"
+        echo -e "${YELLOW}  💡 Install with: $PYTHON -m pip install $module${NC}"
         FAILED=1
     fi
 done
@@ -93,23 +103,22 @@ if [ $FAILED -eq 1 ]; then
 fi
 
 # ============================================================================
-# 2. FLAKE8 LINTING
+# 2. LINTING
 # ============================================================================
-echo -e "\n${BLUE}[2/7] Flake8 (Critical Errors)${NC}"
-echo -e "${YELLOW}→ Running flake8 with CI configuration...${NC}"
-echo -e "${YELLOW}   Checks: E9 (syntax), F63 (invalid), F7 (syntax), F82 (undefined)${NC}"
+echo -e "\n${BLUE}[2/6] Shared Lint Checks${NC}"
+echo -e "${YELLOW}→ Running shared lint policy...${NC}"
 
-if flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics --exclude=.venv,__pycache__,.git,.tox,.mypy_cache,.pytest_cache,build,dist,*.egg-info; then
-    echo -e "${GREEN}✓ Flake8 passed (no critical errors)${NC}"
+if PYTHON_BIN="$PYTHON" ./scripts/lint_runner.sh local; then
+    echo -e "${GREEN}✓ Shared lint checks passed${NC}"
 else
-    echo -e "${RED}✗ Flake8 found critical errors${NC}"
+    echo -e "${RED}✗ Shared lint checks failed${NC}"
     FAILED=1
 fi
 
 # ============================================================================
 # 3. JSON SERIALIZATION GUARDRAILS
 # ============================================================================
-echo -e "\n${BLUE}[3/7] JSON Serialization Guardrails${NC}"
+echo -e "\n${BLUE}[3/6] JSON Serialization Guardrails${NC}"
 echo -e "${YELLOW}→ Checking for raw json.dump/json.dumps usage outside approved modules...${NC}"
 if "$PYTHON" scripts/validation/check_raw_json_usage.py; then
     echo -e "${GREEN}✓ JSON serialization guardrails passed${NC}"
@@ -127,61 +136,22 @@ else
 fi
 
 # ============================================================================
-# 4. PYLINT
+# 4. DOCUMENTATION STRUCTURE
 # ============================================================================
-echo -e "\n${BLUE}[4/7] Pylint (Changed Files)${NC}"
-echo -e "${YELLOW}→ Running pylint on changed files...${NC}"
+echo -e "\n${BLUE}[4/6] Documentation Structure${NC}"
+echo -e "${YELLOW}→ Checking root file placement policy...${NC}"
 
-# Get changed Python files (exclude deprecated, src/transformation_portal, scripts)
-CHANGED_FILES=$(git diff --name-only origin/main...HEAD 2>/dev/null | grep '\.py$' | grep -v -e '/deprecated/' -e 'src/transformation_portal/' -e 'scripts/' || echo "")
-
-if [ -z "$CHANGED_FILES" ]; then
-    echo -e "${YELLOW}⚠ No changed Python files (checking all files)${NC}"
-    CHANGED_FILES=$(git ls-files '*.py' | grep -v -e '/deprecated/' -e 'src/transformation_portal/' -e 'scripts/' | head -20)
-fi
-
-if [ -n "$CHANGED_FILES" ]; then
-    set +e
-    pylint $CHANGED_FILES
-    PYLINT_EXIT=$?
-    set -e
-
-    # Check pylint exit code (bitwise flags)
-    # 1=fatal, 2=error, 4=warning, 8=refactor, 16=convention, 32=usage
-    if [ $((PYLINT_EXIT & 1)) -ne 0 ] || [ $((PYLINT_EXIT & 2)) -ne 0 ] || [ $((PYLINT_EXIT & 32)) -ne 0 ]; then
-        echo -e "${RED}✗ Pylint found critical issues (exit code: $PYLINT_EXIT)${NC}"
-        FAILED=1
-    elif [ $PYLINT_EXIT -ne 0 ]; then
-        echo -e "${YELLOW}⚠ Pylint found warnings/suggestions (exit code: $PYLINT_EXIT)${NC}"
-        echo -e "${GREEN}✓ No critical errors (warnings acceptable)${NC}"
-    else
-        echo -e "${GREEN}✓ Pylint passed (no issues)${NC}"
-    fi
+if ./scripts/setup/pre-commit-check.sh --all; then
+    echo -e "${GREEN}✓ Root file placement policy passed${NC}"
 else
-    echo -e "${YELLOW}⚠ No Python files to check${NC}"
-fi
-
-# ============================================================================
-# 5. DOCUMENTATION STRUCTURE
-# ============================================================================
-echo -e "\n${BLUE}[5/7] Documentation Structure${NC}"
-echo -e "${YELLOW}→ Checking markdown file count in root...${NC}"
-
-MD_COUNT=$(find . -maxdepth 1 -name "*.md" -type f | wc -l | tr -d ' ')
-MAX_MD=11
-
-if [ "$MD_COUNT" -gt "$MAX_MD" ]; then
-    echo -e "${RED}✗ Too many markdown files in root: $MD_COUNT (max: $MAX_MD)${NC}"
-    echo -e "${YELLOW}💡 Run: ./scripts/organize_docs.sh${NC}"
+    echo -e "${RED}✗ Root file placement policy failed${NC}"
     FAILED=1
-else
-    echo -e "${GREEN}✓ Markdown file count OK ($MD_COUNT/$MAX_MD)${NC}"
 fi
 
 # ============================================================================
-# 6. PYTEST (TESTS)
+# 5. PYTEST (TESTS)
 # ============================================================================
-echo -e "\n${BLUE}[6/7] Test Suite${NC}"
+echo -e "\n${BLUE}[5/6] Test Suite${NC}"
 
 if [ $QUICK_MODE -eq 1 ]; then
     echo -e "${YELLOW}→ Running fast tests only (--quick mode)...${NC}"
@@ -216,9 +186,9 @@ else
 fi
 
 # ============================================================================
-# 7. ADDITIONAL CHECKS
+# 6. ADDITIONAL CHECKS
 # ============================================================================
-echo -e "\n${BLUE}[7/7] Additional Quality Checks${NC}"
+echo -e "\n${BLUE}[6/6] Additional Quality Checks${NC}"
 
 # Check for debugging statements
 echo -e "${YELLOW}→ Checking for debugging statements...${NC}"
