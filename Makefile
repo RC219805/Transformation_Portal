@@ -36,8 +36,8 @@ help:
 	@echo "  clean              Remove Python cache files and build artifacts"
 	@echo ""
 	@echo "Quality & CI:"
-	@echo "  lint               Run linting (flake8 + pylint)"
-	@echo "  ci                 Run local CI checks (lint + test-fast)"
+	@echo "  lint               Run advisory lint checks (requires 'make install-core')"
+	@echo "  ci                 Run local CI checks (lint + hygiene + fast tests)"
 	@echo "  ci-full            Run comprehensive CI simulation (all checks)"
 	@echo "  pre-commit         Run pre-commit checks manually"
 	@echo "  install-hooks      Install git pre-commit hook"
@@ -128,8 +128,6 @@ clean:
 # --- Additional developer + CI helpers ---
 
 lint:
-	@echo "Installing package for linting..."
-	@$(PY) -m pip install -q -e . || echo "Warning: Package installation failed"
 	@echo "Running advisory lint via shared policy..."
 	@PYTHON_BIN="$(PY)" ./scripts/lint_runner.sh advisory
 

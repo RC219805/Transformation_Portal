@@ -44,7 +44,8 @@ log() {
 require_module() {
     local module="$1"
     if ! "$PYTHON_BIN" -m "$module" --version >/dev/null 2>&1; then
-        log "missing Python module '$module' for interpreter '$PYTHON_BIN'"
+        log "'$module' not available in interpreter '$PYTHON_BIN'"
+        log "prepare the environment with: make install-core"
         exit 1
     fi
 }
