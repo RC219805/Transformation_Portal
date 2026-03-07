@@ -129,6 +129,7 @@ def test_classifier_uses_tokens_not_substrings_and_preserves_positive_routes(tmp
     _write(repo_root / "CORE_DEPENDENCIES_SUMMARY.txt")
     _write(repo_root / "EFFICIENTSAM_REVIEW_SUMMARY.txt")
     _write(repo_root / "docs" / "README.md")
+    _write(repo_root / "docs" / "ARCHITECT_DECISION.md")
     _write(repo_root / "docs" / "CI_WORKFLOW_GUIDE.md")
     _write(repo_root / "docs" / "CLI_REFERENCE.md")
     _write(repo_root / "docs" / "QUALITY_CONTRACT.md")
@@ -139,6 +140,7 @@ def test_classifier_uses_tokens_not_substrings_and_preserves_positive_routes(tmp
         "CORE_DEPENDENCIES_SUMMARY.txt",
         "EFFICIENTSAM_REVIEW_SUMMARY.txt",
         "docs/README.md",
+        "docs/ARCHITECT_DECISION.md",
         "docs/CI_WORKFLOW_GUIDE.md",
         "docs/CLI_REFERENCE.md",
         "docs/QUALITY_CONTRACT.md",
@@ -150,6 +152,7 @@ def test_classifier_uses_tokens_not_substrings_and_preserves_positive_routes(tmp
     mapping = _proposal_map(result.stdout)
 
     assert result.returncode == 0, result.stdout + result.stderr
+    assert mapping["docs/ARCHITECT_DECISION.md"] == "docs/architecture/ARCHITECT_DECISION.md"
     assert mapping["docs/CI_WORKFLOW_GUIDE.md"] == "docs/ci/CI_WORKFLOW_GUIDE.md"
     assert mapping["docs/CLI_REFERENCE.md"] == "docs/cli/CLI_REFERENCE.md"
     assert mapping["docs/QUALITY_CONTRACT.md"] == "docs/contracts/QUALITY_CONTRACT.md"

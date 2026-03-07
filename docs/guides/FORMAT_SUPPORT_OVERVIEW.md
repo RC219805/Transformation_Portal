@@ -13,7 +13,7 @@ This directory contains comprehensive documentation for file format support acro
 | Document | Description | Best For |
 |----------|-------------|----------|
 | [SUPPORTED_FILE_FORMATS.md](SUPPORTED_FILE_FORMATS.md) | Complete format specification (350+ lines) | Detailed reference, technical specs |
-| [FILE_FORMAT_QUICK_REFERENCE.md](../FILE_FORMAT_QUICK_REFERENCE.md) | One-page quick reference (150+ lines) | Daily use, printable cheat sheet |
+| [FILE_FORMAT_QUICK_REFERENCE.md](FILE_FORMAT_QUICK_REFERENCE.md) | One-page quick reference (150+ lines) | Daily use, printable cheat sheet |
 | [README.md](../README.md) | Main project documentation | Getting started, overview |
 
 ---
@@ -411,7 +411,7 @@ python examples/validate_file_formats.py --scan ./test_images/
 ### Internal Documentation
 
 - [SUPPORTED_FILE_FORMATS.md](SUPPORTED_FILE_FORMATS.md) - Complete format specification
-- [FILE_FORMAT_QUICK_REFERENCE.md](../FILE_FORMAT_QUICK_REFERENCE.md) - Printable quick reference
+- [FILE_FORMAT_QUICK_REFERENCE.md](FILE_FORMAT_QUICK_REFERENCE.md) - Printable quick reference
 - [README.md](../README.md) - Project overview
 - [DEPTH_PIPELINE_README.md](depth_pipeline/DEPTH_PIPELINE_README.md) - Depth pipeline specifics
 

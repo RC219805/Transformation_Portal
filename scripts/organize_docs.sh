@@ -159,7 +159,7 @@ classify_destination() {
 
     if starts_with_token "$tokens" "PR" || starts_with_token "$tokens" "PUSH" || starts_with_token "$tokens" "MERGE" || starts_with_token "$tokens" "REVIEW"; then
         dest="docs/pr_archive"
-    elif starts_with_token "$tokens" "ADR" || has_token "$tokens" "ARCHITECTURE" || has_token "$tokens" "ARCHITECTURAL" || has_token "$tokens" "DESIGN" || has_token "$tokens" "ROADMAP"; then
+    elif starts_with_token "$tokens" "ADR" || has_token "$tokens" "ARCHITECT" || has_token "$tokens" "ARCHITECTURE" || has_token "$tokens" "ARCHITECTURAL" || has_token "$tokens" "DESIGN" || has_token "$tokens" "ROADMAP"; then
         dest="docs/architecture"
     elif has_token "$tokens" "POLICY" || has_token "$tokens" "GOVERNANCE" || has_token "$tokens" "ORGANIZATION"; then
         dest="docs/governance"
