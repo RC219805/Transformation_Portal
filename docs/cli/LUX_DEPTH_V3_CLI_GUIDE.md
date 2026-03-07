@@ -453,4 +453,4 @@ pip install -e ".[ml]"
 - [Depth Pipeline README](../depth_pipeline/DEPTH_PIPELINE_README.md)
 - [Architecture Decision Record: Depth Backend Unification](../architecture/ADR-019-depth-backend-unification.md)
 - [Architecture Decision Record: Depth Pro Integration](../architecture/ADR-018-depth-pro-integration.md)
-- [PBR CLI Coverage Report](../PBR_CLI_COVERAGE_REPORT.md)
+- [PBR CLI Coverage Report](PBR_CLI_COVERAGE_REPORT.md)

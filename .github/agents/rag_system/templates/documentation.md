@@ -312,7 +312,7 @@ class {ClassName}:
 
 - [Depth Pipeline Guide](docs/depth_pipeline/DEPTH_PIPELINE_README.md)
 - [Material Response Guide](assets/luts/material_response/_Material_Response_Technical_Guide.md)
-- [Performance Optimization](docs/PERFORMANCE_OPTIMIZATION.md)
+- [Performance Optimization](docs/performance/PERFORMANCE_OPTIMIZATION.md)
 - [API Reference](docs/API_REFERENCE.md)
 
 ### Changelog

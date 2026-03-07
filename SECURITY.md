@@ -319,9 +319,9 @@ We support responsible disclosure and will:
 
 ## Additional Resources
 
-- [docs/BEST_PRACTICES.md](docs/BEST_PRACTICES.md) - General best practices for contributors
+- [docs/BEST_PRACTICES.md](docs/guides/BEST_PRACTICES.md) - General best practices for contributors
 - [docs/version_history/changelog.md](docs/version_history/changelog.md) - Version history and security updates
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) - System architecture and security considerations
+- [docs/architecture/ARCHITECTURE.md](docs/architecture/ARCHITECTURE.md) - System architecture and security considerations
 
 ---
 

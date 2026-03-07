@@ -405,9 +405,9 @@ ai_enhancement:
 ## References
 
 ### Technical Documentation
-- [Depth Pipeline README](../docs/depth_pipeline/DEPTH_PIPELINE_README.md)
-- [Architecture Documentation](../docs/ARCHITECTURE.md)
-- [Performance Optimization](../docs/PERFORMANCE_OPTIMIZATION.md)
+- [Depth Pipeline README](../depth_pipeline/DEPTH_PIPELINE_README.md)
+- [Architecture Documentation](../architecture/ARCHITECTURE.md)
+- [Performance Optimization](../performance/PERFORMANCE_OPTIMIZATION.md)
 
 ### External Resources
 - [Depth Anything V2 Paper](https://arxiv.org/abs/2406.09414)

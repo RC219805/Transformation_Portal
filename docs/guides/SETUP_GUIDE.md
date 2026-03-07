@@ -232,7 +232,7 @@ from transformation_portal.lux_depth_v3 import EnhanceConfig
 from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
 ```
 
-See [Lux Depth V3 CLI Guide](../LUX_DEPTH_V3_CLI_GUIDE.md) for detailed usage.
+See [Lux Depth V3 CLI Guide](../cli/LUX_DEPTH_V3_CLI_GUIDE.md) for detailed usage.
 
 ---
 

@@ -25,7 +25,7 @@
 ### Documentation
 - `CONTRIBUTING.md` - Complete developer guide with CI requirements
 - `docs/PRODUCTION_READINESS.md` - Honest status assessment
-- `docs/BRANCH_PROTECTION_SETUP.md` - GitHub configuration guide
+- `docs/ci/BRANCH_PROTECTION_SETUP.md` - GitHub configuration guide
 - `docs/RUFF_MIGRATION_GUIDE.md` - Linting consolidation plan
 - `IMPLEMENTATION_SUMMARY.md` - This implementation's full details
 
@@ -139,7 +139,7 @@ twine check dist/*
 
 ## Next Actions (Required)
 
-1. **Configure Branch Protection** (use docs/BRANCH_PROTECTION_SETUP.md):
+1. **Configure Branch Protection** (use docs/ci/BRANCH_PROTECTION_SETUP.md):
    - Require PR reviews (1+)
    - Require status checks (all 9 jobs)
    - Block force push

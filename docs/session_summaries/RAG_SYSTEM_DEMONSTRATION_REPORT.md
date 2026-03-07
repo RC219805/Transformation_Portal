@@ -317,7 +317,7 @@ The RAG system demonstration has been **completed successfully** with all 5 step
 1. Integrate RAG system into `.github/agents/transformation-portal-specialist.md`
 2. Add indexing to repository git hooks
 3. Create CI workflow to validate RAG system on PRs
-4. Document RAG usage patterns in `docs/ARCHITECTURE.md`
+4. Document RAG usage patterns in `docs/architecture/ARCHITECTURE.md`
 5. Train team on using templates and citation generation
 
 ### Demonstration Script

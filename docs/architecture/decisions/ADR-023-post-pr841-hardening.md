@@ -564,7 +564,7 @@ Per expert recommendation:
 - [ADR-019: Backend Unification (Proposed)](ADR-019-depth-backend-unification.md)
 - [ADR-024: Backend Enforcement Strategy](ADR-024-backend-enforcement-strategy.md)
 - [Agent Governance Policy](../agent_governance.md)
-- [Input Hygiene Documentation](../../input_hygiene.md)
+- [Input Hygiene Documentation](../../guides/input_hygiene.md)
 
 ### External
 

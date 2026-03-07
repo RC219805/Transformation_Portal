@@ -269,7 +269,7 @@ autopep8 --in-place --select=W291,W293 your_file.py
    - Check for regressions
 
 4. **Document Architecture**
-   - Create `docs/ARCHITECTURE.md`
+   - Create `docs/architecture/ARCHITECTURE.md`
    - Explain pipeline stages
    - Show data flow diagrams
 

@@ -358,8 +358,8 @@ def print_quick_start_guide(capabilities: Dict, images: Dict) -> None:
     print("\n" + colored("📖 Step 3: Explore Documentation", Colors.OKBLUE))
     print("   README.md - Feature overview and examples")
     print("   docs/depth_pipeline/DEPTH_PIPELINE_README.md - Depth pipeline documentation")
-    print("   docs/ARCHITECTURE.md - System architecture and pipeline overview")
-    print("   docs/PERFORMANCE_OPTIMIZATION.md - Performance tuning and best practices")
+    print("   docs/architecture/ARCHITECTURE.md - System architecture and pipeline overview")
+    print("   docs/performance/PERFORMANCE_OPTIMIZATION.md - Performance tuning and best practices")
 
 
 def print_recommendations(disk: Dict, capabilities: Dict) -> None:

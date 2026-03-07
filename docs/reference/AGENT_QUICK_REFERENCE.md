@@ -100,7 +100,7 @@ for identifying glass surfaces in architectural renders
 
 ## More Information
 
-- **Full Guide**: [docs/CUSTOM_AGENT_GUIDE.md](CUSTOM_AGENT_GUIDE.md)
+- **Full Guide**: [docs/guides/CUSTOM_AGENT_GUIDE.md](../guides/CUSTOM_AGENT_GUIDE.md)
 - **Agent README**: [.github/agents/README.md](../.github/agents/README.md)
 - **Implementation Summary**: [CUSTOM_AGENT_SUMMARY.md](../CUSTOM_AGENT_SUMMARY.md)
 

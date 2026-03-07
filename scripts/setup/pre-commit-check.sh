@@ -131,6 +131,9 @@ is_allowed_in_root() {
 is_legacy_root_file() {
     local file="$1"
     local legacy_file
+    if [[ ${#LEGACY_ROOT_FILES[@]} -eq 0 ]]; then
+        return 1
+    fi
     for legacy_file in "${LEGACY_ROOT_FILES[@]}"; do
         if [[ "$file" == "$legacy_file" ]]; then
             return 0

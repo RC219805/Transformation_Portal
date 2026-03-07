@@ -7,6 +7,8 @@ and contain expected sections.
 import re
 from pathlib import Path
 
+CUSTOM_AGENT_GUIDE = Path(__file__).parents[1] / "docs" / "guides" / "CUSTOM_AGENT_GUIDE.md"
+
 
 def test_agent_file_exists():
     """Verify the custom agent file exists."""
@@ -154,14 +156,12 @@ def test_agent_readme_references_specialist():
 
 def test_custom_agent_guide_exists():
     """Verify the custom agent guide exists in docs."""
-    guide_file = Path(__file__).parents[1] / "docs" / "CUSTOM_AGENT_GUIDE.md"
-    assert guide_file.exists(), f"Custom agent guide not found: {guide_file}"
+    assert CUSTOM_AGENT_GUIDE.exists(), f"Custom agent guide not found: {CUSTOM_AGENT_GUIDE}"
 
 
 def test_custom_agent_guide_has_usage_examples():
     """Verify the custom agent guide includes usage examples."""
-    guide_file = Path(__file__).parents[1] / "docs" / "CUSTOM_AGENT_GUIDE.md"
-    content = guide_file.read_text()
+    content = CUSTOM_AGENT_GUIDE.read_text()
 
     # Should have example prompts using @ notation
     assert "@transformation-portal-specialist" in content, "Guide should include example prompts using @ notation"

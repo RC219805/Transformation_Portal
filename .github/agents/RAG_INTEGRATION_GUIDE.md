@@ -334,5 +334,5 @@ See `.github/agents/transformation-portal-specialist.md` for the full agent conf
 
 For more details, see:
 - [RAG System README](.github/agents/rag_system/README.md)
-- [Architecture Documentation](docs/ARCHITECTURE.md)
+- [Architecture Documentation](docs/architecture/ARCHITECTURE.md)
 - [Example Usage Script](example_rag_usage.py)

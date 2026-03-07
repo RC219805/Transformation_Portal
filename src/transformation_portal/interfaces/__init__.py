@@ -28,7 +28,7 @@ Usage Example:
 
 See Also:
 - docs/architecture/adr/ADR-001-module-interface-contracts.md
-- docs/ARCHITECTURE.md
+- docs/architecture/ARCHITECTURE.md
 """
 
 from transformation_portal.interfaces.enhancer import AdaptiveEnhancer, EnhancementError, Enhancer

@@ -6,7 +6,7 @@ This PR fixes the CI workflow and branch protection mismatch blocking PR #799 me
 ## 📋 Documentation Files
 
 ### For Administrators (Start Here)
-- **[ADMIN_BRANCH_PROTECTION_UPDATE.md](../ADMIN_BRANCH_PROTECTION_UPDATE.md)** - Quick reference card with step-by-step instructions to update GitHub branch protection settings
+- **[ADMIN_BRANCH_PROTECTION_UPDATE.md](../ci/ADMIN_BRANCH_PROTECTION_UPDATE.md)** - Quick reference card with step-by-step instructions to update GitHub branch protection settings
 
 ### For Developers
 - **[PR_799_RESOLUTION.md](PR_799_RESOLUTION.md)** - Complete PR documentation with problem analysis, changes, and testing
@@ -31,7 +31,7 @@ This PR fixes the CI workflow and branch protection mismatch blocking PR #799 me
 
 ### Immediate (Required)
 1. ✅ Review and merge this PR
-2. ⚠️ **Admin**: Update branch protection settings per [ADMIN_BRANCH_PROTECTION_UPDATE.md](../ADMIN_BRANCH_PROTECTION_UPDATE.md)
+2. ⚠️ **Admin**: Update branch protection settings per [ADMIN_BRANCH_PROTECTION_UPDATE.md](../ci/ADMIN_BRANCH_PROTECTION_UPDATE.md)
 3. ✅ Verify PR #799 can now merge
 
 ### Future (Prevention)
@@ -65,4 +65,4 @@ This PR fixes the CI workflow and branch protection mismatch blocking PR #799 me
 
 ---
 
-**Quick Start**: If you're an admin, go directly to [ADMIN_BRANCH_PROTECTION_UPDATE.md](../ADMIN_BRANCH_PROTECTION_UPDATE.md)
+**Quick Start**: If you're an admin, go directly to [ADMIN_BRANCH_PROTECTION_UPDATE.md](../ci/ADMIN_BRANCH_PROTECTION_UPDATE.md)

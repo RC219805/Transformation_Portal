@@ -13,12 +13,12 @@ deprecation_date = (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d")
 
 # Duplicates to deprecate: (file, canonical_replacement)
 DUPLICATES = [
-    ("docs/CODEBASE_QUALITY_STANDARDS.md", "docs/CODE_QUALITY_STANDARDS.md"),
-    ("docs/CODE_QUALITY_BASELINE.md", "docs/CODE_QUALITY_STANDARDS.md"),
-    ("docs/CODE_QUALITY_SYSTEM.md", "docs/CODE_QUALITY_STANDARDS.md"),
-    ("docs/QUALITY_CONTROL_SYSTEM.md", "docs/CODE_QUALITY_STANDARDS.md"),
-    ("docs/ARCHITECTURAL_CONTEXT_INTEGRATION.md", "docs/ARCHITECTURE.md"),
-    ("docs/ARCHITECTURE_PHILOSOPHY.md", "docs/ARCHITECTURE.md"),
+    ("docs/CODEBASE_QUALITY_STANDARDS.md", "docs/guides/CODE_QUALITY_STANDARDS.md"),
+    ("docs/CODE_QUALITY_BASELINE.md", "docs/guides/CODE_QUALITY_STANDARDS.md"),
+    ("docs/CODE_QUALITY_SYSTEM.md", "docs/guides/CODE_QUALITY_STANDARDS.md"),
+    ("docs/QUALITY_CONTROL_SYSTEM.md", "docs/guides/CODE_QUALITY_STANDARDS.md"),
+    ("docs/ARCHITECTURAL_CONTEXT_INTEGRATION.md", "docs/architecture/ARCHITECTURE.md"),
+    ("docs/ARCHITECTURE_PHILOSOPHY.md", "docs/architecture/ARCHITECTURE.md"),
 ]
 
 DEPRECATION_TEMPLATE = """> ⚠️ **DEPRECATED**

@@ -401,8 +401,8 @@
 **Related Documentation:**
 - Main README: `README.md`
 - Depth Pipeline: `DEPTH_PIPELINE_README.md`
-- Architecture: `docs/ARCHITECTURE.md`
-- Performance: `docs/PERFORMANCE_OPTIMIZATION.md`
+- Architecture: `docs/architecture/ARCHITECTURE.md`
+- Performance: `docs/performance/PERFORMANCE_OPTIMIZATION.md`
 
 **Additional Help:**
 - GitHub Issues: Report problems

@@ -724,7 +724,7 @@ if suggestion.confidence < 0.8:
 
 **Documentation**:
 - Main README: `README.md`
-- Architecture Guide: `docs/ARCHITECTURE.md`
+- Architecture Guide: `docs/architecture/ARCHITECTURE.md`
 - SkyGAN Guide: `docs/SKYGAN_ATMOSPHERIC_RENDERING.md`
 - Workflow Guide: `docs/ARCHITECTURAL_WORKFLOW.md`
 

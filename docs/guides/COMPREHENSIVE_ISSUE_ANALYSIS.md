@@ -611,7 +611,7 @@ WORKFLOW_VISUAL_GUIDE.txt
 2. Manual audit of key docs:
    - `README.md`
    - `docs/depth_pipeline/DEPTH_PIPELINE_README.md`
-   - `docs/ARCHITECTURE.md`
+   - `docs/architecture/ARCHITECTURE.md`
 
 **Priority:** P2 - Documentation quality
 

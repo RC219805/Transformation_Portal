@@ -501,7 +501,7 @@ Add `--dry-run --synthetic` for fast validation (no ML deps).
 - Incident response: Respond to auto-created incident issues
 
 **Documentation:**
-- [APEX Contract](../APEX_CONTRACT.md)
+- [APEX Contract](../contracts/APEX_CONTRACT.md)
 - [Performance Budgets](../policy/performance_budgets.yaml)
 - [Enforcement Policy](../policy/enforcement_policy.yaml)
 - [Governance Rules](../policy/governance_rules.yaml)

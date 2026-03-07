@@ -142,7 +142,7 @@ sphinx-apidoc -o docs/api/reference src/transformation_portal
 📄 **Full Plan:** [TRANCHE_PHASE2_EXECUTION_PLAN.md](./TRANCHE_PHASE2_EXECUTION_PLAN.md) (23KB)
 📊 **Summary:** [TRANCHE_PHASE2_SUMMARY.md](./TRANCHE_PHASE2_SUMMARY.md) (4.5KB)
 📋 **Epic:** #819
-📖 **Reference:** [IMPROVEMENT_OPPORTUNITIES.md](../IMPROVEMENT_OPPORTUNITIES.md)
+📖 **Reference:** [IMPROVEMENT_OPPORTUNITIES.md](../guides/IMPROVEMENT_OPPORTUNITIES.md)
 
 ---
 

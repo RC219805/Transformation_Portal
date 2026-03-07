@@ -264,8 +264,8 @@ pip install transformers          # Depth Anything V2
 - `tests/test_unified_luxury_pipeline.py` - Test suite
 
 ### Technical References
-- `docs/ARCHITECTURE.md` - System architecture
-- `docs/PERFORMANCE_OPTIMIZATION.md` - Optimization guide
+- `docs/architecture/ARCHITECTURE.md` - System architecture
+- `docs/performance/PERFORMANCE_OPTIMIZATION.md` - Optimization guide
 - `docs/depth_pipeline/DEPTH_PIPELINE_README.md` - Depth processing
 
 ---

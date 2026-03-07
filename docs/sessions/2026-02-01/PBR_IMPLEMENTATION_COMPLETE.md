@@ -66,7 +66,7 @@
    - 3 batch processing examples
    - Custom post-processing example
 
-4. **docs/PBR_PROCESSOR_QUICKSTART.md** (NEW, 480 lines)
+4. **docs/guides/PBR_PROCESSOR_QUICKSTART.md** (NEW, 480 lines)
    - 5-minute tutorial
    - 4 common use cases with code
    - All 8 presets documented
@@ -99,7 +99,7 @@
 ### New Files Created (3)
 
 1. `tests/test_pbr_processor.py` - 710 lines
-2. `docs/PBR_PROCESSOR_QUICKSTART.md` - 480 lines
+2. `docs/guides/PBR_PROCESSOR_QUICKSTART.md` - 480 lines
 3. `PBR_PRODUCTION_VALIDATION_REPORT.md` - 480 lines
 
 **Total new content**: 1,670 lines
@@ -270,7 +270,7 @@ Per priority guidance, these optimizations are deferred but documented for futur
 1. **Merge to main**
    ```bash
    git add tests/test_pbr_processor.py
-   git add docs/PBR_PROCESSOR_QUICKSTART.md
+   git add docs/guides/PBR_PROCESSOR_QUICKSTART.md
    git add PBR_PRODUCTION_VALIDATION_REPORT.md
    git add README.md examples/README.md docs/PBR_ENHANCE_CONFIG_GUIDE.md
    git commit -m "feat: Add PBRProcessor integration tests and documentation"

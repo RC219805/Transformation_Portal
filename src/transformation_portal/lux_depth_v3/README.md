@@ -484,5 +484,5 @@ pylint src/transformation_portal/lux_depth_v3/
 
 - **Troubleshooting Guide:** [docs/LUX_DEPTH_V3_TROUBLESHOOTING.md](../../../../docs/LUX_DEPTH_V3_TROUBLESHOOTING.md)
 - **CLI Guide:** [docs/LUX_DEPTH_V3_CLI_GUIDE.md](../../../../docs/LUX_DEPTH_V3_CLI_GUIDE.md)
-- **Architecture:** [docs/ARCHITECTURE.md](../../../../docs/ARCHITECTURE.md)
+- **Architecture:** [docs/architecture/ARCHITECTURE.md](../../../../docs/architecture/ARCHITECTURE.md)
 - **Main README:** [README.md](../../../../README.md)

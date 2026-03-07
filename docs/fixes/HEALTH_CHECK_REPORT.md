@@ -147,8 +147,8 @@ pip install -r requirements-dev.txt
   - Table of Contents
 
 ### Architecture Documentation
-- ✅ `docs/ARCHITECTURE.md` (483 lines)
-- ✅ `docs/PERFORMANCE_OPTIMIZATION.md` (319 lines)
+- ✅ `docs/architecture/ARCHITECTURE.md` (483 lines)
+- ✅ `docs/performance/PERFORMANCE_OPTIMIZATION.md` (319 lines)
 
 ### Version History
 - ✅ `docs/Version_History/changelog.md` (20 lines)

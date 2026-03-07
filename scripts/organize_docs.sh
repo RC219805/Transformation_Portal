@@ -98,129 +98,165 @@ apply_action() {
     fi
 }
 
+is_supported_destination() {
+    local dest="$1"
+
+    case "$dest" in
+        docs/architecture|docs/ci|docs/cli|docs/compliance|docs/contracts|docs/deployment|docs/depth_model|docs/depth_pipeline|docs/governance|docs/guides|docs/historical|docs/performance|docs/pr_archive|docs/reference|docs/reports|docs/schemas|docs/status)
+            return 0
+            ;;
+    esac
+    return 1
+}
+
+normalize_tokens() {
+    local input="$1"
+    local normalized
+
+    normalized="$(printf '%s' "$input" | sed -E 's/[^A-Z0-9]+/ /g; s/^ +//; s/ +$//; s/ +/ /g')"
+    printf ' %s ' "$normalized"
+}
+
+has_token() {
+    local haystack="$1"
+    local needle="$2"
+
+    [[ "$haystack" == *" $needle "* ]]
+}
+
+has_phrase() {
+    local haystack="$1"
+    local phrase="$2"
+
+    [[ "$haystack" == *" $phrase "* ]]
+}
+
+starts_with_token() {
+    local haystack="$1"
+    local needle="$2"
+
+    [[ "$haystack" == " $needle "* ]]
+}
+
 classify_destination() {
     local path="$1"
-    local basename upper
+    local basename upper upper_stem tokens dest=""
 
     basename="$(basename "$path")"
     upper="$(printf '%s' "$basename" | tr '[:lower:]' '[:upper:]')"
 
-    case "$upper" in
-        README.MD)
-            return 1
-            ;;
-        .DS_STORE)
-            echo "__REMOVE__"
-            return 0
-            ;;
-        PR_*|PUSH_*|MERGE_*|REVIEW_* )
-            echo "docs/pr_archive"
-            return 0
-            ;;
-        ADR-*|*ARCHITECT*|*DESIGN*|*ROADMAP* )
-            echo "docs/architecture"
-            return 0
-            ;;
-        *POLICY*|*GOVERNANCE*|*ORGANIZATION* )
-            echo "docs/governance"
-            return 0
-            ;;
-        *CI*|*WORKFLOW*|*BRANCH_PROTECTION* )
-            echo "docs/ci"
-            return 0
-            ;;
-        *DEPLOY*|*PRODUCTION* )
-            echo "docs/deployment"
-            return 0
-            ;;
-        *CLI* )
-            echo "docs/cli"
-            return 0
-            ;;
-        *CONTRACT* )
-            echo "docs/contracts"
-            return 0
-            ;;
-        *SCHEMA* )
-            echo "docs/schemas"
-            return 0
-            ;;
-        *REFERENCE*|*QUICK_REF*|*QUICKREF*|*CHEATSHEET* )
-            echo "docs/reference"
-            return 0
-            ;;
-        *SETUP*|*INSTALL*|*TROUBLESHOOT*|*GUIDE*|*BEST_PRACTICES*|*SUPPORTED_FILE_FORMATS* )
-            echo "docs/guides"
-            return 0
-            ;;
-        *PERFORMANCE*|*OPTIMIZATION* )
-            echo "docs/performance"
-            return 0
-            ;;
-        *DEPTH_MODEL* )
-            echo "docs/depth_model"
-            return 0
-            ;;
-        *DEPTH*|*LUX_DEPTH* )
-            echo "docs/depth_pipeline"
-            return 0
-            ;;
-        *STATUS*|*NEXT_STEPS* )
-            echo "docs/status"
-            return 0
-            ;;
-        *REPORT*|*SUMMARY*|*RESULTS*|*CHECKLIST*|*COMPLETE*|*COMPLETION*|*VERIFICATION*|*FIXES*|*RAW_TEST* )
-            echo "docs/historical"
-            return 0
-            ;;
-        *.CSV )
-            echo "docs/compliance"
-            return 0
-            ;;
-        *.TXT )
-            echo "docs/reports"
-            return 0
-            ;;
-        *.MD )
-            echo "docs/guides"
-            return 0
-            ;;
-    esac
+    if [[ "$upper" == "README.MD" ]]; then
+        return 1
+    fi
+
+    if [[ "$upper" == ".DS_STORE" ]]; then
+        echo "__REMOVE__"
+        return 0
+    fi
+
+    upper_stem="$(printf '%s' "${basename%.*}" | tr '[:lower:]' '[:upper:]')"
+    tokens="$(normalize_tokens "$upper_stem")"
+
+    if starts_with_token "$tokens" "PR" || starts_with_token "$tokens" "PUSH" || starts_with_token "$tokens" "MERGE" || starts_with_token "$tokens" "REVIEW"; then
+        dest="docs/pr_archive"
+    elif starts_with_token "$tokens" "ADR" || has_token "$tokens" "ARCHITECT" || has_token "$tokens" "ARCHITECTURE" || has_token "$tokens" "ARCHITECTURAL" || has_token "$tokens" "DESIGN" || has_token "$tokens" "ROADMAP"; then
+        dest="docs/architecture"
+    elif has_token "$tokens" "POLICY" || has_token "$tokens" "GOVERNANCE" || has_token "$tokens" "ORGANIZATION"; then
+        dest="docs/governance"
+    elif has_token "$tokens" "CI" || has_token "$tokens" "WORKFLOW" || has_phrase "$tokens" "BRANCH PROTECTION"; then
+        dest="docs/ci"
+    elif has_token "$tokens" "DEPLOY" || has_token "$tokens" "DEPLOYMENT" || has_token "$tokens" "PRODUCTION"; then
+        dest="docs/deployment"
+    elif has_token "$tokens" "CLI"; then
+        dest="docs/cli"
+    elif has_token "$tokens" "CONTRACT"; then
+        dest="docs/contracts"
+    elif has_token "$tokens" "SCHEMA"; then
+        dest="docs/schemas"
+    elif has_token "$tokens" "REFERENCE" || has_token "$tokens" "QUICKREF" || has_token "$tokens" "CHEATSHEET" || has_phrase "$tokens" "QUICK REF"; then
+        dest="docs/reference"
+    elif has_token "$tokens" "SETUP" || has_token "$tokens" "INSTALL" || has_token "$tokens" "TROUBLESHOOTING" || has_token "$tokens" "GUIDE" || has_phrase "$tokens" "BEST PRACTICES" || has_phrase "$tokens" "SUPPORTED FILE FORMATS"; then
+        dest="docs/guides"
+    elif has_token "$tokens" "PERFORMANCE" || has_token "$tokens" "OPTIMIZATION"; then
+        dest="docs/performance"
+    elif has_phrase "$tokens" "DEPTH MODEL"; then
+        dest="docs/depth_model"
+    elif has_token "$tokens" "DEPTH" || has_phrase "$tokens" "LUX DEPTH"; then
+        dest="docs/depth_pipeline"
+    elif has_token "$tokens" "STATUS" || has_phrase "$tokens" "NEXT STEPS"; then
+        dest="docs/status"
+    elif has_token "$tokens" "REPORT" || has_token "$tokens" "SUMMARY" || has_token "$tokens" "RESULTS" || has_token "$tokens" "CHECKLIST" || has_token "$tokens" "COMPLETE" || has_token "$tokens" "COMPLETION" || has_token "$tokens" "VERIFICATION" || has_token "$tokens" "FIXES" || has_phrase "$tokens" "RAW TEST"; then
+        dest="docs/historical"
+    else
+        case "$upper" in
+            *.CSV)
+                dest="docs/compliance"
+                ;;
+            *.TXT)
+                dest="docs/reports"
+                ;;
+            *.MD)
+                dest="docs/guides"
+                ;;
+        esac
+    fi
+
+    if [[ -n "$dest" ]] && is_supported_destination "$dest"; then
+        echo "$dest"
+        return 0
+    fi
 
     return 1
 }
 
 collect_candidates() {
     local file
+    local sorted=()
     CANDIDATES=()
 
     while IFS= read -r -d '' file; do
-        file="${file#$REPO_ROOT/}"
-        if [[ "$file" != "docs/README.md" ]]; then
-            CANDIDATES+=("$file")
-        fi
-    done < <(find "$REPO_ROOT/docs" -maxdepth 1 -type f -print0)
-
-    while IFS= read -r -d '' file; do
-        if [[ "$file" == */* ]]; then
-            continue
-        fi
-        if is_allowed_root_doc "$file"; then
-            continue
-        fi
         case "$file" in
-            *.md|*.MD|*.txt|*.TXT|*.csv|*.CSV)
-                CANDIDATES+=("$file")
+            docs/README.md)
+                continue
+                ;;
+            docs/*)
+                if [[ "$file" == docs/* && "$file" != docs/*/* ]]; then
+                    CANDIDATES+=("$file")
+                fi
+                ;;
+            */*)
+                continue
+                ;;
+            *)
+                if is_allowed_root_doc "$file"; then
+                    continue
+                fi
+                case "$file" in
+                    *.md|*.MD|*.txt|*.TXT|*.csv|*.CSV)
+                        CANDIDATES+=("$file")
+                        ;;
+                esac
                 ;;
         esac
     done < <(git -C "$REPO_ROOT" ls-files -z)
+
+    if [[ ${#CANDIDATES[@]} -eq 0 ]]; then
+        return 0
+    fi
+
+    while IFS= read -r file; do
+        if [[ -n "$file" ]]; then
+            sorted+=("$file")
+        fi
+    done < <(printf '%s\n' "${CANDIDATES[@]}" | LC_ALL=C sort -u)
+
+    CANDIDATES=("${sorted[@]}")
 }
 
 main() {
     local moves=0
     local skipped=0
-    local seen=()
-    local file dest current_dir already_listed
+    local file dest current_dir
 
     cd "$REPO_ROOT"
     collect_candidates
@@ -233,20 +269,6 @@ main() {
     echo "Documentation organization plan ($MODE):"
 
     for file in "${CANDIDATES[@]}"; do
-        already_listed=0
-        if [[ ${#seen[@]} -gt 0 ]]; then
-            for current_dir in "${seen[@]}"; do
-                if [[ "$current_dir" == "$file" ]]; then
-                    already_listed=1
-                    break
-                fi
-            done
-        fi
-        if [[ "$already_listed" -eq 1 ]]; then
-            continue
-        fi
-        seen+=("$file")
-
         if ! dest="$(classify_destination "$file")"; then
             log_verbose "SKIP $file (no deterministic classification rule)"
             skipped=$((skipped + 1))
