@@ -18,7 +18,7 @@ import numpy as np
 from PIL import Image
 
 from transformation_portal.ingest.canonical_json import canonicalize_json
-from transformation_portal.spatial_ai.ingest import contracts as ingest_contracts
+from transformation_portal.spatial_ai.ingest import contracts
 
 from .raw_loader import is_raw_file
 
@@ -36,11 +36,13 @@ class RawIngestError(RuntimeError):
 
 
 def _normalized_ingest_mode(config: "EnhanceConfig") -> str:
+    allowed_modes = ("auto", "force_rawpy", "force_preview")
     mode = str(getattr(config, "raw_ingest_mode", "auto")).strip().lower()
-    if mode not in {"auto", "force_rawpy", "force_preview"}:
-        raise ValueError(
-            "raw_ingest_mode must be one of:" " auto, force_rawpy, force_preview",
+    if mode not in allowed_modes:
+        message = "raw_ingest_mode must be one of: {}".format(
+            ", ".join(allowed_modes),
         )
+        raise ValueError(message)
     return mode
 
 
@@ -58,7 +60,7 @@ def _preview_escape_enabled() -> bool:
 
 def build_raw_ingest_options(
     config: "EnhanceConfig",
-) -> ingest_contracts.IngestOptions:
+) -> contracts.IngestOptions:
     """Build canonical deterministic ingest options from config.
 
     ``legacy_linear_srgb`` is used for
@@ -67,7 +69,7 @@ def build_raw_ingest_options(
     policy is still enforced by the contract
     fields.
     """
-    return ingest_contracts.IngestOptions(
+    return contracts.IngestOptions(
         contract="legacy_linear_srgb",
         tensor_role="xyz_d50_linear_fp32",
         wb_mode=str(  # type: ignore[arg-type]
@@ -144,27 +146,37 @@ def decode_for_lux_depth(
     """
     path = Path(path)
     if not is_raw_file(path):
-        raise ValueError("decode_for_lux_depth only supports" f" RAW files, got: {path}")
+        message = "decode_for_lux_depth only supports RAW files, got: "
+        message += str(path)
+        raise ValueError(message)
 
     mode = _normalized_ingest_mode(config)
     preview_allowed = _preview_escape_enabled()
 
     if mode == "force_preview":
         if not preview_allowed:
-            raise RawIngestError(
-                "raw_ingest_mode=force_preview" f" requires {RAW_PREVIEW_ESCAPE_ENV}" "=1 (debug-only escape hatch)."
-            )
+            required_env = "{}=1".format(RAW_PREVIEW_ESCAPE_ENV)
+            message = "raw_ingest_mode=force_preview requires "
+            message += required_env
+            message += " (debug-only escape hatch)."
+            raise RawIngestError(message)
         logger.warning("RAW preview escape hatch enabled for %s", path.name)
         return np.clip(_decode_preview_rgb(path), 0.0, 1.0).astype(np.float32)
 
     options = build_raw_ingest_options(config)
 
     try:
-        tensor = ingest_contracts.decode_contract(path, options)
+        tensor = contracts.decode_contract(path, options)
     except Exception as exc:
         if preview_allowed and mode == "auto":
+            preview_message = " ".join(
+                [
+                    "Canonical RAW decode failed for %s;",
+                    "falling back to preview decode because %s is enabled.",
+                ]
+            )
             logger.warning(
-                "Canonical RAW decode failed" " for %s; falling back to" " preview decode because" " %s is enabled.",
+                preview_message,
                 path.name,
                 RAW_PREVIEW_ESCAPE_ENV,
             )
@@ -173,10 +185,18 @@ def decode_for_lux_depth(
                 0.0,
                 1.0,
             ).astype(np.float32)
-        raise RawIngestError("Canonical RAW decode failed for" f" {path.name}: {exc}") from exc
+        message = "Canonical RAW decode failed for {}: {}".format(
+            path.name,
+            exc,
+        )
+        raise RawIngestError(message) from exc
 
     array = np.asarray(tensor, dtype=np.float32)
     if array.ndim != 3 or array.shape[2] != 3:
-        raise RawIngestError("Canonical RAW decode returned" f" invalid shape {array.shape}" f" for {path.name}")
+        message = "Canonical RAW decode returned invalid shape {} ".format(
+            array.shape,
+        )
+        message += "for {}".format(path.name)
+        raise RawIngestError(message)
 
     return np.clip(array, 0.0, 1.0).astype(np.float32)
