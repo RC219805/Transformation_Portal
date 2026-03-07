@@ -1,0 +1,4 @@
+# Legacy tracked root files that still need a cleanup/move PR.
+CORE_DEPENDENCIES_SUMMARY.txt
+rights_privacy_governance.csv
+security_best_practices_report.md

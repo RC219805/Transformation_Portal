@@ -7,6 +7,7 @@ prevents accumulation of clutter or structural issues.
 """
 
 import hashlib
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -95,14 +96,15 @@ class TestDocumentationOrganization:
         assert readme.exists(), "README.md should exist in root"
 
     def test_no_excessive_root_markdown_files(self):
-        """Test that root doesn't have too many markdown files."""
-        markdown_files = list(_repo_root.glob("*.md"))
-        # Standard root files: README, CONTRIBUTING, SECURITY, CHANGELOG, DOCUMENTATION_MAP
-        # Allow some additional project management files but not excessive documentation
-        # Updated limit to 14 to accommodate current project structure (DOC-001)
-        assert len(markdown_files) <= 14, (
-            f"Too many markdown files in root ({len(markdown_files)}). " "Move documentation to docs/"
+        """Test that tracked root files conform to the canonical root placement policy."""
+        result = subprocess.run(
+            ["./scripts/setup/pre-commit-check.sh", "--all"],
+            cwd=_repo_root,
+            capture_output=True,
+            text=True,
+            check=False,
         )
+        assert result.returncode == 0, result.stdout + result.stderr
 
     def test_docs_subdirectories_exist(self):
         """Test that docs has proper subdirectories."""

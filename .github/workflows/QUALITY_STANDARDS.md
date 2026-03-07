@@ -21,27 +21,27 @@ This document establishes baseline quality control standards to prevent recurrin
 
 ### Pre-commit Checks (Local)
 ```bash
-# Runs automatically on commit via .pre-commit-quality-check.py
-1. Trailing whitespace removal (autopep8)
-2. Flake8 critical errors (E9, F63, F7, F82)
-3. Python syntax validation
-4. Import statement compilation
-5. Markdown file count validation (≤10 in root)
+# Runs automatically via pre-commit hooks and local repository checks
+1. Formatting hooks (trailing whitespace, EOF fixes, black, isort)
+2. Root file placement validation
+3. ML test isolation validation
+4. Dependency constraint validation
 ```
 
 ### CI/CD Pipeline (.github/workflows/build.yml)
 ```yaml
 Jobs:
-  pre-commit-checks:
-    - Trailing whitespace auto-fix
-    - Flake8 critical errors only
-    - Pylint (warnings allowed, only fail on fatal/error)
-    - Markdown file count validation
+  lint:
+    - Black --check on src/ tests/
+    - isort --check-only on src/ tests/
+    - Shared lint runner on Python 3.12
+    - Flake8 critical errors on src/ tests/
+    - Pylint changed-file scope (warnings advisory; fatal/error/usage blocking)
 
   lint-and-test:
     Matrix: [Python 3.11, 3.12] × [CPU, GPU]
     - Install dependencies
-    - Run pytest (548 tests)
+    - Run pytest
     - Code coverage reporting
 ```
 
@@ -109,7 +109,8 @@ def complex_function(a, b, c, d, e, f):
 ```
 
 ### 6. Trailing Whitespace
-- **Automatic fix**: Handled by autopep8 in pre-commit
+- **Automatic fix**: Handled by local formatting hooks or editor whitespace trimming
+- **CI behavior**: Validation-only; CI does not rewrite files
 - **Prevention**: Configure editor to remove on save
 
 ### 7. Root Directory Organization
@@ -141,15 +142,15 @@ Root Directory Limits:
 
 ### 1. Pre-commit Hook Auto-fixes
 - Trailing whitespace removal
-- Line length enforcement (127 chars)
+- Black formatting
 - Import sorting
-- Basic formatting
+- End-of-file fixes
 
 ### 2. CI/CD Failure Prevention
 ```bash
 # Run before pushing
 make test-fast          # Quick test subset
-make lint               # Full linting
+make lint               # Advisory lint on the maintained Python surface
 git diff origin/main    # Review changes
 ```
 
@@ -179,9 +180,9 @@ git diff origin/main    # Review changes
 ## Enforcement Mechanisms
 
 ### Automatic (Enforced)
-1. **Pre-commit hook**: Auto-fixes formatting
-2. **CI/CD**: Blocks merge on critical errors
-3. **Flake8**: Zero tolerance for E9, F63, F7, F82
+1. **Pre-commit hook**: Local formatting and structure checks
+2. **CI/CD**: Blocks merge on critical errors and blocking pylint findings
+3. **Flake8**: Zero tolerance for E9, F63, F7, F82 on `src/` and `tests/`
 
 ### Warning (Non-blocking)
 1. **Pylint warnings**: Logged but don't fail CI
@@ -197,14 +198,14 @@ git diff origin/main    # Review changes
 
 ### Installed Quality Tools
 ```bash
-pip install flake8 pylint autopep8 pytest pytest-cov
+pip install -r requirements-lint.txt pytest pytest-cov
 ```
 
 ### Configuration Files
-- `.flake8` - Flake8 configuration
-- `pyproject.toml` - Pylint, pytest configuration
+- `requirements-lint.txt` - Pinned lint toolchain
+- `scripts/lint_runner.sh` - Shared flake8/pylint policy
 - `.github/workflows/build.yml` - CI/CD pipeline
-- `.pre-commit-quality-check.py` - Local validation
+- `.github/workflows/quality-gate.yml` - Advisory quality gate
 
 ### IDE Integration
 ```json

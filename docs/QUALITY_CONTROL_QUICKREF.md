@@ -4,11 +4,11 @@
 
 ### 1. Code Quality
 ```bash
-# Run flake8 critical errors check
-flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+# Run the shared lint policy locally
+./scripts/lint_runner.sh local
 
-# Run pylint on changed files
-pylint $(git diff --name-only origin/main...HEAD | grep '\.py$')
+# Or run advisory lint via Make
+make lint
 ```
 
 ### 2. Tests
@@ -119,17 +119,17 @@ tests/
 ## Automation
 
 ### Git Hooks (Recommended)
-Create `.git/hooks/pre-commit`:
+Install the configured hooks:
 ```bash
-#!/bin/bash
-# Run quality checks before commit
-flake8 . --count --select=E9,F63,F7,F82 --quiet || exit 1
-python3 -m pytest tests/test_codebase_structure.py -q || exit 1
+make install-hooks
+
+# Or directly:
+pre-commit install
 ```
 
 ### Make Targets
 ```bash
-make lint          # Run linting
+make lint          # Run advisory lint via the shared helper
 make test-fast     # Quick tests
 make test-full     # Complete test suite
 make clean         # Clean build artifacts

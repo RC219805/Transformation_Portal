@@ -73,6 +73,7 @@ ALLOWED_DOCS_TOP_LEVEL_DIRS = {
     "workflows",
 }
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
+DEFAULT_LEGACY_ALLOWLIST_PATH = REPO_ROOT / "scripts" / "governance" / "docs_structure_legacy_allowlist.txt"
 
 
 @dataclass(frozen=True)
@@ -157,6 +158,26 @@ def _all_docs_changes() -> list[DocChange]:
     return [DocChange(status="A", path=path) for path in _all_docs_files()]
 
 
+def _load_legacy_allowlist(path: pathlib.Path) -> set[str]:
+    if not path.exists():
+        return set()
+
+    allowlist: set[str] = set()
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        allowlist.add(line.replace("\\", "/"))
+    return allowlist
+
+
+def _display_path(path: pathlib.Path) -> str:
+    try:
+        return str(path.relative_to(REPO_ROOT))
+    except ValueError:
+        return str(path)
+
+
 def _root_violation(change: DocChange) -> bool:
     normalized = change.path.replace("\\", "/")
     parts = pathlib.PurePosixPath(normalized).parts
@@ -172,18 +193,32 @@ def _root_violation(change: DocChange) -> bool:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Validate documentation placement rules.")
     parser.add_argument(
+        "--changed-only",
+        action="store_true",
+        help="Scan only documentation files from the current git diff, even in CI.",
+    )
+    parser.add_argument(
         "--all",
         action="store_true",
         help="Scan all files under docs/ instead of only the current git diff.",
     )
+    parser.add_argument(
+        "--legacy-allowlist",
+        default=str(DEFAULT_LEGACY_ALLOWLIST_PATH),
+        help="Path to a newline-delimited allowlist of legacy docs/ topology violations for full-repo scans.",
+    )
     args = parser.parse_args()
 
-    if args.all:
+    ci_mode = os.getenv("CI", "").strip().lower() == "true"
+    scan_all = args.all or (ci_mode and not args.changed_only)
+    legacy_allowlist = _load_legacy_allowlist(pathlib.Path(args.legacy_allowlist))
+
+    if scan_all:
         candidates = _all_docs_changes()
     else:
         candidates, errors = _changed_docs_files()
         if candidates is None:
-            if os.getenv("CI", "").strip().lower() == "true":
+            if ci_mode:
                 print("Unable to determine changed docs files in CI; failing closed.")
                 for error in errors:
                     print(f"  - {error}")
@@ -198,6 +233,18 @@ def main() -> int:
         return 0
 
     topology_violations = [change for change in candidates if _root_violation(change)]
+    known_legacy_violations: list[DocChange] = []
+    if scan_all and legacy_allowlist:
+        known_legacy_violations = [change for change in topology_violations if change.path in legacy_allowlist]
+        topology_violations = [change for change in topology_violations if change.path not in legacy_allowlist]
+
+        stale_allowlist_entries = sorted(legacy_allowlist - {change.path for change in known_legacy_violations})
+        if stale_allowlist_entries:
+            print("Legacy docs allowlist contains paths that are no longer present:")
+            for path in stale_allowlist_entries:
+                print(f"  - {path}")
+            print("Update the allowlist so repo-wide docs validation reflects the current baseline.")
+            return 1
 
     if topology_violations:
         print("Documentation structure violations detected:")
@@ -211,6 +258,15 @@ def main() -> int:
         for change in topology_violations:
             print(f"  - [{change.status}] {change.path}")
         return 1
+
+    if known_legacy_violations:
+        print(
+            "Documentation structure check passed with "
+            f"{len(known_legacy_violations)} grandfathered legacy docs/ root file(s)."
+        )
+        print(f"Legacy baseline: {_display_path(pathlib.Path(args.legacy_allowlist))}")
+        print("A dedicated cleanup PR is still required to remove the remaining debt.")
+        return 0
 
     print(f"Documentation structure check passed ({len(candidates)} file(s) scanned).")
     return 0

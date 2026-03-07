@@ -82,9 +82,14 @@ def test_main_fails_closed_in_ci_when_changed_file_detection_fails(monkeypatch) 
         lambda: (None, ["git diff failure"]),
     )
     monkeypatch.setenv("CI", "true")
-    monkeypatch.setattr(sys, "argv", ["check_docs_structure.py"])
+    monkeypatch.setattr(check_docs_structure, "_all_docs_files", lambda: ["docs/README.md"])
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["check_docs_structure.py", "--legacy-allowlist", "/dev/null"],
+    )
 
-    assert check_docs_structure.main() == 2
+    assert check_docs_structure.main() == 0
 
 
 def test_main_falls_back_to_all_locally(monkeypatch) -> None:
@@ -99,7 +104,11 @@ def test_main_falls_back_to_all_locally(monkeypatch) -> None:
         lambda: ["docs/README.md", "docs/cli/CLI_REFERENCE.md"],
     )
     monkeypatch.delenv("CI", raising=False)
-    monkeypatch.setattr(sys, "argv", ["check_docs_structure.py"])
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["check_docs_structure.py", "--legacy-allowlist", "/dev/null"],
+    )
 
     assert check_docs_structure.main() == 0
 
@@ -110,7 +119,11 @@ def test_main_all_mode_uses_all_docs_scan(monkeypatch) -> None:
         "_all_docs_files",
         lambda: ["docs/README.md", "docs/cli/CLI_REFERENCE.md"],
     )
-    monkeypatch.setattr(sys, "argv", ["check_docs_structure.py", "--all"])
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["check_docs_structure.py", "--all", "--legacy-allowlist", "/dev/null"],
+    )
 
     assert check_docs_structure.main() == 0
 
@@ -121,6 +134,44 @@ def test_main_all_mode_fails_for_root_docs_violation(monkeypatch) -> None:
         "_all_docs_files",
         lambda: ["docs/README.md", "docs/ILLEGAL.md"],
     )
-    monkeypatch.setattr(sys, "argv", ["check_docs_structure.py", "--all"])
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["check_docs_structure.py", "--all", "--legacy-allowlist", "/dev/null"],
+    )
+
+    assert check_docs_structure.main() == 1
+
+
+def test_main_all_mode_allows_known_legacy_violation(monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr(
+        check_docs_structure,
+        "_all_docs_files",
+        lambda: ["docs/README.md", "docs/ILLEGAL.md"],
+    )
+    allowlist = tmp_path / "docs_legacy.txt"
+    allowlist.write_text("docs/ILLEGAL.md\n", encoding="utf-8")
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["check_docs_structure.py", "--all", "--legacy-allowlist", str(allowlist)],
+    )
+
+    assert check_docs_structure.main() == 0
+
+
+def test_main_changed_only_still_blocks_touched_legacy_file(monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr(
+        check_docs_structure,
+        "_changed_docs_files",
+        lambda: ([check_docs_structure.DocChange(status="M", path="docs/ILLEGAL.md")], []),
+    )
+    allowlist = tmp_path / "docs_legacy.txt"
+    allowlist.write_text("docs/ILLEGAL.md\n", encoding="utf-8")
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["check_docs_structure.py", "--changed-only", "--legacy-allowlist", str(allowlist)],
+    )
 
     assert check_docs_structure.main() == 1

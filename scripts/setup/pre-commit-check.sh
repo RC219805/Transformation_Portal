@@ -1,97 +1,124 @@
 #!/usr/bin/env bash
 #
 # pre-commit-check.sh
-# Pre-commit hook to prevent committing misplaced files
-#
-# This hook checks for files in the repository root that should be
-# organized into subdirectories according to docs/governance/REPO_ORGANIZATION.md
+# Canonical root-file placement validator for staged changes and full-repo scans.
 #
 
 set -euo pipefail
 
-# Colors for output
 RED='\033[0;31m'
 YELLOW='\033[1;33m'
 GREEN='\033[0;32m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
-# Files that are allowed in root
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+MODE="staged"
+LEGACY_ALLOWLIST_PATH="$REPO_ROOT/scripts/governance/root_structure_legacy_allowlist.txt"
+
 ALLOWED_ROOT_FILES=(
-    # Core documentation
     "README.md"
     "LICENSE"
     "CONTRIBUTING.md"
     "SECURITY.md"
     "CHANGELOG.md"
     "AGENTS.md"
-
-    # Build configuration
     "Makefile"
     "pyproject.toml"
     "setup.py"
     "setup.cfg"
-
-    # Dependency management
     "requirements.txt"
     "requirements-dev.txt"
     "requirements-ci.txt"
     "requirements-test.txt"
+    "requirements-lint.txt"
     "Pipfile"
     "Pipfile.lock"
     "poetry.lock"
-
-    # Testing configuration
     "pytest.ini"
     "tox.ini"
     ".coveragerc"
-
-    # Linting configuration
     ".pylintrc"
     ".flake8"
     "mypy.ini"
-
-    # Docker
     "Dockerfile"
     "docker-compose.yml"
     "docker-compose.yaml"
-
-    # Git
     ".gitignore"
     ".gitattributes"
     ".gitmodules"
-
-    # Organization system
+    ".git-blame-ignore-revs"
+    ".pre-commit-config.yaml"
     ".auto-organize.sh"
     ".architect_directive_status.yml"
-
-    # Package metadata
     "PKG-INFO"
     "MANIFEST.in"
-
-    # Python package
     "__init__.py"
+    "app.py"
+    "portal.html"
 )
 
-# Patterns that are allowed in root (regex)
 ALLOWED_ROOT_PATTERNS=(
-    "^requirements.*\.txt$"
-    "^\.git.*$"
-    "^\..*rc$"
+    '^requirements.*\.txt$'
+    '^\.git.*$'
+    '^\..*rc$'
 )
 
-# Check if a file is allowed in root
+usage() {
+    cat <<EOF
+Usage: $0 [--staged|--all] [--legacy-allowlist PATH]
+
+Options:
+  --staged               Validate only staged root files (default).
+  --all                  Validate all tracked root files in the repository.
+  --legacy-allowlist     Newline-delimited baseline of grandfathered root files for --all scans.
+  -h, --help             Show this help text.
+EOF
+}
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --staged)
+            MODE="staged"
+            shift
+            ;;
+        --all)
+            MODE="all"
+            shift
+            ;;
+        --legacy-allowlist)
+            if [[ $# -lt 2 ]]; then
+                echo "Missing path for --legacy-allowlist" >&2
+                exit 2
+            fi
+            LEGACY_ALLOWLIST_PATH="$2"
+            shift 2
+            ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $1" >&2
+            usage >&2
+            exit 2
+            ;;
+    esac
+done
+
 is_allowed_in_root() {
     local file="$1"
-    local basename=$(basename "$file")
+    local basename
+    basename="$(basename "$file")"
+    local allowed
+    local pattern
 
-    # Check exact matches
     for allowed in "${ALLOWED_ROOT_FILES[@]}"; do
         if [[ "$basename" == "$allowed" ]]; then
             return 0
         fi
     done
 
-    # Check patterns
     for pattern in "${ALLOWED_ROOT_PATTERNS[@]}"; do
         if [[ "$basename" =~ $pattern ]]; then
             return 0
@@ -101,131 +128,162 @@ is_allowed_in_root() {
     return 1
 }
 
-# Suggest destination for misplaced file
-suggest_destination() {
+is_legacy_root_file() {
     local file="$1"
-    local basename=$(basename "$file")
-    local ext="${basename##*.}"
-
-    # Documentation
-    if [[ "$basename" =~ \.md$ ]]; then
-        if [[ "$basename" =~ (PLAN|STRATEGY|OPTIMIZATION|SUMMARY) ]]; then
-            echo "docs/guides/"
-        elif [[ "$basename" =~ (ARCHITECTURE|DESIGN) ]]; then
-            echo "docs/architecture/"
-        elif [[ "$basename" =~ (API|REFERENCE) ]]; then
-            echo "docs/api/"
-        elif [[ "$basename" =~ (DEPLOY|PRODUCTION) ]]; then
-            echo "docs/deployment/"
-        else
-            echo "docs/guides/"
+    local legacy_file
+    for legacy_file in "${LEGACY_ROOT_FILES[@]}"; do
+        if [[ "$file" == "$legacy_file" ]]; then
+            return 0
         fi
-        return
-    fi
-
-    # Scripts
-    if [[ "$basename" =~ \.(sh|py)$ ]] && [[ ! "$basename" =~ ^test_ ]]; then
-        if [[ "$basename" =~ (install|setup|download) ]]; then
-            echo "scripts/setup/"
-        elif [[ "$basename" =~ (verify|navigate|util) ]]; then
-            echo "scripts/utilities/"
-        else
-            echo "scripts/automation/"
-        fi
-        return
-    fi
-
-    # Data files
-    if [[ "$ext" == "json" || "$ext" == "csv" || "$ext" == "txt" ]]; then
-        echo "data/"
-        return
-    fi
-
-    # Images
-    if [[ "$ext" =~ ^(jpg|jpeg|png|gif|tiff|tif)$ ]]; then
-        if [[ "$basename" =~ (debug|test) ]]; then
-            echo "archive/"
-        else
-            echo "data/sample_images/"
-        fi
-        return
-    fi
-
-    # Code files
-    if [[ "$ext" == "ts" || "$ext" == "js" ]]; then
-        echo "archive/"
-        return
-    fi
-
-    # Default
-    echo "appropriate subdirectory"
+    done
+    return 1
 }
 
-# Main pre-commit check
-main() {
-    local exit_code=0
-    local misplaced_files=()
+suggest_destination() {
+    local file="$1"
+    local basename
+    local ext
 
-    # Get list of staged files in root directory
-    while IFS= read -r file; do
-        # Skip if not in root directory
+    basename="$(basename "$file")"
+    ext="${basename##*.}"
+
+    if [[ "$basename" =~ \.md$ ]]; then
+        if [[ "$basename" =~ ^(PR_|PUSH_|MERGE_|REVIEW_|BRANCH_) ]]; then
+            echo "docs/pr_archive/"
+        elif [[ "$basename" =~ (POLICY|GOVERNANCE|ORGANIZATION|STANDARD|README|GUIDE|REFERENCE|CHECKLIST|QUICK_REF|QUICKSTART|BEST_PRACTICES) ]]; then
+            echo "docs/governance/ or docs/guides/"
+        else
+            echo "docs/historical/"
+        fi
+        return
+    fi
+
+    if [[ "$ext" == "csv" || "$ext" == "json" || "$ext" == "txt" ]]; then
+        echo "docs/reports/ or data/"
+        return
+    fi
+
+    if [[ "$basename" =~ \.(sh|py)$ ]]; then
+        echo "scripts/"
+        return
+    fi
+
+    echo "an approved project subdirectory"
+}
+
+load_legacy_allowlist() {
+    LEGACY_ROOT_FILES=()
+    if [[ ! -f "$LEGACY_ALLOWLIST_PATH" ]]; then
+        return
+    fi
+
+    while IFS= read -r raw_line; do
+        local line
+        line="${raw_line#"${raw_line%%[![:space:]]*}"}"
+        line="${line%"${line##*[![:space:]]}"}"
+        if [[ -z "$line" || "$line" == \#* ]]; then
+            continue
+        fi
+        LEGACY_ROOT_FILES+=("$line")
+    done < "$LEGACY_ALLOWLIST_PATH"
+}
+
+collect_candidates() {
+    CANDIDATES=()
+
+    if [[ "$MODE" == "all" ]]; then
+        while IFS= read -r -d '' file; do
+            if [[ "$file" == */* ]]; then
+                continue
+            fi
+            CANDIDATES+=("$file")
+        done < <(git -C "$REPO_ROOT" ls-files -z)
+        return
+    fi
+
+    while IFS= read -r -d '' file; do
         if [[ "$file" == */* ]]; then
             continue
         fi
-
-        # Skip if directory
-        if [[ -d "$file" ]]; then
-            continue
-        fi
-
-        # Check if file is allowed in root
-        if ! is_allowed_in_root "$file"; then
-            misplaced_files+=("$file")
-        fi
-    done < <(git diff --cached --name-only --diff-filter=ACM)
-
-    # If there are misplaced files, show error and suggest fix
-    if [[ ${#misplaced_files[@]} -gt 0 ]]; then
-        echo -e "${RED}✗ Pre-commit check failed${NC}"
-        echo ""
-        echo "The following files should not be in the repository root:"
-        echo ""
-
-        for file in "${misplaced_files[@]}"; do
-            local suggestion=$(suggest_destination "$file")
-            echo -e "  ${YELLOW}$file${NC}"
-            echo -e "    → Suggested: ${GREEN}$suggestion${NC}"
-        done
-
-        echo ""
-        echo "Please move these files to appropriate directories and try again:"
-        echo ""
-        echo "  1. Run the organization script:"
-        echo "     ./.auto-organize.sh --dry-run  # Preview changes"
-        echo "     ./.auto-organize.sh            # Apply changes"
-        echo ""
-        echo "  2. Or move files manually:"
-        for file in "${misplaced_files[@]}"; do
-            local suggestion=$(suggest_destination "$file")
-            if [[ "$suggestion" != "appropriate subdirectory" ]]; then
-                echo "     mv $file $suggestion"
-            fi
-        done
-        echo ""
-        echo "  3. Then stage and commit again:"
-        echo "     git add ."
-        echo "     git commit"
-        echo ""
-        echo "To bypass this check (not recommended):"
-        echo "  git commit --no-verify"
-        echo ""
-        echo "For more information, see: docs/governance/REPO_ORGANIZATION.md"
-        echo ""
-
-        exit_code=1
-    fi
-
-    exit $exit_code
+        CANDIDATES+=("$file")
+    done < <(git -C "$REPO_ROOT" diff --cached --name-only --diff-filter=ACMR -z)
 }
 
+main() {
+    local misplaced_files=()
+    local known_legacy_files=()
+    local stale_legacy_files=()
+    local file
+    local legacy_file
+
+    cd "$REPO_ROOT"
+    load_legacy_allowlist
+    collect_candidates
+
+    if [[ ${#CANDIDATES[@]} -eq 0 ]]; then
+        echo "No root files to validate."
+        return 0
+    fi
+
+    for file in "${CANDIDATES[@]}"; do
+        if is_allowed_in_root "$file"; then
+            continue
+        fi
+        if [[ "$MODE" == "all" ]] && is_legacy_root_file "$file"; then
+            known_legacy_files+=("$file")
+            continue
+        fi
+        misplaced_files+=("$file")
+    done
+
+    if [[ "$MODE" == "all" ]] && [[ ${#LEGACY_ROOT_FILES[@]} -gt 0 ]]; then
+        for legacy_file in "${LEGACY_ROOT_FILES[@]}"; do
+            if [[ ! -f "$REPO_ROOT/$legacy_file" ]]; then
+                stale_legacy_files+=("$legacy_file")
+            fi
+        done
+    fi
+
+    if [[ ${#stale_legacy_files[@]} -gt 0 ]]; then
+        echo "Legacy root allowlist contains paths that are no longer present:"
+        for file in "${stale_legacy_files[@]}"; do
+            echo "  - $file"
+        done
+        echo "Update $LEGACY_ALLOWLIST_PATH so the baseline matches the repository."
+        return 1
+    fi
+
+    if [[ ${#misplaced_files[@]} -gt 0 ]]; then
+        echo -e "${RED}✗ Root file placement check failed${NC}"
+        echo
+        if [[ "$MODE" == "all" ]]; then
+            echo "The following tracked root files are outside the current repository contract:"
+        else
+            echo "The following staged root files are outside the current repository contract:"
+        fi
+        echo
+        for file in "${misplaced_files[@]}"; do
+            echo -e "  ${YELLOW}$file${NC}"
+            echo -e "    → Suggested: ${GREEN}$(suggest_destination "$file")${NC}"
+        done
+        echo
+        echo "Move these files to approved locations or update the root policy intentionally."
+        return 1
+    fi
+
+    if [[ ${#known_legacy_files[@]} -gt 0 ]]; then
+        echo "Root file placement check passed with grandfathered legacy root files:"
+        for file in "${known_legacy_files[@]}"; do
+            echo "  - $file"
+        done
+        echo "A cleanup PR is still required to remove this baseline debt."
+        return 0
+    fi
+
+    echo "Root file placement check passed."
+    return 0
+}
+
+LEGACY_ROOT_FILES=()
+CANDIDATES=()
 main "$@"

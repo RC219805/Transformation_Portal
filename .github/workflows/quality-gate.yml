@@ -25,37 +25,17 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version: '3.11'
+          python-version: '3.12'
 
       - name: Install quality tools
         run: |
-          pip install flake8 pylint autopep8
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-lint.txt
 
-      - name: Auto-fix formatting issues
+      - name: Run advisory lint checks
         run: |
-          # Auto-fix trailing whitespace and basic formatting
-          find . -name "*.py" -type f ! -path "./deprecated/*" ! -path "./src/transformation_portal/*" ! -path "./.venv/*" -exec autopep8 --in-place --max-line-length=127 {} \;
+          PYTHON_BIN=python ./scripts/lint_runner.sh advisory
 
-      - name: Run flake8 (critical errors only)
+      - name: Check root file placement
         run: |
-          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics --exclude=deprecated/,src/transformation_portal/,.venv/
-
-      - name: Run pylint (non-blocking)
-        continue-on-error: true
-        run: |
-          files=$(find . -name "*.py" -type f ! -path "./deprecated/*" ! -path "./src/transformation_portal/*" ! -path "./.venv/*")
-          if [ -n "$files" ]; then
-            # shellcheck disable=SC2086
-            pylint $files --exit-zero
-          fi
-
-      - name: Check markdown file count
-        run: |
-          markdown_count=$(find . -maxdepth 1 -name "*.md" -type f | wc -l)
-          # shellcheck disable=SC2086
-          # Updated limit to 14 for DOC-001 consolidation (added DOCUMENTATION_MAP.md)
-          if [ $markdown_count -gt 14 ]; then
-            echo "ERROR: Too many markdown files in root ($markdown_count). Maximum allowed: 14"
-            echo "Please move documentation files to docs/ subdirectories"
-            exit 1
-          fi
+          ./scripts/setup/pre-commit-check.sh --all
