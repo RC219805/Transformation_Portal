@@ -106,7 +106,7 @@ Session Reports:
   - PUSH_COMPLETION_REPORT.md (newly created)
   - PUSH_SUMMARY.md (newly created)
   - docs/sessions/TASK_COMPLETION_REPORT.md
-  - docs/workflow_improvements_nov8.md
+  - docs/ci/workflow_improvements_nov8.md
 
 Executive Summaries:
   - .github/agents/rag_system/750_Picacho_Executive_Summary.md
@@ -118,8 +118,8 @@ Other:
   - FILES_COMMITTED.md
   - ELITE_PIPELINE_SUMMARY.md
   - LUXURY_ESTATE_PIPELINE_SUMMARY.md
-  - docs/IMPLEMENTATION_TEST_REPORT.md
-  - docs/QUALITY_SYSTEM_SUMMARY.md
+  - docs/historical/IMPLEMENTATION_TEST_REPORT.md
+  - docs/historical/QUALITY_SYSTEM_SUMMARY.md
   - install_and_run_rag.py
   - scripts/verification/verify_rag_install.py.txt
 

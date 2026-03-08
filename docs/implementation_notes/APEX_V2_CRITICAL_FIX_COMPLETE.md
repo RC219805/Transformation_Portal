@@ -75,7 +75,7 @@ Output: BitsPerSample: (8, 8, 8)  # ❌ 50% QUALITY LOSS
 Depth generation section in `scripts/pipelines/process_source_tiffs_apex.sh` (lines 112-142) is commented out.
 
 **Solution:**
-Provided comprehensive instructions in `docs/DEPTH_GENERATION_INSTRUCTIONS.md`:
+Provided comprehensive instructions in `docs/depth_pipeline/DEPTH_GENERATION_INSTRUCTIONS.md`:
 
 **Option 1: Enable in batch script (recommended)**
 ```bash
@@ -381,8 +381,8 @@ Enhancement completed successfully in 1.01s ✅
    ```
 
 3. **Update Quality Firewall documentation:**
-   - ✅ Created `docs/QUALITY_FIREWALL_BIT_DEPTH_CONTRACT.md`
-   - ⏳ Update `docs/QUALITY_FIREWALL_IMPLEMENTATION.md` with bit-depth section
+   - ✅ Created `docs/contracts/QUALITY_FIREWALL_BIT_DEPTH_CONTRACT.md`
+   - ⏳ Update `docs/guides/QUALITY_FIREWALL_IMPLEMENTATION.md` with bit-depth section
 
 ### Long-Term (Future Work)
 
@@ -408,15 +408,15 @@ Enhancement completed successfully in 1.01s ✅
    - Complete architectural decision record with implementation details
 
 2. ✅ **Critical Fix Summary**
-   - `docs/CRITICAL_BIT_DEPTH_FIX_SUMMARY.md`
+   - `docs/depth_pipeline/CRITICAL_BIT_DEPTH_FIX_SUMMARY.md`
    - Comprehensive summary of issue, fix, and verification
 
 3. ✅ **Depth Generation Instructions**
-   - `docs/DEPTH_GENERATION_INSTRUCTIONS.md`
+   - `docs/depth_pipeline/DEPTH_GENERATION_INSTRUCTIONS.md`
    - Step-by-step guide for enabling depth processing
 
 4. ✅ **Quality Firewall Bit-Depth Contract**
-   - `docs/QUALITY_FIREWALL_BIT_DEPTH_CONTRACT.md`
+   - `docs/contracts/QUALITY_FIREWALL_BIT_DEPTH_CONTRACT.md`
    - Enforcement mechanisms, verification, and compliance requirements
 
 ---

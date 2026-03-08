@@ -47,7 +47,7 @@ Created smoke PR to validate quality firewall enforcement:
 
 ```bash
 Branch: chore/ci-smoke
-Change: Minimal documentation update (docs/CI_SMOKE.md)
+Change: Minimal documentation update (docs/ci/CI_SMOKE.md)
 Purpose: Verify all quality gates execute and block merge correctly
 ```
 

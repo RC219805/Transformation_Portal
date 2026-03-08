@@ -24,9 +24,9 @@
 
 ### Documentation
 - `CONTRIBUTING.md` - Complete developer guide with CI requirements
-- `docs/PRODUCTION_READINESS.md` - Honest status assessment
+- `docs/deployment/PRODUCTION_READINESS.md` - Honest status assessment
 - `docs/ci/BRANCH_PROTECTION_SETUP.md` - GitHub configuration guide
-- `docs/RUFF_MIGRATION_GUIDE.md` - Linting consolidation plan
+- `docs/guides/RUFF_MIGRATION_GUIDE.md` - Linting consolidation plan
 - `IMPLEMENTATION_SUMMARY.md` - This implementation's full details
 
 ### Configuration
@@ -284,7 +284,7 @@ python -m transformation_portal.metrics.ledger report \
   --output performance_report.md
 ```
 
-See `docs/PERFORMANCE_ANALYSIS_20260207.md` for detailed analysis and optimization roadmap.
+See `docs/performance/PERFORMANCE_ANALYSIS_20260207.md` for detailed analysis and optimization roadmap.
 
 ---
 

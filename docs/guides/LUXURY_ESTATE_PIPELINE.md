@@ -726,7 +726,7 @@ pipeline = LuxuryEstateMasterPipeline(preset)
 
 For issues, questions, or feature requests:
 - **Repository:** /Users/rc/Transformation_Portal
-- **Documentation:** docs/LUXURY_ESTATE_PIPELINE.md
+- **Documentation:** docs/guides/LUXURY_ESTATE_PIPELINE.md
 - **Configuration:** config/750_picacho_master_preset.yaml
 
 ---
