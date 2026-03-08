@@ -40,9 +40,8 @@
 - [x] All 9 stress tests implemented
 
 ### Priority P3: Documentation & Infrastructure ✅ COMPLETED
-- [x] Create `docs/PBR_CLI_TESTING_GUIDE.md` (comprehensive guide)
-- [x] Create `docs/PBR_CLI_IMPLEMENTATION_SUMMARY.md` (summary)
-- [x] Create `docs/PBR_CLI_TESTING_QUICK_REF.md` (quick reference)
+- [x] Create `docs/cli/PBR_CLI_TESTING_GUIDE.md` (comprehensive guide)
+- [x] Create `docs/cli/PBR_CLI_TESTING_QUICK_REF.md` (quick reference)
 - [x] Create `tests/stress/__init__.py` (package docs)
 - [x] Update `pyproject.toml` with `stress` marker
 - [x] Document how to run tests
@@ -63,9 +62,8 @@
 1. ✅ `tests/test_pbr_cli.py` (630 lines)
 2. ✅ `tests/stress/test_stress_large_batch.py` (370 lines)
 3. ✅ `tests/stress/__init__.py` (30 lines)
-4. ✅ `docs/PBR_CLI_TESTING_GUIDE.md` (300 lines)
-5. ✅ `docs/PBR_CLI_IMPLEMENTATION_SUMMARY.md` (400 lines)
-6. ✅ `docs/PBR_CLI_TESTING_QUICK_REF.md` (120 lines)
+4. ✅ `docs/cli/PBR_CLI_TESTING_GUIDE.md` (300 lines)
+5. ✅ `docs/cli/PBR_CLI_TESTING_QUICK_REF.md` (120 lines)
 
 ### Files Modified
 1. ✅ `src/transformation_portal/lux_depth_v3/pbr_cli.py` (~50 lines changed)

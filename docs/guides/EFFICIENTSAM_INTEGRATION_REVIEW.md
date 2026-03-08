@@ -126,17 +126,17 @@ tests/materials/test_segmentation_backend.py
 **Primary Documents:**
 
 1. **Implementation Summary** (402 lines)
-   - File: `IMPLEMENTATION_SUMMARY_EFFICIENTSAM.md`
+   - File: `docs/implementation/IMPLEMENTATION_SUMMARY_EFFICIENTSAM.md`
    - Content: Architecture, performance, usage examples, troubleshooting
    - Quality: ⭐⭐⭐⭐⭐ Comprehensive
 
-2. **Materials V3 Quick Reference** (Updated)
-   - File: `docs/materials_v3_quick_reference.md`
+2. **Legacy Materials V3 quick reference**
+   - File: `docs/reference/materials_v3_quick_reference_old.md`
    - Content: API reference, configuration, integration examples
    - Quality: ⭐⭐⭐⭐⭐ Complete
 
 3. **Confidence Scoring Guide** (100+ lines)
-   - File: `CONFIDENCE_SCORING_IMPLEMENTATION.md`
+   - File: `docs/guides/CONFIDENCE_SCORING_IMPLEMENTATION.md`
    - Content: Confidence scoring implementation details
    - Quality: ⭐⭐⭐⭐⭐ Detailed
 
@@ -505,11 +505,10 @@ This implementation can be deployed to production immediately with confidence. T
 - `scripts/validation/validate_efficientsam_production.py`
 
 ### Documentation
-- `IMPLEMENTATION_SUMMARY_EFFICIENTSAM.md` (402 lines)
-- `CONFIDENCE_SCORING_IMPLEMENTATION.md` (100+ lines)
-- `docs/materials_v3_quick_reference.md` (updated)
-- `docs/confidence_scoring.md`
-- `docs/materials_v3_enhancements_summary.md`
+- `docs/implementation/IMPLEMENTATION_SUMMARY_EFFICIENTSAM.md` (EfficientSAM implementation summary, 402 lines)
+- `docs/guides/CONFIDENCE_SCORING_IMPLEMENTATION.md` (100+ lines)
+- `docs/reference/materials_v3_quick_reference_old.md` (Legacy Materials V3 quick reference)
+- `docs/guides/confidence_scoring.md`
 
 ### Total Impact
 - **Lines Added:** ~2,500+ (implementation + tests + docs)

@@ -141,7 +141,7 @@ git push origin feat/rag-integration-complete
    ```
 
 4. **Create quality checklist**
-   - Document in `docs/QUALITY_CHECKLIST.md`
+   - Document in `docs/quick_references/QUALITY_CONTROL_QUICKREF.md`
    - Standards for all client deliverables
 
 ---

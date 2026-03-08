@@ -287,9 +287,8 @@ This is expected if you haven't installed ML packages. You have two options:
 
 ### Learn More
 - **README.md** - Full feature overview
-- **docs/PIPELINE_OPERATIONS_GUIDE.md** - Detailed pipeline documentation
-- **docs/QUICK_START.md** - Comprehensive getting started guide
-- **docs/CONTEXT_AWARE_RENDERING.md** - AI-powered context extraction
+- **docs/pipeline_docs/PIPELINE_OPERATIONS_GUIDE.md** - Detailed pipeline documentation
+- **docs/guides/CONTEXT_AWARE_RENDERING.md** - AI-powered context extraction
 
 ### Upgrade Your Setup
 1. Start with Minimal tier (numpy, Pillow)

@@ -287,7 +287,7 @@ V2 Enhancement is **image processing only** - no ML dependencies:
 
 ### References
 - `V2_ENHANCEMENT_ARCHITECTURAL_GUIDANCE.md` - Detailed architecture
-- `V2_ENHANCEMENT_IMPLEMENTATION_SUMMARY.md` - Implementation details
+- `docs/historical/V2_ENHANCEMENT_FINAL_REPORT.md` - Final implementation report
 - `ADR-022-v2-enhancement-optional.md` - Decision record
 
 ---
@@ -339,6 +339,6 @@ No research-only or GPL dependencies.
 ## Support
 
 For issues or questions:
-1. Check `docs/V2_ENHANCEMENT_IMPLEMENTATION_SUMMARY.md`
+1. Check the Final implementation report: `docs/historical/V2_ENHANCEMENT_FINAL_REPORT.md`
 2. Review `docs/architecture/decisions/V2_ENHANCEMENT_ARCHITECTURAL_GUIDANCE.md`
 3. See `tests/test_v2_*.py` for usage examples

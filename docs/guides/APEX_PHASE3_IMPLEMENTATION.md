@@ -594,8 +594,8 @@ python scripts/apex_dashboard_generator.py \
 
 ## References
 
-- [APEX Phase 1: Matrix Design](../docs/APEX_PHASE1.md)
-- [APEX Phase 2: Ledger Integration](../docs/APEX_PHASE2.md)
+- [APEX Real Pipeline Integration - Phase 1 Complete](../apex/phase1/APEX_PHASE1_IMPLEMENTATION.md)
+- [APEX Phase 2 Implementation: Real Pipeline Integration](../apex/phase2/IMPLEMENTATION_SUMMARY.md)
 - [Performance Capsule Schema](../src/transformation_portal/metrics/performance_capsule.py)
 - [GitHub Pages Documentation](https://docs.github.com/en/pages)
 - [SQLite Optimization Guide](https://www.sqlite.org/optoverview.html)

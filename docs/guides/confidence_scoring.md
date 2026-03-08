@@ -272,7 +272,7 @@ Potential additions for confidence scoring:
 
 - CLIP Paper: [Learning Transferable Visual Models From Natural Language Supervision](https://arxiv.org/abs/2103.00020)
 - EfficientSAM: [Segment Anything in High Quality](https://arxiv.org/abs/2312.00863)
-- Materials V3 Docs: `docs/materials_v3_quick_reference.md`
+- Materials V3 Docs: `docs/reference/materials_v3_quick_reference_old.md` (Legacy Materials V3 quick reference)
 
 ## Support
 
