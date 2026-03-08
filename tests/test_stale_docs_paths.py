@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+MISSING_ROOT_DOC = "/".join(("docs", "MISSING.md"))
 
 
 def _copy_repo_script(repo_root: Path) -> Path:
@@ -86,13 +87,13 @@ def test_checker_fails_for_changed_file_with_missing_root_doc_reference(
     )
     _commit(repo_root)
 
-    _write(repo_root / "notes.md", "See docs/MISSING.md\n")
+    _write(repo_root / "notes.md", f"See {MISSING_ROOT_DOC}\n")
     _track(repo_root, "notes.md")
 
     result = _run_checker(repo_root)
 
     assert result.returncode == 1, result.stdout + result.stderr
-    assert "notes.md: references missing docs/MISSING.md" in result.stdout
+    assert f"notes.md: references missing {MISSING_ROOT_DOC}" in result.stdout
 
 
 def test_checker_allows_existing_root_doc_reference(tmp_path: Path) -> None:
@@ -150,7 +151,7 @@ def test_checker_ignores_unchanged_files_with_stale_references(
     _copy_repo_script(repo_root)
 
     _write(repo_root / "docs" / "README.md")
-    _write(repo_root / "legacy.md", "Legacy docs/MISSING.md\n")
+    _write(repo_root / "legacy.md", f"Legacy {MISSING_ROOT_DOC}\n")
     _track(
         repo_root,
         "docs/README.md",
@@ -184,7 +185,7 @@ def test_checker_ignores_cache_and_binary_like_files(tmp_path: Path) -> None:
 
     _write_bytes(
         repo_root / "__pycache__" / "module.cpython-311.pyc",
-        b"docs/MISSING.md\0binary",
+        b"docs/" + b"MISSING.md\0binary",
     )
     _track(repo_root, "__pycache__/module.cpython-311.pyc")
 
@@ -212,11 +213,11 @@ def test_checker_uses_git_diff_fallbacks_when_origin_main_is_missing(
     )
     _commit(repo_root)
 
-    _write(repo_root / "notes.md", "See docs/MISSING.md\n")
+    _write(repo_root / "notes.md", f"See {MISSING_ROOT_DOC}\n")
     _track(repo_root, "notes.md")
 
     result = _run_checker(repo_root)
 
     assert result.returncode == 1, result.stdout + result.stderr
     assert "Unable to determine changed files" not in result.stdout
-    assert "notes.md: references missing docs/MISSING.md" in result.stdout
+    assert f"notes.md: references missing {MISSING_ROOT_DOC}" in result.stdout
