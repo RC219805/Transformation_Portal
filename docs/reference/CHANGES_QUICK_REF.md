@@ -142,4 +142,4 @@ pytest tests/test_apex_artifact_assertions.py -v
 **Quick Links:**
 - [Detailed Report](../historical/APEX_BUG_FIXES_IMPLEMENTATION_REPORT.md)
 - [Runtime Investigation](../guides/RUNTIME_SKEW_INVESTIGATION.md)
-- [Test Suite](tests/test_apex_artifact_assertions.py)
+- [Test Suite](../../tests/test_apex_artifact_assertions.py)
