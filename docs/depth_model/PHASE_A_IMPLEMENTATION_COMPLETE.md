@@ -147,7 +147,7 @@ config = EnhanceConfig(
 | Document | Location | Status |
 |----------|----------|--------|
 | Executive Summary | `docs/materials/PHASE_A_COMPLETE.md` | ✅ Complete |
-| Implementation Guide | `docs/materials_v3_phase_a_summary.md` | ✅ Complete |
+| Implementation Guide | `docs/historical/materials_v3_phase_a_summary.md` | ✅ Complete |
 | Status Report | `docs/materials/PHASE_A_STATUS_REPORT.md` | ✅ Complete |
 | Roadmap Reference | `docs/materials/ROADMAP_QUICK_REF.md` | ✅ Complete |
 
