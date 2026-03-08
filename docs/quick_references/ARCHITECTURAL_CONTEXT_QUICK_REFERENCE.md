@@ -321,7 +321,7 @@ pip install pytesseract  # Coming soon
 
 ## 📚 Documentation
 
-- **Full Guide:** `docs/ARCHITECTURAL_CONTEXT_INTEGRATION.md`
+- **Full Guide:** `docs/architecture/ARCHITECTURAL_CONTEXT_INTEGRATION.md`
 - **Implementation:** `ARCHITECTURAL_CONTEXT_IMPLEMENTATION.md`
 - **Examples:** `example_context_aware_processing.py`
 - **Demo:** `python architectural_context_engine.py`

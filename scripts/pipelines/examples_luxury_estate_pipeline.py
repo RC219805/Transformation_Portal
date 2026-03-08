@@ -318,7 +318,7 @@ def main():
 
     print("\n" + "=" * 80)
     print("For full documentation, see:")
-    print("  docs/LUXURY_ESTATE_PIPELINE.md")
+    print("  docs/guides/LUXURY_ESTATE_PIPELINE.md")
     print("  LUXURY_ESTATE_PIPELINE_QUICKSTART.md")
     print("=" * 80)
 
