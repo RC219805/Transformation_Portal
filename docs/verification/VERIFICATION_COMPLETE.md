@@ -135,7 +135,7 @@ Step-by-step checklist with:
 3. `examples/validate_file_formats.py` - 270+ lines CLI tool
 4. `SUPPORTED_FILE_FORMATS.md` - Complete format specification
 5. `FILE_FORMAT_QUICK_REFERENCE.md` - Quick reference guide
-6. `docs/FORMAT_SUPPORT_OVERVIEW.md` - Documentation index
+6. `docs/guides/FORMAT_SUPPORT_OVERVIEW.md` - Documentation index
 
 ### Modified Files (1):
 1. `README.md` - Added "Supported File Formats" section
