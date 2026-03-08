@@ -57,7 +57,7 @@ Successfully created a comprehensive unified luxury processing pipeline that com
 **Test Results:** All 38 tests pass in 3.06 seconds
 
 ### 3. Documentation
-**File:** `docs/UNIFIED_LUXURY_PIPELINE.md` (600+ lines)
+**File:** `docs/guides/UNIFIED_LUXURY_PIPELINE.md` (600+ lines)
 
 **Comprehensive documentation including:**
 - Overview and key features
@@ -263,7 +263,7 @@ outputs = pipeline.process("input.jpg")
 1. **Created:** `src/transformation_portal/pipelines/unified_luxury_pipeline.py`
 2. **Created:** `tests/test_unified_luxury_pipeline.py`
 3. **Created:** `examples/unified_luxury_pipeline_examples.py`
-4. **Created:** `docs/UNIFIED_LUXURY_PIPELINE.md`
+4. **Created:** `docs/guides/UNIFIED_LUXURY_PIPELINE.md`
 5. **Updated:** `src/transformation_portal/pipelines/__init__.py`
 
 ## Summary

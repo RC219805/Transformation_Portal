@@ -33,7 +33,7 @@ save_16bit_tiff_tifffile(image_array, output_path, compression='lzw')
 - `750_PICACHO_TIFF_FINAL_REPORT.md` - Comprehensive findings
 - `TIFF_FIX_SUMMARY_NOV8.md` - Solution summary
 - `UNIFIED_PIPELINE_SUMMARY.md` - Pipeline documentation
-- `docs/UNIFIED_LUXURY_PIPELINE.md` - Technical specification
+- `docs/guides/UNIFIED_LUXURY_PIPELINE.md` - Technical specification
 
 #### 4. **Git Repository Status**
 **Last Commit**: `79be758`

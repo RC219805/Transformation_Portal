@@ -22,9 +22,9 @@ Successfully restructured the Transformation Portal repository to align with mod
 
 **Files Moved:**
 - `08_Documentation/Version_History/changelog.md` → `docs/version_history/changelog.md`
-- `08_Documentation/CHANGELOG_CLI_v1_3.md` → `docs/CHANGELOG_CLI_v1_3.md`
+- `08_Documentation/CHANGELOG_CLI_v1_3.md` → `docs/cli/CHANGELOG_CLI_v1_3.md`
 - `08_Documentation/lantern_logo_component_spec.md` → `docs/brand/lantern_logo_component_spec.md`
-- `08_Documentation/luxury_rendering_insights.md` → `docs/luxury_rendering_insights.md`
+- `08_Documentation/luxury_rendering_insights.md` → `docs/guides/luxury_rendering_insights.md`
 - `08_Documentation/Palette_Assignment_Guide.md` → `docs/brand/Palette_Assignment_Guide.md`
 
 ### 2. Asset Organization ✅

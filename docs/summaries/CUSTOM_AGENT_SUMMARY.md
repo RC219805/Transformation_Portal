@@ -27,7 +27,7 @@ Explains:
 - Maintenance and update procedures
 
 ### 3. **Comprehensive Usage Guide**
-**File**: `docs/CUSTOM_AGENT_GUIDE.md`
+**File**: `docs/guides/CUSTOM_AGENT_GUIDE.md`
 
 Detailed guide including:
 - What makes the agent special
@@ -255,7 +255,7 @@ Potential improvements:
 
 - **Agent File**: `.github/agents/transformation-portal-specialist.md`
 - **Agent README**: `.github/agents/README.md`
-- **Usage Guide**: `docs/CUSTOM_AGENT_GUIDE.md`
+- **Usage Guide**: `docs/guides/CUSTOM_AGENT_GUIDE.md`
 - **Tests**: `tests/test_custom_agent_config.py`
 - **Copilot Instructions**: `.github/copilot-instructions.md`
 - **Repository Docs**: `docs/`
@@ -263,7 +263,7 @@ Potential improvements:
 ## Getting Started
 
 ### For New Contributors
-1. Read `docs/CUSTOM_AGENT_GUIDE.md`
+1. Read `docs/guides/CUSTOM_AGENT_GUIDE.md`
 2. Try example prompts from the guide
 3. Use the agent for your first task
 4. Provide feedback for improvement

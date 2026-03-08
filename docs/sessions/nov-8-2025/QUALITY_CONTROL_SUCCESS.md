@@ -122,7 +122,7 @@ All tests now pass. Ready for merge to main.
 
 ## 🔗 References
 
-- Code Quality Baseline: `docs/CODE_QUALITY_BASELINE.md`
+- Code Quality Baseline: `docs/guides/CODE_QUALITY_BASELINE.md`
 - Session Documentation: `docs/sessions/nov-8-2025/`
 - Project Documentation: `docs/projects/750-picacho/`
 - Technical Documentation: `docs/TIFF_*.md`

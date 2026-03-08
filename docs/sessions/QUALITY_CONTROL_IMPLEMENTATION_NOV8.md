@@ -77,7 +77,7 @@ python3 .pre-commit-quality-check.py
 **Test Compliance**: ✅ PASS
 
 ### 5. Quality Standards Document
-**Location**: `docs/CODEBASE_QUALITY_STANDARDS.md`
+**Location**: `docs/guides/CODEBASE_QUALITY_STANDARDS.md`
 
 **Contents**:
 - Recurring issue patterns and solutions

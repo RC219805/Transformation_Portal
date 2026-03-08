@@ -101,7 +101,7 @@ Blocks: Critical syntax/import errors
 ```
 
 ### 3. Comprehensive Quality System Documentation
-**File:** `docs/CODE_QUALITY_SYSTEM.md`
+**File:** `docs/guides/CODE_QUALITY_SYSTEM.md`
 **Size:** 8.3 KB
 **Status:** ✅ CREATED
 
@@ -123,7 +123,7 @@ Blocks: Critical syntax/import errors
 ```diff
 - CODE_*.md  # Blocked all CODE_* files
 + # But allow important docs in docs/
-+ !docs/CODE_QUALITY_SYSTEM.md
++ !docs/guides/CODE_QUALITY_SYSTEM.md
 ```
 
 ---
@@ -213,7 +213,7 @@ graph LR
 
 ### New Files Created
 
-1. **docs/CODE_QUALITY_SYSTEM.md** (8.3 KB)
+1. **docs/guides/CODE_QUALITY_SYSTEM.md** (8.3 KB)
    - Comprehensive quality guidelines
    - Common issues & solutions
    - Tool configurations
@@ -321,7 +321,7 @@ graph LR
 ## Support & Resources
 
 **Documentation:**
-- Main: `docs/CODE_QUALITY_SYSTEM.md`
+- Main: `docs/guides/CODE_QUALITY_SYSTEM.md`
 - Projects: `docs/projects/`
 - Archive: `docs/archive/`
 

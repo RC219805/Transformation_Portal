@@ -58,7 +58,7 @@
    - Custom parameter overrides example
    - All runnable code (no placeholders)
 
-3. **docs/PBR_ENHANCE_CONFIG_GUIDE.md** (+150 lines)
+3. **docs/guides/PBR_ENHANCE_CONFIG_GUIDE.md** (+150 lines)
    - "PBR-Only Workflow" section
    - `from_cached_depth()` API documentation
    - `from_depth()` API documentation
@@ -108,7 +108,7 @@
 
 1. `README.md` - Added PBR section (+60 lines)
 2. `examples/README.md` - Added PBRProcessor examples (+100 lines)
-3. `docs/PBR_ENHANCE_CONFIG_GUIDE.md` - Added PBR-only workflow (+150 lines)
+3. `docs/guides/PBR_ENHANCE_CONFIG_GUIDE.md` - Added PBR-only workflow (+150 lines)
 
 **Total modifications**: 310 lines
 
@@ -272,7 +272,7 @@ Per priority guidance, these optimizations are deferred but documented for futur
    git add tests/test_pbr_processor.py
    git add docs/guides/PBR_PROCESSOR_QUICKSTART.md
    git add PBR_PRODUCTION_VALIDATION_REPORT.md
-   git add README.md examples/README.md docs/PBR_ENHANCE_CONFIG_GUIDE.md
+   git add README.md examples/README.md docs/guides/PBR_ENHANCE_CONFIG_GUIDE.md
    git commit -m "feat: Add PBRProcessor integration tests and documentation"
    ```
 

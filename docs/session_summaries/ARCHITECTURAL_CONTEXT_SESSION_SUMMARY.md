@@ -106,7 +106,7 @@ Enhanced Prompt:
 
 ### 2. Documentation (3 Files, ~38KB)
 
-#### `docs/ARCHITECTURAL_CONTEXT_INTEGRATION.md` (14.8KB)
+#### `docs/architecture/ARCHITECTURAL_CONTEXT_INTEGRATION.md` (14.8KB)
 **Comprehensive technical documentation:**
 - Architecture diagrams and data flow
 - Component API documentation
@@ -453,7 +453,7 @@ Transformation_Portal/
 │   └── Complete workflow demonstration
 │
 ├── docs/
-│   └── ARCHITECTURAL_CONTEXT_INTEGRATION.md (14.8KB)
+│   └── architecture/ARCHITECTURAL_CONTEXT_INTEGRATION.md (14.8KB)
 │       └── Comprehensive technical documentation
 │
 ├── ARCHITECTURAL_CONTEXT_IMPLEMENTATION.md (13.9KB)
@@ -529,7 +529,7 @@ done
 git add architectural_context_engine.py \
         context_aware_pro_pipeline.py \
         example_context_aware_processing.py \
-        docs/ARCHITECTURAL_CONTEXT_INTEGRATION.md \
+        docs/architecture/ARCHITECTURAL_CONTEXT_INTEGRATION.md \
         ARCHITECTURAL_CONTEXT_IMPLEMENTATION.md \
         ARCHITECTURAL_CONTEXT_QUICK_REFERENCE.md \
         requirements.txt
