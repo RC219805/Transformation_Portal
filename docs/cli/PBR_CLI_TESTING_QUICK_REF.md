@@ -117,8 +117,7 @@ pytest tests/stress/ -v -m stress
 
 ## Documentation
 
-- **Full Guide**: `docs/PBR_CLI_TESTING_GUIDE.md`
-- **Implementation**: `docs/PBR_CLI_IMPLEMENTATION_SUMMARY.md`
+- **Full Guide**: `docs/cli/PBR_CLI_TESTING_GUIDE.md`
 - **Stress Tests**: `tests/stress/__init__.py`
 
 ## Files Modified
@@ -127,9 +126,8 @@ pytest tests/stress/ -v -m stress
 - `tests/test_pbr_cli.py` - CLI test suite
 - `tests/stress/test_stress_large_batch.py` - Stress tests
 - `tests/stress/__init__.py` - Package docs
-- `docs/PBR_CLI_TESTING_GUIDE.md` - Full guide
-- `docs/PBR_CLI_IMPLEMENTATION_SUMMARY.md` - Summary
-- `docs/PBR_CLI_TESTING_QUICK_REF.md` - This file
+- `docs/cli/PBR_CLI_TESTING_GUIDE.md` - Full guide
+- This file
 
 ### Modified Files
 - `src/transformation_portal/lux_depth_v3/pbr_cli.py` - Robustness fixes

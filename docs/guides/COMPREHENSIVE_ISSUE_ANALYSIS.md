@@ -563,7 +563,7 @@ WORKFLOW_VISUAL_GUIDE.txt
                  DeprecationWarning, stacklevel=2)
    ```
 
-2. Create `docs/DEPRECATED.md` listing:
+2. Update `docs/deprecation/DEPRECATION_POLICY.md` with:
    - Deprecated scripts
    - Replacement recommendations
    - Removal timeline

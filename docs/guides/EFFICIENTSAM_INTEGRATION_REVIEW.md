@@ -130,8 +130,8 @@ tests/materials/test_segmentation_backend.py
    - Content: Architecture, performance, usage examples, troubleshooting
    - Quality: ⭐⭐⭐⭐⭐ Comprehensive
 
-2. **Materials V3 Quick Reference** (Updated)
-   - File: `docs/materials_v3_quick_reference.md`
+2. **Legacy Materials V3 quick reference**
+   - File: `docs/reference/materials_v3_quick_reference_old.md`
    - Content: API reference, configuration, integration examples
    - Quality: ⭐⭐⭐⭐⭐ Complete
 
@@ -507,9 +507,9 @@ This implementation can be deployed to production immediately with confidence. T
 ### Documentation
 - `IMPLEMENTATION_SUMMARY_EFFICIENTSAM.md` (402 lines)
 - `CONFIDENCE_SCORING_IMPLEMENTATION.md` (100+ lines)
-- `docs/materials_v3_quick_reference.md` (updated)
-- `docs/confidence_scoring.md`
-- `docs/materials_v3_enhancements_summary.md`
+- `docs/reference/materials_v3_quick_reference_old.md` (Legacy Materials V3 quick reference)
+- `docs/guides/confidence_scoring.md`
+- `docs/implementation/IMPLEMENTATION_SUMMARY_EFFICIENTSAM.md` (EfficientSAM implementation summary)
 
 ### Total Impact
 - **Lines Added:** ~2,500+ (implementation + tests + docs)

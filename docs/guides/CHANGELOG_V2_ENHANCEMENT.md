@@ -43,8 +43,8 @@
 - **Total: 76 V2-related tests** (100% passing)
 
 ##### Documentation
-- **`docs/V2_ENHANCEMENT_IMPLEMENTATION_SUMMARY.md`** - Complete implementation summary
-- **`docs/V2_ENHANCEMENT_QUICKSTART.md`** - User guide with examples
+- **`docs/historical/V2_ENHANCEMENT_FINAL_REPORT.md`** - Final implementation report
+- **`docs/guides/V2_ENHANCEMENT_QUICKSTART.md`** - User guide with examples
 - **`docs/architecture/decisions/V2_ENHANCEMENT_ARCHITECTURAL_GUIDANCE.md`** - Architectural guidance (created by Architect)
 
 ##### Performance
