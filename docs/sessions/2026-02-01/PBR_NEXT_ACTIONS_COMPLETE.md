@@ -52,7 +52,7 @@ From `PBR_REVIEW_AND_OPTIMIZATION_SUMMARY.md`, the following next actions were r
    - Custom parameter overrides
    - All examples are runnable
 
-3. **docs/PBR_ENHANCE_CONFIG_GUIDE.md** (+150 lines)
+3. **docs/guides/PBR_ENHANCE_CONFIG_GUIDE.md** (+150 lines)
    - "PBR-Only Workflow" section
    - `from_cached_depth()` API docs
    - `from_depth()` API docs
@@ -207,7 +207,7 @@ From `PBR_REVIEW_AND_OPTIMIZATION_SUMMARY.md`, the following next actions were r
 
 1. `README.md` - +60 lines (PBR section)
 2. `examples/README.md` - +100 lines (PBRProcessor examples)
-3. `docs/PBR_ENHANCE_CONFIG_GUIDE.md` - +150 lines (PBR-only workflow)
+3. `docs/guides/PBR_ENHANCE_CONFIG_GUIDE.md` - +150 lines (PBR-only workflow)
 
 **Total modifications**: 310 lines
 

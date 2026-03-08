@@ -149,7 +149,7 @@ assert memory_time <= io_time
 |------|------|--------|-------|
 | `README.md` | Updated | ✅ Complete | +60 |
 | `examples/README.md` | Updated | ✅ Complete | +100 |
-| `docs/PBR_ENHANCE_CONFIG_GUIDE.md` | Updated | ✅ Complete | +150 |
+| `docs/guides/PBR_ENHANCE_CONFIG_GUIDE.md` | Updated | ✅ Complete | +150 |
 | `docs/guides/PBR_PROCESSOR_QUICKSTART.md` | Created | ✅ Complete | 480 |
 
 **Total Documentation**: 790+ lines added/updated
@@ -172,7 +172,7 @@ assert memory_time <= io_time
 - [x] All examples are runnable (no placeholders)
 - [x] Expected output documented
 
-✅ **docs/PBR_ENHANCE_CONFIG_GUIDE.md** - Configuration guide
+✅ **docs/guides/PBR_ENHANCE_CONFIG_GUIDE.md** - Configuration guide
 - [x] "PBR-Only Workflow" section added
 - [x] `from_cached_depth()` API documented
 - [x] `from_depth()` API documented
@@ -302,7 +302,7 @@ assert memory_time <= io_time
 **Delivered**:
 1. ✅ **README.md** - PBR section added with quick start, presets, performance
 2. ✅ **examples/README.md** - 4 runnable code examples added
-3. ✅ **docs/PBR_ENHANCE_CONFIG_GUIDE.md** - PBR-only workflow section with API docs
+3. ✅ **docs/guides/PBR_ENHANCE_CONFIG_GUIDE.md** - PBR-only workflow section with API docs
 4. ✅ **docs/guides/PBR_PROCESSOR_QUICKSTART.md** - NEW comprehensive guide (480 lines)
 
 **Total**: 4 files updated/created (meets requirement)
