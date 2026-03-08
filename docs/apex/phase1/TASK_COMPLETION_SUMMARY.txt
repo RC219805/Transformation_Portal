@@ -23,7 +23,7 @@ DELIVERABLES
    - Tracks: Pipeline wiring, schema updates, CI changes, staged rollout
 
 ✅ 3. Completion Report
-   - File: docs/APEX_COMPLETION_REPORT.md
+   - File: docs/historical/APEX_COMPLETION_REPORT.md
    - Summary of deliverables, architecture, next steps
 
 ================================================================================
@@ -114,9 +114,9 @@ REFERENCES
 
 PR #867:  https://github.com/RC219805/Transformation_Portal/pull/867
 Issue #868: https://github.com/RC219805/Transformation_Portal/issues/868
-Completion Report: docs/APEX_COMPLETION_REPORT.md
-Contract: docs/APEX_CONTRACT.md
-Integration Guide: docs/APEX_REAL_PIPELINE_INTEGRATION.md
+Completion Report: docs/historical/APEX_COMPLETION_REPORT.md
+Contract: docs/contracts/APEX_CONTRACT.md
+Integration Guide: docs/guides/APEX_REAL_PIPELINE_INTEGRATION.md
 
 ================================================================================
 TASK STATUS: ✅ COMPLETE

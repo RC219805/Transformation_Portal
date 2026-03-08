@@ -41,8 +41,8 @@ TypeError: expected str, bytes or os.PathLike object, not OptionInfo
 
 **Solutions Provided**:
 1. **Comprehensive Documentation**
-   - Created `docs/SETUP_GUIDE.md` with depth processing setup
-   - Created `docs/TROUBLESHOOTING.md` with solutions
+   - Created `docs/guides/SETUP_GUIDE.md` with depth processing setup
+   - Created `docs/guides/TROUBLESHOOTING.md` with solutions
    - Documented PyTorch vs CoreML options
 
 2. **Automated Download Script**
@@ -162,8 +162,8 @@ RuntimeError: The size of tensor a (128) must match the size of tensor b (88)
    - Clear fallback behavior explanation
 
 5. **Documentation**
-   - Setup instructions in `docs/SETUP_GUIDE.md`
-   - Troubleshooting in `docs/TROUBLESHOOTING.md`
+   - Setup instructions in `docs/guides/SETUP_GUIDE.md`
+   - Troubleshooting in `docs/guides/TROUBLESHOOTING.md`
    - Download instructions and benefits documented
 
 **Files Modified**:
@@ -284,7 +284,7 @@ python scripts/verify_setup.py --verbose
 - Performance Tips
 - Verification Steps
 
-**Location**: `docs/SETUP_GUIDE.md`
+**Location**: `docs/guides/SETUP_GUIDE.md`
 
 ### 2. TROUBLESHOOTING.md (10,457 bytes)
 
@@ -297,7 +297,7 @@ python scripts/verify_setup.py --verbose
 - Performance Optimization
 - Quick Reference Table
 
-**Location**: `docs/TROUBLESHOOTING.md`
+**Location**: `docs/guides/TROUBLESHOOTING.md`
 
 **Coverage**: All 5 issues from bug report addressed with step-by-step solutions
 
@@ -433,14 +433,14 @@ test_dimension_validation_always_returns_valid()  # Hypothesis tests
    - Dimension validation testing
    - Uses constants from main module
 
-3. **docs/SETUP_GUIDE.md** (404 lines)
+3. **docs/guides/SETUP_GUIDE.md** (404 lines)
    - Comprehensive setup instructions
    - Platform-specific guidance
    - Model download instructions
    - Troubleshooting
    - Performance tips
 
-4. **docs/TROUBLESHOOTING.md** (404 lines)
+4. **docs/guides/TROUBLESHOOTING.md** (404 lines)
    - All 5 bug report issues
    - Organized by priority
    - Step-by-step solutions
@@ -634,8 +634,8 @@ SUMMARY
    ```
 
 5. **Read documentation**:
-   - Quick start: `docs/SETUP_GUIDE.md`
-   - Troubleshooting: `docs/TROUBLESHOOTING.md`
+   - Quick start: `docs/guides/SETUP_GUIDE.md`
+   - Troubleshooting: `docs/guides/TROUBLESHOOTING.md`
    - Main README: `README.md`
 
 ---

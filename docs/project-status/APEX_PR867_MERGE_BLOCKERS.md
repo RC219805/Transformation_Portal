@@ -46,7 +46,7 @@ raise NotImplementedError("Actual pipeline integration not yet implemented. Use 
    if not args.dry_run:
        logger.error("❌ Real pipeline integration not yet implemented")
        logger.error("   Use --dry-run to test APEX scaffolding")
-       logger.error("   Track progress: docs/APEX_REAL_PIPELINE_INTEGRATION.md")
+       logger.error("   Track progress: docs/guides/APEX_REAL_PIPELINE_INTEGRATION.md")
        return 1
    ```
 
@@ -56,7 +56,7 @@ raise NotImplementedError("Actual pipeline integration not yet implemented. Use 
    lines.append("# 🎯 APEX Performance Report [SYNTHETIC DATA]")
    lines.append("")
    lines.append("> ⚠️ **This report uses mock data (dry-run mode)**")
-   lines.append("> Real pipeline integration tracked in docs/APEX_REAL_PIPELINE_INTEGRATION.md")
+  lines.append("> Real pipeline integration tracked in docs/guides/APEX_REAL_PIPELINE_INTEGRATION.md")
    lines.append("")
    ```
 
@@ -229,7 +229,7 @@ for table in tables_to_truncate:
 
 ### 3. Copilot: Integration Doc Has Placeholder Issue Numbers
 
-**File:** `docs/APEX_REAL_PIPELINE_INTEGRATION.md`
+**File:** `docs/guides/APEX_REAL_PIPELINE_INTEGRATION.md`
 
 Replace `#XXX` with real issue once created, or remove placeholder.
 

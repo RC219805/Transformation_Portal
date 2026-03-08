@@ -127,7 +127,7 @@ This document provides a **complete, categorized inventory** of all TODOs, NotIm
 
 **Location:**
 - `src/transformation_portal/config_loader.py`
-- Mentioned in: `docs/IMPROVEMENT_OPPORTUNITIES.md:315`
+- Mentioned in: `docs/guides/IMPROVEMENT_OPPORTUNITIES.md:315`
 
 **Scope:**
 - [ ] Implement preset inheritance/composition
@@ -668,7 +668,7 @@ raise NotImplementedError(f"Backend {self.backend} not implemented")
 - Non-deterministic, likely resource contention
 - Does not affect correctness, only performance
 
-**Status:** Already tracked in `docs/IMPROVEMENT_OPPORTUNITIES.md:281` (TEST-006)
+**Status:** Already tracked in `docs/guides/IMPROVEMENT_OPPORTUNITIES.md:281` (TEST-006)
 
 #### 3.3.2 Preset Performance Ordering (line 372)
 
@@ -773,7 +773,7 @@ Multiple TODOs:
 | Item (2026-02-05 Checklist) | Actual Status (2026-02-13) | Evidence |
 |------|--------|---------|
 | Add code coverage to CI | ✅ **COMPLETED** | `ci.yml:424-438` dual-gate (25% floor + 80% diff) |
-| Enforce 70% coverage threshold | 🟡 **PARTIAL** (25% floor, 80% diff ratchet) | Coverage improvement roadmap: docs/coverage-improvement-plan.md |
+| Enforce 70% coverage threshold | 🟡 **PARTIAL** (25% floor, 80% diff ratchet) | Coverage improvement roadmap: docs/guides/coverage-improvement-plan.md |
 | Add security scan to PR workflow | ✅ **COMPLETED** | Bandit, pip-audit, gitleaks, CodeQL, Safety (ci.yml + security-unified.yml) |
 | Configure branch protection | ❓ **UNKNOWN** (repo setting, not in code) | Requires GitHub UI inspection |
 | Document rollback procedures | ❌ **NOT DONE** | No docs/deployment/rollback_procedures.md found |
@@ -864,7 +864,7 @@ Original inventory (2026-02-05) identified 6 gaps. Current reality:
   2. **Diff gate:** 80% coverage on changed lines (ratcheting mechanism)
 - **Combined coverage:** Core tests + ML tests merged
 - **Artifacts:** HTML reports uploaded for PR review
-- **Improvement roadmap:** docs/coverage-improvement-plan.md (target: 33% by Q2 2026)
+- **Improvement roadmap:** docs/guides/coverage-improvement-plan.md (target: 33% by Q2 2026)
 
 **Evidence:**
 ```yaml

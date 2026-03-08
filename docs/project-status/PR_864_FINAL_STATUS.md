@@ -54,7 +54,7 @@ The implementation is **production-grade scaffolding** running in **dry-run/synt
    - Matrix runner generates mock `PerformanceCapsule` data
    - All CI runs use `--dry-run` flag
    - PR comments display "SYNTHETIC DATA" warning banner
-   - Real integration path documented in `docs/APEX_REAL_PIPELINE_INTEGRATION.md`
+   - Real integration path documented in `docs/guides/APEX_REAL_PIPELINE_INTEGRATION.md`
 
 2. **Schema Baseline Clarification**
    - Code uses v2.0.0 (workflow_version + zone)
@@ -149,7 +149,7 @@ All merge-blocking issues addressed:
 ### Immediate (Week 1)
 
 1. **Create GitHub Issue: "APEX Real Pipeline Integration"**
-   - Use template from `docs/APEX_REAL_PIPELINE_INTEGRATION.md`
+   - Use template from `docs/guides/APEX_REAL_PIPELINE_INTEGRATION.md`
    - Assign milestone: "APEX Production Readiness"
    - Priority: High
 
@@ -285,7 +285,7 @@ gh pr merge 864 --squash --delete-branch
 ```bash
 gh issue create \
   --title "APEX Real Pipeline Integration" \
-  --body-file docs/APEX_REAL_PIPELINE_INTEGRATION.md \
+ --body-file docs/guides/APEX_REAL_PIPELINE_INTEGRATION.md \
   --label "enhancement,APEX" \
   --milestone "APEX Production Readiness"
 ```

@@ -40,7 +40,7 @@ Tested `python examples/validate_file_formats.py`:
   - `format_utils.py` (new)
   - `tests/test_format_utils.py` (new)
   - `examples/validate_file_formats.py` (new)
-  - Documentation files: SUPPORTED_FILE_FORMATS.md, FILE_FORMAT_QUICK_REFERENCE.md, docs/FORMAT_SUPPORT_OVERVIEW.md (new)
+  - Documentation files: SUPPORTED_FILE_FORMATS.md, FILE_FORMAT_QUICK_REFERENCE.md, docs/guides/FORMAT_SUPPORT_OVERVIEW.md (new)
   - `README.md` (modified)
 
 **Conflict Assessment**:
@@ -59,7 +59,7 @@ Tested `python examples/validate_file_formats.py`:
 3. `examples/validate_file_formats.py` - CLI validation tool
 4. `SUPPORTED_FILE_FORMATS.md` - Complete format specification
 5. `FILE_FORMAT_QUICK_REFERENCE.md` - Quick reference guide
-6. `docs/FORMAT_SUPPORT_OVERVIEW.md` - Documentation index
+6. `docs/guides/FORMAT_SUPPORT_OVERVIEW.md` - Documentation index
 
 ### Modified Files (1):
 1. `README.md` - Added "Supported File Formats" section
