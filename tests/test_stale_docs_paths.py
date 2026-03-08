@@ -71,6 +71,19 @@ def _run_checker(repo_root: Path) -> subprocess.CompletedProcess[str]:
     )
 
 
+def _assert_stale_reference_detected(
+    repo_root: Path,
+    reference_text: str,
+) -> None:
+    _write(repo_root / "notes.md", f"See {reference_text}\n")
+    _track(repo_root, "notes.md")
+
+    result = _run_checker(repo_root)
+
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert f"notes.md: references missing {MISSING_ROOT_DOC}" in result.stdout
+
+
 def test_checker_fails_for_changed_file_with_missing_root_doc_reference(
     tmp_path: Path,
 ) -> None:
@@ -87,13 +100,45 @@ def test_checker_fails_for_changed_file_with_missing_root_doc_reference(
     )
     _commit(repo_root)
 
-    _write(repo_root / "notes.md", f"See {MISSING_ROOT_DOC}\n")
-    _track(repo_root, "notes.md")
+    _assert_stale_reference_detected(repo_root, MISSING_ROOT_DOC)
 
-    result = _run_checker(repo_root)
 
-    assert result.returncode == 1, result.stdout + result.stderr
-    assert f"notes.md: references missing {MISSING_ROOT_DOC}" in result.stdout
+def test_checker_fails_for_changed_file_with_dot_slash_root_doc_reference(
+    tmp_path: Path,
+) -> None:
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    _init_repo(repo_root)
+    _copy_repo_script(repo_root)
+
+    _write(repo_root / "docs" / "README.md")
+    _track(
+        repo_root,
+        "docs/README.md",
+        "scripts/governance/check_stale_docs_paths.py",
+    )
+    _commit(repo_root)
+
+    _assert_stale_reference_detected(repo_root, f"./{MISSING_ROOT_DOC}")
+
+
+def test_checker_fails_for_changed_file_with_dot_dot_slash_root_doc_reference(
+    tmp_path: Path,
+) -> None:
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    _init_repo(repo_root)
+    _copy_repo_script(repo_root)
+
+    _write(repo_root / "docs" / "README.md")
+    _track(
+        repo_root,
+        "docs/README.md",
+        "scripts/governance/check_stale_docs_paths.py",
+    )
+    _commit(repo_root)
+
+    _assert_stale_reference_detected(repo_root, f"../{MISSING_ROOT_DOC}")
 
 
 def test_checker_allows_existing_root_doc_reference(tmp_path: Path) -> None:
@@ -213,11 +258,9 @@ def test_checker_uses_git_diff_fallbacks_when_origin_main_is_missing(
     )
     _commit(repo_root)
 
-    _write(repo_root / "notes.md", f"See {MISSING_ROOT_DOC}\n")
-    _track(repo_root, "notes.md")
+    _assert_stale_reference_detected(repo_root, f"../{MISSING_ROOT_DOC}")
 
     result = _run_checker(repo_root)
 
     assert result.returncode == 1, result.stdout + result.stderr
     assert "Unable to determine changed files" not in result.stdout
-    assert f"notes.md: references missing {MISSING_ROOT_DOC}" in result.stdout

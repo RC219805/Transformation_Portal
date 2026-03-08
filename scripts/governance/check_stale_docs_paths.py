@@ -11,7 +11,14 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 IGNORE_DIRS = {"__pycache__"}
 IGNORE_SUFFIXES = {".pyc"}
 PATH_PATTERN = re.compile(
-    r"(?<![A-Za-z0-9_./-])docs/([A-Za-z0-9_-]+\.(?:md|txt|csv))",
+    "".join(
+        [
+            r"(?<![A-Za-z0-9_/-])",
+            r"(?:\./|(?:\.\./)+)?docs/",
+            r"([A-Za-z0-9_-]+\.(?:md|txt|csv))",
+            r"(?![A-Za-z0-9_/-])",
+        ]
+    ),
     re.IGNORECASE,
 )
 
