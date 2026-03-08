@@ -139,7 +139,7 @@ Major infrastructure improvement implementing a layered dependency management sy
    - `.github/workflows/dependency-update.yml` updated
 
 5. **Documentation**
-   - New `docs/LAYERED_DEPENDENCIES_IMPLEMENTATION.md` (277 lines)
+   - New `docs/guides/LAYERED_DEPENDENCIES_IMPLEMENTATION.md` (277 lines)
    - README.md streamlined (671 lines removed, focused)
    - Clear migration path documented
 
@@ -153,7 +153,7 @@ Major infrastructure improvement implementing a layered dependency management sy
 #### Files Changed: 20 (+1,313/-598 lines)
 **New files:**
 - `requirements/` directory (8 files)
-- `docs/LAYERED_DEPENDENCIES_IMPLEMENTATION.md`
+- `docs/guides/LAYERED_DEPENDENCIES_IMPLEMENTATION.md`
 
 **Updated files:**
 - Workflows (2 files)

@@ -39,7 +39,7 @@ python scripts/simple_image_processor.py input_images/image.png \
 **New Tools Added:**
 - ✅ `scripts/check_image_processing_readiness.py` - Comprehensive setup checker
 - ✅ `scripts/simple_image_processor.py` - Minimal-dependency processor
-- ✅ `docs/IMAGE_PROCESSING_READINESS.md` - Complete readiness guide
+- ✅ `docs/guides/IMAGE_PROCESSING_READINESS.md` - Complete readiness guide
 
 **Example Output:**
 ```
@@ -116,9 +116,9 @@ pip install -r requirements.txt
 ## Documentation
 
 - **Quick Reference:** This file
-- **Complete Guide:** `docs/IMAGE_PROCESSING_READINESS.md`
+- **Complete Guide:** `docs/guides/IMAGE_PROCESSING_READINESS.md`
 - **Main README:** `README.md`
-- **Pipeline Guide:** `docs/PIPELINE_OPERATIONS_GUIDE.md`
+- **Pipeline Guide:** `docs/pipeline_docs/PIPELINE_OPERATIONS_GUIDE.md`
 
 ## Test Results ✅
 
