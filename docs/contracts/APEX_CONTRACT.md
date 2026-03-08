@@ -217,7 +217,7 @@ if count < 20:
 - [ ] Collect 1-2 weeks shadow data
 - [ ] Tune thresholds based on reality
 
-**Tracked in:** `docs/APEX_REAL_PIPELINE_INTEGRATION.md`
+**Tracked in:** `docs/guides/APEX_REAL_PIPELINE_INTEGRATION.md`
 
 ---
 
@@ -285,10 +285,10 @@ if count < 20:
 
 ## References
 
-- **Architecture:** `docs/APEX_ARCHITECTURE.md`
-- **Integration Plan:** `docs/APEX_REAL_PIPELINE_INTEGRATION.md`
+- **Architecture:** `docs/architecture/APEX_END_TO_END_ARCHITECTURE.md`
+- **Integration Plan:** `docs/guides/APEX_REAL_PIPELINE_INTEGRATION.md`
 - **Quality Firewall:** `QUALITY_FIREWALL_QUICK_REF.md`
-- **Performance Ledger:** `docs/PERFORMANCE_LEDGER_README.md`
+- **Performance Ledger:** `docs/performance/PERFORMANCE_LEDGER_README.md`
 
 ---
 

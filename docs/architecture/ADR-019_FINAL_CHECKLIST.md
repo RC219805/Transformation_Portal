@@ -85,8 +85,8 @@
 1. `README.md` - Already includes backend examples
 2. `src/transformation_portal/lux_depth_v3/__main__.py` - CLI examples
 3. `docs/architecture/decisions/ADR-019-REVISED-DECISION.md` - Architectural guidance
-4. `docs/ADR-019_VERIFICATION_REPORT.md` - Verification report (NEW)
-5. `docs/ADR-019_IMPLEMENTATION_SUMMARY.md` - Implementation summary (NEW)
+4. `docs/architecture/ADR-019_VERIFICATION_REPORT.md` - Verification report (NEW)
+5. `docs/architecture/decisions/ADR-019-IMPLEMENTATION-STATUS.md` - Implementation summary (NEW)
 
 **Status:** ✅ **COMPLETE**
 
@@ -298,8 +298,8 @@ assert hasattr(result, "depth_map")  # New attribute
 - [x] Integration guide (this checklist)
 
 ### ✅ Verification Documentation
-- [x] Verification report (ADR-019_VERIFICATION_REPORT.md)
-- [x] Implementation summary (ADR-019_IMPLEMENTATION_SUMMARY.md)
+- [x] Verification report (docs/architecture/ADR-019_VERIFICATION_REPORT.md)
+- [x] Implementation summary (docs/architecture/decisions/ADR-019-IMPLEMENTATION-STATUS.md)
 - [x] Test coverage documented
 
 ---
