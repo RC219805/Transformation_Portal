@@ -65,7 +65,7 @@ The pipeline auto-detects room types from filenames:
 
 ### Documentation
 
-📖 **Full Documentation**: [docs/ELITE_PIPELINE_GUIDE.md](docs/ELITE_PIPELINE_GUIDE.md)
+📖 **Full Documentation**: [docs/guides/ELITE_PIPELINE_GUIDE.md](../guides/ELITE_PIPELINE_GUIDE.md)
 ⚙️ **Configuration Reference**: [config/750_picacho_elite_preset.yaml](config/750_picacho_elite_preset.yaml)
 🎯 **Pipeline Script**: [elite_architectural_pipeline.py](elite_architectural_pipeline.py)
 

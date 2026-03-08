@@ -35,7 +35,7 @@ Successfully designed and implemented a **cutting-edge, comprehensive processing
 - Performance optimization settings
 
 ### 3. Documentation
-**File**: `docs/ELITE_PIPELINE_GUIDE.md` (450+ lines)
+**File**: `docs/guides/ELITE_PIPELINE_GUIDE.md` (450+ lines)
 
 **Contents**:
 - Complete architecture overview
@@ -335,7 +335,7 @@ Transformation_Portal/
 
 1. **Quick Start**: `ELITE_PIPELINE_README.md` (3 min read)
 2. **Examples**: `elite_pipeline_examples.py` (interactive)
-3. **Full Guide**: `docs/ELITE_PIPELINE_GUIDE.md` (20 min read)
+3. **Full Guide**: `docs/guides/ELITE_PIPELINE_GUIDE.md` (20 min read)
 4. **Configuration**: `config/750_picacho_elite_preset.yaml` (reference)
 5. **Source Code**: `elite_architectural_pipeline.py` (deep dive)
 

@@ -272,4 +272,4 @@ The 750 Picacho Lane project has strong Material Response processing foundations
 - Full Analysis: `docs/projects/750_PICACHO_LANE_ANALYSIS.md`
 - Action Plan: `docs/projects/750_PICACHO_ENHANCEMENT_ROADMAP.md`
 - Technical Fix: `docs/sessions/nov-8-2025/TIFF_FIX_SUMMARY_NOV8.md`
-- Pipeline Docs: `docs/UNIFIED_LUXURY_PIPELINE.md`
+- Pipeline Docs: `docs/guides/UNIFIED_LUXURY_PIPELINE.md`

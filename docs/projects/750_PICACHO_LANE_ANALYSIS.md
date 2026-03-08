@@ -752,4 +752,4 @@ The 750 Picacho Lane project has strong Material Response processing results (lu
 **Related Documents:**
 - `docs/sessions/nov-8-2025/TIFF_FIX_SUMMARY_NOV8.md`
 - `docs/sessions/nov-8-2025/UNIFIED_PIPELINE_SUMMARY.md`
-- `docs/UNIFIED_LUXURY_PIPELINE.md`
+- `docs/guides/UNIFIED_LUXURY_PIPELINE.md`

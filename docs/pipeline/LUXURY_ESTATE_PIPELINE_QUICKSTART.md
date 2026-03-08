@@ -276,7 +276,7 @@ depth:
 ## 📚 Full Documentation
 
 **Comprehensive Guide:**
-`docs/LUXURY_ESTATE_PIPELINE.md`
+`docs/guides/LUXURY_ESTATE_PIPELINE.md`
 
 **Configuration Reference:**
 `config/750_picacho_master_preset.yaml`
@@ -404,4 +404,4 @@ See individual component licenses:
 **Version:** 1.0.0
 **Last Updated:** 2025-11-10
 
-For detailed documentation, see `docs/LUXURY_ESTATE_PIPELINE.md`
+For detailed documentation, see `docs/guides/LUXURY_ESTATE_PIPELINE.md`
