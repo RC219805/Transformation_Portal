@@ -404,9 +404,9 @@ If migrating from CSV-based tracking:
 
 ## References
 
-- **End-to-End Architecture:** `docs/APEX_END_TO_END_ARCHITECTURE.md`
+- **End-to-End Architecture:** `docs/architecture/APEX_END_TO_END_ARCHITECTURE.md`
 - **ADR-025:** `docs/architecture/decisions/ADR-025-APEX-end-to-end.md`
-- **APEX Executive Summary:** `docs/APEX_EXECUTIVE_SUMMARY_20260207.md`
+- **APEX Executive Summary:** `docs/historical/APEX_EXECUTIVE_SUMMARY_20260207.md`
 
 ---
 

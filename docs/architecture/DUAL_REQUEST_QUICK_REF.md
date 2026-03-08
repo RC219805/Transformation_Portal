@@ -227,7 +227,7 @@
 
 - **Full Decision:** `docs/architecture/DUAL_REQUEST_ARCHITECT_DECISION.md`
 - **Roadmap Review:** `docs/materials/MATERIALS_V3_ROADMAP_COMPREHENSIVE_REVIEW.md`
-- **APEX Phase 2 Scope:** `docs/APEX_REAL_PIPELINE_INTEGRATION.md`
+- **APEX Phase 2 Scope:** `docs/guides/APEX_REAL_PIPELINE_INTEGRATION.md`
 - **Governance Policy:** `docs/architecture/agent_governance.md`
 - **Materials V3 ADR:** `docs/architecture/ADR-030-materials-v3-production-integration.md`
 

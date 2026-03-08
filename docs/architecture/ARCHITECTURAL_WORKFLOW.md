@@ -839,7 +839,7 @@ export TRANSFORMERS_DEVICE=cpu
 
 **Next Steps**:
 - Review CLI Reference: `docs/cli/CLI_REFERENCE.md`
-- Explore SkyGAN Guide: `docs/SKYGAN_ATMOSPHERIC_RENDERING.md`
+- Explore SkyGAN Guide: `docs/guides/SKYGAN_ATMOSPHERIC_RENDERING.md`
 - Try examples: `examples/montecito_workflow/`
 
 ---

@@ -212,6 +212,6 @@ This is the shift from **feature velocity** to **sustainable velocity**.
 
 ## References
 - Epic: #819
-- CI-003 Completion: `docs/CI_003_COMPLETION.md`
-- Next Tranche Plan: `docs/NEXT_TRANCHE_PLAN.md`
+- CI-003 Completion: `docs/ci/CI_003_COMPLETION.md`
+- Next Tranche Plan: `docs/guides/NEXT_TRANCHE_PLAN.md`
 - Governance Policy: `docs/architecture/agent_governance.md`

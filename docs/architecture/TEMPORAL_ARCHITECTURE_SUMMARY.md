@@ -177,14 +177,14 @@ recent = store.get_events_by_type("image.enhanced", limit=10)
    - Step-by-step process
    - Support resources
 
-3. ✅ **docs/PLUGIN_DEVELOPMENT.md** - Plugin development guide
+3. ✅ **docs/guides/PLUGIN_DEVELOPMENT.md** - Plugin development guide
    - Quick start examples
    - Plugin types and interfaces
    - Auto-discovery and registration
    - Decorators and best practices
    - Testing and packaging
 
-4. ✅ **docs/ARCHITECTURE_PHILOSOPHY.md** - Temporal architecture philosophy
+4. ✅ **docs/architecture/ARCHITECTURE_PHILOSOPHY.md** - Temporal architecture philosophy
    - Core principles (past, present, future)
    - Architectural patterns
    - Design decisions
@@ -519,8 +519,8 @@ class CustomEnhancer(ProcessorPlugin):
 **Documentation** (4 files):
 - `DEPRECATION_POLICY.md`
 - `MIGRATION_GUIDE.md`
-- `docs/PLUGIN_DEVELOPMENT.md`
-- `docs/ARCHITECTURE_PHILOSOPHY.md`
+- `docs/guides/PLUGIN_DEVELOPMENT.md`
+- `docs/architecture/ARCHITECTURE_PHILOSOPHY.md`
 
 **Infrastructure** (2 files):
 - `Dockerfile`

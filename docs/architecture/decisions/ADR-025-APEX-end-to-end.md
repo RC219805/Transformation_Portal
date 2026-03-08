@@ -425,10 +425,10 @@ If critical issues discovered:
 
 ## References
 
-- **APEX Executive Summary:** `docs/APEX_EXECUTIVE_SUMMARY_20260207.md`
-- **APEX Workflow Design:** `docs/APEX_WORKFLOW_DESIGN.md`
-- **Performance Analysis:** `docs/PERFORMANCE_ANALYSIS_20260207.md`
-- **End-to-End Architecture:** `docs/APEX_END_TO_END_ARCHITECTURE.md`
+- **APEX Executive Summary:** `docs/historical/APEX_EXECUTIVE_SUMMARY_20260207.md`
+- **APEX Workflow Design:** `docs/architecture/APEX_WORKFLOW_DESIGN.md`
+- **Performance Analysis:** `docs/performance/PERFORMANCE_ANALYSIS_20260207.md`
+- **End-to-End Architecture:** `docs/architecture/APEX_END_TO_END_ARCHITECTURE.md`
 - **ADR-019:** Previous APEX instrumentation baseline
 
 ---

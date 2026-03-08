@@ -200,7 +200,7 @@ REFERENCES
 Full Decision:    docs/architecture/DUAL_REQUEST_ARCHITECT_DECISION.md
 Quick Reference:  docs/architecture/DUAL_REQUEST_QUICK_REF.md
 Roadmap Review:   docs/materials/MATERIALS_V3_ROADMAP_COMPREHENSIVE_REVIEW.md
-APEX Phase 2:     docs/APEX_REAL_PIPELINE_INTEGRATION.md
+APEX Phase 2:     docs/guides/APEX_REAL_PIPELINE_INTEGRATION.md
 Governance:       docs/architecture/agent_governance.md
 Materials ADR:    docs/architecture/ADR-030-materials-v3-production-integration.md
 

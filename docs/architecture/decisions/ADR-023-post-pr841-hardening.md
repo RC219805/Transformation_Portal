@@ -453,7 +453,7 @@ def enhance_batch(self, input_dir: Path, ...) -> List[Dict[str, Any]]:
 
 ### Documentation
 
-- [x] Update `docs/input_hygiene.md` with Phase 1 completion notes
+- [x] Update `docs/guides/input_hygiene.md` with Phase 1 completion notes
 - [x] Create `docs/performance/README.md` with ledger usage guide
 - [x] Update `docs/architecture/decisions/` with ADR-023
 - [x] Update manifest schema documentation with new field
