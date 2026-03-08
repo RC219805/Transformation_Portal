@@ -137,7 +137,7 @@ Key Concepts:
 Troubleshooting:
     - "Script not found" error: Add --enable-v2
       "off" to disable V2 enhancement
-    - See docs/LUX_DEPTH_V3_TROUBLESHOOTING.md
+    - See docs/guides/LUX_DEPTH_V3_TROUBLESHOOTING.md
       for complete troubleshooting guide
 """
 

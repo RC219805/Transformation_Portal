@@ -104,7 +104,7 @@
 **Documentation Review:**
 - All markdown files in `docs/`
 - ADRs in `docs/architecture/decisions/`
-- Existing `docs/IMPROVEMENT_OPPORTUNITIES.md` (758 lines, 21 items)
+- Existing `docs/guides/IMPROVEMENT_OPPORTUNITIES.md` (758 lines, 21 items)
 - Recent reports and checklists
 
 **Key References:**

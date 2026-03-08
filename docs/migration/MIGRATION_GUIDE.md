@@ -349,7 +349,7 @@ grader.process(
 - **Migration Issues**: [GitHub Issues](https://github.com/RC219805/Transformation_Portal/issues)
 - **API Documentation**: [docs/](../docs/)
 - **Deprecation Policy**: [DEPRECATION_POLICY.md](DEPRECATION_POLICY.md)
-- **Plugin Guide**: [docs/PLUGIN_DEVELOPMENT.md](docs/PLUGIN_DEVELOPMENT.md)
+- **Plugin Guide**: [docs/guides/PLUGIN_DEVELOPMENT.md](docs/guides/PLUGIN_DEVELOPMENT.md)
 
 ### Support Channels
 
