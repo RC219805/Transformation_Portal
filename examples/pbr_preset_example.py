@@ -88,7 +88,7 @@ Examples:
         print("  fabric    - Upholstery, curtains")
 
         print("\nFor detailed parameter info, see:")
-        print("  docs/PBR_ENHANCE_CONFIG_GUIDE.md")
+        print("  docs/guides/PBR_ENHANCE_CONFIG_GUIDE.md")
         return
 
     # Validate required arguments

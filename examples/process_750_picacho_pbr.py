@@ -487,8 +487,8 @@ Material Preset Selection Guide:
   fabric  - Emphasize textile weave and draping
 
 For detailed PBR configuration documentation:
-  docs/PBR_ENHANCE_CONFIG_GUIDE.md
-  docs/PBR_PRESETS_QUICK_REFERENCE.md
+  docs/guides/PBR_ENHANCE_CONFIG_GUIDE.md
+  docs/reference/PBR_PRESETS_QUICK_REFERENCE.md
         """,
     )
 

@@ -197,7 +197,7 @@ ERROR:   - output/depth/result.png (matched: /depth/)
 
 **Why exclude artifacts?** Processing depth maps as RGB inputs creates nonsensical results (depth of depth), feedback loops, and data corruption.
 
-**Full documentation:** [docs/input_hygiene.md](../../../../docs/input_hygiene.md)
+**Full documentation:** [docs/guides/input_hygiene.md](../../../../docs/guides/input_hygiene.md)
 
 ## Troubleshooting
 
@@ -214,8 +214,8 @@ ERROR: V2 enhancement script not found: scripts/enhance_image.py
 
 ### More Help
 
-- **Full Troubleshooting Guide:** [docs/LUX_DEPTH_V3_TROUBLESHOOTING.md](../../../../docs/LUX_DEPTH_V3_TROUBLESHOOTING.md)
-- **CLI Reference:** [docs/LUX_DEPTH_V3_CLI_GUIDE.md](../../../../docs/LUX_DEPTH_V3_CLI_GUIDE.md)
+- **Full Troubleshooting Guide:** [docs/guides/LUX_DEPTH_V3_TROUBLESHOOTING.md](../../../../docs/guides/LUX_DEPTH_V3_TROUBLESHOOTING.md)
+- **CLI Reference:** [docs/cli/LUX_DEPTH_V3_CLI_GUIDE.md](../../../../docs/cli/LUX_DEPTH_V3_CLI_GUIDE.md)
 - **CLI Help:** `lux-depth-v3 --help`
 
 ## Architecture
@@ -482,7 +482,7 @@ pylint src/transformation_portal/lux_depth_v3/
 
 ## Additional Resources
 
-- **Troubleshooting Guide:** [docs/LUX_DEPTH_V3_TROUBLESHOOTING.md](../../../../docs/LUX_DEPTH_V3_TROUBLESHOOTING.md)
-- **CLI Guide:** [docs/LUX_DEPTH_V3_CLI_GUIDE.md](../../../../docs/LUX_DEPTH_V3_CLI_GUIDE.md)
+- **Troubleshooting Guide:** [docs/guides/LUX_DEPTH_V3_TROUBLESHOOTING.md](../../../../docs/guides/LUX_DEPTH_V3_TROUBLESHOOTING.md)
+- **CLI Guide:** [docs/cli/LUX_DEPTH_V3_CLI_GUIDE.md](../../../../docs/cli/LUX_DEPTH_V3_CLI_GUIDE.md)
 - **Architecture:** [docs/architecture/ARCHITECTURE.md](../../../../docs/architecture/ARCHITECTURE.md)
 - **Main README:** [README.md](../../../../README.md)
