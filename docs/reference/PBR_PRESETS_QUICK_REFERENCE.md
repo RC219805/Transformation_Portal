@@ -1,6 +1,6 @@
 # PBR Presets Quick Reference
 
-**For full documentation, see:** `docs/PBR_ENHANCE_CONFIG_GUIDE.md`
+**For full documentation, see:** `docs/guides/PBR_ENHANCE_CONFIG_GUIDE.md`
 
 ## Quick Start
 
@@ -141,7 +141,7 @@ output_root/
 
 ## References
 
-- **Full Guide**: `docs/PBR_ENHANCE_CONFIG_GUIDE.md`
+- **Full Guide**: `docs/guides/PBR_ENHANCE_CONFIG_GUIDE.md`
 - **Module**: `src/transformation_portal/lux_depth_v3/pbr_presets.py`
 - **Tests**: `tests/test_pbr_presets.py`
 - **PBR Algorithm**: `src/transformation_portal/lux_depth_v3/pbr.py`

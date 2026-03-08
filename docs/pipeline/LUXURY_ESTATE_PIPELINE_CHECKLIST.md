@@ -319,7 +319,7 @@ output_750_picacho_elite_YYYYMMDD_HHMMSS/
 ### Reference Materials
 
 - [ ] Read: `LUXURY_ESTATE_PIPELINE_QUICKSTART.md`
-- [ ] Review: `docs/LUXURY_ESTATE_PIPELINE.md`
+- [ ] Review: `docs/guides/LUXURY_ESTATE_PIPELINE.md`
 - [ ] Study: `examples_luxury_estate_pipeline.py`
 - [ ] Reference: `config/750_picacho_master_preset.yaml`
 

@@ -309,7 +309,7 @@ See: `config/materials_v3_production.yaml`
 | Document | Status | Location |
 |----------|--------|----------|
 | Executive Summary | ✅ Complete | `docs/materials/PHASE_A_COMPLETE.md` |
-| Implementation Guide | ✅ Complete | `docs/materials_v3_phase_a_summary.md` |
+| Implementation Guide | ✅ Complete | `docs/historical/materials_v3_phase_a_summary.md` |
 | Roadmap Reference | ✅ Complete | `docs/materials/ROADMAP_QUICK_REF.md` |
 | This Status Report | ✅ Complete | `docs/materials/PHASE_A_STATUS_REPORT.md` |
 
@@ -358,7 +358,7 @@ Phase B items:
 
 ### Documentation
 - `docs/materials/PHASE_A_COMPLETE.md` (159 lines)
-- `docs/materials_v3_phase_a_summary.md` (368 lines)
+- `docs/historical/materials_v3_phase_a_summary.md` (368 lines)
 - `docs/materials/ROADMAP_QUICK_REF.md` (273 lines)
 - `docs/materials/MATERIALS_V3_ROADMAP_IMPLEMENTATION_PLAN.md` (724 lines)
 

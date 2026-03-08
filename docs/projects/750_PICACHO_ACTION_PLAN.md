@@ -423,7 +423,7 @@ htop
 ### Technical Support
 - **Transformation Portal Docs:** `/Users/rc/Transformation_Portal/docs/`
 - **Pipeline README:** `docs/projects/750_PICACHO_ENHANCEMENT_ROADMAP.md`
-- **Troubleshooting Guide:** `docs/TROUBLESHOOTING.md`
+- **Troubleshooting Guide:** `docs/guides/TROUBLESHOOTING.md`
 
 ### Key Files
 - **Main Processing Script:** `process_750_picacho.py`

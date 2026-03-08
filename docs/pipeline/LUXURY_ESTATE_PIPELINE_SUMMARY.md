@@ -32,7 +32,7 @@ A **comprehensive, production-ready HDR processing pipeline** specifically desig
 ### 3. Documentation
 
 **Comprehensive Guide:**
-- `docs/LUXURY_ESTATE_PIPELINE.md` - 500+ lines of detailed documentation
+- `docs/guides/LUXURY_ESTATE_PIPELINE.md` - 500+ lines of detailed documentation
   - Pipeline architecture diagrams
   - Stage-by-stage breakdown
   - Performance benchmarks
@@ -323,7 +323,7 @@ depth.backend: "coreml"
 ## 📚 Documentation Index
 
 1. **Quick Start:** `LUXURY_ESTATE_PIPELINE_QUICKSTART.md`
-2. **Full Guide:** `docs/LUXURY_ESTATE_PIPELINE.md`
+2. **Full Guide:** `docs/guides/LUXURY_ESTATE_PIPELINE.md`
 3. **Configuration:** `config/750_picacho_master_preset.yaml`
 4. **Examples:** `examples_luxury_estate_pipeline.py`
 5. **Validation:** `test_luxury_estate_pipeline.py`
@@ -438,7 +438,7 @@ depth.backend: "coreml"
 
 ## 📞 Support
 
-**Documentation:** `docs/LUXURY_ESTATE_PIPELINE.md`
+**Documentation:** `docs/guides/LUXURY_ESTATE_PIPELINE.md`
 **Quick Start:** `LUXURY_ESTATE_PIPELINE_QUICKSTART.md`
 **Examples:** `examples_luxury_estate_pipeline.py`
 **Validation:** `test_luxury_estate_pipeline.py`

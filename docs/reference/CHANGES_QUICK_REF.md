@@ -55,8 +55,8 @@ lux-depth-v3 --input-dir images/ --emit-run-card on
 
 ### New Files
 - `tests/test_apex_artifact_assertions.py` (10 tests)
-- `docs/APEX_BUG_FIXES_IMPLEMENTATION_REPORT.md`
-- `docs/RUNTIME_SKEW_INVESTIGATION.md`
+- `docs/historical/APEX_BUG_FIXES_IMPLEMENTATION_REPORT.md`
+- `docs/guides/RUNTIME_SKEW_INVESTIGATION.md`
 
 ### API Changes
 **None** - All changes are backward compatible
@@ -140,6 +140,6 @@ pytest tests/test_apex_artifact_assertions.py -v
 ---
 
 **Quick Links:**
-- [Detailed Report](docs/APEX_BUG_FIXES_IMPLEMENTATION_REPORT.md)
-- [Runtime Investigation](docs/RUNTIME_SKEW_INVESTIGATION.md)
-- [Test Suite](tests/test_apex_artifact_assertions.py)
+- [Detailed Report](../historical/APEX_BUG_FIXES_IMPLEMENTATION_REPORT.md)
+- [Runtime Investigation](../guides/RUNTIME_SKEW_INVESTIGATION.md)
+- [Test Suite](../../tests/test_apex_artifact_assertions.py)

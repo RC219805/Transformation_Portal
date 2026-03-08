@@ -19,7 +19,7 @@ Comprehensive quality control system implemented to prevent CI/CD failures and i
 - DEPRECATION_POLICY.md
 
 **Organized Subdirectories:**
-- `docs/CODEBASE_QUALITY_STANDARDS.md` - Quality standards guide
+- `docs/guides/CODEBASE_QUALITY_STANDARDS.md` - Quality standards guide
 - `docs/sessions/QUALITY_CONTROL_IMPLEMENTATION_NOV8.md` - Implementation report
 - `docs/guides/` - Integration guides (BIM, PDF, Quality Boost)
 - `docs/projects/750_picacho_lane/` - Project-specific documentation

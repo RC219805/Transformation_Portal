@@ -529,4 +529,4 @@ The 750 Picacho Lane project has strong foundational processing (Material Respon
 - `/Users/rc/Transformation_Portal/process_750_picacho.py` (automation script)
 - `docs/projects/750_PICACHO_LANE_ANALYSIS.md` (detailed analysis)
 - `docs/sessions/nov-8-2025/TIFF_FIX_SUMMARY_NOV8.md` (technical fix details)
-- `docs/UNIFIED_LUXURY_PIPELINE.md` (pipeline documentation)
+- `docs/guides/UNIFIED_LUXURY_PIPELINE.md` (pipeline documentation)

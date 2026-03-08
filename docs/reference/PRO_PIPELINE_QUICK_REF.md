@@ -178,7 +178,7 @@ pip install -e ".[tiff]"
 
 ## 📖 Documentation
 
-- **Full Guide**: `docs/PRO_PIPELINE_GUIDE.md`
+- **Full Guide**: `docs/guides/PRO_PIPELINE_GUIDE.md`
 - **Configuration**: `config/pro_pipeline_config.yaml`
 - **Examples**: `examples/pro_pipeline_example.py`
 - **Tests**: `tests/test_pro_pipeline.py`
@@ -228,7 +228,7 @@ pip install -e ".[tiff]"
 
 - **GitHub Issues**: Report bugs
 - **GitHub Discussions**: Ask questions
-- **Documentation**: `docs/PRO_PIPELINE_GUIDE.md`
+- **Documentation**: `docs/guides/PRO_PIPELINE_GUIDE.md`
 - **Examples**: `examples/pro_pipeline_example.py`
 
 ---

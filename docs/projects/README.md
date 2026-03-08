@@ -259,7 +259,7 @@ pip install transformers          # Depth Anything V2
 - `docs/sessions/nov-8-2025/UNIFIED_PIPELINE_SUMMARY.md` - Pipeline details
 
 ### Pipeline Documentation
-- `docs/UNIFIED_LUXURY_PIPELINE.md` - Full pipeline reference
+- `docs/guides/UNIFIED_LUXURY_PIPELINE.md` - Full pipeline reference
 - `examples/unified_luxury_pipeline_examples.py` - Usage examples
 - `tests/test_unified_luxury_pipeline.py` - Test suite
 
