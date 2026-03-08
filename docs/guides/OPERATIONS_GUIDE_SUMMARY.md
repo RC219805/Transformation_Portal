@@ -9,7 +9,7 @@
 ## 📚 Documentation Delivered
 
 ### 1. Pipeline Operations Guide
-**File:** `docs/PIPELINE_OPERATIONS_GUIDE.md`
+**File:** `docs/pipeline_docs/PIPELINE_OPERATIONS_GUIDE.md`
 **Size:** 32KB, 1,247 lines
 **Scope:** Complete operations manual for all pipelines
 
@@ -22,7 +22,7 @@
 - Production workflows (1 to 500+ images)
 
 ### 2. Quick Start Cheat Sheet
-**File:** `docs/QUICKSTART_CHEATSHEET.md`
+**File:** `docs/reference/QUICKSTART_CHEATSHEET.md`
 **Size:** 8KB, 355 lines
 **Scope:** Condensed quick reference for common operations
 
@@ -395,8 +395,8 @@
 ## 📞 Support Resources
 
 **Primary Documentation:**
-- Pipeline Operations Guide: `docs/PIPELINE_OPERATIONS_GUIDE.md`
-- Quick Start Cheat Sheet: `docs/QUICKSTART_CHEATSHEET.md`
+- Pipeline Operations Guide: `docs/pipeline_docs/PIPELINE_OPERATIONS_GUIDE.md`
+- Quick Start Cheat Sheet: `docs/reference/QUICKSTART_CHEATSHEET.md`
 
 **Related Documentation:**
 - Main README: `README.md`

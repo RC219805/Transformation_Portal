@@ -447,7 +447,7 @@ paths = PBRProcessor.from_cached_depth(
 
 ## Next Steps
 
-- **Full documentation**: `docs/PBR_ENHANCE_CONFIG_GUIDE.md`
+- **Full documentation**: `docs/guides/PBR_ENHANCE_CONFIG_GUIDE.md`
 - **Production example**: `examples/process_750_picacho_pbr.py`
 - **API reference**: `src/transformation_portal/lux_depth_v3/pbr_processor.py`
 - **Preset catalog**: `src/transformation_portal/lux_depth_v3/pbr_presets.py`

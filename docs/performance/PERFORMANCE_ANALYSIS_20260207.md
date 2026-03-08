@@ -420,4 +420,4 @@ bucket = get_bucket_for_capsule(capsule)
   - `src/transformation_portal/metrics/performance_capsule.py`
   - `src/transformation_portal/metrics/ledger.py`
   - `tests/test_performance_capsule_contract.py`
-  - `docs/APEX_RESEARCH_WORKFLOW_REPORT_20260207.md`
+  - `docs/ci/APEX_RESEARCH_WORKFLOW_REPORT_20260207.md`

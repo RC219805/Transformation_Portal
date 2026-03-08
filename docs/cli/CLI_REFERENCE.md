@@ -725,8 +725,8 @@ if suggestion.confidence < 0.8:
 **Documentation**:
 - Main README: `README.md`
 - Architecture Guide: `docs/architecture/ARCHITECTURE.md`
-- SkyGAN Guide: `docs/SKYGAN_ATMOSPHERIC_RENDERING.md`
-- Workflow Guide: `docs/ARCHITECTURAL_WORKFLOW.md`
+- SkyGAN Guide: `docs/guides/SKYGAN_ATMOSPHERIC_RENDERING.md`
+- Workflow Guide: `docs/architecture/ARCHITECTURAL_WORKFLOW.md`
 
 **Custom Agent**:
 Use the specialized Transformation Portal agent in GitHub Copilot:

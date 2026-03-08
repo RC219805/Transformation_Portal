@@ -467,7 +467,7 @@ A: Not directly. Extract frames, process with batch mode, then reassemble. Or us
 ## Support
 
 **Documentation:**
-- Full Pipeline Documentation: `docs/PIPELINE_OPERATIONS_GUIDE.md`
+- Full Pipeline Documentation: `docs/pipeline_docs/PIPELINE_OPERATIONS_GUIDE.md`
 - Architecture Guide: `docs/architecture/ARCHITECTURE.md`
 - Performance Tips: `docs/performance/PERFORMANCE_OPTIMIZATION.md`
 
