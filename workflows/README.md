@@ -268,7 +268,7 @@ RuntimeError: CUDA out of memory
 
 ## Additional Resources
 
-- **Full Documentation:** `docs/COMFYUI_WORKFLOW_INTEGRATION.md`
+- **Full Documentation:** `docs/ci/COMFYUI_WORKFLOW_INTEGRATION.md`
 - **API Reference:** See WorkflowBuilder, WorkflowTemplates, WorkflowExecutor classes
 - **Custom Nodes:** `src/transformation_portal/comfyui/custom_nodes.py`
 

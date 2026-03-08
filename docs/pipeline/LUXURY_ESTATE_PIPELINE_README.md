@@ -54,7 +54,7 @@ open test_output/750Picacho_Kitchen_HDR_32-bit_delivery.jpg
 - **`PIPELINE_FIXES_QUICKSTART.md`** - New: Quick start guide for v1.1.0 fixes
 - **`PIPELINE_FIXES_DOCUMENTATION.md`** - New: Detailed fix documentation
 - **`LUXURY_ESTATE_PIPELINE_QUICKSTART.md`** - Quick reference guide
-- **`docs/LUXURY_ESTATE_PIPELINE.md`** - Comprehensive documentation (500+ lines)
+- **`docs/guides/LUXURY_ESTATE_PIPELINE.md`** - Comprehensive documentation (500+ lines)
 - **`LUXURY_ESTATE_PIPELINE_SUMMARY.md`** - Project summary
 - **`LUXURY_ESTATE_PIPELINE_CHECKLIST.md`** - Setup & execution checklist
 
@@ -317,7 +317,7 @@ depth.backend: "coreml"
 | Document | Purpose |
 |----------|---------|
 | **QUICKSTART.md** | Get started in 5 minutes |
-| **docs/LUXURY_ESTATE_PIPELINE.md** | Complete technical guide |
+| **docs/guides/LUXURY_ESTATE_PIPELINE.md** | Complete technical guide |
 | **SUMMARY.md** | Project overview |
 | **CHECKLIST.md** | Setup & execution steps |
 | **examples_*.py** | 8 usage examples |
@@ -376,7 +376,7 @@ depth:
   model_variant: "small"
 ```
 
-See `docs/LUXURY_ESTATE_PIPELINE.md` for detailed troubleshooting.
+See `docs/guides/LUXURY_ESTATE_PIPELINE.md` for detailed troubleshooting.
 
 ---
 
@@ -414,4 +414,4 @@ See individual component licenses:
 **Date:** 2025-11-10
 **Status:** ✅ Production Ready
 
-For detailed documentation, see: **`docs/LUXURY_ESTATE_PIPELINE.md`**
+For detailed documentation, see: **`docs/guides/LUXURY_ESTATE_PIPELINE.md`**
