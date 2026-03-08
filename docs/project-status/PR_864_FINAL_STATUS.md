@@ -285,7 +285,7 @@ gh pr merge 864 --squash --delete-branch
 ```bash
 gh issue create \
   --title "APEX Real Pipeline Integration" \
- --body-file docs/guides/APEX_REAL_PIPELINE_INTEGRATION.md \
+  --body-file docs/guides/APEX_REAL_PIPELINE_INTEGRATION.md \
   --label "enhancement,APEX" \
   --milestone "APEX Production Readiness"
 ```

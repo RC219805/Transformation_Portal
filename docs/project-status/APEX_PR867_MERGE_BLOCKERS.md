@@ -56,7 +56,7 @@ raise NotImplementedError("Actual pipeline integration not yet implemented. Use 
    lines.append("# 🎯 APEX Performance Report [SYNTHETIC DATA]")
    lines.append("")
    lines.append("> ⚠️ **This report uses mock data (dry-run mode)**")
-  lines.append("> Real pipeline integration tracked in docs/guides/APEX_REAL_PIPELINE_INTEGRATION.md")
+   lines.append("> Real pipeline integration tracked in docs/guides/APEX_REAL_PIPELINE_INTEGRATION.md")
    lines.append("")
    ```
 
