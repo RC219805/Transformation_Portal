@@ -59,7 +59,7 @@
   - 20 comprehensive tests covering all Phase A features
 
 ### Documentation
-- `docs/materials_v3_phase_a_summary.md` (NEW)
+- `docs/historical/materials_v3_phase_a_summary.md` (NEW)
   - Complete implementation documentation
 
 ---

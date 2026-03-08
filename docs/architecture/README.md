@@ -161,7 +161,7 @@ These are repository-level rules enforced by ADRs. **Exceptions require an ADR.*
 - **Governance Policy:** [agent_governance.md](agent_governance.md)
 - **CI Gate Pattern:** [ci_gate_pattern.md](ci_gate_pattern.md)
 - **Phase 3 Foundation:** Session file `PHASE3_FOUNDATION.md`
-- **Performance Ledger:** `/docs/PERFORMANCE_LEDGER_README.md`
+- **Performance Ledger:** `/docs/performance/PERFORMANCE_LEDGER_README.md`
 - **Security Policy:** `/SECURITY.md`
 
 ---
