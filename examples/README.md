@@ -191,8 +191,8 @@ The 750 Picacho Primary Bedroom contains:
 - Throughput: 100-150 images/hour
 
 **Documentation:**
-- Full configuration guide: `docs/PBR_ENHANCE_CONFIG_GUIDE.md`
-- Quick reference: `docs/PBR_PRESETS_QUICK_REFERENCE.md`
+- Full configuration guide: `docs/guides/PBR_ENHANCE_CONFIG_GUIDE.md`
+- Quick reference: `docs/reference/PBR_PRESETS_QUICK_REFERENCE.md`
 - Preset module: `src/transformation_portal/lux_depth_v3/pbr_presets.py`
 
 ### Other Examples
