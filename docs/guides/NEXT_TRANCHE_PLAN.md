@@ -150,8 +150,8 @@ These three items (TEST-001, DOC-001, CI-001 Phase 1) move the repo from "more f
 ## References
 
 - **Epic:** #819
-- **Source:** `docs/IMPROVEMENT_OPPORTUNITIES.md`
-- **CI-003 Completion:** `docs/CI_003_COMPLETION.md`
+- **Source:** `docs/guides/IMPROVEMENT_OPPORTUNITIES.md`
+- **CI-003 Completion:** `docs/ci/CI_003_COMPLETION.md`
 - **Current State:** All quick wins complete (8/21 total)
 
 ---

@@ -207,7 +207,7 @@ INFO: CLIP classified 12 segments into 3 materials: glass (87%), water (34%), fo
 ## Documentation
 
 ### Created Files
-1. **`docs/confidence_scoring.md`** - Complete feature documentation
+1. **`docs/guides/confidence_scoring.md`** - Complete feature documentation
    - API reference
    - Confidence interpretation guide
    - Usage examples

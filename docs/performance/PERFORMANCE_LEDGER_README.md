@@ -284,7 +284,7 @@ if bucket:
 
 ## Performance Insights (APEX Research Workflow)
 
-From `docs/PERFORMANCE_ANALYSIS_20260207.md`:
+From `docs/performance/PERFORMANCE_ANALYSIS_20260207.md`:
 
 **Key Findings:**
 - Pool scenes: 11.49s (2.38× slower than interiors) - specular highlights + reflections
@@ -310,12 +310,12 @@ Expected: 22 tests passing, enforcing schema stability.
 1. **Instrument orchestrator** with phase-level timing
 2. **Run baseline collection** (10× APEX workflow)
 3. **Add to CI** (nightly performance regression checks)
-4. **Optimize hot paths** (see `docs/PERFORMANCE_ANALYSIS_20260207.md`)
+4. **Optimize hot paths** (see `docs/performance/PERFORMANCE_ANALYSIS_20260207.md`)
 
 ## Related Documentation
 
-- `docs/PERFORMANCE_ANALYSIS_20260207.md` - Performance analysis and optimization roadmap
-- `docs/APEX_RESEARCH_WORKFLOW_REPORT_20260207.md` - APEX workflow execution report
+- `docs/performance/PERFORMANCE_ANALYSIS_20260207.md` - Performance analysis and optimization roadmap
+- `docs/ci/APEX_RESEARCH_WORKFLOW_REPORT_20260207.md` - APEX workflow execution report
 - `QUALITY_FIREWALL_QUICK_REF.md` - Quality Firewall bucket definitions
 - `tests/test_performance_capsule_contract.py` - Schema contract tests
 
