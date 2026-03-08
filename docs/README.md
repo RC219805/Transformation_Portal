@@ -60,7 +60,7 @@ Depth Anything V2/V3 and Depth Pro evaluation and implementation.
 - `governance/DOCUMENTATION_POLICY.md` - Documentation classification and retention policy
 - `historical/` - Session/execution/push artifacts retained for historical audit context
 - `pr_archive/` - PR-specific summaries and resolution documentation
-- Root-level legacy snapshots (`docs/guides/LAYERED_DEPENDENCIES_IMPLEMENTATION.md`, `docs/status/REPOSITORY_STATUS_REPORT.md`) are historical context only; current dependency policy is defined by `requirements/base.in` and `docs/architecture/ADR-032-dependency-pinning-strategy.md`.
+- Legacy dependency and status snapshots (`guides/LAYERED_DEPENDENCIES_IMPLEMENTATION.md`, `status/REPOSITORY_STATUS_REPORT.md`) are historical context only; current dependency policy is defined by `requirements/base.in` and `docs/architecture/ADR-032-dependency-pinning-strategy.md`.
 
 ---
 
