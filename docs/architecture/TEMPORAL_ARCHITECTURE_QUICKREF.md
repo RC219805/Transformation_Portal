@@ -145,10 +145,10 @@ docker-compose run transformation-portal-worker
 
 ## Documentation
 
-- **Plugin Development**: `docs/PLUGIN_DEVELOPMENT.md`
+- **Plugin Development**: `docs/guides/PLUGIN_DEVELOPMENT.md`
 - **Migration Guide**: `MIGRATION_GUIDE.md`
 - **Deprecation Policy**: `DEPRECATION_POLICY.md`
-- **Architecture**: `docs/ARCHITECTURE_PHILOSOPHY.md`
+- **Architecture**: `docs/architecture/ARCHITECTURE_PHILOSOPHY.md`
 - **Summary**: `TEMPORAL_ARCHITECTURE_SUMMARY.md`
 
 ---

@@ -108,7 +108,7 @@ Concurrency control isn't one-size-fits-all:
 - **Epic:** #819
 - **Merge Commit:** `1fe9e3c8`
 - **Corrective Commit:** `f003fb5`
-- **Source:** `docs/IMPROVEMENT_OPPORTUNITIES.md` (PR #803)
+- **Source:** `docs/guides/IMPROVEMENT_OPPORTUNITIES.md` (PR #803)
 
 ---
 

@@ -529,9 +529,9 @@ After implementation:
 
 ## References
 
-- **APEX Executive Summary:** `docs/APEX_EXECUTIVE_SUMMARY_20260207.md`
-- **APEX Workflow Design:** `docs/APEX_WORKFLOW_DESIGN.md`
-- **Performance Analysis:** `docs/PERFORMANCE_ANALYSIS_20260207.md`
+- **APEX Executive Summary:** `docs/historical/APEX_EXECUTIVE_SUMMARY_20260207.md`
+- **APEX Workflow Design:** `docs/architecture/APEX_WORKFLOW_DESIGN.md`
+- **Performance Analysis:** `docs/performance/PERFORMANCE_ANALYSIS_20260207.md`
 - **ADR-025:** `docs/architecture/decisions/ADR-025-APEX-end-to-end.md`
 
 ---

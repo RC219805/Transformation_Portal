@@ -131,7 +131,7 @@ Four of five nightly deep check jobs failed due to independent root causes spann
 **Critical Finding - Potential Performance Regression**:
 
 The observed behavior contradicts documented expectations:
-- `docs/PBR_CLI_TESTING_GUIDE.md`: "Expected throughput: 50-100+ images/sec (draft preset)"
+- `docs/cli/PBR_CLI_TESTING_GUIDE.md`: "Expected throughput: 50-100+ images/sec (draft preset)"
 - `docs/sessions/2026-02-01/PICACHO_PBR_TEST_RESULTS.md`: "premium preset proved optimal"
 
 **Possible Explanations**:

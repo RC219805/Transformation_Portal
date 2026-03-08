@@ -165,7 +165,7 @@ The repository is functionally healthy with CI passing and core features operati
 
 #### ✅ **CLI Documentation Matches Implementation**
 - **Status:** CLEAN
-- **Main Guide:** `docs/LUX_DEPTH_V3_CLI_GUIDE.md`
+- **Main Guide:** `docs/cli/LUX_DEPTH_V3_CLI_GUIDE.md`
 - **Validation:** CLI `--help` output matches documented options
 - **Quality Tiers:** `standard`, `premium`, `apex` documented and enforced
 - **License Validation:** Depth Pro and v3.1 presets enforce `--non-commercial-ok` flag ✅

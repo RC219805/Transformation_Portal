@@ -195,8 +195,8 @@ compliance:
 - README contains example CLI usage with `--depth-backend depth_pro`
 
 ✅ **Depth Pro Integration Guide Exists:**
-- `docs/DEPTH_PRO_QUICKSTART.md` (comprehensive setup guide)
-- `docs/DEPTH_PRO_INTEGRATION_COMPLETE.md` (408 lines, detailed completion report)
+- `docs/depth_pipeline/DEPTH_PRO_QUICKSTART.md` (comprehensive setup guide)
+- `docs/depth_pipeline/DEPTH_PRO_INTEGRATION_COMPLETE.md` (408 lines, detailed completion report)
 
 ✅ **ADR-019 Status:** Approved and implemented
 - `docs/architecture/ADR-019-depth-backend-unification.md` (comprehensive architecture decision)
@@ -207,7 +207,7 @@ compliance:
 - This is a **documentation metadata issue**, not an implementation gap
 
 ✅ **CLI Integration Documented:**
-- `docs/LUX_DEPTH_V3_CLI_GUIDE.md` documents `--depth-backend depth_pro` flag
+- `docs/cli/LUX_DEPTH_V3_CLI_GUIDE.md` documents `--depth-backend depth_pro` flag
 - License requirements explicitly stated
 
 **Completion: 95%** (5% gap: ADR-019 status field needs update)
@@ -388,7 +388,7 @@ Documentation: 95%
 The 5% gap is a documentation metadata issue (2 min fix). Does not block closure.
 
 See:
-- docs/DEPTH_PRO_INTEGRATION_COMPLETE.md
+- docs/depth_pipeline/DEPTH_PRO_INTEGRATION_COMPLETE.md
 - docs/architecture/ADR-019-depth-backend-unification.md
 - PR #906 (merged 2026-02-09)
 
