@@ -149,7 +149,7 @@ env:
 **Status**: Integration complete per official documentation
 
 **Completion Evidence**:
-- ✅ **Documentation**: `docs/DEPTH_PRO_INTEGRATION_COMPLETE.md` (409 lines)
+- ✅ **Documentation**: `docs/depth_pipeline/DEPTH_PRO_INTEGRATION_COMPLETE.md` (409 lines)
 - ✅ **Phase Status**: PR2 (Wiring Phase) complete, PR3 (Validation) deferred
 - ✅ **Date Completed**: 2026-02-06
 
@@ -204,7 +204,7 @@ python -m transformation_portal.lux_depth_v3 \
 ### Files Verified (No Changes Needed)
 1. `src/transformation_portal/depth/backends/registry.py` - Public API exists
 2. `docs/optimization/phase3_advanced.md` - Documentation accurate
-3. `docs/DEPTH_PRO_INTEGRATION_COMPLETE.md` - Integration complete
+3. `docs/depth_pipeline/DEPTH_PRO_INTEGRATION_COMPLETE.md` - Integration complete
 4. `docs/apex/tier1/REGISTRY_API_MIGRATION.md` - Documentation complete
 
 ### CI/CD Impact

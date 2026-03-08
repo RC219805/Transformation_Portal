@@ -98,7 +98,7 @@ Addresses the question "Are we ready to enhance image files? What are the constr
 1. **Documentation (4 files, ~900 lines)**
    - `SUPPORTED_FILE_FORMATS.md` - Complete format specification
    - `FILE_FORMAT_QUICK_REFERENCE.md` - Printable reference
-   - `docs/FORMAT_SUPPORT_OVERVIEW.md` - Documentation index
+   - `docs/guides/FORMAT_SUPPORT_OVERVIEW.md` - Documentation index
    - Updated `README.md` with format table
 
 2. **Utilities (`format_utils.py`, 400+ lines)**

@@ -121,7 +121,7 @@ python scripts/apex_pr_comment.py --synthetic
     python scripts/apex_matrix_runner.py --dry-run
 ```
 
-**Documentation:** Created `docs/APEX_PRODUCTION_READINESS.md` explaining:
+**Documentation:** Created `docs/deployment/APEX_PRODUCTION_READINESS.md` explaining:
 - What works (schema, ledger, aggregation, reporting)
 - What's pending (real pipeline integration)
 - Migration path to production
@@ -136,7 +136,7 @@ These are good ideas but don't prevent merge:
 
 ### 📋 1. Minimum Sample Size Protection
 
-**Documented in:** `docs/APEX_PRODUCTION_READINESS.md` (Section 4)
+**Documented in:** `docs/deployment/APEX_PRODUCTION_READINESS.md` (Section 4)
 
 **Recommendation:**
 ```python
@@ -150,7 +150,7 @@ if len(total_times) < 20:
 
 ### 📋 2. Fix Percentile Calculation
 
-**Documented in:** `docs/APEX_PRODUCTION_READINESS.md` (Section 5)
+**Documented in:** `docs/deployment/APEX_PRODUCTION_READINESS.md` (Section 5)
 
 **Recommendation:**
 ```python
@@ -164,7 +164,7 @@ p50 = statistics.median(total_times)  # Correct for even counts
 
 ### 📋 3. Mergeable Quantile Sketches (Advanced)
 
-**Documented in:** `docs/APEX_PRODUCTION_READINESS.md` (Future Work)
+**Documented in:** `docs/deployment/APEX_PRODUCTION_READINESS.md` (Future Work)
 
 **Options:** KLL sketch, t-digest
 

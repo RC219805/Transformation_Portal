@@ -26,7 +26,7 @@ M tests/test_apex_contract_verification.py
 ?? APEX_PHASE1_IMPLEMENTATION.md
 ?? PHASE1_COMPLETION_CHECKLIST.md
 ?? TASK_COMPLETION_SUMMARY.txt
-?? docs/APEX_COMPLETION_REPORT_OLD.md
+?? docs/historical/APEX_COMPLETION_REPORT_OLD.md
 ```
 
 **Clean state:** Modified files are intentional changes. Untracked files are documentation artifacts (safe to add or ignore).
