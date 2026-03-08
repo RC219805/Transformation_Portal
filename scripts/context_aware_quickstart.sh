@@ -139,8 +139,7 @@ echo
 echo
 echo "Documentation"
 echo "============="
-echo "Full guide: docs/CONTEXT_AWARE_RENDERING.md"
-echo "Summary: docs/CONTEXT_SYSTEM_SUMMARY.md"
+echo "Full guide: docs/guides/CONTEXT_AWARE_RENDERING.md"
 echo "Examples: Browse output_context_aware/ for sample strategies"
 echo
 

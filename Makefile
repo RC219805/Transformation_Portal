@@ -18,7 +18,7 @@ FAST_TESTS := \
 
 .PHONY: help test-fast test-novideo test-full test-integration test-structure test-utils test-orchestrator-contract venv setup clean \
         lint ci ci-full pre-commit install-hooks quality-check fix-quality validate-ci organize-docs check-json-serialization check-piptools-cache \
-        lock lock-prod lock-ci lock-dev install-core install-ml docs docs-clean
+        check-stale-docs lock lock-prod lock-ci lock-dev install-core install-ml docs docs-clean
 
 help:
 	@echo "Targets:"
@@ -44,6 +44,7 @@ help:
 	@echo "  quality-check      Run all quality checks (lint + structure + tests)"
 	@echo "  check-json-serialization  Fail on raw json.dump/json.dumps outside approved modules"
 	@echo "  check-piptools-cache  Fail if requirements/.pip-tools-cache is tracked in git"
+	@echo "  check-stale-docs   Detect changed-file references to deleted docs root paths"
 	@echo "  fix-quality        Auto-fix common quality issues"
 	@echo "  validate-ci        Validate GitHub Actions workflow configs"
 	@echo "  organize-docs      Organize markdown files to docs/ subdirectories"
@@ -170,6 +171,9 @@ fix-quality:
 check-quality:
 	@echo "Checking for quality issues (dry-run)..."
 	@"$(PY)" scripts/auto_fix_quality.py --dry-run
+
+check-stale-docs:
+	@"$(PY)" scripts/governance/check_stale_docs_paths.py
 
 # Validate CI configuration
 validate-ci:

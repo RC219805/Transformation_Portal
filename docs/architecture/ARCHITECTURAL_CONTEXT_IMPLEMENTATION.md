@@ -86,7 +86,7 @@ python context_aware_pro_pipeline.py kitchen.jpg \
     --upscale-4x
 ```
 
-#### `docs/ARCHITECTURAL_CONTEXT_INTEGRATION.md` (14.8KB)
+#### `docs/architecture/ARCHITECTURAL_CONTEXT_INTEGRATION.md` (14.8KB)
 **Purpose:** Comprehensive documentation
 
 **Contents:**
@@ -436,7 +436,7 @@ Transformation_Portal/
 │   └── Complete workflow demonstration
 │
 ├── docs/
-│   └── ARCHITECTURAL_CONTEXT_INTEGRATION.md (14.8KB)
+│   └── architecture/ARCHITECTURAL_CONTEXT_INTEGRATION.md (14.8KB)
 │       └── Comprehensive documentation
 │
 └── extracted_context/

@@ -1,0 +1,150 @@
+#!/usr/bin/env python3
+"""Detect stale root-level docs path references in changed files."""
+
+from __future__ import annotations
+
+import pathlib
+import re
+import subprocess
+
+REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
+IGNORE_DIRS = {"__pycache__"}
+IGNORE_SUFFIXES = {".pyc"}
+PATH_PATTERN = re.compile(
+    r"(?<![A-Za-z0-9_./-])docs/([A-Za-z0-9_-]+\.(?:md|txt|csv))",
+    re.IGNORECASE,
+)
+
+
+def _run_git(args: list[str]) -> tuple[int, str, str]:
+    proc = subprocess.run(
+        ["git", *args],
+        cwd=REPO_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    return proc.returncode, proc.stdout, proc.stderr
+
+
+def _parse_name_only_output(output: str) -> list[pathlib.Path]:
+    normalized = set()
+    for line in output.splitlines():
+        stripped = line.strip()
+        if stripped:
+            normalized.add(stripped.replace("\\", "/"))
+    return [REPO_ROOT / path for path in sorted(normalized)]
+
+
+def _changed_files() -> tuple[list[pathlib.Path] | None, list[str]]:
+    commands = [
+        [
+            "diff",
+            "--name-only",
+            "--diff-filter=ACMRTUXB",
+            "origin/main...HEAD",
+        ],
+        ["diff", "--name-only", "--diff-filter=ACMRTUXB", "--cached"],
+        ["diff", "--name-only", "--diff-filter=ACMRTUXB"],
+        ["diff", "--name-only", "--diff-filter=ACMRTUXB", "HEAD^..HEAD"],
+        [
+            "show",
+            "--name-only",
+            "--diff-filter=ACMRTUXB",
+            "--pretty=format:",
+            "HEAD",
+        ],
+    ]
+    errors: list[str] = []
+    had_success = False
+
+    for cmd in commands:
+        code, output, stderr = _run_git(cmd)
+        if code != 0:
+            cmd_text = "git " + " ".join(cmd)
+            detail = stderr.strip() or f"exit {code}"
+            errors.append(f"{cmd_text}: {detail}")
+            continue
+        had_success = True
+        changed = _parse_name_only_output(output)
+        if changed:
+            return changed, []
+
+    if had_success:
+        return [], []
+
+    return None, errors
+
+
+def _should_skip(path: pathlib.Path) -> bool:
+    if any(part in IGNORE_DIRS for part in path.parts):
+        return True
+    if path.suffix.lower() in IGNORE_SUFFIXES:
+        return True
+    return False
+
+
+def _read_text_if_probably_text(path: pathlib.Path) -> str | None:
+    try:
+        payload = path.read_bytes()
+    except OSError:
+        return None
+
+    if b"\0" in payload:
+        return None
+
+    return payload.decode("utf-8", errors="ignore")
+
+
+def _find_stale_refs(path: pathlib.Path) -> list[str]:
+    if not path.exists() or not path.is_file() or _should_skip(path):
+        return []
+
+    text = _read_text_if_probably_text(path)
+    if text is None:
+        return []
+
+    stale = set()
+    for match in PATH_PATTERN.findall(text):
+        target = REPO_ROOT / "docs" / match
+        if not target.exists():
+            stale.add(f"docs/{match}")
+    return sorted(stale)
+
+
+def main() -> int:
+    changed_files, errors = _changed_files()
+    if changed_files is None:
+        message = "".join(
+            [
+                "Unable to determine changed files for stale docs-path ",
+                "validation.",
+            ]
+        )
+        print(message)
+        for error in errors:
+            print(f"  - {error}")
+        return 2
+
+    if not changed_files:
+        print("No changed files to scan.")
+        return 0
+
+    findings = []
+    for path in changed_files:
+        relative = path.relative_to(REPO_ROOT)
+        for stale_ref in _find_stale_refs(path):
+            findings.append((str(relative), stale_ref))
+
+    if findings:
+        print("Stale documentation path references detected:")
+        for file_path, stale_ref in sorted(set(findings)):
+            print(f"  - {file_path}: references missing {stale_ref}")
+        return 1
+
+    print("No stale docs path references detected in changed files.")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

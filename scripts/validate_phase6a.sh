@@ -55,8 +55,7 @@ files=(
     "src/transformation_portal/spatial_ai/reconstruction/gaussian_rasterizer.py"
     "tests/spatial_ai/reconstruction/test_gaussian_rasterizer.py"
     "examples/phase6a_gaussian_rasterizer_demo.py"
-    "docs/phase6a_implementation_summary.md"
-    "docs/phase6a_quick_reference.md"
+    "docs/reference/phase6a_quick_reference.md"
 )
 
 for file in "${files[@]}"; do

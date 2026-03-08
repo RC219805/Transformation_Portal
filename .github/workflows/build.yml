@@ -118,6 +118,11 @@ jobs:
           set -euo pipefail
           python3 scripts/validation/check_piptools_cache_tracked.py
 
+      - name: Detect stale docs paths
+        run: |
+          set -euo pipefail
+          python3 scripts/governance/check_stale_docs_paths.py
+
       - name: Enforce documentation structure
         run: |
           set -euo pipefail

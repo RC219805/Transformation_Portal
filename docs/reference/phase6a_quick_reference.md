@@ -14,7 +14,7 @@ A **simplified differentiable Gaussian splatting rasterizer** for 3D reconstruct
 - `src/transformation_portal/spatial_ai/reconstruction/gaussian_rasterizer.py` - Core rasterizer
 - `tests/spatial_ai/reconstruction/test_gaussian_rasterizer.py` - Unit tests (19 tests)
 - `examples/phase6a_gaussian_rasterizer_demo.py` - Demo script
-- `docs/phase6a_implementation_summary.md` - Full documentation
+- `docs/reference/phase6a_quick_reference.md` - Canonical Phase 6A reference (this file)
 
 ### Modified Files
 - `src/transformation_portal/spatial_ai/reconstruction/gaussian_backend.py` - Real optimization + rendering
@@ -111,7 +111,7 @@ A: Check input data ranges (colors [0,1], valid camera params). Gradient clippin
 
 ## Documentation
 
-- Full implementation details: `docs/phase6a_implementation_summary.md`
+- Canonical Phase 6A reference: `docs/reference/phase6a_quick_reference.md`
 - API reference: Docstrings in `gaussian_rasterizer.py` and `gaussian_backend.py`
 - Example usage: `examples/phase6a_gaussian_rasterizer_demo.py`
 

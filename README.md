@@ -55,7 +55,7 @@ Context-Aware Rendering extracts architectural intelligence from construction do
 - Document provenance: explicit linkage from construction docs → final render decisions
 
 Docs:
-- docs/CONTEXT_AWARE_RENDERING.md
+- docs/guides/CONTEXT_AWARE_RENDERING.md
 
 ---
 
@@ -590,9 +590,9 @@ The Documentation Map is your single source of truth for finding guides, referen
 - **API Reference:** [docs/api/](docs/api/)
 - **Pipelines:** [docs/pipeline/](docs/pipeline/)
 - **CI/CD:** [docs/ci/](docs/ci/)
-- **Troubleshooting:** [docs/TROUBLESHOOTING.md](docs/guides/TROUBLESHOOTING.md)
-- **Lux Depth V3 CLI Guide:** [docs/LUX_DEPTH_V3_CLI_GUIDE.md](docs/cli/LUX_DEPTH_V3_CLI_GUIDE.md)
-- **Lux Depth V3 Troubleshooting:** [docs/LUX_DEPTH_V3_TROUBLESHOOTING.md](docs/guides/LUX_DEPTH_V3_TROUBLESHOOTING.md)
+- **Troubleshooting:** [docs/guides/TROUBLESHOOTING.md](docs/guides/TROUBLESHOOTING.md)
+- **Lux Depth V3 CLI Guide:** [docs/cli/LUX_DEPTH_V3_CLI_GUIDE.md](docs/cli/LUX_DEPTH_V3_CLI_GUIDE.md)
+- **Lux Depth V3 Troubleshooting:** [docs/guides/LUX_DEPTH_V3_TROUBLESHOOTING.md](docs/guides/LUX_DEPTH_V3_TROUBLESHOOTING.md)
 
 ---
 
