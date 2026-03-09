@@ -1,8 +1,14 @@
+import importlib.util
 from pathlib import Path
 
 import pytest
 
-from scripts.validation import check_requirements_lock_contract as contract
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+TOOL_PATH = PROJECT_ROOT / "scripts" / "validation" / "check_requirements_lock_contract.py"
+SPEC = importlib.util.spec_from_file_location("check_requirements_lock_contract", TOOL_PATH)
+assert SPEC is not None and SPEC.loader is not None
+contract = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(contract)
 
 
 def write_makefile(tmp_path: Path, version: str = "3.11") -> None:
