@@ -145,7 +145,7 @@ This investigation produced comprehensive documentation:
    - Executive summary from original implementation
    - 159 lines
 
-4. **`docs/materials_v3_phase_a_summary.md`** (existing)
+4. **`docs/historical/materials_v3_phase_a_summary.md`** (existing)
    - Complete implementation guide
    - 368 lines
 
