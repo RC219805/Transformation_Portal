@@ -162,7 +162,7 @@ logger = logging.getLogger(__name__)
 
 app = typer.Typer(
     name="lux-depth-v3",
-    help=("Lux Depth V3 Pipeline - Orchestrated" " depth + enhancement with APEX" " quality tier support"),
+    help=("Lux Depth V3 Pipeline - Orchestrated depth + enhancement with APEX " "quality tier support"),
     add_completion=False,
 )
 
@@ -203,12 +203,12 @@ def main(
     input_dir: Path = typer.Option(
         ...,
         "--input-dir",
-        help="Input directory containing images" " to process",
+        help="Input directory containing images to process",
     ),
     output_dir: Path = typer.Option(
         ...,
         "--output-dir",
-        help=("Output directory for all artifacts" " (depth, PBR, enhanced images," " manifests)"),
+        help=("Output directory for all artifacts " "(depth, PBR, enhanced images, manifests)"),
     ),
     # Preset and Quality
     preset: str = typer.Option(
@@ -237,7 +237,7 @@ def main(
     depth_backend: Optional[str] = typer.Option(
         None,
         "--depth-backend",
-        help=("Depth backend: da3 (default," " commercial), depth_pro" " (research-only, metric depth)"),
+        help=("Depth backend: da3 (default, commercial), depth_pro " "(research-only, metric depth)"),
     ),
     depth_device: str = typer.Option(
         "cpu",
@@ -258,33 +258,33 @@ def main(
     save_float_depth: str = typer.Option(
         "off",
         "--save-float-depth",
-        help=("Save canonical float depth artifact" " (.npy) alongside preview PNG" " depth: on/off"),
+        help=("Save canonical float depth artifact (.npy) alongside preview PNG " "depth: on/off"),
     ),
     # Material Segmentation
     enable_segmentation: str = typer.Option(
         "off",
         "--enable-segmentation",
-        help=("Enable automatic material" " segmentation: on/off" " (default: off)"),
+        help="Enable automatic material segmentation: on/off (default: off)",
     ),
     segmentation_backend: str = typer.Option(
         "stub",
         "--segmentation-backend",
-        help=("Segmentation backend: stub" " (default, no segmentation)," " efficientsam, sam2"),
+        help=("Segmentation backend: stub (default, no segmentation), " + "efficientsam, sam2"),
     ),
     sam2_model_size: str = typer.Option(
         "base",
         "--sam2-model-size",
-        help=("SAM2 model size (base|large)" " when --segmentation-backend sam2"),
+        help="SAM2 model size (base|large) when --segmentation-backend sam2",
     ),
     sam2_checkpoint_path: Optional[Path] = typer.Option(
         None,
         "--sam2-checkpoint-path",
-        help=("Optional path to SAM2 checkpoint" " (.pt) when" " --segmentation-backend sam2"),
+        help=("Optional path to SAM2 checkpoint (.pt) when " "--segmentation-backend sam2"),
     ),
     strict_segmentation: bool = typer.Option(
         False,
         "--strict-segmentation",
-        help=("Fail on segmentation backend" " errors instead of falling" " back to stub"),
+        help=("Fail on segmentation backend errors instead of " + "falling back to stub"),
     ),
     # Caching
     cache_depth: str = typer.Option(
@@ -323,12 +323,12 @@ def main(
     emit_upscaled16: str = typer.Option(
         "off",
         "--emit-upscaled16",
-        help="Emit upscaled 16-bit output:" " on/off",
+        help="Emit upscaled 16-bit output: on/off",
     ),
     emit_marketing: str = typer.Option(
         "off",
         "--emit-marketing",
-        help="Emit marketing-ready output:" " on/off",
+        help="Emit marketing-ready output: on/off",
     ),
     emit_report: str = typer.Option(
         "on",
@@ -338,18 +338,18 @@ def main(
     emit_run_card: str = typer.Option(
         "on",
         "--emit-run-card",
-        help="Emit run card for" " reproducibility: on/off",
+        help="Emit run card for reproducibility: on/off",
     ),
     # License and Research Acknowledgements
     non_commercial_ok: str = typer.Option(
         "false",
         "--non-commercial-ok",
-        help=("Acknowledge non-commercial license" " restrictions (CC BY-NC 4.0):" " true/false"),
+        help=("Acknowledge non-commercial license restrictions " + "(CC BY-NC 4.0): true/false"),
     ),
     accept_apple_depth_pro_research_license: str = typer.Option(
         "false",
         "--accept-apple-depth-pro-research-license",
-        help=("Accept Apple Depth Pro research" " license (AMLR): true/false"),
+        help="Accept Apple Depth Pro research license (AMLR): true/false",
     ),
     accept_research_tools_license: str = typer.Option(
         "false",
@@ -365,87 +365,85 @@ def main(
     enable_reconstruction: str = typer.Option(
         "off",
         "--enable-reconstruction",
-        help=("Enable scene-level reconstruction" " stage (requires research license" " acknowledgements): on/off"),
+        help=("Enable scene-level reconstruction stage " + "(requires research license acknowledgements): on/off"),
     ),
     grouping_mode: str = typer.Option(
         "single",
         "--grouping-mode",
-        help=("Scene grouping strategy: single" " (default) or parent_dir" " (recommended for multi-view" " reconstruction)"),
+        help=("Scene grouping strategy: single (default) or parent_dir " + "(recommended for multi-view reconstruction)"),
     ),
     cameras_sidecar_path: Optional[Path] = typer.Option(
         None,
         "--cameras-sidecar-path",
-        help=("Optional path to a" " tp.scene_cameras.v1 sidecar" " JSON file for scene camera" " metadata"),
+        help=("Optional path to a tp.scene_cameras.v1 sidecar " + "JSON file for scene camera metadata"),
     ),
     reconstruction_iterations: int = typer.Option(
         1000,
         "--reconstruction-iterations",
         min=1,
-        help=("Iteration budget for" " reconstruction optimization" " (default: 1000)"),
+        help=("Iteration budget for reconstruction optimization " "(default: 1000)"),
     ),
     reconstruction_tier: str = typer.Option(
         "apex_research",
         "--reconstruction-tier",
-        help=("Reconstruction policy tier label" " forwarded to the reconstruction" " backend (default: apex_research)"),
+        help=("Reconstruction policy tier label forwarded to the " + "reconstruction backend (default: apex_research)"),
     ),
     emit_scene_debug_bundle: str = typer.Option(
         "off",
         "--emit-scene-debug-bundle",
-        help=("Emit reconstruction debug bundle" " artifacts (scene manifest," " cameras, reprojection preview):" " on/off"),
+        help=("Emit reconstruction debug bundle artifacts " + "(scene manifest, cameras, reprojection preview): on/off"),
     ),
     # Processing Flags
     overwrite: bool = typer.Option(
         False,
         "--overwrite",
-        help="Force reprocessing even if" " outputs exist",
+        help="Force reprocessing even if outputs exist",
     ),
     force_depth: bool = typer.Option(
         False,
         "--force-depth",
-        help="Force depth recomputation" " (ignore cache)",
+        help="Force depth recomputation (ignore cache)",
     ),
     strict_inputs: bool = typer.Option(
         False,
         "--strict-inputs",
-        help=("Fail if depth artifacts or derived" " outputs found in input directory" " (validation mode)"),
+        help=("Fail if depth artifacts or derived outputs " + "found in input directory (validation mode)"),
     ),
     raw_ingest_mode: str = typer.Option(
         "auto",
         "--raw-ingest-mode",
-        help=("RAW decode mode: auto, force_rawpy," " or force_preview (preview requires" " TP_ALLOW_RAW_PREVIEW=1)."),
+        help=("RAW decode mode: auto, force_rawpy, or force_preview " + "(preview requires TP_ALLOW_RAW_PREVIEW=1)."),
     ),
     raw_wb_mode: str = typer.Option(
         "camera",
         "--raw-wb-mode",
-        help=(
-            "RAW white-balance mode for" " legacy_linear_srgb ingest" " contract (currently only" " 'camera' is supported)."
-        ),
+        help=("RAW white-balance mode for legacy_linear_srgb ingest " + "contract (currently only 'camera' is supported)."),
     ),
     raw_demosaic: str = typer.Option(
         "AHD",
         "--raw-demosaic",
-        help=("RAW demosaic algorithm for" " legacy_linear_srgb ingest contract" " (currently only 'AHD' is" " supported)."),
+        help=("RAW demosaic algorithm for legacy_linear_srgb ingest " + "contract (currently only 'AHD' is supported)."),
     ),
     # Performance Tuning (Forward-Compatible)
     max_workers: Optional[int] = typer.Option(
         None,
         "--max-workers",
-        help=("Max CPU/I/O worker threads for" " parallel processing (default:" " auto-detect based on CPU count)"),
+        help=("Max CPU/I/O worker threads for parallel processing " + "(default: auto-detect based on CPU count)"),
     ),
     max_gpu_workers: Optional[int] = typer.Option(
         None,
         "--max-gpu-workers",
-        help=("Max GPU workers for inference" " (default: 2 for GPU/MPS," " auto for CPU)"),
+        help=("Max GPU workers for inference " + "(default: 2 for GPU/MPS, auto for CPU)"),
     ),
     verify_images: bool = typer.Option(
         False,
         "--verify-images",
-        help=("Strict image verification via" " PIL.verify() - useful for" " CI/ingest validation"),
+        help=("Strict image verification via PIL.verify() " + "- useful for CI/ingest validation"),
     ),
     allow_semantic_fallback: bool = typer.Option(
         False,
         "--allow-semantic-fallback",
-        help=("Allow fallback to secondary depth" " backends when APEX semantic" " gate fails"),
+        help=("Allow fallback to secondary depth backends " + "when APEX semantic gate fails"),
     ),
     # Logging
     verbose: bool = typer.Option(
@@ -533,19 +531,19 @@ def main(
 
     # Validate non-commercial usage
     if depth_backend == "depth_pro" and not enable_non_commercial:
-        error_msg = "Depth Pro backend requires" " --non-commercial-ok true" " (AMLR research-only license)"
+        error_msg = "Depth Pro backend requires --non-commercial-ok true " "(AMLR research-only license)"
         logger.error(error_msg)
         print(error_msg, file=sys.stdout)  # Also print to stdout for CLI tests
         raise typer.Exit(code=1)
 
     if depth_backend == "depth_pro" and not enable_apple_license:
-        error_msg = "Depth Pro backend requires" " --accept-apple-depth-pro-research" "-license true (Apple research-only)"
+        error_msg = "Depth Pro backend requires --accept-apple-depth-pro-research-license " "true (Apple research-only)"
         logger.error(error_msg)
         print(error_msg, file=sys.stdout)  # Also print to stdout for CLI tests
         raise typer.Exit(code=1)
 
     if "v3.1" in preset.lower() and not enable_non_commercial:
-        error_msg = f"Preset '{preset}' requires" " --non-commercial-ok true" " (CC BY-NC 4.0 non-commercial" " license)"
+        error_msg = f"Preset '{preset}' requires --non-commercial-ok true " "(CC BY-NC 4.0 non-commercial license)"
         logger.error(error_msg)
         print(error_msg, file=sys.stdout)  # Also print to stdout for CLI tests
         raise typer.Exit(code=1)
@@ -556,7 +554,7 @@ def main(
     # Validate quality tier
     valid_quality_tiers = ["standard", "premium", "apex"]
     if quality_tier.lower() not in valid_quality_tiers:
-        error_msg = f"Invalid quality tier" f" '{quality_tier}'." " Must be one of:" f" {', '.join(valid_quality_tiers)}"
+        error_msg = f"Invalid quality tier '{quality_tier}'. Must be one of: " f"{', '.join(valid_quality_tiers)}"
         logger.error(error_msg)
         print(error_msg, file=sys.stdout)  # Also print to stdout for CLI tests
         raise typer.Exit(code=1)
@@ -565,7 +563,7 @@ def main(
     grouping_mode_normalized = grouping_mode.strip().lower()
     valid_grouping_modes = ["single", "parent_dir"]
     if grouping_mode_normalized not in valid_grouping_modes:
-        error_msg = f"Invalid grouping mode" f" '{grouping_mode}'." " Must be one of:" f" {', '.join(valid_grouping_modes)}"
+        error_msg = f"Invalid grouping mode '{grouping_mode}'. Must be one of: " f"{', '.join(valid_grouping_modes)}"
         logger.error(error_msg)
         print(error_msg, file=sys.stdout)
         raise typer.Exit(code=1)
@@ -579,12 +577,12 @@ def main(
 
     if cameras_sidecar_path is not None:
         if not cameras_sidecar_path.exists():
-            error_msg = f"Camera sidecar file does not" f" exist: {cameras_sidecar_path}"
+            error_msg = f"Camera sidecar file does not exist: " f"{cameras_sidecar_path}"
             logger.error(error_msg)
             print(error_msg, file=sys.stdout)
             raise typer.Exit(code=1)
         if not cameras_sidecar_path.is_file():
-            error_msg = f"Camera sidecar path is not" f" a file: {cameras_sidecar_path}"
+            error_msg = f"Camera sidecar path is not a file: " f"{cameras_sidecar_path}"
             logger.error(error_msg)
             print(error_msg, file=sys.stdout)
             raise typer.Exit(code=1)
@@ -604,7 +602,7 @@ def main(
 
     # Validate SAM2 size option only when SAM2 backend is selected.
     if segmentation_backend.lower() == "sam2" and sam2_model_size.lower() not in ["base", "large"]:
-        error_msg = "Invalid --sam2-model-size." " Must be one of: base, large"
+        error_msg = "Invalid --sam2-model-size. Must be one of: base, large"
         logger.error(error_msg)
         print(error_msg, file=sys.stdout)
         raise typer.Exit(code=1)

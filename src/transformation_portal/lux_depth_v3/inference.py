@@ -155,7 +155,7 @@ class DA3InferenceEngine:
         self._resolved_model_id: Optional[str] = None
 
         logger.info(
-            "Initialized DA3InferenceEngine" " (variant=%s, backend=%s," " device=%s)",
+            "Initialized DA3InferenceEngine " "(variant=%s, backend=%s, device=%s)",
             config.model_variant.name,
             self.backend.name,
             self.device,
@@ -169,7 +169,7 @@ class DA3InferenceEngine:
         use_coreml = getattr(self.config.device, "use_coreml", False)
         if use_coreml and self._should_use_coreml():
             logger.info(
-                "CoreML backend enabled via" " config (5x speedup on" " Apple Silicon)",
+                "CoreML backend enabled via config " "(5x speedup on Apple Silicon)",
             )
             return ModelBackend.COREML
 
@@ -196,7 +196,9 @@ class DA3InferenceEngine:
         if TORCH_AVAILABLE:
             return ModelBackend.PYTORCH_CPU
 
-        raise RuntimeError("No backend available." " Install torch with:" " pip install torch")
+        raise RuntimeError(
+            "No backend available. Install torch with: pip install torch",
+        )
 
     def _should_use_coreml(self) -> bool:
         """Check if CoreML should be used."""
@@ -212,7 +214,7 @@ class DA3InferenceEngine:
         # CoreML tools must be available
         if not COREML_AVAILABLE:
             logger.warning(
-                "CoreML requested but coremltools" " not available. Install:" " pip install coremltools",
+                "CoreML requested but coremltools not available. Install: " "pip install coremltools",
             )
             return False
 
@@ -237,7 +239,7 @@ class DA3InferenceEngine:
         return "cpu"
 
     def _transformers_device_arg(self) -> Union[int, str]:
-        """Map internal device choice to transformers.pipeline device argument."""
+        """Map internal device choice to transformers pipeline device argument."""
         if self.device == "mps":
             return "mps"
         if self.device == "cuda":
@@ -267,9 +269,9 @@ class DA3InferenceEngine:
         models are not found.
         """
         if not TORCH_AVAILABLE:
-            raise ImportError("torch required for PyTorch" " backend. Install with:" " pip install torch")
+            raise ImportError("torch required for PyTorch backend. Install with: pip install torch")
         if not TRANSFORMERS_AVAILABLE:
-            raise ImportError("transformers required for PyTorch" " backend. Install with:" " pip install transformers")
+            raise ImportError("transformers required for PyTorch backend. Install with: " "pip install transformers")
 
         # Get HuggingFace model ID from config
         model_id = self.config.model_variant.value.huggingface_id
@@ -306,7 +308,7 @@ class DA3InferenceEngine:
             if use_fp16 and self.device in ("mps", "cuda"):
                 torch_dtype = torch.float16
                 logger.info(
-                    "Enabling FP16 for %s" " (1.3-1.5x speedup," " 2x memory reduction)",
+                    "Enabling FP16 for %s " "(1.3-1.5x speedup, 2x memory reduction)",
                     self.device,
                 )
 
@@ -493,7 +495,7 @@ class DA3InferenceEngine:
             self.model.eval()  # type: ignore[union-attr]
             logger.info("✓ DA3 model loaded successfully")
             logger.info(
-                "DA3 custom API integration" " active (depth-anything-3" " backend)",
+                "DA3 custom API integration active (depth-anything-3 backend)",
             )
         except Exception as e:
             error_msg = (
@@ -517,7 +519,7 @@ class DA3InferenceEngine:
         Provides 5x inference speedup on Apple Silicon (400ms → 80ms on M4).
         """
         if not COREML_AVAILABLE:
-            raise ImportError("coremltools required for" " CoreML backend. Install with:" " pip install coremltools")
+            raise ImportError("coremltools required for CoreML backend. Install with: " "pip install coremltools")
 
         from .coreml_backend import CoreMLDepthEstimator
 
@@ -529,7 +531,7 @@ class DA3InferenceEngine:
             self.model = CoreMLDepthEstimator(model_id)
 
             logger.info(
-                "CoreML model loaded with" " ANE acceleration" " (5x speedup)",
+                "CoreML model loaded with ANE acceleration (5x speedup)",
             )
 
         except Exception as e:
@@ -586,7 +588,9 @@ class DA3InferenceEngine:
         if isinstance(image, (np.ndarray, Image.Image)):
             return self.infer(image)
 
-        raise TypeError("Expected np.ndarray, PIL.Image," " Path, str, or ImageInput," f" got {type(image)}")
+        raise TypeError(
+            "Expected np.ndarray, PIL.Image," " Path, str, or ImageInput," f" got {type(image)}",
+        )
 
     def infer(self, image: Union[np.ndarray, "Image.Image"]) -> DepthResult:
         """Run depth inference on an image.
@@ -631,7 +635,9 @@ class DA3InferenceEngine:
                     # Scale 16-bit -> 8-bit
                     gray = (image / 256).astype(np.uint8)
                 else:
-                    raise ValueError("Unsupported grayscale" f" dtype: {image.dtype}")
+                    raise ValueError(
+                        "Unsupported grayscale" f" dtype: {image.dtype}",
+                    )
 
                 # Convert grayscale to RGB by repeating channel
                 rgb_uint8 = np.stack([gray, gray, gray], axis=-1)
@@ -653,7 +659,9 @@ class DA3InferenceEngine:
                         # Scale 16-bit → 8-bit
                         rgb_uint8 = (image / 256).astype(np.uint8)
                     else:
-                        raise ValueError("Unsupported RGB" f" dtype: {image.dtype}")
+                        raise ValueError(
+                            "Unsupported RGB" f" dtype: {image.dtype}",
+                        )
 
                     pil_image = Image.fromarray(rgb_uint8, mode="RGB")
                     original_image = rgb_uint8
@@ -668,7 +676,9 @@ class DA3InferenceEngine:
                     elif image.dtype == np.uint16:
                         rgba = (image / 256).astype(np.uint8)
                     else:
-                        raise ValueError("Unsupported RGBA" f" dtype: {image.dtype}")
+                        raise ValueError(
+                            "Unsupported RGBA" f" dtype: {image.dtype}",
+                        )
 
                     # Drop alpha channel
                     rgb_uint8 = rgba[:, :, :3]
@@ -752,7 +762,7 @@ class DA3InferenceEngine:
             from .ingest_adapter import decode_for_lux_depth
 
             logger.debug(
-                "Routing RAW input through" " canonical ingest contract:" " %s",
+                "Routing RAW input through canonical ingest contract: %s",
                 image_path.name,
             )
             ingest_cfg = SimpleNamespace(

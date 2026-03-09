@@ -1139,10 +1139,18 @@ class EnhanceOrchestrator:
 
         checkpoint_meta_present = isinstance(checkpoint_meta, dict)
         if artifact_sha256 is None and checkpoint_meta_present and backend is not None:
-            checkpoint_hash_getter = getattr(backend, "_get_checkpoint_hash", None)
+            checkpoint_hash_backend = cast(Any, backend)
+            checkpoint_hash_getter = getattr(
+                checkpoint_hash_backend,
+                "_get_checkpoint_hash",
+                None,
+            )
             if callable(checkpoint_hash_getter):
                 try:
-                    artifact_sha256 = self._normalize_sha256(checkpoint_hash_getter())
+                    getter = cast(Callable[[], Any], checkpoint_hash_getter)
+                    artifact_sha256 = self._normalize_sha256(
+                        getter(),
+                    )
                 except Exception:  # pragma: no cover - best-effort provenance enrichment
                     artifact_sha256 = None
 
@@ -5260,7 +5268,8 @@ class EnhanceOrchestrator:
             artifact_paths.append(batch_manifest_path)
             batch_name = batch_manifest_path.stem
             if batch_name.startswith("batch_"):
-                batch_id = batch_name[len("batch_") :]
+                prefix_len = len("batch_")
+                batch_id = batch_name[prefix_len:]
 
         for result in results:
             for direct_path_key in (
