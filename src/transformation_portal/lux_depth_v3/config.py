@@ -38,7 +38,7 @@ class ModelVariant(Enum):
         (),
         {
             "name": "depth-anything-v3-metric-large",
-            "display_name": ("Depth Anything V3 Metric Large" " (DA3 Nested Giant)"),
+            "display_name": ("Depth Anything V3 Metric Large " "(DA3 Nested Giant)"),
             "huggingface_id": "depth-anything/DA3NESTED-GIANT-LARGE-1.1",
         },
     )()
@@ -118,7 +118,8 @@ class DA3Config:
 
         Presets provide different quality/performance tradeoffs:
 
-        * ``ARCHITECTURAL_INTERIOR``: High quality for interior architectural renders.
+        * ``ARCHITECTURAL_INTERIOR``:
+          High quality for interior architectural renders.
         * ``ARCHITECTURAL_EXTERIOR``: Balanced for exterior scenes.
         * ``LUXURY_ESTATE``: Premium quality for luxury real estate.
         * ``DEFAULT``: Standard balanced configuration.
