@@ -1140,16 +1140,15 @@ class EnhanceOrchestrator:
         checkpoint_meta_present = isinstance(checkpoint_meta, dict)
         if artifact_sha256 is None and checkpoint_meta_present and backend is not None:
             checkpoint_hash_backend = cast(Any, backend)
-            checkpoint_hash_getter = getattr(
+            checkpoint_hash_getter: Optional[Callable[[], Any]] = getattr(
                 checkpoint_hash_backend,
                 "_get_checkpoint_hash",
                 None,
             )
-            if callable(checkpoint_hash_getter):
+            if checkpoint_hash_getter is not None:
                 try:
-                    getter = cast(Callable[[], Any], checkpoint_hash_getter)
                     artifact_sha256 = self._normalize_sha256(
-                        getter(),
+                        checkpoint_hash_getter(),
                     )
                 except Exception:  # pragma: no cover - best-effort provenance enrichment
                     artifact_sha256 = None
