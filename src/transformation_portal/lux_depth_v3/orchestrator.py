@@ -1099,6 +1099,13 @@ class EnhanceOrchestrator:
             return digest
         return None
 
+    @staticmethod
+    def _typed_nullary_callable(value: Any) -> Optional[Callable[[], Any]]:
+        """Return a typed no-arg callable for dynamically loaded attributes."""
+        if callable(value):
+            return cast(Callable[[], Any], value)
+        return None
+
     def _resolve_backend_model_artifact(
         self,
         backend_id: str,
@@ -1139,11 +1146,8 @@ class EnhanceOrchestrator:
 
         checkpoint_meta_present = isinstance(checkpoint_meta, dict)
         if artifact_sha256 is None and checkpoint_meta_present and backend is not None:
-            checkpoint_hash_backend = cast(Any, backend)
-            checkpoint_hash_getter: Optional[Callable[[], Any]] = getattr(
-                checkpoint_hash_backend,
-                "_get_checkpoint_hash",
-                None,
+            checkpoint_hash_getter = self._typed_nullary_callable(
+                getattr(backend, "_get_checkpoint_hash", None),
             )
             if checkpoint_hash_getter is not None:
                 try:
