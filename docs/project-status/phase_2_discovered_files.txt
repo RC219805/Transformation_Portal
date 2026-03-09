@@ -40,7 +40,7 @@ docs/materials/PHASE_A_COMPLETE.md
 docs/materials/PHASE_B_COMPLETE.md
 docs/materials/ROADMAP_QUICK_REF.md
 docs/materials/SAM2_INTEGRATION.md
-docs/materials_v3_phase_a_summary.md
+docs/historical/materials_v3_phase_a_summary.md
 scripts/pipelines/run_source_tiffs_depth_pro_research.sh
 src/transformation_portal/lux_depth_v3/README.md
 src/transformation_portal/lux_depth_v3/__main__.py
@@ -126,7 +126,7 @@ docs/materials/MATERIALS_V3_ROADMAP_IMPLEMENTATION_PLAN.md
 docs/materials/PHASE_A_COMPLETE.md
 docs/materials/PHASE_B_COMPLETE.md
 docs/materials/ROADMAP_QUICK_REF.md
-docs/materials_v3_phase_a_summary.md
+docs/historical/materials_v3_phase_a_summary.md
 src/transformation_portal/lux_depth_v3/bootstrap/__init__.py
 src/transformation_portal/lux_depth_v3/bootstrap/sky_seed.py
 src/transformation_portal/lux_depth_v3/config.py
