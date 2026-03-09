@@ -5268,7 +5268,8 @@ class EnhanceOrchestrator:
             artifact_paths.append(batch_manifest_path)
             batch_name = batch_manifest_path.stem
             if batch_name.startswith("batch_"):
-                batch_id = batch_name[len("batch_") :]  # noqa: E203
+                prefix_len = len("batch_")
+                batch_id = batch_name[prefix_len:]
 
         for result in results:
             for direct_path_key in (
