@@ -293,9 +293,9 @@ class DA3InferenceEngine:
 
         # Fallback mapping to V2 metric models (which exist on HuggingFace)
         v3_to_v2_fallback = {
-            "depth-anything/Depth-Anything-V3-Metric-Large-hf": ("depth-anything/Depth-Anything-V2-Metric-Indoor-Large-hf"),
-            "depth-anything/Depth-Anything-V3-Metric-Base-hf": ("depth-anything/Depth-Anything-V2-Metric-Indoor-Base-hf"),
-            "depth-anything/Depth-Anything-V3-Metric-Small-hf": ("depth-anything/Depth-Anything-V2-Metric-Indoor-Small-hf"),
+            "depth-anything/Depth-Anything-V3-Metric-Large-hf": "depth-anything/Depth-Anything-V2-Metric-Indoor-Large-hf",
+            "depth-anything/Depth-Anything-V3-Metric-Base-hf": "depth-anything/Depth-Anything-V2-Metric-Indoor-Base-hf",
+            "depth-anything/Depth-Anything-V3-Metric-Small-hf": "depth-anything/Depth-Anything-V2-Metric-Indoor-Small-hf",
         }
 
         try:

@@ -1147,8 +1147,9 @@ class EnhanceOrchestrator:
             )
             if callable(checkpoint_hash_getter):
                 try:
+                    getter = cast(Callable[[], Any], checkpoint_hash_getter)
                     artifact_sha256 = self._normalize_sha256(
-                        checkpoint_hash_backend._get_checkpoint_hash(),
+                        getter(),
                     )
                 except Exception:  # pragma: no cover - best-effort provenance enrichment
                     artifact_sha256 = None
