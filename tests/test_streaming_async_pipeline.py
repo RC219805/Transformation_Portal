@@ -86,6 +86,24 @@ def test_backpressure_queue_timeout_does_not_distort_avg_wait_time(monkeypatch: 
     assert stats["avg_wait_time"] == pytest.approx(baseline)
 
 
+class _AddOneStage(AsyncStage[int, int]):
+    def __init__(self) -> None:
+        super().__init__(name="add_one", max_concurrent=8)
+
+    async def process(self, item: int) -> int:
+        await asyncio.sleep(0)
+        return item + 1
+
+
+class _DoubleStage(AsyncStage[int, int]):
+    def __init__(self) -> None:
+        super().__init__(name="double", max_concurrent=8)
+
+    async def process(self, item: int) -> int:
+        await asyncio.sleep(0)
+        return item * 2
+
+
 @dataclass
 class _TaskCounter:
     created: int = 0
@@ -185,6 +203,23 @@ def _install_task_counter(monkeypatch: pytest.MonkeyPatch) -> _TaskCounter:
 
     monkeypatch.setattr(async_pipeline_module, "_create_process_batch_task", instrumented)
     return counter
+
+
+def test_async_pipeline_with_fake_stages_processes_end_to_end() -> None:
+    async def runner() -> None:
+        pipeline = AsyncPipeline().add_stage(_AddOneStage()).add_stage(_DoubleStage())
+
+        async with pipeline:
+            results = await _collect_process_batch(pipeline, [1, 2, 3], max_concurrent=2)
+
+        assert sorted(result.data for result in results) == [4, 6, 8]
+        assert all(len(result.stage_results) == 2 for result in results)
+        assert all(stage_result.success for result in results for stage_result in result.stage_results)
+        assert {result.stage_results[0].stage_name for result in results} == {"add_one"}
+        assert {result.stage_results[1].stage_name for result in results} == {"double"}
+        assert pipeline.metrics.items_processed == 3
+
+    asyncio.run(runner())
 
 
 def test_process_batch_caps_in_flight_work_at_max_concurrent() -> None:
