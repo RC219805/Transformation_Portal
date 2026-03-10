@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+from dataclasses import fields
 from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
 
-from transformation_portal.core.config.presets import load_preset
+from transformation_portal.core.config.presets import Preset, PresetRegistry, list_presets, load_preset, register_preset
 from transformation_portal.core.config.schemas import PerformanceConfig
 from transformation_portal.core.config.validation import validate_config
 
@@ -19,6 +20,13 @@ def _base_paths(tmp_path: Path) -> dict[str, dict[str, Path]]:
             "output_dir": tmp_path / "output",
         }
     }
+
+
+@pytest.fixture(autouse=True)
+def _restore_preset_registry() -> None:
+    original_presets = PresetRegistry._presets.copy()
+    yield
+    PresetRegistry._presets = original_presets
 
 
 def test_fast_preview_validates_against_config_schema(tmp_path: Path) -> None:
@@ -63,3 +71,28 @@ def test_tile_size_zero_is_allowed_and_sub_256_nonzero_values_are_rejected() -> 
     for invalid_tile_size in (1, 255):
         with pytest.raises(ValidationError, match="tile_size"):
             PerformanceConfig(tile_size=invalid_tile_size)
+
+
+def test_register_and_load_custom_preset_without_parent_semantics() -> None:
+    register_preset(
+        Preset(
+            name="custom_preview",
+            description="Custom preset used to verify registration and loading.",
+            overrides={
+                "performance": {"batch_size": 2, "tile_size": 512},
+                "output": {"format": "png", "quality": 100},
+            },
+        )
+    )
+
+    loaded = load_preset("custom_preview")
+
+    assert loaded["performance"]["batch_size"] == 2
+    assert loaded["output"]["format"] == "png"
+    assert "parent" not in {field.name for field in fields(Preset)}
+
+
+def test_list_presets_contains_builtin_presets() -> None:
+    preset_names = list_presets()
+
+    assert {"fast_preview", "production", "archival"}.issubset(set(preset_names))

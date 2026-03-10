@@ -7,7 +7,7 @@ Manages named configuration profiles (e.g., 'production', 'preview').
 import logging
 from copy import deepcopy
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +19,6 @@ class Preset:
     name: str
     description: str
     overrides: Dict[str, Any]  # Dictionary matching schema structure
-    parent: Optional[str] = None  # For inheritance
 
 
 class PresetRegistry:
@@ -102,5 +101,4 @@ list_presets = PresetRegistry.list
 def load_preset(name: str) -> Dict[str, Any]:
     """Resolve a preset into a configuration dictionary."""
     preset = PresetRegistry.get(name)
-    # In a full implementation, this would handle recursive parent merging
     return deepcopy(preset.overrides)
