@@ -61,6 +61,11 @@ InputT = TypeVar("InputT")
 OutputT = TypeVar("OutputT")
 
 
+def _create_process_batch_task(coro: Awaitable[WorkItem]) -> asyncio.Task[WorkItem]:
+    """Create a process-batch task through a patchable module-local hook."""
+    return asyncio.create_task(coro)
+
+
 class DeviceType(Enum):
     """Device types for worker affinity."""
 
@@ -933,26 +938,57 @@ class AsyncPipeline:
             await self.startup()
 
         start_time = time.time()
-        semaphore = asyncio.Semaphore(max_concurrent)
+        item_iterator = iter(items)
+        pending: set[asyncio.Task[WorkItem]] = set()
+        shutdown_waiter = asyncio.create_task(self._shutdown_event.wait())
 
-        async def process_with_semaphore(item: Any) -> WorkItem:
-            async with semaphore:
-                return await self.process_item(item)
+        def schedule_pending_work() -> None:
+            while len(pending) < max_concurrent and not self._shutdown_event.is_set():
+                try:
+                    item = next(item_iterator)
+                except StopIteration:
+                    break
+                pending.add(_create_process_batch_task(self.process_item(item)))
 
-        # Create all tasks
-        tasks = [asyncio.create_task(process_with_semaphore(item)) for item in items]
+        schedule_pending_work()
 
-        # Yield results as they complete
-        for coro in asyncio.as_completed(tasks):
-            try:
-                work_item = await coro
-                yield work_item
-            except Exception as e:
-                # Create failed work item
-                yield WorkItem(id="error", data=None, metadata={"error": str(e)})
+        try:
+            while pending:
+                done, _ = await asyncio.wait(pending | {shutdown_waiter}, return_when=asyncio.FIRST_COMPLETED)
 
-        self._metrics.total_processing_time = time.time() - start_time
-        self._metrics.update_throughput()
+                if shutdown_waiter in done:
+                    for task in pending:
+                        task.cancel()
+                    await asyncio.gather(*pending, return_exceptions=True)
+                    pending.clear()
+                    break
+
+                completed_tasks = [task for task in done if task is not shutdown_waiter]
+
+                for task in completed_tasks:
+                    pending.remove(task)
+                    try:
+                        work_item = await task
+                    except asyncio.CancelledError:
+                        continue
+                    except Exception as e:
+                        yield WorkItem(id="error", data=None, metadata={"error": str(e)})
+                    else:
+                        yield work_item
+
+                schedule_pending_work()
+        finally:
+            if pending:
+                for task in pending:
+                    task.cancel()
+                await asyncio.gather(*pending, return_exceptions=True)
+
+            if not shutdown_waiter.done():
+                shutdown_waiter.cancel()
+                await asyncio.gather(shutdown_waiter, return_exceptions=True)
+
+            self._metrics.total_processing_time = time.time() - start_time
+            self._metrics.update_throughput()
 
     async def process_streaming(self, items: AsyncIterator[Any]) -> AsyncIterator[WorkItem]:
         """Process items from async iterator (true streaming).
