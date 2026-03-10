@@ -62,9 +62,9 @@ def validate_config(config_data: Union[Dict[str, Any], ConfigSchema], create_dir
 
     # 3. Business Logic / Cross-Field Validation
 
-    # Tiled processing requires overlapping
+    # Non-zero tile sizes must be large enough for stable tiled processing.
     if config.performance.tile_size > 0 and config.performance.tile_size < 256:
-        raise ConfigValidationError("Tile size must be at least 256 pixels.")
+        raise ConfigValidationError("Tile size must be 0 or at least 256 pixels.")
 
     # Precision conflicts
     if config.device.device == "cpu" and config.device.precision == "fp16":
