@@ -30,4 +30,4 @@ pytest \
 
 - This is intentionally narrower than repo-wide coverage.
 - `term-missing` output is required so reviews can immediately see uncovered lines in the audited paths.
-- Keep this workflow separate from PR 6 hotspot smoke coverage and from ML-heavy coverage runs.
+- Keep this workflow separate from hotspot smoke coverage workflows and from ML-heavy coverage runs.
