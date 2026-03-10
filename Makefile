@@ -119,7 +119,8 @@ test-orchestrator-contract:
 	@"$(PY)" -m pytest -q tests/test_app_orchestrator_runtime.py tests/test_app_orchestrator_contract_http.py
 
 coverage-fast-scope:
-	@"$(PY)" -m pytest \
+	@rm -f .coverage.fast-scope .coverage.fast-scope.*
+	@COVERAGE_FILE=.coverage.fast-scope "$(PY)" -m pytest \
 		--cov=src/transformation_portal/core/config \
 		--cov=src/transformation_portal/streaming \
 		--cov-branch \
