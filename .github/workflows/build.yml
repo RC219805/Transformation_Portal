@@ -346,7 +346,8 @@ jobs:
 
       - uses: actions/checkout@v6
         with:
-          fetch-depth: 0
+          # lint_runner.sh performs its own targeted fetch for diff-based pylint selection.
+          fetch-depth: 1
 
       - uses: actions/setup-python@v6
         with:
