@@ -33,6 +33,9 @@ Quick reference for common workflows and commands in this repo.
 - `make lock-prod` regenerate `requirements.lock.txt`.
 - `make lock-ci` regenerate `requirements-ci.lock.txt`.
 - `make lock-dev` regenerate `requirements-dev.lock.txt`.
+- `cd requirements && make update LOCK_PYTHON_VERSION=3.11` update layered lockfiles (`all/base/ml/dev/ci/tools-archive`).
+- `cd requirements && make check LOCK_PYTHON_VERSION=3.11` verify layered lockfiles are current.
+- `python3 scripts/validation/check_requirements_lock_contract.py` validate layered lock contract (headers + CPU-only `ml.txt`).
 - `make docs` build API docs with Sphinx.
 - `make docs-clean` remove generated docs output.
 
