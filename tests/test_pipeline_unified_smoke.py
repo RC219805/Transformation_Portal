@@ -9,6 +9,8 @@ from pathlib import Path
 
 from PIL import Image
 
+PIPELINE_MODULE = "transformation_portal.pipeline_unified"
+
 
 def _load_pipeline_unified_with_stubbed_optionals(monkeypatch):
     quality_module = types.ModuleType("transformation_portal.pipelines.quality_feedback_bridge")
@@ -33,41 +35,44 @@ def _load_pipeline_unified_with_stubbed_optionals(monkeypatch):
 
     monkeypatch.setitem(sys.modules, quality_module.__name__, quality_module)
     monkeypatch.setitem(sys.modules, rendering_module.__name__, rendering_module)
-    monkeypatch.delitem(sys.modules, "transformation_portal.pipeline_unified", raising=False)
+    monkeypatch.delitem(sys.modules, PIPELINE_MODULE, raising=False)
 
-    return importlib.import_module("transformation_portal.pipeline_unified")
+    return importlib.import_module(PIPELINE_MODULE)
 
 
 def test_pipeline_unified_smoke_with_stubbed_dependencies(tmp_path: Path, monkeypatch) -> None:
     pipeline_module = _load_pipeline_unified_with_stubbed_optionals(monkeypatch)
 
-    input_path = tmp_path / "input.png"
-    Image.new("RGB", (8, 6), color=(64, 96, 128)).save(input_path)
+    try:
+        input_path = tmp_path / "input.png"
+        Image.new("RGB", (8, 6), color=(64, 96, 128)).save(input_path)
 
-    recipe = {
-        "name": "Smoke Pipeline",
-        "description": "Tiny happy-path smoke test",
-        "stages": ["color_grading"],
-        "color_grading": {
-            "enabled": True,
-            "contrast": 1.05,
-            "saturation": 1.1,
-        },
-        "quality_feedback": {"enabled": False},
-        "output": {"format": "png"},
-    }
+        recipe = {
+            "name": "Smoke Pipeline",
+            "description": "Tiny happy-path smoke test",
+            "stages": ["color_grading"],
+            "color_grading": {
+                "enabled": True,
+                "contrast": 1.05,
+                "saturation": 1.1,
+            },
+            "quality_feedback": {"enabled": False},
+            "output": {"format": "png"},
+        }
 
-    pipeline = pipeline_module.UnifiedPipeline(recipe)
-    result = pipeline.process_single(input_path)
+        pipeline = pipeline_module.UnifiedPipeline(recipe)
+        result = pipeline.process_single(input_path)
 
-    assert result.success
-    assert result.error_message is None
-    assert result.stages_executed == ["color_grading"]
-    assert "color_grading" in result.stage_times
-    assert result.output_path is not None
-    assert result.output_path == tmp_path / "processed" / "input_smoke_pipeline.png"
-    assert result.output_path.exists()
+        assert result.success
+        assert result.error_message is None
+        assert result.stages_executed == ["color_grading"]
+        assert "color_grading" in result.stage_times
+        assert result.output_path is not None
+        assert result.output_path == tmp_path / "processed" / "input_smoke_pipeline.png"
+        assert result.output_path.exists()
 
-    with Image.open(result.output_path) as output_image:
-        assert output_image.mode == "RGB"
-        assert output_image.size == (8, 6)
+        with Image.open(result.output_path) as output_image:
+            assert output_image.mode == "RGB"
+            assert output_image.size == (8, 6)
+    finally:
+        sys.modules.pop(PIPELINE_MODULE, None)
