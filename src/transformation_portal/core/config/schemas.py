@@ -55,9 +55,15 @@ class PerformanceConfig(BaseModel):
 
     batch_size: int = Field(default=1, ge=1, description="Processing batch size")
     num_workers: int = Field(default=4, ge=0, description="DataLoader workers")
-    tile_size: int = Field(default=512, ge=256, description="Tiled processing size (0 for full image)")
+    tile_size: int = Field(default=512, ge=0, description="Tiled processing size (0 disables tiling; otherwise >= 256)")
     tile_overlap: int = Field(default=64, ge=0, description="Overlap between tiles in pixels")
     memory_limit_gb: float = Field(default=8.0, gt=0, description="VRAM limit hint")
+
+    @validator("tile_size")
+    def validate_tile_size(cls, v):
+        if 0 < v < 256:
+            raise ValueError("tile_size must be 0 or at least 256 pixels")
+        return v
 
 
 class OutputConfig(BaseModel):
