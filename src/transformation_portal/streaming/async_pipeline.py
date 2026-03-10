@@ -213,6 +213,7 @@ class BackpressureQueue(Generic[T]):
     @property
     def stats(self) -> Dict[str, Any]:
         """Get queue statistics."""
+        successful_operations = self._items_put + self._items_got
         return {
             "name": self._name,
             "size": self.size,
@@ -220,7 +221,7 @@ class BackpressureQueue(Generic[T]):
             "items_put": self._items_put,
             "items_got": self._items_got,
             "backpressured": self._backpressured,
-            "avg_wait_time": (self._total_wait_time / self._items_got if self._items_got > 0 else 0.0),
+            "avg_wait_time": (self._total_wait_time / successful_operations if successful_operations > 0 else 0.0),
         }
 
     async def put(self, item: T, timeout: Optional[float] = None) -> None:
@@ -239,14 +240,13 @@ class BackpressureQueue(Generic[T]):
 
         start = time.time()
 
-        try:
-            if timeout is not None:
-                await asyncio.wait_for(self._queue.put(item), timeout=timeout)
-            else:
-                await self._queue.put(item)
-        finally:
-            self._items_put += 1
-            self._total_wait_time += time.time() - start
+        if timeout is not None:
+            await asyncio.wait_for(self._queue.put(item), timeout=timeout)
+        else:
+            await self._queue.put(item)
+
+        self._items_put += 1
+        self._total_wait_time += time.time() - start
 
         # Update backpressure state
         if self._maxsize > 0 and self.size >= self._high_water:
@@ -266,14 +266,13 @@ class BackpressureQueue(Generic[T]):
         """
         start = time.time()
 
-        try:
-            if timeout is not None:
-                item = await asyncio.wait_for(self._queue.get(), timeout=timeout)
-            else:
-                item = await self._queue.get()
-        finally:
-            self._items_got += 1
-            self._total_wait_time += time.time() - start
+        if timeout is not None:
+            item = await asyncio.wait_for(self._queue.get(), timeout=timeout)
+        else:
+            item = await self._queue.get()
+
+        self._items_got += 1
+        self._total_wait_time += time.time() - start
 
         # Update backpressure state
         if self._backpressured and self.size <= self._low_water:
