@@ -91,7 +91,6 @@ class _TaskCounter:
     created: int = 0
     live: int = 0
     peak_live: int = 0
-    peak_created_while_blocked: int = 0
 
 
 class _BarrierStage(AsyncStage[int, int]):
@@ -133,6 +132,29 @@ class _BarrierStage(AsyncStage[int, int]):
             self.active -= 1
 
 
+class _SelectiveShutdownStage(AsyncStage[int, int]):
+    def __init__(self) -> None:
+        super().__init__(name="selective_shutdown", max_concurrent=64)
+        self.started = 0
+        self.started_event = asyncio.Event()
+        self.cancelled = 0
+
+    async def process(self, item: int) -> int:
+        self.started += 1
+        if self.started >= 2:
+            self.started_event.set()
+
+        try:
+            if item == 0:
+                await asyncio.sleep(0)
+                return 100
+            await asyncio.Event().wait()
+            return item
+        except asyncio.CancelledError:
+            self.cancelled += 1
+            raise
+
+
 async def _collect_process_batch(
     pipeline: AsyncPipeline,
     items: list[int],
@@ -154,7 +176,6 @@ def _install_task_counter(monkeypatch: pytest.MonkeyPatch) -> _TaskCounter:
         counter.created += 1
         counter.live += 1
         counter.peak_live = max(counter.peak_live, counter.live)
-        counter.peak_created_while_blocked = max(counter.peak_created_while_blocked, counter.created)
 
         def _on_done(_: asyncio.Task[Any]) -> None:
             counter.live -= 1
@@ -258,5 +279,69 @@ def test_process_batch_shutdown_cleans_up_pending_work(monkeypatch: pytest.Monke
         assert results == []
         assert stage.cancelled == 3
         assert counter.live == 0
+
+    asyncio.run(runner())
+
+
+def test_process_batch_rejects_non_positive_max_concurrent() -> None:
+    async def runner() -> None:
+        pipeline = AsyncPipeline()
+
+        with pytest.raises(ValueError, match="max_concurrent must be >= 1"):
+            await _collect_process_batch(pipeline, [1], max_concurrent=0)
+
+    asyncio.run(runner())
+
+
+def test_process_batch_shutdown_preserves_completed_results(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def runner() -> None:
+        stage = _SelectiveShutdownStage()
+        pipeline = AsyncPipeline().add_stage(stage)
+        original = async_pipeline_module._create_process_batch_task
+
+        def instrumented(coro: Any) -> asyncio.Task[Any]:
+            task = original(coro)
+
+            def trigger_shutdown(completed: asyncio.Task[Any]) -> None:
+                if completed.cancelled():
+                    return
+                if completed.exception() is not None:
+                    return
+                work_item = completed.result()
+                if work_item.data == 100:
+                    pipeline._shutdown_event.set()
+
+            task.add_done_callback(trigger_shutdown)
+            return task
+
+        monkeypatch.setattr(async_pipeline_module, "_create_process_batch_task", instrumented)
+
+        results = await _collect_process_batch(pipeline, [0, 1], max_concurrent=2)
+
+        assert [result.data for result in results] == [100]
+        assert stage.cancelled == 1
+
+    asyncio.run(runner())
+
+
+def test_process_batch_wraps_unexpected_exceptions_in_failure_work_item(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def broken_process_item(item: int) -> Any:
+        raise RuntimeError(f"broken:{item}")
+
+    async def runner() -> None:
+        pipeline = AsyncPipeline()
+        monkeypatch.setattr(pipeline, "process_item", broken_process_item)
+
+        results = await _collect_process_batch(pipeline, [7], max_concurrent=1)
+
+        assert len(results) == 1
+        failure = results[0]
+        assert failure.data == 7
+        assert failure.metadata["error"] == "broken:7"
+        assert len(failure.stage_results) == 1
+        assert failure.stage_results[0].stage_name == "process_batch"
+        assert failure.stage_results[0].failed
+        assert isinstance(failure.stage_results[0].error, RuntimeError)
+        assert pipeline.metrics.items_failed == 1
 
     asyncio.run(runner())

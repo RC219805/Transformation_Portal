@@ -44,6 +44,7 @@ from typing import (
     AsyncIterator,
     Awaitable,
     Callable,
+    Coroutine,
     Dict,
     Generic,
     List,
@@ -61,7 +62,7 @@ InputT = TypeVar("InputT")
 OutputT = TypeVar("OutputT")
 
 
-def _create_process_batch_task(coro: Awaitable[WorkItem]) -> asyncio.Task[WorkItem]:
+def _create_process_batch_task(coro: Coroutine[Any, Any, WorkItem[Any]]) -> asyncio.Task[WorkItem[Any]]:
     """Create a process-batch task through a patchable module-local hook."""
     return asyncio.create_task(coro)
 
@@ -934,13 +935,31 @@ class AsyncPipeline:
         Yields:
             WorkItem for each completed item
         """
+        if max_concurrent <= 0:
+            raise ValueError("max_concurrent must be >= 1")
+
         if not self._active:
             await self.startup()
 
         start_time = time.time()
         item_iterator = iter(items)
-        pending: set[asyncio.Task[WorkItem]] = set()
+        pending: Dict[asyncio.Task[WorkItem[Any]], Any] = {}
         shutdown_waiter = asyncio.create_task(self._shutdown_event.wait())
+
+        def build_failed_work_item(item: Any, error: Exception) -> WorkItem[Any]:
+            work_item = WorkItem(id=str(id(item)), data=item, metadata={"error": str(error)})
+            work_item.add_result(
+                StageResult(
+                    data=None,
+                    stage_name="process_batch",
+                    elapsed_time=0.0,
+                    success=False,
+                    error=error,
+                    metadata={"error_type": type(error).__name__},
+                )
+            )
+            self._metrics.items_failed += 1
+            return work_item
 
         def schedule_pending_work() -> None:
             while len(pending) < max_concurrent and not self._shutdown_event.is_set():
@@ -948,13 +967,27 @@ class AsyncPipeline:
                     item = next(item_iterator)
                 except StopIteration:
                     break
-                pending.add(_create_process_batch_task(self.process_item(item)))
+                task = _create_process_batch_task(self.process_item(item))
+                pending[task] = item
 
         schedule_pending_work()
 
         try:
             while pending:
-                done, _ = await asyncio.wait(pending | {shutdown_waiter}, return_when=asyncio.FIRST_COMPLETED)
+                done, _ = await asyncio.wait(set(pending) | {shutdown_waiter}, return_when=asyncio.FIRST_COMPLETED)
+
+                completed_tasks = [task for task in done if task is not shutdown_waiter]
+
+                for task in completed_tasks:
+                    item = pending.pop(task)
+                    try:
+                        work_item = await task
+                    except asyncio.CancelledError:
+                        continue
+                    except Exception as e:
+                        yield build_failed_work_item(item, e)
+                    else:
+                        yield work_item
 
                 if shutdown_waiter in done:
                     for task in pending:
@@ -962,19 +995,6 @@ class AsyncPipeline:
                     await asyncio.gather(*pending, return_exceptions=True)
                     pending.clear()
                     break
-
-                completed_tasks = [task for task in done if task is not shutdown_waiter]
-
-                for task in completed_tasks:
-                    pending.remove(task)
-                    try:
-                        work_item = await task
-                    except asyncio.CancelledError:
-                        continue
-                    except Exception as e:
-                        yield WorkItem(id="error", data=None, metadata={"error": str(e)})
-                    else:
-                        yield work_item
 
                 schedule_pending_work()
         finally:
