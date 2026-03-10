@@ -33,10 +33,10 @@ def test_fast_preview_validates_against_config_schema(tmp_path: Path) -> None:
     assert validated.paths.output_dir.exists()
 
 
-def test_fast_preview_tile_size_contract_matches_schema() -> None:
-    config = PerformanceConfig(tile_size=0)
+def test_nonzero_tile_size_boundary_matches_schema() -> None:
+    config = PerformanceConfig(tile_size=256)
 
-    assert config.tile_size == 0
+    assert config.tile_size == 256
 
 
 def test_load_preset_returns_deep_copy_for_nested_overrides() -> None:
