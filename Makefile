@@ -16,7 +16,7 @@ FAST_TESTS := \
 	tests/test_float_roundtrip.py \
 	tests/test_golden_hour_courtyard_workflow.py
 
-.PHONY: help test-fast test-novideo test-full test-integration test-structure test-utils test-orchestrator-contract venv setup clean \
+.PHONY: help test-fast test-novideo test-full test-integration test-structure test-utils test-orchestrator-contract coverage-fast-scope venv setup clean \
         lint ci ci-full pre-commit install-hooks quality-check fix-quality validate-ci organize-docs check-json-serialization check-piptools-cache \
         check-stale-docs lock lock-prod lock-ci lock-dev install-core install-ml docs docs-clean
 
@@ -32,6 +32,7 @@ help:
 	@echo "  test-integration   Run integration tests (requires HF_TOKEN)"
 	@echo "  test-structure     Run codebase structure validation tests"
 	@echo "  test-utils         Run tests for performance and error handling utilities"
+	@echo "  coverage-fast-scope  Run branch coverage for audited core/config and streaming paths"
 	@echo "  venv               Create local .venv if missing"
 	@echo "  clean              Remove Python cache files and build artifacts"
 	@echo ""
@@ -116,6 +117,17 @@ test-utils:
 test-orchestrator-contract:
 	@echo "Running portal orchestrator contract suite..."
 	@"$(PY)" -m pytest -q tests/test_app_orchestrator_runtime.py tests/test_app_orchestrator_contract_http.py
+
+coverage-fast-scope:
+	@rm -f .coverage.fast-scope .coverage.fast-scope.*
+	@COVERAGE_FILE=.coverage.fast-scope "$(PY)" -m pytest \
+		--cov=src/transformation_portal/core/config \
+		--cov=src/transformation_portal/streaming \
+		--cov-branch \
+		--cov-report=term-missing \
+		tests/test_core_config_presets.py \
+		tests/test_streaming_async_pipeline.py \
+		tests/test_preset_health.py
 
 clean:
 	@echo "Cleaning Python cache files and build artifacts..."
