@@ -54,3 +54,111 @@ Quick reference for common workflows and commands in this repo.
 ## ComfyUI workflows (`workflows/`)
 - `python -c "from transformation_portal.comfyui import WorkflowTemplates; WorkflowTemplates.save_all_templates('workflows/templates')"` generate ComfyUI template workflows.
 - `python -c "from transformation_portal.comfyui import WorkflowExecutor; from transformation_portal.comfyui.workflow_builder import Workflow; wf = Workflow.load('workflows/examples/simple_enhancement.json'); print(WorkflowExecutor(verbose=True).execute(wf)['success'])"` execute the `simple_enhancement` workflow example.
+
+## AI Skills Usage Rules
+
+These skills assist repository maintenance but must follow their individual skill contracts.
+Skills that modify code must only be executed with explicit user approval.
+
+### `gh-fix-ci`
+
+Purpose:
+Investigate failing GitHub Actions checks.
+
+When to use:
+- GitHub Actions workflow failures
+- failing dependency-update CI runs
+- structural/test failures reported by GitHub Actions
+
+Important:
+- The skill may analyze CI failures automatically.
+- Code changes must **not** be implemented without explicit user approval.
+
+Scope limitation:
+- Operates on **GitHub Actions checks only**.
+- External CI providers are reported by URL only and must be investigated manually.
+
+### `gh-address-comments`
+
+Purpose:
+Address pull-request review comments.
+
+When to use:
+- reviewers request code or test changes
+- follow-up revisions are required after review
+
+Important:
+- The user must **explicitly select which review comment threads should be addressed**.
+- Do not automatically fix all review comments.
+
+Avoid using when:
+- comments are informational or discussion-only
+
+### `security-best-practices`
+
+Purpose:
+Provide secure-by-default code review guidance.
+
+Invocation policy:
+- Invoke **only when explicitly requested by the user** or when a security review is requested.
+
+Recommended use cases:
+- dependency handling changes
+- GitHub workflow modifications
+- scripts interacting with filesystem or network
+- external model downloads or integrations
+- validation scripts or artifact generation logic
+
+Do not run automatically on general code changes.
+
+### `security-threat-model`
+
+Purpose:
+Perform threat modeling for new capabilities.
+
+Invoke when:
+- introducing external downloads or model integrations
+- adding new pipeline stages
+- adding artifact export mechanisms
+- adding automation workflows with repository write permissions
+
+Output should identify:
+- trust boundaries
+- attack surfaces
+- privilege escalation paths
+- mitigation strategies
+
+If the skill is unavailable:
+perform a manual threat-model analysis instead.
+
+### `doc`
+
+Purpose:
+Maintain documentation accuracy and workflow consistency.
+
+Invoke when changes affect:
+- CLI flags
+- Makefile commands
+- validation scripts
+- dependency lock workflows
+- GitHub Actions workflows
+- onboarding commands
+
+Primary targets:
+- `AGENTS.md`
+- `README.md`
+- `docs/`
+- CLI help text
+
+If the skill is unavailable:
+update documentation manually.
+
+### `screenshot` (optional)
+
+Purpose:
+Capture visual evidence for review and regression verification.
+
+Use when:
+- pipeline output images change
+- visual artifact comparison is required
+- before/after results assist PR review
