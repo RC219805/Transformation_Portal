@@ -180,6 +180,25 @@ class TestParallelProcessing:
             assert "image_input" in result
             assert "output_key" in result
 
+    def test_parallel_preprocessing_preserves_input_order(self, mock_orchestrator, tmp_path):
+        """Parallel preprocessing should preserve caller input order."""
+        test_images = []
+        for i in range(5):
+            img_path = tmp_path / f"ordered_{i}.jpg"
+            img_path.touch()
+            test_images.append(ImageInput(img_path))
+
+        def _reverse_completion_order(futures):  # noqa: ANN001, ANN202
+            return reversed(list(futures))
+
+        with patch(
+            "transformation_portal.lux_depth_v3.orchestrator.as_completed",
+            side_effect=_reverse_completion_order,
+        ):
+            results = mock_orchestrator._parallel_preprocess_batch(test_images, tmp_path)
+
+        assert [result["image_input"].path for result in results] == [img.path for img in test_images]
+
     def test_parallel_batch_processing_fallback(self, mock_orchestrator, tmp_path):
         """Verify fallback to sequential for small batches."""
         # Create small batch (< 4 images)
@@ -213,6 +232,29 @@ class TestParallelProcessing:
         assert len(results) == 5
         error_count = sum(1 for r in results if r.get("status") == "error")
         assert error_count == 1
+
+    def test_parallel_batch_processing_preserves_result_order(self, mock_orchestrator, tmp_path):
+        """Parallel batch results should stay aligned with input discovery order."""
+        test_images = [ImageInput(tmp_path / f"batch_{i}.jpg") for i in range(5)]
+        for img in test_images:
+            img.path.touch()
+
+        def _reverse_completion_order(futures):  # noqa: ANN001, ANN202
+            return reversed(list(futures))
+
+        def _mock_enhance(img, input_root, _precomputed_paths=None):  # noqa: ANN001, ARG001
+            return {"status": "ok", "image": str(img.path)}
+
+        with (
+            patch(
+                "transformation_portal.lux_depth_v3.orchestrator.as_completed",
+                side_effect=_reverse_completion_order,
+            ),
+            patch.object(mock_orchestrator, "enhance_image", side_effect=_mock_enhance),
+        ):
+            results = mock_orchestrator.enhance_batch_parallel(test_images, tmp_path)
+
+        assert [result["image"] for result in results] == [str(img.path) for img in test_images]
 
 
 class TestPhase2Config:
