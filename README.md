@@ -498,7 +498,7 @@ pytest -v tests/ -ra -m "not slow" --maxfail=1
 
 Repo Make targets may exist (see Makefile):
 ```bash
-make test-fast
+make test-fast  # fast subset + Phase 6 smoke coverage
 make test-full
 make ci
 ```
