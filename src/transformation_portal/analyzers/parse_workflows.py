@@ -53,13 +53,9 @@ _YAML_MERGE_TAG = "tag:yaml.org,2002:merge"
 
 
 def _construct_unique_mapping(loader: yaml.SafeLoader, node: Any, deep: bool = False) -> Dict[Any, Any]:
-    # Check explicit (non-merge) keys for duplicates before expanding anchors.
-    # Merge key entries (<<: *anchor) are skipped here because overriding an
-    # anchor-supplied key with an explicit key is valid YAML, not a duplicate.
-    seen: Dict[Any, Any] = {}
-    for key_node, _ in node.value:
-        if key_node.tag == _YAML_MERGE_TAG:
-            continue
+    loader.flatten_mapping(node)
+    mapping: Dict[Any, Any] = {}
+    for key_node, value_node in node.value:
         key = loader.construct_object(key_node, deep=deep)
         if key in seen:
             raise yaml.constructor.ConstructorError(
@@ -173,8 +169,10 @@ class WorkflowParser:
                 )
                 return
 
-            # Validate workflow structure
+            # Validate workflow structure; remaining checks require a dict root
             self._validate_workflow_structure(workflow_file, workflow, lines)
+            if not isinstance(workflow, dict):
+                return
             self._check_step_references(workflow_file, workflow, lines)
             self._check_shell_scripts(workflow_file, workflow, lines)
             self._check_job_dependencies(workflow_file, workflow)
@@ -185,8 +183,19 @@ class WorkflowParser:
             error_msg = f"Failed to parse file: {e}"
             self.bugs.append(WorkflowBug(str(workflow_file), None, "error", error_msg))
 
-    def _validate_workflow_structure(self, workflow_file: Path, workflow: Dict[str, Any], lines: List[str]) -> None:
+    def _validate_workflow_structure(self, workflow_file: Path, workflow: Any, lines: List[str]) -> None:
         """Validate basic workflow structure."""
+        if not isinstance(workflow, dict):
+            self.bugs.append(
+                WorkflowBug(
+                    str(workflow_file),
+                    None,
+                    "error",
+                    "Workflow root must be a mapping",
+                )
+            )
+            return
+
         if not workflow:
             self.bugs.append(
                 WorkflowBug(
@@ -336,8 +345,17 @@ class WorkflowParser:
             if not isinstance(job_config, dict):
                 continue
 
-            needs: Union[str, List[str]] = job_config.get("needs", [])
-            needs_list = [needs] if isinstance(needs, str) else needs
+            needs: Union[str, List[str], None] = job_config.get("needs", [])
+            if needs is None:
+                needs_list: List[str] = []
+            elif isinstance(needs, str):
+                needs_list = [needs]
+            elif isinstance(needs, list):
+                needs_list = needs
+            else:
+                # If the schema is malformed (e.g., a non-list/non-str value),
+                # treat it as having no dependencies rather than raising.
+                needs_list = []
 
             for needed_job in needs_list:
                 if needed_job not in job_names:
