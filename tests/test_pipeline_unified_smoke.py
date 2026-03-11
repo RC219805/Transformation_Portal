@@ -10,10 +10,12 @@ from pathlib import Path
 from PIL import Image
 
 PIPELINE_MODULE = "transformation_portal.pipeline_unified"
+QUALITY_BRIDGE_MODULE = "transformation_portal.pipelines.quality_feedback_bridge"
+RENDERING_4K_MODULE = "transformation_portal.pipelines.rendering_4k_pipeline"
 
 
 def _load_pipeline_unified_with_stubbed_optionals(monkeypatch):
-    quality_module = types.ModuleType("transformation_portal.pipelines.quality_feedback_bridge")
+    quality_module = types.ModuleType(QUALITY_BRIDGE_MODULE)
 
     class QualityTargets:
         def __init__(self, **kwargs):
@@ -26,15 +28,15 @@ def _load_pipeline_unified_with_stubbed_optionals(monkeypatch):
     quality_module.QualityFeedbackBridge = QualityFeedbackBridge
     quality_module.QualityTargets = QualityTargets
 
-    rendering_module = types.ModuleType("transformation_portal.pipelines.rendering_4k_pipeline")
+    rendering_module = types.ModuleType(RENDERING_4K_MODULE)
 
     class Rendering4KPipeline:
         pass
 
     rendering_module.Rendering4KPipeline = Rendering4KPipeline
 
-    monkeypatch.setitem(sys.modules, quality_module.__name__, quality_module)
-    monkeypatch.setitem(sys.modules, rendering_module.__name__, rendering_module)
+    monkeypatch.setitem(sys.modules, QUALITY_BRIDGE_MODULE, quality_module)
+    monkeypatch.setitem(sys.modules, RENDERING_4K_MODULE, rendering_module)
     monkeypatch.delitem(sys.modules, PIPELINE_MODULE, raising=False)
 
     return importlib.import_module(PIPELINE_MODULE)
