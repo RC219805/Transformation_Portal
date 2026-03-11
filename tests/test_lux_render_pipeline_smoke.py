@@ -42,8 +42,8 @@ def test_lux_render_pipeline_import_is_graceful_without_ml_extras(monkeypatch) -
 
         help_result = runner.invoke(pipeline_module.app, ["--help"])
         assert help_result.exit_code == 0
-        assert "--input-glob" in help_result.output
-        assert "--base-model" in help_result.output
+        assert "Batch CLI entry point for the luxury render pipeline." in help_result.output
+        assert "Positive prompt" in help_result.output
 
         run_result = runner.invoke(
             pipeline_module.app,
