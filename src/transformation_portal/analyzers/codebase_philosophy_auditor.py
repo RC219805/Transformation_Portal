@@ -34,10 +34,12 @@ The `disable_rule` decision must appear in the module header area (see
 from __future__ import annotations
 
 import ast
+import io
 import re
+import tokenize
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Dict, Iterable, List, Optional, Sequence, Set
+from typing import Callable, Dict, Iterable, List, Optional, Sequence, Set, Union
 
 # Decisions intended to apply module-wide should appear near the top of file.
 HEADER_DECISION_MAX_LINE = 20
@@ -103,20 +105,22 @@ class _AuditContext:
         return None
 
     def is_rule_disabled(self, rule_id: str) -> bool:
-        return rule_id in self.disabled_rules
+        return rule_id.lower() in self.disabled_rules
 
 
-def _extract_decisions(source_lines: Iterable[str]) -> List[Decision]:
+def _extract_decisions(source: str) -> List[Decision]:
     decisions: List[Decision] = []
-    for index, line in enumerate(source_lines, start=1):
-        match = _DECISION_PATTERN.search(line)
+    for token in tokenize.generate_tokens(io.StringIO(source).readline):
+        if token.type != tokenize.COMMENT:
+            continue
+        match = _DECISION_PATTERN.fullmatch(token.string.strip())
         if not match:
             continue
         name = match.group("name").strip().lower()
         rationale = match.group("text")
         if rationale is not None:
             rationale = rationale.strip() or None
-        decisions.append(Decision(name=name, line=index, rationale=rationale))
+        decisions.append(Decision(name=name, line=token.start[0], rationale=rationale))
     return decisions
 
 
@@ -135,7 +139,7 @@ def _extract_disabled_rules(decisions: Sequence[Decision]) -> Set[str]:
             continue
         if not d.rationale:
             continue
-        rule_id = d.rationale.strip()
+        rule_id = d.rationale.strip().lower()
         if rule_id:
             disabled.add(rule_id)
     return disabled
@@ -154,6 +158,24 @@ class RuleSpec:
     principle: str
     description: str
     func: Callable[[ast.Module, _AuditContext], List[Violation]]
+
+
+RuleFunc = Callable[[ast.Module, _AuditContext], List[Violation]]
+RuleLike = Union[RuleSpec, RuleFunc]
+
+
+def _normalize_rule(rule: RuleLike) -> RuleSpec:
+    if isinstance(rule, RuleSpec):
+        return rule
+
+    rule_name = getattr(rule, "__name__", "") or "custom_rule"
+    rule_id = rule_name.lower()
+    return RuleSpec(
+        rule_id=rule_id,
+        principle=rule_id,
+        description="User-supplied audit rule.",
+        func=rule,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -269,8 +291,8 @@ DEFAULT_RULES: List[RuleSpec] = [
 class CodebasePhilosophyAuditor:
     """Audit Python modules for high-level codebase philosophy violations."""
 
-    def __init__(self, rules: Optional[Iterable[RuleSpec]] = None) -> None:
-        self._rules: List[RuleSpec] = list(rules) if rules is not None else list(DEFAULT_RULES)
+    def __init__(self, rules: Optional[Iterable[RuleLike]] = None) -> None:
+        self._rules: List[RuleSpec] = [_normalize_rule(rule) for rule in rules] if rules is not None else list(DEFAULT_RULES)
         self._rules_by_id: Dict[str, RuleSpec] = {r.rule_id: r for r in self._rules}
 
     @property
@@ -282,7 +304,7 @@ class CodebasePhilosophyAuditor:
         """Audit Python source code and return any principle violations discovered."""
         tree = ast.parse(source, filename=filename)
         source_lines = source.splitlines()
-        decisions = _extract_decisions(source_lines)
+        decisions = _extract_decisions(source)
         disabled_rules = _extract_disabled_rules(decisions)
         context = _AuditContext(
             source_lines=source_lines,
