@@ -10,6 +10,7 @@ from typer.testing import CliRunner
 PORTAL_MODULE = "transformation_portal"
 PIPELINES_PACKAGE = "transformation_portal.pipelines"
 PIPELINE_MODULE = "transformation_portal.pipelines.lux_render_pipeline"
+TORCH_MODULE = "torch"
 DIFFUSERS_MODULE = "diffusers"
 CONTROLNET_AUX_MODULE = "controlnet_aux"
 
@@ -17,6 +18,7 @@ CONTROLNET_AUX_MODULE = "controlnet_aux"
 def _load_lux_render_pipeline_with_missing_ml(monkeypatch):
     """Import Lux Render after forcing its ML extras unavailable."""
 
+    monkeypatch.setitem(sys.modules, TORCH_MODULE, None)
     monkeypatch.setitem(sys.modules, DIFFUSERS_MODULE, None)
     monkeypatch.setitem(sys.modules, CONTROLNET_AUX_MODULE, None)
 
@@ -75,8 +77,10 @@ def test_lux_render_pipeline_import_is_graceful_without_ml_extras(monkeypatch) -
             ],
         )
         assert run_result.exit_code == 1
-        assert "lux_render requires optional ML dependencies" in run_result.output
-        assert "controlnet-aux, diffusers" in run_result.output
+        combined_output = (run_result.stdout or "") + (run_result.stderr or "")
+        assert "lux_render requires optional ML dependencies" in combined_output
+        assert "controlnet-aux" in combined_output
+        assert "diffusers" in combined_output
     finally:
         if original_pipeline_module is not None:
             sys.modules[PIPELINE_MODULE] = original_pipeline_module
