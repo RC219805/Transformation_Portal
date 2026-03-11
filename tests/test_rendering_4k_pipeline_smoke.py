@@ -4,43 +4,18 @@ from __future__ import annotations
 
 import importlib
 import sys
-import types
 from pathlib import Path
 
 from PIL import Image
 
 PIPELINE_MODULE = "transformation_portal.pipelines.rendering_4k_pipeline"
-QUALITY_BRIDGE_MODULE = "transformation_portal.pipelines.quality_feedback_bridge"
 CONTROLNET_AUX_MODULE = "controlnet_aux"
 
 
 def _load_rendering_4k_pipeline_with_stubbed_optionals(monkeypatch):
-    quality_module = types.ModuleType(QUALITY_BRIDGE_MODULE)
-
-    class QualityFeedbackBridge:
-        def __init__(self, **kwargs):
-            self.kwargs = kwargs
-
-    class UnifiedQualityMetrics:
-        pass
-
-    def create_rag_indexing_callback(_path):
-        return None
-
-    quality_module.QualityFeedbackBridge = QualityFeedbackBridge
-    quality_module.UnifiedQualityMetrics = UnifiedQualityMetrics
-    quality_module.create_rag_indexing_callback = create_rag_indexing_callback
-
-    controlnet_aux_module = types.ModuleType(CONTROLNET_AUX_MODULE)
-
-    class CannyDetector:
-        def __call__(self, image):
-            return image
-
-    controlnet_aux_module.CannyDetector = CannyDetector
-
-    monkeypatch.setitem(sys.modules, QUALITY_BRIDGE_MODULE, quality_module)
-    monkeypatch.setitem(sys.modules, CONTROLNET_AUX_MODULE, controlnet_aux_module)
+    # Force optional ControlNet support unavailable so the core smoke test
+    # does not drift into heavier enhancement paths if defaults change later.
+    monkeypatch.setitem(sys.modules, CONTROLNET_AUX_MODULE, None)
     monkeypatch.delitem(sys.modules, PIPELINE_MODULE, raising=False)
 
     return importlib.import_module(PIPELINE_MODULE)
