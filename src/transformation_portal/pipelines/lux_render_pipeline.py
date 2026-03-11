@@ -66,29 +66,10 @@ from pathlib import Path
 from typing import List, Optional, Tuple
 
 import numpy as np
-import torch
 import typer
-from diffusers import (
-    ControlNetModel,
-    StableDiffusionControlNetImg2ImgPipeline,
-    StableDiffusionLatentUpscalePipeline,
-    UniPCMultistepScheduler,
-)
 from PIL import Image, ImageDraw, ImageFont
-from scipy.ndimage import gaussian_filter, sobel
-from torch import Generator
 
 from transformation_portal.core.security.model_lock import is_model_lock_strict_enabled, resolve_model_lock_revision
-
-# SDXL (optional). Imported lazily only if used.
-try:
-    from diffusers import StableDiffusionXLControlNetPipeline, StableDiffusionXLImg2ImgPipeline
-except ImportError:
-    StableDiffusionXLControlNetPipeline = None
-    StableDiffusionXLImg2ImgPipeline = None
-
-# Annotators
-from controlnet_aux import CannyDetector, MidasDetector
 
 # Import dimension validation (lightweight, no ML deps)
 from transformation_portal.pipelines.dimension_validation import (
@@ -104,6 +85,150 @@ from transformation_portal.utils.image_utils import load_image, np_to_pil, pil_t
 # Optional Real-ESRGAN status (already set during import attempt above)
 # Keep backward compatibility with existing code that checks _HAS_REALESRGAN
 _HAS_REALESRGAN = _HAS_REALESRGAN_IMPORT
+
+_LUX_RENDER_IMPORT_ERRORS: dict[str, Exception] = {}
+
+
+def _record_missing_dependency(name: str, exc: Exception) -> None:
+    """Capture one representative import error for a runtime dependency."""
+
+    _LUX_RENDER_IMPORT_ERRORS.setdefault(name, exc)
+
+
+def _missing_dependency_display_names() -> list[str]:
+    """Return user-facing package names for unavailable Lux Render dependencies."""
+
+    display_names = {
+        "controlnet_aux": "controlnet-aux",
+    }
+    return [display_names.get(name, name) for name in sorted(_LUX_RENDER_IMPORT_ERRORS)]
+
+
+def _raise_missing_lux_render_dependencies() -> None:
+    """Raise a clear error describing how to enable Lux Render runtime deps."""
+
+    missing = ", ".join(_missing_dependency_display_names())
+    root_cause = next(iter(_LUX_RENDER_IMPORT_ERRORS.values()))
+    raise ImportError(
+        "lux_render requires optional ML dependencies that are not installed: "
+        f"{missing}. Install them with `make install-ml` or `pip install -e '.[ml]'`."
+    ) from root_cause
+
+
+def _require_lux_render_runtime_dependencies() -> None:
+    """Fail fast with a clear message when Lux Render runtime deps are unavailable."""
+
+    if _LUX_RENDER_IMPORT_ERRORS:
+        _raise_missing_lux_render_dependencies()
+
+
+class _TorchCudaShim:
+    """Small torch.cuda stand-in used only to keep the module importable."""
+
+    @staticmethod
+    def is_available() -> bool:
+        return False
+
+    @staticmethod
+    def manual_seed_all(_seed: int) -> None:
+        return None
+
+
+class _TorchGeneratorShim:
+    """Keep Generator type references import-safe when torch is unavailable."""
+
+    def __init__(self, *_, **__):
+        pass
+
+    def manual_seed(self, _seed: int) -> "_TorchGeneratorShim":
+        return self
+
+
+class _TorchShim:
+    """Minimal torch shim for decorators and type comparisons at import time."""
+
+    cuda = _TorchCudaShim()
+    float16 = "float16"
+    float32 = "float32"
+
+    @staticmethod
+    def manual_seed(_seed: int) -> None:
+        return None
+
+    @staticmethod
+    def inference_mode():
+        def decorator(func):
+            return func
+
+        return decorator
+
+
+class _MissingMLComponent:
+    """Placeholder object that raises a clear extras-required error when used."""
+
+    def __init__(self, *_, **__):
+        _raise_missing_lux_render_dependencies()
+
+    @classmethod
+    def from_pretrained(cls, *_, **__):
+        _raise_missing_lux_render_dependencies()
+
+    @classmethod
+    def from_config(cls, *_, **__):
+        _raise_missing_lux_render_dependencies()
+
+    def to(self, *_, **__):
+        _raise_missing_lux_render_dependencies()
+
+    def __call__(self, *_, **__):
+        _raise_missing_lux_render_dependencies()
+
+
+def _missing_scipy_op(*_, **__):
+    """Placeholder for SciPy image filters when SciPy is unavailable."""
+
+    _raise_missing_lux_render_dependencies()
+
+
+try:
+    import torch
+    from torch import Generator
+except ImportError as exc:  # pragma: no cover - optional dependency
+    _record_missing_dependency("torch", exc)
+    torch = _TorchShim()  # type: ignore[assignment]
+    Generator = _TorchGeneratorShim  # type: ignore[misc,assignment]
+
+try:
+    from diffusers import (
+        ControlNetModel,
+        StableDiffusionControlNetImg2ImgPipeline,
+        StableDiffusionLatentUpscalePipeline,
+        StableDiffusionXLControlNetPipeline,
+        StableDiffusionXLImg2ImgPipeline,
+        UniPCMultistepScheduler,
+    )
+except ImportError as exc:  # pragma: no cover - optional dependency
+    _record_missing_dependency("diffusers", exc)
+    ControlNetModel = _MissingMLComponent  # type: ignore[misc,assignment]
+    StableDiffusionControlNetImg2ImgPipeline = _MissingMLComponent  # type: ignore[misc,assignment]
+    StableDiffusionLatentUpscalePipeline = _MissingMLComponent  # type: ignore[misc,assignment]
+    StableDiffusionXLControlNetPipeline = _MissingMLComponent  # type: ignore[misc,assignment]
+    StableDiffusionXLImg2ImgPipeline = _MissingMLComponent  # type: ignore[misc,assignment]
+    UniPCMultistepScheduler = _MissingMLComponent  # type: ignore[misc,assignment]
+
+try:
+    from scipy.ndimage import gaussian_filter, sobel
+except ImportError as exc:  # pragma: no cover - optional dependency
+    _record_missing_dependency("scipy", exc)
+    gaussian_filter = _missing_scipy_op  # type: ignore[assignment]
+    sobel = _missing_scipy_op  # type: ignore[assignment]
+
+try:
+    from controlnet_aux import CannyDetector, MidasDetector
+except ImportError as exc:  # pragma: no cover - optional dependency
+    _record_missing_dependency("controlnet_aux", exc)
+    CannyDetector = _MissingMLComponent  # type: ignore[misc,assignment]
+    MidasDetector = _MissingMLComponent  # type: ignore[misc,assignment]
 
 # --------------------------
 
@@ -204,6 +329,7 @@ class Preprocessor:
     ):
         """Create detectors for edge and depth guidance."""
 
+        _require_lux_render_runtime_dependencies()
         self.canny = CannyDetector(low_threshold=canny_low, high_threshold=canny_high)
         self.strict_model_lock = strict_model_lock
         self.depth = self._load_depth_model(strict_model_lock=self.strict_model_lock) if use_depth else None
@@ -757,6 +883,7 @@ class LuxuryRenderPipeline:
     ):
         """Initialise diffusion pipelines, ControlNets, and optional upscalers."""
 
+        _require_lux_render_runtime_dependencies()
         model_ids.base_model_revision = resolve_model_lock_revision(
             model_ids.base_model,
             model_ids.base_model_revision,
@@ -892,7 +1019,7 @@ class LuxuryRenderPipeline:
         # Real-ESRGAN (optional)
         self._use_realesrgan = use_realesrgan and _HAS_REALESRGAN
         if use_realesrgan and not _HAS_REALESRGAN:
-            print("[Warn] Real-ESRGAN requested but not installed. " "Run: pip install realesrgan basicsr")
+            print("[Warn] Real-ESRGAN requested but not installed. Run: pip install realesrgan basicsr")
         if self._use_realesrgan:
             print("[Load] Real-ESRGAN x4...")
             # RealESRGANer expects model_path parameter
@@ -1320,6 +1447,12 @@ def main(  # pylint: disable=too-many-arguments,too-many-positional-arguments,to
     ),
 ):
     """Batch CLI entry point for the luxury render pipeline."""
+
+    try:
+        _require_lux_render_runtime_dependencies()
+    except ImportError as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
 
     out_dir = Path(out)
     out_dir.mkdir(parents=True, exist_ok=True)
