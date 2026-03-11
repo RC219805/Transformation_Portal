@@ -169,7 +169,7 @@ jobs:
       - candidate-arm
     steps:
       - name: Download harness reports
-        uses: actions/download-artifact@v8.0.0
+        uses: actions/download-artifact@v8.0.1
         with:
           pattern: harness-report-*
           merge-multiple: true
