@@ -276,6 +276,56 @@ jobs:
         assert len(bugs) > 0
         assert any("YAML syntax error" in bug.message for bug in bugs)
 
+    def test_yaml_merge_keys_supported(self, temp_workflow_dir):
+        """Test that YAML merge keys (<<: *anchor) are supported without errors."""
+        workflow_content = """
+name: Test Workflow
+on: [push]
+
+.common_step: &common_step
+  runs-on: ubuntu-latest
+  timeout-minutes: 10
+
+jobs:
+  test:
+    <<: *common_step
+    steps:
+      - run: echo "ok"
+"""
+        workflow_file = temp_workflow_dir / "test.yml"
+        workflow_file.write_text(workflow_content)
+
+        parser = WorkflowParser(temp_workflow_dir)
+        bugs = parser.parse_all_workflows()
+
+        # Merge key expansion must not produce a YAML syntax error
+        assert not any("YAML syntax error" in bug.message for bug in bugs)
+
+    def test_yaml_merge_key_duplicate_detection(self, temp_workflow_dir):
+        """Test that duplicate keys introduced via merge are still detected."""
+        workflow_content = """
+name: Test Workflow
+on: [push]
+
+.defaults: &defaults
+  runs-on: ubuntu-latest
+
+jobs:
+  test:
+    <<: *defaults
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "ok"
+"""
+        workflow_file = temp_workflow_dir / "test.yml"
+        workflow_file.write_text(workflow_content)
+
+        parser = WorkflowParser(temp_workflow_dir)
+        bugs = parser.parse_all_workflows()
+
+        # runs-on appears both in the merged anchor and explicitly — must flag duplicate
+        assert any("duplicate key" in bug.message.lower() for bug in bugs)
+
     def test_multiple_workflows(self, temp_workflow_dir):
         """Test parsing multiple workflow files."""
         # Create first workflow with a bug
