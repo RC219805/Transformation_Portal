@@ -338,6 +338,32 @@ jobs:
 
         assert bugs == []
 
+    def test_parser_does_not_depend_on_yaml_load(self, temp_workflow_dir, monkeypatch):
+        """Workflow parsing should use the custom SafeLoader path instead of yaml.load."""
+        workflow_content = """
+name: Test Workflow
+on: [push]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "ok"
+"""
+        workflow_file = temp_workflow_dir / "test.yml"
+        workflow_file.write_text(workflow_content)
+
+        from transformation_portal.analyzers import parse_workflows as parser_module
+
+        def _unexpected_yaml_load(*_args, **_kwargs):
+            raise AssertionError("yaml.load should not be called")
+
+        monkeypatch.setattr(parser_module.yaml, "load", _unexpected_yaml_load)
+
+        parser = WorkflowParser(temp_workflow_dir)
+        bugs = parser.parse_all_workflows()
+
+        assert bugs == []
+
     def test_multiple_workflows(self, temp_workflow_dir):
         """Test parsing multiple workflow files."""
         # Create first workflow with a bug
