@@ -50,6 +50,7 @@ class _DuplicateKeySafeLoader(yaml.SafeLoader):  # pylint: disable=too-many-ance
 
 
 def _construct_unique_mapping(loader: yaml.SafeLoader, node: Any, deep: bool = False) -> Dict[Any, Any]:
+    loader.flatten_mapping(node)  # preserve <<: *anchor merge-key semantics
     mapping: Dict[Any, Any] = {}
     for key_node, value_node in node.value:
         key = loader.construct_object(key_node, deep=deep)
@@ -179,6 +180,17 @@ class WorkflowParser:
                     None,
                     "error",
                     "Empty workflow file",
+                )
+            )
+            return
+
+        if not isinstance(workflow, dict):
+            self.bugs.append(
+                WorkflowBug(
+                    str(workflow_file),
+                    None,
+                    "error",
+                    "Workflow root must be a mapping",
                 )
             )
             return
@@ -321,8 +333,16 @@ class WorkflowParser:
             if not isinstance(job_config, dict):
                 continue
 
-            needs: Union[str, List[str]] = job_config.get("needs", [])
-            needs_list = [needs] if isinstance(needs, str) else needs
+            needs: Union[str, List[str], None] = job_config.get("needs", [])
+            if needs is None:
+                needs_list: List[str] = []
+            elif isinstance(needs, str):
+                needs_list = [needs]
+            elif isinstance(needs, list):
+                needs_list = needs
+            else:
+                # Malformed schema value – treat as no dependencies.
+                needs_list = []
 
             for needed_job in needs_list:
                 if needed_job not in job_names:
