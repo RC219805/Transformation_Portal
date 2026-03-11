@@ -276,6 +276,82 @@ jobs:
         assert len(bugs) > 0
         assert any("YAML syntax error" in bug.message for bug in bugs)
 
+    def test_duplicate_yaml_keys_detected(self, temp_workflow_dir):
+        """Test that duplicate mapping keys are caught as YAML errors."""
+        workflow_content = """
+name: Test Workflow
+on: [push]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "ok"
+"""
+        workflow_file = temp_workflow_dir / "test.yml"
+        workflow_file.write_text(workflow_content)
+
+        parser = WorkflowParser(temp_workflow_dir)
+        bugs = parser.parse_all_workflows()
+
+        assert len(bugs) > 0
+        assert any("duplicate key" in bug.message for bug in bugs)
+
+    def test_yaml_merge_key_anchor_supported(self, temp_workflow_dir):
+        """Workflows using YAML merge keys (<<: *anchor) should parse without errors."""
+        workflow_content = """
+name: Test Workflow
+
+.common-step: &common-step
+  timeout-minutes: 10
+  continue-on-error: false
+
+on: [push]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run with defaults
+        <<: *common-step
+        run: echo "ok"
+"""
+        workflow_file = temp_workflow_dir / "test.yml"
+        workflow_file.write_text(workflow_content)
+
+        parser = WorkflowParser(temp_workflow_dir)
+        bugs = parser.parse_all_workflows()
+
+        # Merge-key usage must not produce a false-positive duplicate-key error
+        assert not any("duplicate key" in bug.message.lower() for bug in bugs)
+
+    def test_yaml_merge_key_with_explicit_override_supported(self, temp_workflow_dir):
+        """An explicit key that overrides an anchor-supplied key is valid YAML."""
+        workflow_content = """
+name: Test Workflow
+
+.defaults: &defaults
+  timeout-minutes: 10
+  continue-on-error: false
+
+on: [push]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run with override
+        <<: *defaults
+        timeout-minutes: 30
+        run: echo "ok"
+"""
+        workflow_file = temp_workflow_dir / "test.yml"
+        workflow_file.write_text(workflow_content)
+
+        parser = WorkflowParser(temp_workflow_dir)
+        bugs = parser.parse_all_workflows()
+
+        # Overriding a key from an anchor should not be reported as a duplicate
+        assert not any("duplicate key" in bug.message.lower() for bug in bugs)
+
     def test_multiple_workflows(self, temp_workflow_dir):
         """Test parsing multiple workflow files."""
         # Create first workflow with a bug

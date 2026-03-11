@@ -49,17 +49,32 @@ class _DuplicateKeySafeLoader(yaml.SafeLoader):  # pylint: disable=too-many-ance
     """YAML loader that rejects duplicate mapping keys."""
 
 
+_YAML_MERGE_TAG = "tag:yaml.org,2002:merge"
+
+
 def _construct_unique_mapping(loader: yaml.SafeLoader, node: Any, deep: bool = False) -> Dict[Any, Any]:
-    mapping: Dict[Any, Any] = {}
-    for key_node, value_node in node.value:
+    # Check explicit (non-merge) keys for duplicates before expanding anchors.
+    # Merge key entries (<<: *anchor) are skipped here because overriding an
+    # anchor-supplied key with an explicit key is valid YAML, not a duplicate.
+    seen: Dict[Any, Any] = {}
+    for key_node, _ in node.value:
+        if key_node.tag == _YAML_MERGE_TAG:
+            continue
         key = loader.construct_object(key_node, deep=deep)
-        if key in mapping:
+        if key in seen:
             raise yaml.constructor.ConstructorError(
                 "while constructing a mapping",
                 node.start_mark,
                 f"found duplicate key {key!r}",
                 key_node.start_mark,
             )
+        seen[key] = key_node
+
+    # Expand merge keys (<<: *anchor) so that SafeLoader semantics are preserved.
+    loader.flatten_mapping(node)
+    mapping: Dict[Any, Any] = {}
+    for key_node, value_node in node.value:
+        key = loader.construct_object(key_node, deep=deep)
         mapping[key] = loader.construct_object(value_node, deep=deep)
     return mapping
 
