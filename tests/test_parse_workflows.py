@@ -257,19 +257,21 @@ jobs:
         # Should not find model bugs
         assert not any("model" in bug.message.lower() for bug in bugs)
 
-    def test_workflow_root_list_reports_mapping_error(self, temp_workflow_dir):
-        """Test that a YAML root that is a list (not a mapping) emits a structured error."""
-        workflow_content = "- item1\n- item2\n"
-        workflow_file = temp_workflow_dir / "list_root.yml"
+    def test_non_dict_yaml_root_emits_structured_error(self, temp_workflow_dir):
+        """Test that a YAML root that is a list emits a structured mapping error."""
+        workflow_content = """
+- item1
+- item2
+"""
+        workflow_file = temp_workflow_dir / "test.yml"
         workflow_file.write_text(workflow_content)
 
         parser = WorkflowParser(temp_workflow_dir)
         bugs = parser.parse_all_workflows()
 
-        assert len(bugs) > 0
-        assert any("Workflow root must be a mapping" in bug.message for bug in bugs)
-        # Must be a structured error, not the generic "Failed to parse file" fallback
-        assert not any("Failed to parse file" in bug.message for bug in bugs)
+        assert len(bugs) == 1
+        assert bugs[0].message == "Workflow root must be a mapping"
+        assert bugs[0].severity == "error"
 
     def test_yaml_syntax_error(self, temp_workflow_dir):
         """Test that YAML syntax errors are caught."""
@@ -289,6 +291,56 @@ jobs:
         # Should find YAML error
         assert len(bugs) > 0
         assert any("YAML syntax error" in bug.message for bug in bugs)
+
+    def test_yaml_merge_keys_supported(self, temp_workflow_dir):
+        """Test that YAML merge keys (<<: *anchor) are supported without errors."""
+        workflow_content = """
+name: Test Workflow
+on: [push]
+
+.common_step: &common_step
+  runs-on: ubuntu-latest
+  timeout-minutes: 10
+
+jobs:
+  test:
+    <<: *common_step
+    steps:
+      - run: echo "ok"
+"""
+        workflow_file = temp_workflow_dir / "test.yml"
+        workflow_file.write_text(workflow_content)
+
+        parser = WorkflowParser(temp_workflow_dir)
+        bugs = parser.parse_all_workflows()
+
+        # Merge key expansion must not produce a YAML syntax error
+        assert not any("YAML syntax error" in bug.message for bug in bugs)
+
+    def test_yaml_merge_key_duplicate_detection(self, temp_workflow_dir):
+        """Test that duplicate keys introduced via merge are still detected."""
+        workflow_content = """
+name: Test Workflow
+on: [push]
+
+.defaults: &defaults
+  runs-on: ubuntu-latest
+
+jobs:
+  test:
+    <<: *defaults
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "ok"
+"""
+        workflow_file = temp_workflow_dir / "test.yml"
+        workflow_file.write_text(workflow_content)
+
+        parser = WorkflowParser(temp_workflow_dir)
+        bugs = parser.parse_all_workflows()
+
+        # runs-on appears both in the merged anchor and explicitly — must flag duplicate
+        assert any("duplicate key" in bug.message.lower() for bug in bugs)
 
     def test_multiple_workflows(self, temp_workflow_dir):
         """Test parsing multiple workflow files."""
