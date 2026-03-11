@@ -12,17 +12,18 @@ PIPELINE_MODULE = "transformation_portal.pipelines.rendering_4k_pipeline"
 CONTROLNET_AUX_MODULE = "controlnet_aux"
 
 
-def _load_rendering_4k_pipeline_with_stubbed_optionals(monkeypatch):
-    # Force optional ControlNet support unavailable so the core smoke test
-    # does not drift into heavier enhancement paths if defaults change later.
+def _load_rendering_4k_pipeline_for_preview_smoke(monkeypatch):
+    # The preview preset is expected to keep AI enhancement disabled.
+    # Force optional ControlNet support unavailable as well so this smoke test
+    # stays deterministic even when extra local dependencies are installed.
     monkeypatch.setitem(sys.modules, CONTROLNET_AUX_MODULE, None)
     monkeypatch.delitem(sys.modules, PIPELINE_MODULE, raising=False)
 
     return importlib.import_module(PIPELINE_MODULE)
 
 
-def test_rendering_4k_pipeline_smoke_with_stubbed_external_calls(tmp_path: Path, monkeypatch) -> None:
-    pipeline_module = _load_rendering_4k_pipeline_with_stubbed_optionals(monkeypatch)
+def test_rendering_4k_pipeline_preview_smoke_writes_delivery_artifact(tmp_path: Path, monkeypatch) -> None:
+    pipeline_module = _load_rendering_4k_pipeline_for_preview_smoke(monkeypatch)
 
     try:
         input_path = tmp_path / "input.png"
@@ -30,6 +31,9 @@ def test_rendering_4k_pipeline_smoke_with_stubbed_external_calls(tmp_path: Path,
         Image.new("RGB", (8, 6), color=(64, 96, 128)).save(input_path)
 
         pipeline = pipeline_module.Rendering4KPipeline.from_preset("preview")
+        assert pipeline.config.name == "preview"
+        assert not pipeline.config.ai_enhancement.enabled
+
         result = pipeline.process(input_path, output_dir)
 
         assert result.config_used is not None
