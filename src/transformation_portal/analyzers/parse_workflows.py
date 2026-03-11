@@ -321,8 +321,17 @@ class WorkflowParser:
             if not isinstance(job_config, dict):
                 continue
 
-            needs: Union[str, List[str]] = job_config.get("needs", [])
-            needs_list = [needs] if isinstance(needs, str) else needs
+            needs: Union[str, List[str], None] = job_config.get("needs", [])
+            if needs is None:
+                needs_list: List[str] = []
+            elif isinstance(needs, str):
+                needs_list = [needs]
+            elif isinstance(needs, list):
+                needs_list = needs
+            else:
+                # If the schema is malformed (e.g., a non-list/non-str value),
+                # treat it as having no dependencies rather than raising.
+                needs_list = []
 
             for needed_job in needs_list:
                 if needed_job not in job_names:
