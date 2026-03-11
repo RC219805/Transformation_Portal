@@ -8,6 +8,7 @@ import sys
 from typer.testing import CliRunner
 
 PORTAL_MODULE = "transformation_portal"
+PIPELINES_PACKAGE = "transformation_portal.pipelines"
 PIPELINE_MODULE = "transformation_portal.pipelines.lux_render_pipeline"
 DIFFUSERS_MODULE = "diffusers"
 CONTROLNET_AUX_MODULE = "controlnet_aux"
@@ -21,18 +22,37 @@ def _load_lux_render_pipeline_with_missing_ml(monkeypatch):
 
     original_pipeline_module = sys.modules.get(PIPELINE_MODULE)
     portal_module = importlib.import_module(PORTAL_MODULE)
+    pipelines_package = importlib.import_module(PIPELINES_PACKAGE)
     original_cached_pipeline = getattr(portal_module, "_lux_render", None)
+    had_cached_submodule = hasattr(pipelines_package, "lux_render_pipeline")
+    original_cached_submodule = getattr(pipelines_package, "lux_render_pipeline", None)
 
     monkeypatch.delitem(sys.modules, PIPELINE_MODULE, raising=False)
     portal_module._lux_render = None
+    if had_cached_submodule:
+        delattr(pipelines_package, "lux_render_pipeline")
 
-    return portal_module, original_pipeline_module, original_cached_pipeline, portal_module.get_lux_render_pipeline()
+    return (
+        portal_module,
+        pipelines_package,
+        had_cached_submodule,
+        original_cached_submodule,
+        original_pipeline_module,
+        original_cached_pipeline,
+        portal_module.get_lux_render_pipeline(),
+    )
 
 
 def test_lux_render_pipeline_import_is_graceful_without_ml_extras(monkeypatch) -> None:
-    portal_module, original_pipeline_module, original_cached_pipeline, pipeline_module = (
-        _load_lux_render_pipeline_with_missing_ml(monkeypatch)
-    )
+    (
+        portal_module,
+        pipelines_package,
+        had_cached_submodule,
+        original_cached_submodule,
+        original_pipeline_module,
+        original_cached_pipeline,
+        pipeline_module,
+    ) = _load_lux_render_pipeline_with_missing_ml(monkeypatch)
     runner = CliRunner()
 
     try:
@@ -62,4 +82,8 @@ def test_lux_render_pipeline_import_is_graceful_without_ml_extras(monkeypatch) -
             sys.modules[PIPELINE_MODULE] = original_pipeline_module
         else:
             sys.modules.pop(PIPELINE_MODULE, None)
+        if had_cached_submodule:
+            setattr(pipelines_package, "lux_render_pipeline", original_cached_submodule)
+        else:
+            pipelines_package.__dict__.pop("lux_render_pipeline", None)
         portal_module._lux_render = original_cached_pipeline
