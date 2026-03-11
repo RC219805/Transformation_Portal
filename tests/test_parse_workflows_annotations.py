@@ -42,6 +42,32 @@ jobs:
     assert any(bug.severity == "error" for bug in bugs)
 
 
+def test_yaml_merge_keys_are_not_rejected(
+    workflow_dir: Path,
+) -> None:
+    """Workflows using YAML merge keys (<<: *anchor) must parse without errors."""
+    workflow = """
+name: Merge Key Workflow
+on: [push]
+
+.defaults: &defaults
+  runs-on: ubuntu-latest
+  timeout-minutes: 10
+
+jobs:
+  test:
+    <<: *defaults
+    steps:
+      - run: echo "hello"
+"""
+    (workflow_dir / "merge.yml").write_text(workflow, encoding="utf-8")
+
+    bugs = WorkflowParser(workflow_dir).parse_all_workflows()
+
+    yaml_errors = [b for b in bugs if "yaml" in b.message.lower()]
+    assert not yaml_errors, f"Unexpected YAML errors for merge-key workflow: {yaml_errors}"
+
+
 def test_render_github_annotations_escapes_multiline_messages(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
