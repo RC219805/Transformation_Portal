@@ -257,6 +257,22 @@ jobs:
         # Should not find model bugs
         assert not any("model" in bug.message.lower() for bug in bugs)
 
+    def test_non_dict_yaml_root_emits_structured_error(self, temp_workflow_dir):
+        """Test that a YAML root that is a list emits a structured mapping error."""
+        workflow_content = """
+- item1
+- item2
+"""
+        workflow_file = temp_workflow_dir / "test.yml"
+        workflow_file.write_text(workflow_content)
+
+        parser = WorkflowParser(temp_workflow_dir)
+        bugs = parser.parse_all_workflows()
+
+        assert len(bugs) == 1
+        assert bugs[0].message == "Workflow root must be a mapping"
+        assert bugs[0].severity == "error"
+
     def test_yaml_syntax_error(self, temp_workflow_dir):
         """Test that YAML syntax errors are caught."""
         workflow_content = """
