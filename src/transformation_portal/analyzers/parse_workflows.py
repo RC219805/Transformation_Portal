@@ -81,6 +81,15 @@ _DuplicateKeySafeLoader.add_constructor(
 )
 
 
+def _safe_load_workflow_yaml(content: str) -> Any:
+    """Parse workflow YAML with SafeLoader semantics and duplicate-key protection."""
+    loader = _DuplicateKeySafeLoader(content)
+    try:
+        return loader.get_single_data()
+    finally:
+        loader.dispose()
+
+
 def _yaml_error_line_number(error: yaml.YAMLError) -> Optional[int]:
     """Extract a 1-based line number from a PyYAML exception when available."""
     for mark_attr in ("problem_mark", "context_mark"):
@@ -156,7 +165,7 @@ class WorkflowParser:
 
             # Try to parse YAML
             try:
-                workflow = yaml.load(content, Loader=_DuplicateKeySafeLoader)
+                workflow = _safe_load_workflow_yaml(content)
             except yaml.YAMLError as e:
                 line_num = _yaml_error_line_number(e)
                 self.bugs.append(
