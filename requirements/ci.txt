@@ -50,7 +50,7 @@ pycparser==3.0
 pydantic==2.12.5
 pydantic-core==2.41.5
 pygments==2.19.2
-pypdf==6.7.5
+pypdf==6.8.0
 pyproject-api==1.10.0
 pyproject-hooks==1.2.0
 pytest==9.0.2
