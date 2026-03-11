@@ -27,6 +27,7 @@ from transformation_portal.lux_depth_v3.manifest import (
     ConfigFingerprint,
     DepthMetadata,
     InputMetadata,
+    MaterialsV3Metadata,
     TimingMetadata,
     V2Metadata,
 )
@@ -878,6 +879,384 @@ class TestFingerprintDrivenSkipInvalidation:
         )
 
         assert should_skip is False
+
+    def test_should_skip_v2_accepts_legacy_success_status(self, temp_workspace):
+        """Legacy manifests written with V2 status='success' should still be reusable."""
+        from transformation_portal.lux_depth_v3.input_manager import ImageInput
+        from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
+
+        tmpdir = Path(temp_workspace["root"])
+        test_image = tmpdir / "legacy_success.jpg"
+        test_image.write_bytes(b"legacy success image")
+        v2_report = tmpdir / "legacy_success_report.json"
+        v2_report.write_text('{"status":"ok"}', encoding="utf-8")
+        manifest_path = tmpdir / "legacy_success_manifest.json"
+
+        with patch("transformation_portal.lux_depth_v3.orchestrator.DepthBackendRegistry"):
+            orchestrator = EnhanceOrchestrator(
+                EnhanceConfig(enable_v2=True, v2_preset="default"),
+                tmpdir / "output",
+                verify_outputs=False,
+            )
+            CombinedManifest(
+                config_fingerprint=orchestrator.compute_config_fingerprint(),
+                v2=V2Metadata(
+                    preset="default",
+                    status="success",
+                    strict_depth=True,
+                    output_dir="v2/",
+                    report_path=str(v2_report),
+                ),
+            ).save(manifest_path)
+
+        should_skip = orchestrator.should_skip_v2(
+            v2_report,
+            manifest_path,
+            ImageInput(test_image),
+            depth_was_skipped=True,
+        )
+
+        assert should_skip is True
+
+
+class TestCachedRunFidelity:
+    """Tests for cached-run metadata preservation across reruns."""
+
+    def test_cached_depth_restores_materials_v3_segmentation_provenance_and_enhanced_path(self, temp_workspace):
+        """Cached depth reuse should restore full Materials V3 metadata needed by downstream stages."""
+        from transformation_portal.lux_depth_v3.input_manager import ImageInput
+        from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
+
+        tmpdir = Path(temp_workspace["root"])
+        test_image = tmpdir / "cached_materials.jpg"
+        test_image.write_bytes(b"cached-materials-image")
+        depth_path = tmpdir / "cached_materials_depth.png"
+        depth_path.write_bytes(b"depth")
+        float_depth_path = tmpdir / "cached_materials_depth.npy"
+        manifest_path = tmpdir / "cached_materials_manifest.json"
+
+        with (
+            patch("transformation_portal.lux_depth_v3.orchestrator.DepthBackendRegistry"),
+            patch("transformation_portal.lux_depth_v3.materials_v3.MaterialsV3Engine"),
+        ):
+            orchestrator = EnhanceOrchestrator(
+                EnhanceConfig(enable_materials_v3=True, enable_v2=False),
+                tmpdir / "output",
+                verify_outputs=False,
+            )
+
+        output_key = Path("interiors/cached_materials")
+        expected_enhanced_path = orchestrator._expected_materials_v3_enhanced_path(output_key)
+        expected_enhanced_path.parent.mkdir(parents=True, exist_ok=True)
+        expected_enhanced_path.write_bytes(b"enhanced")
+
+        mask_artifact_path = orchestrator._segmentation_mask_artifact_path(output_key)
+        mask_artifact_path.parent.mkdir(parents=True, exist_ok=True)
+        mask_artifact_path.write_bytes(b"npz")
+
+        CombinedManifest(
+            depth=DepthMetadata(model="da3", depth_path=str(depth_path), runtime_seconds=0.1, scaling={}),
+            backend_selection=orchestrator._capture_backend_metadata(),
+            materials_v3=MaterialsV3Metadata(
+                enabled=True,
+                version="3.1",
+                response_plan={"plan": "preserve"},
+                pixel_ops={"applied": 2},
+                segmentation_metadata={
+                    "mask_artifact_path": str(mask_artifact_path),
+                    "mask_artifact_format": "npz",
+                },
+                runtime_seconds=0.42,
+            ),
+        ).save(manifest_path)
+
+        (
+            depth_metadata,
+            _depth_runtime_s,
+            _pbr_assets,
+            materials_v3_result,
+            materials_v3_runtime_s,
+            enhanced_image_path,
+            backend_selection,
+            _depth_attempts,
+        ) = orchestrator._compute_depth_stage(
+            image_input=ImageInput(test_image),
+            output_key=output_key,
+            depth_path=depth_path,
+            float_depth_path=float_depth_path,
+            manifest_path=manifest_path,
+            skip_depth=True,
+        )
+
+        assert depth_metadata is not None
+        assert backend_selection.resolved_backend == "da3"
+        assert materials_v3_result is not None
+        assert materials_v3_result["materials_v3_response_plan"] == {"plan": "preserve"}
+        assert materials_v3_result["materials_v3_pixel_ops"] == {"applied": 2}
+        assert materials_v3_result["materials_v3_metadata"]["segmentation_metadata"]["mask_artifact_path"] == str(
+            mask_artifact_path
+        )
+        assert materials_v3_runtime_s == pytest.approx(0.42, rel=1e-6, abs=1e-6)
+        assert enhanced_image_path == expected_enhanced_path
+
+    def test_run_v2_stage_skip_rehydrates_prior_report_and_output_paths(self, temp_workspace):
+        """V2 skip path should preserve prior report/output references for manifest rewrite and API output."""
+        from transformation_portal.lux_depth_v3.input_manager import ImageInput
+        from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
+
+        tmpdir = Path(temp_workspace["root"])
+        test_image = tmpdir / "v2_skip.jpg"
+        test_image.write_bytes(b"v2-skip-image")
+        manifest_path = tmpdir / "v2_skip_manifest.json"
+        output_key = Path("v2_skip")
+        report_path = tmpdir / "output" / "v2" / f"{output_key.name}_report.json"
+        report_path.parent.mkdir(parents=True, exist_ok=True)
+        report_path.write_text('{"status":"ok"}', encoding="utf-8")
+        output_path = tmpdir / "output" / "v2" / "v2_skip_output.png"
+
+        with (
+            patch("transformation_portal.lux_depth_v3.orchestrator.DepthBackendRegistry"),
+            patch("transformation_portal.lux_depth_v3.orchestrator.V2Runner"),
+        ):
+            orchestrator = EnhanceOrchestrator(
+                EnhanceConfig(enable_v2=True, v2_preset="default"),
+                tmpdir / "output",
+                verify_outputs=False,
+            )
+
+        CombinedManifest(
+            v2=V2Metadata(
+                preset="default",
+                status="ok",
+                strict_depth=True,
+                output_dir="v2/",
+                report_path=str(report_path),
+                output_paths=[str(output_path)],
+                runtime_seconds=1.23,
+            )
+        ).save(manifest_path)
+
+        with patch.object(orchestrator, "should_skip_v2", return_value=True):
+            v2_result, v2_runtime_s, v2_report_path = orchestrator._run_v2_stage(
+                image_input=ImageInput(test_image),
+                depth_path=None,
+                output_key=output_key,
+                v2_log_path=tmpdir / "output" / "logs" / "v2_skip.log",
+                manifest_path=manifest_path,
+                skip_depth=True,
+                materials_v3_result=None,
+            )
+
+        assert v2_runtime_s == 0.0
+        assert v2_report_path == report_path
+        assert v2_result["report_path"] == str(report_path)
+        assert v2_result["output_paths"] == [str(output_path)]
+        assert v2_result["output"] == str(output_path)
+
+    def test_write_manifest_preserves_prior_v2_and_materials_metadata_on_skip(self, temp_workspace):
+        """Manifest rewrites should not erase prior V2 outputs or Materials V3 segmentation provenance."""
+        from transformation_portal.lux_depth_v3.input_manager import ImageInput
+        from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
+
+        tmpdir = Path(temp_workspace["root"])
+        test_image = tmpdir / "manifest_preservation.jpg"
+        test_image.write_bytes(b"manifest-preservation-image")
+        manifest_path = tmpdir / "output" / "manifests" / "manifest_preservation.json"
+        manifest_path.parent.mkdir(parents=True, exist_ok=True)
+        report_path = tmpdir / "output" / "v2" / "manifest_preservation_report.json"
+        report_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path = tmpdir / "output" / "v2" / "manifest_preservation_output.png"
+        mask_artifact_path = tmpdir / "output" / "segmentation" / "manifest_preservation_masks.npz"
+        mask_artifact_path.parent.mkdir(parents=True, exist_ok=True)
+
+        with (
+            patch("transformation_portal.lux_depth_v3.orchestrator.DepthBackendRegistry"),
+            patch("transformation_portal.lux_depth_v3.orchestrator.V2Runner"),
+            patch("transformation_portal.lux_depth_v3.materials_v3.MaterialsV3Engine"),
+        ):
+            orchestrator = EnhanceOrchestrator(
+                EnhanceConfig(enable_v2=True, v2_preset="default", enable_materials_v3=True),
+                tmpdir / "output",
+                verify_outputs=False,
+            )
+
+        previous_depth = DepthMetadata(
+            model="da3",
+            depth_path=str(tmpdir / "output" / "depth" / "manifest_preservation_depth.png"),
+            runtime_seconds=0.5,
+            scaling={},
+        )
+        CombinedManifest(
+            config_fingerprint=orchestrator.compute_config_fingerprint(),
+            depth=previous_depth,
+            v2=V2Metadata(
+                preset="default",
+                status="ok",
+                strict_depth=True,
+                output_dir="v2/",
+                report_path=str(report_path),
+                output_paths=[str(output_path)],
+                runtime_seconds=1.5,
+            ),
+            materials_v3=MaterialsV3Metadata(
+                enabled=True,
+                version="3.1",
+                response_plan={"plan": "persist"},
+                pixel_ops={"applied": 3},
+                segmentation_metadata={
+                    "mask_artifact_path": str(mask_artifact_path),
+                    "mask_artifact_format": "npz",
+                },
+                runtime_seconds=0.25,
+            ),
+            backend_selection=orchestrator._capture_backend_metadata(),
+        ).save(manifest_path)
+
+        fake_provenance = Mock()
+
+        with (
+            patch("transformation_portal.lux_depth_v3.orchestrator.capture_provenance", return_value=fake_provenance),
+            patch(
+                "transformation_portal.lux_depth_v3.raw_loader.is_raw_file",
+                return_value=False,
+            ),
+        ):
+            orchestrator._write_manifest(
+                manifest_path=manifest_path,
+                image_input=ImageInput(test_image),
+                depth_metadata=previous_depth,
+                v2_result={"status": "ok"},
+                v2_report_path=None,
+                pbr_assets=None,
+                depth_runtime_s=0.5,
+                v2_runtime_s=0.0,
+                pipeline_start_time=10.0,
+                pipeline_end_time=11.0,
+                materials_v3_result={"materials_v3_metadata": {"version": "3.1"}},
+                materials_v3_runtime_s=0.0,
+                backend_selection_metadata=orchestrator._capture_backend_metadata(),
+            )
+
+        loaded = CombinedManifest.load(manifest_path)
+
+        assert loaded.v2 is not None
+        assert loaded.v2.report_path == str(report_path)
+        assert loaded.v2.output_paths == [str(output_path)]
+        assert loaded.v2.runtime_seconds == pytest.approx(1.5, rel=1e-6, abs=1e-6)
+        assert loaded.materials_v3 is not None
+        assert loaded.materials_v3.response_plan == {"plan": "persist"}
+        assert loaded.materials_v3.pixel_ops == {"applied": 3}
+        assert loaded.materials_v3.segmentation_metadata["mask_artifact_path"] == str(mask_artifact_path)
+        assert loaded.materials_v3.runtime_seconds == pytest.approx(0.25, rel=1e-6, abs=1e-6)
+
+    def test_write_manifest_normalizes_v2_success_status_and_reuses_previous_hash(self, temp_workspace):
+        """Manifest rewrite should canonicalize V2 status and reuse the already-loaded manifest hash."""
+        from transformation_portal.lux_depth_v3.input_manager import ImageInput
+        from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
+
+        tmpdir = Path(temp_workspace["root"])
+        test_image = tmpdir / "manifest_status_normalization.jpg"
+        test_image.write_bytes(b"manifest-status-image")
+        manifest_path = tmpdir / "output" / "manifests" / "manifest_status_normalization.json"
+        manifest_path.parent.mkdir(parents=True, exist_ok=True)
+        manifest_path.write_text("{}", encoding="utf-8")
+        previous_depth = DepthMetadata(
+            model="da3",
+            depth_path=str(tmpdir / "output" / "depth" / "manifest_status_normalization_depth.png"),
+            runtime_seconds=0.25,
+            scaling={},
+        )
+
+        with (
+            patch("transformation_portal.lux_depth_v3.orchestrator.DepthBackendRegistry"),
+            patch("transformation_portal.lux_depth_v3.orchestrator.V2Runner"),
+        ):
+            orchestrator = EnhanceOrchestrator(
+                EnhanceConfig(enable_v2=True, v2_preset="default"),
+                tmpdir / "output",
+                verify_outputs=False,
+            )
+
+        previous_manifest = CombinedManifest(
+            input=InputMetadata(
+                image_path=str(test_image),
+                image_sha256="saved-input-hash",
+            ),
+            config_fingerprint=orchestrator.compute_config_fingerprint(),
+            depth=previous_depth,
+            v2=V2Metadata(
+                preset="default",
+                status="ok",
+                strict_depth=True,
+                output_dir="v2/",
+                report_path="",
+            ),
+            backend_selection=orchestrator._capture_backend_metadata(),
+        )
+        fake_provenance = Mock()
+        hash_call: dict[str, object] = {}
+
+        def _capture_hash_args(
+            _image_path: Path,
+            *,
+            manifest_exists: bool,
+            saved_hash: str | None,
+            for_manifest_write: bool,
+        ) -> str:
+            hash_call["manifest_exists"] = manifest_exists
+            hash_call["saved_hash"] = saved_hash
+            hash_call["for_manifest_write"] = for_manifest_write
+            return saved_hash or "computed-input-hash"
+
+        with (
+            patch.object(
+                orchestrator,
+                "_load_existing_manifest",
+                return_value=previous_manifest,
+            ),
+            patch(
+                "transformation_portal.lux_depth_v3.orchestrator.CombinedManifest.load",
+                side_effect=AssertionError("unexpected manifest reload"),
+            ),
+            patch.object(
+                orchestrator,
+                "_compute_or_skip_hash",
+                side_effect=_capture_hash_args,
+            ),
+            patch(
+                "transformation_portal.lux_depth_v3.orchestrator.capture_provenance",
+                return_value=fake_provenance,
+            ),
+            patch(
+                "transformation_portal.lux_depth_v3.raw_loader.is_raw_file",
+                return_value=False,
+            ),
+        ):
+            orchestrator._write_manifest(
+                manifest_path=manifest_path,
+                image_input=ImageInput(test_image),
+                depth_metadata=previous_depth,
+                v2_result={"status": "success"},
+                v2_report_path=None,
+                pbr_assets=None,
+                depth_runtime_s=0.25,
+                v2_runtime_s=0.0,
+                pipeline_start_time=10.0,
+                pipeline_end_time=11.0,
+                materials_v3_result=None,
+                materials_v3_runtime_s=0.0,
+                backend_selection_metadata=orchestrator._capture_backend_metadata(),
+            )
+
+        loaded = CombinedManifest.load(manifest_path)
+
+        assert hash_call == {
+            "manifest_exists": True,
+            "saved_hash": "saved-input-hash",
+            "for_manifest_write": True,
+        }
+        assert loaded.v2 is not None
+        assert loaded.v2.status == "ok"
 
 
 class TestInputMetadataSchema:
