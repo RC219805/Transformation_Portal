@@ -1361,12 +1361,9 @@ class EnhanceOrchestrator:
             "glass_response_enabled": bool(self.config.glass_response_enabled),
             "mask_feather_sigma_default": float(self.config.mask_feather_sigma_default),
             "mask_feather_sigma_overrides": {
-                key: float(value)
-                for key, value in sorted(self.config.mask_feather_sigma_overrides.items())
+                key: float(value) for key, value in sorted(self.config.mask_feather_sigma_overrides.items())
             },
-            "mask_feather_disabled_materials": sorted(
-                str(value) for value in self.config.mask_feather_disabled_materials
-            ),
+            "mask_feather_disabled_materials": sorted(str(value) for value in self.config.mask_feather_disabled_materials),
             "sky_top_region_fraction": float(self.config.sky_top_region_fraction),
             "sky_gradient_threshold": float(self.config.sky_gradient_threshold),
             "sky_brightness_threshold": float(self.config.sky_brightness_threshold),
@@ -2089,9 +2086,7 @@ class EnhanceOrchestrator:
                             attempt_cache_fp_hash = self._build_depth_cache_fingerprint(
                                 backend_id,
                             )
-                            cache_key_preview = (
-                                f"{image_sha256[:12]}_{attempt_cache_fp_hash[:12]}"
-                            )
+                            cache_key_preview = f"{image_sha256[:12]}_{attempt_cache_fp_hash[:12]}"
                             logger.debug(
                                 "Stage A depth cache lookup for %s (backend=%s, key=%s)",
                                 output_key,

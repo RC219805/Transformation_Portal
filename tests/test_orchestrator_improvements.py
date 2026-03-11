@@ -643,9 +643,11 @@ class TestFingerprintDrivenSkipInvalidation:
         base_config = EnhanceConfig(generate_pbr=False, enable_v2=False, enable_depth_cache=True)
         changed_config = EnhanceConfig(generate_pbr=True, enable_v2=False, enable_depth_cache=True)
 
-        with patch("transformation_portal.lux_depth_v3.orchestrator.DepthBackendRegistry"), patch(
-            "transformation_portal.lux_depth_v3.orchestrator.Postprocessor"
-        ), patch("transformation_portal.lux_depth_v3.orchestrator.V2Runner"):
+        with (
+            patch("transformation_portal.lux_depth_v3.orchestrator.DepthBackendRegistry"),
+            patch("transformation_portal.lux_depth_v3.orchestrator.Postprocessor"),
+            patch("transformation_portal.lux_depth_v3.orchestrator.V2Runner"),
+        ):
             base_orchestrator = EnhanceOrchestrator(base_config, tmpdir / "output_base", verify_outputs=False)
             CombinedManifest(
                 config_fingerprint=base_orchestrator.compute_config_fingerprint(),
@@ -686,24 +688,31 @@ class TestFingerprintDrivenSkipInvalidation:
         depth_stats = Mock()
         depth_stats._asdict.return_value = {}
 
-        with patch(
-            "transformation_portal.lux_depth_v3.preprocessing.validate_image_format",
-            return_value=test_image,
-        ), patch(
-            "transformation_portal.lux_depth_v3.preprocessing.preprocess_image",
-            return_value=(np.ones((4, 4, 3), dtype=np.float32), (4, 4)),
-        ), patch(
-            "transformation_portal.lux_depth_v3.orchestrator.atomic_write_depth_u16_png_with_stats",
-            return_value=(None, None, depth_stats),
-        ), patch.object(
-            orchestrator,
-            "_enforce_apex_depth_validity_gate",
-            return_value=None,
-        ), patch.object(
-            orchestrator,
-            "_generate_pbr_stage",
-            return_value={"normal": "generated"},
-        ) as mock_generate_pbr, caplog.at_level(logging.DEBUG):
+        with (
+            patch(
+                "transformation_portal.lux_depth_v3.preprocessing.validate_image_format",
+                return_value=test_image,
+            ),
+            patch(
+                "transformation_portal.lux_depth_v3.preprocessing.preprocess_image",
+                return_value=(np.ones((4, 4, 3), dtype=np.float32), (4, 4)),
+            ),
+            patch(
+                "transformation_portal.lux_depth_v3.orchestrator.atomic_write_depth_u16_png_with_stats",
+                return_value=(None, None, depth_stats),
+            ),
+            patch.object(
+                orchestrator,
+                "_enforce_apex_depth_validity_gate",
+                return_value=None,
+            ),
+            patch.object(
+                orchestrator,
+                "_generate_pbr_stage",
+                return_value={"normal": "generated"},
+            ) as mock_generate_pbr,
+            caplog.at_level(logging.DEBUG),
+        ):
             (
                 depth_metadata,
                 _depth_runtime_s,
@@ -750,9 +759,11 @@ class TestFingerprintDrivenSkipInvalidation:
         float_depth_path = tmpdir / "cache_miss_depth.npy"
         manifest_path = tmpdir / "cache_miss_manifest.json"
 
-        with patch("transformation_portal.lux_depth_v3.orchestrator.DepthBackendRegistry"), patch(
-            "transformation_portal.lux_depth_v3.orchestrator.Postprocessor"
-        ), patch("transformation_portal.lux_depth_v3.orchestrator.V2Runner"):
+        with (
+            patch("transformation_portal.lux_depth_v3.orchestrator.DepthBackendRegistry"),
+            patch("transformation_portal.lux_depth_v3.orchestrator.Postprocessor"),
+            patch("transformation_portal.lux_depth_v3.orchestrator.V2Runner"),
+        ):
             orchestrator = EnhanceOrchestrator(
                 EnhanceConfig(enable_v2=False, enable_depth_cache=True),
                 tmpdir / "output",
@@ -787,24 +798,31 @@ class TestFingerprintDrivenSkipInvalidation:
         depth_stats = Mock()
         depth_stats._asdict.return_value = {}
 
-        with patch(
-            "transformation_portal.lux_depth_v3.preprocessing.validate_image_format",
-            return_value=test_image,
-        ), patch(
-            "transformation_portal.lux_depth_v3.preprocessing.preprocess_image",
-            return_value=(np.ones((4, 4, 3), dtype=np.float32), (4, 4)),
-        ), patch(
-            "transformation_portal.lux_depth_v3.orchestrator.atomic_write_depth_u16_png_with_stats",
-            return_value=(None, None, depth_stats),
-        ), patch.object(
-            orchestrator,
-            "_enforce_apex_depth_validity_gate",
-            return_value=None,
-        ), patch.object(
-            orchestrator,
-            "_generate_pbr_stage",
-            return_value=None,
-        ), caplog.at_level(logging.DEBUG):
+        with (
+            patch(
+                "transformation_portal.lux_depth_v3.preprocessing.validate_image_format",
+                return_value=test_image,
+            ),
+            patch(
+                "transformation_portal.lux_depth_v3.preprocessing.preprocess_image",
+                return_value=(np.ones((4, 4, 3), dtype=np.float32), (4, 4)),
+            ),
+            patch(
+                "transformation_portal.lux_depth_v3.orchestrator.atomic_write_depth_u16_png_with_stats",
+                return_value=(None, None, depth_stats),
+            ),
+            patch.object(
+                orchestrator,
+                "_enforce_apex_depth_validity_gate",
+                return_value=None,
+            ),
+            patch.object(
+                orchestrator,
+                "_generate_pbr_stage",
+                return_value=None,
+            ),
+            caplog.at_level(logging.DEBUG),
+        ):
             orchestrator._compute_depth_stage(
                 image_input=ImageInput(test_image),
                 output_key=Path("cache_miss"),
