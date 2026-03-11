@@ -50,6 +50,7 @@ class _DuplicateKeySafeLoader(yaml.SafeLoader):  # pylint: disable=too-many-ance
 
 
 def _construct_unique_mapping(loader: yaml.SafeLoader, node: Any, deep: bool = False) -> Dict[Any, Any]:
+    loader.flatten_mapping(node)
     mapping: Dict[Any, Any] = {}
     for key_node, value_node in node.value:
         key = loader.construct_object(key_node, deep=deep)
