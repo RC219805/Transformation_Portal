@@ -897,8 +897,9 @@ class TestCachedRunFidelity:
         float_depth_path = tmpdir / "cached_materials_depth.npy"
         manifest_path = tmpdir / "cached_materials_manifest.json"
 
-        with patch("transformation_portal.lux_depth_v3.orchestrator.DepthBackendRegistry"), patch(
-            "transformation_portal.lux_depth_v3.materials_v3.MaterialsV3Engine"
+        with (
+            patch("transformation_portal.lux_depth_v3.orchestrator.DepthBackendRegistry"),
+            patch("transformation_portal.lux_depth_v3.materials_v3.MaterialsV3Engine"),
         ):
             orchestrator = EnhanceOrchestrator(
                 EnhanceConfig(enable_materials_v3=True, enable_v2=False),
@@ -975,8 +976,9 @@ class TestCachedRunFidelity:
         report_path.write_text('{"status":"ok"}', encoding="utf-8")
         output_path = tmpdir / "output" / "v2" / "v2_skip_output.png"
 
-        with patch("transformation_portal.lux_depth_v3.orchestrator.DepthBackendRegistry"), patch(
-            "transformation_portal.lux_depth_v3.orchestrator.V2Runner"
+        with (
+            patch("transformation_portal.lux_depth_v3.orchestrator.DepthBackendRegistry"),
+            patch("transformation_portal.lux_depth_v3.orchestrator.V2Runner"),
         ):
             orchestrator = EnhanceOrchestrator(
                 EnhanceConfig(enable_v2=True, v2_preset="default"),
@@ -1029,9 +1031,11 @@ class TestCachedRunFidelity:
         mask_artifact_path = tmpdir / "output" / "segmentation" / "manifest_preservation_masks.npz"
         mask_artifact_path.parent.mkdir(parents=True, exist_ok=True)
 
-        with patch("transformation_portal.lux_depth_v3.orchestrator.DepthBackendRegistry"), patch(
-            "transformation_portal.lux_depth_v3.orchestrator.V2Runner"
-        ), patch("transformation_portal.lux_depth_v3.materials_v3.MaterialsV3Engine"):
+        with (
+            patch("transformation_portal.lux_depth_v3.orchestrator.DepthBackendRegistry"),
+            patch("transformation_portal.lux_depth_v3.orchestrator.V2Runner"),
+            patch("transformation_portal.lux_depth_v3.materials_v3.MaterialsV3Engine"),
+        ):
             orchestrator = EnhanceOrchestrator(
                 EnhanceConfig(enable_v2=True, v2_preset="default", enable_materials_v3=True),
                 tmpdir / "output",
@@ -1072,9 +1076,12 @@ class TestCachedRunFidelity:
 
         fake_provenance = Mock()
 
-        with patch("transformation_portal.lux_depth_v3.orchestrator.capture_provenance", return_value=fake_provenance), patch(
-            "transformation_portal.lux_depth_v3.raw_loader.is_raw_file",
-            return_value=False,
+        with (
+            patch("transformation_portal.lux_depth_v3.orchestrator.capture_provenance", return_value=fake_provenance),
+            patch(
+                "transformation_portal.lux_depth_v3.raw_loader.is_raw_file",
+                return_value=False,
+            ),
         ):
             orchestrator._write_manifest(
                 manifest_path=manifest_path,

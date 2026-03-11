@@ -1639,11 +1639,7 @@ class EnhanceOrchestrator:
             return [raw_paths] if raw_paths else []
         if not isinstance(raw_paths, list):
             return []
-        return [
-            path_value
-            for path_value in raw_paths
-            if isinstance(path_value, str) and path_value
-        ]
+        return [path_value for path_value in raw_paths if isinstance(path_value, str) and path_value]
 
     def _restore_materials_v3_from_manifest(
         self,
@@ -3716,11 +3712,7 @@ class EnhanceOrchestrator:
             purpose="manifest rewrite preservation",
         )
         previous_v2_metadata = previous_manifest.v2 if previous_manifest else None
-        previous_materials_v3_metadata = (
-            previous_manifest.materials_v3
-            if previous_manifest
-            else None
-        )
+        previous_materials_v3_metadata = previous_manifest.materials_v3 if previous_manifest else None
 
         # V2 metadata
         # Determine V2 I/O bit depth based on
@@ -3743,22 +3735,14 @@ class EnhanceOrchestrator:
                     "report_path",
                     "",
                 )
-                or (
-                    previous_v2_metadata.report_path
-                    if previous_v2_metadata and previous_v2_metadata.report_path
-                    else ""
-                )
+                or (previous_v2_metadata.report_path if previous_v2_metadata and previous_v2_metadata.report_path else "")
             )
         )
         v2_output_paths = self._coerce_output_paths(
             v2_result.get("output_paths"),
         )
         v2_output_value = v2_result.get("output")
-        if (
-            isinstance(v2_output_value, str)
-            and v2_output_value
-            and v2_output_value not in v2_output_paths
-        ):
+        if isinstance(v2_output_value, str) and v2_output_value and v2_output_value not in v2_output_paths:
             v2_output_paths.append(v2_output_value)
         if not v2_output_paths and previous_v2_metadata:
             v2_output_paths = self._coerce_output_paths(
@@ -3773,8 +3757,7 @@ class EnhanceOrchestrator:
             if v2_runtime_s > 0.0
             else (
                 float(previous_v2_metadata.runtime_seconds)
-                if previous_v2_metadata
-                and previous_v2_metadata.runtime_seconds is not None
+                if previous_v2_metadata and previous_v2_metadata.runtime_seconds is not None
                 else v2_runtime_s
             )
         )
@@ -3783,11 +3766,7 @@ class EnhanceOrchestrator:
         )
         if v2_error_message is None and previous_v2_metadata is not None:
             v2_error_message = previous_v2_metadata.error_message
-        v2_status = v2_result.get("status") or (
-            previous_v2_metadata.status
-            if previous_v2_metadata
-            else "skipped"
-        )
+        v2_status = v2_result.get("status") or (previous_v2_metadata.status if previous_v2_metadata else "skipped")
 
         _strict_depth = (
             bool(depth_handoff_state)
@@ -3821,18 +3800,11 @@ class EnhanceOrchestrator:
                 "materials_v3_metadata",
                 {},
             )
-            current_materials_v3_metadata = (
-                raw_materials_v3_metadata
-                if isinstance(raw_materials_v3_metadata, dict)
-                else {}
-            )
+            current_materials_v3_metadata = raw_materials_v3_metadata if isinstance(raw_materials_v3_metadata, dict) else {}
             response_plan = materials_v3_result.get(
                 "materials_v3_response_plan",
             )
-            if (
-                response_plan is None
-                and previous_materials_v3_metadata is not None
-            ):
+            if response_plan is None and previous_materials_v3_metadata is not None:
                 response_plan = copy.deepcopy(
                     previous_materials_v3_metadata.response_plan,
                 )
@@ -3840,10 +3812,7 @@ class EnhanceOrchestrator:
             pixel_ops = materials_v3_result.get(
                 "materials_v3_pixel_ops",
             )
-            if (
-                pixel_ops is None
-                and previous_materials_v3_metadata is not None
-            ):
+            if pixel_ops is None and previous_materials_v3_metadata is not None:
                 pixel_ops = copy.deepcopy(
                     previous_materials_v3_metadata.pixel_ops,
                 )
@@ -3851,10 +3820,7 @@ class EnhanceOrchestrator:
             segmentation_metadata = current_materials_v3_metadata.get(
                 "segmentation_metadata",
             )
-            if (
-                segmentation_metadata is None
-                and previous_materials_v3_metadata is not None
-            ):
+            if segmentation_metadata is None and previous_materials_v3_metadata is not None:
                 segmentation_metadata = copy.deepcopy(
                     previous_materials_v3_metadata.segmentation_metadata,
                 )
@@ -3864,8 +3830,7 @@ class EnhanceOrchestrator:
                 if materials_v3_runtime_s > 0.0
                 else (
                     float(previous_materials_v3_metadata.runtime_seconds)
-                    if previous_materials_v3_metadata
-                    and previous_materials_v3_metadata.runtime_seconds is not None
+                    if previous_materials_v3_metadata and previous_materials_v3_metadata.runtime_seconds is not None
                     else materials_v3_runtime_s
                 )
             )
@@ -3879,11 +3844,7 @@ class EnhanceOrchestrator:
             materials_v3_metadata = MaterialsV3Metadata(
                 enabled=True,
                 version=current_materials_v3_metadata.get("version")
-                or (
-                    previous_materials_v3_metadata.version
-                    if previous_materials_v3_metadata
-                    else "3.1"
-                ),
+                or (previous_materials_v3_metadata.version if previous_materials_v3_metadata else "3.1"),
                 response_plan=response_plan,
                 pixel_ops=pixel_ops,
                 segmentation_metadata=segmentation_metadata,
