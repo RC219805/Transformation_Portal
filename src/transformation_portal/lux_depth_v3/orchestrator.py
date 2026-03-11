@@ -4452,13 +4452,11 @@ class EnhanceOrchestrator:
                         img.path,
                         e,
                     )
-                    results[index] = (
-                        {
-                            "status": "error",
-                            "image_input": img,
-                            "error": str(e),
-                        }
-                    )
+                    results[index] = {
+                        "status": "error",
+                        "image_input": img,
+                        "error": str(e),
+                    }
 
             if any(result is None for result in results):
                 raise RuntimeError(
