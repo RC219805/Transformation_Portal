@@ -20,6 +20,7 @@ Improvements implemented (per requirements):
 from __future__ import annotations
 
 import datetime
+import copy
 import hashlib
 import io
 import json
@@ -1612,6 +1613,103 @@ class EnhanceOrchestrator:
             ),
         )
 
+    def _load_existing_manifest(
+        self,
+        manifest_path: Path,
+        *,
+        purpose: str,
+    ) -> Optional[CombinedManifest]:
+        """Best-effort manifest loader for cached-run preservation paths."""
+        if not manifest_path.exists():
+            return None
+        try:
+            return CombinedManifest.load(manifest_path)
+        except Exception as exc:
+            logger.debug(
+                "Failed to load existing manifest for %s: %s",
+                purpose,
+                exc,
+            )
+            return None
+
+    @staticmethod
+    def _coerce_output_paths(raw_paths: Any) -> List[str]:
+        """Normalize V2 output path payloads to a list of strings."""
+        if isinstance(raw_paths, str):
+            return [raw_paths] if raw_paths else []
+        if not isinstance(raw_paths, list):
+            return []
+        return [
+            path_value
+            for path_value in raw_paths
+            if isinstance(path_value, str) and path_value
+        ]
+
+    def _restore_materials_v3_from_manifest(
+        self,
+        manifest: Optional[CombinedManifest],
+        output_key: Path,
+    ) -> tuple[Optional[dict], float, Optional[Path]]:
+        """Restore persisted Materials V3 metadata for cached-depth reruns."""
+        if manifest is None or manifest.materials_v3 is None:
+            return None, 0.0, None
+
+        materials_v3 = manifest.materials_v3
+        materials_v3_metadata: Dict[str, Any] = {
+            "version": materials_v3.version,
+        }
+        if materials_v3.segmentation_metadata is not None:
+            materials_v3_metadata["segmentation_metadata"] = copy.deepcopy(
+                materials_v3.segmentation_metadata,
+            )
+
+        enhanced_image_path = self._expected_materials_v3_enhanced_path(
+            output_key,
+        )
+        if not enhanced_image_path.exists():
+            enhanced_image_path = None
+
+        runtime_seconds = materials_v3.runtime_seconds
+        restored_runtime = float(runtime_seconds) if runtime_seconds is not None else 0.0
+        restored_result = {
+            "materials_v3_response_plan": copy.deepcopy(
+                materials_v3.response_plan,
+            ),
+            "materials_v3_pixel_ops": copy.deepcopy(
+                materials_v3.pixel_ops,
+            ),
+            "materials_v3_metadata": materials_v3_metadata,
+        }
+        return restored_result, restored_runtime, enhanced_image_path
+
+    def _preserved_v2_result_from_manifest(
+        self,
+        manifest: Optional[CombinedManifest],
+    ) -> tuple[dict, Optional[Path]]:
+        """Rehydrate V2 result fields from the prior manifest when reruns skip V2."""
+        if manifest is None or manifest.v2 is None:
+            return {"status": "ok"}, None
+
+        previous_v2 = manifest.v2
+        preserved_result: Dict[str, Any] = {
+            "status": previous_v2.status,
+        }
+        if previous_v2.report_path:
+            preserved_result["report_path"] = previous_v2.report_path
+
+        output_paths = self._coerce_output_paths(
+            previous_v2.output_paths,
+        )
+        if output_paths:
+            preserved_result["output_paths"] = output_paths
+            preserved_result["output"] = output_paths[0]
+
+        if previous_v2.error_message:
+            preserved_result["error"] = previous_v2.error_message
+
+        report_path = Path(previous_v2.report_path) if previous_v2.report_path else None
+        return preserved_result, report_path
+
     @staticmethod
     def _normalize_backend_provenance(value: Any) -> Optional[str]:
         """Normalize backend provenance identifiers for reuse checks."""
@@ -1868,12 +1966,12 @@ class EnhanceOrchestrator:
                 )
                 return False
 
-            # Compare V2/PBR config using stored fingerprint's SHA256
+            # Compare V2-stage config using stored fingerprint's SHA256
             current_fp = self.compute_config_fingerprint()
             stored_fp = manifest.config_fingerprint
 
             if current_fp.v2_only().to_sha256() != stored_fp.v2_only().to_sha256():
-                logger.info("V2/PBR config changed - regenerating")
+                logger.info("V2 config changed - regenerating")
                 return False
 
             # Consistency Check - if depth was recomputed, V2 must also rerun
@@ -2600,63 +2698,54 @@ class EnhanceOrchestrator:
             # Depth was skipped - load from cache
             # Preserve Materials V3 metadata
             # from previous run
-            if manifest_path.exists():
-                try:
-                    m = CombinedManifest.load(
-                        manifest_path,
-                    )
-                    depth_metadata = m.depth
-                    pbr_assets = getattr(
-                        m,
-                        "pbr_assets",
+            existing_manifest = self._load_existing_manifest(
+                manifest_path,
+                purpose="cached depth reuse",
+            )
+            if existing_manifest is not None:
+                depth_metadata = existing_manifest.depth
+                pbr_assets = getattr(
+                    existing_manifest,
+                    "pbr_assets",
+                    None,
+                )
+                if (
+                    getattr(
+                        existing_manifest,
+                        "backend_selection",
                         None,
                     )
-                    if (
-                        getattr(
-                            m,
-                            "backend_selection",
-                            None,
-                        )
-                        is not None
-                    ):
-                        _bs = m.backend_selection
-                        assert _bs is not None
-                        active_backend_metadata = _bs
-                        depth_attempts = list(
-                            _bs.attempts or [],
-                        )
-                        self._active_backend_metadata = active_backend_metadata
-                        self._active_depth_attempts = depth_attempts
-                        success_attempts = [a for a in depth_attempts if a.get("status") == "success"]
-                        if success_attempts:
-                            self._active_selected_attempt_index = int(
-                                success_attempts[-1].get("attempt", 0),
-                            )
-
-                    # Preserve Materials V3
-                    # result from previous run
-                    if hasattr(m, "materials_v3") and m.materials_v3:
-                        logger.info(
-                            "Preserving Materials" " V3 metadata from" " previous run" " (depth was cached)",
-                        )
-                        materials_v3_result = {
-                            "materials_v3_response_plan": (m.materials_v3.response_plan),
-                            "materials_v3_pixel_ops": (m.materials_v3.pixel_ops),
-                            "materials_v3_metadata": {
-                                "version": (m.materials_v3.version),
-                            },
-                        }
-                        _rt = getattr(
-                            m.materials_v3,
-                            "runtime_seconds",
-                            None,
-                        )
-                        materials_v3_runtime_s = float(_rt) if _rt is not None else 0.0
-                except Exception as e:
-                    logger.debug(
-                        "Failed to load" " previous manifest" " metadata: %s",
-                        e,
+                    is not None
+                ):
+                    _bs = existing_manifest.backend_selection
+                    assert _bs is not None
+                    active_backend_metadata = _bs
+                    depth_attempts = list(
+                        _bs.attempts or [],
                     )
+                    self._active_backend_metadata = active_backend_metadata
+                    self._active_depth_attempts = depth_attempts
+                    success_attempts = [a for a in depth_attempts if a.get("status") == "success"]
+                    if success_attempts:
+                        self._active_selected_attempt_index = int(
+                            success_attempts[-1].get("attempt", 0),
+                        )
+
+                (
+                    restored_materials_v3_result,
+                    restored_materials_v3_runtime_s,
+                    restored_enhanced_image_path,
+                ) = self._restore_materials_v3_from_manifest(
+                    existing_manifest,
+                    output_key,
+                )
+                if restored_materials_v3_result:
+                    logger.info(
+                        "Preserving Materials" " V3 metadata from" " previous run" " (depth was cached)",
+                    )
+                    materials_v3_result = restored_materials_v3_result
+                    materials_v3_runtime_s = restored_materials_v3_runtime_s
+                    enhanced_image_path = restored_enhanced_image_path
 
             # PBR generation with cached depth
             # (if enabled but not previously generated)
@@ -3409,7 +3498,16 @@ class EnhanceOrchestrator:
                 v2_result=None,
                 v2_report_path=v2_report_path,
             )
-            return {"status": "ok"}, 0.0, v2_report_path
+            previous_manifest = self._load_existing_manifest(
+                manifest_path,
+                purpose="V2 skip preservation",
+            )
+            preserved_v2_result, preserved_report_path = self._preserved_v2_result_from_manifest(
+                previous_manifest,
+            )
+            if v2_report_path is None:
+                v2_report_path = preserved_report_path
+            return preserved_v2_result, 0.0, v2_report_path
 
         # Use persisted segmentation artifact
         # when available; otherwise serialize
@@ -3613,6 +3711,17 @@ class EnhanceOrchestrator:
                 "Provenance capture failed" f" unexpectedly: {e}",
             ) from e
 
+        previous_manifest = self._load_existing_manifest(
+            manifest_path,
+            purpose="manifest rewrite preservation",
+        )
+        previous_v2_metadata = previous_manifest.v2 if previous_manifest else None
+        previous_materials_v3_metadata = (
+            previous_manifest.materials_v3
+            if previous_manifest
+            else None
+        )
+
         # V2 metadata
         # Determine V2 I/O bit depth based on
         # emit flags and Materials V3 enhancement
@@ -3629,18 +3738,55 @@ class EnhanceOrchestrator:
         v2_report_path_value = (
             str(v2_report_path)
             if v2_report_path
-            else v2_result.get(
-                "report_path",
-                "",
+            else (
+                v2_result.get(
+                    "report_path",
+                    "",
+                )
+                or (
+                    previous_v2_metadata.report_path
+                    if previous_v2_metadata and previous_v2_metadata.report_path
+                    else ""
+                )
             )
         )
-        v2_output_paths = []
+        v2_output_paths = self._coerce_output_paths(
+            v2_result.get("output_paths"),
+        )
         v2_output_value = v2_result.get("output")
-        if isinstance(v2_output_value, str) and v2_output_value:
+        if (
+            isinstance(v2_output_value, str)
+            and v2_output_value
+            and v2_output_value not in v2_output_paths
+        ):
             v2_output_paths.append(v2_output_value)
+        if not v2_output_paths and previous_v2_metadata:
+            v2_output_paths = self._coerce_output_paths(
+                previous_v2_metadata.output_paths,
+            )
         depth_handoff_state = self._extract_v2_depth_handoff_status(
             v2_result=v2_result,
             v2_report_path=v2_report_path,
+        )
+        v2_runtime_value = (
+            v2_runtime_s
+            if v2_runtime_s > 0.0
+            else (
+                float(previous_v2_metadata.runtime_seconds)
+                if previous_v2_metadata
+                and previous_v2_metadata.runtime_seconds is not None
+                else v2_runtime_s
+            )
+        )
+        v2_error_message = v2_result.get(
+            "error",
+        )
+        if v2_error_message is None and previous_v2_metadata is not None:
+            v2_error_message = previous_v2_metadata.error_message
+        v2_status = v2_result.get("status") or (
+            previous_v2_metadata.status
+            if previous_v2_metadata
+            else "skipped"
         )
 
         _strict_depth = (
@@ -3658,12 +3804,10 @@ class EnhanceOrchestrator:
             strict_depth=_strict_depth,
             output_dir="v2/",
             report_path=v2_report_path_value,
-            status=v2_result["status"],
-            runtime_seconds=v2_runtime_s,
+            status=str(v2_status),
+            runtime_seconds=v2_runtime_value,
             output_paths=(v2_output_paths or None),
-            error_message=v2_result.get(
-                "error",
-            ),
+            error_message=v2_error_message,
             input_bit_depth=(v2_input_bit_depth),
             output_bit_depth=(v2_output_bit_depth),
         )
@@ -3673,6 +3817,59 @@ class EnhanceOrchestrator:
         if materials_v3_result:
             from .manifest import MaterialsV3Metadata
 
+            raw_materials_v3_metadata = materials_v3_result.get(
+                "materials_v3_metadata",
+                {},
+            )
+            current_materials_v3_metadata = (
+                raw_materials_v3_metadata
+                if isinstance(raw_materials_v3_metadata, dict)
+                else {}
+            )
+            response_plan = materials_v3_result.get(
+                "materials_v3_response_plan",
+            )
+            if (
+                response_plan is None
+                and previous_materials_v3_metadata is not None
+            ):
+                response_plan = copy.deepcopy(
+                    previous_materials_v3_metadata.response_plan,
+                )
+
+            pixel_ops = materials_v3_result.get(
+                "materials_v3_pixel_ops",
+            )
+            if (
+                pixel_ops is None
+                and previous_materials_v3_metadata is not None
+            ):
+                pixel_ops = copy.deepcopy(
+                    previous_materials_v3_metadata.pixel_ops,
+                )
+
+            segmentation_metadata = current_materials_v3_metadata.get(
+                "segmentation_metadata",
+            )
+            if (
+                segmentation_metadata is None
+                and previous_materials_v3_metadata is not None
+            ):
+                segmentation_metadata = copy.deepcopy(
+                    previous_materials_v3_metadata.segmentation_metadata,
+                )
+
+            materials_v3_runtime_value = (
+                materials_v3_runtime_s
+                if materials_v3_runtime_s > 0.0
+                else (
+                    float(previous_materials_v3_metadata.runtime_seconds)
+                    if previous_materials_v3_metadata
+                    and previous_materials_v3_metadata.runtime_seconds is not None
+                    else materials_v3_runtime_s
+                )
+            )
+
             # Determine bit depth based on
             # emit flags and enhanced image
             materials_v3_bit_depth = None
@@ -3681,27 +3878,16 @@ class EnhanceOrchestrator:
 
             materials_v3_metadata = MaterialsV3Metadata(
                 enabled=True,
-                version=materials_v3_result.get(
-                    "materials_v3_metadata",
-                    {},
-                ).get("version", "3.1"),
-                response_plan=(
-                    materials_v3_result.get(
-                        "materials_v3_response_plan",
-                    )
+                version=current_materials_v3_metadata.get("version")
+                or (
+                    previous_materials_v3_metadata.version
+                    if previous_materials_v3_metadata
+                    else "3.1"
                 ),
-                pixel_ops=(
-                    materials_v3_result.get(
-                        "materials_v3_pixel_ops",
-                    )
-                ),
-                segmentation_metadata=(
-                    materials_v3_result.get(
-                        "materials_v3_metadata",
-                        {},
-                    ).get("segmentation_metadata")
-                ),
-                runtime_seconds=materials_v3_runtime_s,
+                response_plan=response_plan,
+                pixel_ops=pixel_ops,
+                segmentation_metadata=segmentation_metadata,
+                runtime_seconds=materials_v3_runtime_value,
                 output_bit_depth=materials_v3_bit_depth,
             )
 
