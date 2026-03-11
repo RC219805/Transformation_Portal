@@ -1641,6 +1641,23 @@ class EnhanceOrchestrator:
             return []
         return [path_value for path_value in raw_paths if isinstance(path_value, str) and path_value]
 
+    @staticmethod
+    def _normalize_v2_status(raw_status: Any) -> str:
+        """Map runner and manifest status values to the manifest V2 contract."""
+        if raw_status is None:
+            return "skipped"
+        if not isinstance(raw_status, str):
+            return str(raw_status)
+
+        normalized = raw_status.strip().lower()
+        if not normalized:
+            return "skipped"
+        if normalized in {"success", "ok"}:
+            return "ok"
+        if normalized in {"failed", "failure"}:
+            return "error"
+        return normalized
+
     def _restore_materials_v3_from_manifest(
         self,
         manifest: Optional[CombinedManifest],
@@ -1976,7 +1993,7 @@ class EnhanceOrchestrator:
                 return False
 
             # V2 Metadata Check - verify V2 ran successfully
-            if not manifest.v2 or manifest.v2.status != "ok":
+            if not manifest.v2 or self._normalize_v2_status(manifest.v2.status) != "ok":
                 return False
 
             # Defensive output check for V2 report
@@ -3766,7 +3783,9 @@ class EnhanceOrchestrator:
         )
         if v2_error_message is None and previous_v2_metadata is not None:
             v2_error_message = previous_v2_metadata.error_message
-        v2_status = v2_result.get("status") or (previous_v2_metadata.status if previous_v2_metadata else "skipped")
+        v2_status = self._normalize_v2_status(
+            v2_result.get("status") or (previous_v2_metadata.status if previous_v2_metadata else "skipped"),
+        )
 
         _strict_depth = (
             bool(depth_handoff_state)
@@ -3855,7 +3874,9 @@ class EnhanceOrchestrator:
         # Compute input hash respecting HashMode
         manifest_exists = manifest_path.exists()
         saved_hash = None
-        if manifest_exists:
+        if previous_manifest is not None and previous_manifest.input is not None:
+            saved_hash = previous_manifest.input.image_sha256
+        elif manifest_exists:
             try:
                 m = CombinedManifest.load(manifest_path)
                 if m.input:
