@@ -257,6 +257,20 @@ jobs:
         # Should not find model bugs
         assert not any("model" in bug.message.lower() for bug in bugs)
 
+    def test_workflow_root_list_reports_mapping_error(self, temp_workflow_dir):
+        """Test that a YAML root that is a list (not a mapping) emits a structured error."""
+        workflow_content = "- item1\n- item2\n"
+        workflow_file = temp_workflow_dir / "list_root.yml"
+        workflow_file.write_text(workflow_content)
+
+        parser = WorkflowParser(temp_workflow_dir)
+        bugs = parser.parse_all_workflows()
+
+        assert len(bugs) > 0
+        assert any("Workflow root must be a mapping" in bug.message for bug in bugs)
+        # Must be a structured error, not the generic "Failed to parse file" fallback
+        assert not any("Failed to parse file" in bug.message for bug in bugs)
+
     def test_yaml_syntax_error(self, temp_workflow_dir):
         """Test that YAML syntax errors are caught."""
         workflow_content = """

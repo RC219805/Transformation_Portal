@@ -183,6 +183,17 @@ class WorkflowParser:
             )
             return
 
+        if not isinstance(workflow, dict):
+            self.bugs.append(
+                WorkflowBug(
+                    str(workflow_file),
+                    None,
+                    "error",
+                    "Workflow root must be a mapping",
+                )
+            )
+            return
+
         # Check for required fields
         # Note: YAML parsers interpret 'on:' as boolean True
         on_check = "on" in workflow
