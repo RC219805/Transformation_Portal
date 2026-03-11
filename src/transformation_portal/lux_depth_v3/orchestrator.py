@@ -4434,23 +4434,25 @@ class EnhanceOrchestrator:
                     self._preprocess_single,
                     img,
                     input_root,
-                ): img
-                for img in image_inputs
+                ): (index, img)
+                for index, img in enumerate(image_inputs)
             }
 
-            results = []
+            # Preserve the caller's input ordering even when futures complete out
+            # of order, so downstream manifests and result joins stay deterministic.
+            results: List[Optional[Dict[str, Any]]] = [None] * len(image_inputs)
             for future in as_completed(futures):
+                index, img = futures[future]
                 try:
                     result = future.result()
-                    results.append(result)
+                    results[index] = result
                 except Exception as e:
-                    img = futures[future]
                     logger.error(
                         "Preprocessing failed" + " for %s: %s",
                         img.path,
                         e,
                     )
-                    results.append(
+                    results[index] = (
                         {
                             "status": "error",
                             "image_input": img,
@@ -4458,7 +4460,11 @@ class EnhanceOrchestrator:
                         }
                     )
 
-            return results
+            if any(result is None for result in results):
+                raise RuntimeError(
+                    "Parallel preprocessing" " returned incomplete" " result set.",
+                )
+            return cast(List[Dict[str, Any]], results)
 
     def _preprocess_single(
         self,
