@@ -16,6 +16,14 @@ FAST_TESTS := \
 	tests/test_float_roundtrip.py \
 	tests/test_golden_hour_courtyard_workflow.py
 
+PHASE6_SMOKE_TESTS := \
+	tests/test_streaming_stages.py \
+	tests/test_streaming_async_pipeline.py::test_async_pipeline_with_fake_stages_processes_end_to_end \
+	tests/test_pipeline_unified_smoke.py \
+	tests/test_rendering_4k_pipeline_smoke.py \
+	tests/test_lux_render_pipeline_smoke.py \
+	tests/lux_depth_v3/test_orchestrator_smoke.py
+
 .PHONY: help test-fast test-novideo test-full test-integration test-structure test-utils test-orchestrator-contract coverage-fast-scope venv setup clean \
         lint ci ci-full pre-commit install-hooks quality-check fix-quality validate-ci organize-docs check-json-serialization check-piptools-cache \
         check-stale-docs lock lock-prod lock-ci lock-dev install-core install-ml docs docs-clean
@@ -25,7 +33,7 @@ help:
 	@echo "  setup              Install package in editable mode (pip install -e .)"
 	@echo "  install-core       Install core dependencies with constraints"
 	@echo "  install-ml         Install ML tier dependencies with constraints"
-	@echo "  test-fast          Run fast subset (no video/optional heavy paths)"
+	@echo "  test-fast          Run fast subset plus Phase 6 smoke coverage"
 	@echo "  test-novideo       Run all tests excluding video suite via -k filter"
 	@echo "  test-full          Run entire test suite (parallel if xdist present)"
 	@echo "  test-orchestrator-contract  Run route-level portal orchestrator contract suite"
@@ -90,7 +98,7 @@ install-ml: venv
 	fi
 
 test-fast:
-	@"$(PY)" -m pytest -q $(FAST_TESTS)
+	@"$(PY)" -m pytest -q $(FAST_TESTS) $(PHASE6_SMOKE_TESTS)
 
 test-novideo:
 	@"$(PY)" -m pytest -q -k 'not video_master_grader'
