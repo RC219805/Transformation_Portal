@@ -270,7 +270,13 @@ class MaterialsV3Metadata:
 
 @dataclass
 class ConfigFingerprint:
-    """Configuration fingerprint for caching validation."""
+    """Configuration fingerprint for cache and stage reuse validation.
+
+    The base fields cover the historical depth/V2 settings. Newer grouped
+    fields capture additional stage-shaping configuration so manifest reuse can
+    invalidate conservatively when Materials V3, PBR, APEX depth gating, or
+    backend-selection settings change.
+    """
 
     model_variant: str
     depth_quantization: str
@@ -279,17 +285,40 @@ class ConfigFingerprint:
     v2_preset: Optional[str] = None
     v2_device: Optional[str] = None
     v2_upscaler_backend: Optional[str] = None
+    depth_backend: Optional[str] = None
+    depth_pro_checkpoint_path: Optional[str] = None
+    quality_tier: Optional[str] = None
+    materials_config: Optional[Dict[str, Any]] = None
+    pbr_config: Optional[Dict[str, Any]] = None
+    apex_depth_gate_config: Optional[Dict[str, Any]] = None
+    emit_master16: Optional[bool] = None
+    emit_upscaled16: Optional[bool] = None
+    enable_v2: Optional[bool] = None
 
     def depth_only(self) -> ConfigFingerprint:
-        """Return fingerprint with only depth-related fields."""
+        """Return fingerprint for Stage A reuse validation.
+
+        This projection includes the raw depth settings plus the stage-shaping
+        Materials V3, PBR, APEX gate, and delivery flags that determine whether
+        reusing prior Stage A artifacts is still safe.
+        """
         return ConfigFingerprint(
             model_variant=self.model_variant,
             depth_quantization=self.depth_quantization,
             depth_device=self.depth_device,
             preset=self.preset,
+            depth_backend=self.depth_backend,
+            depth_pro_checkpoint_path=self.depth_pro_checkpoint_path,
+            quality_tier=self.quality_tier,
+            materials_config=self.materials_config,
+            pbr_config=self.pbr_config,
+            apex_depth_gate_config=self.apex_depth_gate_config,
+            emit_master16=self.emit_master16,
+            emit_upscaled16=self.emit_upscaled16,
             v2_preset=None,
             v2_device=None,
             v2_upscaler_backend=None,
+            enable_v2=None,
         )
 
     def v2_only(self) -> ConfigFingerprint:
@@ -302,6 +331,15 @@ class ConfigFingerprint:
             v2_preset=self.v2_preset,
             v2_device=self.v2_device,
             v2_upscaler_backend=self.v2_upscaler_backend,
+            depth_backend=None,
+            depth_pro_checkpoint_path=None,
+            quality_tier=None,
+            materials_config=None,
+            pbr_config=None,
+            apex_depth_gate_config=None,
+            emit_master16=self.emit_master16,
+            emit_upscaled16=self.emit_upscaled16,
+            enable_v2=self.enable_v2,
         )
 
     def to_sha256(self) -> str:

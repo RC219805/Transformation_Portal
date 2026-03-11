@@ -21,6 +21,7 @@ import pytest
 
 from transformation_portal.lux_depth_v3.config import EnhanceConfig
 from transformation_portal.lux_depth_v3.manifest import (
+    BackendSelectionMetadata,
     BatchManifest,
     CombinedManifest,
     ConfigFingerprint,
@@ -123,7 +124,7 @@ class TestConfigFingerprint:
     """Tests for config fingerprint skip logic."""
 
     def test_depth_only_extracts_depth_fields(self):
-        """Test that depth_only() returns only depth-related fields."""
+        """Test that depth_only() returns Stage A fields only."""
         fp = ConfigFingerprint(
             model_variant="test_model",
             depth_quantization="u16",
@@ -132,20 +133,36 @@ class TestConfigFingerprint:
             v2_preset="hdr",
             v2_device="mps",
             v2_upscaler_backend="realesrgan",
+            depth_backend="depth_pro",
+            quality_tier="apex",
+            materials_config={"enable_materials_v3": True},
+            pbr_config={"generate_pbr": True},
+            apex_depth_gate_config={"min_upper_iqr": 1e-4},
+            emit_master16=True,
+            emit_upscaled16=False,
+            enable_v2=True,
         )
 
         depth_fp = fp.depth_only()
 
-        # Depth fields should be preserved
+        # Stage A fields should be preserved
         assert depth_fp.model_variant == "test_model"
         assert depth_fp.depth_quantization == "u16"
         assert depth_fp.depth_device == "cuda"
         assert depth_fp.preset == "luxury_estate"
+        assert depth_fp.depth_backend == "depth_pro"
+        assert depth_fp.quality_tier == "apex"
+        assert depth_fp.materials_config == {"enable_materials_v3": True}
+        assert depth_fp.pbr_config == {"generate_pbr": True}
+        assert depth_fp.apex_depth_gate_config == {"min_upper_iqr": 1e-4}
+        assert depth_fp.emit_master16 is True
+        assert depth_fp.emit_upscaled16 is False
 
         # V2 fields should be None/empty
         assert depth_fp.v2_preset is None
         assert depth_fp.v2_device is None
         assert depth_fp.v2_upscaler_backend is None
+        assert depth_fp.enable_v2 is None
 
     def test_v2_only_extracts_v2_fields(self):
         """Test that v2_only() returns only V2-related fields."""
@@ -157,6 +174,14 @@ class TestConfigFingerprint:
             v2_preset="hdr",
             v2_device="mps",
             v2_upscaler_backend="realesrgan",
+            depth_backend="depth_pro",
+            quality_tier="apex",
+            materials_config={"enable_materials_v3": True},
+            pbr_config={"generate_pbr": True},
+            apex_depth_gate_config={"min_upper_iqr": 1e-4},
+            emit_master16=True,
+            emit_upscaled16=False,
+            enable_v2=True,
         )
 
         v2_fp = fp.v2_only()
@@ -165,11 +190,18 @@ class TestConfigFingerprint:
         assert v2_fp.v2_preset == "hdr"
         assert v2_fp.v2_device == "mps"
         assert v2_fp.v2_upscaler_backend == "realesrgan"
+        assert v2_fp.emit_master16 is True
+        assert v2_fp.emit_upscaled16 is False
+        assert v2_fp.enable_v2 is True
 
-        # Depth fields should be empty
+        # Stage A fields should be empty
         assert v2_fp.model_variant == ""
         assert v2_fp.depth_quantization == ""
         assert v2_fp.depth_device == ""
+        assert v2_fp.depth_backend is None
+        assert v2_fp.materials_config is None
+        assert v2_fp.pbr_config is None
+        assert v2_fp.apex_depth_gate_config is None
 
     def test_to_sha256_is_deterministic(self):
         """Test that SHA256 hash is consistent."""
@@ -359,6 +391,495 @@ class TestManifestConfigFingerprintStorage:
         assert loaded.config_fingerprint.depth_quantization == "u16"
 
 
+class TestFingerprintDrivenSkipInvalidation:
+    """Tests for expanded config-fingerprint invalidation paths."""
+
+    def test_should_skip_depth_invalidates_on_backend_change(self, temp_workspace):
+        """Changing depth backend should invalidate Stage A reuse."""
+        from transformation_portal.lux_depth_v3.input_manager import ImageInput
+        from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
+
+        tmpdir = Path(temp_workspace["root"])
+        test_image = tmpdir / "backend_change.jpg"
+        test_image.write_bytes(b"fake image")
+        depth_path = tmpdir / "depth.png"
+        depth_path.write_bytes(b"depth")
+        manifest_path = tmpdir / "manifest.json"
+
+        base_config = EnhanceConfig(depth_backend="da3", enable_v2=False)
+        changed_config = EnhanceConfig(depth_backend="depth_pro", enable_v2=False)
+
+        with patch("transformation_portal.lux_depth_v3.orchestrator.DepthBackendRegistry"):
+            base_orchestrator = EnhanceOrchestrator(base_config, tmpdir / "output_base", verify_outputs=False)
+            manifest = CombinedManifest(
+                config_fingerprint=base_orchestrator.compute_config_fingerprint(),
+                depth=DepthMetadata(model="da3", depth_path=str(depth_path), runtime_seconds=0.1, scaling={}),
+            )
+            manifest.save(manifest_path)
+
+            changed_orchestrator = EnhanceOrchestrator(
+                changed_config,
+                tmpdir / "output_changed",
+                verify_outputs=False,
+            )
+
+        should_skip = changed_orchestrator.should_skip_depth(
+            depth_path,
+            manifest_path,
+            ImageInput(test_image),
+        )
+
+        assert should_skip is False
+
+    def test_should_skip_depth_invalidates_on_materials_change(self, temp_workspace):
+        """Enabling Materials V3 should invalidate cached Stage A reuse."""
+        from transformation_portal.lux_depth_v3.input_manager import ImageInput
+        from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
+
+        tmpdir = Path(temp_workspace["root"])
+        test_image = tmpdir / "materials_change.jpg"
+        test_image.write_bytes(b"fake image")
+        depth_path = tmpdir / "materials_depth.png"
+        depth_path.write_bytes(b"depth")
+        manifest_path = tmpdir / "materials_manifest.json"
+
+        base_config = EnhanceConfig(enable_materials_v3=False, enable_v2=False)
+        changed_config = EnhanceConfig(enable_materials_v3=True, enable_v2=False)
+
+        with patch("transformation_portal.lux_depth_v3.orchestrator.DepthBackendRegistry"):
+            base_orchestrator = EnhanceOrchestrator(base_config, tmpdir / "output_base", verify_outputs=False)
+            manifest = CombinedManifest(
+                config_fingerprint=base_orchestrator.compute_config_fingerprint(),
+                depth=DepthMetadata(model="da3", depth_path=str(depth_path), runtime_seconds=0.1, scaling={}),
+            )
+            manifest.save(manifest_path)
+
+            changed_orchestrator = EnhanceOrchestrator(
+                changed_config,
+                tmpdir / "output_changed",
+                verify_outputs=False,
+            )
+
+        should_skip = changed_orchestrator.should_skip_depth(
+            depth_path,
+            manifest_path,
+            ImageInput(test_image),
+        )
+
+        assert should_skip is False
+
+    def test_should_skip_depth_invalidates_on_pbr_change(self, temp_workspace):
+        """Changing PBR parameters should invalidate Stage A reuse."""
+        from transformation_portal.lux_depth_v3.input_manager import ImageInput
+        from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
+
+        tmpdir = Path(temp_workspace["root"])
+        test_image = tmpdir / "pbr_change.jpg"
+        test_image.write_bytes(b"fake image")
+        depth_path = tmpdir / "pbr_depth.png"
+        depth_path.write_bytes(b"depth")
+        manifest_path = tmpdir / "pbr_manifest.json"
+
+        base_config = EnhanceConfig(generate_pbr=True, pbr_normal_strength=1.0, enable_v2=False)
+        changed_config = EnhanceConfig(generate_pbr=True, pbr_normal_strength=2.0, enable_v2=False)
+
+        with patch("transformation_portal.lux_depth_v3.orchestrator.DepthBackendRegistry"):
+            base_orchestrator = EnhanceOrchestrator(base_config, tmpdir / "output_base", verify_outputs=False)
+            manifest = CombinedManifest(
+                config_fingerprint=base_orchestrator.compute_config_fingerprint(),
+                depth=DepthMetadata(model="da3", depth_path=str(depth_path), runtime_seconds=0.1, scaling={}),
+            )
+            manifest.save(manifest_path)
+
+            changed_orchestrator = EnhanceOrchestrator(
+                changed_config,
+                tmpdir / "output_changed",
+                verify_outputs=False,
+            )
+
+        should_skip = changed_orchestrator.should_skip_depth(
+            depth_path,
+            manifest_path,
+            ImageInput(test_image),
+        )
+
+        assert should_skip is False
+
+    def test_should_skip_depth_invalidates_legacy_manifest_without_stage_a_groups(self, temp_workspace):
+        """Legacy manifests without expanded fingerprint fields should not skip."""
+        from transformation_portal.lux_depth_v3.input_manager import ImageInput
+        from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
+
+        tmpdir = Path(temp_workspace["root"])
+        test_image = tmpdir / "legacy_manifest.jpg"
+        test_image.write_bytes(b"fake image")
+        depth_path = tmpdir / "legacy_depth.png"
+        depth_path.write_bytes(b"depth")
+        manifest_path = tmpdir / "legacy_manifest.json"
+
+        legacy_fingerprint = ConfigFingerprint(
+            model_variant="depth-anything-v3-metric-large",
+            depth_quantization="none",
+            depth_device="cpu",
+            preset=None,
+            v2_preset="default",
+            v2_device="cpu",
+            v2_upscaler_backend="default",
+        )
+        manifest = CombinedManifest(
+            config_fingerprint=legacy_fingerprint,
+            depth=DepthMetadata(model="da3", depth_path=str(depth_path), runtime_seconds=0.1, scaling={}),
+        )
+        manifest.save(manifest_path)
+
+        with patch("transformation_portal.lux_depth_v3.orchestrator.DepthBackendRegistry"):
+            orchestrator = EnhanceOrchestrator(EnhanceConfig(enable_v2=False), tmpdir / "output", verify_outputs=False)
+
+        should_skip = orchestrator.should_skip_depth(
+            depth_path,
+            manifest_path,
+            ImageInput(test_image),
+        )
+
+        assert should_skip is False
+
+    def test_legacy_manifest_invalidates_once_then_restabilizes_after_rewrite(self, temp_workspace):
+        """Legacy manifests should invalidate once, then stabilize after rewrite."""
+        from transformation_portal.lux_depth_v3.input_manager import ImageInput
+        from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
+
+        tmpdir = Path(temp_workspace["root"])
+        test_image = tmpdir / "legacy_restabilize.jpg"
+        test_image.write_bytes(b"fake image")
+        depth_path = tmpdir / "legacy_restabilize_depth.png"
+        depth_path.write_bytes(b"depth")
+        manifest_path = tmpdir / "legacy_restabilize_manifest.json"
+        image_input = ImageInput(test_image)
+
+        legacy_fingerprint = ConfigFingerprint(
+            model_variant="depth-anything-v3-metric-large",
+            depth_quantization="none",
+            depth_device="cpu",
+            preset=None,
+            v2_preset="default",
+            v2_device="cpu",
+            v2_upscaler_backend="default",
+        )
+        CombinedManifest(
+            config_fingerprint=legacy_fingerprint,
+            depth=DepthMetadata(model="da3", depth_path=str(depth_path), runtime_seconds=0.1, scaling={}),
+        ).save(manifest_path)
+
+        with patch("transformation_portal.lux_depth_v3.orchestrator.DepthBackendRegistry"):
+            orchestrator = EnhanceOrchestrator(EnhanceConfig(enable_v2=False), tmpdir / "output", verify_outputs=False)
+
+        assert orchestrator.should_skip_depth(depth_path, manifest_path, image_input) is False
+
+        CombinedManifest(
+            config_fingerprint=orchestrator.compute_config_fingerprint(),
+            depth=DepthMetadata(model="da3", depth_path=str(depth_path), runtime_seconds=0.1, scaling={}),
+            backend_selection=orchestrator._capture_backend_metadata(),
+        ).save(manifest_path)
+
+        assert orchestrator.should_skip_depth(depth_path, manifest_path, image_input) is True
+
+    def test_should_skip_depth_invalidates_on_resolved_backend_drift(self, temp_workspace):
+        """Resolved backend provenance drift should deny manifest reuse."""
+        from transformation_portal.lux_depth_v3.input_manager import ImageInput
+        from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
+
+        tmpdir = Path(temp_workspace["root"])
+        test_image = tmpdir / "resolved_backend_drift.jpg"
+        test_image.write_bytes(b"fake image")
+        depth_path = tmpdir / "resolved_backend_drift_depth.png"
+        depth_path.write_bytes(b"depth")
+        manifest_path = tmpdir / "resolved_backend_drift_manifest.json"
+
+        with patch("transformation_portal.lux_depth_v3.orchestrator.DepthBackendRegistry"):
+            orchestrator = EnhanceOrchestrator(EnhanceConfig(enable_v2=False), tmpdir / "output", verify_outputs=False)
+
+        manifest = CombinedManifest(
+            config_fingerprint=orchestrator.compute_config_fingerprint(),
+            depth=DepthMetadata(model="da3", depth_path=str(depth_path), runtime_seconds=0.1, scaling={}),
+            backend_selection=BackendSelectionMetadata(
+                requested_backend="da3",
+                resolved_backend="da2",
+                resolution_status="fallback",
+                resolution_reason="Simulated backend drift",
+                model_id="depth-anything/Depth-Anything-V2-Small-hf",
+                device="cpu",
+                attempts=[],
+            ),
+        )
+        manifest.save(manifest_path)
+
+        should_skip = orchestrator.should_skip_depth(
+            depth_path,
+            manifest_path,
+            ImageInput(test_image),
+        )
+
+        assert should_skip is False
+
+    def test_downstream_only_change_denies_manifest_reuse_but_reuses_cached_depth(self, temp_workspace, caplog):
+        """Downstream-only changes should rerun Stage A from cached depth without inference."""
+        import logging
+
+        import numpy as np
+
+        from transformation_portal.lux_depth_v3.input_manager import ImageInput
+        from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
+
+        tmpdir = Path(temp_workspace["root"])
+        test_image = tmpdir / "downstream_only.jpg"
+        test_image.write_bytes(b"downstream-only-image")
+        depth_path = tmpdir / "downstream_only_depth.png"
+        depth_path.write_bytes(b"depth")
+        float_depth_path = tmpdir / "downstream_only_depth.npy"
+        manifest_path = tmpdir / "downstream_only_manifest.json"
+        output_key = Path("downstream_only")
+        cached_depth = np.full((4, 4), 0.5, dtype=np.float32)
+
+        base_config = EnhanceConfig(generate_pbr=False, enable_v2=False, enable_depth_cache=True)
+        changed_config = EnhanceConfig(generate_pbr=True, enable_v2=False, enable_depth_cache=True)
+
+        with (
+            patch("transformation_portal.lux_depth_v3.orchestrator.DepthBackendRegistry"),
+            patch("transformation_portal.lux_depth_v3.orchestrator.Postprocessor"),
+            patch("transformation_portal.lux_depth_v3.orchestrator.V2Runner"),
+        ):
+            base_orchestrator = EnhanceOrchestrator(base_config, tmpdir / "output_base", verify_outputs=False)
+            CombinedManifest(
+                config_fingerprint=base_orchestrator.compute_config_fingerprint(),
+                depth=DepthMetadata(model="da3", depth_path=str(depth_path), runtime_seconds=0.1, scaling={}),
+                backend_selection=base_orchestrator._capture_backend_metadata(),
+            ).save(manifest_path)
+
+            orchestrator = EnhanceOrchestrator(changed_config, tmpdir / "output_changed", verify_outputs=False)
+
+        class StubBackend:
+            def __init__(self):
+                self.name = "da3"
+                self.device = "cpu"
+                self._device = "cpu"
+                self.license_type = Mock(value="commercial")
+                self.model_id = "depth-anything/Depth-Anything-V3-Large"
+                self.compute = Mock(
+                    side_effect=AssertionError("Depth inference should not run on cache hit"),
+                )
+
+        backend = StubBackend()
+        orchestrator.depth_backend = backend
+        orchestrator._depth_backend_cache["da3"] = backend
+
+        image_sha256 = orchestrator._compute_or_skip_hash(
+            test_image,
+            manifest_exists=False,
+            for_manifest_write=True,
+        )
+        assert image_sha256 is not None
+        cache_fingerprint = orchestrator._build_depth_cache_fingerprint("da3")
+        assert orchestrator.depth_cache is not None
+        orchestrator.depth_cache.store(image_sha256, cache_fingerprint, cached_depth)
+
+        image_input = ImageInput(test_image)
+        assert orchestrator.should_skip_depth(depth_path, manifest_path, image_input) is False
+
+        depth_stats = Mock()
+        depth_stats._asdict.return_value = {}
+
+        with (
+            patch(
+                "transformation_portal.lux_depth_v3.preprocessing.validate_image_format",
+                return_value=test_image,
+            ),
+            patch(
+                "transformation_portal.lux_depth_v3.preprocessing.preprocess_image",
+                return_value=(np.ones((4, 4, 3), dtype=np.float32), (4, 4)),
+            ),
+            patch(
+                "transformation_portal.lux_depth_v3.orchestrator.atomic_write_depth_u16_png_with_stats",
+                return_value=(None, None, depth_stats),
+            ),
+            patch.object(
+                orchestrator,
+                "_enforce_apex_depth_validity_gate",
+                return_value=None,
+            ),
+            patch.object(
+                orchestrator,
+                "_generate_pbr_stage",
+                return_value={"normal": "generated"},
+            ) as mock_generate_pbr,
+            caplog.at_level(logging.DEBUG),
+        ):
+            (
+                depth_metadata,
+                _depth_runtime_s,
+                pbr_assets,
+                _materials_v3_result,
+                _materials_v3_runtime_s,
+                _enhanced_image_path,
+                backend_selection,
+                depth_attempts,
+            ) = orchestrator._compute_depth_stage(
+                image_input=image_input,
+                output_key=output_key,
+                depth_path=depth_path,
+                float_depth_path=float_depth_path,
+                manifest_path=manifest_path,
+                skip_depth=False,
+            )
+
+        assert depth_metadata is not None
+        assert pbr_assets == {"normal": "generated"}
+        assert backend_selection.resolved_backend == "da3"
+        assert depth_attempts
+        assert depth_attempts[0]["cached"] is True
+        assert depth_attempts[0]["output_normalization"] == "cache_reuse"
+        backend.compute.assert_not_called()
+        mock_generate_pbr.assert_called_once()
+        assert "Stage A depth cache lookup" in caplog.text
+        assert "Cache hit: using cached depth" in caplog.text
+
+    def test_stage_a_cache_miss_logs_diagnostic(self, temp_workspace, caplog):
+        """Stage A should emit a cache-miss diagnostic before falling back to inference."""
+        import logging
+
+        import numpy as np
+
+        from transformation_portal.depth.backends.protocol import DepthResult
+        from transformation_portal.lux_depth_v3.input_manager import ImageInput
+        from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
+
+        tmpdir = Path(temp_workspace["root"])
+        test_image = tmpdir / "cache_miss.jpg"
+        test_image.write_bytes(b"cache-miss-image")
+        depth_path = tmpdir / "cache_miss_depth.png"
+        float_depth_path = tmpdir / "cache_miss_depth.npy"
+        manifest_path = tmpdir / "cache_miss_manifest.json"
+
+        with (
+            patch("transformation_portal.lux_depth_v3.orchestrator.DepthBackendRegistry"),
+            patch("transformation_portal.lux_depth_v3.orchestrator.Postprocessor"),
+            patch("transformation_portal.lux_depth_v3.orchestrator.V2Runner"),
+        ):
+            orchestrator = EnhanceOrchestrator(
+                EnhanceConfig(enable_v2=False, enable_depth_cache=True),
+                tmpdir / "output",
+                verify_outputs=False,
+            )
+
+        class StubBackend:
+            def __init__(self):
+                self.name = "da3"
+                self.device = "cpu"
+                self._device = "cpu"
+                self.license_type = Mock(value="commercial")
+                self.model_id = "depth-anything/Depth-Anything-V3-Large"
+                self.compute = Mock(
+                    return_value=DepthResult(
+                        depth_map=np.full((4, 4), 0.25, dtype=np.float32),
+                        original_image=np.zeros((4, 4, 3), dtype=np.uint8),
+                        metadata={},
+                        depth_units="relative",
+                        backend_id="da3",
+                        device="cpu",
+                        dtype="float32",
+                        input_size=(4, 4),
+                    )
+                )
+
+        backend = StubBackend()
+        orchestrator.depth_backend = backend
+        orchestrator._depth_backend_cache["da3"] = backend
+        orchestrator.postprocessor.process.side_effect = lambda result: result
+
+        depth_stats = Mock()
+        depth_stats._asdict.return_value = {}
+
+        with (
+            patch(
+                "transformation_portal.lux_depth_v3.preprocessing.validate_image_format",
+                return_value=test_image,
+            ),
+            patch(
+                "transformation_portal.lux_depth_v3.preprocessing.preprocess_image",
+                return_value=(np.ones((4, 4, 3), dtype=np.float32), (4, 4)),
+            ),
+            patch(
+                "transformation_portal.lux_depth_v3.orchestrator.atomic_write_depth_u16_png_with_stats",
+                return_value=(None, None, depth_stats),
+            ),
+            patch.object(
+                orchestrator,
+                "_enforce_apex_depth_validity_gate",
+                return_value=None,
+            ),
+            patch.object(
+                orchestrator,
+                "_generate_pbr_stage",
+                return_value=None,
+            ),
+            caplog.at_level(logging.DEBUG),
+        ):
+            orchestrator._compute_depth_stage(
+                image_input=ImageInput(test_image),
+                output_key=Path("cache_miss"),
+                depth_path=depth_path,
+                float_depth_path=float_depth_path,
+                manifest_path=manifest_path,
+                skip_depth=False,
+            )
+
+        backend.compute.assert_called_once()
+        assert "Stage A depth cache miss" in caplog.text
+
+    def test_should_skip_v2_invalidates_on_emit_bit_depth_change(self, temp_workspace):
+        """Changing V2 output bit-depth flags should invalidate V2 reuse."""
+        from transformation_portal.lux_depth_v3.input_manager import ImageInput
+        from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
+
+        tmpdir = Path(temp_workspace["root"])
+        test_image = tmpdir / "emit_change.jpg"
+        test_image.write_bytes(b"fake image")
+        v2_report = tmpdir / "emit_change_report.json"
+        v2_report.write_text('{"status":"ok"}', encoding="utf-8")
+        manifest_path = tmpdir / "emit_change_manifest.json"
+
+        base_config = EnhanceConfig(emit_master16=False, enable_v2=False, v2_preset="default")
+        changed_config = EnhanceConfig(emit_master16=True, enable_v2=False, v2_preset="default")
+
+        with patch("transformation_portal.lux_depth_v3.orchestrator.DepthBackendRegistry"):
+            base_orchestrator = EnhanceOrchestrator(base_config, tmpdir / "output_base", verify_outputs=False)
+            manifest = CombinedManifest(
+                config_fingerprint=base_orchestrator.compute_config_fingerprint(),
+                v2=V2Metadata(
+                    preset="default",
+                    status="ok",
+                    strict_depth=True,
+                    output_dir="v2/",
+                    report_path=str(v2_report),
+                ),
+            )
+            manifest.save(manifest_path)
+
+            changed_orchestrator = EnhanceOrchestrator(
+                changed_config,
+                tmpdir / "output_changed",
+                verify_outputs=False,
+            )
+
+        should_skip = changed_orchestrator.should_skip_v2(
+            v2_report,
+            manifest_path,
+            ImageInput(test_image),
+            depth_was_skipped=True,
+        )
+
+        assert should_skip is False
+
+
 class TestInputMetadataSchema:
     """Tests for InputMetadata schema versioning."""
 
@@ -536,27 +1057,6 @@ class TestV2SkipIndependentOfGeneratePBR:
         v2_report.write_text('{"status": "ok"}')
         manifest_path = tmpdir / "manifest.json"
 
-        # Create manifest with V2 metadata and config fingerprint
-        # Use matching config values to ensure fingerprint matches
-        manifest = CombinedManifest(
-            config_fingerprint=ConfigFingerprint(
-                model_variant="test",
-                depth_quantization="u16",
-                depth_device="cpu",
-                v2_preset="default",
-                v2_device="cpu",
-                v2_upscaler_backend="default",  # Match EnhanceConfig default
-            ),
-            v2=V2Metadata(
-                preset="default",
-                status="ok",
-                strict_depth=True,
-                output_dir="v2/",
-                report_path=str(v2_report),
-            ),
-        )
-        manifest.save(manifest_path)
-
         # Test with generate_pbr=False
         config_no_pbr = EnhanceConfig(generate_pbr=False, v2_preset="default")
 
@@ -566,6 +1066,17 @@ class TestV2SkipIndependentOfGeneratePBR:
                     from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
 
                     orchestrator = EnhanceOrchestrator(config_no_pbr, tmpdir / "output", verify_outputs=False)
+                    manifest = CombinedManifest(
+                        config_fingerprint=orchestrator.compute_config_fingerprint(),
+                        v2=V2Metadata(
+                            preset="default",
+                            status="ok",
+                            strict_depth=True,
+                            output_dir="v2/",
+                            report_path=str(v2_report),
+                        ),
+                    )
+                    manifest.save(manifest_path)
 
                     # V2 should be skippable even without PBR enabled
                     # (V2 outputs are valid, config matches)

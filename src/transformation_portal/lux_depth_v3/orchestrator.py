@@ -1003,7 +1003,14 @@ class EnhanceOrchestrator:
         backend_id: str,
     ) -> str:
         """Build backend-scoped cache fingerprint."""
-        base_fp = self.compute_config_fingerprint().depth_only().to_sha256()
+        cache_payload = self._build_depth_cache_payload()
+        base_fp = hashlib.sha256(
+            json.dumps(
+                cache_payload,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
         expected_units = self._expected_output_depth_units_for_backend(
             backend_id,
         )
@@ -1340,6 +1347,75 @@ class EnhanceOrchestrator:
             attempts=attempts,
         )
 
+    def _build_materials_fingerprint_payload(self) -> Dict[str, Any]:
+        """Build deterministic Materials V3 fingerprint payload."""
+        return {
+            "enable_materials_v3": bool(self.config.enable_materials_v3),
+            "apply_pixel_ops": bool(self.config.apply_pixel_ops),
+            "enable_material_segmentation": bool(self.config.enable_material_segmentation),
+            "material_segmentation_backend": str(self.config.material_segmentation_backend),
+            "strict_backend": bool(self.config.strict_backend),
+            "refinement_strategy": str(self.config.refinement_strategy),
+            "min_coverage_px": int(self.config.min_coverage_px),
+            "min_mean_conf": float(self.config.min_mean_conf),
+            "glass_response_enabled": bool(self.config.glass_response_enabled),
+            "mask_feather_sigma_default": float(self.config.mask_feather_sigma_default),
+            "mask_feather_sigma_overrides": {
+                key: float(value) for key, value in sorted(self.config.mask_feather_sigma_overrides.items())
+            },
+            "mask_feather_disabled_materials": sorted(str(value) for value in self.config.mask_feather_disabled_materials),
+            "sky_top_region_fraction": float(self.config.sky_top_region_fraction),
+            "sky_gradient_threshold": float(self.config.sky_gradient_threshold),
+            "sky_brightness_threshold": float(self.config.sky_brightness_threshold),
+            "sam2_model_size": str(self.config.sam2_model_size),
+            "sam2_checkpoint_path": self.config.sam2_checkpoint_path,
+        }
+
+    def _build_pbr_fingerprint_payload(self) -> Dict[str, Any]:
+        """Build deterministic PBR fingerprint payload."""
+        return {
+            "generate_pbr": bool(self.config.generate_pbr),
+            "save_float_depth": bool(getattr(self.config, "save_float_depth", False)),
+            "normal_strength": float(self.config.pbr_normal_strength),
+            "normal_blur_radius": int(self.config.pbr_normal_blur_radius),
+            "roughness_strength": float(self.config.pbr_roughness_strength),
+            "roughness_blur_radius": int(self.config.pbr_roughness_blur_radius),
+            "ao_strength": float(self.config.pbr_ao_strength),
+            "ao_blur_radius": int(self.config.pbr_ao_blur_radius),
+            "ao_bias": float(self.config.pbr_ao_bias),
+        }
+
+    def _build_apex_depth_gate_fingerprint_payload(self) -> Dict[str, Any]:
+        """Build deterministic APEX depth-gate fingerprint payload."""
+        return {
+            "quality_tier": str(self.config.quality_tier),
+            "min_finite_pct": float(self.config.apex_depth_min_finite_pct),
+            "min_upper_iqr": float(self.config.apex_depth_min_upper_iqr),
+            "max_high_saturation_fraction": float(self.config.apex_depth_max_high_saturation_fraction),
+            "max_low_saturation_fraction": float(self.config.apex_depth_max_low_saturation_fraction),
+            "scaled_saturation_margin": float(self.config.apex_depth_scaled_saturation_margin),
+            "saturation_high_value": float(self.config.apex_depth_saturation_high_value),
+            "saturation_low_value": float(self.config.apex_depth_saturation_low_value),
+            "min_gradient_energy": float(self.config.apex_depth_min_gradient_energy),
+            "threshold_epsilon": float(self.config.apex_depth_threshold_epsilon),
+            "hist_bins": int(self.config.apex_depth_hist_bins),
+        }
+
+    def _build_depth_cache_payload(self) -> Dict[str, Any]:
+        """Build depth-cache fingerprint payload.
+
+        This intentionally stays narrower than manifest Stage A invalidation
+        because the cache stores postprocessed float depth, not Materials V3,
+        PBR, or V2 deliverables.
+        """
+        return {
+            "model_variant": self._model_variant.value.name,
+            "depth_device": self.config.depth_device,
+            "preset": self.config.preset.value if self.config.preset else None,
+            "depth_backend": self.config.depth_backend,
+            "depth_pro_checkpoint_path": self.config.depth_pro_checkpoint_path,
+        }
+
     def compute_config_fingerprint(self) -> ConfigFingerprint:
         return ConfigFingerprint(
             model_variant=self._model_variant.value.name,
@@ -1349,6 +1425,15 @@ class EnhanceOrchestrator:
             v2_preset=self.config.v2_preset,
             v2_device=self.config.v2_device,
             v2_upscaler_backend=self.config.v2_upscaler_backend,
+            depth_backend=self.config.depth_backend,
+            depth_pro_checkpoint_path=self.config.depth_pro_checkpoint_path,
+            quality_tier=str(self.config.quality_tier),
+            materials_config=self._build_materials_fingerprint_payload(),
+            pbr_config=self._build_pbr_fingerprint_payload(),
+            apex_depth_gate_config=self._build_apex_depth_gate_fingerprint_payload(),
+            emit_master16=bool(self.config.emit_master16),
+            emit_upscaled16=bool(self.config.emit_upscaled16),
+            enable_v2=bool(self.config.enable_v2),
         )
 
     def _build_run_card_config_fingerprint(self) -> Dict[str, Any]:
@@ -1527,6 +1612,33 @@ class EnhanceOrchestrator:
             ),
         )
 
+    @staticmethod
+    def _normalize_backend_provenance(value: Any) -> Optional[str]:
+        """Normalize backend provenance identifiers for reuse checks."""
+        if not isinstance(value, str):
+            return None
+        normalized = value.strip().lower()
+        return normalized or None
+
+    @staticmethod
+    def _has_expanded_stage_a_fingerprint(
+        config_fingerprint: Optional[ConfigFingerprint],
+    ) -> bool:
+        """Return True when manifest fingerprint carries the expanded Stage A contract."""
+        if config_fingerprint is None:
+            return False
+        return all(
+            getattr(config_fingerprint, field_name, None) is not None
+            for field_name in (
+                "quality_tier",
+                "materials_config",
+                "pbr_config",
+                "apex_depth_gate_config",
+                "emit_master16",
+                "emit_upscaled16",
+            )
+        )
+
     def _compute_or_skip_hash(
         self,
         image_path: Path,
@@ -1586,8 +1698,10 @@ class EnhanceOrchestrator:
 
         Uses stored config fingerprint for
         comparison rather than reconstructing
-        from partial fields. This ensures any
-        config change invalidates the cache.
+        from partial fields. This invalidates
+        Stage A reuse when any captured
+        depth/Materials/PBR configuration
+        changes.
 
         Args:
             depth_path: Path to the depth output file
@@ -1632,13 +1746,53 @@ class EnhanceOrchestrator:
                 )
                 return False
 
-            # Compare stored depth config fingerprint with current config
-            current_fp = self.compute_config_fingerprint()
             stored_fp = manifest.config_fingerprint
+            if not self._has_expanded_stage_a_fingerprint(stored_fp):
+                logger.info(
+                    "Legacy manifest missing expanded Stage A fingerprint fields - regenerating Stage A",
+                )
+                return False
 
-            # Compare depth-related config using stored fingerprint's SHA256
+            # Compare stored Stage A fingerprint with current config
+            current_fp = self.compute_config_fingerprint()
+
+            # Compare Stage A config using stored fingerprint's SHA256
             if current_fp.depth_only().to_sha256() != stored_fp.depth_only().to_sha256():
-                logger.info("Depth config changed - regenerating")
+                logger.info("Stage A config changed - regenerating")
+                return False
+
+            stored_backend_selection = getattr(
+                manifest,
+                "backend_selection",
+                None,
+            )
+            stored_resolved_backend = self._normalize_backend_provenance(
+                getattr(
+                    stored_backend_selection,
+                    "resolved_backend",
+                    None,
+                ),
+            )
+            if not stored_resolved_backend:
+                logger.info(
+                    "Missing backend selection provenance in manifest - regenerating Stage A",
+                )
+                return False
+
+            current_backend_selection = self._capture_backend_metadata()
+            current_resolved_backend = self._normalize_backend_provenance(
+                getattr(
+                    current_backend_selection,
+                    "resolved_backend",
+                    None,
+                ),
+            )
+            if current_resolved_backend != stored_resolved_backend:
+                logger.info(
+                    "Resolved backend provenance changed - regenerating Stage A: stored=%s current=%s",
+                    stored_resolved_backend,
+                    current_resolved_backend,
+                )
                 return False
 
             # Depth Metadata Check
@@ -1849,6 +2003,17 @@ class EnhanceOrchestrator:
                         manifest_exists=False,
                         for_manifest_write=True,
                     )
+                    if image_sha256 is None:
+                        logger.debug(
+                            "Stage A depth cache lookup skipped for %s: image hash unavailable (hash_mode=%s)",
+                            output_key,
+                            self.config.hash_mode.value,
+                        )
+                else:
+                    logger.debug(
+                        "Stage A depth cache disabled for %s",
+                        output_key,
+                    )
 
                 # 1. Inference with per-image
                 # backend attempt/fallback.
@@ -1921,6 +2086,13 @@ class EnhanceOrchestrator:
                             attempt_cache_fp_hash = self._build_depth_cache_fingerprint(
                                 backend_id,
                             )
+                            cache_key_preview = f"{image_sha256[:12]}_{attempt_cache_fp_hash[:12]}"
+                            logger.debug(
+                                "Stage A depth cache lookup for %s (backend=%s, key=%s)",
+                                output_key,
+                                backend_id,
+                                cache_key_preview,
+                            )
                             cached_depth = self.depth_cache.get(
                                 image_sha256,
                                 attempt_cache_fp_hash,
@@ -1931,6 +2103,19 @@ class EnhanceOrchestrator:
                                     output_key,
                                     backend_id,
                                 )
+                            else:
+                                logger.debug(
+                                    "Stage A depth cache miss for %s (backend=%s, key=%s)",
+                                    output_key,
+                                    backend_id,
+                                    cache_key_preview,
+                                )
+                        elif self.depth_cache:
+                            logger.debug(
+                                "Stage A depth cache lookup unavailable for %s (backend=%s): missing image hash",
+                                output_key,
+                                backend_id,
+                            )
                         attempt_record["cached"] = bool(
                             cached_depth is not None,
                         )
