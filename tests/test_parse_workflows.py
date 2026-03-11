@@ -148,6 +148,30 @@ jobs:
         assert len(bugs) > 0
         assert any("nonexistent_job" in bug.message for bug in bugs)
 
+    def test_null_job_dependency_does_not_raise(self, temp_workflow_dir):
+        """Test that explicit null dependencies are treated as no dependencies."""
+        workflow_content = """
+name: Test Workflow
+on: [push]
+jobs:
+  job1:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "job1"
+  job2:
+    runs-on: ubuntu-latest
+    needs: null
+    steps:
+      - run: echo "job2"
+"""
+        workflow_file = temp_workflow_dir / "test.yml"
+        workflow_file.write_text(workflow_content)
+
+        parser = WorkflowParser(temp_workflow_dir)
+        bugs = parser.parse_all_workflows()
+
+        assert bugs == []
+
     def test_inefficient_matrix_usage(self, temp_workflow_dir):
         """Test that inefficient matrix usage is detected."""
         workflow_content = """
@@ -275,6 +299,44 @@ jobs:
         # Should find YAML error
         assert len(bugs) > 0
         assert any("YAML syntax error" in bug.message for bug in bugs)
+
+    def test_non_mapping_root_reports_structured_error(self, temp_workflow_dir):
+        """Test that non-mapping YAML roots report a workflow-structure error."""
+        workflow_content = """
+- name: not-a-workflow
+  uses: actions/checkout@v4
+"""
+        workflow_file = temp_workflow_dir / "test.yml"
+        workflow_file.write_text(workflow_content)
+
+        parser = WorkflowParser(temp_workflow_dir)
+        bugs = parser.parse_all_workflows()
+
+        assert any("Workflow root must be a mapping" in bug.message for bug in bugs)
+        assert not any("Failed to parse file" in bug.message for bug in bugs)
+
+    def test_yaml_merge_keys_preserve_override_semantics(self, temp_workflow_dir):
+        """Test that merge keys are supported without flagging local overrides."""
+        workflow_content = """
+name: Test Workflow
+on: [push]
+job_defaults: &job_defaults
+  runs-on: ubuntu-latest
+  timeout-minutes: 5
+jobs:
+  test:
+    <<: *job_defaults
+    runs-on: ubuntu-22.04
+    steps:
+      - run: echo "ok"
+"""
+        workflow_file = temp_workflow_dir / "test.yml"
+        workflow_file.write_text(workflow_content)
+
+        parser = WorkflowParser(temp_workflow_dir)
+        bugs = parser.parse_all_workflows()
+
+        assert bugs == []
 
     def test_multiple_workflows(self, temp_workflow_dir):
         """Test parsing multiple workflow files."""

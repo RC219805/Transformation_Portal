@@ -7,7 +7,7 @@ This script identifies:
 - Missing step IDs when outputs are referenced
 - Unclosed conditionals in shell scripts
 - Invalid job dependencies
-- Duplicate job names
+- Duplicate YAML mapping keys (including job names)
 - Invalid GitHub Actions syntax
 - Deprecated OpenAI model usage
 """
@@ -16,7 +16,7 @@ import argparse
 import re
 import sys
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 import yaml
 
@@ -29,6 +29,81 @@ _FI_PATTERN = re.compile(r"(^|\s)fi(\s|$)")
 _STEP_OUTPUT_REF = re.compile(r"\$\{\{\s*steps\.([a-zA-Z0-9_-]+)\.outputs")
 _MODEL_PATTERN1 = re.compile(r'"model":\s*"([^"]+)"')
 _MODEL_PATTERN2 = re.compile(r'\\"model\\":\s*\\"([^"\\]+)\\"')
+
+# Constants for magic strings
+_IF_SEARCH_PATTERN = "if [ "
+_DEVICE_SEARCH_PATTERN = "device:"
+_GITHUB_COMMAND_ESCAPE = {
+    "%": "%25",
+    "\r": "%0D",
+    "\n": "%0A",
+}
+_GITHUB_PROPERTY_ESCAPE = {
+    **_GITHUB_COMMAND_ESCAPE,
+    ":": "%3A",
+    ",": "%2C",
+}
+
+
+class _DuplicateKeySafeLoader(yaml.SafeLoader):  # pylint: disable=too-many-ancestors
+    """YAML loader that rejects duplicate mapping keys."""
+
+
+def _construct_unique_mapping(loader: yaml.SafeLoader, node: Any, deep: bool = False) -> Dict[Any, Any]:
+    explicit_keys: Dict[Any, Any] = {}
+    for key_node, _ in node.value:
+        if key_node.tag == "tag:yaml.org,2002:merge":
+            continue
+
+        key = loader.construct_object(key_node, deep=deep)
+        try:
+            seen_node = explicit_keys.get(key)
+        except TypeError:
+            # Defer unhashable-key validation to PyYAML's default constructor.
+            continue
+
+        if seen_node is not None:
+            raise yaml.constructor.ConstructorError(
+                "while constructing a mapping",
+                node.start_mark,
+                f"found duplicate key {key!r}",
+                key_node.start_mark,
+            )
+        explicit_keys[key] = key_node
+
+    loader.flatten_mapping(node)
+    return dict(yaml.SafeLoader.construct_mapping(loader, node, deep=deep))
+
+
+_DuplicateKeySafeLoader.add_constructor(
+    yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG,
+    _construct_unique_mapping,
+)
+
+
+def _yaml_error_line_number(error: yaml.YAMLError) -> Optional[int]:
+    """Extract a 1-based line number from a PyYAML exception when available."""
+    for mark_attr in ("problem_mark", "context_mark"):
+        mark = getattr(error, mark_attr, None)
+        if mark is not None and hasattr(mark, "line"):
+            return mark.line + 1
+    return None
+
+
+def _escape_github_command_value(value: str) -> str:
+    """Escape workflow command data values per GitHub Actions rules."""
+    escaped = value
+    for original, replacement in _GITHUB_COMMAND_ESCAPE.items():
+        escaped = escaped.replace(original, replacement)
+    return escaped
+
+
+def _escape_github_command_property(value: str) -> str:
+    """Escape workflow command property values per GitHub Actions rules."""
+    escaped = value
+    for original, replacement in _GITHUB_PROPERTY_ESCAPE.items():
+        escaped = escaped.replace(original, replacement)
+    return escaped
 
 
 class WorkflowBug:
@@ -48,7 +123,7 @@ class WorkflowBug:
         self.message = message
         self.context = context
 
-    def __str__(self):
+    def __str__(self) -> str:
         location = f"{self.file_path}"
         if self.line_number:
             location += f":{self.line_number}"
@@ -64,29 +139,30 @@ class WorkflowParser:
 
     def parse_all_workflows(self) -> List[WorkflowBug]:
         """Parse all workflow files in the directory."""
-        workflow_files = list(self.workflow_dir.glob("*.yml")) + list(self.workflow_dir.glob("*.yaml"))
+        yml_files = list(self.workflow_dir.glob("*.yml"))
+        yaml_files = list(self.workflow_dir.glob("*.yaml"))
+        workflow_files = yml_files + yaml_files
 
         for workflow_file in workflow_files:
-            # print(f"Parsing {workflow_file.name}...") # Silence logs for cleaner CI output
             self._parse_workflow(workflow_file)
 
         return self.bugs
 
-    def _parse_workflow(self, workflow_file: Path):
+    def _parse_workflow(self, workflow_file: Path) -> None:
         """Parse a single workflow file."""
         try:
-            with open(workflow_file, "r") as f:
-                content = f.read()
-                lines = content.splitlines()
+            content = workflow_file.read_text(encoding="utf-8")
+            lines = content.splitlines()
 
             # Try to parse YAML
             try:
-                workflow = yaml.safe_load(content)
+                workflow = yaml.load(content, Loader=_DuplicateKeySafeLoader)
             except yaml.YAMLError as e:
+                line_num = _yaml_error_line_number(e)
                 self.bugs.append(
                     WorkflowBug(
                         str(workflow_file),
-                        (getattr(e, "problem_mark", None).line + 1 if hasattr(e, "problem_mark") else None),
+                        line_num,
                         "error",
                         f"YAML syntax error: {e}",
                     )
@@ -94,7 +170,8 @@ class WorkflowParser:
                 return
 
             # Validate workflow structure
-            self._validate_workflow_structure(workflow_file, workflow, lines)
+            if not self._validate_workflow_structure(workflow_file, workflow, lines):
+                return
             self._check_step_references(workflow_file, workflow, lines)
             self._check_shell_scripts(workflow_file, workflow, lines)
             self._check_job_dependencies(workflow_file, workflow)
@@ -102,23 +179,66 @@ class WorkflowParser:
             self._check_openai_models(workflow_file, workflow, lines)
 
         except Exception as e:
-            self.bugs.append(WorkflowBug(str(workflow_file), None, "error", f"Failed to parse file: {e}"))
+            error_msg = f"Failed to parse file: {e}"
+            self.bugs.append(WorkflowBug(str(workflow_file), None, "error", error_msg))
 
-    def _validate_workflow_structure(self, workflow_file: Path, workflow: Dict, _lines: List[str]):
+    def _validate_workflow_structure(self, workflow_file: Path, workflow: Any, _lines: List[str]) -> bool:
         """Validate basic workflow structure."""
+        if workflow is None:
+            self.bugs.append(
+                WorkflowBug(
+                    str(workflow_file),
+                    None,
+                    "error",
+                    "Empty workflow file",
+                )
+            )
+            return False
+
+        if not isinstance(workflow, dict):
+            self.bugs.append(
+                WorkflowBug(
+                    str(workflow_file),
+                    None,
+                    "error",
+                    "Workflow root must be a mapping",
+                )
+            )
+            return False
+
         if not workflow:
-            self.bugs.append(WorkflowBug(str(workflow_file), None, "error", "Empty workflow file"))
-            return
+            self.bugs.append(
+                WorkflowBug(
+                    str(workflow_file),
+                    None,
+                    "error",
+                    "Empty workflow file",
+                )
+            )
+            return False
 
         # Check for required fields
         # Note: YAML parsers interpret 'on:' as boolean True
-        if "on" not in workflow and True not in workflow:
-            self.bugs.append(WorkflowBug(str(workflow_file), None, "error", "Missing 'on' trigger definition"))
+        on_check = "on" in workflow
+        true_check = any(key is True for key in workflow.keys())
+        has_on_trigger = on_check or true_check
+        if not has_on_trigger:
+            self.bugs.append(
+                WorkflowBug(
+                    str(workflow_file),
+                    None,
+                    "error",
+                    "Missing 'on' trigger definition",
+                )
+            )
 
         if "jobs" not in workflow:
-            self.bugs.append(WorkflowBug(str(workflow_file), None, "error", "Missing 'jobs' section"))
+            missing_jobs_msg = "Missing 'jobs' section"
+            self.bugs.append(WorkflowBug(str(workflow_file), None, "error", missing_jobs_msg))
 
-    def _check_step_references(self, workflow_file: Path, workflow: Dict, lines: List[str]):
+        return True
+
+    def _check_step_references(self, workflow_file: Path, workflow: Dict[str, Any], lines: List[str]) -> None:
         """Check for missing step IDs when outputs are referenced."""
         if "jobs" not in workflow:
             return
@@ -145,7 +265,7 @@ class WorkflowParser:
                     continue
 
                 # Convert step to string to search for references
-                step_str = yaml.dump(step)
+                step_str: str = yaml.dump(step)
 
                 # Find step output references
                 references = _STEP_OUTPUT_REF.findall(step_str)
@@ -153,17 +273,21 @@ class WorkflowParser:
                 for ref_id in references:
                     if ref_id not in step_ids:
                         line_num = self._find_line_number(lines, f"steps.{ref_id}.outputs")
+                        step_ref_msg = (
+                            f"Step output referenced "
+                            f"'steps.{ref_id}.outputs' but step id "
+                            f"'{ref_id}' not found in job '{job_name}'"
+                        )
                         self.bugs.append(
                             WorkflowBug(
                                 str(workflow_file),
                                 line_num,
                                 "error",
-                                f"Step output referenced 'steps.{ref_id}.outputs' but step id "
-                                f"'{ref_id}' not found in job '{job_name}'",
+                                step_ref_msg,
                             )
                         )
 
-    def _check_shell_scripts(self, workflow_file: Path, workflow: Dict, lines: List[str]):
+    def _check_shell_scripts(self, workflow_file: Path, workflow: Dict[str, Any], lines: List[str]) -> None:
         """Check for common shell script bugs in run commands."""
         if "jobs" not in workflow:
             return
@@ -183,7 +307,7 @@ class WorkflowParser:
                 # Check for unclosed conditionals
                 self._check_conditionals(workflow_file, job_name, run_script, lines)
 
-    def _check_conditionals(self, workflow_file: Path, job_name: str, script: str, lines: List[str]):
+    def _check_conditionals(self, workflow_file: Path, job_name: str, script: str, lines: List[str]) -> None:
         """Check for unclosed if/fi statements."""
         if_count = 0
         fi_count = 0
@@ -199,22 +323,30 @@ class WorkflowParser:
             if _IF_PATTERN.search(statement) and not _ELIF_PATTERN.search(statement):
                 if_count += 1
 
-            # Count fi statements - must be at start or after whitespace, and must be end of command
+            # Count fi statements - must be at start or after whitespace,
+            # and must be end of command
             if _FI_PATTERN.search(statement):
                 fi_count += 1
 
         if if_count != fi_count:
-            line_num = self._find_line_number(lines, "if [ ")
+            primary_search = self._find_line_number(lines, _IF_SEARCH_PATTERN)
+            fallback_search = self._find_line_number(lines, "if[")
+            line_num = primary_search or fallback_search
+            conditional_msg = (
+                f"Unclosed conditional in job '{job_name}': "
+                f"found {if_count} 'if' statements but "
+                f"{fi_count} 'fi' statements"
+            )
             self.bugs.append(
                 WorkflowBug(
                     str(workflow_file),
                     line_num,
                     "error",
-                    f"Unclosed conditional in job '{job_name}': found {if_count} 'if' statements but {fi_count} 'fi' statements",
+                    conditional_msg,
                 )
             )
 
-    def _check_job_dependencies(self, workflow_file: Path, workflow: Dict):
+    def _check_job_dependencies(self, workflow_file: Path, workflow: Dict[str, Any]) -> None:
         """Check for invalid job dependencies."""
         if "jobs" not in workflow:
             return
@@ -225,22 +357,29 @@ class WorkflowParser:
             if not isinstance(job_config, dict):
                 continue
 
-            needs = job_config.get("needs", [])
-            if isinstance(needs, str):
-                needs = [needs]
+            needs: Union[str, List[str], None] = job_config.get("needs", [])
+            if needs is None:
+                needs_list: List[str] = []
+            elif isinstance(needs, str):
+                needs_list = [needs]
+            elif isinstance(needs, list):
+                needs_list = needs
+            else:
+                needs_list = []
 
-            for needed_job in needs:
+            for needed_job in needs_list:
                 if needed_job not in job_names:
+                    dependency_msg = f"Job '{job_name}' depends on non-existent job " f"'{needed_job}'"
                     self.bugs.append(
                         WorkflowBug(
                             str(workflow_file),
                             None,
                             "error",
-                            f"Job '{job_name}' depends on non-existent job '{needed_job}'",
+                            dependency_msg,
                         )
                     )
 
-    def _check_matrix_usage(self, workflow_file: Path, workflow: Dict, lines: List[str]):
+    def _check_matrix_usage(self, workflow_file: Path, workflow: Dict[str, Any], lines: List[str]) -> None:
         """Check for inefficient or incorrect matrix usage."""
         if "jobs" not in workflow:
             return
@@ -258,7 +397,7 @@ class WorkflowParser:
                 continue
 
             # Check for exclusions
-            exclusions = matrix.get("exclude", [])
+            exclusions: List[Dict[str, Any]] = matrix.get("exclude", [])
 
             # Check for task/device matrix combinations that don't make sense
             if "task" in matrix and "device" in matrix:
@@ -268,21 +407,28 @@ class WorkflowParser:
                 if isinstance(tasks, list) and isinstance(devices, list):
                     # Check if lint+gpu is excluded
                     lint_gpu_excluded = (
-                        any(exc.get("task") == "lint" and exc.get("device") == "gpu" for exc in exclusions)
+                        any(
+                            isinstance(exc, dict) and exc.get("task") == "lint" and exc.get("device") == "gpu"
+                            for exc in exclusions
+                        )
                         if exclusions
                         else False
                     )
 
                     if "lint" in tasks and len(devices) > 1 and not lint_gpu_excluded:
-                        line_num = self._find_line_number(lines, "device:")
+                        line_num = self._find_line_number(lines, _DEVICE_SEARCH_PATTERN)
                         device_list = ", ".join(devices)
+                        matrix_msg = (
+                            f"Job '{job_name}' has device matrix "
+                            f"[{device_list}] but includes 'lint' task "
+                            "which doesn't require multiple devices"
+                        )
                         self.bugs.append(
                             WorkflowBug(
                                 str(workflow_file),
                                 line_num,
                                 "warning",
-                                f"Job '{job_name}' has device matrix [{device_list}] but includes "
-                                "'lint' task which doesn't require multiple devices",
+                                matrix_msg,
                             )
                         )
 
@@ -293,7 +439,7 @@ class WorkflowParser:
                 return idx
         return None
 
-    def _check_openai_models(self, workflow_file: Path, workflow: Dict, lines: List[str]):
+    def _check_openai_models(self, workflow_file: Path, workflow: Dict[str, Any], lines: List[str]) -> None:
         """Check for invalid or deprecated OpenAI model names."""
         valid_models = {
             "gpt-4",
@@ -305,7 +451,8 @@ class WorkflowParser:
             "gpt-3.5-turbo-16k",
         }
 
-        # Valid prefixes for date-stamped versions (e.g., gpt-4-turbo-YYYY-MM-DD).
+        # Valid prefixes for date-stamped versions
+        # (e.g., gpt-4-turbo-YYYY-MM-DD)
         valid_prefixes = {"gpt-4-turbo-", "gpt-4o-", "gpt-3.5-turbo-"}
 
         if "jobs" not in workflow:
@@ -327,20 +474,20 @@ class WorkflowParser:
                 model_matches = _MODEL_PATTERN1.findall(run_script)
                 model_matches += _MODEL_PATTERN2.findall(run_script)
 
-                for model in model_matches:
+                for model_match in model_matches:
                     # Check if it looks like a GPT model but isn't valid
-                    if model.startswith("gpt-") and model not in valid_models:
-                        # Check if it's a date-stamped version
-                        is_versioned = any(model.startswith(vp) for vp in valid_prefixes)
+                    if model_match.startswith("gpt-") and model_match not in valid_models:
+                        is_versioned = any(model_match.startswith(vp) for vp in valid_prefixes)
 
                         if not is_versioned:
-                            line_num = self._find_line_number(lines, model)
+                            line_num = self._find_line_number(lines, model_match)
+                            model_error_msg = f"Potentially invalid OpenAI model " f"name '{model_match}' in job '{job_name}'"
                             self.bugs.append(
                                 WorkflowBug(
                                     str(workflow_file),
                                     line_num,
                                     "warning",
-                                    f"Potentially invalid OpenAI model name '{model}' in job '{job_name}'",
+                                    model_error_msg,
                                 )
                             )
 
@@ -352,7 +499,13 @@ def render_github_annotations(bugs: List[WorkflowBug]) -> None:
         # info -> notice, warning -> warning, error -> error
         level = "notice" if bug.severity == "info" else bug.severity
 
-        print(f"::{level} file={bug.file_path},line={bug.line_number or 1}," f"title=Workflow Issue::" f"{bug.message}")
+        annotation_msg = (
+            f"::{level} file={_escape_github_command_property(bug.file_path)},"
+            f"line={bug.line_number or 1},"
+            f"title={_escape_github_command_property('Workflow Issue')}::"
+            f"{_escape_github_command_value(bug.message)}"
+        )
+        print(annotation_msg)
 
 
 def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
@@ -371,7 +524,7 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def main():
+def main() -> int:
     """Main entry point."""
     args = parse_args()
 
@@ -379,7 +532,8 @@ def main():
     workflow_dir = args.root / ".github" / "workflows"
 
     if not workflow_dir.exists():
-        # Fallback: check if we are already inside .github/workflows or close to it
+        # Fallback: check if we are already inside .github/workflows
+        # or close to it
         if Path(".github/workflows").exists():
             workflow_dir = Path(".github/workflows")
         else:
