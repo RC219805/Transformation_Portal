@@ -435,7 +435,7 @@ class TestMetadataEdgeCases:
             InputMetadata.from_dict(data)
 
     def test_config_fingerprint_depth_only_projection(self):
-        """Verify depth_only() projection preserves depth fields only."""
+        """Verify depth_only() projection preserves Stage A fields only."""
         config = ConfigFingerprint(
             model_variant="large",
             depth_quantization="float16",
@@ -444,6 +444,14 @@ class TestMetadataEdgeCases:
             v2_preset="enhance",
             v2_device="cuda",
             v2_upscaler_backend="realesrgan",
+            depth_backend="depth_pro",
+            quality_tier="apex",
+            materials_config={"enable_materials_v3": True},
+            pbr_config={"generate_pbr": True},
+            apex_depth_gate_config={"min_upper_iqr": 1e-4},
+            emit_master16=True,
+            emit_upscaled16=False,
+            enable_v2=True,
         )
 
         depth_only = config.depth_only()
@@ -452,9 +460,17 @@ class TestMetadataEdgeCases:
         assert depth_only.depth_quantization == "float16"
         assert depth_only.depth_device == "mps"
         assert depth_only.preset == "architectural"
+        assert depth_only.depth_backend == "depth_pro"
+        assert depth_only.quality_tier == "apex"
+        assert depth_only.materials_config == {"enable_materials_v3": True}
+        assert depth_only.pbr_config == {"generate_pbr": True}
+        assert depth_only.apex_depth_gate_config == {"min_upper_iqr": 1e-4}
+        assert depth_only.emit_master16 is True
+        assert depth_only.emit_upscaled16 is False
         assert depth_only.v2_preset is None
         assert depth_only.v2_device is None
         assert depth_only.v2_upscaler_backend is None
+        assert depth_only.enable_v2 is None
 
     def test_config_fingerprint_v2_only_projection(self):
         """Verify v2_only() projection preserves V2 fields only."""
@@ -466,6 +482,14 @@ class TestMetadataEdgeCases:
             v2_preset="enhance",
             v2_device="cuda",
             v2_upscaler_backend="realesrgan",
+            depth_backend="depth_pro",
+            quality_tier="apex",
+            materials_config={"enable_materials_v3": True},
+            pbr_config={"generate_pbr": True},
+            apex_depth_gate_config={"min_upper_iqr": 1e-4},
+            emit_master16=True,
+            emit_upscaled16=False,
+            enable_v2=True,
         )
 
         v2_only = config.v2_only()
@@ -474,6 +498,13 @@ class TestMetadataEdgeCases:
         assert v2_only.depth_quantization == ""
         assert v2_only.depth_device == ""
         assert v2_only.preset is None
+        assert v2_only.depth_backend is None
+        assert v2_only.materials_config is None
+        assert v2_only.pbr_config is None
+        assert v2_only.apex_depth_gate_config is None
         assert v2_only.v2_preset == "enhance"
         assert v2_only.v2_device == "cuda"
         assert v2_only.v2_upscaler_backend == "realesrgan"
+        assert v2_only.emit_master16 is True
+        assert v2_only.emit_upscaled16 is False
+        assert v2_only.enable_v2 is True
