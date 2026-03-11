@@ -50,7 +50,7 @@ class _DuplicateKeySafeLoader(yaml.SafeLoader):  # pylint: disable=too-many-ance
 
 
 def _construct_unique_mapping(loader: yaml.SafeLoader, node: Any, deep: bool = False) -> Dict[Any, Any]:
-    loader.flatten_mapping(node)  # preserve <<: *anchor merge-key semantics
+    loader.flatten_mapping(node)
     mapping: Dict[Any, Any] = {}
     for key_node, value_node in node.value:
         key = loader.construct_object(key_node, deep=deep)
@@ -341,7 +341,8 @@ class WorkflowParser:
             elif isinstance(needs, list):
                 needs_list = needs
             else:
-                # Malformed schema value – treat as no dependencies.
+                # If the schema is malformed (e.g., a non-list/non-str value),
+                # treat it as having no dependencies rather than raising.
                 needs_list = []
 
             for needed_job in needs_list:
