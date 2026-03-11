@@ -328,7 +328,7 @@ class WorkflowParser:
             elif isinstance(needs, str):
                 needs_list = [needs]
             elif isinstance(needs, list):
-                needs_list = needs
+                needs_list = [item for item in needs if isinstance(item, str)]
             else:
                 # If the schema is malformed (e.g., a non-list/non-str value),
                 # treat it as having no dependencies rather than raising.

@@ -42,6 +42,34 @@ jobs:
     assert any(bug.severity == "error" for bug in bugs)
 
 
+def test_job_dependencies_with_nonstring_list_elements_do_not_raise(
+    workflow_dir: Path,
+) -> None:
+    """Non-string elements in a 'needs' list must not cause TypeError."""
+    workflow = """
+name: Malformed Needs
+on: [push]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "build"
+  deploy:
+    runs-on: ubuntu-latest
+    needs:
+      - build
+      - {bad: mapping}
+    steps:
+      - run: echo "deploy"
+"""
+    (workflow_dir / "malformed_needs.yml").write_text(workflow, encoding="utf-8")
+
+    # Must not raise; non-string elements are silently skipped
+    bugs = WorkflowParser(workflow_dir).parse_all_workflows()
+
+    assert not any("Failed to parse" in bug.message for bug in bugs)
+
+
 def test_render_github_annotations_escapes_multiline_messages(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
