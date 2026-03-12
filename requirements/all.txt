@@ -38,7 +38,7 @@ backports-tarfile==1.2.0
     # via jaraco-context
 bandit==1.9.4
     # via -r requirements/ci.in
-black==26.1.0
+black==26.3.1
     # via -r requirements/dev.in
 build==1.4.0
     # via -r requirements/ci.in
