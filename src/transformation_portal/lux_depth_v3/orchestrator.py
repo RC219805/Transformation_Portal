@@ -58,6 +58,11 @@ from ..spatial_ai.reconstruction.contracts import (  # noqa: E501
     LicenseRestrictionError as ReconstructionLicenseRestrictionError,
 )
 from .batch_stats import compute_batch_runtime_stats, detect_runtime_outliers
+from ._backend_contract import (
+    normalize_backend_id,
+    normalize_backend_provenance,
+    normalize_backend_sequence,
+)
 from .camera_metadata_loader import load_scene_cameras, load_sidecar_payload
 
 # Note: Imports adjusted to relative for package context compatibility
@@ -843,7 +848,7 @@ class EnhanceOrchestrator:
         4. Optionally fallback to synthetic in explicit test/CI mode
         5. Record selection decision in metadata
         """
-        requested = self.config.depth_backend or "da3"
+        requested = normalize_backend_id(self.config.depth_backend) or "da3"
         self._depth_registry = DepthBackendRegistry()
         self._depth_backend_cache: Dict[str, Any] = {}
 
@@ -854,12 +859,11 @@ class EnhanceOrchestrator:
             )
             == "1"
         )
-        candidate_chain: List[str] = [requested]
-        for fallback_backend in ("da3", "da2"):
-            if fallback_backend not in candidate_chain:
-                candidate_chain.append(fallback_backend)
-        if allow_synthetic and "synthetic" not in candidate_chain:
-            candidate_chain.append("synthetic")
+        candidate_chain = list(
+            normalize_backend_sequence(
+                (requested, "da3", "da2", "synthetic" if allow_synthetic else None),
+            )
+        )
 
         try:
             backend = None
@@ -971,13 +975,16 @@ class EnhanceOrchestrator:
         primary_backend_id: str,
     ) -> List[str]:
         """Resolve ordered runtime fallback chain."""
-        chain: List[str] = [primary_backend_id]
+        normalized_primary_backend_id = normalize_backend_id(
+            primary_backend_id,
+        ) or "da3"
+        chain: List[str] = [normalized_primary_backend_id]
         configured_chain = getattr(
             self.config,
             "depth_operational_fallback_chain",
             ("da3", "da2"),
         )
-        for backend_id in configured_chain:
+        for backend_id in normalize_backend_sequence(configured_chain):
             if backend_id and backend_id not in chain:
                 chain.append(backend_id)
 
@@ -997,7 +1004,7 @@ class EnhanceOrchestrator:
         backend_id: str,
     ) -> str:
         """Return expected output depth units."""
-        return "meters" if backend_id == "depth_pro" else "relative"
+        return "meters" if normalize_backend_id(backend_id) == "depth_pro" else "relative"
 
     def _build_depth_cache_fingerprint(
         self,
@@ -1020,7 +1027,7 @@ class EnhanceOrchestrator:
 
     def _default_model_id_for_backend(self, backend_id: str) -> str:
         """Return canonical backend model identifier for provenance."""
-        normalized_backend = str(backend_id or "").strip().lower()
+        normalized_backend = normalize_backend_id(backend_id) or ""
         if normalized_backend == "depth_pro":
             return "apple/ml-depth-pro"
         if normalized_backend == "da2":
@@ -1300,8 +1307,13 @@ class EnhanceOrchestrator:
         selected_attempt_index: Optional[int] = None,
     ) -> BackendSelectionMetadata:
         """Build per-image backend selection metadata."""
-        requested = self._backend_metadata.requested_backend or self._backend_metadata.resolved_backend
-        resolution_status = "success" if selected_backend == requested else "fallback"
+        normalized_selected_backend = normalize_backend_id(
+            selected_backend,
+        ) or selected_backend
+        requested = normalize_backend_provenance(
+            self._backend_metadata.requested_backend or self._backend_metadata.resolved_backend,
+        )
+        resolution_status = "success" if normalized_selected_backend == requested else "fallback"
         resolution_reason: Optional[str] = None
         if resolution_status == "fallback":
             failed = [attempt for attempt in attempts if attempt.get("status") == "failed"]
@@ -1318,29 +1330,29 @@ class EnhanceOrchestrator:
                 resolution_reason = (
                     f"Fallback from"
                     f" '{requested}' to"
-                    f" '{selected_backend}'"
+                    f" '{normalized_selected_backend}'"
                     f" after {failure_kind}"
                     f" failure ({failure_code})"
                 )
             else:
-                resolution_reason = f"Fallback from" f" '{requested}'" f" to '{selected_backend}'"
+                resolution_reason = f"Fallback from" f" '{requested}'" f" to '{normalized_selected_backend}'"
 
         model_id = self._extract_model_id_from_attempts(
-            selected_backend,
+            normalized_selected_backend,
             attempts,
             selected_attempt_index=selected_attempt_index,
         )
         if not model_id:
             backend_cache = getattr(self, "_depth_backend_cache", {})
             model_id = self._resolve_backend_model_id(
-                selected_backend,
+                normalized_selected_backend,
                 result_metadata=result_metadata,
-                backend=backend_cache.get(selected_backend),
+                backend=backend_cache.get(normalized_selected_backend),
             )
 
         return BackendSelectionMetadata(
             requested_backend=requested,
-            resolved_backend=selected_backend,
+            resolved_backend=normalized_selected_backend,
             resolution_status=resolution_status,
             resolution_reason=resolution_reason,
             model_id=str(model_id),
@@ -1415,6 +1427,7 @@ class EnhanceOrchestrator:
             "preset": self.config.preset.value if self.config.preset else None,
             "depth_backend": self.config.depth_backend,
             "depth_pro_checkpoint_path": self.config.depth_pro_checkpoint_path,
+            "depth_pro_python_executable": self.config.depth_pro_python_executable,
         }
 
     def compute_config_fingerprint(self) -> ConfigFingerprint:
@@ -1428,6 +1441,7 @@ class EnhanceOrchestrator:
             v2_upscaler_backend=self.config.v2_upscaler_backend,
             depth_backend=self.config.depth_backend,
             depth_pro_checkpoint_path=self.config.depth_pro_checkpoint_path,
+            depth_pro_python_executable=self.config.depth_pro_python_executable,
             quality_tier=str(self.config.quality_tier),
             materials_config=self._build_materials_fingerprint_payload(),
             pbr_config=self._build_pbr_fingerprint_payload(),
@@ -1462,6 +1476,7 @@ class EnhanceOrchestrator:
             "v2_preset": base.v2_preset,
             "v2_device": base.v2_device,
             "v2_upscaler_backend": base.v2_upscaler_backend,
+            "depth_pro_python_executable": base.depth_pro_python_executable,
             "preset_requested": preset_requested,
             "preset_resolved": preset_resolved,
             "backend_requested": requested_backend,
@@ -1726,10 +1741,7 @@ class EnhanceOrchestrator:
     @staticmethod
     def _normalize_backend_provenance(value: Any) -> Optional[str]:
         """Normalize backend provenance identifiers for reuse checks."""
-        if not isinstance(value, str):
-            return None
-        normalized = value.strip().lower()
-        return normalized or None
+        return normalize_backend_provenance(value)
 
     @staticmethod
     def _has_expanded_stage_a_fingerprint(

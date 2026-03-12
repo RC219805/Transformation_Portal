@@ -25,13 +25,15 @@ def test_sam2_backend_import():
     assert SAM2Backend is not None
 
 
-def test_sam2_backend_init_requires_checkpoint():
+def test_sam2_backend_init_requires_checkpoint(tmp_path):
     """Test SAM2Backend requires checkpoint file."""
     from transformation_portal.spatial_ai.segmentation.sam2_backend import SAM2Backend
 
-    # Without checkpoint, should raise FileNotFoundError
+    missing_checkpoint = tmp_path / "missing_sam2_checkpoint.pt"
+
+    # An explicitly missing checkpoint should raise FileNotFoundError.
     with pytest.raises(FileNotFoundError, match="SAM2 checkpoint not found"):
-        SAM2Backend(model_size="base", device="cpu")
+        SAM2Backend(model_size="base", checkpoint_path=str(missing_checkpoint), device="cpu")
 
 
 def test_sam2_backend_init_with_checkpoint():

@@ -298,6 +298,7 @@ class TestGeometricValidator:
 
         # Check quality grade
         assert results["quality_grade"] in ["A", "B", "C", "D", "F"]
+        assert isinstance(results["rmse_pass"], bool)
 
     def test_quality_grading(self):
         """Test quality grade assignment."""

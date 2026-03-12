@@ -26,7 +26,7 @@ python -m transformation_portal.lux_depth_v3 [options]
 
 ## Commercial-Safe APEX Mode
 
-The commercial-safe APEX mode uses commercially-licensed depth backends (Depth Anything V3 with Apache 2.0 license) and provides the highest quality output for production use.
+The commercial-safe APEX mode uses the canonical `da3` production backend and provides the highest quality output for production use.
 
 ### Basic APEX Command
 
@@ -36,7 +36,7 @@ lux-depth-v3 \
   --output-dir "./output/lux_depth_v3_apex" \
   --preset "premium" \
   --quality-tier "apex" \
-  --depth-backend "depth_anything_v3" \
+  --depth-backend "da3" \
   --materials-v3 "on" \
   --pbr "on" \
   --cache-depth "on" \
@@ -153,7 +153,7 @@ lux-depth-v3 \
 ### Depth Backend Configuration
 
 - `--depth-backend TEXT`: Depth estimation backend
-  - Options: `depth_anything_v3` (default, commercial), `depth_pro` (research-only)
+  - Options: `da3` (default, commercial-safe), `depth_pro` (research-only)
 - `--depth-device TEXT`: Device for depth inference (default: `cpu`)
   - Options: `cpu`, `cuda`, `mps`
 

@@ -84,12 +84,18 @@ curl -L https://ml-site.cdn-apple.com/models/depth-pro/depth_pro.pt -o checkpoin
 
 | Package | Purpose | Install |
 |---------|---------|---------|
-| `depth-pro` | Apple's inference package | `pip install depth-pro` |
+| `depth-pro` | Apple's inference package | `./.venv-depth-pro/bin/python -m pip install depth-pro` |
 | `torch` | ML backend | Already in ML extras |
 
-**Note:** `depth-pro` is NOT added to core dependencies. Users must install explicitly:
+**Note:** `depth-pro` is NOT added to core dependencies and should live in a
+dedicated environment to avoid downgrading the main repo to `numpy<2`:
 ```bash
-pip install depth-pro
+python3 -m venv .venv-depth-pro
+./.venv-depth-pro/bin/python -m pip install --upgrade pip
+./.venv-depth-pro/bin/python -m pip install depth-pro
+
+# Wire the isolated env into Transformation Portal
+export TRANSFORMATION_PORTAL_DEPTH_PRO_PYTHON=./.venv-depth-pro/bin/python
 ```
 
 ### Output Contract
@@ -251,9 +257,10 @@ Depth Pro may be promoted from **experimental** to **canary** tier when:
 **No changes required.** DA3 remains default. Depth Pro is opt-in only.
 
 ### For Experimental Users (PR2+)
-1. Install `depth-pro`: `pip install depth-pro`
+1. Create a dedicated Depth Pro environment and install `depth-pro` there
 2. Download checkpoint: `curl -L <url> -o checkpoints/depth_pro.pt`
-3. Use preset: `--preset depth-pro-example` or `depth_backend: depth_pro`
+3. Set `TRANSFORMATION_PORTAL_DEPTH_PRO_PYTHON` or pass `--depth-pro-python`
+4. Use preset: `--preset depth-pro-example` or `depth_backend: depth_pro`
 
 ### For Future Promotion
 If promoted to canary/stable:

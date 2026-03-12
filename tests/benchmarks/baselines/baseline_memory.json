@@ -1,0 +1,14 @@
+{
+  "baseline_rss_mb": 248.859375,
+  "fixture": "1024x768",
+  "incremental_mb": 77.1875,
+  "measurement_semantic": "processing_only",
+  "measurement_type": "peak_rss_polled",
+  "megapixels": 0.786432,
+  "peak_rss_mb": 326.046875,
+  "per_mp_mb": 98.14898173014322,
+  "post_processing_rss_mb": 326.015625,
+  "sample_count": 49,
+  "sampling_interval_s": 0.005,
+  "test": "memory_baseline"
+}

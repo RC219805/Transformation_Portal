@@ -169,6 +169,34 @@ class TestSAM2BackendPromptedMode:
                 mock_prompted.assert_called_once_with(seg_input)
                 assert result.masks.shape[0] == 1
 
+    def test_segment_prompted_orders_multimask_results_by_score(self, mock_checkpoint):
+        """Prompted mode should expose the highest-confidence proposal first."""
+        from transformation_portal.spatial_ai.segmentation.sam2_backend import SAM2Backend
+
+        backend = SAM2Backend(model_size="base", checkpoint_path=str(mock_checkpoint), device="cpu")
+        backend._image_predictor = Mock()
+
+        masks = np.zeros((3, 64, 64), dtype=np.float32)
+        masks[0, 31:33, 31:33] = 1.0
+        masks[1, 12:52, 12:52] = 1.0
+        masks[2, 20:44, 20:44] = 1.0
+        scores = np.array([0.10, 0.95, 0.60], dtype=np.float32)
+
+        backend._image_predictor.predict.return_value = (masks, scores, None)
+
+        seg_input = SegmentationInput(
+            image=np.random.rand(64, 64, 3).astype(np.float32),
+            gamma=1.0,
+            mode="points",
+            prompts={"points": [[32, 32]], "labels": [1]},
+        )
+
+        result = backend._segment_prompted(seg_input)
+
+        assert result.scores.tolist() == pytest.approx([0.95, 0.60, 0.10])
+        assert result.metadata[0].area == 1600
+        assert result.masks[0].sum() == 1600
+
 
 class TestSAM2BackendVideoMode:
     """Test video mode by mocking internal _segment_video method."""

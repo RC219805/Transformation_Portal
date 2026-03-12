@@ -70,6 +70,7 @@ Usage:
         --quality-tier "apex" \\
         --preset "apple-depth-pro-research" \\
         --depth-backend "depth_pro" \\
+        --depth-pro-python "./.venv-depth-pro/bin/python" \\
         --non-commercial-ok "true" \\
         --accept-apple-depth-pro-research-license "true" \\
         --depth-device "mps" \\
@@ -89,6 +90,7 @@ Usage:
         --output-dir "./output/lux_depth_v3_with_reconstruction" \\
         --quality-tier "apex" \\
         --depth-backend "depth_pro" \\
+        --depth-pro-python "./.venv-depth-pro/bin/python" \\
         --materials-v3 "on" \\
         --enable-segmentation "on" \\
         --segmentation-backend "sam2" \\
@@ -155,6 +157,11 @@ except ImportError:
     )
     sys.exit(1)
 
+from ._backend_contract import (
+    backend_alias_warning,
+    is_legacy_backend_alias,
+    normalize_backend_id,
+)
 from .config import EnhanceConfig, Preset
 from .orchestrator import EnhanceOrchestrator
 
@@ -238,6 +245,14 @@ def main(
         None,
         "--depth-backend",
         help=("Depth backend: da3 (default, commercial), depth_pro " "(research-only, metric depth)"),
+    ),
+    depth_pro_python: Optional[str] = typer.Option(
+        None,
+        "--depth-pro-python",
+        help=(
+            "Optional Python executable for an isolated Depth Pro environment. "
+            "Use this to keep depth_pro out of the main Transformation Portal venv."
+        ),
     ),
     depth_device: str = typer.Option(
         "cpu",
@@ -521,6 +536,10 @@ def main(
 
     # Parse V2 preset (convert "none" string to None for skipping V2)
     v2_preset_value = None if (v2_preset and v2_preset.lower() == "none") else v2_preset
+    legacy_depth_backend = depth_backend if is_legacy_backend_alias(depth_backend) else None
+    depth_backend = normalize_backend_id(depth_backend)
+    if legacy_depth_backend:
+        logger.warning(backend_alias_warning(str(legacy_depth_backend).strip(), str(depth_backend)))
 
     # Validate input directory
     if not input_dir.exists():
@@ -724,6 +743,7 @@ def main(
         non_commercial_ok=enable_non_commercial,
         accept_apple_depth_pro_research_license=enable_apple_license,
         accept_research_tools_license=enable_research_tools_license,
+        depth_pro_python_executable=depth_pro_python,
         force_depth=force_depth or overwrite,
         enable_depth_cache=enable_cache_depth,
         enable_v2=enable_v2_bool,

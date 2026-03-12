@@ -15,7 +15,7 @@ def test_backend_selection_metadata_schema():
     """Test BackendSelectionMetadata schema."""
     metadata = BackendSelectionMetadata(
         requested_backend="da3",
-        resolved_backend="depth_anything_v3",
+        resolved_backend="da3",
         resolution_status="success",
         resolution_reason=None,
         model_id="depth-anything/DA3NESTED-GIANT-LARGE-1.1",
@@ -23,7 +23,7 @@ def test_backend_selection_metadata_schema():
     )
 
     assert metadata.requested_backend == "da3"
-    assert metadata.resolved_backend == "depth_anything_v3"
+    assert metadata.resolved_backend == "da3"
     assert metadata.resolution_status == "success"
     assert metadata.resolution_reason is None
     assert metadata.schema_version == "1.0"
@@ -33,7 +33,7 @@ def test_backend_selection_serialization_roundtrip():
     """Test BackendSelectionMetadata serialization/deserialization."""
     metadata = BackendSelectionMetadata(
         requested_backend="depth_pro",
-        resolved_backend="depth_anything_v3",
+        resolved_backend="da3",
         resolution_status="fallback",
         resolution_reason="Requested 'depth_pro' not available",
         model_id="depth-anything/DA3NESTED-GIANT-LARGE-1.1",
@@ -58,7 +58,7 @@ def test_backend_selection_metadata_success_path():
     """Test backend selection when requested matches resolved."""
     metadata = BackendSelectionMetadata(
         requested_backend=None,  # Auto-select
-        resolved_backend="depth_anything_v3",
+        resolved_backend="da3",
         resolution_status="success",
         resolution_reason=None,
         model_id="depth-anything/DA3NESTED-GIANT-LARGE-1.1",
@@ -72,16 +72,16 @@ def test_backend_selection_metadata_success_path():
 def test_backend_selection_metadata_explicit_da3():
     """Test backend selection when user explicitly requests DA3."""
     metadata = BackendSelectionMetadata(
-        requested_backend="depth_anything_v3",
-        resolved_backend="depth_anything_v3",
+        requested_backend="da3",
+        resolved_backend="da3",
         resolution_status="success",
         resolution_reason=None,
         model_id="depth-anything/DA3NESTED-GIANT-LARGE-1.1",
         device="mps",
     )
 
-    assert metadata.requested_backend == "depth_anything_v3"
-    assert metadata.resolved_backend == "depth_anything_v3"
+    assert metadata.requested_backend == "da3"
+    assert metadata.resolved_backend == "da3"
     assert metadata.resolution_status == "success"
 
 
@@ -89,24 +89,24 @@ def test_backend_selection_metadata_fallback():
     """Test backend selection when fallback occurs."""
     metadata = BackendSelectionMetadata(
         requested_backend="depth_pro",
-        resolved_backend="depth_anything_v3",
+        resolved_backend="da3",
         resolution_status="fallback",
-        resolution_reason="Requested 'depth_pro' not available, using 'depth_anything_v3' (ADR-019 not yet implemented)",
+        resolution_reason="Requested 'depth_pro' not available, using 'da3'",
         model_id="depth-anything/DA3NESTED-GIANT-LARGE-1.1",
         device="cpu",
     )
 
     assert metadata.requested_backend == "depth_pro"
-    assert metadata.resolved_backend == "depth_anything_v3"
+    assert metadata.resolved_backend == "da3"
     assert metadata.resolution_status == "fallback"
-    assert "ADR-019 not yet implemented" in metadata.resolution_reason
+    assert "using 'da3'" in metadata.resolution_reason
 
 
 def test_manifest_includes_backend_selection(tmp_path):
     """Test CombinedManifest includes backend_selection field."""
     backend_metadata = BackendSelectionMetadata(
         requested_backend="da3",
-        resolved_backend="depth_anything_v3",
+        resolved_backend="da3",
         resolution_status="success",
         resolution_reason=None,
         model_id="depth-anything/DA3NESTED-GIANT-LARGE-1.1",
@@ -124,7 +124,7 @@ def test_manifest_includes_backend_selection(tmp_path):
         data = json.load(f)
 
     assert "backend_selection" in data
-    assert data["backend_selection"]["resolved_backend"] == "depth_anything_v3"
+    assert data["backend_selection"]["resolved_backend"] == "da3"
     assert data["backend_selection"]["resolution_status"] == "success"
 
 
@@ -160,7 +160,7 @@ def test_backend_selection_unsupported_schema():
     """Test that unsupported schema version raises ValueError."""
     data = {
         "requested_backend": "da3",
-        "resolved_backend": "depth_anything_v3",
+        "resolved_backend": "da3",
         "resolution_status": "success",
         "resolution_reason": None,
         "model_id": "depth-anything/DA3NESTED-GIANT-LARGE-1.1",
@@ -176,7 +176,7 @@ def test_manifest_serialization_with_backend_selection(tmp_path):
     """Test full manifest serialization roundtrip with backend_selection."""
     backend_metadata = BackendSelectionMetadata(
         requested_backend="da3",
-        resolved_backend="depth_anything_v3",
+        resolved_backend="da3",
         resolution_status="success",
         resolution_reason=None,
         model_id="depth-anything/DA3NESTED-GIANT-LARGE-1.1",
@@ -191,5 +191,23 @@ def test_manifest_serialization_with_backend_selection(tmp_path):
     loaded = CombinedManifest.load(manifest_path)
 
     assert loaded.backend_selection is not None
-    assert loaded.backend_selection.resolved_backend == "depth_anything_v3"
+    assert loaded.backend_selection.resolved_backend == "da3"
     assert loaded.backend_selection.resolution_status == "success"
+
+
+def test_backend_selection_from_legacy_manifest_alias_normalizes_to_canonical():
+    """Legacy alias values should deserialize to canonical backend IDs."""
+    metadata = BackendSelectionMetadata.from_dict(
+        {
+            "requested_backend": "depth_anything_v3",
+            "resolved_backend": "depth-anything-v3",
+            "resolution_status": "success",
+            "resolution_reason": None,
+            "model_id": "depth-anything/DA3NESTED-GIANT-LARGE-1.1",
+            "device": "cpu",
+            "schema_version": "1.0",
+        }
+    )
+
+    assert metadata.requested_backend == "da3"
+    assert metadata.resolved_backend == "da3"

@@ -105,6 +105,22 @@ class TestEnhanceConfig:
         config = EnhanceConfig(depth_fallback=mode)
         assert config.depth_fallback == mode
 
+    def test_enhance_config_normalizes_legacy_depth_backend_alias(self):
+        """Legacy backend aliases should normalize to canonical IDs."""
+        with pytest.warns(FutureWarning, match="depth_anything_v3"):
+            config = EnhanceConfig(depth_backend="depth_anything_v3")
+
+        assert config.depth_backend == "da3"
+
+    def test_enhance_config_normalizes_fallback_chain_aliases(self):
+        """Fallback chains should normalize aliases and deduplicate canonical IDs."""
+        with pytest.warns(FutureWarning, match="depth-anything-v3"):
+            config = EnhanceConfig(
+                depth_operational_fallback_chain=("depth-anything-v3", "da2", "da3"),
+            )
+
+        assert config.depth_operational_fallback_chain == ("da3", "da2")
+
     def test_enhance_config_all_required_fields_present(self):
         """Test that EnhanceConfig has all fields used by orchestrator."""
         config = EnhanceConfig()

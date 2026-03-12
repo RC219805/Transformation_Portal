@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple
 
+from ._backend_contract import normalize_backend_id, normalize_backend_sequence
 from .security import HashMode
 
 if TYPE_CHECKING:
@@ -221,6 +222,9 @@ class EnhanceConfig:
     depth_backend: Optional[str] = None
     # Path to depth_pro.pt checkpoint
     depth_pro_checkpoint_path: Optional[str] = None
+    # Optional Python executable for a
+    # dedicated Depth Pro environment
+    depth_pro_python_executable: Optional[str] = None
 
     # Fallback configuration
     depth_fallback: str = "fail"  # Options: "fail", "skip", "v2-auto"
@@ -380,6 +384,19 @@ class EnhanceConfig:
     # Emit per-scene debug bundle for
     # reconstruction triage
     emit_scene_debug_bundle: bool = False
+
+    def __post_init__(self) -> None:
+        """Normalize backend identifiers and compatibility fields."""
+        self.depth_backend = normalize_backend_id(
+            self.depth_backend,
+            warn=True,
+            warning_context="EnhanceConfig.depth_backend",
+        )
+        self.depth_operational_fallback_chain = normalize_backend_sequence(
+            self.depth_operational_fallback_chain or ("da3", "da2"),
+            warn=True,
+            warning_context="EnhanceConfig.depth_operational_fallback_chain",
+        )
 
     @property
     def enable_pbr(self) -> bool:

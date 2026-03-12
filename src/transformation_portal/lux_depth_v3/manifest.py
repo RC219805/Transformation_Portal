@@ -16,6 +16,10 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from transformation_portal.ingest.canonical_json import dump_json, to_jsonable
+from transformation_portal.lux_depth_v3._backend_contract import (
+    normalize_backend_id,
+    normalize_backend_provenance,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -183,6 +187,29 @@ class BackendSelectionMetadata:
     attempts: Optional[List[Dict[str, Any]]] = None
     schema_version: str = "1.0"
 
+    def __post_init__(self) -> None:
+        """Normalize emitted backend identifiers to canonical IDs."""
+        self.requested_backend = normalize_backend_provenance(
+            self.requested_backend,
+        )
+        normalized_resolved = normalize_backend_provenance(self.resolved_backend)
+        if normalized_resolved:
+            self.resolved_backend = normalized_resolved
+        if self.attempts:
+            normalized_attempts: List[Dict[str, Any]] = []
+            for attempt in self.attempts:
+                if not isinstance(attempt, dict):
+                    normalized_attempts.append(attempt)
+                    continue
+                normalized_attempt = dict(attempt)
+                normalized_backend = normalize_backend_id(
+                    normalized_attempt.get("backend"),
+                )
+                if normalized_backend:
+                    normalized_attempt["backend"] = normalized_backend
+                normalized_attempts.append(normalized_attempt)
+            self.attempts = normalized_attempts
+
     def to_dict(self) -> Dict[str, Any]:
         """Serialize to dictionary."""
         return asdict(self)
@@ -287,6 +314,7 @@ class ConfigFingerprint:
     v2_upscaler_backend: Optional[str] = None
     depth_backend: Optional[str] = None
     depth_pro_checkpoint_path: Optional[str] = None
+    depth_pro_python_executable: Optional[str] = None
     quality_tier: Optional[str] = None
     materials_config: Optional[Dict[str, Any]] = None
     pbr_config: Optional[Dict[str, Any]] = None
@@ -309,6 +337,7 @@ class ConfigFingerprint:
             preset=self.preset,
             depth_backend=self.depth_backend,
             depth_pro_checkpoint_path=self.depth_pro_checkpoint_path,
+            depth_pro_python_executable=self.depth_pro_python_executable,
             quality_tier=self.quality_tier,
             materials_config=self.materials_config,
             pbr_config=self.pbr_config,
@@ -333,6 +362,7 @@ class ConfigFingerprint:
             v2_upscaler_backend=self.v2_upscaler_backend,
             depth_backend=None,
             depth_pro_checkpoint_path=None,
+            depth_pro_python_executable=None,
             quality_tier=None,
             materials_config=None,
             pbr_config=None,

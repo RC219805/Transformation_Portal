@@ -18,8 +18,11 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
+import sys
 import threading
 import time
+import textwrap
 from pathlib import Path
 
 import numpy as np
@@ -27,12 +30,19 @@ import pytest
 from PIL import Image
 
 # Import lux_depth_v3 components
+from transformation_portal.lux_depth_v3._benchmark_contract import (
+    assert_regression_within_tolerance,
+    load_benchmark_metrics,
+    write_benchmark_metrics,
+)
 from transformation_portal.lux_depth_v3.config import EnhanceConfig, ModelVariant
 from transformation_portal.lux_depth_v3.input_manager import ImageInput
 from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
 
 # Mark all tests as benchmark tier
 pytestmark = [pytest.mark.benchmark]
+BASELINES_DIR = Path(__file__).with_name("baselines")
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 # ============================================================================
@@ -136,6 +146,146 @@ def validate_output_invariants(depth_map):
         assert np.all(depth_map >= 0), "Depth map has negative values"
         # No strict upper bound for float depth, but check for sanity
         assert np.all(depth_map < 1e6), "Depth map has unreasonably large values"
+
+
+def committed_baseline_path(filename: str) -> Path:
+    """Return path to a committed benchmark baseline fixture."""
+    return BASELINES_DIR / filename
+
+
+def write_runtime_baseline(tmp_path: Path, filename: str, payload: dict) -> None:
+    """Persist runtime metrics for debugging and local comparison."""
+    artifacts_dir = Path(
+        os.environ.get(
+            "BENCHMARK_ARTIFACTS_DIR",
+            tmp_path / "benchmark_results",
+        )
+    )
+    write_benchmark_metrics(artifacts_dir / filename, payload)
+
+
+def measure_memory_baseline_subprocess(fixture_path: Path, input_root: Path, output_dir: Path) -> dict:
+    """Measure processing RSS in a fresh subprocess to avoid in-worker memory drift."""
+    script = textwrap.dedent(
+        """
+        import json
+        import threading
+        from pathlib import Path
+
+        import psutil
+
+        from transformation_portal.lux_depth_v3.config import EnhanceConfig, ModelVariant
+        from transformation_portal.lux_depth_v3.input_manager import ImageInput
+        from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
+
+
+        class PeakRSSTracker:
+            def __init__(self, process, interval: float = 0.005):
+                self.process = process
+                self.interval = interval
+                self.peak_rss_bytes = 0
+                self.samples = 0
+                self._stop = threading.Event()
+                self._ready = threading.Event()
+                self._thread = None
+
+            def __enter__(self):
+                self.peak_rss_bytes = self.process.memory_info().rss
+                self.samples = 0
+                self._stop.clear()
+                self._ready.clear()
+                self._thread = threading.Thread(target=self._poll, daemon=True)
+                self._thread.start()
+                timeout = max(0.05, self.interval * 10)
+                if not self._ready.wait(timeout=timeout):
+                    self._stop.set()
+                    if self._thread is not None:
+                        self._thread.join(timeout=1.0)
+                    raise RuntimeError(
+                        f"PeakRSSTracker first-sample barrier timed out after {timeout}s"
+                    )
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                self._stop.set()
+                if self._thread is not None:
+                    self._thread.join(timeout=1.0)
+                self._sample()
+                return False
+
+            def _poll(self):
+                self._sample()
+                self._ready.set()
+                while not self._stop.wait(self.interval):
+                    self._sample()
+
+            def _sample(self):
+                try:
+                    rss = self.process.memory_info().rss
+                except (ProcessLookupError, PermissionError):
+                    return
+                self.samples += 1
+                if rss > self.peak_rss_bytes:
+                    self.peak_rss_bytes = rss
+
+            @property
+            def peak_rss_mb(self):
+                return self.peak_rss_bytes / 1024 / 1024
+
+
+        fixture_path = Path(__import__("sys").argv[1])
+        input_root = Path(__import__("sys").argv[2])
+        output_dir = Path(__import__("sys").argv[3])
+
+        process = psutil.Process()
+        config = EnhanceConfig(
+            model_variant=ModelVariant.METRIC_LARGE,
+            enable_v2=False,
+            generate_pbr=False,
+            enable_manifest_cache=False,
+            allow_synthetic_fallback=True,
+            depth_backend="synthetic",
+        )
+        orchestrator = EnhanceOrchestrator(config=config, output_root=output_dir)
+        baseline_rss_mb = process.memory_info().rss / 1024 / 1024
+
+        with PeakRSSTracker(process) as tracker:
+            result = orchestrator.enhance_image(ImageInput(path=fixture_path), input_root=input_root)
+
+        if result["status"] != "ok":
+            raise RuntimeError(f"Unexpected benchmark status: {result}")
+
+        peak_rss_mb = tracker.peak_rss_mb
+        post_rss_mb = process.memory_info().rss / 1024 / 1024
+        print(
+            json.dumps(
+                {
+                    "baseline_rss_mb": baseline_rss_mb,
+                    "peak_rss_mb": peak_rss_mb,
+                    "post_processing_rss_mb": post_rss_mb,
+                    "incremental_mb": peak_rss_mb - baseline_rss_mb,
+                    "sampling_interval_s": tracker.interval,
+                    "sample_count": tracker.samples,
+                },
+                sort_keys=True,
+            )
+        )
+        """
+    )
+    pythonpath_entries = [str(REPO_ROOT / "src")]
+    existing_pythonpath = os.environ.get("PYTHONPATH")
+    if existing_pythonpath:
+        pythonpath_entries.append(existing_pythonpath)
+    env = {**os.environ, "PYTHONPATH": os.pathsep.join(pythonpath_entries)}
+    completed = subprocess.run(
+        [sys.executable, "-c", script, str(fixture_path), str(input_root), str(output_dir)],
+        check=True,
+        capture_output=True,
+        text=True,
+        cwd=REPO_ROOT,
+        env=env,
+    )
+    return json.loads(completed.stdout.strip().splitlines()[-1])
 
 
 class PeakRSSTracker:
@@ -274,17 +424,17 @@ class TestLuxDepthV3PerformanceBaseline:
         }
 
         # Write to artifacts (env-configurable location for baseline persistence)
-        artifacts_dir = Path(os.environ.get("BENCHMARK_ARTIFACTS_DIR", tmp_path / "benchmark_results"))
-        artifacts_dir.mkdir(parents=True, exist_ok=True)
-        with open(artifacts_dir / "baseline_cold_start.json", "w") as f:
-            json.dump(baseline_json, f, indent=2)
-
-        # Relaxed sanity check: warn if extremely slow (allows for CI runner variance)
-        # Note: Absolute thresholds removed per architectural review
-        # TODO L0.2: Implement baseline comparison with % tolerance
-        if stats["p95"] > 1.0:
-            print(f"⚠️  Warning: p95 latency unusually high: {stats['p95']*1000:.1f}ms (threshold: 1000ms)")
-            print("    This may indicate CI runner performance issues, not code regression")
+        write_runtime_baseline(tmp_path, "baseline_cold_start.json", baseline_json)
+        committed_baseline = load_benchmark_metrics(
+            committed_baseline_path("baseline_cold_start.json"),
+        )
+        assert_regression_within_tolerance(
+            label="Cold-start p95",
+            measured_value=baseline_json["p95_ms"],
+            baseline_value=float(committed_baseline["p95_ms"]),
+            tolerance_fraction=0.25,
+            unit="ms",
+        )
 
     @pytest.mark.benchmark
     def test_single_image_steady_state_p95(self, tmp_path, synthetic_images, benchmark_config):
@@ -346,14 +496,17 @@ class TestLuxDepthV3PerformanceBaseline:
             "measurement_type": "steady_state",
         }
 
-        artifacts_dir = Path(os.environ.get("BENCHMARK_ARTIFACTS_DIR", tmp_path / "benchmark_results"))
-        artifacts_dir.mkdir(parents=True, exist_ok=True)
-        with open(artifacts_dir / "baseline_steady_state.json", "w") as f:
-            json.dump(baseline_json, f, indent=2)
-
-        # Relaxed sanity check
-        if stats["p95"] > 1.0:
-            print(f"⚠️  Warning: p95 latency unusually high: {stats['p95']*1000:.1f}ms (threshold: 1000ms)")
+        write_runtime_baseline(tmp_path, "baseline_steady_state.json", baseline_json)
+        committed_baseline = load_benchmark_metrics(
+            committed_baseline_path("baseline_steady_state.json"),
+        )
+        assert_regression_within_tolerance(
+            label="Steady-state p95",
+            measured_value=baseline_json["p95_ms"],
+            baseline_value=float(committed_baseline["p95_ms"]),
+            tolerance_fraction=0.20,
+            unit="ms",
+        )
 
     @pytest.mark.benchmark
     def test_batch_throughput_baseline(self, tmp_path, synthetic_images, benchmark_config):
@@ -405,14 +558,17 @@ class TestLuxDepthV3PerformanceBaseline:
             "measurement_type": "batch_throughput",
         }
 
-        artifacts_dir = Path(os.environ.get("BENCHMARK_ARTIFACTS_DIR", tmp_path / "benchmark_results"))
-        artifacts_dir.mkdir(parents=True, exist_ok=True)
-        with open(artifacts_dir / "baseline_batch.json", "w") as f:
-            json.dump(baseline_json, f, indent=2)
-
-        # Relaxed sanity check
-        if batch_elapsed > 5.0:
-            print(f"⚠️  Warning: batch processing unusually slow: {batch_elapsed*1000:.1f}ms (threshold: 5000ms)")
+        write_runtime_baseline(tmp_path, "baseline_batch.json", baseline_json)
+        committed_baseline = load_benchmark_metrics(
+            committed_baseline_path("baseline_batch.json"),
+        )
+        assert_regression_within_tolerance(
+            label="Batch total runtime",
+            measured_value=baseline_json["total_ms"],
+            baseline_value=float(committed_baseline["total_ms"]),
+            tolerance_fraction=0.20,
+            unit="ms",
+        )
 
     @pytest.mark.benchmark
     def test_output_invariants_smoke(self, tmp_path, synthetic_images, benchmark_config):
@@ -462,42 +618,35 @@ class TestLuxDepthV3PerformanceBaseline:
         print(f"✓ Output invariants verified for {len(synthetic_images)} fixtures")
 
     @pytest.mark.benchmark
-    def test_memory_peak_rss_baseline(self, tmp_path, synthetic_images, benchmark_config):
+    def test_memory_peak_rss_baseline(self, tmp_path, synthetic_images):
         """Establish baseline for peak RSS memory during image processing.
 
         Measures processing-only peak RSS: baseline is taken AFTER orchestrator
         construction so that ``incremental_mb`` reflects only the memory used by
         ``enhance_image()``, not one-time initialization overhead.
 
-        Uses PeakRSSTracker (polling thread with first-sample barrier) to sample
-        RSS at ~5ms intervals and record the high-water mark.
+        Runs in a fresh subprocess so RSS is not polluted by previous tests in
+        the same pytest worker.
         """
         try:
             import psutil
         except ImportError:
             pytest.skip("psutil not available (requires ML dependencies)")
 
-        import os as os_module
-
-        process = psutil.Process(os_module.getpid())
-
-        output_dir = tmp_path / "output_memory"
-        orchestrator = EnhanceOrchestrator(config=benchmark_config, output_root=output_dir)
-
-        # Baseline RSS after orchestrator construction (processing-only window)
-        baseline_rss_mb = process.memory_info().rss / 1024 / 1024
-
         # Process largest fixture with peak RSS tracking
         fixture = synthetic_images[2]  # 1024x768
-        img_input = ImageInput(path=fixture["path"])
-
-        with PeakRSSTracker(process) as tracker:
-            result = orchestrator.enhance_image(img_input, input_root=tmp_path)
-        assert result["status"] == "ok"
-
-        peak_rss_mb = tracker.peak_rss_mb
-        post_rss_mb = process.memory_info().rss / 1024 / 1024
-        incremental_mb = peak_rss_mb - baseline_rss_mb
+        output_dir = tmp_path / "output_memory"
+        measurement = measure_memory_baseline_subprocess(
+            fixture_path=fixture["path"],
+            input_root=tmp_path,
+            output_dir=output_dir,
+        )
+        baseline_rss_mb = float(measurement["baseline_rss_mb"])
+        peak_rss_mb = float(measurement["peak_rss_mb"])
+        post_rss_mb = float(measurement["post_processing_rss_mb"])
+        incremental_mb = float(measurement["incremental_mb"])
+        sample_count = int(measurement["sample_count"])
+        sampling_interval_s = float(measurement["sampling_interval_s"])
 
         print(f"\n{'='*60}")
         print(f"Memory Baseline ({fixture['width']}x{fixture['height']}, {fixture['megapixels']:.2f}MP)")
@@ -506,7 +655,7 @@ class TestLuxDepthV3PerformanceBaseline:
         print(f"  Post-processing RSS: {post_rss_mb:.1f}MB")
         print(f"  Incremental (peak - baseline): {incremental_mb:.1f}MB")
         print(f"  Per MP: {incremental_mb / fixture['megapixels']:.1f}MB/MP")
-        print(f"  Samples: {tracker.samples}")
+        print(f"  Samples: {sample_count}")
         print("  Semantic: processing-only (excludes orchestrator init)")
         print(f"{'='*60}\n")
 
@@ -522,18 +671,21 @@ class TestLuxDepthV3PerformanceBaseline:
             "per_mp_mb": incremental_mb / fixture["megapixels"],
             "measurement_type": "peak_rss_polled",
             "measurement_semantic": "processing_only",
-            "sampling_interval_s": tracker.interval,
-            "sample_count": tracker.samples,
+            "sampling_interval_s": sampling_interval_s,
+            "sample_count": sample_count,
         }
 
-        artifacts_dir = Path(os.environ.get("BENCHMARK_ARTIFACTS_DIR", tmp_path / "benchmark_results"))
-        artifacts_dir.mkdir(parents=True, exist_ok=True)
-        with open(artifacts_dir / "baseline_memory.json", "w") as f:
-            json.dump(baseline_json, f, indent=2)
-
-        # Relaxed sanity check
-        if abs(incremental_mb) > 1000:
-            print(f"⚠️  Warning: memory usage unusually high: {incremental_mb:.1f}MB")
+        write_runtime_baseline(tmp_path, "baseline_memory.json", baseline_json)
+        committed_baseline = load_benchmark_metrics(
+            committed_baseline_path("baseline_memory.json"),
+        )
+        assert_regression_within_tolerance(
+            label="Incremental peak RSS",
+            measured_value=baseline_json["incremental_mb"],
+            baseline_value=float(committed_baseline["incremental_mb"]),
+            tolerance_fraction=0.20,
+            unit="MB",
+        )
 
     @pytest.mark.benchmark
     def test_no_model_reinitialization_guard(self, tmp_path, synthetic_images, benchmark_config):
@@ -559,56 +711,22 @@ class TestLuxDepthV3PerformanceBaseline:
 
 
 class TestRegressionGuards:
-    """Regression guards for future optimizations (will be populated in L1.x PRs).
-
-    Note: These tests currently emit warnings only (non-failing) to handle CI runner
-    variance. Once L0.2 implements baseline comparison with % tolerance, these can
-    become blocking checks.
-    """
+    """Regression guard fixture sanity for committed benchmark baselines."""
 
     @pytest.mark.benchmark
     def test_cold_start_p95_regression_threshold(self, tmp_path):
-        """Placeholder for cold-start p95 latency regression detection.
-
-        Future PRs will populate this with actual thresholds and % tolerance checks.
-        For now, just verify JSON output format.
-        """
-        # Placeholder baseline
-        baseline_p95_ms = 100.0  # Will be updated after L0.0 merge
-
-        # Load actual baseline if available
-        baseline_file = tmp_path.parent / "benchmark_results" / "baseline_cold_start.json"
-        if baseline_file.exists():
-            with open(baseline_file) as f:
-                baseline_data = json.load(f)
-                baseline_p95_ms = baseline_data.get("p95_ms", 100.0)
-
-        # Placeholder assertion
-        # Real regression check will compare current run vs stored baseline with % tolerance
-        assert baseline_p95_ms > 0, "Baseline p95 should be positive"
-
-        print(f"✓ Regression threshold check (cold-start p95: {baseline_p95_ms:.1f}ms)")
-        print("  Note: Actual regression detection will be implemented in L0.2")
+        """Committed cold-start baseline must exist and remain well-formed."""
+        baseline_data = load_benchmark_metrics(
+            committed_baseline_path("baseline_cold_start.json"),
+        )
+        assert baseline_data["p95_ms"] > 0
+        assert baseline_data["measurement_type"] == "cold_start"
 
     @pytest.mark.benchmark
     def test_steady_state_p95_regression_threshold(self, tmp_path):
-        """Placeholder for steady-state p95 latency regression detection.
-
-        Future PRs will populate this with actual thresholds and % tolerance checks.
-        For now, just verify JSON output format.
-        """
-        # Placeholder baseline
-        baseline_p95_ms = 100.0  # Will be updated after L0.0 merge
-
-        # Load actual baseline if available
-        baseline_file = tmp_path.parent / "benchmark_results" / "baseline_steady_state.json"
-        if baseline_file.exists():
-            with open(baseline_file) as f:
-                baseline_data = json.load(f)
-                baseline_p95_ms = baseline_data.get("p95_ms", 100.0)
-
-        # Placeholder assertion
-        assert baseline_p95_ms > 0, "Baseline p95 should be positive"
-
-        print(f"✓ Regression threshold check (steady-state p95: {baseline_p95_ms:.1f}ms)")
-        print("  Note: Actual regression detection will be implemented in L0.2")
+        """Committed steady-state baseline must exist and remain well-formed."""
+        baseline_data = load_benchmark_metrics(
+            committed_baseline_path("baseline_steady_state.json"),
+        )
+        assert baseline_data["p95_ms"] > 0
+        assert baseline_data["measurement_type"] == "steady_state"

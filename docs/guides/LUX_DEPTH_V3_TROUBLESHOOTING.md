@@ -223,7 +223,7 @@ Output Deliverables
 ```bash
 # ❌ Unnecessary research flags for commercial workflow
 --quality-tier "apex" \
---depth-backend "depth_anything_v3" \
+--depth-backend "da3" \
 --non-commercial-ok "true"
 ```
 
@@ -231,10 +231,10 @@ Output Deliverables
 ```bash
 # ✅ Omit research flags for commercial workflows
 --quality-tier "apex" \
---depth-backend "depth_anything_v3"
+--depth-backend "da3"
 ```
 
-**Explanation:** Commercial models (Depth Anything V3 with Apache 2.0) do not require license flags.
+**Explanation:** The canonical commercial-safe backend is `da3`; it does not require research license flags.
 
 ---
 
@@ -404,9 +404,9 @@ python3 -c "import torch; print('CUDA:', torch.cuda.is_available()); print('MPS:
 
 ### Commercial-Safe Models (No Restrictions)
 
-**Depth Anything V3 (Apache 2.0):**
+**DA3 (`da3` backend):**
 ```bash
---depth-backend "depth_anything_v3"  # Default
+--depth-backend "da3"  # Default
 ```
 - ✅ Commercial use allowed
 - ✅ No license acknowledgement required

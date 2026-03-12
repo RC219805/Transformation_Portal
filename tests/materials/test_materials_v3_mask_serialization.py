@@ -420,6 +420,61 @@ class TestCleanupBehavior:
         assert run_mock.call_args.kwargs["masks_file"] == persisted_path
         assert persisted_path.exists(), "Persisted segmentation artifacts should not be removed during V2 cleanup"
 
+    @pytest.mark.parametrize(
+        "raised_error",
+        [
+            RuntimeError("V2 failed"),
+            RuntimeError("V2 enhancement timed out after 30s"),
+        ],
+    )
+    def test_persisted_mask_artifact_survives_v2_error_paths(
+        self,
+        temp_output_dir,
+        mock_depth_backend,
+        mock_da3_available,
+        raised_error,
+    ):
+        """Persisted segmentation artifacts should survive V2 failure and timeout paths."""
+        config = EnhanceConfig(
+            enable_v2=True,
+            v2_preset="default",
+            enable_materials_v3=True,
+            enable_material_segmentation=True,
+            material_segmentation_backend="stub",
+            depth_device="cpu",
+        )
+        orchestrator = EnhanceOrchestrator(config, temp_output_dir)
+
+        masks = {"glass": np.random.rand(16, 16).astype(np.float32)}
+        output_key = Path("test_image_abc123")
+        persisted_dir = temp_output_dir / "segmentation"
+        persisted_path = orchestrator._serialize_material_masks(masks, output_key, persisted_dir)
+        assert persisted_path is not None
+        assert persisted_path.exists()
+
+        from transformation_portal.lux_depth_v3.input_manager import ImageInput
+
+        test_input_path = temp_output_dir / "test.jpg"
+        test_input_path.write_text("mock")
+        image_input = ImageInput(path=test_input_path, metadata={"sha256": "abc123"})
+
+        with patch.object(orchestrator.v2_runner, "run", side_effect=raised_error):
+            with pytest.raises(RuntimeError, match="V2"):
+                orchestrator._run_v2_stage(
+                    image_input=image_input,
+                    depth_path=None,
+                    output_key=output_key,
+                    v2_log_path=temp_output_dir / "logs" / "test.log",
+                    manifest_path=temp_output_dir / "manifests" / "test.json",
+                    skip_depth=False,
+                    materials_v3_result={
+                        "material_masks": masks,
+                        "materials_v3_metadata": {"segmentation_metadata": {"mask_artifact_path": str(persisted_path)}},
+                    },
+                )
+
+        assert persisted_path.exists(), "Persisted segmentation artifacts should not be removed on V2 errors"
+
 
 class TestBackwardCompatibility:
     """Test backward compatibility when masks are not provided."""

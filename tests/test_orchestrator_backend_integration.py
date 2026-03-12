@@ -55,6 +55,22 @@ def test_orchestrator_default_backend(tmp_path, mock_da3_available):
     assert orchestrator._backend_metadata.resolution_status == "success"
 
 
+def test_orchestrator_canonicalizes_legacy_backend_alias_in_metadata(tmp_path, mock_da3_available):
+    """Legacy backend aliases should not leak into emitted backend metadata."""
+    with pytest.warns(FutureWarning, match="depth_anything_v3"):
+        config = EnhanceConfig(
+            depth_backend="depth_anything_v3",
+            depth_device="cpu",
+            enable_v2=False,
+        )
+
+    orchestrator = EnhanceOrchestrator(config, tmp_path)
+
+    assert orchestrator.depth_backend.name == "da3"
+    assert orchestrator._backend_metadata.requested_backend == "da3"
+    assert orchestrator._backend_metadata.resolved_backend == "da3"
+
+
 def test_orchestrator_fallback_logic(tmp_path):
     """Orchestrator falls back to DA3 if requested backend unavailable."""
     config = EnhanceConfig(

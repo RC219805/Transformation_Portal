@@ -4,6 +4,8 @@ Tests multi-layer license enforcement (config, registry, runtime).
 See ADR-019 for architectural context.
 """
 
+import json
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import numpy as np
@@ -21,11 +23,13 @@ class MockEnhanceConfig:
         accept_apple_depth_pro_research_license: bool = False,
         depth_device: str = "cpu",
         depth_pro_checkpoint_path: str = None,
+        depth_pro_python_executable: str = None,
     ):
         self.non_commercial_ok = non_commercial_ok
         self.accept_apple_depth_pro_research_license = accept_apple_depth_pro_research_license
         self.depth_device = depth_device
         self.depth_pro_checkpoint_path = depth_pro_checkpoint_path
+        self.depth_pro_python_executable = depth_pro_python_executable
 
 
 @pytest.mark.unit
@@ -183,6 +187,23 @@ class TestDepthProBackendUnit:
             assert backend._checkpoint_path.name == "depth_pro.pt"
             assert "checkpoints" in str(backend._checkpoint_path)
 
+    def test_python_executable_resolution_from_config(self, tmp_path):
+        """Dedicated Depth Pro Python path should be resolved from config."""
+        from transformation_portal.depth.backends.depth_pro import DepthProBackend
+
+        python_executable = tmp_path / ".venv-depth-pro" / "bin" / "python"
+        python_executable.parent.mkdir(parents=True)
+        python_executable.write_text("#!/bin/sh\n", encoding="utf-8")
+
+        config = MockEnhanceConfig(
+            non_commercial_ok=True,
+            accept_apple_depth_pro_research_license=True,
+            depth_pro_python_executable=str(python_executable),
+        )
+
+        backend = DepthProBackend(config)
+        assert backend._python_executable == str(python_executable.resolve())
+
     def test_ensure_available_missing_package(self):
         """Should raise ImportError if depth_pro package not installed."""
         from transformation_portal.depth.backends.depth_pro import DepthProBackend
@@ -218,6 +239,96 @@ class TestDepthProBackendUnit:
 
             assert "not found" in str(exc_info.value).lower()
             assert "curl" in str(exc_info.value)  # Download instructions
+
+    def test_subprocess_ensure_available_skips_local_package_import(self, tmp_path):
+        """Dedicated subprocess mode should not require local depth_pro imports."""
+        from transformation_portal.depth.backends.depth_pro import DepthProBackend
+
+        checkpoint_path = tmp_path / "depth_pro.pt"
+        checkpoint_path.write_bytes(b"checkpoint")
+        python_executable = tmp_path / ".venv-depth-pro" / "bin" / "python"
+        python_executable.parent.mkdir(parents=True)
+        python_executable.write_text("#!/bin/sh\n", encoding="utf-8")
+
+        config = MockEnhanceConfig(
+            non_commercial_ok=True,
+            accept_apple_depth_pro_research_license=True,
+            depth_pro_checkpoint_path=str(checkpoint_path),
+            depth_pro_python_executable=str(python_executable),
+        )
+        backend = DepthProBackend(config)
+
+        with patch.object(
+            backend,
+            "_ensure_local_package_available",
+            side_effect=AssertionError("local package import should not be used"),
+        ):
+            with patch("transformation_portal.depth.backends.depth_pro.subprocess.run") as mock_run:
+                mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+                backend.ensure_available()
+
+        command = mock_run.call_args.args[0]
+        assert "--check" in command
+        assert str(checkpoint_path.resolve()) in command
+
+    def test_subprocess_compute_returns_depth_result(self, tmp_path):
+        """Subprocess worker output should map back to the DepthResult contract."""
+        from transformation_portal.depth.backends.depth_pro import DepthProBackend
+
+        checkpoint_path = tmp_path / "depth_pro.pt"
+        checkpoint_path.write_bytes(b"checkpoint")
+        python_executable = tmp_path / ".venv-depth-pro" / "bin" / "python"
+        python_executable.parent.mkdir(parents=True)
+        python_executable.write_text("#!/bin/sh\n", encoding="utf-8")
+
+        config = MockEnhanceConfig(
+            non_commercial_ok=True,
+            accept_apple_depth_pro_research_license=True,
+            depth_pro_checkpoint_path=str(checkpoint_path),
+            depth_pro_python_executable=str(python_executable),
+        )
+        backend = DepthProBackend(config)
+
+        def fake_run(command, **kwargs):
+            if "--check" in command:
+                return MagicMock(returncode=0, stdout="", stderr="")
+
+            output_depth_path = Path(command[command.index("--output-depth") + 1])
+            output_json_path = Path(command[command.index("--output-json") + 1])
+            np.save(output_depth_path, np.full((4, 5), 2.5, dtype=np.float32), allow_pickle=False)
+            output_json_path.write_text(
+                json.dumps(
+                    {
+                        "depth_units": "meters",
+                        "device": "cpu",
+                        "dtype": "float32",
+                        "input_size": [4, 5],
+                        "focal_length_px": 525.0,
+                        "field_of_view_deg": 65.0,
+                        "provenance": {
+                            "checkpoint": {
+                                "path": str(checkpoint_path),
+                                "sha256": "a" * 64,
+                                "bytes": checkpoint_path.stat().st_size,
+                            }
+                        },
+                        "warnings": ["isolated depth env"],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        with patch("transformation_portal.depth.backends.depth_pro.subprocess.run", side_effect=fake_run):
+            result = backend.compute(np.zeros((4, 5, 3), dtype=np.uint8))
+
+        assert result.depth_units == "meters"
+        assert result.depth_map.shape == (4, 5)
+        assert result.focal_length_px == 525.0
+        assert result.field_of_view_deg == 65.0
+        assert result.metadata["runner"]["mode"] == "subprocess"
+        assert result.metadata["checkpoint"]["sha256"] == "a" * 64
+        assert result.warnings == ["isolated depth env"]
 
     def test_runtime_license_validation(self):
         """Layer 3: Runtime validation should reject missing flags."""

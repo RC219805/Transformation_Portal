@@ -4,6 +4,7 @@ Ensures that backend selection metadata is correctly captured in manifests
 and depth metadata files for both DA3 and Depth Pro backends.
 """
 
+import importlib.util
 import json
 from pathlib import Path
 
@@ -17,6 +18,7 @@ from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
 
 # Mark all tests as ML tier
 pytestmark = pytest.mark.ml
+DEPTH_PRO_PKG_AVAILABLE = importlib.util.find_spec("depth_pro") is not None
 
 
 @pytest.fixture
@@ -71,8 +73,8 @@ def test_da3_backend_metadata_in_depth_stats(tmp_path, test_input_dir):
 
 
 @pytest.mark.skipif(
-    not Path("checkpoints/depth_pro.pt").exists(),
-    reason="Depth Pro checkpoint not available",
+    not Path("checkpoints/depth_pro.pt").exists() or not DEPTH_PRO_PKG_AVAILABLE,
+    reason="Depth Pro checkpoint or package not available",
 )
 def test_depth_pro_backend_metadata_in_depth_stats(tmp_path, test_input_dir):
     """Test that Depth Pro backend metadata is correctly captured in depth stats."""

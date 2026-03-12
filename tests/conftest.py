@@ -41,6 +41,30 @@ def pytest_configure(config):
     os.environ["TP_ALLOW_SYNTHETIC_FALLBACK"] = "1"
 
 
+def _benchmark_run_explicitly_requested(config: pytest.Config) -> bool:
+    """Return True when benchmark-marked tests were requested on purpose."""
+    if os.getenv("TP_RUN_BENCHMARKS", "").strip().lower() in {"1", "true", "yes", "on"}:
+        return True
+
+    markexpr = (config.option.markexpr or "").strip().lower()
+    if "benchmark" in markexpr:
+        return True
+
+    invocation_args = tuple(str(arg) for arg in config.invocation_params.args)
+    return any("tests/benchmarks" in arg for arg in invocation_args)
+
+
+def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
+    """Skip benchmark tests unless the caller explicitly opted into them."""
+    if _benchmark_run_explicitly_requested(config):
+        return
+
+    skip_benchmark = pytest.mark.skip(reason="benchmark tests are excluded from default pytest runs")
+    for item in items:
+        if "benchmark" in item.keywords:
+            item.add_marker(skip_benchmark)
+
+
 import numpy as np
 import pytest
 from PIL import Image
