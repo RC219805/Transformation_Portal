@@ -23,7 +23,7 @@ dependencies = [
     # Web stack ranges are intentionally bounded here.
     # Exact versions are enforced in requirements/base.in and compiled lockfiles.
     "fastapi>=0.121.0,<0.122",
-    "starlette>=0.49.1,<0.50",  # direct runtime import + patched security baseline
+    "starlette>=0.49.1,<0.53",  # direct runtime import + patched security baseline
     "uvicorn>=0.29.0,<0.42",
     "aiofiles>=23.2.1,<26",
     "tifffile>=2023.7.18,<2027",
