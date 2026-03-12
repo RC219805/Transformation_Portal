@@ -395,7 +395,7 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION_LINT }}
 
       - name: Download coverage artifacts
-        uses: actions/download-artifact@v8.0.0
+        uses: actions/download-artifact@v8.0.1
         with:
           pattern: coverage-*
           path: coverage-artifacts
