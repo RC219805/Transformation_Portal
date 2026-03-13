@@ -1,6 +1,6 @@
 # Portal Orchestrator Roadmap (Re-Baselined)
 
-Date: 2026-03-01  
+Date: 2026-03-01
 Scope: `app.py` + `portal.html` (single-file UI + FastAPI wrapper)
 
 ## Objective

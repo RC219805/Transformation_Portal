@@ -9,9 +9,7 @@ from typing import Optional, Tuple
 
 import numpy as np
 
-from transformation_portal.spatial_ai.reconstruction.contracts import (  # noqa: E501
-    CameraParams,
-)
+from transformation_portal.spatial_ai.reconstruction.contracts import CameraParams  # noqa: E501
 
 from .scene_context import CameraProvenance, CameraWithProvenance
 from .scene_groups import SceneGroup, normalize_relative_path

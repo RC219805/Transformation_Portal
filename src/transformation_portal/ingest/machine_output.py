@@ -8,12 +8,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 from .errors import IngestError, IngestExitCode
-from .metadata_service import (
-    BatchExtractResult,
-    BatchItemResult,
-    ExtractResult,
-    ValidateResult,
-)
+from .metadata_service import BatchExtractResult, BatchItemResult, ExtractResult, ValidateResult
 
 MACHINE_SCHEMA_VERSION = "tp.meta.machine.v1"
 _CANONICAL_JSON_KWARGS: Dict[str, Any] = {

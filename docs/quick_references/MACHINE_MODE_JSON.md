@@ -251,20 +251,20 @@ echo "Result: $success/$total succeeded"
 
 ## Troubleshooting
 
-**Problem:** `--json-pretty requires --json`  
+**Problem:** `--json-pretty requires --json`
 **Fix:** Always use `--json` flag before `--json-pretty` or `--json-output`
 
-**Problem:** Exit code always 0  
+**Problem:** Exit code always 0
 **Fix:** Don't use `set -e` before capturing JSON; capture exit code explicitly:
 ```bash
 result=$(python scripts/test_metadata_extraction.py --json ...)
 exit_code=$?  # Capture before any other commands
 ```
 
-**Problem:** Unexpected JSON shape  
+**Problem:** Unexpected JSON shape
 **Fix:** Validate `schema` field equals `tp.meta.machine.v1` first
 
-**Problem:** Byte-exact outputs expected  
+**Problem:** Byte-exact outputs expected
 **Fix:** Don't compare bytes; use schema validation and exit code routing
 
 ---

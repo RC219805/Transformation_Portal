@@ -16,7 +16,9 @@ EXIT_RUNTIME_FAILURE = 31
 EXIT_PARITY_MISMATCH = 32
 
 PROJECT_ROOT_DEFAULT = Path(__file__).resolve().parents[1]
-DEFAULT_CAPTURE_JSON = PROJECT_ROOT_DEFAULT / "tests" / "golden" / "phase4" / "expected_capture_metadata.tp.meta.capture.v1.json"
+DEFAULT_CAPTURE_JSON = (
+    PROJECT_ROOT_DEFAULT / "tests" / "golden" / "phase4" / "expected_capture_metadata.tp.meta.capture.v1.json"
+)
 DEFAULT_METADATA_MANIFEST_JSON = (
     PROJECT_ROOT_DEFAULT / "tests" / "golden" / "phase4" / "expected_metadata_manifest.tp.meta.capture_manifest.v1.json"
 )
@@ -27,11 +29,7 @@ DEFAULT_PROVENANCE_MERKLE_JSON = (
     PROJECT_ROOT_DEFAULT / "tests" / "golden" / "phase4" / "expected_provenance_merkle.tp.meta.provenance_merkle.v1.json"
 )
 DEFAULT_EXPECTED_REPORT_JSON = (
-    PROJECT_ROOT_DEFAULT
-    / "tests"
-    / "golden"
-    / "phase4"
-    / "expected_verification_report.tp.meta.verification_report.v1.json"
+    PROJECT_ROOT_DEFAULT / "tests" / "golden" / "phase4" / "expected_verification_report.tp.meta.verification_report.v1.json"
 )
 
 

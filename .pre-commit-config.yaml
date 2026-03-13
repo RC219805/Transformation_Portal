@@ -13,20 +13,22 @@ repos:
       - id: check-merge-conflict
       - id: mixed-line-ending
 
-  - repo: https://github.com/psf/black
-    rev: 24.10.0
-    hooks:
-      - id: black
-        args: ['--line-length=127']
-
-  - repo: https://github.com/PyCQA/isort
-    rev: 5.13.2
-    hooks:
-      - id: isort
-        args: ['--profile=black', '--line-length=127']
-
   - repo: local
     hooks:
+      - id: black-ci-parity
+        name: Black (CI parity)
+        entry: scripts/setup/run_lint_tool.sh black
+        language: system
+        types_or: [python, pyi]
+        files: ^(src|tests)/.*\.pyi?$
+
+      - id: isort-ci-parity
+        name: isort (CI parity)
+        entry: scripts/setup/run_lint_tool.sh isort
+        language: system
+        types: [python]
+        files: ^(src|tests)/.*\.py$
+
       - id: check-root-file-placement
         name: Check Root File Placement
         entry: scripts/setup/pre-commit-check.sh

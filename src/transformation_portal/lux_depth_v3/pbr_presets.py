@@ -20,10 +20,7 @@ Example:
     >>> orchestrator = EnhanceOrchestrator(STANDARD_QUALITY, output_root)
 """
 
-from transformation_portal.lux_depth_v3.config import (
-    EnhanceConfig,
-    ModelVariant,
-)
+from transformation_portal.lux_depth_v3.config import EnhanceConfig, ModelVariant
 
 # Standard Quality - Balanced preset for typical real estate imagery
 # Throughput: ~200-250 images/hour

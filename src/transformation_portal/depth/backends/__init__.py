@@ -37,13 +37,7 @@ See Also:
 """
 
 from .cache import DepthCacheWriter
-from .protocol import (
-    DepthBackend,
-    DepthResult,
-    LicenseRestrictionError,
-    LicenseType,
-    StatefulBackend,
-)
+from .protocol import DepthBackend, DepthResult, LicenseRestrictionError, LicenseType, StatefulBackend
 from .registry import DepthBackendRegistry, get_registry
 
 __all__ = [

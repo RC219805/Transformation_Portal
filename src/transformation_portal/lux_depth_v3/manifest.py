@@ -16,10 +16,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from transformation_portal.ingest.canonical_json import dump_json, to_jsonable
-from transformation_portal.lux_depth_v3._backend_contract import (
-    normalize_backend_id,
-    normalize_backend_provenance,
-)
+from transformation_portal.lux_depth_v3._backend_contract import normalize_backend_id, normalize_backend_provenance
 
 logger = logging.getLogger(__name__)
 

@@ -25,7 +25,7 @@ PHASE6_SMOKE_TESTS := \
 	tests/lux_depth_v3/test_orchestrator_smoke.py
 
 .PHONY: help test-fast test-novideo test-full test-integration test-structure test-utils test-orchestrator-contract coverage-fast-scope venv setup clean \
-        lint ci ci-full pre-commit install-hooks quality-check fix-quality validate-ci organize-docs check-json-serialization check-piptools-cache \
+        lint lint-parity ci ci-full pre-commit install-hooks quality-check fix-quality validate-ci organize-docs check-json-serialization check-piptools-cache \
         check-stale-docs lock lock-prod lock-ci lock-dev install-core install-ml docs docs-clean
 
 help:
@@ -46,9 +46,10 @@ help:
 	@echo ""
 	@echo "Quality & CI:"
 	@echo "  lint               Run advisory lint checks (requires 'make install-core')"
+	@echo "  lint-parity        Run the GitHub lint job locally using Python 3.12 + requirements-lint.txt"
 	@echo "  ci                 Run local CI checks (lint + hygiene + fast tests)"
 	@echo "  ci-full            Run comprehensive CI simulation (all checks)"
-	@echo "  pre-commit         Run pre-commit checks manually"
+	@echo "  pre-commit         Run pre-commit hooks manually with CI-aligned formatter versions"
 	@echo "  install-hooks      Install git pre-commit hook"
 	@echo "  quality-check      Run all quality checks (lint + structure + tests)"
 	@echo "  check-json-serialization  Fail on raw json.dump/json.dumps outside approved modules"
@@ -152,6 +153,10 @@ lint:
 	@echo "Running advisory lint via shared policy..."
 	@PYTHON_BIN="$(PY)" ./scripts/lint_runner.sh advisory
 
+lint-parity:
+	@echo "Running CI-aligned lint parity..."
+	@./scripts/setup/run_lint_tool.sh parity
+
 ci: lint check-json-serialization check-piptools-cache test-fast test-orchestrator-contract
 	@echo "✅ Local CI checks completed successfully."
 
@@ -168,12 +173,12 @@ ci-quick:
 # Pre-commit checks
 pre-commit:
 	@echo "Running pre-commit checks..."
-	@pre-commit run --all-files
+	@pre-commit run --all-files --show-diff-on-failure
 
 # Install git hooks
 install-hooks:
 	@echo "Installing git pre-commit hook..."
-	@pre-commit install
+	@pre-commit install -f
 	@echo "✓ Pre-commit hook installed via pre-commit"
 
 # Quality check (all validations)

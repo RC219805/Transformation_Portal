@@ -7,11 +7,7 @@ from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from .normalize_machine_json import (
-    DEFAULT_NORMALIZATION_PROFILE,
-    canonical_json_bytes,
-    normalize_machine_payload,
-)
+from .normalize_machine_json import DEFAULT_NORMALIZATION_PROFILE, canonical_json_bytes, normalize_machine_payload
 from .provenance import capture_provenance
 
 BATCH_MANIFEST_SCHEMA = "tp.ingest.batch_manifest.v1"

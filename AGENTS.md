@@ -17,10 +17,11 @@ Quick reference for common workflows and commands in this repo.
 - `make coverage-fast-scope` run branch coverage for the audited `core/config` and `streaming` paths with `term-missing` output.
 - `make clean` remove Python caches and build/test artifacts.
 - `make lint` run flake8 + pylint (non-blocking).
+- `make lint-parity` run the GitHub lint job locally with the CI-pinned Python 3.12 lint environment.
 - `make ci` run local CI checks (lint + check-json-serialization + check-piptools-cache + test-fast + test-orchestrator-contract).
 - `make ci-full` run comprehensive local CI (`./scripts/local_ci_check.sh`).
 - `make ci-quick` run quick local CI (`./scripts/local_ci_check.sh --quick`).
-- `make pre-commit` run pre-commit checks.
+- `make pre-commit` run pre-commit hooks with CI-aligned Black/isort versions.
 - `make install-hooks` install git pre-commit hook.
 - `make quality-check` run lint + CI validation + doc structure checks.
 - `make fix-quality` auto-fix quality issues (`scripts/auto_fix_quality.py --fix-all`).

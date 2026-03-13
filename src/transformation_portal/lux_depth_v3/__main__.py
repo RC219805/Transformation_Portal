@@ -157,11 +157,7 @@ except ImportError:
     )
     sys.exit(1)
 
-from ._backend_contract import (
-    backend_alias_warning,
-    is_legacy_backend_alias,
-    normalize_backend_id,
-)
+from ._backend_contract import backend_alias_warning, is_legacy_backend_alias, normalize_backend_id
 from .config import EnhanceConfig, Preset
 from .orchestrator import EnhanceOrchestrator
 

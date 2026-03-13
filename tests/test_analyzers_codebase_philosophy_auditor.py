@@ -1,9 +1,6 @@
 from textwrap import dedent
 
-from transformation_portal.analyzers.codebase_philosophy_auditor import (
-    CodebasePhilosophyAuditor,
-    Violation,
-)
+from transformation_portal.analyzers.codebase_philosophy_auditor import CodebasePhilosophyAuditor, Violation
 
 
 def test_audit_source_ignores_decision_examples_inside_docstrings() -> None:

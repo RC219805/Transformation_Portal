@@ -14,16 +14,7 @@ from bisect import bisect_left
 from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import (
-    Any,
-    AsyncGenerator,
-    Callable,
-    Deque,
-    Dict,
-    List,
-    Mapping,
-    Optional,
-)
+from typing import Any, AsyncGenerator, Callable, Deque, Dict, List, Mapping, Optional
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exception_handlers import request_validation_exception_handler as fastapi_request_validation_exception_handler

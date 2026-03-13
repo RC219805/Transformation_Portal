@@ -1,7 +1,7 @@
 # Machine-Mode Contract Stabilization - Implementation Summary
 
-**Completed:** 2026-02-25  
-**PR:** #(to be assigned)  
+**Completed:** 2026-02-25
+**PR:** #(to be assigned)
 **Issue:** Post-merge follow-up for PR #1024 (machine-mode JSON output)
 
 ---
@@ -332,11 +332,11 @@ $ echo $?
 ## Success Metrics
 
 ### Immediate (Implemented)
-✅ Contract documentation published  
-✅ Reference parsers available  
-✅ CI gate enforcing stability  
-✅ Tests passing (15/15)  
-✅ No breaking changes to existing output  
+✅ Contract documentation published
+✅ Reference parsers available
+✅ CI gate enforcing stability
+✅ Tests passing (15/15)
+✅ No breaking changes to existing output
 
 ### Short-term (Next Sprint)
 - [ ] At least 1 automation consumer migrated to machine-mode

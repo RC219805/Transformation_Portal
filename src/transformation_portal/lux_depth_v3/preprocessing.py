@@ -376,12 +376,7 @@ def preprocess_image_linear(
         >>> img, orig_shape = preprocess_image_linear("photo.jpg", apex_strict_formats=False)
         >>> # Allowed but may violate linear-light preservation
     """
-    from .linear_verify import (
-        DtypeViolationError,
-        LinearityViolationError,
-        RangeViolationError,
-        verify_linear_ingest,
-    )
+    from .linear_verify import DtypeViolationError, LinearityViolationError, RangeViolationError, verify_linear_ingest
     from .raw_loader import load_raw_as_rgb
 
     # Load image preserving bit depth and linearity
