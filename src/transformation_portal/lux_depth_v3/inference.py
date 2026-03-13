@@ -23,10 +23,7 @@ from typing import TYPE_CHECKING, Any, Dict, Optional, Union
 import numpy as np
 from PIL import Image
 
-from transformation_portal.core.security.model_lock import (
-    is_model_lock_strict_enabled,
-    resolve_model_lock_revision,
-)
+from transformation_portal.core.security.model_lock import is_model_lock_strict_enabled, resolve_model_lock_revision
 
 # noqa: F401 - Used in docstring examples
 from .config import DA3Config, ModelVariant  # noqa: F401

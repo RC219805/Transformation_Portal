@@ -74,7 +74,7 @@ def call_openai_with_retries(client, messages, model="gpt-4o-mini", max_retries=
             status = getattr(e, "status_code", None) or getattr(e, "http_status", None)
             if status == 429 or "429" in err_str or "Rate limit" in err_str:
                 status_is_429 = True
-            
+
             if status_is_429 and attempt < max_retries:
                 base_wait = min(60, 2 ** attempt)
                 jitter = random.uniform(0.5, 1.5)

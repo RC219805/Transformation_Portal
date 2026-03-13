@@ -1,7 +1,7 @@
 # Security Best Practices Report
 
-Date: 2026-03-03  
-Repository: `Transformation_Portal`  
+Date: 2026-03-03
+Repository: `Transformation_Portal`
 Scope: API (`app.py`), runtime modules (`src/`), and operational tooling (`scripts/`, `tools/`).
 
 ## Executive Summary

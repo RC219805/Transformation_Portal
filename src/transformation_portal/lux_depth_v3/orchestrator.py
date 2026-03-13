@@ -46,10 +46,7 @@ except ImportError:
     XXHASH_AVAILABLE = False
     xxhash = None  # type: ignore
 
-from ..depth.backends.protocol import (
-    DepthBackend,
-    LicenseRestrictionError,
-)
+from ..depth.backends.protocol import DepthBackend, LicenseRestrictionError
 
 # Backend registry for depth estimation
 from ..depth.backends.registry import DepthBackendRegistry
@@ -57,11 +54,7 @@ from ..ingest.canonical_json import dump_json, dumps_json
 from ..spatial_ai.reconstruction.contracts import (  # noqa: E501
     LicenseRestrictionError as ReconstructionLicenseRestrictionError,
 )
-from ._backend_contract import (
-    normalize_backend_id,
-    normalize_backend_provenance,
-    normalize_backend_sequence,
-)
+from ._backend_contract import normalize_backend_id, normalize_backend_provenance, normalize_backend_sequence
 from .batch_stats import compute_batch_runtime_stats, detect_runtime_outliers
 from .camera_metadata_loader import load_scene_cameras, load_sidecar_payload
 
@@ -89,11 +82,7 @@ from .manifest import (
 from .pbr import generate_pbr_maps
 from .pbr_writer import write_pbr_maps
 from .postprocessing import Postprocessor
-from .provenance import (
-    ExiftoolNotFoundError,
-    ProvenanceError,
-    capture_provenance,
-)
+from .provenance import ExiftoolNotFoundError, ProvenanceError, capture_provenance
 from .reconstruction_runner import (
     diagnostics_artifact_path,
     manifest_artifact_path,
@@ -111,15 +100,8 @@ from .scene_integrity import (
     verify_scene_integrity,
     write_scene_manifest,
 )
-from .scene_preflight import (
-    validate_scene_preflight,
-    write_scene_preflight_artifact,
-)
-from .security import (
-    HashMode,
-    sanitize_file_stem,
-    sanitize_path_component_nonlossy,
-)
+from .scene_preflight import validate_scene_preflight, write_scene_preflight_artifact
+from .security import HashMode, sanitize_file_stem, sanitize_path_component_nonlossy
 from .v2_runner import V2Runner, find_v2_report
 
 logger = logging.getLogger(__name__)
@@ -2944,10 +2926,7 @@ class EnhanceOrchestrator:
             # prerequisites before Materials V3.
             self._enforce_apex_materials_gate()
 
-            from .segmentation_backend import (
-                get_last_segmentation_runtime_metadata,
-                segment_materials,
-            )
+            from .segmentation_backend import get_last_segmentation_runtime_metadata, segment_materials
 
             # Convert float32 [0,1] to uint8 [0,255]
             # for segmentation backend.

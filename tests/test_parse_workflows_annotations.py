@@ -2,11 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from transformation_portal.analyzers.parse_workflows import (
-    WorkflowBug,
-    WorkflowParser,
-    render_github_annotations,
-)
+from transformation_portal.analyzers.parse_workflows import WorkflowBug, WorkflowParser, render_github_annotations
 
 # pylint: disable=redefined-outer-name  # pytest fixtures
 

@@ -1,8 +1,8 @@
 # ADR-034: Benchmark Test Exclusion from PR Gating CI
 
-**Status:** Accepted  
-**Date:** 2026-02-07  
-**Architect:** Transformation Portal Architect  
+**Status:** Accepted
+**Date:** 2026-02-07
+**Architect:** Transformation Portal Architect
 **Context:** PR #990 CI failure investigation
 
 ---
@@ -26,7 +26,7 @@ PR #990 ("feat(determinism): CLI refactor + hardware FP-state enforcement + CAS 
 3. **Policy Contradiction:**
    - **Governance Policy** (`.github/copilot-instructions.md`):
      > "Benchmark/performance regression tests must be explicitly marked and kept out of fast PR gating CI. Nightly/deep-check workflows may run benchmarks; PR gating workflows should not."
-   
+
    - **Implementation Reality** (`tests/benchmarks/README.md`):
      > "Benchmarks ARE included in PR gating CI (runs on every PR). Policy Decision (L0.0): Keep benchmarks in PR gating CI with warnings-only approach."
 
@@ -49,7 +49,7 @@ All PR gating workflows now use:
 # Core tests
 markexpr: "not ml and not slow and not benchmark"
 
-# ML tests  
+# ML tests
 markexpr: "ml and not slow and not benchmark"
 ```
 

@@ -1,14 +1,12 @@
 from textwrap import dedent
 
-from transformation_portal.analyzers.codebase_philosophy_auditor import (
-    CodebasePhilosophyAuditor,
-    Violation,
-)
+from transformation_portal.analyzers.codebase_philosophy_auditor import CodebasePhilosophyAuditor, Violation
 
 
 def test_audit_source_ignores_decision_examples_inside_docstrings() -> None:
     auditor = CodebasePhilosophyAuditor()
-    source = dedent('''
+    source = dedent(
+        '''
         """Example module docs.
 
         # Decision: disable_rule - public_api_documentation
@@ -17,7 +15,8 @@ def test_audit_source_ignores_decision_examples_inside_docstrings() -> None:
 
         class PublicThing:
             pass
-        ''')
+        '''
+    )
 
     violations = auditor.audit_source(source)
 
@@ -34,7 +33,8 @@ def test_audit_source_ignores_decision_examples_inside_docstrings() -> None:
 
 def test_audit_source_ignores_decisions_inside_string_literals() -> None:
     auditor = CodebasePhilosophyAuditor()
-    source = dedent('''
+    source = dedent(
+        '''
         BANNER = """
         # Decision: disable_rule - public_api_documentation
         """
@@ -42,7 +42,8 @@ def test_audit_source_ignores_decisions_inside_string_literals() -> None:
 
         def PublicThing():
             return True
-        ''')
+        '''
+    )
 
     violations = auditor.audit_source(source)
 
@@ -66,14 +67,16 @@ def test_custom_rule_callables_remain_supported() -> None:
 
 def test_disabled_rules_are_matched_case_insensitively() -> None:
     auditor = CodebasePhilosophyAuditor()
-    source = dedent('''
+    source = dedent(
+        '''
         # Decision: disable_rule - PUBLIC_API_DOCUMENTATION
         """Module doc."""
 
 
         def PublicThing():
             return True
-        ''')
+        '''
+    )
 
     violations = auditor.audit_source(source)
 

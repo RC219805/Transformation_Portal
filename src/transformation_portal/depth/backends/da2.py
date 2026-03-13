@@ -94,10 +94,7 @@ class DA2Backend:
             return
 
         from ...depth.models.depth_anything_v2 import DepthAnythingV2Model as DepthAnythingV2Model  # noqa: F811
-        from ...depth.models.depth_anything_v2 import (
-            ModelBackend,
-            ModelVariant,
-        )
+        from ...depth.models.depth_anything_v2 import ModelBackend, ModelVariant
 
         if self._device == "mps":
             backend = ModelBackend.PYTORCH_MPS

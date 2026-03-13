@@ -10,12 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence
 
-from .errors import (
-    IngestError,
-    IngestExitCode,
-    OtherIngestFailure,
-    aggregate_errors,
-)
+from .errors import IngestError, IngestExitCode, OtherIngestFailure, aggregate_errors
 from .provenance import capture_provenance
 from .sidecar import write_sidecar
 from .validator import validate_schema_errors

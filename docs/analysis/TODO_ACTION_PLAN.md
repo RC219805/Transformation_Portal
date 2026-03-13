@@ -18,14 +18,16 @@ This action plan consolidates findings from a codebase-wide TODO review and prov
 | **Test Observational TODOs** | 2 | Track only |
 | **Config/Preset TODOs** | 2 | Manual verification |
 | **Security Pattern TODOs** | 2 | Intentional (no action) |
-| **Documentation TODOs** | ~190 | Review/archive |
+| **Documentation TODOs** | 190 | Mostly no action; retain/archive historical notes |
+
+Documentation TODO instances were reviewed for governance and archival value, but they are not part of the 11-item implementation backlog unless explicitly called out in the consolidated plan below.
 
 ### Priority Summary
 
 - **P1 (Immediate)**: 3 items requiring action
 - **P2 (Near-term)**: 4 items for v2.3.0 cycle
-- **P3 (Deferred)**: 3 items for future phases
-- **No Action Required**: ~196 items (correct as-is, observational, or documented)
+- **P3 (Deferred)**: 4 items for future phases
+- **No Action Required**: 195 items (95%; historical, observational, or intentionally retained)
 
 ---
 
@@ -270,16 +272,16 @@ test_file.write_text("""# TODO: Consider using spatial_ai for this
 
 ---
 
-### No Action Required (63% of inventory)
+### No Action Required (195 reviewed TODO instances, 95%)
 
 The following categories require **no action**:
 
-1. **Intentional Feature Gates** (25 items): NotImplementedError stubs that correctly gate unimplemented features
-2. **Security Patterns** (2 items): `TODO_REPLACE` regex patterns for detecting placeholders
-3. **Test Fixtures** (1 item): TODO in test data content
-4. **Observational Notes** (2 items): Performance investigation tracking
-5. **Completed Items** (9 items): Already resolved per TODO_INVENTORY.md
-6. **Obsolete Documentation** (17 items): Historical tracking, scheduled for archive
+1. **Documentation TODO markers** (190 items): Historical notes, status markers, or archive candidates reviewed for context rather than implementation
+2. **Security Patterns** (2 items): `TODO_REPLACE` regex patterns used to detect placeholder values
+3. **Observational Notes** (2 items): Performance investigation tracking already captured in follow-up documentation
+4. **Test Fixture Content** (1 item): Embedded `TODO` text used as scanner test data
+
+These 195 reviewed instances are intentionally excluded from the 11-item P1/P2/P3 backlog above.
 
 ---
 
@@ -324,7 +326,7 @@ Require for all preset changes:
 **Action Required**: 11 items (5%)
 **No Action Required**: 195 items (95%)
 
-**Key Takeaway**: The majority of TODOs in this codebase are **intentional feature gates**, **security infrastructure**, or **observational tracking**. Only 11 items require actual implementation work, with 3 being P1 priority.
+**Key Takeaway**: The majority of reviewed TODO instances are **historical documentation notes**, **intentional validation patterns**, or **observational tracking**. Only 11 items require actual implementation work, with 3 being P1 priority.
 
 The codebase demonstrates mature TODO management with proper documentation and categorization. The existing [TODO_INVENTORY.md](./TODO_INVENTORY.md) provides comprehensive tracking and should continue to be the authoritative source for TODO governance.
 
