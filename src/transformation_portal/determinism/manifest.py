@@ -17,6 +17,11 @@ Design constraints:
 - No environment / host identifiers
 - Stable key ordering (use stable_manifest_json for serialization)
 - Only content-derived + deterministic probe/enforcement outcomes
+
+Probe governance:
+- `fpstate.probe_version` is an audit contract, not convenience metadata.
+- Any new probe version MUST be mapped in `PROBE_VERSION_SCHEMA_MAP` and
+  coordinated with manifest schema governance before merge.
 """
 
 from typing import Any, Dict, Optional
@@ -25,6 +30,24 @@ from .jcs import dumps
 
 # Current schema version for new manifests.
 MANIFEST_SCHEMA_VERSION = 3
+
+# Probe-to-schema governance contract.
+# Keys are probe semantic versions; values are minimum manifest schema versions.
+PROBE_VERSION_SCHEMA_MAP: dict[int, int] = {
+    0: 3,  # legacy migration placeholder (v2 -> v3)
+    1: 3,  # governed cross-ISA behavioral probe
+}
+
+
+def _required_schema_for_probe_version(probe_version: int) -> int:
+    """Return minimum manifest schema required for a probe version."""
+    try:
+        return PROBE_VERSION_SCHEMA_MAP[probe_version]
+    except KeyError as e:
+        raise ValueError(
+            f"Unsupported probe_version={probe_version}; update PROBE_VERSION_SCHEMA_MAP "
+            "and manifest schema governance before merge."
+        ) from e
 
 
 def build_artifact_manifest(
@@ -46,6 +69,13 @@ def build_artifact_manifest(
     This manifest is content-derived and contains no timestamps or host identifiers.
     All fields are Python primitives for JCS/JSON serialization safety.
     """
+    probe_version_int = int(probe_version)
+    min_schema = _required_schema_for_probe_version(probe_version_int)
+    if MANIFEST_SCHEMA_VERSION < min_schema:
+        raise ValueError(
+            f"schema_version={MANIFEST_SCHEMA_VERSION} is incompatible with "
+            f"probe_version={probe_version_int}; requires schema_version>={min_schema}."
+        )
 
     m: Dict[str, Any] = {
         "schema_version": MANIFEST_SCHEMA_VERSION,
@@ -57,7 +87,7 @@ def build_artifact_manifest(
         "fpstate": {
             "enforced": bool(fpstate_enforced),
             "backend": str(fpstate_backend),
-            "probe_version": int(probe_version),
+            "probe_version": probe_version_int,
             "probe_policy": str(probe_policy),
             "subnormals_preserved": bool(subnormals_preserved),
         },
@@ -83,7 +113,13 @@ def is_manifest_v3_compatible(manifest: Dict[str, Any]) -> bool:
     if manifest.get("schema_version") != 3:
         return False
     fpstate = manifest.get("fpstate", {})
-    return "probe_version" in fpstate and "probe_policy" in fpstate
+    if "probe_version" not in fpstate or "probe_policy" not in fpstate:
+        return False
+    try:
+        min_schema = _required_schema_for_probe_version(int(fpstate["probe_version"]))
+    except (TypeError, ValueError):
+        return False
+    return manifest["schema_version"] >= min_schema
 
 
 def migrate_manifest_v2_to_v3(manifest: Dict[str, Any]) -> Dict[str, Any]:

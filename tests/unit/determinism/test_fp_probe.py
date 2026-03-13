@@ -15,6 +15,7 @@ from __future__ import annotations
 import pytest
 
 from transformation_portal.determinism.fp_probe import (
+    PROBE_VERSION,
     FPProbeNormalized,
     FPProbeRaw,
     normalize_fp_probe,
@@ -35,7 +36,7 @@ def make_raw(
     smallest: bool = True,
     scalar: bool = True,
     vector: bool = True,
-    version: int = 1,
+    version: int = PROBE_VERSION,
     note: str | None = None,
 ) -> FPProbeRaw:
     """Create a FPProbeRaw for testing with simplified parameters."""
@@ -186,9 +187,9 @@ def test_probe_version_propagates():
 
 
 def test_probe_version_one_in_raw_probe():
-    """Current raw probe implementation returns version 1."""
+    """Current raw probe implementation returns the governed probe version."""
     raw = probe_fpstate_raw()
-    assert raw.probe_version == 1
+    assert raw.probe_version == PROBE_VERSION
 
 
 # ---------------------------------------------------------------------------
@@ -264,7 +265,7 @@ def test_probe_fpstate_normalized_default_policy():
     """probe_fpstate_normalized defaults to strict policy."""
     result = probe_fpstate_normalized()
     assert result.policy == "strict"
-    assert result.probe_version == 1
+    assert result.probe_version == PROBE_VERSION
 
 
 def test_probe_fpstate_normalized_with_policy():

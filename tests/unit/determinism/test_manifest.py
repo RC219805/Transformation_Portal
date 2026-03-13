@@ -13,8 +13,10 @@ import json
 
 import pytest
 
+from transformation_portal.determinism.fp_probe import PROBE_VERSION
 from transformation_portal.determinism.manifest import (
     MANIFEST_SCHEMA_VERSION,
+    PROBE_VERSION_SCHEMA_MAP,
     build_artifact_manifest,
     is_manifest_v3_compatible,
     migrate_manifest_v2_to_v3,
@@ -34,6 +36,11 @@ def test_current_schema_version_is_3():
     assert MANIFEST_SCHEMA_VERSION == 3
 
 
+def test_current_probe_version_maps_to_current_manifest_schema():
+    """Current probe version must be explicitly mapped to current schema."""
+    assert PROBE_VERSION_SCHEMA_MAP[PROBE_VERSION] == MANIFEST_SCHEMA_VERSION
+
+
 # ---------------------------------------------------------------------------
 # build_artifact_manifest
 # ---------------------------------------------------------------------------
@@ -49,7 +56,7 @@ def test_build_artifact_manifest_basic():
         fingerprint_hash="ghi789",
         fpstate_enforced=True,
         fpstate_backend="fpstate.enforce_ftz_daz_disabled",
-        probe_version=1,
+        probe_version=PROBE_VERSION,
         probe_policy="strict",
         subnormals_preserved=True,
     )
@@ -64,7 +71,7 @@ def test_build_artifact_manifest_basic():
     fpstate = manifest["fpstate"]
     assert fpstate["enforced"] is True
     assert fpstate["backend"] == "fpstate.enforce_ftz_daz_disabled"
-    assert fpstate["probe_version"] == 1
+    assert fpstate["probe_version"] == PROBE_VERSION
     assert fpstate["probe_policy"] == "strict"
     assert fpstate["subnormals_preserved"] is True
     assert "note" not in fpstate
@@ -80,7 +87,7 @@ def test_build_artifact_manifest_with_note():
         fingerprint_hash="ghi789",
         fpstate_enforced=False,
         fpstate_backend="probe_only",
-        probe_version=1,
+        probe_version=PROBE_VERSION,
         probe_policy="strict",
         subnormals_preserved=False,
         fpstate_note="strict_requires_scalar_and_vector",
@@ -99,7 +106,7 @@ def test_build_artifact_manifest_types_are_python_primitives():
         fingerprint_hash="ghi789",
         fpstate_enforced=True,
         fpstate_backend="test",
-        probe_version=1,
+        probe_version=PROBE_VERSION,
         probe_policy="strict",
         subnormals_preserved=True,
     )
@@ -109,6 +116,23 @@ def test_build_artifact_manifest_types_are_python_primitives():
     assert isinstance(manifest["fpstate"]["probe_version"], int)
     assert isinstance(manifest["fpstate"]["probe_policy"], str)
     assert isinstance(manifest["fpstate"]["subnormals_preserved"], bool)
+
+
+def test_build_artifact_manifest_rejects_unmapped_probe_version():
+    """Unknown probe versions must fail closed until schema mapping is updated."""
+    with pytest.raises(ValueError, match="Unsupported probe_version"):
+        build_artifact_manifest(
+            artifact_id="sha256:abc123",
+            tensor_role="xyz_d50_linear_fp32",
+            tensor_hash="abc123",
+            raw_hash="def456",
+            fingerprint_hash="ghi789",
+            fpstate_enforced=True,
+            fpstate_backend="test",
+            probe_version=999,
+            probe_policy="strict",
+            subnormals_preserved=True,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -146,7 +170,7 @@ def test_stable_manifest_json_deterministic():
         fingerprint_hash="test",
         fpstate_enforced=True,
         fpstate_backend="test",
-        probe_version=1,
+        probe_version=PROBE_VERSION,
         probe_policy="strict",
         subnormals_preserved=True,
     )
@@ -167,7 +191,7 @@ def test_is_manifest_v3_compatible_true():
     manifest = {
         "schema_version": 3,
         "fpstate": {
-            "probe_version": 1,
+            "probe_version": PROBE_VERSION,
             "probe_policy": "strict",
         },
     }
@@ -202,7 +226,19 @@ def test_is_manifest_v3_compatible_false_missing_probe_policy():
     manifest = {
         "schema_version": 3,
         "fpstate": {
-            "probe_version": 1,
+            "probe_version": PROBE_VERSION,
+        },
+    }
+    assert is_manifest_v3_compatible(manifest) is False
+
+
+def test_is_manifest_v3_compatible_false_unsupported_probe_version():
+    """is_manifest_v3_compatible returns False for unmapped probe versions."""
+    manifest = {
+        "schema_version": 3,
+        "fpstate": {
+            "probe_version": 999,
+            "probe_policy": "strict",
         },
     }
     assert is_manifest_v3_compatible(manifest) is False
@@ -240,7 +276,7 @@ def test_migrate_manifest_v2_to_v3_idempotent():
     v3_manifest = {
         "schema_version": 3,
         "fpstate": {
-            "probe_version": 1,
+            "probe_version": PROBE_VERSION,
             "probe_policy": "strict",
         },
     }
@@ -248,7 +284,7 @@ def test_migrate_manifest_v2_to_v3_idempotent():
     result = migrate_manifest_v2_to_v3(v3_manifest)
 
     assert result["schema_version"] == 3
-    assert result["fpstate"]["probe_version"] == 1
+    assert result["fpstate"]["probe_version"] == PROBE_VERSION
     assert result["fpstate"]["probe_policy"] == "strict"
 
 
@@ -283,7 +319,7 @@ def test_full_manifest_roundtrip():
         fingerprint_hash="fp456",
         fpstate_enforced=True,
         fpstate_backend="fpstate.enforce_ftz_daz_disabled",
-        probe_version=1,
+        probe_version=PROBE_VERSION,
         probe_policy="strict",
         subnormals_preserved=True,
         fpstate_note="test_note",
@@ -293,7 +329,7 @@ def test_full_manifest_roundtrip():
     parsed = json.loads(json_str)
 
     assert parsed["schema_version"] == 3
-    assert parsed["fpstate"]["probe_version"] == 1
+    assert parsed["fpstate"]["probe_version"] == PROBE_VERSION
     assert parsed["fpstate"]["probe_policy"] == "strict"
     assert parsed["fpstate"]["note"] == "test_note"
     assert is_manifest_v3_compatible(parsed) is True
