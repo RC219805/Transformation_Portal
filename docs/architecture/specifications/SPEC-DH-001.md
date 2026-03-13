@@ -75,3 +75,4 @@ Because this spec is LOCKED:
 
 1. Compatible clarifications MAY be added without changing bounds.
 2. Any bound, matrix, or artifact schema change requires `SPEC-DH-001` version increment and review sign-off.
+3. Any `fpstate.probe_version` semantic change MUST coordinate with an artifact manifest schema update and contract map update before merge.

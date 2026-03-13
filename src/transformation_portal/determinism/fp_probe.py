@@ -4,7 +4,7 @@ This module provides a versioned, policy-driven FP-state probe that tests both
 scalar and vector operations to detect cross-ISA divergence in subnormal handling.
 
 Architecture: ADR-030 determinism harness extension.
-Probe Version: 1
+Probe Version: governed by PROBE_VERSION
 
 The probe tests:
 - Scalar multiplication of smallest subnormal × 1.0
@@ -49,6 +49,11 @@ from typing import Literal, Optional
 import numpy as np
 
 ProbePolicy = Literal["strict", "relaxed", "scalar_only", "vector_only"]
+
+# Governance contract for probe_fpstate_raw() semantics.
+# Increment only when detection semantics change (ops, vector length, reduction,
+# preservation definition, or failure handling) and coordinate schema/docs.
+PROBE_VERSION = 1
 
 
 @dataclass(frozen=True)
@@ -95,9 +100,9 @@ def probe_fpstate_raw() -> FPProbeRaw:
     detects whether subnormal values survive basic arithmetic operations.
 
     Returns:
-        FPProbeRaw with probe_version=1 and scalar/vector preservation flags.
+        FPProbeRaw with probe_version=PROBE_VERSION and scalar/vector preservation flags.
     """
-    probe_version = 1
+    probe_version = PROBE_VERSION
 
     # Smallest positive float32 subnormal.
     x = np.nextafter(np.float32(0.0), np.float32(1.0), dtype=np.float32)
