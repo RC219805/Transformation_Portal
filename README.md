@@ -86,6 +86,7 @@ Transformation Portal supports depth models across two tiers with different lice
 ### Production Path
 - **DA3 (`da3` backend):** Primary production backend for Lux Depth V3
 - **Use for:** The default governed depth workflow, with a commercial-safe model tier
+- **Requirement:** Install the ML tier for actual DA3 inference (`make install-ml` or `pip install -e ".[ml]"`)
 - **Default:** Standard CLI flows resolve here unless a research-only backend is explicitly requested
 
 ### Research & Non-Commercial
@@ -259,13 +260,15 @@ make venv
 source .venv/bin/activate  # Windows: .venv\Scripts\activate
 make install-core
 lux-depth-v3 --help
-make test-fast
 ```
 
-Add the ML tier only when you need research backends, segmentation, or heavier model workflows:
+Core-only installs are useful for documentation, contract checks, portal/orchestrator surfaces, and non-ML utilities. Actual depth inference with the default `da3` backend requires the ML tier unless you are intentionally exercising synthetic fallback in a constrained test setup.
+
+Add the ML tier when you need DA3 depth inference, research backends, segmentation, or other model-heavy workflows:
 
 ```bash
 make install-ml
+make test-fast
 ```
 
 For a more guided environment bring-up, see [SETUP_GUIDE.md](docs/guides/SETUP_GUIDE.md).
