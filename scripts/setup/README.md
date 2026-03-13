@@ -6,7 +6,7 @@ This directory contains installation and setup scripts for the Transformation Po
 
 ### `auto-organize-install.sh`
 
-Installs the automated repository organization system, including the standard thin pre-commit wrapper.
+Installs the automated repository organization system, including the standard repository pre-commit hook.
 
 **Usage:**
 ```bash
@@ -14,7 +14,7 @@ Installs the automated repository organization system, including the standard th
 ```
 
 **What it does:**
-- Installs the standard thin pre-commit wrapper at `.git/hooks/pre-commit`
+- Installs the standard repository pre-commit hook at `.git/hooks/pre-commit`
 - Makes the `.auto-organize.sh` script executable
 - Validates the repository structure
 
@@ -24,12 +24,18 @@ Installs the automated repository organization system, including the standard th
 
 ### `pre-commit-check.sh`
 
-Standalone root-placement validator used by the repo's pre-commit hooks and organization checks.
+Canonical root-placement validator used by the repository hook set and by the
+compatibility quality-gate wrapper.
 
 **Usage:**
-The primary git hook is installed with `make install-hooks`, which runs
-`pre-commit install -f`. This script remains available for manual
-organization-only checks:
+The primary git hook is installed with `make install-hooks` or
+`./scripts/setup/auto-organize-install.sh`, both of which install the
+repository's `pre-commit` hook. `scripts/pre_commit_hook.sh` remains available
+as a compatibility wrapper around
+`scripts/utilities/pre-commit-quality-check.py`; that Python quality gate
+invokes `scripts/setup/pre-commit-check.sh` so the root-placement policy stays
+single-sourced. This script also remains available for manual organization-only
+checks:
 
 ```bash
 ./scripts/setup/pre-commit-check.sh

@@ -33,55 +33,6 @@ MAX_LARGE_FILE_KB = 5000
 ROOT_MARKDOWN_LIMIT = 10
 CONFLICT_MARKER_RE = re.compile(r"^(<<<<<<< |=======|>>>>>>> )", re.MULTILINE)
 
-ALLOWED_ROOT_FILES = {
-    "AGENTS.md",
-    "README.md",
-    "LICENSE",
-    "CONTRIBUTING.md",
-    "CHANGELOG.md",
-    "REPO_ORGANIZATION.md",
-    "Makefile",
-    "pyproject.toml",
-    "setup.py",
-    "setup.cfg",
-    "requirements.txt",
-    "requirements-dev.txt",
-    "requirements-ci.txt",
-    "requirements-test.txt",
-    "Pipfile",
-    "Pipfile.lock",
-    "poetry.lock",
-    "pytest.ini",
-    "tox.ini",
-    ".coveragerc",
-    ".pylintrc",
-    ".flake8",
-    "mypy.ini",
-    "Dockerfile",
-    "docker-compose.yml",
-    "docker-compose.yaml",
-    ".gitignore",
-    ".gitattributes",
-    ".gitmodules",
-    ".auto-organize.sh",
-    "PKG-INFO",
-    "MANIFEST.in",
-    "__init__.py",
-}
-
-ALLOWED_ROOT_PATTERNS = (
-    re.compile(r"^requirements.*\.txt$"),
-    re.compile(r"^\.git.*$"),
-    re.compile(r"^\..*rc$"),
-)
-
-ROOT_DESTINATION_RULES: tuple[tuple[re.Pattern[str], str], ...] = (
-    (re.compile(r"(PLAN|STRATEGY|OPTIMIZATION|SUMMARY)"), "docs/guides/"),
-    (re.compile(r"(ARCHITECTURE|DESIGN)"), "docs/architecture/"),
-    (re.compile(r"(API|REFERENCE)"), "docs/api/"),
-    (re.compile(r"(DEPLOY|PRODUCTION)"), "docs/deployment/"),
-)
-
 
 @dataclass(frozen=True)
 class CheckOutcome:
@@ -142,7 +93,7 @@ def run_command(
     )
 
 
-def git_paths(repo_root: Path, *, all_files: bool, diff_filter: str = "ACM") -> list[Path]:
+def git_paths(repo_root: Path, *, all_files: bool, diff_filter: str = "ACMR") -> list[Path]:
     if all_files:
         result = run_command(["git", "ls-files"], cwd=repo_root)
     else:
@@ -220,49 +171,21 @@ def auto_fix_text_hygiene(repo_root: Path, paths: Iterable[Path]) -> CheckOutcom
     return CheckOutcome("Text hygiene auto-fix", True)
 
 
-def is_allowed_in_root(name: str) -> bool:
-    if name in ALLOWED_ROOT_FILES:
-        return True
-    return any(pattern.match(name) for pattern in ALLOWED_ROOT_PATTERNS)
+def check_root_file_placement(repo_root: Path, *, all_files: bool) -> CheckOutcome:
+    policy_script = repo_root / "scripts" / "setup" / "pre-commit-check.sh"
+    if not policy_script.is_file():
+        print(f"Root placement policy script not found: {policy_script}")
+        return CheckOutcome("Root file placement", False)
 
-
-def suggest_root_destination(name: str) -> str:
-    if name.endswith(".md"):
-        for pattern, destination in ROOT_DESTINATION_RULES:
-            if pattern.search(name):
-                return destination
-        return "docs/guides/"
-    if name.endswith((".sh", ".py")) and not name.startswith("test_"):
-        if re.search(r"(install|setup|download)", name):
-            return "scripts/setup/"
-        if re.search(r"(verify|navigate|util)", name):
-            return "scripts/utilities/"
-        return "scripts/automation/"
-    if name.endswith((".json", ".csv", ".txt")):
-        return "data/"
-    if name.endswith((".jpg", ".jpeg", ".png", ".gif", ".tiff", ".tif")):
-        return "archive/" if re.search(r"(debug|test)", name) else "data/sample_images/"
-    if name.endswith((".ts", ".js")):
-        return "archive/"
-    return "appropriate subdirectory"
-
-
-def check_root_file_placement(repo_root: Path, staged_paths: Sequence[Path]) -> CheckOutcome:
-    misplaced = []
-    for path in staged_paths:
-        rel = path.relative_to(repo_root)
-        if len(rel.parts) != 1 or not path.is_file():
-            continue
-        name = rel.name
-        if not is_allowed_in_root(name):
-            misplaced.append((name, suggest_root_destination(name)))
-
-    if not misplaced:
+    mode = "--all" if all_files else "--staged"
+    result = run_command(["bash", str(policy_script), mode], cwd=repo_root)
+    if result.returncode == 0:
         return CheckOutcome("Root file placement", True)
 
-    print("Repository-root placement check failed:")
-    for name, suggestion in misplaced:
-        print(f"  - {name} -> suggested destination: {suggestion}")
+    if result.stdout.strip():
+        print(result.stdout.strip())
+    if result.stderr.strip():
+        print(result.stderr.strip())
     return CheckOutcome("Root file placement", False)
 
 
@@ -596,7 +519,7 @@ def main() -> int:
 
     outcomes = [
         check_untracked_core_files(repo_root),
-        check_root_file_placement(repo_root, staged_paths),
+        check_root_file_placement(repo_root, all_files=args.all_files),
         check_markdown_count(repo_root),
         auto_fix_text_hygiene(repo_root, text_paths),
         check_large_added_files(added_paths, repo_root),
