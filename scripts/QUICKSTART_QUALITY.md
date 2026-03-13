@@ -16,6 +16,8 @@ make quality-check
 ```
 
 That's it! The pre-commit hook will now run automatically before every commit.
+`make pre-commit` runs the same configured hook set manually, with CI-aligned
+Black and isort versions.
 
 ## Daily Usage
 
@@ -51,6 +53,7 @@ git push
 # Quick Checks
 make ci              # Fast checks (30 seconds)
 make pre-commit      # Pre-commit checks only
+make lint-parity     # Match the GitHub lint job locally
 make lint            # Linting only
 
 # Full Checks
@@ -77,7 +80,7 @@ make validate-ci     # Validate GitHub Actions workflows
 ✅ **Documentation** - Markdown file organization
 ✅ **Whitespace** - Trailing whitespace (auto-fixes)
 ✅ **Syntax** - Python compilation
-✅ **Debugging** - No debugging statements in commits
+✅ **Hook hygiene** - Root-file placement, merge conflicts, line endings, YAML syntax
 
 ## Troubleshooting
 
@@ -85,7 +88,9 @@ make validate-ci     # Validate GitHub Actions workflows
 ```bash
 # Reinstall
 make install-hooks
-chmod +x .git/hooks/pre-commit
+
+# Verify the generated hook
+sed -n '1,40p' .git/hooks/pre-commit
 ```
 
 ### Tests failing

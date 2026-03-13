@@ -6,7 +6,7 @@ This directory contains installation and setup scripts for the Transformation Po
 
 ### `auto-organize-install.sh`
 
-Installs the automated repository organization system, including the pre-commit hook.
+Installs the automated repository organization system, including the standard thin pre-commit wrapper.
 
 **Usage:**
 ```bash
@@ -14,7 +14,7 @@ Installs the automated repository organization system, including the pre-commit 
 ```
 
 **What it does:**
-- Installs the pre-commit hook to prevent misplaced files
+- Installs the standard thin pre-commit wrapper at `.git/hooks/pre-commit`
 - Makes the `.auto-organize.sh` script executable
 - Validates the repository structure
 
@@ -24,10 +24,12 @@ Installs the automated repository organization system, including the pre-commit 
 
 ### `pre-commit-check.sh`
 
-Root-placement validator used by the pre-commit hook before allowing commits.
+Standalone root-placement validator used by the repo's pre-commit hooks and organization checks.
 
 **Usage:**
-This script is automatically run by git when you commit. You can also run it manually:
+The primary git hook is installed with `make install-hooks`, which runs
+`pre-commit install -f`. This script remains available for manual
+organization-only checks:
 
 ```bash
 ./scripts/setup/pre-commit-check.sh
@@ -129,7 +131,10 @@ ls -la .git/hooks/pre-commit
 # Test organization script
 ./.auto-organize.sh --dry-run
 
-# Test pre-commit hook (should show help if no misplaced files)
+# Run the same hook set manually
+make pre-commit
+
+# Or run only the organization sub-check
 ./scripts/setup/pre-commit-check.sh
 ```
 
@@ -152,7 +157,7 @@ chmod +x .auto-organize.sh
 **Solution:**
 ```bash
 # Reinstall the hook
-./scripts/setup/auto-organize-install.sh
+make install-hooks
 
 # Verify installation
 ls -la .git/hooks/pre-commit
