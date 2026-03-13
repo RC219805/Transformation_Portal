@@ -1,25 +1,29 @@
 [![CI](https://github.com/RC219805/Transformation_Portal/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/RC219805/Transformation_Portal/actions/workflows/build.yml)
 [![APEX Performance](https://github.com/RC219805/Transformation_Portal/actions/workflows/apex_performance.yml/badge.svg?branch=main)](https://github.com/RC219805/Transformation_Portal/actions/workflows/apex_performance.yml)
 [![Python](https://img.shields.io/badge/python-3.11%2B-brightgreen.svg)](https://www.python.org/)
-[![License](https://img.shields.io/badge/license-Attribution-blue.svg)](#license)
+[![License](https://img.shields.io/badge/license-Proprietary-red.svg)](#license)
 [![Release](https://img.shields.io/github/v/release/RC219805/Transformation_Portal?sort=semver)](https://github.com/RC219805/Transformation_Portal/releases)
 
 # Transformation Portal
 
-Professional image and video processing toolkit for luxury real estate rendering, architectural visualization, and editorial post-production.
+Transformation Portal is a governed image and video processing platform for luxury real estate rendering, architectural visualization, and editorial finishing.
+
+It combines orchestrated depth estimation, PBR map generation, material-aware finishing, optional AI enhancement, and portal/orchestrator surfaces behind explicit contracts, provenance, and reproducibility artifacts.
 
 **📊 [Performance Dashboard](https://rc219805.github.io/Transformation_Portal/)** | **📈 [Latest Metrics](https://rc219805.github.io/Transformation_Portal/latest.html)**
 
 ---
 
-## Current Release: v2.0.0 (Golden Path)
+## Repository Status
 
-Transformation Portal v2.0.0 is the first stable release with production-ready contracts and preset governance.
+`main` tracks the active development branch for the repository.
 
-Key improvements in v2.0.0:
-- Versioned API contracts (schema-aligned payloads)
-- Preset stability taxonomy (stable / canary / experimental) discoverable via CLI
-- Service hardening including `/ready` for readiness checks
+For reproducible installs, pin a specific release tag from [GitHub Releases](https://github.com/RC219805/Transformation_Portal/releases) instead of relying on branch prose. The release badge above reflects the latest tagged GitHub release.
+
+Core entry points:
+- `lux-depth-v3` for orchestrated depth, PBR, materials, and enhancement workflows
+- Portal/orchestrator HTTP surfaces with `/ready` and contract-tested job endpoints
+- Determinism, manifest, run-card, and provenance layers for governed execution
 
 Quick discovery:
 ```bash
@@ -27,25 +31,27 @@ lux-depth-v3 --help
 
 # If console scripts aren't on PATH, run as module:
 python -m transformation_portal.lux_depth_v3 --help
-```
 
-Install the release:
-```bash
-pip install "git+https://github.com/RC219805/Transformation_Portal.git@v2.0.0"
-```
-
-Portal orchestrator docs:
-- [Portal + Orchestrator Quickstart](docs/guides/PORTAL_ORCHESTRATOR_QUICKSTART.md)
-- [Portal Orchestrator Roadmap (Re-Baselined)](docs/architecture/PORTAL_ORCHESTRATOR_ROADMAP.md)
-
-Portal orchestrator contract gate:
-```bash
+# Portal/orchestrator contract gate:
 make test-orchestrator-contract
 ```
 
+Install a pinned release:
+```bash
+pip install "git+https://github.com/RC219805/Transformation_Portal.git@<release-tag>"
+```
+
+Replace `<release-tag>` with a tag from [GitHub Releases](https://github.com/RC219805/Transformation_Portal/releases).
+
+Key docs:
+- [Portal + Orchestrator Quickstart](docs/guides/PORTAL_ORCHESTRATOR_QUICKSTART.md)
+- [Portal Orchestrator Roadmap (Re-Baselined)](docs/architecture/PORTAL_ORCHESTRATOR_ROADMAP.md)
+- [Lux Depth V3 CLI Guide](docs/cli/LUX_DEPTH_V3_CLI_GUIDE.md)
+- [Context-Aware Rendering Guide](docs/guides/CONTEXT_AWARE_RENDERING.md)
+
 ---
 
-## Major Feature: Context-Aware Rendering (Nov 2025)
+## Flagship Capability: Context-Aware Rendering
 
 Context-Aware Rendering extracts architectural intelligence from construction documents (floor plans, elevations, specifications) and uses that context to inform processing decisions.
 - Architectural context extraction from PDFs (room types, dimensions, materials, design style)
@@ -55,7 +61,7 @@ Context-Aware Rendering extracts architectural intelligence from construction do
 - Document provenance: explicit linkage from construction docs → final render decisions
 
 Docs:
-- docs/guides/CONTEXT_AWARE_RENDERING.md
+- [Context-Aware Rendering Guide](docs/guides/CONTEXT_AWARE_RENDERING.md)
 
 ---
 
@@ -73,24 +79,23 @@ Core capabilities:
 
 ---
 
-## Depth Models: Commercial vs. Research
+## Depth Models: Production and Research Tiers
 
 Transformation Portal supports depth models across two tiers with different licensing and use cases.
 
-### Production (Commercial)
-- **DA3 (`da3` backend):** Fully supported, production-ready
-- **Use for:** Commercial applications, products, revenue-generating services
-- **Licensing:** Commercial-safe production tier
-- **Default:** All standard presets use this tier
+### Production Path
+- **DA3 (`da3` backend):** Primary production backend for Lux Depth V3
+- **Use for:** The default governed depth workflow, with a commercial-safe model tier
+- **Requirement:** Install the ML tier for actual DA3 inference (`make install-ml` or `pip install -e ".[ml]"`)
+- **Default:** Standard CLI flows resolve here unless a research-only backend is explicitly requested
 
 ### Research & Non-Commercial
-- **Depth Anything V3.1 (DA3 1.1, CC BY-NC 4.0):** Available for research/academic use only
-- **Use for:** Academic research, benchmarking, non-profit projects
-- **Licensing:** CC BY-NC 4.0 (non-commercial research only)
-- **Enabled by:** Setting `non_commercial_ok=True` in EnhanceConfig
-- **Example Preset:** `depth-anything-v3.1-research-m4` (Apple Silicon optimized)
+- **Depth Anything V3.1 preset:** `depth-anything-v3.1-research-m4`
+- **Depth Pro backend:** `depth_pro`
+- **Use for:** Explicitly acknowledged research and non-commercial evaluation paths
+- **Requirements:** `non_commercial_ok=True`, plus Apple license acceptance for `depth_pro`
 
-**Important:** DA3 1.1 is prohibited for commercial use. If you plan to use these models in a commercial product or service, use the commercial DA3 V2 variants instead. See [ADR-0015: DA3 1.1 Non-Commercial Research Tier](docs/architecture/adr-0015-da3-1-1-non-commercial-research-tier.md) for detailed governance.
+**Important:** Research-only models are not part of the default commercial-safe path. See [ADR-0015: DA3 1.1 Non-Commercial Research Tier](docs/architecture/adr-0015-da3-1-1-non-commercial-research-tier.md) for governance details.
 
 ### Research Preset Example
 
@@ -111,12 +116,14 @@ config = EnhanceConfig(
 
 Lux Depth V3 supports multiple depth estimation backends with automatic fallback for robustness.
 
-### Available Backends
+### Primary User-Facing Backends
 
 | Backend | Model | License | Focal Length | Metric Depth | Checkpoint Required |
 |---------|-------|---------|--------------|--------------|---------------------|
-| `da3` (default) | Depth Anything V3 | Commercial-safe | ❌ | ❌ | No (auto-download) |
-| `depth_pro` | Apple Depth Pro | Apple ML Research | ✅ | ✅ | Yes (1.9 GB) |
+| `da3` (default) | Depth Anything V3 | Commercial-safe production path | ❌ | ❌ | No (auto-download) |
+| `depth_pro` | Apple Depth Pro | Research-only with explicit license acceptance | ✅ | ✅ | Yes (1.9 GB) |
+
+The orchestrator also contains an internal `synthetic` fallback path used for explicit test/CI or fallback scenarios. It is not the primary production backend surfaced for normal CLI use.
 
 ### Usage
 
@@ -158,7 +165,7 @@ orchestrator = EnhanceOrchestrator(config, Path("./output"))
 
 ### Fallback Behavior
 
-If the requested backend is unavailable (missing checkpoint or dependencies), the system automatically falls back to DA3 with a warning logged. This ensures robustness in production environments.
+If the requested backend is unavailable, the orchestrator records the resolution outcome in backend metadata and falls back through the configured operational chain. In explicit test or constrained environments, a synthetic fallback path can also be enabled.
 
 ### Backend Metadata
 
@@ -176,75 +183,31 @@ See [ADR-019: Backend Registry Integration](docs/architecture/decisions/ADR-019-
 
 ### RAW Camera File Support
 
-Enable processing of RAW camera files (CR2, NEF, ARW, DNG, etc.) from professional cameras.
+Enable direct ingestion of professional camera RAW formats such as CR2, NEF, ARW, and DNG.
 
-**Installation:**
 ```bash
-pip install rawpy
-# Or install with the RAW extras group:
 pip install -e ".[raw]"
+# or: pip install rawpy
 ```
 
-**Supported RAW Formats:**
-- Canon (CR2, CRW), Nikon (NEF, NRW), Sony (ARW, SRF, SR2)
-- Adobe DNG, Olympus ORF, Fujifilm RAF, Pentax PEF
-- Panasonic RW2, Phase One IIQ, Hasselblad 3FR
-
-**Usage:**
-```bash
-# Process RAW files just like standard images
-lux-depth-v3 --input-dir ./raw_images --output-dir ./output
-
-# RAW files are automatically detected and converted to RGB
-# High-quality settings: camera white balance, full resolution, sRGB color space
-```
-
-**Technical Details:**
-- RAW → RGB conversion uses LibRaw via rawpy
-- Default settings: camera white balance, full resolution, AHD demosaic
-- Output: 8-bit sRGB (standard pipeline input)
-- Graceful fallback: clear error message if rawpy not installed
+RAW inputs are auto-detected and converted into pipeline-ready RGB using LibRaw via `rawpy`. See [SETUP_GUIDE.md](docs/guides/SETUP_GUIDE.md) for environment details.
 
 ---
 
 ### Depth Pro (Experimental)
 
-Apple's Depth Pro model for metric depth estimation. **Experimental tier** - for research and evaluation only.
+Use `depth_pro` when you need metric depth and are operating in an explicit research-only workflow.
 
-**Safe installation (dedicated environment):**
 ```bash
 python3 -m venv .venv-depth-pro
-./.venv-depth-pro/bin/python -m pip install --upgrade pip
-./.venv-depth-pro/bin/python -m pip install depth-pro
-```
-
-Do not install `depth-pro` into the main Transformation Portal environment. The
-Depth Pro package currently pins `numpy<2`, which conflicts with the repository
-lockfiles and several image-processing dependencies used by the primary stack.
-
-**Checkpoint Download (1.9 GB):**
-```bash
+./.venv-depth-pro/bin/python -m pip install --upgrade pip depth-pro
 mkdir -p checkpoints
 curl -L https://ml-site.cdn-apple.com/models/depth-pro/depth_pro.pt -o checkpoints/depth_pro.pt
 ```
 
-**License Requirements (Research-Only):**
+Keep `depth-pro` in its own environment. Its dependency constraints conflict with the main repository stack.
 
-Depth Pro uses the Apple Machine Learning Research License (AMLR), which restricts usage to **non-commercial research only**. To use Depth Pro, you must explicitly acknowledge both:
-
-```python
-from transformation_portal.lux_depth_v3 import EnhanceConfig
-
-config = EnhanceConfig(
-    depth_backend="depth_pro",
-    non_commercial_ok=True,                          # Required: Acknowledge non-commercial use
-    accept_apple_depth_pro_research_license=True,    # Required: Accept Apple AMLR license
-    depth_pro_python_executable=".venv-depth-pro/bin/python",
-    depth_device="mps",  # Apple Silicon (or "cpu" for fallback)
-)
-```
-
-**CLI / env wiring:**
+Required CLI wiring:
 ```bash
 lux-depth-v3 \
   --input-dir ./input \
@@ -258,378 +221,176 @@ lux-depth-v3 \
 export TRANSFORMATION_PORTAL_DEPTH_PRO_PYTHON=./.venv-depth-pro/bin/python
 ```
 
-**⚠️ Important:** This model cannot be used for:
-- Commercial products or services
-- Revenue-generating applications
-- Paid client work
-
-See [Apple AMLR License](https://github.com/apple/ml-depth-pro/blob/main/LICENSE) for full terms.
-
-**Presets:**
-- `depth_pro_metric_mps.yaml` - Apple Silicon optimized
-- `depth_pro_metric_cpu.yaml` - CPU fallback
-
-**Hardware Requirements:**
-- Optimized for Apple Silicon (MPS device)
-- Fallback to CPU supported
-- Memory: ~2 GB for model + checkpoint
-
-**Tier Status:** Experimental - use at your own risk. Default backend remains Depth Anything V3.
+See the [Lux Depth V3 CLI Guide](docs/cli/LUX_DEPTH_V3_CLI_GUIDE.md) for presets, Apple Silicon guidance, and license enforcement details.
 
 ---
 
 ## PBR Map Generation
 
-**New in v2.0**: Standalone PBR processor for generating Physically Based Rendering maps from depth data.
+Lux Depth V3 can generate physically based rendering maps directly from the full pipeline or from cached depth when you are tuning look-development workflows.
 
-### Quick Start - PBR Only
-
-Generate PBR maps from existing depth:
-
-```python
-from transformation_portal.lux_depth_v3 import PBRProcessor, get_preset
-
-# Use premium quality preset
-config = get_preset("premium").to_pbr_config()
-
-# Generate from cached depth (2.3x faster than full pipeline)
-paths = PBRProcessor.from_cached_depth(
-    depth_path="output/scene1_depth.npy",
-    config=config,
-    output_dir="output/pbr/",
-    base_name="scene1"
-)
-
-# Output: scene1_normal.png, scene1_roughness.png, scene1_ao.png
+Fast PBR-only run:
+```bash
+lux-depth-v3 \
+  --input-dir ./input \
+  --output-dir ./output/pbr \
+  --quality-tier apex \
+  --pbr "on" \
+  --enable-v2 "off"
 ```
 
-### When to Use PBRProcessor vs Full Pipeline
+Typical outputs:
+- `*_depth.png` and optional float depth artifacts
+- `*_normal.png`
+- `*_roughness.png`
+- `*_ao.png`
 
-**Use PBRProcessor** (standalone) when:
-- You already have depth maps and only need PBR
-- Iterating on PBR parameters (2.3x faster than re-running depth)
-- Integrating PBR into custom workflows
-- Processing depth from external sources
-
-**Use Orchestrator** (full pipeline) when:
-- Starting from RGB images (need depth estimation)
-- Running complete enhancement workflow
-- Need depth + PBR + V2 enhancement in one pass
-
-### Available Presets
-
-**Quality Tiers:**
-- `standard` - Balanced quality/speed (typical batch processing)
-- `premium` - Maximum quality (hero shots, marketing)
-- `draft` - Fast preview (internal review)
-
-**Material-Optimized:**
-- `wood` - Emphasizes grain texture
-- `metal` - Lower roughness for polished surfaces
-- `glass` - Heavy smoothing for flat surfaces
-- `stone` - High detail for texture
-- `fabric` - Moderate parameters for textiles
-
-### Performance Benefits
-
-- **PBR-only workflow**: ~3,000 images/hour (vs ~1,277 for full pipeline)
-- **Memory-only mode**: No file I/O overhead
-- **Iterative tuning**: 2x faster when testing multiple presets
-
-See [PBR Processor Quick Start](docs/guides/PBR_PROCESSOR_QUICKSTART.md) for detailed guide.
+For standalone depth-to-PBR iteration, see [PBR Processor Quick Start](docs/guides/PBR_PROCESSOR_QUICKSTART.md).
 
 ---
 
 ## Quick Start
 
-1) Clone (recommended for development / local ops)
+Recommended local setup:
 
 ```bash
 git clone https://github.com/RC219805/Transformation_Portal.git
 cd Transformation_Portal
-python -m venv .venv
+make venv
 source .venv/bin/activate  # Windows: .venv\Scripts\activate
+make install-core
+lux-depth-v3 --help
 ```
 
-2) Install (choose your environment)
+Core-only installs are useful for documentation, contract checks, portal/orchestrator surfaces, and non-ML utilities. Actual depth inference with the default `da3` backend requires the ML tier unless you are intentionally exercising synthetic fallback in a constrained test setup.
 
-**Option A - Minimal runtime**
-```bash
-pip install -r requirements.txt
-pip install -e .
-```
-
-**Option B - Runtime + tests (CI-like)**
-```bash
-pip install -r requirements-ci.txt
-pip install -e .
-```
-
-**Option C - Full dev environment**
-```bash
-pip install -r requirements-dev.txt
-pip install -e .
-```
-
-3) Verify installation
+Add the ML tier when you need DA3 depth inference, research backends, segmentation, or other model-heavy workflows:
 
 ```bash
-python scripts/verification/verify_core.py
+make install-ml
+make test-fast
 ```
+
+For a more guided environment bring-up, see [SETUP_GUIDE.md](docs/guides/SETUP_GUIDE.md).
 
 ---
 
 ## Machine-Readable JSON Output for Automation
 
-The metadata extraction CLI supports a machine-mode JSON output for CI/CD and automation workflows.
+The metadata extraction tooling supports deterministic machine-mode JSON for CI/CD and automation.
 
-**Quick Start:**
 ```bash
-# Emit structured JSON
 python scripts/test_metadata_extraction.py --json extract /input/image.CR2
-
-# Write JSON to file
-python scripts/test_metadata_extraction.py --json --json-output result.json extract /input/image.CR2
-
-# Parse with reference parser
-python tools/parse_machine_json.py result.json
 ```
 
-**Key Features:**
-- **Deterministic structure:** Stable keys, ordering, and types across runs
-- **Exit code semantics:** Clear success/failure signaling (0=success, 1-5=specific failures)
-- **Typed errors:** Structured error objects for programmatic parsing
-- **Schema versioning:** `tp.meta.machine.v1` contract with explicit version bumps
+Key properties:
+- deterministic structure and stable keys
+- explicit exit-code semantics
+- schema-versioned payloads for automation
 
-**Documentation:**
-- **Quick Reference:** [docs/quick_references/MACHINE_MODE_JSON.md](docs/quick_references/MACHINE_MODE_JSON.md)
-- **Full Contract:** [docs/api/MACHINE_MODE_CONTRACT.md](docs/api/MACHINE_MODE_CONTRACT.md)
-- **Reference Parser:** [tools/parse_machine_json.py](tools/parse_machine_json.py)
-- **Bash Examples:** [tools/parse_machine_json_examples.sh](tools/parse_machine_json_examples.sh)
+Docs:
+- [Machine Mode JSON Quick Reference](docs/quick_references/MACHINE_MODE_JSON.md)
+- [Machine Mode Contract](docs/api/MACHINE_MODE_CONTRACT.md)
 
 ---
 
 ## Dependency Management
 
-This repo uses two layers:
-1. Convenience pinned files at repo root:
-   - `requirements.txt`
-   - `requirements-ci.txt`
-   - `requirements-dev.txt`
-   - `requirements-lint.txt`
+- Root `requirements*.txt` files are convenience entry points.
+- `requirements/` contains the layered source of truth for maintainers.
+- If you change dependency inputs, regenerate and commit the matching lockfiles from `requirements/`.
 
-2. Source-of-truth layered inputs in `requirements/` for maintainers:
-
-```
-requirements/
-├── base.in      # Core runtime deps (human-editable)
-├── base.txt     # Compiled/pinned
-├── ml.in        # ML/AI deps (human-editable)
-├── ml.txt       # Compiled/pinned
-├── dev.in       # Dev deps (human-editable)
-├── dev.txt      # Compiled/pinned
-├── ci.in        # CI/test deps (human-editable)
-└── ci.txt       # Compiled/pinned
-```
-
-If you update `.in` files, recompile and commit both `.in` and `.txt` outputs:
-```bash
-cd requirements/
-make compile
-```
+See [AGENTS.md](AGENTS.md) and the `requirements/` Make targets for the supported lock/update workflow.
 
 ---
 
 ## Repository Layout (high level)
 
-```
-assets/       # LUTs, branding, look assets
-config/       # YAML presets and configuration
-docs/         # Architecture, guides, reports
-examples/     # Usage examples
-requirements/ # Layered dependency sources (pip-tools style)
-scripts/      # Operational scripts / pipeline runners
-src/          # Installable package source
-tests/        # pytest suite
-tools/        # Dev/ops tools (manifests, audits, utilities)
-workflows/    # Workflow artifacts / operational workflow utilities
-```
+- `src/` installable package source
+- `docs/` architecture, guides, contracts, and reports
+- `scripts/` operational workflows, validation, and setup helpers
+- `tests/` pytest suite and regression gates
+- `config/` presets and pipeline configuration
+- `tools/` developer and audit utilities
 
 ---
 
 ## Supported File Formats (summary)
 
-### Input Formats
-
-**Standard Image Formats:**
-- PNG, JPEG (`.jpg`, `.jpeg`)
-- TIFF/TIF (`.tif`, `.tiff`)
-- WebP, BMP (case-insensitive)
-
-**RAW Camera Formats** (requires `rawpy` - optional):
-- Canon: `.cr2`, `.crw`
-- Nikon: `.nef`, `.nrw`
-- Sony: `.arw`, `.srf`, `.sr2`
-- Adobe: `.dng` (Digital Negative)
-- Olympus: `.orf`
-- Fujifilm: `.raf`
-- Pentax: `.pef`
-- Panasonic: `.rw2`
-- Phase One, Hasselblad, and more
-
-To enable RAW support:
-```bash
-pip install rawpy
-# Or install with optional extras:
-pip install -e ".[raw]"
-```
-
-**Video:**
-- MP4, MOV, AVI, MKV (codec/container dependent)
-- HDR pipelines supported where FFmpeg metadata and filters allow (PQ/HLG workflows)
+- Images: PNG, JPEG, TIFF, WebP, BMP
+- RAW stills: optional via `rawpy` for major camera ecosystems
+- Video: MP4, MOV, AVI, MKV where FFmpeg codec support is available
+- High-bit-depth and metadata-preserving workflows are supported where the selected pipeline path and dependencies allow
 
 ---
 
 ## System Requirements
-- Python: 3.11+
-- FFmpeg: 6+ (for video workflows)
-- Hardware: CPU-only supported; GPU/Apple Silicon acceleration optional depending on pipeline
-
-CI note:
-- Core tests run on Python 3.11 and 3.12
-- ML tests run on Python 3.11
-- Lint runs on Python 3.12
+- Python 3.11+
+- CPU-only operation supported
+- Apple Silicon (`mps`) and CUDA acceleration supported where the selected workflow can use them
+- FFmpeg recommended for video workflows
 
 ---
 
 ## Testing
 
-Fast local run (mirrors CI core suite):
+Use the Make targets first:
 ```bash
-pytest -v tests/ -ra -m "not ml and not slow" --maxfail=1
-```
-
-ML tests (requires ML extras):
-```bash
-pytest -v tests/ -ra -m "ml and not slow" --maxfail=1
-```
-
-All tests except slow:
-```bash
-pytest -v tests/ -ra -m "not slow" --maxfail=1
-```
-
-Repo Make targets may exist (see Makefile):
-```bash
-make test-fast  # fast subset + Phase 6 smoke coverage
+make test-fast
 make test-full
 make ci
+make test-orchestrator-contract
+```
+
+Direct pytest examples:
+```bash
+pytest -v tests/ -ra -m "not ml and not slow" --maxfail=1
+pytest -v tests/ -ra -m "ml and not slow" --maxfail=1
 ```
 
 ---
 
 ## Performance Monitoring
 
-Transformation Portal includes automated performance regression detection via the **APEX Performance Observability Platform** (integrated in CI) and the legacy Performance Ledger tool (for historical analysis).
+Performance is treated as a first-class signal in CI.
 
-### APEX System (Authoritative for CI/CD)
+- APEX workflows publish performance summaries and dashboard updates on `main`
+- Determinism and contract gates protect reproducibility, not just raw throughput
+- Local baseline capture and comparison are available through the performance ledger tooling
 
-**Current Status (Phase 1):** Shadow mode with synthetic data (informational only, non-blocking)
-
-The APEX system runs automatically on every PR with:
-- **V1 vs V2 performance comparison** (workflow baseline)
-- **Per-zone performance heatmaps** (deployment topology awareness)
-- **Worst offenders detection** (pinpoint regressions)
-- **Gate verdict reporting** (pass/warn/fail with explanations)
-- See `.github/workflows/apex_performance.yml`
-
-**Phase 1 Configuration (Current):**
-- Mode: Shadow (reports but does not block)
-- Data: Synthetic (dry-run mode validates contracts/schema)
-- Purpose: Validate APEX infrastructure before real integration
-
-**Future (Phase 2 - Real Pipeline Integration):**
-Once ML dependencies (torch/transformers, ~5GB) and model caching are deployed:
-- Mode: Enforce (blocks merges on violations)
-- Data: Real pipeline execution (actual performance measurements)
-- Thresholds (to be calibrated from Phase 2 baseline):
-  - **p95 > 10% worse:** Tail latency regression (blocks)
-  - **mean > 15% worse:** Average performance regression (blocks)
-  - **failure_rate > 0%:** Any new failures (blocks)
-
-**Why Phased Rollout:**
-- Phase 1 validates data contracts and reporting without ML overhead
-- Phase 2 adds real measurements and enforcement once infrastructure is ready
-- Prevents false failures during scaffold validation phase
-
-See [APEX Real Pipeline Integration Plan](docs/guides/APEX_REAL_PIPELINE_INTEGRATION.md) and [ADR-024](docs/decisions/ADR-024-performance-regression-authority-canonicalization.md) for details.
-
-### Legacy Performance Ledger (Ad-hoc Analysis)
-
-For local analysis and historical baselines:
-
-#### Capture Baseline
-
-```bash
-python tools/performance_ledger.py \
-  --manifests-dir output/prod_run/manifests \
-  --output docs/performance/baselines/v2.1.0-baseline.json \
-  --version "v2.1.0" \
-  --backend "da3" \
-  --quality-tier "standard"
-```
-
-#### Compare Against Baseline
-
-```bash
-python tools/performance_ledger.py \
-  --baseline docs/performance/baselines/v2.0.0-post-pr841.json \
-  --compare output/test_run/manifests \
-  --output perf_report.md
-```
-
-Exit codes:
-- `0`: No regressions detected
-- `1`: Regressions detected (blocks merge)
-
-See [Performance Monitoring Guide](docs/performance/README.md) and [ADR-024](docs/decisions/ADR-024-performance-regression-authority-canonicalization.md) for details.
+For deeper performance workflows, see:
+- [Performance Monitoring Guide](docs/performance/README.md)
+- [APEX Real Pipeline Integration Guide](docs/guides/APEX_REAL_PIPELINE_INTEGRATION.md)
+- [ADR-024](docs/decisions/ADR-024-performance-regression-authority-canonicalization.md)
 
 ---
 
 ## Documentation
 
-**📖 Start with:** [DOCUMENTATION_MAP.md](docs/governance/DOCUMENTATION_MAP.md)
-
-The Documentation Map is your single source of truth for finding guides, references, and technical documentation.
-
-### Essential Docs
-- **[DOCUMENTATION_MAP.md](docs/governance/DOCUMENTATION_MAP.md)** - Complete documentation index
-- **[API Documentation](docs/api/)** - Full API reference (Sphinx)
-- **[SETUP_GUIDE.md](docs/guides/SETUP_GUIDE.md)** - Detailed installation
-- **[ARCHITECTURE.md](docs/architecture/ARCHITECTURE.md)** - System architecture
-- **[CONTRIBUTING.md](CONTRIBUTING.md)** - How to contribute
-
-### Quick Links
-- **API Reference:** [docs/api/](docs/api/)
-- **Pipelines:** [docs/pipeline/](docs/pipeline/)
-- **CI/CD:** [docs/ci/](docs/ci/)
-- **Troubleshooting:** [docs/guides/TROUBLESHOOTING.md](docs/guides/TROUBLESHOOTING.md)
-- **Lux Depth V3 CLI Guide:** [docs/cli/LUX_DEPTH_V3_CLI_GUIDE.md](docs/cli/LUX_DEPTH_V3_CLI_GUIDE.md)
-- **Lux Depth V3 Troubleshooting:** [docs/guides/LUX_DEPTH_V3_TROUBLESHOOTING.md](docs/guides/LUX_DEPTH_V3_TROUBLESHOOTING.md)
+Start here:
+- [Documentation Map](docs/governance/DOCUMENTATION_MAP.md)
+- [Setup Guide](docs/guides/SETUP_GUIDE.md)
+- [Architecture Overview](docs/architecture/ARCHITECTURE.md)
+- [Lux Depth V3 CLI Guide](docs/cli/LUX_DEPTH_V3_CLI_GUIDE.md)
+- [Lux Depth V3 Troubleshooting](docs/guides/LUX_DEPTH_V3_TROUBLESHOOTING.md)
+- [API Documentation](docs/api/)
 
 ---
 
 ## License
 
-Professional use permitted with attribution.
+This repository is distributed under a proprietary, limited non-commercial evaluation license. Public visibility does not make it open source.
 
-Component licenses:
-- Pipeline code: proprietary with attribution requirements
-- Depth Anything V3 (commercial variant): Commercial-friendly licensing
-- Depth Anything V3.1 (DA3 1.1): CC BY-NC-4.0 (non-commercial research only) ⚠️
-- LUT collection: attribution required
+Repository-level restrictions include:
+- No commercial use without prior written authorization
+- No redistribution or derivative works
+- No ML training, benchmarking, extraction, or reuse of repository materials beyond permitted evaluation use
 
-**⚠️ Important:** DA3 1.1 is non-commercial only. Commercial applications must use DA3 V2 or equivalent commercially-licensed depth models. See [Depth Models: Commercial vs. Research](#depth-models-commercial-vs-research) above.
+Component-specific terms may add further restrictions for optional integrations:
+- DA3 research preset (`depth-anything-v3.1-research-m4`): CC BY-NC 4.0
+- Apple Depth Pro (`depth_pro`): Apple AMLR research license with explicit acceptance flags
+
+For exact legal terms, see [LICENSE](LICENSE).
 
 ---
 
@@ -646,4 +407,4 @@ Resources:
 
 ---
 
-Last Updated: 2026-03-01
+Last Updated: 2026-03-13
