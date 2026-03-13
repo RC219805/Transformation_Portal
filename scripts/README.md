@@ -15,8 +15,10 @@ The repository uses an automated file organization system to maintain a clean st
 
 ### Key Scripts
 
-- **`setup/auto-organize-install.sh`** - Install the organization system and pre-commit hook
-- **`setup/pre-commit-check.sh`** - Pre-commit hook that validates file organization
+- **`setup/auto-organize-install.sh`** - Install the organization system and current pre-commit hook
+- **`pre_commit_hook.sh`** - Compatibility wrapper for running the unified quality gate directly
+- **`utilities/pre-commit-quality-check.py`** - Compatibility quality gate used by `pre_commit_hook.sh`
+- **`setup/pre-commit-check.sh`** - Standalone root-file-placement check used by the quality gate
 - **`utilities/verify_organization.sh`** - Verify repository organization
 
 ### Quick Start

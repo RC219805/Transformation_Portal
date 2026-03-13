@@ -26,30 +26,13 @@ echo ""
 
 # Install pre-commit hook
 echo "Installing pre-commit hook..."
-PRE_COMMIT_HOOK="$REPO_ROOT/.git/hooks/pre-commit"
-PRE_COMMIT_SCRIPT="$SCRIPT_DIR/pre-commit-check.sh"
-
-# Check if pre-commit script exists
-if [[ ! -f "$PRE_COMMIT_SCRIPT" ]]; then
-    echo "ERROR: Pre-commit script not found at: $PRE_COMMIT_SCRIPT"
+if ! command -v pre-commit >/dev/null 2>&1; then
+    echo "ERROR: 'pre-commit' is required but not installed."
+    echo "Install it with: python3 -m pip install pre-commit"
     exit 1
 fi
 
-# Make pre-commit script executable
-chmod +x "$PRE_COMMIT_SCRIPT"
-
-# Create or update pre-commit hook
-if [[ -L "$PRE_COMMIT_HOOK" ]]; then
-    echo "  Removing existing symbolic link..."
-    rm "$PRE_COMMIT_HOOK"
-elif [[ -f "$PRE_COMMIT_HOOK" ]]; then
-    echo "  Backing up existing pre-commit hook..."
-    mv "$PRE_COMMIT_HOOK" "$PRE_COMMIT_HOOK.backup"
-    echo "  Backup saved to: $PRE_COMMIT_HOOK.backup"
-fi
-
-# Create symbolic link
-ln -sf "../../scripts/setup/pre-commit-check.sh" "$PRE_COMMIT_HOOK"
+(cd "$REPO_ROOT" && pre-commit install -f)
 echo "  ✓ Pre-commit hook installed"
 
 # Make organization script executable
@@ -75,7 +58,7 @@ echo ""
 echo "3. View organization documentation:"
 echo "   cat docs/governance/REPO_ORGANIZATION.md"
 echo ""
-echo "The pre-commit hook will now automatically check for misplaced files"
-echo "before each commit. To bypass (not recommended):"
+echo "The pre-commit hook will now run the repository hook set before each commit."
+echo "That includes misplaced-file detection as one of its checks. To bypass (not recommended):"
 echo "   git commit --no-verify"
 echo ""

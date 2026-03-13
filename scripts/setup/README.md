@@ -6,7 +6,7 @@ This directory contains installation and setup scripts for the Transformation Po
 
 ### `auto-organize-install.sh`
 
-Installs the automated repository organization system, including the pre-commit hook.
+Installs the automated repository organization system, including the standard repository pre-commit hook.
 
 **Usage:**
 ```bash
@@ -14,7 +14,7 @@ Installs the automated repository organization system, including the pre-commit 
 ```
 
 **What it does:**
-- Installs the pre-commit hook to prevent misplaced files
+- Installs the standard repository pre-commit hook at `.git/hooks/pre-commit`
 - Makes the `.auto-organize.sh` script executable
 - Validates the repository structure
 
@@ -24,10 +24,18 @@ Installs the automated repository organization system, including the pre-commit 
 
 ### `pre-commit-check.sh`
 
-Root-placement validator used by the pre-commit hook before allowing commits.
+Canonical root-placement validator used by the repository hook set and by the
+compatibility quality-gate wrapper.
 
 **Usage:**
-This script is automatically run by git when you commit. You can also run it manually:
+The primary git hook is installed with `make install-hooks` or
+`./scripts/setup/auto-organize-install.sh`, both of which install the
+repository's `pre-commit` hook. `scripts/pre_commit_hook.sh` remains available
+as a compatibility wrapper around
+`scripts/utilities/pre-commit-quality-check.py`; that Python quality gate
+invokes `scripts/setup/pre-commit-check.sh` so the root-placement policy stays
+single-sourced. This script also remains available for manual organization-only
+checks:
 
 ```bash
 ./scripts/setup/pre-commit-check.sh
@@ -129,7 +137,10 @@ ls -la .git/hooks/pre-commit
 # Test organization script
 ./.auto-organize.sh --dry-run
 
-# Test pre-commit hook (should show help if no misplaced files)
+# Run the same hook set manually
+make pre-commit
+
+# Or run only the organization sub-check
 ./scripts/setup/pre-commit-check.sh
 ```
 
@@ -152,7 +163,7 @@ chmod +x .auto-organize.sh
 **Solution:**
 ```bash
 # Reinstall the hook
-./scripts/setup/auto-organize-install.sh
+make install-hooks
 
 # Verify installation
 ls -la .git/hooks/pre-commit

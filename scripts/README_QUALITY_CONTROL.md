@@ -36,31 +36,46 @@ make pre-commit
 
 ## Tools
 
-### 1. Pre-commit Hook (`scripts/pre_commit_hook.sh`)
+### 1. Pre-commit Hooks
 
-Automatically runs before every commit to catch issues early.
+The default git hook is installed with `make install-hooks`, which runs
+`pre-commit install -f` against this repository's `.pre-commit-config.yaml`.
+The legacy `scripts/pre_commit_hook.sh` entrypoint remains available as a
+compatibility wrapper for running `scripts/utilities/pre-commit-quality-check.py`
+directly.
 
 **Installation:**
 ```bash
 make install-hooks
-# OR manually:
-cp scripts/pre_commit_hook.sh .git/hooks/pre-commit
-chmod +x .git/hooks/pre-commit
 ```
 
-**What it checks:**
-- Trailing whitespace (auto-fixes)
-- Flake8 critical errors (E9, F63, F7, F82)
-- Python import validation
-- Markdown file count (max 10 in root)
-- Debugging statements (`pdb`, `breakpoint()`)
-- Python syntax errors
+**What the default installed hook checks:**
+- Trailing whitespace / EOF hygiene
+- Large added files, merge-conflict markers, line-ending issues, YAML syntax
+- Repository-root file placement
+- CI-parity `black` / `isort` checks for `src/` and `tests/`
+- ML test isolation guardrails
+- Dependency-constraint validation for requirement files
+
+**Additional checks available through the compatibility wrapper / manual gate:**
+- Untracked core files
+- Trailing whitespace / EOF hygiene with auto-fix and re-stage
+- Large added files, merge-conflict markers, line-ending issues, YAML syntax
+- Repository-root file placement
+- Lint tool parity from `requirements-lint.txt`
+- Staged Python `flake8` critical/F821 checks
+- Staged Python `black` / `isort` checks
+- Repo-specific import heuristics (`iio`, `cv2`)
 
 **Manual run:**
 ```bash
-./scripts/pre_commit_hook.sh
-# OR
 make pre-commit
+
+# Optional compatibility path
+./scripts/pre_commit_hook.sh
+
+# Run the canonical implementation directly
+python3 scripts/utilities/pre-commit-quality-check.py
 ```
 
 ### 2. Local CI Simulation (`scripts/local_ci_check.sh`)
@@ -338,8 +353,8 @@ ls -la .git/hooks/pre-commit
 # Reinstall
 make install-hooks
 
-# Check if executable
-chmod +x .git/hooks/pre-commit
+# Check the generated hook
+sed -n '1,40p' .git/hooks/pre-commit
 ```
 
 ### Flake8 errors not caught locally
@@ -445,7 +460,7 @@ The system fails only on: 1 (fatal), 2 (error), 32 (usage error)
 
 When adding new quality checks:
 
-1. Add check to appropriate script (`pre_commit_hook.sh`, `local_ci_check.sh`, etc.)
+1. Keep `.pre-commit-config.yaml`, `make install-hooks`, and any compatibility wrapper behavior consistent
 2. Update Makefile with new target if needed
 3. Document in this README
 4. Test with `--dry-run` mode first
