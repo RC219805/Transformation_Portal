@@ -166,8 +166,7 @@ def write_runtime_baseline(tmp_path: Path, filename: str, payload: dict) -> None
 
 def measure_memory_baseline_subprocess(fixture_path: Path, input_root: Path, output_dir: Path) -> dict:
     """Measure processing RSS in a fresh subprocess to avoid in-worker memory drift."""
-    script = textwrap.dedent(
-        """
+    script = textwrap.dedent("""
         import json
         import threading
         from pathlib import Path
@@ -270,8 +269,7 @@ def measure_memory_baseline_subprocess(fixture_path: Path, input_root: Path, out
                 sort_keys=True,
             )
         )
-        """
-    )
+        """)
     pythonpath_entries = [str(REPO_ROOT / "src")]
     existing_pythonpath = os.environ.get("PYTHONPATH")
     if existing_pythonpath:

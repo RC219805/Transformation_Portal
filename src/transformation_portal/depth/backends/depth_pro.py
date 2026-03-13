@@ -384,9 +384,7 @@ class DepthProBackend:
                 ) from exc
 
             if not output_depth_path.exists() or not output_json_path.exists():
-                raise RuntimeError(
-                    "Depth Pro subprocess completed without producing the expected output files."
-                )
+                raise RuntimeError("Depth Pro subprocess completed without producing the expected output files.")
 
             with output_json_path.open("r", encoding="utf-8") as handle:
                 payload = json.load(handle)

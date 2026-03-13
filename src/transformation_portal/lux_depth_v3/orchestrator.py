@@ -975,9 +975,12 @@ class EnhanceOrchestrator:
         primary_backend_id: str,
     ) -> List[str]:
         """Resolve ordered runtime fallback chain."""
-        normalized_primary_backend_id = normalize_backend_id(
-            primary_backend_id,
-        ) or "da3"
+        normalized_primary_backend_id = (
+            normalize_backend_id(
+                primary_backend_id,
+            )
+            or "da3"
+        )
         chain: List[str] = [normalized_primary_backend_id]
         configured_chain = getattr(
             self.config,
@@ -1307,9 +1310,12 @@ class EnhanceOrchestrator:
         selected_attempt_index: Optional[int] = None,
     ) -> BackendSelectionMetadata:
         """Build per-image backend selection metadata."""
-        normalized_selected_backend = normalize_backend_id(
-            selected_backend,
-        ) or selected_backend
+        normalized_selected_backend = (
+            normalize_backend_id(
+                selected_backend,
+            )
+            or selected_backend
+        )
         requested = normalize_backend_provenance(
             self._backend_metadata.requested_backend or self._backend_metadata.resolved_backend,
         )

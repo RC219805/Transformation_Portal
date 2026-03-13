@@ -204,13 +204,16 @@ class TestDepthProBackendUnit:
         backend = DepthProBackend(config)
         assert backend._python_executable == str(python_executable.resolve())
 
-    def test_ensure_available_missing_package(self):
+    def test_ensure_available_missing_package(self, tmp_path):
         """Should raise ImportError if depth_pro package not installed."""
         from transformation_portal.depth.backends.depth_pro import DepthProBackend
 
+        checkpoint_path = tmp_path / "depth_pro.pt"
+        checkpoint_path.write_bytes(b"checkpoint")
         config = MockEnhanceConfig(
             non_commercial_ok=True,
             accept_apple_depth_pro_research_license=True,
+            depth_pro_checkpoint_path=str(checkpoint_path),
         )
         backend = DepthProBackend(config)
 
