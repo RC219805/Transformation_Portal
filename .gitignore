@@ -265,7 +265,7 @@ COMMIT_SUMMARY_OLD.md
 !COMMIT_SUMMARY.md
 
 # But allow important docs in docs/
-!docs/CODE_QUALITY_SYSTEM.md
+!docs/guides/CODE_QUALITY_SYSTEM.md
 
 # -----------------------------------------------------------------------------
 # Workflow markers (operational artifacts)
