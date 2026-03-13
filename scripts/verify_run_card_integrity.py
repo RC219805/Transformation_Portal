@@ -160,6 +160,7 @@ def _verify_config_fingerprint(run_card_payload: dict[str, Any], errors: list[st
     optional_fields = (
         "raw_ingest_profile",
         "raw_ingest_settings_hash",
+        "depth_pro_python_executable",
     )
     present_optional_fields = tuple(field for field in optional_fields if field in config_fingerprint)
     fingerprint_fields = (*fields, *present_optional_fields)

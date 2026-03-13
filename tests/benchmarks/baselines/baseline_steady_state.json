@@ -1,0 +1,9 @@
+{
+  "fixture": "512x512",
+  "measurement_type": "steady_state",
+  "megapixels": 0.262144,
+  "p50_ms": 226.48637497331947,
+  "p95_ms": 235.1210166234523,
+  "per_mp_ms": 863.9769553120402,
+  "test": "single_image_steady_state"
+}

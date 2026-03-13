@@ -17,6 +17,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -420,8 +421,16 @@ print(json.dumps({
 def _collect_cli_surface() -> dict[str, Any]:
     env = os.environ.copy()
     env.setdefault("PYTHONHASHSEED", "0")
+    python_executable = sys.executable
+    if not python_executable or not Path(python_executable).exists():
+        python_executable = shutil.which("python3") or shutil.which("python")
+    if not python_executable:
+        raise AssertionError(
+            "No usable Python executable found for CLI surface introspection. "
+            "Install Python 3 or restore the project virtualenv."
+        )
     result = subprocess.run(
-        [sys.executable, "-c", CLI_INTROSPECTOR],
+        [python_executable, "-c", CLI_INTROSPECTOR],
         cwd=str(REPO_ROOT),
         env=env,
         check=True,

@@ -9,7 +9,7 @@ The benchmark suite provides:
 - **Baseline performance measurement** (p50/p95 runtime, throughput)
 - **Memory tracking** (peak RSS via polling thread, processing-only window)
 - **Output invariants validation** (dtype, range, shape checks)
-- **Regression detection** (automated threshold checks - planned L0.2)
+- **Regression detection** (committed JSON baselines with fixed tolerance gates)
 
 ## Running Benchmarks
 
@@ -67,20 +67,20 @@ markexpr: "not ml and not slow"  # Don't do this!
    - **What:** Creates new orchestrator per run
    - **Includes:** Initialization overhead (directory creation, config parsing, backend instantiation)
    - **Use Case:** Worst-case single-image workflow, one-off processing
-   - **Artifact:** `baseline_cold_start.json`
+   - **Artifact:** `tests/benchmarks/baselines/baseline_cold_start.json`
 
 2. **`test_single_image_steady_state_p95`**
    - **Type:** STEADY-STATE measurement
    - **What:** Reuses orchestrator across runs, includes warm-up
    - **Excludes:** Initialization overhead
    - **Use Case:** Best-case throughput, batch workflows, long-running processes
-   - **Artifact:** `baseline_steady_state.json`
+   - **Artifact:** `tests/benchmarks/baselines/baseline_steady_state.json`
 
 3. **`test_batch_throughput_baseline`**
    - **Type:** BATCH THROUGHPUT measurement
    - **What:** Processes multiple different images sequentially
    - **Use Case:** Sustained production throughput
-   - **Artifact:** `baseline_batch.json`
+   - **Artifact:** `tests/benchmarks/baselines/baseline_batch.json`
 
 **Invariant Tests:**
 
@@ -99,7 +99,7 @@ markexpr: "not ml and not slow"  # Don't do this!
    - **Captures:** Transient allocation spikes missed by post-completion snapshots
    - **Use Case:** Detecting memory leaks and regression in allocation patterns
    - **Requires:** psutil (skips gracefully if unavailable)
-   - **Artifact:** `baseline_memory.json` (includes `sample_count`, `sampling_interval_s`)
+   - **Artifact:** `tests/benchmarks/baselines/baseline_memory.json` (includes `sample_count`, `sampling_interval_s`)
 
 **Guard Tests:**
 
@@ -107,10 +107,10 @@ markexpr: "not ml and not slow"  # Don't do this!
    - Placeholder for L1.0 backend singleton checks
 
 7. **`test_cold_start_p95_regression_threshold`**
-   - Placeholder for L0.2 regression detection with % tolerance
+   - Validates committed cold-start baseline fixture shape
 
 8. **`test_steady_state_p95_regression_threshold`**
-   - Placeholder for L0.2 regression detection with % tolerance
+   - Validates committed steady-state baseline fixture shape
 
 **Execution Time:** <2 seconds (target: <10s)
 
@@ -127,14 +127,14 @@ markexpr: "not ml and not slow"  # Don't do this!
 - **Fixture generation**: Vectorized NumPy (avoids Python loop contamination)
 - **Timing**: Uses `time.perf_counter()` for monotonic high-resolution measurements
 - **Percentiles**: Computed with `np.percentile()` for accuracy
-- **Assertions**: Relaxed warnings instead of hard failures (prevents CI runner variance issues)
-- **Artifact persistence**: Supports `BENCHMARK_ARTIFACTS_DIR` env var for cross-run baseline storage
+- **Assertions**: Hard regression gates relative to committed baselines
+- **Artifact persistence**: Supports `BENCHMARK_ARTIFACTS_DIR` env var for writing runtime comparison JSON
 
 **Known Limitations:**
 - Memory test uses polling-thread peak RSS (~5ms sampling interval); sub-millisecond spikes may be missed
-- Baseline persistence not yet implemented (each test writes to tmp_path)
-- Absolute time assertions removed per architectural review
-- Cross-run regression detection planned for L0.2
+- Committed baselines are calibrated for offline synthetic runs only
+- Runtime artifact JSON is best-effort debug output, not the source of truth
+- Benchmarks still remain outside default PR gating due runner variance
 
 ## Optimization Roadmap Integration
 
@@ -143,7 +143,7 @@ These benchmarks support the lux_depth_v3 v2.1 Optimization Roadmap:
 **Milestone 0: Baselines & Guardrails**
 - ✅ **L0.0**: Benchmark harness (this directory)
 - ✅ **L0.1**: Peak RSS tracking (polling-thread high-water mark)
-- 🔜 **L0.2**: Output invariants & golden-delta tests
+- ✅ **L0.2**: Committed baselines + fixed tolerance regression gates
 
 **Milestone 1: Throughput Wins**
 - 🔜 **L1.0**: Backend warm pool + singleton registry cache
@@ -171,8 +171,8 @@ Benchmarks produce machine-readable JSON for automated regression detection:
 ## CI Integration
 
 Benchmarks use the `@pytest.mark.benchmark` marker:
-- Included in PR gating CI (marker expression `"not ml and not slow"` does NOT exclude `benchmark`)
-- Assertions are warnings-only until L0.2 implements baseline comparison with % tolerance
+- Excluded from default PR gating CI (`"not ml and not slow and not benchmark"`)
+- Assertions enforce committed baseline tolerances when the benchmark suite is run explicitly
 - Dedicated benchmark runs can be invoked with `-m "benchmark"`
 
 ## Design Principles

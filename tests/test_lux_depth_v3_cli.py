@@ -377,6 +377,87 @@ class TestCLIValidation:
 class TestCLIConfiguration:
     """Test CLI configuration building."""
 
+    @pytest.mark.parametrize(
+        ("name", "args", "expected_backend", "expected_device", "expected_non_commercial"),
+        [
+            (
+                "commercial_safe_default",
+                [],
+                "da3",
+                "cpu",
+                False,
+            ),
+            (
+                "apple_silicon_da3",
+                ["--depth-backend", "da3", "--depth-device", "mps"],
+                "da3",
+                "mps",
+                False,
+            ),
+            (
+                "research_depth_pro",
+                [
+                    "--depth-backend",
+                    "depth_pro",
+                    "--depth-device",
+                    "mps",
+                    "--non-commercial-ok",
+                    "true",
+                    "--accept-apple-depth-pro-research-license",
+                    "true",
+                ],
+                "depth_pro",
+                "mps",
+                True,
+            ),
+        ],
+    )
+    def test_tier_matrix_builds_expected_config(
+        self,
+        tmp_path,
+        name,
+        args,
+        expected_backend,
+        expected_device,
+        expected_non_commercial,
+    ):
+        """CLI should preserve the supported commercial-safe, Apple Silicon, and research tiers."""
+        from unittest.mock import MagicMock, patch
+
+        input_dir = tmp_path / "input"
+        input_dir.mkdir()
+        (input_dir / f"{name}.jpg").touch()
+
+        captured_config = None
+
+        def mock_orch_init(config, output_root):
+            nonlocal captured_config
+            captured_config = config
+            mock_orch = MagicMock()
+            mock_orch.enhance_batch.return_value = [{"status": "ok"}]
+            return mock_orch
+
+        with patch(
+            "transformation_portal.lux_depth_v3.__main__.EnhanceOrchestrator",
+            side_effect=mock_orch_init,
+        ):
+            result = runner.invoke(
+                app,
+                [
+                    "--input-dir",
+                    str(input_dir),
+                    "--output-dir",
+                    str(tmp_path / f"output_{name}"),
+                    *args,
+                ],
+            )
+
+        assert result.exit_code == 0
+        assert captured_config is not None
+        assert (captured_config.depth_backend or "da3") == expected_backend
+        assert captured_config.depth_device == expected_device
+        assert captured_config.non_commercial_ok == expected_non_commercial
+
     def test_apex_commercial_config(self, tmp_path):
         """Test APEX commercial-safe configuration."""
         input_dir = tmp_path / "input"
@@ -397,7 +478,7 @@ class TestCLIConfiguration:
                 "--quality-tier",
                 "apex",
                 "--depth-backend",
-                "depth_anything_v3",
+                "da3",
                 "--materials-v3",
                 "on",
                 "--pbr",
@@ -422,6 +503,45 @@ class TestCLIConfiguration:
         if result.exit_code == 1:
             assert "non-commercial" not in result.stdout.lower()
             assert "license" not in result.stdout.lower()
+
+    def test_legacy_backend_alias_normalizes_to_da3(self, tmp_path):
+        """Legacy backend aliases should remain accepted but normalize in config."""
+        from unittest.mock import MagicMock, patch
+
+        input_dir = tmp_path / "input"
+        input_dir.mkdir()
+        (input_dir / "test.jpg").touch()
+
+        captured_config = None
+
+        def mock_orch_init(config, output_root):
+            nonlocal captured_config
+            captured_config = config
+            mock_orch = MagicMock()
+            mock_orch.enhance_batch.return_value = [
+                {"status": "ok"},
+            ]
+            return mock_orch
+
+        with patch(
+            "transformation_portal.lux_depth_v3.__main__.EnhanceOrchestrator",
+            side_effect=mock_orch_init,
+        ):
+            result = runner.invoke(
+                app,
+                [
+                    "--input-dir",
+                    str(input_dir),
+                    "--output-dir",
+                    str(tmp_path / "output"),
+                    "--depth-backend",
+                    "depth_anything_v3",
+                ],
+            )
+
+        assert result.exit_code == 0
+        assert captured_config is not None
+        assert captured_config.depth_backend == "da3"
 
     def test_apex_research_depth_pro_config(self, tmp_path):
         """Test APEX+ research configuration with Depth Pro."""
@@ -536,6 +656,42 @@ class TestCLIConfiguration:
         # Should capture config with v2_preset set to None (from "none" string)
         assert captured_config is not None
         assert captured_config.v2_preset is None
+
+    def test_depth_pro_python_flag_sets_config(self, tmp_path):
+        """--depth-pro-python should be forwarded into EnhanceConfig."""
+        from unittest.mock import MagicMock, patch
+
+        input_dir = tmp_path / "input"
+        input_dir.mkdir()
+        (input_dir / "test.jpg").touch()
+
+        captured_config = None
+
+        def mock_orch_init(config, output_root):
+            nonlocal captured_config
+            captured_config = config
+            mock_orch = MagicMock()
+            mock_orch.enhance_batch.return_value = {"total": 0, "succeeded": 0}
+            return mock_orch
+
+        with patch(
+            "transformation_portal.lux_depth_v3.__main__.EnhanceOrchestrator",
+            side_effect=mock_orch_init,
+        ):
+            _result = runner.invoke(
+                app,
+                [
+                    "--input-dir",
+                    str(input_dir),
+                    "--output-dir",
+                    str(tmp_path / "output"),
+                    "--depth-pro-python",
+                    "./.venv-depth-pro/bin/python",
+                ],
+            )
+
+        assert captured_config is not None
+        assert captured_config.depth_pro_python_executable == "./.venv-depth-pro/bin/python"
 
     def test_save_float_depth_defaults_false(self, tmp_path):
         """save_float_depth should default to False when flag is omitted."""

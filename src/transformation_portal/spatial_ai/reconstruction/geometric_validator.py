@@ -252,12 +252,12 @@ class GeometricValidator:
 
         # RMSE validation
         if reference_images is not None:
-            rmse = self.compute_rmse(scene, reference_images)
-            results["rmse"] = rmse
-            results["rmse_pass"] = rmse < self.RMSE_GOOD
+            rmse_value = float(self.compute_rmse(scene, reference_images))
         else:
-            results["rmse"] = scene.rmse
-            results["rmse_pass"] = scene.rmse < self.RMSE_GOOD
+            rmse_value = float(scene.rmse)
+
+        results["rmse"] = rmse_value
+        results["rmse_pass"] = bool(rmse_value < self.RMSE_GOOD)
 
         # Depth consistency
         if depth_maps is not None:
@@ -271,7 +271,7 @@ class GeometricValidator:
         results["coverage"] = coverage
 
         # Quality grade
-        rmse_val = results["rmse"]
+        rmse_val = rmse_value
         if rmse_val < self.RMSE_EXCELLENT:
             grade = "A"
         elif rmse_val < self.RMSE_GOOD:

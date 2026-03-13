@@ -78,9 +78,9 @@ Core capabilities:
 Transformation Portal supports depth models across two tiers with different licensing and use cases.
 
 ### Production (Commercial)
-- **Depth Anything V3 (V2 commercial variant):** Fully supported, production-ready
+- **DA3 (`da3` backend):** Fully supported, production-ready
 - **Use for:** Commercial applications, products, revenue-generating services
-- **Licensing:** Commercial-friendly licensing
+- **Licensing:** Commercial-safe production tier
 - **Default:** All standard presets use this tier
 
 ### Research & Non-Commercial
@@ -95,13 +95,13 @@ Transformation Portal supports depth models across two tiers with different lice
 ### Research Preset Example
 
 ```python
-from transformation_portal.lux_depth_v3 import EnhanceConfig, Preset
+from transformation_portal.lux_depth_v3 import EnhanceConfig
 
 # Non-commercial research (requires explicit opt-in)
 config = EnhanceConfig(
-    preset=Preset.RESEARCH_DA31_M4,
+    preset_requested="depth-anything-v3.1-research-m4",
     non_commercial_ok=True,  # Acknowledge CC BY-NC 4.0 restrictions
-    depth_device="mps",       # Apple Silicon
+    depth_device="mps",      # Apple Silicon
 )
 ```
 
@@ -115,7 +115,7 @@ Lux Depth V3 supports multiple depth estimation backends with automatic fallback
 
 | Backend | Model | License | Focal Length | Metric Depth | Checkpoint Required |
 |---------|-------|---------|--------------|--------------|---------------------|
-| `da3` (default) | Depth Anything V3 | MIT | ❌ | ❌ | No (auto-download) |
+| `da3` (default) | Depth Anything V3 | Commercial-safe | ❌ | ❌ | No (auto-download) |
 | `depth_pro` | Apple Depth Pro | Apple ML Research | ✅ | ✅ | Yes (1.9 GB) |
 
 ### Usage
@@ -131,6 +131,7 @@ lux-depth-v3 \
   --input-dir ./input \
   --output-dir ./output \
   --depth-backend depth_pro \
+  --depth-pro-python ./.venv-depth-pro/bin/python \
   --accept-apple-depth-pro-research-license true \
   --non-commercial-ok true
 ```
@@ -145,6 +146,7 @@ from pathlib import Path
 config = EnhanceConfig(
     depth_backend="depth_pro",
     depth_pro_checkpoint_path="checkpoints/depth_pro.pt",
+    depth_pro_python_executable=".venv-depth-pro/bin/python",
     accept_apple_depth_pro_research_license=True,
     non_commercial_ok=True,
     depth_device="cpu",
@@ -209,10 +211,16 @@ lux-depth-v3 --input-dir ./raw_images --output-dir ./output
 
 Apple's Depth Pro model for metric depth estimation. **Experimental tier** - for research and evaluation only.
 
-**Installation:**
+**Safe installation (dedicated environment):**
 ```bash
-pip install depth-pro
+python3 -m venv .venv-depth-pro
+./.venv-depth-pro/bin/python -m pip install --upgrade pip
+./.venv-depth-pro/bin/python -m pip install depth-pro
 ```
+
+Do not install `depth-pro` into the main Transformation Portal environment. The
+Depth Pro package currently pins `numpy<2`, which conflicts with the repository
+lockfiles and several image-processing dependencies used by the primary stack.
 
 **Checkpoint Download (1.9 GB):**
 ```bash
@@ -231,8 +239,23 @@ config = EnhanceConfig(
     depth_backend="depth_pro",
     non_commercial_ok=True,                          # Required: Acknowledge non-commercial use
     accept_apple_depth_pro_research_license=True,    # Required: Accept Apple AMLR license
+    depth_pro_python_executable=".venv-depth-pro/bin/python",
     depth_device="mps",  # Apple Silicon (or "cpu" for fallback)
 )
+```
+
+**CLI / env wiring:**
+```bash
+lux-depth-v3 \
+  --input-dir ./input \
+  --output-dir ./output \
+  --depth-backend depth_pro \
+  --depth-pro-python ./.venv-depth-pro/bin/python \
+  --non-commercial-ok true \
+  --accept-apple-depth-pro-research-license true
+
+# Or export once for repeated runs
+export TRANSFORMATION_PORTAL_DEPTH_PRO_PYTHON=./.venv-depth-pro/bin/python
 ```
 
 **⚠️ Important:** This model cannot be used for:

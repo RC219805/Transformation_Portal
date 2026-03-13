@@ -4,11 +4,17 @@ This guide helps you get started with Apple's Depth Pro for metric depth estimat
 
 ## Prerequisites
 
-### 1. Install depth-pro Package
+### 1. Create a Dedicated Depth Pro Environment
 
 ```bash
-pip install depth-pro
+python3 -m venv .venv-depth-pro
+./.venv-depth-pro/bin/python -m pip install --upgrade pip
+./.venv-depth-pro/bin/python -m pip install depth-pro
 ```
+
+Keep `depth-pro` out of the main Transformation Portal environment. Depth Pro
+currently requires `numpy<2`, while the primary repository environment is pinned
+around NumPy 2.x for OpenCV, imagecodecs, and related tooling.
 
 ### 2. Download Checkpoint (1.9 GB)
 
@@ -28,7 +34,7 @@ curl -L https://ml-site.cdn-apple.com/models/depth-pro/depth_pro.pt \
 Run the validation script to ensure your checkpoint is correct:
 
 ```bash
-python scripts/validate_depth_pro_checkpoint.py
+./.venv-depth-pro/bin/python scripts/validate_depth_pro_checkpoint.py
 ```
 
 This will:
@@ -92,6 +98,7 @@ python -m transformation_portal.lux_depth_v3 \
   --input-dir ./images \
   --output-dir ./output \
   --preset depth-pro-example \
+  --depth-pro-python ./.venv-depth-pro/bin/python \
   --non-commercial-ok \
   --accept-apple-depth-pro-research-license
 ```
@@ -110,6 +117,7 @@ python -m transformation_portal.lux_depth_v3 \
   --input-dir ./images \
   --output-dir ./output \
   --depth-backend depth_pro \
+  --depth-pro-python ./.venv-depth-pro/bin/python \
   --depth-device mps \
   --non-commercial-ok \
   --accept-apple-depth-pro-research-license
@@ -271,7 +279,12 @@ ImportError: depth_pro package not installed.
 
 **Solution:**
 ```bash
-pip install depth-pro
+./.venv-depth-pro/bin/python -m pip install depth-pro
+```
+
+Then point the main pipeline at that environment:
+```bash
+export TRANSFORMATION_PORTAL_DEPTH_PRO_PYTHON=./.venv-depth-pro/bin/python
 ```
 
 ### License flags missing

@@ -1,0 +1,9 @@
+{
+  "avg_per_image_ms": 245.8219443409083,
+  "measurement_type": "batch_throughput",
+  "num_images": 3,
+  "per_mp_ms": 661.9315051114473,
+  "test": "batch_throughput",
+  "total_megapixels": 1.114112,
+  "total_ms": 737.4658330227248
+}

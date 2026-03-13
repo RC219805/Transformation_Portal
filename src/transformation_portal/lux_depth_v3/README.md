@@ -5,7 +5,7 @@ Lux Depth V3 is a production-grade orchestrator for depth-aware image processing
 ## Overview
 
 The Lux Depth V3 pipeline provides:
-- **Depth Estimation** using Depth Anything V3 (commercial) or Depth Pro (research)
+- **Depth Estimation** using the canonical `da3` backend (commercial-safe) or `depth_pro` (research-only)
 - **PBR Map Generation** (normal, roughness, ambient occlusion)
 - **Materials V3** surface-aware finishing
 - **V2 Enhancement** (optional AI-powered refinement)
@@ -20,6 +20,7 @@ lux-depth-v3 \
   --input-dir "./input_images" \
   --output-dir "./output/commercial" \
   --quality-tier "apex" \
+  --depth-backend "da3" \
   --depth-device "mps" \
   --pbr "on" \
   --enable-v2 "off" \
@@ -33,6 +34,7 @@ lux-depth-v3 \
   --input-dir "./input_images" \
   --output-dir "./output/enhanced" \
   --quality-tier "apex" \
+  --depth-backend "da3" \
   --depth-device "mps" \
   --pbr "on" \
   --materials-v3 "on" \
@@ -223,7 +225,7 @@ ERROR: V2 enhancement script not found: scripts/enhance_image.py
 ```
 Input Images
     ↓
-Depth Estimation (Depth Anything V3 or Depth Pro)
+Depth Estimation (`da3` or `depth_pro`)
     ↓
 PBR Generation (Normal, Roughness, AO) [Optional]
     ↓
@@ -247,7 +249,7 @@ Output Deliverables
 
 ### Commercial-Safe (Default)
 
-**Depth Anything V3** (Apache 2.0)
+**DA3 (`da3` backend)**
 - ✅ Commercial use allowed
 - ✅ No license flags required
 - Recommended for production
@@ -263,11 +265,16 @@ Output Deliverables
 **Apple Depth Pro** (AMLR Research License)
 ```bash
 --depth-backend "depth_pro" \
+--depth-pro-python "./.venv-depth-pro/bin/python" \
 --non-commercial-ok "true" \
 --accept-apple-depth-pro-research-license "true"
 ```
 
 The CLI **enforces license compliance** at startup to prevent accidental violations.
+For safe installation, keep `depth-pro` in a dedicated NumPy 1.x environment
+and point the main pipeline at it with `--depth-pro-python` or
+`TRANSFORMATION_PORTAL_DEPTH_PRO_PYTHON`.
+Legacy aliases such as `depth_anything_v3` remain accepted as inputs, but emitted manifests, run cards, and logs normalize to `da3`.
 
 ## Performance Optimization
 

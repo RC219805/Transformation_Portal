@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -23,39 +24,65 @@ from transformation_portal.lux_depth_v3.orchestrator import (
 
 
 def _valid_run_card_payload() -> dict:
+    config_fingerprint = {
+        "model_variant": "METRIC_LARGE",
+        "depth_quantization": "u16",
+        "depth_device": "cpu",
+        "preset": "premium",
+        "preset_requested": "premium",
+        "preset_resolved": "premium",
+        "backend_requested": "da3",
+        "backend_resolved": "da3",
+        "device_requested": "cpu",
+        "device_resolved": "cpu",
+        "quality_tier": "premium",
+        "strict_inputs": False,
+        "strict_segmentation": False,
+        "apex_strict_mode": False,
+        "v2_preset": "premium",
+        "v2_device": "cpu",
+        "v2_upscaler_backend": "realesrgan",
+        "depth_pro_python_executable": None,
+    }
+    canonical_json = json.dumps(
+        {
+            field: config_fingerprint[field]
+            for field in (
+                "model_variant",
+                "depth_quantization",
+                "depth_device",
+                "preset",
+                "v2_preset",
+                "v2_device",
+                "v2_upscaler_backend",
+                "preset_requested",
+                "preset_resolved",
+                "backend_requested",
+                "backend_resolved",
+                "device_requested",
+                "device_resolved",
+                "quality_tier",
+                "strict_inputs",
+                "strict_segmentation",
+                "apex_strict_mode",
+                "depth_pro_python_executable",
+            )
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    config_fingerprint["hash_algorithm"] = "sha256"
+    config_fingerprint["canonical_json"] = canonical_json
+    config_fingerprint["sha256"] = hashlib.sha256(canonical_json.encode("utf-8")).hexdigest()
+
     return {
         "batch_id": "2026-02-28_120000",
         "start_time": "2026-02-28T12:00:00Z",
         "end_time": "2026-02-28T12:01:00Z",
         "config_fingerprint": {
-            "model_variant": "METRIC_LARGE",
-            "depth_quantization": "u16",
-            "depth_device": "cpu",
-            "preset": "premium",
-            "preset_requested": "premium",
-            "preset_resolved": "premium",
-            "backend_requested": "da3",
-            "backend_resolved": "da3",
-            "device_requested": "cpu",
-            "device_resolved": "cpu",
-            "quality_tier": "premium",
+            **config_fingerprint,
             "raw_ingest_profile": "tp.raw_ingest.deterministic_v1",
             "raw_ingest_settings_hash": "e" * 64,
-            "strict_inputs": False,
-            "strict_segmentation": False,
-            "apex_strict_mode": False,
-            "v2_preset": "premium",
-            "v2_device": "cpu",
-            "v2_upscaler_backend": "realesrgan",
-            "hash_algorithm": "sha256",
-            "canonical_json": (
-                '{"apex_strict_mode":false,"backend_requested":"da3","backend_resolved":"da3",'
-                '"depth_device":"cpu","depth_quantization":"u16","device_requested":"cpu","device_resolved":"cpu",'
-                '"model_variant":"METRIC_LARGE","preset":"premium","preset_requested":"premium","preset_resolved":"premium",'
-                '"quality_tier":"premium","strict_inputs":false,"strict_segmentation":false,'
-                '"v2_device":"cpu","v2_preset":"premium","v2_upscaler_backend":"realesrgan"}'
-            ),
-            "sha256": "a" * 64,
         },
         "backend_selection": {
             "requested": "da3",

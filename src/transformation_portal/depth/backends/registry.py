@@ -10,6 +10,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any, Dict, Optional, Type
 
+from ...lux_depth_v3._backend_contract import normalize_backend_id
 from .protocol import DepthBackend, LicenseRestrictionError, LicenseType
 
 if TYPE_CHECKING:
@@ -147,7 +148,7 @@ class DepthBackendRegistry:
         Returns:
             Backend class if registered, None otherwise.
         """
-        return self._backends.get(backend_id)
+        return self._backends.get(normalize_backend_id(backend_id) or "")
 
     def available_backend_ids(self) -> list[str]:
         """Get list of all registered backend IDs.
@@ -166,7 +167,8 @@ class DepthBackendRegistry:
         Returns:
             True if backend is registered.
         """
-        return backend_id in self._backends
+        normalized_backend_id = normalize_backend_id(backend_id)
+        return bool(normalized_backend_id and normalized_backend_id in self._backends)
 
     def get_backend(
         self,
@@ -190,13 +192,14 @@ class DepthBackendRegistry:
             ValueError: If backend_name is unknown.
             LicenseRestrictionError: If license requirements not met.
         """
-        backend_cls = self._backends.get(backend_name)
+        normalized_backend_name = normalize_backend_id(backend_name)
+        backend_cls = self._backends.get(normalized_backend_name or "")
         if backend_cls is None:
             available = ", ".join(sorted(self._backends.keys())) or "(none)"
             raise ValueError(f"Unknown depth backend:" f" '{backend_name}'." f" Available backends: {available}")
 
         # Layer 2: License enforcement at factory level
-        self._validate_license(backend_name, backend_cls, config)
+        self._validate_license(normalized_backend_name or backend_name, backend_cls, config)
 
         # Instantiate backend
         if config is not None:

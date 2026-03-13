@@ -36,6 +36,7 @@ import logging
 import os
 import re
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Dict, Literal, Optional
 
 import numpy as np
@@ -556,6 +557,49 @@ class SAM2Backend:
         if hasattr(torch, "cuda") and torch.cuda.is_available():
             torch.cuda.empty_cache()
 
+    @staticmethod
+    def _to_numpy_array(value, *, dtype=None) -> np.ndarray:
+        """Convert SAM2-style outputs to NumPy arrays without assuming tensor type."""
+        if hasattr(value, "detach"):
+            value = value.detach()
+        if hasattr(value, "cpu"):
+            value = value.cpu()
+        if hasattr(value, "numpy"):
+            value = value.numpy()
+        array = np.asarray(value)
+        if dtype is not None:
+            array = array.astype(dtype, copy=False)
+        return array
+
+    def _extract_sam2_predictions(self, output) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Extract masks plus IoU/stability scores from a SAM2 output object.
+
+        ``pred_masks`` is required. Missing or ``None`` confidence attributes
+        fall back to ``1.0`` so older stub outputs and partial mocks still
+        satisfy the segmentation contract.
+        """
+        raw_masks = getattr(output, "pred_masks", None)
+        if raw_masks is None:
+            raise AttributeError("SAM2 output missing required pred_masks attribute")
+        masks = self._to_numpy_array(raw_masks, dtype=bool)
+        if masks.ndim == 2:
+            masks = masks[np.newaxis, ...]
+
+        count = masks.shape[0]
+
+        def _extract_scores(attr_name: str) -> np.ndarray:
+            raw_value = getattr(output, attr_name, None)
+            if raw_value is None:
+                return np.ones(count, dtype=np.float32)
+            scores = self._to_numpy_array(raw_value, dtype=np.float32).reshape(-1)
+            if scores.shape != (count,):
+                return np.ones(count, dtype=np.float32)
+            return np.clip(scores, 0.0, 1.0)
+
+        iou_scores = _extract_scores("iou_predictions")
+        stability_scores = _extract_scores("stability_scores")
+        return masks, iou_scores, stability_scores
+
     def _segment_auto(self, seg_input: SegmentationInput) -> SegmentationResult:
         """Automatic mask generation (entire image).
 
@@ -677,7 +721,7 @@ class SAM2Backend:
                 labels = np.array(seg_input.prompts.get("labels", [1] * len(points)))  # Default to foreground
 
                 # Predict masks
-                masks, scores, logits = self._image_predictor.predict(
+                prediction = self._image_predictor.predict(
                     point_coords=points,
                     point_labels=labels,
                     multimask_output=True,  # Get multiple mask proposals
@@ -691,7 +735,7 @@ class SAM2Backend:
                 bbox = np.array(seg_input.prompts["bbox"])  # [x1, y1, x2, y2]
 
                 # Predict masks
-                masks, scores, logits = self._image_predictor.predict(
+                prediction = self._image_predictor.predict(
                     box=bbox,
                     multimask_output=True,
                 )
@@ -699,9 +743,21 @@ class SAM2Backend:
             else:
                 raise ValueError(f"Unsupported prompted mode: {mode}")
 
-            # SAM2ImagePredictor returns float32 probability masks
-            # Convert to bool dtype to match contract (auto mode returns bool)
-            masks = (masks > 0.0).astype(bool)
+            if isinstance(prediction, tuple):
+                if len(prediction) < 2:
+                    raise RuntimeError("SAM2 predictor returned an unexpected prompted output tuple")
+                prediction = SimpleNamespace(
+                    pred_masks=prediction[0],
+                    iou_predictions=prediction[1],
+                    stability_scores=prediction[1],
+                )
+
+            masks, scores, stability_scores = self._extract_sam2_predictions(prediction)
+
+            # SAM2ImagePredictor may return proposals in arbitrary order.
+            # Normalize to a deterministic highest-confidence-first order so
+            # prompted mode has a stable primary mask across environments.
+            scores = np.asarray(scores, dtype=np.float32)
 
             # Convert masks to correct format
             if masks.ndim == 3:
@@ -710,6 +766,17 @@ class SAM2Backend:
             elif masks.ndim == 2:
                 # Single mask (H, W) - expand to (1, H, W)
                 masks = masks[np.newaxis, ...]
+
+            if masks.shape[0] > 1:
+                areas = masks.reshape(masks.shape[0], -1).sum(axis=1, dtype=np.int64)
+                ordered_indices = sorted(
+                    range(masks.shape[0]),
+                    key=lambda idx: (float(scores[idx]), int(areas[idx])),
+                    reverse=True,
+                )
+                masks = masks[ordered_indices]
+                scores = scores[ordered_indices]
+                stability_scores = stability_scores[ordered_indices]
 
             # Create metadata for each mask
             metadata_list = []
@@ -733,7 +800,7 @@ class SAM2Backend:
                     MaskMetadata(
                         area=area,
                         bbox=bbox_xywh,
-                        stability_score=float(scores[i]),
+                        stability_score=float(stability_scores[i]),
                     )
                 )
 

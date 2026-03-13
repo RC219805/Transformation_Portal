@@ -1,0 +1,9 @@
+{
+  "fixture": "512x512",
+  "measurement_type": "cold_start",
+  "megapixels": 0.262144,
+  "p50_ms": 231.345541018527,
+  "p95_ms": 273.99087517987937,
+  "per_mp_ms": 882.5132027379112,
+  "test": "single_image_cold_start"
+}
