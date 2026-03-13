@@ -76,14 +76,12 @@ class TestIsolationCheckAST:
     def test_ignores_docstring_mentions(self, tmp_path: Path):
         """Test that docstring mentions of spatial_ai are ignored (AST precision)."""
         test_file = tmp_path / "test.py"
-        test_file.write_text(
-            '''"""This module does NOT import spatial_ai.
+        test_file.write_text('''"""This module does NOT import spatial_ai.
 
 WARNING: Do not import from ...spatial_ai here.
 """
 import numpy as np
-'''
-        )
+''')
 
         violations = check_imports_ast(test_file, ["spatial_ai"])
         assert len(violations) == 0, "Docstring mentions should not be flagged"
@@ -91,12 +89,10 @@ import numpy as np
     def test_ignores_comment_mentions(self, tmp_path: Path):
         """Test that comment mentions of spatial_ai are ignored."""
         test_file = tmp_path / "test.py"
-        test_file.write_text(
-            """# TODO: Consider using spatial_ai for this
+        test_file.write_text("""# TODO: Consider using spatial_ai for this
 # from ...spatial_ai import LinearDecoder  # Commented out
 import numpy as np
-"""
-        )
+""")
 
         violations = check_imports_ast(test_file, ["spatial_ai"])
         assert len(violations) == 0, "Comment mentions should not be flagged"
@@ -104,13 +100,11 @@ import numpy as np
     def test_safe_imports_not_flagged(self, tmp_path: Path):
         """Test that non-spatial_ai imports are not flagged."""
         test_file = tmp_path / "test.py"
-        test_file.write_text(
-            """from transformation_portal.depth import DepthBackend
+        test_file.write_text("""from transformation_portal.depth import DepthBackend
 import numpy as np
 from ..depth.backends import ensemble
 from ...lux_depth_v3 import config
-"""
-        )
+""")
 
         violations = check_imports_ast(test_file, ["spatial_ai"])
         assert len(violations) == 0, "Safe imports should not be flagged"
@@ -127,14 +121,12 @@ from ...lux_depth_v3 import config
     def test_reports_line_numbers(self, tmp_path: Path):
         """Test that violations include line numbers for easy debugging."""
         test_file = tmp_path / "test.py"
-        test_file.write_text(
-            """import numpy as np
+        test_file.write_text("""import numpy as np
 
 from transformation_portal.spatial_ai import LinearDecoder
 
 import pandas as pd
-"""
-        )
+""")
 
         violations = check_imports_ast(test_file, ["spatial_ai"])
         assert len(violations) == 1
@@ -143,11 +135,9 @@ import pandas as pd
     def test_handles_multiple_violations(self, tmp_path: Path):
         """Test that multiple violations in same file are all reported."""
         test_file = tmp_path / "test.py"
-        test_file.write_text(
-            """from ..spatial_ai import LinearDecoder
+        test_file.write_text("""from ..spatial_ai import LinearDecoder
 from ...spatial_ai.ingest import decode
-"""
-        )
+""")
 
         violations = check_imports_ast(test_file, ["spatial_ai"])
         assert len(violations) == 2

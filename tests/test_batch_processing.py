@@ -17,7 +17,9 @@ from transformation_portal.lux_depth_v3.config import EnhanceConfig, ModelVarian
 from transformation_portal.lux_depth_v3.input_manager import ImageInput
 from transformation_portal.lux_depth_v3.orchestrator import ApexStrictGateError, EnhanceOrchestrator
 from transformation_portal.lux_depth_v3.scene_context import CameraProvenance, CameraWithProvenance
-from transformation_portal.spatial_ai.reconstruction.contracts import CameraParams
+from transformation_portal.spatial_ai.reconstruction.contracts import (
+    CameraParams,
+)
 from transformation_portal.spatial_ai.reconstruction.contracts import (
     LicenseRestrictionError as ReconstructionLicenseRestrictionError,
 )
