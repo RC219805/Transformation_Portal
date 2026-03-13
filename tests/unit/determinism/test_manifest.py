@@ -135,6 +135,24 @@ def test_build_artifact_manifest_rejects_unmapped_probe_version():
         )
 
 
+@pytest.mark.parametrize("probe_version", [True, 1.0, "1"])
+def test_build_artifact_manifest_rejects_non_integer_probe_version(probe_version: object):
+    """Non-int probe versions must fail closed instead of being coerced."""
+    with pytest.raises(TypeError, match="probe_version must be a Python int"):
+        build_artifact_manifest(
+            artifact_id="sha256:abc123",
+            tensor_role="xyz_d50_linear_fp32",
+            tensor_hash="abc123",
+            raw_hash="def456",
+            fingerprint_hash="ghi789",
+            fpstate_enforced=True,
+            fpstate_backend="test",
+            probe_version=probe_version,
+            probe_policy="strict",
+            subnormals_preserved=True,
+        )
+
+
 # ---------------------------------------------------------------------------
 # stable_manifest_json
 # ---------------------------------------------------------------------------
@@ -238,6 +256,19 @@ def test_is_manifest_v3_compatible_false_unsupported_probe_version():
         "schema_version": 3,
         "fpstate": {
             "probe_version": 999,
+            "probe_policy": "strict",
+        },
+    }
+    assert is_manifest_v3_compatible(manifest) is False
+
+
+@pytest.mark.parametrize("probe_version", [True, 1.0, "1", float("inf")])
+def test_is_manifest_v3_compatible_false_invalid_probe_version_type(probe_version: object):
+    """Compatibility checks fail closed for malformed probe_version values."""
+    manifest = {
+        "schema_version": 3,
+        "fpstate": {
+            "probe_version": probe_version,
             "probe_policy": "strict",
         },
     }

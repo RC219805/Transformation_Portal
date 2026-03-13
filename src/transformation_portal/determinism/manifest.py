@@ -39,6 +39,13 @@ PROBE_VERSION_SCHEMA_MAP: dict[int, int] = {
 }
 
 
+def _validate_probe_version(probe_version: object) -> int:
+    """Return a governed probe version or fail closed for non-int inputs."""
+    if isinstance(probe_version, bool) or not isinstance(probe_version, int):
+        raise TypeError("probe_version must be a Python int audit contract value.")
+    return probe_version
+
+
 def _required_schema_for_probe_version(probe_version: int) -> int:
     """Return minimum manifest schema required for a probe version."""
     try:
@@ -46,7 +53,7 @@ def _required_schema_for_probe_version(probe_version: int) -> int:
     except KeyError as e:
         raise ValueError(
             f"Unsupported probe_version={probe_version}; update PROBE_VERSION_SCHEMA_MAP "
-            "and manifest schema governance before merge."
+            "and manifest schema governance together before using this probe version."
         ) from e
 
 
@@ -69,7 +76,7 @@ def build_artifact_manifest(
     This manifest is content-derived and contains no timestamps or host identifiers.
     All fields are Python primitives for JCS/JSON serialization safety.
     """
-    probe_version_int = int(probe_version)
+    probe_version_int = _validate_probe_version(probe_version)
     min_schema = _required_schema_for_probe_version(probe_version_int)
     if MANIFEST_SCHEMA_VERSION < min_schema:
         raise ValueError(
@@ -116,8 +123,9 @@ def is_manifest_v3_compatible(manifest: Dict[str, Any]) -> bool:
     if "probe_version" not in fpstate or "probe_policy" not in fpstate:
         return False
     try:
-        min_schema = _required_schema_for_probe_version(int(fpstate["probe_version"]))
-    except (TypeError, ValueError):
+        probe_version = _validate_probe_version(fpstate["probe_version"])
+        min_schema = _required_schema_for_probe_version(probe_version)
+    except (TypeError, ValueError, OverflowError):
         return False
     return manifest["schema_version"] >= min_schema
 
