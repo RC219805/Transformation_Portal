@@ -6,11 +6,15 @@ import json
 from pathlib import Path
 from typing import Any, Dict
 
+from ..ingest.canonical_json import dump_json
+
 
 def write_benchmark_metrics(path: Path, payload: Dict[str, Any]) -> None:
     """Write benchmark metrics as deterministic JSON."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    with path.open("w", encoding="utf-8") as handle:
+        dump_json(payload, handle, indent=2, sort_keys=True)
+        handle.write("\n")
 
 
 def load_benchmark_metrics(path: Path) -> Dict[str, Any]:
