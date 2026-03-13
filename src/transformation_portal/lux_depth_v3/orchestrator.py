@@ -57,12 +57,12 @@ from ..ingest.canonical_json import dump_json, dumps_json
 from ..spatial_ai.reconstruction.contracts import (  # noqa: E501
     LicenseRestrictionError as ReconstructionLicenseRestrictionError,
 )
-from .batch_stats import compute_batch_runtime_stats, detect_runtime_outliers
 from ._backend_contract import (
     normalize_backend_id,
     normalize_backend_provenance,
     normalize_backend_sequence,
 )
+from .batch_stats import compute_batch_runtime_stats, detect_runtime_outliers
 from .camera_metadata_loader import load_scene_cameras, load_sidecar_payload
 
 # Note: Imports adjusted to relative for package context compatibility

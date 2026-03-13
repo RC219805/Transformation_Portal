@@ -20,9 +20,9 @@ import json
 import os
 import subprocess
 import sys
+import textwrap
 import threading
 import time
-import textwrap
 from pathlib import Path
 
 import numpy as np
