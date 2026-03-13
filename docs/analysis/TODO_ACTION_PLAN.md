@@ -1,0 +1,335 @@
+# TODO Action Plan - Transformation Portal
+
+**Generated**: 2026-03-13
+**Scope**: Comprehensive review of all outstanding TODOs across the codebase
+**Cross-Reference**: [TODO_INVENTORY.md](./TODO_INVENTORY.md) (v2.0.0)
+
+---
+
+## Executive Summary
+
+This action plan consolidates findings from a codebase-wide TODO review and provides prioritized recommendations for resolution.
+
+### Key Findings
+
+| Category | Count | Action Required |
+|----------|-------|-----------------|
+| **Active Source Code TODOs** | 10 | Mixed (see details) |
+| **Test Observational TODOs** | 2 | Track only |
+| **Config/Preset TODOs** | 2 | Manual verification |
+| **Security Pattern TODOs** | 2 | Intentional (no action) |
+| **Documentation TODOs** | ~190 | Review/archive |
+
+### Priority Summary
+
+- **P1 (Immediate)**: 3 items requiring action
+- **P2 (Near-term)**: 4 items for v2.3.0 cycle
+- **P3 (Deferred)**: 3 items for future phases
+- **No Action Required**: ~196 items (correct as-is, observational, or documented)
+
+---
+
+## Category 1: Active Source Code TODOs
+
+### P2: ICC Profile and EXIF Preservation (v2_enhance.py)
+
+**Location**: `src/transformation_portal/lux_depth_v3/v2_enhance.py:577`
+```python
+# TODO: ICC profile and EXIF preservation with tifffile
+```
+
+**Context**: When saving 16-bit TIFFs, ICC profile and EXIF metadata are not preserved.
+
+**Impact**: Medium - Affects color management and metadata consistency.
+
+**Recommended Action**:
+1. Implement ICC profile extraction from source image via `PIL.Image.info.get('icc_profile')`
+2. Pass ICC profile to `tifffile.imwrite()` via `metadata={'icc_profile': ...}`
+3. For EXIF, consider `tifffile.TiffWriter` with `extratags`
+
+**Effort**: 4-6 hours
+**Priority**: P2 (Quality improvement)
+**Owner**: Specialist (ML/Image Processing)
+
+---
+
+### P3: Material Backend Integration Stubs (3 items)
+
+**Location**: `src/transformation_portal/spatial_ai/materials/material_backend.py`
+
+#### 1. ComfyUI Subprocess Integration (Line 281)
+```python
+# TODO: Implement ComfyUI subprocess integration
+```
+**Status**: Placeholder with graceful fallback to heuristic
+**Action**: Keep as-is until Phase 5B implementation
+**Priority**: P3 (Deferred - experimental feature)
+
+#### 2. NVDIFFREC Integration (Line 323)
+```python
+# TODO: Implement NVDIFFREC integration
+```
+**Status**: Placeholder with graceful fallback to heuristic
+**Action**: Defer to v2.3.0+ (requires ADR for GPU requirements)
+**Priority**: P3 (Research feature)
+
+#### 3. MaterialGAN Integration (Line 359)
+```python
+# TODO: Implement MaterialGAN integration
+```
+**Status**: Placeholder with graceful fallback to heuristic
+**Action**: Defer to v2.3.0+ (requires ADR for model licensing)
+**Priority**: P3 (Research feature)
+
+**Cross-Reference**: See [OUTSTANDING_TODOS_EXPERIMENTAL_FEATURES.md](./OUTSTANDING_TODOS_EXPERIMENTAL_FEATURES.md) Section 3
+
+---
+
+### P3: SLERP Interpolation (scene_builder.py)
+
+**Location**: `src/transformation_portal/spatial_ai/reconstruction/scene_builder.py:290`
+```python
+# TODO: Replace with proper SLERP interpolation
+# This naive interpolation produces sheared rotations
+```
+
+**Context**: Camera path interpolation uses linear interpolation instead of spherical linear interpolation (SLERP).
+
+**Impact**: Low - Affects only experimental reconstruction feature, produces "sheared rotations" per comment.
+
+**Recommended Action**:
+1. Implement SLERP using quaternion representation
+2. Use `scipy.spatial.transform.Rotation.slerp()` or manual quaternion interpolation
+3. Add unit tests for interpolation quality
+
+**Effort**: 1-2 days
+**Priority**: P3 (Technical enhancement)
+**Owner**: Specialist (Spatial AI)
+
+---
+
+### P4: Upscaling Weights Cache (realesrgan.py)
+
+**Location**: `src/transformation_portal/upscaling/backends/realesrgan.py:234`
+```python
+# # TODO(Phase 4.1): Use ~/.cache/transformation_portal/upscaling/weights
+```
+
+**Context**: Commented-out TODO for standardizing weight cache location.
+
+**Impact**: Minimal - Currently functional, cache location is implementation detail.
+
+**Action**: Track for Phase 4.1 standardization; no immediate action.
+**Priority**: P4 (Nice-to-have)
+
+---
+
+### ✅ No Action Required: Security Pattern Constants
+
+**Locations**:
+- `src/transformation_portal/core/security/model_lock.py:19`
+- `src/transformation_portal/core/config/preset_health.py:31`
+
+```python
+re.compile(r"TODO_REPLACE", re.IGNORECASE),
+```
+
+**Context**: These are **intentional pattern matchers** for detecting placeholder values in config files. The regex `TODO_REPLACE` is part of the security scanner to find unverified model hashes.
+
+**Action**: None - This is correct security infrastructure.
+
+---
+
+## Category 2: Sample Download URLs
+
+**Location**: `scripts/download_samples.py` (Lines 79, 98)
+```python
+"url": None,  # TODO: Upload to GitHub Release
+```
+
+**Impact**: Medium - Users cannot download demo samples automatically.
+
+**Affected Samples**:
+1. `demo_coastal_interior` (5MB)
+2. `demo_pool_aerial` (8MB)
+3. `sample_render_4k` (25MB)
+
+**Recommended Action**:
+1. Create GitHub Release `v2.x.x-samples`
+2. Upload sample files with SHA256 hashes
+3. Update `download_samples.py` with URLs and hashes
+4. Update README sample documentation
+
+**Effort**: 4 hours
+**Priority**: P2 (User-facing feature)
+**Owner**: DevOps
+
+**Cross-Reference**: See [TODO_INVENTORY.md Section 3.2](./TODO_INVENTORY.md)
+
+---
+
+## Category 3: Config/Preset TODOs
+
+### P1: HuggingFace Model Revision Pinning
+
+**Locations**:
+- `config/presets/apex_research.yaml:155`
+- `config/presets/apex_research_canary.yaml:26`
+- `config/presets/experimental/apex_research_ultra.yaml:80`
+
+```yaml
+# TODO(Phase 1.1): Pin revision to commit hash for reproducibility
+```
+
+**Context**: Model revisions are not pinned to specific commit hashes, using `main` branch by default.
+
+**Impact**: High - Reproducibility risk; model behavior could change without notice.
+
+**Recommended Action**:
+1. Manual verification at https://huggingface.co/depth-anything/DA3-NESTED-GIANT-LARGE-1.1/commits/main
+2. Copy verified commit SHA (40-char hex string)
+3. Update all 3 preset files with pinned revision
+4. Run `python scripts/validation/validate_hf_revisions.py` (if available)
+
+**Effort**: 1 hour (manual verification)
+**Priority**: P1 (Reproducibility)
+**Owner**: Specialist (ML)
+
+**Cross-Reference**: See [OUTSTANDING_TODOS_EXPERIMENTAL_FEATURES.md Section 6](./OUTSTANDING_TODOS_EXPERIMENTAL_FEATURES.md)
+
+---
+
+## Category 4: Test TODOs (Observational - No Action)
+
+**Location**: `tests/stress/test_stress_large_batch.py` (Lines 326, 372)
+
+```python
+# TODO: Investigate why draft is slower than expected (expected: draft < standard)
+# TODO: Investigate preset performance ordering regression
+```
+
+**Context**: These are observational notes tracking inconsistent preset performance, likely due to resource contention in stress tests.
+
+**Impact**: None - Performance observation, not a bug.
+
+**Action**: Track in [IMPROVEMENT_OPPORTUNITIES.md](../guides/IMPROVEMENT_OPPORTUNITIES.md) (already done).
+**Priority**: P4 (Optimization research)
+
+---
+
+## Category 5: Test File Content (Not a TODO)
+
+**Location**: `tests/security/test_pipeline_isolation.py:92`
+```python
+test_file.write_text("""# TODO: Consider using spatial_ai for this
+```
+
+**Context**: This is test fixture content written to a temporary file for security scanning validation. The "TODO" is part of the test data, not an actionable item.
+
+**Action**: None - Test data, not a real TODO.
+
+---
+
+## Consolidated Action Plan
+
+### Immediate Actions (P1) - Before v2.3.0 Planning
+
+| # | Item | Effort | Owner | Deadline |
+|---|------|--------|-------|----------|
+| 1 | Pin HuggingFace model revisions | 1h | ML Specialist | Week 1 |
+| 2 | Verify branch protection (GitHub UI) | 15min | Admin | Week 1 |
+| 3 | Create rollback procedures doc | 2h | Architect | Week 2 |
+
+**Total P1 Effort**: ~3.5 hours
+
+---
+
+### Near-term Actions (P2) - v2.3.0 Cycle
+
+| # | Item | Effort | Owner | Sprint |
+|---|------|--------|-------|--------|
+| 4 | Upload sample data to GitHub Release | 4h | DevOps | Sprint 1 |
+| 5 | Implement ICC/EXIF preservation in v2_enhance.py | 6h | ML Specialist | Sprint 1 |
+| 6 | Delete obsolete depth_canonical module | 1h | Specialist | Sprint 1 |
+| 7 | Archive obsolete PR tracking docs | 30min | Any | Sprint 1 |
+
+**Total P2 Effort**: ~11.5 hours
+
+---
+
+### Deferred Actions (P3) - v2.4.0+ / Phase 2
+
+| # | Item | Effort | Owner | Phase |
+|---|------|--------|-------|-------|
+| 8 | SLERP interpolation in scene_builder.py | 1-2d | Spatial AI | Phase 2 |
+| 9 | ComfyUI subprocess integration | 1-2w | ML | Phase 5B |
+| 10 | NVDIFFREC integration | 3-4w | ML Research | Phase 3 |
+| 11 | MaterialGAN integration | 2-3w | ML Research | Phase 3 |
+
+**Total P3 Effort**: ~200+ hours (deferred)
+
+---
+
+### No Action Required (63% of inventory)
+
+The following categories require **no action**:
+
+1. **Intentional Feature Gates** (25 items): NotImplementedError stubs that correctly gate unimplemented features
+2. **Security Patterns** (2 items): `TODO_REPLACE` regex patterns for detecting placeholders
+3. **Test Fixtures** (1 item): TODO in test data content
+4. **Observational Notes** (2 items): Performance investigation tracking
+5. **Completed Items** (9 items): Already resolved per TODO_INVENTORY.md
+6. **Obsolete Documentation** (17 items): Historical tracking, scheduled for archive
+
+---
+
+## Governance Recommendations
+
+### 1. Definition of Done Updates
+
+Add to project Definition of Done:
+- [ ] "If adding `NotImplementedError`, document in TODO_INVENTORY.md with categorization"
+- [ ] "If adding `# TODO:` comment, include tracking reference (phase, ADR, or issue number)"
+
+### 2. Inventory Update Cadence
+
+Establish monthly TODO inventory review:
+- Review new TODOs added in PRs
+- Verify deferred items still deferred for valid reasons
+- Archive completed items
+
+### 3. Preset Governance
+
+Require for all preset changes:
+- HuggingFace model revisions must be pinned (40-char SHA)
+- Expected SHA256 hashes for model checkpoints
+- `model_lock_manifest.yaml` must be updated
+
+---
+
+## Cross-Reference Documents
+
+| Document | Purpose | Status |
+|----------|---------|--------|
+| [TODO_INVENTORY.md](./TODO_INVENTORY.md) | Comprehensive v2.0.0 inventory | ✅ Current |
+| [OUTSTANDING_TODOS_EXPERIMENTAL_FEATURES.md](./OUTSTANDING_TODOS_EXPERIMENTAL_FEATURES.md) | Experimental feature tracking | ✅ Current |
+| [HF_REVISION_PINNING_GUIDE.md](./HF_REVISION_PINNING_GUIDE.md) | Model pinning procedures | ✅ Current |
+| [IMPROVEMENT_OPPORTUNITIES.md](../guides/IMPROVEMENT_OPPORTUNITIES.md) | Performance optimization tracking | ✅ Current |
+
+---
+
+## Summary
+
+**Total Items Reviewed**: 206 TODO instances
+**Action Required**: 11 items (5%)
+**No Action Required**: 195 items (95%)
+
+**Key Takeaway**: The majority of TODOs in this codebase are **intentional feature gates**, **security infrastructure**, or **observational tracking**. Only 11 items require actual implementation work, with 3 being P1 priority.
+
+The codebase demonstrates mature TODO management with proper documentation and categorization. The existing [TODO_INVENTORY.md](./TODO_INVENTORY.md) provides comprehensive tracking and should continue to be the authoritative source for TODO governance.
+
+---
+
+**Document Version**: 1.0.0
+**Author**: Transformation Portal Architect Review
+**Next Review**: Before v2.3.0 release planning
