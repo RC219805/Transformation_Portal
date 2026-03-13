@@ -28,7 +28,7 @@ echo ""
 echo "Installing pre-commit hook..."
 if ! command -v pre-commit >/dev/null 2>&1; then
     echo "ERROR: 'pre-commit' is required but not installed."
-    echo "Install it with: python -m pip install pre-commit"
+    echo "Install it with: python3 -m pip install pre-commit"
     exit 1
 fi
 

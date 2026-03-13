@@ -49,11 +49,19 @@ directly.
 make install-hooks
 ```
 
-**What it checks:**
-- Untracked core files
-- Repository-root file placement
-- Trailing whitespace / EOF hygiene (auto-fixes and re-stages)
+**What the default installed hook checks:**
+- Trailing whitespace / EOF hygiene
 - Large added files, merge-conflict markers, line-ending issues, YAML syntax
+- Repository-root file placement
+- CI-parity `black` / `isort` checks for `src/` and `tests/`
+- ML test isolation guardrails
+- Dependency-constraint validation for requirement files
+
+**Additional checks available through the compatibility wrapper / manual gate:**
+- Untracked core files
+- Trailing whitespace / EOF hygiene with auto-fix and re-stage
+- Large added files, merge-conflict markers, line-ending issues, YAML syntax
+- Repository-root file placement
 - Lint tool parity from `requirements-lint.txt`
 - Staged Python `flake8` critical/F821 checks
 - Staged Python `black` / `isort` checks

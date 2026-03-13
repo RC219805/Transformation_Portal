@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Unified pre-commit quality gate for this repository.
+"""Compatibility pre-commit quality gate for this repository.
 
-This script consolidates the strongest checks from the prior shell hook,
-ad hoc Python runner, and generic pre-commit configuration into one
-standalone file that can run directly from ``.git/hooks/pre-commit``.
+This script consolidates the strongest checks from the prior shell hook and
+ad hoc Python runner into one manual/compatibility entrypoint that can be
+invoked via ``scripts/pre_commit_hook.sh``.
 """
 
 from __future__ import annotations
@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import ast
 import re
+import shutil
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -65,16 +66,28 @@ def python_can_import(python_bin: str, modules: Sequence[str]) -> bool:
 
 
 def choose_python(repo_root: Path) -> str:
-    venv_python = repo_root / ".venv" / "bin" / "python"
-    candidates = []
-    if venv_python.exists():
-        candidates.append(str(venv_python))
-    candidates.append(sys.executable)
+    candidates: list[str] = []
+    for path in (
+        repo_root / ".venv-lint" / "bin" / "python",
+        repo_root / ".venv" / "bin" / "python",
+    ):
+        if path.exists():
+            candidates.append(str(path))
+    if sys.executable:
+        candidates.append(sys.executable)
+    for binary in ("python3", "python"):
+        resolved = shutil.which(binary)
+        if resolved:
+            candidates.append(resolved)
 
-    for candidate in candidates:
+    unique_candidates = list(dict.fromkeys(candidates))
+
+    for candidate in unique_candidates:
         if python_can_import(candidate, ("black", "flake8", "isort")):
             return candidate
-    return candidates[0]
+    if unique_candidates:
+        return unique_candidates[0]
+    return sys.executable
 
 
 def run_command(
@@ -454,7 +467,9 @@ def check_import_heuristics(staged_python: Sequence[Path], repo_root: Path) -> C
             elif isinstance(node, ast.ImportFrom):
                 imported_names.update(alias.asname or alias.name for alias in node.names)
 
-        used_names = {node.id for node in ast.walk(tree) if isinstance(node, ast.Name)}
+        used_names = {
+            node.id for node in ast.walk(tree) if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load)
+        }
         for suspect in ("iio", "cv2"):
             if suspect in used_names and suspect not in imported_names:
                 offenders.append(f"{relpath(repo_root, path)}: '{suspect}' used without import")
