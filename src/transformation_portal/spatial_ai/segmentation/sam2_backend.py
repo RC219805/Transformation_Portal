@@ -36,6 +36,7 @@ import logging
 import os
 import re
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Dict, Literal, Optional
 
 import numpy as np
@@ -573,10 +574,14 @@ class SAM2Backend:
     def _extract_sam2_predictions(self, output) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Extract masks plus IoU/stability scores from a SAM2 output object.
 
-        Missing or ``None`` confidence attributes fall back to ``1.0`` so older
-        stub outputs and partial mocks still satisfy the segmentation contract.
+        ``pred_masks`` is required. Missing or ``None`` confidence attributes
+        fall back to ``1.0`` so older stub outputs and partial mocks still
+        satisfy the segmentation contract.
         """
-        masks = self._to_numpy_array(getattr(output, "pred_masks"), dtype=bool)
+        raw_masks = getattr(output, "pred_masks", None)
+        if raw_masks is None:
+            raise AttributeError("SAM2 output missing required pred_masks attribute")
+        masks = self._to_numpy_array(raw_masks, dtype=bool)
         if masks.ndim == 2:
             masks = masks[np.newaxis, ...]
 
@@ -716,7 +721,7 @@ class SAM2Backend:
                 labels = np.array(seg_input.prompts.get("labels", [1] * len(points)))  # Default to foreground
 
                 # Predict masks
-                masks, scores, logits = self._image_predictor.predict(
+                prediction = self._image_predictor.predict(
                     point_coords=points,
                     point_labels=labels,
                     multimask_output=True,  # Get multiple mask proposals
@@ -730,7 +735,7 @@ class SAM2Backend:
                 bbox = np.array(seg_input.prompts["bbox"])  # [x1, y1, x2, y2]
 
                 # Predict masks
-                masks, scores, logits = self._image_predictor.predict(
+                prediction = self._image_predictor.predict(
                     box=bbox,
                     multimask_output=True,
                 )
@@ -738,14 +743,21 @@ class SAM2Backend:
             else:
                 raise ValueError(f"Unsupported prompted mode: {mode}")
 
+            if isinstance(prediction, tuple):
+                if len(prediction) < 2:
+                    raise RuntimeError("SAM2 predictor returned an unexpected prompted output tuple")
+                prediction = SimpleNamespace(
+                    pred_masks=prediction[0],
+                    iou_predictions=prediction[1],
+                    stability_scores=prediction[1],
+                )
+
+            masks, scores, stability_scores = self._extract_sam2_predictions(prediction)
+
             # SAM2ImagePredictor may return proposals in arbitrary order.
             # Normalize to a deterministic highest-confidence-first order so
             # prompted mode has a stable primary mask across environments.
             scores = np.asarray(scores, dtype=np.float32)
-
-            # SAM2ImagePredictor returns float32 probability masks.
-            # Convert to bool dtype to match contract (auto mode returns bool).
-            masks = (masks > 0.0).astype(bool)
 
             # Convert masks to correct format
             if masks.ndim == 3:
@@ -764,6 +776,7 @@ class SAM2Backend:
                 )
                 masks = masks[ordered_indices]
                 scores = scores[ordered_indices]
+                stability_scores = stability_scores[ordered_indices]
 
             # Create metadata for each mask
             metadata_list = []
@@ -787,7 +800,7 @@ class SAM2Backend:
                     MaskMetadata(
                         area=area,
                         bbox=bbox_xywh,
-                        stability_score=float(scores[i]),
+                        stability_score=float(stability_scores[i]),
                     )
                 )
 

@@ -204,6 +204,24 @@ class TestDepthProBackendUnit:
         backend = DepthProBackend(config)
         assert backend._python_executable == str(python_executable.resolve())
 
+    def test_python_executable_resolution_uses_cwd_for_relative_paths(self, tmp_path, monkeypatch):
+        """Relative dedicated env paths should resolve from the caller's cwd."""
+        from transformation_portal.depth.backends.depth_pro import DepthProBackend
+
+        python_executable = tmp_path / ".venv-depth-pro" / "bin" / "python"
+        python_executable.parent.mkdir(parents=True)
+        python_executable.write_text("#!/bin/sh\n", encoding="utf-8")
+        monkeypatch.chdir(tmp_path)
+
+        config = MockEnhanceConfig(
+            non_commercial_ok=True,
+            accept_apple_depth_pro_research_license=True,
+            depth_pro_python_executable="./.venv-depth-pro/bin/python",
+        )
+
+        backend = DepthProBackend(config)
+        assert backend._python_executable == str(python_executable.resolve())
+
     def test_ensure_available_missing_package(self, tmp_path):
         """Should raise ImportError if depth_pro package not installed."""
         from transformation_portal.depth.backends.depth_pro import DepthProBackend
@@ -273,6 +291,36 @@ class TestDepthProBackendUnit:
         command = mock_run.call_args.args[0]
         assert "--check" in command
         assert str(checkpoint_path.resolve()) in command
+
+    def test_subprocess_without_repo_checkout_uses_caller_cwd(self, tmp_path, monkeypatch):
+        """Installed-package layouts should not assume a checkout-relative cwd."""
+        from transformation_portal.depth.backends.depth_pro import DepthProBackend
+
+        checkpoint_path = tmp_path / "depth_pro.pt"
+        checkpoint_path.write_bytes(b"checkpoint")
+        python_executable = tmp_path / ".venv-depth-pro" / "bin" / "python"
+        python_executable.parent.mkdir(parents=True)
+        python_executable.write_text("#!/bin/sh\n", encoding="utf-8")
+        monkeypatch.chdir(tmp_path)
+
+        with patch.object(DepthProBackend, "_find_repo_root", return_value=None):
+            config = MockEnhanceConfig(
+                non_commercial_ok=True,
+                accept_apple_depth_pro_research_license=True,
+                depth_pro_checkpoint_path=str(checkpoint_path),
+                depth_pro_python_executable="./.venv-depth-pro/bin/python",
+            )
+            backend = DepthProBackend(config)
+
+        with patch.dict("os.environ", {"PYTHONPATH": "existing-path"}, clear=True):
+            worker_env = backend._build_worker_env()
+        assert worker_env["PYTHONPATH"] == "existing-path"
+
+        with patch("transformation_portal.depth.backends.depth_pro.subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+            backend.ensure_available()
+
+        assert mock_run.call_args.kwargs["cwd"] == tmp_path
 
     def test_subprocess_compute_returns_depth_result(self, tmp_path):
         """Subprocess worker output should map back to the DepthResult contract."""

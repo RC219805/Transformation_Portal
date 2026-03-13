@@ -197,6 +197,33 @@ class TestSAM2BackendPromptedMode:
         assert result.metadata[0].area == 1600
         assert result.masks[0].sum() == 1600
 
+    def test_segment_prompted_uses_normalized_prediction_extraction(self, mock_checkpoint):
+        """Prompted mode should route predictor outputs through the SAM2 extraction helper."""
+        from transformation_portal.spatial_ai.segmentation.sam2_backend import SAM2Backend
+
+        backend = SAM2Backend(model_size="base", checkpoint_path=str(mock_checkpoint), device="cpu")
+        backend._image_predictor = Mock()
+
+        masks = np.zeros((2, 32, 32), dtype=np.float32)
+        masks[0, 8:24, 8:24] = 1.0
+        masks[1, 10:22, 10:22] = 1.0
+        scores = np.array([0.4, 0.8], dtype=np.float32)
+        backend._image_predictor.predict.return_value = (masks, scores, None)
+
+        seg_input = SegmentationInput(
+            image=np.random.rand(32, 32, 3).astype(np.float32),
+            gamma=1.0,
+            mode="bbox",
+            prompts={"bbox": [6, 6, 26, 26]},
+        )
+
+        with patch.object(backend, "_extract_sam2_predictions", wraps=backend._extract_sam2_predictions) as extractor:
+            result = backend._segment_prompted(seg_input)
+
+        extractor.assert_called_once()
+        assert result.scores.tolist() == pytest.approx([0.8, 0.4])
+        assert result.metadata[0].stability_score == pytest.approx(0.8)
+
 
 class TestSAM2BackendVideoMode:
     """Test video mode by mocking internal _segment_video method."""

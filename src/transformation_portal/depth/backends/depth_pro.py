@@ -63,20 +63,31 @@ class DepthProBackend:
         self._config = config
         self._stage: Optional["DepthProStage"] = None
         self._repo_root = self._find_repo_root()
-        self._repo_src = self._repo_root / "src"
+        self._repo_src = self._repo_root / "src" if self._repo_root is not None else None
         self._device = self._resolve_device(config)
         self._checkpoint_path = self._resolve_checkpoint_path(config)
         self._checkpoint_hash_cached: Optional[str] = None
         self._python_executable = self._resolve_python_executable(config)
         self._subprocess_available_checked = False
 
-    def _find_repo_root(self) -> Path:
-        """Find repository root by walking parent directories."""
+    def _find_repo_root(self) -> Optional[Path]:
+        """Find repository root by walking parent directories when in a checkout."""
         current = Path(__file__).resolve()
         for parent in [current] + list(current.parents):
             if (parent / "pyproject.toml").exists() and (parent / "src").exists():
                 return parent
-        return current.parents[4]
+        return None
+
+    def _worker_cwd(self) -> Path:
+        """Choose a stable subprocess working directory.
+
+        Source checkouts use the repo root so a sibling dedicated Depth Pro
+        environment can import the local package via ``PYTHONPATH``. Installed
+        package layouts fall back to the caller's current working directory.
+        """
+        if self._repo_root is not None:
+            return self._repo_root
+        return Path.cwd()
 
     def _resolve_device(self, config: Optional["EnhanceConfig"]) -> str:
         """Resolve device from config or auto-detect."""
@@ -141,7 +152,7 @@ class DepthProBackend:
         if candidate.startswith(".") or has_separator:
             path = Path(candidate).expanduser()
             if not path.is_absolute():
-                path = self._repo_root / path
+                path = Path.cwd() / path
             if not path.exists():
                 raise FileNotFoundError(f"Depth Pro Python executable not found: {path}")
             return str(path.resolve())
@@ -158,7 +169,7 @@ class DepthProBackend:
     def _build_worker_env(self) -> dict[str, str]:
         """Build environment for the subprocess worker."""
         env = os.environ.copy()
-        if self._repo_src.exists():
+        if self._repo_src is not None and self._repo_src.exists():
             existing = env.get("PYTHONPATH")
             env["PYTHONPATH"] = f"{self._repo_src}{os.pathsep}{existing}" if existing else str(self._repo_src)
         return env
@@ -218,7 +229,7 @@ class DepthProBackend:
             command,
             capture_output=True,
             text=True,
-            cwd=self._repo_root,
+            cwd=self._worker_cwd(),
             env=self._build_worker_env(),
             check=False,
         )
@@ -370,7 +381,7 @@ class DepthProBackend:
                     command,
                     capture_output=True,
                     text=True,
-                    cwd=self._repo_root,
+                    cwd=self._worker_cwd(),
                     env=self._build_worker_env(),
                     check=True,
                 )

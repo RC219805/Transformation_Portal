@@ -124,6 +124,17 @@ class TestExtractSAM2Predictions:
         np.testing.assert_array_equal(iou, np.ones(3, dtype=np.float32))
         np.testing.assert_array_equal(stability, np.ones(3, dtype=np.float32))
 
+    def test_extract_sam2_predictions_missing_pred_masks(self):
+        """pred_masks is required and should fail with a clear error when missing."""
+        backend = SAM2Backend(device="cpu")
+
+        mock_output = Mock(spec=["iou_predictions", "stability_scores"])
+        mock_output.iou_predictions = np.array([0.9], dtype=np.float32)
+        mock_output.stability_scores = np.array([0.95], dtype=np.float32)
+
+        with pytest.raises(AttributeError, match="pred_masks"):
+            backend._extract_sam2_predictions(mock_output)
+
     def test_extract_sam2_predictions_shape_consistency(self):
         """Test that extracted arrays have consistent shapes."""
         backend = SAM2Backend(device="cpu")

@@ -23,8 +23,10 @@ or if PYTHONPATH is set correctly.
 
 from __future__ import annotations
 
+import ast
 import os
 from collections.abc import Callable
+from itertools import product
 from pathlib import Path
 from typing import Any
 
@@ -41,13 +43,58 @@ def pytest_configure(config):
     os.environ["TP_ALLOW_SYNTHETIC_FALLBACK"] = "1"
 
 
+def _eval_markexpr_ast(node: ast.AST, values: dict[str, bool]) -> bool:
+    """Evaluate a pytest ``-m`` expression over a boolean marker assignment."""
+    if isinstance(node, ast.Expression):
+        return _eval_markexpr_ast(node.body, values)
+    if isinstance(node, ast.Name):
+        return bool(values.get(node.id, False))
+    if isinstance(node, ast.Constant) and isinstance(node.value, bool):
+        return node.value
+    if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Not):
+        return not _eval_markexpr_ast(node.operand, values)
+    if isinstance(node, ast.BoolOp):
+        operands = [_eval_markexpr_ast(value, values) for value in node.values]
+        if isinstance(node.op, ast.And):
+            return all(operands)
+        if isinstance(node.op, ast.Or):
+            return any(operands)
+    raise ValueError(f"Unsupported pytest mark expression node: {ast.dump(node, include_attributes=False)}")
+
+
+def _markexpr_requests_marker(markexpr: str, marker_name: str) -> bool:
+    """Return True when a marker appears positively in a ``pytest -m`` expression."""
+    markexpr = markexpr.strip()
+    if not markexpr:
+        return False
+
+    try:
+        expression = ast.parse(markexpr, mode="eval")
+    except SyntaxError:
+        return False
+
+    names = sorted({node.id for node in ast.walk(expression) if isinstance(node, ast.Name)})
+    if marker_name not in names:
+        return False
+
+    other_names = [name for name in names if name != marker_name]
+    for values in product([False, True], repeat=len(other_names)):
+        assignment = dict(zip(other_names, values))
+        if _eval_markexpr_ast(expression, {**assignment, marker_name: True}) and not _eval_markexpr_ast(
+            expression,
+            {**assignment, marker_name: False},
+        ):
+            return True
+    return False
+
+
 def _benchmark_run_explicitly_requested(config: pytest.Config) -> bool:
     """Return True when benchmark-marked tests were requested on purpose."""
     if os.getenv("TP_RUN_BENCHMARKS", "").strip().lower() in {"1", "true", "yes", "on"}:
         return True
 
     markexpr = (config.option.markexpr or "").strip().lower()
-    if "benchmark" in markexpr:
+    if _markexpr_requests_marker(markexpr, "benchmark"):
         return True
 
     invocation_args = tuple(str(arg) for arg in config.invocation_params.args)
