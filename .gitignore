@@ -54,6 +54,7 @@ requirements/.pip-tools-cache/
 # -----------------------------------------------------------------------------
 .env
 .venv/
+.venv-lint/
 env/
 venv/
 path/to/venv

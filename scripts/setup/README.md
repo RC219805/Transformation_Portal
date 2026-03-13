@@ -24,7 +24,7 @@ Installs the automated repository organization system, including the pre-commit 
 
 ### `pre-commit-check.sh`
 
-Pre-commit hook that validates file organization before allowing commits.
+Root-placement validator used by the pre-commit hook before allowing commits.
 
 **Usage:**
 This script is automatically run by git when you commit. You can also run it manually:
@@ -37,6 +37,23 @@ This script is automatically run by git when you commit. You can also run it man
 - Checks for files in the repository root that should be elsewhere
 - Provides suggestions for where files should go
 - Prevents commits with misplaced files (unless `--no-verify` is used)
+
+### `run_lint_tool.sh`
+
+Bootstraps the CI-pinned lint toolchain locally and runs formatter/import checks from that environment.
+
+**Usage:**
+```bash
+./scripts/setup/run_lint_tool.sh black path/to/file.py
+./scripts/setup/run_lint_tool.sh isort path/to/file.py
+./scripts/setup/run_lint_tool.sh parity
+```
+
+**What it does:**
+- Creates `.venv-lint/` with `python3.12` if needed
+- Installs `requirements-lint.txt` when the lockfile changes
+- Runs Black and isort with the same versions used by GitHub Actions
+- Powers `make lint-parity` and the local Black/isort pre-commit hooks
 
 **Bypass (Emergency Only):**
 ```bash
