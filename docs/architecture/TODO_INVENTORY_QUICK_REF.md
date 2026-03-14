@@ -43,9 +43,9 @@
 
 ## Sprint Planning
 
-### Sprint 1: Cleanup (Week 1, 8h) - **Partially Completed**
+### Sprint 1: Cleanup (Week 1, 8h) - **Mostly Completed**
 1. ~~Delete depth_canonical module (1h)~~ ✅ Already archived
-2. Archive obsolete PR docs (30min)
+2. ~~Archive obsolete PR docs (30min)~~ ✅ Completed 2026-03-14
 3. Update binary cleanup docs (30min)
 4. Complete CLI e2e tests (4h)
 5. Audit ADR-023 manifest (2h)

@@ -242,12 +242,17 @@ test_file.write_text("""# TODO: Consider using spatial_ai for this
 
 | # | Item | Effort | Owner | Sprint | Status |
 |---|------|--------|-------|--------|--------|
-| 4 | Upload sample data to GitHub Release | 4h | DevOps | Sprint 1 | Pending |
+| 4 | Upload sample data to GitHub Release | 4h | DevOps | Sprint 1 | Pending (requires GitHub Release creation) |
 | 5 | Implement ICC/EXIF preservation in v2_enhance.py | 6h | ML Specialist | Sprint 1 | ✅ Completed 2026-03-14 |
 | 6 | Delete obsolete depth_canonical module | 1h | Specialist | Sprint 1 | ✅ Already archived |
-| 7 | Archive obsolete PR tracking docs | 30min | Any | Sprint 1 | Pending |
+| 7 | Archive obsolete PR tracking docs | 30min | Any | Sprint 1 | ✅ Completed 2026-03-14 |
 
-**Total P2 Effort**: ~11.5 hours → **Remaining**: ~4.5 hours
+**Total P2 Effort**: ~11.5 hours → **Remaining**: ~4 hours
+
+**Note**: PR tracking docs archived to `docs/_archive/2026-03-legacy-prs/`:
+- `PR98_VERIFICATION_REPORT.md`
+- `PR100_FIX_SUMMARY.md`
+- `PR162_VERIFICATION_SUMMARY.md`
 
 ---
 
