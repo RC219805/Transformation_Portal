@@ -587,6 +587,73 @@ class TestEnhanceImage:
             assert output_icc is not None, "ICC profile was not preserved"
             assert output_icc == icc_profile, "ICC profile data differs"
 
+    def test_enhance_image_preserves_icc_profile_16bit_tiff(self, tmp_path):
+        """Test that ICC profiles are preserved in 16-bit TIFF output via tifffile.
+
+        Regression test for the ICC profile preservation path added in the 16-bit
+        TIFF code path using tifffile extratags (tag 34675).
+        """
+        tifffile = pytest.importorskip("tifffile")
+
+        input_path = tmp_path / "input_16bit.tif"
+        output_path = tmp_path / "output_16bit.tif"
+
+        # Seed RNG for deterministic test behavior
+        rng = np.random.default_rng(seed=42)
+
+        # Create 16-bit test image with ICC profile
+        test_image_16 = rng.integers(0, 65535, size=(100, 100, 3), dtype=np.uint16)
+
+        # Create a minimal fake ICC profile for testing purposes.
+        # Real ICC profiles have a 128-byte header; we use a small payload (~1.1KB)
+        # sufficient to verify the preservation mechanism works.
+        icc_profile = b"\x00\x00\x02\x10" + b"ICC_PROFILE_DATA_16BIT" * 50
+
+        # Save input with ICC profile using tifffile extratags (uncompressed to avoid imagecodecs)
+        tifffile.imwrite(
+            input_path,
+            test_image_16,
+            photometric="rgb",
+            compression=None,  # No compression to avoid imagecodecs dependency
+            extratags=[(34675, "B", len(icc_profile), icc_profile, False)],
+        )
+
+        with patch("transformation_portal.lux_depth_v3.v2_enhance.EnhancementStage") as mock_stage_cls:
+            mock_stage = Mock()
+            mock_stage_cls.return_value = mock_stage
+
+            # Return 16-bit enhanced image
+            mock_result = Mock()
+            mock_result.status = StageStatus.COMPLETED
+            mock_result.artifacts = {"enhanced_image": test_image_16}
+            mock_result.metadata = {}
+            mock_stage.compute.return_value = mock_result
+
+            # Mock tifffile.imwrite at the tifffile module level (since it's imported locally)
+            with patch("tifffile.imwrite") as mock_imwrite:
+                enhance_image(input_path, output_path, allow_8bit_output=False)
+
+                # Verify tifffile.imwrite was called
+                assert mock_imwrite.called, "tifffile.imwrite was not called"
+
+                # Get the call arguments
+                call_kwargs = mock_imwrite.call_args[1]
+
+                # Verify extratags contains ICC profile (tag 34675)
+                extratags = call_kwargs.get("extratags")
+                assert extratags is not None, "extratags not passed to tifffile.imwrite"
+
+                # Find the ICC profile tag in extratags
+                icc_tag_found = False
+                for tag in extratags:
+                    if tag[0] == 34675:  # ICC profile tag
+                        icc_tag_found = True
+                        # tag format: (tag_id, dtype, count, value, writeonce)
+                        assert tag[3] == icc_profile, "ICC profile data differs"
+                        break
+
+                assert icc_tag_found, "ICC profile tag 34675 not found in extratags"
+
     def test_enhance_image_handles_exif_orientation(self, tmp_path):
         """Test that EXIF orientation is properly handled."""
         input_path = tmp_path / "input.jpg"
