@@ -84,7 +84,9 @@ class Postprocessor:
         else:
             try:
                 self.refiner = DepthRefiner(refinement_cfg)
-            except Exception:
+            except (TypeError, ValueError, AttributeError) as e:
+                # Refinement initialization failed - use no-op fallback
+                logger.debug("Edge refinement initialization failed, using no-op: %s", e)
                 self.refiner = _NoOpDepthRefiner()
 
     def process(self, result: DepthResult) -> DepthResult:
@@ -250,8 +252,9 @@ class Postprocessor:
 
             except expected_joint_filter_errors as exc:
                 logger.debug("Joint bilateral filter" " unavailable/incompatible;" " using bilateral" " fallback: %s", exc)
-            except Exception:
-                logger.exception("Unexpected joint bilateral" " filter failure; using" " bilateral fallback")
+            except RuntimeError as exc:
+                # Catch any cv2 runtime errors not covered by expected_joint_filter_errors
+                logger.warning("Unexpected joint bilateral" " filter failure; using" " bilateral fallback: %s", exc)
 
             # cv2.ximgproc not available or
             # type mismatch - fall back to
@@ -295,10 +298,11 @@ class Postprocessor:
         del threshold
         try:
             gray = np.asarray(image)
-        except Exception:
+        except (TypeError, ValueError) as exc:
             logger.warning(
-                "Edge preservation skipped:" " image is not array-like" " (%s)",
+                "Edge preservation skipped:" " image is not array-like" " (%s): %s",
                 type(image).__name__,
+                exc,
             )
             return depth
 
