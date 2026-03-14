@@ -1,6 +1,6 @@
 # TODO Inventory Quick Reference
 
-**Version:** 2.0.0 | **Date:** 2026-02-13 | **Status:** ACTIVE
+**Version:** 2.0.1 | **Date:** 2026-03-14 | **Status:** ACTIVE
 
 **Full Inventory:** [docs/analysis/TODO_INVENTORY.md](../../analysis/TODO_INVENTORY.md)
 **Executive Summary:** [TODO_INVENTORY_EXECUTIVE_SUMMARY.md](TODO_INVENTORY_EXECUTIVE_SUMMARY.md)
@@ -12,33 +12,39 @@
 | Metric | Value |
 |--------|-------|
 | **Total Items** | 65 |
-| **✅ Completed** | 9 (14%) |
+| **✅ Completed** | 12 (18%) |
 | **🟢 Correct (No Action)** | 32 (49%) |
 | **📦 Obsolete** | 17 (26%) |
-| **⏳ Action Required** | 24 (37%) |
+| **⏳ Action Required** | 21 (32%) |
 | **P0 Blockers** | 0 |
 | **Repository Health** | **EXCELLENT** ✅ |
+
+**Recently Completed (2026-03-14):**
+- P1: HuggingFace model revision pinning
+- P2: ICC profile preservation in 16-bit TIFF
+- P2: depth_canonical example archived
 
 ---
 
 ## Immediate Actions (By March 1, 2026)
 
-**Total Effort:** 4 hours
+**Total Effort:** 4 hours → **Remaining:** 45 min
 **Owner:** Architect + DevOps
+**Last Updated:** 2026-03-14
 
-| # | Task | Priority | Effort | Owner |
-|---|------|----------|--------|-------|
-| 1 | Create rollback procedures | P1 | 2h | Architect |
-| 2 | Verify branch protection | P1 | 15min | Admin |
-| 3 | Update V2_0_0_RELEASE_REVIEW.md | P1 | 30min | Architect |
-| 4 | Archive obsolete modules | P2 | 1h | Specialist |
+| # | Task | Priority | Effort | Owner | Status |
+|---|------|----------|--------|-------|--------|
+| 1 | Create rollback procedures | P1 | 2h | Architect | ✅ Already exists |
+| 2 | Verify branch protection | P1 | 15min | Admin | Pending |
+| 3 | Update V2_0_0_RELEASE_REVIEW.md | P1 | 30min | Architect | Pending |
+| 4 | Archive obsolete modules | P2 | 1h | Specialist | ✅ Already done |
 
 ---
 
 ## Sprint Planning
 
-### Sprint 1: Cleanup (Week 1, 8h)
-1. Delete depth_canonical module (1h)
+### Sprint 1: Cleanup (Week 1, 8h) - **Partially Completed**
+1. ~~Delete depth_canonical module (1h)~~ ✅ Already archived
 2. Archive obsolete PR docs (30min)
 3. Update binary cleanup docs (30min)
 4. Complete CLI e2e tests (4h)
@@ -46,7 +52,7 @@
 
 ### Sprint 2: Phase 2 Foundation (Week 2-3, 16h)
 6. SAM2 auto mask generation (P2, 3-4 days)
-7. Dependency pinning validation (P2, 4h)
+7. ~~Dependency pinning validation (P2, 4h)~~ ✅ HuggingFace revisions pinned (2026-03-14)
 8. Create V2_3_0 release checklist (P2, 2h)
 
 ### Sprint 3: Nice-to-Have (v2.3.0, 12h)
@@ -158,11 +164,11 @@ All NotImplementedError must include context:
 ## v2.3.0 Success Criteria
 
 ### Must Have ✅
-- [ ] Rollback procedures documented
+- [x] Rollback procedures documented ✅ (already exists: docs/operations/ROLLBACK_PROCEDURES.md)
 - [ ] Branch protection verified
-- [ ] depth_canonical deleted
+- [x] depth_canonical deleted ✅ (already archived)
 - [ ] CLI e2e tests passing
-- [ ] Dependency pinning enforced
+- [x] Dependency pinning enforced ✅ (HuggingFace revisions pinned 2026-03-14)
 
 ### Should Have ✅
 - [ ] SAM2 auto mode implemented
