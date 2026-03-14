@@ -396,8 +396,8 @@ class DepthCache:
                 if cache_file.exists():
                     cache_file.unlink()
                     logger.debug(f"Removed corrupted cache file: {cache_file}")
-            except Exception:
-                pass
+            except OSError:
+                pass  # Cleanup failed - not critical
             return None
 
     def clear(self, clear_disk: bool = False):

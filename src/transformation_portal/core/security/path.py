@@ -37,7 +37,7 @@ class PathValidator:
                     except ValueError:
                         continue
             return False
-        except Exception:
+        except (OSError, ValueError):
             return False
 
 
@@ -64,8 +64,10 @@ def safe_resolve_path(path: Union[str, Path], allowed_root: Union[str, Path] = o
 
 def is_safe_path(path: Union[str, Path]) -> bool:
     """Quick check if path is safe (relative to CWD)."""
+    from .validation import ValidationError
+
     try:
         safe_resolve_path(path)
         return True
-    except Exception:
+    except (OSError, ValueError, ValidationError):
         return False

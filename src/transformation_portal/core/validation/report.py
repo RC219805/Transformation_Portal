@@ -31,7 +31,8 @@ class GitInfo:
             branch = subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"]).decode().strip()
             status = subprocess.check_output(["git", "status", "--porcelain"]).decode().strip()
             return cls(commit, branch, bool(status))
-        except Exception:
+        except (subprocess.SubprocessError, OSError, FileNotFoundError):
+            # Git not available or not in a git repository
             return cls("unknown", "unknown", False)
 
 

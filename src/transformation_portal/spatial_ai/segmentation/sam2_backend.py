@@ -552,7 +552,7 @@ class SAM2Backend:
         self._material_classifier = None
         try:
             import torch
-        except Exception:
+        except ImportError:
             return
         if hasattr(torch, "cuda") and torch.cuda.is_available():
             torch.cuda.empty_cache()

@@ -79,7 +79,7 @@ def _get_numpy_config() -> Dict[str, Any]:
             config["build_info_summary"] = "available"
         else:
             config["build_info_summary"] = "unavailable"
-    except Exception:
+    except (AttributeError, TypeError):
         config["build_info_summary"] = "error"
 
     # Detect BLAS backend (important for determinism)
@@ -93,7 +93,7 @@ def _get_numpy_config() -> Dict[str, Any]:
                 config["blas_libraries"] = "unknown"
         else:
             config["blas_libraries"] = "unknown"
-    except Exception:
+    except (AttributeError, TypeError):
         config["blas_libraries"] = "detection_error"
 
     return config

@@ -675,7 +675,8 @@ def get_git_revision(repo_root: Path) -> Optional[str]:
         result = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo_root, capture_output=True, text=True, timeout=5)
         if result.returncode == 0:
             return result.stdout.strip()
-    except Exception:
+    except (subprocess.SubprocessError, OSError):
+        # Git not available or subprocess failed
         pass
 
     return None

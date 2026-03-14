@@ -291,7 +291,8 @@ def _load_union_mask(mask_artifact_path: Path) -> np.ndarray | None:
     try:
         with np.load(mask_artifact_path, allow_pickle=False) as payload:
             mask_arrays = [np.asarray(payload[key], dtype=np.float32) for key in sorted(payload.files)]
-    except Exception:
+    except (OSError, ValueError, KeyError):
+        # File unreadable, invalid format, or missing keys
         return None
     if not mask_arrays:
         return None
