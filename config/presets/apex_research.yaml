@@ -151,10 +151,10 @@ fallback:
   model:
     variant: depth-anything-v3-nested-giant-large-1.1
     source: huggingface
-    hf_id: "depth-anything/DA3-NESTED-GIANT-LARGE-1.1"
-    # TODO(Phase 1.1): Pin revision to commit hash for reproducibility
-    # See: docs/apex/HUGGINGFACE_MODEL_PINNING.md
-    # Omitted until manual verification complete (will default to 'main' in loader)
+    hf_id: "depth-anything/DA3NESTED-GIANT-LARGE-1.1"
+    # Pinned revision for reproducibility (Phase 1.1 Item 5)
+    # Verified 2026-03-14 from https://huggingface.co/depth-anything/DA3NESTED-GIANT-LARGE-1.1
+    revision: "b2359bdf726fb44ef62acca04d629dcf158053e7"
 
   # Fallback still requires non-commercial license
   license_restriction: research_only
