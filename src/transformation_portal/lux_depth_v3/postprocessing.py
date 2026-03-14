@@ -253,8 +253,10 @@ class Postprocessor:
             except expected_joint_filter_errors as exc:
                 logger.debug("Joint bilateral filter" " unavailable/incompatible;" " using bilateral" " fallback: %s", exc)
             except RuntimeError as exc:
-                # Catch any cv2 runtime errors not covered by expected_joint_filter_errors
-                logger.warning("Unexpected joint bilateral" " filter failure; using" " bilateral fallback: %s", exc)
+                # Defensive catch for cv2 internal errors not covered by expected_joint_filter_errors.
+                # opencv.error is added to expected_joint_filter_errors when available, but some
+                # cv2 builds may raise RuntimeError for internal failures.
+                logger.warning("Joint bilateral filter" " failed unexpectedly; using" " bilateral fallback: %s", exc)
 
             # cv2.ximgproc not available or
             # type mismatch - fall back to
