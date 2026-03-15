@@ -231,9 +231,9 @@ class RealESRGANUpscaler:
         #     raise ValueError(f"Unknown model: {self._model_name}")
         #
         # # Model weights path
-        # # TODO(Phase 4.1): Use ~/.cache/transformation_portal/upscaling/weights
-        # weights_dir = Path("weights")
-        # weights_dir.mkdir(exist_ok=True)
+        # # Using standard cache directory pattern for transformation_portal
+        # weights_dir = Path.home() / ".cache" / "transformation_portal" / "upscaling" / "weights"
+        # weights_dir.mkdir(parents=True, exist_ok=True)
         # model_path = weights_dir / f"{self._model_name}.pth"
         #
         # # Download if not cached

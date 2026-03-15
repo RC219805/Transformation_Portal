@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
+from scipy.spatial.transform import Rotation, Slerp
 
 from .contracts import CameraParams, ReconstructionInput, Scene3D
 from .gaussian_backend import GaussianBackend
@@ -235,27 +236,18 @@ class SceneBuilder:
     ) -> List[CameraParams]:
         """Extract smooth camera path for video rendering.
 
-        IMPORTANT: This is a SIMPLIFIED PLACEHOLDER implementation.
+        Interpolates camera poses between the first and last cameras in the scene
+        using mathematically correct interpolation:
+        - Translation: Linear interpolation (LERP)
+        - Rotation: Spherical linear interpolation (SLERP) via quaternions
 
-        KNOWN ISSUE: Linear interpolation of 4x4 extrinsic matrices is
-        mathematically incorrect - it produces sheared/skewed rotations.
-
-        PRODUCTION REQUIREMENTS:
-        - Decompose extrinsics into translation + rotation (R|t)
-        - Interpolate translation with LERP
-        - Interpolate rotation with SLERP (spherical linear interpolation)
-        - Optionally use spline interpolation for smooth paths
-
-        Current implementation is suitable for:
-        - Testing and development only
-        - Scenes where cameras are close together (minimal rotation)
-        - Placeholder for future proper implementation
+        This ensures rigid transformations are preserved (no shearing/skewing).
 
         Args:
             scene: Reconstructed 3D scene.
             num_frames: Number of frames in camera path.
-            interpolation: Interpolation method ("linear" or "spline").
-                          Currently ignored - only linear is implemented.
+            interpolation: Interpolation method ("linear" supported).
+                          Both translation and rotation are interpolated smoothly.
 
         Returns:
             List of camera parameters along path.
@@ -270,26 +262,42 @@ class SceneBuilder:
         if interpolation != "linear":
             raise NotImplementedError(
                 f"Interpolation method '{interpolation}' not implemented. "
-                "Only 'linear' is supported (with known limitations)."
+                "Only 'linear' is supported."
             )
-
-        logger.warning(
-            "extract_camera_path uses simplified linear interpolation which "
-            "produces mathematically incorrect rotation blending. "
-            "Use only for testing or scenes with minimal camera rotation. "
-            "See method docstring for production requirements."
-        )
 
         cam0 = scene.cameras[0]
         cam1 = scene.cameras[-1]
 
+        # Extract rotation and translation from extrinsics
+        # Extrinsics format: [[R|t], [0 0 0 1]] where R is 3x3 rotation, t is 3x1 translation
+        R0 = cam0.extrinsics[:3, :3]
+        R1 = cam1.extrinsics[:3, :3]
+        t0 = cam0.extrinsics[:3, 3]
+        t1 = cam1.extrinsics[:3, 3]
+
+        # Create Rotation objects for SLERP
+        rot0 = Rotation.from_matrix(R0)
+        rot1 = Rotation.from_matrix(R1)
+
+        # Setup SLERP interpolator with key times [0, 1]
+        key_times = [0.0, 1.0]
+        key_rots = Rotation.concatenate([rot0, rot1])
+        slerp = Slerp(key_times, key_rots)
+
         path = []
         for i in range(num_frames):
-            t = i / (num_frames - 1)
+            t = i / (num_frames - 1) if num_frames > 1 else 0.0
 
-            # TODO: Replace with proper SLERP interpolation
-            # This naive interpolation produces sheared rotations
-            extrinsics = cam0.extrinsics * (1 - t) + cam1.extrinsics * t
+            # LERP translation
+            t_interp = (1 - t) * t0 + t * t1
+
+            # SLERP rotation
+            R_interp = slerp(t).as_matrix()
+
+            # Reconstruct 4x4 extrinsics matrix
+            extrinsics = np.eye(4, dtype=np.float32)
+            extrinsics[:3, :3] = R_interp.astype(np.float32)
+            extrinsics[:3, 3] = t_interp.astype(np.float32)
 
             # Copy intrinsics from first camera
             cam = CameraParams(
