@@ -89,6 +89,101 @@ class TestSceneBuilder:
 
         assert len(path) == 50
 
+    def test_extract_camera_path_preserves_rotation_orthogonality(self, builder, intrinsics):
+        """Test that SLERP interpolation preserves rotation matrix orthogonality.
+
+        This validates the fix for the TODO that was using naive linear interpolation
+        of 4x4 extrinsic matrices (which produces sheared rotations).
+        """
+        # Test scene parameters (minimal valid scene for path extraction)
+        TEST_RMSE = 0.01
+        TEST_ITERATION = 1000
+        TEST_CONVERGENCE = "converged"
+
+        # Create two cameras with 90° rotation difference around Z-axis
+        # cam0: identity rotation at origin
+        extrinsics0 = np.eye(4, dtype=np.float32)
+        extrinsics0[:3, 3] = [0.0, 0.0, 0.0]  # origin
+
+        # cam1: 90° rotation around Z-axis (camera-up convention) + translation
+        # This uses the standard right-hand coordinate system where Z points up/forward
+        # Rotation matrix R = [[cos(θ), -sin(θ), 0], [sin(θ), cos(θ), 0], [0, 0, 1]]
+        # For θ=90°: cos(90°)=0, sin(90°)=1
+        extrinsics1 = np.eye(4, dtype=np.float32)
+        extrinsics1[:3, :3] = np.array(
+            [
+                [0, -1, 0],  # x' = -y
+                [1, 0, 0],  # y' = x
+                [0, 0, 1],  # z' = z (Z-axis unchanged)
+            ],
+            dtype=np.float32,
+        )
+        extrinsics1[:3, 3] = [1.0, 1.0, 0.0]  # translated
+
+        cameras = [
+            CameraParams(intrinsics.copy(), extrinsics0, W, H),
+            CameraParams(intrinsics.copy(), extrinsics1, W, H),
+        ]
+
+        # Create minimal valid scene for path extraction test
+        N = 10
+        splats = GaussianSplat(
+            positions=np.zeros((N, 3), dtype=np.float32),
+            colors=np.ones((N, 3), dtype=np.float32) * 0.5,
+            scales=np.ones((N, 3), dtype=np.float32),
+            rotations=np.tile([1, 0, 0, 0], (N, 1)).astype(np.float32),
+            opacities=np.ones((N, 1), dtype=np.float32),
+        )
+        scene = Scene3D(
+            splats=splats,
+            cameras=cameras,
+            rmse=TEST_RMSE,
+            iteration=TEST_ITERATION,
+            convergence=TEST_CONVERGENCE,
+        )
+
+        # Extract path
+        path = builder.extract_camera_path(scene, num_frames=11)
+
+        assert len(path) == 11
+
+        # Verify all interpolated rotation matrices are orthogonal (R @ R.T = I)
+        for i, cam in enumerate(path):
+            R = cam.extrinsics[:3, :3]
+            RRT = R @ R.T
+            np.testing.assert_allclose(
+                RRT, np.eye(3, dtype=np.float32), atol=1e-5, err_msg=f"Rotation at frame {i} is not orthogonal (SLERP failed)"
+            )
+            # Also verify determinant is +1 (not -1, which would be a reflection)
+            det = np.linalg.det(R)
+            np.testing.assert_allclose(
+                det, 1.0, atol=1e-5, err_msg=f"Rotation at frame {i} has det={det}, expected +1 (proper rotation)"
+            )
+
+        # Verify boundary conditions: first and last match original cameras
+        np.testing.assert_allclose(path[0].extrinsics, extrinsics0, atol=1e-5)
+        np.testing.assert_allclose(path[-1].extrinsics, extrinsics1, atol=1e-5)
+
+        # Verify midpoint (t=0.5) has 45° rotation (between 0° and 90°)
+        # At t=0.5, the rotation should be 45° around Z-axis
+        mid_R = path[5].extrinsics[:3, :3]
+        expected_cos = np.cos(np.pi / 4)  # cos(45°) ≈ 0.707
+        expected_sin = np.sin(np.pi / 4)  # sin(45°) ≈ 0.707
+        expected_mid_R = np.array(
+            [
+                [expected_cos, -expected_sin, 0],
+                [expected_sin, expected_cos, 0],
+                [0, 0, 1],
+            ],
+            dtype=np.float32,
+        )
+        np.testing.assert_allclose(mid_R, expected_mid_R, atol=1e-4)
+
+        # Verify translation is linearly interpolated
+        mid_t = path[5].extrinsics[:3, 3]
+        expected_mid_t = np.array([0.5, 0.5, 0.0], dtype=np.float32)
+        np.testing.assert_allclose(mid_t, expected_mid_t, atol=1e-5)
+
 
 class TestMeshExporter:
     """Test MeshExporter."""
