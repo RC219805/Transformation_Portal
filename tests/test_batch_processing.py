@@ -251,13 +251,14 @@ class TestEnhanceBatch:
                         # Second image fails
                         raise ValueError("Simulated processing error")
 
-                    # Other images succeed
+                    # Other images succeed - include backend key for run card semantics
                     return {
                         "status": "ok",
                         "image": str(image_input.path),
                         "depth_path": "depth.png",
                         "manifest": "manifest.json",
                         "runtime_s": 1.5,
+                        "backend": "da3",
                     }
 
                 with patch.object(orchestrator, "enhance_image", side_effect=mock_enhance_image):
@@ -988,6 +989,7 @@ class TestEnhanceBatch:
                         "depth_path": "depth.png",
                         "manifest": "manifest.json",
                         "runtime_s": 2.5,
+                        "backend": "da3",
                     }
 
                 with patch.object(orchestrator, "enhance_image", side_effect=mock_enhance_image):
