@@ -634,7 +634,7 @@ After implementing these best practices:
 - **GitHub Releases for Datasets**: https://docs.github.com/en/repositories/releasing-projects-on-github
 - **Repository Size Limits**: https://docs.github.com/en/repositories/working-with-files/managing-large-files/about-large-files-on-github
 - **.gitignore Patterns**: https://git-scm.com/docs/gitignore
-- **Transformation Portal Refactoring**: `docs/REFACTORING_SUMMARY.md`
+- **Transformation Portal Refactoring**: `docs/historical/REFACTORING_SUMMARY.md`
 
 ---
 
