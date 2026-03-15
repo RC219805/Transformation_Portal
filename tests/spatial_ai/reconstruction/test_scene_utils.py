@@ -110,11 +110,14 @@ class TestSceneBuilder:
         # Rotation matrix R = [[cos(θ), -sin(θ), 0], [sin(θ), cos(θ), 0], [0, 0, 1]]
         # For θ=90°: cos(90°)=0, sin(90°)=1
         extrinsics1 = np.eye(4, dtype=np.float32)
-        extrinsics1[:3, :3] = np.array([
-            [0, -1, 0],  # x' = -y
-            [1,  0, 0],  # y' = x
-            [0,  0, 1],  # z' = z (Z-axis unchanged)
-        ], dtype=np.float32)
+        extrinsics1[:3, :3] = np.array(
+            [
+                [0, -1, 0],  # x' = -y
+                [1, 0, 0],  # y' = x
+                [0, 0, 1],  # z' = z (Z-axis unchanged)
+            ],
+            dtype=np.float32,
+        )
         extrinsics1[:3, 3] = [1.0, 1.0, 0.0]  # translated
 
         cameras = [
@@ -149,14 +152,12 @@ class TestSceneBuilder:
             R = cam.extrinsics[:3, :3]
             RRT = R @ R.T
             np.testing.assert_allclose(
-                RRT, np.eye(3, dtype=np.float32), atol=1e-5,
-                err_msg=f"Rotation at frame {i} is not orthogonal (SLERP failed)"
+                RRT, np.eye(3, dtype=np.float32), atol=1e-5, err_msg=f"Rotation at frame {i} is not orthogonal (SLERP failed)"
             )
             # Also verify determinant is +1 (not -1, which would be a reflection)
             det = np.linalg.det(R)
             np.testing.assert_allclose(
-                det, 1.0, atol=1e-5,
-                err_msg=f"Rotation at frame {i} has det={det}, expected +1 (proper rotation)"
+                det, 1.0, atol=1e-5, err_msg=f"Rotation at frame {i} has det={det}, expected +1 (proper rotation)"
             )
 
         # Verify boundary conditions: first and last match original cameras
@@ -168,11 +169,14 @@ class TestSceneBuilder:
         mid_R = path[5].extrinsics[:3, :3]
         expected_cos = np.cos(np.pi / 4)  # cos(45°) ≈ 0.707
         expected_sin = np.sin(np.pi / 4)  # sin(45°) ≈ 0.707
-        expected_mid_R = np.array([
-            [expected_cos, -expected_sin, 0],
-            [expected_sin, expected_cos, 0],
-            [0, 0, 1],
-        ], dtype=np.float32)
+        expected_mid_R = np.array(
+            [
+                [expected_cos, -expected_sin, 0],
+                [expected_sin, expected_cos, 0],
+                [0, 0, 1],
+            ],
+            dtype=np.float32,
+        )
         np.testing.assert_allclose(mid_R, expected_mid_R, atol=1e-4)
 
         # Verify translation is linearly interpolated

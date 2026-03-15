@@ -36,7 +36,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 FAST_ML_MARKEXPR = "ml and not slow and not integration and not benchmark"
 INTEGRATION_MARKEXPR = "ml and integration and not slow and not benchmark"
-FAST_ML_SELECTED_CEILING = 69
+FAST_ML_SELECTED_CEILING = 70
 TORCH_BLOCK_MESSAGE = "Torch import blocked during fast-ML contract collect"
 
 _COLLECT_SUMMARY = re.compile(
