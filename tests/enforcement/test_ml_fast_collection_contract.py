@@ -7,12 +7,14 @@ Baseline rationale (March 3, 2026):
   "ml and not slow and not integration and not benchmark"
 - Post-marker baseline: 67 selected tests after marking
   tests/spatial_ai/reconstruction/test_integration_phase23.py as integration
-- Current baseline: 69 selected tests after adding
+- Previous baseline: 69 selected tests after adding
   deterministic reconstruction golden state snapshot + byte-stability tests
   in tests/spatial_ai/reconstruction/test_reconstruction_golden_snapshot.py
+- Current baseline: 70 selected tests after adding SLERP orthogonality test
+  in tests/spatial_ai/reconstruction/test_scene_utils.py
 
 Contract:
-- fast-ML selected count must remain <= 69
+- fast-ML selected count must remain <= 70
 - integration-marked Phase 2.3 tests must stay out of fast-ML selection
 
 Design notes:

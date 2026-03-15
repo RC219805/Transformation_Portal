@@ -21,7 +21,6 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
-from scipy.spatial.transform import Rotation, Slerp
 
 from .contracts import CameraParams, ReconstructionInput, Scene3D
 from .gaussian_backend import GaussianBackend
@@ -263,6 +262,9 @@ class SceneBuilder:
             raise NotImplementedError(
                 f"Interpolation method '{interpolation}' not implemented. " "Only 'linear' is supported."
             )
+
+        # Lazy import scipy to maintain module's lazy-loading contract
+        from scipy.spatial.transform import Rotation, Slerp
 
         cam0 = scene.cameras[0]
         cam1 = scene.cameras[-1]
