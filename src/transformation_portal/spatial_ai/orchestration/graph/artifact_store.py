@@ -1130,7 +1130,7 @@ class ArtifactStore:
         # Atomic rename with cleanup on failure
         try:
             tmp_path.replace(self.stats_path)
-        except Exception:
+        except OSError:
             # Clean up temp file on failure (disk full, permissions, etc.)
             tmp_path.unlink(missing_ok=True)
             raise

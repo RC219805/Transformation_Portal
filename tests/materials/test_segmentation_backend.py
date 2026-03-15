@@ -256,7 +256,7 @@ def test_clip_loader_offline_mode_missing_cache_fails_fast(monkeypatch):
         create_calls["count"] += 1
         return object(), None, (lambda image: image)
 
-    def fake_try_to_load_from_cache(_repo_id, _filename):
+    def fake_try_to_load_from_cache(*, repo_id=None, filename=None):
         return None
 
     fake_hf_module = types.ModuleType("huggingface_hub")
@@ -299,7 +299,7 @@ def test_clip_loader_with_cache_does_not_touch_network(monkeypatch, tmp_path):
         calls["create"] += 1
         return object(), None, (lambda image: image)
 
-    def fake_try_to_load_from_cache(_repo_id, filename):
+    def fake_try_to_load_from_cache(*, repo_id=None, filename=None):
         if filename == "open_clip_model.safetensors":
             return str(cached_checkpoint)
         return None

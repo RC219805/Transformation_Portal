@@ -461,7 +461,7 @@ class DepthProStage(Stage):
         """Get depth_pro package version."""
         try:
             return importlib_metadata.version("depth_pro")
-        except Exception:
+        except importlib_metadata.PackageNotFoundError:
             return "unknown"
 
     def _fail_result(self, error_msg: str, duration_ms: float) -> StageResult:

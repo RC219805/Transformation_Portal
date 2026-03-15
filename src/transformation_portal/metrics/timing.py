@@ -24,10 +24,13 @@ Usage::
 from __future__ import annotations
 
 import atexit
+import logging
 import os
 import time
 from contextlib import contextmanager
 from typing import Any, Dict, Optional
+
+logger = logging.getLogger(__name__)
 
 _SHUTTING_DOWN = False
 
@@ -101,7 +104,9 @@ class TimingContext:
 
         try:
             import torch
-        except Exception:
+        except (ImportError, OSError):
+            # torch not installed or shared library missing - skip GPU synchronization
+            logger.debug("torch not available for GPU sync in timing context")
             return
 
         try:
@@ -118,7 +123,9 @@ class TimingContext:
                 and hasattr(torch.mps, "synchronize")
             ):
                 torch.mps.synchronize()
-        except Exception:
+        except RuntimeError as e:
+            # GPU sync may fail if device not properly initialized or during shutdown
+            logger.debug("GPU sync failed in timing context: %s", e)
             return
 
 

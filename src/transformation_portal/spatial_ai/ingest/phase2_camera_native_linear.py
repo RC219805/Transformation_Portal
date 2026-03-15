@@ -133,7 +133,7 @@ def ingest_phase2_xyz_d50_linear_fp32(
         camera_wb: Optional[list] = None
         try:
             camera_wb = [float(x) for x in raw.camera_whitebalance]
-        except Exception:
+        except (TypeError, ValueError, AttributeError):
             camera_wb = None
 
         fingerprint: Dict[str, Any] = {

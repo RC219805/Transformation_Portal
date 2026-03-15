@@ -14,10 +14,13 @@ All operations use atomic rename (os.replace) and guarantee:
 
 from __future__ import annotations
 
+import logging
 import os
 import tempfile
 from contextlib import contextmanager
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 try:
     from PIL import Image
@@ -89,8 +92,10 @@ def atomic_temp_file(output_path: Path, suffix: str = ".tmp", prefix: str = ".tm
             # Atomic rename on success
             os.replace(temp_path, output_path)
 
-        except Exception:
-            # Cleanup temp file on any failure
+        except BaseException:
+            # Cleanup temp file on any failure (including KeyboardInterrupt)
+            # Log at debug level since exception will be re-raised and handled by caller
+            logger.debug("Cleaning up temp file after failure: %s", temp_path)
             temp_path.unlink(missing_ok=True)
             raise
     else:
@@ -110,8 +115,10 @@ def atomic_temp_file(output_path: Path, suffix: str = ".tmp", prefix: str = ".tm
             else:
                 raise IOError(f"Writer did not create temp file: {temp_path}")
 
-        except Exception:
-            # Cleanup temp file on any failure
+        except BaseException:
+            # Cleanup temp file on any failure (including KeyboardInterrupt)
+            # Log at debug level since exception will be re-raised and handled by caller
+            logger.debug("Cleaning up temp file after failure: %s", temp_path)
             temp_path.unlink(missing_ok=True)
             raise
 

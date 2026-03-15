@@ -292,7 +292,8 @@ def load_image_preserve_bit_depth(input_path: Path, allow_8bit_output: bool = Fa
         # - EXIF Orientation must not request additional rotation in viewers
         try:
             exif = pil_image.getexif()
-        except Exception:
+        except (AttributeError, ValueError, OSError):
+            # Image doesn't support EXIF or EXIF is malformed
             exif = None
 
         if exif:

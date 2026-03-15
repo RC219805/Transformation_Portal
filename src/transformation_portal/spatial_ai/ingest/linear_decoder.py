@@ -214,7 +214,7 @@ class LinearDecoder:
         """Best-effort telemetry emission that never interrupts ingest flow."""
         try:
             self._telemetry.emit(event, **fields)
-        except Exception:
+        except (OSError, ValueError, TypeError, AttributeError, RuntimeError):
             logger.warning(
                 "Ignoring ingest telemetry backend failure for event '%s'",
                 event,
@@ -832,7 +832,7 @@ class LinearDecoder:
                 return None
             try:
                 arr = np.asarray(matrix, dtype=np.float64)
-            except Exception:
+            except (TypeError, ValueError):
                 return None
             # Accept common LibRaw/rawpy matrix layouts and reduce to 3x3.
             if arr.shape == (3, 3):
@@ -855,7 +855,7 @@ class LinearDecoder:
                 return None
             try:
                 norm = np.linalg.norm(arr)
-            except Exception:
+            except (TypeError, ValueError):
                 return None
             if norm < 1e-6:
                 return None

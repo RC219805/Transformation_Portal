@@ -35,7 +35,7 @@ Configuration:
 - material_segmentation_backend: "stub" (default), "efficientsam", or "sam2"
 - strict_backend: If True, raise on missing weights instead of falling back
 
-For usage examples, see docs/materials_v3_quick_reference.md
+For usage examples, see docs/reference/materials_v3_quick_reference_old.md
 """
 
 from __future__ import annotations
@@ -209,12 +209,14 @@ class EfficientSAMBackend:
 
         try:
             from huggingface_hub import try_to_load_from_cache
-        except Exception:
+        except ImportError:
+            # huggingface_hub not installed - cannot check cache
             return None
 
         try:
             cfg = open_clip.get_pretrained_cfg(model_name, pretrained_tag)
-        except Exception:
+        except (KeyError, ValueError, AttributeError):
+            # Config not found or malformed - skip cache resolution
             return None
         if not cfg:
             return None
@@ -237,7 +239,8 @@ class EfficientSAMBackend:
         for filename in dict.fromkeys(candidates):
             try:
                 cached_path = try_to_load_from_cache(repo_id=repo_id, filename=filename)
-            except Exception:
+            except (OSError, ValueError):
+                # Cache check failed for this candidate - try next
                 continue
             if isinstance(cached_path, str) and Path(cached_path).is_file():
                 return cached_path

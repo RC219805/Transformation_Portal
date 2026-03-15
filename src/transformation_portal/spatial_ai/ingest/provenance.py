@@ -484,7 +484,7 @@ class ProvenanceCapture:
         except ImportError:
             # rawpy not installed or import failed
             pass
-        except Exception:
+        except (AttributeError, TypeError):
             # Unexpected error getting versions - don't fail provenance capture
             pass
 

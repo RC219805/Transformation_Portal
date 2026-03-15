@@ -147,8 +147,8 @@ class ImageLoadStage(AsyncStage[Path, ImageData]):
                         exif = img._getexif()
                         if exif:
                             metadata["exif"] = {k: v for k, v in exif.items() if isinstance(v, (str, int, float, bytes))}
-                    except Exception:
-                        pass  # EXIF extraction optional
+                    except (AttributeError, TypeError, KeyError, ValueError, OSError, UnicodeError):
+                        pass  # EXIF extraction optional - silently skip on error
 
                 array = np.array(img)
                 metadata["loaded_with"] = "PIL"
@@ -808,7 +808,8 @@ class ColorGradingStage(AsyncStage[ImageData, ImageData]):
             if lut_size > 0 and len(lut_data) == lut_size**3:
                 # pylint: disable=too-many-function-args  # numpy reshape accepts multiple positional args
                 self._lut_data = np.array(lut_data).reshape(lut_size, lut_size, lut_size, 3)
-        except Exception:
+        except (OSError, ValueError, IndexError):
+            # LUT file unreadable or malformed - disable LUT processing
             self._lut_data = None
 
     def _apply_lut_sync(self, image_data: ImageData) -> ImageData:

@@ -9,6 +9,8 @@ import os
 from pathlib import Path
 from typing import List, Union
 
+from .validation import ValidationError
+
 
 class PathValidator:
     """Validates filesystem paths against security policies."""
@@ -37,7 +39,7 @@ class PathValidator:
                     except ValueError:
                         continue
             return False
-        except Exception:
+        except (OSError, ValueError, RuntimeError):
             return False
 
 
@@ -48,8 +50,6 @@ def safe_resolve_path(path: Union[str, Path], allowed_root: Union[str, Path] = o
     Raises:
         ValidationError: If path attempts traversal out of root.
     """
-    from .validation import ValidationError
-
     root = Path(allowed_root).resolve()
     target = Path(path).resolve()
 
@@ -67,5 +67,5 @@ def is_safe_path(path: Union[str, Path]) -> bool:
     try:
         safe_resolve_path(path)
         return True
-    except Exception:
+    except (OSError, ValueError, RuntimeError, ValidationError):
         return False

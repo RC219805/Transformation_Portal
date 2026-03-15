@@ -64,7 +64,7 @@ try:
     from scipy.ndimage import gaussian_filter  # type: ignore
 
     _SCIPY_AVAILABLE = True
-except Exception:
+except ImportError:
     gaussian_filter = None
     _SCIPY_AVAILABLE = False
 
@@ -72,7 +72,7 @@ try:
     import cv2  # type: ignore
 
     _CV2_AVAILABLE = True
-except Exception:
+except ImportError:
     cv2 = None
     _CV2_AVAILABLE = False
 
@@ -80,7 +80,7 @@ try:
     import tifffile as tiff  # type: ignore
 
     _TIFFFILE_AVAILABLE = True
-except Exception:
+except ImportError:
     tiff = None
     _TIFFFILE_AVAILABLE = False
 

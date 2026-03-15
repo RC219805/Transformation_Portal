@@ -58,7 +58,12 @@ def validate_preset_file(preset_path: Path) -> tuple[bool, List[str]]:
     return len(issues) == 0, issues
 
 
-def main():
+def main() -> int:
+    """Validate license compliance of presets.
+
+    Returns:
+        Exit code: 0 if all presets are compliant, 1 otherwise.
+    """
     parser = argparse.ArgumentParser(description="Validate license compliance of presets")
     parser.add_argument("--check-presets", type=Path, help="Directory containing preset YAML files")
     args = parser.parse_args()

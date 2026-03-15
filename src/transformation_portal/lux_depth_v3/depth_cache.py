@@ -177,10 +177,12 @@ class DepthCache:
         try:
             total_bytes = sum(f.stat().st_size for f in self.cache_dir.glob("*.npy"))
             return total_bytes / (1024**3)
-        except Exception:
+        except OSError as e:
+            # Filesystem errors during cache size calculation - return 0 as fallback
+            logger.debug("Failed to compute cache size: %s", e)
             return 0.0
 
-    def _evict_lru(self):
+    def _evict_lru(self) -> None:
         """Evict least recently used cache entries.
 
         Removes oldest 20% of files based on access time.
@@ -200,14 +202,14 @@ class DepthCache:
                     evicted_bytes += f.stat().st_size
                     f.unlink()
                     logger.debug(f"Evicted cache entry: {f.name}")
-                except Exception as e:
+                except OSError as e:
                     logger.warning(f"Failed to evict {f.name}: {e}")
 
             logger.info(f"Cache eviction: removed {evict_count} entries ({evicted_bytes / (1024**2):.1f}MB)")
-        except Exception as e:
+        except OSError as e:
             logger.warning(f"Cache eviction failed: {e}")
 
-    def clear(self):
+    def clear(self) -> None:
         """Clear all cached depth maps.
 
         Used for testing and cache invalidation.
@@ -218,7 +220,7 @@ class DepthCache:
                 f.unlink()
                 count += 1
             logger.info(f"Cache cleared: removed {count} entries")
-        except Exception as e:
+        except OSError as e:
             logger.warning(f"Cache clear failed: {e}")
 
     def stats(self) -> dict:
@@ -235,7 +237,9 @@ class DepthCache:
                 "max_size_gb": self.max_size_gb,
                 "cache_dir": str(self.cache_dir),
             }
-        except Exception:
+        except OSError as e:
+            # Filesystem errors during stats - return default values
+            logger.debug("Failed to collect cache stats: %s", e)
             return {
                 "entry_count": 0,
                 "size_gb": 0.0,
