@@ -48,7 +48,8 @@ except ImportError:
 # Sample Image Registry
 # ============================================================================
 
-# NOTE: Update URLs when samples are uploaded to GitHub Releases
+# NOTE: Sample URLs are pending GitHub Release upload (v2.4.0 roadmap item)
+# See: docs/architecture/TODO_INVENTORY_QUICK_REF.md - Finding #5
 # Format: https://github.com/RC219805/Transformation_Portal/releases/download/samples-v1.0.0/<filename>
 
 SAMPLE_REGISTRY: Dict[str, Dict] = {
@@ -65,7 +66,7 @@ SAMPLE_REGISTRY: Dict[str, Dict] = {
     },
     "test_depth_map": {
         "category": "minimal",
-        "url": "https://via.placeholder.com/256x256.jpg",  # Placeholder
+        "url": "https://via.placeholder.com/256x256.jpg",  # Placeholder until release
         "size": "5KB",
         "path": "tests/fixtures/test_depth.jpg",
         "sha256": None,
@@ -73,10 +74,11 @@ SAMPLE_REGISTRY: Dict[str, Dict] = {
     },
     # ========================================================================
     # DEMO: Small examples for README and documentation
+    # Status: Pending GitHub Release (v2.4.0 roadmap)
     # ========================================================================
     "demo_coastal_interior": {
         "category": "demo",
-        "url": None,  # TODO: Upload to GitHub Release
+        "url": None,  # Pending GitHub Release upload (v2.4.0)
         "size": "5MB",
         "path": "data/sample_images/demo_coastal_interior.jpg",
         "sha256": None,
@@ -84,7 +86,7 @@ SAMPLE_REGISTRY: Dict[str, Dict] = {
     },
     "demo_pool_aerial": {
         "category": "demo",
-        "url": None,
+        "url": None,  # Pending GitHub Release upload (v2.4.0)
         "size": "8MB",
         "path": "data/sample_images/demo_pool_aerial.jpg",
         "sha256": None,
@@ -92,10 +94,11 @@ SAMPLE_REGISTRY: Dict[str, Dict] = {
     },
     # ========================================================================
     # FULL: Complete sample dataset for pipeline testing
+    # Status: Pending GitHub Release (v2.4.0 roadmap)
     # ========================================================================
     "sample_render_4k": {
         "category": "full",
-        "url": None,  # TODO: Upload to GitHub Release
+        "url": None,  # Pending GitHub Release upload (v2.4.0)
         "size": "25MB",
         "path": "data/sample_images/sample_render_4k.tif",
         "sha256": None,
@@ -103,7 +106,7 @@ SAMPLE_REGISTRY: Dict[str, Dict] = {
     },
     "sample_depth_anything_v2": {
         "category": "full",
-        "url": None,
+        "url": None,  # Pending GitHub Release upload (v2.4.0)
         "size": "2MB",
         "path": "data/sample_images/depth_maps/sample_depth.npy",
         "sha256": None,
@@ -237,7 +240,7 @@ def download_samples(categories: List[str], output_dir: Optional[Path] = None, f
 
         # Check if URL is available
         if sample["url"] is None:
-            print(f"⚠️  {sample['name']}: URL not yet available (TODO: upload to GitHub Release)")
+            print(f"⚠️  {sample['name']}: URL pending GitHub Release upload (v2.4.0 roadmap)")
             failed += 1
             continue
 
@@ -309,7 +312,7 @@ Categories:
             samples = get_samples_by_category(category)
             print(f"\n{category.upper()}:")
             for sample in samples:
-                status = "✅ Ready" if sample["url"] else "⚠️ TODO"
+                status = "✅ Ready" if sample["url"] else "⏳ Pending v2.4.0"
                 print(f"  - {sample['name']:30} ({sample['size']:>6}) {status}")
                 print(f"    {sample['description']}")
         print()

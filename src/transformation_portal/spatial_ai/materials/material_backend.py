@@ -278,12 +278,13 @@ class MaterialBackend:
         pbrfusion_path = os.getenv("PBRFUSION_PATH")
 
         if pbrfusion_path and os.path.exists(pbrfusion_path):
-            # TODO: Implement ComfyUI subprocess integration
-            # For Phase 5B implementation:
+            # Phase 5B roadmap item: ComfyUI subprocess integration
+            # Implementation steps when ready:
             # 1. Write rgb to temp file
             # 2. Spawn ComfyUI with PBRFusion workflow
             # 3. Parse output PBR maps
             # 4. Return as tuple
+            # See: docs/analysis/TODO_INVENTORY.md §2.0.4
             warnings.warn(
                 "PBRFusion ComfyUI integration not yet implemented. "
                 "Falling back to enhanced heuristic. "
@@ -320,12 +321,12 @@ class MaterialBackend:
 
         For Phase 2.2, we fall back to heuristic until NVDIFFREC is integrated.
         """
-        # TODO: Implement NVDIFFREC integration
-        # For now, fall back to heuristic
-        # In production:
+        # Phase 2.2 roadmap item: NVDIFFREC integration
+        # Implementation when ready:
         # - self._load_nvdiffrec_model()
         # - Run neural optimization
         # - Return optimized PBR textures
+        # See: docs/analysis/TODO_INVENTORY.md §2.0.4
 
         # Fallback warning
         import warnings
@@ -356,8 +357,8 @@ class MaterialBackend:
 
         For Phase 2.2, we fall back to heuristic until MaterialGAN is integrated.
         """
-        # TODO: Implement MaterialGAN integration
-        # For now, fall back to heuristic
+        # Phase 2.2 roadmap item: MaterialGAN integration
+        # See: docs/analysis/TODO_INVENTORY.md §2.0.5
 
         # Fallback warning
         import warnings

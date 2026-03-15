@@ -1,9 +1,9 @@
 # TODO Inventory - Transformation Portal
 
-**Document Version:** 2.0.0
-**Date:** February 13, 2026
-**Last Updated:** 2026-02-13 (Architect Review)
-**Previous Version:** 1.0.0 (2026-02-05)
+**Document Version:** 2.1.0
+**Date:** March 15, 2026
+**Last Updated:** 2026-03-15 (Architect Review)
+**Previous Version:** 2.0.0 (2026-02-13)
 
 ---
 
@@ -17,22 +17,25 @@ This document provides a **complete, categorized inventory** of all TODOs, NotIm
 - Integration with issue tracking systems
 - Binding inventory enforced by Architect governance
 
-## Version 2.0.0 Changes (2026-02-13)
+## Version 2.1.0 Changes (2026-03-15)
 
 **Major Updates:**
+- ✅ HuggingFace model revision pinning **COMPLETED** (config/model_lock_manifest.yaml)
+- ✅ Rollback procedures **VERIFIED** (docs/operations/ROLLBACK_PROCEDURES.md exists)
+- ✅ depth_canonical module **ARCHIVED** (removed from src/)
+- ✅ context_aware_rendering.py **ARCHIVED** (archive/scripts/)
+- ✅ lux_render_pipeline_plus_v3.py **ARCHIVED** (archive/scripts/pipelines/)
+- ✅ ICC profile preservation in 16-bit TIFF **COMPLETED**
+- 📊 Reduced P1 items from 3 to 1 (only branch protection pending)
+- 📊 Updated statistics: 15 completed (23%), 4 pending action items (6%)
+
+**Previous Version (2.0.0) Summary:**
 - ✅ ADR-019 backend registry integration **COMPLETED** (PR #906, commit 9c7a281c)
 - ✅ CI/CD coverage enforcement **IMPLEMENTED** (ci.yml dual-gate: 25% floor + 80% diff)
 - ✅ Security scanning **IMPLEMENTED** (Bandit, pip-audit, gitleaks, CodeQL, Safety)
 - ✅ Contract validation **IMPLEMENTED** (ingest_contract_validation.yml)
 - ✅ Nightly regression suite **IMPLEMENTED** (nightly.yml with benchmarks)
-- 🔴 V2.0.0 release checklist **SUPERSEDED** (v2.2.0 is current production tag)
-- 📊 Added 18 new NotImplementedError instances (SAM2 segmentation, materials-v3 features)
-- 🗑️ Identified 3 obsolete modules for cleanup (depth_canonical, context_aware_rendering)
-
-**Scope Expansion:**
-- Added Phase 3 L1 foundation tracking (execution graphs, artifact store)
-- Added Spatial AI Phase 2 tracking (SAM2, PBR, 3D reconstruction)
-- Updated effort estimates based on v2.0.0 → v2.2.0 reality
+- 🗑️ Identified 3 obsolete modules for cleanup → **NOW ARCHIVED**
 
 ---
 
