@@ -325,7 +325,7 @@ class MaterialBackend:
         # - self._load_nvdiffrec_model()
         # - Run neural optimization
         # - Return optimized PBR textures
-        # See: docs/analysis/TODO_INVENTORY.md §2.0.4
+        # See: docs/analysis/TODO_INVENTORY.md for the NVDIFFREC backend roadmap entry.
 
         # Fallback warning
         import warnings
@@ -357,7 +357,7 @@ class MaterialBackend:
         For Phase 2.2, we fall back to heuristic until MaterialGAN is integrated.
         """
         # Phase 2.2 roadmap item: MaterialGAN integration
-        # See: docs/analysis/TODO_INVENTORY.md §2.0.5
+        # See: docs/analysis/TODO_INVENTORY.md for the MaterialGAN backend roadmap entry.
 
         # Fallback warning
         import warnings
