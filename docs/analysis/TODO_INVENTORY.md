@@ -279,17 +279,17 @@ raise NotImplementedError("Video tracking not yet implemented")
 
 **Location:** `src/transformation_portal/spatial_ai/materials/material_backend.py`
 
-#### 2.0.4 NVDIFFREC Integration (Line 82)
+#### 2.0.4 NVDIFFREC Integration (Line 323)
 ```python
-# TODO: Implement NVDIFFREC integration
+# Phase 2.2 roadmap item: NVDIFFREC integration
 ```
 **Context:** NVIDIA Differentiable Rendering for PBR material extraction
 **Status:** Research phase (GPU-intensive, license considerations)
 **Effort:** 3-4 weeks (model integration, dataset requirements, validation)
 
-#### 2.0.5 MaterialGAN Integration (Line 89)
+#### 2.0.5 MaterialGAN Integration (Line 359)
 ```python
-# TODO: Implement MaterialGAN integration
+# Phase 2.2 roadmap item: MaterialGAN integration
 ```
 **Context:** GAN-based material synthesis
 **Status:** Research phase (model availability, quality validation)
