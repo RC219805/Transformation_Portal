@@ -261,8 +261,7 @@ class SceneBuilder:
 
         if interpolation != "linear":
             raise NotImplementedError(
-                f"Interpolation method '{interpolation}' not implemented. "
-                "Only 'linear' is supported."
+                f"Interpolation method '{interpolation}' not implemented. " "Only 'linear' is supported."
             )
 
         cam0 = scene.cameras[0]
