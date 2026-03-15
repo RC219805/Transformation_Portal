@@ -214,7 +214,7 @@ class LinearDecoder:
         """Best-effort telemetry emission that never interrupts ingest flow."""
         try:
             self._telemetry.emit(event, **fields)
-        except (OSError, ValueError, TypeError, AttributeError):
+        except (OSError, ValueError, TypeError, AttributeError, RuntimeError):
             logger.warning(
                 "Ignoring ingest telemetry backend failure for event '%s'",
                 event,
