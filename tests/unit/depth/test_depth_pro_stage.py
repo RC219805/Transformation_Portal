@@ -336,6 +336,8 @@ class TestDepthProStageUnit:
 
     def test_get_package_version(self):
         """Package version should be retrieved or return 'unknown'."""
+        from importlib import metadata as importlib_metadata
+
         stage = DepthProStage()
 
         with patch("transformation_portal.stage_graph.stages.depth_pro.importlib_metadata.version", return_value="1.2.3"):
@@ -343,7 +345,8 @@ class TestDepthProStageUnit:
             assert version == "1.2.3"
 
         with patch(
-            "transformation_portal.stage_graph.stages.depth_pro.importlib_metadata.version", side_effect=Exception("not found")
+            "transformation_portal.stage_graph.stages.depth_pro.importlib_metadata.version",
+            side_effect=importlib_metadata.PackageNotFoundError("depth_pro"),
         ):
             version = stage._get_package_version()
             assert version == "unknown"

@@ -122,9 +122,9 @@ class TestOrchestratorCounters:
 
         # Mock results: 3 ok, 1 skipped, 1 error
         mock_results = [
-            {"status": "ok", "image": str(images[0]), "runtime_s": 1.0},
-            {"status": "ok", "image": str(images[1]), "runtime_s": 1.0},
-            {"status": "ok", "image": str(images[2]), "runtime_s": 1.0},
+            {"status": "ok", "image": str(images[0]), "runtime_s": 1.0, "backend": "mock"},
+            {"status": "ok", "image": str(images[1]), "runtime_s": 1.0, "backend": "mock"},
+            {"status": "ok", "image": str(images[2]), "runtime_s": 1.0, "backend": "mock"},
             {"status": "skipped", "image": str(images[3])},
             {"status": "error", "image": str(images[4]), "error": "Failed"},
         ]

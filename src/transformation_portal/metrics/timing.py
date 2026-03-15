@@ -104,8 +104,8 @@ class TimingContext:
 
         try:
             import torch
-        except ImportError:
-            # torch not installed - skip GPU synchronization
+        except (ImportError, OSError):
+            # torch not installed or shared library missing - skip GPU synchronization
             logger.debug("torch not available for GPU sync in timing context")
             return
 
