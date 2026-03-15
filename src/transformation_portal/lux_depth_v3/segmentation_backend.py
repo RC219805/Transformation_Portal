@@ -35,7 +35,7 @@ Configuration:
 - material_segmentation_backend: "stub" (default), "efficientsam", or "sam2"
 - strict_backend: If True, raise on missing weights instead of falling back
 
-For usage examples, see docs/materials_v3_quick_reference.md
+For usage examples, see docs/reference/materials_v3_quick_reference_old.md
 """
 
 from __future__ import annotations
