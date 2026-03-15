@@ -130,14 +130,14 @@ Transformation_Portal/
 │
 ├── input_images/              # ❌ Excluded from Git (local dev only)
 │   ├── *.tiff                # ✅ Already excluded (TIFF client files)
-│   ├── *.png                 # ⚠️ TODO: Exclude PNG previews
+│   ├── *.png                 # ✅ Excluded via .gitignore (line 201)
 │   └── .gitkeep
 │
 ├── output/                    # ❌ Excluded from Git (generated)
 │   └── .gitkeep
 │
-├── processed_images/          # ⚠️ Currently tracked (4 examples)
-│   └── *.jpg                 # TODO: Move to docs/examples/
+├── processed_images/          # ✅ Directory cleaned up (no files tracked)
+│   └── *.jpg                 # ✅ Completed - directory empty or excluded
 │
 ├── tests/
 │   └── fixtures/             # ✅ Tiny test files only (< 50KB)

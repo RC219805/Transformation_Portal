@@ -13,8 +13,12 @@ This document provides implementation guidance for Phase 2 (Performance Ledger) 
 
 **Status:**
 - ✅ Phase 1: Input Hygiene (COMPLETED - commit 4761e2e5)
-- 🎯 Phase 2: Performance Ledger (READY TO IMPLEMENT)
-- 🎯 Phase 3: Backend Selection Truth (READY TO IMPLEMENT)
+- ✅ Phase 2: Performance Ledger (COMPLETED - tools/performance_ledger.py v1.7.0)
+- ✅ Phase 3: Backend Selection Truth (COMPLETED - manifest.py BackendSelectionMetadata)
+
+> **Note:** This guide documents the implementation approach that was used. The code
+> examples below show the implementation plan; "TODO" markers in code snippets were
+> planning notes that have since been implemented in the actual source files.
 
 ---
 
@@ -24,10 +28,9 @@ This document provides implementation guidance for Phase 2 (Performance Ledger) 
 
 #### 1. Complete `tools/performance_ledger.py`
 
-**Current Status:** Skeleton created with dataclasses and stubs
-**TODO:** Implement actual manifest parsing logic
+**Current Status:** ✅ COMPLETED (v1.7.0 with optional NumPy, bootstrap CI)
 
-**Key Functions to Implement:**
+**Key Functions (Implemented):**
 
 ```python
 def parse_manifests(manifests_dir: Path) -> List[Dict[str, Any]]:
