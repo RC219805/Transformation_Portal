@@ -552,7 +552,9 @@ class SAM2Backend:
         self._material_classifier = None
         try:
             import torch
-        except ImportError:
+        except (ImportError, OSError):
+            # ImportError: torch not installed
+            # OSError: torch installed but native libraries missing/mislinked
             return
         if hasattr(torch, "cuda") and torch.cuda.is_available():
             torch.cuda.empty_cache()

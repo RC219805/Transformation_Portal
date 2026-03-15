@@ -39,7 +39,7 @@ class PathValidator:
                     except ValueError:
                         continue
             return False
-        except (OSError, ValueError):
+        except (OSError, ValueError, RuntimeError):
             return False
 
 
@@ -67,5 +67,5 @@ def is_safe_path(path: Union[str, Path]) -> bool:
     try:
         safe_resolve_path(path)
         return True
-    except (OSError, ValueError, ValidationError):
+    except (OSError, ValueError, RuntimeError, ValidationError):
         return False

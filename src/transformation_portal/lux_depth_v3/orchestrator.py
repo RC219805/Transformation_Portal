@@ -5186,8 +5186,8 @@ class EnhanceOrchestrator:
             return None
         try:
             return str(Path(path_value).resolve())
-        except (OSError, ValueError):
-            # Invalid path - return None
+        except (OSError, ValueError, RuntimeError):
+            # Invalid path or symlink loop - return None
             return None
 
     def _run_scene_reconstruction_stage(
@@ -5600,8 +5600,8 @@ class EnhanceOrchestrator:
             return None
         try:
             payload = json.loads(report_path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            # Cache file unreadable or malformed - cache miss
+        except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+            # Cache file unreadable, malformed, or encoding error - cache miss
             return None
         if payload.get("scene_fingerprint") != scene_fingerprint:
             return None
@@ -6088,7 +6088,7 @@ class EnhanceOrchestrator:
                     ensure_ascii=False,
                     allow_nan=False,
                 )
-        except (OSError, TypeError, ValueError):
+        except (OSError, TypeError, ValueError, RuntimeError):
             logger.exception(
                 "Run card emission failed"
                 " for batch_id=%s"

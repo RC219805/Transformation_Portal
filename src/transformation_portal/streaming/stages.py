@@ -147,7 +147,7 @@ class ImageLoadStage(AsyncStage[Path, ImageData]):
                         exif = img._getexif()
                         if exif:
                             metadata["exif"] = {k: v for k, v in exif.items() if isinstance(v, (str, int, float, bytes))}
-                    except (AttributeError, TypeError, KeyError):
+                    except (AttributeError, TypeError, KeyError, ValueError, OSError, UnicodeError):
                         pass  # EXIF extraction optional - silently skip on error
 
                 array = np.array(img)
