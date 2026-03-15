@@ -284,7 +284,6 @@ class MaterialBackend:
             # 2. Spawn ComfyUI with PBRFusion workflow
             # 3. Parse output PBR maps
             # 4. Return as tuple
-            # See: docs/analysis/TODO_INVENTORY.md §2.0.4
             warnings.warn(
                 "PBRFusion ComfyUI integration not yet implemented. "
                 "Falling back to enhanced heuristic. "

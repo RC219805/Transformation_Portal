@@ -31,7 +31,7 @@
 
 ## Immediate Actions (v2.3.0 Planning - Q1 2026)
 
-**Total Effort:** 4 hours → **Remaining:** 2h
+**Total Effort:** 4 hours → **Remaining:** 15min
 **Owner:** Architect + DevOps
 **Last Updated:** 2026-03-15
 
@@ -93,7 +93,7 @@
 - Branch protection verification (P1, GitHub Admin task)
 - CLI e2e test suite (P2, deferred to v2.4.0)
 - SAM2 auto mode (P2, roadmap item)
-- Sample data upload (P3, low priority)
+- Sample data upload (P2, low priority)
 
 ### 🔴 DEFERRED (No Action for v2.x)
 - Staging environment (P3, LOW ROI)
@@ -191,7 +191,7 @@ All NotImplementedError must include context:
 A: 0 P0 blockers. 1 P1 item (branch protection - GitHub Admin task).
 
 **Q: How many items are technical debt?**
-A: Only 3 NotImplementedError instances (10%). Rest are intentional stubs.
+A: Of the 25 NotImplementedError instances, only 3 are technical debt requiring future work (NVDIFFREC, MaterialGAN, PBRFusion). The rest are intentional stubs (abstract methods, phase gates, platform limitations).
 
 **Q: When should we update the inventory?**
 A: Monthly or per-release. This review: 2026-03-15 (v2.3.0 planning).

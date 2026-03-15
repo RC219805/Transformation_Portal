@@ -277,7 +277,7 @@ raise NotImplementedError("Video tracking not yet implemented")
 **Priority:** P3 (Low - experimental ML features)
 **Action:** Document as experimental, defer to v2.3.0 or v3.0.0
 
-**Location:** `src/transformation_portal/spatial_ai/segmentation/material_backend.py`
+**Location:** `src/transformation_portal/spatial_ai/materials/material_backend.py`
 
 #### 2.0.4 NVDIFFREC Integration (Line 82)
 ```python
