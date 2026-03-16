@@ -198,10 +198,7 @@ def validate_device_spec(device: str) -> str:
             return device
 
     logger.warning(f"Invalid device specification rejected: {device}")
-    raise ValueError(
-        f"Invalid device specification: {device}. "
-        f"Expected one of: cpu, cuda, cuda:N, mps, auto"
-    )
+    raise ValueError(f"Invalid device specification: {device}. " f"Expected one of: cpu, cuda, cuda:N, mps, auto")
 
 
 def validate_quantization_method(method: str) -> str:
@@ -235,10 +232,7 @@ def validate_quantization_method(method: str) -> str:
         return method
 
     logger.warning(f"Invalid quantization method rejected: {method}")
-    raise ValueError(
-        f"Invalid quantization method: {method}. "
-        f"Expected one of: {', '.join(sorted(valid_methods))}"
-    )
+    raise ValueError(f"Invalid quantization method: {method}. " f"Expected one of: {', '.join(sorted(valid_methods))}")
 
 
 def validate_depth_fallback(fallback: Optional[str]) -> Optional[str]:
@@ -273,10 +267,7 @@ def validate_depth_fallback(fallback: Optional[str]) -> Optional[str]:
         return fallback
 
     logger.warning(f"Invalid depth fallback rejected: {fallback}")
-    raise ValueError(
-        f"Invalid depth fallback: {fallback}. "
-        f"Expected one of: {', '.join(sorted(valid_fallbacks))}"
-    )
+    raise ValueError(f"Invalid depth fallback: {fallback}. " f"Expected one of: {', '.join(sorted(valid_fallbacks))}")
 
 
 def validate_preset_name(preset: str) -> str:

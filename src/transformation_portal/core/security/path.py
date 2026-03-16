@@ -67,10 +67,7 @@ def safe_resolve_path(path: Union[str, Path], allowed_root: Union[str, Path] = o
     try:
         target.relative_to(root)
     except ValueError:
-        logger.warning(
-            f"Path traversal blocked: '{path}' resolved to '{target}' "
-            f"which is outside allowed root '{root}'"
-        )
+        logger.warning(f"Path traversal blocked: '{path}' resolved to '{target}' " f"which is outside allowed root '{root}'")
         raise ValidationError(f"Path traversal detected: {path} is outside {root}")
 
     logger.debug(f"Path validated: '{path}' -> '{target}' (within '{root}')")
