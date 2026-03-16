@@ -38,7 +38,7 @@ pipeline:
     material_classification: true  # Enable CLIP for material hints
 
   materials:
-    backend: heuristic  # Phase gate: nvdiffrec is a future research feature (see TODO_INVENTORY.md section 2.0.4)
+    backend: heuristic  # Phase gate: nvdiffrec is a future research feature (see docs/analysis/TODO_INVENTORY.md section 2.0.4)
     material_hints: true
     resolution: 2048  # Higher resolution for research
     optimize_iterations: 200  # More iterations for quality

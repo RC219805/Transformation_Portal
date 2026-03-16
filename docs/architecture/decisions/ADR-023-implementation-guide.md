@@ -30,7 +30,14 @@ This document provides implementation guidance for Phase 2 (Performance Ledger) 
 
 **Current Status:** ✅ COMPLETED (v1.7.0 with optional NumPy, bootstrap CI)
 
-**Key Functions (Implemented):**
+**Historical Planning Notes:**
+
+> The code snippet below shows the **original implementation plan**. TODO markers
+> were planning notes. For the actual implemented API, see `tools/performance_ledger.py`.
+> The manifest uses `total_seconds`, `depth_seconds`, etc. (not `total_sec`/`depth_sec`).
+
+<details>
+<summary>Original Planning Snippet (Historical)</summary>
 
 ```python
 def parse_manifests(manifests_dir: Path) -> List[Dict[str, Any]]:
@@ -96,6 +103,8 @@ def main() -> int:
     """
     # TODO: Implement full workflow
 ```
+
+</details>
 
 **Testing Requirements:**
 

@@ -130,7 +130,7 @@ Transformation_Portal/
 │
 ├── input_images/              # ❌ Excluded from Git (local dev only)
 │   ├── *.tiff                # ✅ Already excluded (TIFF client files)
-│   ├── *.png                 # ✅ Excluded via .gitignore (line 201)
+│   ├── *.png                 # ✅ Excluded via .gitignore (`input_images/**/*.png` pattern)
 │   └── .gitkeep
 │
 ├── output/                    # ❌ Excluded from Git (generated)
