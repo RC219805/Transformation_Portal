@@ -265,3 +265,10 @@ class TestValidateDepthFallback:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+# Pytest markers
+pytestmark = [
+    pytest.mark.unit,
+    pytest.mark.security,
+]

@@ -6,6 +6,11 @@ from pathlib import Path
 
 import pytest
 
+# Pytest markers
+pytestmark = [
+    pytest.mark.unit,
+]
+
 # Constants
 # Exceptions
 # Format validation functions

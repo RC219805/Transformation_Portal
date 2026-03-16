@@ -10,6 +10,11 @@ import numpy as np
 import pytest
 from PIL import Image
 
+# Pytest markers
+pytestmark = [
+    pytest.mark.unit,
+]
+
 from transformation_portal.lux_depth_v3.preprocessing import (
     DIMENSION_MULTIPLE,
     SUPPORTED_EXTENSIONS,

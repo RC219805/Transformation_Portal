@@ -110,3 +110,10 @@ def test_load_recipe_invalid_type(temp_workspace):
 
     with pytest.raises(ValueError, match="Recipe must be a dictionary"):
         load_recipe(recipe_path)
+
+
+# Pytest markers
+pytestmark = [
+    pytest.mark.unit,
+    pytest.mark.security,
+]

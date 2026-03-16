@@ -6,6 +6,11 @@ import time
 
 import pytest
 
+# Pytest markers
+pytestmark = [
+    pytest.mark.unit,
+]
+
 from transformation_portal.metrics.timing import TimingContext, timing_context
 
 

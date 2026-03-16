@@ -8,6 +8,11 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
+# Pytest markers
+pytestmark = [
+    pytest.mark.unit,
+]
+
 from transformation_portal.core.config.presets import Preset, PresetRegistry, list_presets, load_preset, register_preset
 from transformation_portal.core.config.schemas import PerformanceConfig
 from transformation_portal.core.config.validation import validate_config

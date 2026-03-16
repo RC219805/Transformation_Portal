@@ -4,6 +4,11 @@ from pathlib import Path
 
 import pytest
 
+# Pytest markers
+pytestmark = [
+    pytest.mark.unit,
+]
+
 from transformation_portal.lux_depth_v3.input_discovery import DiscoveryConfig, discover_images
 
 

@@ -14,6 +14,13 @@ Coverage target: >90% for pbr_processor.py
 
 from pathlib import Path
 
+import pytest
+
+# Pytest markers
+pytestmark = [
+    pytest.mark.unit,
+]
+
 import numpy as np
 import pytest
 

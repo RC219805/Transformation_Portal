@@ -12,6 +12,12 @@ These tests prevent silent corruption bugs by verifying that:
 from __future__ import annotations
 
 import json
+import pytest
+
+# Pytest markers
+pytestmark = [
+    pytest.mark.unit,
+]
 
 import numpy as np
 import pytest

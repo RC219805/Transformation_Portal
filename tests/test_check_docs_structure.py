@@ -4,6 +4,13 @@ from __future__ import annotations
 
 import sys
 
+import pytest
+
+# Pytest markers
+pytestmark = [
+    pytest.mark.unit,
+]
+
 from scripts.governance import check_docs_structure
 
 

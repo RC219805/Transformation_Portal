@@ -13,6 +13,13 @@ Uses Typer's CliRunner for isolated testing.
 import json
 from pathlib import Path
 
+import pytest
+
+# Pytest markers
+pytestmark = [
+    pytest.mark.unit,
+]
+
 import numpy as np
 import pytest
 from PIL import Image

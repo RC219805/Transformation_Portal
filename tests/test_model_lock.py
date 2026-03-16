@@ -369,3 +369,10 @@ def test_da3_inference_strict_mode_rejects_revisionless_da3_fallback(tmp_path: P
         engine._load_da3_model(model_id)
 
     assert fallback_used["called_without_revision"] is False
+
+
+# Pytest markers
+pytestmark = [
+    pytest.mark.unit,
+    pytest.mark.security,
+]

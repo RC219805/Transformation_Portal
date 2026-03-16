@@ -5,6 +5,11 @@ import logging
 import numpy as np
 import pytest
 
+# Pytest markers
+pytestmark = [
+    pytest.mark.unit,
+]
+
 from transformation_portal.upscaling import UpscalerRegistry
 
 logger = logging.getLogger(__name__)

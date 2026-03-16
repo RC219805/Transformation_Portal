@@ -11,6 +11,11 @@ import numpy as np
 import pytest
 from PIL import Image
 
+# Pytest markers
+pytestmark = [
+    pytest.mark.unit,
+]
+
 from transformation_portal.utils.image_utils import load_image, load_image_rgb, np_to_pil, pil_to_np, save_image
 
 

@@ -17,6 +17,11 @@ from unittest.mock import patch
 
 import pytest
 
+# Pytest markers
+pytestmark = [
+    pytest.mark.unit,
+]
+
 from transformation_portal.lux_depth_v3.config import EnhanceConfig
 from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
 

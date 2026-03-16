@@ -14,6 +14,11 @@ from unittest.mock import MagicMock, patch
 import pytest
 from PIL import Image
 
+# Pytest markers
+pytestmark = [
+    pytest.mark.unit,
+]
+
 from transformation_portal.lux_depth_v3.provenance import (
     PROVENANCE_SCHEMA_VERSION,
     ExiftoolNotFoundError,

@@ -5,6 +5,11 @@ Tests preset configuration loading, validation, and parameter ranges.
 
 import pytest
 
+# Pytest markers
+pytestmark = [
+    pytest.mark.unit,
+]
+
 from transformation_portal.lux_depth_v3.v2_presets import PRESETS, V2EnhancementConfig, get_preset_description, list_presets
 
 

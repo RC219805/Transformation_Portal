@@ -9,6 +9,11 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+# Pytest markers
+pytestmark = [
+    pytest.mark.unit,
+]
+
 from tools.performance_ledger import (
     DEFAULT_REGRESSION_THRESHOLDS,
     Baseline,

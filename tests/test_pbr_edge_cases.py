@@ -13,6 +13,13 @@ Coverage target: Issue #4 from PBR Implementation Audit
 
 import shutil
 import tempfile
+
+import pytest
+
+# Pytest markers
+pytestmark = [
+    pytest.mark.unit,
+]
 from pathlib import Path
 
 import numpy as np
