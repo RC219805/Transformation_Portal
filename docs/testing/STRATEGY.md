@@ -291,8 +291,20 @@ TP_RUN_BENCHMARKS=1 pytest -v tests/benchmarks/ -m "benchmark"
 
 ### Coverage Thresholds
 
-| Module | Minimum Coverage |
-|--------|------------------|
+**CI-Enforced (Current):**
+
+| Tier | Minimum | Notes |
+|------|---------|-------|
+| Core tests | 20% | `--cov-fail-under=20` in build.yml |
+| ML tests | — | Coverage disabled for faster PR feedback |
+
+**Aspirational Per-Module Targets (Not Yet Enforced):**
+
+These targets guide new test development. Per-module enforcement
+will be added once tooling supports granular thresholds.
+
+| Module | Target Coverage |
+|--------|-----------------|
 | `core/config` | 80% |
 | `core/security` | 90% |
 | `streaming` | 70% |
