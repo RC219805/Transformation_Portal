@@ -188,11 +188,21 @@ jobs:
           directoryExclusionList: '.git,node_modules,deprecated,archive,tests,docs,examples,.pytest_cache,__pycache__,.tox,.mypy_cache'
         continue-on-error: true
 
-      - name: Enforce dependency submission success
+      - name: Handle dependency submission result
         if: steps.dependency_submission_attempt_1.outcome == 'failure' && steps.dependency_submission_attempt_2.outcome == 'failure'
         run: |
-          echo "Dependency submission failed after two attempts."
-          exit 1
+          echo "::warning::Dependency submission failed after two attempts."
+          echo ""
+          echo "This is typically caused by a transient GitHub API issue and does not"
+          echo "indicate a problem with the code or dependencies themselves."
+          echo ""
+          echo "The dependency graph update will be retried on the next push or can be"
+          echo "manually triggered via workflow_dispatch."
+          echo ""
+          echo "This workflow is intentionally non-blocking to avoid failing PRs due to"
+          echo "GitHub infrastructure issues outside the repository's control."
+          # Exit with success to not block PRs due to transient GitHub API errors
+          exit 0
 
       - name: Cleanup after submission
         if: always()
@@ -219,16 +229,26 @@ jobs:
           echo ""
           echo "Dependency submission cleanup completed."
 
-      - name: Report status
-        if: failure()
+      - name: Report submission status
+        if: always()
         run: |
-          echo "⚠️ Dependency submission failed!"
-          echo ""
-          echo "Common issues:"
-          echo "1. Out of disk space - check cleanup steps"
-          echo "2. Network timeout - retry the workflow"
-          echo "3. Invalid requirements file - check syntax"
-          echo "4. GitHub checkout fetch 500 - infrastructure transient; rerun job"
-          echo ""
-          echo "Current disk usage:"
-          df -h
+          attempt1="${{ steps.dependency_submission_attempt_1.outcome }}"
+          attempt2="${{ steps.dependency_submission_attempt_2.outcome }}"
+          
+          if [ "$attempt1" = "success" ] || [ "$attempt2" = "success" ]; then
+            echo "✅ Dependency submission completed successfully."
+          else
+            echo "::warning::⚠️ Dependency submission encountered issues (non-blocking)"
+            echo ""
+            echo "Both submission attempts did not succeed:"
+            echo "  - Attempt 1: $attempt1"
+            echo "  - Attempt 2: $attempt2"
+            echo ""
+            echo "This is typically caused by:"
+            echo "  1. Transient GitHub API errors (most common)"
+            echo "  2. Network timeouts"
+            echo "  3. GitHub infrastructure issues"
+            echo ""
+            echo "No action required - dependency graph updates are non-critical"
+            echo "and will be retried on the next push."
+          fi

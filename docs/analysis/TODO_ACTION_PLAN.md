@@ -1,9 +1,9 @@
 # TODO Action Plan - Transformation Portal
 
 **Generated**: 2026-03-13
-**Last Updated**: 2026-03-14
+**Last Updated**: 2026-03-16
 **Scope**: Comprehensive review of all outstanding TODOs across the codebase
-**Cross-Reference**: [TODO_INVENTORY.md](./TODO_INVENTORY.md) (v2.0.0)
+**Cross-Reference**: [TODO_INVENTORY.md](./TODO_INVENTORY.md) (v2.2.0)
 
 ---
 
@@ -15,19 +15,19 @@ This action plan consolidates findings from a codebase-wide TODO review and prov
 
 | Category | Count | Action Required |
 |----------|-------|-----------------|
-| **Active Source Code TODOs** | 10 | Mixed (see details) |
+| **Active Source Code TODOs** | 9 | Mixed (see details) |
 | **Test Observational TODOs** | 2 | Track only |
 | **Config/Preset TODOs** | 2 | ✅ Completed (2026-03-14) |
 | **Security Pattern TODOs** | 2 | Intentional (no action) |
 | **Documentation TODOs** | 190 | Mostly no action; retain/archive historical notes |
 
-Documentation TODO instances were reviewed for governance and archival value, but they are not part of the 11-item implementation backlog unless explicitly called out in the consolidated plan below.
+Documentation TODO instances were reviewed for governance and archival value, but they are not part of the 9-item active source code backlog unless explicitly called out in the consolidated plan below.
 
 ### Priority Summary
 
 - **P1 (Immediate)**: ~~3 items~~ 1 item remaining (HuggingFace revision pinning ✅ completed)
 - **P2 (Near-term)**: ~~4 items~~ 3 items remaining (ICC preservation ✅ completed)
-- **P3 (Deferred)**: 4 items for future phases
+- **P3 (Deferred)**: ~~4 items~~ 3 items remaining (SLERP interpolation ✅ completed 2026-03-16)
 - **No Action Required**: 195 items (95%; historical, observational, or intentionally retained)
 
 ---
@@ -85,26 +85,33 @@ Documentation TODO instances were reviewed for governance and archival value, bu
 
 ---
 
-### P3: SLERP Interpolation (scene_builder.py)
+### ✅ COMPLETED: SLERP Interpolation (scene_builder.py)
 
-**Location**: `src/transformation_portal/spatial_ai/reconstruction/scene_builder.py:290`
-```python
-# TODO: Replace with proper SLERP interpolation
-# This naive interpolation produces sheared rotations
+**Location**: `src/transformation_portal/spatial_ai/reconstruction/scene_builder.py`
+
+**Completed**: 2026-03-16
+
+**Implementation**:
+- ✅ SLERP interpolation using `scipy.spatial.transform.Slerp`
+- ✅ Proper rotation matrix preservation (orthogonality maintained)
+- ✅ LERP for translation vectors (separate from rotation)
+- ✅ Comprehensive unit tests validating rotation orthogonality
+
+**Changes Made**:
+- `extract_camera_path()` now uses SLERP for rotations via scipy
+- Translation uses linear interpolation (LERP)
+- Tests verify orthogonality and proper determinant (+1) for all frames
+- Boundary and midpoint validation included in test suite
+
+**Tests Added**:
+- `tests/spatial_ai/reconstruction/test_scene_utils.py::test_extract_camera_path_preserves_rotation_orthogonality`
+
+**Verification**:
+```bash
+pytest tests/spatial_ai/reconstruction/test_scene_utils.py::TestSceneBuilder::test_extract_camera_path_preserves_rotation_orthogonality -v
 ```
 
-**Context**: Camera path interpolation uses linear interpolation instead of spherical linear interpolation (SLERP).
-
-**Impact**: Low - Affects only experimental reconstruction feature, produces "sheared rotations" per comment.
-
-**Recommended Action**:
-1. Implement SLERP using quaternion representation
-2. Use `scipy.spatial.transform.Rotation.slerp()` or manual quaternion interpolation
-3. Add unit tests for interpolation quality
-
-**Effort**: 1-2 days
-**Priority**: P3 (Technical enhancement)
-**Owner**: Specialist (Spatial AI)
+**Original Context**: Camera path interpolation previously used naive linear interpolation of 4x4 extrinsic matrices, which produced sheared rotations. The SLERP implementation ensures rigid transformations are preserved.
 
 ---
 
@@ -258,14 +265,14 @@ test_file.write_text("""# TODO: Consider using spatial_ai for this
 
 ### Deferred Actions (P3) - v2.4.0+ / Phase 2
 
-| # | Item | Effort | Owner | Phase |
-|---|------|--------|-------|-------|
-| 8 | SLERP interpolation in scene_builder.py | 1-2d | Spatial AI | Phase 2 |
-| 9 | ComfyUI subprocess integration | 1-2w | ML | Phase 5B |
-| 10 | NVDIFFREC integration | 3-4w | ML Research | Phase 3 |
-| 11 | MaterialGAN integration | 2-3w | ML Research | Phase 3 |
+| # | Item | Effort | Owner | Phase | Status |
+|---|------|--------|-------|-------|--------|
+| 8 | SLERP interpolation in scene_builder.py | 1-2d | Spatial AI | Phase 2 | ✅ Completed 2026-03-16 |
+| 9 | ComfyUI subprocess integration | 1-2w | ML | Phase 5B | Pending |
+| 10 | NVDIFFREC integration | 3-4w | ML Research | Phase 3 | Pending |
+| 11 | MaterialGAN integration | 2-3w | ML Research | Phase 3 | Pending |
 
-**Total P3 Effort**: ~200+ hours (deferred)
+**Total P3 Effort**: ~~200+~~ hours → **Remaining**: ~185+ hours (SLERP completed)
 
 ---
 
@@ -310,7 +317,7 @@ Require for all preset changes:
 
 | Document | Purpose | Status |
 |----------|---------|--------|
-| [TODO_INVENTORY.md](./TODO_INVENTORY.md) | Comprehensive v2.0.0 inventory | ✅ Current |
+| [TODO_INVENTORY.md](./TODO_INVENTORY.md) | Comprehensive v2.2.0 inventory | ✅ Current |
 | [OUTSTANDING_TODOS_EXPERIMENTAL_FEATURES.md](./OUTSTANDING_TODOS_EXPERIMENTAL_FEATURES.md) | Experimental feature tracking | ✅ Current |
 | [HF_REVISION_PINNING_GUIDE.md](./HF_REVISION_PINNING_GUIDE.md) | Model pinning procedures | ✅ Current |
 | [IMPROVEMENT_OPPORTUNITIES.md](../guides/IMPROVEMENT_OPPORTUNITIES.md) | Performance optimization tracking | ✅ Current |
@@ -320,15 +327,23 @@ Require for all preset changes:
 ## Summary
 
 **Total Items Reviewed**: 206 TODO instances
-**Action Required**: 11 items (5%)
+**Action Required**: 11 items total (5%)
+  - 9 active source code TODOs (see Key Findings table)
+  - 2 test observational TODOs (tracking only)
 **No Action Required**: 195 items (95%)
 
-**Key Takeaway**: The majority of reviewed TODO instances are **historical documentation notes**, **intentional validation patterns**, or **observational tracking**. Only 11 items require actual implementation work, with 3 being P1 priority.
+**Completion Progress (2026-03-16)**:
+- ✅ 6 items completed (HF pinning, ICC preservation, rollback docs, depth_canonical archived, PR docs archived, SLERP interpolation)
+- ⏳ 2 items pending external action (branch protection, sample data upload)
+- ⏳ 3 items pending future phases (ComfyUI, NVDIFFREC, MaterialGAN)
+
+**Key Takeaway**: The majority of reviewed TODO instances are **historical documentation notes**, **intentional validation patterns**, or **observational tracking**. Only 11 items require actual implementation work, with 1 remaining P1 priority (admin task).
 
 The codebase demonstrates mature TODO management with proper documentation and categorization. The existing [TODO_INVENTORY.md](./TODO_INVENTORY.md) provides comprehensive tracking and should continue to be the authoritative source for TODO governance.
 
 ---
 
-**Document Version**: 1.0.0
+**Document Version**: 1.1.0
 **Author**: Transformation Portal Architect Review
+**Last Updated**: 2026-03-16
 **Next Review**: Before v2.3.0 release planning
