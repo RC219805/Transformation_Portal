@@ -5,11 +5,14 @@ Prevents path traversal attacks (e.g., ../../../etc/passwd) by enforcing
 strict directory confinement.
 """
 
+import logging
 import os
 from pathlib import Path
 from typing import List, Union
 
 from .validation import ValidationError
+
+logger = logging.getLogger(__name__)
 
 
 class PathValidator:
@@ -47,6 +50,13 @@ def safe_resolve_path(path: Union[str, Path], allowed_root: Union[str, Path] = o
     """
     Resolve a path and ensure it sits within the allowed root.
 
+    Args:
+        path: Path to resolve (can be relative or absolute)
+        allowed_root: Root directory that path must be within (default: cwd)
+
+    Returns:
+        Resolved absolute path
+
     Raises:
         ValidationError: If path attempts traversal out of root.
     """
@@ -57,8 +67,13 @@ def safe_resolve_path(path: Union[str, Path], allowed_root: Union[str, Path] = o
     try:
         target.relative_to(root)
     except ValueError:
+        logger.warning(
+            f"Path traversal blocked: '{path}' resolved to '{target}' "
+            f"which is outside allowed root '{root}'"
+        )
         raise ValidationError(f"Path traversal detected: {path} is outside {root}")
 
+    logger.debug(f"Path validated: '{path}' -> '{target}' (within '{root}')")
     return target
 
 
