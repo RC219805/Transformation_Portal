@@ -3,7 +3,7 @@
 **Generated**: 2026-03-13
 **Last Updated**: 2026-03-16
 **Scope**: Comprehensive review of all outstanding TODOs across the codebase
-**Cross-Reference**: [TODO_INVENTORY.md](./TODO_INVENTORY.md) (v2.1.0)
+**Cross-Reference**: [TODO_INVENTORY.md](./TODO_INVENTORY.md) (v2.2.0)
 
 ---
 
@@ -21,7 +21,7 @@ This action plan consolidates findings from a codebase-wide TODO review and prov
 | **Security Pattern TODOs** | 2 | Intentional (no action) |
 | **Documentation TODOs** | 190 | Mostly no action; retain/archive historical notes |
 
-Documentation TODO instances were reviewed for governance and archival value, but they are not part of the 10-item implementation backlog unless explicitly called out in the consolidated plan below.
+Documentation TODO instances were reviewed for governance and archival value, but they are not part of the 9-item active source code backlog unless explicitly called out in the consolidated plan below.
 
 ### Priority Summary
 
