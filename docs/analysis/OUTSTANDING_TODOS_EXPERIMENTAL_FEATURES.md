@@ -1,6 +1,7 @@
 # Outstanding TODOs for Advanced Features - Transformation Portal
 
 **Generated**: 2026-02-18
+**Last Updated**: 2026-03-16
 **Status**: Based on experimental preset analysis and codebase review
 
 ---
@@ -157,38 +158,25 @@ pip install gsplat
 ## 📋 Medium Priority: Model Pinning & Verification
 
 ### 6. HuggingFace Model Revision Pinning
-**Status**: ⚠️ Needs Verification
+**Status**: ✅ **COMPLETED** (2026-03-14)
 **Affected Presets**:
 - apex_research.yaml
 - apex_research_canary.yaml
 - apex_research_ultra.yaml (DA3 1.1 fallback)
 
-**TODO Items**:
-- [ ] Verify DA3 1.1 Nested Giant Large revision
-- [ ] Pin to 40-char commit SHA
-- [ ] Update `expected_sha256` if needed
-- [ ] Run validation script
+**Completed Items**:
+- [x] Verified DA3 1.1 Nested Giant Large revision
+- [x] Pinned to 40-char commit SHA: `b2359bdf726fb44ef62acca04d629dcf158053e7`
+- [x] Model ID corrected from `DA3-NESTED-GIANT-LARGE-1.1` to `DA3NESTED-GIANT-LARGE-1.1`
+- [x] Validation script passed
 
-**Current State**:
-```yaml
-# apex_research.yaml line 155
-# TODO(Phase 1.1): Pin revision to commit hash for reproducibility
-# Omitted until manual verification complete (will default to 'main' in loader)
-```
-
-**Action**:
+**Verification Command**:
 ```bash
-# Manual verification required
-# Visit: https://huggingface.co/depth-anything/DA3-NESTED-GIANT-LARGE-1.1/commits/main
-# Copy commit SHA from verified release
-# Update all 3 presets
 python scripts/validation/validate_hf_revisions.py
+# ✅ All HuggingFace model revisions are properly pinned
 ```
 
-**Files**:
-- `config/presets/apex_research.yaml:155`
-- `config/presets/apex_research_canary.yaml:26`
-- `config/presets/experimental/apex_research_ultra.yaml:80`
+**Cross-Reference**: See [TODO_ACTION_PLAN.md](./TODO_ACTION_PLAN.md) "COMPLETED: HuggingFace Model Revision Pinning"
 
 ---
 
@@ -269,15 +257,15 @@ def test_sam2_temporal_propagation():
 
 ## 📊 Priority Matrix
 
-| Feature | Complexity | Value | Dependencies | Priority |
-|---------|-----------|-------|--------------|----------|
-| SAM2 Segmentation | Medium | High | pip install, checkpoint | **HIGH** |
-| HF Revision Pinning | Low | High | Manual verification | **HIGH** |
-| MaterialGAN/NVDIFFREC | High | Medium | Research models | **MEDIUM** |
-| 3D Gaussian Splatting | Very High | Medium | gsplat, multi-view | **MEDIUM** |
-| Depth Ensemble | High | Medium | DepthCrafter | **MEDIUM** |
-| LLaVA Validation | Medium | Low | 34B model (large) | **LOW** |
-| Real-ESRGAN Fix | Medium | Low | Alternative upscaler | **LOW** |
+| Feature | Complexity | Value | Dependencies | Priority | Status |
+|---------|-----------|-------|--------------|----------|--------|
+| SAM2 Segmentation | Medium | High | pip install, checkpoint | **HIGH** | Pending |
+| HF Revision Pinning | Low | High | Manual verification | ~~**HIGH**~~ | ✅ Completed |
+| MaterialGAN/NVDIFFREC | High | Medium | Research models | **MEDIUM** | Pending |
+| 3D Gaussian Splatting | Very High | Medium | gsplat, multi-view | **MEDIUM** | Pending |
+| Depth Ensemble | High | Medium | DepthCrafter | **MEDIUM** | Partial (EMA only) |
+| LLaVA Validation | Medium | Low | 34B model (large) | **LOW** | Pending |
+| Real-ESRGAN Fix | Medium | Low | Alternative upscaler | **LOW** | Blocked (CVE) |
 
 ---
 
@@ -320,6 +308,18 @@ python -m transformation_portal.spatial_ai segment \
 **Total TODOs in codebase**: 254
 **High-priority items**: 7
 **Blocked on external dependencies**: 4
+
+---
+
+## 📊 Status Update (2026-03-16)
+
+**Completed since document creation:**
+- ✅ HF Revision Pinning (Section 6) - Completed 2026-03-14
+- ✅ Depth Ensemble (partial) - EMA temporal filter implemented
+
+**In Progress:**
+- SAM2 Segmentation - Awaiting checkpoint verification
+- 3D Gaussian Splatting - Research phase
 
 ---
 
