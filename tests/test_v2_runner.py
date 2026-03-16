@@ -7,7 +7,7 @@ and report discovery without requiring the actual script to exist.
 import json
 import subprocess
 from pathlib import Path
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -115,6 +115,7 @@ class TestV2RunnerExecution:
 
         # Verify timeout passed to subprocess
         assert mock_subprocess.call_args[1]["timeout"] == 300
+        assert result["status"] == "success"
 
     @patch("transformation_portal.lux_depth_v3.v2_runner.subprocess.run")
     def test_optional_arguments_omitted_when_none(self, mock_subprocess, tmp_path):
@@ -143,6 +144,7 @@ class TestV2RunnerExecution:
 
         # Verify required arguments still present
         assert "--output-dir" in cmd
+        assert result["status"] == "success"
 
     def test_raises_filenotfounderror_if_script_missing(self, tmp_path):
         """Test that run() raises clear error if script doesn't exist."""
@@ -304,7 +306,7 @@ class TestFindV2Report:
 
 class TestPathValidation:
     """Test path validation behavior in V2Runner.run().
-    
+
     Security contract:
     - All paths are resolved to absolute paths (normalization)
     - Paths inside repo root are validated via safe_resolve_path()
@@ -333,6 +335,7 @@ class TestPathValidation:
         for arg in cmd:
             if str(tmp_path) in arg:
                 assert Path(arg).is_absolute()
+        assert result["status"] == "success"
 
     @patch("transformation_portal.lux_depth_v3.v2_runner.subprocess.run")
     def test_path_outside_repo_allowed_with_warning(self, mock_subprocess, tmp_path, caplog):
@@ -375,11 +378,12 @@ class TestPathValidation:
         cmd = mock_subprocess.call_args[0][0]
         assert "--masks-file" in cmd
         assert str(masks_file) in cmd or str(masks_file.resolve()) in cmd
+        assert result["status"] == "success"
 
     @patch("transformation_portal.lux_depth_v3.v2_runner.subprocess.run")
     def test_traversal_path_normalized(self, mock_subprocess, tmp_path):
         """Test that path traversal sequences are normalized to absolute paths.
-        
+
         Paths with .. are resolved to their canonical form. Paths outside
         repo root are allowed by design (user data directories).
         """
@@ -396,18 +400,18 @@ class TestPathValidation:
             result = runner.run(input_path=input_path, depth_dir=None, output_dir=output_dir)
 
         cmd = mock_subprocess.call_args[0][0]
-        
+
         # Verify no .. in command (paths are resolved)
         for arg in cmd:
             if arg.startswith("/") or arg.startswith("\\"):
                 assert ".." not in arg, f"Traversal not normalized: {arg}"
-        
+
         assert result["status"] == "success"
 
     @patch("transformation_portal.lux_depth_v3.v2_runner.subprocess.run")
     def test_output_dir_warning_logged(self, mock_subprocess, tmp_path, caplog):
         """Test that output dir outside repo root logs warning.
-        
+
         When output_dir is outside the repository root, a warning should be
         logged but execution should still succeed (user data directories are
         allowed by design).
@@ -464,10 +468,10 @@ class TestPathValidation:
         assert "--output-dir" in cmd
         assert "--log-file" in cmd
         assert "--masks-file" in cmd
-        
+
         # Verify input path is present (it's a positional arg)
         assert any(str(input_path) in arg or str(input_path.resolve()) in arg for arg in cmd)
-        
+
         assert result["status"] == "success"
 
 
