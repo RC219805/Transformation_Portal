@@ -12,15 +12,14 @@ These tests prevent silent corruption bugs by verifying that:
 from __future__ import annotations
 
 import json
+
+import numpy as np
 import pytest
 
 # Pytest markers
 pytestmark = [
     pytest.mark.unit,
 ]
-
-import numpy as np
-import pytest
 
 from src.transformation_portal.lux_depth_v3.manifest import (
     CombinedManifest,

@@ -14,15 +14,13 @@ Coverage target: >90% for pbr_processor.py
 
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 # Pytest markers
 pytestmark = [
     pytest.mark.unit,
 ]
-
-import numpy as np
-import pytest
 
 from transformation_portal.lux_depth_v3.pbr import PBRConfig
 from transformation_portal.lux_depth_v3.pbr_presets import STANDARD_QUALITY, get_preset, list_presets

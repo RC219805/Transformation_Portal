@@ -13,17 +13,15 @@ Uses Typer's CliRunner for isolated testing.
 import json
 from pathlib import Path
 
+import numpy as np
 import pytest
+from PIL import Image
+from typer.testing import CliRunner
 
 # Pytest markers
 pytestmark = [
     pytest.mark.unit,
 ]
-
-import numpy as np
-import pytest
-from PIL import Image
-from typer.testing import CliRunner
 
 from transformation_portal.lux_depth_v3.pbr_cli import app
 

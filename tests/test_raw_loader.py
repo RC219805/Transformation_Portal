@@ -11,13 +11,12 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
+from PIL import Image
 
 # Pytest markers
 pytestmark = [
     pytest.mark.unit,
 ]
-import pytest
-from PIL import Image
 
 from transformation_portal.lux_depth_v3.raw_loader import RAW_EXTENSIONS, is_raw_file, load_raw_as_pil, load_raw_as_rgb
 

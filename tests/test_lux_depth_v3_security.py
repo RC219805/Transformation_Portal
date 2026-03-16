@@ -8,6 +8,12 @@ Tests security validation functions including:
 
 import pytest
 
+# Pytest markers
+pytestmark = [
+    pytest.mark.unit,
+    pytest.mark.security,
+]
+
 from transformation_portal.lux_depth_v3.security import (
     sanitize_file_stem,
     sanitize_path_component_nonlossy,
@@ -265,10 +271,3 @@ class TestValidateDepthFallback:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
-
-
-# Pytest markers
-pytestmark = [
-    pytest.mark.unit,
-    pytest.mark.security,
-]

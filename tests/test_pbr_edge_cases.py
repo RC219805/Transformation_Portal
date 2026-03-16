@@ -13,18 +13,16 @@ Coverage target: Issue #4 from PBR Implementation Audit
 
 import shutil
 import tempfile
-
-import pytest
-
-# Pytest markers
-pytestmark = [
-    pytest.mark.unit,
-]
 from pathlib import Path
 
 import numpy as np
 import pytest
 from PIL import Image
+
+# Pytest markers
+pytestmark = [
+    pytest.mark.unit,
+]
 
 from transformation_portal.lux_depth_v3.pbr import PBRConfig, generate_pbr_maps
 from transformation_portal.lux_depth_v3.pbr_presets import get_preset
