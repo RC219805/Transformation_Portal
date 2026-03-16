@@ -158,4 +158,5 @@ from ...spatial_ai.ingest import decode
 pytestmark = [
     pytest.mark.unit,
     pytest.mark.regression,
+    pytest.mark.security,
 ]

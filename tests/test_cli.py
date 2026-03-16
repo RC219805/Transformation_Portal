@@ -8,6 +8,11 @@ from __future__ import annotations
 
 import pytest
 
+# Pytest markers
+pytestmark = [
+    pytest.mark.unit,
+]
+
 
 class TestCLIImport:
     """Tests for CLI module import."""

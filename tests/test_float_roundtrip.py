@@ -2,7 +2,13 @@
 from typing import Optional
 
 import numpy as np
+import pytest
 from PIL import Image
+
+# Pytest markers
+pytestmark = [
+    pytest.mark.unit,
+]
 
 import luxury_tiff_batch_processor as ltiff
 from luxury_tiff_batch_processor.adjustments import gaussian_blur, gaussian_kernel_cached

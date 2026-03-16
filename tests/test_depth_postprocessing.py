@@ -4,6 +4,11 @@ from unittest.mock import Mock
 import numpy as np
 import pytest
 
+# Pytest markers
+pytestmark = [
+    pytest.mark.unit,
+]
+
 # Save original modules before mocking
 _ORIGINAL_TORCH = sys.modules.get("torch")
 _ORIGINAL_TRANSFORMERS = sys.modules.get("transformers")

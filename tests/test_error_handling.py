@@ -4,6 +4,11 @@
 
 import pytest
 
+# Pytest markers
+pytestmark = [
+    pytest.mark.unit,
+]
+
 # Use proper package imports (assumes package is installed or PYTHONPATH is set)
 # For development: pip install -e . or set PYTHONPATH to include src/
 from transformation_portal.utils.error_handling import (

@@ -16,6 +16,11 @@ import json
 import numpy as np
 import pytest
 
+# Pytest markers
+pytestmark = [
+    pytest.mark.unit,
+]
+
 from src.transformation_portal.lux_depth_v3.manifest import (
     CombinedManifest,
     ConfigFingerprint,

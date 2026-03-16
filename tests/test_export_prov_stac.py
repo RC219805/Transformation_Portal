@@ -7,6 +7,13 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
+# Pytest markers
+pytestmark = [
+    pytest.mark.unit,
+]
+
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 TOOL_PATH = PROJECT_ROOT / "tools" / "export_prov_stac.py"
 

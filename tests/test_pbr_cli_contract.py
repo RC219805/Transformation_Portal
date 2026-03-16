@@ -18,6 +18,11 @@ import pytest
 from PIL import Image
 from typer.testing import CliRunner
 
+# Pytest markers
+pytestmark = [
+    pytest.mark.unit,
+]
+
 from transformation_portal.lux_depth_v3.pbr_cli import app
 
 runner = CliRunner()

@@ -5,7 +5,13 @@ from __future__ import annotations
 import importlib
 import sys
 
+import pytest
 from typer.testing import CliRunner
+
+# Pytest markers
+pytestmark = [
+    pytest.mark.unit,
+]
 
 PORTAL_MODULE = "transformation_portal"
 PIPELINES_PACKAGE = "transformation_portal.pipelines"

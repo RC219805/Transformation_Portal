@@ -12,6 +12,11 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
+# Pytest markers
+pytestmark = [
+    pytest.mark.unit,
+]
+
 # Import from the module location
 from src.transformation_portal.pipelines.depth_tools import BatchOptions, main, process_batch
 

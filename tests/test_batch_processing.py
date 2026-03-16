@@ -12,6 +12,11 @@ from unittest.mock import Mock, patch
 import pytest
 from PIL import Image
 
+# Pytest markers
+pytestmark = [
+    pytest.mark.unit,
+]
+
 from transformation_portal.lux_depth_v3.batch_stats import compute_batch_runtime_stats
 from transformation_portal.lux_depth_v3.config import EnhanceConfig, ModelVariant
 from transformation_portal.lux_depth_v3.input_manager import ImageInput

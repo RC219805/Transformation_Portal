@@ -17,6 +17,11 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+# Pytest markers
+pytestmark = [
+    pytest.mark.unit,
+]
+
 from transformation_portal.lux_depth_v3.pbr import PBRConfig
 from transformation_portal.lux_depth_v3.pbr_presets import STANDARD_QUALITY, get_preset, list_presets
 from transformation_portal.lux_depth_v3.pbr_processor import PBRProcessor

@@ -6,7 +6,13 @@ import asyncio
 from pathlib import Path
 
 import numpy as np
+import pytest
 from PIL import Image
+
+# Pytest markers
+pytestmark = [
+    pytest.mark.unit,
+]
 
 from transformation_portal.streaming.stages import ImageData, ImageLoadStage, ImageSaveStage
 

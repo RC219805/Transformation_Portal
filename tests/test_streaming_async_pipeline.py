@@ -8,6 +8,11 @@ from typing import Any, Optional
 
 import pytest
 
+# Pytest markers
+pytestmark = [
+    pytest.mark.unit,
+]
+
 import transformation_portal.streaming.async_pipeline as async_pipeline_module
 from transformation_portal.streaming.async_pipeline import AsyncPipeline, AsyncStage, BackpressureQueue
 

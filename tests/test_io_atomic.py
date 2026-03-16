@@ -12,6 +12,11 @@ import os
 import pytest
 from PIL import Image  # pylint: disable=possibly-used-before-assignment
 
+# Pytest markers
+pytestmark = [
+    pytest.mark.unit,
+]
+
 from transformation_portal.lux_depth_v3.io_atomic import (
     HAS_PIL,
     atomic_temp_file,

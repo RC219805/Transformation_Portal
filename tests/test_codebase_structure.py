@@ -12,6 +12,11 @@ from pathlib import Path
 
 import pytest
 
+# Pytest markers
+pytestmark = [
+    pytest.mark.unit,
+]
+
 # Repository root for structure validation
 _repo_root = Path(__file__).parent.parent
 

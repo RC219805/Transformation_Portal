@@ -7,6 +7,12 @@ from pathlib import Path
 
 import pytest
 
+# Pytest markers
+pytestmark = [
+    pytest.mark.unit,
+    pytest.mark.security,
+]
+
 from transformation_portal.config_loader import _expand_env_vars, load_recipe
 
 

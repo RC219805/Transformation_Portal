@@ -9,6 +9,12 @@ from pathlib import Path
 import pytest
 import yaml
 
+# Pytest markers
+pytestmark = [
+    pytest.mark.unit,
+    pytest.mark.security,
+]
+
 from transformation_portal.core.security.model_lock import (
     ModelLockError,
     is_model_lock_strict_enabled,

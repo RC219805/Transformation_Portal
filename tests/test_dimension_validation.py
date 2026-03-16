@@ -4,6 +4,11 @@
 
 import pytest
 
+# Pytest markers
+pytestmark = [
+    pytest.mark.unit,
+]
+
 # Import from lightweight module (no ML dependencies)
 from transformation_portal.pipelines.dimension_validation import (
     MIN_SD_DIMENSION,

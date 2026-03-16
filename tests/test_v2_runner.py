@@ -11,6 +11,11 @@ from unittest.mock import Mock, patch
 
 import pytest
 
+# Pytest markers
+pytestmark = [
+    pytest.mark.unit,
+]
+
 from transformation_portal.lux_depth_v3.v2_runner import V2Runner, find_v2_report
 
 

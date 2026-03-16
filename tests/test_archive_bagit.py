@@ -11,6 +11,11 @@ from pathlib import Path
 
 import pytest
 
+# Pytest markers
+pytestmark = [
+    pytest.mark.unit,
+]
+
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 BAGIT_TOOL = PROJECT_ROOT / "tools" / "archive_bagit.py"
 

@@ -6,6 +6,13 @@ import stat
 import subprocess
 from pathlib import Path
 
+import pytest
+
+# Pytest markers
+pytestmark = [
+    pytest.mark.unit,
+]
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 PROPOSAL_PATTERN = re.compile(r"^(MOVE (?P<src>.+) -> (?P<dest>.+)|REMOVE (?P<remove>.+))$")
 

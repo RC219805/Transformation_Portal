@@ -9,6 +9,11 @@ from pathlib import Path
 
 import pytest
 
+# Pytest markers
+pytestmark = [
+    pytest.mark.unit,
+]
+
 
 def test_import_config():
     """Test that config module imports successfully."""

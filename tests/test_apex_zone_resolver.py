@@ -11,6 +11,13 @@ Tests validate:
 import os
 from unittest.mock import MagicMock, patch
 
+import pytest
+
+# Pytest markers
+pytestmark = [
+    pytest.mark.unit,
+]
+
 from transformation_portal.metrics.zone_resolver import ZoneResolver
 
 

@@ -10,6 +10,9 @@ import subprocess
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 IGNORE_DIRS = {"__pycache__"}
 IGNORE_SUFFIXES = {".pyc"}
+# Test files may contain strings referencing fictional docs paths as test fixtures.
+# Exclude them from stale docs path detection.
+IGNORE_PATH_PATTERNS = {"tests/"}  # Paths starting with these are skipped
 PATH_PATTERN = re.compile(
     "".join(
         [
@@ -83,11 +86,16 @@ def _changed_files() -> tuple[list[pathlib.Path] | None, list[str]]:
     return None, errors
 
 
-def _should_skip(path: pathlib.Path) -> bool:
+def _should_skip(path: pathlib.Path, relative_path: pathlib.Path | None = None) -> bool:
     if any(part in IGNORE_DIRS for part in path.parts):
         return True
     if path.suffix.lower() in IGNORE_SUFFIXES:
         return True
+    # Skip test files that may contain fictional docs paths as test fixtures
+    if relative_path is not None:
+        rel_str = str(relative_path).replace("\\", "/")
+        if any(rel_str.startswith(pattern) for pattern in IGNORE_PATH_PATTERNS):
+            return True
     return False
 
 
@@ -103,8 +111,8 @@ def _read_text_if_probably_text(path: pathlib.Path) -> str | None:
     return payload.decode("utf-8", errors="ignore")
 
 
-def _find_stale_refs(path: pathlib.Path) -> list[str]:
-    if not path.exists() or not path.is_file() or _should_skip(path):
+def _find_stale_refs(path: pathlib.Path, relative_path: pathlib.Path | None = None) -> list[str]:
+    if not path.exists() or not path.is_file() or _should_skip(path, relative_path):
         return []
 
     text = _read_text_if_probably_text(path)
@@ -140,7 +148,7 @@ def main() -> int:
     findings = []
     for path in changed_files:
         relative = path.relative_to(REPO_ROOT)
-        for stale_ref in _find_stale_refs(path):
+        for stale_ref in _find_stale_refs(path, relative):
             findings.append((str(relative), stale_ref))
 
     if findings:

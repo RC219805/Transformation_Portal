@@ -10,6 +10,11 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+# Pytest markers
+pytestmark = [
+    pytest.mark.unit,
+]
+
 from transformation_portal.depth.utils.cache import DepthCache
 
 
