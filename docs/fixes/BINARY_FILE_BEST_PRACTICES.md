@@ -130,14 +130,14 @@ Transformation_Portal/
 │
 ├── input_images/              # ❌ Excluded from Git (local dev only)
 │   ├── *.tiff                # ✅ Already excluded (TIFF client files)
-│   ├── *.png                 # ⚠️ TODO: Exclude PNG previews
+│   ├── *.png                 # ✅ Excluded via .gitignore (`input_images/**/*.png` pattern)
 │   └── .gitkeep
 │
 ├── output/                    # ❌ Excluded from Git (generated)
 │   └── .gitkeep
 │
-├── processed_images/          # ⚠️ Currently tracked (4 examples)
-│   └── *.jpg                 # TODO: Move to docs/examples/
+├── processed_images/          # ✅ Directory cleaned up (no files tracked)
+│   └── *.jpg                 # ✅ Completed - directory empty or excluded
 │
 ├── tests/
 │   └── fixtures/             # ✅ Tiny test files only (< 50KB)
@@ -634,7 +634,7 @@ After implementing these best practices:
 - **GitHub Releases for Datasets**: https://docs.github.com/en/repositories/releasing-projects-on-github
 - **Repository Size Limits**: https://docs.github.com/en/repositories/working-with-files/managing-large-files/about-large-files-on-github
 - **.gitignore Patterns**: https://git-scm.com/docs/gitignore
-- **Transformation Portal Refactoring**: `docs/REFACTORING_SUMMARY.md`
+- **Transformation Portal Refactoring**: `docs/historical/REFACTORING_SUMMARY.md`
 
 ---
 
