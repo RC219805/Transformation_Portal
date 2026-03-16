@@ -22,7 +22,7 @@ This document provides a **complete, categorized inventory** of all TODOs, NotIm
 **Major Updates:**
 - ✅ SLERP interpolation **COMPLETED** (scene_builder.py using scipy.spatial.transform.Slerp)
 - 📊 Reduced P3 items from 4 to 3 (SLERP completed)
-- 📊 Total completed items: 16 (25%)
+- 📊 Total completed items: 16 of 65 action-tracked items (25%)
 
 ## Version 2.1.0 Changes (2026-03-15)
 
@@ -34,7 +34,7 @@ This document provides a **complete, categorized inventory** of all TODOs, NotIm
 - ✅ lux_render_pipeline_plus_v3.py **ARCHIVED** (archive/scripts/pipelines/)
 - ✅ ICC profile preservation in 16-bit TIFF **COMPLETED**
 - 📊 Reduced P1 items from 3 to 1 (only branch protection pending)
-- 📊 Updated statistics: 15 completed (23%), 4 pending action items (6%)
+- 📊 Updated statistics: 15 of 65 completed (23%), 5 pending action items (8%)
 
 **Previous Version (2.0.0) Summary:**
 - ✅ ADR-019 backend registry integration **COMPLETED** (PR #906, commit 9c7a281c)

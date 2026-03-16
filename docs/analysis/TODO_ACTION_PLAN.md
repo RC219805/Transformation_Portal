@@ -317,7 +317,7 @@ Require for all preset changes:
 
 | Document | Purpose | Status |
 |----------|---------|--------|
-| [TODO_INVENTORY.md](./TODO_INVENTORY.md) | Comprehensive v2.1.0 inventory | ✅ Current |
+| [TODO_INVENTORY.md](./TODO_INVENTORY.md) | Comprehensive v2.2.0 inventory | ✅ Current |
 | [OUTSTANDING_TODOS_EXPERIMENTAL_FEATURES.md](./OUTSTANDING_TODOS_EXPERIMENTAL_FEATURES.md) | Experimental feature tracking | ✅ Current |
 | [HF_REVISION_PINNING_GUIDE.md](./HF_REVISION_PINNING_GUIDE.md) | Model pinning procedures | ✅ Current |
 | [IMPROVEMENT_OPPORTUNITIES.md](../guides/IMPROVEMENT_OPPORTUNITIES.md) | Performance optimization tracking | ✅ Current |
@@ -327,15 +327,17 @@ Require for all preset changes:
 ## Summary
 
 **Total Items Reviewed**: 206 TODO instances
-**Action Required**: 10 items (5%)
-**No Action Required**: 196 items (95%)
+**Action Required**: 11 items total (5%)
+  - 9 active source code TODOs (see Key Findings table)
+  - 2 test observational TODOs (tracking only)
+**No Action Required**: 195 items (95%)
 
 **Completion Progress (2026-03-16)**:
 - ✅ 6 items completed (HF pinning, ICC preservation, rollback docs, depth_canonical archived, PR docs archived, SLERP interpolation)
 - ⏳ 2 items pending external action (branch protection, sample data upload)
 - ⏳ 3 items pending future phases (ComfyUI, NVDIFFREC, MaterialGAN)
 
-**Key Takeaway**: The majority of reviewed TODO instances are **historical documentation notes**, **intentional validation patterns**, or **observational tracking**. Only 10 items require actual implementation work, with 1 remaining P1 priority (admin task).
+**Key Takeaway**: The majority of reviewed TODO instances are **historical documentation notes**, **intentional validation patterns**, or **observational tracking**. Only 11 items require actual implementation work, with 1 remaining P1 priority (admin task).
 
 The codebase demonstrates mature TODO management with proper documentation and categorization. The existing [TODO_INVENTORY.md](./TODO_INVENTORY.md) provides comprehensive tracking and should continue to be the authoritative source for TODO governance.
 
