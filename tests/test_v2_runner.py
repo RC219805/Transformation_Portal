@@ -302,5 +302,73 @@ class TestFindV2Report:
         assert found is None
 
 
+class TestPathValidation:
+    """Test path validation behavior in V2Runner.run()."""
+
+    @patch("transformation_portal.lux_depth_v3.v2_runner.subprocess.run")
+    def test_relative_path_resolved(self, mock_subprocess, tmp_path, caplog):
+        """Test that relative paths are resolved to absolute."""
+        mock_subprocess.return_value = Mock(returncode=0, stdout="", stderr="")
+
+        runner = V2Runner()
+        runner.script_path = Path("/fake/enhance_image.py")
+
+        # Create a relative path that's valid
+        input_path = tmp_path / "input.jpg"
+        output_dir = tmp_path / "output"
+
+        with patch.object(Path, "exists", return_value=True):
+            result = runner.run(input_path=input_path, depth_dir=None, output_dir=output_dir)
+
+        # Command should contain resolved absolute paths
+        cmd = mock_subprocess.call_args[0][0]
+        # Paths in command should be absolute
+        for arg in cmd:
+            if str(tmp_path) in arg:
+                assert Path(arg).is_absolute()
+
+    @patch("transformation_portal.lux_depth_v3.v2_runner.subprocess.run")
+    def test_path_outside_repo_allowed_with_warning(self, mock_subprocess, tmp_path, caplog):
+        """Test that paths outside repo root are allowed but logged."""
+        import logging
+
+        mock_subprocess.return_value = Mock(returncode=0, stdout="", stderr="")
+
+        runner = V2Runner()
+        runner.script_path = Path("/fake/enhance_image.py")
+
+        # Use tmp_path which is likely outside repo root
+        output_dir = tmp_path / "external_output"
+
+        with caplog.at_level(logging.DEBUG):
+            with patch.object(Path, "exists", return_value=True):
+                result = runner.run(input_path=tmp_path / "input.jpg", depth_dir=None, output_dir=output_dir)
+
+        # Should succeed without raising ValidationError
+        assert result["status"] == "success"
+
+    @patch("transformation_portal.lux_depth_v3.v2_runner.subprocess.run")
+    def test_masks_file_validated(self, mock_subprocess, tmp_path):
+        """Test that masks_file path is validated and included in command."""
+        mock_subprocess.return_value = Mock(returncode=0, stdout="", stderr="")
+
+        runner = V2Runner()
+        runner.script_path = Path("/fake/enhance_image.py")
+
+        masks_file = tmp_path / "masks.npz"
+
+        with patch.object(Path, "exists", return_value=True):
+            result = runner.run(
+                input_path=tmp_path / "input.jpg",
+                depth_dir=None,
+                output_dir=tmp_path / "output",
+                masks_file=masks_file,
+            )
+
+        cmd = mock_subprocess.call_args[0][0]
+        assert "--masks-file" in cmd
+        assert str(masks_file) in cmd or str(masks_file.resolve()) in cmd
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

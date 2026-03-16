@@ -16,7 +16,6 @@ from __future__ import annotations
 import logging
 import re
 from enum import Enum
-from pathlib import Path
 from typing import Optional
 
 # Import core security utilities
@@ -45,18 +44,15 @@ def sanitize_file_stem(stem: str, max_length: int = 200) -> str:
         max_length: Maximum length for the sanitized stem (default: 200)
 
     Returns:
-        Sanitized file stem
-
-    Raises:
-        ValueError: If stem is empty after sanitization
+        Sanitized file stem, or 'unnamed' if stem is empty/invalid
 
     Examples:
         >>> sanitize_file_stem("my_image")
         'my_image'
         >>> sanitize_file_stem("../../../etc/passwd")
-        '_etc_passwd'
+        'etc_passwd'
         >>> sanitize_file_stem("file<>with|bad:chars")
-        'file__with_bad_chars'
+        'file_with_bad_chars'
     """
     if not stem:
         logger.warning("Empty stem provided, returning 'unnamed'")
@@ -87,7 +83,7 @@ def sanitize_file_stem(stem: str, max_length: int = 200) -> str:
 
     # Final validation - must have at least one valid character
     if not sanitized or not re.search(r"[\w]", sanitized):
-        logger.warning(f"Stem '{stem}' sanitized to empty, returning 'unnamed'")
+        logger.warning("Stem %r sanitized to empty, returning 'unnamed'", stem)
         return "unnamed"
 
     return sanitized
@@ -197,7 +193,7 @@ def validate_device_spec(device: str) -> str:
                 return normalized
             return device
 
-    logger.warning(f"Invalid device specification rejected: {device}")
+    logger.warning("Invalid device specification rejected: %r", device)
     raise ValueError(f"Invalid device specification: {device}. " f"Expected one of: cpu, cuda, cuda:N, mps, auto")
 
 
@@ -231,7 +227,7 @@ def validate_quantization_method(method: str) -> str:
     if method in valid_methods:
         return method
 
-    logger.warning(f"Invalid quantization method rejected: {method}")
+    logger.warning("Invalid quantization method rejected: %r", method)
     raise ValueError(f"Invalid quantization method: {method}. " f"Expected one of: {', '.join(sorted(valid_methods))}")
 
 
@@ -266,7 +262,7 @@ def validate_depth_fallback(fallback: Optional[str]) -> Optional[str]:
     if fallback in valid_fallbacks:
         return fallback
 
-    logger.warning(f"Invalid depth fallback rejected: {fallback}")
+    logger.warning("Invalid depth fallback rejected: %r", fallback)
     raise ValueError(f"Invalid depth fallback: {fallback}. " f"Expected one of: {', '.join(sorted(valid_fallbacks))}")
 
 
@@ -295,18 +291,18 @@ def validate_preset_name(preset: str) -> str:
 
     # Check for path traversal attempts
     if ".." in preset or "/" in preset or "\\" in preset:
-        logger.warning(f"Preset name rejected due to path traversal characters: {preset}")
+        logger.warning("Preset name rejected due to path traversal characters: %r", preset)
         raise ValueError(f"Preset name contains invalid characters: {preset}")
 
     # Check for null bytes or control characters
     if re.search(r"[\x00-\x1f]", preset):
-        logger.warning(f"Preset name rejected due to control characters: {preset}")
+        logger.warning("Preset name rejected due to control characters: %r", preset)
         raise ValueError(f"Preset name contains control characters: {preset}")
 
     # Allow alphanumeric, underscore, hyphen, dot
     # Note: \w includes underscore, but keeping explicit for clarity
     if not re.match(r"^[\w._-]+$", preset):
-        logger.warning(f"Preset name rejected due to invalid characters: {preset}")
+        logger.warning("Preset name rejected due to invalid characters: %r", preset)
         raise ValueError(
             f"Preset name contains invalid characters: {preset}. "
             "Only alphanumeric, underscore, hyphen, and dot are allowed."

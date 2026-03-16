@@ -120,7 +120,11 @@ class V2Runner:
             FileNotFoundError: If enhance_image.py script missing
             RuntimeError: If subprocess fails
             TimeoutError: If subprocess times out
-            ValidationError: If path traversal is detected
+
+        Note:
+            Path validation is performed for all paths, but paths outside the
+            repository root are allowed with a warning logged. This is intentional
+            as user data directories may legitimately be outside the repository.
         """
         # Verify script exists
         if not self.script_path.exists():

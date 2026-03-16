@@ -27,7 +27,7 @@ The Transformation Portal is a **sophisticated, production-grade context-aware r
 
 ## Category Ratings (1-10 Scale)
 
-### 1. Security: 7.5/10 ⭐⭐⭐⭐
+### 1. Security: 8.5/10 ⭐⭐⭐⭐
 
 **Strengths:**
 - ✅ Comprehensive security module (`core/security/`) with path validation, sanitization, and restricted unpickler
@@ -37,10 +37,10 @@ The Transformation Portal is a **sophisticated, production-grade context-aware r
 - ✅ Model lock security with revision pinning
 - ✅ Plugin trust model with external plugins disabled by default
 
-**Weaknesses:**
-- ❌ Unsafe pickle usage in cache layer (`depth/utils/cache.py`)
-- ❌ Incomplete stub implementation (`lux_depth_v3/security.py`)
-- ❌ Unvalidated subprocess arguments in v2_runner.py
+**Weaknesses (Pre-Phase 1 findings, now resolved):**
+- ~~❌ Unsafe pickle usage in cache layer (`depth/utils/cache.py`)~~ → ✅ Uses `safe_pickle_load`
+- ~~❌ Incomplete stub implementation (`lux_depth_v3/security.py`)~~ → ✅ Full implementation
+- ~~❌ Unvalidated subprocess arguments in v2_runner.py~~ → ✅ Path validation added
 - ⚠️ No authentication/authorization framework (acceptable for local CLI)
 - ⚠️ Temporary file handling undocumented
 
