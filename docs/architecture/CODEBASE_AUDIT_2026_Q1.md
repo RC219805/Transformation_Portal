@@ -239,16 +239,22 @@ The Transformation Portal is a **sophisticated, production-grade context-aware r
 ### Phase 2: Testing Improvements (1 week)
 
 **Effort:** 10-15 hours  
-**Priority:** 🟠 HIGH
+**Priority:** 🟠 HIGH  
+**Status:** 🟢 IN PROGRESS (core items complete)
 
-| Task | Effort | Impact |
-|------|--------|--------|
-| Retrofit `@pytest.mark.unit` to 80+ tests | 2 hours | Governance |
-| Add `@pytest.mark.security` to all security tests | 1 hour | Governance |
-| Create `docs/testing/STRATEGY.md` | 3 hours | Documentation |
-| Migrate golden tests to `/tests/golden/` | 2 hours | Organization |
-| Add pytest-rerunfailures for flaky tests | 1 hour | CI Stability |
-| Implement per-subsystem coverage thresholds | 2 hours | Quality |
+| Task | Effort | Impact | Status |
+|------|--------|--------|--------|
+| Retrofit `@pytest.mark.unit` to 80+ tests | 2 hours | Governance | ✅ Complete (81 files) |
+| Add `@pytest.mark.security` to all security tests | 1 hour | Governance | ✅ Complete (7 files) |
+| Create `docs/testing/STRATEGY.md` | 3 hours | Documentation | ✅ Complete |
+| Migrate golden tests to `/tests/golden/` | 2 hours | Organization | 🔄 Pending |
+| Add pytest-rerunfailures for flaky tests | 1 hour | CI Stability | 🔄 Pending |
+| Implement per-subsystem coverage thresholds | 2 hours | Quality | 🔄 Pending |
+
+**Implementation Summary (2026-03-16):**
+- Created `docs/testing/STRATEGY.md` with comprehensive test strategy
+- Retrofitted `@pytest.mark.unit` markers to 71 additional test files (81 total)
+- Added `@pytest.mark.security` markers to 7 security-focused test files
 
 **Example Test Strategy Doc:**
 ```markdown
@@ -363,7 +369,7 @@ lux_depth_v3/orchestrator.py (6,108 LOC)
 | Phase | Effort | Impact | Status |
 |-------|--------|--------|--------|
 | Phase 1: Security | 4-6 hours | Critical risk mitigation | ✅ Complete |
-| Phase 2: Testing | 10-15 hours | Governance + stability | 🔄 Pending |
+| Phase 2: Testing | 10-15 hours | Governance + stability | 🟢 In Progress (core complete) |
 | Phase 3: Documentation | 15-20 hours | Developer experience | 🔄 Pending |
 | Phase 4: CI/CD | 20-25 hours | 35% faster CI | 🔄 Pending |
 | Phase 5: Architecture | 90-130 hours | Long-term maintainability | 🔄 Pending |
@@ -371,7 +377,7 @@ lux_depth_v3/orchestrator.py (6,108 LOC)
 ### Recommended Priority Order
 
 1. **Phase 1** (Security) - ✅ COMPLETED
-2. **Phase 2** (Testing) - Enables safe refactoring
+2. **Phase 2** (Testing) - 🟢 IN PROGRESS (strategy doc + markers complete)
 3. **Phase 4** (CI/CD) - Faster feedback enables more changes
 4. **Phase 3** (Documentation) - Parallel track
 5. **Phase 5** (Architecture) - Strategic, phased over quarters
@@ -383,9 +389,10 @@ lux_depth_v3/orchestrator.py (6,108 LOC)
 The Transformation Portal codebase is **production-grade with strong fundamentals**. The primary areas requiring attention are:
 
 1. **Security fixes** (pickle, subprocess validation) - ✅ COMPLETED
-2. **Architecture debt** (monolithic orchestrator, circular imports) - 🟠 Strategic
-3. **Documentation organization** (fragmentation, stubs) - 🟡 Ongoing
-4. **CI optimization** (parallelization, action pinning) - 🟡 Incremental
+2. **Testing governance** (markers, strategy) - 🟢 IN PROGRESS
+3. **Architecture debt** (monolithic orchestrator, circular imports) - 🟠 Strategic
+4. **Documentation organization** (fragmentation, stubs) - 🟡 Ongoing
+5. **CI optimization** (parallelization, action pinning) - 🟡 Incremental
 
 With the proposed roadmap, the overall score can improve from **7.4/10 to 8.6/10** within 6-8 weeks of focused effort, with the architecture refactoring extending over 1-2 quarters.
 
