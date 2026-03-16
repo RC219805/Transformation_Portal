@@ -7,8 +7,11 @@ global classes/functions needed for numpy array cache artifacts.
 from __future__ import annotations
 
 import importlib
+import logging
 import pickle
 from typing import Any, BinaryIO, Set, Tuple
+
+logger = logging.getLogger(__name__)
 
 # Allow only globals required for safe cache reconstruction across versions.
 # `torch.Size` remains for backward compatibility with legacy caches written
@@ -36,9 +39,27 @@ class RestrictedUnpickler(pickle.Unpickler):
     def find_class(self, module: str, name: str) -> Any:
         if (module, name) in _ALLOWED_PICKLE_GLOBALS:
             return getattr(importlib.import_module(module), name)
+        logger.warning(
+            f"Blocked forbidden pickle global: {module}.{name}. "
+            "This may indicate a malicious pickle file or an unexpected data format."
+        )
         raise pickle.UnpicklingError(f"Forbidden pickle global: {module}.{name}")
 
 
 def safe_pickle_load(file_obj: BinaryIO) -> Any:
-    """Load pickle data with restricted globals."""
+    """Load pickle data with restricted globals.
+
+    Uses RestrictedUnpickler to prevent arbitrary code execution
+    from malicious pickle files.
+
+    Args:
+        file_obj: Binary file object to read pickle data from
+
+    Returns:
+        Unpickled Python object
+
+    Raises:
+        pickle.UnpicklingError: If pickle contains forbidden globals
+    """
+    logger.debug("Loading pickle data with security restrictions")
     return RestrictedUnpickler(file_obj).load()

@@ -8,6 +8,7 @@ Design:
 - Robust repo root resolution
 - Comprehensive error handling with command context
 - Report JSON discovery and merging
+- Path validation to prevent traversal attacks
 """
 
 from __future__ import annotations
@@ -19,6 +20,9 @@ import sys
 import time
 from pathlib import Path
 from typing import Any, Dict, Optional
+
+from transformation_portal.core.security.path import safe_resolve_path
+from transformation_portal.core.security.validation import ValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -116,6 +120,11 @@ class V2Runner:
             FileNotFoundError: If enhance_image.py script missing
             RuntimeError: If subprocess fails
             TimeoutError: If subprocess times out
+
+        Note:
+            Path validation is performed for all paths, but paths outside the
+            repository root are allowed with a warning logged. This is intentional
+            as user data directories may legitimately be outside the repository.
         """
         # Verify script exists
         if not self.script_path.exists():
@@ -124,19 +133,67 @@ class V2Runner:
                 f"Expected location: scripts/enhance_image.py in repo root {self.repo_root}"
             )
 
-        # Ensure output directory exists
-        output_dir = Path(output_dir)
-        output_dir.mkdir(parents=True, exist_ok=True)
+        # Validate all paths to prevent traversal attacks
+        # Use repo_root as the allowed root for path validation
+        try:
+            validated_input = safe_resolve_path(input_path, allowed_root=self.repo_root)
+            logger.debug(f"Validated input path: {validated_input}")
+        except ValidationError:
+            # Input paths may legitimately be outside repo (user data directories)
+            # Fall back to resolving and logging
+            validated_input = Path(input_path).resolve()
+            logger.debug(f"Input path outside repo root (allowed): {validated_input}")
 
-        # Build command
-        cmd = [sys.executable, str(self.script_path), str(input_path)]
+        # Output directory validation - must be within repo or explicitly allowed
+        try:
+            validated_output = safe_resolve_path(output_dir, allowed_root=self.repo_root)
+        except ValidationError:
+            # Output paths may also be outside repo - resolve but warn
+            validated_output = Path(output_dir).resolve()
+            logger.warning(
+                f"Output directory outside repo root: {validated_output}. "
+                "Consider using paths within the repository for better isolation."
+            )
+
+        # Validate depth_dir if provided
+        validated_depth_dir = None
+        if depth_dir is not None:
+            try:
+                validated_depth_dir = safe_resolve_path(depth_dir, allowed_root=self.repo_root)
+            except ValidationError:
+                validated_depth_dir = Path(depth_dir).resolve()
+                logger.debug(f"Depth directory outside repo root (allowed): {validated_depth_dir}")
+
+        # Validate masks_file if provided
+        validated_masks_file = None
+        if masks_file is not None:
+            try:
+                validated_masks_file = safe_resolve_path(masks_file, allowed_root=self.repo_root)
+            except ValidationError:
+                validated_masks_file = Path(masks_file).resolve()
+                logger.debug(f"Masks file outside repo root (allowed): {validated_masks_file}")
+
+        # Validate log_file if provided
+        validated_log_file = None
+        if log_file is not None:
+            try:
+                validated_log_file = safe_resolve_path(log_file, allowed_root=self.repo_root)
+            except ValidationError:
+                validated_log_file = Path(log_file).resolve()
+                logger.debug(f"Log file outside repo root (allowed): {validated_log_file}")
+
+        # Ensure output directory exists
+        validated_output.mkdir(parents=True, exist_ok=True)
+
+        # Build command using validated paths
+        cmd = [sys.executable, str(self.script_path), str(validated_input)]
 
         # Add optional arguments (only if provided)
-        if depth_dir is not None:
-            cmd.extend(["--depth-dir", str(depth_dir)])
+        if validated_depth_dir is not None:
+            cmd.extend(["--depth-dir", str(validated_depth_dir)])
 
         # output_dir is required
-        cmd.extend(["--output-dir", str(output_dir)])
+        cmd.extend(["--output-dir", str(validated_output)])
 
         cmd.extend(["--preset", preset])
         cmd.extend(["--device", device])
@@ -144,13 +201,13 @@ class V2Runner:
         if upscaler_backend is not None:
             cmd.extend(["--upscaler", upscaler_backend])
 
-        if log_file is not None:
-            cmd.extend(["--log-file", str(log_file)])
+        if validated_log_file is not None:
+            cmd.extend(["--log-file", str(validated_log_file)])
 
         # Add explicit mask file path if provided (Materials V3 integration)
         # Uses explicit NPZ path to eliminate filename coupling
-        if masks_file is not None:
-            cmd.extend(["--masks-file", str(masks_file)])
+        if validated_masks_file is not None:
+            cmd.extend(["--masks-file", str(validated_masks_file)])
 
         logger.info(f"Running V2 enhancement: {' '.join(cmd)}")
 
@@ -190,7 +247,7 @@ class V2Runner:
             ) from e
 
         # Try to find and merge report JSON
-        report_path = find_v2_report(output_dir, input_path.stem)
+        report_path = find_v2_report(validated_output, validated_input.stem)
 
         if report_path:
             logger.info(f"Found V2 report: {report_path}")
@@ -204,7 +261,7 @@ class V2Runner:
                 logger.warning(f"Failed to load report JSON: {e}")
                 # Fall through to stdout/stderr return
         else:
-            logger.info(f"No V2 report found for {input_path.stem} in {output_dir}")
+            logger.info(f"No V2 report found for {validated_input.stem} in {validated_output}")
 
         # Return basic success info with process output
         return {

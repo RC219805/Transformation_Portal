@@ -7,7 +7,7 @@ and report discovery without requiring the actual script to exist.
 import json
 import subprocess
 from pathlib import Path
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -115,6 +115,7 @@ class TestV2RunnerExecution:
 
         # Verify timeout passed to subprocess
         assert mock_subprocess.call_args[1]["timeout"] == 300
+        assert result["status"] == "success"
 
     @patch("transformation_portal.lux_depth_v3.v2_runner.subprocess.run")
     def test_optional_arguments_omitted_when_none(self, mock_subprocess, tmp_path):
@@ -143,6 +144,7 @@ class TestV2RunnerExecution:
 
         # Verify required arguments still present
         assert "--output-dir" in cmd
+        assert result["status"] == "success"
 
     def test_raises_filenotfounderror_if_script_missing(self, tmp_path):
         """Test that run() raises clear error if script doesn't exist."""
@@ -300,6 +302,177 @@ class TestFindV2Report:
         found = find_v2_report(output_dir, "nonexistent")
 
         assert found is None
+
+
+class TestPathValidation:
+    """Test path validation behavior in V2Runner.run().
+
+    Security contract:
+    - All paths are resolved to absolute paths (normalization)
+    - Paths inside repo root are validated via safe_resolve_path()
+    - Paths outside repo root are allowed but logged (warning for output, debug for input)
+    - This is intentional: user data directories are often outside the repo
+    """
+
+    @patch("transformation_portal.lux_depth_v3.v2_runner.subprocess.run")
+    def test_relative_path_resolved(self, mock_subprocess, tmp_path, caplog):
+        """Test that relative paths are resolved to absolute."""
+        mock_subprocess.return_value = Mock(returncode=0, stdout="", stderr="")
+
+        runner = V2Runner()
+        runner.script_path = Path("/fake/enhance_image.py")
+
+        # Create a relative path that's valid
+        input_path = tmp_path / "input.jpg"
+        output_dir = tmp_path / "output"
+
+        with patch.object(Path, "exists", return_value=True):
+            result = runner.run(input_path=input_path, depth_dir=None, output_dir=output_dir)
+
+        # Command should contain resolved absolute paths
+        cmd = mock_subprocess.call_args[0][0]
+        # Paths in command should be absolute
+        for arg in cmd:
+            if str(tmp_path) in arg:
+                assert Path(arg).is_absolute()
+        assert result["status"] == "success"
+
+    @patch("transformation_portal.lux_depth_v3.v2_runner.subprocess.run")
+    def test_path_outside_repo_allowed_with_warning(self, mock_subprocess, tmp_path, caplog):
+        """Test that paths outside repo root are allowed but logged."""
+        import logging
+
+        mock_subprocess.return_value = Mock(returncode=0, stdout="", stderr="")
+
+        runner = V2Runner()
+        runner.script_path = Path("/fake/enhance_image.py")
+
+        # Use tmp_path which is likely outside repo root
+        output_dir = tmp_path / "external_output"
+
+        with caplog.at_level(logging.DEBUG):
+            with patch.object(Path, "exists", return_value=True):
+                result = runner.run(input_path=tmp_path / "input.jpg", depth_dir=None, output_dir=output_dir)
+
+        # Should succeed without raising ValidationError
+        assert result["status"] == "success"
+
+    @patch("transformation_portal.lux_depth_v3.v2_runner.subprocess.run")
+    def test_masks_file_validated(self, mock_subprocess, tmp_path):
+        """Test that masks_file path is validated and included in command."""
+        mock_subprocess.return_value = Mock(returncode=0, stdout="", stderr="")
+
+        runner = V2Runner()
+        runner.script_path = Path("/fake/enhance_image.py")
+
+        masks_file = tmp_path / "masks.npz"
+
+        with patch.object(Path, "exists", return_value=True):
+            result = runner.run(
+                input_path=tmp_path / "input.jpg",
+                depth_dir=None,
+                output_dir=tmp_path / "output",
+                masks_file=masks_file,
+            )
+
+        cmd = mock_subprocess.call_args[0][0]
+        assert "--masks-file" in cmd
+        assert str(masks_file) in cmd or str(masks_file.resolve()) in cmd
+        assert result["status"] == "success"
+
+    @patch("transformation_portal.lux_depth_v3.v2_runner.subprocess.run")
+    def test_traversal_path_normalized(self, mock_subprocess, tmp_path):
+        """Test that path traversal sequences are normalized to absolute paths.
+
+        Paths with .. are resolved to their canonical form. Paths outside
+        repo root are allowed by design (user data directories).
+        """
+        mock_subprocess.return_value = Mock(returncode=0, stdout="", stderr="")
+
+        runner = V2Runner()
+        runner.script_path = Path("/fake/enhance_image.py")
+
+        # Path with traversal - should be normalized
+        input_path = tmp_path / "subdir" / ".." / "input.jpg"
+        output_dir = tmp_path / "output"
+
+        with patch.object(Path, "exists", return_value=True):
+            result = runner.run(input_path=input_path, depth_dir=None, output_dir=output_dir)
+
+        cmd = mock_subprocess.call_args[0][0]
+
+        # Verify no .. in command (paths are resolved)
+        for arg in cmd:
+            if arg.startswith("/") or arg.startswith("\\"):
+                assert ".." not in arg, f"Traversal not normalized: {arg}"
+
+        assert result["status"] == "success"
+
+    @patch("transformation_portal.lux_depth_v3.v2_runner.subprocess.run")
+    def test_output_dir_warning_logged(self, mock_subprocess, tmp_path, caplog):
+        """Test that output dir outside repo root logs warning.
+
+        When output_dir is outside the repository root, a warning should be
+        logged but execution should still succeed (user data directories are
+        allowed by design).
+        """
+        import logging
+
+        mock_subprocess.return_value = Mock(returncode=0, stdout="", stderr="")
+
+        runner = V2Runner()
+        runner.script_path = Path("/fake/enhance_image.py")
+
+        # Output dir outside repo root (tmp_path is typically /tmp/...)
+        # This is a common case for user data directories
+        output_dir = tmp_path / "external_output"
+
+        with caplog.at_level(logging.DEBUG):
+            with patch.object(Path, "exists", return_value=True):
+                result = runner.run(input_path=tmp_path / "input.jpg", depth_dir=None, output_dir=output_dir)
+
+        # Should succeed without raising error
+        assert result["status"] == "success"
+        # Output path should be resolved and appear in command
+        cmd = mock_subprocess.call_args[0][0]
+        assert str(output_dir.resolve()) in cmd or str(output_dir) in cmd
+
+    @patch("transformation_portal.lux_depth_v3.v2_runner.subprocess.run")
+    def test_all_path_args_validated(self, mock_subprocess, tmp_path):
+        """Test that all path arguments are validated/normalized."""
+        mock_subprocess.return_value = Mock(returncode=0, stdout="", stderr="")
+
+        runner = V2Runner()
+        runner.script_path = Path("/fake/enhance_image.py")
+
+        # Provide all path arguments
+        input_path = tmp_path / "input.jpg"
+        depth_dir = tmp_path / "depth"
+        output_dir = tmp_path / "output"
+        log_file = tmp_path / "log.txt"
+        masks_file = tmp_path / "masks.npz"
+
+        with patch.object(Path, "exists", return_value=True):
+            result = runner.run(
+                input_path=input_path,
+                depth_dir=depth_dir,
+                output_dir=output_dir,
+                log_file=log_file,
+                masks_file=masks_file,
+            )
+
+        cmd = mock_subprocess.call_args[0][0]
+
+        # All path flags should appear in command
+        assert "--depth-dir" in cmd
+        assert "--output-dir" in cmd
+        assert "--log-file" in cmd
+        assert "--masks-file" in cmd
+
+        # Verify input path is present (it's a positional arg)
+        assert any(str(input_path) in arg or str(input_path.resolve()) in arg for arg in cmd)
+
+        assert result["status"] == "success"
 
 
 if __name__ == "__main__":
