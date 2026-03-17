@@ -127,37 +127,40 @@ not the primary material path. Best introduced after NVDIFFREC normalization exi
 ---
 
 ### 4. 3D Gaussian Splatting Reconstruction
-**Status**: ⚠️ Verification Framework Needed (Artifact Source Blocked)
+**Status**: ✅ Verification Framework Implemented | ⚠️ Canonical Source Unresolved
 **Required For**: gaussian_splat_3d, apex_research_ultra presets
+
 **Components Implemented**:
 - [x] GaussianBackend implementation — `src/transformation_portal/spatial_ai/reconstruction/gaussian_backend.py`
 - [x] Multi-view camera pose handling
 - [x] Depth consistency verification — `GeometricValidator`
 - [x] PLY/OBJ export — `MeshExporter`
+- [x] Attestation schema — `config/model_lock_manifest.yaml` (artifact_attestation section)
 
-**IMPORTANT**: 3DGS model revision verification is **blocked on exact upstream artifact identification**.
-No clear HuggingFace "official Inria checkpoint" exists. This must be treated as a **source-artifact
-attestation problem**, not a normal HF model-lock problem.
-
-**Recommended Verification Framework**:
+**Verification Framework** (✅ Implemented):
 ```yaml
 # config/model_lock_manifest.yaml - artifact_attestation section
 gaussian_splatting:
   backend: inria_graphdeco
   source_type: direct_checkpoint  # git_release | direct_checkpoint | local_import
-  source_url: "<exact canonical URL>"
-  source_commit_or_tag: "<commit-or-release>"
+  source_url: "PENDING_CANONICAL_URL"
+  source_commit_or_tag: "PENDING_VERIFICATION"
   artifacts:
-    - filename: "<checkpoint-name>"
-      sha256: "<sha256>"
-      filesize_bytes: 0
+    - filename: "gaussian_splatting_base.pt"
+      sha256: "PENDING_VERIFICATION"
+      filesize_bytes: null  # null = validation should fail
   verification:
     method: sha256+source_commit
     required: true
 ```
 
-**What Must Be Verified** (revision tuple):
-- Code revision
+**Canonical Source Status** (⚠️ Unresolved):
+- No official HuggingFace artifact from Inria/GraphDECO found
+- This is a **source-artifact attestation problem**, not a normal HF model-lock problem
+- **Attestation is incomplete until source artifact is identified and hashed**
+
+**What Must Be Verified** (full revision tuple, not just checkpoint):
+- Code revision (exact commit from graphdeco-inria/gaussian-splatting)
 - Rasterizer backend revision
 - Optimizer behavior
 - Serialization format of splat params
@@ -355,25 +358,35 @@ and serve as integration test targets for Phase 2.2/5 completion.
 
 ## 📊 Priority Matrix (Updated 2026-03-17)
 
-### Phase 2.2 Roadmap Priority Order
+### Recommended Execution Sequence
 
-| Phase | Feature | Status | Next Action |
-|-------|---------|--------|-------------|
-| **2.2A** | NVDIFFREC Backend | 🔜 Ready to start | Implement `nvdiffrec_backend.py` + artifact contract |
-| **2.2B** | LLaVA Quality Validation | ✅ Models verified | Implement `llava_backend.py` + structured prompts |
-| **2.2C** | MaterialGAN Backend | ⏳ After NVDIFFREC | Optional enrichment path |
-| **2.2D** | 3DGS Artifact Verification | ⚠️ Blocked | Framework ready, awaiting canonical source |
+**Phase A — Model-Lock Hardening (PREREQUISITE)**
+
+Before backend implementation, pin exact HF revisions for all identified model sources:
+- SAM2 models (MackinationsAi tiers + ONNX)
+- LLaVA models (v1.6-mistral-7b, onevision, 1.5-7b)
+
+Add manifest validation that fails on missing revision, floating refs, or missing file hashes.
+
+**Phase B–E Implementation Order** (optimized for delivery risk):
+
+| Order | Phase | Feature | Rationale |
+|-------|-------|---------|-----------|
+| 1st | **2.2B** | LLaVA Quality Validation | Lowest risk, easiest isolation, immediate utility across artifact classes |
+| 2nd | **2.2D** | 3DGS Verification Plumbing | Infrastructure can land before canonical source is resolved |
+| 3rd | **2.2A** | NVDIFFREC Backend | Higher strategic value, but more fragile operationally |
+| 4th | **2.2C** | MaterialGAN Backend | Optional enrichment, only after normalized contract exists |
 
 ### Full Priority Matrix
 
 | Feature | Complexity | Value | Dependencies | Priority | Status |
 |---------|-----------|-------|--------------|----------|--------|
-| SAM2 Segmentation | Medium | High | pip install, models verified | **HIGH** | ✅ Backend done, models verified |
-| LLaVA Validation | Medium | High | HF models verified | **HIGH** | ✅ Models verified, impl pending |
-| NVDIFFREC | High | High | Graphics deps | **HIGH** | 🔜 Phase 2.2A priority |
-| HF Revision Pinning | Low | High | Manual verification | ~~**HIGH**~~ | ✅ Completed |
-| 3DGS Verification | Medium | Medium | Source artifact blocked | **MEDIUM** | ⚠️ Framework ready |
-| MaterialGAN | High | Medium | After NVDIFFREC | **MEDIUM** | ⏳ Phase 2.2C |
+| **Model-Lock Hardening** | Low | Critical | Manual revision pinning | **CRITICAL** | 🔜 Phase A prerequisite |
+| SAM2 Segmentation | Medium | High | pip install, sources identified | **HIGH** | ✅ Backend done, sources identified |
+| LLaVA Validation | Medium | High | HF sources identified | **HIGH** | 🔜 Phase B priority |
+| NVDIFFREC | High | High | Graphics deps, worker isolation | **HIGH** | ⏳ Phase C (after LLaVA) |
+| 3DGS Verification | Medium | Medium | Framework ready, source blocked | **MEDIUM** | ⚠️ Plumbing can land, attestation incomplete |
+| MaterialGAN | High | Medium | After NVDIFFREC contract | **MEDIUM** | ⏳ Phase D (last) |
 | Depth Ensemble | High | Medium | DepthCrafter | **MEDIUM** | ✅ EMA implemented |
 | Real-ESRGAN Fix | Medium | Low | Alternative upscaler | **LOW** | ❌ Blocked (CVE) |
 
@@ -385,19 +398,17 @@ SAM2 is the lowest-hanging fruit with highest impact:
 
 ```bash
 # 1. Install package
-pip install segment-anything-2
+pip install sam2  # Note: package is 'sam2', not 'segment-anything-2'
 
-# 2. Verify HuggingFace revision
-# Visit: https://huggingface.co/facebook/sam2-hiera-large
-# Copy latest stable commit SHA
+# 2. Pin HF revision (Phase A hardening)
+# Visit: https://huggingface.co/MackinationsAi/segment-anything-model-v2-base-plus-hf
+# Copy exact commit SHA and update config/model_lock_manifest.yaml
 
-# 3. Update config
+# 3. Update config preset (if using HF integration)
 # Edit: config/presets/experimental/sam2_segmentation.yaml
-# Replace: NEEDS_VERIFICATION_SAM2_LARGE_20260211
-# With: <40-char-commit-sha>
 
-# 4. Download checkpoint (if needed)
-python -c "from transformers import AutoModel; AutoModel.from_pretrained('facebook/sam2-hiera-large')"
+# 4. Download checkpoint
+python scripts/download_sam2_checkpoint.py
 
 # 5. Test
 python -m transformation_portal.spatial_ai segment \
@@ -418,32 +429,45 @@ python -m transformation_portal.spatial_ai segment \
 **Total TODOs in codebase**: 254
 **High-priority items**: 7
 **Blocked on external artifact source**: 1 (3DGS canonical Inria checkpoint)
-**Pending implementation (model sources verified)**: 3 (LLaVA, NVDIFFREC, MaterialGAN)
+**Pending exact revision pinning**: 8 (SAM2 + LLaVA model sources identified, revisions not yet locked)
+**Pending implementation**: 3 (LLaVA, NVDIFFREC, MaterialGAN backends)
 
 ---
 
 ## 📊 Status Update (2026-03-17)
 
 **Completed since document creation:**
-- ✅ HF Revision Pinning (HuggingFace Model Revision Pinning) - Completed 2026-03-14
+- ✅ HF Revision Pinning for DA3 - Completed 2026-03-14
 - ✅ Multi-Model Depth Ensemble - EMA temporal filter implemented
 - ✅ Documentation Gaps - All guides now exist (2026-03-17)
 - ✅ Test Coverage for Experimental Features - Test skeletons added (2026-03-17)
-- ✅ SAM2 Model Sources Verified - MackinationsAi HF repos + ONNX alternatives (2026-03-17)
-- ✅ LLaVA Model Sources Verified - llava-hf repos for quality validation (2026-03-17)
+- ✅ SAM2 Model Source Identification - MackinationsAi HF repos + ONNX alternatives (2026-03-17)
+- ✅ LLaVA Model Source Identification - llava-hf repos for quality validation (2026-03-17)
+- ✅ 3DGS Verification Framework - Attestation schema defined (2026-03-17)
 
-**Model Sources Now Verified:**
+**IMPORTANT DISTINCTION:**
+- **Model source identification ✅** = repository locators discovered
+- **Model revision verification ⏳** = exact commit SHAs + file hashes pending
 
-| Feature | HuggingFace Repo | Status |
-|---------|------------------|--------|
-| SAM2 Tiny | `MackinationsAi/segment-anything-model-v2-tiny-hf` | ✅ CI/smoke tier |
-| SAM2 Small | `MackinationsAi/segment-anything-model-v2-small-hf` | ✅ Dev default |
-| SAM2 Base+ | `MackinationsAi/segment-anything-model-v2-base-plus-hf` | ✅ Production default |
-| SAM2 Large | `MackinationsAi/segment-anything-model-v2-large-hf` | ✅ Quality max |
-| SAM2 ONNX | `vietanhdev/segment-anything-2-onnx-models` | ✅ Portable backend |
-| LLaVA v1.6 7B | `llava-hf/llava-v1.6-mistral-7b-hf` | ✅ Primary validation |
-| LLaVA 0.5B | `llava-hf/llava-onevision-qwen2-0.5b-ov-hf` | ✅ CI/smoke |
-| LLaVA 1.5 13B | `llava-hf/llava-1.5-13b-hf` | ✅ Quality max |
+Until revisions are pinned, manifests are **repository locators**, not **deterministic locks**.
+
+**Model Sources Identified (Revisions Pending):**
+
+| Feature | HuggingFace Repo | Source Status | Revision Status |
+|---------|------------------|---------------|-----------------|
+| SAM2 Tiny | `MackinationsAi/segment-anything-model-v2-tiny-hf` | ✅ Identified | ⏳ Pin pending |
+| SAM2 Small | `MackinationsAi/segment-anything-model-v2-small-hf` | ✅ Identified | ⏳ Pin pending |
+| SAM2 Base+ | `MackinationsAi/segment-anything-model-v2-base-plus-hf` | ✅ Identified | ⏳ Pin pending |
+| SAM2 Large | `MackinationsAi/segment-anything-model-v2-large-hf` | ✅ Identified | ⏳ Pin pending |
+| SAM2 ONNX | `vietanhdev/segment-anything-2-onnx-models` | ✅ Identified | ⏳ Pin pending |
+| LLaVA v1.6 7B | `llava-hf/llava-v1.6-mistral-7b-hf` | ✅ Identified | ⏳ Pin pending |
+| LLaVA 0.5B | `llava-hf/llava-onevision-qwen2-0.5b-ov-hf` | ✅ Identified | ⏳ Pin pending |
+| LLaVA 1.5 13B | `llava-hf/llava-1.5-13b-hf` | ✅ Pinned | ✅ Complete |
+
+**3DGS Attestation Status:**
+- ✅ Verification framework implemented (attestation schema in `model_lock_manifest.yaml`)
+- ⚠️ Canonical source unresolved (no official Inria HF artifact found)
+- ⚠️ Attestation incomplete until source artifact is identified and hashed
 
 **Documentation Now Available:**
 - `docs/guides/SAM2_INTEGRATION_GUIDE.md` - SAM2 backend integration + model sources
@@ -457,13 +481,14 @@ python -m transformation_portal.spatial_ai segment \
 - `tests/spatial_ai/materials/test_materialgan_integration.py` - MaterialGAN
 - `tests/validation/test_llava_quality_validation.py` - LLaVA quality validation
 
-**Phase 2.2 Implementation Roadmap:**
-| Phase | Feature | Status | Blocker |
-|-------|---------|--------|---------|
-| 2.2A | NVDIFFREC Backend | 🔜 Ready | None - can start |
-| 2.2B | LLaVA Backend | 🔜 Ready | None - models verified |
-| 2.2C | MaterialGAN Backend | ⏳ Waiting | Depends on 2.2A |
-| 2.2D | 3DGS Verification | ⚠️ Blocked | Canonical source pending |
+**Recommended Execution Sequence:**
+| Order | Phase | Feature | Status | Prerequisite |
+|-------|-------|---------|--------|--------------|
+| 0 | **A** | Model-Lock Hardening | 🔜 Next | None |
+| 1 | **B** | LLaVA Backend | ⏳ Waiting | Phase A complete |
+| 2 | **D** | 3DGS Verification Plumbing | ⏳ Waiting | Phase A complete |
+| 3 | **C** | NVDIFFREC Backend | ⏳ Waiting | Phase B complete |
+| 4 | **E** | MaterialGAN Backend | ⏳ Waiting | Phase C complete |
 
 ---
 
