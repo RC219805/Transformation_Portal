@@ -2,15 +2,28 @@
 
 This module provides FastAPI endpoints for creating, editing,
 and saving pipeline definitions via a drag-and-drop UI.
+
+Security: All filesystem operations go through FSGuard for
+zero-trust file access with audit logging.
 """
 
 from __future__ import annotations
 
 import json
 import logging
-import re
 from pathlib import Path
 from typing import Any, Optional
+
+from transformation_portal.core.security.fs_guard import (
+    FSContext,
+    FSGuard,
+    FSPolicyError,
+    get_fs_guard,
+)
+from transformation_portal.core.security.path_safety import (
+    PathSafetyError,
+    validate_safe_name,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -26,22 +39,24 @@ except ImportError:
     APIRouter = None
 
 
-# Default pipelines directory
+# Default pipelines directory and FSGuard context
 _pipelines_dir: Path = Path("pipelines")
+_fs_context: Optional[FSContext] = None
 
-# Strict whitelist pattern for pipeline names: alphanumeric, underscores, hyphens only
-# No dots, path separators, or unicode - bounded length prevents DoS
-_PIPELINE_NAME_PATTERN = re.compile(r"^[a-zA-Z0-9_-]{1,64}$")
+
+def _get_fs_context() -> FSContext:
+    """Get or create the FSContext for pipeline operations."""
+    global _fs_context
+    if _fs_context is None or _fs_context.base_dir != _pipelines_dir:
+        _fs_context = FSContext(mode="user", base_dir=_pipelines_dir)
+    return _fs_context
 
 
 def _validate_pipeline_name(name: str) -> str:
     """Strict whitelist validation for pipeline names.
 
-    Guarantees:
-    - No path separators (/, \\)
-    - No traversal tokens (., ..)
-    - No unicode tricks
-    - Bounded length (1-64 chars)
+    Uses the centralized path_safety module for validation.
+    Converts PathSafetyError to HTTPException for API responses.
 
     Args:
         name: Pipeline name to validate
@@ -52,23 +67,20 @@ def _validate_pipeline_name(name: str) -> str:
     Raises:
         HTTPException: If name fails validation
     """
-    if not name:
-        raise HTTPException(status_code=400, detail="Pipeline name required")
-
-    if not _PIPELINE_NAME_PATTERN.fullmatch(name):
+    try:
+        return validate_safe_name(name)
+    except PathSafetyError as e:
         raise HTTPException(
             status_code=400,
-            detail="Invalid pipeline name: must match [a-zA-Z0-9_-]{1,64}",
+            detail=f"Invalid pipeline name: {e}",
         )
-
-    return name
 
 
 def _get_safe_pipeline_path(name: str) -> Path:
-    """Construct a safe pipeline path after strict validation.
+    """Construct a safe pipeline path using FSGuard.
 
-    Path traversal is prevented by validating the name against a strict
-    whitelist BEFORE any path construction occurs.
+    Uses zero-trust FSGuard for CodeQL-compliant path construction.
+    Validation happens BEFORE path construction.
 
     Args:
         name: Pipeline name (will be validated first)
@@ -79,13 +91,16 @@ def _get_safe_pipeline_path(name: str) -> Path:
     Raises:
         HTTPException: If name fails validation
     """
-    # Validate BEFORE path construction - required for static analysis
-    safe_name = _validate_pipeline_name(name)
+    fs = get_fs_guard()
+    ctx = _get_fs_context()
 
-    # Only construct path after validation passes
-    filepath = _pipelines_dir / f"{safe_name}.json"
-
-    return filepath
+    try:
+        return fs.user_file(ctx, name, suffix=".json")
+    except (PathSafetyError, FSPolicyError) as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid pipeline name: {e}",
+        )
 
 
 def set_pipelines_dir(path: Path) -> None:
@@ -94,8 +109,9 @@ def set_pipelines_dir(path: Path) -> None:
     Args:
         path: Directory path for pipeline JSON files
     """
-    global _pipelines_dir
+    global _pipelines_dir, _fs_context
     _pipelines_dir = path
+    _fs_context = None  # Reset context to pick up new directory
     _pipelines_dir.mkdir(parents=True, exist_ok=True)
 
 
@@ -138,6 +154,7 @@ def create_dag_editor_router() -> "APIRouter":
         raise ImportError("FastAPI is required for DAG editor")
 
     router = APIRouter(prefix="/api/editor", tags=["editor"])
+    fs = get_fs_guard()
 
     @router.get("/pipelines")
     async def list_pipelines():
@@ -146,7 +163,7 @@ def create_dag_editor_router() -> "APIRouter":
         pipelines = []
         for p in _pipelines_dir.glob("*.json"):
             try:
-                data = json.loads(p.read_text())
+                data = json.loads(fs.read_text(p))
                 pipelines.append(
                     {
                         "name": p.stem,
@@ -164,11 +181,12 @@ def create_dag_editor_router() -> "APIRouter":
         """Get a specific pipeline definition."""
         _pipelines_dir.mkdir(parents=True, exist_ok=True)
         filepath = _get_safe_pipeline_path(name)
-        if not filepath.exists():
+
+        if not fs.exists(filepath):
             raise HTTPException(status_code=404, detail=f"Pipeline not found: {name}")
 
         try:
-            data = json.loads(filepath.read_text())
+            data = json.loads(fs.read_text(filepath))
             return JSONResponse(data)
         except Exception as exc:
             raise HTTPException(status_code=500, detail=str(exc))
@@ -183,7 +201,7 @@ def create_dag_editor_router() -> "APIRouter":
         payload["name"] = name
 
         try:
-            filepath.write_text(json.dumps(payload, indent=2))
+            fs.write_text(filepath, json.dumps(payload, indent=2))
             logger.info("Saved pipeline: %s", name)
             return JSONResponse({"status": "ok", "name": name})
         except Exception as exc:
@@ -193,11 +211,12 @@ def create_dag_editor_router() -> "APIRouter":
     async def delete_pipeline(name: str):
         """Delete a pipeline definition."""
         filepath = _get_safe_pipeline_path(name)
-        if not filepath.exists():
+
+        if not fs.exists(filepath):
             raise HTTPException(status_code=404, detail=f"Pipeline not found: {name}")
 
         try:
-            filepath.unlink()
+            fs.delete(filepath)
             logger.info("Deleted pipeline: %s", name)
             return JSONResponse({"status": "ok"})
         except Exception as exc:
