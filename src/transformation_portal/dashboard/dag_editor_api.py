@@ -29,47 +29,61 @@ except ImportError:
 # Default pipelines directory
 _pipelines_dir: Path = Path("pipelines")
 
-# Safe filename pattern: alphanumeric, underscores, hyphens, dots (no path separators)
-_SAFE_NAME_PATTERN = re.compile(r"^[a-zA-Z0-9_\-\.]+$")
+# Strict whitelist pattern for pipeline names: alphanumeric, underscores, hyphens only
+# No dots, path separators, or unicode - bounded length prevents DoS
+_PIPELINE_NAME_PATTERN = re.compile(r"^[a-zA-Z0-9_-]{1,64}$")
+
+
+def _validate_pipeline_name(name: str) -> str:
+    """Strict whitelist validation for pipeline names.
+
+    Guarantees:
+    - No path separators (/, \\)
+    - No traversal tokens (., ..)
+    - No unicode tricks
+    - Bounded length (1-64 chars)
+
+    Args:
+        name: Pipeline name to validate
+
+    Returns:
+        The validated name (unchanged if valid)
+
+    Raises:
+        HTTPException: If name fails validation
+    """
+    if not name:
+        raise HTTPException(status_code=400, detail="Pipeline name required")
+
+    if not _PIPELINE_NAME_PATTERN.fullmatch(name):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid pipeline name: must match [a-zA-Z0-9_-]{1,64}",
+        )
+
+    return name
 
 
 def _get_safe_pipeline_path(name: str) -> Path:
-    """Construct a safe path for a pipeline JSON file.
+    """Construct a safe pipeline path after strict validation.
 
-    This prevents path traversal attacks by:
-    1. Validating the name against a safe pattern
-    2. Ensuring the resolved path stays within _pipelines_dir
+    Path traversal is prevented by validating the name against a strict
+    whitelist BEFORE any path construction occurs.
 
     Args:
-        name: Pipeline name (filename without extension)
+        name: Pipeline name (will be validated first)
 
     Returns:
-        Safe resolved path to the pipeline JSON file
+        Path to the pipeline JSON file
 
     Raises:
-        HTTPException: If the name is invalid or would escape the directory
+        HTTPException: If name fails validation
     """
-    # Reject empty or whitespace-only names
-    if not name or not name.strip():
-        raise HTTPException(status_code=400, detail="Invalid pipeline name: empty")
+    # Validate BEFORE path construction - required for static analysis
+    safe_name = _validate_pipeline_name(name)
 
-    # Reject names with path separators or traversal patterns
-    if "/" in name or "\\" in name or ".." in name:
-        raise HTTPException(status_code=400, detail="Invalid pipeline name: path traversal")
-
-    # Validate against safe filename pattern
-    if not _SAFE_NAME_PATTERN.match(name):
-        raise HTTPException(status_code=400, detail="Invalid pipeline name: unsafe characters")
-
-    # Construct path and resolve
-    base_dir = _pipelines_dir.resolve()
-    filepath = (base_dir / f"{name}.json").resolve()
-
-    # Verify the path is within the base directory
-    try:
-        filepath.relative_to(base_dir)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid pipeline name: path traversal")
+    # Only construct path after validation passes
+    filepath = _pipelines_dir / f"{safe_name}.json"
 
     return filepath
 
