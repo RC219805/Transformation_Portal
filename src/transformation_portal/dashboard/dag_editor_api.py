@@ -146,7 +146,7 @@ def create_dag_editor_router() -> "APIRouter":
         filepath = _get_safe_pipeline_path(name)
         if not filepath.exists():
             raise HTTPException(status_code=404, detail=f"Pipeline not found: {name}")
-        
+
         try:
             data = json.loads(filepath.read_text())
             return JSONResponse(data)
@@ -158,10 +158,10 @@ def create_dag_editor_router() -> "APIRouter":
         """Save a pipeline definition."""
         _pipelines_dir.mkdir(parents=True, exist_ok=True)
         filepath = _get_safe_pipeline_path(name)
-        
+
         # Add metadata
         payload["name"] = name
-        
+
         try:
             filepath.write_text(json.dumps(payload, indent=2))
             logger.info("Saved pipeline: %s", name)
@@ -175,7 +175,7 @@ def create_dag_editor_router() -> "APIRouter":
         filepath = _get_safe_pipeline_path(name)
         if not filepath.exists():
             raise HTTPException(status_code=404, detail=f"Pipeline not found: {name}")
-        
+
         try:
             filepath.unlink()
             logger.info("Deleted pipeline: %s", name)
@@ -322,7 +322,7 @@ def get_dag_editor_html() -> str:
         #canvas-svg {
             width: 100%;
             height: 100%;
-            background: 
+            background:
                 linear-gradient(rgba(15, 52, 96, 0.3) 1px, transparent 1px),
                 linear-gradient(90deg, rgba(15, 52, 96, 0.3) 1px, transparent 1px);
             background-size: 20px 20px;
@@ -424,7 +424,7 @@ def get_dag_editor_html() -> str:
             const res = await fetch('/api/editor/node-types');
             const data = await res.json();
             const container = document.getElementById('node-types');
-            
+
             data.node_types.forEach(nt => {
                 const div = document.createElement('div');
                 div.className = `node-type ${nt.category}`;
@@ -434,11 +434,11 @@ def get_dag_editor_html() -> str:
                 div.dataset.label = nt.label;
                 div.dataset.inputs = JSON.stringify(nt.inputs);
                 div.dataset.outputs = JSON.stringify(nt.outputs);
-                
+
                 div.addEventListener('dragstart', (e) => {
                     e.dataTransfer.setData('node-type', JSON.stringify(nt));
                 });
-                
+
                 container.appendChild(div);
             });
         }
@@ -448,10 +448,10 @@ def get_dag_editor_html() -> str:
             const res = await fetch('/api/editor/pipelines');
             const data = await res.json();
             const select = document.getElementById('pipeline-select');
-            
+
             // Clear existing options except first
             while (select.options.length > 1) select.remove(1);
-            
+
             data.pipelines.forEach(p => {
                 const opt = document.createElement('option');
                 opt.value = p.name;
@@ -469,12 +469,12 @@ def get_dag_editor_html() -> str:
             e.preventDefault();
             const ntData = e.dataTransfer.getData('node-type');
             if (!ntData) return;
-            
+
             const nt = JSON.parse(ntData);
             const rect = e.target.getBoundingClientRect();
             const x = e.clientX - rect.left - 75;
             const y = e.clientY - rect.top - 30;
-            
+
             addNode(nt, x, y);
         });
 
@@ -500,20 +500,20 @@ def get_dag_editor_html() -> str:
             div.id = node.id;
             div.style.left = node.position.x + 'px';
             div.style.top = node.position.y + 'px';
-            
+
             div.innerHTML = `
                 <div class="node-header">${node.label}</div>
                 <div class="node-body">ID: ${node.id}</div>
                 <div class="node-ports">
-                    <div class="ports-in">${node.inputs.map(i => 
+                    <div class="ports-in">${node.inputs.map(i =>
                         `<div class="port input" title="${i}" data-port="${i}" data-dir="in"></div>`
                     ).join('')}</div>
-                    <div class="ports-out">${node.outputs.map(o => 
+                    <div class="ports-out">${node.outputs.map(o =>
                         `<div class="port output" title="${o}" data-port="${o}" data-dir="out"></div>`
                     ).join('')}</div>
                 </div>
             `;
-            
+
             // Drag handling
             div.addEventListener('mousedown', (e) => {
                 if (e.target.classList.contains('port')) return;
@@ -524,7 +524,7 @@ def get_dag_editor_html() -> str:
                 };
                 div.classList.add('selected');
             });
-            
+
             // Port connection
             div.querySelectorAll('.port').forEach(port => {
                 port.addEventListener('mousedown', (e) => {
@@ -533,7 +533,7 @@ def get_dag_editor_html() -> str:
                         connecting = { nodeId: node.id, port: port.dataset.port };
                     }
                 });
-                
+
                 port.addEventListener('mouseup', (e) => {
                     if (connecting && port.dataset.dir === 'in') {
                         addEdge(connecting.nodeId, node.id);
@@ -541,7 +541,7 @@ def get_dag_editor_html() -> str:
                     }
                 });
             });
-            
+
             container.appendChild(div);
         }
 
@@ -567,7 +567,7 @@ def get_dag_editor_html() -> str:
         function addEdge(sourceId, targetId) {
             if (sourceId === targetId) return;
             if (edges.some(e => e.source === sourceId && e.target === targetId)) return;
-            
+
             edges.push({ id: `edge_${edges.length}`, source: sourceId, target: targetId });
             renderEdges();
             updateStatus(`Connected: ${sourceId} → ${targetId}`);
@@ -576,17 +576,17 @@ def get_dag_editor_html() -> str:
         function renderEdges() {
             const g = document.getElementById('edges');
             g.innerHTML = '';
-            
+
             edges.forEach(edge => {
                 const sourceNode = nodes.find(n => n.id === edge.source);
                 const targetNode = nodes.find(n => n.id === edge.target);
                 if (!sourceNode || !targetNode) return;
-                
+
                 const x1 = sourceNode.position.x + 150;
                 const y1 = sourceNode.position.y + 40;
                 const x2 = targetNode.position.x;
                 const y2 = targetNode.position.y + 40;
-                
+
                 const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
                 const midX = (x1 + x2) / 2;
                 path.setAttribute('d', `M${x1},${y1} C${midX},${y1} ${midX},${y2} ${x2},${y2}`);
@@ -599,13 +599,13 @@ def get_dag_editor_html() -> str:
         async function savePipeline() {
             const name = prompt('Pipeline name:', 'my_pipeline');
             if (!name) return;
-            
+
             await fetch(`/api/editor/pipelines/${name}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ nodes, edges })
             });
-            
+
             updateStatus(`Saved pipeline: ${name}`);
             loadPipelinesList();
         }
@@ -613,15 +613,15 @@ def get_dag_editor_html() -> str:
         async function loadPipeline() {
             const name = document.getElementById('pipeline-select').value;
             if (!name) return;
-            
+
             const res = await fetch(`/api/editor/pipelines/${name}`);
             const data = await res.json();
-            
+
             clearCanvas();
             nodes = data.nodes || [];
             edges = data.edges || [];
             nodeIdCounter = nodes.length;
-            
+
             nodes.forEach(n => renderNode(n));
             renderEdges();
             updateStatus(`Loaded pipeline: ${name}`);

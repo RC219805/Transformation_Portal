@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 import mimetypes
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
     from transformation_portal.storage.cas_store import ArtifactStore
@@ -469,17 +469,17 @@ def get_preview_viewer_html() -> str:
         async function loadArtifact() {
             const hash = document.getElementById('hash-input').value.trim();
             if (!hash) return;
-            
+
             currentHash = hash;
             showLoading();
-            
+
             try {
                 const res = await fetch(`/api/preview/artifact/${hash}/meta`);
                 if (!res.ok) throw new Error('Artifact not found');
                 const meta = await res.json();
-                
+
                 showMeta(meta);
-                
+
                 if (meta.is_image) {
                     renderImage(hash);
                 } else if (meta.is_3d) {
@@ -535,11 +535,11 @@ def get_preview_viewer_html() -> str:
             cleanup3D();
             const container = document.getElementById('preview-container');
             container.className = 'preview-container image-mode';
-            
+
             const img = document.createElement('img');
             img.src = `/api/preview/artifact/${hash}/raw`;
             img.onerror = () => showError('Failed to load image');
-            
+
             container.innerHTML = '';
             container.appendChild(img);
         }
@@ -548,11 +548,11 @@ def get_preview_viewer_html() -> str:
             cleanup3D();
             const container = document.getElementById('preview-container');
             container.className = 'preview-container text-mode';
-            
+
             try {
                 const res = await fetch(`/api/preview/artifact/${hash}/text`);
                 const data = await res.json();
-                
+
                 let content = data.content;
                 // Try to format JSON
                 if (content.trim().startsWith('{') || content.trim().startsWith('[')) {
@@ -560,7 +560,7 @@ def get_preview_viewer_html() -> str:
                         content = JSON.stringify(JSON.parse(content), null, 2);
                     } catch {}
                 }
-                
+
                 container.innerHTML = `<pre>${escapeHtml(content)}${data.truncated ? '\\n\\n[truncated]' : ''}</pre>`;
             } catch (e) {
                 showError('Failed to load text: ' + e.message);
@@ -578,47 +578,47 @@ def get_preview_viewer_html() -> str:
                     <button onclick="toggleGrid()">Grid</button>
                 </div>
             `;
-            
+
             // Setup Three.js scene
             threeScene = new THREE.Scene();
             threeScene.background = new THREE.Color(0x1a1a2e);
-            
+
             threeCamera = new THREE.PerspectiveCamera(75, container.clientWidth / 500, 0.1, 1000);
             threeCamera.position.set(2, 2, 2);
-            
+
             threeRenderer = new THREE.WebGLRenderer({ antialias: true });
             threeRenderer.setSize(container.clientWidth, 500);
             threeRenderer.setPixelRatio(window.devicePixelRatio);
             container.appendChild(threeRenderer.domElement);
-            
+
             // Controls
             threeControls = new THREE.OrbitControls(threeCamera, threeRenderer.domElement);
             threeControls.enableDamping = true;
             threeControls.dampingFactor = 0.05;
-            
+
             // Lighting
             const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
             threeScene.add(ambientLight);
-            
+
             const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
             directionalLight.position.set(5, 10, 7.5);
             threeScene.add(directionalLight);
-            
+
             const directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.5);
             directionalLight2.position.set(-5, -5, -5);
             threeScene.add(directionalLight2);
-            
+
             // Grid
             const grid = new THREE.GridHelper(10, 10, 0x0f3460, 0x0f3460);
             grid.name = 'grid';
             threeScene.add(grid);
-            
+
             // Load model
             const url = `/api/preview/artifact/${hash}/raw`;
-            
+
             if (contentType.includes('gltf')) {
                 const loader = new THREE.GLTFLoader();
-                loader.load(url, 
+                loader.load(url,
                     (gltf) => {
                         centerAndScaleModel(gltf.scene);
                         threeScene.add(gltf.scene);
@@ -650,7 +650,7 @@ def get_preview_viewer_html() -> str:
                     (error) => showError('Failed to load model')
                 );
             }
-            
+
             // Animation loop
             function animate() {
                 animationId = requestAnimationFrame(animate);
@@ -658,7 +658,7 @@ def get_preview_viewer_html() -> str:
                 threeRenderer.render(threeScene, threeCamera);
             }
             animate();
-            
+
             // Handle resize
             window.addEventListener('resize', onWindowResize);
         }
@@ -667,10 +667,10 @@ def get_preview_viewer_html() -> str:
             const box = new THREE.Box3().setFromObject(object);
             const center = box.getCenter(new THREE.Vector3());
             const size = box.getSize(new THREE.Vector3());
-            
+
             const maxDim = Math.max(size.x, size.y, size.z);
             const scale = 2 / maxDim;
-            
+
             object.position.sub(center);
             object.scale.multiplyScalar(scale);
         }

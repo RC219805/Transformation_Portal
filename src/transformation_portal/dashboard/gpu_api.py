@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -316,18 +316,18 @@ def get_gpu_dashboard_html() -> str:
         function connect() {
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             ws = new WebSocket(`${protocol}//${window.location.host}/api/gpu/stream`);
-            
+
             ws.onopen = () => {
                 document.getElementById('status').textContent = 'Connected';
                 document.getElementById('status').className = 'status connected';
             };
-            
+
             ws.onclose = () => {
                 document.getElementById('status').textContent = 'Disconnected';
                 document.getElementById('status').className = 'status disconnected';
                 setTimeout(connect, 3000);
             };
-            
+
             ws.onmessage = (event) => {
                 const data = JSON.parse(event.data);
                 if (data.error) {
@@ -363,7 +363,7 @@ def get_gpu_dashboard_html() -> str:
                 }
 
                 const tempClass = gpu.temperature > 80 ? 'hot' : gpu.temperature > 60 ? 'warm' : 'cool';
-                
+
                 return `
                     <div class="gpu-card">
                         <div class="gpu-header">
@@ -378,7 +378,7 @@ def get_gpu_dashboard_html() -> str:
                             <div class="progress-bar">
                                 <div class="progress-fill gpu" style="width: ${gpu.gpu_util}%"></div>
                             </div>
-                            
+
                             <div class="metric-row" style="margin-top: 1rem;">
                                 <span class="metric-label">Memory</span>
                                 <span class="metric-value">${gpu.memory_used_gb} / ${gpu.memory_total_gb} GB</span>
@@ -386,16 +386,16 @@ def get_gpu_dashboard_html() -> str:
                             <div class="progress-bar">
                                 <div class="progress-fill memory" style="width: ${gpu.memory_util}%"></div>
                             </div>
-                            
+
                             <div class="metric-row" style="margin-top: 1rem;">
                                 <span class="metric-label">Power Draw</span>
                                 <span class="metric-value">${gpu.power_draw} W</span>
                             </div>
-                            
+
                             <div class="chart-container">
                                 <div class="chart-title">GPU Utilization History (60s)</div>
                                 <div class="chart">
-                                    ${history[gpu.index].map(v => 
+                                    ${history[gpu.index].map(v =>
                                         `<div class="chart-bar" style="height: ${v}%"></div>`
                                     ).join('')}
                                 </div>

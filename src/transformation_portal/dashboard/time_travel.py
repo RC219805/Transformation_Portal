@@ -11,7 +11,7 @@ This module provides:
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
     from transformation_portal.dashboard.node_state_store import NodeStateStore
@@ -389,7 +389,7 @@ def get_time_travel_html() -> str:
 
         function renderVersionList() {
             const container = document.getElementById('version-list');
-            
+
             if (history.length === 0) {
                 container.innerHTML = '<div class="empty">No history found for this node</div>';
                 return;
@@ -421,7 +421,7 @@ def get_time_travel_html() -> str:
 
         function renderDetails(version) {
             const panel = document.getElementById('details-panel');
-            
+
             let html = `
                 <div class="detail-section">
                     <h4>Run Info</h4>
@@ -476,7 +476,7 @@ def get_time_travel_html() -> str:
                     <div class="detail-section">
                         <h4>Lineage</h4>
                         <div class="detail-content lineage">
-                            <div>Inputs: ${version.lineage.inputs.map(h => 
+                            <div>Inputs: ${version.lineage.inputs.map(h =>
                                 `<span class="hash">${h.slice(0, 8)}...</span>`
                             ).join(', ') || 'None'}</div>
                         </div>
@@ -489,7 +489,7 @@ def get_time_travel_html() -> str:
 
         function setCompareSlot(index) {
             const version = history[index];
-            
+
             if (!compareA) {
                 compareA = version;
                 document.getElementById('slot-a').innerHTML = `
@@ -640,7 +640,7 @@ def get_diff_viewer_html() -> str:
             height: calc(100vh - 50px);
             position: relative;
         }
-        
+
         /* Image Diff Slider Mode */
         .image-diff {
             position: relative;
@@ -1028,7 +1028,7 @@ def get_diff_viewer_html() -> str:
             const loader = new THREE.GLTFLoader();
             loader.load(url, (gltf) => {
                 const model = gltf.scene;
-                
+
                 // Center and scale
                 const box = new THREE.Box3().setFromObject(model);
                 const center = box.getCenter(new THREE.Vector3());

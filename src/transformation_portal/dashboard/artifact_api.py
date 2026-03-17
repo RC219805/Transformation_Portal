@@ -6,10 +6,8 @@ and exploring Merkle DAG lineage.
 
 from __future__ import annotations
 
-import json
 import logging
-from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
     from transformation_portal.storage.cas_store import ArtifactStore
@@ -20,7 +18,7 @@ logger = logging.getLogger(__name__)
 # Optional FastAPI import
 try:
     from fastapi import APIRouter, HTTPException, Query
-    from fastapi.responses import JSONResponse, FileResponse
+    from fastapi.responses import JSONResponse
     FASTAPI_AVAILABLE = True
 except ImportError:
     FASTAPI_AVAILABLE = False
@@ -451,7 +449,7 @@ def get_artifact_browser_html() -> str:
             <button id="next-btn" onclick="nextPage()">Next</button>
         </div>
     </div>
-    
+
     <div id="modal" class="modal">
         <div class="modal-content">
             <button class="close-modal" onclick="closeModal()">&times;</button>
@@ -468,14 +466,14 @@ def get_artifact_browser_html() -> str:
         async function loadStats() {
             const res = await fetch('/api/artifacts/stats/summary');
             const data = await res.json();
-            
+
             document.getElementById('total-objects').textContent = data.total_objects || 0;
             document.getElementById('total-size').textContent = data.total_size_human || '0 B';
-            
+
             const dist = data.size_distribution || {};
-            document.getElementById('small-files').textContent = 
+            document.getElementById('small-files').textContent =
                 (dist['<1KB'] || 0) + (dist['1KB-1MB'] || 0);
-            document.getElementById('large-files').textContent = 
+            document.getElementById('large-files').textContent =
                 (dist['1MB-100MB'] || 0) + (dist['>100MB'] || 0);
         }
 
@@ -485,10 +483,10 @@ def get_artifact_browser_html() -> str:
                 (searchPrefix ? `&prefix=${searchPrefix}` : '')
             );
             const data = await res.json();
-            
+
             const tbody = document.getElementById('artifacts-body');
             tbody.innerHTML = '';
-            
+
             data.artifacts.forEach(a => {
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
@@ -504,18 +502,18 @@ def get_artifact_browser_html() -> str:
                 `;
                 tbody.appendChild(tr);
             });
-            
-            document.getElementById('page-info').textContent = 
+
+            document.getElementById('page-info').textContent =
                 `Page ${currentPage + 1} (${data.artifacts.length} of ${data.total})`;
             document.getElementById('prev-btn').disabled = currentPage === 0;
-            document.getElementById('next-btn').disabled = 
+            document.getElementById('next-btn').disabled =
                 (currentPage + 1) * pageSize >= data.total;
         }
 
         async function viewDetails(hash) {
             const res = await fetch(`/api/artifacts/${hash}`);
             const data = await res.json();
-            
+
             document.getElementById('modal-title').textContent = `Artifact: ${hash.slice(0, 8)}...`;
             document.getElementById('modal-content').textContent = JSON.stringify(data, null, 2);
             document.getElementById('modal').classList.add('active');
@@ -524,9 +522,9 @@ def get_artifact_browser_html() -> str:
         async function viewPreview(hash) {
             const res = await fetch(`/api/artifacts/${hash}/preview`);
             const data = await res.json();
-            
+
             document.getElementById('modal-title').textContent = `Preview: ${hash.slice(0, 8)}...`;
-            document.getElementById('modal-content').textContent = 
+            document.getElementById('modal-content').textContent =
                 data.type === 'text' ? data.preview : `[Binary: ${data.preview}]`;
             document.getElementById('modal').classList.add('active');
         }

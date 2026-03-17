@@ -229,9 +229,6 @@ def resolve_into_cas(
         >>> resolved = resolve_manifest_model("llava", payload)
         >>> runtime_dir = resolve_into_cas(resolved, cas, Path("runtime/llava"))
     """
-    # Import here to avoid circular dependency
-    from transformation_portal.storage import ArtifactStore  # noqa: F811
-
     target_dir.mkdir(parents=True, exist_ok=True)
 
     for relpath, src_path in resolved.resolved_files.items():

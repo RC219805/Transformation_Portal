@@ -65,7 +65,7 @@ def _try_cuda_ipc_export(tensor: "torch.Tensor") -> Optional[TensorPayload]:
         TensorPayload if successful, None otherwise
     """
     try:
-        import torch
+        import torch  # noqa: F401 - ensures tensor methods work
 
         if not tensor.is_cuda:
             return None
@@ -103,7 +103,7 @@ def _cpu_export(tensor: "torch.Tensor") -> TensorPayload:
     Returns:
         TensorPayload with numpy array data
     """
-    import numpy as np
+    import numpy as np  # noqa: F401 - required for tensor.numpy()
 
     # Move to CPU and convert to numpy
     arr = tensor.detach().cpu().numpy()
@@ -139,7 +139,7 @@ def export_tensor(
         >>> payload = export_tensor(tensor)
         >>> print(f"Using CUDA IPC: {payload.is_cuda_ipc}")
     """
-    import torch
+    import torch  # noqa: F401 - ensures tensor methods work
 
     if prefer_cuda_ipc and tensor.is_cuda:
         ipc_payload = _try_cuda_ipc_export(tensor)

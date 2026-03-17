@@ -7,8 +7,7 @@ details including inputs, outputs, artifacts, and logs.
 from __future__ import annotations
 
 import logging
-from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, Optional
+from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
     from transformation_portal.storage.cas_store import ArtifactStore
@@ -17,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 # Optional FastAPI import
 try:
-    from fastapi import APIRouter, HTTPException, Query
+    from fastapi import APIRouter, HTTPException
     from fastapi.responses import JSONResponse, HTMLResponse, FileResponse
     FASTAPI_AVAILABLE = True
 except ImportError:
@@ -446,12 +445,12 @@ def get_inspection_ui_html() -> str:
             <input type="text" id="node-id" placeholder="Node ID">
             <button onclick="loadNode()">Inspect</button>
         </div>
-        
+
         <div id="node-header" style="margin-bottom: 1rem; display: none;">
             <h2 id="node-title">Node: </h2>
             <span id="node-status" class="status">-</span>
         </div>
-        
+
         <div class="panels">
             <div class="panel">
                 <div class="panel-header">Inputs</div>
@@ -487,7 +486,7 @@ def get_inspection_ui_html() -> str:
             </div>
         </div>
     </div>
-    
+
     <div id="preview-modal" class="preview-modal">
         <button class="close-btn" onclick="closePreview()">&times;</button>
         <div class="preview-content" id="preview-content"></div>
@@ -497,12 +496,12 @@ def get_inspection_ui_html() -> str:
         async function loadNode() {
             const runId = document.getElementById('run-id').value;
             const nodeId = document.getElementById('node-id').value;
-            
+
             if (!runId || !nodeId) {
                 alert('Please enter Run ID and Node ID');
                 return;
             }
-            
+
             try {
                 const res = await fetch(`/api/inspect/runs/${runId}/nodes/${nodeId}`);
                 if (!res.ok) throw new Error('Node not found');
@@ -518,7 +517,7 @@ def get_inspection_ui_html() -> str:
             document.getElementById('node-title').textContent = `Node: ${data.node_id}`;
             document.getElementById('node-status').textContent = data.status;
             document.getElementById('node-status').className = `status ${data.status}`;
-            
+
             // Inputs
             const inputs = document.getElementById('inputs-content');
             if (Object.keys(data.inputs).length > 0) {
@@ -528,7 +527,7 @@ def get_inspection_ui_html() -> str:
                 inputs.textContent = 'No inputs';
                 inputs.className = 'empty';
             }
-            
+
             // Outputs
             const outputs = document.getElementById('outputs-content');
             if (Object.keys(data.outputs).length > 0) {
@@ -538,7 +537,7 @@ def get_inspection_ui_html() -> str:
                 outputs.textContent = 'No outputs';
                 outputs.className = 'empty';
             }
-            
+
             // Artifacts
             document.getElementById('artifact-count').textContent = Object.keys(data.artifacts).length;
             const artifactsList = document.getElementById('artifacts-list');
@@ -558,12 +557,12 @@ def get_inspection_ui_html() -> str:
             } else {
                 artifactsList.innerHTML = '<li class="empty">No artifacts</li>';
             }
-            
+
             // Logs
             document.getElementById('log-count').textContent = data.logs.length;
             const logsContent = document.getElementById('logs-content');
             if (data.logs.length > 0) {
-                logsContent.innerHTML = data.logs.map(log => 
+                logsContent.innerHTML = data.logs.map(log =>
                     `<div class="log-entry">${log}</div>`
                 ).join('');
             } else {
@@ -575,10 +574,10 @@ def get_inspection_ui_html() -> str:
             try {
                 const res = await fetch(`/api/inspect/artifact/${hash}/preview`);
                 const data = await res.json();
-                
+
                 const modal = document.getElementById('preview-modal');
                 const content = document.getElementById('preview-content');
-                
+
                 if (data.content_type.startsWith('image/')) {
                     content.innerHTML = `<img src="/api/inspect/artifact/${hash}/download" alt="Preview">`;
                 } else if (data.preview) {
@@ -586,7 +585,7 @@ def get_inspection_ui_html() -> str:
                 } else {
                     content.innerHTML = `<p>Cannot preview ${data.content_type}</p>`;
                 }
-                
+
                 modal.classList.add('active');
             } catch (e) {
                 alert('Failed to preview: ' + e.message);

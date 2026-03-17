@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 # Optional FastAPI import
 try:
-    from fastapi import APIRouter, HTTPException, Query, Body
+    from fastapi import APIRouter, HTTPException, Body
     from fastapi.responses import JSONResponse, HTMLResponse
     FASTAPI_AVAILABLE = True
 except ImportError:
@@ -64,7 +64,7 @@ def init_db() -> None:
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP,
                 updated_at TEXT DEFAULT CURRENT_TIMESTAMP
             );
-            
+
             CREATE TABLE IF NOT EXISTS runs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 experiment_id INTEGER NOT NULL,
@@ -79,7 +79,7 @@ def init_db() -> None:
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (experiment_id) REFERENCES experiments(id)
             );
-            
+
             CREATE INDEX IF NOT EXISTS idx_runs_experiment ON runs(experiment_id);
             CREATE INDEX IF NOT EXISTS idx_runs_status ON runs(status);
         """)
@@ -136,7 +136,7 @@ def create_experiment(
     """
     init_db()
     tags_json = json.dumps(tags or [])
-    
+
     with get_db() as conn:
         cursor = conn.execute(
             "INSERT INTO experiments (name, description, tags) VALUES (?, ?, ?)",
@@ -153,10 +153,10 @@ def get_experiment(experiment_id: int) -> Optional[Experiment]:
             "SELECT * FROM experiments WHERE id = ?",
             (experiment_id,),
         ).fetchone()
-        
+
         if row is None:
             return None
-        
+
         return Experiment(
             id=row["id"],
             name=row["name"],
@@ -174,7 +174,7 @@ def list_experiments() -> list[Experiment]:
         rows = conn.execute(
             "SELECT * FROM experiments ORDER BY created_at DESC"
         ).fetchall()
-        
+
         return [
             Experiment(
                 id=row["id"],
@@ -206,10 +206,10 @@ def create_run(
         Run ID
     """
     now = datetime.now(timezone.utc).isoformat()
-    
+
     with get_db() as conn:
         cursor = conn.execute(
-            """INSERT INTO runs 
+            """INSERT INTO runs
                (experiment_id, name, status, config, params, start_time)
                VALUES (?, ?, 'running', ?, ?, ?)""",
             (
@@ -237,10 +237,10 @@ def log_metrics(run_id: int, metrics: dict[str, Any]) -> None:
             "SELECT metrics FROM runs WHERE id = ?",
             (run_id,),
         ).fetchone()
-        
+
         existing = json.loads(row["metrics"] or "{}") if row else {}
         existing.update(metrics)
-        
+
         conn.execute(
             "UPDATE runs SET metrics = ? WHERE id = ?",
             (json.dumps(existing), run_id),
@@ -256,7 +256,7 @@ def complete_run(run_id: int, status: str = "completed") -> None:
         status: Final status ("completed", "failed", "cancelled")
     """
     now = datetime.now(timezone.utc).isoformat()
-    
+
     with get_db() as conn:
         conn.execute(
             "UPDATE runs SET status = ?, end_time = ? WHERE id = ?",
@@ -272,10 +272,10 @@ def get_run(run_id: int) -> Optional[Run]:
             "SELECT * FROM runs WHERE id = ?",
             (run_id,),
         ).fetchone()
-        
+
         if row is None:
             return None
-        
+
         return Run(
             id=row["id"],
             experiment_id=row["experiment_id"],
@@ -298,7 +298,7 @@ def list_runs(experiment_id: int) -> list[Run]:
             "SELECT * FROM runs WHERE experiment_id = ? ORDER BY created_at DESC",
             (experiment_id,),
         ).fetchall()
-        
+
         return [
             Run(
                 id=row["id"],
@@ -373,7 +373,7 @@ def create_experiment_router() -> "APIRouter":
         exp = get_experiment(experiment_id)
         if exp is None:
             raise HTTPException(status_code=404, detail="Experiment not found")
-        
+
         runs = list_runs(experiment_id)
         return JSONResponse({
             "id": exp.id,
@@ -405,7 +405,7 @@ def create_experiment_router() -> "APIRouter":
         exp = get_experiment(experiment_id)
         if exp is None:
             raise HTTPException(status_code=404, detail="Experiment not found")
-        
+
         run_id = create_run(experiment_id, name, config, params)
         return JSONResponse({"id": run_id, "experiment_id": experiment_id})
 
@@ -433,7 +433,7 @@ def create_experiment_router() -> "APIRouter":
         run = get_run(run_id)
         if run is None:
             raise HTTPException(status_code=404, detail="Run not found")
-        
+
         log_metrics(run_id, metrics)
         return JSONResponse({"status": "ok"})
 
@@ -443,7 +443,7 @@ def create_experiment_router() -> "APIRouter":
         run = get_run(run_id)
         if run is None:
             raise HTTPException(status_code=404, detail="Run not found")
-        
+
         complete_run(run_id, status)
         return JSONResponse({"status": "ok"})
 
@@ -593,7 +593,7 @@ def get_experiments_html() -> str:
             </div>
         </div>
     </div>
-    
+
     <div id="modal" class="modal">
         <div class="modal-content">
             <h3>Create Experiment</h3>
@@ -613,12 +613,12 @@ def get_experiments_html() -> str:
             const res = await fetch('/api/experiments/');
             const data = await res.json();
             const container = document.getElementById('experiments');
-            
+
             if (data.experiments.length === 0) {
                 container.innerHTML = '<div class="empty">No experiments yet</div>';
                 return;
             }
-            
+
             container.innerHTML = data.experiments.map(e => `
                 <div class="experiment-item ${selectedExperiment?.id === e.id ? 'selected' : ''}"
                      onclick="selectExperiment(${e.id})">
@@ -637,12 +637,12 @@ def get_experiments_html() -> str:
 
         function renderRuns(runs) {
             const container = document.getElementById('runs');
-            
+
             if (runs.length === 0) {
                 container.innerHTML = '<div class="empty">No runs yet</div>';
                 return;
             }
-            
+
             container.innerHTML = `
                 <table class="runs-table">
                     <thead>
@@ -688,13 +688,13 @@ def get_experiments_html() -> str:
         async function createExperiment() {
             const name = document.getElementById('exp-name').value;
             const desc = document.getElementById('exp-desc').value;
-            
+
             if (!name) return;
-            
+
             await fetch(`/api/experiments/?name=${encodeURIComponent(name)}&description=${encodeURIComponent(desc)}`, {
                 method: 'POST'
             });
-            
+
             closeModal();
             loadExperiments();
         }

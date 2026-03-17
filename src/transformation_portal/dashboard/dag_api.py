@@ -7,7 +7,7 @@ and Merkle lineage data for visualization.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
     from transformation_portal.execution_graph.scheduler import PriorityDAGScheduler
@@ -332,7 +332,7 @@ def get_dag_visualization_html() -> str:
     <script>
         let currentData = null;
         let simulation = null;
-        
+
         async function loadDAG() {
             const res = await fetch('/api/dag/graph');
             const data = await res.json();
@@ -340,52 +340,55 @@ def get_dag_visualization_html() -> str:
             renderGraph(data);
             updateSidebar(data);
         }
-        
+
         async function loadMerkle() {
             const res = await fetch('/api/dag/merkle');
             const data = await res.json();
             renderMerkleOverlay(data);
         }
-        
+
         function renderGraph(data) {
             const svg = d3.select('svg');
             svg.selectAll('*:not(defs)').remove();
-            
+
             const width = svg.node().clientWidth;
             const height = svg.node().clientHeight;
-            
+
             const g = svg.append('g');
-            
+
             // Zoom
             svg.call(d3.zoom().on('zoom', (e) => g.attr('transform', e.transform)));
-            
+
             simulation = d3.forceSimulation(data.nodes)
                 .force('link', d3.forceLink(data.edges).id(d => d.id).distance(120))
                 .force('charge', d3.forceManyBody().strength(-400))
                 .force('center', d3.forceCenter(width / 2, height / 2))
                 .force('y', d3.forceY(height / 2).strength(0.1));
-            
+
             const link = g.selectAll('.link')
                 .data(data.edges)
                 .enter().append('path')
                 .attr('class', 'link');
-            
+
             const node = g.selectAll('.node')
                 .data(data.nodes)
                 .enter().append('g')
-                .attr('class', d => `node ${d.status} ${d.score > 0.7 ? 'high-score' : d.score !== null ? 'low-score' : ''}`)
+                .attr('class', d => {
+                    const scoreClass = d.score > 0.7 ? 'high-score' : d.score !== null ? 'low-score' : '';
+                    return `node ${d.status} ${scoreClass}`;
+                })
                 .call(d3.drag()
                     .on('start', dragstart)
                     .on('drag', drag)
                     .on('end', dragend))
                 .on('click', (e, d) => showNodeDetails(d));
-            
+
             node.append('circle').attr('r', 12);
             node.append('text')
                 .attr('dy', -18)
                 .attr('text-anchor', 'middle')
                 .text(d => d.label);
-            
+
             simulation.on('tick', () => {
                 link.attr('d', d => {
                     const dx = d.target.x - d.source.x;
@@ -395,13 +398,13 @@ def get_dag_visualization_html() -> str:
                 node.attr('transform', d => `translate(${d.x},${d.y})`);
             });
         }
-        
+
         function renderMerkleOverlay(data) {
             // Add Merkle lineage edges as dashed lines
             const g = d3.select('svg g');
-            
+
             g.selectAll('.link.lineage').remove();
-            
+
             g.selectAll('.link.lineage')
                 .data(data.edges)
                 .enter().append('line')
@@ -411,27 +414,34 @@ def get_dag_visualization_html() -> str:
                 .attr('x2', d => findNodePos(d.target)?.x || 0)
                 .attr('y2', d => findNodePos(d.target)?.y || 0);
         }
-        
+
         function findNodePos(hash) {
             if (!currentData) return null;
             return currentData.nodes.find(n => n.id.startsWith(hash) || hash.startsWith(n.id));
         }
-        
+
         function showNodeDetails(node) {
             const details = document.getElementById('node-details');
-            details.innerHTML = `
+            let html = `
                 <div><span class="label">ID:</span> <span class="value">${node.id}</span></div>
                 <div><span class="label">Status:</span> <span class="value">${node.status}</span></div>
                 <div><span class="label">Priority:</span> <span class="value">${node.priority}</span></div>
-                ${node.score !== null ? `<div><span class="label">Score:</span> <span class="value">${node.score.toFixed(3)}</span></div>` : ''}
-                ${node.resources?.gpu ? `<div><span class="label">GPU:</span> <span class="value">${node.resources.gpu_memory_mb}MB</span></div>` : ''}
             `;
+            if (node.score !== null) {
+                const scoreVal = node.score.toFixed(3);
+                html += `<div><span class="label">Score:</span> <span class="value">${scoreVal}</span></div>`;
+            }
+            if (node.resources?.gpu) {
+                const memVal = node.resources.gpu_memory_mb;
+                html += `<div><span class="label">GPU:</span> <span class="value">${memVal}MB</span></div>`;
+            }
+            details.innerHTML = html;
         }
-        
+
         function updateSidebar(data) {
-            document.getElementById('exec-order').innerHTML = 
+            document.getElementById('exec-order').innerHTML =
                 `<div class="value">${data.execution_order?.join(' → ') || 'N/A'}</div>`;
-            
+
             const completed = data.nodes.filter(n => n.status === 'completed').length;
             document.getElementById('stats').innerHTML = `
                 <div><span class="label">Total:</span> <span class="value">${data.nodes.length}</span></div>
@@ -439,29 +449,29 @@ def get_dag_visualization_html() -> str:
                 <div><span class="label">Edges:</span> <span class="value">${data.edges.length}</span></div>
             `;
         }
-        
+
         function resetView() {
             d3.select('svg g').attr('transform', null);
             if (simulation) simulation.alpha(1).restart();
         }
-        
+
         function dragstart(event) {
             if (!event.active) simulation.alphaTarget(0.3).restart();
             event.subject.fx = event.subject.x;
             event.subject.fy = event.subject.y;
         }
-        
+
         function drag(event) {
             event.subject.fx = event.x;
             event.subject.fy = event.y;
         }
-        
+
         function dragend(event) {
             if (!event.active) simulation.alphaTarget(0);
             event.subject.fx = null;
             event.subject.fy = null;
         }
-        
+
         // Initial load
         loadDAG();
     </script>

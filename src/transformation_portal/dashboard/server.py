@@ -23,10 +23,9 @@ import asyncio
 import json
 import logging
 import threading
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +33,6 @@ logger = logging.getLogger(__name__)
 try:
     from fastapi import FastAPI, WebSocket, WebSocketDisconnect
     from fastapi.responses import HTMLResponse, JSONResponse
-    from fastapi.staticfiles import StaticFiles
     import uvicorn
     FASTAPI_AVAILABLE = True
 except ImportError:
@@ -359,18 +357,18 @@ def _get_index_html() -> str:
         function connect() {
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
-            
+
             ws.onopen = () => {
                 statusEl.textContent = 'Connected';
                 statusEl.className = 'status connected';
             };
-            
+
             ws.onclose = () => {
                 statusEl.textContent = 'Disconnected';
                 statusEl.className = 'status disconnected';
                 setTimeout(connect, 3000);
             };
-            
+
             ws.onmessage = (event) => {
                 const data = JSON.parse(event.data);
                 addEvent(data);
@@ -381,22 +379,22 @@ def _get_index_html() -> str:
         function addEvent(data) {
             eventCount++;
             countEl.textContent = eventCount;
-            
+
             const eventEl = document.createElement('div');
             eventEl.className = 'event';
-            
+
             const time = new Date(data.timestamp).toLocaleTimeString();
             const typeClass = data.type.toLowerCase();
-            
+
             eventEl.innerHTML = `
                 <span class="time">${time}</span>
                 <span class="type ${typeClass}">${data.type}</span>
                 ${data.source ? `<span class="source">${data.source}</span>` : ''}
                 <div class="data">${JSON.stringify(data.data, null, 2)}</div>
             `;
-            
+
             eventsEl.insertBefore(eventEl, eventsEl.firstChild);
-            
+
             // Limit events shown
             while (eventsEl.children.length > 50) {
                 eventsEl.removeChild(eventsEl.lastChild);

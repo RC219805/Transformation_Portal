@@ -13,7 +13,6 @@ This module provides a professional 3D inspection environment with:
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -458,7 +457,7 @@ def get_studio_inspector_html() -> str:
 
         <div class="viewport">
             <div id="canvas-container"></div>
-            
+
             <div class="viewport-overlay">
                 <button onclick="screenshotViewport()">📷 Screenshot</button>
                 <button onclick="toggleFullscreen()">⛶ Fullscreen</button>
@@ -525,7 +524,7 @@ def get_studio_inspector_html() -> str:
             state.scene = new THREE.Scene();
 
             // Renderer
-            state.renderer = new THREE.WebGLRenderer({ 
+            state.renderer = new THREE.WebGLRenderer({
                 antialias: true,
                 preserveDrawingBuffer: true,
             });
@@ -664,7 +663,7 @@ def get_studio_inspector_html() -> str:
 
             // Detect format and load
             const loader = new THREE.GLTFLoader();
-            
+
             loader.load(
                 url,
                 (gltf) => {
@@ -693,7 +692,7 @@ def get_studio_inspector_html() -> str:
             model.traverse((child) => {
                 if (child.isMesh) {
                     state.meshes.push(child);
-                    
+
                     // Store original material
                     state.originalMaterials.set(child.uuid, child.material.clone());
 
@@ -765,7 +764,7 @@ def get_studio_inspector_html() -> str:
                 texture.mapping = THREE.EquirectangularReflectionMapping;
                 state.scene.environment = texture;
                 state.currentEnv = texture;
-                
+
                 const bgBtn = document.getElementById('bg-env');
                 if (bgBtn && bgBtn.classList.contains('active')) {
                     state.scene.background = texture;
@@ -775,7 +774,7 @@ def get_studio_inspector_html() -> str:
 
         function setBackground(mode) {
             document.querySelectorAll('#bg-env, #bg-solid, #bg-gradient').forEach(b => b.classList.remove('active'));
-            
+
             if (mode === 'env' && state.currentEnv) {
                 state.scene.background = state.currentEnv;
                 document.getElementById('bg-env').classList.add('active');
@@ -894,7 +893,7 @@ def get_studio_inspector_html() -> str:
         // ============================================================
         function setViewMode(mode) {
             state.viewMode = mode;
-            
+
             // Update buttons
             document.querySelectorAll('[id^="mode-"]').forEach(b => b.classList.remove('active'));
             const btn = document.getElementById('mode-' + mode);
@@ -902,7 +901,7 @@ def get_studio_inspector_html() -> str:
 
             state.meshes.forEach(mesh => {
                 const original = state.originalMaterials.get(mesh.uuid);
-                
+
                 switch (mode) {
                     case 'normal':
                         if (original) mesh.material = original.clone();
@@ -939,7 +938,7 @@ def get_studio_inspector_html() -> str:
             canvas.width = 256;
             canvas.height = 256;
             const ctx = canvas.getContext('2d');
-            
+
             // Checker pattern
             const size = 32;
             for (let y = 0; y < 256; y += size) {
@@ -948,7 +947,7 @@ def get_studio_inspector_html() -> str:
                     ctx.fillRect(x, y, size, size);
                 }
             }
-            
+
             return new THREE.CanvasTexture(canvas);
         }
 
@@ -1033,7 +1032,7 @@ def get_studio_inspector_html() -> str:
             const details = document.getElementById('picked-details');
 
             let html = `<div class="prop">Name: ${obj.name || 'Unnamed'}</div>`;
-            
+
             if (obj.geometry) {
                 const verts = obj.geometry.attributes.position?.count || 0;
                 html += `<div class="prop">Vertices: ${verts.toLocaleString()}</div>`;

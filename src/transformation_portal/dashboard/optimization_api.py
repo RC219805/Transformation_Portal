@@ -6,10 +6,8 @@ autonomous pipeline optimization from the dashboard UI.
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any, Callable
 
 logger = logging.getLogger(__name__)

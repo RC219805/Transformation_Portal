@@ -342,18 +342,18 @@ def get_execution_ui_html() -> str:
         function connect() {
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             ws = new WebSocket(`${protocol}//${window.location.host}/api/exec/ws`);
-            
+
             ws.onopen = () => {
                 document.getElementById('ws-status').textContent = 'Connected';
                 document.getElementById('ws-status').className = 'status-badge connected';
             };
-            
+
             ws.onclose = () => {
                 document.getElementById('ws-status').textContent = 'Disconnected';
                 document.getElementById('ws-status').className = 'status-badge disconnected';
                 setTimeout(connect, 3000);
             };
-            
+
             ws.onmessage = (event) => {
                 const msg = JSON.parse(event.data);
                 handleMessage(msg);
@@ -449,7 +449,7 @@ def get_execution_ui_html() -> str:
             try {
                 const res = await fetch('/api/exec/runs');
                 const data = await res.json();
-                
+
                 data.runs.forEach(r => {
                     if (!runs[r.run_id]) {
                         runs[r.run_id] = r;
@@ -457,7 +457,7 @@ def get_execution_ui_html() -> str:
                         runs[r.run_id].status = r.status;
                     }
                 });
-                
+
                 renderRuns();
             } catch (e) {
                 console.error('Failed to load runs:', e);
@@ -466,15 +466,15 @@ def get_execution_ui_html() -> str:
 
         function renderRuns() {
             const container = document.getElementById('runs');
-            const runList = Object.values(runs).sort((a, b) => 
+            const runList = Object.values(runs).sort((a, b) =>
                 (b.start_time || '').localeCompare(a.start_time || '')
             );
-            
+
             if (runList.length === 0) {
                 container.innerHTML = '<div class="empty">No runs yet</div>';
                 return;
             }
-            
+
             container.innerHTML = runList.map(r => `
                 <div class="run-item ${selectedRunId === r.run_id ? 'selected' : ''}"
                      onclick="selectRun('${r.run_id}')">
@@ -491,7 +491,7 @@ def get_execution_ui_html() -> str:
             selectedRunId = runId;
             document.getElementById('current-run').textContent = `Run ${runId}`;
             renderRuns();
-            
+
             // Fetch full run details
             try {
                 const res = await fetch(`/api/exec/runs/${runId}`);
@@ -506,12 +506,12 @@ def get_execution_ui_html() -> str:
         function renderNodes() {
             const container = document.getElementById('nodes');
             const run = runs[selectedRunId];
-            
+
             if (!run || !run.nodes || Object.keys(run.nodes).length === 0) {
                 container.innerHTML = '<div class="empty">No nodes</div>';
                 return;
             }
-            
+
             container.innerHTML = Object.entries(run.nodes).map(([nodeId, node]) => `
                 <div class="node-card ${node.status || 'pending'}">
                     <h4>${nodeId}</h4>
