@@ -217,11 +217,19 @@ class LlavaQualityBackend:
             return_tensors="pt",
         )
 
-        # Determine model device
+        # Determine model device (handle distributed models with device_map)
+        model_device = None
         try:
-            model_device = loaded.model.device
+            # First try: use first parameter's device (most reliable)
+            model_device = next(loaded.model.parameters()).device
+        except StopIteration:
+            pass
         except Exception:
-            model_device = None
+            # Fallback: try model.device attribute
+            try:
+                model_device = loaded.model.device
+            except Exception:
+                pass
 
         # Move inputs to model device if possible
         if hasattr(processed, "to") and model_device is not None:

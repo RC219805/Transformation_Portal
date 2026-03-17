@@ -160,9 +160,25 @@ def _try_cuda_ipc_import(payload: TensorPayload) -> Optional["torch.Tensor"]:
     try:
         import torch
 
+        # Safe dtype mapping (avoid eval)
+        DTYPE_MAP = {
+            "float16": torch.float16,
+            "float32": torch.float32,
+            "float64": torch.float64,
+            "bfloat16": torch.bfloat16,
+            "int8": torch.int8,
+            "int16": torch.int16,
+            "int32": torch.int32,
+            "int64": torch.int64,
+            "uint8": torch.uint8,
+            "bool": torch.bool,
+        }
+
         # Reconstruct from IPC handle
         storage = torch.cuda.storage._new_shared_cuda(*payload.data)
-        tensor = torch.tensor([], dtype=eval(f"torch.{payload.dtype.split('.')[-1]}"))
+        dtype_str = payload.dtype.split(".")[-1]
+        dtype = DTYPE_MAP.get(dtype_str, torch.float32)
+        tensor = torch.tensor([], dtype=dtype)
         tensor.set_(storage, 0, payload.shape)
 
         return tensor

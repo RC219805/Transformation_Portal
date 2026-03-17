@@ -231,14 +231,14 @@ def create_node_inspection_router() -> "APIRouter":
                 try:
                     preview = data.decode("utf-8")
                     content_type = "application/json"
-                except:
+                except Exception:
                     pass
             # Check for text
             else:
                 try:
                     preview = data.decode("utf-8")
                     content_type = "text/plain"
-                except:
+                except Exception:
                     preview = data.hex()[:500]
 
             return JSONResponse({
