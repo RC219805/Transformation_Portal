@@ -117,8 +117,8 @@ class PipelineEnv:
         Returns:
             StepResult with new state, reward, done flag
         """
-        from transformation_portal.execution_graph.patcher import apply_fix
         from transformation_portal.evals.self_healing import FixSuggestion
+        from transformation_portal.execution_graph.patcher import apply_fix
 
         action = self.actions[action_idx]
 

@@ -10,8 +10,8 @@ from transformation_portal.evals.vision_language.llava_backend import (
     LlavaQualityBackend,
 )
 from transformation_portal.evals.vision_language.llava_loader import (
-    LlavaLoaderError,
     LlavaLoadedArtifacts,
+    LlavaLoaderError,
     load_llava_from_manifest_entry,
 )
 from transformation_portal.evals.vision_language.llava_prompts import (
