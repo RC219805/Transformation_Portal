@@ -106,7 +106,12 @@ class TestConvergenceTracking:
         assert scene.rmse is not None
         assert isinstance(scene.rmse, float)
         assert scene.rmse >= 0.0
-        assert "rmse_history" in scene.metadata or scene.rmse >= 0.0
+        # Note: rmse_history is optional - may not be present in all backend versions
+        # If present, it should be a list of float values
+        if "rmse_history" in scene.metadata:
+            rmse_history = scene.metadata["rmse_history"]
+            assert isinstance(rmse_history, list)
+            assert all(isinstance(v, (int, float)) for v in rmse_history)
 
     @pytest.mark.skipif(
         not _require_convergence_tests(),

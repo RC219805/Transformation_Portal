@@ -126,7 +126,11 @@ class TestMaterialGANIntegration:
         """MaterialGAN should load checkpoint from HuggingFace.
 
         Expected: checkpoints/materialgan_v2.pth
-        License: CC BY-NC 4.0 (research only)
+        License: CC BY-NC 4.0 (non-commercial research only)
+        
+        Note: CC BY-NC 4.0 prohibits commercial use. When implemented,
+        the backend should enforce this via config gating (similar to
+        Depth Pro's non_commercial_ok flag requirement).
         """
         # Phase 2.2 implementation placeholder
         pass

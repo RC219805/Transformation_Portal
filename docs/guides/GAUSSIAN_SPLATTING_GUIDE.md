@@ -163,6 +163,9 @@ backend:
   type: gaussian_splatting
   model:
     repo_id: "graphdeco-inria/gaussian-splatting"
+    # IMPORTANT: Users must verify and update this revision before production use.
+    # Visit: https://github.com/graphdeco-inria/gaussian-splatting
+    # Copy a valid commit SHA (40 characters) and replace this placeholder.
     revision: "NEEDS_VERIFICATION_0000000000000000000000"
 
 optimization:
@@ -406,7 +409,7 @@ class GaussianBackend:
         tier: str = "apex_research",
         device: Optional[str] = None,
         model_repo: str = "graphdeco-inria/gaussian-splatting",
-        model_revision: str = "NEEDS_VERIFICATION_...",
+        model_revision: str = "<VERIFY_AND_UPDATE>",  # Must be valid 40-char SHA
         optimization_seed: Optional[int] = None,
         optimization_max_gaussians: int = 5000,
     ) -> None: ...

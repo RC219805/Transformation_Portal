@@ -321,10 +321,10 @@ python -m transformation_portal.spatial_ai segment \
 ## 📊 Status Update (2026-03-17)
 
 **Completed since document creation:**
-- ✅ HF Revision Pinning (Section 6) - Completed 2026-03-14
-- ✅ Depth Ensemble (Section 1) - EMA temporal filter implemented
-- ✅ Documentation Gaps (Section 9) - All guides now exist (2026-03-17)
-- ✅ Test Coverage (Section 10) - Test skeletons added for all experimental features (2026-03-17)
+- ✅ HF Revision Pinning (HuggingFace Model Revision Pinning) - Completed 2026-03-14
+- ✅ Multi-Model Depth Ensemble - EMA temporal filter implemented
+- ✅ Documentation Gaps - All guides now exist (2026-03-17)
+- ✅ Test Coverage for Experimental Features - Test skeletons added (2026-03-17)
 
 **Documentation Now Available:**
 - `docs/guides/SAM2_INTEGRATION_GUIDE.md` - SAM2 backend integration
