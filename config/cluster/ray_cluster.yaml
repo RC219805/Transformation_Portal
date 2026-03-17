@@ -1,0 +1,140 @@
+# Ray Cluster Configuration for Transformation Portal
+# GPU-aware autoscaling for distributed ML workloads
+#
+# Usage:
+#   ray up config/cluster/ray_cluster.yaml
+#   ray submit config/cluster/ray_cluster.yaml scripts/run_pipeline.py
+#   ray down config/cluster/ray_cluster.yaml
+
+cluster_name: transformation-portal
+
+# Maximum number of worker nodes (excluding head)
+max_workers: 8
+
+# Autoscaler configuration
+upscaling_speed: 1.0  # How aggressively to scale up
+idle_timeout_minutes: 10  # Terminate idle workers after this time
+
+# Cloud provider configuration
+provider:
+  type: aws
+  region: us-west-2
+  availability_zone: us-west-2a,us-west-2b
+
+# Node types available in the cluster
+available_node_types:
+  # Head node - orchestration and scheduling
+  head_node:
+    resources:
+      CPU: 4
+      memory: 16000000000  # 16GB
+    node_config:
+      InstanceType: m5.xlarge
+      ImageId: latest_dlami  # Use Deep Learning AMI
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs:
+            VolumeSize: 100
+            VolumeType: gp3
+
+  # GPU worker nodes - for inference and training
+  gpu_worker:
+    min_workers: 0
+    max_workers: 8
+    resources:
+      CPU: 8
+      GPU: 1
+      memory: 64000000000  # 64GB
+    node_config:
+      InstanceType: g5.xlarge  # NVIDIA A10G GPU
+      ImageId: latest_dlami
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs:
+            VolumeSize: 200
+            VolumeType: gp3
+
+  # CPU worker nodes - for preprocessing and postprocessing
+  cpu_worker:
+    min_workers: 0
+    max_workers: 4
+    resources:
+      CPU: 16
+      memory: 64000000000  # 64GB
+    node_config:
+      InstanceType: m5.4xlarge
+      ImageId: latest_dlami
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs:
+            VolumeSize: 100
+            VolumeType: gp3
+
+# Default node type for the head node
+head_node_type: head_node
+
+# Files to mount on all nodes
+file_mounts:
+  "/home/ubuntu/app": "./"
+  "/home/ubuntu/config": "./config"
+
+# Commands to run on all nodes during setup
+setup_commands:
+  # System packages
+  - sudo apt-get update -qq
+  - sudo apt-get install -y -qq ffmpeg libsm6 libxext6
+
+  # Python environment
+  - pip install --upgrade pip
+  - pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
+  - pip install transformers accelerate bitsandbytes
+  - pip install ray[default] fastapi uvicorn
+  - pip install lpips scikit-image opencv-python
+
+  # Install transformation_portal
+  - cd /home/ubuntu/app && pip install -e .
+
+# Commands for head node only
+head_setup_commands:
+  - echo "Head node setup complete"
+
+# Commands for worker nodes only
+worker_setup_commands:
+  # Verify GPU access
+  - nvidia-smi || echo "No GPU detected"
+  - python -c "import torch; print(f'CUDA available: {torch.cuda.is_available()}')"
+
+# Commands to start Ray on each node
+head_start_ray_commands:
+  - ray stop || true
+  - >-
+    ray start
+    --head
+    --port=6379
+    --dashboard-host=0.0.0.0
+    --dashboard-port=8265
+    --object-manager-port=8076
+    --node-manager-port=8077
+    --autoscaling-config=~/ray_bootstrap_config.yaml
+
+worker_start_ray_commands:
+  - ray stop || true
+  - >-
+    ray start
+    --address=$RAY_HEAD_IP:6379
+    --object-manager-port=8076
+    --node-manager-port=8077
+
+# Authentication
+auth:
+  ssh_user: ubuntu
+  # ssh_private_key: ~/.ssh/ray-autoscaler.pem
+
+# Initialization commands (run before setup)
+initialization_commands: []
+
+# Docker configuration (optional)
+# docker:
+#   image: "rayproject/ray-ml:latest-gpu"
+#   container_name: "ray_container"
+#   pull_before_run: True

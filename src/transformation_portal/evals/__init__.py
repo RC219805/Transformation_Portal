@@ -1,5 +1,58 @@
 """Evaluation harness package.
 
 This package provides evaluation backends and utilities for assessing
-pipeline outputs including vision-language models for quality validation.
+pipeline outputs including:
+- Vision-language models (LLaVA) for quality validation
+- Traditional image quality metrics (PSNR, SSIM, LPIPS, IoU)
+- APEX Research Ultra evaluation harness
+- Full benchmark suite
 """
+
+from transformation_portal.evals.apex_harness import (
+    ApexEvaluationHarness,
+    EvalMetricResult,
+    EvalResult,
+    brightness_metric,
+    contrast_metric,
+    sharpness_metric,
+)
+from transformation_portal.evals.benchmark_suite import (
+    BenchmarkResult,
+    BenchmarkSuite,
+    BenchmarkWeights,
+    run_benchmark_batch,
+)
+from transformation_portal.evals.metrics import (
+    dice_coefficient,
+    lpips_score,
+    lpips_to_score,
+    psnr,
+    psnr_to_score,
+    psnr_torch,
+    segmentation_iou,
+    ssim,
+)
+
+__all__ = [
+    # APEX harness
+    "ApexEvaluationHarness",
+    "EvalMetricResult",
+    "EvalResult",
+    "brightness_metric",
+    "contrast_metric",
+    "sharpness_metric",
+    # Benchmark suite
+    "BenchmarkResult",
+    "BenchmarkSuite",
+    "BenchmarkWeights",
+    "run_benchmark_batch",
+    # Metrics
+    "dice_coefficient",
+    "lpips_score",
+    "lpips_to_score",
+    "psnr",
+    "psnr_to_score",
+    "psnr_torch",
+    "segmentation_iou",
+    "ssim",
+]

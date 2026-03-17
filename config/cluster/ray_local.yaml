@@ -1,0 +1,44 @@
+# Local Ray Cluster Configuration
+# For development and testing on a single machine
+#
+# Usage:
+#   ray start --head
+#   python scripts/run_pipeline.py
+
+cluster_name: transformation-portal-local
+
+# Single node (local development)
+max_workers: 0
+
+provider:
+  type: local
+
+# Local node configuration
+available_node_types:
+  local_node:
+    resources:
+      CPU: 8
+      GPU: 1  # Set to 0 if no GPU
+      memory: 32000000000  # 32GB
+    node_config: {}
+
+head_node_type: local_node
+
+# Setup commands for local development
+setup_commands:
+  - pip install torch torchvision
+  - pip install transformers accelerate
+  - pip install ray fastapi uvicorn
+  - pip install -e .
+
+# Start Ray locally
+head_start_ray_commands:
+  - ray stop || true
+  - >-
+    ray start
+    --head
+    --port=6379
+    --dashboard-host=127.0.0.1
+    --dashboard-port=8265
+    --num-cpus=8
+    --num-gpus=1

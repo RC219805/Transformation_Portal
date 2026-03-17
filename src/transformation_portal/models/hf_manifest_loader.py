@@ -196,3 +196,59 @@ def resolve_manifest_model(
         local_root=local_root,
         resolved_files=resolved_files,
     )
+
+
+def resolve_into_cas(
+    resolved: HFResolvedLocalModel,
+    cas: "ArtifactStore",
+    target_dir: Path,
+) -> Path:
+    """Convert HF snapshot into CAS-backed directory.
+
+    This function takes a resolved HF model and:
+    1. Adds all files to CAS (deduplication by SHA-256)
+    2. Materializes symlinks in the target directory
+
+    The result is a runtime directory where each file is a symlink
+    to the deduplicated CAS object.
+
+    Args:
+        resolved: Resolved HF model from resolve_manifest_model
+        cas: ArtifactStore instance for CAS operations
+        target_dir: Target directory for symlinks
+
+    Returns:
+        Path to target directory with materialized symlinks
+
+    Example:
+        >>> from transformation_portal.storage import ArtifactStore
+        >>> cas = ArtifactStore(Path("/cache/cas"))
+        >>> resolved = resolve_manifest_model("llava", payload)
+        >>> runtime_dir = resolve_into_cas(resolved, cas, Path("runtime/llava"))
+    """
+    # Import here to avoid circular dependency
+    from transformation_portal.storage import ArtifactStore  # noqa: F811
+
+    target_dir.mkdir(parents=True, exist_ok=True)
+
+    for relpath, src_path in resolved.resolved_files.items():
+        # Add to CAS (deduplication happens here)
+        cas_obj = cas.add_file(src_path)
+
+        # Materialize symlink at target location
+        dest = target_dir / relpath
+        cas.materialize(cas_obj.sha256, dest)
+
+        logger.debug(
+            "CAS resolved: %s -> %s",
+            relpath,
+            cas_obj.sha256[:8],
+        )
+
+    logger.info(
+        "Resolved %d files into CAS-backed directory: %s",
+        len(resolved.resolved_files),
+        target_dir,
+    )
+
+    return target_dir
