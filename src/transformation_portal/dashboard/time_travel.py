@@ -22,7 +22,8 @@ logger = logging.getLogger(__name__)
 # Optional FastAPI import
 try:
     from fastapi import APIRouter, HTTPException, Query
-    from fastapi.responses import JSONResponse, HTMLResponse
+    from fastapi.responses import HTMLResponse, JSONResponse
+
     FASTAPI_AVAILABLE = True
 except ImportError:
     FASTAPI_AVAILABLE = False
@@ -101,11 +102,13 @@ def create_time_travel_router() -> "APIRouter":
             reverse=True,
         )
 
-        return JSONResponse({
-            "node_id": node_id,
-            "total_versions": len(history),
-            "history": history[:limit],
-        })
+        return JSONResponse(
+            {
+                "node_id": node_id,
+                "total_versions": len(history),
+                "history": history[:limit],
+            }
+        )
 
     @router.get("/runs/{run_id}/snapshot")
     async def get_run_snapshot(run_id: str):
@@ -121,21 +124,23 @@ def create_time_travel_router() -> "APIRouter":
         if run is None:
             raise HTTPException(status_code=404, detail="Run not found")
 
-        return JSONResponse({
-            "run_id": run.run_id,
-            "status": run.status,
-            "start_time": run.start_time,
-            "end_time": run.end_time,
-            "nodes": {
-                node_id: {
-                    "status": node.status,
-                    "outputs": node.outputs,
-                    "artifacts": node.artifacts,
-                    "merkle_hash": node.merkle_hash,
-                }
-                for node_id, node in run.nodes.items()
-            },
-        })
+        return JSONResponse(
+            {
+                "run_id": run.run_id,
+                "status": run.status,
+                "start_time": run.start_time,
+                "end_time": run.end_time,
+                "nodes": {
+                    node_id: {
+                        "status": node.status,
+                        "outputs": node.outputs,
+                        "artifacts": node.artifacts,
+                        "merkle_hash": node.merkle_hash,
+                    }
+                    for node_id, node in run.nodes.items()
+                },
+            }
+        )
 
     @router.get("/compare")
     async def compare_artifacts(
@@ -148,12 +153,14 @@ def create_time_travel_router() -> "APIRouter":
             hash_a: First artifact hash
             hash_b: Second artifact hash
         """
-        return JSONResponse({
-            "hash_a": hash_a,
-            "hash_b": hash_b,
-            "url_a": f"/api/preview/artifact/{hash_a}/raw",
-            "url_b": f"/api/preview/artifact/{hash_b}/raw",
-        })
+        return JSONResponse(
+            {
+                "hash_a": hash_a,
+                "hash_b": hash_b,
+                "url_a": f"/api/preview/artifact/{hash_a}/raw",
+                "url_b": f"/api/preview/artifact/{hash_b}/raw",
+            }
+        )
 
     @router.get("/", response_class=HTMLResponse)
     async def time_travel_ui():

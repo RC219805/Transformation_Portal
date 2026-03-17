@@ -17,14 +17,14 @@ logger = logging.getLogger(__name__)
 # Optional FastAPI import
 try:
     from fastapi import APIRouter, HTTPException
-    from fastapi.responses import JSONResponse, HTMLResponse, FileResponse
+    from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+
     FASTAPI_AVAILABLE = True
 except ImportError:
     FASTAPI_AVAILABLE = False
     APIRouter = None
 
 from transformation_portal.dashboard.node_state_store import get_store
-
 
 # Global CAS reference
 _global_cas: Optional["ArtifactStore"] = None  # type: ignore
@@ -66,10 +66,7 @@ def create_node_inspection_router() -> "APIRouter":
         node = store.get_node(run_id, node_id)
 
         if node is None:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Node not found: run={run_id}, node={node_id}"
-            )
+            raise HTTPException(status_code=404, detail=f"Node not found: run={run_id}, node={node_id}")
 
         return JSONResponse(node.to_dict())
 
@@ -82,10 +79,12 @@ def create_node_inspection_router() -> "APIRouter":
         if node is None:
             raise HTTPException(status_code=404, detail="Node not found")
 
-        return JSONResponse({
-            "node_id": node_id,
-            "inputs": node.inputs,
-        })
+        return JSONResponse(
+            {
+                "node_id": node_id,
+                "inputs": node.inputs,
+            }
+        )
 
     @router.get("/runs/{run_id}/nodes/{node_id}/outputs")
     async def get_node_outputs(run_id: str, node_id: str):
@@ -96,10 +95,12 @@ def create_node_inspection_router() -> "APIRouter":
         if node is None:
             raise HTTPException(status_code=404, detail="Node not found")
 
-        return JSONResponse({
-            "node_id": node_id,
-            "outputs": node.outputs,
-        })
+        return JSONResponse(
+            {
+                "node_id": node_id,
+                "outputs": node.outputs,
+            }
+        )
 
     @router.get("/runs/{run_id}/nodes/{node_id}/artifacts")
     async def get_node_artifacts(run_id: str, node_id: str):
@@ -124,10 +125,12 @@ def create_node_inspection_router() -> "APIRouter":
 
             artifacts.append(artifact_info)
 
-        return JSONResponse({
-            "node_id": node_id,
-            "artifacts": artifacts,
-        })
+        return JSONResponse(
+            {
+                "node_id": node_id,
+                "artifacts": artifacts,
+            }
+        )
 
     @router.get("/runs/{run_id}/nodes/{node_id}/logs")
     async def get_node_logs(run_id: str, node_id: str, tail: int = 100):
@@ -144,11 +147,13 @@ def create_node_inspection_router() -> "APIRouter":
         if node is None:
             raise HTTPException(status_code=404, detail="Node not found")
 
-        return JSONResponse({
-            "node_id": node_id,
-            "logs": node.logs[-tail:],
-            "total_logs": len(node.logs),
-        })
+        return JSONResponse(
+            {
+                "node_id": node_id,
+                "logs": node.logs[-tail:],
+                "total_logs": len(node.logs),
+            }
+        )
 
     @router.get("/runs/{run_id}/summary")
     async def get_run_summary(run_id: str):
@@ -159,23 +164,25 @@ def create_node_inspection_router() -> "APIRouter":
         if run is None:
             raise HTTPException(status_code=404, detail="Run not found")
 
-        return JSONResponse({
-            "run_id": run.run_id,
-            "status": run.status,
-            "start_time": run.start_time,
-            "end_time": run.end_time,
-            "nodes": {
-                node_id: {
-                    "status": node.status,
-                    "has_inputs": bool(node.inputs),
-                    "has_outputs": bool(node.outputs),
-                    "artifact_count": len(node.artifacts),
-                    "log_count": len(node.logs),
-                    "error": node.error,
-                }
-                for node_id, node in run.nodes.items()
-            },
-        })
+        return JSONResponse(
+            {
+                "run_id": run.run_id,
+                "status": run.status,
+                "start_time": run.start_time,
+                "end_time": run.end_time,
+                "nodes": {
+                    node_id: {
+                        "status": node.status,
+                        "has_inputs": bool(node.inputs),
+                        "has_outputs": bool(node.outputs),
+                        "artifact_count": len(node.artifacts),
+                        "log_count": len(node.logs),
+                        "error": node.error,
+                    }
+                    for node_id, node in run.nodes.items()
+                },
+            }
+        )
 
     @router.get("/artifact/{hash}")
     async def get_artifact_info(hash: str):
@@ -191,12 +198,14 @@ def create_node_inspection_router() -> "APIRouter":
         if obj is None:
             raise HTTPException(status_code=404, detail=f"Artifact not found: {hash}")
 
-        return JSONResponse({
-            "hash": obj.sha256,
-            "size_bytes": obj.size_bytes,
-            "path": str(obj.path),
-            "exists": obj.path.exists(),
-        })
+        return JSONResponse(
+            {
+                "hash": obj.sha256,
+                "size_bytes": obj.size_bytes,
+                "path": str(obj.path),
+                "exists": obj.path.exists(),
+            }
+        )
 
     @router.get("/artifact/{hash}/preview")
     async def preview_artifact(hash: str, max_bytes: int = 4096):
@@ -222,14 +231,14 @@ def create_node_inspection_router() -> "APIRouter":
             preview = None
 
             # Check for image
-            if data[:8] == b'\x89PNG\r\n\x1a\n':
+            if data[:8] == b"\x89PNG\r\n\x1a\n":
                 content_type = "image/png"
-            elif data[:2] == b'\xff\xd8':
+            elif data[:2] == b"\xff\xd8":
                 content_type = "image/jpeg"
-            elif data[:4] == b'RIFF' and data[8:12] == b'WEBP':
+            elif data[:4] == b"RIFF" and data[8:12] == b"WEBP":
                 content_type = "image/webp"
             # Check for JSON
-            elif data[:1] in (b'{', b'['):
+            elif data[:1] in (b"{", b"["):
                 try:
                     preview = data.decode("utf-8")
                     content_type = "application/json"
@@ -243,13 +252,15 @@ def create_node_inspection_router() -> "APIRouter":
                 except Exception:
                     preview = data.hex()[:500]
 
-            return JSONResponse({
-                "hash": hash,
-                "content_type": content_type,
-                "size_bytes": obj.size_bytes,
-                "preview": preview,
-                "truncated": obj.size_bytes > max_bytes,
-            })
+            return JSONResponse(
+                {
+                    "hash": hash,
+                    "content_type": content_type,
+                    "size_bytes": obj.size_bytes,
+                    "preview": preview,
+                    "truncated": obj.size_bytes > max_bytes,
+                }
+            )
 
         except Exception as exc:
             raise HTTPException(status_code=500, detail=str(exc))

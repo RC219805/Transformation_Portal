@@ -19,8 +19,9 @@ logger = logging.getLogger(__name__)
 
 # Optional FastAPI import
 try:
-    from fastapi import APIRouter, HTTPException, Body
-    from fastapi.responses import JSONResponse, HTMLResponse
+    from fastapi import APIRouter, Body, HTTPException
+    from fastapi.responses import HTMLResponse, JSONResponse
+
     FASTAPI_AVAILABLE = True
 except ImportError:
     FASTAPI_AVAILABLE = False
@@ -90,6 +91,7 @@ def init_db() -> None:
 @dataclass
 class Experiment:
     """Experiment record."""
+
     id: int
     name: str
     description: Optional[str] = None
@@ -101,6 +103,7 @@ class Experiment:
 @dataclass
 class Run:
     """Run record."""
+
     id: int
     experiment_id: int
     name: Optional[str] = None
@@ -171,9 +174,7 @@ def list_experiments() -> list[Experiment]:
     """List all experiments."""
     init_db()
     with get_db() as conn:
-        rows = conn.execute(
-            "SELECT * FROM experiments ORDER BY created_at DESC"
-        ).fetchall()
+        rows = conn.execute("SELECT * FROM experiments ORDER BY created_at DESC").fetchall()
 
         return [
             Experiment(
@@ -341,18 +342,20 @@ def create_experiment_router() -> "APIRouter":
     async def api_list_experiments():
         """List all experiments."""
         experiments = list_experiments()
-        return JSONResponse({
-            "experiments": [
-                {
-                    "id": e.id,
-                    "name": e.name,
-                    "description": e.description,
-                    "tags": e.tags,
-                    "created_at": e.created_at,
-                }
-                for e in experiments
-            ]
-        })
+        return JSONResponse(
+            {
+                "experiments": [
+                    {
+                        "id": e.id,
+                        "name": e.name,
+                        "description": e.description,
+                        "tags": e.tags,
+                        "created_at": e.created_at,
+                    }
+                    for e in experiments
+                ]
+            }
+        )
 
     @router.post("/")
     async def api_create_experiment(
@@ -375,24 +378,26 @@ def create_experiment_router() -> "APIRouter":
             raise HTTPException(status_code=404, detail="Experiment not found")
 
         runs = list_runs(experiment_id)
-        return JSONResponse({
-            "id": exp.id,
-            "name": exp.name,
-            "description": exp.description,
-            "tags": exp.tags,
-            "created_at": exp.created_at,
-            "run_count": len(runs),
-            "runs": [
-                {
-                    "id": r.id,
-                    "name": r.name,
-                    "status": r.status,
-                    "metrics": r.metrics,
-                    "created_at": r.created_at,
-                }
-                for r in runs[:10]  # Last 10 runs
-            ],
-        })
+        return JSONResponse(
+            {
+                "id": exp.id,
+                "name": exp.name,
+                "description": exp.description,
+                "tags": exp.tags,
+                "created_at": exp.created_at,
+                "run_count": len(runs),
+                "runs": [
+                    {
+                        "id": r.id,
+                        "name": r.name,
+                        "status": r.status,
+                        "metrics": r.metrics,
+                        "created_at": r.created_at,
+                    }
+                    for r in runs[:10]  # Last 10 runs
+                ],
+            }
+        )
 
     @router.post("/{experiment_id}/runs")
     async def api_create_run(
@@ -413,19 +418,21 @@ def create_experiment_router() -> "APIRouter":
     async def api_list_runs(experiment_id: int):
         """List runs for an experiment."""
         runs = list_runs(experiment_id)
-        return JSONResponse({
-            "runs": [
-                {
-                    "id": r.id,
-                    "name": r.name,
-                    "status": r.status,
-                    "metrics": r.metrics,
-                    "start_time": r.start_time,
-                    "end_time": r.end_time,
-                }
-                for r in runs
-            ]
-        })
+        return JSONResponse(
+            {
+                "runs": [
+                    {
+                        "id": r.id,
+                        "name": r.name,
+                        "status": r.status,
+                        "metrics": r.metrics,
+                        "start_time": r.start_time,
+                        "end_time": r.end_time,
+                    }
+                    for r in runs
+                ]
+            }
+        )
 
     @router.post("/runs/{run_id}/metrics")
     async def api_log_metrics(run_id: int, metrics: dict = Body(...)):

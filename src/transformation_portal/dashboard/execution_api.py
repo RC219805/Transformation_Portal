@@ -14,15 +14,15 @@ logger = logging.getLogger(__name__)
 
 # Optional FastAPI import
 try:
-    from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Body, HTTPException
-    from fastapi.responses import JSONResponse, HTMLResponse
+    from fastapi import APIRouter, Body, HTTPException, WebSocket, WebSocketDisconnect
+    from fastapi.responses import HTMLResponse, JSONResponse
+
     FASTAPI_AVAILABLE = True
 except ImportError:
     FASTAPI_AVAILABLE = False
     APIRouter = None
 
 from transformation_portal.dashboard.execution_manager import ExecutionManager
-
 
 # Global execution manager and WebSocket clients
 _manager: Optional[ExecutionManager] = None
@@ -116,18 +116,22 @@ def create_execution_router() -> "APIRouter":
         # Start execution in background
         run_id = await manager.run_pipeline(payload, broadcast)
 
-        return JSONResponse({
-            "status": "started",
-            "run_id": run_id,
-        })
+        return JSONResponse(
+            {
+                "status": "started",
+                "run_id": run_id,
+            }
+        )
 
     @router.get("/runs")
     async def list_runs():
         """List active and recent runs."""
         manager = get_manager()
-        return JSONResponse({
-            "runs": manager.get_active_runs(),
-        })
+        return JSONResponse(
+            {
+                "runs": manager.get_active_runs(),
+            }
+        )
 
     @router.get("/runs/{run_id}")
     async def get_run(run_id: str):
@@ -138,26 +142,28 @@ def create_execution_router() -> "APIRouter":
         if run is None:
             raise HTTPException(status_code=404, detail="Run not found")
 
-        return JSONResponse({
-            "run_id": run.run_id,
-            "status": run.status.value,
-            "start_time": run.start_time,
-            "end_time": run.end_time,
-            "error": run.error,
-            "nodes": {
-                node_id: {
-                    "status": state.status.value,
-                    "start_time": state.start_time,
-                    "end_time": state.end_time,
-                    "outputs": state.outputs,
-                    "error": state.error,
-                    "progress": state.progress,
-                    "merkle_hash": state.merkle_hash,
-                }
-                for node_id, state in run.nodes.items()
-            },
-            "results": run.results,
-        })
+        return JSONResponse(
+            {
+                "run_id": run.run_id,
+                "status": run.status.value,
+                "start_time": run.start_time,
+                "end_time": run.end_time,
+                "error": run.error,
+                "nodes": {
+                    node_id: {
+                        "status": state.status.value,
+                        "start_time": state.start_time,
+                        "end_time": state.end_time,
+                        "outputs": state.outputs,
+                        "error": state.error,
+                        "progress": state.progress,
+                        "merkle_hash": state.merkle_hash,
+                    }
+                    for node_id, state in run.nodes.items()
+                },
+                "results": run.results,
+            }
+        )
 
     @router.post("/runs/{run_id}/cancel")
     async def cancel_run(run_id: str):

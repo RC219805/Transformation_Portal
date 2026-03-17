@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 try:
     from fastapi import APIRouter, HTTPException, Query
     from fastapi.responses import JSONResponse
+
     FASTAPI_AVAILABLE = True
 except ImportError:
     FASTAPI_AVAILABLE = False
@@ -75,11 +76,13 @@ def create_artifact_router() -> "APIRouter":
             offset: Pagination offset
         """
         if _global_cas is None:
-            return JSONResponse({
-                "artifacts": [],
-                "total": 0,
-                "error": "No CAS configured",
-            })
+            return JSONResponse(
+                {
+                    "artifacts": [],
+                    "total": 0,
+                    "error": "No CAS configured",
+                }
+            )
 
         artifacts = []
         total = 0
@@ -105,22 +108,26 @@ def create_artifact_router() -> "APIRouter":
 
                 try:
                     stat = obj_path.stat()
-                    artifacts.append({
-                        "hash": obj_hash,
-                        "hash_short": obj_hash[:8],
-                        "size_bytes": stat.st_size,
-                        "size_human": _human_size(stat.st_size),
-                        "path": str(obj_path),
-                    })
+                    artifacts.append(
+                        {
+                            "hash": obj_hash,
+                            "hash_short": obj_hash[:8],
+                            "size_bytes": stat.st_size,
+                            "size_human": _human_size(stat.st_size),
+                            "path": str(obj_path),
+                        }
+                    )
                 except Exception as exc:
                     logger.warning("Failed to stat %s: %s", obj_path, exc)
 
-        return JSONResponse({
-            "artifacts": artifacts,
-            "total": total,
-            "limit": limit,
-            "offset": offset,
-        })
+        return JSONResponse(
+            {
+                "artifacts": artifacts,
+                "total": total,
+                "limit": limit,
+                "offset": offset,
+            }
+        )
 
     @router.get("/{hash}")
     async def get_artifact(hash: str):
@@ -141,19 +148,23 @@ def create_artifact_router() -> "APIRouter":
         if _global_merkle_dag:
             for node_hash, node in _global_merkle_dag.nodes.items():
                 if node.outputs.get("content_hash") == hash:
-                    related_nodes.append({
-                        "node_hash": node_hash,
-                        "type": node.node_type,
-                    })
+                    related_nodes.append(
+                        {
+                            "node_hash": node_hash,
+                            "type": node.node_type,
+                        }
+                    )
 
-        return JSONResponse({
-            "hash": obj.sha256,
-            "size_bytes": obj.size_bytes,
-            "size_human": _human_size(obj.size_bytes),
-            "path": str(obj.path),
-            "exists": obj.path.exists(),
-            "related_merkle_nodes": related_nodes,
-        })
+        return JSONResponse(
+            {
+                "hash": obj.sha256,
+                "size_bytes": obj.size_bytes,
+                "size_human": _human_size(obj.size_bytes),
+                "path": str(obj.path),
+                "exists": obj.path.exists(),
+                "related_merkle_nodes": related_nodes,
+            }
+        )
 
     @router.get("/{hash}/preview")
     async def preview_artifact(hash: str, max_bytes: int = 1024):
@@ -178,20 +189,24 @@ def create_artifact_router() -> "APIRouter":
             # Try UTF-8 decode
             try:
                 text = data.decode("utf-8")
-                return JSONResponse({
-                    "hash": hash,
-                    "type": "text",
-                    "preview": text,
-                    "truncated": obj.size_bytes > max_bytes,
-                })
+                return JSONResponse(
+                    {
+                        "hash": hash,
+                        "type": "text",
+                        "preview": text,
+                        "truncated": obj.size_bytes > max_bytes,
+                    }
+                )
             except UnicodeDecodeError:
                 # Return hex preview for binary
-                return JSONResponse({
-                    "hash": hash,
-                    "type": "binary",
-                    "preview": data.hex()[:200],
-                    "truncated": True,
-                })
+                return JSONResponse(
+                    {
+                        "hash": hash,
+                        "type": "binary",
+                        "preview": data.hex()[:200],
+                        "truncated": True,
+                    }
+                )
 
         except Exception as exc:
             raise HTTPException(status_code=500, detail=str(exc))
@@ -227,12 +242,14 @@ def create_artifact_router() -> "APIRouter":
                 except Exception:
                     pass
 
-        return JSONResponse({
-            "total_objects": total_count,
-            "total_size_bytes": total_size,
-            "total_size_human": _human_size(total_size),
-            "size_distribution": size_distribution,
-        })
+        return JSONResponse(
+            {
+                "total_objects": total_count,
+                "total_size_bytes": total_size,
+                "total_size_human": _human_size(total_size),
+                "size_distribution": size_distribution,
+            }
+        )
 
     return router
 

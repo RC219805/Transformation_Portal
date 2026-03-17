@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 try:
     from fastapi import APIRouter, HTTPException
     from fastapi.responses import JSONResponse
+
     FASTAPI_AVAILABLE = True
 except ImportError:
     FASTAPI_AVAILABLE = False
@@ -78,30 +79,36 @@ def create_dag_router() -> "APIRouter":
                 status = "completed"
                 outputs = _global_scheduler.results.get(node_id, {})
 
-            nodes.append({
-                "id": node_id,
-                "label": node_id,
-                "priority": -scheduled_node.priority,  # Restore original priority
-                "status": status,
-                "resources": {
-                    "gpu": scheduled_node.resources.gpu,
-                    "gpu_memory_mb": scheduled_node.resources.gpu_memory_mb,
-                },
-                "outputs": outputs,
-                "score": outputs.get("score") if isinstance(outputs, dict) else None,
-            })
+            nodes.append(
+                {
+                    "id": node_id,
+                    "label": node_id,
+                    "priority": -scheduled_node.priority,  # Restore original priority
+                    "status": status,
+                    "resources": {
+                        "gpu": scheduled_node.resources.gpu,
+                        "gpu_memory_mb": scheduled_node.resources.gpu_memory_mb,
+                    },
+                    "outputs": outputs,
+                    "score": outputs.get("score") if isinstance(outputs, dict) else None,
+                }
+            )
 
             for dep in scheduled_node.deps:
-                edges.append({
-                    "source": dep,
-                    "target": node_id,
-                })
+                edges.append(
+                    {
+                        "source": dep,
+                        "target": node_id,
+                    }
+                )
 
-        return JSONResponse({
-            "nodes": nodes,
-            "edges": edges,
-            "execution_order": _global_scheduler.get_execution_order(),
-        })
+        return JSONResponse(
+            {
+                "nodes": nodes,
+                "edges": edges,
+                "execution_order": _global_scheduler.get_execution_order(),
+            }
+        )
 
     @router.get("/merkle")
     async def get_merkle_graph():
@@ -113,26 +120,32 @@ def create_dag_router() -> "APIRouter":
         edges = []
 
         for node_hash, node in _global_merkle_dag.nodes.items():
-            nodes.append({
-                "id": node_hash,
-                "hash_short": node_hash[:8],
-                "type": node.node_type,
-                "metadata": node.metadata,
-                "outputs": node.outputs,
-                "timestamp": node.timestamp,
-            })
+            nodes.append(
+                {
+                    "id": node_hash,
+                    "hash_short": node_hash[:8],
+                    "type": node.node_type,
+                    "metadata": node.metadata,
+                    "outputs": node.outputs,
+                    "timestamp": node.timestamp,
+                }
+            )
 
             for input_hash in node.inputs:
-                edges.append({
-                    "source": input_hash,
-                    "target": node_hash,
-                })
+                edges.append(
+                    {
+                        "source": input_hash,
+                        "target": node_hash,
+                    }
+                )
 
-        return JSONResponse({
-            "nodes": nodes,
-            "edges": edges,
-            "summary": _global_merkle_dag.summary(),
-        })
+        return JSONResponse(
+            {
+                "nodes": nodes,
+                "edges": edges,
+                "summary": _global_merkle_dag.summary(),
+            }
+        )
 
     @router.get("/merkle/{node_hash}")
     async def get_merkle_node(node_hash: str):
@@ -144,14 +157,16 @@ def create_dag_router() -> "APIRouter":
         if node is None:
             raise HTTPException(status_code=404, detail=f"Node not found: {node_hash}")
 
-        return JSONResponse({
-            "hash": node.hash,
-            "type": node.node_type,
-            "inputs": list(node.inputs),
-            "outputs": node.outputs,
-            "metadata": node.metadata,
-            "timestamp": node.timestamp,
-        })
+        return JSONResponse(
+            {
+                "hash": node.hash,
+                "type": node.node_type,
+                "inputs": list(node.inputs),
+                "outputs": node.outputs,
+                "metadata": node.metadata,
+                "timestamp": node.timestamp,
+            }
+        )
 
     @router.get("/merkle/{node_hash}/lineage")
     async def get_merkle_lineage(node_hash: str, max_depth: int = 10):
@@ -163,18 +178,20 @@ def create_dag_router() -> "APIRouter":
         if not lineage:
             raise HTTPException(status_code=404, detail=f"Node not found: {node_hash}")
 
-        return JSONResponse({
-            "target": node_hash,
-            "depth": len(lineage),
-            "lineage": [
-                {
-                    "hash": n.hash,
-                    "type": n.node_type,
-                    "metadata": n.metadata,
-                }
-                for n in lineage
-            ],
-        })
+        return JSONResponse(
+            {
+                "target": node_hash,
+                "depth": len(lineage),
+                "lineage": [
+                    {
+                        "hash": n.hash,
+                        "type": n.node_type,
+                        "metadata": n.metadata,
+                    }
+                    for n in lineage
+                ],
+            }
+        )
 
     return router
 

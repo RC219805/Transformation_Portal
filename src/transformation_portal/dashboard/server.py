@@ -31,9 +31,10 @@ logger = logging.getLogger(__name__)
 
 # Optional FastAPI import
 try:
+    import uvicorn
     from fastapi import FastAPI, WebSocket, WebSocketDisconnect
     from fastapi.responses import HTMLResponse, JSONResponse
-    import uvicorn
+
     FASTAPI_AVAILABLE = True
 except ImportError:
     FASTAPI_AVAILABLE = False
@@ -142,10 +143,7 @@ def create_app() -> "FastAPI":
         ImportError: If FastAPI is not installed
     """
     if not FASTAPI_AVAILABLE:
-        raise ImportError(
-            "FastAPI is required for the dashboard. "
-            "Install with: pip install fastapi uvicorn"
-        )
+        raise ImportError("FastAPI is required for the dashboard. " "Install with: pip install fastapi uvicorn")
 
     app = FastAPI(
         title="APEX Evaluation Dashboard",
@@ -161,20 +159,24 @@ def create_app() -> "FastAPI":
     @app.get("/api/status")
     async def status():
         """Get dashboard status."""
-        return JSONResponse({
-            "status": "running",
-            "connected_clients": len(_connected_clients),
-            "event_history_size": len(_event_history),
-        })
+        return JSONResponse(
+            {
+                "status": "running",
+                "connected_clients": len(_connected_clients),
+                "event_history_size": len(_event_history),
+            }
+        )
 
     @app.get("/api/history")
     async def history(limit: int = 100):
         """Get recent event history."""
         events = _event_history[-limit:]
-        return JSONResponse({
-            "count": len(events),
-            "events": [e.to_dict() for e in events],
-        })
+        return JSONResponse(
+            {
+                "count": len(events),
+                "events": [e.to_dict() for e in events],
+            }
+        )
 
     @app.websocket("/ws")
     async def websocket_endpoint(websocket: WebSocket):
@@ -201,10 +203,14 @@ def create_app() -> "FastAPI":
                         await websocket.send_text("pong")
                 except asyncio.TimeoutError:
                     # Send heartbeat
-                    await websocket.send_text(json.dumps({
-                        "type": "heartbeat",
-                        "timestamp": datetime.now(timezone.utc).isoformat(),
-                    }))
+                    await websocket.send_text(
+                        json.dumps(
+                            {
+                                "type": "heartbeat",
+                                "timestamp": datetime.now(timezone.utc).isoformat(),
+                            }
+                        )
+                    )
         except WebSocketDisconnect:
             pass
         except Exception as exc:
@@ -441,10 +447,7 @@ class DashboardServer:
     def __init__(self) -> None:
         """Initialize dashboard server."""
         if not FASTAPI_AVAILABLE:
-            raise ImportError(
-                "FastAPI is required for the dashboard. "
-                "Install with: pip install fastapi uvicorn"
-            )
+            raise ImportError("FastAPI is required for the dashboard. " "Install with: pip install fastapi uvicorn")
 
         self.app = create_app()
         self._server_thread: Optional[threading.Thread] = None
@@ -475,6 +478,7 @@ class DashboardServer:
             host: Host to bind to
             port: Port to bind to
         """
+
         def run():
             uvicorn.run(self.app, host=host, port=port)
 

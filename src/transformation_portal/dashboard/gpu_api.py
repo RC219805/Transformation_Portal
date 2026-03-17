@@ -16,7 +16,8 @@ logger = logging.getLogger(__name__)
 # Optional imports
 try:
     from fastapi import APIRouter, WebSocket, WebSocketDisconnect
-    from fastapi.responses import JSONResponse, HTMLResponse
+    from fastapi.responses import HTMLResponse, JSONResponse
+
     FASTAPI_AVAILABLE = True
 except ImportError:
     FASTAPI_AVAILABLE = False
@@ -25,6 +26,7 @@ except ImportError:
 # Try to import pynvml for GPU monitoring
 try:
     import pynvml
+
     pynvml.nvmlInit()
     NVML_AVAILABLE = True
     GPU_COUNT = pynvml.nvmlDeviceGetCount()
@@ -38,6 +40,7 @@ except Exception as exc:
 @dataclass
 class GPUStats:
     """GPU statistics snapshot."""
+
     index: int
     name: str
     temperature: int  # Celsius
@@ -120,30 +123,34 @@ def create_gpu_router() -> "APIRouter":
     async def gpu_status():
         """Get current GPU status."""
         if not NVML_AVAILABLE:
-            return JSONResponse({
-                "available": False,
-                "message": "NVML not available",
-            })
+            return JSONResponse(
+                {
+                    "available": False,
+                    "message": "NVML not available",
+                }
+            )
 
         stats = get_all_gpu_stats()
-        return JSONResponse({
-            "available": True,
-            "gpu_count": GPU_COUNT,
-            "gpus": [
-                {
-                    "index": s.index,
-                    "name": s.name,
-                    "temperature_c": s.temperature,
-                    "gpu_util_percent": s.gpu_util,
-                    "memory_used_gb": s.memory_used / (1024**3),
-                    "memory_total_gb": s.memory_total / (1024**3),
-                    "memory_util_percent": s.memory_util,
-                    "power_draw_w": s.power_draw,
-                    "power_limit_w": s.power_limit,
-                }
-                for s in stats
-            ],
-        })
+        return JSONResponse(
+            {
+                "available": True,
+                "gpu_count": GPU_COUNT,
+                "gpus": [
+                    {
+                        "index": s.index,
+                        "name": s.name,
+                        "temperature_c": s.temperature,
+                        "gpu_util_percent": s.gpu_util,
+                        "memory_used_gb": s.memory_used / (1024**3),
+                        "memory_total_gb": s.memory_total / (1024**3),
+                        "memory_util_percent": s.memory_util,
+                        "power_draw_w": s.power_draw,
+                        "power_limit_w": s.power_limit,
+                    }
+                    for s in stats
+                ],
+            }
+        )
 
     @router.websocket("/stream")
     async def gpu_stream(websocket: WebSocket):

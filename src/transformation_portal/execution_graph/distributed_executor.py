@@ -37,6 +37,7 @@ logger = logging.getLogger(__name__)
 # Optional Ray import
 try:
     import ray
+
     RAY_AVAILABLE = True
 except ImportError:
     ray = None
@@ -108,9 +109,7 @@ class DistributedDAGExecutor:
 
         if self.config.backend == "ray":
             if not RAY_AVAILABLE:
-                raise DistributedExecutorError(
-                    "Ray is not installed. Install with: pip install ray"
-                )
+                raise DistributedExecutorError("Ray is not installed. Install with: pip install ray")
             self._init_ray()
 
     def _init_ray(self) -> None:
@@ -149,9 +148,7 @@ class DistributedDAGExecutor:
         elif self.config.backend == "ray":
             return self._run_ray(inputs)
         else:
-            raise DistributedExecutorError(
-                f"Unknown backend: {self.config.backend}"
-            )
+            raise DistributedExecutorError(f"Unknown backend: {self.config.backend}")
 
     def _run_local(
         self,
@@ -174,13 +171,16 @@ class DistributedDAGExecutor:
 
         # Create Ray remote function based on GPU requirements
         if self.config.num_gpus_per_task > 0:
+
             @ray.remote(num_gpus=self.config.num_gpus_per_task)
             def execute_node(node: Any, node_inputs: dict) -> Any:
                 result = node.run(**node_inputs)
                 if hasattr(result, "outputs"):
                     return result.outputs
                 return result
+
         else:
+
             @ray.remote
             def execute_node(node: Any, node_inputs: dict) -> Any:
                 result = node.run(**node_inputs)
@@ -225,9 +225,7 @@ class DistributedDAGExecutor:
                 )
             except Exception as exc:
                 logger.error("Node '%s' failed: %s", node_id, exc)
-                raise DistributedExecutorError(
-                    f"Node '{node_id}' execution failed: {exc}"
-                ) from exc
+                raise DistributedExecutorError(f"Node '{node_id}' execution failed: {exc}") from exc
 
         return results
 

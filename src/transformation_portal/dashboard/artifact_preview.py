@@ -19,7 +19,8 @@ logger = logging.getLogger(__name__)
 # Optional FastAPI import
 try:
     from fastapi import APIRouter, HTTPException
-    from fastapi.responses import JSONResponse, HTMLResponse, FileResponse, Response
+    from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
+
     FASTAPI_AVAILABLE = True
 except ImportError:
     FASTAPI_AVAILABLE = False
@@ -95,24 +96,24 @@ def detect_content_type(path: Path, data: Optional[bytes] = None) -> str:
     # Try magic bytes if data provided
     if data:
         # PNG
-        if data[:8] == b'\x89PNG\r\n\x1a\n':
+        if data[:8] == b"\x89PNG\r\n\x1a\n":
             return "image/png"
         # JPEG
-        if data[:2] == b'\xff\xd8':
+        if data[:2] == b"\xff\xd8":
             return "image/jpeg"
         # GIF
-        if data[:6] in (b'GIF87a', b'GIF89a'):
+        if data[:6] in (b"GIF87a", b"GIF89a"):
             return "image/gif"
         # WebP
-        if data[:4] == b'RIFF' and data[8:12] == b'WEBP':
+        if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
             return "image/webp"
         # GLB (glTF binary)
-        if data[:4] == b'glTF':
+        if data[:4] == b"glTF":
             return "model/gltf-binary"
         # JSON
-        if data[:1] in (b'{', b'['):
+        if data[:1] in (b"{", b"["):
             try:
-                data[:100].decode('utf-8')
+                data[:100].decode("utf-8")
                 return "application/json"
             except:
                 pass
@@ -158,18 +159,22 @@ def create_preview_router() -> "APIRouter":
         size = path.stat().st_size
 
         # Determine preview capability
-        previewable = content_type.startswith(("image/", "text/", "model/")) or \
-                      content_type in ("application/json", "application/x-yaml")
+        previewable = content_type.startswith(("image/", "text/", "model/")) or content_type in (
+            "application/json",
+            "application/x-yaml",
+        )
 
-        return JSONResponse({
-            "hash": hash,
-            "size_bytes": size,
-            "content_type": content_type,
-            "previewable": previewable,
-            "is_image": content_type.startswith("image/"),
-            "is_3d": content_type.startswith("model/"),
-            "is_text": content_type.startswith("text/") or content_type == "application/json",
-        })
+        return JSONResponse(
+            {
+                "hash": hash,
+                "size_bytes": size,
+                "content_type": content_type,
+                "previewable": previewable,
+                "is_image": content_type.startswith("image/"),
+                "is_3d": content_type.startswith("model/"),
+                "is_text": content_type.startswith("text/") or content_type == "application/json",
+            }
+        )
 
     @router.get("/artifact/{hash}/raw")
     async def artifact_raw(hash: str):
@@ -215,8 +220,9 @@ def create_preview_router() -> "APIRouter":
             raise HTTPException(status_code=400, detail="Not an image")
 
         try:
-            from PIL import Image
             import io
+
+            from PIL import Image
 
             img = Image.open(path)
             img.thumbnail((size, size))
@@ -252,11 +258,13 @@ def create_preview_router() -> "APIRouter":
                 content = f.read(max_chars)
                 truncated = len(content) >= max_chars
 
-            return JSONResponse({
-                "hash": hash,
-                "content": content,
-                "truncated": truncated,
-            })
+            return JSONResponse(
+                {
+                    "hash": hash,
+                    "content": content,
+                    "truncated": truncated,
+                }
+            )
         except UnicodeDecodeError:
             raise HTTPException(status_code=400, detail="Not a text file")
 

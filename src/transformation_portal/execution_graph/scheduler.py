@@ -166,9 +166,7 @@ class PriorityDAGScheduler:
         for node_id, node in self.nodes.items():
             for dep in node.deps:
                 if dep not in self.nodes:
-                    errors.append(
-                        f"Node '{node_id}' depends on missing node '{dep}'"
-                    )
+                    errors.append(f"Node '{node_id}' depends on missing node '{dep}'")
 
         # Check for cycles (simple DFS)
         visited = set()
@@ -243,11 +241,7 @@ class PriorityDAGScheduler:
                 continue
 
             # Gather inputs from dependencies
-            node_inputs = {
-                dep: self.results[dep]
-                for dep in node.deps
-                if dep in self.results
-            }
+            node_inputs = {dep: self.results[dep] for dep in node.deps if dep in self.results}
 
             # Execute node
             logger.debug("Executing node '%s'", node.node_id)
@@ -299,9 +293,7 @@ class PriorityDAGScheduler:
 
         except Exception as exc:
             logger.error("Node '%s' execution failed: %s", node.node_id, exc)
-            raise SchedulerError(
-                f"Node '{node.node_id}' execution failed: {exc}"
-            ) from exc
+            raise SchedulerError(f"Node '{node.node_id}' execution failed: {exc}") from exc
 
     def _execute_on_gpu(
         self,

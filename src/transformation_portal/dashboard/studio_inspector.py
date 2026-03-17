@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 try:
     from fastapi import APIRouter
     from fastapi.responses import HTMLResponse
+
     FASTAPI_AVAILABLE = True
 except ImportError:
     FASTAPI_AVAILABLE = False

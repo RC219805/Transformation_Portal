@@ -16,9 +16,10 @@ logger = logging.getLogger(__name__)
 
 # Optional FastAPI import
 try:
-    from fastapi import APIRouter, HTTPException, Body
-    from fastapi.responses import JSONResponse, HTMLResponse
+    from fastapi import APIRouter, Body, HTTPException
+    from fastapi.responses import HTMLResponse, JSONResponse
     from pydantic import BaseModel
+
     FASTAPI_AVAILABLE = True
 except ImportError:
     FASTAPI_AVAILABLE = False
@@ -86,6 +87,7 @@ def set_pipelines_dir(path: Path) -> None:
 
 class PipelineNode(BaseModel):
     """Node in a pipeline definition."""
+
     id: str
     type: str = "default"
     label: str
@@ -95,6 +97,7 @@ class PipelineNode(BaseModel):
 
 class PipelineEdge(BaseModel):
     """Edge connecting nodes in a pipeline."""
+
     id: str
     source: str
     target: str
@@ -104,6 +107,7 @@ class PipelineEdge(BaseModel):
 
 class PipelineDefinition(BaseModel):
     """Complete pipeline definition."""
+
     name: str
     nodes: list[dict[str, Any]]
     edges: list[dict[str, Any]]
@@ -129,12 +133,14 @@ def create_dag_editor_router() -> "APIRouter":
         for p in _pipelines_dir.glob("*.json"):
             try:
                 data = json.loads(p.read_text())
-                pipelines.append({
-                    "name": p.stem,
-                    "filename": p.name,
-                    "node_count": len(data.get("nodes", [])),
-                    "edge_count": len(data.get("edges", [])),
-                })
+                pipelines.append(
+                    {
+                        "name": p.stem,
+                        "filename": p.name,
+                        "node_count": len(data.get("nodes", [])),
+                        "edge_count": len(data.get("edges", [])),
+                    }
+                )
             except Exception as exc:
                 logger.warning("Failed to read pipeline %s: %s", p, exc)
         return JSONResponse({"pipelines": pipelines})
@@ -186,52 +192,54 @@ def create_dag_editor_router() -> "APIRouter":
     @router.get("/node-types")
     async def get_node_types():
         """Get available node types for the editor."""
-        return JSONResponse({
-            "node_types": [
-                {
-                    "type": "ingest",
-                    "label": "Ingest",
-                    "category": "input",
-                    "inputs": [],
-                    "outputs": ["image", "metadata"],
-                },
-                {
-                    "type": "segment",
-                    "label": "Segmentation (SAM2)",
-                    "category": "processing",
-                    "inputs": ["image"],
-                    "outputs": ["masks", "scores"],
-                },
-                {
-                    "type": "depth",
-                    "label": "Depth Estimation",
-                    "category": "processing",
-                    "inputs": ["image"],
-                    "outputs": ["depth_map"],
-                },
-                {
-                    "type": "materials",
-                    "label": "Material Reconstruction",
-                    "category": "processing",
-                    "inputs": ["image", "masks"],
-                    "outputs": ["albedo", "normal", "roughness"],
-                },
-                {
-                    "type": "quality",
-                    "label": "Quality Assessment (LLaVA)",
-                    "category": "evaluation",
-                    "inputs": ["image"],
-                    "outputs": ["score", "issues"],
-                },
-                {
-                    "type": "export",
-                    "label": "Export",
-                    "category": "output",
-                    "inputs": ["image", "metadata"],
-                    "outputs": [],
-                },
-            ]
-        })
+        return JSONResponse(
+            {
+                "node_types": [
+                    {
+                        "type": "ingest",
+                        "label": "Ingest",
+                        "category": "input",
+                        "inputs": [],
+                        "outputs": ["image", "metadata"],
+                    },
+                    {
+                        "type": "segment",
+                        "label": "Segmentation (SAM2)",
+                        "category": "processing",
+                        "inputs": ["image"],
+                        "outputs": ["masks", "scores"],
+                    },
+                    {
+                        "type": "depth",
+                        "label": "Depth Estimation",
+                        "category": "processing",
+                        "inputs": ["image"],
+                        "outputs": ["depth_map"],
+                    },
+                    {
+                        "type": "materials",
+                        "label": "Material Reconstruction",
+                        "category": "processing",
+                        "inputs": ["image", "masks"],
+                        "outputs": ["albedo", "normal", "roughness"],
+                    },
+                    {
+                        "type": "quality",
+                        "label": "Quality Assessment (LLaVA)",
+                        "category": "evaluation",
+                        "inputs": ["image"],
+                        "outputs": ["score", "issues"],
+                    },
+                    {
+                        "type": "export",
+                        "label": "Export",
+                        "category": "output",
+                        "inputs": ["image", "metadata"],
+                        "outputs": [],
+                    },
+                ]
+            }
+        )
 
     @router.get("/", response_class=HTMLResponse)
     async def editor_ui():

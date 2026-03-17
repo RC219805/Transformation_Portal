@@ -74,9 +74,7 @@ def _common_local_root(paths: list[Path]) -> Path:
     first = paths[0]
     parts = first.parts
     if "snapshots" not in parts:
-        raise HFManifestLoaderError(
-            f"Unable to infer Hugging Face snapshot root from path: {first}"
-        )
+        raise HFManifestLoaderError(f"Unable to infer Hugging Face snapshot root from path: {first}")
     snapshot_index = parts.index("snapshots")
     root = Path(*parts[: snapshot_index + 2])
     return root
@@ -108,9 +106,7 @@ def _infer_local_root_from_hub(
     try:
         from huggingface_hub import hf_hub_download
     except ImportError as exc:
-        raise HFManifestLoaderError(
-            "huggingface_hub is required for HF model resolution"
-        ) from exc
+        raise HFManifestLoaderError("huggingface_hub is required for HF model resolution") from exc
 
     # Try common config files
     config_files = ["config.json", "tokenizer_config.json", "preprocessor_config.json"]
@@ -128,10 +124,7 @@ def _infer_local_root_from_hub(
         except Exception:
             continue
 
-    raise HFManifestLoaderError(
-        f"Cannot determine local root for '{repo_id}@{revision}': "
-        "no common config files found"
-    )
+    raise HFManifestLoaderError(f"Cannot determine local root for '{repo_id}@{revision}': " "no common config files found")
 
 
 def resolve_manifest_model(
@@ -169,9 +162,7 @@ def resolve_manifest_model(
                 force_download=force_download,
             )
         except HFModelLockError as exc:
-            raise HFManifestLoaderError(
-                f"Failed to resolve required files for '{model_key}': {exc}"
-            ) from exc
+            raise HFManifestLoaderError(f"Failed to resolve required files for '{model_key}': {exc}") from exc
 
         local_root = _common_local_root(list(resolved_files.values()))
     else:
