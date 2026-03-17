@@ -132,7 +132,7 @@ artifact_attestation:
     artifacts:
       - filename: "gaussian_splatting_base.pt"
         sha256: "PENDING_VERIFICATION"
-        filesize_bytes: 0
+        filesize_bytes: null  # null = not yet verified; validation should fail on null
     verification:
       method: sha256+source_commit  # sha256_only | sha256+source_commit | reproducibility_trial
       required: true

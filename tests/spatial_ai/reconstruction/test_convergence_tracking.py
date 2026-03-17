@@ -86,14 +86,18 @@ class TestConvergenceTracking:
 
         scene = gaussian_backend.reconstruct(minimal_input, iterations=50)
 
-        valid_states = {
-            ConvergenceState.CONVERGED,
-            ConvergenceState.STALLED,
-            ConvergenceState.DIVERGING,
-            ConvergenceState.IN_PROGRESS,
-        }
-        # Check string value is valid
-        assert scene.convergence in {s.value for s in valid_states} or scene.convergence in valid_states
+        # Convergence can be either a ConvergenceState enum or its string value
+        # depending on serialization path. Both are valid per contract.
+        valid_state_values = {s.value for s in ConvergenceState}
+        valid_states = set(ConvergenceState)
+        
+        convergence = scene.convergence
+        is_valid = (
+            convergence in valid_states  # Enum instance
+            or convergence in valid_state_values  # String value
+            or (hasattr(convergence, 'value') and convergence.value in valid_state_values)
+        )
+        assert is_valid, f"Invalid convergence state: {convergence!r}"
 
     @pytest.mark.skipif(
         not _require_convergence_tests(),

@@ -417,7 +417,8 @@ python -m transformation_portal.spatial_ai segment \
 
 **Total TODOs in codebase**: 254
 **High-priority items**: 7
-**Blocked on external dependencies**: 1 (3DGS canonical source)
+**Blocked on external artifact source**: 1 (3DGS canonical Inria checkpoint)
+**Pending implementation (model sources verified)**: 3 (LLaVA, NVDIFFREC, MaterialGAN)
 
 ---
 
