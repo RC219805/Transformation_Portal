@@ -275,8 +275,7 @@ class PolicyValueNet:
         """
         torch, _, _ = _get_torch()
 
-        # nosec B614: Loading trusted model checkpoints from controlled paths
-        data = torch.load(path, weights_only=True)  # nosec B614
+        data = torch.load(path, weights_only=True)  # nosec B614: trusted checkpoint
         model = cls(
             state_dim=data["state_dim"],
             action_dim=data["action_dim"],

@@ -91,8 +91,7 @@ def load_llava_from_manifest_entry(
     )
 
     try:
-        # nosec B615: Loading from verified local snapshot after HF lock resolution
-        processor = AutoProcessor.from_pretrained(  # nosec B615
+        processor = AutoProcessor.from_pretrained(  # nosec B615: verified local snapshot
             str(resolved.local_root),
             trust_remote_code=False,
         )
@@ -107,8 +106,7 @@ def load_llava_from_manifest_entry(
     )
 
     try:
-        # nosec B615: Loading from verified local snapshot after HF lock resolution
-        model = AutoModelForImageTextToText.from_pretrained(  # nosec B615
+        model = AutoModelForImageTextToText.from_pretrained(  # nosec B615: verified local snapshot
             str(resolved.local_root),
             device_map=device_map,
             torch_dtype=torch_dtype,
