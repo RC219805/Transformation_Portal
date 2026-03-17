@@ -1,7 +1,24 @@
 # APEX Quality Firewall: Pre-Commit Hooks
 # Ensures code meets minimum standards before commit
+#
+# Zero-Diff Formatting Pipeline:
+# - Code is formatted at write-time (via write_formatted())
+# - Pre-commit auto-formats any staged files as a safety net
+# - CI performs verification only (no fixing)
+#
+# Install: pre-commit install
 
 repos:
+  # Zero-diff formatting: auto-format changed files before commit
+  - repo: local
+    hooks:
+      - id: auto-format-staged
+        name: Auto-format staged Python files
+        entry: python scripts/dev/auto_format_changed.py
+        language: system
+        pass_filenames: false
+        stages: [commit]
+
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.5.0
     hooks:
