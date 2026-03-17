@@ -210,7 +210,7 @@ class ThreadedCASServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
 def start_cas_server(
     cas: ArtifactStore,
     *,
-    host: str = "0.0.0.0",
+    host: str = "0.0.0.0",  # nosec B104 - CAS server intentionally binds to all interfaces
     port: int = 6000,
     compress: bool = True,
     threaded: bool = True,
@@ -249,7 +249,7 @@ class CASServerProcess:
         self,
         cas: ArtifactStore,
         *,
-        host: str = "0.0.0.0",
+        host: str = "0.0.0.0",  # nosec B104 - CAS server intentionally binds to all interfaces
         port: int = 6000,
     ) -> None:
         """Initialize server wrapper.

@@ -286,7 +286,7 @@ class WorldModel:
     def load(cls, path: str | Path) -> "WorldModel":
         """Load model from file."""
         torch, _, _ = _get_torch()
-        data = torch.load(path)
+        data = torch.load(path, weights_only=True)
         model = cls(**data["config"])
         model.load_state_dict(data["state_dict"])
         logger.info("Loaded world model from %s", path)

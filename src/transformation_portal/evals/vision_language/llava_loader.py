@@ -91,7 +91,7 @@ def load_llava_from_manifest_entry(
     )
 
     try:
-        processor = AutoProcessor.from_pretrained(
+        processor = AutoProcessor.from_pretrained(  # nosec B615: verified local snapshot
             str(resolved.local_root),
             trust_remote_code=False,
         )
@@ -106,7 +106,7 @@ def load_llava_from_manifest_entry(
     )
 
     try:
-        model = AutoModelForImageTextToText.from_pretrained(
+        model = AutoModelForImageTextToText.from_pretrained(  # nosec B615: verified local snapshot
             str(resolved.local_root),
             device_map=device_map,
             torch_dtype=torch_dtype,

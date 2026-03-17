@@ -275,7 +275,7 @@ class PolicyValueNet:
         """
         torch, _, _ = _get_torch()
 
-        data = torch.load(path)
+        data = torch.load(path, weights_only=True)
         model = cls(
             state_dim=data["state_dim"],
             action_dim=data["action_dim"],
