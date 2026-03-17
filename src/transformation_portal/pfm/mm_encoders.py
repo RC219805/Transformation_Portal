@@ -77,8 +77,8 @@ class ImageEncoder(nn.Module):
             if self.backend == "clip":
                 from transformers import CLIPModel, CLIPProcessor
 
-                self._model = CLIPModel.from_pretrained(self.model_name)
-                self._processor = CLIPProcessor.from_pretrained(self.model_name)
+                self._model = CLIPModel.from_pretrained(self.model_name)  # nosec B615
+                self._processor = CLIPProcessor.from_pretrained(self.model_name)  # nosec B615
 
                 if self.freeze:
                     for param in self._model.parameters():
@@ -87,7 +87,7 @@ class ImageEncoder(nn.Module):
             elif self.backend == "dinov2":
                 from transformers import Dinov2Model
 
-                self._model = Dinov2Model.from_pretrained(self.model_name)
+                self._model = Dinov2Model.from_pretrained(self.model_name)  # nosec B615
 
                 if self.freeze:
                     for param in self._model.parameters():

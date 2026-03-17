@@ -470,7 +470,8 @@ def create_foundation_model(
     model = PipelineFoundationModel(config)
 
     if pretrained_path:
-        state_dict = torch.load(pretrained_path, map_location="cpu")
+        # nosec B614: Loading trusted model checkpoints from controlled paths
+        state_dict = torch.load(pretrained_path, map_location="cpu", weights_only=True)  # nosec B614
         model.load_state_dict(state_dict)
 
     return model

@@ -318,7 +318,8 @@ class RLTrainer:
         """
         torch = _get_torch()
 
-        data = torch.load(path)
+        # nosec B614: Loading trusted trainer checkpoints from controlled paths
+        data = torch.load(path, weights_only=True)  # nosec B614
         self.model.load_state_dict(data["model_state"])
         self.optimizer.load_state_dict(data["optimizer_state"])
         self.total_steps = data["total_steps"]
