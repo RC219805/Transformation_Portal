@@ -27,7 +27,10 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Any, Callable, Optional
+from typing import TYPE_CHECKING, Any, Callable, Optional
+
+if TYPE_CHECKING:
+    from transformation_portal.execution_graph.scheduler import PriorityDAGScheduler
 
 logger = logging.getLogger(__name__)
 

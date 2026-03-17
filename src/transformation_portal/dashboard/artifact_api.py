@@ -9,7 +9,11 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
+
+if TYPE_CHECKING:
+    from transformation_portal.storage.cas_store import ArtifactStore
+    from transformation_portal.storage.merkle_dag import MerkleDAG
 
 logger = logging.getLogger(__name__)
 

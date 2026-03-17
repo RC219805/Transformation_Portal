@@ -9,7 +9,10 @@ from __future__ import annotations
 import logging
 import mimetypes
 from pathlib import Path
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
+
+if TYPE_CHECKING:
+    from transformation_portal.storage.cas_store import ArtifactStore
 
 logger = logging.getLogger(__name__)
 

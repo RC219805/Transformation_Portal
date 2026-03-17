@@ -11,7 +11,11 @@ This module provides:
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
+
+if TYPE_CHECKING:
+    from transformation_portal.dashboard.node_state_store import NodeStateStore
+    from transformation_portal.storage.merkle_dag import MerkleDAG
 
 logger = logging.getLogger(__name__)
 

@@ -21,7 +21,10 @@ from __future__ import annotations
 
 import logging
 import multiprocessing as mp
-from typing import Any, Callable, Optional
+from typing import TYPE_CHECKING, Any, Callable, Optional
+
+if TYPE_CHECKING:
+    from transformation_portal.runtime.gpu_semaphore import GPUSemaphore
 
 logger = logging.getLogger(__name__)
 

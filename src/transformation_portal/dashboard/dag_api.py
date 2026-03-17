@@ -7,7 +7,11 @@ and Merkle lineage data for visualization.
 from __future__ import annotations
 
 import logging
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
+
+if TYPE_CHECKING:
+    from transformation_portal.execution_graph.scheduler import PriorityDAGScheduler
+    from transformation_portal.storage.merkle_dag import MerkleDAG
 
 logger = logging.getLogger(__name__)
 

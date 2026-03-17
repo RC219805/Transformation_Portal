@@ -8,7 +8,10 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
+
+if TYPE_CHECKING:
+    from transformation_portal.evals.apex_harness import ApexEvaluationHarness
 
 from transformation_portal.execution_graph.nodes.base import DAGNode, NodeResult
 

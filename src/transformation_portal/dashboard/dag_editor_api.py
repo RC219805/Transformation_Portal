@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from pathlib import Path
 from typing import Any, Optional
 
@@ -26,6 +27,50 @@ except ImportError:
 
 # Default pipelines directory
 _pipelines_dir: Path = Path("pipelines")
+
+# Safe filename pattern: alphanumeric, underscores, hyphens, dots (no path separators)
+_SAFE_NAME_PATTERN = re.compile(r"^[a-zA-Z0-9_\-\.]+$")
+
+
+def _get_safe_pipeline_path(name: str) -> Path:
+    """Construct a safe path for a pipeline JSON file.
+
+    This prevents path traversal attacks by:
+    1. Validating the name against a safe pattern
+    2. Ensuring the resolved path stays within _pipelines_dir
+
+    Args:
+        name: Pipeline name (filename without extension)
+
+    Returns:
+        Safe resolved path to the pipeline JSON file
+
+    Raises:
+        HTTPException: If the name is invalid or would escape the directory
+    """
+    # Reject empty or whitespace-only names
+    if not name or not name.strip():
+        raise HTTPException(status_code=400, detail="Invalid pipeline name: empty")
+
+    # Reject names with path separators or traversal patterns
+    if "/" in name or "\\" in name or ".." in name:
+        raise HTTPException(status_code=400, detail="Invalid pipeline name: path traversal")
+
+    # Validate against safe filename pattern
+    if not _SAFE_NAME_PATTERN.match(name):
+        raise HTTPException(status_code=400, detail="Invalid pipeline name: unsafe characters")
+
+    # Construct path and resolve
+    base_dir = _pipelines_dir.resolve()
+    filepath = (base_dir / f"{name}.json").resolve()
+
+    # Verify the path is within the base directory
+    try:
+        filepath.relative_to(base_dir)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid pipeline name: path traversal")
+
+    return filepath
 
 
 def set_pipelines_dir(path: Path) -> None:
@@ -98,7 +143,7 @@ def create_dag_editor_router() -> "APIRouter":
     async def get_pipeline(name: str):
         """Get a specific pipeline definition."""
         _pipelines_dir.mkdir(parents=True, exist_ok=True)
-        filepath = _pipelines_dir / f"{name}.json"
+        filepath = _get_safe_pipeline_path(name)
         if not filepath.exists():
             raise HTTPException(status_code=404, detail=f"Pipeline not found: {name}")
         
@@ -112,7 +157,7 @@ def create_dag_editor_router() -> "APIRouter":
     async def save_pipeline(name: str, payload: dict = Body(...)):
         """Save a pipeline definition."""
         _pipelines_dir.mkdir(parents=True, exist_ok=True)
-        filepath = _pipelines_dir / f"{name}.json"
+        filepath = _get_safe_pipeline_path(name)
         
         # Add metadata
         payload["name"] = name
@@ -127,7 +172,7 @@ def create_dag_editor_router() -> "APIRouter":
     @router.delete("/pipelines/{name}")
     async def delete_pipeline(name: str):
         """Delete a pipeline definition."""
-        filepath = _pipelines_dir / f"{name}.json"
+        filepath = _get_safe_pipeline_path(name)
         if not filepath.exists():
             raise HTTPException(status_code=404, detail=f"Pipeline not found: {name}")
         

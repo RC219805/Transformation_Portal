@@ -14,7 +14,11 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Callable, Coroutine, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Callable, Coroutine, Dict, List, Optional
+
+if TYPE_CHECKING:
+    from transformation_portal.storage.cas_store import ArtifactStore
+    from transformation_portal.storage.merkle_dag import MerkleDAG
 
 logger = logging.getLogger(__name__)
 
