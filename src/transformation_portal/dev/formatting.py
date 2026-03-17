@@ -167,9 +167,11 @@ def write_formatted(
     tmp_path = Path(tmp_path_str)
 
     try:
-        # Write content to temp file
-        os.write(fd, content.encode(encoding))
-        os.close(fd)
+        # Write content to temp file (ensure fd is closed even on write failure)
+        try:
+            os.write(fd, content.encode(encoding))
+        finally:
+            os.close(fd)
         logger.debug("Wrote %d bytes to temp file %s", len(content), tmp_path)
 
         # Apply formatting to temp file
@@ -180,8 +182,7 @@ def write_formatted(
         logger.debug("Atomically moved %s to %s", tmp_path, path)
 
     except Exception:
-        # Clean up temp file on error
-        os.close(fd) if fd else None  # Ensure fd is closed
+        # Clean up temp file on error (fd already closed by inner try/finally)
         if tmp_path.exists():
             tmp_path.unlink()
         raise
@@ -359,9 +360,11 @@ def write_canonical(
     tmp_path = Path(tmp_path_str)
 
     try:
-        # Write content to temp file
-        os.write(fd, content.encode(encoding))
-        os.close(fd)
+        # Write content to temp file (ensure fd is closed even on write failure)
+        try:
+            os.write(fd, content.encode(encoding))
+        finally:
+            os.close(fd)
         logger.debug("Wrote %d bytes to temp file %s", len(content), tmp_path)
 
         # Apply formatting to temp file
@@ -372,8 +375,7 @@ def write_canonical(
         logger.debug("Atomically moved %s to %s", tmp_path, path)
 
     except Exception:
-        # Clean up temp file on error
-        os.close(fd) if fd else None  # Ensure fd is closed
+        # Clean up temp file on error (fd already closed by inner try/finally)
         if tmp_path.exists():
             tmp_path.unlink()
         raise
