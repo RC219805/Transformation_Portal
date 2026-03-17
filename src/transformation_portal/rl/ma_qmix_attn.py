@@ -121,6 +121,7 @@ class AttnMixer:
         self.embed_dim = embed_dim
         self.n_heads = n_heads
         self.head_dim = embed_dim // n_heads
+        self.scale_factor = self.head_dim**0.5  # Pre-compute for attention scaling
 
         # Attention projections
         # Query from global state, Keys/Values from agent embeddings
@@ -183,7 +184,7 @@ class AttnMixer:
 
         # Scaled dot-product attention
         # q: [B, H, D], k: [B, H, N, D]
-        attn_scores = torch.einsum("bhd,bhnd->bhn", q, k) / (self.head_dim**0.5)  # [B, H, N]
+        attn_scores = torch.einsum("bhd,bhnd->bhn", q, k) / self.scale_factor  # [B, H, N]
 
         # Apply mask if provided
         if mask is not None:

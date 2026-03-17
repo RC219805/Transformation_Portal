@@ -207,11 +207,11 @@ def train_world_model(
             m_target = batch["metrics"]
 
             # Forward
-            s2_pred, m_pred = model.forward(s, a)
+            next_state_pred, metrics_pred = model.forward(s, a)
 
             # Loss
-            state_loss = (s2_pred - s2_target).pow(2).mean()
-            metrics_loss = (m_pred - m_target).pow(2).mean()
+            state_loss = (next_state_pred - s2_target).pow(2).mean()
+            metrics_loss = (metrics_pred - m_target).pow(2).mean()
 
             loss = (
                 config.state_loss_weight * state_loss

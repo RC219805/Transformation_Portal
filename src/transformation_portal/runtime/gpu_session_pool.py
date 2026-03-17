@@ -83,8 +83,11 @@ def _worker_loop(
         state = init_fn(device_id)
         logger.info("Worker %s initialized successfully", worker_id)
     except Exception as exc:
-        logger.error("Worker %s initialization failed: %s", worker_id, exc)
-        result_queue.put(("init_error", str(exc)))
+        import traceback
+
+        error_detail = f"{type(exc).__name__}: {exc}\n{traceback.format_exc()}"
+        logger.error("Worker %s initialization failed: %s", worker_id, error_detail)
+        result_queue.put(("init_error", error_detail))
         return
 
     result_queue.put(("init_ok", worker_id))

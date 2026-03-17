@@ -148,8 +148,12 @@ class GPUUtilizationMonitor:
             pynvml.nvmlInit()
             self._nvml_initialized = True
             return True
+        except ImportError:
+            logger.debug("pynvml module not installed; GPU monitoring unavailable")
+            return False
         except Exception as e:
-            logger.debug("NVML not available: %s", e)
+            # pynvml.NVMLError or other initialization errors
+            logger.debug("NVML initialization failed (%s): %s", type(e).__name__, e)
             return False
 
     def get_utilization(self, device_index: int = 0) -> float:

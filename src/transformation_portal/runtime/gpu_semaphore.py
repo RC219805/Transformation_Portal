@@ -130,8 +130,12 @@ class GPUSemaphore:
         if cuda_visible:
             try:
                 return [int(x.strip()) for x in cuda_visible.split(",") if x.strip()]
-            except ValueError:
-                pass
+            except ValueError as exc:
+                logger.warning(
+                    "Failed to parse CUDA_VISIBLE_DEVICES='%s': %s",
+                    cuda_visible,
+                    exc,
+                )
 
         return []
 

@@ -58,13 +58,13 @@ def ucb_score(parent: MuZeroNode, child: MuZeroNode, config: MCTSConfig) -> floa
 
     Uses PUCT formula from AlphaZero/MuZero.
     """
-    pb_c = (
+    exploration_bonus = (
         math.log((parent.visit_count + config.c_puct + 1) / config.c_puct)
         + config.c_puct
     )
-    pb_c *= math.sqrt(parent.visit_count) / (child.visit_count + 1)
+    exploration_bonus *= math.sqrt(parent.visit_count) / (child.visit_count + 1)
 
-    prior_score = pb_c * child.prior
+    prior_score = exploration_bonus * child.prior
     value_score = child.value()
 
     return prior_score + value_score

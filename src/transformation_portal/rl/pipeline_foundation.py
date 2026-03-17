@@ -405,8 +405,13 @@ class PipelineFoundationModel(nn.Module):
             embeddings = out["contrastive"]
             positive_idx = batch["positive_idx"]
 
+            # Compute similarity matrix and normalize by temperature
             logits = torch.matmul(embeddings, embeddings.T) / self.config.contrastive_temp
-            labels = positive_idx
+
+            # For InfoNCE, labels should be the indices of positive samples
+            # If positive_idx[i] = j, then sample i's positive is sample j
+            # We need to ensure positive_idx correctly represents the positive pair indices
+            labels = positive_idx.to(logits.device)
             losses["contrastive"] = F.cross_entropy(logits, labels)
 
         # Total loss

@@ -48,8 +48,11 @@ def _worker_entry(
         result = fn(*args, **kwargs)
         result_queue.put(("ok", result))
     except Exception as e:
-        # Serialize exception as string (exception objects may not pickle)
-        result_queue.put(("error", f"{type(e).__name__}: {e}"))
+        import traceback
+
+        # Serialize exception with full traceback for debugging
+        error_msg = f"{type(e).__name__}: {e}\n{traceback.format_exc()}"
+        result_queue.put(("error", error_msg))
 
 
 def run_spawned(
