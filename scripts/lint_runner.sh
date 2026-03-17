@@ -18,12 +18,35 @@ cd "$REPO_ROOT"
 
 if [ -n "${PYTHON_BIN:-}" ]; then
     :
-elif [ -x .venv/bin/python ]; then
-    PYTHON_BIN=.venv/bin/python
-elif command -v python3 >/dev/null 2>&1; then
-    PYTHON_BIN=python3
 else
-    PYTHON_BIN=python
+    pick_python_with_lint_modules() {
+        local candidate=""
+        for candidate in "$@"; do
+            [ -n "$candidate" ] || continue
+            if "$candidate" -m flake8 --version >/dev/null 2>&1 \
+                && "$candidate" -m pylint --version >/dev/null 2>&1; then
+                echo "$candidate"
+                return 0
+            fi
+        done
+        return 1
+    }
+
+    CANDIDATES=()
+    if [ -x .venv/bin/python ]; then
+        CANDIDATES+=(".venv/bin/python")
+    fi
+    if command -v python3 >/dev/null 2>&1; then
+        CANDIDATES+=("python3")
+    fi
+    if command -v python >/dev/null 2>&1; then
+        CANDIDATES+=("python")
+    fi
+
+    if ! PYTHON_BIN=$(pick_python_with_lint_modules "${CANDIDATES[@]}"); then
+        # Preserve historical preference order so missing-module errors remain clear.
+        PYTHON_BIN="${CANDIDATES[0]:-python3}"
+    fi
 fi
 
 readonly PYTHON_BIN
@@ -44,6 +67,11 @@ log() {
 require_module() {
     local module="$1"
     if ! "$PYTHON_BIN" -m "$module" --version >/dev/null 2>&1; then
+        if [ "$MODE" = "advisory" ]; then
+            log "'$module' not available in interpreter '$PYTHON_BIN'"
+            log "advisory mode: skipping lint checks because dependencies are unavailable"
+            exit 0
+        fi
         log "'$module' not available in interpreter '$PYTHON_BIN'"
         log "prepare the environment with: make install-core"
         exit 1
