@@ -131,8 +131,7 @@ def _verify_file(file_path: Path, required_file: HFRequiredFile) -> None:
         actual_size = file_path.stat().st_size
         if actual_size != required_file.filesize_bytes:
             raise HFModelLockError(
-                f"File size mismatch for {required_file.path}: "
-                f"expected {required_file.filesize_bytes}, got {actual_size}"
+                f"File size mismatch for {required_file.path}: " f"expected {required_file.filesize_bytes}, got {actual_size}"
             )
 
     if required_file.sha256 is not None:
@@ -140,8 +139,7 @@ def _verify_file(file_path: Path, required_file: HFRequiredFile) -> None:
         expected_sha256 = required_file.sha256.lower()
         if actual_sha256 != expected_sha256:
             raise HFModelLockError(
-                f"SHA-256 mismatch for {required_file.path}: "
-                f"expected {expected_sha256}, got {actual_sha256}"
+                f"SHA-256 mismatch for {required_file.path}: " f"expected {expected_sha256}, got {actual_sha256}"
             )
 
 
@@ -167,9 +165,7 @@ def resolve_all_required_files(
     try:
         from huggingface_hub import hf_hub_download
     except ImportError as exc:
-        raise HFModelLockError(
-            "huggingface_hub is required for HF model resolution"
-        ) from exc
+        raise HFModelLockError("huggingface_hub is required for HF model resolution") from exc
 
     resolved_files: dict[str, Path] = {}
 
@@ -188,9 +184,7 @@ def resolve_all_required_files(
             )
             local_path = Path(local_path)
         except Exception as exc:
-            raise HFModelLockError(
-                f"Failed to download '{required_file.path}' from '{record.repo_id}': {exc}"
-            ) from exc
+            raise HFModelLockError(f"Failed to download '{required_file.path}' from '{record.repo_id}': {exc}") from exc
 
         # Verify file if specifications provided
         if required_file.sha256 or required_file.filesize_bytes:

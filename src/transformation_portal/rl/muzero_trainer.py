@@ -86,9 +86,7 @@ class MuZeroTrainer:
 
         # Initial losses
         value_loss = F.mse_loss(v.squeeze(-1), target_values[:, 0])
-        policy_loss = F.cross_entropy(
-            p.log(), target_policies[:, 0], reduction="mean"
-        )
+        policy_loss = F.cross_entropy(p.log(), target_policies[:, 0], reduction="mean")
         reward_loss = torch.tensor(0.0, device=obs.device)
 
         # Unroll dynamics
@@ -96,15 +94,9 @@ class MuZeroTrainer:
             s, p, v, r = self.model.recurrent_inference(s, actions[:, t])
 
             # Accumulate losses
-            value_loss = value_loss + F.mse_loss(
-                v.squeeze(-1), target_values[:, t + 1]
-            )
-            reward_loss = reward_loss + F.mse_loss(
-                r.squeeze(-1), target_rewards[:, t]
-            )
-            policy_loss = policy_loss + F.cross_entropy(
-                p.log(), target_policies[:, t + 1], reduction="mean"
-            )
+            value_loss = value_loss + F.mse_loss(v.squeeze(-1), target_values[:, t + 1])
+            reward_loss = reward_loss + F.mse_loss(r.squeeze(-1), target_rewards[:, t])
+            policy_loss = policy_loss + F.cross_entropy(p.log(), target_policies[:, t + 1], reduction="mean")
 
         # Average over unroll steps
         n_steps = unroll_steps + 1
@@ -185,10 +177,7 @@ def train_muzero(
             epoch_losses.append(losses)
 
         # Average epoch losses
-        avg_losses = {
-            k: sum(l[k] for l in epoch_losses) / len(epoch_losses)
-            for k in epoch_losses[0]
-        }
+        avg_losses = {k: sum(l[k] for l in epoch_losses) / len(epoch_losses) for k in epoch_losses[0]}
 
         history.append(avg_losses)
         print(

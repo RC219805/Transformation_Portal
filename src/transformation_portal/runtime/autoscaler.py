@@ -114,20 +114,12 @@ class ScalingHistory:
     def recent_scale_ups(self, window_sec: int = 600) -> int:
         """Count recent scale-up decisions."""
         cutoff = time.time() - window_sec
-        return sum(
-            1
-            for ts, dec in self.decisions
-            if ts > cutoff and dec.action == "scale_up"
-        )
+        return sum(1 for ts, dec in self.decisions if ts > cutoff and dec.action == "scale_up")
 
     def recent_scale_downs(self, window_sec: int = 600) -> int:
         """Count recent scale-down decisions."""
         cutoff = time.time() - window_sec
-        return sum(
-            1
-            for ts, dec in self.decisions
-            if ts > cutoff and dec.action == "scale_down"
-        )
+        return sum(1 for ts, dec in self.decisions if ts > cutoff and dec.action == "scale_down")
 
 
 class GPUUtilizationMonitor:
@@ -272,9 +264,7 @@ class GPUAutoscaler:
 
             # Estimate pending from difference
             available_gpus = resources.get("GPU", 0)
-            metrics.pending_tasks = max(
-                0, metrics.current_workers - int(available_gpus)
-            )
+            metrics.pending_tasks = max(0, metrics.current_workers - int(available_gpus))
 
         except Exception as e:
             logger.debug("Failed to get Ray metrics: %s", e)

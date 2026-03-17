@@ -61,9 +61,7 @@ class DynamicsNet(nn.Module):
         self.state_head = nn.Linear(256, latent_dim)
         self.reward_head = nn.Linear(256, 1)
 
-    def forward(
-        self, s: torch.Tensor, a: torch.Tensor
-    ) -> tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, s: torch.Tensor, a: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         """Predict next state and reward."""
         a_emb = self.action_emb(a)
         x = torch.cat([s, a_emb], dim=-1)
@@ -130,9 +128,7 @@ class MuZeroModel(nn.Module):
         self.dyn = DynamicsNet(latent_dim, action_dim)
         self.pred = PredictionNet(latent_dim, action_dim)
 
-    def initial_inference(
-        self, obs: torch.Tensor
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    def initial_inference(self, obs: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Encode observation and predict policy/value.
 
         Used at the root of MCTS search.

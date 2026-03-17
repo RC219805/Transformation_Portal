@@ -201,10 +201,7 @@ class ArtifactStore:
             actual_sha = self._sha256_file(dst)
             if actual_sha != sha:
                 dst.unlink()  # Remove corrupt copy
-                raise CASError(
-                    f"Hash verification failed after copy: "
-                    f"expected {sha}, got {actual_sha}"
-                )
+                raise CASError(f"Hash verification failed after copy: " f"expected {sha}, got {actual_sha}")
 
         logger.info("CAS add: %s (%d bytes)", sha[:8], dst.stat().st_size)
 

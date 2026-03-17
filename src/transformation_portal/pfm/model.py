@@ -41,9 +41,7 @@ class GraphAttention(nn.Module):
 
     def __init__(self, d_model: int, n_heads: int, dropout: float = 0.1) -> None:
         super().__init__()
-        self.attn = nn.MultiheadAttention(
-            d_model, n_heads, dropout=dropout, batch_first=True
-        )
+        self.attn = nn.MultiheadAttention(d_model, n_heads, dropout=dropout, batch_first=True)
         self.norm = nn.LayerNorm(d_model)
         self.dropout = nn.Dropout(dropout)
 
@@ -76,9 +74,7 @@ class TemporalBlock(nn.Module):
         dropout: float = 0.1,
     ) -> None:
         super().__init__()
-        self.self_attn = nn.MultiheadAttention(
-            d_model, n_heads, dropout=dropout, batch_first=True
-        )
+        self.self_attn = nn.MultiheadAttention(d_model, n_heads, dropout=dropout, batch_first=True)
         self.ffn = nn.Sequential(
             nn.Linear(d_model, d_ff),
             nn.GELU(),
@@ -145,25 +141,24 @@ class PipelineFoundationModel(nn.Module):
         self.feat_proj = nn.Linear(config.feature_dim, config.d_model)
 
         # Graph attention layers
-        self.graph_layers = nn.ModuleList([
-            GraphAttention(config.d_model, config.n_heads // 2, config.dropout)
-            for _ in range(config.n_graph_layers)
-        ])
+        self.graph_layers = nn.ModuleList(
+            [GraphAttention(config.d_model, config.n_heads // 2, config.dropout) for _ in range(config.n_graph_layers)]
+        )
 
         # Temporal transformer (operates on flattened graph)
         self.temporal_dim = config.d_model * config.max_nodes
         self.temporal_proj_in = nn.Linear(self.temporal_dim, config.d_model)
         self.temporal_proj_out = nn.Linear(config.d_model, self.temporal_dim)
 
-        self.temporal_layers = nn.ModuleList([
-            TemporalBlock(config.d_model, config.n_heads, config.d_ff, config.dropout)
-            for _ in range(config.n_temporal_layers)
-        ])
+        self.temporal_layers = nn.ModuleList(
+            [
+                TemporalBlock(config.d_model, config.n_heads, config.d_ff, config.dropout)
+                for _ in range(config.n_temporal_layers)
+            ]
+        )
 
         # Positional encoding
-        self.pos_embed = nn.Parameter(
-            torch.randn(1, config.max_seq_len, config.d_model) * 0.02
-        )
+        self.pos_embed = nn.Parameter(torch.randn(1, config.max_seq_len, config.d_model) * 0.02)
 
         # Output heads
         self.policy_head = nn.Sequential(
@@ -236,9 +231,7 @@ class PipelineFoundationModel(nn.Module):
         # Create causal mask if needed
         causal_mask = None
         if causal:
-            causal_mask = torch.triu(
-                torch.ones(t, t, device=h.device), diagonal=1
-            ).bool()
+            causal_mask = torch.triu(torch.ones(t, t, device=h.device), diagonal=1).bool()
 
         # Apply temporal layers
         for layer in self.temporal_layers:

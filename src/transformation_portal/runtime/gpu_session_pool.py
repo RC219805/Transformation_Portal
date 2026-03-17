@@ -108,15 +108,17 @@ def _worker_loop(
                 result = task.fn(state, *task.args, **task.kwargs)
                 elapsed = time.time() - start_time
 
-                result_queue.put((
-                    "ok",
-                    {
-                        "result": result,
-                        "task_id": task.task_id,
-                        "worker_id": worker_id,
-                        "elapsed_ms": elapsed * 1000,
-                    },
-                ))
+                result_queue.put(
+                    (
+                        "ok",
+                        {
+                            "result": result,
+                            "task_id": task.task_id,
+                            "worker_id": worker_id,
+                            "elapsed_ms": elapsed * 1000,
+                        },
+                    )
+                )
 
             except Exception as exc:
                 logger.error(
@@ -125,14 +127,16 @@ def _worker_loop(
                     task.task_id,
                     exc,
                 )
-                result_queue.put((
-                    "error",
-                    {
-                        "error": str(exc),
-                        "task_id": task.task_id,
-                        "worker_id": worker_id,
-                    },
-                ))
+                result_queue.put(
+                    (
+                        "error",
+                        {
+                            "error": str(exc),
+                            "task_id": task.task_id,
+                            "worker_id": worker_id,
+                        },
+                    )
+                )
 
         except Exception as exc:
             logger.error("Worker %s loop error: %s", worker_id, exc)
@@ -211,9 +215,7 @@ class GPUSessionPool:
                 init_results.append((status, payload))
             except Exception as exc:
                 self.shutdown()
-                raise SessionPoolError(
-                    f"Worker initialization timed out after {init_timeout}s"
-                ) from exc
+                raise SessionPoolError(f"Worker initialization timed out after {init_timeout}s") from exc
 
         # Check for initialization errors
         errors = [p for s, p in init_results if s == "init_error"]
@@ -280,9 +282,7 @@ class GPUSessionPool:
             raise SessionPoolError(f"Result timeout: {exc}") from exc
 
         if status == "error":
-            raise SessionPoolError(
-                f"Task {payload.get('task_id')} failed: {payload.get('error')}"
-            )
+            raise SessionPoolError(f"Task {payload.get('task_id')} failed: {payload.get('error')}")
 
         return payload.get("result")
 
@@ -304,9 +304,7 @@ class GPUSessionPool:
             raise SessionPoolError(f"Result timeout: {exc}") from exc
 
         if status == "error":
-            raise SessionPoolError(
-                f"Task {payload.get('task_id')} failed: {payload.get('error')}"
-            )
+            raise SessionPoolError(f"Task {payload.get('task_id')} failed: {payload.get('error')}")
 
         return payload
 

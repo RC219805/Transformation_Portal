@@ -137,10 +137,7 @@ class NodeStateStore:
             status="running",
             start_time=self._now(),
             config=config or {},
-            nodes={
-                node_id: NodeExecutionState(node_id=node_id)
-                for node_id in node_ids
-            },
+            nodes={node_id: NodeExecutionState(node_id=node_id) for node_id in node_ids},
         )
         self.run_history.append(run_id)
         self._trim_history()

@@ -58,10 +58,7 @@ def ucb_score(parent: MuZeroNode, child: MuZeroNode, config: MCTSConfig) -> floa
 
     Uses PUCT formula from AlphaZero/MuZero.
     """
-    exploration_bonus = (
-        math.log((parent.visit_count + config.c_puct + 1) / config.c_puct)
-        + config.c_puct
-    )
+    exploration_bonus = math.log((parent.visit_count + config.c_puct + 1) / config.c_puct) + config.c_puct
     exploration_bonus *= math.sqrt(parent.visit_count) / (child.visit_count + 1)
 
     prior_score = exploration_bonus * child.prior
@@ -70,9 +67,7 @@ def ucb_score(parent: MuZeroNode, child: MuZeroNode, config: MCTSConfig) -> floa
     return prior_score + value_score
 
 
-def select_child(
-    node: MuZeroNode, config: MCTSConfig
-) -> tuple[int, MuZeroNode]:
+def select_child(node: MuZeroNode, config: MCTSConfig) -> tuple[int, MuZeroNode]:
     """Select best child using UCB."""
     best_score = -float("inf")
     best_action = -1
@@ -122,9 +117,7 @@ def add_exploration_noise(
 
     frac = config.root_exploration_fraction
     for idx, action in enumerate(actions):
-        node.children[action].prior = (
-            node.children[action].prior * (1 - frac) + noise[idx] * frac
-        )
+        node.children[action].prior = node.children[action].prior * (1 - frac) + noise[idx] * frac
 
 
 def backpropagate(
@@ -181,13 +174,9 @@ def run_mcts(
 
         # EXPAND: use dynamics model
         parent = path[-2] if len(path) > 1 else root
-        action = next(
-            a for a, c in parent.children.items() if c is node
-        )
+        action = next(a for a, c in parent.children.items() if c is node)
 
-        s2, p2, v2, r = model.recurrent_inference(
-            state, torch.tensor([action], device=state.device)
-        )
+        s2, p2, v2, r = model.recurrent_inference(state, torch.tensor([action], device=state.device))
 
         node.reward = r.item()
         expand_node(node, s2, p2)
@@ -196,9 +185,7 @@ def run_mcts(
         backpropagate(path, v2.item(), config.discount)
 
     # Select action with most visits
-    visit_counts = {
-        action: child.visit_count for action, child in root.children.items()
-    }
+    visit_counts = {action: child.visit_count for action, child in root.children.items()}
     best_action = max(visit_counts, key=lambda a: visit_counts[a])
 
     return best_action, visit_counts
@@ -218,7 +205,4 @@ def get_action_probs(
         Action probability distribution
     """
     total = sum(v ** (1 / temperature) for v in visit_counts.values())
-    return {
-        a: (v ** (1 / temperature)) / total
-        for a, v in visit_counts.items()
-    }
+    return {a: (v ** (1 / temperature)) / total for a, v in visit_counts.items()}

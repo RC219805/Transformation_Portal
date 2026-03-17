@@ -204,9 +204,7 @@ class LlavaQualityBackend:
         try:
             import torch
         except ImportError as exc:
-            raise LlavaBackendError(
-                "torch is required for LLaVA inference"
-            ) from exc
+            raise LlavaBackendError("torch is required for LLaVA inference") from exc
 
         # Apply chat template to get processed inputs
         processed = loaded.processor.apply_chat_template(

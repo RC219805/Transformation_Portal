@@ -188,7 +188,7 @@ class GATLayer:
         out = out.mean(dim=1)  # [N, D]
 
         # Add bias
-        out = out + self.bias[: D]  # Use first D elements of bias
+        out = out + self.bias[:D]  # Use first D elements of bias
 
         # Residual connection
         if self.residual:

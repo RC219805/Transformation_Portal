@@ -309,11 +309,7 @@ class RolloutBuffer:
                 delta = self.rewards[i] - self.values[i].item()
                 gae = delta
             else:
-                delta = (
-                    self.rewards[i]
-                    + gamma * next_value
-                    - self.values[i].item()
-                )
+                delta = self.rewards[i] + gamma * next_value - self.values[i].item()
                 gae = delta + gamma * gae_lambda * gae
 
             advantages.insert(0, gae)

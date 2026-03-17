@@ -378,10 +378,7 @@ class AutoOptimizer:
                 return output
 
             # Submit tasks
-            futures = [
-                eval_candidate.remote(self.run_fn, c.pipeline)
-                for c in candidates[: self.config.beam_width]
-            ]
+            futures = [eval_candidate.remote(self.run_fn, c.pipeline) for c in candidates[: self.config.beam_width]]
 
             # Gather results
             outputs = ray.get(futures)

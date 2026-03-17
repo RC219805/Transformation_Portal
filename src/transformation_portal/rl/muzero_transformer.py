@@ -28,9 +28,7 @@ class PositionalEncoding(nn.Module):
 
         pe = torch.zeros(max_len, d_model)
         position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
-        div_term = torch.exp(
-            torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model)
-        )
+        div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model))
 
         pe[:, 0::2] = torch.sin(position * div_term)
         pe[:, 1::2] = torch.cos(position * div_term)
@@ -158,9 +156,7 @@ class MuZeroTransformer(nn.Module):
         # Create causal mask if not provided
         if mask is None:
             seq_len = x.size(1)
-            mask = torch.triu(
-                torch.ones(seq_len, seq_len, device=x.device), diagonal=1
-            ).bool()
+            mask = torch.triu(torch.ones(seq_len, seq_len, device=x.device), diagonal=1).bool()
 
         # Transform
         h = self.transformer(x, mask=mask)
@@ -176,9 +172,7 @@ class MuZeroTransformer(nn.Module):
             "hidden": h,
         }
 
-    def initial_inference(
-        self, obs: torch.Tensor
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    def initial_inference(self, obs: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Initial inference for MCTS root.
 
         Args:
@@ -190,9 +184,7 @@ class MuZeroTransformer(nn.Module):
         # Create single-step sequence
         obs_seq = obs.unsqueeze(1)  # [B, 1, obs_dim]
         # Use zero action for initial step
-        action_seq = torch.zeros(
-            obs.size(0), 1, dtype=torch.long, device=obs.device
-        )
+        action_seq = torch.zeros(obs.size(0), 1, dtype=torch.long, device=obs.device)
 
         out = self.forward(obs_seq, action_seq)
 
@@ -217,14 +209,10 @@ class MuZeroTransformer(nn.Module):
             Tuple of (next_hidden, policy, value, reward)
         """
         # Append new action
-        new_actions = torch.cat(
-            [context_actions, action.unsqueeze(1)], dim=1
-        )
+        new_actions = torch.cat([context_actions, action.unsqueeze(1)], dim=1)
 
         # Use dummy observation for new position
-        dummy_obs = torch.zeros(
-            context_obs.size(0), 1, self.obs_dim, device=context_obs.device
-        )
+        dummy_obs = torch.zeros(context_obs.size(0), 1, self.obs_dim, device=context_obs.device)
         new_obs = torch.cat([context_obs, dummy_obs], dim=1)
 
         out = self.forward(new_obs, new_actions)
@@ -266,17 +254,19 @@ class MuZeroTransformerV2(nn.Module):
         self.pos = LearnedPositionalEncoding(d_model, max_len=512)
 
         # Transformer blocks
-        self.blocks = nn.ModuleList([
-            nn.TransformerEncoderLayer(
-                d_model=d_model,
-                nhead=n_heads,
-                dim_feedforward=d_model * 4,
-                dropout=dropout,
-                activation="gelu",
-                batch_first=True,
-            )
-            for _ in range(n_layers)
-        ])
+        self.blocks = nn.ModuleList(
+            [
+                nn.TransformerEncoderLayer(
+                    d_model=d_model,
+                    nhead=n_heads,
+                    dim_feedforward=d_model * 4,
+                    dropout=dropout,
+                    activation="gelu",
+                    batch_first=True,
+                )
+                for _ in range(n_layers)
+            ]
+        )
 
         self.ln_f = nn.LayerNorm(d_model)
 
@@ -317,9 +307,7 @@ class MuZeroTransformerV2(nn.Module):
         x = self.pos(x)
 
         # Causal mask
-        mask = torch.triu(
-            torch.ones(t, t, device=x.device), diagonal=1
-        ).bool()
+        mask = torch.triu(torch.ones(t, t, device=x.device), diagonal=1).bool()
 
         # Apply transformer blocks
         for block in self.blocks:

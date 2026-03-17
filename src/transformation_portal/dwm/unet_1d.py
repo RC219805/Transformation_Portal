@@ -11,24 +11,14 @@ class UNet1D(nn.Module):
 
     def __init__(self, dim: int, cond_dim: int) -> None:
         super().__init__()
-        self.time_mlp = nn.Sequential(
-            nn.Linear(1, dim), nn.SiLU(), nn.Linear(dim, dim)
-        )
+        self.time_mlp = nn.Sequential(nn.Linear(1, dim), nn.SiLU(), nn.Linear(dim, dim))
         self.cond_proj = nn.Linear(cond_dim, dim)
-        self.down = nn.Sequential(
-            nn.Linear(dim, dim * 2), nn.SiLU(), nn.Linear(dim * 2, dim * 2)
-        )
-        self.mid = nn.Sequential(
-            nn.Linear(dim * 2, dim * 2), nn.SiLU(), nn.Linear(dim * 2, dim * 2)
-        )
-        self.up = nn.Sequential(
-            nn.Linear(dim * 2, dim), nn.SiLU(), nn.Linear(dim, dim)
-        )
+        self.down = nn.Sequential(nn.Linear(dim, dim * 2), nn.SiLU(), nn.Linear(dim * 2, dim * 2))
+        self.mid = nn.Sequential(nn.Linear(dim * 2, dim * 2), nn.SiLU(), nn.Linear(dim * 2, dim * 2))
+        self.up = nn.Sequential(nn.Linear(dim * 2, dim), nn.SiLU(), nn.Linear(dim, dim))
         self.out = nn.Linear(dim, dim)
 
-    def forward(
-        self, x_t: torch.Tensor, t: torch.Tensor, cond: torch.Tensor
-    ) -> torch.Tensor:
+    def forward(self, x_t: torch.Tensor, t: torch.Tensor, cond: torch.Tensor) -> torch.Tensor:
         """Predict noise."""
         t_emb = self.time_mlp(t)
         c = self.cond_proj(cond)

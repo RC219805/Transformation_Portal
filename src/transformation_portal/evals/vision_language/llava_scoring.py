@@ -8,7 +8,6 @@ from __future__ import annotations
 
 from transformation_portal.evals.vision_language.llava_schema import VQAResult
 
-
 # Severity penalties for quality issues
 _SEVERITY_PENALTIES = {
     "low": 0.10,

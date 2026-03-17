@@ -212,11 +212,7 @@ class RLTrainer:
         value_loss = torch.stack(value_losses).mean()
         entropy = torch.stack(entropies).mean()
 
-        total_loss = (
-            policy_loss
-            + self.config.value_coef * value_loss
-            - self.config.entropy_coef * entropy
-        )
+        total_loss = policy_loss + self.config.value_coef * value_loss - self.config.entropy_coef * entropy
 
         return total_loss, {
             "policy_loss": float(policy_loss.item()),

@@ -40,6 +40,7 @@ def _to_numpy(img: ImageLike) -> np.ndarray:
     if isinstance(img, Path):
         try:
             import cv2
+
             arr = cv2.imread(str(img))
             if arr is None:
                 raise ValueError(f"Failed to load image: {img}")
@@ -47,6 +48,7 @@ def _to_numpy(img: ImageLike) -> np.ndarray:
             return arr.astype(np.float32) / 255.0
         except ImportError:
             from PIL import Image
+
             pil_img = Image.open(img).convert("RGB")
             return np.array(pil_img).astype(np.float32) / 255.0
 
@@ -188,13 +190,16 @@ def ssim(
     # Try using skimage if available
     try:
         from skimage.metrics import structural_similarity
-        return float(structural_similarity(
-            arr1,
-            arr2,
-            win_size=win_size,
-            data_range=data_range,
-            channel_axis=-1 if arr1.ndim == 3 else None,
-        ))
+
+        return float(
+            structural_similarity(
+                arr1,
+                arr2,
+                win_size=win_size,
+                data_range=data_range,
+                channel_axis=-1 if arr1.ndim == 3 else None,
+            )
+        )
     except ImportError:
         pass
 
@@ -208,8 +213,7 @@ def ssim(
     sigma2_sq = np.var(arr2)
     sigma12 = np.mean((arr1 - mu1) * (arr2 - mu2))
 
-    ssim_val = ((2 * mu1 * mu2 + C1) * (2 * sigma12 + C2)) / \
-               ((mu1 ** 2 + mu2 ** 2 + C1) * (sigma1_sq + sigma2_sq + C2))
+    ssim_val = ((2 * mu1 * mu2 + C1) * (2 * sigma12 + C2)) / ((mu1**2 + mu2**2 + C1) * (sigma1_sq + sigma2_sq + C2))
 
     return float(ssim_val)
 

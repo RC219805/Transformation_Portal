@@ -90,12 +90,12 @@ class TestConvergenceTracking:
         # depending on serialization path. Both are valid per contract.
         valid_state_values = {s.value for s in ConvergenceState}
         valid_states = set(ConvergenceState)
-        
+
         convergence = scene.convergence
         is_valid = (
             convergence in valid_states  # Enum instance
             or convergence in valid_state_values  # String value
-            or (hasattr(convergence, 'value') and convergence.value in valid_state_values)
+            or (hasattr(convergence, "value") and convergence.value in valid_state_values)
         )
         assert is_valid, f"Invalid convergence state: {convergence!r}"
 

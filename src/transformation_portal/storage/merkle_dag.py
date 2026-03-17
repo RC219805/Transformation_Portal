@@ -329,9 +329,7 @@ class MerkleDAG:
         for node_hash, node in self.nodes.items():
             for input_hash in node.inputs:
                 if input_hash not in self.nodes:
-                    errors.append(
-                        f"Node {node_hash[:8]} references missing input {input_hash[:8]}"
-                    )
+                    errors.append(f"Node {node_hash[:8]} references missing input {input_hash[:8]}")
 
         return errors
 

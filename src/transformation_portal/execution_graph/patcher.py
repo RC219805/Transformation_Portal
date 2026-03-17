@@ -323,9 +323,7 @@ def apply_fixes(
     import json
 
     # Compute original hash for tracking
-    original_hash = hashlib.sha256(
-        json.dumps(pipeline, sort_keys=True).encode()
-    ).hexdigest()[:16]
+    original_hash = hashlib.sha256(json.dumps(pipeline, sort_keys=True).encode()).hexdigest()[:16]
 
     patch_set = PatchSet(original_hash=original_hash)
     current = pipeline

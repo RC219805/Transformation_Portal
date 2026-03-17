@@ -107,11 +107,7 @@ class WorldModelDataset:
         data = []
         for t in self.transitions:
             state = t.state.tolist() if hasattr(t.state, "tolist") else t.state
-            next_state = (
-                t.next_state.tolist()
-                if hasattr(t.next_state, "tolist")
-                else t.next_state
-            )
+            next_state = t.next_state.tolist() if hasattr(t.next_state, "tolist") else t.next_state
             data.append(
                 {
                     "state": state,
@@ -213,10 +209,7 @@ def train_world_model(
             state_loss = (next_state_pred - s2_target).pow(2).mean()
             metrics_loss = (metrics_pred - m_target).pow(2).mean()
 
-            loss = (
-                config.state_loss_weight * state_loss
-                + config.metrics_loss_weight * metrics_loss
-            )
+            loss = config.state_loss_weight * state_loss + config.metrics_loss_weight * metrics_loss
 
             # Backward
             optimizer.zero_grad()

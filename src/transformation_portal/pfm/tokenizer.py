@@ -86,9 +86,7 @@ class PFMTokenizer:
         # Diff types in order
         self.diff_types = ["geometry", "texture", "missing", "artifact", "semantic"]
 
-    def encode_step(
-        self, step: dict[str, Any]
-    ) -> tuple[int, torch.Tensor]:
+    def encode_step(self, step: dict[str, Any]) -> tuple[int, torch.Tensor]:
         """Encode a single step to tensors.
 
         Args:
@@ -118,9 +116,7 @@ class PFMTokenizer:
 
         return node_idx, torch.tensor(features, dtype=torch.float32)
 
-    def encode_sequence(
-        self, sequence: list[dict[str, Any]]
-    ) -> tuple[torch.Tensor, torch.Tensor]:
+    def encode_sequence(self, sequence: list[dict[str, Any]]) -> tuple[torch.Tensor, torch.Tensor]:
         """Encode a sequence of steps.
 
         Args:
@@ -169,11 +165,7 @@ class PFMTokenizer:
 
     def get_feature_dim(self) -> int:
         """Return total feature dimension."""
-        return (
-            self.config.metric_dim
-            + self.config.config_dim
-            + self.config.diff_dim
-        )
+        return self.config.metric_dim + self.config.config_dim + self.config.diff_dim
 
     def add_node(self, node_id: str) -> int:
         """Add new node to vocabulary.

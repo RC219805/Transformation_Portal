@@ -69,9 +69,7 @@ class PositionalEncoding2D(nn.Module):
         self.node_pos = nn.Embedding(max_nodes, d_model // 2)
         self.time_pos = nn.Embedding(max_time, d_model // 2)
 
-    def forward(
-        self, node_idx: torch.Tensor, time_idx: torch.Tensor
-    ) -> torch.Tensor:
+    def forward(self, node_idx: torch.Tensor, time_idx: torch.Tensor) -> torch.Tensor:
         """Combine node and time positional encodings.
 
         Args:
@@ -101,16 +99,18 @@ class GraphEncoder(nn.Module):
         self.node_proj = nn.Linear(config.node_state_dim, config.d_model)
 
         # Graph attention layers
-        self.layers = nn.ModuleList([
-            nn.TransformerEncoderLayer(
-                d_model=config.d_model,
-                nhead=config.n_heads,
-                dim_feedforward=config.d_ff,
-                dropout=config.dropout,
-                batch_first=True,
-            )
-            for _ in range(3)
-        ])
+        self.layers = nn.ModuleList(
+            [
+                nn.TransformerEncoderLayer(
+                    d_model=config.d_model,
+                    nhead=config.n_heads,
+                    dim_feedforward=config.d_ff,
+                    dropout=config.dropout,
+                    batch_first=True,
+                )
+                for _ in range(3)
+            ]
+        )
 
         # Pooling for graph-level representation
         self.pool = nn.Sequential(
@@ -167,16 +167,18 @@ class TrajectoryEncoder(nn.Module):
         self.pos_encoding = nn.Embedding(config.max_seq_len, config.d_model)
 
         # Transformer
-        self.layers = nn.ModuleList([
-            nn.TransformerEncoderLayer(
-                d_model=config.d_model,
-                nhead=config.n_heads,
-                dim_feedforward=config.d_ff,
-                dropout=config.dropout,
-                batch_first=True,
-            )
-            for _ in range(config.n_encoder_layers)
-        ])
+        self.layers = nn.ModuleList(
+            [
+                nn.TransformerEncoderLayer(
+                    d_model=config.d_model,
+                    nhead=config.n_heads,
+                    dim_feedforward=config.d_ff,
+                    dropout=config.dropout,
+                    batch_first=True,
+                )
+                for _ in range(config.n_encoder_layers)
+            ]
+        )
 
         self.norm = nn.LayerNorm(config.d_model)
 
@@ -216,9 +218,7 @@ class TrajectoryEncoder(nn.Module):
         x = x + self.pos_encoding(positions)
 
         # Causal mask
-        causal_mask = torch.triu(
-            torch.ones(t, t, device=x.device), diagonal=1
-        ).bool()
+        causal_mask = torch.triu(torch.ones(t, t, device=x.device), diagonal=1).bool()
 
         # Transform
         for layer in self.layers:
@@ -389,15 +389,11 @@ class PipelineFoundationModel(nn.Module):
 
         # Value prediction loss (if targets available)
         if "target_value" in batch:
-            losses["value"] = F.mse_loss(
-                out["value"].squeeze(-1), batch["target_value"]
-            )
+            losses["value"] = F.mse_loss(out["value"].squeeze(-1), batch["target_value"])
 
         # Reward prediction loss
         if "target_reward" in batch:
-            losses["reward"] = F.mse_loss(
-                out["reward_pred"].squeeze(-1), batch["target_reward"]
-            )
+            losses["reward"] = F.mse_loss(out["reward_pred"].squeeze(-1), batch["target_reward"])
 
         # Contrastive loss (if pairs available)
         if "positive_idx" in batch:
@@ -431,9 +427,7 @@ class PipelineFoundationTrainer:
         warmup_steps: int = 1000,
     ) -> None:
         self.model = model
-        self.optimizer = torch.optim.AdamW(
-            model.parameters(), lr=lr, weight_decay=weight_decay
-        )
+        self.optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
         self.warmup_steps = warmup_steps
         self.step = 0
 

@@ -53,14 +53,16 @@ def build_sequence(run: dict[str, Any]) -> list[dict[str, Any]]:
     seq = []
 
     for step in run.get("steps", []):
-        seq.append({
-            "node_id": step.get("node_id", "unknown"),
-            "config": _normalize_config(step.get("config", {})),
-            "metrics": _normalize_metrics(step.get("metrics", {})),
-            "diff": _normalize_diff(step.get("diff", {})),
-            "artifacts": step.get("artifacts", {}),
-            "action": step.get("action"),
-        })
+        seq.append(
+            {
+                "node_id": step.get("node_id", "unknown"),
+                "config": _normalize_config(step.get("config", {})),
+                "metrics": _normalize_metrics(step.get("metrics", {})),
+                "diff": _normalize_diff(step.get("diff", {})),
+                "artifacts": step.get("artifacts", {}),
+                "action": step.get("action"),
+            }
+        )
 
     return seq
 
@@ -204,10 +206,12 @@ def load_runs_from_merkle_dag(merkle_path: str) -> list[dict[str, Any]]:
             metadata = node_data.get("metadata", {})
             if "run_id" in metadata:
                 # This is a run node
-                runs.append({
-                    "run_id": metadata["run_id"],
-                    "steps": metadata.get("steps", []),
-                    "final_score": metadata.get("score", 0.0),
-                })
+                runs.append(
+                    {
+                        "run_id": metadata["run_id"],
+                        "steps": metadata.get("steps", []),
+                        "final_score": metadata.get("score", 0.0),
+                    }
+                )
 
     return runs

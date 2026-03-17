@@ -97,8 +97,7 @@ class GPUSemaphore:
 
         if not self._device_ids:
             raise GPUSemaphoreError(
-                "No GPU devices available or specified. "
-                "Use num_devices=1 to create a single-device semaphore."
+                "No GPU devices available or specified. " "Use num_devices=1 to create a single-device semaphore."
             )
 
         self._manager = mp.Manager()
@@ -177,9 +176,7 @@ class GPUSemaphore:
         try:
             device_id = self._queue.get(timeout=timeout)
         except Exception as exc:
-            raise GPUSemaphoreError(
-                f"Failed to acquire GPU slot (timeout={timeout}s): {exc}"
-            ) from exc
+            raise GPUSemaphoreError(f"Failed to acquire GPU slot (timeout={timeout}s): {exc}") from exc
 
         slot = GPUSlot(device_id=device_id)
         logger.debug("Acquired GPU slot: device_id=%d", device_id)

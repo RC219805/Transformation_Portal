@@ -124,9 +124,7 @@ class TemporalTransformerLayer(nn.Module):
         dropout: float = 0.1,
     ) -> None:
         super().__init__()
-        self.attn = nn.MultiheadAttention(
-            d_model, n_heads, dropout=dropout, batch_first=True
-        )
+        self.attn = nn.MultiheadAttention(d_model, n_heads, dropout=dropout, batch_first=True)
         self.ffn = nn.Sequential(
             nn.Linear(d_model, d_model * 4),
             nn.GELU(),
@@ -203,17 +201,15 @@ class GraphTransformerMuZero(nn.Module):
         self.node_embed = NodeEmbedding(state_dim, d_model)
 
         # Graph attention layers
-        self.graph_layers = nn.ModuleList([
-            GraphAttentionLayer(d_model, n_heads=4, dropout=dropout)
-            for _ in range(n_graph_layers)
-        ])
+        self.graph_layers = nn.ModuleList(
+            [GraphAttentionLayer(d_model, n_heads=4, dropout=dropout) for _ in range(n_graph_layers)]
+        )
 
         # Temporal transformer (operates on flattened node features)
         self.temporal_dim = d_model * n_nodes
-        self.temporal_layers = nn.ModuleList([
-            TemporalTransformerLayer(self.temporal_dim, n_heads, dropout)
-            for _ in range(n_temporal_layers)
-        ])
+        self.temporal_layers = nn.ModuleList(
+            [TemporalTransformerLayer(self.temporal_dim, n_heads, dropout) for _ in range(n_temporal_layers)]
+        )
 
         # Positional encoding for temporal dimension
         self.pos_embed = nn.Parameter(torch.randn(1, 128, self.temporal_dim) * 0.02)
@@ -278,9 +274,7 @@ class GraphTransformerMuZero(nn.Module):
         # Create causal mask if needed
         causal_mask = None
         if causal:
-            causal_mask = torch.triu(
-                torch.ones(t, t, device=h.device), diagonal=1
-            ).bool()
+            causal_mask = torch.triu(torch.ones(t, t, device=h.device), diagonal=1).bool()
 
         # Temporal transformer
         for temporal_layer in self.temporal_layers:
@@ -398,15 +392,10 @@ class GraphTransformerMuZeroV2(nn.Module):
         # Shared encoder
         self.node_embed = NodeEmbedding(state_dim, d_model)
 
-        self.graph_layers = nn.ModuleList([
-            GraphAttentionLayer(d_model) for _ in range(2)
-        ])
+        self.graph_layers = nn.ModuleList([GraphAttentionLayer(d_model) for _ in range(2)])
 
         # Per-node policy heads
-        self.policy_heads = nn.ModuleList([
-            nn.Linear(d_model, action_dim)
-            for action_dim in node_action_dims
-        ])
+        self.policy_heads = nn.ModuleList([nn.Linear(d_model, action_dim) for action_dim in node_action_dims])
 
         # Shared value head (central critic)
         self.value_head = nn.Sequential(

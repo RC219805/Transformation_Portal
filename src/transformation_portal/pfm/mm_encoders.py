@@ -155,11 +155,13 @@ class PointCloudEncoder(nn.Module):
         layers = []
         prev_dim = input_dim
         for dim in hidden_dims:
-            layers.extend([
-                nn.Linear(prev_dim, dim),
-                nn.BatchNorm1d(dim),
-                nn.ReLU(),
-            ])
+            layers.extend(
+                [
+                    nn.Linear(prev_dim, dim),
+                    nn.BatchNorm1d(dim),
+                    nn.ReLU(),
+                ]
+            )
             prev_dim = dim
 
         self.pointwise = nn.Sequential(*layers)
@@ -241,7 +243,7 @@ class MeshEncoder(nn.Module):
         # Sample points if too many vertices
         b, v, _ = vertices.shape
         if v > self.num_samples:
-            idx = torch.randperm(v)[:self.num_samples]
+            idx = torch.randperm(v)[: self.num_samples]
             vertices = vertices[:, idx]
             if normals is not None:
                 normals = normals[:, idx]
@@ -305,9 +307,7 @@ class CrossModalFusion(nn.Module):
         dropout: float = 0.1,
     ) -> None:
         super().__init__()
-        self.attn = nn.MultiheadAttention(
-            d_model, n_heads, dropout=dropout, batch_first=True
-        )
+        self.attn = nn.MultiheadAttention(d_model, n_heads, dropout=dropout, batch_first=True)
         self.norm = nn.LayerNorm(d_model)
         self.ffn = nn.Sequential(
             nn.Linear(d_model, d_model * 4),
@@ -347,14 +347,9 @@ class ModalityProjector(nn.Module):
         output_dim: int,
     ) -> None:
         super().__init__()
-        self.projectors = nn.ModuleDict({
-            name: nn.Linear(dim, output_dim)
-            for name, dim in input_dims.items()
-        })
+        self.projectors = nn.ModuleDict({name: nn.Linear(dim, output_dim) for name, dim in input_dims.items()})
 
-    def forward(
-        self, features: dict[str, torch.Tensor]
-    ) -> dict[str, torch.Tensor]:
+    def forward(self, features: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
         """Project all modality features.
 
         Args:
@@ -363,8 +358,4 @@ class ModalityProjector(nn.Module):
         Returns:
             Projected features (same keys)
         """
-        return {
-            name: self.projectors[name](feat)
-            for name, feat in features.items()
-            if name in self.projectors
-        }
+        return {name: self.projectors[name](feat) for name, feat in features.items() if name in self.projectors}

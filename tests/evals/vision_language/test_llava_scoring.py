@@ -138,11 +138,14 @@ class TestComputeQualityGatePass:
             issues=[VQAIssue("test", "high", "e")],
         )
         # With relaxed thresholds, should pass
-        assert compute_quality_gate_pass(
-            result,
-            min_score=0.5,
-            max_high_severity_issues=1,
-        ) is True
+        assert (
+            compute_quality_gate_pass(
+                result,
+                min_score=0.5,
+                max_high_severity_issues=1,
+            )
+            is True
+        )
 
 
 class TestSeverityToNumeric:

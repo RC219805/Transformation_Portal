@@ -113,10 +113,7 @@ class SelfHealPolicy:
             return PolicyDecision(
                 can_auto_apply=False,
                 approval_level=ApprovalLevel.REVIEW,
-                reason=(
-                    f"Confidence {fix.confidence:.2f} below threshold "
-                    f"{self.confidence_threshold:.2f}"
-                ),
+                reason=(f"Confidence {fix.confidence:.2f} below threshold " f"{self.confidence_threshold:.2f}"),
             )
 
         # Check reversibility
@@ -238,11 +235,7 @@ def evaluate_all(
     return PolicyReport(
         total_fixes=len(fixes),
         auto_applicable=sum(1 for _, d in decisions if d.can_auto_apply),
-        needs_review=sum(
-            1 for _, d in decisions if d.approval_level == ApprovalLevel.REVIEW
-        ),
-        blocked=sum(
-            1 for _, d in decisions if d.approval_level == ApprovalLevel.MANUAL
-        ),
+        needs_review=sum(1 for _, d in decisions if d.approval_level == ApprovalLevel.REVIEW),
+        blocked=sum(1 for _, d in decisions if d.approval_level == ApprovalLevel.MANUAL),
         decisions=decisions,
     )

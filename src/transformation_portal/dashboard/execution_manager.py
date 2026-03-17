@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 
 class NodeStatus(str, Enum):
     """Node execution status."""
+
     PENDING = "pending"
     QUEUED = "queued"
     RUNNING = "running"
@@ -35,6 +36,7 @@ class NodeStatus(str, Enum):
 
 class RunStatus(str, Enum):
     """Pipeline run status."""
+
     PENDING = "pending"
     RUNNING = "running"
     COMPLETE = "complete"
@@ -45,6 +47,7 @@ class RunStatus(str, Enum):
 @dataclass
 class NodeState:
     """State of a single node in a run."""
+
     node_id: str
     status: NodeStatus = NodeStatus.PENDING
     start_time: Optional[str] = None
@@ -59,6 +62,7 @@ class NodeState:
 @dataclass
 class RunState:
     """State of a pipeline run."""
+
     run_id: str
     status: RunStatus = RunStatus.PENDING
     start_time: Optional[str] = None
@@ -135,6 +139,7 @@ class ExecutionManager:
 
         # Fallback: use PassthroughNode
         from transformation_portal.execution_graph.nodes.base import PassthroughNode
+
         return PassthroughNode()
 
     def _get_node_deps(
@@ -198,12 +203,14 @@ class ExecutionManager:
                 del self.active_runs[old_id]
 
         # Broadcast run started
-        await broadcast({
-            "type": "run_started",
-            "run_id": run_id,
-            "node_count": len(nodes),
-            "timestamp": self._now(),
-        })
+        await broadcast(
+            {
+                "type": "run_started",
+                "run_id": run_id,
+                "node_count": len(nodes),
+                "timestamp": self._now(),
+            }
+        )
 
         try:
             # Build scheduler
@@ -235,11 +242,13 @@ class ExecutionManager:
             # Get execution order
             execution_order = scheduler.get_execution_order()
 
-            await broadcast({
-                "type": "execution_plan",
-                "run_id": run_id,
-                "order": execution_order,
-            })
+            await broadcast(
+                {
+                    "type": "execution_plan",
+                    "run_id": run_id,
+                    "order": execution_order,
+                }
+            )
 
             # Execute nodes in order
             results: Dict[str, Any] = {}
@@ -252,12 +261,14 @@ class ExecutionManager:
                 node_state.status = NodeStatus.RUNNING
                 node_state.start_time = self._now()
 
-                await broadcast({
-                    "type": "node_start",
-                    "run_id": run_id,
-                    "node": node_id,
-                    "timestamp": node_state.start_time,
-                })
+                await broadcast(
+                    {
+                        "type": "node_start",
+                        "run_id": run_id,
+                        "node": node_id,
+                        "timestamp": node_state.start_time,
+                    }
+                )
 
                 try:
                     # Gather inputs from dependencies
@@ -266,12 +277,14 @@ class ExecutionManager:
                     # Log start
                     node_state.logs.append(f"Starting execution with {len(inputs)} inputs")
 
-                    await broadcast({
-                        "type": "log",
-                        "run_id": run_id,
-                        "node": node_id,
-                        "message": f"Executing with inputs: {list(inputs.keys())}",
-                    })
+                    await broadcast(
+                        {
+                            "type": "log",
+                            "run_id": run_id,
+                            "node": node_id,
+                            "message": f"Executing with inputs: {list(inputs.keys())}",
+                        }
+                    )
 
                     # Execute node (with small delay for UI visibility)
                     await asyncio.sleep(0.1)
@@ -295,9 +308,7 @@ class ExecutionManager:
                     # Record in Merkle DAG
                     if self.merkle_dag:
                         dep_hashes = [
-                            run_state.nodes[dep].merkle_hash
-                            for dep in scheduled_node.deps
-                            if run_state.nodes[dep].merkle_hash
+                            run_state.nodes[dep].merkle_hash for dep in scheduled_node.deps if run_state.nodes[dep].merkle_hash
                         ]
                         node_state.merkle_hash = self.merkle_dag.add_computation(
                             node_id=node_id,
@@ -306,14 +317,16 @@ class ExecutionManager:
                             metadata={"run_id": run_id},
                         )
 
-                    await broadcast({
-                        "type": "node_complete",
-                        "run_id": run_id,
-                        "node": node_id,
-                        "outputs": outputs,
-                        "merkle_hash": node_state.merkle_hash,
-                        "timestamp": node_state.end_time,
-                    })
+                    await broadcast(
+                        {
+                            "type": "node_complete",
+                            "run_id": run_id,
+                            "node": node_id,
+                            "outputs": outputs,
+                            "merkle_hash": node_state.merkle_hash,
+                            "timestamp": node_state.end_time,
+                        }
+                    )
 
                     node_state.logs.append(f"Completed with {len(outputs)} outputs")
 
@@ -324,13 +337,15 @@ class ExecutionManager:
                     node_state.end_time = self._now()
                     node_state.logs.append(f"Error: {error_msg}")
 
-                    await broadcast({
-                        "type": "node_error",
-                        "run_id": run_id,
-                        "node": node_id,
-                        "error": error_msg,
-                        "timestamp": node_state.end_time,
-                    })
+                    await broadcast(
+                        {
+                            "type": "node_error",
+                            "run_id": run_id,
+                            "node": node_id,
+                            "error": error_msg,
+                            "timestamp": node_state.end_time,
+                        }
+                    )
 
                     # Continue with other nodes or fail?
                     # For now, continue but mark results as None
@@ -341,12 +356,14 @@ class ExecutionManager:
             run_state.end_time = self._now()
             run_state.results = results
 
-            await broadcast({
-                "type": "run_complete",
-                "run_id": run_id,
-                "results": {k: v for k, v in results.items() if v is not None},
-                "timestamp": run_state.end_time,
-            })
+            await broadcast(
+                {
+                    "type": "run_complete",
+                    "run_id": run_id,
+                    "results": {k: v for k, v in results.items() if v is not None},
+                    "timestamp": run_state.end_time,
+                }
+            )
 
         except Exception as exc:
             error_msg = f"{type(exc).__name__}: {exc}"
@@ -356,13 +373,15 @@ class ExecutionManager:
 
             logger.exception("Pipeline execution failed: %s", run_id)
 
-            await broadcast({
-                "type": "run_error",
-                "run_id": run_id,
-                "error": error_msg,
-                "traceback": traceback.format_exc(),
-                "timestamp": run_state.end_time,
-            })
+            await broadcast(
+                {
+                    "type": "run_error",
+                    "run_id": run_id,
+                    "error": error_msg,
+                    "traceback": traceback.format_exc(),
+                    "timestamp": run_state.end_time,
+                }
+            )
 
         return run_id
 
@@ -411,10 +430,12 @@ class ExecutionManager:
             run.status = RunStatus.CANCELLED
             run.end_time = self._now()
 
-            await broadcast({
-                "type": "run_cancelled",
-                "run_id": run_id,
-                "timestamp": run.end_time,
-            })
+            await broadcast(
+                {
+                    "type": "run_cancelled",
+                    "run_id": run_id,
+                    "timestamp": run.end_time,
+                }
+            )
 
         return True

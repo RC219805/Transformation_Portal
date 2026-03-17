@@ -166,9 +166,7 @@ class MCTSNode:
         import math
 
         max_visits = max(visits.values())
-        exp_visits = {
-            a: math.exp((v - max_visits) / temperature) for a, v in visits.items()
-        }
+        exp_visits = {a: math.exp((v - max_visits) / temperature) for a, v in visits.items()}
         total = sum(exp_visits.values())
 
         return {a: v / total for a, v in exp_visits.items()}

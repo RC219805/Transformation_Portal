@@ -92,7 +92,7 @@ class TestParseVqaResult:
 
     def test_json_with_issues(self) -> None:
         """Should parse JSON with issues array."""
-        raw_text = '''
+        raw_text = """
         {
             "passes_basic_quality": false,
             "summary_score": 0.5,
@@ -101,7 +101,7 @@ class TestParseVqaResult:
                 {"issue_type": "texture", "severity": "low", "evidence": "minor seam"}
             ]
         }
-        '''
+        """
         result = parse_vqa_result("test_model", raw_text)
         assert result.passes_basic_quality is False
         assert len(result.issues) == 2
@@ -109,14 +109,14 @@ class TestParseVqaResult:
 
     def test_json_in_markdown(self) -> None:
         """Should extract JSON from markdown code fence."""
-        raw_text = '''Here is my assessment:
+        raw_text = """Here is my assessment:
         
 ```json
 {"passes_basic_quality": true, "summary_score": 0.85, "issues": []}
 ```
 
 That's my evaluation.
-'''
+"""
         result = parse_vqa_result("test_model", raw_text)
         assert result.passes_basic_quality is True
         assert result.summary_score == 0.85

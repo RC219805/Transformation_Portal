@@ -74,8 +74,7 @@ def load_llava_from_manifest_entry(
         from transformers import AutoModelForImageTextToText, AutoProcessor
     except ImportError as exc:
         raise LlavaLoaderError(
-            "transformers is required for loading LLaVA artifacts. "
-            "Install with: pip install transformers>=4.35"
+            "transformers is required for loading LLaVA artifacts. " "Install with: pip install transformers>=4.35"
         ) from exc
 
     logger.info("Resolving manifest entry for model key: %s", model_key)
@@ -97,9 +96,7 @@ def load_llava_from_manifest_entry(
             trust_remote_code=False,
         )
     except Exception as exc:
-        raise LlavaLoaderError(
-            f"Failed to load processor from '{resolved.local_root}': {exc}"
-        ) from exc
+        raise LlavaLoaderError(f"Failed to load processor from '{resolved.local_root}': {exc}") from exc
 
     logger.info(
         "Loading LLaVA model from local root: %s (device_map=%s, torch_dtype=%s)",
@@ -116,9 +113,7 @@ def load_llava_from_manifest_entry(
             trust_remote_code=False,
         )
     except Exception as exc:
-        raise LlavaLoaderError(
-            f"Failed to load model from '{resolved.local_root}': {exc}"
-        ) from exc
+        raise LlavaLoaderError(f"Failed to load model from '{resolved.local_root}': {exc}") from exc
 
     logger.info(
         "Successfully loaded LLaVA model '%s' (%s@%s)",

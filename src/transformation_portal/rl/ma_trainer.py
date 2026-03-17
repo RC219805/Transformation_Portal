@@ -101,9 +101,7 @@ class AgentTrainer:
             loss = loss + (-logp * advantage)
 
             # Value loss
-            loss = loss + self.config.value_coef * F.mse_loss(
-                v, torch.tensor([[target]])
-            )
+            loss = loss + self.config.value_coef * F.mse_loss(v, torch.tensor([[target]]))
 
         self.optimizer.zero_grad()
         loss.backward()
@@ -228,8 +226,7 @@ class CentralizedTrainer:
         self.optimizer.zero_grad()
         total_loss.backward()
         torch.nn.utils.clip_grad_norm_(
-            list(self.critic.parameters())
-            + [p for a in self.agents.values() for p in a.parameters()],
+            list(self.critic.parameters()) + [p for a in self.agents.values() for p in a.parameters()],
             self.config.max_grad_norm,
         )
         self.optimizer.step()
