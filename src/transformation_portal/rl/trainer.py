@@ -10,7 +10,7 @@ This module provides the training algorithm for the RL optimizer:
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import TYPE_CHECKING, Any
 
 from transformation_portal.rl.action_space import RLAction
@@ -302,7 +302,7 @@ class RLTrainer:
             {
                 "model_state": self.model.state_dict(),
                 "optimizer_state": self.optimizer.state_dict(),
-                "config": self.config,
+                "config": asdict(self.config),  # Save as dict for weights_only=True compatibility
                 "total_steps": self.total_steps,
                 "total_updates": self.total_updates,
             },
@@ -318,7 +318,7 @@ class RLTrainer:
         """
         torch = _get_torch()
 
-        data = torch.load(path, weights_only=True)  # nosec B614: trusted checkpoint
+        data = torch.load(path, weights_only=True)
         self.model.load_state_dict(data["model_state"])
         self.optimizer.load_state_dict(data["optimizer_state"])
         self.total_steps = data["total_steps"]
