@@ -135,10 +135,15 @@ class OptimizationJobManager:
         pipeline: dict[str, Any],
         job: OptimizationJobState,
     ) -> Any:
-        """Run optimizer with progress updates."""
-        # This would need to be made async in a real implementation
-        # For now, we run synchronously and report at the end
-        result = optimizer.optimize(pipeline)
+        """Run optimizer with progress updates.
+
+        Uses asyncio.to_thread to avoid blocking the event loop.
+        """
+        import asyncio
+
+        # Run the synchronous optimizer.optimize() in a worker thread
+        # to avoid blocking the event loop
+        result = await asyncio.to_thread(optimizer.optimize, pipeline)
 
         # Update job state from result
         job.current_iteration = result.iterations

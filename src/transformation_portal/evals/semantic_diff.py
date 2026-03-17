@@ -273,7 +273,7 @@ def semantic_diff(
     messages = _build_messages(image_a, image_b)
 
     try:
-        raw = backend._run_inference(messages=messages)
+        raw = backend.generate(messages)
     except Exception as e:
         logger.error("Semantic diff inference failed: %s", e)
         raise SemanticDiffError(f"Inference failed: {e}") from e

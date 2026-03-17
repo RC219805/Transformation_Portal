@@ -6,7 +6,10 @@ optionally refactors it by extracting canonical implementations
 to a shared module.
 
 Usage:
-    # Preview changes (default)
+    # Preview changes (default) - run from repo root with package installed
+    python -m transformation_portal.dev.scripts.run_refactor
+
+    # Or via python scripts/dev/run_refactor.py (requires: pip install -e .)
     python scripts/dev/run_refactor.py
 
     # Execute refactoring
@@ -34,9 +37,6 @@ import argparse
 import logging
 import sys
 from pathlib import Path
-
-# Add src to path for local development
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
 
 def main() -> int:
@@ -106,11 +106,19 @@ def main() -> int:
         print(f"Error: Root directory not found: {args.root}", file=sys.stderr)
         return 1
 
-    # Import after path setup
-    from transformation_portal.dev.refactor_engine import (
-        AutoRefactorEngine,
-        IncrementalRefactor,
-    )
+    # Import refactor engine (requires package to be installed: pip install -e .)
+    try:
+        from transformation_portal.dev.refactor_engine import (
+            AutoRefactorEngine,
+            IncrementalRefactor,
+        )
+    except ImportError as e:
+        print(
+            f"Error: Failed to import refactor engine: {e}\n"
+            "Please install the package first: pip install -e .",
+            file=sys.stderr,
+        )
+        return 1
 
     # Create engine
     exclude_patterns = [

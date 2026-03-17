@@ -257,3 +257,31 @@ class LlavaQualityBackend:
             raise LlavaBackendError("Model generation returned no decoded text")
 
         return generated_texts[0].strip()
+
+    def generate(self, messages: list[dict[str, Any]]) -> str:
+        """Run inference on messages.
+
+        Public API for raw message inference. Useful for custom prompts
+        and multi-image scenarios like semantic diff.
+
+        Args:
+            messages: Multimodal message structure with system/user roles
+                      containing text and image content.
+
+        Returns:
+            Generated text response
+
+        Raises:
+            LlavaBackendError: If inference fails or model not loaded
+
+        Example:
+            >>> messages = [
+            ...     {"role": "system", "content": [{"type": "text", "text": "..."}]},
+            ...     {"role": "user", "content": [
+            ...         {"type": "image", "image": "path/to/img.png"},
+            ...         {"type": "text", "text": "Describe this image."},
+            ...     ]},
+            ... ]
+            >>> response = backend.generate(messages)
+        """
+        return self._run_inference(messages)

@@ -156,7 +156,9 @@ def psnr_torch(
     if mse == 0:
         return 100.0  # Perfect match
 
-    return float(20 * torch.log10(torch.tensor(max_val) / torch.sqrt(mse)))
+    # Create max_val tensor on same device/dtype as mse to avoid device mismatch
+    max_val_tensor = torch.as_tensor(max_val, device=mse.device, dtype=mse.dtype)
+    return float(20 * torch.log10(max_val_tensor / torch.sqrt(mse)))
 
 
 # ============================================================================

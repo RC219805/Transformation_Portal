@@ -33,6 +33,7 @@ from .serialization import RestrictedUnpickler, safe_pickle_load
 from .validation import InputValidator, ValidationError, ValidationResult
 
 # Conditional imports for optional dependencies
+_SIGNING_AVAILABLE = False
 try:
     from .signing import (
         CertificateSigner,
@@ -44,8 +45,34 @@ try:
 
     _SIGNING_AVAILABLE = True
 except ImportError:
-    _SIGNING_AVAILABLE = False
+    # Define stubs that raise clear errors when unavailable
+    class SigningError(RuntimeError):  # type: ignore[no-redef]
+        """Raised for signing errors (cryptography not available)."""
 
+    class SignedCertificate:  # type: ignore[no-redef]
+        """Stub: cryptography library not available."""
+
+        def __init__(self, *args, **kwargs):
+            raise ImportError("SignedCertificate requires cryptography library: pip install cryptography")
+
+    class CertificateSigner:  # type: ignore[no-redef]
+        """Stub: cryptography library not available."""
+
+        def __init__(self, *args, **kwargs):
+            raise ImportError("CertificateSigner requires cryptography library: pip install cryptography")
+
+    class CertificateVerifier:  # type: ignore[no-redef]
+        """Stub: cryptography library not available."""
+
+        def __init__(self, *args, **kwargs):
+            raise ImportError("CertificateVerifier requires cryptography library: pip install cryptography")
+
+    def generate_ed25519_keypair():  # type: ignore[no-redef]
+        """Stub: cryptography library not available."""
+        raise ImportError("generate_ed25519_keypair requires cryptography library: pip install cryptography")
+
+
+_TLS_AVAILABLE = False
 try:
     from .tls import (
         ThreadedTLSServer,
@@ -58,7 +85,34 @@ try:
 
     _TLS_AVAILABLE = True
 except ImportError:
-    _TLS_AVAILABLE = False
+    # Define stubs that raise clear errors when unavailable
+    class TLSError(RuntimeError):  # type: ignore[no-redef]
+        """Raised for TLS errors (dependencies not available)."""
+
+    class TLSTCPServer:  # type: ignore[no-redef]
+        """Stub: TLS dependencies not available."""
+
+        def __init__(self, *args, **kwargs):
+            raise ImportError("TLSTCPServer requires TLS dependencies")
+
+    class ThreadedTLSServer:  # type: ignore[no-redef]
+        """Stub: TLS dependencies not available."""
+
+        def __init__(self, *args, **kwargs):
+            raise ImportError("ThreadedTLSServer requires TLS dependencies")
+
+    def create_server_ssl_context(*args, **kwargs):  # type: ignore[no-redef]
+        """Stub: TLS dependencies not available."""
+        raise ImportError("create_server_ssl_context requires TLS dependencies")
+
+    def create_client_ssl_context(*args, **kwargs):  # type: ignore[no-redef]
+        """Stub: TLS dependencies not available."""
+        raise ImportError("create_client_ssl_context requires TLS dependencies")
+
+    def create_tls_connection(*args, **kwargs):  # type: ignore[no-redef]
+        """Stub: TLS dependencies not available."""
+        raise ImportError("create_tls_connection requires TLS dependencies")
+
 
 from .task_signing import SignedTask, TaskSigner, TaskSigningError, TaskVerifier
 from .tenant import (
@@ -107,13 +161,13 @@ __all__ = [
     # Serialization
     "RestrictedUnpickler",
     "safe_pickle_load",
-    # Signing (if available)
+    # Signing (stubs if unavailable)
     "SigningError",
     "SignedCertificate",
     "CertificateSigner",
     "CertificateVerifier",
     "generate_ed25519_keypair",
-    # TLS (if available)
+    # TLS (stubs if unavailable)
     "TLSError",
     "TLSTCPServer",
     "ThreadedTLSServer",

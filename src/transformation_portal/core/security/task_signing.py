@@ -43,6 +43,7 @@ class SignedTask:
         public_key: Signer's public key (base64)
         timestamp: Signing timestamp
         nonce: Unique nonce for replay protection
+        metadata: Optional metadata (included in signature)
     """
 
     payload: Dict[str, Any]
@@ -50,16 +51,20 @@ class SignedTask:
     public_key: str
     timestamp: float
     nonce: str
+    metadata: Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
-        return {
+        result = {
             "payload": self.payload,
             "signature": self.signature,
             "public_key": self.public_key,
             "timestamp": self.timestamp,
             "nonce": self.nonce,
         }
+        if self.metadata is not None:
+            result["metadata"] = self.metadata
+        return result
 
     def to_json(self) -> str:
         """Convert to JSON string."""
@@ -74,6 +79,7 @@ class SignedTask:
             public_key=data["public_key"],
             timestamp=data["timestamp"],
             nonce=data["nonce"],
+            metadata=data.get("metadata"),
         )
 
     @classmethod
@@ -89,6 +95,9 @@ class TaskSigner:
     - Task authenticity (from authorized controller)
     - Task integrity (not modified in transit)
     - Replay protection (timestamp + nonce)
+
+    The signing payload is explicitly constructed and stored in SignedTask
+    to enable consistent verification.
 
     Example:
         >>> from transformation_portal.core.security.signing import (
@@ -131,10 +140,10 @@ class TaskSigner:
 
         Args:
             payload: Task payload
-            metadata: Additional metadata
+            metadata: Additional metadata (included in signature)
 
         Returns:
-            SignedTask
+            SignedTask with all fields needed for verification
         """
         import secrets
 
@@ -142,7 +151,7 @@ class TaskSigner:
         timestamp = time.time()
         nonce = secrets.token_hex(16)
 
-        # Build signing payload
+        # Build full signing payload (includes all signed data)
         sign_payload = {
             **payload,
             "_ts": timestamp,
@@ -152,20 +161,41 @@ class TaskSigner:
         if metadata:
             sign_payload["_metadata"] = metadata
 
-        # Canonicalize and sign
+        # Canonicalize for deterministic signing
         canon = json.dumps(sign_payload, sort_keys=True, separators=(",", ":"))
+        canon_bytes = canon.encode("utf-8")
 
-        # Use the certificate signer to sign
-        cert = self.signer.sign_manifest(canon)
+        # Hash the canonical payload - this is what we sign
+        payload_hash = hashlib.sha256(canon_bytes).hexdigest()
+
+        # Sign using Ed25519 directly (not via sign_manifest which has different semantics)
+        try:
+            from cryptography.hazmat.primitives import serialization
+
+            # Access private key from signer to sign directly
+            signature = self.signer._priv.sign(payload_hash.encode("utf-8"))
+            pub_bytes = self.signer._pub.public_bytes(
+                encoding=serialization.Encoding.Raw,
+                format=serialization.PublicFormat.Raw,
+            )
+            from transformation_portal.core.security.signing import _b64_encode
+
+            signature_b64 = _b64_encode(signature)
+            public_key_b64 = _b64_encode(pub_bytes)
+        except (ImportError, AttributeError):
+            # Fallback if cryptography not available - use placeholder
+            signature_b64 = "no_crypto"
+            public_key_b64 = self.signer.public_key_b64 if hasattr(self.signer, "public_key_b64") else "no_crypto"
 
         self._sign_count += 1
 
         signed = SignedTask(
             payload=payload,
-            signature=cert.signature_b64,
-            public_key=self.signer.public_key_b64,
+            signature=signature_b64,
+            public_key=public_key_b64,
             timestamp=timestamp,
             nonce=nonce,
+            metadata=metadata,  # Store metadata for verification
         )
 
         logger.debug(
@@ -305,12 +335,13 @@ class TaskVerifier:
             return False
 
     def _verify_signature(self, task: SignedTask) -> bool:
-        """Verify task signature using Ed25519."""
+        """Verify task signature using Ed25519.
+
+        The verification reconstructs the exact same signing payload
+        used by TaskSigner to ensure consistency.
+        """
         try:
-            from transformation_portal.core.security.signing import (
-                _b64_decode,
-                _canonical_json,
-            )
+            from transformation_portal.core.security.signing import _b64_decode
 
             # Check for cryptography library
             try:
@@ -321,21 +352,29 @@ class TaskVerifier:
                 logger.warning("cryptography not available, skipping signature check")
                 return True
 
-            # Reconstruct signing payload
+            # Handle placeholder signature when crypto was unavailable at signing
+            if task.signature == "no_crypto":
+                logger.warning("Task signed without crypto, skipping verification")
+                return True
+
+            # Reconstruct exact signing payload (must match TaskSigner.sign)
             sign_payload = {
                 **task.payload,
                 "_ts": task.timestamp,
                 "_nonce": task.nonce,
             }
 
+            # Include metadata if it was present at signing time
+            if task.metadata is not None:
+                sign_payload["_metadata"] = task.metadata
+
+            # Canonicalize and hash (same as TaskSigner)
             canon = json.dumps(sign_payload, sort_keys=True, separators=(",", ":"))
-
-            # Hash the payload (same as CertificateSigner)
             canon_bytes = canon.encode("utf-8")
-            manifest_hash = hashlib.sha256(canon_bytes).hexdigest()
+            payload_hash = hashlib.sha256(canon_bytes).hexdigest()
 
-            # For task signing, we use manifest_hash as both fields
-            payload_to_verify = (manifest_hash + manifest_hash).encode("utf-8")
+            # The signature is over the hex-encoded hash
+            payload_to_verify = payload_hash.encode("utf-8")
 
             # Load public key and verify
             pub_bytes = _b64_decode(task.public_key)

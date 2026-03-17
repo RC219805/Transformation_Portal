@@ -40,6 +40,10 @@ def _tool_available(tool: str) -> bool:
 def format_file(path: Path, *, quiet: bool = True) -> bool:
     """Apply canonical formatting to a Python file immediately after write.
 
+    The formatting order is: isort (import ordering) → Black → Black (final pass).
+    Running isort first ensures imports are sorted, then Black formats the code.
+    A final Black pass ensures any isort changes are also Black-compliant.
+
     Args:
         path: Path to the Python file to format.
         quiet: If True, suppress stdout/stderr from formatters.
@@ -61,7 +65,23 @@ def format_file(path: Path, *, quiet: bool = True) -> bool:
     stdout = subprocess.DEVNULL if quiet else None
     stderr = subprocess.DEVNULL if quiet else None
 
-    # Apply Black formatting
+    # Step 1: Apply isort import ordering first
+    if _tool_available("isort"):
+        try:
+            subprocess.run(
+                ["isort", str(path)],
+                check=True,
+                stdout=stdout,
+                stderr=stderr,
+            )
+            logger.debug("isort applied: %s", path)
+        except subprocess.CalledProcessError as e:
+            logger.warning("isort failed for %s: %s", path, e)
+            success = False
+    else:
+        logger.warning("isort not available - skipping import sorting for %s", path)
+
+    # Step 2: Apply Black formatting
     if _tool_available("black"):
         try:
             subprocess.run(
@@ -77,21 +97,19 @@ def format_file(path: Path, *, quiet: bool = True) -> bool:
     else:
         logger.warning("Black not available - skipping formatting for %s", path)
 
-    # Apply isort import ordering
-    if _tool_available("isort"):
+    # Step 3: Final Black pass to ensure isort changes are also Black-compliant
+    if _tool_available("black") and success:
         try:
             subprocess.run(
-                ["isort", str(path)],
+                ["black", f"--line-length={BLACK_LINE_LENGTH}", str(path)],
                 check=True,
                 stdout=stdout,
                 stderr=stderr,
             )
-            logger.debug("isort applied: %s", path)
+            logger.debug("Final Black pass applied: %s", path)
         except subprocess.CalledProcessError as e:
-            logger.warning("isort failed for %s: %s", path, e)
+            logger.warning("Final Black pass failed for %s: %s", path, e)
             success = False
-    else:
-        logger.warning("isort not available - skipping import sorting for %s", path)
 
     return success
 
@@ -109,6 +127,10 @@ def write_formatted(
     It ensures that all generated code is formatted before it enters
     the repository, eliminating formatting drift and CI failures.
 
+    The write is atomic: content is written to a temporary file, formatted
+    there, and only then renamed to the destination path. This ensures
+    the destination is never left in a partially-written or unformatted state.
+
     Args:
         path: Destination path for the file.
         content: Content to write to the file.
@@ -124,16 +146,45 @@ def write_formatted(
         '''
         write_formatted(Path("src/module.py"), code)
     """
+    import os
+    import tempfile
+
     # Ensure parent directory exists
     path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Write content
-    path.write_text(content, encoding=encoding)
-    logger.debug("Wrote %d bytes to %s", len(content), path)
+    # For non-Python files, write directly (no formatting needed)
+    if path.suffix not in (".py", ".pyi"):
+        path.write_text(content, encoding=encoding)
+        logger.debug("Wrote %d bytes to %s (non-Python, no formatting)", len(content), path)
+        return
 
-    # Apply formatting (only for Python files)
-    if path.suffix in (".py", ".pyi"):
-        format_file(path, quiet=quiet)
+    # Create temp file in the same directory (so rename is atomic)
+    fd, tmp_path_str = tempfile.mkstemp(
+        suffix=path.suffix,
+        prefix=f".{path.stem}_",
+        dir=path.parent,
+    )
+    tmp_path = Path(tmp_path_str)
+
+    try:
+        # Write content to temp file
+        os.write(fd, content.encode(encoding))
+        os.close(fd)
+        logger.debug("Wrote %d bytes to temp file %s", len(content), tmp_path)
+
+        # Apply formatting to temp file
+        format_file(tmp_path, quiet=quiet)
+
+        # Atomic rename to final destination
+        tmp_path.replace(path)
+        logger.debug("Atomically moved %s to %s", tmp_path, path)
+
+    except Exception:
+        # Clean up temp file on error
+        os.close(fd) if fd else None  # Ensure fd is closed
+        if tmp_path.exists():
+            tmp_path.unlink()
+        raise
 
 
 def format_directory(
@@ -277,6 +328,9 @@ def write_canonical(
         write_canonical(Path("src/module.py"), code)
         # Result: x = {"a": 1, "b": 2}; foo(a=1, z=3)
     """
+    import os
+    import tempfile
+
     # Ensure parent directory exists
     path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -290,13 +344,39 @@ def write_canonical(
         except Exception as e:
             logger.warning("AST canonicalization failed for %s: %s (using original)", path, e)
 
-    # Write content
-    path.write_text(content, encoding=encoding)
-    logger.debug("Wrote %d bytes to %s", len(content), path)
+    # For non-Python files, write directly (no formatting needed)
+    if path.suffix not in (".py", ".pyi"):
+        path.write_text(content, encoding=encoding)
+        logger.debug("Wrote %d bytes to %s (non-Python, no formatting)", len(content), path)
+        return
 
-    # Apply formatting (only for Python files)
-    if path.suffix in (".py", ".pyi"):
-        format_file(path, quiet=quiet)
+    # Create temp file in the same directory (so rename is atomic)
+    fd, tmp_path_str = tempfile.mkstemp(
+        suffix=path.suffix,
+        prefix=f".{path.stem}_",
+        dir=path.parent,
+    )
+    tmp_path = Path(tmp_path_str)
+
+    try:
+        # Write content to temp file
+        os.write(fd, content.encode(encoding))
+        os.close(fd)
+        logger.debug("Wrote %d bytes to temp file %s", len(content), tmp_path)
+
+        # Apply formatting to temp file
+        format_file(tmp_path, quiet=quiet)
+
+        # Atomic rename to final destination
+        tmp_path.replace(path)
+        logger.debug("Atomically moved %s to %s", tmp_path, path)
+
+    except Exception:
+        # Clean up temp file on error
+        os.close(fd) if fd else None  # Ensure fd is closed
+        if tmp_path.exists():
+            tmp_path.unlink()
+        raise
 
 
 class CanonicalFileWriter:
