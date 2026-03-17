@@ -41,3 +41,38 @@ src/transformation_portal/spatial_ai/orchestration/pipeline.py
 src/transformation_portal/spatial_ai/reconstruction/mesh_exporter.py
 src/transformation_portal/stage_graph/stage.py
 src/transformation_portal/streaming/checkpoint.py
+
+# Core security modules - require precise JSON serialization for cryptographic signing
+src/transformation_portal/core/security/fs_guard.py
+src/transformation_portal/core/security/signing.py
+src/transformation_portal/core/security/task_signing.py
+
+# Dashboard modules - HTTP response serialization
+src/transformation_portal/dashboard/dag_editor_api.py
+src/transformation_portal/dashboard/experiment_api.py
+src/transformation_portal/dashboard/server.py
+
+# Dev infrastructure - AST hashing and code canonicalization
+src/transformation_portal/dev/ast_hash.py
+src/transformation_portal/dev/ast_index.py
+src/transformation_portal/dev/deduplicate.py
+
+# Evals and execution graph
+src/transformation_portal/evals/auto_optimizer.py
+src/transformation_portal/execution_graph/patcher.py
+
+# RL training infrastructure
+src/transformation_portal/rl/world_model_trainer.py
+
+# Runtime infrastructure - execution manifests, ledgers, CAS
+src/transformation_portal/runtime/cas_server.py
+src/transformation_portal/runtime/certificate.py
+src/transformation_portal/runtime/distributed_client.py
+src/transformation_portal/runtime/execution_manifest.py
+src/transformation_portal/runtime/ledger.py
+src/transformation_portal/runtime/sandbox.py
+
+# Storage infrastructure - CAS replication and Merkle DAG
+src/transformation_portal/storage/cas_replication.py
+src/transformation_portal/storage/dataset_cas.py
+src/transformation_portal/storage/merkle_dag.py

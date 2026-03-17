@@ -10,11 +10,13 @@ Baseline rationale (March 3, 2026):
 - Previous baseline: 69 selected tests after adding
   deterministic reconstruction golden state snapshot + byte-stability tests
   in tests/spatial_ai/reconstruction/test_reconstruction_golden_snapshot.py
-- Current baseline: 70 selected tests after adding SLERP orthogonality test
+- Previous baseline: 70 selected tests after adding SLERP orthogonality test
   in tests/spatial_ai/reconstruction/test_scene_utils.py
+- Current baseline: 75 selected tests after adding zero-trust filesystem
+  and execution security infrastructure tests in PR #1217
 
 Contract:
-- fast-ML selected count must remain <= 70
+- fast-ML selected count must remain <= 75
 - integration-marked Phase 2.3 tests must stay out of fast-ML selection
 
 Design notes:
@@ -38,7 +40,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 FAST_ML_MARKEXPR = "ml and not slow and not integration and not benchmark"
 INTEGRATION_MARKEXPR = "ml and integration and not slow and not benchmark"
-FAST_ML_SELECTED_CEILING = 70
+FAST_ML_SELECTED_CEILING = 75
 TORCH_BLOCK_MESSAGE = "Torch import blocked during fast-ML contract collect"
 
 _COLLECT_SUMMARY = re.compile(
@@ -393,7 +395,7 @@ def _assert_no_torch_boundary_violation(result: subprocess.CompletedProcess[str]
 
 
 def test_fast_ml_collection_contract():
-    """Fast-ML lane must remain at or under the strict 69-test ceiling."""
+    """Fast-ML lane must remain at or under the strict 75-test ceiling."""
     result, selected = _run_collect_with_torch_stub(FAST_ML_MARKEXPR, "tests/spatial_ai/reconstruction")
     assert result.returncode == 0, _format_subprocess_failure(
         result=result,

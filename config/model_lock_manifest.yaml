@@ -1,10 +1,48 @@
 version: 1
-updated_at: "2026-03-03"
+updated_at: "2026-03-17"
 description: >
   Repository-wide HuggingFace model lock manifest. Replace placeholders with
   verified 40-character commit SHAs before enabling strict model lock in CI/production.
 
 repositories:
+  # --- SAM2 Segmentation Models (HuggingFace converted) ---
+  # Primary SAM2 backend models (Apache 2.0, commercial OK)
+  # Source: MackinationsAi SAM2 HF conversions (updated 2024-08-01)
+  MackinationsAi/segment-anything-model-v2-tiny-hf:
+    revision: "NEEDS_VERIFICATION"  # CI/smoke/low-VRAM fallback tier
+    owner: "segmentation"
+    tier: "ci_smoke"
+    license: "Apache-2.0"
+  MackinationsAi/segment-anything-model-v2-small-hf:
+    revision: "NEEDS_VERIFICATION"  # Developer default tier
+    owner: "segmentation"
+    tier: "dev_default"
+    license: "Apache-2.0"
+  MackinationsAi/segment-anything-model-v2-base-plus-hf:
+    revision: "NEEDS_VERIFICATION"  # Production default tier (balanced)
+    owner: "segmentation"
+    tier: "production_default"
+    license: "Apache-2.0"
+  MackinationsAi/segment-anything-model-v2-large-hf:
+    revision: "NEEDS_VERIFICATION"  # Highest-quality offline tier
+    owner: "segmentation"
+    tier: "quality_max"
+    license: "Apache-2.0"
+  
+  # SAM2 ONNX backend (alternate portable backend)
+  # Source: vietanhdev (updated 2026-02-21)
+  vietanhdev/segment-anything-2-onnx-models:
+    revision: "NEEDS_VERIFICATION"  # ONNX portable backend
+    owner: "segmentation"
+    tier: "onnx_portable"
+    license: "Apache-2.0"
+  vietanhdev/segment-anything-2.1-onnx-models:
+    revision: "NEEDS_VERIFICATION"  # ONNX 2.1 update
+    owner: "segmentation"
+    tier: "onnx_portable"
+    license: "Apache-2.0"
+
+  # --- Depth Estimation Models ---
   depth-anything/Depth-Anything-V2-Small-hf:
     revision: "5426e4f0f36572d16453bbda7a8389317b1bef99"
     owner: "depth pipeline"
@@ -26,6 +64,8 @@ repositories:
   apple/coreml-depth-anything-v2-small:
     revision: "cfef6f6f2a70783dedc0bfae40cecbc2052285d3"
     owner: "depth pipeline"
+  
+  # --- Lux Render Pipeline Models ---
   runwayml/stable-diffusion-v1-5:
     revision: "451f4fe16113bff5a5d2269ed5ad43b0592e9a14"
     owner: "lux render pipeline"
@@ -41,6 +81,8 @@ repositories:
   stabilityai/stable-diffusion-xl-refiner-1.0:
     revision: "5d4cfe854c9a9a87939ff3653551c2b3c99a4356"
     owner: "lux render pipeline"
+  
+  # --- CLIP and Style Transfer Models ---
   openai/clip-vit-large-patch14:
     revision: "32bd64288804d66eefd0ccbe215aa642df71cc41"
     owner: "segmentation + style-transfer"
@@ -50,6 +92,54 @@ repositories:
   black-forest-labs/FLUX.1-dev:
     revision: "3de623fc3c33e44ffbe2bad470d0f45bccf2eb21"
     owner: "style-transfer"
+  
+  # --- Vision Language Models ---
+  # LLaVA Quality Validation (APEX Research Ultra evaluation backend)
+  # Primary: llava-v1.6-mistral-7b (balanced capability)
+  llava-hf/llava-v1.6-mistral-7b-hf:
+    revision: "NEEDS_VERIFICATION"  # Primary quality validation backend
+    owner: "evals/vision_language"
+    tier: "quality_validation_primary"
+    license: "Apache-2.0"
+  # Lightweight: llava-onevision-qwen2-0.5b (CI/smoke/contract testing)
+  llava-hf/llava-onevision-qwen2-0.5b-ov-hf:
+    revision: "NEEDS_VERIFICATION"  # CI/smoke tier
+    owner: "evals/vision_language"
+    tier: "ci_smoke"
+    license: "Apache-2.0"
+  # Legacy: llava-1.5-7b (backward compatibility)
+  llava-hf/llava-1.5-7b-hf:
+    revision: "NEEDS_VERIFICATION"  # Legacy fallback
+    owner: "evals/vision_language"
+    tier: "legacy_fallback"
+    license: "Apache-2.0"
+  # Existing llava-1.5-13b entry (larger model)
   llava-hf/llava-1.5-13b-hf:
     revision: "5dda2880bda009266dda7c4baff660b95ca64540"
     owner: "vlm"
+    tier: "quality_max"
+    license: "Apache-2.0"
+
+# --- 3DGS Artifact Attestation ---
+# Note: 3DGS artifacts require source-attestation verification, not just HF model lock.
+# These entries track the verification framework; exact artifacts pending Inria release.
+artifact_attestation:
+  gaussian_splatting:
+    backend: inria_graphdeco
+    source_type: direct_checkpoint  # git_release | direct_checkpoint | local_import
+    source_url: "PENDING_CANONICAL_URL"  # Exact URL pending Inria verification
+    source_commit_or_tag: "PENDING_VERIFICATION"
+    artifacts:
+      - filename: "gaussian_splatting_base.pt"
+        sha256: "PENDING_VERIFICATION"
+        filesize_bytes: null  # null = not yet verified; validation should fail on null
+    verification:
+      method: sha256+source_commit  # sha256_only | sha256+source_commit | reproducibility_trial
+      required: true
+      notes: |
+        3DGS revision verification requires verifying the full revision tuple:
+        - code revision
+        - rasterizer backend revision
+        - optimizer behavior
+        - serialization format of splat params
+        See: scripts/validation/verify_3dgs_artifacts.py

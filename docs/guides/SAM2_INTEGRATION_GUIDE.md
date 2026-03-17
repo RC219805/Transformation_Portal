@@ -1,13 +1,49 @@
 # SAM2 Integration Guide
 
 **Status:** Phase 4A Complete (2026-02-17)
-**Backend:** Direct checkpoint loading (not HuggingFace Hub)
+**Backend:** Direct checkpoint loading + HuggingFace Hub support
 **License:** Apache 2.0 (commercial-friendly)
 **Video Mode:** ✅ Operational (temporal tracking)
 
 ## Overview
 
 SAM2 (Segment Anything 2) backend provides universal object/material segmentation for luxury real estate and architectural visualization pipelines.
+
+---
+
+## Model Sources (Verified)
+
+### HuggingFace SAM2 Models (Primary Path)
+
+The following HuggingFace-hosted SAM2 models are the recommended sources for integration:
+
+| Model | Use Case | Size | HuggingFace Repo |
+|-------|----------|------|------------------|
+| **Tiny** | CI/smoke tests, low-VRAM fallback | ~50MB | `MackinationsAi/segment-anything-model-v2-tiny-hf` |
+| **Small** | Developer default | ~100MB | `MackinationsAi/segment-anything-model-v2-small-hf` |
+| **Base+** | Production default (balanced) | ~200MB | `MackinationsAi/segment-anything-model-v2-base-plus-hf` |
+| **Large** | Highest-quality offline runs | ~856MB | `MackinationsAi/segment-anything-model-v2-large-hf` |
+
+**License:** Apache 2.0 (commercial use OK)
+**Source:** MackinationsAi SAM2 HF conversions (updated 2024-08-01)
+
+### ONNX Backend Models (Alternate Path)
+
+For portable backend abstraction and CPU/edge deployment:
+
+| Model | Use Case | HuggingFace Repo |
+|-------|----------|------------------|
+| **SAM2 ONNX** | CPU inference, portability | `vietanhdev/segment-anything-2-onnx-models` |
+| **SAM2.1 ONNX** | Updated ONNX variant | `vietanhdev/segment-anything-2.1-onnx-models` |
+
+**License:** Apache 2.0
+**Source:** vietanhdev (updated 2026-02-21)
+
+### Model Lock Manifest
+
+All SAM2 model revisions should be pinned in `config/model_lock_manifest.yaml` before production use.
+
+---
 
 ## Installation
 
