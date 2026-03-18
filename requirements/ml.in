@@ -6,33 +6,34 @@
 #
 # LAYERED ML DEPENDENCY STRATEGY
 # ==============================
-# This file aggregates all ML layers for backward-compatible "full ML" installs.
-# For platform-safe, deterministic installs, prefer individual layers:
+# This file aggregates CROSS-PLATFORM ML layers for backward-compatible installs.
+# Platform-specific and scripted-only layers are NOT included.
 #
-#   ml-core.in     Cross-platform ML baseline (torch, diffusers, transformers, etc.)
-#   ml-raw.in      RAW camera file ingest (rawpy) - platform-scoped
-#   ml-sam2.in     SAM2 segmentation backend - optional, may need special install
+#   ml-core.in     Cross-platform ML baseline (torch, diffusers, transformers)
+#   ml-raw.in      RAW camera file ingest (rawpy) - platform-scoped markers
+#
+# EXCLUDED from umbrella (opt-in only):
+#   ml-sam2.in     SAM2 segmentation - SCRIPTED ONLY (non-standard install semantics)
 #   ml-coreml.in   Apple CoreML acceleration - macOS only
 #   ml-research.in Research/experimental extras - reserved for future use
 #
 # Install profiles:
 #   make install-ml-core    # Cross-platform baseline
 #   make install-ml-raw     # + RAW ingest capability
-#   make install-ml-sam2    # + SAM2 segmentation
-#   make install-ml         # All ML capabilities (this umbrella)
+#   make install-ml         # ml-core + ml-raw (this umbrella)
+#
+# For SAM2 or CoreML, use bootstrap script:
+#   ./scripts/bootstrap/install_ml_stack.sh --profile core-cpu,sam2
+#   ./scripts/bootstrap/install_ml_stack.sh --profile core-cpu,coreml
 #
 # Known-good pinned inference stack for determinism:
-#   torch==2.10.0, torchvision==0.25.0, sam2==1.1.0, open-clip-torch==3.3.0
+#   torch==2.10.0, torchvision==0.25.0, open-clip-torch==3.3.0
 #
 # See requirements/README.md for full layering documentation.
 
-# Include all ML capability layers
+# Include cross-platform ML capability layers only
 -r ml-core.in
 -r ml-raw.in
--r ml-sam2.in
--r ml-coreml.in
-# NOTE: ml-research.in is NOT included by default (opt-in only)
-# To include research extras, install separately:
-#   pip install -r requirements/ml-research.txt
-# Or add to your project-specific requirements:
-#   -r ml-research.in
+# NOTE: ml-sam2.in is EXCLUDED - requires scripted install (non-standard semantics)
+# NOTE: ml-coreml.in is EXCLUDED - platform-specific (macOS only)
+# NOTE: ml-research.in is EXCLUDED - opt-in only

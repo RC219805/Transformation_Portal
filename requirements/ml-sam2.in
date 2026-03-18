@@ -1,22 +1,29 @@
 # Optional SAM2 segmentation backend
-# Platform-scoped due to build-time torch requirements.
+# SCRIPTED INSTALL ONLY - does NOT follow standard lockfile contract.
 # Run `make compile` in this directory to generate pinned ml-sam2.txt
 #
-# WARNING:
-# - SAM2 has build-time torch requirements and may require non-default install
-#   semantics on some platforms.
-# - First, try installing via the lockfile: pip install -r requirements/ml-sam2.txt
-# - If that fails, the bootstrap script will automatically retry with:
-#   pip install --no-build-isolation sam2==1.1.0
-# - This layer requires ml-core.in dependencies to be installed first.
+# IMPORTANT:
+# SAM2 requires non-standard install semantics on some platforms:
+# - May require --no-build-isolation for torch compatibility
+# - May require pre-installed PyTorch matching the build environment
+#
+# DO NOT use: pip install -r requirements/ml-sam2.txt directly
+# INSTEAD use: ./scripts/bootstrap/install_ml_stack.sh --profile sam2
+#
+# The bootstrap script handles platform-specific install logic including:
+# - Detecting build failures and retrying with --no-build-isolation
+# - Ensuring ml-core dependencies are installed first
+# - Validating successful installation
 #
 # Capability contract:
 # - This is an OPTIONAL layer. Absence downgrades segmentation to EfficientSAM.
-# - Install via: make install-ml-sam2 or pip install -r requirements/ml-sam2.txt
+# - This layer is SCRIPTED-ONLY (not a standard lockfile contract).
+# - Install via: ./scripts/bootstrap/install_ml_stack.sh --profile core-cpu,sam2
 #
 # Licensing:
 # - Meta Segment Anything 2 - check license for commercial use requirements.
 
 # SAM2 - Meta Segment Anything 2 for advanced segmentation
-# Pinned with torch==2.10.0/open-clip==3.3.0 for deterministic SAM2 masks
-sam2==1.1.0                  # Deterministic builds: SAM2/CLIP stack compatibility
+# NOTE: This file exists for documentation and fallback compilation.
+# Primary install path is via bootstrap script, not pip install -r.
+sam2==1.1.0

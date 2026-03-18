@@ -4,8 +4,15 @@
 This validator enforces the following contracts:
 1. All lockfiles must be generated with the expected Python version
 2. ML lockfiles must be CPU-only (no GPU-linked packages)
-3. ML layer lockfiles (ml-core, ml-raw, ml-sam2, ml-coreml, ml-research) must exist
+3. ML layer lockfiles (ml-core, ml-raw, ml-coreml, ml-research) must exist
 4. Umbrella ml.txt must remain backward-compatible
+
+CONTRACT SEPARATION:
+- Standard lockfile layers: ml-core, ml-raw, ml-coreml, ml-research
+- Scripted-only layers: ml-sam2 (requires non-standard install semantics)
+
+Scripted-only layers are NOT validated as standard lockfile contracts.
+They exist for documentation but install path is via bootstrap script.
 """
 
 from __future__ import annotations
@@ -27,22 +34,29 @@ CORE_LOCK_FILES = (
     "tools-archive.txt",
 )
 
-# ML layer lockfiles (capability-specific)
+# ML layer lockfiles (standard lockfile contract)
+# These follow the standard pip install -r contract
 ML_LAYER_LOCK_FILES = (
     "ml-core.txt",
     "ml-raw.txt",
-    "ml-sam2.txt",
     "ml-coreml.txt",
     "ml-research.txt",
+)
+
+# Scripted-only ML layers (NOT standard lockfile contract)
+# These require non-standard install semantics via bootstrap script
+SCRIPTED_ONLY_ML_LAYERS = (
+    "ml-sam2.txt",
 )
 
 # ML umbrella lockfile (backward compatibility)
 ML_UMBRELLA_LOCK_FILE = "ml.txt"
 
-# All lockfiles for validation
-ALL_LOCK_FILES = CORE_LOCK_FILES + ML_LAYER_LOCK_FILES + (ML_UMBRELLA_LOCK_FILE,)
+# All lockfiles for header validation (includes scripted for consistency checking)
+ALL_LOCK_FILES = CORE_LOCK_FILES + ML_LAYER_LOCK_FILES + SCRIPTED_ONLY_ML_LAYERS + (ML_UMBRELLA_LOCK_FILE,)
 
 # ML lockfiles that must be CPU-only (compiled with PyTorch CPU index)
+# Note: ml-sam2.txt is scripted-only but still validated for CPU-only if present
 CPU_ONLY_ML_LOCKS = (
     "ml-core.txt",
     "ml-sam2.txt",
@@ -73,13 +87,21 @@ def validate_lockfile_headers(expected_python: str) -> list[str]:
 
     Only validates files that exist. ML layer lockfiles may not exist in
     environments where they haven't been compiled yet (e.g., fresh checkouts).
+    
+    Contract separation:
+    - Standard ML layers: validated as optional during transition
+    - Scripted-only layers: validated if present but not required
     """
     errors: list[str] = []
     warnings: list[str] = []
     for lock_name in ALL_LOCK_FILES:
         lock_path = REQUIREMENTS_DIR / lock_name
         if not lock_path.is_file():
-            # ML layer files are optional if not yet compiled
+            # Scripted-only layers are not required as lockfiles
+            if lock_name in SCRIPTED_ONLY_ML_LAYERS:
+                # Silently skip - scripted-only layers may not have lockfiles
+                continue
+            # Standard ML layer files are optional during transition
             if lock_name in ML_LAYER_LOCK_FILES:
                 warnings.append(f"Optional ML layer lockfile not found (will be compiled by CI): {lock_name}")
                 continue
@@ -134,16 +156,24 @@ def validate_ml_lock_contract() -> list[str]:
 
 
 def validate_ml_layer_structure() -> list[str]:
-    """Validate that ML layer .in files exist for the layered strategy."""
+    """Validate that ML layer .in files exist for the layered strategy.
+    
+    Both standard and scripted-only .in files should exist for documentation,
+    but only standard layers follow the lockfile contract.
+    """
     errors: list[str] = []
-    expected_in_files = [
+    # Standard lockfile layers (must exist)
+    standard_in_files = [
         "ml-core.in",
         "ml-raw.in",
-        "ml-sam2.in",
         "ml-coreml.in",
         "ml-research.in",
     ]
-    for in_file in expected_in_files:
+    # Scripted-only layers (should exist for documentation)
+    scripted_in_files = [
+        "ml-sam2.in",
+    ]
+    for in_file in standard_in_files + scripted_in_files:
         in_path = REQUIREMENTS_DIR / in_file
         if not in_path.is_file():
             errors.append(f"Missing ML layer input file: {in_path}")

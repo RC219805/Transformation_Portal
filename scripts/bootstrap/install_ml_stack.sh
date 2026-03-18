@@ -148,17 +148,34 @@ install_profile() {
             fi
             ;;
         sam2)
-            check_lockfile "ml-sam2.txt"
-            log_info "Installing ML SAM2 segmentation layer..."
-            log_warn "SAM2 may require --no-build-isolation on some platforms."
+            # SAM2 is a SCRIPTED-ONLY capability - not a standard lockfile contract.
+            # It requires non-standard install semantics on some platforms.
+            log_info "Installing ML SAM2 segmentation layer (SCRIPTED-ONLY)..."
+            log_warn "SAM2 requires ml-core dependencies. Ensure core-cpu is installed first."
+            
             if [[ "${DRY_RUN}" == "true" ]]; then
-                log_info "[DRY-RUN] Would install: requirements/ml-sam2.txt"
+                log_info "[DRY-RUN] Would install sam2==1.1.0 with fallback to --no-build-isolation"
             else
-                if ! ${pip_cmd} -r "${REQUIREMENTS_DIR}/ml-sam2.txt" 2>/tmp/sam2_install_error.log; then
-                    log_warn "Standard install failed with error:"
-                    cat /tmp/sam2_install_error.log >&2
-                    log_warn "Trying with --no-build-isolation..."
-                    ${pip_cmd} --no-build-isolation -r "${REQUIREMENTS_DIR}/ml-sam2.txt"
+                # Create secure temporary file for error logging
+                local error_log
+                error_log="$(mktemp)"
+                trap 'rm -f "${error_log}"' RETURN
+                
+                # Try standard install first
+                log_info "Attempting standard SAM2 install..."
+                if python3 -m pip install ${PIP_OPTS:-} sam2==1.1.0 2>"${error_log}"; then
+                    log_info "SAM2 installed successfully via standard path."
+                else
+                    log_warn "Standard install failed. Error log:"
+                    cat "${error_log}" >&2
+                    log_warn "Retrying with --no-build-isolation (torch must be pre-installed)..."
+                    if python3 -m pip install ${PIP_OPTS:-} --no-build-isolation sam2==1.1.0; then
+                        log_info "SAM2 installed successfully with --no-build-isolation."
+                    else
+                        log_error "SAM2 installation failed. Platform may not be supported."
+                        log_error "Ensure PyTorch is installed first: ./scripts/bootstrap/install_ml_stack.sh --profile core-cpu"
+                        exit 2
+                    fi
                 fi
             fi
             ;;
