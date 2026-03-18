@@ -245,7 +245,7 @@ install_profile() {
             check_lockfile "ml-cuda.txt"
             log_info "Installing ML core layer + CUDA acceleration (linux-x86_64-cuda)..."
             log_info "Using PyTorch CUDA index: ${PYTORCH_INDEX}"
-            log_warn "Ensure NVIDIA drivers are installed on the host system."
+            log_warn "Ensure NVIDIA drivers (compatible with CUDA 12.x) are installed on the host system."
             if [[ "${DRY_RUN}" == "true" ]]; then
                 log_info "[DRY-RUN] Would install: requirements/ml-cuda.txt"
                 log_info "[DRY-RUN] With extra-index-url: ${PYTORCH_INDEX}"

@@ -57,7 +57,7 @@ class PlatformOS(str, Enum):
         elif system == "Linux":
             return cls.LINUX
         else:
-            raise ValueError(f"Unsupported platform_system: {system}")
+            raise ValueError(f"Unsupported operating system: {system} (expected Darwin or Linux)")
 
 
 class PlatformISA(str, Enum):
@@ -76,7 +76,7 @@ class PlatformISA(str, Enum):
         elif machine in ("x86_64", "amd64"):
             return cls.X86_64
         else:
-            raise ValueError(f"Unsupported platform_machine: {machine}")
+            raise ValueError(f"Unsupported processor architecture: {machine} (expected arm64/aarch64 or x86_64/amd64)")
 
 
 class PlatformAccel(str, Enum):

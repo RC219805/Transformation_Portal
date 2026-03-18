@@ -20,9 +20,17 @@
 #   - Includes ml-core.in as baseline
 #   - Install via: ./scripts/bootstrap/install_ml_stack.sh --profile core-cuda
 #
-# NOTE: This file exists for documentation and profile completeness.
-# CUDA wheels are typically installed via PyTorch's CUDA index, not pip-compile.
-# The bootstrap script handles the correct index URL selection.
+# IMPORTANT: Package installation notes
+# -------------------------------------
+# The CUDA packages listed below are installed via pip when using the CUDA PyTorch index.
+# When compiling with pip-compile, these packages are included with platform markers
+# to document CUDA dependencies. At install time, the bootstrap script uses
+# PYTORCH_INDEX=https://download.pytorch.org/whl/cu121 (or similar) to get CUDA wheels.
+#
+# These explicit package listings serve as:
+# 1. Documentation of CUDA dependencies
+# 2. Platform-marked constraints for pip-compile
+# 3. Reference for manual CUDA environment setup
 
 # Include cross-platform ML baseline
 -r ml-core.in
