@@ -1,64 +1,39 @@
-# Optional ML and deep learning dependencies
-# These are heavy dependencies for AI/ML features (not needed for basic use)
-# This file contains abstract requirements with version ranges.
+# Optional ML and deep learning dependencies (umbrella)
+# This is a convenience umbrella file that aggregates ML capability layers.
+# For fine-grained control, install individual layers from ml-*.in files.
+#
 # Run `make compile` in this directory to generate pinned ml.txt
+#
+# LAYERED ML DEPENDENCY STRATEGY
+# ==============================
+# This file aggregates CROSS-PLATFORM ML layers for backward-compatible installs.
+# Platform-specific and scripted-only layers are NOT included.
+#
+#   ml-core.in     Cross-platform ML baseline (torch, diffusers, transformers)
+#   ml-raw.in      RAW camera file ingest (rawpy) - platform-scoped markers
+#
+# EXCLUDED from umbrella (opt-in only):
+#   ml-sam2.in     SAM2 segmentation - SCRIPTED ONLY (non-standard install semantics)
+#   ml-coreml.in   Apple CoreML acceleration - macOS only
+#   ml-research.in Research/experimental extras - reserved for future use
+#
+# Install profiles:
+#   make install-ml-core    # Cross-platform baseline
+#   make install-ml-raw     # + RAW ingest capability
+#   make install-ml         # ml-core + ml-raw (this umbrella)
+#
+# For SAM2 or CoreML, use bootstrap script:
+#   ./scripts/bootstrap/install_ml_stack.sh --profile core-cpu,sam2
+#   ./scripts/bootstrap/install_ml_stack.sh --profile core-cpu,coreml
+#
+# Known-good pinned inference stack for determinism:
+#   torch==2.10.0, torchvision==0.25.0, open-clip-torch==3.3.0
+#
+# See requirements/README.md for full layering documentation.
 
-# ML and deep learning libraries (optional)
-# Known-good pinned inference stack for SAM2 + CLIP determinism:
-# torch==2.10.0, torchvision==0.25.0, sam2==1.1.0, open-clip-torch==3.3.0
-torch==2.10.0               # Pinned for known-good SAM2/CLIP determinism stack
-diffusers>=0.36.0,<1
-controlnet-aux>=0.0.6,<1
-# realesrgan>=0.3.0,<1  # BANNED: Unmaintained, use local implementation
-
-# RAW file processing (optional, for spatial_ai linear ingest)
-rawpy==0.26.1               # Pinned for deterministic RAW demosaic (LibRaw wrapper)
-
-# HuggingFace ecosystem and vision utilities
-transformers>=4.57.0,<6
-huggingface-hub>=0.19.0,<2
-torchvision==0.25.0         # Pinned to torch 2.10.0/SAM2 stack for deterministic vision ops
-# opencv-python>=4.8.0,<5  # MOVED TO BASE: Required for depth_writer (core pipeline)
-scikit-image>=0.21.0,<1
-
-# Configuration and color science
-PyYAML>=6.0
-colour-science>=0.4.2
-
-# Apple Silicon acceleration and performance tools
-coremltools>=7.0
-psutil>=5.9.0
-memory-profiler>=0.61.0
-
-# Vector search for RAG system
-# Updated to >=3.1.0 for CVE-73169 remediation (arbitrary code execution vulnerability)
-sentence-transformers>=3.1.0,<6
-
-# Additional ML support
-accelerate>=0.20.0,<2      # improves model loading speed
-
-# Segmentation models (Materials V3 EfficientSAM backend v2)
-# V2 dependencies for real model-backed segmentation (optional)
-# Activate v2 with: pip install efficientsam open-clip-torch
-
-# EfficientSAM - lightweight Segment Anything Model variant (Apache 2.0 license, commercial-safe)
-efficientsam==1.0.0       # EfficientVIT SAM model zoo (~133MB weights on first load)
-
-# SAM2 segmentation backend (Meta Segment Anything 2)
-sam2==1.1.0                 # Pinned with torch==2.10.0/open-clip==3.2.0 for deterministic SAM2 masks
-
-# CLIP - material classification via text embeddings (MIT license, commercial-safe)
-open-clip-torch==3.3.0    # OpenCLIP for zero-shot material classification
-
-# Note: V1 (heuristic-based) works without these dependencies
-# V2 (model-backed) auto-activates when dependencies installed
-# Weights auto-download to ~/.cache/transformation_portal/segmentation/
-
-# 3D Gaussian Splatting (Phase 6 - research license, non-commercial)
-# Inria 3D Gaussian Splatting for real-time novel view synthesis
-# License: Inria research license (non-commercial use only)
-# Requires: tier >= apex_research
-plyfile>=1.0.0,<2                      # PLY mesh export format
-# Note: Core gaussian-splatting implementation will be integrated directly
-# rather than using PyPI package to maintain tighter control over license
-# enforcement and integration with existing reconstruction contracts.
+# Include cross-platform ML capability layers only
+-r ml-core.in
+-r ml-raw.in
+# NOTE: ml-sam2.in is EXCLUDED - requires scripted install (non-standard semantics)
+# NOTE: ml-coreml.in is EXCLUDED - platform-specific (macOS only)
+# NOTE: ml-research.in is EXCLUDED - opt-in only

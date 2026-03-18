@@ -93,10 +93,23 @@ jobs:
 
             ### 📁 Updated Files
             - `requirements/base.txt` - Core runtime dependencies
-            - `requirements/ml.txt` - ML and deep learning packages
+            - `requirements/ml.txt` - ML umbrella (all ML capabilities)
+            - `requirements/ml-core.txt` - ML core layer (cross-platform baseline)
+            - `requirements/ml-raw.txt` - ML RAW ingest layer
+            - `requirements/ml-sam2.txt` - ML SAM2 segmentation layer
+            - `requirements/ml-coreml.txt` - ML CoreML layer (macOS)
+            - `requirements/ml-research.txt` - ML research/experimental layer
             - `requirements/dev.txt` - Development tools
             - `requirements/ci.txt` - CI/CD tools
             - `requirements/all.txt` - Combined requirements
+
+            ### 🎯 ML Layer Strategy
+            ML dependencies are now organized into capability layers:
+            - **ml-core**: Cross-platform ML baseline (torch, diffusers, transformers)
+            - **ml-raw**: RAW camera file ingest (rawpy)
+            - **ml-sam2**: SAM2 segmentation backend
+            - **ml-coreml**: Apple CoreML acceleration (macOS only)
+            - **ml-research**: Reserved for experimental features
 
             ### 🔍 Security Report
             See attached safety-report.json for vulnerability scan results.
@@ -106,6 +119,7 @@ jobs:
             - [ ] Review security report
             - [ ] Validate tests pass
             - [ ] Verify compatibility
+            - [ ] Confirm ML layer contracts (CPU-only PyTorch in ml-core.txt, ml-sam2.txt, ml.txt)
 
             **Generated automatically by GitHub Actions**
           branch: automated/dependency-updates

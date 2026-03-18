@@ -42,7 +42,7 @@ def isolated_repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setattr(contract, "REQUIREMENTS_DIR", tmp_path / "requirements")
     monkeypatch.setattr(contract, "MAKEFILE_PATH", tmp_path / "requirements" / "Makefile")
     write_makefile(tmp_path)
-    for name in contract.LOCK_FILES:
+    for name in contract.ALL_LOCK_FILES:
         write_lockfile(tmp_path, name, "3.11")
     return tmp_path
 
@@ -70,5 +70,5 @@ def test_ml_lock_rejects_gpu_linked_packages(isolated_repo: Path) -> None:
     assert errors == [
         f"{isolated_repo / 'requirements' / 'ml.txt'} contains GPU-linked package "
         "'nvidia-cublas-cu12==12.8.4.1', but the documented contract is CPU-only "
-        "PyTorch in ml.txt"
+        "PyTorch in ML lockfiles"
     ]

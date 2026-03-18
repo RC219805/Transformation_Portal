@@ -1,5 +1,25 @@
 # Makefile for compiling layered requirements with pip-tools
 # This ensures consistent dependency resolution across all layers
+#
+# LAYERED ML DEPENDENCY STRATEGY
+# ==============================
+# ML dependencies are split into capability-specific layers for:
+# - Platform-safe compilation (CPU-only baseline, platform-specific extras)
+# - Deterministic installs (each layer has explicit contracts)
+# - Capability-gated promotion (optional features can be added incrementally)
+#
+# Standard Lockfile Layers (compiled via this Makefile):
+#   ml-core.txt      Cross-platform ML baseline (torch, diffusers, transformers, etc.)
+#   ml-raw.txt       RAW camera file ingest (rawpy) - may have platform limitations
+#   ml-coreml.txt    Apple CoreML acceleration - macOS only
+#   ml-research.txt  Research/experimental extras - reserved for future use
+#   ml.txt           Standard umbrella layer (ml-core + ml-raw)
+#
+# Scripted-Only Layers (NOT compiled here - use bootstrap script):
+#   ml-sam2          SAM2 segmentation - requires non-standard install semantics
+#                    Install via: ./scripts/bootstrap/install_ml_stack.sh --profile core-cpu,sam2
+#
+# See requirements/README.md for full documentation.
 
 SHELL := /bin/bash
 LOCK_PYTHON_VERSION ?= 3.11
@@ -8,33 +28,55 @@ PIP_COMPILE_BASE := pip-compile -q --resolver=backtracking
 PIP_COMPILE_PY_FLAG := $(shell pip-compile --help 2>/dev/null | grep -q -- '--python-version' && echo "--python-version=$(LOCK_PYTHON_VERSION)" || true)
 PIP_COMPILE := mkdir -p "$(PIP_TOOLS_CACHE_DIR)" && PIP_TOOLS_CACHE_DIR="$(PIP_TOOLS_CACHE_DIR)" $(PIP_COMPILE_BASE) $(PIP_COMPILE_PY_FLAG)
 
+# PyTorch CPU index for CI/cross-platform lockfiles
+PYTORCH_CPU_INDEX := --extra-index-url https://download.pytorch.org/whl/cpu
+
 # Default target: compile all requirements
-.PHONY: all compile compile-all update help clean check
+.PHONY: all compile compile-all compile-ml-layers update help clean check
 
 help:
 	@echo "Targets:"
-	@echo "  compile      Compile all pinned requirements from .in files"
-	@echo "  compile-all  Same as compile (for compatibility)"
-	@echo "  update       Update all dependencies to latest versions"
-	@echo "  check        Verify that .txt files are up-to-date with .in files"
-	@echo "  clean        Remove all compiled .txt files"
+	@echo "  compile           Compile all pinned requirements from .in files"
+	@echo "  compile-all       Same as compile (for compatibility)"
+	@echo "  compile-ml-layers Compile only ML layer lockfiles"
+	@echo "  update            Update all dependencies to latest versions"
+	@echo "  check             Verify that .txt files are up-to-date with .in files"
+	@echo "  clean             Remove all compiled .txt files"
 	@echo ""
 	@echo "Individual compilation targets:"
-	@echo "  all.txt      Compile all.txt (global resolution)"
-	@echo "  base.txt     Compile base.txt (constrained by all.txt)"
-	@echo "  ml.txt       Compile ml.txt (constrained by all.txt)"
-	@echo "  dev.txt      Compile dev.txt (constrained by all.txt)"
-	@echo "  ci.txt       Compile ci.txt (constrained by all.txt)"
+	@echo "  all.txt           Compile all.txt (global resolution)"
+	@echo "  base.txt          Compile base.txt (constrained by all.txt)"
+	@echo ""
+	@echo "ML Layer targets (CPU-only PyTorch index):"
+	@echo "  ml-core.txt       Cross-platform ML baseline"
+	@echo "  ml-raw.txt        RAW ingest capability layer"
+	@echo "  ml-coreml.txt     Apple CoreML acceleration layer"
+	@echo "  ml-research.txt   Research/experimental extras layer"
+	@echo "  ml.txt            Standard umbrella layer (ml-core + ml-raw)"
+	@echo ""
+	@echo "Scripted-only layers (NOT compiled here):"
+	@echo "  ml-sam2           SAM2 segmentation - use bootstrap script"
+	@echo ""
+	@echo "Other targets:"
+	@echo "  dev.txt           Compile dev.txt (constrained by all.txt)"
+	@echo "  ci.txt            Compile ci.txt (constrained by all.txt)"
 	@echo "  tools-archive.txt Compile tools-archive.txt (constrained by all.txt)"
 
 # Compile all requirements in correct order
-compile: all.txt base.txt ml.txt dev.txt ci.txt tools-archive.txt
+# Note: SAM2 is scripted-only and NOT compiled here - use bootstrap script
+compile: all.txt base.txt ml-core.txt ml-raw.txt ml-coreml.txt ml-research.txt ml.txt dev.txt ci.txt tools-archive.txt
 	@echo "✓ All requirements compiled successfully"
 
 compile-all: compile
 
+# Compile only ML layers (useful for ML-focused updates)
+# Note: SAM2 is scripted-only and NOT compiled here
+compile-ml-layers: all.txt ml-core.txt ml-raw.txt ml-coreml.txt ml-research.txt ml.txt
+	@echo "✓ ML layer requirements compiled successfully"
+
 # Compile all.txt first for global resolution
-all.txt: all.in base.in ml.in dev.in ci.in
+# Note: ml-sam2.in included for global resolution but NOT compiled as lockfile
+all.txt: all.in base.in ml.in ml-core.in ml-raw.in ml-sam2.in ml-coreml.in ml-research.in dev.in ci.in
 	@echo "Compiling all.txt (global resolution)..."
 	@$(PIP_COMPILE) all.in -o all.txt
 
@@ -43,9 +85,31 @@ base.txt: base.in all.txt
 	@echo "Compiling base.txt..."
 	@$(PIP_COMPILE) -c all.txt base.in -o base.txt
 
-ml.txt: ml.in all.txt
-	@echo "Compiling ml.txt..."
-	@$(PIP_COMPILE) -c all.txt ml.in -o ml.txt
+# ML Layer lockfiles - compiled with CPU-only PyTorch index for deterministic CI
+# Each layer is compiled independently to allow fine-grained capability installs
+# NOTE: SAM2 is scripted-only and NOT compiled here - use bootstrap script
+
+ml-core.txt: ml-core.in all.txt
+	@echo "Compiling ml-core.txt (CPU-only PyTorch)..."
+	@$(PIP_COMPILE) $(PYTORCH_CPU_INDEX) -c all.txt ml-core.in -o ml-core.txt
+
+ml-raw.txt: ml-raw.in all.txt
+	@echo "Compiling ml-raw.txt..."
+	@$(PIP_COMPILE) -c all.txt ml-raw.in -o ml-raw.txt
+
+ml-coreml.txt: ml-coreml.in all.txt
+	@echo "Compiling ml-coreml.txt..."
+	@$(PIP_COMPILE) -c all.txt ml-coreml.in -o ml-coreml.txt
+
+ml-research.txt: ml-research.in all.txt
+	@echo "Compiling ml-research.txt..."
+	@$(PIP_COMPILE) -c all.txt ml-research.in -o ml-research.txt
+
+# Standard umbrella lockfile - includes ml-core + ml-raw
+# Does NOT include: sam2 (scripted-only), coreml (platform-specific), research (experimental)
+ml.txt: ml.in ml-core.in ml-raw.in all.txt
+	@echo "Compiling ml.txt (standard umbrella, CPU-only PyTorch)..."
+	@$(PIP_COMPILE) $(PYTORCH_CPU_INDEX) -c all.txt ml.in -o ml.txt
 
 dev.txt: dev.in all.txt
 	@echo "Compiling dev.txt..."
@@ -60,29 +124,53 @@ tools-archive.txt: tools-archive.in all.txt
 	@$(PIP_COMPILE) -c all.txt tools-archive.in -o tools-archive.txt
 
 # Update all dependencies to latest allowed versions
+# Note: SAM2 is scripted-only and NOT updated here
 update:
 	@echo "Updating all dependencies to latest versions..."
 	@$(PIP_COMPILE) --upgrade all.in -o all.txt
 	@$(PIP_COMPILE) --upgrade -c all.txt base.in -o base.txt
-	@$(PIP_COMPILE) --upgrade -c all.txt ml.in -o ml.txt
+	@$(PIP_COMPILE) --upgrade $(PYTORCH_CPU_INDEX) -c all.txt ml-core.in -o ml-core.txt
+	@$(PIP_COMPILE) --upgrade -c all.txt ml-raw.in -o ml-raw.txt
+	@$(PIP_COMPILE) --upgrade -c all.txt ml-coreml.in -o ml-coreml.txt
+	@$(PIP_COMPILE) --upgrade -c all.txt ml-research.in -o ml-research.txt
+	@$(PIP_COMPILE) --upgrade $(PYTORCH_CPU_INDEX) -c all.txt ml.in -o ml.txt
 	@$(PIP_COMPILE) --upgrade -c all.txt dev.in -o dev.txt
 	@$(PIP_COMPILE) --upgrade -c all.txt ci.in -o ci.txt
 	@$(PIP_COMPILE) --upgrade -c all.txt tools-archive.in -o tools-archive.txt
 	@echo "✓ All requirements updated successfully"
 
 # Check if .txt files are up-to-date
+# Note: SAM2 is scripted-only and NOT checked here
 check:
 	@echo "Checking if requirements are up-to-date..."
 	@set -euo pipefail; \
 	repo_dir="$$(pwd)"; \
 	tmp_dir="$$(mktemp -d)"; \
 	trap 'rm -rf "$$tmp_dir"' EXIT; \
-	cp all.in base.in ml.in dev.in ci.in tools-archive.in "$$tmp_dir"/; \
-	cp all.txt base.txt ml.txt dev.txt ci.txt tools-archive.txt "$$tmp_dir"/; \
+	cp all.in base.in ml.in ml-core.in ml-raw.in ml-coreml.in ml-research.in dev.in ci.in tools-archive.in "$$tmp_dir"/; \
+	for f in all.txt base.txt ml.txt dev.txt ci.txt tools-archive.txt; do \
+		if [ -f "$$repo_dir/$$f" ]; then \
+			cp "$$repo_dir/$$f" "$$tmp_dir"/; \
+		else \
+			echo "ERROR: Required lockfile missing: $$f"; \
+			exit 1; \
+		fi; \
+	done; \
+	for f in ml-core.txt ml-raw.txt ml-coreml.txt ml-research.txt; do \
+		if [ -f "$$repo_dir/$$f" ]; then \
+			cp "$$repo_dir/$$f" "$$tmp_dir"/; \
+		else \
+			echo "INFO: Optional ML layer lockfile not found: $$f (will be compiled by CI)"; \
+		fi; \
+	done; \
 	cd "$$tmp_dir"; \
 	$(PIP_COMPILE) all.in -o all.txt >/dev/null; \
 	$(PIP_COMPILE) -c all.txt base.in -o base.txt >/dev/null; \
-	$(PIP_COMPILE) -c all.txt ml.in -o ml.txt >/dev/null; \
+	$(PIP_COMPILE) $(PYTORCH_CPU_INDEX) -c all.txt ml-core.in -o ml-core.txt >/dev/null; \
+	$(PIP_COMPILE) -c all.txt ml-raw.in -o ml-raw.txt >/dev/null; \
+	$(PIP_COMPILE) -c all.txt ml-coreml.in -o ml-coreml.txt >/dev/null; \
+	$(PIP_COMPILE) -c all.txt ml-research.in -o ml-research.txt >/dev/null; \
+	$(PIP_COMPILE) $(PYTORCH_CPU_INDEX) -c all.txt ml.in -o ml.txt >/dev/null; \
 	$(PIP_COMPILE) -c all.txt dev.in -o dev.txt >/dev/null; \
 	$(PIP_COMPILE) -c all.txt ci.in -o ci.txt >/dev/null; \
 	$(PIP_COMPILE) -c all.txt tools-archive.in -o tools-archive.txt >/dev/null; \
@@ -95,10 +183,19 @@ check:
 			exit 1; \
 		fi; \
 	done; \
+	for f in ml-core.txt ml-raw.txt ml-coreml.txt ml-research.txt; do \
+		if [ -f "$$repo_dir/$$f" ]; then \
+			if ! diff -u <(normalize_req "$$tmp_dir/$$f") <(normalize_req "$$repo_dir/$$f") >/dev/null; then \
+				echo "❌ $$f is out of date. Run 'make compile' to update."; \
+				exit 1; \
+			fi; \
+		fi; \
+	done; \
 	echo "✓ All requirements are up-to-date"
 
 # Clean compiled files
+# Note: ml-sam2.txt removed if present (historical artifact)
 clean:
 	@echo "Removing compiled .txt files..."
-	@rm -f all.txt base.txt ml.txt dev.txt ci.txt tools-archive.txt
+	@rm -f all.txt base.txt ml.txt ml-core.txt ml-raw.txt ml-sam2.txt ml-coreml.txt ml-research.txt dev.txt ci.txt tools-archive.txt
 	@echo "✓ Cleanup complete"

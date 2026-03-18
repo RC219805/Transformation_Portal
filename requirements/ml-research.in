@@ -1,0 +1,20 @@
+# Optional research / advanced ML extras
+# Run `make compile` in this directory to generate pinned ml-research.txt
+#
+# Keep anything fragile or non-universal out of ml-core.
+# This layer is for experimental, research-only, or platform-limited packages.
+#
+# Capability contract:
+# - This is an OPTIONAL layer for experimental/research features.
+# - Packages here may have restricted licenses (non-commercial use only).
+# - Install via: make install-ml-research or pip install -r requirements/ml-research.txt
+#
+# NOTE: This file is reserved for future research-only extras.
+# Packages to consider for this layer:
+# - 3D Gaussian Splatting implementations (research license)
+# - MaterialGAN and similar experimental models
+# - Non-production neural radiance field tools
+
+# Reserved for future research-only extras
+# Example (not active):
+# gaussian-splatting ; platform_system == "Linux"  # Inria research license

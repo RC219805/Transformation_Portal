@@ -6,7 +6,11 @@ Quick reference for common workflows and commands in this repo.
 - `make venv` create local `.venv` if missing.
 - `make setup` install package in editable mode.
 - `make install-core` install core runtime + dev tooling dependencies (with constraints if present).
-- `make install-ml` install ML tier dependencies (with constraints if present).
+- `make install-ml` install full ML tier dependencies (umbrella, all ML capabilities).
+- `make install-ml-core` install ML core layer only (cross-platform baseline: torch, diffusers, transformers).
+- `make install-ml-raw` install ML RAW ingest layer (rawpy, platform-scoped).
+- `make install-ml-sam2` install ML SAM2 layer (Meta Segment Anything 2, optional).
+- `make install-ml-coreml` install ML CoreML layer (Apple acceleration, macOS only).
 - `make test-fast` run fast test subset plus the Phase 6 smoke coverage layer.
 - `make test-novideo` run tests excluding luxury video master grader tests (filters out `video_master_grader`).
 - `make test-full` run full test suite (parallel if xdist installed).
@@ -35,11 +39,21 @@ Quick reference for common workflows and commands in this repo.
 - `make lock-prod` regenerate `requirements.lock.txt`.
 - `make lock-ci` regenerate `requirements-ci.lock.txt`.
 - `make lock-dev` regenerate `requirements-dev.lock.txt`.
-- `cd requirements && make update LOCK_PYTHON_VERSION=3.11` update layered lockfiles (`all/base/ml/dev/ci/tools-archive`).
+- `cd requirements && make compile LOCK_PYTHON_VERSION=3.11` compile all layered lockfiles (including ML layers).
+- `cd requirements && make compile-ml-layers LOCK_PYTHON_VERSION=3.11` compile only ML layer lockfiles.
+- `cd requirements && make update LOCK_PYTHON_VERSION=3.11` update layered lockfiles (`all/base/ml-*/dev/ci/tools-archive`).
 - `cd requirements && make check LOCK_PYTHON_VERSION=3.11` verify layered lockfiles are current.
-- `python3 scripts/validation/check_requirements_lock_contract.py` validate layered lock contract (headers + CPU-only `ml.txt`).
+- `python3 scripts/validation/check_requirements_lock_contract.py` validate layered lock contract (headers + CPU-only ML lockfiles + layer structure).
 - `make docs` build API docs with Sphinx.
 - `make docs-clean` remove generated docs output.
+
+## ML Layer Bootstrap Script
+- `./scripts/bootstrap/install_ml_stack.sh --profile core-cpu` install cross-platform ML baseline only.
+- `./scripts/bootstrap/install_ml_stack.sh --profile core-cpu,raw` install ML baseline + RAW ingest.
+- `./scripts/bootstrap/install_ml_stack.sh --profile core-cpu,sam2` install ML baseline + SAM2 segmentation.
+- `./scripts/bootstrap/install_ml_stack.sh --profile full` install all ML capabilities (equivalent to `make install-ml`).
+- `./scripts/bootstrap/install_ml_stack.sh --profile core-cpu --dry-run` show what would be installed without installing.
+- `./scripts/bootstrap/install_ml_stack.sh --help` show all available profiles and options.
 
 ## Workflow scripts (bash)
 - `./scripts/pipelines/run_montecito_apex_full.sh` run Montecito Shores APEX batch with all deliverables (interactive prompt).

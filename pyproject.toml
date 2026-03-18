@@ -39,35 +39,56 @@ classifiers = [
 ]
 
 [project.optional-dependencies]
-# ML and deep learning - see requirements/ml.in for pinned versions
+# ML and deep learning - see requirements/ml-*.in for layered pinned versions
 # ML dependencies. Note: `realesrgan` is BANNED (unmaintained).
 # Enforcement: requirements/constraints.txt hard-block pins + scripts/security/verify_banned_dependencies.py
-ml = [
-    # Known-good pinned segmentation stack (SAM2 + CLIP) to avoid drift.
-    "torch==2.10.0",
-    "diffusers>=0.20,<1",
-    "controlnet-aux>=0.0.6,<1",
-    "transformers>=4.35.0,<6",
-    "huggingface-hub>=0.19.0,<2",
-    "torchvision==0.25.0",
-    "sam2==1.1.0",
-    "efficientsam==1.0.0",
-    "open-clip-torch==3.3.0",
-    # opencv-python moved to core dependencies (required for depth_writer)
-    "scikit-image>=0.21.0,<1",
-    "PyYAML>=6.0",
-    "colour-science>=0.4.2",
-    "psutil>=5.9.0",
-    "memory-profiler>=0.61.0",
-    "sentence-transformers>=3.1.0,<6",
-    "accelerate>=0.20.0,<2",
+#
+# LAYERED ML DEPENDENCY STRATEGY
+# ==============================
+# ML dependencies are organized into capability layers.
+# The lockfile system (requirements/*.txt) is the operational source of truth.
+# pyproject.toml extras are minimal capability pointers for editable installs.
+#
+# Standard Layers (lockfile-compiled):
+#   ml-core   Cross-platform ML baseline
+#   ml-raw    RAW camera file ingest
+#   ml.txt    Standard umbrella (ml-core + ml-raw)
+#
+# Scripted-Only Layers (use bootstrap script):
+#   sam2      SAM2 segmentation - requires non-standard install semantics
+#             Install via: ./scripts/bootstrap/install_ml_stack.sh --profile core-cpu,sam2
+#
+# Platform-Specific Layers:
+#   coreml    Apple CoreML acceleration (macOS only)
+
+# ML Core - Cross-platform ML baseline (minimal spec, see ml-core.in for pins)
+ml-core = [
+    "torch>=2.0",
+    "torchvision>=0.15",
+    "diffusers>=0.30",
+    "transformers>=4.40",
+    "huggingface-hub>=0.19",
+    "accelerate>=0.20",
 ]
 # CoreML acceleration (optional, Apple Silicon only)
 coreml = [
-    "coremltools>=7.0",
+    "coremltools>=7.0 ; platform_system == 'Darwin'",
 ]
 # RAW camera file support (CR2, NEF, ARW, DNG, etc.)
 raw = [
+    "rawpy>=0.18.0",
+]
+# Standard ML umbrella - cross-platform layers only (ml-core + ml-raw)
+# Does NOT include: sam2 (scripted-only), coreml (platform-specific), research (experimental)
+# For additional capabilities:
+#   SAM2:   ./scripts/bootstrap/install_ml_stack.sh --profile core-cpu,sam2
+#   CoreML: ./scripts/bootstrap/install_ml_stack.sh --profile core-cpu,coreml (macOS only)
+#   Full:   ./scripts/bootstrap/install_ml_stack.sh --profile full (same as ml.txt)
+ml = [
+    "torch>=2.0",
+    "torchvision>=0.15",
+    "diffusers>=0.30",
+    "transformers>=4.40",
     "rawpy>=0.18.0",
 ]
 # Optional detached signing support for archive attestation CLIs
@@ -100,9 +121,10 @@ ci = [
     "tox>=4.5,<5",
     "pypdf>=3.9.0",
 ]
-# All dependencies combined
+# All dependencies combined (minimal pointer, not full graph)
+# For production, use lockfiles: requirements/all.txt
 all = [
-    "transformation-portal[ml,dev,ci,raw]",
+    "transformation-portal[ml,dev,ci]",
 ]
 
 [project.scripts]
