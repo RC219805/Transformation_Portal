@@ -7,19 +7,25 @@
 # Run `make compile` in this directory to generate pinned ml-core-darwin.txt
 #
 # PLATFORM TARGET: darwin-* (macOS Intel + Apple Silicon)
-#   - darwin-x86_64-cpu   (macOS Intel, CPU-only)
+#   - darwin-x86_64-cpu   (macOS Intel, DEPRECATED - see security note)
 #   - darwin-arm64-cpu    (macOS Apple Silicon, CPU fallback)
 #   - darwin-arm64-mps    (macOS Apple Silicon, Metal)
 #
-# Torch version: 2.2.2 (last stable version with macOS x86_64 wheels)
+# SECURITY NOTE (CVE-2025-32434):
+#   torch < 2.6.0 has a critical RCE vulnerability (CVSS 9.8) via torch.load()
+#   - macOS Intel (x86_64): DEPRECATED - no torch 2.6.0+ wheels available from PyTorch
+#   - macOS ARM64: uses torch 2.6.0+ (secure)
 #
 # See: requirements/README.md for layering rationale.
 
-# --- PyTorch (macOS, pinned) ---
-# torch 2.2.2 is the last version with x86_64 macOS wheels
-# and provides stable MPS support on Apple Silicon.
-torch==2.2.2  # CAS determinism: cross-platform reproducibility
-torchvision==0.17.2  # CAS determinism: matches torch 2.2.2
+# --- PyTorch (macOS, security-aware) ---
+# SECURITY: torch 2.6.0+ required to patch CVE-2025-32434 (torch.load RCE)
+#
+# macOS ARM64 (Apple Silicon): torch 2.6.0 (secure, MPS support)
+# macOS Intel (x86_64): DEPRECATED - no official secure wheels available
+#   Users should migrate to Apple Silicon or Linux for ML workloads.
+torch>=2.6.0,<3  # CVE-2025-32434 patched (requires macOS ARM64)
+torchvision>=0.21.0,<1  # matches torch 2.6.0+
 
 # Diffusion / HuggingFace ecosystem
 diffusers>=0.36.0,<1

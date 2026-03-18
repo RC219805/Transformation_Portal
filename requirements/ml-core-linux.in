@@ -11,15 +11,16 @@
 #   - linux-x86_64-cuda   (Linux Intel/AMD, NVIDIA GPU)
 #   - linux-arm64-cpu     (Linux ARM, CPU-only)
 #
-# Torch version: 2.2.2 (latest stable with CPU wheels on PyPI)
+# SECURITY NOTE (CVE-2025-32434):
+#   torch < 2.6.0 has a critical RCE vulnerability (CVSS 9.8) via torch.load()
+#   All Linux platforms use torch 2.6.0+ (secure)
 #
 # See: requirements/README.md for layering rationale.
 
-# --- PyTorch (Linux, pinned) ---
-# torch 2.2.2 is the latest stable version with CPU wheels on PyPI.
-# Both macOS and Linux use the same version for cross-platform reproducibility.
-torch==2.2.2  # CAS determinism: cross-platform reproducibility
-torchvision==0.17.2  # CAS determinism: matches torch 2.2.2
+# --- PyTorch (Linux, security-aware) ---
+# SECURITY: torch 2.6.0+ required to patch CVE-2025-32434 (torch.load RCE)
+torch>=2.6.0,<3  # CVE-2025-32434 patched
+torchvision>=0.21.0,<1  # matches torch 2.6.0+
 
 # Diffusion / HuggingFace ecosystem
 diffusers>=0.36.0,<1

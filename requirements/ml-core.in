@@ -15,29 +15,40 @@
 # - This layer EXCLUDES SAM2 due to build-time torch requirements
 # - Accel is EXPLICIT via profile, never inferred from OS
 #
+# SECURITY NOTE (CVE-2025-32434):
+# - torch < 2.6.0 has a critical RCE vulnerability (CVSS 9.8) via torch.load()
+# - macOS Intel (x86_64) is DEPRECATED: no official torch 2.6.0+ wheels exist
+# - macOS ARM64 and Linux use torch 2.6.0+ (secure versions)
+#
 # See: requirements/README.md for layering rationale.
 
 # --- PyTorch (deterministic, platform-aware) ---
 # Pinned for known-good SAM2/CLIP determinism stack
 #
+# SECURITY: torch 2.6.0+ required to patch CVE-2025-32434 (torch.load RCE)
+#
 # Platform-specific version notes:
-# - macOS Intel (x86_64): torch 2.2.2 (last version with x86_64 macOS wheels)
-# - macOS Apple Silicon (arm64): torch 2.2.2 (stable MPS support)
-# - Linux (all arch): torch 2.2.2 (cross-platform reproducibility)
+# - macOS Intel (x86_64): DEPRECATED - no torch 2.6.0+ wheels available
+#   Last known-good: torch 2.5.1 (vulnerable). Use at own risk or migrate to ARM64.
+# - macOS Apple Silicon (arm64): torch 2.6.0 (secure, MPS support)
+# - Linux (all arch): torch 2.6.0 (secure, CPU/CUDA support)
 #
 # NOTE: When updating torch versions, verify SAM2/CLIP compatibility.
 
-# macOS Intel (no modern torch builds after 2.2.x)
-torch==2.2.2 ; platform_system == "Darwin" and platform_machine == "x86_64"  # CAS determinism
-torchvision==0.17.2 ; platform_system == "Darwin" and platform_machine == "x86_64"  # CAS determinism
+# macOS Intel (DEPRECATED - no secure torch wheels available)
+# WARNING: torch 2.5.1 is the last x86_64 macOS wheel but is vulnerable to CVE-2025-32434
+# Users on macOS Intel should migrate to Apple Silicon or use Linux for ML workloads.
+# Keeping last available version for backwards compatibility - USE AT OWN RISK.
+torch==2.5.1 ; platform_system == "Darwin" and platform_machine == "x86_64"  # DEPRECATED: CVE-2025-32434 vulnerable
+torchvision==0.20.1 ; platform_system == "Darwin" and platform_machine == "x86_64"  # DEPRECATED: matches torch 2.5.1
 
-# macOS Apple Silicon (MPS)
-torch==2.2.2 ; platform_system == "Darwin" and platform_machine == "arm64"  # CAS determinism
-torchvision==0.17.2 ; platform_system == "Darwin" and platform_machine == "arm64"  # CAS determinism
+# macOS Apple Silicon (MPS) - SECURE
+torch>=2.6.0,<3 ; platform_system == "Darwin" and platform_machine == "arm64"  # CVE-2025-32434 patched
+torchvision>=0.21.0,<1 ; platform_system == "Darwin" and platform_machine == "arm64"  # matches torch 2.6.0+
 
-# Linux (CPU baseline for CI - use same torch version for cross-platform reproducibility)
-torch==2.2.2 ; platform_system == "Linux"  # CAS determinism
-torchvision==0.17.2 ; platform_system == "Linux"  # CAS determinism
+# Linux (CPU/CUDA baseline) - SECURE
+torch>=2.6.0,<3 ; platform_system == "Linux"  # CVE-2025-32434 patched
+torchvision>=0.21.0,<1 ; platform_system == "Linux"  # matches torch 2.6.0+
 
 # Diffusion / HuggingFace ecosystem
 diffusers>=0.36.0,<1

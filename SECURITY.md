@@ -101,13 +101,23 @@ Given our image/video processing nature, special attention is required for:
 
 - **Recent Security Updates**:
 
+  **March 2026**:
+  - **PyTorch 2.6.0+** - Fixed CVE-2025-32434 (CVSS 9.8 Critical RCE via torch.load)
+    - macOS ARM64 and Linux: Updated to torch>=2.6.0 (secure)
+    - macOS Intel (x86_64): DEPRECATED - no official secure wheels available
+  - **Pillow>=10.3.0** - Fixed CVE-2024-28219 (buffer overflow vulnerability)
+  - **cryptography>=46.0.5** - Fixed GHSA subgroup attack vulnerability (SECT curves)
+  - **black>=26.3.1** - Fixed arbitrary file writes from unsanitized cache names
+
   **January 2026**:
   - **protobuf 6.34.0** - Fixed CVE-2026-0994 / GHSA-7gcm-g887-7qv7 (Dependabot #69)
   - **Workflow Hardening** - Stricter token permissions across all GitHub Actions workflows
   - **Quality Gate** - Fixed duplicate permissions block (aa555e0a)
 
 - **Known Vulnerabilities** (Monitor for updates):
-  - PyTorch: Keep updated for CUDA-related security patches
+  - PyTorch: macOS Intel (x86_64) ML support DEPRECATED due to CVE-2025-32434
+    - No official torch 2.6.0+ wheels available for macOS x86_64
+    - Users should migrate to macOS ARM64 (Apple Silicon) or Linux
   - Pillow: Critical for image parsing vulnerabilities
   - NumPy: Monitor for numerical computation exploits
 
@@ -325,6 +335,6 @@ We support responsible disclosure and will:
 
 ---
 
-*Last Updated: November 2025*
-*Next Review: February 2026*
-*Security Policy Version: 1.0*
+*Last Updated: March 2026*
+*Next Review: June 2026*
+*Security Policy Version: 1.1*
