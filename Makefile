@@ -130,14 +130,10 @@ install-ml-raw: venv
 	fi
 
 install-ml-sam2: venv
-	@echo "Installing ML SAM2 segmentation layer..."
-	@if [ -f requirements/ml-sam2.txt ]; then \
-		"$(PY)" -m pip install -r requirements/ml-sam2.txt && \
-		"$(PY)" -m pip install -e .; \
-	else \
-		echo "Error: requirements/ml-sam2.txt not found. Run 'cd requirements && make compile' first."; \
-		exit 1; \
-	fi
+	@echo "Installing ML SAM2 segmentation layer via bootstrap script..."
+	@echo "SAM2 requires non-standard install semantics and is scripted-only."
+	@./scripts/bootstrap/install_ml_stack.sh --profile core-cpu,sam2
+	@"$(PY)" -m pip install -e .
 
 install-ml-coreml: venv
 	@echo "Installing ML CoreML layer (macOS only)..."
