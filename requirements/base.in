@@ -4,7 +4,7 @@
 
 # Core array and image processing
 numpy>=1.24,<2.5.0         # upper bound for OpenCV compatibility; see ADR-032
-Pillow>=10.3.0,<12         # Security: CVE-2024-28219 (buffer overflow) fixed in 10.3.0
+Pillow>=10.3.0,<12         # Security: CVE-2024-28219 fixed in 10.3.0; upper bound aligned with lint requirements
 scipy>=1.15,<2
 scikit-learn>=1.8.0,<2       # classical ML (used in core features)
 opencv-python>=4.8.0,<5    # required for depth_writer (core pipeline)

@@ -24,7 +24,7 @@
 # macOS ARM64 (Apple Silicon): torch 2.6.0+ (secure, MPS support)
 # macOS Intel (x86_64): NOT SUPPORTED - no official secure wheels available
 #   Users must migrate to Apple Silicon or Linux for ML workloads.
-#   Installation on macOS Intel will fail (no matching torch>=2.6.0 wheels).
+#   (The parent ml-core.in excludes x86_64; this file only provides ARM64 packages.)
 torch>=2.6.0,<3 ; platform_system == "Darwin" and platform_machine == "arm64"  # CVE-2025-32434 patched
 torchvision>=0.21.0,<1 ; platform_system == "Darwin" and platform_machine == "arm64"  # matches torch 2.6.0+
 

@@ -115,10 +115,7 @@ Given our image/video processing nature, special attention is required for:
   - **Quality Gate** - Fixed duplicate permissions block (aa555e0a)
 
 - **Known Vulnerabilities** (Monitor for updates):
-  - PyTorch: macOS Intel (x86_64) ML support REMOVED due to CVE-2025-32434
-    - No official torch 2.6.0+ wheels available for macOS x86_64
-    - Users must migrate to macOS ARM64 (Apple Silicon) or Linux for ML workloads
-    - Core (non-ML) functionality remains available on macOS Intel
+  - PyTorch: macOS Intel (x86_64) ML support removed due to CVE-2025-32434; no secure wheels available
   - Pillow: Critical for image parsing vulnerabilities
   - NumPy: Monitor for numerical computation exploits
 
