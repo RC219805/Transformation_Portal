@@ -19,11 +19,11 @@
 # ---------------------------------------------------------------------------
 # Platform          Lockfile                 Torch Version
 # darwin-*          ml-core-darwin.txt       2.2.2
-# linux-*           ml-core-linux.txt        2.10.0
+# linux-*           ml-core-linux.txt        2.2.2
 #
 # Standard Lockfile Layers (compiled via this Makefile):
 #   ml-core-darwin.txt  macOS ML baseline (torch 2.2.2)
-#   ml-core-linux.txt   Linux ML baseline (torch 2.10.0)
+#   ml-core-linux.txt   Linux ML baseline (torch 2.2.2)
 #   ml-cpu.txt          CPU baseline acceleration layer (thin, includes ml-core)
 #   ml-mps.txt          Apple Silicon MPS acceleration layer (darwin-arm64-mps)
 #   ml-cuda.txt         NVIDIA CUDA acceleration layer (linux-x86_64-cuda)
@@ -125,7 +125,7 @@ ml-core-darwin.txt: ml-core-darwin.in all.txt
 	@$(PIP_COMPILE) $(PYTORCH_CPU_INDEX) -c all.txt ml-core-darwin.in -o ml-core-darwin.txt
 
 ml-core-linux.txt: ml-core-linux.in all.txt
-	@echo "Compiling ml-core-linux.txt (Linux, torch 2.10.0)..."
+	@echo "Compiling ml-core-linux.txt (Linux, torch 2.2.2)..."
 	@$(PIP_COMPILE) $(PYTORCH_CPU_INDEX) -c all.txt ml-core-linux.in -o ml-core-linux.txt
 
 # Legacy ml-core.txt (for backward compatibility - compiled on current platform)

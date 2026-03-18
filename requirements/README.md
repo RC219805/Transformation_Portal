@@ -70,13 +70,12 @@ To ensure deterministic builds, ml-core has platform-specific lockfiles:
 | Platform     | Lockfile              | Torch Version |
 |--------------|----------------------|---------------|
 | macOS (all)  | `ml-core-darwin.txt` | 2.2.2         |
-| Linux (all)  | `ml-core-linux.txt`  | 2.10.0        |
+| Linux (all)  | `ml-core-linux.txt`  | 2.2.2         |
 
-**Torch Version Strategy (Option B - Performance Stratification):**
-- Different platforms use different torch versions optimized for that platform
-- Torch version is part of the CAS identity for reproducibility
-- macOS uses torch 2.2.2 (last version with x86_64 macOS wheels, stable MPS support)
-- Linux uses torch 2.10.0 (latest stable, CI baseline)
+**Torch Version Strategy:**
+- Both platforms use torch 2.2.2 for cross-platform reproducibility
+- Torch 2.2.2 is the latest stable version with CPU wheels on PyPI
+- Torch version is part of the CAS identity for artifact provenance
 
 **Important:** Acceleration is NEVER inferred from OS—it must be explicitly specified via profile.
 
@@ -298,7 +297,7 @@ Each ML layer has a specific contract:
 
 | Layer | Contract | Platform Target | Notes |
 |-------|----------|-----------------|-------|
-| ml-core | Platform-aware PyTorch (macOS: 2.2.2, Linux: 2.10.0) | All | Base ML functionality |
+| ml-core | Platform-aware PyTorch (torch 2.2.2) | All | Base ML functionality |
 | ml-cpu | CPU-only, cross-platform | darwin-*/linux-*-cpu | No GPU packages |
 | ml-mps | Apple Silicon MPS | darwin-arm64-mps | Includes accelerate |
 | ml-cuda | NVIDIA CUDA | linux-x86_64-cuda | GPU packages allowed |

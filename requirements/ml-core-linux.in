@@ -11,14 +11,15 @@
 #   - linux-x86_64-cuda   (Linux Intel/AMD, NVIDIA GPU)
 #   - linux-arm64-cpu     (Linux ARM, CPU-only)
 #
-# Torch version: 2.10.0 (latest stable, CI baseline)
+# Torch version: 2.2.2 (latest stable with CPU wheels on PyPI)
 #
 # See: requirements/README.md for layering rationale.
 
 # --- PyTorch (Linux, pinned) ---
-# torch 2.10.0 is the latest stable version, used as CI baseline.
-torch==2.10.0
-torchvision==0.25.0
+# torch 2.2.2 is the latest stable version with CPU wheels on PyPI.
+# Both macOS and Linux use the same version for cross-platform reproducibility.
+torch==2.2.2
+torchvision==0.17.2
 
 # Diffusion / HuggingFace ecosystem
 diffusers>=0.36.0,<1

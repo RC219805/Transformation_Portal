@@ -23,7 +23,7 @@
 # Platform-specific version notes:
 # - macOS Intel (x86_64): torch 2.2.2 (last version with x86_64 macOS wheels)
 # - macOS Apple Silicon (arm64): torch 2.2.2 (stable MPS support)
-# - Linux (all arch): torch 2.10.0 (latest stable, CI baseline)
+# - Linux (all arch): torch 2.2.2 (cross-platform reproducibility)
 #
 # NOTE: When updating torch versions, verify SAM2/CLIP compatibility.
 
@@ -35,9 +35,9 @@ torchvision==0.17.2 ; platform_system == "Darwin" and platform_machine == "x86_6
 torch==2.2.2 ; platform_system == "Darwin" and platform_machine == "arm64"
 torchvision==0.17.2 ; platform_system == "Darwin" and platform_machine == "arm64"
 
-# Linux (CPU baseline for CI - modern torch version)
-torch==2.10.0 ; platform_system == "Linux"
-torchvision==0.25.0 ; platform_system == "Linux"
+# Linux (CPU baseline for CI - use same torch version for cross-platform reproducibility)
+torch==2.2.2 ; platform_system == "Linux"
+torchvision==0.17.2 ; platform_system == "Linux"
 
 # Diffusion / HuggingFace ecosystem
 diffusers>=0.36.0,<1
