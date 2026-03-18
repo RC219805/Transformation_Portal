@@ -104,7 +104,7 @@ Given our image/video processing nature, special attention is required for:
   **March 2026**:
   - **PyTorch 2.6.0+** - Fixed CVE-2025-32434 (CVSS 9.8 Critical RCE via torch.load)
     - macOS ARM64 and Linux: Updated to torch>=2.6.0 (secure)
-    - macOS Intel (x86_64): DEPRECATED - no official secure wheels available
+    - macOS Intel (x86_64): ML support REMOVED - no official secure wheels available
   - **Pillow>=10.3.0** - Fixed CVE-2024-28219 (buffer overflow vulnerability)
   - **cryptography>=46.0.5** - Fixed GHSA subgroup attack vulnerability (SECT curves)
   - **black>=26.3.1** - Fixed arbitrary file writes from unsanitized cache names
@@ -115,9 +115,10 @@ Given our image/video processing nature, special attention is required for:
   - **Quality Gate** - Fixed duplicate permissions block (aa555e0a)
 
 - **Known Vulnerabilities** (Monitor for updates):
-  - PyTorch: macOS Intel (x86_64) ML support DEPRECATED due to CVE-2025-32434
+  - PyTorch: macOS Intel (x86_64) ML support REMOVED due to CVE-2025-32434
     - No official torch 2.6.0+ wheels available for macOS x86_64
-    - Users should migrate to macOS ARM64 (Apple Silicon) or Linux
+    - Users must migrate to macOS ARM64 (Apple Silicon) or Linux for ML workloads
+    - Core (non-ML) functionality remains available on macOS Intel
   - Pillow: Critical for image parsing vulnerabilities
   - NumPy: Monitor for numerical computation exploits
 

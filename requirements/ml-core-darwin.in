@@ -21,11 +21,12 @@
 # --- PyTorch (macOS, security-aware) ---
 # SECURITY: torch 2.6.0+ required to patch CVE-2025-32434 (torch.load RCE)
 #
-# macOS ARM64 (Apple Silicon): torch 2.6.0 (secure, MPS support)
-# macOS Intel (x86_64): DEPRECATED - no official secure wheels available
-#   Users should migrate to Apple Silicon or Linux for ML workloads.
-torch>=2.6.0,<3  # CVE-2025-32434 patched (requires macOS ARM64)
-torchvision>=0.21.0,<1  # matches torch 2.6.0+
+# macOS ARM64 (Apple Silicon): torch 2.6.0+ (secure, MPS support)
+# macOS Intel (x86_64): NOT SUPPORTED - no official secure wheels available
+#   Users must migrate to Apple Silicon or Linux for ML workloads.
+#   Installation on macOS Intel will fail (no matching torch>=2.6.0 wheels).
+torch>=2.6.0,<3 ; platform_system == "Darwin" and platform_machine == "arm64"  # CVE-2025-32434 patched
+torchvision>=0.21.0,<1 ; platform_system == "Darwin" and platform_machine == "arm64"  # matches torch 2.6.0+
 
 # Diffusion / HuggingFace ecosystem
 diffusers>=0.36.0,<1

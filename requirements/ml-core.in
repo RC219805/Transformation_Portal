@@ -36,11 +36,10 @@
 # NOTE: When updating torch versions, verify SAM2/CLIP compatibility.
 
 # macOS Intel (DEPRECATED - no secure torch wheels available)
-# WARNING: torch 2.5.1 is the last x86_64 macOS wheel but is vulnerable to CVE-2025-32434
-# Users on macOS Intel should migrate to Apple Silicon or use Linux for ML workloads.
-# Keeping last available version for backwards compatibility - USE AT OWN RISK.
-torch==2.5.1 ; platform_system == "Darwin" and platform_machine == "x86_64"  # DEPRECATED: CVE-2025-32434 vulnerable
-torchvision==0.20.1 ; platform_system == "Darwin" and platform_machine == "x86_64"  # DEPRECATED: matches torch 2.5.1
+# WARNING: No official torch 2.6.0+ wheels exist for macOS x86_64.
+# This platform is NO LONGER SUPPORTED for ML workloads.
+# Users must migrate to macOS ARM64 (Apple Silicon) or Linux.
+# Installation on macOS Intel will fail with a clear dependency resolution error.
 
 # macOS Apple Silicon (MPS) - SECURE
 torch>=2.6.0,<3 ; platform_system == "Darwin" and platform_machine == "arm64"  # CVE-2025-32434 patched
