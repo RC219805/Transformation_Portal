@@ -67,7 +67,7 @@ help:
 	@echo ""
 	@echo "Platform-specific ML Core targets:"
 	@echo "  ml-core-darwin.txt   macOS ML baseline (torch 2.2.2)"
-	@echo "  ml-core-linux.txt    Linux ML baseline (torch 2.10.0)"
+	@echo "  ml-core-linux.txt    Linux ML baseline (torch 2.2.2)"
 	@echo ""
 	@echo "ML Layer targets (CPU-only PyTorch index):"
 	@echo "  ml-cpu.txt           CPU baseline acceleration layer"

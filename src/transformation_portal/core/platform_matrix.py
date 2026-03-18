@@ -214,6 +214,34 @@ class PlatformMatrix:
         return self.canonical_target
 
 
+def _normalize_pip_freeze(freeze_output: str) -> str:
+    """Normalize pip freeze output for deterministic hashing.
+
+    Normalization rules:
+    1. Exclude editable installs (-e packages) - these contain local paths
+    2. Sort packages alphabetically (pip freeze order is not deterministic)
+    3. Strip whitespace and empty lines
+    4. Handle both Unix (LF) and Windows (CRLF) line endings
+
+    Args:
+        freeze_output: Raw output from `pip freeze`
+
+    Returns:
+        Normalized, sorted package list as a single string
+    """
+    # Use splitlines() to handle both LF and CRLF
+    lines = freeze_output.strip().splitlines()
+    # Filter out editable installs and empty lines
+    packages = [
+        line.strip()
+        for line in lines
+        if line.strip() and not line.strip().startswith("-e")
+    ]
+    # Sort for deterministic ordering
+    packages.sort()
+    return "\n".join(packages)
+
+
 def get_env_fingerprint() -> str:
     """Compute SHA256 fingerprint of the current pip environment.
 
@@ -226,7 +254,9 @@ def get_env_fingerprint() -> str:
     invalidating cached artifacts.
 
     Note:
-        Uses `pip freeze` output for cross-platform consistency.
+        Uses normalized `pip freeze` output for cross-platform consistency.
+        Normalization excludes editable installs and sorts packages
+        to ensure identical environments produce identical fingerprints.
         If pip is unavailable, returns a placeholder fingerprint.
     """
     try:
@@ -238,8 +268,9 @@ def get_env_fingerprint() -> str:
             check=False,
         )
         if result.returncode == 0:
-            freeze_output = result.stdout
-            digest = hashlib.sha256(freeze_output.encode("utf-8")).hexdigest()
+            # Normalize pip freeze output for deterministic hashing
+            normalized = _normalize_pip_freeze(result.stdout)
+            digest = hashlib.sha256(normalized.encode("utf-8")).hexdigest()
             return f"sha256:{digest}"
         else:
             # pip freeze failed - return placeholder
