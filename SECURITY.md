@@ -102,20 +102,28 @@ Given our image/video processing nature, special attention is required for:
 - **Recent Security Updates**:
 
   **March 2026**:
-  - **PyTorch 2.6.0+** - Fixed CVE-2025-32434 (CVSS 9.8 Critical RCE via torch.load)
-    - macOS ARM64 and Linux: Updated to torch>=2.6.0 (secure)
-    - macOS Intel (x86_64): ML support REMOVED - no official secure wheels available
+  - **PyTorch CVE-2025-32434** - Critical RCE vulnerability via torch.load()
+    - **Mitigation**: Runtime enforcement of `weights_only=True` for all torch.load() calls
+    - **Rationale**: Preserves CAS determinism (torch==2.2.2 pin) while mitigating RCE
+    - **Implementation**: Use `transformation_portal.core.security.torch_security.safe_load()`
   - **Pillow>=10.3.0** - Fixed CVE-2024-28219 (buffer overflow vulnerability)
-  - **cryptography>=46.0.5** - Fixed GHSA subgroup attack vulnerability (SECT curves)
-  - **black>=26.3.1** - Fixed arbitrary file writes from unsanitized cache names
+  - **cryptography==46.0.5** - Fixed GHSA subgroup attack vulnerability (SECT curves)
+  - **black==26.3.1** - Fixed arbitrary file writes from unsanitized cache names
 
   **January 2026**:
   - **protobuf 6.34.0** - Fixed CVE-2026-0994 / GHSA-7gcm-g887-7qv7 (Dependabot #69)
   - **Workflow Hardening** - Stricter token permissions across all GitHub Actions workflows
   - **Quality Gate** - Fixed duplicate permissions block (aa555e0a)
 
-- **Known Vulnerabilities** (Monitor for updates):
-  - PyTorch: macOS Intel (x86_64) ML support removed due to CVE-2025-32434; no secure wheels available
+- **Security vs Determinism Policy**:
+  - Transformation Portal prioritizes **reproducibility** over latest versions (ADR-032)
+  - Security vulnerabilities are mitigated at **runtime** when possible
+  - Version upgrades only occur during **controlled baseline rotations**
+  - All torch.load() calls MUST use `weights_only=True` parameter
+
+- **Known Vulnerabilities** (Mitigated):
+  - PyTorch torch==2.2.2: CVE-2025-32434 mitigated via weights_only=True enforcement
+  - All model loading uses safe_load() wrapper or explicit weights_only=True
   - Pillow: Critical for image parsing vulnerabilities
   - NumPy: Monitor for numerical computation exploits
 

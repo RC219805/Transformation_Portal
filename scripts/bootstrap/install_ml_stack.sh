@@ -259,6 +259,21 @@ install_profile() {
     platform_lockfile="$(detect_platform_lockfile)"
     local platform_id
 
+    # Security warning for macOS Intel (CVE-2025-32434 mitigation)
+    if [[ "$(uname -s)" == "Darwin" ]] && [[ "$(uname -m)" == "x86_64" ]]; then
+        log_warn "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        log_warn "SECURITY NOTICE: macOS Intel (x86_64) ML Stack"
+        log_warn "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        log_warn "PyTorch torch==2.2.2 is pinned for CAS determinism (ADR-032)."
+        log_warn "This version is vulnerable to CVE-2025-32434 (torch.load RCE)."
+        log_warn ""
+        log_warn "MITIGATION: All torch.load() calls use weights_only=True at runtime."
+        log_warn "See: src/transformation_portal/core/security/torch_security.py"
+        log_warn ""
+        log_warn "For maximum security, migrate to macOS Apple Silicon or Linux."
+        log_warn "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    fi
+
     case "${profile}" in
         core-cpu)
             # CPU baseline: platform-specific lockfile selection

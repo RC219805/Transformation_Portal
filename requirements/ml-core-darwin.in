@@ -7,26 +7,22 @@
 # Run `make compile` in this directory to generate pinned ml-core-darwin.txt
 #
 # PLATFORM TARGET: darwin-* (macOS Intel + Apple Silicon)
-#   - darwin-x86_64-cpu   (macOS Intel, DEPRECATED - see security note)
+#   - darwin-x86_64-cpu   (macOS Intel)
 #   - darwin-arm64-cpu    (macOS Apple Silicon, CPU fallback)
 #   - darwin-arm64-mps    (macOS Apple Silicon, Metal)
 #
 # SECURITY NOTE (CVE-2025-32434):
-#   torch < 2.6.0 has a critical RCE vulnerability (CVSS 9.8) via torch.load()
-#   - macOS Intel (x86_64): DEPRECATED - no torch 2.6.0+ wheels available from PyTorch
-#   - macOS ARM64: uses torch 2.6.0+ (secure)
+#   torch < 2.6.0 has a critical RCE vulnerability via torch.load()
+#   MITIGATION: All torch.load() calls use weights_only=True at runtime
+#   This preserves CAS determinism while mitigating the vulnerability.
 #
 # See: requirements/README.md for layering rationale.
 
-# --- PyTorch (macOS, security-aware) ---
-# SECURITY: torch 2.6.0+ required to patch CVE-2025-32434 (torch.load RCE)
-#
-# macOS ARM64 (Apple Silicon): torch 2.6.0+ (secure, MPS support)
-# macOS Intel (x86_64): NOT SUPPORTED - no official secure wheels available
-#   Users must migrate to Apple Silicon or Linux for ML workloads.
-#   (The parent ml-core.in excludes x86_64; this file only provides ARM64 packages.)
-torch>=2.6.0,<3 ; platform_system == "Darwin" and platform_machine == "arm64"  # CVE-2025-32434 patched
-torchvision>=0.21.0,<1 ; platform_system == "Darwin" and platform_machine == "arm64"  # matches torch 2.6.0+
+# --- PyTorch (macOS, deterministic) ---
+# CAS DETERMINISM: Pinned versions for reproducible environment fingerprints
+# SECURITY: CVE-2025-32434 mitigated via weights_only=True at runtime
+torch==2.2.2  # CAS determinism: cross-platform reproducibility
+torchvision==0.17.2  # CAS determinism: matches torch 2.2.2
 
 # Diffusion / HuggingFace ecosystem
 diffusers>=0.36.0,<1

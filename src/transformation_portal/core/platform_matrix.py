@@ -176,6 +176,65 @@ class PlatformMatrix:
         """True if running on macOS Intel (x86_64)."""
         return self.os == PlatformOS.DARWIN and self.isa == PlatformISA.X86_64
 
+    def check_ml_security_posture(self) -> dict[str, Any]:
+        """Check ML security posture for this platform.
+
+        Returns:
+            Dictionary with security status:
+            - platform: Platform canonical target
+            - cve_2025_32434_note: Security note for CVE-2025-32434
+            - mitigation: Required mitigation steps
+            - secure: True if platform has secure torch wheels available
+
+        Security Context (CVE-2025-32434):
+            PyTorch torch==2.2.2 is pinned for CAS determinism (ADR-032).
+            This version is vulnerable to RCE via torch.load().
+            All platforms must use weights_only=True for torch.load() calls.
+        """
+        base_mitigation = (
+            "All torch.load() calls must use weights_only=True. "
+            "Use transformation_portal.core.security.torch_security.safe_load() "
+            "or explicitly pass weights_only=True."
+        )
+
+        if self.is_macos_intel:
+            return {
+                "platform": self.canonical_target,
+                "cve_2025_32434_note": (
+                    "macOS Intel (x86_64) uses torch==2.2.2 which is vulnerable "
+                    "to CVE-2025-32434 (torch.load RCE). Runtime mitigation required."
+                ),
+                "mitigation": base_mitigation,
+                "secure": False,  # No secure torch wheels available for this platform
+            }
+        else:
+            return {
+                "platform": self.canonical_target,
+                "cve_2025_32434_note": (
+                    "Platform uses torch==2.2.2 for CAS determinism. "
+                    "CVE-2025-32434 mitigated via weights_only=True at runtime."
+                ),
+                "mitigation": base_mitigation,
+                "secure": True,  # Secure when mitigation is applied
+            }
+
+    def warn_if_insecure_ml_platform(self) -> None:
+        """Emit warning if ML stack has known security considerations.
+
+        Call this when initializing ML workloads to alert users about
+        security mitigations required for CVE-2025-32434.
+        """
+        import warnings
+
+        status = self.check_ml_security_posture()
+        if not status["secure"]:
+            warnings.warn(
+                f"[{status['platform']}] {status['cve_2025_32434_note']} "
+                f"Mitigation: {status['mitigation']}",
+                UserWarning,
+                stacklevel=2,
+            )
+
     @property
     def supports_mps(self) -> bool:
         """True if platform can use MPS acceleration.

@@ -11,13 +11,13 @@ pytest-rerunfailures>=14.0,<17  # Rerun flaky tests automatically
 httpx>=0.28,<1  # required for FastAPI/Starlette TestClient in HTTP contract tests
 hypothesis>=6.0,<7
 jsonschema>=4.21.0,<5  # required for machine-mode contract schema validation tests
-cryptography>=46.0.5,<47  # Security: GHSA subgroup attack (SECT curves) fixed in 46.0.5
+cryptography==46.0.5  # CAS determinism + Security: GHSA subgroup attack fixed in 46.0.5
 
 # Type checking and linting
 mypy>=1.10
 flake8>=7.0
 pylint>=3.0
-black>=26.3.1  # Security: arbitrary file writes from unsanitized cache names fixed in 26.3.1
+black==26.3.1  # CAS determinism + Security: arbitrary file writes fixed in 26.3.1
 isort>=5.13,<8
 autopep8>=2.0,<3
 libcst>=1.2,<2
