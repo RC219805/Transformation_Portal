@@ -39,28 +39,48 @@ classifiers = [
 ]
 
 [project.optional-dependencies]
-# ML and deep learning - see requirements/ml.in for pinned versions
+# ML and deep learning - see requirements/ml-*.in for layered pinned versions
 # ML dependencies. Note: `realesrgan` is BANNED (unmaintained).
 # Enforcement: requirements/constraints.txt hard-block pins + scripts/security/verify_banned_dependencies.py
-ml = [
-    # Known-good pinned segmentation stack (SAM2 + CLIP) to avoid drift.
+#
+# LAYERED ML DEPENDENCY STRATEGY
+# ==============================
+# ML dependencies are organized into capability layers:
+#   ml-core  Cross-platform ML baseline (torch, diffusers, transformers, etc.)
+#   raw      RAW camera file ingest (rawpy) - platform-scoped
+#   sam2     SAM2 segmentation backend - optional, may need special install
+#   coreml   Apple CoreML acceleration - macOS only
+#
+# For fine-grained installs, use lockfiles directly:
+#   pip install -r requirements/ml-core.txt
+#   pip install -r requirements/ml-raw.txt
+#   pip install -r requirements/ml-sam2.txt
+#
+# The 'ml' extra below includes all layers for backward compatibility.
+
+# ML Core - Cross-platform ML baseline (matches requirements/ml-core.in)
+ml-core = [
+    # Known-good pinned inference stack for determinism.
     "torch==2.10.0",
-    "diffusers>=0.20,<1",
-    "controlnet-aux>=0.0.6,<1",
-    "transformers>=4.35.0,<6",
-    "huggingface-hub>=0.19.0,<2",
     "torchvision==0.25.0",
-    "sam2==1.1.0",
+    "diffusers>=0.36.0,<1",
+    "controlnet-aux>=0.0.6,<1",
+    "transformers>=4.57.0,<6",
+    "huggingface-hub>=0.19.0,<2",
+    "accelerate>=0.20.0,<2",
     "efficientsam==1.0.0",
     "open-clip-torch==3.3.0",
-    # opencv-python moved to core dependencies (required for depth_writer)
     "scikit-image>=0.21.0,<1",
     "PyYAML>=6.0",
     "colour-science>=0.4.2",
     "psutil>=5.9.0",
     "memory-profiler>=0.61.0",
     "sentence-transformers>=3.1.0,<6",
-    "accelerate>=0.20.0,<2",
+    "plyfile>=1.0.0,<2",
+]
+# SAM2 segmentation backend (optional capability layer)
+sam2 = [
+    "sam2==1.1.0",
 ]
 # CoreML acceleration (optional, Apple Silicon only)
 coreml = [
@@ -69,6 +89,11 @@ coreml = [
 # RAW camera file support (CR2, NEF, ARW, DNG, etc.)
 raw = [
     "rawpy>=0.18.0",
+]
+# ML umbrella - includes all ML layers for backward compatibility
+# Note: Does NOT include coreml (platform-specific)
+ml = [
+    "transformation-portal[ml-core,sam2,raw]",
 ]
 # Optional detached signing support for archive attestation CLIs
 archive-signing = [
@@ -102,7 +127,7 @@ ci = [
 ]
 # All dependencies combined
 all = [
-    "transformation-portal[ml,dev,ci,raw]",
+    "transformation-portal[ml,dev,ci,coreml]",
 ]
 
 [project.scripts]

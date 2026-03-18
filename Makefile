@@ -26,13 +26,17 @@ PHASE6_SMOKE_TESTS := \
 
 .PHONY: help test-fast test-novideo test-full test-integration test-structure test-utils test-orchestrator-contract coverage-fast-scope venv setup clean \
         lint lint-parity ci ci-full pre-commit install-hooks quality-check fix-quality validate-ci organize-docs check-json-serialization check-piptools-cache \
-        check-stale-docs lock lock-prod lock-ci lock-dev install-core install-ml docs docs-clean
+        check-stale-docs lock lock-prod lock-ci lock-dev install-core install-ml install-ml-core install-ml-raw install-ml-sam2 install-ml-coreml docs docs-clean
 
 help:
 	@echo "Targets:"
 	@echo "  setup              Install package in editable mode (pip install -e .)"
 	@echo "  install-core       Install core dependencies with constraints"
-	@echo "  install-ml         Install ML tier dependencies with constraints"
+	@echo "  install-ml         Install all ML tier dependencies (umbrella)"
+	@echo "  install-ml-core    Install ML core layer only (cross-platform baseline)"
+	@echo "  install-ml-raw     Install ML RAW ingest layer (platform-scoped)"
+	@echo "  install-ml-sam2    Install ML SAM2 layer (optional segmentation)"
+	@echo "  install-ml-coreml  Install ML CoreML layer (macOS only)"
 	@echo "  test-fast          Run fast subset plus Phase 6 smoke coverage"
 	@echo "  test-novideo       Run all tests excluding video suite via -k filter"
 	@echo "  test-full          Run entire test suite (parallel if xdist present)"
@@ -89,13 +93,57 @@ install-core: venv
 		"$(PY)" -m pip install -e ".[dev]"; \
 	fi
 
+# ML Layer Install Targets
+# These support fine-grained ML capability installation per the layered strategy.
+# See requirements/README.md for layer documentation.
+
 install-ml: venv
-	@echo "Installing ML tier dependencies with constraints..."
-	@if [ -f requirements/constraints.txt ]; then \
+	@echo "Installing full ML tier dependencies (umbrella)..."
+	@if [ -f requirements/ml.txt ]; then \
+		"$(PY)" -m pip install -r requirements/ml.txt; \
+	elif [ -f requirements/constraints.txt ]; then \
 		"$(PY)" -m pip install -e ".[ml]" -c requirements/constraints.txt; \
 	else \
-		echo "Warning: requirements/constraints.txt not found, installing without constraints"; \
+		echo "Warning: No lockfile or constraints, installing with loose ranges"; \
 		"$(PY)" -m pip install -e ".[ml]"; \
+	fi
+
+install-ml-core: venv
+	@echo "Installing ML core layer (cross-platform baseline)..."
+	@if [ -f requirements/ml-core.txt ]; then \
+		"$(PY)" -m pip install -r requirements/ml-core.txt; \
+	else \
+		echo "Error: requirements/ml-core.txt not found. Run 'cd requirements && make compile' first."; \
+		exit 1; \
+	fi
+
+install-ml-raw: venv
+	@echo "Installing ML RAW ingest layer..."
+	@if [ -f requirements/ml-raw.txt ]; then \
+		"$(PY)" -m pip install -r requirements/ml-raw.txt; \
+	else \
+		echo "Error: requirements/ml-raw.txt not found. Run 'cd requirements && make compile' first."; \
+		exit 1; \
+	fi
+
+install-ml-sam2: venv
+	@echo "Installing ML SAM2 segmentation layer..."
+	@if [ -f requirements/ml-sam2.txt ]; then \
+		"$(PY)" -m pip install -r requirements/ml-sam2.txt; \
+	else \
+		echo "Error: requirements/ml-sam2.txt not found. Run 'cd requirements && make compile' first."; \
+		exit 1; \
+	fi
+
+install-ml-coreml: venv
+	@echo "Installing ML CoreML layer (macOS only)..."
+	@if [ "$$(uname -s)" != "Darwin" ]; then \
+		echo "Warning: CoreML layer is only available on macOS. Skipping."; \
+	elif [ -f requirements/ml-coreml.txt ]; then \
+		"$(PY)" -m pip install -r requirements/ml-coreml.txt; \
+	else \
+		echo "Error: requirements/ml-coreml.txt not found. Run 'cd requirements && make compile' first."; \
+		exit 1; \
 	fi
 
 test-fast:

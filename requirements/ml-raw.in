@@ -1,0 +1,18 @@
+# Optional RAW ingest extras
+# Platform-scoped due to wheel availability differences.
+# Run `make compile` in this directory to generate pinned ml-raw.txt
+#
+# WARNING:
+# - rawpy wheel availability varies by platform/architecture
+# - macOS Intel (x86_64) may have limited wheel availability for newer versions
+# - Use environment markers or platform-specific lockfiles if needed
+#
+# Capability contract:
+# - This is an OPTIONAL layer. Absence downgrades ingest to non-RAW paths.
+# - Install via: make install-ml-raw or pip install -r requirements/ml-raw.txt
+
+# RAW file processing (LibRaw wrapper for CR2, NEF, ARW, DNG, etc.)
+# Use platform markers for version split if needed in future:
+# rawpy==0.25.1 ; platform_system == "Darwin" and platform_machine == "x86_64"
+# rawpy==0.26.1 ; platform_system != "Darwin" or platform_machine != "x86_64"
+rawpy==0.26.1

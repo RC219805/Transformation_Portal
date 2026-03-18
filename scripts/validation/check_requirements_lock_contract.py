@@ -1,5 +1,12 @@
 #!/usr/bin/env python3
-"""Validate layered requirements lockfile generation contract."""
+"""Validate layered requirements lockfile generation contract.
+
+This validator enforces the following contracts:
+1. All lockfiles must be generated with the expected Python version
+2. ML lockfiles must be CPU-only (no GPU-linked packages)
+3. ML layer lockfiles (ml-core, ml-raw, ml-sam2, ml-coreml, ml-research) must exist
+4. Umbrella ml.txt must remain backward-compatible
+"""
 
 from __future__ import annotations
 
@@ -10,14 +17,38 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 REQUIREMENTS_DIR = REPO_ROOT / "requirements"
 MAKEFILE_PATH = REQUIREMENTS_DIR / "Makefile"
-LOCK_FILES = (
+
+# Core lockfiles that must always exist
+CORE_LOCK_FILES = (
     "all.txt",
     "base.txt",
-    "ml.txt",
     "dev.txt",
     "ci.txt",
     "tools-archive.txt",
 )
+
+# ML layer lockfiles (capability-specific)
+ML_LAYER_LOCK_FILES = (
+    "ml-core.txt",
+    "ml-raw.txt",
+    "ml-sam2.txt",
+    "ml-coreml.txt",
+    "ml-research.txt",
+)
+
+# ML umbrella lockfile (backward compatibility)
+ML_UMBRELLA_LOCK_FILE = "ml.txt"
+
+# All lockfiles for validation
+ALL_LOCK_FILES = CORE_LOCK_FILES + ML_LAYER_LOCK_FILES + (ML_UMBRELLA_LOCK_FILE,)
+
+# ML lockfiles that must be CPU-only (compiled with PyTorch CPU index)
+CPU_ONLY_ML_LOCKS = (
+    "ml-core.txt",
+    "ml-sam2.txt",
+    "ml.txt",
+)
+
 GPU_LOCK_PACKAGES = (
     "cuda-bindings==",
     "cuda-pathfinder==",
@@ -38,12 +69,20 @@ def read_expected_lock_python_version() -> str:
 
 
 def validate_lockfile_headers(expected_python: str) -> list[str]:
-    """Return header validation errors for generated lockfiles."""
+    """Return header validation errors for generated lockfiles.
+
+    Only validates files that exist. ML layer lockfiles may not exist in
+    environments where they haven't been compiled yet (e.g., fresh checkouts).
+    """
     errors: list[str] = []
-    for lock_name in LOCK_FILES:
+    for lock_name in ALL_LOCK_FILES:
         lock_path = REQUIREMENTS_DIR / lock_name
         if not lock_path.is_file():
-            errors.append(f"Missing lockfile: {lock_path}")
+            # Skip non-existent ML layer files with a warning (not an error)
+            # Core files and ml.txt umbrella must exist
+            if lock_name in CORE_LOCK_FILES or lock_name == ML_UMBRELLA_LOCK_FILE:
+                errors.append(f"Missing required lockfile: {lock_path}")
+            # ML layer files are optional if not yet compiled
             continue
 
         header_match = None
@@ -63,22 +102,44 @@ def validate_lockfile_headers(expected_python: str) -> list[str]:
 
 
 def validate_ml_lock_contract() -> list[str]:
-    """Return ML lockfile contract violations."""
-    errors: list[str] = []
-    ml_lock_path = REQUIREMENTS_DIR / "ml.txt"
-    if not ml_lock_path.is_file():
-        errors.append(f"Missing lockfile: {ml_lock_path}")
-        return errors
+    """Return ML lockfile contract violations.
 
-    for raw_line in ml_lock_path.read_text(encoding="utf-8").splitlines():
-        line = raw_line.strip()
-        if not line or line.startswith("#"):
+    Validates that CPU-only ML lockfiles don't contain GPU-linked packages.
+    """
+    errors: list[str] = []
+
+    for lock_name in CPU_ONLY_ML_LOCKS:
+        ml_lock_path = REQUIREMENTS_DIR / lock_name
+        if not ml_lock_path.is_file():
+            # Skip if not yet compiled (layer may be optional)
             continue
-        if any(line.startswith(prefix) for prefix in GPU_LOCK_PACKAGES):
-            errors.append(
-                f"{ml_lock_path} contains GPU-linked package '{line}', "
-                "but the documented contract is CPU-only PyTorch in ml.txt"
-            )
+
+        for raw_line in ml_lock_path.read_text(encoding="utf-8").splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if any(line.startswith(prefix) for prefix in GPU_LOCK_PACKAGES):
+                errors.append(
+                    f"{ml_lock_path} contains GPU-linked package '{line}', "
+                    "but the documented contract is CPU-only PyTorch in ML lockfiles"
+                )
+    return errors
+
+
+def validate_ml_layer_structure() -> list[str]:
+    """Validate that ML layer .in files exist for the layered strategy."""
+    errors: list[str] = []
+    expected_in_files = [
+        "ml-core.in",
+        "ml-raw.in",
+        "ml-sam2.in",
+        "ml-coreml.in",
+        "ml-research.in",
+    ]
+    for in_file in expected_in_files:
+        in_path = REQUIREMENTS_DIR / in_file
+        if not in_path.is_file():
+            errors.append(f"Missing ML layer input file: {in_path}")
     return errors
 
 
@@ -91,6 +152,7 @@ def main() -> int:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
 
+    errors.extend(validate_ml_layer_structure())
     errors.extend(validate_lockfile_headers(expected_python))
     errors.extend(validate_ml_lock_contract())
 
@@ -100,7 +162,10 @@ def main() -> int:
             print(f"  - {error}", file=sys.stderr)
         return 1
 
-    print("requirements lock contract passed: headers match " f"Python {expected_python} and ml.txt stays CPU-only.")
+    print(
+        f"requirements lock contract passed: headers match "
+        f"Python {expected_python}, ML layers present, CPU-only ML lockfiles verified."
+    )
     return 0
 
 

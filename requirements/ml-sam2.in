@@ -1,0 +1,21 @@
+# Optional SAM2 segmentation backend
+# Platform-scoped due to build-time torch requirements.
+# Run `make compile` in this directory to generate pinned ml-sam2.txt
+#
+# WARNING:
+# - SAM2 has build-time torch requirements and may require non-default install
+#   semantics on some platforms.
+# - On platforms where isolated build fails (e.g., some macOS configurations),
+#   consider installing with: pip install --no-build-isolation sam2==1.1.0
+# - This layer requires ml-core.in dependencies to be installed first.
+#
+# Capability contract:
+# - This is an OPTIONAL layer. Absence downgrades segmentation to EfficientSAM.
+# - Install via: make install-ml-sam2 or pip install -r requirements/ml-sam2.txt
+#
+# Licensing:
+# - Meta Segment Anything 2 - check license for commercial use requirements.
+
+# SAM2 - Meta Segment Anything 2 for advanced segmentation
+# Pinned with torch==2.10.0/open-clip==3.3.0 for deterministic SAM2 masks
+sam2==1.1.0

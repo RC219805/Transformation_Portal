@@ -1,0 +1,15 @@
+# Optional Apple CoreML acceleration extras
+# macOS-only due to platform requirements.
+# Run `make compile` in this directory to generate pinned ml-coreml.txt
+#
+# WARNING:
+# - coremltools is only available on macOS
+# - This layer is automatically skipped on non-Darwin platforms in CI
+# - Use environment markers if compiling cross-platform lockfiles
+#
+# Capability contract:
+# - This is an OPTIONAL layer. Absence uses standard PyTorch backends.
+# - Install via: make install-ml-coreml or pip install -r requirements/ml-coreml.txt
+
+# Apple Silicon acceleration and CoreML conversion tools
+coremltools>=7.0 ; platform_system == "Darwin"

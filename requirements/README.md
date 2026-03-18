@@ -6,20 +6,30 @@ This directory contains the layered dependency management system for Transformat
 
 ```
 requirements/
-├── README.md          # This file
-├── Makefile           # Automation for compiling requirements
-├── base.in            # Core runtime dependencies (abstract)
-├── base.txt           # Core runtime dependencies (pinned)
-├── ml.in              # Optional ML dependencies (abstract)
-├── ml.txt             # Optional ML dependencies (pinned)
-├── dev.in             # Development tools (abstract)
-├── dev.txt            # Development tools (pinned)
-├── ci.in              # CI/CD tools (abstract)
-├── ci.txt             # CI/CD tools (pinned)
-├── tools-archive.in   # Archive reporting tool deps (abstract)
-├── tools-archive.txt  # Archive reporting tool deps (pinned)
-├── all.in             # Aggregate of all dependencies
-└── all.txt            # Aggregate pinned requirements
+├── README.md              # This file
+├── Makefile               # Automation for compiling requirements
+├── base.in                # Core runtime dependencies (abstract)
+├── base.txt               # Core runtime dependencies (pinned)
+├── ml.in                  # ML umbrella (references ml-*.in layers)
+├── ml.txt                 # ML umbrella (pinned, backward compatible)
+├── ml-core.in             # ML core layer - cross-platform baseline
+├── ml-core.txt            # ML core layer (pinned, CPU-only PyTorch)
+├── ml-raw.in              # ML RAW ingest layer - rawpy
+├── ml-raw.txt             # ML RAW ingest layer (pinned)
+├── ml-sam2.in             # ML SAM2 layer - Meta Segment Anything 2
+├── ml-sam2.txt            # ML SAM2 layer (pinned, CPU-only PyTorch)
+├── ml-coreml.in           # ML CoreML layer - macOS only
+├── ml-coreml.txt          # ML CoreML layer (pinned)
+├── ml-research.in         # ML research/experimental layer
+├── ml-research.txt        # ML research layer (pinned)
+├── dev.in                 # Development tools (abstract)
+├── dev.txt                # Development tools (pinned)
+├── ci.in                  # CI/CD tools (abstract)
+├── ci.txt                 # CI/CD tools (pinned)
+├── tools-archive.in       # Archive reporting tool deps (abstract)
+├── tools-archive.txt      # Archive reporting tool deps (pinned)
+├── all.in                 # Aggregate of all dependencies
+└── all.txt                # Aggregate pinned requirements
 ```
 
 ## 🎯 Design Principles
@@ -29,11 +39,25 @@ requirements/
 Dependencies are organized into logical layers:
 
 - **base**: Core runtime essentials needed for the application to function
-- **ml**: Optional machine learning and deep learning dependencies (heavy packages)
+- **ml**: Optional machine learning and deep learning dependencies (umbrella)
+- **ml-core**: Cross-platform ML baseline (torch, diffusers, transformers, etc.)
+- **ml-raw**: RAW camera file ingest (rawpy) - platform-scoped
+- **ml-sam2**: SAM2 segmentation backend - may need special install semantics
+- **ml-coreml**: Apple CoreML acceleration - macOS only
+- **ml-research**: Research/experimental extras - reserved for future use
 - **dev**: Developer tools for testing, linting, and formatting
 - **ci**: CI/CD pipeline tools for builds, security scanning, and releases
 - **tools-archive**: dependencies for `tools/archive_manifest_reports.py`
 - **all**: Convenience layer that includes everything
+
+### Layered ML Strategy
+
+The ML dependencies are split into capability layers for:
+
+1. **Platform-safe compilation**: Each layer is compiled independently, allowing platform-specific handling
+2. **Deterministic installs**: Each layer has explicit contracts (CPU-only, platform markers, etc.)
+3. **Capability-gated promotion**: Optional features can be added incrementally
+4. **Better failure semantics**: Instead of "pip install fails halfway through," you get clear capability boundaries
 
 ### Abstract vs Pinned
 
@@ -52,17 +76,51 @@ To install the package with specific dependency sets:
 # Install core dependencies only
 pip install -r requirements/base.txt
 
-# Install with ML features
-pip install -r requirements/base.txt -r requirements/ml.txt
+# Install ML core layer (cross-platform baseline)
+pip install -r requirements/ml-core.txt
+
+# Install ML with RAW ingest capability
+pip install -r requirements/ml-core.txt -r requirements/ml-raw.txt
+
+# Install all ML capabilities (umbrella)
+pip install -r requirements/ml.txt
 
 # Install everything (development environment)
 pip install -r requirements/all.txt
 ```
 
+Or use the Makefile targets:
+
+```bash
+# Install ML core layer
+make install-ml-core
+
+# Install ML RAW ingest layer
+make install-ml-raw
+
+# Install ML SAM2 layer
+make install-ml-sam2
+
+# Install ML CoreML layer (macOS only)
+make install-ml-coreml
+
+# Install all ML capabilities
+make install-ml
+```
+
 Or use the package extras (installs latest allowed versions, not pinned):
 
 ```bash
-# Install with ML support
+# Install ML core support only
+pip install -e ".[ml-core]"
+
+# Install with SAM2 segmentation
+pip install -e ".[sam2]"
+
+# Install with RAW camera support
+pip install -e ".[raw]"
+
+# Install full ML support
 pip install -e ".[ml]"
 
 # Install full development environment
@@ -83,7 +141,7 @@ pip install -e .
 
 #### Adding New Dependencies
 
-1. Edit the appropriate `.in` file (e.g., `base.in`, `ml.in`, `dev.in`, `ci.in`, or `tools-archive.in`)
+1. Edit the appropriate `.in` file (e.g., `base.in`, `ml-core.in`, `ml-raw.in`, `dev.in`, etc.)
 2. Add your dependency with a version constraint (e.g., `requests>=2.28,<3`)
 3. Recompile all requirements:
 
@@ -120,11 +178,20 @@ Run `make help` in this directory to see all available targets:
 
 ```
 Targets:
-  compile      Compile all pinned requirements from .in files
-  compile-all  Same as compile (for compatibility)
-  update       Update all dependencies to latest versions
-  check        Verify that .txt files are up-to-date with .in files
-  clean        Remove all compiled .txt files
+  compile           Compile all pinned requirements from .in files
+  compile-all       Same as compile (for compatibility)
+  compile-ml-layers Compile only ML layer lockfiles
+  update            Update all dependencies to latest versions
+  check             Verify that .txt files are up-to-date with .in files
+  clean             Remove all compiled .txt files
+
+ML Layer targets (CPU-only PyTorch index):
+  ml-core.txt       Cross-platform ML baseline
+  ml-raw.txt        RAW ingest capability layer
+  ml-sam2.txt       SAM2 segmentation capability layer
+  ml-coreml.txt     Apple CoreML acceleration layer
+  ml-research.txt   Research/experimental extras layer
+  ml.txt            Umbrella ML layer (backward compatibility)
 ```
 
 ## 📚 Technical Details
@@ -137,7 +204,21 @@ The system uses a two-phase compilation strategy:
 
 2. **Layer-Specific Outputs**: Then, each individual `.in` file is compiled using `all.txt` as a constraint file. This ensures that the subset of packages in each layer uses the same versions as in the global resolution.
 
+3. **CPU-Only PyTorch**: ML layers that include PyTorch (ml-core, ml-sam2, ml.txt) are compiled with `--extra-index-url https://download.pytorch.org/whl/cpu` to ensure CPU-only packages without GPU dependencies.
+
 This approach prevents conflicts between layers and ensures reproducible builds.
+
+### ML Layer Contracts
+
+Each ML layer has a specific contract:
+
+| Layer | Contract | Platform | Notes |
+|-------|----------|----------|-------|
+| ml-core | CPU-only PyTorch, cross-platform | All | Base ML functionality |
+| ml-raw | Platform-scoped | Linux, macOS | rawpy wheel availability varies |
+| ml-sam2 | CPU-only PyTorch | All (may need --no-build-isolation) | Build-time torch dependency |
+| ml-coreml | macOS only | Darwin | coremltools |
+| ml-research | Reserved | Varies | Future experimental extras |
 
 ### Why pip-tools?
 
@@ -153,7 +234,7 @@ This approach prevents conflicts between layers and ensures reproducible builds.
 The `pyproject.toml` file contains the same dependencies as the `.in` files, with version ranges. This ensures:
 
 - The package can be installed with `pip install -e .`
-- Extras like `[ml]`, `[dev]`, `[ci]`, and `[all]` work as expected
+- Extras like `[ml-core]`, `[sam2]`, `[raw]`, `[ml]`, `[dev]`, `[ci]`, and `[all]` work as expected
 - The `.in` files remain the single source of truth for version constraints
 - The `.txt` files provide reproducible pinned versions for deployments
 
@@ -170,7 +251,8 @@ The CI/CD pipeline should:
 
 1. **Verify consistency**: Check that `.txt` files are up-to-date with `.in` files
 2. **Use pinned versions**: Install from `.txt` files for reproducible tests
-3. **Update dependencies**: Periodically run `make update` and create PRs
+3. **Validate contracts**: Run `check_requirements_lock_contract.py` to verify CPU-only ML lockfiles
+4. **Layer-specific validation**: Each layer can be validated independently
 
 Example CI workflow step:
 
@@ -179,13 +261,21 @@ Example CI workflow step:
   run: |
     cd requirements/
     make check
+
+- name: Validate lockfile contract
+  run: |
+    python3 scripts/validation/check_requirements_lock_contract.py
 ```
 
 ## 📝 Notes
 
-- **ML dependencies**: Due to disk space constraints, `ml.txt` may need to be regenerated in environments with more resources. The CI environment should have sufficient space for PyTorch and related packages.
+- **ML dependencies**: Due to disk space constraints, ML lockfiles may need to be regenerated in environments with more resources. The CI environment should have sufficient space for PyTorch and related packages.
 
-- **GPU vs CPU**: The current `ml.txt` uses CPU-only PyTorch for compatibility. For GPU environments, torch should be installed from the CUDA index before installing other ML dependencies.
+- **GPU vs CPU**: All ML lockfiles use CPU-only PyTorch for compatibility and determinism. For GPU environments, torch should be installed from the CUDA index before installing other ML dependencies.
+
+- **Platform-specific layers**: Some layers (ml-coreml) are platform-specific. Install commands will skip these on unsupported platforms.
+
+- **SAM2 build isolation**: sam2 may require `pip install --no-build-isolation sam2==1.1.0` on some platforms due to build-time torch requirements.
 
 - **Python version**: All layered requirements are compiled with Python 3.11 (`requirements/Makefile: LOCK_PYTHON_VERSION`) and support Python 3.11+ as specified in `pyproject.toml`.
 
@@ -214,6 +304,13 @@ If compilation fails due to disk space:
 - Run `pip cache purge` to clear pip's cache
 - Compile layers individually instead of all at once
 - Use a machine with more disk space (ML dependencies can require 5-10GB)
+
+### SAM2 installation issues
+
+If sam2 fails to install:
+1. Ensure ml-core is installed first (provides torch)
+2. Try `pip install --no-build-isolation sam2==1.1.0`
+3. Check platform compatibility
 
 ## 📖 References
 
