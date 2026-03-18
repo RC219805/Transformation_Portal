@@ -3,18 +3,41 @@
 # This file must remain installable on supported CI + local platforms.
 # Run `make compile` in this directory to generate pinned ml-core.txt
 #
+# PLATFORM MATRIX (ADR-032):
+#   OS:    Darwin (macOS), Linux
+#   ISA:   arm64 (Apple Silicon), x86_64 (Intel/AMD)
+#   Accel: cpu (default), mps (macOS ARM64), cuda (Linux x86_64)
+#
 # IMPORTANT:
 # - Lockfiles must be compiled per-platform / per-index policy
 # - CPU-only lockfiles should use the PyTorch CPU index in compilation
 # - This layer EXCLUDES platform-specific packages (rawpy, coremltools)
 # - This layer EXCLUDES SAM2 due to build-time torch requirements
+# - Accel is EXPLICIT via profile, never inferred from OS
 #
-# See: ADR requirements/README.md for layering rationale.
+# See: requirements/README.md for layering rationale.
 
-# PyTorch runtime (CPU-only baseline for CI; MPS/CUDA installs use platform-specific extras)
+# --- PyTorch (deterministic, platform-aware) ---
 # Pinned for known-good SAM2/CLIP determinism stack
-torch==2.10.0                # Deterministic builds: SAM2/CLIP stack compatibility
-torchvision==0.25.0          # Deterministic builds: matched to torch 2.10.0
+#
+# Platform-specific version notes:
+# - macOS Intel (x86_64): torch 2.2.2 (last version with x86_64 macOS wheels)
+# - macOS Apple Silicon (arm64): torch 2.2.2 (stable MPS support)
+# - Linux (all arch): torch 2.10.0 (latest stable, CI baseline)
+#
+# NOTE: When updating torch versions, verify SAM2/CLIP compatibility.
+
+# macOS Intel (no modern torch builds after 2.2.x)
+torch==2.2.2 ; platform_system == "Darwin" and platform_machine == "x86_64"
+torchvision==0.17.2 ; platform_system == "Darwin" and platform_machine == "x86_64"
+
+# macOS Apple Silicon (MPS)
+torch==2.2.2 ; platform_system == "Darwin" and platform_machine == "arm64"
+torchvision==0.17.2 ; platform_system == "Darwin" and platform_machine == "arm64"
+
+# Linux (CPU baseline for CI - modern torch version)
+torch==2.10.0 ; platform_system == "Linux"
+torchvision==0.25.0 ; platform_system == "Linux"
 
 # Diffusion / HuggingFace ecosystem
 diffusers>=0.36.0,<1

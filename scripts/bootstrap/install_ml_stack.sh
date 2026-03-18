@@ -1,8 +1,14 @@
 #!/usr/bin/env bash
 # scripts/bootstrap/install_ml_stack.sh
 #
-# Profile-based ML stack installation script.
+# Profile-based ML stack installation script (ADR-032).
 # Installs ML dependencies using the layered requirements system.
+#
+# PLATFORM MATRIX:
+#   Axis       Values                    Detection
+#   OS         Darwin / Linux            platform_system
+#   ISA        arm64 / x86_64            platform_machine
+#   Accel      cpu / mps / cuda          explicit profile (NEVER inferred)
 #
 # Requirements:
 #   - Bash 4.3+ (uses nameref for array passing)
@@ -11,17 +17,25 @@
 #
 # Usage:
 #   ./scripts/bootstrap/install_ml_stack.sh --profile core-cpu
+#   ./scripts/bootstrap/install_ml_stack.sh --profile core-mps
+#   ./scripts/bootstrap/install_ml_stack.sh --profile core-cuda
 #   ./scripts/bootstrap/install_ml_stack.sh --profile core-cpu,raw
-#   ./scripts/bootstrap/install_ml_stack.sh --profile core-cpu,sam2
+#   ./scripts/bootstrap/install_ml_stack.sh --profile core-mps,sam2
 #   ./scripts/bootstrap/install_ml_stack.sh --profile full
 #   ./scripts/bootstrap/install_ml_stack.sh --help
 #
-# Profiles:
-#   core-cpu    Cross-platform ML baseline (torch, diffusers, transformers)
+# Core Profiles (mutually exclusive):
+#   core-cpu    CPU baseline (darwin-*/linux-*, CPU fallback)
+#   core-mps    Apple Silicon MPS (darwin-arm64-mps)
+#   core-cuda   NVIDIA CUDA (linux-x86_64-cuda)
+#
+# Capability Layers (stack on core):
 #   raw         RAW camera file ingest (rawpy)
 #   sam2        SAM2 segmentation backend
-#   coreml      Apple CoreML acceleration (macOS only)
+#   coreml      Apple CoreML conversion (macOS only)
 #   research    Research/experimental extras (reserved)
+#
+# Convenience:
 #   full        All ML capabilities (equivalent to ml.txt umbrella)
 #
 # Environment Variables:
@@ -64,21 +78,41 @@ OPTIONS:
     --dry-run             Show what would be installed without installing
     --help                Show this help message
 
-PROFILES:
-    core-cpu    Cross-platform ML baseline (torch, diffusers, transformers)
-    raw         RAW camera file ingest (rawpy)
-    sam2        SAM2 segmentation backend (requires core-cpu)
-    coreml      Apple CoreML acceleration (macOS only)
-    research    Research/experimental extras (reserved)
-    full        All ML capabilities (equivalent to ml.txt umbrella)
+PROFILES (Platform Matrix - ADR-032):
+    Core profiles (mutually exclusive - choose one):
+      core-cpu    CPU baseline (darwin-*/linux-*, CPU fallback)
+      core-mps    Apple Silicon MPS (darwin-arm64-mps)
+      core-cuda   NVIDIA CUDA (linux-x86_64-cuda)
+
+    Capability layers (stack on top of core profile):
+      raw         RAW camera file ingest (rawpy)
+      sam2        SAM2 segmentation backend (requires core-*)
+      coreml      Apple CoreML conversion (macOS only)
+      research    Research/experimental extras (reserved)
+
+    Convenience profiles:
+      full        All ML capabilities (equivalent to ml.txt umbrella)
+
+PLATFORM TARGETS:
+    darwin-x86_64-cpu   macOS Intel (core-cpu)
+    darwin-arm64-cpu    macOS Apple Silicon, CPU-only (core-cpu)
+    darwin-arm64-mps    macOS Apple Silicon, Metal (core-mps)
+    linux-x86_64-cpu    Linux Intel/AMD, CPU (core-cpu)
+    linux-x86_64-cuda   Linux Intel/AMD, NVIDIA GPU (core-cuda)
 
 ENVIRONMENT VARIABLES:
     PYTORCH_INDEX   Custom PyTorch index URL (default: https://download.pytorch.org/whl/cpu)
     PIP_OPTS        Additional pip options (e.g., --no-cache-dir)
 
 EXAMPLES:
-    # Install just the cross-platform ML baseline
+    # Install cross-platform CPU baseline
     $(basename "$0") --profile core-cpu
+
+    # Install Apple Silicon MPS acceleration
+    $(basename "$0") --profile core-mps
+
+    # Install NVIDIA CUDA acceleration (Linux only)
+    PYTORCH_INDEX=https://download.pytorch.org/whl/cu121 $(basename "$0") --profile core-cuda
 
     # Install ML baseline with RAW ingest capability
     $(basename "$0") --profile core-cpu,raw
@@ -87,10 +121,7 @@ EXAMPLES:
     $(basename "$0") --profile full
 
     # Dry run to see what would be installed
-    $(basename "$0") --profile core-cpu,sam2 --dry-run
-
-    # Use custom PyTorch index (GPU)
-    PYTORCH_INDEX=https://download.pytorch.org/whl/cu118 $(basename "$0") --profile core-cpu
+    $(basename "$0") --profile core-mps,sam2 --dry-run
 
 EOF
     exit 0
@@ -174,14 +205,52 @@ install_profile() {
 
     case "${profile}" in
         core-cpu)
-            check_lockfile "ml-core.txt"
-            log_info "Installing ML core layer (cross-platform baseline)..."
+            # CPU baseline: cross-platform, no GPU acceleration
+            check_lockfile "ml-cpu.txt"
+            log_info "Installing ML core layer + CPU baseline (darwin-*/linux-*-cpu)..."
             log_verbose "Using PyTorch index: ${PYTORCH_INDEX}"
             if [[ "${DRY_RUN}" == "true" ]]; then
-                log_info "[DRY-RUN] Would install: requirements/ml-core.txt"
+                log_info "[DRY-RUN] Would install: requirements/ml-cpu.txt"
                 log_info "[DRY-RUN] With extra-index-url: ${PYTORCH_INDEX}"
             else
-                "${pip_cmd[@]}" --extra-index-url "${PYTORCH_INDEX}" -r "${REQUIREMENTS_DIR}/ml-core.txt"
+                "${pip_cmd[@]}" --extra-index-url "${PYTORCH_INDEX}" -r "${REQUIREMENTS_DIR}/ml-cpu.txt"
+            fi
+            ;;
+        core-mps)
+            # Apple Silicon MPS acceleration (darwin-arm64-mps)
+            if [[ "$(uname -s)" != "Darwin" ]]; then
+                log_error "core-mps profile requires macOS. Current platform: $(uname -s)"
+                exit 1
+            fi
+            if [[ "$(uname -m)" != "arm64" ]]; then
+                log_error "core-mps profile requires Apple Silicon (arm64). Current arch: $(uname -m)"
+                exit 1
+            fi
+            check_lockfile "ml-mps.txt"
+            log_info "Installing ML core layer + MPS acceleration (darwin-arm64-mps)..."
+            log_verbose "Using PyTorch index: ${PYTORCH_INDEX}"
+            if [[ "${DRY_RUN}" == "true" ]]; then
+                log_info "[DRY-RUN] Would install: requirements/ml-mps.txt"
+                log_info "[DRY-RUN] With extra-index-url: ${PYTORCH_INDEX}"
+            else
+                "${pip_cmd[@]}" --extra-index-url "${PYTORCH_INDEX}" -r "${REQUIREMENTS_DIR}/ml-mps.txt"
+            fi
+            ;;
+        core-cuda)
+            # NVIDIA CUDA acceleration (linux-x86_64-cuda)
+            if [[ "$(uname -s)" != "Linux" ]]; then
+                log_error "core-cuda profile requires Linux. Current platform: $(uname -s)"
+                exit 1
+            fi
+            check_lockfile "ml-cuda.txt"
+            log_info "Installing ML core layer + CUDA acceleration (linux-x86_64-cuda)..."
+            log_info "Using PyTorch CUDA index: ${PYTORCH_INDEX}"
+            log_warn "Ensure NVIDIA drivers are installed on the host system."
+            if [[ "${DRY_RUN}" == "true" ]]; then
+                log_info "[DRY-RUN] Would install: requirements/ml-cuda.txt"
+                log_info "[DRY-RUN] With extra-index-url: ${PYTORCH_INDEX}"
+            else
+                "${pip_cmd[@]}" --extra-index-url "${PYTORCH_INDEX}" -r "${REQUIREMENTS_DIR}/ml-cuda.txt"
             fi
             ;;
         raw)
@@ -197,7 +266,7 @@ install_profile() {
             # SAM2 is a SCRIPTED-ONLY capability - not a standard lockfile contract.
             # It requires non-standard install semantics on some platforms.
             log_info "Installing ML SAM2 segmentation layer (SCRIPTED-ONLY)..."
-            log_warn "SAM2 requires ml-core dependencies. Ensure core-cpu is installed first."
+            log_warn "SAM2 requires ml-core dependencies. Ensure core-cpu/core-mps/core-cuda is installed first."
             
             if [[ "${DRY_RUN}" == "true" ]]; then
                 log_info "[DRY-RUN] Would install sam2==1.1.0 with fallback to --no-build-isolation"
@@ -262,7 +331,7 @@ install_profile() {
             ;;
         *)
             log_error "Unknown profile: ${profile}"
-            log_error "Valid profiles: core-cpu, raw, sam2, coreml, research, full"
+            log_error "Valid profiles: core-cpu, core-mps, core-cuda, raw, sam2, coreml, research, full"
             exit 1
             ;;
     esac

@@ -1,15 +1,25 @@
 # Makefile for compiling layered requirements with pip-tools
 # This ensures consistent dependency resolution across all layers
 #
-# LAYERED ML DEPENDENCY STRATEGY
-# ==============================
+# LAYERED ML DEPENDENCY STRATEGY (ADR-032)
+# ========================================
 # ML dependencies are split into capability-specific layers for:
 # - Platform-safe compilation (CPU-only baseline, platform-specific extras)
 # - Deterministic installs (each layer has explicit contracts)
 # - Capability-gated promotion (optional features can be added incrementally)
 #
+# PLATFORM MATRIX
+# ---------------
+# Axis       Values                    Detection
+# OS         Darwin / Linux            platform_system
+# ISA        arm64 / x86_64            platform_machine
+# Accel      cpu / mps / cuda          explicit profile (NEVER inferred)
+#
 # Standard Lockfile Layers (compiled via this Makefile):
 #   ml-core.txt      Cross-platform ML baseline (torch, diffusers, transformers, etc.)
+#   ml-cpu.txt       CPU baseline acceleration layer (thin, includes ml-core)
+#   ml-mps.txt       Apple Silicon MPS acceleration layer (darwin-arm64-mps)
+#   ml-cuda.txt      NVIDIA CUDA acceleration layer (linux-x86_64-cuda)
 #   ml-raw.txt       RAW camera file ingest (rawpy) - may have platform limitations
 #   ml-coreml.txt    Apple CoreML acceleration - macOS only
 #   ml-research.txt  Research/experimental extras - reserved for future use
@@ -39,6 +49,7 @@ help:
 	@echo "  compile           Compile all pinned requirements from .in files"
 	@echo "  compile-all       Same as compile (for compatibility)"
 	@echo "  compile-ml-layers Compile only ML layer lockfiles"
+	@echo "  compile-accel     Compile acceleration layer lockfiles (ml-cpu, ml-mps, ml-cuda)"
 	@echo "  update            Update all dependencies to latest versions"
 	@echo "  check             Verify that .txt files are up-to-date with .in files"
 	@echo "  clean             Remove all compiled .txt files"
@@ -49,6 +60,9 @@ help:
 	@echo ""
 	@echo "ML Layer targets (CPU-only PyTorch index):"
 	@echo "  ml-core.txt       Cross-platform ML baseline"
+	@echo "  ml-cpu.txt        CPU baseline acceleration layer"
+	@echo "  ml-mps.txt        Apple Silicon MPS acceleration layer"
+	@echo "  ml-cuda.txt       NVIDIA CUDA acceleration layer"
 	@echo "  ml-raw.txt        RAW ingest capability layer"
 	@echo "  ml-coreml.txt     Apple CoreML acceleration layer"
 	@echo "  ml-research.txt   Research/experimental extras layer"
@@ -64,19 +78,24 @@ help:
 
 # Compile all requirements in correct order
 # Note: SAM2 is scripted-only and NOT compiled here - use bootstrap script
-compile: all.txt base.txt ml-core.txt ml-raw.txt ml-coreml.txt ml-research.txt ml.txt dev.txt ci.txt tools-archive.txt
+compile: all.txt base.txt ml-core.txt ml-cpu.txt ml-mps.txt ml-cuda.txt ml-raw.txt ml-coreml.txt ml-research.txt ml.txt dev.txt ci.txt tools-archive.txt
 	@echo "✓ All requirements compiled successfully"
 
 compile-all: compile
 
 # Compile only ML layers (useful for ML-focused updates)
 # Note: SAM2 is scripted-only and NOT compiled here
-compile-ml-layers: all.txt ml-core.txt ml-raw.txt ml-coreml.txt ml-research.txt ml.txt
+compile-ml-layers: all.txt ml-core.txt ml-cpu.txt ml-mps.txt ml-cuda.txt ml-raw.txt ml-coreml.txt ml-research.txt ml.txt
 	@echo "✓ ML layer requirements compiled successfully"
+
+# Compile only acceleration layers (useful for profile updates)
+compile-accel: all.txt ml-core.txt ml-cpu.txt ml-mps.txt ml-cuda.txt
+	@echo "✓ Acceleration layer requirements compiled successfully"
 
 # Compile all.txt first for global resolution
 # Note: ml-sam2.in included for global resolution but NOT compiled as lockfile
-all.txt: all.in base.in ml.in ml-core.in ml-raw.in ml-sam2.in ml-coreml.in ml-research.in dev.in ci.in
+# Note: ml-cpu.in, ml-mps.in, ml-cuda.in included for acceleration layers
+all.txt: all.in base.in ml.in ml-core.in ml-cpu.in ml-mps.in ml-cuda.in ml-raw.in ml-sam2.in ml-coreml.in ml-research.in dev.in ci.in
 	@echo "Compiling all.txt (global resolution)..."
 	@$(PIP_COMPILE) all.in -o all.txt
 
@@ -92,6 +111,22 @@ base.txt: base.in all.txt
 ml-core.txt: ml-core.in all.txt
 	@echo "Compiling ml-core.txt (CPU-only PyTorch)..."
 	@$(PIP_COMPILE) $(PYTORCH_CPU_INDEX) -c all.txt ml-core.in -o ml-core.txt
+
+# Acceleration layers (platform matrix profiles)
+ml-cpu.txt: ml-cpu.in ml-core.in all.txt
+	@echo "Compiling ml-cpu.txt (CPU baseline)..."
+	@$(PIP_COMPILE) $(PYTORCH_CPU_INDEX) -c all.txt ml-cpu.in -o ml-cpu.txt
+
+ml-mps.txt: ml-mps.in ml-core.in all.txt
+	@echo "Compiling ml-mps.txt (Apple Silicon MPS)..."
+	@$(PIP_COMPILE) $(PYTORCH_CPU_INDEX) -c all.txt ml-mps.in -o ml-mps.txt
+
+ml-cuda.txt: ml-cuda.in ml-core.in all.txt
+	@echo "Compiling ml-cuda.txt (NVIDIA CUDA)..."
+	@# NOTE: ml-cuda.txt is compiled with CPU index for consistency,
+	@# but contains CUDA packages with platform markers.
+	@# Actual CUDA wheel installation uses PyTorch CUDA index at install time.
+	@$(PIP_COMPILE) $(PYTORCH_CPU_INDEX) -c all.txt ml-cuda.in -o ml-cuda.txt
 
 ml-raw.txt: ml-raw.in all.txt
 	@echo "Compiling ml-raw.txt..."
@@ -130,6 +165,9 @@ update:
 	@$(PIP_COMPILE) --upgrade all.in -o all.txt
 	@$(PIP_COMPILE) --upgrade -c all.txt base.in -o base.txt
 	@$(PIP_COMPILE) --upgrade $(PYTORCH_CPU_INDEX) -c all.txt ml-core.in -o ml-core.txt
+	@$(PIP_COMPILE) --upgrade $(PYTORCH_CPU_INDEX) -c all.txt ml-cpu.in -o ml-cpu.txt
+	@$(PIP_COMPILE) --upgrade $(PYTORCH_CPU_INDEX) -c all.txt ml-mps.in -o ml-mps.txt
+	@$(PIP_COMPILE) --upgrade $(PYTORCH_CPU_INDEX) -c all.txt ml-cuda.in -o ml-cuda.txt
 	@$(PIP_COMPILE) --upgrade -c all.txt ml-raw.in -o ml-raw.txt
 	@$(PIP_COMPILE) --upgrade -c all.txt ml-coreml.in -o ml-coreml.txt
 	@$(PIP_COMPILE) --upgrade -c all.txt ml-research.in -o ml-research.txt
@@ -147,7 +185,7 @@ check:
 	repo_dir="$$(pwd)"; \
 	tmp_dir="$$(mktemp -d)"; \
 	trap 'rm -rf "$$tmp_dir"' EXIT; \
-	cp all.in base.in ml.in ml-core.in ml-raw.in ml-coreml.in ml-research.in dev.in ci.in tools-archive.in "$$tmp_dir"/; \
+	cp all.in base.in ml.in ml-core.in ml-cpu.in ml-mps.in ml-cuda.in ml-raw.in ml-coreml.in ml-research.in dev.in ci.in tools-archive.in "$$tmp_dir"/; \
 	for f in all.txt base.txt ml.txt dev.txt ci.txt tools-archive.txt; do \
 		if [ -f "$$repo_dir/$$f" ]; then \
 			cp "$$repo_dir/$$f" "$$tmp_dir"/; \
@@ -156,7 +194,7 @@ check:
 			exit 1; \
 		fi; \
 	done; \
-	for f in ml-core.txt ml-raw.txt ml-coreml.txt ml-research.txt; do \
+	for f in ml-core.txt ml-cpu.txt ml-mps.txt ml-cuda.txt ml-raw.txt ml-coreml.txt ml-research.txt; do \
 		if [ -f "$$repo_dir/$$f" ]; then \
 			cp "$$repo_dir/$$f" "$$tmp_dir"/; \
 		else \
@@ -167,6 +205,9 @@ check:
 	$(PIP_COMPILE) all.in -o all.txt >/dev/null; \
 	$(PIP_COMPILE) -c all.txt base.in -o base.txt >/dev/null; \
 	$(PIP_COMPILE) $(PYTORCH_CPU_INDEX) -c all.txt ml-core.in -o ml-core.txt >/dev/null; \
+	$(PIP_COMPILE) $(PYTORCH_CPU_INDEX) -c all.txt ml-cpu.in -o ml-cpu.txt >/dev/null; \
+	$(PIP_COMPILE) $(PYTORCH_CPU_INDEX) -c all.txt ml-mps.in -o ml-mps.txt >/dev/null; \
+	$(PIP_COMPILE) $(PYTORCH_CPU_INDEX) -c all.txt ml-cuda.in -o ml-cuda.txt >/dev/null; \
 	$(PIP_COMPILE) -c all.txt ml-raw.in -o ml-raw.txt >/dev/null; \
 	$(PIP_COMPILE) -c all.txt ml-coreml.in -o ml-coreml.txt >/dev/null; \
 	$(PIP_COMPILE) -c all.txt ml-research.in -o ml-research.txt >/dev/null; \
@@ -183,7 +224,7 @@ check:
 			exit 1; \
 		fi; \
 	done; \
-	for f in ml-core.txt ml-raw.txt ml-coreml.txt ml-research.txt; do \
+	for f in ml-core.txt ml-cpu.txt ml-mps.txt ml-cuda.txt ml-raw.txt ml-coreml.txt ml-research.txt; do \
 		if [ -f "$$repo_dir/$$f" ]; then \
 			if ! diff -u <(normalize_req "$$tmp_dir/$$f") <(normalize_req "$$repo_dir/$$f") >/dev/null; then \
 				echo "❌ $$f is out of date. Run 'make compile' to update."; \
@@ -197,5 +238,5 @@ check:
 # Note: ml-sam2.txt removed if present (historical artifact)
 clean:
 	@echo "Removing compiled .txt files..."
-	@rm -f all.txt base.txt ml.txt ml-core.txt ml-raw.txt ml-sam2.txt ml-coreml.txt ml-research.txt dev.txt ci.txt tools-archive.txt
+	@rm -f all.txt base.txt ml.txt ml-core.txt ml-cpu.txt ml-mps.txt ml-cuda.txt ml-raw.txt ml-sam2.txt ml-coreml.txt ml-research.txt dev.txt ci.txt tools-archive.txt
 	@echo "✓ Cleanup complete"

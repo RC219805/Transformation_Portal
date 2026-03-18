@@ -1,0 +1,276 @@
+"""Platform matrix definition and detection for deterministic ML reproducibility.
+
+This module provides explicit platform identification for the ML dependency system,
+enabling deterministic, reproducible builds across environments.
+
+Platform Matrix (Axes):
+    - OS: Darwin (macOS), Linux
+    - ISA: arm64 (Apple Silicon/ARM), x86_64 (Intel/AMD)
+    - Accel: cpu, mps (Apple Metal), cuda (NVIDIA)
+
+Canonical Platform Targets:
+    - darwin-x86_64-cpu   (macOS Intel)
+    - darwin-arm64-cpu    (macOS Apple Silicon, CPU-only)
+    - darwin-arm64-mps    (macOS Apple Silicon, Metal)
+    - linux-x86_64-cpu    (Linux Intel/AMD, CPU baseline)
+    - linux-x86_64-cuda   (Linux Intel/AMD, NVIDIA GPU)
+    - linux-arm64-cpu     (Linux ARM, CPU-only)
+
+Design Principles (ADR-032):
+    - Accel is NEVER inferred from OS - always explicit via profile
+    - OS and ISA are detected from platform module
+    - Platform fingerprint is included in CAS key for reproducibility
+    - Environment fingerprint (pip freeze hash) enables drift detection
+
+Example:
+    >>> matrix = PlatformMatrix.detect()
+    >>> matrix.canonical_target
+    'darwin-arm64-cpu'
+    >>> matrix.to_dict()
+    {'os': 'Darwin', 'isa': 'arm64', 'accel': 'cpu'}
+    >>> fingerprint = get_env_fingerprint()
+    'sha256:abc123...'
+"""
+
+from __future__ import annotations
+
+import hashlib
+import platform
+import subprocess
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import Any, Dict, Optional
+
+
+class PlatformOS(str, Enum):
+    """Supported operating systems."""
+
+    DARWIN = "Darwin"
+    LINUX = "Linux"
+
+    @classmethod
+    def detect(cls) -> "PlatformOS":
+        """Detect current OS from platform module."""
+        system = platform.system()
+        if system == "Darwin":
+            return cls.DARWIN
+        elif system == "Linux":
+            return cls.LINUX
+        else:
+            raise ValueError(f"Unsupported platform_system: {system}")
+
+
+class PlatformISA(str, Enum):
+    """Supported instruction set architectures."""
+
+    ARM64 = "arm64"
+    X86_64 = "x86_64"
+
+    @classmethod
+    def detect(cls) -> "PlatformISA":
+        """Detect current ISA from platform module."""
+        machine = platform.machine().lower()
+        # Normalize architecture names
+        if machine in ("arm64", "aarch64"):
+            return cls.ARM64
+        elif machine in ("x86_64", "amd64"):
+            return cls.X86_64
+        else:
+            raise ValueError(f"Unsupported platform_machine: {machine}")
+
+
+class PlatformAccel(str, Enum):
+    """Supported acceleration backends."""
+
+    CPU = "cpu"
+    MPS = "mps"
+    CUDA = "cuda"
+
+    @classmethod
+    def default_for_platform(cls, os: PlatformOS, isa: PlatformISA) -> "PlatformAccel":
+        """Return conservative default acceleration (always CPU).
+
+        IMPORTANT: Accel is explicit via profile, never auto-detected.
+        This method returns CPU as the safe default when no profile is specified.
+        """
+        return cls.CPU
+
+
+@dataclass(frozen=True)
+class PlatformMatrix:
+    """Immutable platform identification for reproducibility.
+
+    Attributes:
+        os: Operating system (Darwin, Linux)
+        isa: Instruction set architecture (arm64, x86_64)
+        accel: Acceleration backend (cpu, mps, cuda) - explicit, not inferred
+
+    The canonical_target property produces strings like:
+        - darwin-arm64-mps
+        - linux-x86_64-cuda
+        - darwin-x86_64-cpu
+    """
+
+    os: PlatformOS
+    isa: PlatformISA
+    accel: PlatformAccel = field(default=PlatformAccel.CPU)
+
+    @classmethod
+    def detect(cls, accel: Optional[str] = None) -> "PlatformMatrix":
+        """Detect current platform matrix.
+
+        Args:
+            accel: Explicit acceleration profile ("cpu", "mps", "cuda").
+                   If None, defaults to "cpu" (safe baseline).
+
+        Returns:
+            PlatformMatrix with detected OS/ISA and specified acceleration.
+
+        Raises:
+            ValueError: If OS or ISA is unsupported, or accel is invalid.
+        """
+        os = PlatformOS.detect()
+        isa = PlatformISA.detect()
+
+        if accel is not None:
+            try:
+                accel_enum = PlatformAccel(accel)
+            except ValueError:
+                valid = [a.value for a in PlatformAccel]
+                raise ValueError(f"Invalid acceleration '{accel}', must be one of {valid}")
+        else:
+            accel_enum = PlatformAccel.default_for_platform(os, isa)
+
+        return cls(os=os, isa=isa, accel=accel_enum)
+
+    @property
+    def canonical_target(self) -> str:
+        """Canonical platform target string.
+
+        Format: {os}-{isa}-{accel} (lowercased)
+
+        Examples:
+            darwin-arm64-mps
+            linux-x86_64-cuda
+            darwin-x86_64-cpu
+        """
+        return f"{self.os.value.lower()}-{self.isa.value}-{self.accel.value}"
+
+    @property
+    def is_macos(self) -> bool:
+        """True if running on macOS."""
+        return self.os == PlatformOS.DARWIN
+
+    @property
+    def is_linux(self) -> bool:
+        """True if running on Linux."""
+        return self.os == PlatformOS.LINUX
+
+    @property
+    def is_apple_silicon(self) -> bool:
+        """True if running on Apple Silicon (macOS ARM64)."""
+        return self.os == PlatformOS.DARWIN and self.isa == PlatformISA.ARM64
+
+    @property
+    def is_macos_intel(self) -> bool:
+        """True if running on macOS Intel (x86_64)."""
+        return self.os == PlatformOS.DARWIN and self.isa == PlatformISA.X86_64
+
+    @property
+    def supports_mps(self) -> bool:
+        """True if platform can use MPS acceleration.
+
+        MPS is only available on macOS ARM64 (Apple Silicon).
+        """
+        return self.is_apple_silicon
+
+    @property
+    def supports_cuda(self) -> bool:
+        """True if platform can potentially use CUDA.
+
+        CUDA is only available on Linux x86_64 (with NVIDIA GPU).
+        This is a static check - actual GPU availability requires runtime detection.
+        """
+        return self.os == PlatformOS.LINUX and self.isa == PlatformISA.X86_64
+
+    def to_dict(self) -> Dict[str, str]:
+        """Export as dictionary for JSON serialization."""
+        return {
+            "os": self.os.value,
+            "isa": self.isa.value,
+            "accel": self.accel.value,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, str]) -> "PlatformMatrix":
+        """Reconstruct from dictionary."""
+        return cls(
+            os=PlatformOS(data["os"]),
+            isa=PlatformISA(data["isa"]),
+            accel=PlatformAccel(data["accel"]),
+        )
+
+    def __str__(self) -> str:
+        return self.canonical_target
+
+
+def get_env_fingerprint() -> str:
+    """Compute SHA256 fingerprint of the current pip environment.
+
+    Returns:
+        Environment fingerprint in format "sha256:..."
+
+    This fingerprint can be used in CAS keys to ensure identical
+    environments produce identical results. Environment drift
+    (package updates, version changes) will change the fingerprint,
+    invalidating cached artifacts.
+
+    Note:
+        Uses `pip freeze` output for cross-platform consistency.
+        If pip is unavailable, returns a placeholder fingerprint.
+    """
+    try:
+        result = subprocess.run(
+            ["pip", "freeze"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+        if result.returncode == 0:
+            freeze_output = result.stdout
+            digest = hashlib.sha256(freeze_output.encode("utf-8")).hexdigest()
+            return f"sha256:{digest}"
+        else:
+            # pip freeze failed - return placeholder
+            return "sha256:unknown-pip-freeze-failed"
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        # pip not available or timed out
+        return "sha256:unknown-pip-unavailable"
+
+
+def get_platform_fingerprint() -> Dict[str, Any]:
+    """Get comprehensive platform fingerprint for artifact provenance.
+
+    Returns:
+        Dictionary with platform matrix, environment fingerprint,
+        Python version, and other reproducibility-relevant metadata.
+    """
+    import sys
+
+    matrix = PlatformMatrix.detect()
+    return {
+        "platform": matrix.to_dict(),
+        "canonical_target": matrix.canonical_target,
+        "env_fingerprint": get_env_fingerprint(),
+        "python_version": sys.version,
+        "python_implementation": platform.python_implementation(),
+    }
+
+
+# Pre-compute current platform at module load for fast access
+try:
+    CURRENT_PLATFORM = PlatformMatrix.detect()
+except ValueError:
+    # Fallback for unsupported platforms (e.g., Windows)
+    CURRENT_PLATFORM = None

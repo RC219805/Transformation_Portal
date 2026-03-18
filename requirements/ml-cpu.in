@@ -1,0 +1,24 @@
+# CPU baseline acceleration layer
+# Cross-platform CPU-only ML baseline (no GPU-specific packages).
+#
+# This is a thin layer that ensures CPU-only execution.
+# It includes ml-core.in and adds no GPU packages.
+#
+# Run `make compile` in this directory to generate pinned ml-cpu.txt
+#
+# Platform targets:
+#   - darwin-x86_64-cpu   (macOS Intel)
+#   - darwin-arm64-cpu    (macOS Apple Silicon, CPU fallback)
+#   - linux-x86_64-cpu    (Linux Intel/AMD, CI baseline)
+#   - linux-arm64-cpu     (Linux ARM)
+#
+# Capability contract:
+#   - Cross-platform baseline (no platform-specific packages)
+#   - No GPU acceleration packages (cuda-*, nvidia-*, triton)
+#   - Install via: ./scripts/bootstrap/install_ml_stack.sh --profile core-cpu
+
+# Include cross-platform ML baseline
+-r ml-core.in
+
+# CPU-only: no additional packages needed
+# GPU-specific packages are in ml-cuda.in and ml-mps.in

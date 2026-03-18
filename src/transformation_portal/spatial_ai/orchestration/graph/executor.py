@@ -442,6 +442,19 @@ class Executor:
         # L1 (Tier 1 core) has no ML dependencies, so torch is not imported here.
         # Stages that use torch should include version in their config if provenance tracking is needed.
 
+        # ADR-032: Include platform matrix and env fingerprint for reproducibility
+        env_fingerprint = None
+        platform_dict = None
+        try:
+            from ....core.platform_matrix import CURRENT_PLATFORM, get_env_fingerprint
+
+            env_fingerprint = get_env_fingerprint()
+            if CURRENT_PLATFORM is not None:
+                platform_dict = CURRENT_PLATFORM.to_dict()
+        except ImportError:
+            # Platform matrix module not available - graceful degradation
+            pass
+
         return ProvenanceMetadata(
             cache_key=cache_key,
             stage_id=stage_id,
@@ -456,6 +469,8 @@ class Executor:
             device=context.device,
             model_repo_id=context.config.get("repo_id"),
             model_revision=context.config.get("revision"),
+            env_fingerprint=env_fingerprint,
+            platform=platform_dict,
         )
 
     def _detect_device(self) -> str:
