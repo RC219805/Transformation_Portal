@@ -60,7 +60,7 @@ if [[ "${BASH_VERSINFO[0]}" -lt 4 ]] || { [[ "${BASH_VERSINFO[0]}" -eq 4 ]] && [
     else
         echo "[ERROR] Bash 4.3+ is required (found ${BASH_VERSION})" >&2
         echo "[ERROR] On macOS, install with: brew install bash" >&2
-        echo "[ERROR] Then run: /usr/local/bin/bash $0 $*" >&2
+        echo "[ERROR] Then run: /usr/local/bin/bash $0 $@" >&2
         exit 1
     fi
 fi
@@ -164,14 +164,8 @@ log_verbose() {
 }
 
 check_prerequisites() {
-    # Check bash version (need 4.3+ for nameref)
-    # Note: This check is redundant due to auto-exec at script start,
-    # but kept for clarity and explicit error messages.
-    if [[ "${BASH_VERSINFO[0]}" -lt 4 ]] || { [[ "${BASH_VERSINFO[0]}" -eq 4 ]] && [[ "${BASH_VERSINFO[1]}" -lt 3 ]]; }; then
-        log_error "Bash 4.3+ is required (found ${BASH_VERSION})"
-        log_error "On macOS, install with: brew install bash"
-        exit 1
-    fi
+    # Note: Bash version check is handled by auto-exec at script start.
+    # If we reach here, bash 4.3+ is guaranteed.
 
     # Check Python is available
     if ! command -v python3 &> /dev/null; then

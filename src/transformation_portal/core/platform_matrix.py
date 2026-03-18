@@ -244,8 +244,11 @@ def get_env_fingerprint() -> str:
         else:
             # pip freeze failed - return placeholder
             return "sha256:unknown-pip-freeze-failed"
-    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
-        # pip not available or timed out
+    except subprocess.TimeoutExpired:
+        # pip freeze timed out
+        return "sha256:unknown-pip-timeout"
+    except (FileNotFoundError, OSError):
+        # pip not available
         return "sha256:unknown-pip-unavailable"
 
 
