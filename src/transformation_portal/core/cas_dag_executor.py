@@ -263,6 +263,60 @@ class CASDAGExecutor:
         lock_file = self.locks_dir / f"{stage_name}_{cas_id[:16]}.lock"
         return FileLock(lock_file, timeout=self.config.lock_timeout)
 
+    def _add_provenance_node(
+        self,
+        merkle_dag: MerkleDAG,
+        merkle_node_hashes: Dict[str, str],
+        stage_name: str,
+        stage: Stage,
+        identity: ExecutionIdentity,
+        cached: bool,
+        duration_ms: Optional[float] = None,
+    ) -> None:
+        """Add provenance node for a stage execution.
+
+        Helper method to avoid duplication between cache hit and miss paths.
+
+        Args:
+            merkle_dag: Merkle DAG to add node to
+            merkle_node_hashes: Dict mapping stage names to merkle node hashes
+            stage_name: Name of the stage
+            stage: Stage instance
+            identity: Execution identity
+            cached: Whether result was from cache
+            duration_ms: Execution duration (None for cache hits)
+        """
+        # Create metadata for the artifact node
+        metadata: Dict[str, Any] = {"stage": stage_name, "cached": cached}
+        if duration_ms is not None:
+            metadata["duration_ms"] = duration_ms
+
+        # Add artifact node for this stage's identity
+        artifact_hash = merkle_dag.add_artifact(
+            artifact_type="execution_identity",
+            content_hash=identity.cas_id,
+            metadata=metadata,
+        )
+        merkle_node_hashes[stage_name] = artifact_hash
+
+        # Add computation node if there are upstream dependencies
+        upstream_hashes = [
+            merkle_node_hashes[d]
+            for d in stage.get_dependencies()
+            if d in merkle_node_hashes
+        ]
+        if upstream_hashes:
+            computation_metadata = {"version": stage.version}
+            if duration_ms is not None:
+                computation_metadata["duration_ms"] = duration_ms
+
+            merkle_dag.add_computation(
+                node_id=stage_name,
+                inputs=upstream_hashes,
+                outputs={"cas_id": identity.cas_id, "cached": cached},
+                metadata=computation_metadata,
+            )
+
     def execute(
         self,
         graph: StageGraph,
@@ -337,26 +391,14 @@ class CASDAGExecutor:
 
                     # Add to provenance DAG
                     if merkle_dag:
-                        # First add an artifact node for this stage's identity
-                        artifact_hash = merkle_dag.add_artifact(
-                            artifact_type="execution_identity",
-                            content_hash=identity.cas_id,
-                            metadata={"stage": stage_name, "cached": True},
+                        self._add_provenance_node(
+                            merkle_dag=merkle_dag,
+                            merkle_node_hashes=merkle_node_hashes,
+                            stage_name=stage_name,
+                            stage=stage,
+                            identity=identity,
+                            cached=True,
                         )
-                        merkle_node_hashes[stage_name] = artifact_hash
-                        # Then add the computation node with upstream references
-                        upstream_hashes = [
-                            merkle_node_hashes[d]
-                            for d in stage.get_dependencies()
-                            if d in merkle_node_hashes
-                        ]
-                        if upstream_hashes:  # Only add computation if there are inputs
-                            merkle_dag.add_computation(
-                                node_id=stage_name,
-                                inputs=upstream_hashes,
-                                outputs={"cas_id": identity.cas_id, "cached": True},
-                                metadata={"version": stage.version},
-                            )
                 else:
                     # Cache miss - execute with lock
                     with self._get_lock(stage_name, identity.cas_id):
@@ -397,33 +439,15 @@ class CASDAGExecutor:
 
                         # Add to provenance DAG
                         if merkle_dag:
-                            # First add an artifact node for this stage's identity
-                            artifact_hash = merkle_dag.add_artifact(
-                                artifact_type="execution_identity",
-                                content_hash=identity.cas_id,
-                                metadata={
-                                    "stage": stage_name,
-                                    "cached": False,
-                                    "duration_ms": result.duration_ms,
-                                },
+                            self._add_provenance_node(
+                                merkle_dag=merkle_dag,
+                                merkle_node_hashes=merkle_node_hashes,
+                                stage_name=stage_name,
+                                stage=stage,
+                                identity=identity,
+                                cached=False,
+                                duration_ms=result.duration_ms,
                             )
-                            merkle_node_hashes[stage_name] = artifact_hash
-                            # Then add the computation node with upstream references
-                            upstream_hashes = [
-                                merkle_node_hashes[d]
-                                for d in stage.get_dependencies()
-                                if d in merkle_node_hashes
-                            ]
-                            if upstream_hashes:  # Only add computation if there are inputs
-                                merkle_dag.add_computation(
-                                    node_id=stage_name,
-                                    inputs=upstream_hashes,
-                                    outputs={"cas_id": identity.cas_id, "cached": False},
-                                    metadata={
-                                        "version": stage.version,
-                                        "duration_ms": result.duration_ms,
-                                    },
-                                )
 
                         # Check for failure
                         if not result.is_success():

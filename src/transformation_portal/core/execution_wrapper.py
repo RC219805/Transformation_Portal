@@ -153,9 +153,8 @@ class FileLock:
             try:
                 # Atomic creation - fails if file exists
                 self.lock_path.parent.mkdir(parents=True, exist_ok=True)
-                fd = self.lock_path.open("x")
-                fd.write(str(time.time()))
-                fd.close()
+                with self.lock_path.open("x") as fd:
+                    fd.write(str(time.time()))
                 self._acquired = True
                 return True
             except FileExistsError:

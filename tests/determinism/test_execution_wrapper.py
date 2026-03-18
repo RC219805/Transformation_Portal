@@ -66,24 +66,28 @@ class TestFileLock:
     def test_concurrent_locks(self, tmp_path):
         """Test locks block concurrent access."""
         lock_path = tmp_path / "test.lock"
-        order = []
+        execution_times = []
 
         def worker(worker_id: int):
             with FileLock(lock_path, timeout=10.0):
-                order.append(f"enter_{worker_id}")
+                entry_time = time.time()
                 time.sleep(0.1)
-                order.append(f"exit_{worker_id}")
+                exit_time = time.time()
+                execution_times.append((worker_id, entry_time, exit_time))
 
         with ThreadPoolExecutor(max_workers=3) as executor:
             futures = [executor.submit(worker, i) for i in range(3)]
             for f in as_completed(futures):
                 f.result()
 
-        # Each worker should complete before next enters
-        for i in range(3):
-            enter_idx = order.index(f"enter_{i}")
-            exit_idx = order.index(f"exit_{i}")
-            assert exit_idx == enter_idx + 1  # Sequential execution
+        # Verify mutual exclusion: no two workers overlap
+        # Sort by entry time
+        execution_times.sort(key=lambda x: x[1])
+        for i in range(len(execution_times) - 1):
+            current_exit = execution_times[i][2]
+            next_entry = execution_times[i + 1][1]
+            # Each worker should exit before the next enters
+            assert current_exit <= next_entry, "Workers should not overlap"
 
     def test_timeout(self, tmp_path):
         """Test lock timeout behavior."""
@@ -360,7 +364,7 @@ class TestExecuteWithCaching:
                 assert call_count == 1
 
 
-class TestDAGStage(Stage):
+class DAGStageForTesting(Stage):
     """Stage implementation for DAG testing."""
 
     def __init__(self, name: str, deps: List[str] = None, version: str = "1.0.0"):
@@ -405,8 +409,8 @@ class TestCASDAGExecutor:
 
         # Build simple graph
         graph = StageGraph("test_pipeline")
-        stage1 = TestDAGStage("stage1")
-        stage2 = TestDAGStage("stage2", deps=["stage1"])
+        stage1 = DAGStageForTesting("stage1")
+        stage2 = DAGStageForTesting("stage2", deps=["stage1"])
 
         graph.add_stage(stage1)
         graph.add_stage(stage2)
@@ -434,8 +438,8 @@ class TestCASDAGExecutor:
         executor, _ = dag_executor_setup
 
         graph = StageGraph("test_pipeline")
-        stage1 = TestDAGStage("stage1")
-        stage2 = TestDAGStage("stage2", deps=["stage1"])
+        stage1 = DAGStageForTesting("stage1")
+        stage2 = DAGStageForTesting("stage2", deps=["stage1"])
 
         graph.add_stage(stage1)
         graph.add_stage(stage2)
@@ -470,8 +474,8 @@ class TestCASDAGExecutor:
         executor, _ = dag_executor_setup
 
         graph = StageGraph("test_pipeline")
-        stage1 = TestDAGStage("stage1")
-        stage2 = TestDAGStage("stage2", deps=["stage1"])
+        stage1 = DAGStageForTesting("stage1")
+        stage2 = DAGStageForTesting("stage2", deps=["stage1"])
 
         graph.add_stage(stage1)
         graph.add_stage(stage2)
@@ -504,8 +508,8 @@ class TestCASDAGExecutor:
         executor, _ = dag_executor_setup
 
         graph = StageGraph("test_pipeline")
-        stage1 = TestDAGStage("stage1")
-        stage2 = TestDAGStage("stage2", deps=["stage1"])
+        stage1 = DAGStageForTesting("stage1")
+        stage2 = DAGStageForTesting("stage2", deps=["stage1"])
 
         graph.add_stage(stage1)
         graph.add_stage(stage2)
@@ -531,7 +535,7 @@ class TestCASDAGExecutor:
         executor, _ = dag_executor_setup
 
         graph = StageGraph("test_pipeline")
-        stage1 = TestDAGStage("stage1")
+        stage1 = DAGStageForTesting("stage1")
         graph.add_stage(stage1)
 
         context = StageContext()
@@ -627,7 +631,7 @@ class TestVerifyDAGDeterminism:
         executor = CASDAGExecutor(store, cache_dir, config)
 
         graph = StageGraph("test")
-        stage = TestDAGStage("deterministic")
+        stage = DAGStageForTesting("deterministic")
         graph.add_stage(stage)
 
         context = StageContext()
