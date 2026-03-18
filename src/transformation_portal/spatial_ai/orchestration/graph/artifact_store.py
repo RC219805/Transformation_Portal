@@ -141,7 +141,7 @@ class CacheLockTimeout(Exception):
 
 @dataclass
 class ProvenanceMetadata:
-    """Provenance metadata for cached artifacts.
+    """Provenance metadata for cached artifacts (ADR-032 extended).
 
     Attributes:
         cache_key: Content-addressed cache key.
@@ -157,11 +157,15 @@ class ProvenanceMetadata:
         device: Execution device ("cuda", "cpu", "mps").
         model_repo_id: HuggingFace model repo ID (if applicable).
         model_revision: HuggingFace model revision/commit (if applicable).
+        env_fingerprint: SHA256 of pip freeze output (environment identity).
+        platform: Platform matrix dict (os, isa, accel) for reproducibility.
 
     Design notes:
     - Captures complete lineage for reproducibility audits.
     - Timestamps are UTC to avoid timezone ambiguity.
     - Model provenance enables tracking of upstream drift.
+    - env_fingerprint enables detection of environment drift (ADR-032).
+    - platform captures explicit OS/ISA/accel for deterministic CAS keys.
     """
 
     cache_key: str
@@ -177,6 +181,9 @@ class ProvenanceMetadata:
     torch_version: Optional[str] = None
     model_repo_id: Optional[str] = None
     model_revision: Optional[str] = None
+    # ADR-032: Environment and platform fingerprinting for CAS reproducibility
+    env_fingerprint: Optional[str] = None
+    platform: Optional[Dict[str, str]] = None
 
 
 class ArtifactStore:

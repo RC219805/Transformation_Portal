@@ -1,0 +1,27 @@
+# Apple Silicon MPS acceleration layer
+# macOS ARM64 Metal Performance Shaders acceleration.
+#
+# This layer enables MPS (Metal) GPU acceleration on Apple Silicon Macs.
+# Requires macOS + ARM64 (M1/M2/M3/M4 chips).
+#
+# Run `make compile` in this directory to generate pinned ml-mps.txt
+#
+# Platform target:
+#   - darwin-arm64-mps    (macOS Apple Silicon with Metal)
+#
+# WARNING:
+#   - Only available on macOS ARM64 (Apple Silicon)
+#   - Will be skipped/fail on Intel Macs and Linux
+#   - Uses platform markers for conditional installation
+#
+# Capability contract:
+#   - Enables MPS device selection in PyTorch
+#   - Includes ml-core.in as baseline
+#   - Install via: ./scripts/bootstrap/install_ml_stack.sh --profile core-mps
+
+# Include cross-platform ML baseline
+-r ml-core.in
+
+# MPS-specific helpers (optional, bounded)
+# accelerate helps with MPS device placement and memory management
+accelerate>=1.3.0,<2 ; platform_system == "Darwin" and platform_machine == "arm64"

@@ -1,15 +1,22 @@
 #!/usr/bin/env python3
-"""Validate layered requirements lockfile generation contract.
+"""Validate layered requirements lockfile generation contract (ADR-032).
 
 This validator enforces the following contracts:
 1. All lockfiles must be generated with the expected Python version
-2. ML lockfiles must be CPU-only (no GPU-linked packages)
-3. ML layer lockfiles (ml-core, ml-raw, ml-coreml, ml-research) must exist
+2. ML lockfiles must be CPU-only (no GPU-linked packages) - except ml-cuda.txt
+3. ML layer lockfiles must exist (platform-specific + capability layers)
 4. Umbrella ml.txt must remain backward-compatible
 
 CONTRACT SEPARATION:
-- Standard lockfile layers: ml-core, ml-raw, ml-coreml, ml-research
+- Platform-specific lockfiles: ml-core-darwin, ml-core-linux
+- Standard lockfile layers: ml-core, ml-cpu, ml-mps, ml-cuda, ml-raw, ml-coreml, ml-research
 - Scripted-only layers: ml-sam2 (requires non-standard install semantics)
+
+PLATFORM MATRIX (ADR-032):
+- Platform-specific lockfiles: ml-core-darwin.txt (torch 2.2.2), ml-core-linux.txt (torch 2.10.0)
+- Acceleration layers (ml-cpu, ml-mps, ml-cuda) map to explicit profiles
+- ml-cuda.txt is ALLOWED to contain GPU packages (nvidia-*, triton, etc.)
+- CPU-only lockfiles (ml-core-*, ml-cpu, ml-mps, ml.txt) must NOT contain GPU packages
 
 Scripted-only layers are NOT validated as standard lockfile contracts.
 They exist for documentation but install path is via bootstrap script.
@@ -34,10 +41,19 @@ CORE_LOCK_FILES = (
     "tools-archive.txt",
 )
 
+# Platform-specific ML core lockfiles (pip-compile multi-platform fix)
+PLATFORM_ML_CORE_LOCK_FILES = (
+    "ml-core-darwin.txt",
+    "ml-core-linux.txt",
+)
+
 # ML layer lockfiles (standard lockfile contract)
 # These follow the standard pip install -r contract
 ML_LAYER_LOCK_FILES = (
     "ml-core.txt",
+    "ml-cpu.txt",
+    "ml-mps.txt",
+    "ml-cuda.txt",
     "ml-raw.txt",
     "ml-coreml.txt",
     "ml-research.txt",
@@ -45,23 +61,32 @@ ML_LAYER_LOCK_FILES = (
 
 # Scripted-only ML layers (NOT standard lockfile contract)
 # These require non-standard install semantics via bootstrap script
-SCRIPTED_ONLY_ML_LAYERS = (
-    "ml-sam2.txt",
-)
+SCRIPTED_ONLY_ML_LAYERS = ("ml-sam2.txt",)
 
 # ML umbrella lockfile (backward compatibility)
 ML_UMBRELLA_LOCK_FILE = "ml.txt"
 
 # All lockfiles for header validation (includes scripted for consistency checking)
-ALL_LOCK_FILES = CORE_LOCK_FILES + ML_LAYER_LOCK_FILES + SCRIPTED_ONLY_ML_LAYERS + (ML_UMBRELLA_LOCK_FILE,)
+ALL_LOCK_FILES = (
+    CORE_LOCK_FILES + PLATFORM_ML_CORE_LOCK_FILES + ML_LAYER_LOCK_FILES + SCRIPTED_ONLY_ML_LAYERS + (ML_UMBRELLA_LOCK_FILE,)
+)
 
 # ML lockfiles that must be CPU-only (compiled with PyTorch CPU index)
-# Note: ml-sam2.txt is scripted-only but still validated for CPU-only if present
+# NOTE: ml-cuda.txt is EXCLUDED - it's expected to contain GPU packages
+# NOTE: ml-sam2.txt is scripted-only but still validated for CPU-only if present
 CPU_ONLY_ML_LOCKS = (
     "ml-core.txt",
+    "ml-core-darwin.txt",
+    "ml-core-linux.txt",
+    "ml-cpu.txt",
+    "ml-mps.txt",
     "ml-sam2.txt",
     "ml.txt",
 )
+
+# ML lockfiles that are ALLOWED to contain GPU packages
+# These are platform-specific acceleration layers
+GPU_ALLOWED_ML_LOCKS = ("ml-cuda.txt",)
 
 GPU_LOCK_PACKAGES = (
     "cuda-bindings==",
@@ -87,8 +112,9 @@ def validate_lockfile_headers(expected_python: str) -> list[str]:
 
     Only validates files that exist. ML layer lockfiles may not exist in
     environments where they haven't been compiled yet (e.g., fresh checkouts).
-    
+
     Contract separation:
+    - Platform-specific ML core layers: optional during transition
     - Standard ML layers: validated as optional during transition
     - Scripted-only layers: validated if present but not required
     """
@@ -100,6 +126,10 @@ def validate_lockfile_headers(expected_python: str) -> list[str]:
             # Scripted-only layers are not required as lockfiles
             if lock_name in SCRIPTED_ONLY_ML_LAYERS:
                 # Silently skip - scripted-only layers may not have lockfiles
+                continue
+            # Platform-specific ML core files are optional during transition
+            if lock_name in PLATFORM_ML_CORE_LOCK_FILES:
+                warnings.append(f"Optional platform-specific lockfile not found (will be compiled by CI): {lock_name}")
                 continue
             # Standard ML layer files are optional during transition
             if lock_name in ML_LAYER_LOCK_FILES:
@@ -157,14 +187,27 @@ def validate_ml_lock_contract() -> list[str]:
 
 def validate_ml_layer_structure() -> list[str]:
     """Validate that ML layer .in files exist for the layered strategy.
-    
+
     Both standard and scripted-only .in files should exist for documentation,
     but only standard layers follow the lockfile contract.
+
+    Platform matrix (ADR-032):
+    - Platform-specific core: ml-core-darwin.in, ml-core-linux.in
+    - Acceleration layers: ml-cpu.in, ml-mps.in, ml-cuda.in
+    - Capability layers: ml-raw.in, ml-coreml.in, ml-research.in
     """
     errors: list[str] = []
+    # Platform-specific lockfile layers (must exist)
+    platform_in_files = [
+        "ml-core-darwin.in",
+        "ml-core-linux.in",
+    ]
     # Standard lockfile layers (must exist)
     standard_in_files = [
         "ml-core.in",
+        "ml-cpu.in",
+        "ml-mps.in",
+        "ml-cuda.in",
         "ml-raw.in",
         "ml-coreml.in",
         "ml-research.in",
@@ -173,7 +216,7 @@ def validate_ml_layer_structure() -> list[str]:
     scripted_in_files = [
         "ml-sam2.in",
     ]
-    for in_file in standard_in_files + scripted_in_files:
+    for in_file in platform_in_files + standard_in_files + scripted_in_files:
         in_path = REQUIREMENTS_DIR / in_file
         if not in_path.is_file():
             errors.append(f"Missing ML layer input file: {in_path}")

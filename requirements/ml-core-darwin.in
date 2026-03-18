@@ -1,0 +1,48 @@
+# ML Core layer for macOS (Darwin)
+# Platform-specific lockfile for deterministic pip-compile resolution.
+#
+# This file is macOS-specific because pip-compile cannot resolve
+# conditional dependencies across platforms in a single graph.
+#
+# Run `make compile` in this directory to generate pinned ml-core-darwin.txt
+#
+# PLATFORM TARGET: darwin-* (macOS Intel + Apple Silicon)
+#   - darwin-x86_64-cpu   (macOS Intel, CPU-only)
+#   - darwin-arm64-cpu    (macOS Apple Silicon, CPU fallback)
+#   - darwin-arm64-mps    (macOS Apple Silicon, Metal)
+#
+# Torch version: 2.2.2 (last stable version with macOS x86_64 wheels)
+#
+# See: requirements/README.md for layering rationale.
+
+# --- PyTorch (macOS, pinned) ---
+# torch 2.2.2 is the last version with x86_64 macOS wheels
+# and provides stable MPS support on Apple Silicon.
+torch==2.2.2  # CAS determinism: cross-platform reproducibility
+torchvision==0.17.2  # CAS determinism: matches torch 2.2.2
+
+# Diffusion / HuggingFace ecosystem
+diffusers>=0.36.0,<1
+transformers>=4.57.0,<6
+huggingface-hub>=0.19.0,<2
+accelerate>=0.20.0,<2
+
+# Vision / segmentation helpers (cross-platform)
+controlnet-aux>=0.0.6,<1
+efficientsam==1.0.0          # Deterministic builds: stable EfficientSAM weights
+open-clip-torch==3.3.0       # Deterministic builds: SAM2/CLIP stack compatibility
+
+# Vision / image processing
+scikit-image>=0.21.0,<1
+
+# Configuration / diagnostics / color
+PyYAML>=6.0,<7               # Config parser: stable API
+colour-science>=0.4.2,<1     # Color math library: stable API
+psutil>=5.9.0,<7             # System utilities: OS compatibility layer
+memory-profiler>=0.61.0,<1   # Dev/profiling tool
+
+# RAG / embedding support
+sentence-transformers>=3.1.0,<6
+
+# 3D support (cross-platform, commercial-safe)
+plyfile>=1.0.0,<2
