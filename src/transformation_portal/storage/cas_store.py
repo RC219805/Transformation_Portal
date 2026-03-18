@@ -12,6 +12,18 @@ Layout:
             ab/
                 abcd1234...  (full sha256)
 
+Atomicity Contract:
+    All write operations use atomic semantics to prevent partial writes:
+    1. Write to temporary file (.tmp suffix)
+    2. fsync to ensure durability
+    3. Atomic rename to final path
+    4. Verify hash matches expected value
+
+    This prevents corruption in parallel execution scenarios where:
+    - Process A is writing artifact
+    - Process B reads partial artifact
+    → silent corruption / invalid CAS reuse
+
 Example:
     >>> store = ArtifactStore(Path("/cache/cas"))
     >>> obj = store.add_file(Path("model.safetensors"))
@@ -25,6 +37,7 @@ import hashlib
 import logging
 import os
 import shutil
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
@@ -151,26 +164,167 @@ class ArtifactStore:
             size_bytes=path.stat().st_size,
         )
 
+    def _atomic_write_file(
+        self,
+        src: Path,
+        dst: Path,
+        expected_sha: str,
+    ) -> None:
+        """Atomically write a file to CAS with integrity verification.
+
+        Atomicity Contract:
+        1. Copy to temporary file in same directory
+        2. fsync to ensure durability
+        3. Verify hash matches expected value
+        4. Atomic rename to final path
+
+        Args:
+            src: Source file to copy
+            dst: Destination path in CAS
+            expected_sha: Expected SHA-256 hash (lowercase hex)
+
+        Raises:
+            CASError: If copy fails or hash verification fails
+        """
+        # Create parent directory
+        dst.parent.mkdir(parents=True, exist_ok=True)
+
+        # Write to temp file in same directory for atomic rename
+        fd, tmp_path_str = tempfile.mkstemp(
+            suffix=".tmp",
+            prefix=f".cas_{expected_sha[:8]}_",
+            dir=dst.parent,
+        )
+        tmp_path = Path(tmp_path_str)
+
+        try:
+            # Close the fd opened by mkstemp, we'll use shutil.copy2
+            os.close(fd)
+
+            # Copy source to temp file
+            shutil.copy2(src, tmp_path)
+
+            # fsync the temp file to ensure durability
+            with tmp_path.open("rb") as f:
+                os.fsync(f.fileno())
+
+            # Verify hash BEFORE atomic rename
+            actual_sha = self._sha256_file(tmp_path)
+            if actual_sha != expected_sha:
+                raise CASError(
+                    f"Hash verification failed: expected {expected_sha}, got {actual_sha}"
+                )
+
+            # Atomic rename (POSIX guarantee: rename is atomic within same filesystem)
+            os.replace(tmp_path, dst)
+
+            # fsync parent directory to ensure rename is durable
+            dir_fd = os.open(str(dst.parent), os.O_RDONLY | os.O_DIRECTORY)
+            try:
+                os.fsync(dir_fd)
+            finally:
+                os.close(dir_fd)
+
+            logger.debug("Atomic write complete: %s", expected_sha[:8])
+
+        except Exception as exc:
+            # Clean up temp file on failure
+            if tmp_path.exists():
+                try:
+                    tmp_path.unlink()
+                except OSError:
+                    pass
+            raise CASError(f"Atomic write failed for {expected_sha}: {exc}") from exc
+
+    def _atomic_write_bytes(
+        self,
+        data: bytes,
+        dst: Path,
+        expected_sha: str,
+    ) -> None:
+        """Atomically write bytes to CAS with integrity verification.
+
+        Args:
+            data: Bytes to write
+            dst: Destination path in CAS
+            expected_sha: Expected SHA-256 hash (lowercase hex)
+
+        Raises:
+            CASError: If write fails or hash verification fails
+        """
+        # Create parent directory
+        dst.parent.mkdir(parents=True, exist_ok=True)
+
+        # Write to temp file in same directory for atomic rename
+        fd, tmp_path_str = tempfile.mkstemp(
+            suffix=".tmp",
+            prefix=f".cas_{expected_sha[:8]}_",
+            dir=dst.parent,
+        )
+        tmp_path = Path(tmp_path_str)
+
+        try:
+            # Write bytes and fsync
+            os.write(fd, data)
+            os.fsync(fd)
+            os.close(fd)
+
+            # Verify hash BEFORE atomic rename
+            actual_sha = self._sha256_file(tmp_path)
+            if actual_sha != expected_sha:
+                raise CASError(
+                    f"Hash verification failed: expected {expected_sha}, got {actual_sha}"
+                )
+
+            # Atomic rename
+            os.replace(tmp_path, dst)
+
+            # fsync parent directory
+            dir_fd = os.open(str(dst.parent), os.O_RDONLY | os.O_DIRECTORY)
+            try:
+                os.fsync(dir_fd)
+            finally:
+                os.close(dir_fd)
+
+        except Exception as exc:
+            # Clean up temp file on failure
+            if tmp_path.exists():
+                try:
+                    tmp_path.unlink()
+                except OSError:
+                    pass
+            # Close fd if still open
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+            raise CASError(f"Atomic write failed for {expected_sha}: {exc}") from exc
+
     def add_file(
         self,
         src: Path,
         *,
         verify: bool = True,
     ) -> CASObject:
-        """Add file to CAS.
+        """Add file to CAS with atomic write guarantees.
 
         If an object with the same hash already exists, the existing
         object is returned (deduplication).
 
+        Atomicity Contract:
+        - Writes use temp file + atomic rename pattern
+        - Hash is verified BEFORE making artifact visible
+        - Parallel writers cannot corrupt each other
+
         Args:
             src: Source file to add
-            verify: If True, verify hash after copy
+            verify: If True, verify hash after copy (always True for atomicity)
 
         Returns:
             CASObject reference
 
         Raises:
-            CASError: If file doesn't exist or copy fails
+            CASError: If file doesn't exist, copy fails, or hash verification fails
         """
         if not src.exists():
             raise CASError(f"Source file does not exist: {src}")
@@ -180,28 +334,34 @@ class ArtifactStore:
 
         # Check for existing object (deduplication)
         if dst.exists():
-            logger.debug("CAS hit: %s already exists", sha[:8])
-            return CASObject(
-                sha256=sha,
-                path=dst,
-                size_bytes=dst.stat().st_size,
-            )
+            # Verify existing object integrity if requested
+            if verify:
+                actual_sha = self._sha256_file(dst)
+                if actual_sha != sha:
+                    logger.warning(
+                        "Corrupt CAS object detected: %s (expected %s, got %s). Re-adding.",
+                        dst,
+                        sha[:8],
+                        actual_sha[:8],
+                    )
+                    # Fall through to re-add the file
+                else:
+                    logger.debug("CAS hit: %s already exists (verified)", sha[:8])
+                    return CASObject(
+                        sha256=sha,
+                        path=dst,
+                        size_bytes=dst.stat().st_size,
+                    )
+            else:
+                logger.debug("CAS hit: %s already exists", sha[:8])
+                return CASObject(
+                    sha256=sha,
+                    path=dst,
+                    size_bytes=dst.stat().st_size,
+                )
 
-        # Create parent directory
-        dst.parent.mkdir(parents=True, exist_ok=True)
-
-        # Copy file to CAS
-        try:
-            shutil.copy2(src, dst)
-        except Exception as exc:
-            raise CASError(f"Failed to copy {src} to CAS: {exc}") from exc
-
-        # Verify copy if requested
-        if verify:
-            actual_sha = self._sha256_file(dst)
-            if actual_sha != sha:
-                dst.unlink()  # Remove corrupt copy
-                raise CASError(f"Hash verification failed after copy: " f"expected {sha}, got {actual_sha}")
+        # Atomic write with integrity verification
+        self._atomic_write_file(src, dst, sha)
 
         logger.info("CAS add: %s (%d bytes)", sha[:8], dst.stat().st_size)
 
@@ -214,27 +374,56 @@ class ArtifactStore:
     def add_bytes(
         self,
         data: bytes,
+        *,
+        verify: bool = True,
     ) -> CASObject:
-        """Add bytes directly to CAS.
+        """Add bytes directly to CAS with atomic write guarantees.
+
+        Atomicity Contract:
+        - Writes use temp file + atomic rename pattern
+        - Hash is verified BEFORE making artifact visible
+        - Parallel writers cannot corrupt each other
 
         Args:
             data: Bytes to store
+            verify: If True, verify existing object integrity
 
         Returns:
             CASObject reference
+
+        Raises:
+            CASError: If write fails or hash verification fails
         """
         sha = hashlib.sha256(data).hexdigest()
         dst = self._object_path(sha)
 
         if dst.exists():
-            return CASObject(
-                sha256=sha,
-                path=dst,
-                size_bytes=dst.stat().st_size,
-            )
+            # Verify existing object integrity if requested
+            if verify:
+                actual_sha = self._sha256_file(dst)
+                if actual_sha != sha:
+                    logger.warning(
+                        "Corrupt CAS object detected: %s (expected %s, got %s). Re-adding.",
+                        dst,
+                        sha[:8],
+                        actual_sha[:8],
+                    )
+                    # Fall through to re-add
+                else:
+                    return CASObject(
+                        sha256=sha,
+                        path=dst,
+                        size_bytes=dst.stat().st_size,
+                    )
+            else:
+                return CASObject(
+                    sha256=sha,
+                    path=dst,
+                    size_bytes=dst.stat().st_size,
+                )
 
-        dst.parent.mkdir(parents=True, exist_ok=True)
-        dst.write_bytes(data)
+        # Atomic write with integrity verification
+        self._atomic_write_bytes(data, dst, sha)
 
         return CASObject(
             sha256=sha,

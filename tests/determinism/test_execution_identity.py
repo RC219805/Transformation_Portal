@@ -8,6 +8,9 @@ Test Coverage:
 - Config hash computation
 - Execution gate (should_execute)
 - Determinism verification
+- Lockfile hash integration (ADR-032)
+- Atomic artifact writes
+- Strict platform compatibility
 """
 
 from __future__ import annotations
@@ -23,18 +26,20 @@ import numpy as np
 import pytest
 
 from transformation_portal.core.execution_identity import (
+    ALLOW_CROSS_PLATFORM,
     ArtifactMetadata,
     CAS_IDENTITY_VERSION,
     ExecutionIdentity,
     compute_cas_id,
     compute_code_hash,
     compute_config_hash,
+    compute_stage_code_hash,
     create_artifact_metadata,
     is_compatible,
     should_execute,
     verify_determinism,
 )
-from transformation_portal.core.platform_matrix import PlatformMatrix
+from transformation_portal.core.platform_matrix import PlatformMatrix, compute_lockfile_hash
 
 
 class TestExecutionIdentity:
@@ -49,6 +54,7 @@ class TestExecutionIdentity:
             code_hash="sha256:code123",
             config_hash="sha256:config456",
             env_fingerprint="sha256:env789",
+            lockfile_hash="sha256:lockfile123",
             platform_id="darwin-arm64-mps",
             cas_id="sha256:final123",
         )
@@ -56,6 +62,7 @@ class TestExecutionIdentity:
         assert identity.stage_name == "depth_estimation"
         assert identity.stage_version == "1.0.0"
         assert len(identity.input_ids) == 2
+        assert identity.lockfile_hash == "sha256:lockfile123"
         assert identity.schema_version == CAS_IDENTITY_VERSION
 
     def test_immutability(self):
@@ -67,6 +74,7 @@ class TestExecutionIdentity:
             code_hash="sha256:x",
             config_hash="sha256:y",
             env_fingerprint="sha256:z",
+            lockfile_hash="sha256:lock",
             platform_id="linux-x86_64-cpu",
             cas_id="sha256:final",
         )
@@ -83,9 +91,18 @@ class TestExecutionIdentity:
             code_hash="sha256:code",
             config_hash="sha256:config",
             env_fingerprint="sha256:env",
+            lockfile_hash="sha256:lockfile",
             platform_id="darwin-arm64-cpu",
             cas_id="sha256:final",
         )
+
+        # Roundtrip
+        data = identity.to_dict()
+        restored = ExecutionIdentity.from_dict(data)
+
+        assert restored.stage_name == identity.stage_name
+        assert restored.stage_version == identity.stage_version
+        assert restored.lockfile_hash == identity.lockfile_hash
 
         # Roundtrip
         data = identity.to_dict()
@@ -109,12 +126,14 @@ class TestArtifactMetadata:
             code_hash="sha256:code",
             config_hash="sha256:config",
             env_fingerprint="sha256:env",
+            lockfile_hash="sha256:lockfile",
             platform_id="darwin-arm64-mps",
             created_at="2026-03-18T12:00:00Z",
         )
 
         assert metadata.artifact_id == "sha256:artifact123"
         assert metadata.stage == "depth_estimation"
+        assert metadata.lockfile_hash == "sha256:lockfile"
         assert metadata.version == CAS_IDENTITY_VERSION
 
     def test_to_dict_roundtrip(self):
@@ -126,6 +145,7 @@ class TestArtifactMetadata:
             code_hash="sha256:code",
             config_hash="sha256:cfg",
             env_fingerprint="sha256:env",
+            lockfile_hash="sha256:lockfile",
             platform_id="linux-x86_64-cuda",
             created_at="2026-03-18T12:00:00Z",
             execution_identity="sha256:exec123",
@@ -136,6 +156,7 @@ class TestArtifactMetadata:
 
         assert restored.artifact_id == metadata.artifact_id
         assert restored.inputs == metadata.inputs
+        assert restored.lockfile_hash == metadata.lockfile_hash
         assert restored.execution_identity == metadata.execution_identity
 
 
@@ -334,6 +355,7 @@ class TestComputeCasId:
                     input_ids=["sha256:input1"],
                     config={"key": "value"},
                     stage_version="2.0.0",
+                    lockfile_hash="sha256:test_lockfile",
                 )
 
                 assert identity.stage_name == "my_stage"
@@ -341,6 +363,7 @@ class TestComputeCasId:
                 assert identity.input_ids == ("sha256:input1",)
                 assert identity.code_hash == "sha256:test_code"
                 assert identity.env_fingerprint == "sha256:test_env"
+                assert identity.lockfile_hash == "sha256:test_lockfile"
                 assert identity.cas_id.startswith("sha256:")
 
 
@@ -359,6 +382,7 @@ class TestShouldExecute:
             code_hash="sha256:x",
             config_hash="sha256:y",
             env_fingerprint="sha256:z",
+            lockfile_hash="sha256:lock",
             platform_id="linux-x86_64-cpu",
             cas_id="sha256:notfound",
         )
@@ -378,6 +402,7 @@ class TestShouldExecute:
             code_hash="sha256:x",
             config_hash="sha256:y",
             env_fingerprint="sha256:z",
+            lockfile_hash="sha256:lock",
             platform_id="linux-x86_64-cpu",
             cas_id="sha256:found",
         )
@@ -386,7 +411,7 @@ class TestShouldExecute:
 
 
 class TestIsCompatible:
-    """Tests for is_compatible function."""
+    """Tests for is_compatible function (Blocker #4: Strict by default)."""
 
     def test_compatible_same_platform_same_env(self):
         """Test compatibility with same platform and env."""
@@ -400,6 +425,7 @@ class TestIsCompatible:
             code_hash="sha256:c",
             config_hash="sha256:cfg",
             env_fingerprint="sha256:matching_env",
+            lockfile_hash="sha256:matching_lock",
             platform_id=current_platform.canonical_target,  # Same as current
             created_at="2026-03-18T12:00:00Z",
         )
@@ -413,7 +439,7 @@ class TestIsCompatible:
         assert result is True
 
     def test_incompatible_different_platform(self):
-        """Test incompatibility with different platform."""
+        """Test incompatibility with different platform (strict mode default)."""
         metadata = ArtifactMetadata(
             artifact_id="sha256:x",
             stage="test",
@@ -421,6 +447,7 @@ class TestIsCompatible:
             code_hash="sha256:c",
             config_hash="sha256:cfg",
             env_fingerprint="sha256:env",
+            lockfile_hash="sha256:lock",
             platform_id="linux-x86_64-cuda",
             created_at="2026-03-18T12:00:00Z",
         )
@@ -433,10 +460,13 @@ class TestIsCompatible:
             current_env_fingerprint="sha256:env",
         )
 
+        # Strict mode (default): different platform should be incompatible
         assert result is False
 
     def test_incompatible_different_env(self):
-        """Test incompatibility with different environment."""
+        """Test incompatibility with different environment (strict mode)."""
+        current_platform = PlatformMatrix.detect(accel="cpu")
+
         metadata = ArtifactMetadata(
             artifact_id="sha256:x",
             stage="test",
@@ -444,22 +474,22 @@ class TestIsCompatible:
             code_hash="sha256:c",
             config_hash="sha256:cfg",
             env_fingerprint="sha256:old_env",
-            platform_id="darwin-arm64-cpu",
+            lockfile_hash="sha256:lock",
+            platform_id=current_platform.canonical_target,
             created_at="2026-03-18T12:00:00Z",
         )
 
-        platform = PlatformMatrix.detect(accel="cpu")
-
         result = is_compatible(
             metadata,
-            current_platform=platform,
+            current_platform=current_platform,
             current_env_fingerprint="sha256:new_env",
         )
 
+        # Strict mode: different env should be incompatible
         assert result is False
 
-    def test_cpu_fallback_allowed(self):
-        """Test CPU fallback mode allows cross-platform reuse."""
+    def test_cross_platform_cpu_fallback_disabled_by_default(self):
+        """Test cross-platform CPU fallback is DISABLED by default (Blocker #4)."""
         metadata = ArtifactMetadata(
             artifact_id="sha256:x",
             stage="test",
@@ -467,24 +497,54 @@ class TestIsCompatible:
             code_hash="sha256:c",
             config_hash="sha256:cfg",
             env_fingerprint="sha256:env",
+            lockfile_hash="sha256:lock",
+            platform_id="linux-x86_64-cpu",  # Different CPU platform
+            created_at="2026-03-18T12:00:00Z",
+        )
+
+        platform = PlatformMatrix.detect(accel="cpu")
+
+        # Default behavior: cross-platform is NOT allowed
+        result = is_compatible(
+            metadata,
+            current_platform=platform,
+            current_env_fingerprint="sha256:env",
+        )
+
+        # Should be False because platform doesn't match exactly
+        # (unless current platform happens to be linux-x86_64-cpu)
+        if platform.canonical_target != "linux-x86_64-cpu":
+            assert result is False
+
+    def test_cross_platform_explicit_opt_in(self):
+        """Test cross-platform reuse requires explicit opt-in."""
+        metadata = ArtifactMetadata(
+            artifact_id="sha256:x",
+            stage="test",
+            inputs=(),
+            code_hash="sha256:c",
+            config_hash="sha256:cfg",
+            env_fingerprint="sha256:env",
+            lockfile_hash="sha256:lock",
             platform_id="linux-x86_64-cpu",
             created_at="2026-03-18T12:00:00Z",
         )
 
         platform = PlatformMatrix.detect(accel="cpu")
 
+        # Explicit opt-in for cross-platform
         result = is_compatible(
             metadata,
             current_platform=platform,
             current_env_fingerprint="sha256:env",
-            allow_cpu_fallback=True,
+            allow_cross_platform=True,  # Explicit opt-in
         )
 
-        # Both are CPU platforms, should allow
+        # Both are CPU platforms, should allow with explicit opt-in
         assert result is True
 
-    def test_cpu_fallback_not_allowed_for_gpu(self):
-        """Test CPU fallback does not allow GPU artifacts."""
+    def test_cross_platform_not_allowed_for_gpu(self):
+        """Test cross-platform does not allow GPU artifacts even with opt-in."""
         metadata = ArtifactMetadata(
             artifact_id="sha256:x",
             stage="test",
@@ -492,6 +552,7 @@ class TestIsCompatible:
             code_hash="sha256:c",
             config_hash="sha256:cfg",
             env_fingerprint="sha256:env",
+            lockfile_hash="sha256:lock",
             platform_id="linux-x86_64-cuda",  # GPU platform
             created_at="2026-03-18T12:00:00Z",
         )
@@ -502,7 +563,7 @@ class TestIsCompatible:
             metadata,
             current_platform=platform,
             current_env_fingerprint="sha256:env",
-            allow_cpu_fallback=True,
+            allow_cross_platform=True,  # Even with opt-in
         )
 
         # CUDA is not CPU, should not allow
@@ -513,7 +574,7 @@ class TestCreateArtifactMetadata:
     """Tests for create_artifact_metadata function."""
 
     def test_creates_complete_metadata(self):
-        """Test creates complete artifact metadata."""
+        """Test creates complete artifact metadata with lockfile_hash."""
         identity = ExecutionIdentity(
             stage_name="depth_estimation",
             stage_version="1.0.0",
@@ -521,6 +582,7 @@ class TestCreateArtifactMetadata:
             code_hash="sha256:code",
             config_hash="sha256:config",
             env_fingerprint="sha256:env",
+            lockfile_hash="sha256:lockfile",
             platform_id="darwin-arm64-mps",
             cas_id="sha256:exec123",
         )
@@ -536,9 +598,117 @@ class TestCreateArtifactMetadata:
         assert metadata.code_hash == "sha256:code"
         assert metadata.config_hash == "sha256:config"
         assert metadata.env_fingerprint == "sha256:env"
+        assert metadata.lockfile_hash == "sha256:lockfile"
         assert metadata.platform_id == "darwin-arm64-mps"
         assert metadata.execution_identity == "sha256:exec123"
         assert metadata.created_at  # Should have timestamp
+
+
+class TestComputeStageCodeHash:
+    """Tests for compute_stage_code_hash function (Blocker #3: Strict code hash)."""
+
+    def test_stage_code_hash_deterministic(self):
+        """Test stage code hash is deterministic."""
+
+        class TestStage:
+            def execute(self, inputs, config):
+                return inputs * 2
+
+        hash1 = compute_stage_code_hash(TestStage())
+        hash2 = compute_stage_code_hash(TestStage())
+
+        assert hash1 == hash2
+        assert hash1.startswith("sha256:")
+
+    def test_stage_code_hash_changes_with_code(self):
+        """Test stage code hash changes when code changes."""
+
+        class StageV1:
+            def execute(self, inputs, config):
+                return inputs * 2
+
+        class StageV2:
+            def execute(self, inputs, config):
+                return inputs * 3  # Different implementation
+
+        hash1 = compute_stage_code_hash(StageV1())
+        hash2 = compute_stage_code_hash(StageV2())
+
+        # Different implementations should have different hashes
+        assert hash1 != hash2
+
+    def test_stage_code_hash_function(self):
+        """Test stage code hash works with functions."""
+
+        def my_stage(inputs, config):
+            return inputs * 2
+
+        hash1 = compute_stage_code_hash(my_stage)
+        assert hash1.startswith("sha256:")
+
+
+class TestLockfileHash:
+    """Tests for lockfile hash integration (Blocker #2)."""
+
+    def test_lockfile_hash_included_in_cas_id(self, tmp_path):
+        """Test lockfile hash is included in CAS ID computation."""
+        # Create test lockfile
+        lockfile = tmp_path / "requirements.txt"
+        lockfile.write_text("torch==2.2.2\nnumpy==1.24.0\n")
+
+        with patch(
+            "transformation_portal.core.execution_identity.compute_code_hash"
+        ) as mock_code:
+            with patch(
+                "transformation_portal.core.execution_identity.get_env_fingerprint"
+            ) as mock_env:
+                mock_code.return_value = "sha256:fixed_code"
+                mock_env.return_value = "sha256:fixed_env"
+
+                id1 = compute_cas_id(
+                    stage_name="test",
+                    input_ids=["sha256:abc"],
+                    config={},
+                    lockfile_path=str(lockfile),
+                )
+
+                assert id1.lockfile_hash.startswith("sha256:")
+                assert id1.lockfile_hash != "sha256:unknown-no-lockfile"
+
+    def test_different_lockfile_different_cas_id(self, tmp_path):
+        """Test different lockfile produces different CAS ID."""
+        lockfile1 = tmp_path / "requirements1.txt"
+        lockfile1.write_text("torch==2.2.2\n")
+
+        lockfile2 = tmp_path / "requirements2.txt"
+        lockfile2.write_text("torch==2.3.0\n")  # Different version
+
+        with patch(
+            "transformation_portal.core.execution_identity.compute_code_hash"
+        ) as mock_code:
+            with patch(
+                "transformation_portal.core.execution_identity.get_env_fingerprint"
+            ) as mock_env:
+                mock_code.return_value = "sha256:fixed_code"
+                mock_env.return_value = "sha256:fixed_env"
+
+                id1 = compute_cas_id(
+                    stage_name="test",
+                    input_ids=[],
+                    config={},
+                    lockfile_path=str(lockfile1),
+                )
+
+                id2 = compute_cas_id(
+                    stage_name="test",
+                    input_ids=[],
+                    config={},
+                    lockfile_path=str(lockfile2),
+                )
+
+                # Different lockfiles should produce different CAS IDs
+                assert id1.lockfile_hash != id2.lockfile_hash
+                assert id1.cas_id != id2.cas_id
 
 
 class TestVerifyDeterminism:

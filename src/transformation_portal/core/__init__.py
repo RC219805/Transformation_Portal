@@ -30,11 +30,14 @@ Version: 1.1.0 (Phase 2 Deterministic Execution Layer)
 from .config import ConfigSchema, DeviceConfig, PathsConfig, PerformanceConfig, PresetRegistry, load_preset, validate_config
 from .device import DeviceCapabilities, DeviceDetector, DeviceType, MemoryManager, PerformanceProfiler
 from .execution_identity import (
+    ALLOW_CROSS_PLATFORM,
     ArtifactMetadata,
+    CAS_IDENTITY_VERSION,
     ExecutionIdentity,
     compute_cas_id,
     compute_code_hash,
     compute_config_hash,
+    compute_stage_code_hash,
     create_artifact_metadata,
     is_compatible,
     should_execute,
@@ -100,11 +103,14 @@ __all__ = [
     "get_pip_version",
     "get_platform_fingerprint",
     # Execution Identity (Phase 2)
+    "ALLOW_CROSS_PLATFORM",
     "ArtifactMetadata",
+    "CAS_IDENTITY_VERSION",
     "ExecutionIdentity",
     "compute_cas_id",
     "compute_code_hash",
     "compute_config_hash",
+    "compute_stage_code_hash",
     "create_artifact_metadata",
     "is_compatible",
     "should_execute",

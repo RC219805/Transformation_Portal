@@ -3,7 +3,7 @@
 This module implements Phase 2 of the Deterministic Execution Layer (ADR-030/032).
 Every stage execution becomes:
 
-    Stage Execution = f(inputs, code, config, environment)
+    Stage Execution = f(inputs, code, config, environment, lockfile)
 
 The CAS identity materializes this function into a single content-addressable hash.
 
@@ -13,7 +13,8 @@ CAS_ID = sha256(
     code_hash +
     config_hash +
     env_fingerprint +
-    platform_id
+    platform_id +
+    lockfile_hash  # ADR-032: Required for dependency graph integrity
 )
 
 Design Principles:
@@ -21,6 +22,7 @@ Design Principles:
     - Platform-aware: Different platforms produce different IDs
     - Code-aware: Code changes invalidate cache
     - Config-aware: Config changes invalidate cache
+    - Dependency-aware: Lockfile changes invalidate cache (ADR-032)
 
 Example:
     >>> from transformation_portal.core.execution_identity import compute_cas_id
@@ -28,6 +30,7 @@ Example:
     ...     stage_name="depth_estimation",
     ...     input_ids=["sha256:abc123..."],
     ...     config={"model": "DA3-Large"},
+    ...     lockfile_path="requirements/ml-core-darwin.txt",
     ... )
     >>> print(cas_id)
     'sha256:def456...'
@@ -36,16 +39,18 @@ Example:
 from __future__ import annotations
 
 import hashlib
+import inspect
 import logging
 import subprocess
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import Any, Callable, Optional, Union
 
 from transformation_portal.core.platform_matrix import (
     CURRENT_PLATFORM,
     PlatformMatrix,
+    compute_lockfile_hash,
     get_env_fingerprint,
 )
 from transformation_portal.determinism.jcs import dumpb as jcs_dumpb
@@ -53,7 +58,7 @@ from transformation_portal.determinism.jcs import dumpb as jcs_dumpb
 logger = logging.getLogger(__name__)
 
 # Version tag for CAS identity schema evolution
-CAS_IDENTITY_VERSION = "adr-032-v1"
+CAS_IDENTITY_VERSION = "adr-032-v2"  # v2: Added lockfile_hash
 
 
 @dataclass(frozen=True)
@@ -69,6 +74,7 @@ class ExecutionIdentity:
         code_hash: SHA-256 of relevant source code
         config_hash: SHA-256 of canonicalized configuration
         env_fingerprint: Environment fingerprint (pip freeze hash)
+        lockfile_hash: SHA-256 of requirements lockfile (ADR-032)
         platform_id: Canonical platform target (e.g., darwin-arm64-mps)
         cas_id: Final CAS identity hash
         schema_version: Schema version for future compatibility
@@ -80,6 +86,7 @@ class ExecutionIdentity:
     code_hash: str
     config_hash: str
     env_fingerprint: str
+    lockfile_hash: str  # ADR-032: Required for dependency graph integrity
     platform_id: str
     cas_id: str
     schema_version: str = CAS_IDENTITY_VERSION
@@ -93,6 +100,7 @@ class ExecutionIdentity:
             "code_hash": self.code_hash,
             "config_hash": self.config_hash,
             "env_fingerprint": self.env_fingerprint,
+            "lockfile_hash": self.lockfile_hash,
             "platform_id": self.platform_id,
             "cas_id": self.cas_id,
             "schema_version": self.schema_version,
@@ -108,6 +116,7 @@ class ExecutionIdentity:
             code_hash=data["code_hash"],
             config_hash=data["config_hash"],
             env_fingerprint=data["env_fingerprint"],
+            lockfile_hash=data.get("lockfile_hash", "sha256:unknown"),
             platform_id=data["platform_id"],
             cas_id=data["cas_id"],
             schema_version=data.get("schema_version", CAS_IDENTITY_VERSION),
@@ -131,6 +140,7 @@ class ArtifactMetadata:
         code_hash: Code version at time of creation
         config_hash: Configuration hash at time of creation
         env_fingerprint: Environment fingerprint at creation
+        lockfile_hash: Lockfile hash at creation (ADR-032)
         platform_id: Platform that created the artifact
         created_at: ISO timestamp of creation
         version: Schema version tag
@@ -143,6 +153,7 @@ class ArtifactMetadata:
     code_hash: str
     config_hash: str
     env_fingerprint: str
+    lockfile_hash: str  # ADR-032: Required for dependency graph integrity
     platform_id: str
     created_at: str
     version: str = CAS_IDENTITY_VERSION
@@ -157,6 +168,7 @@ class ArtifactMetadata:
             "code_hash": self.code_hash,
             "config_hash": self.config_hash,
             "env_fingerprint": self.env_fingerprint,
+            "lockfile_hash": self.lockfile_hash,
             "platform_id": self.platform_id,
             "created_at": self.created_at,
             "version": self.version,
@@ -173,6 +185,7 @@ class ArtifactMetadata:
             code_hash=data["code_hash"],
             config_hash=data["config_hash"],
             env_fingerprint=data["env_fingerprint"],
+            lockfile_hash=data.get("lockfile_hash", "sha256:unknown"),
             platform_id=data["platform_id"],
             created_at=data["created_at"],
             version=data.get("version", CAS_IDENTITY_VERSION),
@@ -245,6 +258,77 @@ def compute_code_hash(
     return _compute_file_hash(paths)
 
 
+def compute_stage_code_hash(
+    stage: Any,
+    *,
+    include_dependencies: bool = True,
+) -> str:
+    """Compute deterministic hash of a stage's implementation code.
+
+    This provides a strict code hash for cache invalidation by hashing
+    the actual source code of the stage class/function.
+
+    Args:
+        stage: Stage object (class instance or callable)
+        include_dependencies: If True, include imported module dependencies
+
+    Returns:
+        SHA-256 hash in format "sha256:..."
+
+    Note:
+        This uses inspect.getsource() to get the actual source code,
+        ensuring that ANY change to the stage logic invalidates the cache.
+        This is stricter than git-based hashing which might miss runtime
+        patches or monkey-patching.
+
+    Example:
+        >>> class MyStage:
+        ...     def execute(self, inputs, config):
+        ...         return inputs * 2
+        >>>
+        >>> hash1 = compute_stage_code_hash(MyStage())
+        >>> # Modify the stage
+        >>> MyStage.execute = lambda self, i, c: i * 3
+        >>> hash2 = compute_stage_code_hash(MyStage())
+        >>> assert hash1 != hash2  # Code changed, hash changed
+    """
+    digest = hashlib.sha256()
+
+    # Get the class or function to inspect
+    target = type(stage) if hasattr(stage, "__class__") and not callable(stage) else stage
+
+    try:
+        # Get source code of the main target
+        source = inspect.getsource(target)
+        digest.update(source.encode("utf-8"))
+
+        # Include method sources for class-based stages
+        if inspect.isclass(target):
+            for name, method in inspect.getmembers(target, predicate=inspect.isfunction):
+                if not name.startswith("_") or name in ("__init__", "__call__"):
+                    try:
+                        method_source = inspect.getsource(method)
+                        digest.update(f"{name}:{method_source}".encode("utf-8"))
+                    except (OSError, TypeError):
+                        pass
+
+        # Optionally include imported dependencies
+        if include_dependencies:
+            module = inspect.getmodule(target)
+            if module and hasattr(module, "__file__") and module.__file__:
+                # Hash the module file path for dependency tracking
+                digest.update(f"module:{module.__file__}".encode("utf-8"))
+
+    except (OSError, TypeError) as e:
+        # inspect.getsource fails for built-in/C extension types
+        # Fall back to repr + type name
+        logger.debug("Cannot get source for %s: %s, using repr fallback", target, e)
+        fallback = f"{type(target).__module__}.{type(target).__qualname__}"
+        digest.update(fallback.encode("utf-8"))
+
+    return f"sha256:{digest.hexdigest()}"
+
+
 def _compute_file_hash(paths: list[Union[str, Path]]) -> str:
     """Compute hash of file contents (fallback when git unavailable)."""
     digest = hashlib.sha256()
@@ -306,6 +390,8 @@ def compute_cas_id(
     stage_version: str = "1.0.0",
     code_hash: Optional[str] = None,
     env_fingerprint: Optional[str] = None,
+    lockfile_hash: Optional[str] = None,
+    lockfile_path: Optional[str] = None,
     platform: Optional[PlatformMatrix] = None,
 ) -> ExecutionIdentity:
     """Compute unified CAS identity for stage execution.
@@ -321,16 +407,24 @@ def compute_cas_id(
         stage_version: Semantic version of stage implementation
         code_hash: Pre-computed code hash (if None, computed automatically)
         env_fingerprint: Pre-computed env fingerprint (if None, computed automatically)
+        lockfile_hash: Pre-computed lockfile hash (ADR-032)
+        lockfile_path: Path to lockfile (used if lockfile_hash is None)
         platform: Platform matrix (if None, uses CURRENT_PLATFORM)
 
     Returns:
         ExecutionIdentity with all determinism factors and final CAS ID
+
+    Note:
+        ADR-032 requires lockfile_hash for dependency graph integrity.
+        If neither lockfile_hash nor lockfile_path is provided, a placeholder
+        hash is used. This should be avoided in production.
 
     Example:
         >>> identity = compute_cas_id(
         ...     stage_name="depth_estimation",
         ...     input_ids=["sha256:abc123"],
         ...     config={"model": "DA3-Large", "quantization": "none"},
+        ...     lockfile_path="requirements/ml-core-darwin.txt",
         ... )
         >>> if artifact_store.exists(identity.cas_id):
         ...     return artifact_store.load(identity.cas_id)  # Cache hit
@@ -345,6 +439,19 @@ def compute_cas_id(
     if env_fingerprint is None:
         env_fingerprint = get_env_fingerprint()
 
+    # Compute lockfile hash (ADR-032: Required for dependency graph integrity)
+    if lockfile_hash is None:
+        if lockfile_path is not None:
+            lockfile_hash = compute_lockfile_hash(lockfile_path)
+        else:
+            # Default lockfile path based on platform
+            lockfile_hash = "sha256:unknown-no-lockfile"
+            logger.debug(
+                "No lockfile_hash or lockfile_path provided for %s. "
+                "Using placeholder. This may cause cache invalidation issues.",
+                stage_name,
+            )
+
     if platform is None:
         platform = CURRENT_PLATFORM
 
@@ -353,7 +460,7 @@ def compute_cas_id(
     # Compute config hash
     config_hash = compute_config_hash(config)
 
-    # Build CAS identity payload
+    # Build CAS identity payload (ADR-032 v2: includes lockfile_hash)
     identity_payload = {
         "stage": stage_name,
         "stage_version": stage_version,
@@ -361,6 +468,7 @@ def compute_cas_id(
         "code": code_hash,
         "config": config_hash,
         "env": env_fingerprint,
+        "lockfile": lockfile_hash,  # ADR-032: Required for dependency graph integrity
         "platform": platform_id,
         "schema_version": CAS_IDENTITY_VERSION,
     }
@@ -376,6 +484,7 @@ def compute_cas_id(
         code_hash=code_hash,
         config_hash=config_hash,
         env_fingerprint=env_fingerprint,
+        lockfile_hash=lockfile_hash,
         platform_id=platform_id,
         cas_id=cas_id,
         schema_version=CAS_IDENTITY_VERSION,
@@ -408,31 +517,68 @@ def should_execute(
     return not artifact_store.has_object(identity.cas_id)
 
 
+# Environment variable for cross-platform artifact reuse (default: disabled)
+import os
+
+ALLOW_CROSS_PLATFORM = os.environ.get("TP_ALLOW_CROSS_PLATFORM", "false").lower() in (
+    "true",
+    "1",
+    "yes",
+)
+
+
 def is_compatible(
     artifact_metadata: ArtifactMetadata,
     current_platform: Optional[PlatformMatrix] = None,
     current_env_fingerprint: Optional[str] = None,
+    current_lockfile_hash: Optional[str] = None,
     *,
-    allow_cpu_fallback: bool = False,
+    strict: bool = True,
+    allow_cross_platform: Optional[bool] = None,
 ) -> bool:
     """Check if an artifact is compatible with current platform/environment.
 
-    This guard prevents invalid reuse across incompatible platforms.
+    IMPORTANT: Platform compatibility is STRICT by default (Blocker #4).
+    Cross-platform artifact reuse is DISABLED unless explicitly enabled.
+
+    This guard prevents invalid reuse across incompatible platforms which
+    can cause silent numerical output corruption.
 
     Args:
         artifact_metadata: Metadata of the artifact to validate
         current_platform: Current platform (default: CURRENT_PLATFORM)
         current_env_fingerprint: Current env fingerprint (default: computed)
-        allow_cpu_fallback: If True, allow CPU artifacts on any platform
+        current_lockfile_hash: Current lockfile hash (default: None)
+        strict: If True (default), require exact platform + env + lockfile match
+        allow_cross_platform: If True, allow cross-platform reuse for CPU artifacts.
+                              If None, uses TP_ALLOW_CROSS_PLATFORM env var (default: false)
 
     Returns:
         True if artifact is safe to reuse, False otherwise
 
-    Note:
-        When allow_cpu_fallback=True, artifacts created on any CPU platform
-        can be reused on any other CPU platform. This is useful for artifacts
-        that are platform-independent (e.g., JSON configs, model weights).
+    Security Note:
+        Cross-platform artifact reuse (e.g., darwin-arm64-mps -> linux-x86_64-cpu)
+        can produce INVALID NUMERICAL OUTPUT even for CPU-only operations.
+        This is because:
+        - Different floating-point implementations across architectures
+        - Different library versions (BLAS, OpenMP, etc.)
+        - Different memory layouts and alignment
+
+        NEVER enable cross-platform reuse for numerical artifacts in production.
+
+    Example:
+        >>> # Strict mode (default) - exact match required
+        >>> is_compatible(artifact, current_platform)
+        False  # Different platform
+
+        >>> # Explicit cross-platform opt-in (DANGEROUS)
+        >>> is_compatible(artifact, allow_cross_platform=True)
+        True   # CPU fallback allowed
     """
+    # Resolve allow_cross_platform from env var if not specified
+    if allow_cross_platform is None:
+        allow_cross_platform = ALLOW_CROSS_PLATFORM
+
     if current_platform is None:
         current_platform = CURRENT_PLATFORM
 
@@ -441,41 +587,62 @@ def is_compatible(
 
     current_platform_id = current_platform.canonical_target if current_platform else ""
 
-    # Strict platform match
-    if artifact_metadata.platform_id == current_platform_id:
-        # Also check env fingerprint for full determinism
-        if artifact_metadata.env_fingerprint == current_env_fingerprint:
-            return True
+    # Rule 1: Platform must match exactly (unless cross-platform explicitly allowed)
+    platform_match = artifact_metadata.platform_id == current_platform_id
+
+    if not platform_match:
+        if allow_cross_platform:
+            # Only allow CPU-to-CPU cross-platform reuse
+            artifact_is_cpu = artifact_metadata.platform_id.endswith("-cpu")
+            current_is_cpu = current_platform_id.endswith("-cpu")
+
+            if artifact_is_cpu and current_is_cpu:
+                logger.warning(
+                    "Cross-platform artifact reuse enabled (DANGEROUS): %s -> %s. "
+                    "This may produce invalid numerical output.",
+                    artifact_metadata.platform_id,
+                    current_platform_id,
+                )
+                # Continue to check other constraints
+            else:
+                logger.debug(
+                    "Cross-platform reuse rejected: %s -> %s (GPU artifacts cannot cross platforms)",
+                    artifact_metadata.platform_id,
+                    current_platform_id,
+                )
+                return False
         else:
             logger.debug(
-                "Artifact %s has different env fingerprint: %s != %s",
+                "Artifact %s incompatible: platform %s != %s (strict mode)",
+                artifact_metadata.artifact_id[:8],
+                artifact_metadata.platform_id,
+                current_platform_id,
+            )
+            return False
+
+    # Rule 2: Environment fingerprint must match (in strict mode)
+    if strict:
+        if artifact_metadata.env_fingerprint != current_env_fingerprint:
+            logger.debug(
+                "Artifact %s incompatible: env fingerprint %s != %s",
                 artifact_metadata.artifact_id[:8],
                 artifact_metadata.env_fingerprint[:16],
                 current_env_fingerprint[:16],
             )
             return False
 
-    # Optional CPU fallback mode
-    if allow_cpu_fallback:
-        # Check if both are CPU platforms (no GPU acceleration)
-        artifact_is_cpu = artifact_metadata.platform_id.endswith("-cpu")
-        current_is_cpu = current_platform_id.endswith("-cpu")
-
-        if artifact_is_cpu and current_is_cpu:
+    # Rule 3: Lockfile hash must match if provided (ADR-032)
+    if strict and current_lockfile_hash is not None:
+        if artifact_metadata.lockfile_hash != current_lockfile_hash:
             logger.debug(
-                "CPU fallback allowed: %s -> %s",
-                artifact_metadata.platform_id,
-                current_platform_id,
+                "Artifact %s incompatible: lockfile hash %s != %s",
+                artifact_metadata.artifact_id[:8],
+                artifact_metadata.lockfile_hash[:16] if artifact_metadata.lockfile_hash else "none",
+                current_lockfile_hash[:16],
             )
-            return True
+            return False
 
-    logger.debug(
-        "Artifact %s incompatible: platform %s != %s",
-        artifact_metadata.artifact_id[:8],
-        artifact_metadata.platform_id,
-        current_platform_id,
-    )
-    return False
+    return True
 
 
 def create_artifact_metadata(
@@ -501,6 +668,7 @@ def create_artifact_metadata(
         code_hash=execution_identity.code_hash,
         config_hash=execution_identity.config_hash,
         env_fingerprint=execution_identity.env_fingerprint,
+        lockfile_hash=execution_identity.lockfile_hash,
         platform_id=execution_identity.platform_id,
         created_at=datetime.now(timezone.utc).isoformat(),
         version=execution_identity.schema_version,
