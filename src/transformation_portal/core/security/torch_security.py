@@ -113,7 +113,7 @@ def check_torch_security_compliance() -> dict[str, Any]:
             "recommendation": "PyTorch not installed",
         }
 
-    torch_version = torch.__version__.split("+")[0]  # Strip +cpu/+cu* suffix
+    torch_version = torch.__version__.split("+")[0]  # Strip build suffix (+cpu, +cu118, etc.)
 
     try:
         version = Version(torch_version)

@@ -205,7 +205,7 @@ class PlatformMatrix:
                     "to CVE-2025-32434 (torch.load RCE). Runtime mitigation required."
                 ),
                 "mitigation": base_mitigation,
-                "secure": False,  # No secure torch wheels available for this platform
+                "secure": False,  # macOS Intel has no torch>=2.6.0 wheels (dropped platform support)
             }
         else:
             return {

@@ -19,7 +19,7 @@
 # - torch < 2.6.0 has a critical RCE vulnerability via torch.load()
 # - MITIGATION: All torch.load() calls MUST use weights_only=True
 # - This preserves CAS determinism while mitigating the vulnerability
-# - See: src/transformation_portal/core/torch_security.py for safe loading
+# - See: src/transformation_portal/core/security/torch_security.py for safe loading
 #
 # See: requirements/README.md for layering rationale.
 
