@@ -47,6 +47,24 @@
 #   1   Invalid arguments or missing prerequisites
 #   2   Installation failure
 
+# --- Bash version auto-upgrade ---
+# macOS ships with Bash 3.2 by default. This script requires Bash 4.3+
+# for nameref support. On macOS, install newer bash with: brew install bash
+# The script will auto-exec to the Homebrew-installed bash if available.
+if [[ "${BASH_VERSINFO[0]}" -lt 4 ]] || { [[ "${BASH_VERSINFO[0]}" -eq 4 ]] && [[ "${BASH_VERSINFO[1]}" -lt 3 ]]; }; then
+    # Try to find a newer bash
+    if [[ -x /usr/local/bin/bash ]]; then
+        exec /usr/local/bin/bash "$0" "$@"
+    elif [[ -x /opt/homebrew/bin/bash ]]; then
+        exec /opt/homebrew/bin/bash "$0" "$@"
+    else
+        echo "[ERROR] Bash 4.3+ is required (found ${BASH_VERSION})" >&2
+        echo "[ERROR] On macOS, install with: brew install bash" >&2
+        echo "[ERROR] Then run: /usr/local/bin/bash $0 $*" >&2
+        exit 1
+    fi
+fi
+
 set -euo pipefail
 
 # Script directory for relative path resolution
@@ -147,8 +165,11 @@ log_verbose() {
 
 check_prerequisites() {
     # Check bash version (need 4.3+ for nameref)
+    # Note: This check is redundant due to auto-exec at script start,
+    # but kept for clarity and explicit error messages.
     if [[ "${BASH_VERSINFO[0]}" -lt 4 ]] || { [[ "${BASH_VERSINFO[0]}" -eq 4 ]] && [[ "${BASH_VERSINFO[1]}" -lt 3 ]]; }; then
         log_error "Bash 4.3+ is required (found ${BASH_VERSION})"
+        log_error "On macOS, install with: brew install bash"
         exit 1
     fi
 
@@ -198,22 +219,82 @@ build_pip_cmd() {
     fi
 }
 
+# Detect current platform and return platform-specific lockfile
+# This is critical for deterministic pip-compile resolution (Issue 1 fix)
+detect_platform_lockfile() {
+    local os_type
+    os_type="$(uname -s)"
+    
+    case "${os_type}" in
+        Darwin)
+            echo "ml-core-darwin.txt"
+            ;;
+        Linux)
+            echo "ml-core-linux.txt"
+            ;;
+        *)
+            log_error "Unsupported platform: ${os_type}"
+            exit 1
+            ;;
+    esac
+}
+
+# Get platform identity string for CAS fingerprinting
+get_platform_id() {
+    local os_type arch accel
+    os_type="$(uname -s | tr '[:upper:]' '[:lower:]')"
+    arch="$(uname -m)"
+    accel="${1:-cpu}"  # Default to CPU if not specified
+    
+    # Normalize architecture names
+    case "${arch}" in
+        aarch64) arch="arm64" ;;
+        amd64) arch="x86_64" ;;
+    esac
+    
+    echo "${os_type}-${arch}-${accel}"
+}
+
 install_profile() {
     local profile="$1"
     local pip_cmd=()
     build_pip_cmd pip_cmd
-
+    
+    # Get platform-specific lockfile for ml-core
+    local platform_lockfile
+    platform_lockfile="$(detect_platform_lockfile)"
+    local platform_id
+    
     case "${profile}" in
         core-cpu)
-            # CPU baseline: cross-platform, no GPU acceleration
-            check_lockfile "ml-cpu.txt"
-            log_info "Installing ML core layer + CPU baseline (darwin-*/linux-*-cpu)..."
-            log_verbose "Using PyTorch index: ${PYTORCH_INDEX}"
-            if [[ "${DRY_RUN}" == "true" ]]; then
-                log_info "[DRY-RUN] Would install: requirements/ml-cpu.txt"
-                log_info "[DRY-RUN] With extra-index-url: ${PYTORCH_INDEX}"
+            # CPU baseline: platform-specific lockfile selection
+            platform_id="$(get_platform_id cpu)"
+            
+            # Use platform-specific lockfile if available, fallback to generic
+            if [[ -f "${REQUIREMENTS_DIR}/${platform_lockfile}" ]]; then
+                check_lockfile "${platform_lockfile}"
+                log_info "Installing ML core layer + CPU baseline (${platform_id})..."
+                log_info "Using platform-specific lockfile: ${platform_lockfile}"
+                log_verbose "Using PyTorch index: ${PYTORCH_INDEX}"
+                if [[ "${DRY_RUN}" == "true" ]]; then
+                    log_info "[DRY-RUN] Would install: requirements/${platform_lockfile}"
+                    log_info "[DRY-RUN] With extra-index-url: ${PYTORCH_INDEX}"
+                else
+                    "${pip_cmd[@]}" --extra-index-url "${PYTORCH_INDEX}" -r "${REQUIREMENTS_DIR}/${platform_lockfile}"
+                fi
             else
-                "${pip_cmd[@]}" --extra-index-url "${PYTORCH_INDEX}" -r "${REQUIREMENTS_DIR}/ml-cpu.txt"
+                # Fallback to ml-cpu.txt
+                check_lockfile "ml-cpu.txt"
+                log_warn "Platform-specific lockfile not found: ${platform_lockfile}"
+                log_info "Falling back to ml-cpu.txt..."
+                log_info "Installing ML core layer + CPU baseline (${platform_id})..."
+                log_verbose "Using PyTorch index: ${PYTORCH_INDEX}"
+                if [[ "${DRY_RUN}" == "true" ]]; then
+                    log_info "[DRY-RUN] Would install: requirements/ml-cpu.txt"
+                    log_info "[DRY-RUN] With extra-index-url: ${PYTORCH_INDEX}"
+                else
+                    "${pip_cmd[@]}" --extra-index-url "${PYTORCH_INDEX}" -r "${REQUIREMENTS_DIR}/ml-cpu.txt"
+                fi
             fi
             ;;
         core-mps)
@@ -226,14 +307,33 @@ install_profile() {
                 log_error "core-mps profile requires Apple Silicon (arm64). Current arch: $(uname -m)"
                 exit 1
             fi
-            check_lockfile "ml-mps.txt"
-            log_info "Installing ML core layer + MPS acceleration (darwin-arm64-mps)..."
-            log_verbose "Using PyTorch index: ${PYTORCH_INDEX}"
-            if [[ "${DRY_RUN}" == "true" ]]; then
-                log_info "[DRY-RUN] Would install: requirements/ml-mps.txt"
-                log_info "[DRY-RUN] With extra-index-url: ${PYTORCH_INDEX}"
+            platform_id="$(get_platform_id mps)"
+            
+            # MPS always uses darwin lockfile
+            if [[ -f "${REQUIREMENTS_DIR}/ml-core-darwin.txt" ]]; then
+                check_lockfile "ml-core-darwin.txt"
+                log_info "Installing ML core layer + MPS acceleration (${platform_id})..."
+                log_info "Using platform-specific lockfile: ml-core-darwin.txt"
+                log_verbose "Using PyTorch index: ${PYTORCH_INDEX}"
+                if [[ "${DRY_RUN}" == "true" ]]; then
+                    log_info "[DRY-RUN] Would install: requirements/ml-core-darwin.txt"
+                    log_info "[DRY-RUN] With extra-index-url: ${PYTORCH_INDEX}"
+                else
+                    "${pip_cmd[@]}" --extra-index-url "${PYTORCH_INDEX}" -r "${REQUIREMENTS_DIR}/ml-core-darwin.txt"
+                fi
             else
-                "${pip_cmd[@]}" --extra-index-url "${PYTORCH_INDEX}" -r "${REQUIREMENTS_DIR}/ml-mps.txt"
+                # Fallback to ml-mps.txt
+                check_lockfile "ml-mps.txt"
+                log_warn "Platform-specific lockfile not found: ml-core-darwin.txt"
+                log_info "Falling back to ml-mps.txt..."
+                log_info "Installing ML core layer + MPS acceleration (${platform_id})..."
+                log_verbose "Using PyTorch index: ${PYTORCH_INDEX}"
+                if [[ "${DRY_RUN}" == "true" ]]; then
+                    log_info "[DRY-RUN] Would install: requirements/ml-mps.txt"
+                    log_info "[DRY-RUN] With extra-index-url: ${PYTORCH_INDEX}"
+                else
+                    "${pip_cmd[@]}" --extra-index-url "${PYTORCH_INDEX}" -r "${REQUIREMENTS_DIR}/ml-mps.txt"
+                fi
             fi
             ;;
         core-cuda)
@@ -242,15 +342,35 @@ install_profile() {
                 log_error "core-cuda profile requires Linux. Current platform: $(uname -s)"
                 exit 1
             fi
-            check_lockfile "ml-cuda.txt"
-            log_info "Installing ML core layer + CUDA acceleration (linux-x86_64-cuda)..."
-            log_info "Using PyTorch CUDA index: ${PYTORCH_INDEX}"
-            log_warn "Ensure NVIDIA drivers (compatible with CUDA 12.x) are installed on the host system."
-            if [[ "${DRY_RUN}" == "true" ]]; then
-                log_info "[DRY-RUN] Would install: requirements/ml-cuda.txt"
-                log_info "[DRY-RUN] With extra-index-url: ${PYTORCH_INDEX}"
+            platform_id="$(get_platform_id cuda)"
+            
+            # CUDA always uses linux lockfile + cuda packages
+            if [[ -f "${REQUIREMENTS_DIR}/ml-core-linux.txt" ]]; then
+                check_lockfile "ml-core-linux.txt"
+                log_info "Installing ML core layer + CUDA acceleration (${platform_id})..."
+                log_info "Using platform-specific lockfile: ml-core-linux.txt"
+                log_info "Using PyTorch CUDA index: ${PYTORCH_INDEX}"
+                log_warn "Ensure NVIDIA drivers (compatible with CUDA 12.x) are installed on the host system."
+                if [[ "${DRY_RUN}" == "true" ]]; then
+                    log_info "[DRY-RUN] Would install: requirements/ml-core-linux.txt"
+                    log_info "[DRY-RUN] With extra-index-url: ${PYTORCH_INDEX}"
+                else
+                    "${pip_cmd[@]}" --extra-index-url "${PYTORCH_INDEX}" -r "${REQUIREMENTS_DIR}/ml-core-linux.txt"
+                fi
             else
-                "${pip_cmd[@]}" --extra-index-url "${PYTORCH_INDEX}" -r "${REQUIREMENTS_DIR}/ml-cuda.txt"
+                # Fallback to ml-cuda.txt
+                check_lockfile "ml-cuda.txt"
+                log_warn "Platform-specific lockfile not found: ml-core-linux.txt"
+                log_info "Falling back to ml-cuda.txt..."
+                log_info "Installing ML core layer + CUDA acceleration (${platform_id})..."
+                log_info "Using PyTorch CUDA index: ${PYTORCH_INDEX}"
+                log_warn "Ensure NVIDIA drivers (compatible with CUDA 12.x) are installed on the host system."
+                if [[ "${DRY_RUN}" == "true" ]]; then
+                    log_info "[DRY-RUN] Would install: requirements/ml-cuda.txt"
+                    log_info "[DRY-RUN] With extra-index-url: ${PYTORCH_INDEX}"
+                else
+                    "${pip_cmd[@]}" --extra-index-url "${PYTORCH_INDEX}" -r "${REQUIREMENTS_DIR}/ml-cuda.txt"
+                fi
             fi
             ;;
         raw)

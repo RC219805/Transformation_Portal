@@ -249,23 +249,117 @@ def get_env_fingerprint() -> str:
         return "sha256:unknown-pip-unavailable"
 
 
-def get_platform_fingerprint() -> Dict[str, Any]:
-    """Get comprehensive platform fingerprint for artifact provenance.
+def get_pip_version() -> str:
+    """Get the current pip version.
 
     Returns:
-        Dictionary with platform matrix, environment fingerprint,
-        Python version, and other reproducibility-relevant metadata.
+        Pip version string, or "unknown" if unavailable.
+    """
+    try:
+        result = subprocess.run(
+            ["pip", "--version"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+        if result.returncode == 0:
+            # Output format: "pip X.Y.Z from ..."
+            parts = result.stdout.strip().split()
+            if len(parts) >= 2:
+                return parts[1]
+        return "unknown"
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        return "unknown"
+
+
+def compute_lockfile_hash(lockfile_path: str) -> str:
+    """Compute SHA256 hash of a lockfile.
+
+    Args:
+        lockfile_path: Path to the lockfile (e.g., "ml-core-darwin.txt")
+
+    Returns:
+        Hash in format "sha256:..." or "sha256:unknown" if file not found.
+    """
+    from pathlib import Path
+
+    try:
+        path = Path(lockfile_path)
+        if path.is_file():
+            content = path.read_bytes()
+            digest = hashlib.sha256(content).hexdigest()
+            return f"sha256:{digest}"
+        return "sha256:unknown-file-not-found"
+    except (OSError, IOError):
+        return "sha256:unknown-read-error"
+
+
+def get_platform_fingerprint(
+    accel: Optional[str] = None,
+    lockfile_path: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Get comprehensive platform fingerprint for artifact provenance.
+
+    This fingerprint includes all information needed for CAS identity:
+    - Platform matrix (os, arch, accel)
+    - Python version
+    - Pip version
+    - Environment fingerprint (pip freeze hash)
+    - Lockfile hash (if provided)
+
+    Args:
+        accel: Explicit acceleration profile ("cpu", "mps", "cuda").
+               If None, defaults to "cpu".
+        lockfile_path: Path to the lockfile used for installation.
+                       If provided, its hash is included in the fingerprint.
+
+    Returns:
+        Dictionary with complete platform identity for CAS.
     """
     import sys
 
-    matrix = PlatformMatrix.detect()
-    return {
+    matrix = PlatformMatrix.detect(accel)
+
+    fingerprint: Dict[str, Any] = {
+        "platform_id": matrix.canonical_target,
         "platform": matrix.to_dict(),
-        "canonical_target": matrix.canonical_target,
-        "env_fingerprint": get_env_fingerprint(),
         "python_version": sys.version,
         "python_implementation": platform.python_implementation(),
+        "pip_version": get_pip_version(),
+        "env_fingerprint": get_env_fingerprint(),
     }
+
+    if lockfile_path:
+        fingerprint["lockfile_hash"] = compute_lockfile_hash(lockfile_path)
+
+    return fingerprint
+
+
+def compute_cas_identity(
+    accel: Optional[str] = None,
+    lockfile_path: Optional[str] = None,
+) -> str:
+    """Compute a single CAS identity string from platform fingerprint.
+
+    This produces a deterministic hash that can be used as part of a CAS key
+    to ensure reproducibility. If the platform, environment, or lockfile changes,
+    the CAS identity will change, invalidating cached artifacts.
+
+    Args:
+        accel: Explicit acceleration profile ("cpu", "mps", "cuda").
+        lockfile_path: Path to the lockfile used for installation.
+
+    Returns:
+        CAS identity in format "sha256:..."
+    """
+    import json
+
+    fingerprint = get_platform_fingerprint(accel, lockfile_path)
+    # Sort keys for deterministic serialization
+    canonical = json.dumps(fingerprint, sort_keys=True, separators=(",", ":"))
+    digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+    return f"sha256:{digest}"
 
 
 # Pre-compute current platform at module load for fast access

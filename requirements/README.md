@@ -6,36 +6,39 @@ This directory contains the layered dependency management system for Transformat
 
 ```
 requirements/
-├── README.md              # This file
-├── Makefile               # Automation for compiling requirements
-├── base.in                # Core runtime dependencies (abstract)
-├── base.txt               # Core runtime dependencies (pinned)
-├── ml.in                  # ML umbrella (references ml-*.in layers)
-├── ml.txt                 # ML umbrella (pinned, backward compatible)
-├── ml-core.in             # ML core layer - cross-platform baseline
-├── ml-core.txt            # ML core layer (pinned, platform-aware PyTorch)
-├── ml-cpu.in              # ML CPU acceleration layer
-├── ml-cpu.txt             # ML CPU layer (pinned)
-├── ml-mps.in              # ML MPS acceleration layer (Apple Silicon)
-├── ml-mps.txt             # ML MPS layer (pinned)
-├── ml-cuda.in             # ML CUDA acceleration layer (Linux + NVIDIA)
-├── ml-cuda.txt            # ML CUDA layer (pinned)
-├── ml-raw.in              # ML RAW ingest layer - rawpy
-├── ml-raw.txt             # ML RAW ingest layer (pinned)
-├── ml-sam2.in             # ML SAM2 layer - Meta Segment Anything 2
-├── ml-sam2.txt            # ML SAM2 layer (scripted-only)
-├── ml-coreml.in           # ML CoreML layer - macOS only
-├── ml-coreml.txt          # ML CoreML layer (pinned)
-├── ml-research.in         # ML research/experimental layer
-├── ml-research.txt        # ML research layer (pinned)
-├── dev.in                 # Development tools (abstract)
-├── dev.txt                # Development tools (pinned)
-├── ci.in                  # CI/CD tools (abstract)
-├── ci.txt                 # CI/CD tools (pinned)
-├── tools-archive.in       # Archive reporting tool deps (abstract)
-├── tools-archive.txt      # Archive reporting tool deps (pinned)
-├── all.in                 # Aggregate of all dependencies
-└── all.txt                # Aggregate pinned requirements
+├── README.md               # This file
+├── Makefile                # Automation for compiling requirements
+├── base.in                 # Core runtime dependencies (abstract)
+├── base.txt                # Core runtime dependencies (pinned)
+├── ml.in                   # ML umbrella (references ml-*.in layers)
+├── ml.txt                  # ML umbrella (pinned, backward compatible)
+├── ml-core.in              # ML core layer - cross-platform (legacy)
+├── ml-core-darwin.in       # ML core layer - macOS (torch 2.2.2)
+├── ml-core-darwin.txt      # ML core layer - macOS (pinned)
+├── ml-core-linux.in        # ML core layer - Linux (torch 2.10.0)
+├── ml-core-linux.txt       # ML core layer - Linux (pinned)
+├── ml-cpu.in               # ML CPU acceleration layer
+├── ml-cpu.txt              # ML CPU layer (pinned)
+├── ml-mps.in               # ML MPS acceleration layer (Apple Silicon)
+├── ml-mps.txt              # ML MPS layer (pinned)
+├── ml-cuda.in              # ML CUDA acceleration layer (Linux + NVIDIA)
+├── ml-cuda.txt             # ML CUDA layer (pinned)
+├── ml-raw.in               # ML RAW ingest layer - rawpy
+├── ml-raw.txt              # ML RAW ingest layer (pinned)
+├── ml-sam2.in              # ML SAM2 layer - Meta Segment Anything 2
+├── ml-sam2.txt             # ML SAM2 layer (scripted-only)
+├── ml-coreml.in            # ML CoreML layer - macOS only
+├── ml-coreml.txt           # ML CoreML layer (pinned)
+├── ml-research.in          # ML research/experimental layer
+├── ml-research.txt         # ML research layer (pinned)
+├── dev.in                  # Development tools (abstract)
+├── dev.txt                 # Development tools (pinned)
+├── ci.in                   # CI/CD tools (abstract)
+├── ci.txt                  # CI/CD tools (pinned)
+├── tools-archive.in        # Archive reporting tool deps (abstract)
+├── tools-archive.txt       # Archive reporting tool deps (pinned)
+├── all.in                  # Aggregate of all dependencies
+└── all.txt                 # Aggregate pinned requirements
 ```
 
 ## 🎯 Design Principles
@@ -57,6 +60,23 @@ ML dependencies use an explicit platform matrix with three orthogonal axes:
 - `linux-x86_64-cpu` (Linux Intel/AMD, CPU baseline)
 - `linux-x86_64-cuda` (Linux Intel/AMD, NVIDIA GPU)
 - `linux-arm64-cpu` (Linux ARM)
+
+### Platform-Specific Lockfiles
+
+**IMPORTANT:** pip-compile cannot resolve multi-platform conditional dependencies in a single graph.
+
+To ensure deterministic builds, ml-core has platform-specific lockfiles:
+
+| Platform     | Lockfile              | Torch Version |
+|--------------|----------------------|---------------|
+| macOS (all)  | `ml-core-darwin.txt` | 2.2.2         |
+| Linux (all)  | `ml-core-linux.txt`  | 2.10.0        |
+
+**Torch Version Strategy (Option B - Performance Stratification):**
+- Different platforms use different torch versions optimized for that platform
+- Torch version is part of the CAS identity for reproducibility
+- macOS uses torch 2.2.2 (last version with x86_64 macOS wheels, stable MPS support)
+- Linux uses torch 2.10.0 (latest stable, CI baseline)
 
 **Important:** Acceleration is NEVER inferred from OS—it must be explicitly specified via profile.
 

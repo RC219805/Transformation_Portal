@@ -1,0 +1,47 @@
+# ML Core layer for Linux
+# Platform-specific lockfile for deterministic pip-compile resolution.
+#
+# This file is Linux-specific because pip-compile cannot resolve
+# conditional dependencies across platforms in a single graph.
+#
+# Run `make compile` in this directory to generate pinned ml-core-linux.txt
+#
+# PLATFORM TARGET: linux-* (Linux Intel/AMD/ARM)
+#   - linux-x86_64-cpu    (Linux Intel/AMD, CPU baseline)
+#   - linux-x86_64-cuda   (Linux Intel/AMD, NVIDIA GPU)
+#   - linux-arm64-cpu     (Linux ARM, CPU-only)
+#
+# Torch version: 2.10.0 (latest stable, CI baseline)
+#
+# See: requirements/README.md for layering rationale.
+
+# --- PyTorch (Linux, pinned) ---
+# torch 2.10.0 is the latest stable version, used as CI baseline.
+torch==2.10.0
+torchvision==0.25.0
+
+# Diffusion / HuggingFace ecosystem
+diffusers>=0.36.0,<1
+transformers>=4.57.0,<6
+huggingface-hub>=0.19.0,<2
+accelerate>=0.20.0,<2
+
+# Vision / segmentation helpers (cross-platform)
+controlnet-aux>=0.0.6,<1
+efficientsam==1.0.0          # Deterministic builds: stable EfficientSAM weights
+open-clip-torch==3.3.0       # Deterministic builds: SAM2/CLIP stack compatibility
+
+# Vision / image processing
+scikit-image>=0.21.0,<1
+
+# Configuration / diagnostics / color
+PyYAML>=6.0,<7               # Config parser: stable API
+colour-science>=0.4.2,<1     # Color math library: stable API
+psutil>=5.9.0,<7             # System utilities: OS compatibility layer
+memory-profiler>=0.61.0,<1   # Dev/profiling tool
+
+# RAG / embedding support
+sentence-transformers>=3.1.0,<6
+
+# 3D support (cross-platform, commercial-safe)
+plyfile>=1.0.0,<2
