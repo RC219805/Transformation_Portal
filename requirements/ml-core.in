@@ -13,8 +13,8 @@
 
 # PyTorch runtime (CPU-only baseline for CI; MPS/CUDA installs use platform-specific extras)
 # Pinned for known-good SAM2/CLIP determinism stack
-torch==2.10.0
-torchvision==0.25.0
+torch==2.10.0                # Deterministic builds: SAM2/CLIP stack compatibility
+torchvision==0.25.0          # Deterministic builds: matched to torch 2.10.0
 
 # Diffusion / HuggingFace ecosystem
 diffusers>=0.36.0,<1
@@ -24,17 +24,17 @@ accelerate>=0.20.0,<2
 
 # Vision / segmentation helpers (cross-platform)
 controlnet-aux>=0.0.6,<1
-efficientsam==1.0.0
-open-clip-torch==3.3.0
+efficientsam==1.0.0          # Deterministic builds: stable EfficientSAM weights
+open-clip-torch==3.3.0       # Deterministic builds: SAM2/CLIP stack compatibility
 
 # Vision / image processing
 scikit-image>=0.21.0,<1
 
 # Configuration / diagnostics / color
-PyYAML>=6.0
-colour-science>=0.4.2
-psutil>=5.9.0
-memory-profiler>=0.61.0
+PyYAML>=6.0,<7               # Config parser: stable API
+colour-science>=0.4.2,<1     # Color math library: stable API
+psutil>=5.9.0,<7             # System utilities: OS compatibility layer
+memory-profiler>=0.61.0,<1   # Dev/profiling tool
 
 # RAG / embedding support
 sentence-transformers>=3.1.0,<6

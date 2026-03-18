@@ -15,4 +15,4 @@
 # Use platform markers for version split if needed in future:
 # rawpy==0.25.1 ; platform_system == "Darwin" and platform_machine == "x86_64"
 # rawpy==0.26.1 ; platform_system != "Darwin" or platform_machine != "x86_64"
-rawpy==0.26.1
+rawpy==0.26.1                # Deterministic builds: pinned RAW demosaic

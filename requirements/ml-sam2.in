@@ -19,4 +19,4 @@
 
 # SAM2 - Meta Segment Anything 2 for advanced segmentation
 # Pinned with torch==2.10.0/open-clip==3.3.0 for deterministic SAM2 masks
-sam2==1.1.0
+sam2==1.1.0                  # Deterministic builds: SAM2/CLIP stack compatibility
