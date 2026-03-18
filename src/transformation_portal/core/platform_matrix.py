@@ -232,11 +232,7 @@ def _normalize_pip_freeze(freeze_output: str) -> str:
     # Use splitlines() to handle both LF and CRLF
     lines = freeze_output.strip().splitlines()
     # Filter out editable installs and empty lines
-    packages = [
-        line.strip()
-        for line in lines
-        if line.strip() and not line.strip().startswith("-e")
-    ]
+    packages = [line.strip() for line in lines if line.strip() and not line.strip().startswith("-e")]
     # Sort for deterministic ordering
     packages.sort()
     return "\n".join(packages)
