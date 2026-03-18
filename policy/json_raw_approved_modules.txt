@@ -47,6 +47,9 @@ src/transformation_portal/core/security/fs_guard.py
 src/transformation_portal/core/security/signing.py
 src/transformation_portal/core/security/task_signing.py
 
+# Platform matrix - CAS identity fingerprint requires deterministic JSON serialization
+src/transformation_portal/core/platform_matrix.py
+
 # Dashboard modules - HTTP response serialization
 src/transformation_portal/dashboard/dag_editor_api.py
 src/transformation_portal/dashboard/experiment_api.py
