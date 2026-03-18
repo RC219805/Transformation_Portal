@@ -143,7 +143,21 @@ check:
 	tmp_dir="$$(mktemp -d)"; \
 	trap 'rm -rf "$$tmp_dir"' EXIT; \
 	cp all.in base.in ml.in ml-core.in ml-raw.in ml-sam2.in ml-coreml.in ml-research.in dev.in ci.in tools-archive.in "$$tmp_dir"/; \
-	cp all.txt base.txt ml.txt ml-core.txt ml-raw.txt ml-sam2.txt ml-coreml.txt ml-research.txt dev.txt ci.txt tools-archive.txt "$$tmp_dir"/ 2>/dev/null || true; \
+	for f in all.txt base.txt ml.txt dev.txt ci.txt tools-archive.txt; do \
+		if [ -f "$$repo_dir/$$f" ]; then \
+			cp "$$repo_dir/$$f" "$$tmp_dir"/; \
+		else \
+			echo "ERROR: Required lockfile missing: $$f"; \
+			exit 1; \
+		fi; \
+	done; \
+	for f in ml-core.txt ml-raw.txt ml-sam2.txt ml-coreml.txt ml-research.txt; do \
+		if [ -f "$$repo_dir/$$f" ]; then \
+			cp "$$repo_dir/$$f" "$$tmp_dir"/; \
+		else \
+			echo "INFO: Optional ML layer lockfile not found: $$f (will be compiled by CI)"; \
+		fi; \
+	done; \
 	cd "$$tmp_dir"; \
 	$(PIP_COMPILE) all.in -o all.txt >/dev/null; \
 	$(PIP_COMPILE) -c all.txt base.in -o base.txt >/dev/null; \
@@ -159,7 +173,13 @@ check:
 	normalize_req() { \
 		awk 'BEGIN{start=0} { if (!start) { if ($$0 ~ /^#/ || $$0 ~ /^[[:space:]]*$$/) next; start=1 } print }' "$$1"; \
 	}; \
-	for f in all.txt base.txt ml.txt ml-core.txt ml-raw.txt ml-sam2.txt ml-coreml.txt ml-research.txt dev.txt ci.txt tools-archive.txt; do \
+	for f in all.txt base.txt ml.txt dev.txt ci.txt tools-archive.txt; do \
+		if ! diff -u <(normalize_req "$$tmp_dir/$$f") <(normalize_req "$$repo_dir/$$f") >/dev/null; then \
+			echo "❌ $$f is out of date. Run 'make compile' to update."; \
+			exit 1; \
+		fi; \
+	done; \
+	for f in ml-core.txt ml-raw.txt ml-sam2.txt ml-coreml.txt ml-research.txt; do \
 		if [ -f "$$repo_dir/$$f" ]; then \
 			if ! diff -u <(normalize_req "$$tmp_dir/$$f") <(normalize_req "$$repo_dir/$$f") >/dev/null; then \
 				echo "❌ $$f is out of date. Run 'make compile' to update."; \

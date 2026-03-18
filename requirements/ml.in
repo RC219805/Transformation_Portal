@@ -32,3 +32,7 @@
 -r ml-sam2.in
 -r ml-coreml.in
 # NOTE: ml-research.in is NOT included by default (opt-in only)
+# To include research extras, install separately:
+#   pip install -r requirements/ml-research.txt
+# Or add to your project-specific requirements:
+#   -r ml-research.in

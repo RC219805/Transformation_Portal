@@ -92,8 +92,29 @@ raw = [
 ]
 # ML umbrella - includes all ML layers for backward compatibility
 # Note: Does NOT include coreml (platform-specific)
+# Dependencies are inlined for maximum pip version compatibility
 ml = [
-    "transformation-portal[ml-core,sam2,raw]",
+    # From ml-core
+    "torch==2.10.0",
+    "torchvision==0.25.0",
+    "diffusers>=0.36.0,<1",
+    "controlnet-aux>=0.0.6,<1",
+    "transformers>=4.57.0,<6",
+    "huggingface-hub>=0.19.0,<2",
+    "accelerate>=0.20.0,<2",
+    "efficientsam==1.0.0",
+    "open-clip-torch==3.3.0",
+    "scikit-image>=0.21.0,<1",
+    "PyYAML>=6.0",
+    "colour-science>=0.4.2",
+    "psutil>=5.9.0",
+    "memory-profiler>=0.61.0",
+    "sentence-transformers>=3.1.0,<6",
+    "plyfile>=1.0.0,<2",
+    # From sam2
+    "sam2==1.1.0",
+    # From raw
+    "rawpy>=0.18.0",
 ]
 # Optional detached signing support for archive attestation CLIs
 archive-signing = [
@@ -126,8 +147,51 @@ ci = [
     "pypdf>=3.9.0",
 ]
 # All dependencies combined
+# Dependencies are inlined for maximum pip version compatibility
 all = [
-    "transformation-portal[ml,dev,ci,coreml]",
+    # From ml (ml-core + sam2 + raw)
+    "torch==2.10.0",
+    "torchvision==0.25.0",
+    "diffusers>=0.36.0,<1",
+    "controlnet-aux>=0.0.6,<1",
+    "transformers>=4.57.0,<6",
+    "huggingface-hub>=0.19.0,<2",
+    "accelerate>=0.20.0,<2",
+    "efficientsam==1.0.0",
+    "open-clip-torch==3.3.0",
+    "scikit-image>=0.21.0,<1",
+    "PyYAML>=6.0",
+    "colour-science>=0.4.2",
+    "psutil>=5.9.0",
+    "memory-profiler>=0.61.0",
+    "sentence-transformers>=3.1.0,<6",
+    "plyfile>=1.0.0,<2",
+    "sam2==1.1.0",
+    "rawpy>=0.18.0",
+    # From coreml
+    "coremltools>=7.0",
+    # From dev
+    "pytest>=8.0,<10",
+    "pytest-cov>=4.0,<8",
+    "httpx>=0.28,<1",
+    "hypothesis>=6.0,<7",
+    "jsonschema>=4.21.0,<5",
+    "cryptography>=46.0,<47",
+    "mypy>=1.10",
+    "flake8>=7.0",
+    "pylint>=3.0",
+    "black>=24.8",
+    "isort>=5.13,<8",
+    "autopep8>=2.0,<3",
+    "libcst>=1.2,<2",
+    "types-PyYAML>=6.0.12",
+    # From ci
+    "bandit>=1.7,<2",
+    "safety>=2.3,<4",
+    "build>=1.0,<2",
+    "twine>=4.0,<7",
+    "tox>=4.5,<5",
+    "pypdf>=3.9.0",
 ]
 
 [project.scripts]

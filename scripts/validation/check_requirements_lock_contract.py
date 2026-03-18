@@ -75,14 +75,16 @@ def validate_lockfile_headers(expected_python: str) -> list[str]:
     environments where they haven't been compiled yet (e.g., fresh checkouts).
     """
     errors: list[str] = []
+    warnings: list[str] = []
     for lock_name in ALL_LOCK_FILES:
         lock_path = REQUIREMENTS_DIR / lock_name
         if not lock_path.is_file():
-            # Skip non-existent ML layer files with a warning (not an error)
-            # Core files and ml.txt umbrella must exist
-            if lock_name in CORE_LOCK_FILES or lock_name == ML_UMBRELLA_LOCK_FILE:
-                errors.append(f"Missing required lockfile: {lock_path}")
             # ML layer files are optional if not yet compiled
+            if lock_name in ML_LAYER_LOCK_FILES:
+                warnings.append(f"Optional ML layer lockfile not found (will be compiled by CI): {lock_name}")
+                continue
+            # Core files and ml.txt umbrella must exist
+            errors.append(f"Missing required lockfile: {lock_path}")
             continue
 
         header_match = None
@@ -98,6 +100,11 @@ def validate_lockfile_headers(expected_python: str) -> list[str]:
         actual_python = header_match.group(1)
         if actual_python != expected_python:
             errors.append(f"{lock_path} was generated with Python {actual_python}; " f"expected Python {expected_python}")
+
+    # Print warnings to stderr (informational, not blocking)
+    for warning in warnings:
+        print(f"WARNING: {warning}", file=sys.stderr)
+
     return errors
 
 

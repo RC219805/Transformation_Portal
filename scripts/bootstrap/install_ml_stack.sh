@@ -154,10 +154,12 @@ install_profile() {
             if [[ "${DRY_RUN}" == "true" ]]; then
                 log_info "[DRY-RUN] Would install: requirements/ml-sam2.txt"
             else
-                ${pip_cmd} -r "${REQUIREMENTS_DIR}/ml-sam2.txt" || {
-                    log_warn "Standard install failed. Trying with --no-build-isolation..."
+                if ! ${pip_cmd} -r "${REQUIREMENTS_DIR}/ml-sam2.txt" 2>/tmp/sam2_install_error.log; then
+                    log_warn "Standard install failed with error:"
+                    cat /tmp/sam2_install_error.log >&2
+                    log_warn "Trying with --no-build-isolation..."
                     ${pip_cmd} --no-build-isolation -r "${REQUIREMENTS_DIR}/ml-sam2.txt"
-                }
+                fi
             fi
             ;;
         coreml)
@@ -244,8 +246,8 @@ main() {
     fi
 
     for profile in "${PROFILES[@]}"; do
-        # Trim whitespace
-        profile="$(echo -e "${profile}" | tr -d '[:space:]')"
+        # Trim whitespace using parameter expansion (safer than echo -e)
+        profile="${profile//[[:space:]]/}"
         install_profile "${profile}"
     done
 

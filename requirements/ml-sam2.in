@@ -5,8 +5,9 @@
 # WARNING:
 # - SAM2 has build-time torch requirements and may require non-default install
 #   semantics on some platforms.
-# - On platforms where isolated build fails (e.g., some macOS configurations),
-#   consider installing with: pip install --no-build-isolation sam2==1.1.0
+# - First, try installing via the lockfile: pip install -r requirements/ml-sam2.txt
+# - If that fails, the bootstrap script will automatically retry with:
+#   pip install --no-build-isolation sam2==1.1.0
 # - This layer requires ml-core.in dependencies to be installed first.
 #
 # Capability contract:
