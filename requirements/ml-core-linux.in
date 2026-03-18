@@ -18,8 +18,8 @@
 # --- PyTorch (Linux, pinned) ---
 # torch 2.2.2 is the latest stable version with CPU wheels on PyPI.
 # Both macOS and Linux use the same version for cross-platform reproducibility.
-torch==2.2.2
-torchvision==0.17.2
+torch==2.2.2  # CAS determinism: cross-platform reproducibility
+torchvision==0.17.2  # CAS determinism: matches torch 2.2.2
 
 # Diffusion / HuggingFace ecosystem
 diffusers>=0.36.0,<1

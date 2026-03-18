@@ -18,8 +18,8 @@
 # --- PyTorch (macOS, pinned) ---
 # torch 2.2.2 is the last version with x86_64 macOS wheels
 # and provides stable MPS support on Apple Silicon.
-torch==2.2.2
-torchvision==0.17.2
+torch==2.2.2  # CAS determinism: cross-platform reproducibility
+torchvision==0.17.2  # CAS determinism: matches torch 2.2.2
 
 # Diffusion / HuggingFace ecosystem
 diffusers>=0.36.0,<1

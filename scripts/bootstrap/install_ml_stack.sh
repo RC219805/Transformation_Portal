@@ -199,12 +199,12 @@ check_lockfile() {
 build_pip_cmd() {
     local -n cmd_array=$1
     cmd_array=(python3 -m pip install)
-    
+
     # Add verbose flag if enabled
     if [[ "${VERBOSE}" == "true" ]]; then
         cmd_array+=(-v)
     fi
-    
+
     # Add any extra pip options safely using read -ra
     if [[ -n "${PIP_OPTS:-}" ]]; then
         local opts=()
@@ -218,7 +218,7 @@ build_pip_cmd() {
 detect_platform_lockfile() {
     local os_type
     os_type="$(uname -s)"
-    
+
     case "${os_type}" in
         Darwin)
             echo "ml-core-darwin.txt"
@@ -239,13 +239,13 @@ get_platform_id() {
     os_type="$(uname -s | tr '[:upper:]' '[:lower:]')"
     arch="$(uname -m)"
     accel="${1:-cpu}"  # Default to CPU if not specified
-    
+
     # Normalize architecture names
     case "${arch}" in
         aarch64) arch="arm64" ;;
         amd64) arch="x86_64" ;;
     esac
-    
+
     echo "${os_type}-${arch}-${accel}"
 }
 
@@ -253,17 +253,17 @@ install_profile() {
     local profile="$1"
     local pip_cmd=()
     build_pip_cmd pip_cmd
-    
+
     # Get platform-specific lockfile for ml-core
     local platform_lockfile
     platform_lockfile="$(detect_platform_lockfile)"
     local platform_id
-    
+
     case "${profile}" in
         core-cpu)
             # CPU baseline: platform-specific lockfile selection
             platform_id="$(get_platform_id cpu)"
-            
+
             # Use platform-specific lockfile if available, fallback to generic
             if [[ -f "${REQUIREMENTS_DIR}/${platform_lockfile}" ]]; then
                 check_lockfile "${platform_lockfile}"
@@ -302,7 +302,7 @@ install_profile() {
                 exit 1
             fi
             platform_id="$(get_platform_id mps)"
-            
+
             # MPS always uses darwin lockfile
             if [[ -f "${REQUIREMENTS_DIR}/ml-core-darwin.txt" ]]; then
                 check_lockfile "ml-core-darwin.txt"
@@ -337,7 +337,7 @@ install_profile() {
                 exit 1
             fi
             platform_id="$(get_platform_id cuda)"
-            
+
             # CUDA always uses linux lockfile + cuda packages
             if [[ -f "${REQUIREMENTS_DIR}/ml-core-linux.txt" ]]; then
                 check_lockfile "ml-core-linux.txt"
@@ -381,7 +381,7 @@ install_profile() {
             # It requires non-standard install semantics on some platforms.
             log_info "Installing ML SAM2 segmentation layer (SCRIPTED-ONLY)..."
             log_warn "SAM2 requires ml-core dependencies. Ensure core-cpu/core-mps/core-cuda is installed first."
-            
+
             if [[ "${DRY_RUN}" == "true" ]]; then
                 log_info "[DRY-RUN] Would install sam2==1.1.0 with fallback to --no-build-isolation"
             else
@@ -389,7 +389,7 @@ install_profile() {
                 local error_log
                 error_log="$(mktemp)"
                 trap 'rm -f "${error_log}"' RETURN
-                
+
                 # Try standard install first
                 log_info "Attempting standard SAM2 install..."
                 log_verbose "Using PyTorch index: ${PYTORCH_INDEX}"
@@ -493,7 +493,7 @@ main() {
 
     # Parse and install profiles
     IFS=',' read -ra PROFILES <<< "${PROFILE}"
-    
+
     log_info "Installing ML stack with profiles: ${PROFILE}"
     log_verbose "PyTorch index URL: ${PYTORCH_INDEX}"
     if [[ "${DRY_RUN}" == "true" ]]; then

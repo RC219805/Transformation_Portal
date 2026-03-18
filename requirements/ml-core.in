@@ -28,16 +28,16 @@
 # NOTE: When updating torch versions, verify SAM2/CLIP compatibility.
 
 # macOS Intel (no modern torch builds after 2.2.x)
-torch==2.2.2 ; platform_system == "Darwin" and platform_machine == "x86_64"
-torchvision==0.17.2 ; platform_system == "Darwin" and platform_machine == "x86_64"
+torch==2.2.2 ; platform_system == "Darwin" and platform_machine == "x86_64"  # CAS determinism
+torchvision==0.17.2 ; platform_system == "Darwin" and platform_machine == "x86_64"  # CAS determinism
 
 # macOS Apple Silicon (MPS)
-torch==2.2.2 ; platform_system == "Darwin" and platform_machine == "arm64"
-torchvision==0.17.2 ; platform_system == "Darwin" and platform_machine == "arm64"
+torch==2.2.2 ; platform_system == "Darwin" and platform_machine == "arm64"  # CAS determinism
+torchvision==0.17.2 ; platform_system == "Darwin" and platform_machine == "arm64"  # CAS determinism
 
 # Linux (CPU baseline for CI - use same torch version for cross-platform reproducibility)
-torch==2.2.2 ; platform_system == "Linux"
-torchvision==0.17.2 ; platform_system == "Linux"
+torch==2.2.2 ; platform_system == "Linux"  # CAS determinism
+torchvision==0.17.2 ; platform_system == "Linux"  # CAS determinism
 
 # Diffusion / HuggingFace ecosystem
 diffusers>=0.36.0,<1
