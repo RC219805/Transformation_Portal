@@ -190,9 +190,10 @@ class ArtifactStore:
         dst.parent.mkdir(parents=True, exist_ok=True)
 
         # Write to temp file in same directory for atomic rename
+        # Use non-identifying prefix to avoid leaking hash info in directory listings
         fd, tmp_path_str = tempfile.mkstemp(
             suffix=".tmp",
-            prefix=f".cas_{expected_sha[:8]}_",
+            prefix=".cas_write_",
             dir=dst.parent,
         )
         tmp_path = Path(tmp_path_str)
@@ -256,9 +257,10 @@ class ArtifactStore:
         dst.parent.mkdir(parents=True, exist_ok=True)
 
         # Write to temp file in same directory for atomic rename
+        # Use non-identifying prefix to avoid leaking hash info in directory listings
         fd, tmp_path_str = tempfile.mkstemp(
             suffix=".tmp",
-            prefix=f".cas_{expected_sha[:8]}_",
+            prefix=".cas_write_",
             dir=dst.parent,
         )
         tmp_path = Path(tmp_path_str)

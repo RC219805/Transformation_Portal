@@ -102,15 +102,8 @@ class TestExecutionIdentity:
 
         assert restored.stage_name == identity.stage_name
         assert restored.stage_version == identity.stage_version
-        assert restored.lockfile_hash == identity.lockfile_hash
-
-        # Roundtrip
-        data = identity.to_dict()
-        restored = ExecutionIdentity.from_dict(data)
-
-        assert restored.stage_name == identity.stage_name
-        assert restored.stage_version == identity.stage_version
         assert restored.input_ids == identity.input_ids
+        assert restored.lockfile_hash == identity.lockfile_hash
         assert restored.cas_id == identity.cas_id
 
 

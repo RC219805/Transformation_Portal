@@ -350,7 +350,10 @@ class CASDAGExecutor:
 
         # Initialize provenance DAG
         merkle_dag = MerkleDAG() if self.config.enable_provenance else None
-        # Track merkle node hashes for each stage (to avoid MerkleDAG validation errors)
+        # Track merkle node hashes for each stage. MerkleDAG.add_computation() requires
+        # that input node hashes exist in the DAG. This dict maps stage names to their
+        # artifact node hashes, enabling us to reference upstream stages when adding
+        # computation nodes for downstream stages.
         merkle_node_hashes: Dict[str, str] = {}
 
         try:
