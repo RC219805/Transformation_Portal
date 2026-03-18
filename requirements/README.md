@@ -13,11 +13,17 @@ requirements/
 ├── ml.in                  # ML umbrella (references ml-*.in layers)
 ├── ml.txt                 # ML umbrella (pinned, backward compatible)
 ├── ml-core.in             # ML core layer - cross-platform baseline
-├── ml-core.txt            # ML core layer (pinned, CPU-only PyTorch)
+├── ml-core.txt            # ML core layer (pinned, platform-aware PyTorch)
+├── ml-cpu.in              # ML CPU acceleration layer
+├── ml-cpu.txt             # ML CPU layer (pinned)
+├── ml-mps.in              # ML MPS acceleration layer (Apple Silicon)
+├── ml-mps.txt             # ML MPS layer (pinned)
+├── ml-cuda.in             # ML CUDA acceleration layer (Linux + NVIDIA)
+├── ml-cuda.txt            # ML CUDA layer (pinned)
 ├── ml-raw.in              # ML RAW ingest layer - rawpy
 ├── ml-raw.txt             # ML RAW ingest layer (pinned)
 ├── ml-sam2.in             # ML SAM2 layer - Meta Segment Anything 2
-├── ml-sam2.txt            # ML SAM2 layer (pinned, CPU-only PyTorch)
+├── ml-sam2.txt            # ML SAM2 layer (scripted-only)
 ├── ml-coreml.in           # ML CoreML layer - macOS only
 ├── ml-coreml.txt          # ML CoreML layer (pinned)
 ├── ml-research.in         # ML research/experimental layer
@@ -34,15 +40,38 @@ requirements/
 
 ## 🎯 Design Principles
 
+### Platform Matrix (ADR-032)
+
+ML dependencies use an explicit platform matrix with three orthogonal axes:
+
+| Axis   | Values           | Detection           |
+|--------|------------------|---------------------|
+| OS     | Darwin / Linux   | `platform_system`   |
+| ISA    | arm64 / x86_64   | `platform_machine`  |
+| Accel  | cpu / mps / cuda | **Explicit profile** |
+
+**Canonical platform targets:**
+- `darwin-x86_64-cpu` (macOS Intel)
+- `darwin-arm64-cpu` (macOS Apple Silicon, CPU-only)
+- `darwin-arm64-mps` (macOS Apple Silicon, Metal)
+- `linux-x86_64-cpu` (Linux Intel/AMD, CPU baseline)
+- `linux-x86_64-cuda` (Linux Intel/AMD, NVIDIA GPU)
+- `linux-arm64-cpu` (Linux ARM)
+
+**Important:** Acceleration is NEVER inferred from OS—it must be explicitly specified via profile.
+
 ### Layered Dependencies
 
 Dependencies are organized into logical layers:
 
 - **base**: Core runtime essentials needed for the application to function
 - **ml**: Optional machine learning and deep learning dependencies (umbrella)
-- **ml-core**: Cross-platform ML baseline (torch, diffusers, transformers, etc.)
+- **ml-core**: Cross-platform ML baseline (torch with platform-aware pins, diffusers, transformers, etc.)
+- **ml-cpu**: CPU acceleration layer (cross-platform, no GPU packages)
+- **ml-mps**: MPS acceleration layer (Apple Silicon, Metal Performance Shaders)
+- **ml-cuda**: CUDA acceleration layer (Linux + NVIDIA GPU)
 - **ml-raw**: RAW camera file ingest (rawpy) - platform-scoped
-- **ml-sam2**: SAM2 segmentation backend - may need special install semantics
+- **ml-sam2**: SAM2 segmentation backend - scripted-only (non-standard install)
 - **ml-coreml**: Apple CoreML acceleration - macOS only
 - **ml-research**: Research/experimental extras - reserved for future use
 - **dev**: Developer tools for testing, linting, and formatting
@@ -69,6 +98,35 @@ The `.in` files define the desired version constraints, while `.txt` files are a
 ## 🚀 Usage
 
 ### For Users
+
+#### Using Bootstrap Script (Recommended)
+
+The bootstrap script provides profile-based installation with platform validation:
+
+```bash
+# Install cross-platform CPU baseline
+./scripts/bootstrap/install_ml_stack.sh --profile core-cpu
+
+# Install Apple Silicon MPS acceleration (macOS ARM64 only)
+./scripts/bootstrap/install_ml_stack.sh --profile core-mps
+
+# Install NVIDIA CUDA acceleration (Linux only)
+PYTORCH_INDEX=https://download.pytorch.org/whl/cu121 ./scripts/bootstrap/install_ml_stack.sh --profile core-cuda
+
+# Install with RAW ingest capability
+./scripts/bootstrap/install_ml_stack.sh --profile core-cpu,raw
+
+# Install with SAM2 segmentation
+./scripts/bootstrap/install_ml_stack.sh --profile core-mps,sam2
+
+# Dry run to preview what would be installed
+./scripts/bootstrap/install_ml_stack.sh --profile core-cpu,raw --dry-run
+
+# Install full ML stack (umbrella)
+./scripts/bootstrap/install_ml_stack.sh --profile full
+```
+
+#### Using pip directly
 
 To install the package with specific dependency sets:
 
@@ -181,17 +239,23 @@ Targets:
   compile           Compile all pinned requirements from .in files
   compile-all       Same as compile (for compatibility)
   compile-ml-layers Compile only ML layer lockfiles
+  compile-accel     Compile acceleration layer lockfiles (ml-cpu, ml-mps, ml-cuda)
   update            Update all dependencies to latest versions
   check             Verify that .txt files are up-to-date with .in files
   clean             Remove all compiled .txt files
 
 ML Layer targets (CPU-only PyTorch index):
   ml-core.txt       Cross-platform ML baseline
+  ml-cpu.txt        CPU baseline acceleration layer
+  ml-mps.txt        Apple Silicon MPS acceleration layer
+  ml-cuda.txt       NVIDIA CUDA acceleration layer
   ml-raw.txt        RAW ingest capability layer
-  ml-sam2.txt       SAM2 segmentation capability layer
   ml-coreml.txt     Apple CoreML acceleration layer
   ml-research.txt   Research/experimental extras layer
   ml.txt            Umbrella ML layer (backward compatibility)
+
+Scripted-only layers (NOT compiled here):
+  ml-sam2           SAM2 segmentation - use bootstrap script
 ```
 
 ## 📚 Technical Details
@@ -212,11 +276,14 @@ This approach prevents conflicts between layers and ensures reproducible builds.
 
 Each ML layer has a specific contract:
 
-| Layer | Contract | Platform | Notes |
-|-------|----------|----------|-------|
-| ml-core | CPU-only PyTorch, cross-platform | All | Base ML functionality |
+| Layer | Contract | Platform Target | Notes |
+|-------|----------|-----------------|-------|
+| ml-core | Platform-aware PyTorch (macOS: 2.2.2, Linux: 2.10.0) | All | Base ML functionality |
+| ml-cpu | CPU-only, cross-platform | darwin-*/linux-*-cpu | No GPU packages |
+| ml-mps | Apple Silicon MPS | darwin-arm64-mps | Includes accelerate |
+| ml-cuda | NVIDIA CUDA | linux-x86_64-cuda | GPU packages allowed |
 | ml-raw | Platform-scoped | Linux, macOS | rawpy wheel availability varies |
-| ml-sam2 | CPU-only PyTorch | All (may need --no-build-isolation) | Build-time torch dependency |
+| ml-sam2 | Scripted-only | All (may need --no-build-isolation) | Build-time torch dependency |
 | ml-coreml | macOS only | Darwin | coremltools |
 | ml-research | Reserved | Varies | Future experimental extras |
 

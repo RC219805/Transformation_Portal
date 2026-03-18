@@ -47,11 +47,19 @@ Quick reference for common workflows and commands in this repo.
 - `make docs` build API docs with Sphinx.
 - `make docs-clean` remove generated docs output.
 
-## ML Layer Bootstrap Script
-- `./scripts/bootstrap/install_ml_stack.sh --profile core-cpu` install cross-platform ML baseline only.
+## ML Layer Bootstrap Script (ADR-032 Platform Matrix)
+### Core profiles (mutually exclusive)
+- `./scripts/bootstrap/install_ml_stack.sh --profile core-cpu` install CPU baseline (darwin-*/linux-*-cpu).
+- `./scripts/bootstrap/install_ml_stack.sh --profile core-mps` install Apple Silicon MPS (darwin-arm64-mps, macOS ARM64 only).
+- `PYTORCH_INDEX=https://download.pytorch.org/whl/cu121 ./scripts/bootstrap/install_ml_stack.sh --profile core-cuda` install NVIDIA CUDA (linux-x86_64-cuda, Linux only).
+
+### Capability layers (stack on core profile)
 - `./scripts/bootstrap/install_ml_stack.sh --profile core-cpu,raw` install ML baseline + RAW ingest.
-- `./scripts/bootstrap/install_ml_stack.sh --profile core-cpu,sam2` install ML baseline + SAM2 segmentation.
+- `./scripts/bootstrap/install_ml_stack.sh --profile core-mps,sam2` install MPS + SAM2 segmentation.
+- `./scripts/bootstrap/install_ml_stack.sh --profile core-cpu,coreml` install ML baseline + CoreML (macOS only).
 - `./scripts/bootstrap/install_ml_stack.sh --profile full` install all ML capabilities (equivalent to `make install-ml`).
+
+### Utility options
 - `./scripts/bootstrap/install_ml_stack.sh --profile core-cpu --dry-run` show what would be installed without installing.
 - `./scripts/bootstrap/install_ml_stack.sh --help` show all available profiles and options.
 
