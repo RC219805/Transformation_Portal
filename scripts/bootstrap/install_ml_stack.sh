@@ -4,6 +4,11 @@
 # Profile-based ML stack installation script.
 # Installs ML dependencies using the layered requirements system.
 #
+# Requirements:
+#   - Bash 4.3+ (uses nameref for array passing)
+#   - Python 3.11+
+#   - pip
+#
 # Usage:
 #   ./scripts/bootstrap/install_ml_stack.sh --profile core-cpu
 #   ./scripts/bootstrap/install_ml_stack.sh --profile core-cpu,raw
@@ -20,7 +25,7 @@
 #   full        All ML capabilities (equivalent to ml.txt umbrella)
 #
 # Environment Variables:
-#   PYTORCH_INDEX   Custom PyTorch index URL (default: CPU index for core/sam2)
+#   PYTORCH_INDEX   Custom PyTorch index URL (default: https://download.pytorch.org/whl/cpu)
 #   PIP_OPTS        Additional pip options (e.g., --no-cache-dir)
 #
 # Exit Codes:
@@ -45,6 +50,7 @@ NC='\033[0m' # No Color
 PROFILE=""
 VERBOSE=false
 DRY_RUN=false
+PYTORCH_INDEX="${PYTORCH_INDEX:-https://download.pytorch.org/whl/cpu}"
 
 usage() {
     cat << EOF
@@ -54,7 +60,7 @@ Install ML dependencies using the layered requirements system.
 
 OPTIONS:
     --profile PROFILES    Comma-separated list of profiles to install
-    --verbose             Enable verbose output
+    --verbose             Enable verbose output (adds -v to pip commands)
     --dry-run             Show what would be installed without installing
     --help                Show this help message
 
@@ -65,6 +71,10 @@ PROFILES:
     coreml      Apple CoreML acceleration (macOS only)
     research    Research/experimental extras (reserved)
     full        All ML capabilities (equivalent to ml.txt umbrella)
+
+ENVIRONMENT VARIABLES:
+    PYTORCH_INDEX   Custom PyTorch index URL (default: https://download.pytorch.org/whl/cpu)
+    PIP_OPTS        Additional pip options (e.g., --no-cache-dir)
 
 EXAMPLES:
     # Install just the cross-platform ML baseline
@@ -78,6 +88,9 @@ EXAMPLES:
 
     # Dry run to see what would be installed
     $(basename "$0") --profile core-cpu,sam2 --dry-run
+
+    # Use custom PyTorch index (GPU)
+    PYTORCH_INDEX=https://download.pytorch.org/whl/cu118 $(basename "$0") --profile core-cpu
 
 EOF
     exit 0
@@ -95,7 +108,19 @@ log_error() {
     echo -e "${RED}[ERROR]${NC} $*" >&2
 }
 
+log_verbose() {
+    if [[ "${VERBOSE}" == "true" ]]; then
+        echo -e "${GREEN}[VERBOSE]${NC} $*"
+    fi
+}
+
 check_prerequisites() {
+    # Check bash version (need 4.3+ for nameref)
+    if [[ "${BASH_VERSINFO[0]}" -lt 4 ]] || { [[ "${BASH_VERSINFO[0]}" -eq 4 ]] && [[ "${BASH_VERSINFO[1]}" -lt 3 ]]; }; then
+        log_error "Bash 4.3+ is required (found ${BASH_VERSION})"
+        exit 1
+    fi
+
     # Check Python is available
     if ! command -v python3 &> /dev/null; then
         log_error "Python 3 is required but not found."
@@ -124,18 +149,39 @@ check_lockfile() {
     fi
 }
 
+# Build pip command as array for safe quoting
+build_pip_cmd() {
+    local -n cmd_array=$1
+    cmd_array=(python3 -m pip install)
+    
+    # Add verbose flag if enabled
+    if [[ "${VERBOSE}" == "true" ]]; then
+        cmd_array+=(-v)
+    fi
+    
+    # Add any extra pip options safely using read -ra
+    if [[ -n "${PIP_OPTS:-}" ]]; then
+        local opts=()
+        read -ra opts <<< "${PIP_OPTS}"
+        cmd_array+=("${opts[@]}")
+    fi
+}
+
 install_profile() {
     local profile="$1"
-    local pip_cmd="python3 -m pip install ${PIP_OPTS:-}"
+    local pip_cmd=()
+    build_pip_cmd pip_cmd
 
     case "${profile}" in
         core-cpu)
             check_lockfile "ml-core.txt"
             log_info "Installing ML core layer (cross-platform baseline)..."
+            log_verbose "Using PyTorch index: ${PYTORCH_INDEX}"
             if [[ "${DRY_RUN}" == "true" ]]; then
                 log_info "[DRY-RUN] Would install: requirements/ml-core.txt"
+                log_info "[DRY-RUN] With extra-index-url: ${PYTORCH_INDEX}"
             else
-                ${pip_cmd} -r "${REQUIREMENTS_DIR}/ml-core.txt"
+                "${pip_cmd[@]}" --extra-index-url "${PYTORCH_INDEX}" -r "${REQUIREMENTS_DIR}/ml-core.txt"
             fi
             ;;
         raw)
@@ -144,7 +190,7 @@ install_profile() {
             if [[ "${DRY_RUN}" == "true" ]]; then
                 log_info "[DRY-RUN] Would install: requirements/ml-raw.txt"
             else
-                ${pip_cmd} -r "${REQUIREMENTS_DIR}/ml-raw.txt"
+                "${pip_cmd[@]}" -r "${REQUIREMENTS_DIR}/ml-raw.txt"
             fi
             ;;
         sam2)
@@ -163,13 +209,14 @@ install_profile() {
                 
                 # Try standard install first
                 log_info "Attempting standard SAM2 install..."
-                if python3 -m pip install ${PIP_OPTS:-} sam2==1.1.0 2>"${error_log}"; then
+                log_verbose "Using PyTorch index: ${PYTORCH_INDEX}"
+                if "${pip_cmd[@]}" --extra-index-url "${PYTORCH_INDEX}" sam2==1.1.0 2>"${error_log}"; then
                     log_info "SAM2 installed successfully via standard path."
                 else
                     log_warn "Standard install failed. Error log:"
                     cat "${error_log}" >&2
                     log_warn "Retrying with --no-build-isolation (torch must be pre-installed)..."
-                    if python3 -m pip install ${PIP_OPTS:-} --no-build-isolation sam2==1.1.0; then
+                    if "${pip_cmd[@]}" --extra-index-url "${PYTORCH_INDEX}" --no-build-isolation sam2==1.1.0; then
                         log_info "SAM2 installed successfully with --no-build-isolation."
                     else
                         log_error "SAM2 installation failed. Platform may not be supported."
@@ -190,7 +237,7 @@ install_profile() {
             if [[ "${DRY_RUN}" == "true" ]]; then
                 log_info "[DRY-RUN] Would install: requirements/ml-coreml.txt"
             else
-                ${pip_cmd} -r "${REQUIREMENTS_DIR}/ml-coreml.txt"
+                "${pip_cmd[@]}" -r "${REQUIREMENTS_DIR}/ml-coreml.txt"
             fi
             ;;
         research)
@@ -199,16 +246,18 @@ install_profile() {
             if [[ "${DRY_RUN}" == "true" ]]; then
                 log_info "[DRY-RUN] Would install: requirements/ml-research.txt"
             else
-                ${pip_cmd} -r "${REQUIREMENTS_DIR}/ml-research.txt"
+                "${pip_cmd[@]}" -r "${REQUIREMENTS_DIR}/ml-research.txt"
             fi
             ;;
         full)
             check_lockfile "ml.txt"
             log_info "Installing full ML stack (umbrella)..."
+            log_verbose "Using PyTorch index: ${PYTORCH_INDEX}"
             if [[ "${DRY_RUN}" == "true" ]]; then
                 log_info "[DRY-RUN] Would install: requirements/ml.txt"
+                log_info "[DRY-RUN] With extra-index-url: ${PYTORCH_INDEX}"
             else
-                ${pip_cmd} -r "${REQUIREMENTS_DIR}/ml.txt"
+                "${pip_cmd[@]}" --extra-index-url "${PYTORCH_INDEX}" -r "${REQUIREMENTS_DIR}/ml.txt"
             fi
             ;;
         *)
@@ -254,10 +303,16 @@ main() {
     # Check prerequisites
     check_prerequisites
 
+    # Enable verbose mode if requested
+    if [[ "${VERBOSE}" == "true" ]]; then
+        log_info "Verbose mode enabled"
+    fi
+
     # Parse and install profiles
     IFS=',' read -ra PROFILES <<< "${PROFILE}"
     
     log_info "Installing ML stack with profiles: ${PROFILE}"
+    log_verbose "PyTorch index URL: ${PYTORCH_INDEX}"
     if [[ "${DRY_RUN}" == "true" ]]; then
         log_info "[DRY-RUN] No packages will be installed."
     fi

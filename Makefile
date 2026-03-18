@@ -100,7 +100,8 @@ install-core: venv
 install-ml: venv
 	@echo "Installing full ML tier dependencies (umbrella)..."
 	@if [ -f requirements/ml.txt ]; then \
-		"$(PY)" -m pip install -r requirements/ml.txt; \
+		"$(PY)" -m pip install -r requirements/ml.txt && \
+		"$(PY)" -m pip install -e .; \
 	elif [ -f requirements/constraints.txt ]; then \
 		"$(PY)" -m pip install -e ".[ml]" -c requirements/constraints.txt; \
 	else \
@@ -111,7 +112,8 @@ install-ml: venv
 install-ml-core: venv
 	@echo "Installing ML core layer (cross-platform baseline)..."
 	@if [ -f requirements/ml-core.txt ]; then \
-		"$(PY)" -m pip install -r requirements/ml-core.txt; \
+		"$(PY)" -m pip install -r requirements/ml-core.txt && \
+		"$(PY)" -m pip install -e .; \
 	else \
 		echo "Error: requirements/ml-core.txt not found. Run 'cd requirements && make compile' first."; \
 		exit 1; \
@@ -120,7 +122,8 @@ install-ml-core: venv
 install-ml-raw: venv
 	@echo "Installing ML RAW ingest layer..."
 	@if [ -f requirements/ml-raw.txt ]; then \
-		"$(PY)" -m pip install -r requirements/ml-raw.txt; \
+		"$(PY)" -m pip install -r requirements/ml-raw.txt && \
+		"$(PY)" -m pip install -e .; \
 	else \
 		echo "Error: requirements/ml-raw.txt not found. Run 'cd requirements && make compile' first."; \
 		exit 1; \
@@ -129,7 +132,8 @@ install-ml-raw: venv
 install-ml-sam2: venv
 	@echo "Installing ML SAM2 segmentation layer..."
 	@if [ -f requirements/ml-sam2.txt ]; then \
-		"$(PY)" -m pip install -r requirements/ml-sam2.txt; \
+		"$(PY)" -m pip install -r requirements/ml-sam2.txt && \
+		"$(PY)" -m pip install -e .; \
 	else \
 		echo "Error: requirements/ml-sam2.txt not found. Run 'cd requirements && make compile' first."; \
 		exit 1; \
@@ -140,7 +144,8 @@ install-ml-coreml: venv
 	@if [ "$$(uname -s)" != "Darwin" ]; then \
 		echo "Warning: CoreML layer is only available on macOS. Skipping."; \
 	elif [ -f requirements/ml-coreml.txt ]; then \
-		"$(PY)" -m pip install -r requirements/ml-coreml.txt; \
+		"$(PY)" -m pip install -r requirements/ml-coreml.txt && \
+		"$(PY)" -m pip install -e .; \
 	else \
 		echo "Error: requirements/ml-coreml.txt not found. Run 'cd requirements && make compile' first."; \
 		exit 1; \
