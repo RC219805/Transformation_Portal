@@ -24,6 +24,7 @@ def _torch_available() -> bool:
     """Check if PyTorch is available."""
     try:
         import torch
+
         return True
     except ImportError:
         return False
@@ -117,7 +118,7 @@ class TestTorchSecurityEnforcement:
 
     def test_get_canonical_security_profile_static(self):
         """Test canonical profile uses STATIC values only.
-        
+
         Note: get_canonical_security_profile() returns a public API structure
         with field names that differ from the internal get_security_profile_hash()
         format. This is intentional - the hash uses its own internal structure.
