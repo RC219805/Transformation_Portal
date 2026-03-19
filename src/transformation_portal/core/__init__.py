@@ -39,7 +39,10 @@ from .execution_identity import (
     compute_config_hash,
     compute_stage_code_hash,
     create_artifact_metadata,
+    explain_cache_miss,
     is_compatible,
+    log_cache_decision,
+    resolve_platform_lockfile,
     should_execute,
     verify_determinism,
 )
@@ -112,7 +115,10 @@ __all__ = [
     "compute_config_hash",
     "compute_stage_code_hash",
     "create_artifact_metadata",
+    "explain_cache_miss",
     "is_compatible",
+    "log_cache_decision",
+    "resolve_platform_lockfile",
     "should_execute",
     "verify_determinism",
     # Execution Wrapper (Phase 2)

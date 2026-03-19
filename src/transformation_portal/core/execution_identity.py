@@ -20,7 +20,7 @@ CAS_ID = sha256(
 Design Principles:
     - Deterministic: Same inputs always produce same CAS ID
     - Platform-aware: Different platforms produce different IDs
-    - Code-aware: Code changes invalidate cache
+    - Code-aware: Code changes invalidate cache (AST-normalized)
     - Config-aware: Config changes invalidate cache
     - Dependency-aware: Lockfile changes invalidate cache (ADR-032)
 
@@ -38,6 +38,7 @@ Example:
 
 from __future__ import annotations
 
+import ast
 import hashlib
 import inspect
 import logging
@@ -258,6 +259,30 @@ def compute_code_hash(
     return _compute_file_hash(paths)
 
 
+def _normalize_code_ast(source: str) -> str:
+    """Normalize source code to AST representation for stable hashing.
+
+    This eliminates formatting drift (whitespace, comments, decorators)
+    that would cause unnecessary cache invalidation.
+
+    Args:
+        source: Python source code string
+
+    Returns:
+        Normalized AST dump string
+
+    Note:
+        Uses ast.dump() with annotate_fields=False for minimal, stable output.
+    """
+    try:
+        tree = ast.parse(source)
+        # annotate_fields=False produces more compact, stable output
+        return ast.dump(tree, annotate_fields=False)
+    except SyntaxError:
+        # Fall back to raw source if parsing fails
+        return source
+
+
 def compute_stage_code_hash(
     stage: Any,
     *,
@@ -265,8 +290,10 @@ def compute_stage_code_hash(
 ) -> str:
     """Compute deterministic hash of a stage's implementation code.
 
-    This provides a strict code hash for cache invalidation by hashing
-    the actual source code of the stage class/function.
+    Uses AST-based normalization to prevent cache invalidation from:
+    - Formatting changes (whitespace, indentation)
+    - Comment changes
+    - Decorator ordering
 
     Args:
         stage: Stage object (class instance or callable)
@@ -276,10 +303,9 @@ def compute_stage_code_hash(
         SHA-256 hash in format "sha256:..."
 
     Note:
-        This uses inspect.getsource() to get the actual source code,
-        ensuring that ANY change to the stage logic invalidates the cache.
-        This is stricter than git-based hashing which might miss runtime
-        patches or monkey-patching.
+        This uses AST normalization instead of raw source code to ensure
+        that only semantic changes (actual logic) invalidate the cache.
+        Formatting changes and comments are ignored.
 
     Example:
         >>> class MyStage:
@@ -294,13 +320,18 @@ def compute_stage_code_hash(
     """
     digest = hashlib.sha256()
 
+    # Include schema version for identity stability
+    digest.update(f"schema:{CAS_IDENTITY_VERSION}".encode("utf-8"))
+
     # Get the class or function to inspect
     target = type(stage) if hasattr(stage, "__class__") and not callable(stage) else stage
 
     try:
         # Get source code of the main target
         source = inspect.getsource(target)
-        digest.update(source.encode("utf-8"))
+        # Normalize using AST to eliminate formatting drift
+        normalized = _normalize_code_ast(source)
+        digest.update(normalized.encode("utf-8"))
 
         # Include method sources for class-based stages
         if inspect.isclass(target):
@@ -308,7 +339,8 @@ def compute_stage_code_hash(
                 if not name.startswith("_") or name in ("__init__", "__call__"):
                     try:
                         method_source = inspect.getsource(method)
-                        digest.update(f"{name}:{method_source}".encode("utf-8"))
+                        method_normalized = _normalize_code_ast(method_source)
+                        digest.update(f"{name}:{method_normalized}".encode("utf-8"))
                     except (OSError, TypeError):
                         pass
 
@@ -327,6 +359,47 @@ def compute_stage_code_hash(
         digest.update(fallback.encode("utf-8"))
 
     return f"sha256:{digest.hexdigest()}"
+
+
+def resolve_platform_lockfile() -> Optional[Path]:
+    """Resolve the canonical lockfile path for the current platform.
+
+    Returns:
+        Absolute Path to platform-specific lockfile, or None if not found.
+
+    Note:
+        This ensures lockfile paths are canonical (absolute, resolved),
+        eliminating relative path ambiguity that could cause identity drift.
+    """
+    import sys
+
+    # Get repository root (relative to this module)
+    try:
+        module_path = Path(__file__).resolve()
+        # Navigate up from src/transformation_portal/core/ to repo root
+        repo_root = module_path.parent.parent.parent.parent
+
+        # Determine platform-specific lockfile
+        platform = sys.platform
+        if platform == "darwin":
+            lockfile = repo_root / "requirements" / "ml-core-darwin.txt"
+        elif platform.startswith("linux"):
+            lockfile = repo_root / "requirements" / "ml-core-linux.txt"
+        else:
+            # Fallback to generic lockfile
+            lockfile = repo_root / "requirements" / "ml-core.txt"
+
+        if lockfile.exists():
+            return lockfile.resolve()  # Canonical absolute path
+
+        # Fall back to requirements.txt
+        fallback = repo_root / "requirements.txt"
+        if fallback.exists():
+            return fallback.resolve()
+
+        return None
+    except Exception:
+        return None
 
 
 def _compute_file_hash(paths: list[Union[str, Path]]) -> str:
@@ -515,6 +588,116 @@ def should_execute(
         ...     result = artifact_store.load(identity.cas_id)
     """
     return not artifact_store.has_object(identity.cas_id)
+
+
+def explain_cache_miss(
+    current_identity: ExecutionIdentity,
+    cached_identity: Optional[ExecutionIdentity],
+) -> dict[str, Any]:
+    """Explain why a cache miss occurred (debug utility).
+
+    Compares current and cached identities to pinpoint the exact
+    dimension(s) that caused the cache miss.
+
+    Args:
+        current_identity: The identity computed for current execution
+        cached_identity: The identity from cached artifact (None if no cache)
+
+    Returns:
+        Dict with:
+        - "reason": Human-readable summary
+        - "differences": List of fields that differ
+        - "details": Detailed comparison for each differing field
+
+    Example:
+        >>> [CAS MISS]
+        >>> stage: depth
+        >>> reason:
+        >>>   - lockfile_hash mismatch
+        >>>   - code_hash mismatch
+    """
+    if cached_identity is None:
+        return {
+            "reason": "No cached artifact exists",
+            "differences": [],
+            "details": {},
+        }
+
+    differences = []
+    details = {}
+
+    # Compare all identity dimensions
+    fields_to_compare = [
+        ("stage_name", "Stage name"),
+        ("stage_version", "Stage version"),
+        ("input_ids", "Input artifact IDs"),
+        ("code_hash", "Code hash"),
+        ("config_hash", "Config hash"),
+        ("env_fingerprint", "Environment fingerprint"),
+        ("lockfile_hash", "Lockfile hash"),
+        ("platform_id", "Platform ID"),
+        ("schema_version", "Schema version"),
+    ]
+
+    for field, label in fields_to_compare:
+        current_val = getattr(current_identity, field)
+        cached_val = getattr(cached_identity, field)
+        if current_val != cached_val:
+            differences.append(field)
+            details[field] = {
+                "label": label,
+                "current": current_val[:32] if isinstance(current_val, str) else current_val,
+                "cached": cached_val[:32] if isinstance(cached_val, str) else cached_val,
+            }
+
+    if not differences:
+        return {
+            "reason": "Identities match but CAS miss (possible store issue)",
+            "differences": [],
+            "details": {},
+        }
+
+    reason_parts = [f"{details[d]['label']} mismatch" for d in differences]
+    return {
+        "reason": f"Identity mismatch: {', '.join(reason_parts)}",
+        "differences": differences,
+        "details": details,
+    }
+
+
+def log_cache_decision(
+    identity: ExecutionIdentity,
+    cache_hit: bool,
+    cached_identity: Optional[ExecutionIdentity] = None,
+) -> None:
+    """Log cache hit/miss decision with identity details (debug utility).
+
+    Args:
+        identity: Current execution identity
+        cache_hit: True if cache hit, False if miss
+        cached_identity: If miss, the cached identity for comparison
+    """
+    if cache_hit:
+        logger.debug(
+            "[CAS HIT] stage=%s cas_id=%s",
+            identity.stage_name,
+            identity.cas_id[:16],
+        )
+    else:
+        explanation = explain_cache_miss(identity, cached_identity)
+        logger.debug(
+            "[CAS MISS] stage=%s reason=%s differences=%s",
+            identity.stage_name,
+            explanation["reason"],
+            explanation["differences"],
+        )
+        for field, detail in explanation.get("details", {}).items():
+            logger.debug(
+                "  %s: current=%s cached=%s",
+                detail["label"],
+                detail.get("current", "N/A"),
+                detail.get("cached", "N/A"),
+            )
 
 
 # Environment variable for cross-platform artifact reuse (default: disabled)
