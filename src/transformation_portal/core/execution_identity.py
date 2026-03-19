@@ -42,6 +42,7 @@ import ast
 import hashlib
 import inspect
 import logging
+import os
 import subprocess
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -66,6 +67,36 @@ CAS_IDENTITY_VERSION = "adr-032-v2"  # v2: Added lockfile_hash
 # This is used for debugging - when you see this hash, it means
 # no lockfile was provided and caching may be inconsistent
 LOCKFILE_HASH_PLACEHOLDER = "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+
+
+class DeterminismViolationError(Exception):
+    """Raised when determinism requirements are violated in strict mode.
+
+    This exception is raised in CI environments when critical determinism
+    inputs (like lockfile_hash) are missing, to prevent cache poisoning
+    and non-reproducible artifacts.
+    """
+
+    pass
+
+
+def is_ci_environment() -> bool:
+    """Detect if we're running in a CI environment.
+
+    Returns:
+        True if running in CI (GitHub Actions, Jenkins, etc.)
+    """
+    # Common CI environment variables
+    ci_vars = [
+        "CI",              # Generic CI indicator
+        "GITHUB_ACTIONS",  # GitHub Actions
+        "JENKINS_URL",     # Jenkins
+        "GITLAB_CI",       # GitLab CI
+        "CIRCLECI",        # CircleCI
+        "TRAVIS",          # Travis CI
+        "BUILDKITE",       # Buildkite
+    ]
+    return any(os.environ.get(var) for var in ci_vars)
 
 
 @dataclass(frozen=True)
@@ -271,6 +302,11 @@ def _normalize_code_ast(source: str) -> str:
     This eliminates formatting drift (whitespace, comments, decorators)
     that would cause unnecessary cache invalidation.
 
+    CRITICAL: Also strips line numbers, column offsets, and other
+    non-semantic attributes to ensure stability across Python versions.
+    Python 3.10/3.11/3.12 can produce different AST structures for the
+    same code if these attributes are included.
+
     Args:
         source: Python source code string
 
@@ -278,12 +314,21 @@ def _normalize_code_ast(source: str) -> str:
         Normalized AST dump string
 
     Note:
-        Uses ast.dump() with annotate_fields=False for minimal, stable output.
+        Uses ast.dump() with annotate_fields=False and include_attributes=False
+        for maximal stability across Python versions.
     """
     try:
         tree = ast.parse(source)
-        # annotate_fields=False produces more compact, stable output
-        return ast.dump(tree, annotate_fields=False)
+
+        # Strip non-semantic attributes that can vary across Python versions
+        # These include: lineno, col_offset, end_lineno, end_col_offset
+        for node in ast.walk(tree):
+            for attr in ("lineno", "col_offset", "end_lineno", "end_col_offset"):
+                if hasattr(node, attr):
+                    setattr(node, attr, None)
+
+        # annotate_fields=False + include_attributes=False = maximal stability
+        return ast.dump(tree, annotate_fields=False, include_attributes=False)
     except SyntaxError:
         # Fall back to raw source if parsing fails
         return source
@@ -523,7 +568,16 @@ def compute_cas_id(
         if lockfile_path is not None:
             lockfile_hash = compute_lockfile_hash(lockfile_path)
         else:
-            # Use placeholder hash for missing lockfile - clearly identifiable
+            # FAIL-CLOSED in CI: Missing lockfile hash is a determinism violation
+            # that can cause cache poisoning and non-reproducible artifacts
+            if is_ci_environment() and not os.environ.get("TP_ALLOW_NONDETERMINISTIC"):
+                raise DeterminismViolationError(
+                    f"Missing lockfile_hash for stage '{stage_name}' in CI environment. "
+                    "Deterministic builds require explicit lockfile_path parameter. "
+                    "To proceed in non-deterministic mode, set TP_ALLOW_NONDETERMINISTIC=1."
+                )
+
+            # In local dev or when explicitly allowed, use placeholder with warning
             lockfile_hash = LOCKFILE_HASH_PLACEHOLDER
             logger.warning(
                 "No lockfile_hash or lockfile_path provided for %s. "

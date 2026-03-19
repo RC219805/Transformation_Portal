@@ -235,6 +235,9 @@ class TestComputeConfigHash:
 class TestComputeCasId:
     """Tests for compute_cas_id function."""
 
+    # Test lockfile hash for CI environments
+    TEST_LOCKFILE_HASH = "sha256:test_lockfile_hash_for_unit_tests"
+
     def test_cas_id_deterministic(self):
         """Test CAS ID is deterministic."""
         with patch(
@@ -250,11 +253,13 @@ class TestComputeCasId:
                     stage_name="test",
                     input_ids=["sha256:abc"],
                     config={"x": 1},
+                    lockfile_hash=self.TEST_LOCKFILE_HASH,
                 )
                 id2 = compute_cas_id(
                     stage_name="test",
                     input_ids=["sha256:abc"],
                     config={"x": 1},
+                    lockfile_hash=self.TEST_LOCKFILE_HASH,
                 )
 
                 assert id1.cas_id == id2.cas_id
@@ -274,11 +279,13 @@ class TestComputeCasId:
                     stage_name="test",
                     input_ids=["sha256:abc"],
                     config={},
+                    lockfile_hash=self.TEST_LOCKFILE_HASH,
                 )
                 id2 = compute_cas_id(
                     stage_name="test",
                     input_ids=["sha256:xyz"],
                     config={},
+                    lockfile_hash=self.TEST_LOCKFILE_HASH,
                 )
 
                 assert id1.cas_id != id2.cas_id
@@ -298,11 +305,13 @@ class TestComputeCasId:
                     stage_name="test",
                     input_ids=[],
                     config={"quality": "low"},
+                    lockfile_hash=self.TEST_LOCKFILE_HASH,
                 )
                 id2 = compute_cas_id(
                     stage_name="test",
                     input_ids=[],
                     config={"quality": "high"},
+                    lockfile_hash=self.TEST_LOCKFILE_HASH,
                 )
 
                 assert id1.cas_id != id2.cas_id
@@ -322,11 +331,13 @@ class TestComputeCasId:
                     stage_name="test",
                     input_ids=["sha256:a", "sha256:b", "sha256:c"],
                     config={},
+                    lockfile_hash=self.TEST_LOCKFILE_HASH,
                 )
                 id2 = compute_cas_id(
                     stage_name="test",
                     input_ids=["sha256:c", "sha256:a", "sha256:b"],
                     config={},
+                    lockfile_hash=self.TEST_LOCKFILE_HASH,
                 )
 
                 # Same inputs in different order should produce same CAS ID
@@ -905,3 +916,133 @@ class TestDebugCacheTrace:
 
         # Result can be None (if requirements not found) or a Path
         assert result is None or isinstance(result, Path)
+
+
+class TestDeterminismViolation:
+    """Tests for CI fail-closed behavior on missing lockfile hash."""
+
+    def test_is_ci_environment_detects_github_actions(self):
+        """Test CI detection for GitHub Actions."""
+        from transformation_portal.core.execution_identity import is_ci_environment
+        import os
+
+        # Save original state
+        original = os.environ.get("GITHUB_ACTIONS")
+
+        try:
+            os.environ["GITHUB_ACTIONS"] = "true"
+            assert is_ci_environment() is True
+        finally:
+            if original is None:
+                os.environ.pop("GITHUB_ACTIONS", None)
+            else:
+                os.environ["GITHUB_ACTIONS"] = original
+
+    def test_is_ci_environment_detects_generic_ci(self):
+        """Test CI detection for generic CI variable."""
+        from transformation_portal.core.execution_identity import is_ci_environment
+        import os
+
+        # Save original state
+        original_ci = os.environ.get("CI")
+        original_gh = os.environ.get("GITHUB_ACTIONS")
+
+        try:
+            os.environ.pop("GITHUB_ACTIONS", None)
+            os.environ["CI"] = "true"
+            assert is_ci_environment() is True
+        finally:
+            if original_ci is None:
+                os.environ.pop("CI", None)
+            else:
+                os.environ["CI"] = original_ci
+            if original_gh is not None:
+                os.environ["GITHUB_ACTIONS"] = original_gh
+
+    def test_determinism_violation_error_in_ci_without_lockfile(self):
+        """Test that missing lockfile raises error in CI."""
+        from transformation_portal.core.execution_identity import (
+            DeterminismViolationError,
+            compute_cas_id,
+        )
+        import os
+
+        # Save original state
+        original_ci = os.environ.get("CI")
+        original_allow = os.environ.get("TP_ALLOW_NONDETERMINISTIC")
+
+        try:
+            # Simulate CI environment
+            os.environ["CI"] = "true"
+            os.environ.pop("TP_ALLOW_NONDETERMINISTIC", None)
+
+            with patch(
+                "transformation_portal.core.execution_identity.compute_code_hash"
+            ) as mock_code:
+                with patch(
+                    "transformation_portal.core.execution_identity.get_env_fingerprint"
+                ) as mock_env:
+                    mock_code.return_value = "sha256:test"
+                    mock_env.return_value = "sha256:test"
+
+                    with pytest.raises(DeterminismViolationError) as exc_info:
+                        compute_cas_id(
+                            stage_name="test",
+                            input_ids=[],
+                            config={},
+                            # No lockfile_hash or lockfile_path
+                        )
+
+                    assert "Missing lockfile_hash" in str(exc_info.value)
+                    assert "TP_ALLOW_NONDETERMINISTIC" in str(exc_info.value)
+        finally:
+            if original_ci is None:
+                os.environ.pop("CI", None)
+            else:
+                os.environ["CI"] = original_ci
+            if original_allow is not None:
+                os.environ["TP_ALLOW_NONDETERMINISTIC"] = original_allow
+
+    def test_nondeterministic_override_allows_placeholder(self):
+        """Test that TP_ALLOW_NONDETERMINISTIC allows placeholder in CI."""
+        from transformation_portal.core.execution_identity import (
+            LOCKFILE_HASH_PLACEHOLDER,
+            compute_cas_id,
+        )
+        import os
+
+        # Save original state
+        original_ci = os.environ.get("CI")
+        original_allow = os.environ.get("TP_ALLOW_NONDETERMINISTIC")
+
+        try:
+            # Simulate CI environment with override
+            os.environ["CI"] = "true"
+            os.environ["TP_ALLOW_NONDETERMINISTIC"] = "1"
+
+            with patch(
+                "transformation_portal.core.execution_identity.compute_code_hash"
+            ) as mock_code:
+                with patch(
+                    "transformation_portal.core.execution_identity.get_env_fingerprint"
+                ) as mock_env:
+                    mock_code.return_value = "sha256:test"
+                    mock_env.return_value = "sha256:test"
+
+                    # Should not raise - override allows placeholder
+                    identity = compute_cas_id(
+                        stage_name="test",
+                        input_ids=[],
+                        config={},
+                    )
+
+                    assert identity.lockfile_hash == LOCKFILE_HASH_PLACEHOLDER
+        finally:
+            if original_ci is None:
+                os.environ.pop("CI", None)
+            else:
+                os.environ["CI"] = original_ci
+            if original_allow is None:
+                os.environ.pop("TP_ALLOW_NONDETERMINISTIC", None)
+            else:
+                os.environ["TP_ALLOW_NONDETERMINISTIC"] = original_allow
