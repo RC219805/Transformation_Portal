@@ -35,6 +35,7 @@ Example:
 from __future__ import annotations
 
 import hashlib
+import os
 import platform
 import subprocess
 from dataclasses import dataclass, field
@@ -192,8 +193,6 @@ class PlatformMatrix:
             This version is vulnerable to RCE via torch.load().
             All platforms must use weights_only=True for torch.load() calls.
         """
-        import os
-
         base_mitigation = (
             "All torch.load() calls must use weights_only=True. "
             "Use transformation_portal.core.security.torch_security.safe_load() "

@@ -102,8 +102,12 @@ def is_allowed_file(path: Path, repo_root: Path) -> bool:
 def is_in_string(line: str, pattern: re.Pattern) -> bool:
     """Check if the pattern match appears inside a string literal.
 
-    This is a simple heuristic that counts quotes before the match.
-    If the number of quotes is odd, the match is likely inside a string.
+    This is a heuristic approach that tracks quote context before the match.
+    While not perfect (can fail on complex cases like raw strings with
+    backslashes), it works well for typical Python code patterns.
+
+    For more robust detection, consider using Python's ast module,
+    but that requires parsing entire files and is slower.
     """
     match = pattern.search(line)
     if not match:
@@ -111,12 +115,26 @@ def is_in_string(line: str, pattern: re.Pattern) -> bool:
 
     before_match = line[:match.start()]
 
-    # Count unescaped quotes before the match
-    single_quotes = before_match.count("'") - before_match.count("\\'")
-    double_quotes = before_match.count('"') - before_match.count('\\"')
+    # Track quote context more carefully
+    # We look for unmatched quotes by scanning character by character
+    in_single_quote = False
+    in_double_quote = False
+    i = 0
+    while i < len(before_match):
+        char = before_match[i]
+        # Handle escape sequences
+        if i + 1 < len(before_match) and before_match[i] == '\\':
+            i += 2  # Skip escaped character
+            continue
+        # Track quote state
+        if char == '"' and not in_single_quote:
+            in_double_quote = not in_double_quote
+        elif char == "'" and not in_double_quote:
+            in_single_quote = not in_single_quote
+        i += 1
 
-    # If either count is odd, we're likely inside a string
-    return (single_quotes % 2 == 1) or (double_quotes % 2 == 1)
+    # If we're inside a string at the match position
+    return in_single_quote or in_double_quote
 
 
 def check_file(path: Path, repo_root: Path) -> Iterator[Violation]:
@@ -131,22 +149,34 @@ def check_file(path: Path, repo_root: Path) -> Iterator[Violation]:
 
     lines = content.splitlines()
 
-    # Track docstring state (simple heuristic)
+    # Track docstring state with the specific quote type
     in_docstring = False
-    docstring_char = None
+    docstring_quote = None  # Track which quote type started the docstring
 
     for line_num, line in enumerate(lines, start=1):
         stripped = line.strip()
 
         # Track docstring boundaries (triple quotes)
-        if '"""' in stripped or "'''" in stripped:
-            quote = '"""' if '"""' in stripped else "'''"
-            # Count occurrences to handle start and end on same line
-            count = stripped.count(quote)
-            if count == 1:
-                in_docstring = not in_docstring
-                docstring_char = quote if in_docstring else None
-            # If count is even (e.g., 2), state doesn't change
+        # Only toggle on matching quote type
+        if not in_docstring:
+            # Not in docstring - check for start
+            if '"""' in stripped:
+                count = stripped.count('"""')
+                if count % 2 == 1:  # Odd count means docstring started
+                    in_docstring = True
+                    docstring_quote = '"""'
+            elif "'''" in stripped:
+                count = stripped.count("'''")
+                if count % 2 == 1:
+                    in_docstring = True
+                    docstring_quote = "'''"
+        else:
+            # In docstring - check for end with matching quote
+            if docstring_quote and docstring_quote in stripped:
+                count = stripped.count(docstring_quote)
+                if count % 2 == 1:  # Odd count means docstring ended
+                    in_docstring = False
+                    docstring_quote = None
 
         # Skip if inside docstring
         if in_docstring:

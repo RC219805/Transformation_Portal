@@ -189,7 +189,7 @@ def _enforced_torch_load(
     Args:
         f: File path or file-like object
         map_location: Device mapping for loaded tensors
-        pickle_module: Deprecated parameter (ignored)
+        pickle_module: Deprecated - not supported when weights_only=True.
         weights_only: Must be True (enforced). Passing False raises SecurityError.
         **kwargs: Additional torch.load keyword arguments
 
@@ -206,6 +206,15 @@ def _enforced_torch_load(
         raise RuntimeError(
             "Torch security enforcement not installed. "
             "Call install_global_enforcement() at startup."
+        )
+
+    # Warn if pickle_module is provided (not supported with weights_only=True)
+    if pickle_module is not None:
+        warnings.warn(
+            "pickle_module parameter is not supported when weights_only=True. "
+            "The parameter will be ignored.",
+            DeprecationWarning,
+            stacklevel=2,
         )
 
     # Block explicit weights_only=False
