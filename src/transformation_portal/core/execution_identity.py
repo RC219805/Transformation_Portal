@@ -61,6 +61,12 @@ logger = logging.getLogger(__name__)
 # Version tag for CAS identity schema evolution
 CAS_IDENTITY_VERSION = "adr-032-v2"  # v2: Added lockfile_hash
 
+# Placeholder lockfile hash when none is provided
+# Uses 64 zeros to be visually distinct and indicate "no lockfile"
+# This is used for debugging - when you see this hash, it means
+# no lockfile was provided and caching may be inconsistent
+LOCKFILE_HASH_PLACEHOLDER = "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+
 
 @dataclass(frozen=True)
 class ExecutionIdentity:
@@ -517,11 +523,12 @@ def compute_cas_id(
         if lockfile_path is not None:
             lockfile_hash = compute_lockfile_hash(lockfile_path)
         else:
-            # Default lockfile path based on platform
-            lockfile_hash = "sha256:unknown-no-lockfile"
-            logger.debug(
+            # Use placeholder hash for missing lockfile - clearly identifiable
+            lockfile_hash = LOCKFILE_HASH_PLACEHOLDER
+            logger.warning(
                 "No lockfile_hash or lockfile_path provided for %s. "
-                "Using placeholder. This may cause cache invalidation issues.",
+                "Using placeholder. This may cause cache invalidation issues. "
+                "For deterministic builds, provide lockfile_path parameter.",
                 stage_name,
             )
 

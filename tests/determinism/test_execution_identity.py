@@ -666,7 +666,9 @@ class TestLockfileHash:
                 )
 
                 assert id1.lockfile_hash.startswith("sha256:")
-                assert id1.lockfile_hash != "sha256:unknown-no-lockfile"
+                # Should not be the placeholder (64 zeros)
+                from transformation_portal.core.execution_identity import LOCKFILE_HASH_PLACEHOLDER
+                assert id1.lockfile_hash != LOCKFILE_HASH_PLACEHOLDER
 
     def test_different_lockfile_different_cas_id(self, tmp_path):
         """Test different lockfile produces different CAS ID."""
