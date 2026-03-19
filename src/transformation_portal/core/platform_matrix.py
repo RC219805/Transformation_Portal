@@ -516,10 +516,19 @@ def compute_cas_identity(
     import json
 
     fingerprint = get_platform_fingerprint(accel, lockfile_path, include_security_profile)
+    # Add schema version for evolvability - old artifacts are invalidated on schema change
+    fingerprint["cas_schema_version"] = CAS_IDENTITY_SCHEMA_VERSION
     # Sort keys for deterministic serialization
     canonical = json.dumps(fingerprint, sort_keys=True, separators=(",", ":"))
     digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
     return f"sha256:{digest}"
+
+
+# CAS Identity Schema Version (ADR-032)
+# Increment this when CAS identity computation changes to invalidate old artifacts
+# v1: Initial schema (platform_id, env_fingerprint, lockfile_hash)
+# v2: Added security_profile for CVE-2025-32434 mitigation tracking
+CAS_IDENTITY_SCHEMA_VERSION = "adr-032-v2"
 
 
 # Pre-compute current platform at module load for fast access

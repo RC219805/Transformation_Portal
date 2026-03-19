@@ -242,6 +242,28 @@ class ArtifactStore:
             size_bytes=len(data),
         )
 
+    def verify_object(self, sha256: str) -> bool:
+        """Verify CAS object integrity by re-hashing.
+
+        This is critical for detecting silent corruption in the CAS.
+        Should be called on read operations where integrity is required.
+
+        Args:
+            sha256: Expected SHA-256 hash
+
+        Returns:
+            True if hash matches, False if corruption detected
+
+        Raises:
+            CASError: If object doesn't exist
+        """
+        src = self._object_path(sha256)
+        if not src.exists():
+            raise CASError(f"CAS object missing: {sha256}")
+
+        actual_sha = self._sha256_file(src)
+        return actual_sha.lower() == sha256.lower()
+
     def materialize(
         self,
         sha256: str,
@@ -249,6 +271,7 @@ class ArtifactStore:
         *,
         use_symlink: bool = True,
         overwrite: bool = True,
+        verify: bool = False,
     ) -> Path:
         """Materialize CAS object at a destination path.
 
@@ -257,16 +280,35 @@ class ArtifactStore:
             dest: Destination path
             use_symlink: If True, create symlink; if False, copy
             overwrite: If True, overwrite existing destination
+            verify: If True, verify hash integrity before materializing.
+                    This prevents silent corruption from being propagated.
+                    Recommended for ML model artifacts.
 
         Returns:
             Path to materialized file
 
         Raises:
-            CASError: If object doesn't exist in CAS
+            CASError: If object doesn't exist in CAS or hash verification fails
         """
         src = self._object_path(sha256)
         if not src.exists():
             raise CASError(f"CAS object missing: {sha256}")
+
+        # CRITICAL: Verify hash on read to detect corruption (TOCTOU protection)
+        if verify:
+            actual_sha = self._sha256_file(src)
+            if actual_sha.lower() != sha256.lower():
+                # Corruption detected - delete the corrupt object
+                logger.error(
+                    "CAS corruption detected: expected %s, got %s. Deleting corrupt artifact.",
+                    sha256[:8],
+                    actual_sha[:8],
+                )
+                src.unlink()
+                raise CASError(
+                    f"CAS hash verification failed: expected {sha256}, got {actual_sha}. "
+                    "Corrupt artifact has been deleted. Re-run to regenerate."
+                )
 
         dest.parent.mkdir(parents=True, exist_ok=True)
 
