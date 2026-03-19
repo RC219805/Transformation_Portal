@@ -7,17 +7,20 @@
 # Run `make compile` in this directory to generate pinned ml-core-darwin.txt
 #
 # PLATFORM TARGET: darwin-* (macOS Intel + Apple Silicon)
-#   - darwin-x86_64-cpu   (macOS Intel, CPU-only)
+#   - darwin-x86_64-cpu   (macOS Intel)
 #   - darwin-arm64-cpu    (macOS Apple Silicon, CPU fallback)
 #   - darwin-arm64-mps    (macOS Apple Silicon, Metal)
 #
-# Torch version: 2.2.2 (last stable version with macOS x86_64 wheels)
+# SECURITY NOTE (CVE-2025-32434):
+#   torch < 2.6.0 has a critical RCE vulnerability via torch.load()
+#   MITIGATION: All torch.load() calls use weights_only=True at runtime
+#   This preserves CAS determinism while mitigating the vulnerability.
 #
 # See: requirements/README.md for layering rationale.
 
-# --- PyTorch (macOS, pinned) ---
-# torch 2.2.2 is the last version with x86_64 macOS wheels
-# and provides stable MPS support on Apple Silicon.
+# --- PyTorch (macOS, deterministic) ---
+# CAS DETERMINISM: Pinned versions for reproducible environment fingerprints
+# SECURITY: CVE-2025-32434 mitigated via weights_only=True at runtime
 torch==2.2.2  # CAS determinism: cross-platform reproducibility
 torchvision==0.17.2  # CAS determinism: matches torch 2.2.2
 

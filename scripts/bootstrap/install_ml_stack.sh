@@ -259,6 +259,39 @@ install_profile() {
     platform_lockfile="$(detect_platform_lockfile)"
     local platform_id
 
+    # SECURITY BLOCK: macOS Intel (x86_64) is NOT SUPPORTED for ML workloads
+    # CVE-2025-32434 cannot be fully mitigated on this platform due to
+    # lack of secure PyTorch wheels. This is a HARD FAIL, not a warning.
+    if [[ "$(uname -s)" == "Darwin" ]] && [[ "$(uname -m)" == "x86_64" ]]; then
+        log_error "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        log_error "SECURITY BLOCK: macOS Intel (x86_64) ML Stack NOT SUPPORTED"
+        log_error "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        log_error ""
+        log_error "PyTorch does not provide torch>=2.6.0 wheels for macOS Intel."
+        log_error "torch==2.2.2 (pinned for CAS determinism) is vulnerable to"
+        log_error "CVE-2025-32434 (CVSS 9.8 Critical RCE via torch.load)."
+        log_error ""
+        log_error "While runtime mitigation (weights_only=True) exists, macOS Intel"
+        log_error "cannot receive a secure PyTorch version upgrade path."
+        log_error ""
+        log_error "REQUIRED ACTION:"
+        log_error "  Migrate to macOS Apple Silicon (arm64) or Linux."
+        log_error ""
+        log_error "To bypass this block (NOT RECOMMENDED for production):"
+        log_error "  export TP_ALLOW_MACOS_INTEL_ML=1"
+        log_error "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+        # Allow bypass via environment variable for development/testing only
+        if [[ "${TP_ALLOW_MACOS_INTEL_ML:-}" != "1" ]]; then
+            exit 1
+        else
+            log_warn ""
+            log_warn "⚠️  TP_ALLOW_MACOS_INTEL_ML=1 detected - PROCEEDING AT YOUR OWN RISK"
+            log_warn "    This bypasses security policy. DO NOT use in production."
+            log_warn ""
+        fi
+    fi
+
     case "${profile}" in
         core-cpu)
             # CPU baseline: platform-specific lockfile selection

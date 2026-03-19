@@ -15,10 +15,19 @@
 # - This layer EXCLUDES SAM2 due to build-time torch requirements
 # - Accel is EXPLICIT via profile, never inferred from OS
 #
+# SECURITY NOTE (CVE-2025-32434):
+# - torch < 2.6.0 has a critical RCE vulnerability via torch.load()
+# - MITIGATION: All torch.load() calls MUST use weights_only=True
+# - This preserves CAS determinism while mitigating the vulnerability
+# - See: src/transformation_portal/core/security/torch_security.py for safe loading
+#
 # See: requirements/README.md for layering rationale.
 
 # --- PyTorch (deterministic, platform-aware) ---
 # Pinned for known-good SAM2/CLIP determinism stack
+#
+# SECURITY: CVE-2025-32434 mitigated via weights_only=True at runtime
+# CAS DETERMINISM: Pinned versions ensure reproducible environment fingerprints
 #
 # Platform-specific version notes:
 # - macOS Intel (x86_64): torch 2.2.2 (last version with x86_64 macOS wheels)

@@ -79,3 +79,8 @@ src/transformation_portal/runtime/sandbox.py
 src/transformation_portal/storage/cas_replication.py
 src/transformation_portal/storage/dataset_cas.py
 src/transformation_portal/storage/merkle_dag.py
+
+# Phase 2 Deterministic Execution Layer - CAS-aware execution
+# Uses raw JSON for cache storage and retrieval
+src/transformation_portal/core/execution_wrapper.py
+src/transformation_portal/core/cas_dag_executor.py

@@ -35,6 +35,7 @@ Example:
 from __future__ import annotations
 
 import hashlib
+import os
 import platform
 import subprocess
 from dataclasses import dataclass, field
@@ -175,6 +176,90 @@ class PlatformMatrix:
     def is_macos_intel(self) -> bool:
         """True if running on macOS Intel (x86_64)."""
         return self.os == PlatformOS.DARWIN and self.isa == PlatformISA.X86_64
+
+    def check_ml_security_posture(self) -> dict[str, Any]:
+        """Check ML security posture for this platform.
+
+        Returns:
+            Dictionary with security status:
+            - platform: Platform canonical target
+            - cve_2025_32434_note: Security note for CVE-2025-32434
+            - mitigation: Required mitigation steps
+            - secure: True if platform has secure torch wheels available
+            - ml_supported: True if ML stack is supported on this platform
+
+        Security Context (CVE-2025-32434):
+            PyTorch torch==2.2.2 is pinned for CAS determinism (ADR-032).
+            This version is vulnerable to RCE via torch.load().
+            All platforms must use weights_only=True for torch.load() calls.
+        """
+        base_mitigation = (
+            "All torch.load() calls must use weights_only=True. "
+            "Use transformation_portal.core.security.torch_security.safe_load() "
+            "or explicitly pass weights_only=True."
+        )
+
+        if self.is_macos_intel:
+            # Check for bypass environment variable
+            allow_bypass = os.environ.get("TP_ALLOW_MACOS_INTEL_ML", "0") == "1"
+            return {
+                "platform": self.canonical_target,
+                "cve_2025_32434_note": (
+                    "macOS Intel (x86_64) uses torch==2.2.2 which is vulnerable "
+                    "to CVE-2025-32434 (torch.load RCE). Runtime mitigation required."
+                ),
+                "mitigation": base_mitigation,
+                "secure": False,  # macOS Intel has no torch>=2.6.0 wheels (dropped platform support)
+                "ml_supported": allow_bypass,  # Only if explicitly bypassed
+            }
+        else:
+            return {
+                "platform": self.canonical_target,
+                "cve_2025_32434_note": (
+                    "Platform uses torch==2.2.2 for CAS determinism. "
+                    "CVE-2025-32434 mitigated via weights_only=True at runtime."
+                ),
+                "mitigation": base_mitigation,
+                "secure": True,  # Secure when mitigation is applied
+                "ml_supported": True,
+            }
+
+    def assert_ml_supported(self) -> None:
+        """Assert that ML stack is supported on this platform.
+
+        Raises:
+            RuntimeError: If ML stack is not supported (e.g., macOS Intel)
+
+        Call this at ML stack initialization to enforce security policy.
+        This is a HARD FAIL, not a warning.
+        """
+        status = self.check_ml_security_posture()
+        if not status.get("ml_supported", True):
+            raise RuntimeError(
+                f"ML stack not supported on {status['platform']}. "
+                f"{status['cve_2025_32434_note']} "
+                "Migrate to macOS Apple Silicon or Linux. "
+                "To bypass (NOT RECOMMENDED): export TP_ALLOW_MACOS_INTEL_ML=1"
+            )
+
+    def warn_if_insecure_ml_platform(self) -> None:
+        """Emit warning if ML stack has known security considerations.
+
+        Call this when initializing ML workloads to alert users about
+        security mitigations required for CVE-2025-32434.
+
+        Note: This is a warning, not a hard fail. Use assert_ml_supported()
+        for enforcement.
+        """
+        import warnings
+
+        status = self.check_ml_security_posture()
+        if not status["secure"]:
+            warnings.warn(
+                f"[{status['platform']}] {status['cve_2025_32434_note']} " f"Mitigation: {status['mitigation']}",
+                UserWarning,
+                stacklevel=2,
+            )
 
     @property
     def supports_mps(self) -> bool:
@@ -328,6 +413,7 @@ def compute_lockfile_hash(lockfile_path: str) -> str:
 def get_platform_fingerprint(
     accel: Optional[str] = None,
     lockfile_path: Optional[str] = None,
+    include_security_profile: bool = True,
 ) -> Dict[str, Any]:
     """Get comprehensive platform fingerprint for artifact provenance.
 
@@ -337,12 +423,15 @@ def get_platform_fingerprint(
     - Pip version
     - Environment fingerprint (pip freeze hash)
     - Lockfile hash (if provided)
+    - Security profile hash (CVE mitigation status)
 
     Args:
         accel: Explicit acceleration profile ("cpu", "mps", "cuda").
                If None, defaults to "cpu".
         lockfile_path: Path to the lockfile used for installation.
                        If provided, its hash is included in the fingerprint.
+        include_security_profile: If True, include security profile in fingerprint.
+                                  Default True for CAS identity completeness.
 
     Returns:
         Dictionary with complete platform identity for CAS.
@@ -363,33 +452,90 @@ def get_platform_fingerprint(
     if lockfile_path:
         fingerprint["lockfile_hash"] = compute_lockfile_hash(lockfile_path)
 
+    # Include security profile for CAS identity (ADR-032 security layer)
+    if include_security_profile:
+        fingerprint["security_profile"] = get_security_profile()
+
     return fingerprint
+
+
+def get_security_profile() -> Dict[str, Any]:
+    """Get current security profile for CAS identity.
+
+    Returns:
+        Dictionary with CANONICAL security profile information.
+        Uses STATIC policy values only - no runtime-derived state.
+
+    CRITICAL: This function returns canonical, deterministic values
+    that are the same regardless of:
+    - Import order
+    - Runtime enforcement state
+    - Process initialization timing
+
+    This ensures artifacts from different security configurations
+    (e.g., with/without torch.load enforcement) are not mixed,
+    while maintaining deterministic CAS identity computation.
+    """
+    try:
+        from transformation_portal.core.security.torch_security import (
+            SECURITY_PROFILE_VERSION,
+            get_canonical_security_profile,
+            get_security_profile_hash,
+        )
+
+        # Use canonical profile (static policy, not runtime state)
+        canonical = get_canonical_security_profile()
+        return {
+            "version": SECURITY_PROFILE_VERSION,
+            "policy": canonical,
+            "profile_hash": get_security_profile_hash(),
+        }
+    except ImportError:
+        # torch_security module not available - use deterministic fallback
+        return {
+            "version": "unavailable",
+            "policy": {"torch_load_enforced": False, "weights_only": False},
+            "profile_hash": "sha256:module-unavailable",
+        }
 
 
 def compute_cas_identity(
     accel: Optional[str] = None,
     lockfile_path: Optional[str] = None,
+    include_security_profile: bool = True,
 ) -> str:
     """Compute a single CAS identity string from platform fingerprint.
 
     This produces a deterministic hash that can be used as part of a CAS key
-    to ensure reproducibility. If the platform, environment, or lockfile changes,
-    the CAS identity will change, invalidating cached artifacts.
+    to ensure reproducibility. If the platform, environment, lockfile, or
+    security profile changes, the CAS identity will change, invalidating
+    cached artifacts.
 
     Args:
         accel: Explicit acceleration profile ("cpu", "mps", "cuda").
         lockfile_path: Path to the lockfile used for installation.
+        include_security_profile: If True, include security profile in identity.
+                                  Default True for complete security posture.
 
     Returns:
         CAS identity in format "sha256:..."
     """
     import json
 
-    fingerprint = get_platform_fingerprint(accel, lockfile_path)
+    fingerprint = get_platform_fingerprint(accel, lockfile_path, include_security_profile)
+    # Add schema version for evolvability - old artifacts are invalidated on schema change
+    fingerprint["cas_schema_version"] = CAS_IDENTITY_SCHEMA_VERSION
     # Sort keys for deterministic serialization
     canonical = json.dumps(fingerprint, sort_keys=True, separators=(",", ":"))
     digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
     return f"sha256:{digest}"
+
+
+# CAS Identity Schema Version (ADR-032)
+# Increment this when CAS identity computation changes to invalidate old artifacts
+# v1: Initial schema (platform_id, env_fingerprint, lockfile_hash)
+# v2: Added security_profile for CVE-2025-32434 mitigation tracking
+CAS_IDENTITY_SCHEMA_VERSION = "adr-032-v2"
 
 
 # Pre-compute current platform at module load for fast access
