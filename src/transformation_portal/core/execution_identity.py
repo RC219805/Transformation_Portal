@@ -88,13 +88,13 @@ def is_ci_environment() -> bool:
     """
     # Common CI environment variables
     ci_vars = [
-        "CI",              # Generic CI indicator
+        "CI",  # Generic CI indicator
         "GITHUB_ACTIONS",  # GitHub Actions
-        "JENKINS_URL",     # Jenkins
-        "GITLAB_CI",       # GitLab CI
-        "CIRCLECI",        # CircleCI
-        "TRAVIS",          # Travis CI
-        "BUILDKITE",       # Buildkite
+        "JENKINS_URL",  # Jenkins
+        "GITLAB_CI",  # GitLab CI
+        "CIRCLECI",  # CircleCI
+        "TRAVIS",  # Travis CI
+        "BUILDKITE",  # Buildkite
     ]
     return any(os.environ.get(var) for var in ci_vars)
 
@@ -570,9 +570,7 @@ def compute_cas_id(
         else:
             # FAIL-CLOSED in CI: Missing lockfile hash is a determinism violation
             # that can cause cache poisoning and non-reproducible artifacts
-            allow_nondet = os.environ.get("TP_ALLOW_NONDETERMINISTIC", "").lower() in (
-                "1", "true", "yes"
-            )
+            allow_nondet = os.environ.get("TP_ALLOW_NONDETERMINISTIC", "").lower() in ("1", "true", "yes")
             if is_ci_environment() and not allow_nondet:
                 raise DeterminismViolationError(
                     f"Missing lockfile_hash for stage '{stage_name}' in CI environment. "
@@ -980,9 +978,7 @@ def verify_determinism(
             result_hash = hashlib.sha256(jcs_dumpb(result)).hexdigest()
         else:
             # Fallback: JSON serialization
-            result_hash = hashlib.sha256(
-                json.dumps(result, sort_keys=True, default=str).encode()
-            ).hexdigest()
+            result_hash = hashlib.sha256(json.dumps(result, sort_keys=True, default=str).encode()).hexdigest()
 
         hashes.append(result_hash)
         logger.debug("Run %d hash: %s", i + 1, result_hash[:16])

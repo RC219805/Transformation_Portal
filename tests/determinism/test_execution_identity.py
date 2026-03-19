@@ -27,8 +27,8 @@ import pytest
 
 from transformation_portal.core.execution_identity import (
     ALLOW_CROSS_PLATFORM,
-    ArtifactMetadata,
     CAS_IDENTITY_VERSION,
+    ArtifactMetadata,
     ExecutionIdentity,
     compute_cas_id,
     compute_code_hash,
@@ -240,12 +240,8 @@ class TestComputeCasId:
 
     def test_cas_id_deterministic(self):
         """Test CAS ID is deterministic."""
-        with patch(
-            "transformation_portal.core.execution_identity.compute_code_hash"
-        ) as mock_code:
-            with patch(
-                "transformation_portal.core.execution_identity.get_env_fingerprint"
-            ) as mock_env:
+        with patch("transformation_portal.core.execution_identity.compute_code_hash") as mock_code:
+            with patch("transformation_portal.core.execution_identity.get_env_fingerprint") as mock_env:
                 mock_code.return_value = "sha256:fixed_code"
                 mock_env.return_value = "sha256:fixed_env"
 
@@ -266,12 +262,8 @@ class TestComputeCasId:
 
     def test_cas_id_changes_with_inputs(self):
         """Test CAS ID changes when inputs change."""
-        with patch(
-            "transformation_portal.core.execution_identity.compute_code_hash"
-        ) as mock_code:
-            with patch(
-                "transformation_portal.core.execution_identity.get_env_fingerprint"
-            ) as mock_env:
+        with patch("transformation_portal.core.execution_identity.compute_code_hash") as mock_code:
+            with patch("transformation_portal.core.execution_identity.get_env_fingerprint") as mock_env:
                 mock_code.return_value = "sha256:fixed_code"
                 mock_env.return_value = "sha256:fixed_env"
 
@@ -292,12 +284,8 @@ class TestComputeCasId:
 
     def test_cas_id_changes_with_config(self):
         """Test CAS ID changes when config changes."""
-        with patch(
-            "transformation_portal.core.execution_identity.compute_code_hash"
-        ) as mock_code:
-            with patch(
-                "transformation_portal.core.execution_identity.get_env_fingerprint"
-            ) as mock_env:
+        with patch("transformation_portal.core.execution_identity.compute_code_hash") as mock_code:
+            with patch("transformation_portal.core.execution_identity.get_env_fingerprint") as mock_env:
                 mock_code.return_value = "sha256:fixed_code"
                 mock_env.return_value = "sha256:fixed_env"
 
@@ -318,12 +306,8 @@ class TestComputeCasId:
 
     def test_cas_id_input_order_normalized(self):
         """Test CAS ID normalizes input order."""
-        with patch(
-            "transformation_portal.core.execution_identity.compute_code_hash"
-        ) as mock_code:
-            with patch(
-                "transformation_portal.core.execution_identity.get_env_fingerprint"
-            ) as mock_env:
+        with patch("transformation_portal.core.execution_identity.compute_code_hash") as mock_code:
+            with patch("transformation_portal.core.execution_identity.get_env_fingerprint") as mock_env:
                 mock_code.return_value = "sha256:fixed_code"
                 mock_env.return_value = "sha256:fixed_env"
 
@@ -345,12 +329,8 @@ class TestComputeCasId:
 
     def test_cas_id_contains_all_components(self):
         """Test ExecutionIdentity contains all required components."""
-        with patch(
-            "transformation_portal.core.execution_identity.compute_code_hash"
-        ) as mock_code:
-            with patch(
-                "transformation_portal.core.execution_identity.get_env_fingerprint"
-            ) as mock_env:
+        with patch("transformation_portal.core.execution_identity.compute_code_hash") as mock_code:
+            with patch("transformation_portal.core.execution_identity.get_env_fingerprint") as mock_env:
                 mock_code.return_value = "sha256:test_code"
                 mock_env.return_value = "sha256:test_env"
 
@@ -663,12 +643,8 @@ class TestLockfileHash:
         lockfile = tmp_path / "requirements.txt"
         lockfile.write_text("torch==2.2.2\nnumpy==1.24.0\n")
 
-        with patch(
-            "transformation_portal.core.execution_identity.compute_code_hash"
-        ) as mock_code:
-            with patch(
-                "transformation_portal.core.execution_identity.get_env_fingerprint"
-            ) as mock_env:
+        with patch("transformation_portal.core.execution_identity.compute_code_hash") as mock_code:
+            with patch("transformation_portal.core.execution_identity.get_env_fingerprint") as mock_env:
                 mock_code.return_value = "sha256:fixed_code"
                 mock_env.return_value = "sha256:fixed_env"
 
@@ -682,6 +658,7 @@ class TestLockfileHash:
                 assert id1.lockfile_hash.startswith("sha256:")
                 # Should not be the placeholder (64 zeros)
                 from transformation_portal.core.execution_identity import LOCKFILE_HASH_PLACEHOLDER
+
                 assert id1.lockfile_hash != LOCKFILE_HASH_PLACEHOLDER
 
     def test_different_lockfile_different_cas_id(self, tmp_path):
@@ -692,12 +669,8 @@ class TestLockfileHash:
         lockfile2 = tmp_path / "requirements2.txt"
         lockfile2.write_text("torch==2.3.0\n")  # Different version
 
-        with patch(
-            "transformation_portal.core.execution_identity.compute_code_hash"
-        ) as mock_code:
-            with patch(
-                "transformation_portal.core.execution_identity.get_env_fingerprint"
-            ) as mock_env:
+        with patch("transformation_portal.core.execution_identity.compute_code_hash") as mock_code:
+            with patch("transformation_portal.core.execution_identity.get_env_fingerprint") as mock_env:
                 mock_code.return_value = "sha256:fixed_code"
                 mock_env.return_value = "sha256:fixed_env"
 
@@ -926,8 +899,9 @@ class TestDeterminismViolation:
 
     def test_is_ci_environment_detects_github_actions(self):
         """Test CI detection for GitHub Actions."""
-        from transformation_portal.core.execution_identity import is_ci_environment
         import os
+
+        from transformation_portal.core.execution_identity import is_ci_environment
 
         # Save original state
         original = os.environ.get("GITHUB_ACTIONS")
@@ -943,8 +917,9 @@ class TestDeterminismViolation:
 
     def test_is_ci_environment_detects_generic_ci(self):
         """Test CI detection for generic CI variable."""
-        from transformation_portal.core.execution_identity import is_ci_environment
         import os
+
+        from transformation_portal.core.execution_identity import is_ci_environment
 
         # Save original state
         original_ci = os.environ.get("CI")
@@ -964,11 +939,12 @@ class TestDeterminismViolation:
 
     def test_determinism_violation_error_in_ci_without_lockfile(self):
         """Test that missing lockfile raises error in CI."""
+        import os
+
         from transformation_portal.core.execution_identity import (
             DeterminismViolationError,
             compute_cas_id,
         )
-        import os
 
         # Save original state
         original_ci = os.environ.get("CI")
@@ -979,12 +955,8 @@ class TestDeterminismViolation:
             os.environ["CI"] = "true"
             os.environ.pop("TP_ALLOW_NONDETERMINISTIC", None)
 
-            with patch(
-                "transformation_portal.core.execution_identity.compute_code_hash"
-            ) as mock_code:
-                with patch(
-                    "transformation_portal.core.execution_identity.get_env_fingerprint"
-                ) as mock_env:
+            with patch("transformation_portal.core.execution_identity.compute_code_hash") as mock_code:
+                with patch("transformation_portal.core.execution_identity.get_env_fingerprint") as mock_env:
                     mock_code.return_value = "sha256:test"
                     mock_env.return_value = "sha256:test"
 
@@ -1008,11 +980,12 @@ class TestDeterminismViolation:
 
     def test_nondeterministic_override_allows_placeholder(self):
         """Test that TP_ALLOW_NONDETERMINISTIC allows placeholder in CI."""
+        import os
+
         from transformation_portal.core.execution_identity import (
             LOCKFILE_HASH_PLACEHOLDER,
             compute_cas_id,
         )
-        import os
 
         # Save original state
         original_ci = os.environ.get("CI")
@@ -1023,12 +996,8 @@ class TestDeterminismViolation:
             os.environ["CI"] = "true"
             os.environ["TP_ALLOW_NONDETERMINISTIC"] = "1"
 
-            with patch(
-                "transformation_portal.core.execution_identity.compute_code_hash"
-            ) as mock_code:
-                with patch(
-                    "transformation_portal.core.execution_identity.get_env_fingerprint"
-                ) as mock_env:
+            with patch("transformation_portal.core.execution_identity.compute_code_hash") as mock_code:
+                with patch("transformation_portal.core.execution_identity.get_env_fingerprint") as mock_env:
                     mock_code.return_value = "sha256:test"
                     mock_env.return_value = "sha256:test"
 

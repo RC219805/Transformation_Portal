@@ -131,10 +131,7 @@ class TestAtomicWrites:
 
         # Add files in parallel
         with ThreadPoolExecutor(max_workers=5) as executor:
-            futures = [
-                executor.submit(add_file, src, content)
-                for src, content in files
-            ]
+            futures = [executor.submit(add_file, src, content) for src, content in files]
             for f in as_completed(futures):
                 f.result()
 
@@ -142,8 +139,9 @@ class TestAtomicWrites:
         assert len(results) == 10
 
         # Verify all files have correct content
-        for obj, (_, expected_content) in zip(sorted(results, key=lambda x: x.sha256), 
-                                               sorted(files, key=lambda x: hashlib.sha256(x[1]).hexdigest())):
+        for obj, (_, expected_content) in zip(
+            sorted(results, key=lambda x: x.sha256), sorted(files, key=lambda x: hashlib.sha256(x[1]).hexdigest())
+        ):
             stored = Path(obj.path).read_bytes()
             assert hashlib.sha256(stored).hexdigest() == obj.sha256
 
