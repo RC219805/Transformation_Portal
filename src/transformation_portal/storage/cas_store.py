@@ -343,8 +343,7 @@ class ArtifactStore:
         tmp_path = Path(tmp_path_str)
 
         try:
-            # Write bytes in a loop to handle partial writes
-            # os.write may perform partial writes, so we need to loop
+            # Write bytes in a loop to handle partial writes from os.write()
             offset = 0
             while offset < len(data):
                 written = os.write(fd, data[offset:])

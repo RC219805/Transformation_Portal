@@ -397,11 +397,19 @@ class CASExecutor:
     def _sanitize_key(self, key: str) -> str:
         """Sanitize an output key for safe use in filenames.
 
-        Prevents path traversal attacks by replacing problematic characters.
+        Prevents path traversal attacks by:
+        - Replacing path separators and problematic characters with underscores
+        - Removing directory traversal sequences like '..'
+        - Stripping leading/trailing dots and whitespace
         """
         # Replace any path separators and other problematic characters
-        # with underscores
-        return re.sub(r'[/\\:*?"<>|]', "_", key)
+        result = re.sub(r'[/\\:*?"<>|]', "_", key)
+        # Remove directory traversal sequences
+        result = result.replace("..", "_")
+        # Strip leading/trailing dots and whitespace
+        result = result.strip(". \t\n\r")
+        # If empty after sanitization, use a placeholder
+        return result if result else "_key_"
 
     def _make_serializable(
         self,
@@ -450,12 +458,16 @@ class CASExecutor:
     def _serialize_list(self, items: list | tuple, cas_id: str) -> list:
         """Serialize a list/tuple, handling nested numpy arrays and dicts.
 
+        Note: Both list and tuple inputs are converted to lists in the output.
+        This is required for JSON serialization. The original type is not preserved
+        during cache round-trip.
+
         Args:
             items: List or tuple of items to serialize
             cas_id: Base CAS ID for nested items
 
         Returns:
-            Serialized list with numpy arrays stored in CAS
+            Serialized list with numpy arrays stored in CAS (always list, even if input was tuple)
         """
         import numpy as np
 
