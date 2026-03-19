@@ -414,7 +414,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v4.2.2
 
       - name: Download Latest Ledger
-        uses: dawidd6/action-download-artifact@2536c51d3d126276eb39f74d6bc9c72ac6ef30d3 # v16
+        uses: dawidd6/action-download-artifact@8a338493df3d275e4a7a63bcff3b8fe97e51a927 # v19
         with:
           name: apex-ledger
           workflow: apex_performance.yml
@@ -427,7 +427,7 @@ jobs:
           gzip -c "${{ env.APEX_LEDGER_DB }}" > "apex_ledger_${DATE}.db.gz"
 
       - name: Create Release Backup
-        uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2.5.0
+        uses: softprops/action-gh-release@153bb8e04406b158c6c84fc1615b65b24149a1fe # v2.6.1
         with:
           tag_name: ledger-backup-${{ github.run_number }}
           name: APEX Ledger Backup ${{ github.run_number }}
