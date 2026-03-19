@@ -762,8 +762,6 @@ def log_cache_decision(
 
 
 # Environment variable for cross-platform artifact reuse (default: disabled)
-import os
-
 ALLOW_CROSS_PLATFORM = os.environ.get("TP_ALLOW_CROSS_PLATFORM", "false").lower() in (
     "true",
     "1",
