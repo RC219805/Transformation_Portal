@@ -513,6 +513,103 @@ class TestCASDAGExecutor:
                 result2 = executor.execute(graph, context)
                 assert result2.cache_misses == 1
 
+    def test_dag_nested_numpy_serialization(self, dag_executor_setup):
+        """Test DAG executor handles nested numpy arrays in artifacts.
+
+        This is a regression test for the blocking issue where DAG path
+        only serialized top-level numpy arrays but not nested ones.
+        Now both executors use the shared recursive serialization helpers.
+        """
+        executor, _ = dag_executor_setup
+
+        class NestedNumpyStage(Stage):
+            """Stage that returns nested numpy arrays in artifacts."""
+
+            def __init__(self):
+                super().__init__("nested_numpy", "1.0.0")
+                self.call_count = 0
+
+            def get_dependencies(self) -> List[str]:
+                return []
+
+            def get_cache_key(self, context: StageContext) -> str:
+                return hashlib.sha256(f"{self.name}:{self.version}".encode()).hexdigest()
+
+            def compute(self, context: StageContext) -> StageResult:
+                self.call_count += 1
+                return StageResult(
+                    stage_name=self.name,
+                    stage_version=self.version,
+                    status=StageStatus.COMPLETED,
+                    artifacts={
+                        "features": {
+                            "depth": np.ones((3, 3), dtype=np.float32),
+                            "normals": np.zeros((3, 3, 3), dtype=np.float32),
+                        },
+                        "array_list": [
+                            np.array([1, 2, 3], dtype=np.int32),
+                            np.array([4, 5, 6], dtype=np.int32),
+                        ],
+                        "scalar": 42,
+                    },
+                )
+
+        graph = StageGraph("test_pipeline")
+        stage = NestedNumpyStage()
+        graph.add_stage(stage)
+
+        context = StageContext()
+
+        with patch("transformation_portal.core.execution_identity.compute_code_hash") as mock_code:
+            with patch("transformation_portal.core.execution_identity.get_env_fingerprint") as mock_env:
+                mock_code.return_value = "sha256:fixed_code"
+                mock_env.return_value = "sha256:fixed_env"
+
+                # First execution - cache miss
+                result1 = executor.execute(graph, context)
+                assert result1.success is True
+                assert result1.cache_misses == 1
+                assert stage.call_count == 1
+
+                # Verify nested structures were correctly stored and loaded
+                stage_result = result1.stage_results["nested_numpy"]
+                artifacts = stage_result.artifacts
+
+                # Check nested dict with numpy arrays
+                assert "features" in artifacts
+                assert isinstance(artifacts["features"]["depth"], np.ndarray)
+                assert artifacts["features"]["depth"].shape == (3, 3)
+                assert artifacts["features"]["depth"].dtype == np.float32
+                assert np.all(artifacts["features"]["depth"] == 1.0)
+
+                assert isinstance(artifacts["features"]["normals"], np.ndarray)
+                assert artifacts["features"]["normals"].shape == (3, 3, 3)
+
+                # Check list with numpy arrays
+                assert "array_list" in artifacts
+                assert isinstance(artifacts["array_list"], list)
+                assert len(artifacts["array_list"]) == 2
+                assert isinstance(artifacts["array_list"][0], np.ndarray)
+                assert np.array_equal(artifacts["array_list"][0], np.array([1, 2, 3], dtype=np.int32))
+
+                # Check scalar preserved
+                assert artifacts["scalar"] == 42
+
+                # Second execution - cache hit
+                result2 = executor.execute(graph, context)
+                assert result2.success is True
+                assert result2.cache_hits == 1
+                assert stage.call_count == 1  # No additional execution
+
+                # Verify cache hit still has correct nested structures
+                stage_result2 = result2.stage_results["nested_numpy"]
+                artifacts2 = stage_result2.artifacts
+
+                assert isinstance(artifacts2["features"]["depth"], np.ndarray)
+                assert np.all(artifacts2["features"]["depth"] == 1.0)
+                assert isinstance(artifacts2["array_list"][0], np.ndarray)
+                assert np.array_equal(artifacts2["array_list"][0], np.array([1, 2, 3], dtype=np.int32))
+
 
 class TestCASExecutionResult:
     """Tests for CASExecutionResult dataclass."""

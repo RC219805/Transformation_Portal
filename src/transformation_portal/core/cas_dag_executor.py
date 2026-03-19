@@ -57,6 +57,8 @@ from transformation_portal.core.execution_identity import (
 from transformation_portal.core.execution_wrapper import _atomic_write_json  # Shared atomic cache writes
 from transformation_portal.core.execution_wrapper import _compute_numpy_array_id  # Shared NumPy identity computation
 from transformation_portal.core.execution_wrapper import _sanitize_cas_id_for_filename  # Shared filename sanitization
+from transformation_portal.core.execution_wrapper import load_serializable  # Shared recursive deserialization
+from transformation_portal.core.execution_wrapper import make_serializable  # Shared recursive serialization
 from transformation_portal.core.execution_wrapper import (
     CASExecutor,
     CASObjectMissingError,
@@ -514,6 +516,9 @@ class CASDAGExecutor:
     def _check_cache(self, identity: ExecutionIdentity) -> Optional[StageResult]:
         """Check if stage result is cached.
 
+        Uses recursive deserialization to handle nested numpy arrays and dicts,
+        matching the single-stage executor's semantics.
+
         Args:
             identity: Execution identity to look up
 
@@ -526,8 +531,6 @@ class CASDAGExecutor:
 
         try:
             import json
-
-            import numpy as np
 
             data = json.loads(cache_path.read_text())
 
@@ -547,20 +550,10 @@ class CASDAGExecutor:
                     logger.debug("Cache platform mismatch for %s", identity.cas_id[:16])
                     return None
 
-            # Reconstruct artifacts
-            artifacts = {}
-            for key, value in data.get("artifacts", {}).items():
-                if isinstance(value, dict) and value.get("__numpy__"):
-                    # Load numpy array from CAS
-                    sha256 = value["sha256"]
-                    cas_obj = self.artifact_store.get_object(sha256)
-                    if cas_obj:
-                        artifacts[key] = np.load(cas_obj.path)
-                    else:
-                        logger.warning("Missing CAS object for %s", sha256[:8])
-                        return None
-                else:
-                    artifacts[key] = value
+            # Reconstruct artifacts using shared recursive deserialization
+            # This handles nested dicts/lists with numpy arrays
+            raw_artifacts = data.get("artifacts", {})
+            artifacts = load_serializable(raw_artifacts, self.artifact_store)
 
             return StageResult(
                 stage_name=data["stage_name"],
@@ -572,6 +565,10 @@ class CASDAGExecutor:
                 metadata=data.get("result_metadata", {}),
             )
 
+        except CASObjectMissingError as e:
+            # Missing CAS object - treat as cache miss for self-healing
+            logger.warning("Missing CAS object for %s: %s", identity.cas_id[:16], e)
+            return None
         except (json.JSONDecodeError, KeyError, OSError) as e:
             logger.warning("Failed to load cache for %s: %s", identity.cas_id[:16], e)
             return None
@@ -580,38 +577,24 @@ class CASDAGExecutor:
         """Store stage result in cache atomically.
 
         Uses atomic writes to prevent partial writes visible to concurrent readers.
-        Shares serialization semantics with the single-stage executor for consistency.
+        Uses shared recursive serialization for consistent semantics with the
+        single-stage executor - handles nested dicts/lists with numpy arrays.
 
         Args:
             identity: Execution identity
             result: Stage result to cache
         """
-        import tempfile
-
-        import numpy as np
-
         cache_path = self._cache_path(identity.cas_id)
 
-        # Serialize artifacts BEFORE computing output hash (same as single-stage executor)
-        serialized_artifacts = {}
-        for key, value in result.artifacts.items():
-            if isinstance(value, np.ndarray):
-                # Store numpy array in CAS
-                with tempfile.NamedTemporaryFile(suffix=".npy", delete=False) as f:
-                    np.save(f, value)
-                    temp_path = Path(f.name)
-
-                cas_obj = self.artifact_store.add_file(temp_path)
-                temp_path.unlink()
-
-                serialized_artifacts[key] = {
-                    "__numpy__": True,
-                    "sha256": cas_obj.sha256,
-                    "shape": list(value.shape),
-                    "dtype": str(value.dtype),
-                }
-            else:
-                serialized_artifacts[key] = value
+        # Use shared recursive serialization (same as single-stage executor)
+        # This handles nested dicts/lists with numpy arrays
+        base_path = cache_path.parent
+        serialized_artifacts = make_serializable(
+            result.artifacts,
+            self.artifact_store,
+            base_path,
+            identity.cas_id,
+        )
 
         # Create artifact metadata from SERIALIZED form (consistent with single-stage executor)
         # This ensures the output_hash reflects actual content, not just type signatures

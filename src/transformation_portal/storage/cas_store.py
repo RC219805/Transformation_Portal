@@ -44,6 +44,43 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
+# Cache platform check at module load time for efficiency
+import platform as _platform
+
+_IS_WINDOWS = _platform.system() == "Windows"
+_HAS_O_DIRECTORY = hasattr(os, "O_DIRECTORY")
+
+
+def _fsync_parent_directory(path: Path) -> None:
+    """Fsync parent directory for durability (cross-platform).
+
+    On POSIX systems, this ensures the directory entry update from an
+    atomic rename is persisted. On Windows, this is a no-op since NTFS
+    provides different durability guarantees (rename is visible after
+    file fsync completes).
+
+    Args:
+        path: Path whose parent directory should be fsynced
+    """
+    if _IS_WINDOWS:
+        # Windows/NTFS: rename durability handled by file fsync
+        return
+
+    if not _HAS_O_DIRECTORY:
+        # Some platforms may not support directory open
+        return
+
+    try:
+        dir_fd = os.open(str(path.parent), os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(dir_fd)
+        finally:
+            os.close(dir_fd)
+    except OSError:
+        # Directory fsync may fail on some filesystems (e.g., network drives)
+        # but the atomic rename itself provides consistency guarantees
+        pass
+
 
 class CASError(RuntimeError):
     """Raised for CAS operation failures."""
@@ -79,6 +116,7 @@ class CASFileLock:
             timeout: Maximum time to wait for lock (seconds)
         """
         import time
+
         self._time = time
         self.lock_path = Path(lock_path)
         self.timeout = timeout
@@ -289,19 +327,13 @@ class ArtifactStore:
             # Verify hash BEFORE atomic rename
             actual_sha = self._sha256_file(tmp_path)
             if actual_sha != expected_sha:
-                raise CASError(
-                    f"Hash verification failed: expected {expected_sha}, got {actual_sha}"
-                )
+                raise CASError(f"Hash verification failed: expected {expected_sha}, got {actual_sha}")
 
             # Atomic rename (POSIX guarantee: rename is atomic within same filesystem)
             os.replace(tmp_path, dst)
 
-            # fsync parent directory to ensure rename is durable
-            dir_fd = os.open(str(dst.parent), os.O_RDONLY | os.O_DIRECTORY)
-            try:
-                os.fsync(dir_fd)
-            finally:
-                os.close(dir_fd)
+            # fsync parent directory to ensure rename is durable (cross-platform)
+            _fsync_parent_directory(dst)
 
             logger.debug("Atomic write complete: %s", expected_sha[:8])
 
@@ -356,19 +388,13 @@ class ArtifactStore:
             # Verify hash BEFORE atomic rename
             actual_sha = self._sha256_file(tmp_path)
             if actual_sha != expected_sha:
-                raise CASError(
-                    f"Hash verification failed: expected {expected_sha}, got {actual_sha}"
-                )
+                raise CASError(f"Hash verification failed: expected {expected_sha}, got {actual_sha}")
 
             # Atomic rename
             os.replace(tmp_path, dst)
 
-            # fsync parent directory
-            dir_fd = os.open(str(dst.parent), os.O_RDONLY | os.O_DIRECTORY)
-            try:
-                os.fsync(dir_fd)
-            finally:
-                os.close(dir_fd)
+            # fsync parent directory (cross-platform)
+            _fsync_parent_directory(dst)
 
         except Exception as exc:
             # Clean up temp file on failure
@@ -514,9 +540,7 @@ class ArtifactStore:
                         path=dst,
                         size_bytes=dst.stat().st_size,
                     )
-                logger.warning(
-                    "Corrupt CAS object detected: %s. Re-adding.", sha[:8]
-                )
+                logger.warning("Corrupt CAS object detected: %s. Re-adding.", sha[:8])
             else:
                 return CASObject(
                     sha256=sha,
