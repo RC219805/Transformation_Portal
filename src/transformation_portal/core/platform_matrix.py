@@ -256,8 +256,7 @@ class PlatformMatrix:
         status = self.check_ml_security_posture()
         if not status["secure"]:
             warnings.warn(
-                f"[{status['platform']}] {status['cve_2025_32434_note']} "
-                f"Mitigation: {status['mitigation']}",
+                f"[{status['platform']}] {status['cve_2025_32434_note']} " f"Mitigation: {status['mitigation']}",
                 UserWarning,
                 stacklevel=2,
             )

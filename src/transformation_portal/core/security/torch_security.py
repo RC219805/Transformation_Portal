@@ -96,10 +96,7 @@ def safe_load(
     try:
         import torch
     except ImportError as e:
-        raise ImportError(
-            "PyTorch is required for safe_load(). "
-            "Install with: pip install torch"
-        ) from e
+        raise ImportError("PyTorch is required for safe_load(). " "Install with: pip install torch") from e
 
     path = Path(path)
     if not path.exists():
@@ -203,16 +200,12 @@ def _enforced_torch_load(
     global _original_torch_load
 
     if not _enforcement_installed or _original_torch_load is None:
-        raise RuntimeError(
-            "Torch security enforcement not installed. "
-            "Call install_global_enforcement() at startup."
-        )
+        raise RuntimeError("Torch security enforcement not installed. " "Call install_global_enforcement() at startup.")
 
     # Warn if pickle_module is provided (not supported with weights_only=True)
     if pickle_module is not None:
         warnings.warn(
-            "pickle_module parameter is not supported when weights_only=True. "
-            "The parameter will be ignored.",
+            "pickle_module parameter is not supported when weights_only=True. " "The parameter will be ignored.",
             DeprecationWarning,
             stacklevel=2,
         )
