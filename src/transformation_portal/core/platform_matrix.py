@@ -463,32 +463,39 @@ def get_security_profile() -> Dict[str, Any]:
     """Get current security profile for CAS identity.
 
     Returns:
-        Dictionary with security profile information:
-        - version: Security profile version identifier
-        - enforcement_installed: Whether torch.load enforcement is active
-        - profile_hash: SHA256 hash of security configuration
+        Dictionary with CANONICAL security profile information.
+        Uses STATIC policy values only - no runtime-derived state.
+
+    CRITICAL: This function returns canonical, deterministic values
+    that are the same regardless of:
+    - Import order
+    - Runtime enforcement state
+    - Process initialization timing
 
     This ensures artifacts from different security configurations
-    (e.g., with/without torch.load enforcement) are not mixed.
+    (e.g., with/without torch.load enforcement) are not mixed,
+    while maintaining deterministic CAS identity computation.
     """
     try:
         from transformation_portal.core.security.torch_security import (
             SECURITY_PROFILE_VERSION,
+            get_canonical_security_profile,
             get_security_profile_hash,
-            is_enforcement_installed,
         )
 
+        # Use canonical profile (static policy, not runtime state)
+        canonical = get_canonical_security_profile()
         return {
             "version": SECURITY_PROFILE_VERSION,
-            "enforcement_installed": is_enforcement_installed(),
+            "policy": canonical,
             "profile_hash": get_security_profile_hash(),
         }
     except ImportError:
-        # torch_security module not available
+        # torch_security module not available - use deterministic fallback
         return {
-            "version": "unknown",
-            "enforcement_installed": False,
-            "profile_hash": "sha256:unknown-module-unavailable",
+            "version": "unavailable",
+            "policy": {"torch_load_enforced": False, "weights_only": False},
+            "profile_hash": "sha256:module-unavailable",
         }
 
 

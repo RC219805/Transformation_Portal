@@ -11,6 +11,13 @@ Layout:
         objects/
             ab/
                 abcd1234...  (full sha256)
+        quarantine/
+            {sha256}_{actual_sha16}  (corrupt artifacts for forensics)
+
+Quarantine Policy:
+    Corrupt artifacts are moved to quarantine/ for forensic analysis.
+    The quarantine is subject to lifecycle policy (default 7 days, 10GB max).
+    Use gc_quarantine() to clean up old quarantined artifacts.
 
 Example:
     >>> store = ArtifactStore(Path("/cache/cas"))
@@ -25,11 +32,16 @@ import hashlib
 import logging
 import os
 import shutil
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
 logger = logging.getLogger(__name__)
+
+# Quarantine lifecycle policy (prevents unbounded growth)
+QUARANTINE_MAX_AGE_SECONDS = 7 * 24 * 60 * 60  # 7 days
+QUARANTINE_MAX_SIZE_BYTES = 10 * 1024 * 1024 * 1024  # 10 GB
 
 
 class CASError(RuntimeError):
@@ -271,7 +283,7 @@ class ArtifactStore:
         *,
         use_symlink: bool = True,
         overwrite: bool = True,
-        verify: bool = False,
+        verify: bool = True,
     ) -> Path:
         """Materialize CAS object at a destination path.
 
@@ -280,9 +292,10 @@ class ArtifactStore:
             dest: Destination path
             use_symlink: If True, create symlink; if False, copy
             overwrite: If True, overwrite existing destination
-            verify: If True, verify hash integrity before materializing.
+            verify: If True (default), verify hash integrity before materializing.
                     This prevents silent corruption from being propagated.
-                    Recommended for ML model artifacts.
+                    STRONGLY RECOMMENDED to keep as True for all use cases.
+                    Setting to False emits a warning.
 
         Returns:
             Path to materialized file
@@ -295,7 +308,14 @@ class ArtifactStore:
             raise CASError(f"CAS object missing: {sha256}")
 
         # CRITICAL: Verify hash on read to detect corruption (TOCTOU protection)
-        if verify:
+        # Default is True - setting to False emits a warning
+        if not verify:
+            logger.warning(
+                "CAS materialize called with verify=False for %s. "
+                "This bypasses corruption detection and is NOT RECOMMENDED.",
+                sha256[:8],
+            )
+        else:
             actual_sha = self._sha256_file(src)
             if actual_sha.lower() != sha256.lower():
                 # Corruption detected - quarantine instead of delete for forensics
@@ -363,3 +383,94 @@ class ArtifactStore:
                         logger.info("CAS gc: deleted %s", sha[:8])
 
         return to_delete
+
+    def gc_quarantine(
+        self,
+        *,
+        max_age_seconds: int = QUARANTINE_MAX_AGE_SECONDS,
+        max_size_bytes: int = QUARANTINE_MAX_SIZE_BYTES,
+        dry_run: bool = True,
+    ) -> dict[str, any]:
+        """Garbage collect quarantined artifacts based on lifecycle policy.
+
+        Quarantine cleanup is based on two policies:
+        1. Age-based: Delete artifacts older than max_age_seconds
+        2. Size-based: If total size exceeds max_size_bytes, delete oldest first
+
+        Args:
+            max_age_seconds: Maximum age in seconds (default: 7 days)
+            max_size_bytes: Maximum total quarantine size (default: 10GB)
+            dry_run: If True, don't delete, just report what would be deleted
+
+        Returns:
+            Dictionary with:
+            - deleted: List of deleted file names
+            - retained: List of retained file names
+            - total_size_before: Total size before cleanup
+            - total_size_after: Total size after cleanup
+        """
+        quarantine_dir = self.root / "quarantine"
+        if not quarantine_dir.exists():
+            return {
+                "deleted": [],
+                "retained": [],
+                "total_size_before": 0,
+                "total_size_after": 0,
+            }
+
+        now = time.time()
+        files_with_info = []
+
+        # Collect all quarantined files with their metadata
+        for path in quarantine_dir.iterdir():
+            if path.is_file():
+                stat = path.stat()
+                files_with_info.append(
+                    {
+                        "path": path,
+                        "name": path.name,
+                        "size": stat.st_size,
+                        "mtime": stat.st_mtime,
+                        "age": now - stat.st_mtime,
+                    }
+                )
+
+        # Sort by age (oldest first) for size-based cleanup
+        files_with_info.sort(key=lambda f: f["mtime"])
+
+        total_size_before = sum(f["size"] for f in files_with_info)
+        deleted = []
+        retained = []
+
+        # Phase 1: Age-based cleanup
+        for f in files_with_info:
+            if f["age"] > max_age_seconds:
+                deleted.append(f["name"])
+                if not dry_run:
+                    f["path"].unlink()
+                    logger.info("CAS quarantine gc: deleted %s (age: %.1f days)", f["name"], f["age"] / 86400)
+            else:
+                retained.append(f)
+
+        # Phase 2: Size-based cleanup (if still over limit)
+        current_size = sum(f["size"] for f in retained)
+        retained_final = []
+
+        for f in retained:
+            if current_size > max_size_bytes:
+                deleted.append(f["name"])
+                current_size -= f["size"]
+                if not dry_run:
+                    f["path"].unlink()
+                    logger.info("CAS quarantine gc: deleted %s (size limit)", f["name"])
+            else:
+                retained_final.append(f["name"])
+
+        total_size_after = current_size if not dry_run else sum(f["size"] for f in files_with_info if f["name"] not in deleted)
+
+        return {
+            "deleted": deleted,
+            "retained": retained_final,
+            "total_size_before": total_size_before,
+            "total_size_after": total_size_after,
+        }

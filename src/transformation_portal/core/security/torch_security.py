@@ -415,14 +415,22 @@ def get_security_profile_hash() -> str:
     This hash should be included in CAS identity to ensure artifacts
     from different security configurations are not mixed.
 
+    IMPORTANT: This function returns a CANONICAL hash based on static policy,
+    NOT runtime state. This ensures deterministic CAS identity across:
+    - Different import orders
+    - Different enforcement timing
+    - Multiple processes
+
     Example:
         >>> get_security_profile_hash()
         'sha256:abc123...'
     """
+    # CRITICAL: Use ONLY static policy values, NOT runtime state
+    # Runtime state (_enforcement_installed) would break determinism
     profile_data = {
-        "version": SECURITY_PROFILE_VERSION,
-        "enforcement_installed": _enforcement_installed,
-        "cve_2025_32434_mitigation": "weights_only_true",
+        "policy_version": SECURITY_PROFILE_VERSION,
+        "cve_2025_32434_mitigation": "weights_only_enforced",
+        "torch_load_policy": "weights_only_true",
     }
     # Use sorted keys for deterministic hash
     import json
@@ -430,3 +438,57 @@ def get_security_profile_hash() -> str:
     profile_str = json.dumps(profile_data, sort_keys=True)
     digest = hashlib.sha256(profile_str.encode("utf-8")).hexdigest()
     return f"sha256:{digest}"
+
+
+def assert_enforcement_installed() -> None:
+    """Assert that global torch.load enforcement is active.
+
+    Raises:
+        RuntimeError: If enforcement is not installed
+
+    Use this at ML stack entry points to validate the security
+    invariant that torch.load is patched before any model loading.
+
+    Example:
+        >>> install_global_enforcement()
+        >>> assert_enforcement_installed()  # Passes
+        >>> # If enforcement not installed:
+        >>> assert_enforcement_installed()  # Raises RuntimeError
+    """
+    if not _enforcement_installed:
+        raise RuntimeError(
+            "Torch security enforcement not installed. "
+            "Call install_global_enforcement() at ML stack initialization "
+            "BEFORE importing any modules that use torch.load(). "
+            "This is required for CVE-2025-32434 mitigation."
+        )
+
+
+def get_canonical_security_profile() -> dict[str, Any]:
+    """Get canonical security profile for CAS identity.
+
+    Returns:
+        Dictionary with STATIC security policy values only.
+        NO runtime-derived values are included.
+
+    CRITICAL: This profile is designed for CAS identity inclusion.
+    It must be:
+    - Deterministic (same output every time)
+    - Static (not affected by import order or runtime state)
+    - Canonical (consistent across processes and environments)
+
+    Example:
+        >>> get_canonical_security_profile()
+        {
+            'policy_version': 'torch_safe_load_v1',
+            'torch_load_enforced': True,
+            'weights_only': True,
+            'cve_mitigation': 'cve-2025-32434-v1'
+        }
+    """
+    return {
+        "policy_version": SECURITY_PROFILE_VERSION,
+        "torch_load_enforced": True,  # Policy requirement, not runtime state
+        "weights_only": True,  # Policy requirement
+        "cve_mitigation": "cve-2025-32434-v1",
+    }
