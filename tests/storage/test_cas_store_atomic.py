@@ -13,6 +13,7 @@ Test Coverage:
 from __future__ import annotations
 
 import hashlib
+import os
 import tempfile
 import threading
 import time
@@ -239,3 +240,200 @@ class TestAtomicWriteContract:
         # All successful reads should have full content
         for size in read_results:
             assert size == len(large_data), "Reader saw partial content"
+
+
+class TestMaterializeCorruptionHandling:
+    """Tests for corruption detection and quarantine in materialize()."""
+
+    def test_materialize_corrupted_artifact_quarantine(self, tmp_path):
+        """Test that corrupted artifacts are quarantined and exception raised."""
+        store = ArtifactStore(tmp_path / "cas")
+
+        # Add valid object
+        data = b"valid content for test"
+        obj = store.add_bytes(data)
+
+        # Corrupt the stored file
+        obj.path.write_bytes(b"corrupted!")
+
+        # Materialize with verify=True should detect corruption
+        dest = tmp_path / "output" / "file.bin"
+        with pytest.raises(CASError) as exc_info:
+            store.materialize(obj.sha256, dest, verify=True)
+
+        # Verify error message mentions quarantine
+        assert "quarantine" in str(exc_info.value).lower()
+        assert "verification failed" in str(exc_info.value).lower()
+
+        # Verify the file was moved to quarantine
+        quarantine_dir = tmp_path / "cas" / "quarantine"
+        assert quarantine_dir.exists()
+        quarantine_files = list(quarantine_dir.iterdir())
+        assert len(quarantine_files) == 1
+
+        # Quarantine filename should include original and actual hash
+        quarantine_name = quarantine_files[0].name
+        assert obj.sha256 in quarantine_name
+
+        # Verify original location is now empty
+        assert not obj.path.exists()
+
+    def test_materialize_verify_true_passes_valid_artifact(self, tmp_path):
+        """Test verify=True passes for valid artifacts."""
+        store = ArtifactStore(tmp_path / "cas")
+
+        data = b"valid content"
+        obj = store.add_bytes(data)
+
+        dest = tmp_path / "output" / "file.bin"
+        result = store.materialize(obj.sha256, dest, verify=True)
+
+        assert result == dest
+        assert dest.exists()
+        # Symlinks point to original, so read via the symlink
+        assert dest.read_bytes() == data
+
+    def test_materialize_verify_false_skips_hash_check(self, tmp_path):
+        """Test verify=False skips hash verification (with warning)."""
+        store = ArtifactStore(tmp_path / "cas")
+
+        data = b"test content"
+        obj = store.add_bytes(data)
+
+        # Corrupt the file
+        obj.path.write_bytes(b"corrupted!")
+
+        dest = tmp_path / "output" / "file.bin"
+        # Should NOT raise with verify=False (but will return corrupted content)
+        result = store.materialize(obj.sha256, dest, verify=False)
+
+        assert result == dest
+        # The destination now links to the corrupted content
+        assert dest.exists()
+
+
+class TestQuarantineGC:
+    """Tests for gc_quarantine() lifecycle policy."""
+
+    def test_gc_quarantine_empty_dir(self, tmp_path):
+        """Test gc_quarantine handles empty/missing quarantine dir."""
+        store = ArtifactStore(tmp_path / "cas")
+
+        result = store.gc_quarantine(dry_run=True)
+
+        assert result["deleted"] == []
+        assert result["retained"] == []
+        assert result["total_size_before"] == 0
+        assert result["total_size_after"] == 0
+
+    def test_gc_quarantine_age_based_cleanup(self, tmp_path):
+        """Test age-based cleanup of quarantined artifacts."""
+        store = ArtifactStore(tmp_path / "cas")
+
+        # Create quarantine directory with files of different ages
+        quarantine_dir = tmp_path / "cas" / "quarantine"
+        quarantine_dir.mkdir(parents=True, exist_ok=True)
+
+        # Create a "new" file (recent mtime)
+        new_file = quarantine_dir / "new_artifact"
+        new_file.write_bytes(b"new content")
+
+        # Create an "old" file and backdate it
+        old_file = quarantine_dir / "old_artifact"
+        old_file.write_bytes(b"old content")
+
+        # Set mtime to 10 days ago
+        old_time = time.time() - (10 * 24 * 60 * 60)
+        os.utime(old_file, (old_time, old_time))
+
+        # Run gc with 7-day limit (dry_run first)
+        result = store.gc_quarantine(max_age_seconds=7 * 24 * 60 * 60, dry_run=True)
+
+        assert "old_artifact" in result["deleted"]
+        assert "new_artifact" not in result["deleted"]
+        # In dry_run, files are not actually deleted
+        assert old_file.exists()
+
+        # Now run for real
+        result = store.gc_quarantine(max_age_seconds=7 * 24 * 60 * 60, dry_run=False)
+
+        assert "old_artifact" in result["deleted"]
+        assert not old_file.exists()
+        assert new_file.exists()
+
+    def test_gc_quarantine_size_based_cleanup(self, tmp_path):
+        """Test size-based cleanup of quarantined artifacts."""
+        store = ArtifactStore(tmp_path / "cas")
+
+        quarantine_dir = tmp_path / "cas" / "quarantine"
+        quarantine_dir.mkdir(parents=True, exist_ok=True)
+
+        # Create files with specific sizes
+        file1 = quarantine_dir / "file1"
+        file1.write_bytes(b"x" * 500)  # 500 bytes
+
+        file2 = quarantine_dir / "file2"
+        file2.write_bytes(b"x" * 300)  # 300 bytes
+
+        # Set different ages (file1 older)
+        old_time = time.time() - 100  # 100 seconds ago
+        os.utime(file1, (old_time, old_time))
+
+        # Run gc with size limit of 600 bytes (should delete oldest until under limit)
+        result = store.gc_quarantine(
+            max_age_seconds=7 * 24 * 60 * 60,  # Don't trigger age cleanup
+            max_size_bytes=600,
+            dry_run=True,
+        )
+
+        # file1 is oldest and should be deleted first to get under 600 bytes
+        assert "file1" in result["deleted"]
+        assert "file2" not in result["deleted"]
+
+    def test_gc_quarantine_dry_run_no_deletion(self, tmp_path):
+        """Test dry_run mode doesn't actually delete files."""
+        store = ArtifactStore(tmp_path / "cas")
+
+        quarantine_dir = tmp_path / "cas" / "quarantine"
+        quarantine_dir.mkdir(parents=True, exist_ok=True)
+
+        old_file = quarantine_dir / "old_artifact"
+        old_file.write_bytes(b"content")
+
+        # Backdate the file
+        old_time = time.time() - (30 * 24 * 60 * 60)  # 30 days ago
+        os.utime(old_file, (old_time, old_time))
+
+        # Dry run
+        result = store.gc_quarantine(dry_run=True)
+
+        assert "old_artifact" in result["deleted"]
+        # File should still exist
+        assert old_file.exists()
+        # In dry_run, reports what size would be after cleanup (0 if all files would be deleted)
+        assert result["total_size_after"] == 0
+
+    def test_gc_quarantine_accounting(self, tmp_path):
+        """Test size accounting in gc_quarantine results."""
+        store = ArtifactStore(tmp_path / "cas")
+
+        quarantine_dir = tmp_path / "cas" / "quarantine"
+        quarantine_dir.mkdir(parents=True, exist_ok=True)
+
+        # Create files
+        file1 = quarantine_dir / "keep"
+        file1.write_bytes(b"x" * 100)
+
+        file2 = quarantine_dir / "delete"
+        file2.write_bytes(b"x" * 200)
+
+        # Make file2 old
+        old_time = time.time() - (30 * 24 * 60 * 60)
+        os.utime(file2, (old_time, old_time))
+
+        result = store.gc_quarantine(dry_run=False)
+
+        assert result["total_size_before"] == 300
+        assert result["total_size_after"] == 100
+        assert "delete" in result["deleted"]
+        assert "keep" in result["retained"]
