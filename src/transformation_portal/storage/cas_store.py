@@ -31,6 +31,18 @@ Atomicity Contract:
     - Process B reads partial artifact
     → silent corruption / invalid CAS reuse
 
+Atomicity Contract:
+    All write operations use atomic semantics to prevent partial writes:
+    1. Write to temporary file (.tmp suffix)
+    2. fsync to ensure durability
+    3. Verify hash matches expected value
+    4. Atomic rename to final path
+
+    This prevents corruption in parallel execution scenarios where:
+    - Process A is writing artifact
+    - Process B reads partial artifact
+    → silent corruption / invalid CAS reuse
+
 Example:
     >>> store = ArtifactStore(Path("/cache/cas"))
     >>> obj = store.add_file(Path("model.safetensors"))
@@ -126,6 +138,8 @@ class CASFileLock:
             lock_path: Path to lock file (will be created)
             timeout: Maximum time to wait for lock (seconds)
         """
+        import time
+
         self._time = time
         self.lock_path = Path(lock_path)
         self.timeout = timeout
