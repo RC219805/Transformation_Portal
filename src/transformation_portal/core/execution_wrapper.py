@@ -533,7 +533,9 @@ class CASExecutor:
             # This handles numpy arrays and other complex types
             serializable_outputs = self._make_serializable(outputs, identity.cas_id)
 
-            # Compute output artifact ID from serializable form
+            # Compute metadata hash from serialized output structure
+            # Note: For numpy arrays, actual content is stored in CAS with its own SHA-256;
+            # this hash represents the output manifest structure for metadata purposes
             output_hash = hashlib.sha256(jcs_dumpb(serializable_outputs)).hexdigest()
 
             # Create artifact metadata

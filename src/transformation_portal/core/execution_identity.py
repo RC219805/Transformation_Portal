@@ -570,7 +570,10 @@ def compute_cas_id(
         else:
             # FAIL-CLOSED in CI: Missing lockfile hash is a determinism violation
             # that can cause cache poisoning and non-reproducible artifacts
-            if is_ci_environment() and not os.environ.get("TP_ALLOW_NONDETERMINISTIC"):
+            allow_nondet = os.environ.get("TP_ALLOW_NONDETERMINISTIC", "").lower() in (
+                "1", "true", "yes"
+            )
+            if is_ci_environment() and not allow_nondet:
                 raise DeterminismViolationError(
                     f"Missing lockfile_hash for stage '{stage_name}' in CI environment. "
                     "Deterministic builds require explicit lockfile_path parameter. "
