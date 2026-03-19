@@ -22,18 +22,18 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 
+from transformation_portal.core.cas_dag_executor import (
+    CASDAGConfig,
+    CASDAGExecutor,
+    CASExecutionResult,
+    verify_dag_determinism,
+)
 from transformation_portal.core.execution_wrapper import (
     CacheResult,
     CASExecutor,
     ExecutorConfig,
     FileLock,
     execute_with_caching,
-)
-from transformation_portal.core.cas_dag_executor import (
-    CASDAGConfig,
-    CASDAGExecutor,
-    CASExecutionResult,
-    verify_dag_determinism,
 )
 from transformation_portal.stage_graph.graph import StageGraph
 from transformation_portal.stage_graph.stage import Stage, StageContext, StageResult, StageStatus
@@ -143,12 +143,8 @@ class TestCASExecutor:
         executor, _ = executor_setup
         stage = SimpleStage("test_stage")
 
-        with patch(
-            "transformation_portal.core.execution_identity.compute_code_hash"
-        ) as mock_code:
-            with patch(
-                "transformation_portal.core.execution_identity.get_env_fingerprint"
-            ) as mock_env:
+        with patch("transformation_portal.core.execution_identity.compute_code_hash") as mock_code:
+            with patch("transformation_portal.core.execution_identity.get_env_fingerprint") as mock_env:
                 mock_code.return_value = "sha256:fixed_code"
                 mock_env.return_value = "sha256:fixed_env"
 
@@ -167,12 +163,8 @@ class TestCASExecutor:
         executor, _ = executor_setup
         stage = SimpleStage("test_stage")
 
-        with patch(
-            "transformation_portal.core.execution_identity.compute_code_hash"
-        ) as mock_code:
-            with patch(
-                "transformation_portal.core.execution_identity.get_env_fingerprint"
-            ) as mock_env:
+        with patch("transformation_portal.core.execution_identity.compute_code_hash") as mock_code:
+            with patch("transformation_portal.core.execution_identity.get_env_fingerprint") as mock_env:
                 mock_code.return_value = "sha256:fixed_code"
                 mock_env.return_value = "sha256:fixed_env"
 
@@ -199,12 +191,8 @@ class TestCASExecutor:
         executor, _ = executor_setup
         stage = SimpleStage("test_stage")
 
-        with patch(
-            "transformation_portal.core.execution_identity.compute_code_hash"
-        ) as mock_code:
-            with patch(
-                "transformation_portal.core.execution_identity.get_env_fingerprint"
-            ) as mock_env:
+        with patch("transformation_portal.core.execution_identity.compute_code_hash") as mock_code:
+            with patch("transformation_portal.core.execution_identity.get_env_fingerprint") as mock_env:
                 mock_code.return_value = "sha256:fixed_code"
                 mock_env.return_value = "sha256:fixed_env"
 
@@ -231,12 +219,8 @@ class TestCASExecutor:
         executor, _ = executor_setup
         stage = SimpleStage("test_stage")
 
-        with patch(
-            "transformation_portal.core.execution_identity.compute_code_hash"
-        ) as mock_code:
-            with patch(
-                "transformation_portal.core.execution_identity.get_env_fingerprint"
-            ) as mock_env:
+        with patch("transformation_portal.core.execution_identity.compute_code_hash") as mock_code:
+            with patch("transformation_portal.core.execution_identity.get_env_fingerprint") as mock_env:
                 mock_code.return_value = "sha256:fixed_code"
                 mock_env.return_value = "sha256:fixed_env"
 
@@ -277,12 +261,8 @@ class TestCASExecutor:
         stage = NumpyStage()
         arr = np.array([[1, 2], [3, 4]], dtype=np.float32)
 
-        with patch(
-            "transformation_portal.core.execution_identity.compute_code_hash"
-        ) as mock_code:
-            with patch(
-                "transformation_portal.core.execution_identity.get_env_fingerprint"
-            ) as mock_env:
+        with patch("transformation_portal.core.execution_identity.compute_code_hash") as mock_code:
+            with patch("transformation_portal.core.execution_identity.get_env_fingerprint") as mock_env:
                 mock_code.return_value = "sha256:fixed_code"
                 mock_env.return_value = "sha256:fixed_env"
 
@@ -306,12 +286,8 @@ class TestCASExecutor:
 
         stage = SimpleStage("test_stage")
 
-        with patch(
-            "transformation_portal.core.execution_identity.compute_code_hash"
-        ) as mock_code:
-            with patch(
-                "transformation_portal.core.execution_identity.get_env_fingerprint"
-            ) as mock_env:
+        with patch("transformation_portal.core.execution_identity.compute_code_hash") as mock_code:
+            with patch("transformation_portal.core.execution_identity.get_env_fingerprint") as mock_env:
                 mock_code.return_value = "sha256:fixed_code"
                 mock_env.return_value = "sha256:fixed_env"
 
@@ -340,12 +316,8 @@ class TestExecuteWithCaching:
             call_count += 1
             return {"result": inputs["x"] * 2}
 
-        with patch(
-            "transformation_portal.core.execution_identity.compute_code_hash"
-        ) as mock_code:
-            with patch(
-                "transformation_portal.core.execution_identity.get_env_fingerprint"
-            ) as mock_env:
+        with patch("transformation_portal.core.execution_identity.compute_code_hash") as mock_code:
+            with patch("transformation_portal.core.execution_identity.get_env_fingerprint") as mock_env:
                 mock_code.return_value = "sha256:fixed_code"
                 mock_env.return_value = "sha256:fixed_env"
 
@@ -417,12 +389,8 @@ class TestCASDAGExecutor:
 
         context = StageContext()
 
-        with patch(
-            "transformation_portal.core.execution_identity.compute_code_hash"
-        ) as mock_code:
-            with patch(
-                "transformation_portal.core.execution_identity.get_env_fingerprint"
-            ) as mock_env:
+        with patch("transformation_portal.core.execution_identity.compute_code_hash") as mock_code:
+            with patch("transformation_portal.core.execution_identity.get_env_fingerprint") as mock_env:
                 mock_code.return_value = "sha256:fixed_code"
                 mock_env.return_value = "sha256:fixed_env"
 
@@ -444,12 +412,8 @@ class TestCASDAGExecutor:
         graph.add_stage(stage1)
         graph.add_stage(stage2)
 
-        with patch(
-            "transformation_portal.core.execution_identity.compute_code_hash"
-        ) as mock_code:
-            with patch(
-                "transformation_portal.core.execution_identity.get_env_fingerprint"
-            ) as mock_env:
+        with patch("transformation_portal.core.execution_identity.compute_code_hash") as mock_code:
+            with patch("transformation_portal.core.execution_identity.get_env_fingerprint") as mock_env:
                 mock_code.return_value = "sha256:fixed_code"
                 mock_env.return_value = "sha256:fixed_env"
 
@@ -480,12 +444,8 @@ class TestCASDAGExecutor:
         graph.add_stage(stage1)
         graph.add_stage(stage2)
 
-        with patch(
-            "transformation_portal.core.execution_identity.compute_code_hash"
-        ) as mock_code:
-            with patch(
-                "transformation_portal.core.execution_identity.get_env_fingerprint"
-            ) as mock_env:
+        with patch("transformation_portal.core.execution_identity.compute_code_hash") as mock_code:
+            with patch("transformation_portal.core.execution_identity.get_env_fingerprint") as mock_env:
                 mock_code.return_value = "sha256:fixed_code"
                 mock_env.return_value = "sha256:fixed_env"
 
@@ -516,12 +476,8 @@ class TestCASDAGExecutor:
 
         context = StageContext()
 
-        with patch(
-            "transformation_portal.core.execution_identity.compute_code_hash"
-        ) as mock_code:
-            with patch(
-                "transformation_portal.core.execution_identity.get_env_fingerprint"
-            ) as mock_env:
+        with patch("transformation_portal.core.execution_identity.compute_code_hash") as mock_code:
+            with patch("transformation_portal.core.execution_identity.get_env_fingerprint") as mock_env:
                 mock_code.return_value = "sha256:fixed_code"
                 mock_env.return_value = "sha256:fixed_env"
 
@@ -540,12 +496,8 @@ class TestCASDAGExecutor:
 
         context = StageContext()
 
-        with patch(
-            "transformation_portal.core.execution_identity.compute_code_hash"
-        ) as mock_code:
-            with patch(
-                "transformation_portal.core.execution_identity.get_env_fingerprint"
-            ) as mock_env:
+        with patch("transformation_portal.core.execution_identity.compute_code_hash") as mock_code:
+            with patch("transformation_portal.core.execution_identity.get_env_fingerprint") as mock_env:
                 mock_code.return_value = "sha256:fixed_code"
                 mock_env.return_value = "sha256:fixed_env"
 
@@ -636,12 +588,8 @@ class TestVerifyDAGDeterminism:
 
         context = StageContext()
 
-        with patch(
-            "transformation_portal.core.execution_identity.compute_code_hash"
-        ) as mock_code:
-            with patch(
-                "transformation_portal.core.execution_identity.get_env_fingerprint"
-            ) as mock_env:
+        with patch("transformation_portal.core.execution_identity.compute_code_hash") as mock_code:
+            with patch("transformation_portal.core.execution_identity.get_env_fingerprint") as mock_env:
                 mock_code.return_value = "sha256:fixed_code"
                 mock_env.return_value = "sha256:fixed_env"
 
@@ -692,12 +640,8 @@ class TestCacheHitCompatibilityRegression:
 
         stage = CompatStage()
 
-        with patch(
-            "transformation_portal.core.execution_identity.compute_code_hash"
-        ) as mock_code:
-            with patch(
-                "transformation_portal.core.execution_identity.get_env_fingerprint"
-            ) as mock_env:
+        with patch("transformation_portal.core.execution_identity.compute_code_hash") as mock_code:
+            with patch("transformation_portal.core.execution_identity.get_env_fingerprint") as mock_env:
                 mock_code.return_value = "sha256:fixed_code"
                 mock_env.return_value = "sha256:fixed_env"
 
@@ -761,12 +705,8 @@ class TestNumpyOutputRegression:
 
         stage = NumpyOutputStage()
 
-        with patch(
-            "transformation_portal.core.execution_identity.compute_code_hash"
-        ) as mock_code:
-            with patch(
-                "transformation_portal.core.execution_identity.get_env_fingerprint"
-            ) as mock_env:
+        with patch("transformation_portal.core.execution_identity.compute_code_hash") as mock_code:
+            with patch("transformation_portal.core.execution_identity.get_env_fingerprint") as mock_env:
                 mock_code.return_value = "sha256:fixed_code"
                 mock_env.return_value = "sha256:fixed_env"
 
@@ -820,12 +760,8 @@ class TestNumpyOutputRegression:
 
         stage = ComplexOutputStage()
 
-        with patch(
-            "transformation_portal.core.execution_identity.compute_code_hash"
-        ) as mock_code:
-            with patch(
-                "transformation_portal.core.execution_identity.get_env_fingerprint"
-            ) as mock_env:
+        with patch("transformation_portal.core.execution_identity.compute_code_hash") as mock_code:
+            with patch("transformation_portal.core.execution_identity.get_env_fingerprint") as mock_env:
                 mock_code.return_value = "sha256:fixed_code"
                 mock_env.return_value = "sha256:fixed_env"
 
@@ -956,6 +892,74 @@ class TestNumpyInputIdentityRegression:
         ids2 = executor._compute_input_ids({"arr": arr2})
 
         assert ids1[0] == ids2[0], "Identical arrays should have same input ID"
+
+
+class TestDAGExecutorNumpyIdentityRegression:
+    """Regression tests for DAG executor NumPy artifact identity.
+
+    These tests verify that CASDAGExecutor._compute_stage_identity() correctly
+    includes dtype and shape when hashing NumPy artifacts, preventing false
+    cache hits in DAG execution paths.
+    """
+
+    def test_dag_executor_numpy_identity_includes_dtype(self):
+        """Test DAG executor uses dtype+shape+data for NumPy artifact identity."""
+        from transformation_portal.core.execution_wrapper import _compute_numpy_array_id
+
+        # Two arrays with same raw bytes but different semantics
+        arr_uint32 = np.array([1], dtype=np.uint32)  # 4 bytes: 01 00 00 00
+        arr_uint8 = np.array([1, 0, 0, 0], dtype=np.uint8)  # 4 bytes: 01 00 00 00
+
+        # Verify they have same raw bytes
+        assert arr_uint32.tobytes() == arr_uint8.tobytes()
+
+        # Compute IDs using the shared helper (used by DAG executor)
+        id1 = _compute_numpy_array_id(arr_uint32)
+        id2 = _compute_numpy_array_id(arr_uint8)
+
+        # They MUST be different despite same raw bytes
+        assert id1 != id2, "NumPy arrays with same bytes but different dtype must have different IDs"
+
+    def test_dag_executor_numpy_identity_includes_shape(self):
+        """Test DAG executor uses shape in NumPy artifact identity."""
+        from transformation_portal.core.execution_wrapper import _compute_numpy_array_id
+
+        # Two arrays with same bytes but different shapes
+        arr_1d = np.array([1, 2, 3, 4], dtype=np.float32)  # shape (4,)
+        arr_2d = np.array([[1, 2], [3, 4]], dtype=np.float32)  # shape (2, 2)
+
+        # Verify they have same raw bytes
+        assert arr_1d.tobytes() == arr_2d.tobytes()
+
+        # Compute IDs using the shared helper
+        id1 = _compute_numpy_array_id(arr_1d)
+        id2 = _compute_numpy_array_id(arr_2d)
+
+        # They MUST be different despite same raw bytes
+        assert id1 != id2, "NumPy arrays with same bytes but different shape must have different IDs"
+
+    def test_single_stage_and_dag_use_same_numpy_identity(self, tmp_path):
+        """Test single-stage and DAG executors use identical NumPy identity logic."""
+        from transformation_portal.core.execution_wrapper import _compute_numpy_array_id
+
+        cas_root = tmp_path / "cas"
+        cache_dir = tmp_path / "cache"
+        store = ArtifactStore(cas_root)
+
+        # Create single-stage executor
+        single_executor = CASExecutor(store, cache_dir)
+
+        # Test array
+        arr = np.array([[1, 2], [3, 4]], dtype=np.float32)
+
+        # Get ID from single-stage executor's _compute_input_ids
+        single_stage_id = single_executor._compute_input_ids({"arr": arr})[0]
+
+        # Get ID from shared helper (used by DAG executor)
+        dag_helper_id = _compute_numpy_array_id(arr)
+
+        # They MUST be identical - same helper is used
+        assert single_stage_id == dag_helper_id, "Single-stage and DAG executors must use same NumPy identity logic"
 
 
 class TestAtomicCacheWrites:

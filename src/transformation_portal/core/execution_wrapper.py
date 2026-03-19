@@ -118,6 +118,27 @@ def _atomic_write_json(path: Path, data: dict[str, Any]) -> None:
         raise
 
 
+def _compute_numpy_array_id(arr: Any) -> str:
+    """Compute a unique ID for a NumPy array including dtype, shape, and data.
+
+    This prevents false cache hits between arrays with the same raw bytes
+    but different semantics (e.g., np.array([1], dtype=uint32) vs
+    np.array([1,0,0,0], dtype=uint8) both have the same 4 bytes).
+
+    Args:
+        arr: NumPy array (must have dtype, shape, and tobytes() attributes)
+
+    Returns:
+        SHA-256 hex digest of the array manifest
+    """
+    array_manifest = {
+        "dtype": str(arr.dtype),
+        "shape": list(arr.shape),
+        "data_sha256": hashlib.sha256(arr.tobytes()).hexdigest(),
+    }
+    return hashlib.sha256(jcs_dumpb(array_manifest)).hexdigest()
+
+
 class CASObjectMissingError(Exception):
     """Raised when a referenced CAS object is missing during cache load."""
 
@@ -583,15 +604,8 @@ class CASExecutor:
             value = inputs[key]
 
             if isinstance(value, np.ndarray):
-                # Include dtype, shape, and data bytes to avoid false hits
-                # between arrays with same bytes but different semantics
-                # (e.g., np.array([1], dtype=np.uint32) vs np.array([1,0,0,0], dtype=np.uint8))
-                array_manifest = {
-                    "dtype": str(value.dtype),
-                    "shape": list(value.shape),
-                    "data_sha256": hashlib.sha256(value.tobytes()).hexdigest(),
-                }
-                ids.append(hashlib.sha256(jcs_dumpb(array_manifest)).hexdigest())
+                # Use shared helper for consistent NumPy identity across executors
+                ids.append(_compute_numpy_array_id(value))
             elif isinstance(value, (bytes, bytearray)):
                 ids.append(hashlib.sha256(value).hexdigest())
             elif isinstance(value, str):

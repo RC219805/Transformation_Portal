@@ -54,13 +54,14 @@ from transformation_portal.core.execution_identity import (
     is_compatible,
     resolve_platform_lockfile,
 )
+from transformation_portal.core.execution_wrapper import _atomic_write_json  # Shared atomic cache writes
+from transformation_portal.core.execution_wrapper import _compute_numpy_array_id  # Shared NumPy identity computation
+from transformation_portal.core.execution_wrapper import _sanitize_cas_id_for_filename  # Shared filename sanitization
 from transformation_portal.core.execution_wrapper import (
     CASExecutor,
     CASObjectMissingError,
     ExecutorConfig,
     FileLock,
-    _atomic_write_json,  # Shared atomic cache writes
-    _sanitize_cas_id_for_filename,  # Shared filename sanitization
 )
 from transformation_portal.determinism.jcs import dumpb as jcs_dumpb
 from transformation_portal.stage_graph.graph import GraphExecution, StageGraph
@@ -243,6 +244,8 @@ class CASDAGExecutor:
         Returns:
             ExecutionIdentity for this stage execution
         """
+        import numpy as np
+
         # Collect input IDs from context artifacts
         input_ids = []
 
@@ -254,7 +257,12 @@ class CASDAGExecutor:
             # Also include actual artifact hashes
             artifact = context.get_artifact(dep_name)
             if artifact is not None:
-                if hasattr(artifact, "tobytes"):
+                if isinstance(artifact, np.ndarray):
+                    # Use shared helper for consistent NumPy identity across executors
+                    # This includes dtype, shape, and data hash to avoid false cache hits
+                    input_ids.append(_compute_numpy_array_id(artifact))
+                elif hasattr(artifact, "tobytes"):
+                    # Non-NumPy types with tobytes (e.g., custom array-like)
                     input_ids.append(hashlib.sha256(artifact.tobytes()).hexdigest())
                 elif isinstance(artifact, dict):
                     input_ids.append(hashlib.sha256(jcs_dumpb(artifact)).hexdigest())
@@ -316,11 +324,7 @@ class CASDAGExecutor:
         merkle_node_hashes[stage_name] = artifact_hash
 
         # Add computation node if there are upstream dependencies
-        upstream_hashes = [
-            merkle_node_hashes[d]
-            for d in stage.get_dependencies()
-            if d in merkle_node_hashes
-        ]
+        upstream_hashes = [merkle_node_hashes[d] for d in stage.get_dependencies() if d in merkle_node_hashes]
         if upstream_hashes:
             computation_metadata = {"version": stage.version}
             if duration_ms is not None:
