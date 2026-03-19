@@ -655,3 +655,238 @@ class TestVerifyDAGDeterminism:
                 assert is_det is True
                 assert len(hashes["deterministic"]) == 2
                 assert hashes["deterministic"][0] == hashes["deterministic"][1]
+
+
+class TestCacheHitCompatibilityRegression:
+    """Regression tests for cache-hit compatibility validation.
+
+    These tests verify the fix for PR #1226 blocking issue #1:
+    is_compatible() was called with wrong kwarg (allow_cpu_fallback vs allow_cross_platform).
+    """
+
+    def test_cache_hit_compatibility_check(self, tmp_path):
+        """Test that cache hit with metadata runs compatibility check without error."""
+        cas_root = tmp_path / "cas"
+        cache_dir = tmp_path / "cache"
+        store = ArtifactStore(cas_root)
+
+        # Executor with cross-platform disabled (strict mode)
+        config = ExecutorConfig(allow_cross_platform=False)
+        executor = CASExecutor(store, cache_dir, config)
+
+        class CompatStage:
+            @property
+            def name(self) -> str:
+                return "compat_test"
+
+            @property
+            def version(self) -> str:
+                return "1.0.0"
+
+            def __init__(self):
+                self.call_count = 0
+
+            def execute(self, inputs: Dict[str, Any], config: Any) -> Dict[str, Any]:
+                self.call_count += 1
+                return {"value": inputs.get("x", 0) * 2}
+
+        stage = CompatStage()
+
+        with patch(
+            "transformation_portal.core.execution_identity.compute_code_hash"
+        ) as mock_code:
+            with patch(
+                "transformation_portal.core.execution_identity.get_env_fingerprint"
+            ) as mock_env:
+                mock_code.return_value = "sha256:fixed_code"
+                mock_env.return_value = "sha256:fixed_env"
+
+                # First execution - cache miss
+                result1 = executor.execute(
+                    stage=stage,
+                    inputs={"x": 5},
+                    config={},
+                )
+                assert result1.cache_hit is False
+                assert result1.outputs["value"] == 10
+                assert stage.call_count == 1
+
+                # Second execution - cache hit with compatibility check
+                # This should NOT raise TypeError about allow_cpu_fallback
+                result2 = executor.execute(
+                    stage=stage,
+                    inputs={"x": 5},
+                    config={},
+                )
+                assert result2.cache_hit is True
+                assert result2.outputs["value"] == 10
+                assert stage.call_count == 1  # No additional call
+
+
+class TestNumpyOutputRegression:
+    """Regression tests for numpy array output handling.
+
+    These tests verify the fix for PR #1226 blocking issue #3:
+    jcs_dumpb(outputs) was called on raw outputs containing numpy arrays,
+    which would fail serialization. Now we serialize first, then hash.
+    """
+
+    def test_numpy_output_cache_miss_and_hit(self, tmp_path):
+        """Test stage returning numpy array can cache miss and hit."""
+        cas_root = tmp_path / "cas"
+        cache_dir = tmp_path / "cache"
+        store = ArtifactStore(cas_root)
+
+        executor = CASExecutor(store, cache_dir)
+
+        class NumpyOutputStage:
+            @property
+            def name(self) -> str:
+                return "numpy_output_stage"
+
+            @property
+            def version(self) -> str:
+                return "1.0.0"
+
+            def __init__(self):
+                self.call_count = 0
+
+            def execute(self, inputs: Dict[str, Any], config: Any) -> Dict[str, Any]:
+                self.call_count += 1
+                # Return numpy array in outputs - this is the regression case
+                return {
+                    "depth_map": np.zeros((10, 10), dtype=np.float32),
+                    "scalar": 42,
+                }
+
+        stage = NumpyOutputStage()
+
+        with patch(
+            "transformation_portal.core.execution_identity.compute_code_hash"
+        ) as mock_code:
+            with patch(
+                "transformation_portal.core.execution_identity.get_env_fingerprint"
+            ) as mock_env:
+                mock_code.return_value = "sha256:fixed_code"
+                mock_env.return_value = "sha256:fixed_env"
+
+                # First execution - cache miss (should not fail on numpy serialization)
+                result1 = executor.execute(
+                    stage=stage,
+                    inputs={},
+                    config={},
+                )
+                assert result1.cache_hit is False
+                assert isinstance(result1.outputs["depth_map"], np.ndarray)
+                assert result1.outputs["scalar"] == 42
+                assert stage.call_count == 1
+
+                # Second execution - cache hit
+                result2 = executor.execute(
+                    stage=stage,
+                    inputs={},
+                    config={},
+                )
+                assert result2.cache_hit is True
+                assert isinstance(result2.outputs["depth_map"], np.ndarray)
+                assert result2.outputs["scalar"] == 42
+                assert stage.call_count == 1  # No additional call
+
+    def test_complex_numpy_output(self, tmp_path):
+        """Test stage with nested numpy arrays in output dict."""
+        cas_root = tmp_path / "cas"
+        cache_dir = tmp_path / "cache"
+        store = ArtifactStore(cas_root)
+
+        executor = CASExecutor(store, cache_dir)
+
+        class ComplexOutputStage:
+            @property
+            def name(self) -> str:
+                return "complex_stage"
+
+            @property
+            def version(self) -> str:
+                return "1.0.0"
+
+            def execute(self, inputs: Dict[str, Any], config: Any) -> Dict[str, Any]:
+                return {
+                    "features": {
+                        "depth": np.ones((5, 5), dtype=np.float32),
+                        "normals": np.zeros((5, 5, 3), dtype=np.float32),
+                    },
+                    "metadata": {"count": 25},
+                }
+
+        stage = ComplexOutputStage()
+
+        with patch(
+            "transformation_portal.core.execution_identity.compute_code_hash"
+        ) as mock_code:
+            with patch(
+                "transformation_portal.core.execution_identity.get_env_fingerprint"
+            ) as mock_env:
+                mock_code.return_value = "sha256:fixed_code"
+                mock_env.return_value = "sha256:fixed_env"
+
+                # Execute - should handle nested numpy arrays
+                result = executor.execute(
+                    stage=stage,
+                    inputs={},
+                    config={},
+                )
+                assert result.cache_hit is False
+                assert isinstance(result.outputs["features"]["depth"], np.ndarray)
+                assert result.outputs["metadata"]["count"] == 25
+
+
+class TestCILockfileEnforcement:
+    """Tests for CI lockfile enforcement at executor level.
+
+    These tests verify the fix for PR #1226 blocking issue #2:
+    compute_cas_id() is called without lockfile_path/lockfile_hash in executors.
+    """
+
+    def test_executor_resolves_lockfile(self, tmp_path):
+        """Test that executor resolves lockfile path on init."""
+        cas_root = tmp_path / "cas"
+        cache_dir = tmp_path / "cache"
+        store = ArtifactStore(cas_root)
+
+        executor = CASExecutor(store, cache_dir)
+
+        # Executor should have resolved lockfile path (or None if not found)
+        # The key is that it's set, not that it fails
+        assert hasattr(executor, "_lockfile_path")
+
+    def test_executor_uses_explicit_lockfile_path(self, tmp_path):
+        """Test that executor uses explicit lockfile_path from config."""
+        cas_root = tmp_path / "cas"
+        cache_dir = tmp_path / "cache"
+        store = ArtifactStore(cas_root)
+
+        # Create a test lockfile
+        lockfile = tmp_path / "test-lockfile.txt"
+        lockfile.write_text("test-package==1.0.0\n")
+
+        config = ExecutorConfig(lockfile_path=str(lockfile))
+        executor = CASExecutor(store, cache_dir, config)
+
+        assert executor._lockfile_path == str(lockfile)
+
+    def test_dag_executor_threads_lockfile(self, tmp_path):
+        """Test that DAG executor threads lockfile to stage executor."""
+        cas_root = tmp_path / "cas"
+        cache_dir = tmp_path / "cache"
+        store = ArtifactStore(cas_root)
+
+        # Create a test lockfile
+        lockfile = tmp_path / "dag-lockfile.txt"
+        lockfile.write_text("torch==2.2.2\n")
+
+        config = CASDAGConfig(lockfile_path=str(lockfile))
+        executor = CASDAGExecutor(store, cache_dir, config)
+
+        # Both executor and internal stage executor should have same path
+        assert executor._lockfile_path == str(lockfile)
+        assert executor._stage_executor._lockfile_path == str(lockfile)

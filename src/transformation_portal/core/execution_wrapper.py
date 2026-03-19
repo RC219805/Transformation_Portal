@@ -44,6 +44,7 @@ from transformation_portal.core.execution_identity import (
     compute_cas_id,
     create_artifact_metadata,
     is_compatible,
+    resolve_platform_lockfile,
     should_execute,
 )
 from transformation_portal.determinism.jcs import dumpb as jcs_dumpb
@@ -98,18 +99,20 @@ class ExecutorConfig:
     Attributes:
         enable_caching: If False, always execute (no cache lookup)
         verify_on_load: If True, verify artifact integrity on cache hit
-        allow_cpu_fallback: If True, allow CPU artifacts on any platform
+        allow_cross_platform: If True, allow cross-platform CPU artifacts
         lock_timeout: Timeout for acquiring file locks (seconds)
         max_retries: Maximum retries for failed executions
         code_paths: Paths to include in code hash computation
+        lockfile_path: Path to lockfile for deterministic builds (CI-required)
     """
 
     enable_caching: bool = True
     verify_on_load: bool = True
-    allow_cpu_fallback: bool = False
+    allow_cross_platform: bool = False
     lock_timeout: float = 300.0  # 5 minutes
     max_retries: int = 0
     code_paths: list[str] = field(default_factory=lambda: ["src/"])
+    lockfile_path: Optional[str] = None
 
 
 class FileLock:
@@ -248,6 +251,14 @@ class CASExecutor:
 
         self._code_hash = compute_code_hash(self.config.code_paths)
 
+        # Resolve lockfile path for CI determinism (ADR-032)
+        # Use explicit path if provided, otherwise auto-resolve
+        if self.config.lockfile_path:
+            self._lockfile_path = str(self.config.lockfile_path)
+        else:
+            resolved = resolve_platform_lockfile()
+            self._lockfile_path = str(resolved) if resolved else None
+
     def _get_lock(self, cas_id: str) -> FileLock:
         """Get file lock for a CAS ID."""
         lock_file = self.locks_dir / f"{cas_id}.lock"
@@ -270,13 +281,31 @@ class CASExecutor:
         outputs: dict[str, Any],
         metadata: ArtifactMetadata,
     ) -> None:
-        """Save result and metadata to cache."""
+        """Save result and metadata to cache.
+
+        Note: This method serializes outputs before saving.
+        For pre-serialized outputs, use _save_result_serialized().
+        """
+        # Handle numpy arrays in outputs
+        serializable_outputs = self._make_serializable(outputs, cas_id)
+        self._save_result_serialized(cas_id, serializable_outputs, metadata)
+
+    def _save_result_serialized(
+        self,
+        cas_id: str,
+        serializable_outputs: dict[str, Any],
+        metadata: ArtifactMetadata,
+    ) -> None:
+        """Save pre-serialized result and metadata to cache.
+
+        Args:
+            cas_id: CAS identity hash
+            serializable_outputs: Already-serialized outputs (from _make_serializable)
+            metadata: Artifact metadata
+        """
         # Save result
         result_path = self._result_path(cas_id)
         result_path.parent.mkdir(parents=True, exist_ok=True)
-
-        # Handle numpy arrays in outputs
-        serializable_outputs = self._make_serializable(outputs, cas_id)
 
         result_data = {
             "cas_id": cas_id,
@@ -431,13 +460,14 @@ class CASExecutor:
         # Compute input IDs
         input_ids = self._compute_input_ids(inputs)
 
-        # Compute execution identity
+        # Compute execution identity (with lockfile for CI determinism)
         identity = compute_cas_id(
             stage_name=stage.name,
             input_ids=input_ids,
             config=config,
             stage_version=stage.version,
             code_hash=self._code_hash,
+            lockfile_path=self._lockfile_path,
         )
 
         logger.debug(
@@ -454,7 +484,7 @@ class CASExecutor:
                 metadata = self._load_metadata(identity.cas_id)
                 if metadata and not is_compatible(
                     metadata,
-                    allow_cpu_fallback=self.config.allow_cpu_fallback,
+                    allow_cross_platform=self.config.allow_cross_platform,
                 ):
                     logger.info(
                         "Cache hit for %s but incompatible platform, re-executing",
@@ -499,8 +529,12 @@ class CASExecutor:
             logger.info("Executing %s (cache miss)", stage.name)
             outputs = stage.execute(inputs, config)
 
-            # Compute output artifact ID
-            output_hash = hashlib.sha256(jcs_dumpb(outputs)).hexdigest()
+            # Convert outputs to serializable form BEFORE hashing
+            # This handles numpy arrays and other complex types
+            serializable_outputs = self._make_serializable(outputs, identity.cas_id)
+
+            # Compute output artifact ID from serializable form
+            output_hash = hashlib.sha256(jcs_dumpb(serializable_outputs)).hexdigest()
 
             # Create artifact metadata
             metadata = create_artifact_metadata(
@@ -508,8 +542,8 @@ class CASExecutor:
                 execution_identity=identity,
             )
 
-            # Save result
-            self._save_result(identity.cas_id, outputs, metadata)
+            # Save result (uses already-serialized outputs)
+            self._save_result_serialized(identity.cas_id, serializable_outputs, metadata)
 
             duration_ms = (time.time() - start_time) * 1000
             logger.info(

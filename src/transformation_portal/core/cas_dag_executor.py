@@ -52,6 +52,7 @@ from transformation_portal.core.execution_identity import (
     compute_code_hash,
     create_artifact_metadata,
     is_compatible,
+    resolve_platform_lockfile,
 )
 from transformation_portal.core.execution_wrapper import (
     CASExecutor,
@@ -122,21 +123,23 @@ class CASDAGConfig:
         enable_caching: If False, always execute (no cache lookup)
         enable_provenance: If True, build Merkle DAG for lineage
         verify_on_load: If True, verify artifact integrity on cache hit
-        allow_cpu_fallback: If True, allow CPU artifacts on any platform
+        allow_cross_platform: If True, allow cross-platform CPU artifacts
         parallel: If True, execute independent stages in parallel
         max_workers: Maximum parallel workers
         lock_timeout: Timeout for file locks (seconds)
         code_paths: Paths to include in code hash computation
+        lockfile_path: Path to lockfile for deterministic builds (CI-required)
     """
 
     enable_caching: bool = True
     enable_provenance: bool = True
     verify_on_load: bool = True
-    allow_cpu_fallback: bool = False
+    allow_cross_platform: bool = False
     parallel: bool = True
     max_workers: int = 4
     lock_timeout: float = 300.0
     code_paths: List[str] = field(default_factory=lambda: ["src/"])
+    lockfile_path: Optional[str] = None
 
 
 class CASDAGExecutor:
@@ -195,13 +198,21 @@ class CASDAGExecutor:
         # Pre-compute code hash
         self._code_hash = compute_code_hash(self.config.code_paths)
 
+        # Resolve lockfile path for CI determinism (ADR-032)
+        if self.config.lockfile_path:
+            self._lockfile_path = str(self.config.lockfile_path)
+        else:
+            resolved = resolve_platform_lockfile()
+            self._lockfile_path = str(resolved) if resolved else None
+
         # Stage executor
         executor_config = ExecutorConfig(
             enable_caching=self.config.enable_caching,
             verify_on_load=self.config.verify_on_load,
-            allow_cpu_fallback=self.config.allow_cpu_fallback,
+            allow_cross_platform=self.config.allow_cross_platform,
             lock_timeout=self.config.lock_timeout,
             code_paths=self.config.code_paths,
+            lockfile_path=self._lockfile_path,
         )
         self._stage_executor = CASExecutor(
             artifact_store=artifact_store,
@@ -256,6 +267,7 @@ class CASDAGExecutor:
             config=stage_config,
             stage_version=stage.version,
             code_hash=self._code_hash,
+            lockfile_path=self._lockfile_path,
         )
 
     def _get_lock(self, stage_name: str, cas_id: str) -> FileLock:
@@ -522,7 +534,7 @@ class CASDAGExecutor:
                 metadata = ArtifactMetadata.from_dict(metadata_dict)
                 if not is_compatible(
                     metadata,
-                    allow_cpu_fallback=self.config.allow_cpu_fallback,
+                    allow_cross_platform=self.config.allow_cross_platform,
                 ):
                     logger.debug("Cache platform mismatch for %s", identity.cas_id[:16])
                     return None
