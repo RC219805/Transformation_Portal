@@ -185,12 +185,15 @@ class PlatformMatrix:
             - cve_2025_32434_note: Security note for CVE-2025-32434
             - mitigation: Required mitigation steps
             - secure: True if platform has secure torch wheels available
+            - ml_supported: True if ML stack is supported on this platform
 
         Security Context (CVE-2025-32434):
             PyTorch torch==2.2.2 is pinned for CAS determinism (ADR-032).
             This version is vulnerable to RCE via torch.load().
             All platforms must use weights_only=True for torch.load() calls.
         """
+        import os
+
         base_mitigation = (
             "All torch.load() calls must use weights_only=True. "
             "Use transformation_portal.core.security.torch_security.safe_load() "
@@ -198,6 +201,8 @@ class PlatformMatrix:
         )
 
         if self.is_macos_intel:
+            # Check for bypass environment variable
+            allow_bypass = os.environ.get("TP_ALLOW_MACOS_INTEL_ML", "0") == "1"
             return {
                 "platform": self.canonical_target,
                 "cve_2025_32434_note": (
@@ -206,6 +211,7 @@ class PlatformMatrix:
                 ),
                 "mitigation": base_mitigation,
                 "secure": False,  # macOS Intel has no torch>=2.6.0 wheels (dropped platform support)
+                "ml_supported": allow_bypass,  # Only if explicitly bypassed
             }
         else:
             return {
@@ -216,13 +222,35 @@ class PlatformMatrix:
                 ),
                 "mitigation": base_mitigation,
                 "secure": True,  # Secure when mitigation is applied
+                "ml_supported": True,
             }
+
+    def assert_ml_supported(self) -> None:
+        """Assert that ML stack is supported on this platform.
+
+        Raises:
+            RuntimeError: If ML stack is not supported (e.g., macOS Intel)
+
+        Call this at ML stack initialization to enforce security policy.
+        This is a HARD FAIL, not a warning.
+        """
+        status = self.check_ml_security_posture()
+        if not status.get("ml_supported", True):
+            raise RuntimeError(
+                f"ML stack not supported on {status['platform']}. "
+                f"{status['cve_2025_32434_note']} "
+                "Migrate to macOS Apple Silicon or Linux. "
+                "To bypass (NOT RECOMMENDED): export TP_ALLOW_MACOS_INTEL_ML=1"
+            )
 
     def warn_if_insecure_ml_platform(self) -> None:
         """Emit warning if ML stack has known security considerations.
 
         Call this when initializing ML workloads to alert users about
         security mitigations required for CVE-2025-32434.
+
+        Note: This is a warning, not a hard fail. Use assert_ml_supported()
+        for enforcement.
         """
         import warnings
 
@@ -387,6 +415,7 @@ def compute_lockfile_hash(lockfile_path: str) -> str:
 def get_platform_fingerprint(
     accel: Optional[str] = None,
     lockfile_path: Optional[str] = None,
+    include_security_profile: bool = True,
 ) -> Dict[str, Any]:
     """Get comprehensive platform fingerprint for artifact provenance.
 
@@ -396,12 +425,15 @@ def get_platform_fingerprint(
     - Pip version
     - Environment fingerprint (pip freeze hash)
     - Lockfile hash (if provided)
+    - Security profile hash (CVE mitigation status)
 
     Args:
         accel: Explicit acceleration profile ("cpu", "mps", "cuda").
                If None, defaults to "cpu".
         lockfile_path: Path to the lockfile used for installation.
                        If provided, its hash is included in the fingerprint.
+        include_security_profile: If True, include security profile in fingerprint.
+                                  Default True for CAS identity completeness.
 
     Returns:
         Dictionary with complete platform identity for CAS.
@@ -422,29 +454,70 @@ def get_platform_fingerprint(
     if lockfile_path:
         fingerprint["lockfile_hash"] = compute_lockfile_hash(lockfile_path)
 
+    # Include security profile for CAS identity (ADR-032 security layer)
+    if include_security_profile:
+        fingerprint["security_profile"] = get_security_profile()
+
     return fingerprint
+
+
+def get_security_profile() -> Dict[str, Any]:
+    """Get current security profile for CAS identity.
+
+    Returns:
+        Dictionary with security profile information:
+        - version: Security profile version identifier
+        - enforcement_installed: Whether torch.load enforcement is active
+        - profile_hash: SHA256 hash of security configuration
+
+    This ensures artifacts from different security configurations
+    (e.g., with/without torch.load enforcement) are not mixed.
+    """
+    try:
+        from transformation_portal.core.security.torch_security import (
+            SECURITY_PROFILE_VERSION,
+            get_security_profile_hash,
+            is_enforcement_installed,
+        )
+
+        return {
+            "version": SECURITY_PROFILE_VERSION,
+            "enforcement_installed": is_enforcement_installed(),
+            "profile_hash": get_security_profile_hash(),
+        }
+    except ImportError:
+        # torch_security module not available
+        return {
+            "version": "unknown",
+            "enforcement_installed": False,
+            "profile_hash": "sha256:unknown-module-unavailable",
+        }
 
 
 def compute_cas_identity(
     accel: Optional[str] = None,
     lockfile_path: Optional[str] = None,
+    include_security_profile: bool = True,
 ) -> str:
     """Compute a single CAS identity string from platform fingerprint.
 
     This produces a deterministic hash that can be used as part of a CAS key
-    to ensure reproducibility. If the platform, environment, or lockfile changes,
-    the CAS identity will change, invalidating cached artifacts.
+    to ensure reproducibility. If the platform, environment, lockfile, or
+    security profile changes, the CAS identity will change, invalidating
+    cached artifacts.
 
     Args:
         accel: Explicit acceleration profile ("cpu", "mps", "cuda").
         lockfile_path: Path to the lockfile used for installation.
+        include_security_profile: If True, include security profile in identity.
+                                  Default True for complete security posture.
 
     Returns:
         CAS identity in format "sha256:..."
     """
     import json
 
-    fingerprint = get_platform_fingerprint(accel, lockfile_path)
+    fingerprint = get_platform_fingerprint(accel, lockfile_path, include_security_profile)
     # Sort keys for deterministic serialization
     canonical = json.dumps(fingerprint, sort_keys=True, separators=(",", ":"))
     digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
