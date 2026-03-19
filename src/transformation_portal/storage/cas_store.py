@@ -35,7 +35,7 @@ import shutil
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -390,7 +390,7 @@ class ArtifactStore:
         max_age_seconds: int = QUARANTINE_MAX_AGE_SECONDS,
         max_size_bytes: int = QUARANTINE_MAX_SIZE_BYTES,
         dry_run: bool = True,
-    ) -> dict[str, any]:
+    ) -> dict[str, Any]:
         """Garbage collect quarantined artifacts based on lifecycle policy.
 
         Quarantine cleanup is based on two policies:
