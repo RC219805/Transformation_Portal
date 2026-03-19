@@ -173,9 +173,10 @@ class TestTorchSecurityEnforcement:
         install_global_enforcement()
 
         if is_enforcement_installed():
-            import torch
-            import tempfile
             import pickle
+            import tempfile
+
+            import torch
 
             # Create a test file with a simple pickled tensor
             with tempfile.NamedTemporaryFile(suffix=".pt", delete=False) as f:
