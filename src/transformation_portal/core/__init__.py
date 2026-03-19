@@ -27,15 +27,21 @@ Architecture Goals:
 Version: 1.1.0 (Phase 2 Deterministic Execution Layer)
 """
 
+from .cas_dag_executor import (
+    CASDAGConfig,
+    CASDAGExecutor,
+    CASExecutionResult,
+    verify_dag_determinism,
+)
 from .config import ConfigSchema, DeviceConfig, PathsConfig, PerformanceConfig, PresetRegistry, load_preset, validate_config
 from .device import DeviceCapabilities, DeviceDetector, DeviceType, MemoryManager, PerformanceProfiler
 from .execution_identity import (
     ALLOW_CROSS_PLATFORM,
-    ArtifactMetadata,
     CAS_IDENTITY_VERSION,
+    LOCKFILE_HASH_PLACEHOLDER,
+    ArtifactMetadata,
     DeterminismViolationError,
     ExecutionIdentity,
-    LOCKFILE_HASH_PLACEHOLDER,
     compute_cas_id,
     compute_code_hash,
     compute_config_hash,
@@ -55,12 +61,6 @@ from .execution_wrapper import (
     ExecutorConfig,
     FileLock,
     execute_with_caching,
-)
-from .cas_dag_executor import (
-    CASDAGConfig,
-    CASDAGExecutor,
-    CASExecutionResult,
-    verify_dag_determinism,
 )
 from .platform_matrix import (
     CURRENT_PLATFORM,
