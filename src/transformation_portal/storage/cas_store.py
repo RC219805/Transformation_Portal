@@ -298,16 +298,21 @@ class ArtifactStore:
         if verify:
             actual_sha = self._sha256_file(src)
             if actual_sha.lower() != sha256.lower():
-                # Corruption detected - delete the corrupt object
+                # Corruption detected - quarantine instead of delete for forensics
+                quarantine_dir = self.root / "quarantine"
+                quarantine_dir.mkdir(parents=True, exist_ok=True)
+                quarantine_path = quarantine_dir / f"{sha256}_{actual_sha[:16]}"
                 logger.error(
-                    "CAS corruption detected: expected %s, got %s. Deleting corrupt artifact.",
+                    "CAS corruption detected: expected %s, got %s. " "Moving to quarantine: %s",
                     sha256[:8],
                     actual_sha[:8],
+                    quarantine_path,
                 )
-                src.unlink()
+                # Move to quarantine for forensic analysis
+                shutil.move(str(src), str(quarantine_path))
                 raise CASError(
                     f"CAS hash verification failed: expected {sha256}, got {actual_sha}. "
-                    "Corrupt artifact has been deleted. Re-run to regenerate."
+                    f"Corrupt artifact quarantined at {quarantine_path}. Re-run to regenerate."
                 )
 
         dest.parent.mkdir(parents=True, exist_ok=True)
