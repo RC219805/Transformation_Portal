@@ -632,26 +632,39 @@ def should_execute(
     identity: ExecutionIdentity,
     artifact_store: Any,  # ArtifactStore from storage.cas_store
 ) -> bool:
-    """Determine if stage should execute or use cached result.
+    """Check if an artifact exists in the CAS store.
 
-    This is the execution gate that enables CAS-aware skipping.
+    IMPORTANT: This function checks if an object exists in the CAS store
+    keyed by the raw SHA-256 digest portion of the CAS ID. However, the
+    CASExecutor stores stage results in a separate result cache directory,
+    NOT in the ArtifactStore keyed by CAS ID.
+
+    This function is primarily useful for checking if specific artifacts
+    (like numpy arrays) have been stored in CAS, not for checking if a
+    stage execution has been cached.
+
+    For checking if a stage should execute, use CASExecutor directly,
+    which handles result cache lookups properly.
 
     Args:
         identity: Execution identity for the stage
-        artifact_store: ArtifactStore instance to check for cached results
+        artifact_store: ArtifactStore instance to check
 
     Returns:
-        True if stage should execute (cache miss), False if cached (cache hit)
+        True if CAS object does NOT exist (should execute)
+        False if CAS object exists (cached)
 
-    Example:
-        >>> identity = compute_cas_id(...)
-        >>> if should_execute(identity, artifact_store):
-        ...     result = stage.run(inputs)
-        ...     artifact_store.store(identity.cas_id, result)
-        ... else:
-        ...     result = artifact_store.load(identity.cas_id)
+    Note:
+        The CAS ID format is 'sha256:<hex_digest>'. This function
+        extracts the hex digest portion before checking the store.
     """
-    return not artifact_store.has_object(identity.cas_id)
+    # Extract the hex digest from the CAS ID
+    cas_id = identity.cas_id
+    if cas_id.startswith("sha256:"):
+        sha256_digest = cas_id[7:]
+    else:
+        sha256_digest = cas_id
+    return not artifact_store.has_object(sha256_digest)
 
 
 def explain_cache_miss(

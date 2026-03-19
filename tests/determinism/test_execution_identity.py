@@ -392,7 +392,8 @@ class TestShouldExecute:
         )
 
         assert should_execute(identity, mock_store) is True
-        mock_store.has_object.assert_called_once_with("sha256:notfound")
+        # should_execute extracts the hex digest from the CAS ID
+        mock_store.has_object.assert_called_once_with("notfound")
 
     def test_should_execute_cache_hit(self):
         """Test should_execute returns False on cache hit."""
@@ -412,6 +413,8 @@ class TestShouldExecute:
         )
 
         assert should_execute(identity, mock_store) is False
+        # should_execute extracts the hex digest from the CAS ID
+        mock_store.has_object.assert_called_once_with("found")
 
 
 class TestIsCompatible:

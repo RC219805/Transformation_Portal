@@ -56,9 +56,11 @@ from transformation_portal.core.execution_identity import (
 )
 from transformation_portal.core.execution_wrapper import (
     CASExecutor,
+    CASObjectMissingError,
     ExecutorConfig,
     FileLock,
     _atomic_write_json,  # Shared atomic cache writes
+    _sanitize_cas_id_for_filename,  # Shared filename sanitization
 )
 from transformation_portal.determinism.jcs import dumpb as jcs_dumpb
 from transformation_portal.stage_graph.graph import GraphExecution, StageGraph
@@ -273,7 +275,8 @@ class CASDAGExecutor:
 
     def _get_lock(self, stage_name: str, cas_id: str) -> FileLock:
         """Get file lock for a stage execution."""
-        lock_file = self.locks_dir / f"{stage_name}_{cas_id[:16]}.lock"
+        safe_id = _sanitize_cas_id_for_filename(cas_id)
+        lock_file = self.locks_dir / f"{stage_name}_{safe_id[:16]}.lock"
         return FileLock(lock_file, timeout=self.config.lock_timeout)
 
     def _add_provenance_node(
@@ -629,8 +632,9 @@ class CASDAGExecutor:
 
     def _cache_path(self, cas_id: str) -> Path:
         """Get cache file path for a CAS ID."""
-        prefix = cas_id.replace("sha256:", "")[:2]
-        return self.cache_dir / "dag_cache" / prefix / f"{cas_id}.json"
+        safe_id = _sanitize_cas_id_for_filename(cas_id)
+        prefix = safe_id[:2]
+        return self.cache_dir / "dag_cache" / prefix / f"{safe_id}.json"
 
     def invalidate(
         self,

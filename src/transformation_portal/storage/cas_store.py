@@ -16,8 +16,8 @@ Atomicity Contract:
     All write operations use atomic semantics to prevent partial writes:
     1. Write to temporary file (.tmp suffix)
     2. fsync to ensure durability
-    3. Atomic rename to final path
-    4. Verify hash matches expected value
+    3. Verify hash matches expected value
+    4. Atomic rename to final path
 
     This prevents corruption in parallel execution scenarios where:
     - Process A is writing artifact
@@ -343,8 +343,14 @@ class ArtifactStore:
         tmp_path = Path(tmp_path_str)
 
         try:
-            # Write bytes and fsync
-            os.write(fd, data)
+            # Write bytes in a loop to handle partial writes
+            # os.write may perform partial writes, so we need to loop
+            offset = 0
+            while offset < len(data):
+                written = os.write(fd, data[offset:])
+                if written == 0:
+                    raise CASError(f"Write returned 0 bytes at offset {offset}")
+                offset += written
             os.fsync(fd)
             os.close(fd)
 
@@ -377,6 +383,8 @@ class ArtifactStore:
                 os.close(fd)
             except OSError:
                 pass
+            if isinstance(exc, CASError):
+                raise
             raise CASError(f"Atomic write failed for {expected_sha}: {exc}") from exc
 
     def add_file(

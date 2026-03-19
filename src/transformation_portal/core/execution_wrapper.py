@@ -32,6 +32,7 @@ import hashlib
 import json
 import logging
 import os
+import re
 import tempfile
 import time
 from dataclasses import dataclass, field
@@ -54,6 +55,23 @@ from transformation_portal.storage.cas_store import ArtifactStore, CASObject
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
+
+
+def _sanitize_cas_id_for_filename(cas_id: str) -> str:
+    """Extract the hex digest from a CAS ID for use in filenames.
+
+    CAS IDs have the format 'sha256:<hex_digest>'. The colon is invalid
+    on Windows filesystems. This extracts just the hex digest part.
+
+    Args:
+        cas_id: Full CAS ID (e.g., 'sha256:abc123...')
+
+    Returns:
+        Just the hex digest portion (e.g., 'abc123...')
+    """
+    if cas_id.startswith("sha256:"):
+        return cas_id[7:]  # len("sha256:") == 7
+    return cas_id
 
 
 def _atomic_write_json(path: Path, data: dict[str, Any]) -> None:
@@ -98,6 +116,14 @@ def _atomic_write_json(path: Path, data: dict[str, Any]) -> None:
         if tmp_path.exists():
             tmp_path.unlink()
         raise
+
+
+class CASObjectMissingError(Exception):
+    """Raised when a referenced CAS object is missing during cache load."""
+
+    def __init__(self, sha256: str):
+        self.sha256 = sha256
+        super().__init__(f"Missing CAS object: {sha256[:16]}...")
 
 
 class ExecutableStage(Protocol):
@@ -306,19 +332,21 @@ class CASExecutor:
 
     def _get_lock(self, cas_id: str) -> FileLock:
         """Get file lock for a CAS ID."""
-        lock_file = self.locks_dir / f"{cas_id}.lock"
+        safe_id = _sanitize_cas_id_for_filename(cas_id)
+        lock_file = self.locks_dir / f"{safe_id}.lock"
         return FileLock(lock_file, timeout=self.config.lock_timeout)
 
     def _result_path(self, cas_id: str) -> Path:
         """Get result cache path for a CAS ID."""
-        # Use two-level directory structure like CAS
-        prefix = cas_id.replace("sha256:", "")[:2]
-        return self.cache_dir / "results" / prefix / f"{cas_id}.json"
+        safe_id = _sanitize_cas_id_for_filename(cas_id)
+        prefix = safe_id[:2]
+        return self.cache_dir / "results" / prefix / f"{safe_id}.json"
 
     def _metadata_path(self, cas_id: str) -> Path:
         """Get metadata path for a CAS ID."""
-        prefix = cas_id.replace("sha256:", "")[:2]
-        return self.metadata_dir / prefix / f"{cas_id}.meta.json"
+        safe_id = _sanitize_cas_id_for_filename(cas_id)
+        prefix = safe_id[:2]
+        return self.metadata_dir / prefix / f"{safe_id}.meta.json"
 
     def _save_result(
         self,
@@ -366,6 +394,15 @@ class CASExecutor:
 
         logger.debug("Saved result for %s", cas_id[:16])
 
+    def _sanitize_key(self, key: str) -> str:
+        """Sanitize an output key for safe use in filenames.
+
+        Prevents path traversal attacks by replacing problematic characters.
+        """
+        # Replace any path separators and other problematic characters
+        # with underscores
+        return re.sub(r'[/\\:*?"<>|]', "_", key)
+
     def _make_serializable(
         self,
         outputs: dict[str, Any],
@@ -373,44 +410,74 @@ class CASExecutor:
     ) -> dict[str, Any]:
         """Convert outputs to JSON-serializable format.
 
-        Handles numpy arrays by storing them as separate .npy files.
+        Handles numpy arrays by storing them as separate .npy files in CAS.
+        Temp files are cleaned up after adding to CAS.
         """
         import numpy as np
 
+        safe_cas_id = _sanitize_cas_id_for_filename(cas_id)
         result = {}
         for key, value in outputs.items():
+            safe_key = self._sanitize_key(key)
             if isinstance(value, np.ndarray):
-                # Store numpy array in CAS
-                array_path = self._result_path(cas_id).parent / f"{cas_id}_{key}.npy"
+                # Store numpy array in CAS via temp file
+                array_path = self._result_path(cas_id).parent / f"{safe_cas_id}_{safe_key}.npy"
                 array_path.parent.mkdir(parents=True, exist_ok=True)
                 np.save(array_path, value)
 
-                # Store reference to CAS
-                cas_obj = self.artifact_store.add_file(array_path)
-                result[key] = {
-                    "__numpy__": True,
-                    "sha256": cas_obj.sha256,
-                    "shape": list(value.shape),
-                    "dtype": str(value.dtype),
-                }
+                try:
+                    # Store reference to CAS
+                    cas_obj = self.artifact_store.add_file(array_path)
+                    result[key] = {
+                        "__numpy__": True,
+                        "sha256": cas_obj.sha256,
+                        "shape": list(value.shape),
+                        "dtype": str(value.dtype),
+                    }
+                finally:
+                    # Clean up temp .npy file after adding to CAS
+                    if array_path.exists():
+                        array_path.unlink()
             elif isinstance(value, dict):
-                result[key] = self._make_serializable(value, f"{cas_id}_{key}")
+                result[key] = self._make_serializable(value, f"{cas_id}_{safe_key}")
             elif isinstance(value, (list, tuple)):
-                result[key] = [
-                    self._make_serializable({"item": v}, f"{cas_id}_{key}_{i}")["item"]
-                    if isinstance(v, np.ndarray)
-                    else v
-                    for i, v in enumerate(value)
-                ]
+                result[key] = self._serialize_list(value, f"{cas_id}_{safe_key}")
             else:
                 result[key] = value
 
         return result
 
+    def _serialize_list(self, items: list | tuple, cas_id: str) -> list:
+        """Serialize a list/tuple, handling nested numpy arrays and dicts.
+
+        Args:
+            items: List or tuple of items to serialize
+            cas_id: Base CAS ID for nested items
+
+        Returns:
+            Serialized list with numpy arrays stored in CAS
+        """
+        import numpy as np
+
+        result = []
+        for i, item in enumerate(items):
+            if isinstance(item, np.ndarray):
+                # Use _make_serializable to handle the array
+                serialized = self._make_serializable({"item": item}, f"{cas_id}_{i}")
+                result.append(serialized["item"])
+            elif isinstance(item, dict):
+                result.append(self._make_serializable(item, f"{cas_id}_{i}"))
+            elif isinstance(item, (list, tuple)):
+                result.append(self._serialize_list(item, f"{cas_id}_{i}"))
+            else:
+                result.append(item)
+        return result
+
     def _load_serializable(self, data: dict[str, Any]) -> dict[str, Any]:
         """Reconstruct outputs from serialized format.
 
-        Loads numpy arrays from CAS.
+        Loads numpy arrays from CAS. Raises CASObjectMissingError if any
+        referenced CAS object is missing (triggers cache miss for self-healing).
         """
         import numpy as np
 
@@ -423,13 +490,46 @@ class CASExecutor:
                 if cas_obj:
                     result[key] = np.load(cas_obj.path)
                 else:
-                    logger.warning("Missing CAS object: %s", sha256[:16])
-                    result[key] = None
+                    # Missing CAS object - fail load to trigger re-execution
+                    raise CASObjectMissingError(sha256)
             elif isinstance(value, dict):
                 result[key] = self._load_serializable(value)
+            elif isinstance(value, list):
+                result[key] = self._load_list(value)
             else:
                 result[key] = value
 
+        return result
+
+    def _load_list(self, items: list) -> list:
+        """Reconstruct a list, handling nested numpy arrays and dicts.
+
+        Args:
+            items: Serialized list to reconstruct
+
+        Returns:
+            Reconstructed list with numpy arrays loaded from CAS
+
+        Raises:
+            CASObjectMissingError: If a referenced CAS object is missing
+        """
+        import numpy as np
+
+        result = []
+        for item in items:
+            if isinstance(item, dict) and item.get("__numpy__"):
+                sha256 = item["sha256"]
+                cas_obj = self.artifact_store.get_object(sha256)
+                if cas_obj:
+                    result.append(np.load(cas_obj.path))
+                else:
+                    raise CASObjectMissingError(sha256)
+            elif isinstance(item, dict):
+                result.append(self._load_serializable(item))
+            elif isinstance(item, list):
+                result.append(self._load_list(item))
+            else:
+                result.append(item)
         return result
 
     def _load_result(self, cas_id: str) -> Optional[dict[str, Any]]:
@@ -441,7 +541,7 @@ class CASExecutor:
         try:
             result_data = json.loads(result_path.read_text())
             return self._load_serializable(result_data.get("outputs", {}))
-        except (json.JSONDecodeError, OSError) as e:
+        except (json.JSONDecodeError, OSError, CASObjectMissingError) as e:
             logger.warning("Failed to load cached result for %s: %s", cas_id[:16], e)
             return None
 
