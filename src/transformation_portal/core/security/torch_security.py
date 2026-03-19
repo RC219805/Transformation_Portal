@@ -197,8 +197,6 @@ def _enforced_torch_load(
         SecurityError: If weights_only=False is explicitly passed
         RuntimeError: If enforcement is not installed
     """
-    global _original_torch_load
-
     if not _enforcement_installed or _original_torch_load is None:
         raise RuntimeError("Torch security enforcement not installed. " "Call install_global_enforcement() at startup.")
 
@@ -383,8 +381,6 @@ def _unsafe_torch_load_bypass(
         [ ] Custom classes in the file are safe and expected
         [ ] This usage is documented in security review notes
     """
-    global _original_torch_load
-
     if not _security_review_approved:
         raise SecurityError(
             "Security review approval required. "
