@@ -890,3 +890,102 @@ class TestCILockfileEnforcement:
         # Both executor and internal stage executor should have same path
         assert executor._lockfile_path == str(lockfile)
         assert executor._stage_executor._lockfile_path == str(lockfile)
+
+
+class TestNumpyInputIdentityRegression:
+    """Regression tests for NumPy input identity including shape/dtype.
+
+    These tests verify the fix for the blocking issue:
+    _compute_input_ids() was only using tobytes(), creating false cache hits
+    between arrays with same bytes but different dtype/shape.
+    """
+
+    def test_different_dtype_same_bytes_different_identity(self, tmp_path):
+        """Test arrays with same bytes but different dtype get different identities."""
+        cas_root = tmp_path / "cas"
+        cache_dir = tmp_path / "cache"
+        store = ArtifactStore(cas_root)
+
+        executor = CASExecutor(store, cache_dir)
+
+        # Two arrays with overlapping byte representation but different semantics
+        arr_uint32 = np.array([1], dtype=np.uint32)  # 4 bytes: 01 00 00 00
+        arr_uint8 = np.array([1, 0, 0, 0], dtype=np.uint8)  # 4 bytes: 01 00 00 00
+
+        # Compute input IDs
+        ids1 = executor._compute_input_ids({"arr": arr_uint32})
+        ids2 = executor._compute_input_ids({"arr": arr_uint8})
+
+        # They MUST be different despite same raw bytes
+        assert ids1[0] != ids2[0], "Arrays with same bytes but different dtype should have different input IDs"
+
+    def test_different_shape_same_bytes_different_identity(self, tmp_path):
+        """Test arrays with same bytes but different shape get different identities."""
+        cas_root = tmp_path / "cas"
+        cache_dir = tmp_path / "cache"
+        store = ArtifactStore(cas_root)
+
+        executor = CASExecutor(store, cache_dir)
+
+        # Two arrays with same bytes but different shapes
+        arr_1d = np.array([1, 2, 3, 4], dtype=np.float32)  # shape (4,)
+        arr_2d = np.array([[1, 2], [3, 4]], dtype=np.float32)  # shape (2, 2)
+
+        # Verify they have same raw bytes
+        assert arr_1d.tobytes() == arr_2d.tobytes()
+
+        # Compute input IDs
+        ids1 = executor._compute_input_ids({"arr": arr_1d})
+        ids2 = executor._compute_input_ids({"arr": arr_2d})
+
+        # They MUST be different
+        assert ids1[0] != ids2[0], "Arrays with same bytes but different shape should have different input IDs"
+
+    def test_identical_arrays_same_identity(self, tmp_path):
+        """Test identical arrays get the same identity."""
+        cas_root = tmp_path / "cas"
+        cache_dir = tmp_path / "cache"
+        store = ArtifactStore(cas_root)
+
+        executor = CASExecutor(store, cache_dir)
+
+        arr1 = np.array([[1, 2], [3, 4]], dtype=np.float32)
+        arr2 = np.array([[1, 2], [3, 4]], dtype=np.float32)
+
+        ids1 = executor._compute_input_ids({"arr": arr1})
+        ids2 = executor._compute_input_ids({"arr": arr2})
+
+        assert ids1[0] == ids2[0], "Identical arrays should have same input ID"
+
+
+class TestAtomicCacheWrites:
+    """Tests for atomic cache write operations.
+
+    These tests verify that cache writes use atomic semantics.
+    """
+
+    def test_atomic_write_json_creates_file(self, tmp_path):
+        """Test that _atomic_write_json creates a valid JSON file."""
+        from transformation_portal.core.execution_wrapper import _atomic_write_json
+
+        test_path = tmp_path / "subdir" / "test.json"
+        data = {"key": "value", "number": 42}
+
+        _atomic_write_json(test_path, data)
+
+        assert test_path.exists()
+        loaded = json.loads(test_path.read_text())
+        assert loaded == data
+
+    def test_atomic_write_json_sorted_keys(self, tmp_path):
+        """Test that _atomic_write_json produces sorted keys."""
+        from transformation_portal.core.execution_wrapper import _atomic_write_json
+
+        test_path = tmp_path / "test.json"
+        data = {"z_key": 1, "a_key": 2, "m_key": 3}
+
+        _atomic_write_json(test_path, data)
+
+        content = test_path.read_text()
+        # Keys should appear in sorted order
+        assert content.index("a_key") < content.index("m_key") < content.index("z_key")

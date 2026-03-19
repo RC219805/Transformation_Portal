@@ -31,6 +31,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import os
 import tempfile
 import time
 from dataclasses import dataclass, field
@@ -53,6 +54,50 @@ from transformation_portal.storage.cas_store import ArtifactStore, CASObject
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
+
+
+def _atomic_write_json(path: Path, data: dict[str, Any]) -> None:
+    """Atomically write JSON data to a file.
+
+    Uses temp-file + fsync + atomic-rename discipline to prevent
+    partial writes or corruption visible to concurrent readers.
+
+    Args:
+        path: Target file path
+        data: JSON-serializable data to write
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Write to temp file in same directory for atomic rename
+    fd, tmp_path_str = tempfile.mkstemp(
+        suffix=".tmp",
+        prefix=".cache_write_",
+        dir=path.parent,
+    )
+    tmp_path = Path(tmp_path_str)
+
+    try:
+        # Write JSON content
+        with os.fdopen(fd, "w") as f:
+            json.dump(data, f, indent=2, sort_keys=True)
+            f.flush()
+            os.fsync(f.fileno())
+
+        # Atomic rename (POSIX guarantee)
+        os.replace(tmp_path, path)
+
+        # fsync parent directory to ensure rename is durable
+        dir_fd = os.open(str(path.parent), os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(dir_fd)
+        finally:
+            os.close(dir_fd)
+
+    except Exception:
+        # Clean up temp file on failure
+        if tmp_path.exists():
+            tmp_path.unlink()
+        raise
 
 
 class ExecutableStage(Protocol):
@@ -296,16 +341,18 @@ class CASExecutor:
         serializable_outputs: dict[str, Any],
         metadata: ArtifactMetadata,
     ) -> None:
-        """Save pre-serialized result and metadata to cache.
+        """Save pre-serialized result and metadata to cache atomically.
+
+        Uses atomic writes (temp-file + fsync + rename) to prevent
+        partial writes visible to concurrent readers.
 
         Args:
             cas_id: CAS identity hash
             serializable_outputs: Already-serialized outputs (from _make_serializable)
             metadata: Artifact metadata
         """
-        # Save result
         result_path = self._result_path(cas_id)
-        result_path.parent.mkdir(parents=True, exist_ok=True)
+        metadata_path = self._metadata_path(cas_id)
 
         result_data = {
             "cas_id": cas_id,
@@ -313,12 +360,9 @@ class CASExecutor:
             "saved_at": datetime.now(timezone.utc).isoformat(),
         }
 
-        result_path.write_text(json.dumps(result_data, indent=2, sort_keys=True))
-
-        # Save metadata
-        metadata_path = self._metadata_path(cas_id)
-        metadata_path.parent.mkdir(parents=True, exist_ok=True)
-        metadata_path.write_text(json.dumps(metadata.to_dict(), indent=2, sort_keys=True))
+        # Write both files atomically
+        _atomic_write_json(result_path, result_data)
+        _atomic_write_json(metadata_path, metadata.to_dict())
 
         logger.debug("Saved result for %s", cas_id[:16])
 
@@ -415,7 +459,11 @@ class CASExecutor:
             return None
 
     def _compute_input_ids(self, inputs: dict[str, Any]) -> list[str]:
-        """Compute SHA-256 IDs for input artifacts."""
+        """Compute SHA-256 IDs for input artifacts.
+
+        For NumPy arrays, includes dtype, shape, and data bytes to prevent
+        false cache hits between arrays with same bytes but different semantics.
+        """
         import numpy as np
 
         ids = []
@@ -423,7 +471,15 @@ class CASExecutor:
             value = inputs[key]
 
             if isinstance(value, np.ndarray):
-                ids.append(hashlib.sha256(value.tobytes()).hexdigest())
+                # Include dtype, shape, and data bytes to avoid false hits
+                # between arrays with same bytes but different semantics
+                # (e.g., np.array([1], dtype=np.uint32) vs np.array([1,0,0,0], dtype=np.uint8))
+                array_manifest = {
+                    "dtype": str(value.dtype),
+                    "shape": list(value.shape),
+                    "data_sha256": hashlib.sha256(value.tobytes()).hexdigest(),
+                }
+                ids.append(hashlib.sha256(jcs_dumpb(array_manifest)).hexdigest())
             elif isinstance(value, (bytes, bytearray)):
                 ids.append(hashlib.sha256(value).hexdigest())
             elif isinstance(value, str):

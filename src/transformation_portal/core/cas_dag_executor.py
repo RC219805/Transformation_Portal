@@ -58,6 +58,7 @@ from transformation_portal.core.execution_wrapper import (
     CASExecutor,
     ExecutorConfig,
     FileLock,
+    _atomic_write_json,  # Shared atomic cache writes
 )
 from transformation_portal.determinism.jcs import dumpb as jcs_dumpb
 from transformation_portal.stage_graph.graph import GraphExecution, StageGraph
@@ -569,32 +570,26 @@ class CASDAGExecutor:
             return None
 
     def _store_cache(self, identity: ExecutionIdentity, result: StageResult) -> None:
-        """Store stage result in cache.
+        """Store stage result in cache atomically.
+
+        Uses atomic writes to prevent partial writes visible to concurrent readers.
+        Shares serialization semantics with the single-stage executor for consistency.
 
         Args:
             identity: Execution identity
             result: Stage result to cache
         """
-        import json
+        import tempfile
 
         import numpy as np
 
         cache_path = self._cache_path(identity.cas_id)
-        cache_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # Create artifact metadata
-        output_hash = hashlib.sha256(
-            jcs_dumpb({k: str(type(v)) for k, v in result.artifacts.items()})
-        ).hexdigest()
-        metadata = create_artifact_metadata(output_hash, identity)
-
-        # Serialize artifacts
+        # Serialize artifacts BEFORE computing output hash (same as single-stage executor)
         serialized_artifacts = {}
         for key, value in result.artifacts.items():
             if isinstance(value, np.ndarray):
                 # Store numpy array in CAS
-                import tempfile
-
                 with tempfile.NamedTemporaryFile(suffix=".npy", delete=False) as f:
                     np.save(f, value)
                     temp_path = Path(f.name)
@@ -611,6 +606,11 @@ class CASDAGExecutor:
             else:
                 serialized_artifacts[key] = value
 
+        # Create artifact metadata from SERIALIZED form (consistent with single-stage executor)
+        # This ensures the output_hash reflects actual content, not just type signatures
+        output_hash = hashlib.sha256(jcs_dumpb(serialized_artifacts)).hexdigest()
+        metadata = create_artifact_metadata(output_hash, identity)
+
         # Build cache entry
         cache_data = {
             "cas_id": identity.cas_id,
@@ -623,7 +623,8 @@ class CASDAGExecutor:
             "cached_at": datetime.now(timezone.utc).isoformat(),
         }
 
-        cache_path.write_text(json.dumps(cache_data, indent=2, sort_keys=True))
+        # Use atomic write (shared with single-stage executor)
+        _atomic_write_json(cache_path, cache_data)
         logger.debug("Cached result for %s", identity.cas_id[:16])
 
     def _cache_path(self, cas_id: str) -> Path:
