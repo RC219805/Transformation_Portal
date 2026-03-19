@@ -428,11 +428,11 @@ def get_security_profile_hash() -> str:
         "cve_2025_32434_mitigation": "weights_only_enforced",
         "torch_load_policy": "weights_only_true",
     }
-    # Use sorted keys for deterministic hash
-    import json
+    # Use canonical JSON for deterministic hash (repo guardrail requires this)
+    from transformation_portal.ingest.canonical_json import canonicalize_json
 
-    profile_str = json.dumps(profile_data, sort_keys=True)
-    digest = hashlib.sha256(profile_str.encode("utf-8")).hexdigest()
+    profile_bytes = canonicalize_json(profile_data)
+    digest = hashlib.sha256(profile_bytes).hexdigest()
     return f"sha256:{digest}"
 
 
