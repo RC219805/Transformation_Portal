@@ -960,7 +960,7 @@ def verify_determinism(
         ... )
         >>> assert is_deterministic, f"Non-deterministic: {hashes}"
     """
-    import json
+    from transformation_portal.ingest.canonical_json import canonicalize_json
 
     hashes = []
 
@@ -977,8 +977,8 @@ def verify_determinism(
             # Use JCS for deterministic dict hashing
             result_hash = hashlib.sha256(jcs_dumpb(result)).hexdigest()
         else:
-            # Fallback: JSON serialization
-            result_hash = hashlib.sha256(json.dumps(result, sort_keys=True, default=str).encode()).hexdigest()
+            # Fallback: Canonical JSON serialization (policy-compliant)
+            result_hash = hashlib.sha256(canonicalize_json(result)).hexdigest()
 
         hashes.append(result_hash)
         logger.debug("Run %d hash: %s", i + 1, result_hash[:16])
