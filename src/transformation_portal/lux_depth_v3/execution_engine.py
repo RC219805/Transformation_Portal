@@ -546,11 +546,7 @@ def persist_depth_artifacts(
         return DepthArtifactResult(
             success=True,
             depth_path=depth_path,
-            float_depth_path=(
-                float_depth_path
-                if float_depth_path and getattr(config, "save_float_depth", False)
-                else None
-            ),
+            float_depth_path=(float_depth_path if float_depth_path and getattr(config, "save_float_depth", False) else None),
             metadata_path=metadata_path,
             # depth_stats is DepthWriteStats (dataclass with _asdict() method)
             scaling_stats=depth_stats._asdict() if depth_stats else None,
@@ -620,9 +616,7 @@ def persist_enhanced_image(
             # 16-bit TIFF output
             import tifffile
 
-            enhanced_uint16 = (np.clip(enhanced_image, 0, 1) * 65535 + 0.5).astype(
-                np.uint16
-            )
+            enhanced_uint16 = (np.clip(enhanced_image, 0, 1) * 65535 + 0.5).astype(np.uint16)
 
             # Ensure .tif extension for 16-bit
             if output_path.suffix.lower() not in {".tif", ".tiff"}:
@@ -642,8 +636,7 @@ def persist_enhanced_image(
                 )
 
             logger.info(
-                "Materials V3 enhanced image with %d pixel operations - "
-                "saved to %s (16-bit TIFF) for V2 stage",
+                "Materials V3 enhanced image with %d pixel operations - " "saved to %s (16-bit TIFF) for V2 stage",
                 n_operations_applied,
                 output_path,
             )
@@ -671,8 +664,7 @@ def persist_enhanced_image(
             )
 
             logger.info(
-                "Materials V3 enhanced image with %d pixel operations - "
-                "saved to %s (8-bit PNG) for V2 stage",
+                "Materials V3 enhanced image with %d pixel operations - " "saved to %s (8-bit PNG) for V2 stage",
                 n_operations_applied,
                 output_path,
             )
@@ -805,9 +797,7 @@ class ExecutionEngine:
         """
         depth_path = self.depth_dir / f"{output_key.stem}_depth.png"
         float_depth_path = (
-            self.depth_dir / f"{output_key.stem}_depth.npy"
-            if getattr(self.config, "save_float_depth", False)
-            else None
+            self.depth_dir / f"{output_key.stem}_depth.npy" if getattr(self.config, "save_float_depth", False) else None
         )
 
         return persist_depth_artifacts(
@@ -835,11 +825,7 @@ class ExecutionEngine:
             EnhancedImageResult with persistence outcomes
         """
         temp_dir = self.output_root / "temp"
-        extension = (
-            ".tif"
-            if (self.config.emit_master16 or self.config.emit_upscaled16)
-            else ".png"
-        )
+        extension = ".tif" if (self.config.emit_master16 or self.config.emit_upscaled16) else ".png"
         output_path = temp_dir / f"{output_key.stem}_materials_v3_enhanced{extension}"
 
         return persist_enhanced_image(
