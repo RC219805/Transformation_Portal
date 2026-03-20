@@ -104,6 +104,15 @@ from .scene_preflight import validate_scene_preflight, write_scene_preflight_art
 from .security import HashMode, sanitize_file_stem, sanitize_path_component_nonlossy
 from .v2_runner import V2Runner, find_v2_report
 
+# ADR-043: Run card validators extracted to validators/run_card_validator.py
+# Backward-compatible re-exports preserve existing import paths
+from .validators import validate_run_card_backend_semantics, validate_run_card_payload
+from .validators.run_card_validator import _default_schema_path as _run_card_schema_path
+
+# Backward-compatible aliases for existing tests and consumers
+_validate_run_card_payload = validate_run_card_payload
+_validate_run_card_backend_semantics = validate_run_card_backend_semantics
+
 logger = logging.getLogger(__name__)
 
 
@@ -295,172 +304,12 @@ def make_output_key(
     return Path(key_name)
 
 
-def _run_card_schema_path() -> Path:
-    """Return repository-local run card schema path."""
-    return Path(__file__).resolve().parents[3] / "docs" / "schemas" / "run_card" / "run_card.v1.schema.json"
-
-
-@lru_cache(maxsize=1)
-def _load_run_card_schema(schema_path_str: str) -> Dict[str, Any]:
-    """Load run card JSON schema once per process."""
-    schema_path = Path(schema_path_str)
-    with open(schema_path, "r", encoding="utf-8") as schema_file:
-        return json.load(schema_file)
-
-
-@lru_cache(maxsize=1)
-def _load_run_card_validator(schema_path_str: str) -> Any:
-    """Build cached Draft202012 validator for run card schema."""
-    try:
-        import jsonschema
-    except ImportError as exc:  # pragma: no cover
-        raise RuntimeError(
-            "jsonschema dependency is required" " for run card schema validation",
-        ) from exc
-
-    schema = _load_run_card_schema(schema_path_str)
-    try:
-        jsonschema.Draft202012Validator.check_schema(schema)
-    except jsonschema.exceptions.SchemaError as exc:
-        raise RuntimeError(
-            "Run card schema is invalid:" f" {exc.message}",
-        ) from exc
-    return jsonschema.Draft202012Validator(schema)
-
-
-def _validate_run_card_payload(
-    payload: Dict[str, Any],
-    schema_path: Path,
-) -> None:
-    """Validate run card payload against run_card.v1 schema."""
-    validator = _load_run_card_validator(str(schema_path))
-    errors = sorted(
-        validator.iter_errors(payload),
-        key=lambda error: list(error.path),
-    )
-    if not errors:
-        return
-
-    formatted = []
-    for error in errors:
-        path = ".".join(str(p) for p in error.path) or "<root>"
-        formatted.append(f"{path}: {error.message}")
-    raise RuntimeError(
-        "Run card schema validation" " failed: " + "; ".join(formatted),
-    )
-
-
-def _validate_run_card_backend_semantics(payload: Dict[str, Any]) -> None:
-    """Validate backend resolution semantics for run-card transparency."""
-    backend_selection = payload.get("backend_selection")
-    backend_summary = payload.get("backend_summary")
-    if not isinstance(
-        backend_selection,
-        dict,
-    ) or not isinstance(
-        backend_summary,
-        dict,
-    ):
-        return
-
-    final_backends_used = backend_summary.get("final_backends_used")
-    if not isinstance(final_backends_used, list):
-        return
-
-    success_count = payload.get("success_count")
-    if not isinstance(success_count, int):
-        success_count = 0
-
-    if not final_backends_used:
-        if success_count > 0:
-            raise RuntimeError(
-                "Run card backend semantics validation failed: "
-                "backend_summary"
-                ".final_backends_used must be"
-                " non-empty when"
-                " success_count > 0."
-            )
-        return
-
-    primary_backend = final_backends_used[0]
-    if not isinstance(primary_backend, str) or not primary_backend:
-        raise RuntimeError(
-            "Run card backend semantics validation failed: "
-            "backend_summary"
-            ".final_backends_used[0]"
-            " must be a non-empty string."
-        )
-
-    summary_primary = backend_summary.get("primary_backend")
-    if summary_primary != primary_backend:
-        raise RuntimeError(
-            "Run card backend semantics validation failed: "
-            "backend_summary.primary_backend"
-            " must equal backend_summary"
-            ".final_backends_used[0]."
-        )
-
-    resolved = backend_selection.get("resolved")
-    if not isinstance(resolved, str) or not resolved:
-        raise RuntimeError(
-            "Run card backend semantics" " validation failed:" " backend_selection.resolved" " must be a non-empty string."
-        )
-
-    if resolved != primary_backend:
-        raise RuntimeError(
-            "Run card backend semantics validation failed: "
-            "backend_selection.resolved"
-            " must match backend_summary"
-            ".final_backends_used[0]."
-        )
-
-    logical_backend = backend_selection.get("logical_backend")
-    resolved_engine = backend_selection.get("resolved_engine")
-    wrapper_declared = logical_backend is not None or resolved_engine is not None
-    if not wrapper_declared:
-        return
-
-    if not isinstance(logical_backend, str) or not logical_backend:
-        raise RuntimeError(
-            "Run card backend semantics validation failed: "
-            "backend_selection"
-            ".logical_backend must be a"
-            " non-empty string when wrapper"
-            " semantics are declared."
-        )
-    if not isinstance(resolved_engine, str) or not resolved_engine:
-        raise RuntimeError(
-            "Run card backend semantics validation failed: "
-            "backend_selection"
-            ".resolved_engine must be a"
-            " non-empty string when wrapper"
-            " semantics are declared."
-        )
-    if logical_backend == resolved_engine:
-        raise RuntimeError(
-            "Run card backend semantics validation failed: "
-            "backend_selection"
-            ".logical_backend and"
-            " backend_selection"
-            ".resolved_engine must differ."
-        )
-    if resolved_engine != primary_backend:
-        raise RuntimeError(
-            "Run card backend semantics validation failed: "
-            "backend_selection"
-            ".resolved_engine must match"
-            " backend_summary"
-            ".final_backends_used[0]."
-        )
-
-    fallback_images = backend_summary.get("fallback_images")
-    if isinstance(fallback_images, int) and fallback_images != 0:
-        raise RuntimeError(
-            "Run card backend semantics validation failed: "
-            "wrapper semantics are only"
-            " valid when backend_summary"
-            ".fallback_images == 0."
-        )
+# NOTE: Run card validation functions have been extracted to
+# validators/run_card_validator.py as part of ADR-043 decomposition.
+# The following are now imported:
+# - _run_card_schema_path (aliased from _default_schema_path)
+# - validate_run_card_payload (was _validate_run_card_payload)
+# - validate_run_card_backend_semantics (was _validate_run_card_backend_semantics)
 
 
 def _infer_artifact_type(relative_path: str) -> str:

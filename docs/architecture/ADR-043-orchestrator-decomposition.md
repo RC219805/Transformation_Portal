@@ -1,6 +1,6 @@
 # ADR-043: Orchestrator Decomposition Strategy
 
-**Status:** PROPOSED  
+**Status:** IN PROGRESS (Phase 2 Complete)  
 **Date:** 2026-03-20  
 **Decision Makers:** Architect  
 **Replaces:** None  
@@ -160,10 +160,16 @@ class RunCardValidator:
 2. Document current method dependencies
 3. Create module stub files
 
-### Phase 2: Extract Validators (Week 1-2)
-1. Extract `_validate_run_card_*` methods to `validators/run_card_validator.py`
-2. Update orchestrator to use new validator
-3. Add unit tests for validator
+### Phase 2: Extract Validators (Week 1-2) ✅ COMPLETE
+1. ✅ Extract `_validate_run_card_*` methods to `validators/run_card_validator.py`
+2. ✅ Update orchestrator to use new validator
+3. ✅ Add unit tests for validator (17 tests)
+4. ✅ Maintain backward compatibility with orchestrator imports
+
+**Metrics after Phase 2:**
+- Orchestrator LOC: 5,955 (was 6,108, -153 lines)
+- New module: `validators/run_card_validator.py` (310 LOC)
+- Test coverage: 17 unit tests for validator
 
 ### Phase 3: Extract ArtifactManager (Week 2)
 1. Extract `_infer_artifact_type`, `_build_artifact_index`, `_compute_artifact_merkle_root`
