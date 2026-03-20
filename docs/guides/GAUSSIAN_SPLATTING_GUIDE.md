@@ -403,7 +403,7 @@ backend = GaussianBackend(tier="apex_research")  # Required
 ```python
 class GaussianBackend:
     """3D Gaussian Splatting backend."""
-    
+
     def __init__(
         self,
         tier: str = "apex_research",
@@ -413,13 +413,13 @@ class GaussianBackend:
         optimization_seed: Optional[int] = None,
         optimization_max_gaussians: int = 5000,
     ) -> None: ...
-    
+
     def reconstruct(
         self,
         input_data: ReconstructionInput,
         iterations: int = 30000,
     ) -> Scene3D: ...
-    
+
     def render_view(
         self,
         scene: Scene3D,
@@ -432,12 +432,12 @@ class GaussianBackend:
 ```python
 class GeometricValidator:
     """Validates reconstruction against depth maps."""
-    
+
     def __init__(
         self,
         rmse_threshold: float = 0.05,
     ) -> None: ...
-    
+
     def validate_depth_consistency(
         self,
         scene: Scene3D,

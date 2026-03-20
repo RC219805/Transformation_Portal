@@ -28,7 +28,7 @@ repositories:
     owner: "segmentation"
     tier: "quality_max"
     license: "Apache-2.0"
-  
+
   # SAM2 ONNX backend (alternate portable backend)
   # Source: vietanhdev (updated 2026-02-21)
   vietanhdev/segment-anything-2-onnx-models:
@@ -64,7 +64,7 @@ repositories:
   apple/coreml-depth-anything-v2-small:
     revision: "cfef6f6f2a70783dedc0bfae40cecbc2052285d3"
     owner: "depth pipeline"
-  
+
   # --- Lux Render Pipeline Models ---
   runwayml/stable-diffusion-v1-5:
     revision: "451f4fe16113bff5a5d2269ed5ad43b0592e9a14"
@@ -81,7 +81,7 @@ repositories:
   stabilityai/stable-diffusion-xl-refiner-1.0:
     revision: "5d4cfe854c9a9a87939ff3653551c2b3c99a4356"
     owner: "lux render pipeline"
-  
+
   # --- CLIP and Style Transfer Models ---
   openai/clip-vit-large-patch14:
     revision: "32bd64288804d66eefd0ccbe215aa642df71cc41"
@@ -92,7 +92,7 @@ repositories:
   black-forest-labs/FLUX.1-dev:
     revision: "3de623fc3c33e44ffbe2bad470d0f45bccf2eb21"
     owner: "style-transfer"
-  
+
   # --- Vision Language Models ---
   # LLaVA Quality Validation (APEX Research Ultra evaluation backend)
   # Primary: llava-v1.6-mistral-7b (balanced capability)

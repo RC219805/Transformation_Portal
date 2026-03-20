@@ -234,7 +234,7 @@ jobs:
         run: |
           attempt1="${{ steps.dependency_submission_attempt_1.outcome }}"
           attempt2="${{ steps.dependency_submission_attempt_2.outcome }}"
-          
+
           if [ "$attempt1" = "success" ] || [ "$attempt2" = "success" ]; then
             echo "✅ Dependency submission completed successfully."
           else

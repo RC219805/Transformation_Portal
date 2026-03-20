@@ -110,7 +110,7 @@ class TestParseVqaResult:
     def test_json_in_markdown(self) -> None:
         """Should extract JSON from markdown code fence."""
         raw_text = """Here is my assessment:
-        
+
 ```json
 {"passes_basic_quality": true, "summary_score": 0.85, "issues": []}
 ```

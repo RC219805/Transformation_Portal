@@ -1,8 +1,8 @@
 # Test Strategy
 
-**Document Status:** Active  
-**Last Updated:** 2026-03-16  
-**Version:** 1.0.0  
+**Document Status:** Active
+**Last Updated:** 2026-03-16
+**Version:** 1.0.0
 **Related ADRs:** ADR-034 (Benchmark Exclusion), TODO_INVENTORY.md §2.1 (Testing Phase)
 
 ---
