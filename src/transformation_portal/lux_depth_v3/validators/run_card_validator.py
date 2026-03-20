@@ -64,13 +64,7 @@ def _default_schema_path() -> Path:
     This path is resolved relative to this module's location in the
     installed package structure.
     """
-    return (
-        Path(__file__).resolve().parents[4]
-        / "docs"
-        / "schemas"
-        / "run_card"
-        / "run_card.v1.schema.json"
-    )
+    return Path(__file__).resolve().parents[4] / "docs" / "schemas" / "run_card" / "run_card.v1.schema.json"
 
 
 @lru_cache(maxsize=1)
@@ -224,8 +218,7 @@ def validate_run_card_backend_semantics(payload: Dict[str, Any]) -> None:
     resolved = backend_selection.get("resolved")
     if not isinstance(resolved, str) or not resolved:
         raise RuntimeError(
-            "Run card backend semantics validation failed: "
-            "backend_selection.resolved must be a non-empty string."
+            "Run card backend semantics validation failed: " "backend_selection.resolved must be a non-empty string."
         )
 
     if resolved != primary_backend:

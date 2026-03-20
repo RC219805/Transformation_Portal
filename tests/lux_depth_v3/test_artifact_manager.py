@@ -307,9 +307,7 @@ class TestComputeArtifactMerkleRoot:
             {"relative_path": "a.png", "sha256": "a" * 64},
         ]
 
-        assert compute_artifact_merkle_root(index1) == compute_artifact_merkle_root(
-            index2
-        )
+        assert compute_artifact_merkle_root(index1) == compute_artifact_merkle_root(index2)
 
     def test_rejects_invalid_sha256(self):
         """Test that invalid sha256 raises error."""

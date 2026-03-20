@@ -80,9 +80,7 @@ class TestValidationResult:
             ValidationResult,
         )
 
-        result = ValidationResult(
-            is_valid=False, errors=["error1", "error2"]
-        )
+        result = ValidationResult(is_valid=False, errors=["error1", "error2"])
         assert not result.is_valid
         assert bool(result) is False
         assert len(result.errors) == 2
@@ -139,9 +137,7 @@ def _minimal_valid_payload() -> Dict[str, Any]:
     )
     config_fingerprint["hash_algorithm"] = "sha256"
     config_fingerprint["canonical_json"] = canonical_json
-    config_fingerprint["sha256"] = hashlib.sha256(
-        canonical_json.encode("utf-8")
-    ).hexdigest()
+    config_fingerprint["sha256"] = hashlib.sha256(canonical_json.encode("utf-8")).hexdigest()
 
     return {
         "batch_id": "2026-03-20_120000",

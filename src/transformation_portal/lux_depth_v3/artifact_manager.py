@@ -263,9 +263,7 @@ def compute_artifact_merkle_root(
     for artifact in sorted_artifacts:
         digest = artifact.get("sha256")
         if not isinstance(digest, str) or len(digest) != 64:
-            raise RuntimeError(
-                f"Invalid artifact sha256 in run card index: {digest!r}"
-            )
+            raise RuntimeError(f"Invalid artifact sha256 in run card index: {digest!r}")
         leaves.append(bytes.fromhex(digest))
 
     return hashlib.sha256(b"".join(leaves)).hexdigest()
