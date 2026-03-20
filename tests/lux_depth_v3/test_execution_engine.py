@@ -406,6 +406,7 @@ class TestGeneratePBRStage:
         )
 
         assert result.success is False
+        assert result.error is not None
         assert "disabled" in result.error.lower()
 
     def test_enabled_calls_generation(self, tmp_path):

@@ -49,6 +49,21 @@ logger = logging.getLogger(__name__)
 
 
 # -----------------------------------------------------------------------------
+# Module-level Constants
+# -----------------------------------------------------------------------------
+
+# Default backend selection for error cases (avoid repeated allocation)
+_DEFAULT_ERROR_BACKEND_SELECTION = BackendSelectionMetadata(
+    requested_backend="unknown",
+    resolved_backend="unknown",
+    resolution_status="error",
+    resolution_reason="No backend selection available",
+    model_id="unknown",
+    device="cpu",
+)
+
+
+# -----------------------------------------------------------------------------
 # Result Data Classes
 # -----------------------------------------------------------------------------
 
@@ -103,7 +118,7 @@ class DepthStageResult:
     def to_tuple(
         self,
     ) -> Tuple[
-        Optional[Any],
+        Optional[DepthMetadata],
         float,
         Optional[Dict[str, Any]],
         Optional[Dict[str, Any]],
@@ -117,14 +132,6 @@ class DepthStageResult:
         Returns:
             8-tuple matching _compute_depth_stage return signature
         """
-        default_backend_selection = BackendSelectionMetadata(
-            requested_backend="unknown",
-            resolved_backend="unknown",
-            resolution_status="error",
-            resolution_reason="No backend selection available",
-            model_id="unknown",
-            device="cpu",
-        )
         return (
             self.depth_metadata,
             self.depth_runtime_s,
@@ -132,7 +139,7 @@ class DepthStageResult:
             self.materials_v3_result,
             self.materials_v3_runtime_s,
             self.enhanced_image_path,
-            self.backend_selection or default_backend_selection,
+            self.backend_selection or _DEFAULT_ERROR_BACKEND_SELECTION,
             self.depth_attempts,
         )
 
