@@ -617,3 +617,300 @@ class TestBackwardCompatibility:
         assert enhanced_image_path is None
         assert backend_selection_metadata == backend_sel
         assert depth_attempts == []
+
+
+class TestDepthArtifactPaths:
+    """Test DepthArtifactPaths data class."""
+
+    def test_default_values(self):
+        """Test default initialization."""
+        from transformation_portal.lux_depth_v3.execution_engine import (
+            DepthArtifactPaths,
+        )
+
+        paths = DepthArtifactPaths(depth_path=Path("/test/depth.png"))
+
+        assert paths.depth_path == Path("/test/depth.png")
+        assert paths.float_depth_path is None
+        assert paths.metadata_path is None
+
+    def test_with_all_values(self):
+        """Test initialization with all values."""
+        from transformation_portal.lux_depth_v3.execution_engine import (
+            DepthArtifactPaths,
+        )
+
+        paths = DepthArtifactPaths(
+            depth_path=Path("/test/depth.png"),
+            float_depth_path=Path("/test/depth.npy"),
+            metadata_path=Path("/test/depth_metadata.json"),
+        )
+
+        assert paths.depth_path == Path("/test/depth.png")
+        assert paths.float_depth_path == Path("/test/depth.npy")
+        assert paths.metadata_path == Path("/test/depth_metadata.json")
+
+
+class TestDepthArtifactResult:
+    """Test DepthArtifactResult data class."""
+
+    def test_default_values(self):
+        """Test default initialization."""
+        from transformation_portal.lux_depth_v3.execution_engine import (
+            DepthArtifactResult,
+        )
+
+        result = DepthArtifactResult()
+
+        assert result.success is False
+        assert result.depth_path is None
+        assert result.float_depth_path is None
+        assert result.metadata_path is None
+        assert result.scaling_stats is None
+        assert result.error is None
+
+    def test_success_case(self):
+        """Test success initialization."""
+        from transformation_portal.lux_depth_v3.execution_engine import (
+            DepthArtifactResult,
+        )
+
+        result = DepthArtifactResult(
+            success=True,
+            depth_path=Path("/test/depth.png"),
+            metadata_path=Path("/test/depth_metadata.json"),
+            scaling_stats={"min": 0.0, "max": 1.0},
+        )
+
+        assert result.success is True
+        assert result.depth_path == Path("/test/depth.png")
+        assert result.scaling_stats == {"min": 0.0, "max": 1.0}
+
+
+class TestEnhancedImageResult:
+    """Test EnhancedImageResult data class."""
+
+    def test_default_values(self):
+        """Test default initialization."""
+        from transformation_portal.lux_depth_v3.execution_engine import (
+            EnhancedImageResult,
+        )
+
+        result = EnhancedImageResult()
+
+        assert result.success is False
+        assert result.output_path is None
+        assert result.format == "png"
+        assert result.bit_depth == 8
+        assert result.n_operations_applied == 0
+        assert result.error is None
+
+    def test_success_case_png(self):
+        """Test success case with PNG output."""
+        from transformation_portal.lux_depth_v3.execution_engine import (
+            EnhancedImageResult,
+        )
+
+        result = EnhancedImageResult(
+            success=True,
+            output_path=Path("/test/enhanced.png"),
+            format="png",
+            bit_depth=8,
+            n_operations_applied=5,
+        )
+
+        assert result.success is True
+        assert result.output_path == Path("/test/enhanced.png")
+        assert result.format == "png"
+        assert result.bit_depth == 8
+        assert result.n_operations_applied == 5
+
+    def test_success_case_tiff(self):
+        """Test success case with TIFF output."""
+        from transformation_portal.lux_depth_v3.execution_engine import (
+            EnhancedImageResult,
+        )
+
+        result = EnhancedImageResult(
+            success=True,
+            output_path=Path("/test/enhanced.tif"),
+            format="tiff",
+            bit_depth=16,
+            n_operations_applied=3,
+        )
+
+        assert result.success is True
+        assert result.format == "tiff"
+        assert result.bit_depth == 16
+
+
+class TestPersistDepthArtifacts:
+    """Test persist_depth_artifacts function."""
+
+    def test_persist_depth_success(self, tmp_path):
+        """Test successful depth artifact persistence."""
+        from transformation_portal.lux_depth_v3.config import EnhanceConfig
+        from transformation_portal.lux_depth_v3.execution_engine import (
+            persist_depth_artifacts,
+        )
+        from transformation_portal.lux_depth_v3.manifest import DepthMetadata
+
+        config = EnhanceConfig(depth_quantization="u16", verify_depth_writes=False)
+        import numpy as np
+
+        depth_map = np.random.rand(100, 100).astype(np.float32)
+        depth_path = tmp_path / "depth" / "test_depth.png"
+        depth_path.parent.mkdir(parents=True, exist_ok=True)
+
+        depth_metadata = DepthMetadata(
+            model="da3",
+            depth_path=str(depth_path),
+            runtime_seconds=1.5,
+            scaling={},
+            stats={},
+        )
+
+        result = persist_depth_artifacts(
+            depth_map=depth_map,
+            depth_path=depth_path,
+            float_depth_path=None,
+            depth_metadata=depth_metadata,
+            config=config,
+        )
+
+        assert result.success is True
+        assert result.depth_path == depth_path
+        assert result.depth_path.exists()
+        assert result.metadata_path is not None
+        assert result.metadata_path.exists()
+
+
+class TestPersistEnhancedImage:
+    """Test persist_enhanced_image function."""
+
+    def test_persist_enhanced_image_png(self, tmp_path):
+        """Test successful 8-bit PNG enhanced image persistence."""
+        from transformation_portal.lux_depth_v3.config import EnhanceConfig
+        from transformation_portal.lux_depth_v3.execution_engine import (
+            persist_enhanced_image,
+        )
+
+        config = EnhanceConfig(emit_master16=False, emit_upscaled16=False)
+        import numpy as np
+
+        # Create RGB image
+        enhanced_image = np.random.rand(100, 100, 3).astype(np.float32)
+        output_path = tmp_path / "temp" / "test_enhanced.png"
+
+        result = persist_enhanced_image(
+            enhanced_image=enhanced_image,
+            output_path=output_path,
+            config=config,
+            n_operations_applied=5,
+        )
+
+        assert result.success is True
+        assert result.format == "png"
+        assert result.bit_depth == 8
+        assert result.n_operations_applied == 5
+        assert result.output_path is not None
+        assert result.output_path.exists()
+
+
+class TestExecutionEngineNewMethods:
+    """Test new ExecutionEngine methods for depth and enhanced image persistence."""
+
+    def test_persist_depth_method(self, tmp_path):
+        """Test ExecutionEngine.persist_depth method."""
+        from transformation_portal.lux_depth_v3.config import EnhanceConfig
+        from transformation_portal.lux_depth_v3.execution_engine import ExecutionEngine
+        from transformation_portal.lux_depth_v3.manifest import DepthMetadata
+
+        config = EnhanceConfig(depth_quantization="u16", verify_depth_writes=False)
+        engine = ExecutionEngine(config=config, output_root=tmp_path)
+
+        import numpy as np
+
+        depth_map = np.random.rand(100, 100).astype(np.float32)
+        depth_metadata = DepthMetadata(
+            model="da3",
+            depth_path="/test/depth.png",
+            runtime_seconds=1.5,
+            scaling={},
+            stats={},
+        )
+
+        result = engine.persist_depth(
+            depth_map=depth_map,
+            output_key=Path("test_image"),
+            depth_metadata=depth_metadata,
+        )
+
+        assert result.success is True
+        assert result.depth_path is not None
+        assert result.depth_path.exists()
+
+    def test_persist_enhanced_method(self, tmp_path):
+        """Test ExecutionEngine.persist_enhanced method."""
+        from transformation_portal.lux_depth_v3.config import EnhanceConfig
+        from transformation_portal.lux_depth_v3.execution_engine import ExecutionEngine
+
+        config = EnhanceConfig(emit_master16=False, emit_upscaled16=False)
+        engine = ExecutionEngine(config=config, output_root=tmp_path)
+
+        import numpy as np
+
+        enhanced_image = np.random.rand(100, 100, 3).astype(np.float32)
+
+        result = engine.persist_enhanced(
+            enhanced_image=enhanced_image,
+            output_key=Path("test_image"),
+            n_operations_applied=3,
+        )
+
+        assert result.success is True
+        assert result.format == "png"
+        assert result.output_path is not None
+        assert result.output_path.exists()
+
+
+class TestNewImports:
+    """Test new imports from execution_engine module."""
+
+    def test_import_new_result_classes(self):
+        """Test that we can import new result data classes."""
+        from transformation_portal.lux_depth_v3.execution_engine import (
+            DepthArtifactPaths,
+            DepthArtifactResult,
+            EnhancedImageResult,
+        )
+
+        assert DepthArtifactPaths is not None
+        assert DepthArtifactResult is not None
+        assert EnhancedImageResult is not None
+
+    def test_import_new_functions(self):
+        """Test that we can import new standalone functions."""
+        from transformation_portal.lux_depth_v3.execution_engine import (
+            persist_depth_artifacts,
+            persist_enhanced_image,
+        )
+
+        assert callable(persist_depth_artifacts)
+        assert callable(persist_enhanced_image)
+
+    def test_backward_compatible_orchestrator_imports_new(self):
+        """Test that new imports from orchestrator work."""
+        from transformation_portal.lux_depth_v3.orchestrator import (
+            DepthArtifactPaths,
+            DepthArtifactResult,
+            EnhancedImageResult,
+            persist_depth_artifacts,
+            persist_enhanced_image,
+        )
+
+        assert DepthArtifactPaths is not None
+        assert DepthArtifactResult is not None
+        assert EnhancedImageResult is not None
+        assert callable(persist_depth_artifacts)
+        assert callable(persist_enhanced_image)
