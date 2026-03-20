@@ -18,8 +18,8 @@ import pytest
 pytestmark = [pytest.mark.unit]
 
 
-def _get_orchestrator_modules() -> set:
-    """Return set of orchestrator-related modules currently in sys.modules."""
+def _snapshot_orchestrator_modules() -> set:
+    """Snapshot orchestrator-related modules currently loaded in sys.modules."""
     return {name for name in sys.modules if name.startswith("transformation_portal.lux_depth_v3.orchestrator")}
 
 
@@ -29,7 +29,7 @@ class TestNoCircularImports:
     def test_execution_engine_does_not_import_orchestrator(self):
         """execution_engine.py should not import from orchestrator."""
         # Snapshot orchestrator modules BEFORE import
-        pre = _get_orchestrator_modules()
+        pre = _snapshot_orchestrator_modules()
 
         from transformation_portal.lux_depth_v3 import execution_engine
 
@@ -37,51 +37,51 @@ class TestNoCircularImports:
         assert "EnhanceOrchestrator" not in dir(execution_engine)
 
         # Ensure import did NOT load orchestrator (no new orchestrator modules)
-        post = _get_orchestrator_modules()
+        post = _snapshot_orchestrator_modules()
         assert post == pre, f"execution_engine imported orchestrator: {post - pre}"
 
     def test_config_resolver_does_not_import_orchestrator(self):
         """config_resolver.py should not import from orchestrator."""
-        pre = _get_orchestrator_modules()
+        pre = _snapshot_orchestrator_modules()
 
         from transformation_portal.lux_depth_v3 import config_resolver
 
         assert "EnhanceOrchestrator" not in dir(config_resolver)
 
-        post = _get_orchestrator_modules()
+        post = _snapshot_orchestrator_modules()
         assert post == pre, f"config_resolver imported orchestrator: {post - pre}"
 
     def test_pipeline_coordinator_does_not_import_orchestrator(self):
         """pipeline_coordinator.py should not import from orchestrator."""
-        pre = _get_orchestrator_modules()
+        pre = _snapshot_orchestrator_modules()
 
         from transformation_portal.lux_depth_v3 import pipeline_coordinator
 
         assert "EnhanceOrchestrator" not in dir(pipeline_coordinator)
 
-        post = _get_orchestrator_modules()
+        post = _snapshot_orchestrator_modules()
         assert post == pre, f"pipeline_coordinator imported orchestrator: {post - pre}"
 
     def test_artifact_manager_does_not_import_orchestrator(self):
         """artifact_manager.py should not import from orchestrator."""
-        pre = _get_orchestrator_modules()
+        pre = _snapshot_orchestrator_modules()
 
         from transformation_portal.lux_depth_v3 import artifact_manager
 
         assert "EnhanceOrchestrator" not in dir(artifact_manager)
 
-        post = _get_orchestrator_modules()
+        post = _snapshot_orchestrator_modules()
         assert post == pre, f"artifact_manager imported orchestrator: {post - pre}"
 
     def test_validators_does_not_import_orchestrator(self):
         """validators package should not import from orchestrator."""
-        pre = _get_orchestrator_modules()
+        pre = _snapshot_orchestrator_modules()
 
         from transformation_portal.lux_depth_v3 import validators
 
         assert "EnhanceOrchestrator" not in dir(validators)
 
-        post = _get_orchestrator_modules()
+        post = _snapshot_orchestrator_modules()
         assert post == pre, f"validators imported orchestrator: {post - pre}"
 
 
@@ -248,13 +248,9 @@ class TestBackwardCompatibleImports:
             validate_run_card_payload,
         )
 
-        # All should import successfully
-        assert all(
-            [
-                DepthStageResult,
-                ExecutionEngine,
-                ConfigResolver,
-                ArtifactManager,
-                PipelineCoordinator,
-            ]
-        )
+        # Verify all canonical imports succeeded (import errors would fail above)
+        assert DepthStageResult is not None
+        assert ExecutionEngine is not None
+        assert ConfigResolver is not None
+        assert ArtifactManager is not None
+        assert PipelineCoordinator is not None
