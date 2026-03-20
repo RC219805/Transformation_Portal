@@ -18,7 +18,7 @@ import pytest
 pytestmark = [pytest.mark.unit]
 
 
-def _snapshot_orchestrator_modules() -> set:
+def _snapshot_orchestrator_modules() -> set[str]:
     """Snapshot orchestrator-related modules currently loaded in sys.modules."""
     return {name for name in sys.modules if name.startswith("transformation_portal.lux_depth_v3.orchestrator")}
 
