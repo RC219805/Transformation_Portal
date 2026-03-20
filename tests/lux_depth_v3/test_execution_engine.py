@@ -784,6 +784,57 @@ class TestPersistDepthArtifacts:
         assert result.metadata_path is not None
         assert result.metadata_path.exists()
 
+    def test_persist_depth_metadata_uses_actual_values(self, tmp_path):
+        """Test that metadata sidecar uses actual computed values, not input metadata."""
+        import json
+
+        from transformation_portal.lux_depth_v3.config import EnhanceConfig
+        from transformation_portal.lux_depth_v3.execution_engine import (
+            persist_depth_artifacts,
+        )
+        from transformation_portal.lux_depth_v3.manifest import DepthMetadata
+
+        config = EnhanceConfig(depth_quantization="u16", verify_depth_writes=False)
+        import numpy as np
+
+        depth_map = np.random.rand(100, 100).astype(np.float32)
+        # Use different actual path vs what's in metadata
+        actual_depth_path = tmp_path / "depth" / "actual_output_depth.png"
+        actual_depth_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # depth_metadata has a placeholder/old path - should NOT appear in sidecar
+        depth_metadata = DepthMetadata(
+            model="da3",
+            depth_path="/stale/placeholder/depth.png",  # This should be overwritten
+            runtime_seconds=1.5,
+            scaling={"stale_key": "stale_value"},  # Should be replaced by computed stats
+            stats={"stale_stats": "should_be_replaced"},
+        )
+
+        result = persist_depth_artifacts(
+            depth_map=depth_map,
+            depth_path=actual_depth_path,
+            float_depth_path=None,
+            depth_metadata=depth_metadata,
+            config=config,
+        )
+
+        assert result.success is True
+        assert result.metadata_path.exists()
+
+        # Read the metadata sidecar and verify it uses actual values
+        with open(result.metadata_path, "r") as f:
+            written_metadata = json.load(f)
+
+        # depth_path should be the actual path, not the placeholder
+        assert written_metadata["depth_path"] == str(actual_depth_path)
+        assert written_metadata["depth_path"] != "/stale/placeholder/depth.png"
+
+        # scaling and stats should be computed from depth_stats, not stale values
+        # (since depth_stats is computed by atomic_write_depth_u16_png_with_stats)
+        assert "stale_key" not in written_metadata.get("scaling", {})
+        assert "stale_stats" not in written_metadata.get("stats", {})
+
 
 class TestPersistEnhancedImage:
     """Test persist_enhanced_image function."""
@@ -850,6 +901,43 @@ class TestExecutionEngineNewMethods:
         assert result.depth_path is not None
         assert result.depth_path.exists()
 
+    def test_persist_depth_preserves_nested_path(self, tmp_path):
+        """Test ExecutionEngine.persist_depth preserves output_key.parent structure."""
+        from transformation_portal.lux_depth_v3.config import EnhanceConfig
+        from transformation_portal.lux_depth_v3.execution_engine import ExecutionEngine
+        from transformation_portal.lux_depth_v3.manifest import DepthMetadata
+
+        config = EnhanceConfig(depth_quantization="u16", verify_depth_writes=False)
+        engine = ExecutionEngine(config=config, output_root=tmp_path)
+
+        import numpy as np
+
+        depth_map = np.random.rand(100, 100).astype(np.float32)
+        depth_metadata = DepthMetadata(
+            model="da3",
+            depth_path="/test/depth.png",
+            runtime_seconds=1.5,
+            scaling={},
+            stats={},
+        )
+
+        # Use nested output_key like orchestrator does: batch/subdir/image_name
+        nested_output_key = Path("batch1/subdir/test_image")
+        result = engine.persist_depth(
+            depth_map=depth_map,
+            output_key=nested_output_key,
+            depth_metadata=depth_metadata,
+        )
+
+        assert result.success is True
+        assert result.depth_path is not None
+        assert result.depth_path.exists()
+        # Verify the nested path structure is preserved
+        # Pattern: depth_dir / output_key.parent / {output_key.name}_depth.png
+        expected_parent = tmp_path / "depth" / "batch1" / "subdir"
+        assert result.depth_path.parent == expected_parent
+        assert result.depth_path.name == "test_image_depth.png"
+
     def test_persist_enhanced_method(self, tmp_path):
         """Test ExecutionEngine.persist_enhanced method."""
         from transformation_portal.lux_depth_v3.config import EnhanceConfig
@@ -872,6 +960,36 @@ class TestExecutionEngineNewMethods:
         assert result.format == "png"
         assert result.output_path is not None
         assert result.output_path.exists()
+
+    def test_persist_enhanced_preserves_nested_path(self, tmp_path):
+        """Test ExecutionEngine.persist_enhanced preserves output_key.parent structure."""
+        from transformation_portal.lux_depth_v3.config import EnhanceConfig
+        from transformation_portal.lux_depth_v3.execution_engine import ExecutionEngine
+
+        config = EnhanceConfig(emit_master16=False, emit_upscaled16=False)
+        engine = ExecutionEngine(config=config, output_root=tmp_path)
+
+        import numpy as np
+
+        enhanced_image = np.random.rand(100, 100, 3).astype(np.float32)
+
+        # Use nested output_key like orchestrator does: batch/subdir/image_name
+        nested_output_key = Path("batch1/subdir/test_image")
+        result = engine.persist_enhanced(
+            enhanced_image=enhanced_image,
+            output_key=nested_output_key,
+            n_operations_applied=3,
+        )
+
+        assert result.success is True
+        assert result.format == "png"
+        assert result.output_path is not None
+        assert result.output_path.exists()
+        # Verify the nested path structure is preserved
+        # Pattern: temp_dir / output_key.parent / {output_key.name}_materials_v3_enhanced.png
+        expected_parent = tmp_path / "temp" / "batch1" / "subdir"
+        assert result.output_path.parent == expected_parent
+        assert "test_image_materials_v3_enhanced" in result.output_path.name
 
 
 class TestNewImports:

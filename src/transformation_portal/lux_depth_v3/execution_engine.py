@@ -525,15 +525,16 @@ def persist_depth_artifacts(
             logger.debug("Saved float depth: %s", float_depth_path)
 
         # Write depth metadata JSON sidecar
+        # Use actual computed values to ensure sidecar matches persisted artifacts
         metadata_path = depth_path.parent / f"{depth_path.stem}_metadata.json"
         with open(metadata_path, "w", encoding="utf-8") as f:
             dump_json(
                 {
                     "model": depth_metadata.model,
-                    "depth_path": depth_metadata.depth_path,
+                    "depth_path": str(depth_path),
                     "runtime_seconds": depth_metadata.runtime_seconds,
-                    "scaling": depth_metadata.scaling,
-                    "stats": depth_metadata.stats,
+                    "scaling": depth_stats._asdict() if depth_stats else depth_metadata.scaling,
+                    "stats": depth_stats._asdict() if depth_stats else depth_metadata.stats,
                 },
                 f,
                 indent=2,
@@ -789,15 +790,19 @@ class ExecutionEngine:
 
         Args:
             depth_map: Float32 depth array from inference
-            output_key: Output key for artifact naming
+            output_key: Output key for artifact naming (preserves parent structure)
             depth_metadata: Depth metadata for JSON sidecar
 
         Returns:
             DepthArtifactResult with persistence outcomes
         """
-        depth_path = self.depth_dir / f"{output_key.stem}_depth.png"
+        # Preserve output_key.parent structure to match orchestrator path layout
+        # Pattern: depth_dir / output_key.parent / {output_key.name}_depth.png
+        depth_path = self.depth_dir / output_key.parent / f"{output_key.name}_depth.png"
         float_depth_path = (
-            self.depth_dir / f"{output_key.stem}_depth.npy" if getattr(self.config, "save_float_depth", False) else None
+            self.depth_dir / output_key.parent / f"{output_key.name}_depth.npy"
+            if getattr(self.config, "save_float_depth", False)
+            else None
         )
 
         return persist_depth_artifacts(
@@ -818,7 +823,7 @@ class ExecutionEngine:
 
         Args:
             enhanced_image: Float32 enhanced image array (normalized 0-1)
-            output_key: Output key for artifact naming
+            output_key: Output key for artifact naming (preserves parent structure)
             n_operations_applied: Number of pixel operations applied
 
         Returns:
@@ -826,7 +831,8 @@ class ExecutionEngine:
         """
         temp_dir = self.output_root / "temp"
         extension = ".tif" if (self.config.emit_master16 or self.config.emit_upscaled16) else ".png"
-        output_path = temp_dir / f"{output_key.stem}_materials_v3_enhanced{extension}"
+        # Preserve output_key.parent structure to match orchestrator path layout
+        output_path = temp_dir / output_key.parent / f"{output_key.name}_materials_v3_enhanced{extension}"
 
         return persist_enhanced_image(
             enhanced_image=enhanced_image,
