@@ -2,27 +2,36 @@
 
 Extracted from orchestrator.py as part of ADR-043 decomposition (Phase 6).
 
-This module currently provides:
+This module provides:
 - Helpers for generating and writing PBR maps
 - Helpers for invoking the V2 enhancement subprocess
+- Helpers for persisting depth artifacts (PNG, metadata JSON)
+- Helpers for persisting Materials V3 enhanced images
 - Result data classes for the supported stages
 - ExecutionEngine class for coordinating PBR + V2 stage execution
 
-Depth and Materials V3 orchestration lives in the lux_depth_v3 pipeline
-coordinator; this module does not run depth inference or Materials V3
-finishing directly.
+The depth inference and Materials V3 segmentation logic remain in the
+orchestrator due to tight coupling with per-image state management
+(backend fallback tracking, APEX gates, cache coordination). This module
+handles the stateless artifact persistence and subprocess coordination.
 
 Usage:
     from transformation_portal.lux_depth_v3.execution_engine import (
         ExecutionEngine,
         PBRStageResult,
         V2StageResult,
+        persist_depth_artifacts,
+        persist_enhanced_image,
     )
 
     # Using ExecutionEngine class
     engine = ExecutionEngine(config, output_root)
     pbr_result = engine.execute_pbr_stage(depth_array, output_key)
     v2_result = engine.execute_v2_stage(image_input, output_key, paths)
+
+    # Using standalone artifact persistence
+    persist_depth_artifacts(depth_map, depth_path, metadata, config)
+    persist_enhanced_image(enhanced_array, output_path, config)
 """
 
 from __future__ import annotations
@@ -36,6 +45,8 @@ from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 
 from .config import EnhanceConfig
+from .depth_writer import atomic_write_depth_u16_png_with_stats
+from .io_atomic import atomic_temp_file, atomic_write_pil_png
 from .manifest import BackendSelectionMetadata, DepthMetadata
 from .pbr import generate_pbr_maps
 from .pbr_writer import write_pbr_maps
@@ -430,6 +441,252 @@ def run_v2_stage(
 
 
 # -----------------------------------------------------------------------------
+# Depth Artifact Persistence Helper Functions
+# -----------------------------------------------------------------------------
+
+
+@dataclass
+class DepthArtifactPaths:
+    """Paths for depth artifacts.
+
+    Attributes:
+        depth_path: Path to quantized depth PNG (uint16)
+        float_depth_path: Path to float depth NPY (optional)
+        metadata_path: Path to depth metadata JSON
+    """
+
+    depth_path: Path
+    float_depth_path: Optional[Path] = None
+    metadata_path: Optional[Path] = None
+
+
+@dataclass
+class DepthArtifactResult:
+    """Result from depth artifact persistence.
+
+    Attributes:
+        success: Whether persistence succeeded
+        depth_path: Path to written depth PNG
+        float_depth_path: Path to float depth NPY (or None)
+        metadata_path: Path to metadata JSON
+        scaling_stats: Depth scaling statistics
+        error: Error message if persistence failed
+    """
+
+    success: bool = False
+    depth_path: Optional[Path] = None
+    float_depth_path: Optional[Path] = None
+    metadata_path: Optional[Path] = None
+    scaling_stats: Optional[Dict[str, Any]] = None
+    error: Optional[str] = None
+
+
+def persist_depth_artifacts(
+    depth_map: np.ndarray,
+    depth_path: Path,
+    float_depth_path: Optional[Path],
+    depth_metadata: DepthMetadata,
+    config: EnhanceConfig,
+) -> DepthArtifactResult:
+    """Persist depth artifacts to disk.
+
+    Writes the depth map as a quantized uint16 PNG, optionally saves
+    the float32 NPY, and writes metadata JSON. This function handles
+    the I/O portion of depth stage completion.
+
+    Args:
+        depth_map: Float32 depth array from inference
+        depth_path: Target path for quantized depth PNG
+        float_depth_path: Target path for float depth NPY (optional)
+        depth_metadata: Depth metadata for JSON sidecar
+        config: Enhancement configuration
+
+    Returns:
+        DepthArtifactResult with persistence outcomes
+    """
+    from ..ingest.canonical_json import dump_json
+
+    try:
+        # Ensure parent directories exist
+        depth_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Write quantized depth PNG (uint16)
+        _, _, depth_stats = atomic_write_depth_u16_png_with_stats(
+            depth_path,
+            depth_map,
+            method=config.depth_quantization,
+            debug_verify=config.verify_depth_writes,
+        )
+
+        # Save float depth NPY if enabled
+        if float_depth_path and getattr(config, "save_float_depth", False):
+            float_depth_path.parent.mkdir(parents=True, exist_ok=True)
+            np.save(str(float_depth_path), depth_map)
+            logger.debug("Saved float depth: %s", float_depth_path)
+
+        # Write depth metadata JSON sidecar
+        # Use actual computed values to ensure sidecar matches persisted artifacts
+        metadata_path = depth_path.parent / f"{depth_path.stem}_metadata.json"
+        with open(metadata_path, "w", encoding="utf-8") as f:
+            dump_json(
+                {
+                    "model": depth_metadata.model,
+                    "depth_path": str(depth_path),
+                    "runtime_seconds": depth_metadata.runtime_seconds,
+                    "scaling": depth_stats._asdict() if depth_stats else depth_metadata.scaling,
+                    "stats": depth_stats._asdict() if depth_stats else depth_metadata.stats,
+                },
+                f,
+                indent=2,
+                sort_keys=True,
+                ensure_ascii=False,
+                allow_nan=False,
+            )
+        logger.debug("Wrote depth metadata: %s", metadata_path)
+
+        return DepthArtifactResult(
+            success=True,
+            depth_path=depth_path,
+            float_depth_path=(float_depth_path if float_depth_path and getattr(config, "save_float_depth", False) else None),
+            metadata_path=metadata_path,
+            # depth_stats is DepthWriteStats (dataclass with _asdict() method)
+            scaling_stats=depth_stats._asdict() if depth_stats else None,
+        )
+
+    except Exception as e:
+        logger.error("Depth artifact persistence failed: %s", e)
+        return DepthArtifactResult(
+            success=False,
+            error=str(e),
+        )
+
+
+# -----------------------------------------------------------------------------
+# Enhanced Image Persistence Helper Functions
+# -----------------------------------------------------------------------------
+
+
+@dataclass
+class EnhancedImageResult:
+    """Result from enhanced image persistence.
+
+    Attributes:
+        success: Whether persistence succeeded
+        output_path: Path to written enhanced image
+        format: Output format ("png" or "tiff")
+        bit_depth: Bit depth (8 or 16)
+        n_operations_applied: Number of pixel operations applied
+        error: Error message if persistence failed
+    """
+
+    success: bool = False
+    output_path: Optional[Path] = None
+    format: str = "png"
+    bit_depth: int = 8
+    n_operations_applied: int = 0
+    error: Optional[str] = None
+
+
+def persist_enhanced_image(
+    enhanced_image: np.ndarray,
+    output_path: Path,
+    config: EnhanceConfig,
+    n_operations_applied: int = 0,
+) -> EnhancedImageResult:
+    """Persist Materials V3 enhanced image to disk.
+
+    Writes the enhanced image as either 8-bit PNG or 16-bit TIFF
+    based on configuration. This function handles the I/O portion
+    of Materials V3 stage completion.
+
+    Args:
+        enhanced_image: Float32 enhanced image array (normalized 0-1)
+        output_path: Target path for output image
+        config: Enhancement configuration
+        n_operations_applied: Number of pixel operations applied (for logging)
+
+    Returns:
+        EnhancedImageResult with persistence outcomes
+    """
+    from PIL import Image as PILImage
+
+    try:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        if config.emit_master16 or config.emit_upscaled16:
+            # 16-bit TIFF output
+            import tifffile
+
+            enhanced_uint16 = (np.clip(enhanced_image, 0, 1) * 65535 + 0.5).astype(np.uint16)
+
+            # Ensure .tif extension for 16-bit
+            if output_path.suffix.lower() not in {".tif", ".tiff"}:
+                output_path = output_path.with_suffix(".tif")
+
+            with atomic_temp_file(
+                output_path,
+                suffix=".tif",
+                create_file=False,
+            ) as temp_path:
+                tifffile.imwrite(
+                    temp_path,
+                    enhanced_uint16,
+                    photometric="rgb",
+                    compression="lzw",
+                    metadata={"software": "Transformation Portal v3"},
+                )
+
+            logger.info(
+                "Materials V3 enhanced image with %d pixel operations - " "saved to %s (16-bit TIFF) for V2 stage",
+                n_operations_applied,
+                output_path,
+            )
+
+            return EnhancedImageResult(
+                success=True,
+                output_path=output_path,
+                format="tiff",
+                bit_depth=16,
+                n_operations_applied=n_operations_applied,
+            )
+
+        else:
+            # 8-bit PNG output
+            enhanced_uint8 = (np.clip(enhanced_image, 0, 1) * 255).astype(np.uint8)
+
+            # Ensure .png extension for 8-bit
+            if output_path.suffix.lower() != ".png":
+                output_path = output_path.with_suffix(".png")
+
+            output_path = atomic_write_pil_png(
+                output_path,
+                PILImage.fromarray(enhanced_uint8),
+                optimize=True,
+            )
+
+            logger.info(
+                "Materials V3 enhanced image with %d pixel operations - " "saved to %s (8-bit PNG) for V2 stage",
+                n_operations_applied,
+                output_path,
+            )
+
+            return EnhancedImageResult(
+                success=True,
+                output_path=output_path,
+                format="png",
+                bit_depth=8,
+                n_operations_applied=n_operations_applied,
+            )
+
+    except Exception as e:
+        logger.error("Enhanced image persistence failed: %s", e)
+        return EnhancedImageResult(
+            success=False,
+            error=str(e),
+        )
+
+
+# -----------------------------------------------------------------------------
 # ExecutionEngine Class
 # -----------------------------------------------------------------------------
 
@@ -523,6 +780,67 @@ class ExecutionEngine:
             masks_path=masks_path,
         )
 
+    def persist_depth(
+        self,
+        depth_map: np.ndarray,
+        output_key: Path,
+        depth_metadata: DepthMetadata,
+    ) -> DepthArtifactResult:
+        """Persist depth artifacts to disk.
+
+        Args:
+            depth_map: Float32 depth array from inference
+            output_key: Output key for artifact naming (preserves parent structure)
+            depth_metadata: Depth metadata for JSON sidecar
+
+        Returns:
+            DepthArtifactResult with persistence outcomes
+        """
+        # Preserve output_key.parent structure to match orchestrator path layout
+        # Pattern: depth_dir / output_key.parent / {output_key.name}_depth.png
+        depth_path = self.depth_dir / output_key.parent / f"{output_key.name}_depth.png"
+        float_depth_path = (
+            self.depth_dir / output_key.parent / f"{output_key.name}_depth.npy"
+            if getattr(self.config, "save_float_depth", False)
+            else None
+        )
+
+        return persist_depth_artifacts(
+            depth_map=depth_map,
+            depth_path=depth_path,
+            float_depth_path=float_depth_path,
+            depth_metadata=depth_metadata,
+            config=self.config,
+        )
+
+    def persist_enhanced(
+        self,
+        enhanced_image: np.ndarray,
+        output_key: Path,
+        n_operations_applied: int = 0,
+    ) -> EnhancedImageResult:
+        """Persist Materials V3 enhanced image to disk.
+
+        Args:
+            enhanced_image: Float32 enhanced image array (normalized 0-1)
+            output_key: Output key for artifact naming (preserves parent structure)
+            n_operations_applied: Number of pixel operations applied
+
+        Returns:
+            EnhancedImageResult with persistence outcomes
+        """
+        temp_dir = self.output_root / "temp"
+        extension = ".tif" if (self.config.emit_master16 or self.config.emit_upscaled16) else ".png"
+        # Preserve output_key.parent structure to match orchestrator path layout
+        output_path = temp_dir / output_key.parent / f"{output_key.name}_materials_v3_enhanced{extension}"
+
+        return persist_enhanced_image(
+            enhanced_image=enhanced_image,
+            output_path=output_path,
+            config=self.config,
+            n_operations_applied=n_operations_applied,
+        )
+
 
 # -----------------------------------------------------------------------------
 # Module exports
@@ -534,9 +852,15 @@ __all__ = [
     "PBRStageResult",
     "MaterialsV3StageResult",
     "V2StageResult",
+    # Artifact result data classes
+    "DepthArtifactPaths",
+    "DepthArtifactResult",
+    "EnhancedImageResult",
     # Standalone functions
     "generate_pbr_stage",
     "run_v2_stage",
+    "persist_depth_artifacts",
+    "persist_enhanced_image",
     # Main class
     "ExecutionEngine",
 ]

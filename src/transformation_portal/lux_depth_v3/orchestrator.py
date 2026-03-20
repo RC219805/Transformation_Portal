@@ -165,13 +165,21 @@ _resolve_backend_model_id = resolve_backend_model_id
 # The extracted functions are the new canonical API for standalone use:
 # - generate_pbr_stage(...) -> PBRStageResult
 # - run_v2_stage(...) -> V2StageResult
+# ADR-043 Phase 6 also adds artifact persistence helpers:
+# - persist_depth_artifacts(...) -> DepthArtifactResult
+# - persist_enhanced_image(...) -> EnhancedImageResult
 from .execution_engine import (
+    DepthArtifactPaths,
+    DepthArtifactResult,
     DepthStageResult,
+    EnhancedImageResult,
     ExecutionEngine,
     MaterialsV3StageResult,
     PBRStageResult,
     V2StageResult,
     generate_pbr_stage,
+    persist_depth_artifacts,
+    persist_enhanced_image,
     run_v2_stage,
 )
 
