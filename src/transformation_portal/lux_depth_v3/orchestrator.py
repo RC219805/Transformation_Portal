@@ -157,6 +157,21 @@ _default_model_id_for_backend = default_model_id_for_backend
 _derive_model_id_from_backend_instance = derive_model_id_from_backend_instance
 _resolve_backend_model_id = resolve_backend_model_id
 
+# ADR-043 Phase 6: Execution engine extracted to execution_engine.py
+from .execution_engine import (
+    DepthStageResult,
+    ExecutionEngine,
+    MaterialsV3StageResult,
+    PBRStageResult,
+    V2StageResult,
+    generate_pbr_stage,
+    run_v2_stage,
+)
+
+# ADR-043: Execution engine backward-compatible aliases
+_generate_pbr_stage = generate_pbr_stage
+_run_v2_stage = run_v2_stage
+
 logger = logging.getLogger(__name__)
 
 

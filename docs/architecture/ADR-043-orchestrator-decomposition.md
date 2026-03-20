@@ -1,6 +1,6 @@
 # ADR-043: Orchestrator Decomposition Strategy
 
-**Status:** IN PROGRESS (Phases 2-5 Complete)
+**Status:** IN PROGRESS (Phases 2-5 Complete, Phase 6 In Progress)
 **Date:** 2026-03-20
 **Decision Makers:** Architect
 **Replaces:** None
@@ -212,10 +212,21 @@ class RunCardValidator:
 - New module: `pipeline_coordinator.py` (623 LOC)
 - Test coverage: 35 unit tests for pipeline coordinator
 
-### Phase 6: Extract ExecutionEngine (Week 4-5)
-1. Extract core processing logic
-2. Create `ProcessedImage` result type
-3. Add unit tests
+### Phase 6: Extract ExecutionEngine (Week 4-5) 🚧 IN PROGRESS
+1. ✅ Create result data classes (`DepthStageResult`, `PBRStageResult`, `MaterialsV3StageResult`, `V2StageResult`)
+2. ✅ Extract PBR generation logic (`generate_pbr_stage`)
+3. ✅ Extract V2 stage execution logic (`run_v2_stage`)
+4. ✅ Create `ExecutionEngine` class skeleton
+5. ✅ Add unit tests (29 tests)
+6. ✅ Add backward-compatible imports in orchestrator
+7. [ ] Extract depth stage execution logic
+8. [ ] Extract Materials V3 stage execution logic
+9. [ ] Wire ExecutionEngine into orchestrator
+
+**Metrics after Phase 6 (partial):**
+- New module: `execution_engine.py` (536 LOC)
+- Test coverage: 29 unit tests for execution engine
+- Orchestrator LOC: 5,664 (was 5,649, +15 lines for backward-compat imports)
 
 ### Phase 7: Finalize Facade (Week 5)
 1. Reduce orchestrator to facade pattern
