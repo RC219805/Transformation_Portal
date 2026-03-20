@@ -1,6 +1,6 @@
 # ADR-043: Orchestrator Decomposition Strategy
 
-**Status:** IN PROGRESS (Phase 2 Complete)  
+**Status:** IN PROGRESS (Phases 2-3 Complete)  
 **Date:** 2026-03-20  
 **Decision Makers:** Architect  
 **Replaces:** None  
@@ -171,10 +171,17 @@ class RunCardValidator:
 - New module: `validators/run_card_validator.py` (310 LOC)
 - Test coverage: 17 unit tests for validator
 
-### Phase 3: Extract ArtifactManager (Week 2)
-1. Extract `_infer_artifact_type`, `_build_artifact_index`, `_compute_artifact_merkle_root`
-2. Move output key generation logic
-3. Add unit tests
+### Phase 3: Extract ArtifactManager (Week 2) ✅ COMPLETE
+1. ✅ Extract `_infer_artifact_type`, `_build_artifact_index`, `_compute_artifact_merkle_root`
+2. ✅ Move output key generation logic (`make_output_key`)
+3. ✅ Extract `_v2_log_filename`
+4. ✅ Add unit tests (52 tests)
+5. ✅ Maintain backward compatibility with orchestrator imports
+
+**Metrics after Phase 3:**
+- Orchestrator LOC: 5,770 (was 6,108, -338 lines total)
+- New module: `artifact_manager.py` (350 LOC)
+- Test coverage: 52 unit tests for artifact manager
 
 ### Phase 4: Extract ConfigResolver (Week 3)
 1. Extract preset discovery and config merging
