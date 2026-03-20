@@ -18,7 +18,12 @@ Usage:
     )
 
     validator = RunCardValidator()
-    validator.validate(payload)  # Raises RunCardValidationError on failure
+    result = validator.validate(payload)  # Returns ValidationResult
+    if not result:
+        raise RunCardValidationError(result.errors)
+
+    # Or use validate_or_raise for throwing behavior:
+    validator.validate_or_raise(payload)  # Raises RunCardValidationError on failure
 
     # Or use standalone functions for specific validation phases:
     validate_run_card_payload(payload, schema_path)

@@ -264,7 +264,11 @@ def compute_artifact_merkle_root(
         digest = artifact.get("sha256")
         if not isinstance(digest, str) or len(digest) != 64:
             raise RuntimeError(f"Invalid artifact sha256 in run card index: {digest!r}")
-        leaves.append(bytes.fromhex(digest))
+        try:
+            leaves.append(bytes.fromhex(digest))
+        except ValueError:
+            # Normalize underlying ValueError to the documented RuntimeError contract.
+            raise RuntimeError(f"Invalid artifact sha256 in run card index: {digest!r}") from None
 
     return hashlib.sha256(b"".join(leaves)).hexdigest()
 

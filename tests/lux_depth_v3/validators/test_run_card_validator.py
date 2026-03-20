@@ -87,7 +87,12 @@ class TestValidationResult:
 
 
 def _minimal_valid_payload() -> Dict[str, Any]:
-    """Return a minimal valid run card payload for testing."""
+    """Return a minimal run card payload for backend semantics tests.
+
+    Note: this payload is intentionally not schema-complete and may omit
+    required top-level fields from run_card.v1.schema.json. It is only
+    intended for tests that do not require full schema validation.
+    """
     config_fingerprint = {
         "model_variant": "METRIC_LARGE",
         "depth_quantization": "u16",
