@@ -91,9 +91,7 @@ class BackendSelection:
             ValueError: If resolved_backend is None (error state)
         """
         if self.resolved_backend is None:
-            raise ValueError(
-                "Cannot convert error selection to metadata: resolved_backend is None"
-            )
+            raise ValueError("Cannot convert error selection to metadata: resolved_backend is None")
         return BackendSelectionMetadata(
             requested_backend=self.requested_backend,
             resolved_backend=self.resolved_backend,
