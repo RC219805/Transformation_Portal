@@ -1,0 +1,623 @@
+"""Pipeline coordination for lux_depth_v3 pipeline.
+
+Extracted from orchestrator.py as part of ADR-043 decomposition.
+
+This module provides:
+- Backend selection and fallback logic
+- Runtime backend chain resolution
+- Model ID resolution for provenance
+- ExecutionPlan and BackendSelection data classes
+
+The pipeline coordinator handles:
+1. Selecting depth backends based on availability and fallback rules
+2. Building ordered fallback chains for runtime resilience
+3. Resolving model identifiers for provenance tracking
+
+Usage:
+    from transformation_portal.lux_depth_v3.pipeline_coordinator import (
+        PipelineCoordinator,
+        BackendSelection,
+        ExecutionPlan,
+        resolve_runtime_backend_chain,
+        select_backend,
+    )
+
+    # Using PipelineCoordinator class
+    coordinator = PipelineCoordinator(config, registry)
+    selection = coordinator.select_backend("da3")
+    plan = coordinator.plan(resolved_config)
+
+    # Using standalone functions
+    chain = resolve_runtime_backend_chain("da3", config)
+    model_id = default_model_id_for_backend("da3", model_variant)
+"""
+
+from __future__ import annotations
+
+import logging
+import os
+from dataclasses import dataclass, field
+from typing import Any, Callable, Dict, List, Optional, Tuple
+
+from ..depth.backends.protocol import DepthBackend, LicenseRestrictionError
+
+# Use absolute import to avoid circular dependencies
+from ._backend_contract import normalize_backend_id, normalize_backend_sequence
+from .config import EnhanceConfig, ModelVariant
+from .manifest import BackendSelectionMetadata
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class BackendSelection:
+    """Result of backend selection process.
+
+    Captures the selection outcome including:
+    - What was requested vs what was resolved
+    - Selection status and reason
+    - The backend instance (if successful)
+    - Any errors encountered during selection
+
+    Attributes:
+        requested_backend: Originally requested backend ID
+        resolved_backend: Actually selected backend ID
+        status: Selection outcome (success, fallback, synthetic_fallback, error)
+        reason: Human-readable explanation of selection
+        backend: The backend instance if selection succeeded
+        model_id: Resolved model identifier for provenance
+        device: Target device for inference
+        init_errors: Dictionary of backend IDs to error messages
+    """
+
+    requested_backend: str
+    resolved_backend: Optional[str]
+    status: str
+    reason: Optional[str] = None
+    backend: Optional[Any] = None
+    model_id: Optional[str] = None
+    device: str = "cpu"
+    init_errors: Dict[str, str] = field(default_factory=dict)
+
+    @property
+    def is_success(self) -> bool:
+        """Return True if selection succeeded."""
+        return self.status in ("success", "fallback", "synthetic_fallback")
+
+    def to_metadata(self, attempts: Optional[List[Dict[str, Any]]] = None) -> BackendSelectionMetadata:
+        """Convert to BackendSelectionMetadata for manifest storage."""
+        return BackendSelectionMetadata(
+            requested_backend=self.requested_backend,
+            resolved_backend=self.resolved_backend,
+            resolution_status=self.status,
+            resolution_reason=self.reason,
+            model_id=self.model_id or "",
+            device=self.device,
+            attempts=attempts or [],
+        )
+
+
+@dataclass
+class ExecutionPlan:
+    """Execution plan for pipeline processing.
+
+    Describes the planned execution stages and their configuration.
+
+    Attributes:
+        stages: Ordered list of stage names to execute
+        backend_selection: Backend selection result
+        enable_depth: Whether depth stage is enabled
+        enable_v2: Whether V2 enhancement stage is enabled
+        enable_pbr: Whether PBR generation is enabled
+        enable_materials_v3: Whether Materials V3 is enabled
+        enable_reconstruction: Whether scene reconstruction is enabled
+        quality_tier: Target quality tier (standard, premium, apex)
+    """
+
+    stages: List[str]
+    backend_selection: Optional[BackendSelection] = None
+    enable_depth: bool = True
+    enable_v2: bool = True
+    enable_pbr: bool = False
+    enable_materials_v3: bool = False
+    enable_reconstruction: bool = False
+    quality_tier: str = "standard"
+
+
+def resolve_runtime_backend_chain(
+    primary_backend_id: str,
+    config: EnhanceConfig,
+) -> List[str]:
+    """Resolve ordered runtime fallback chain.
+
+    Builds an ordered list of backend IDs to try during runtime,
+    starting with the primary backend and falling back through
+    configured alternatives.
+
+    Args:
+        primary_backend_id: Primary backend to try first
+        config: EnhanceConfig with fallback configuration
+
+    Returns:
+        Ordered list of backend IDs to attempt
+    """
+    normalized_primary = normalize_backend_id(primary_backend_id) or "da3"
+    chain: List[str] = [normalized_primary]
+
+    configured_chain = getattr(
+        config,
+        "depth_operational_fallback_chain",
+        ("da3", "da2"),
+    )
+    for backend_id in normalize_backend_sequence(configured_chain):
+        if backend_id and backend_id not in chain:
+            chain.append(backend_id)
+
+    allow_synthetic = bool(config.allow_synthetic_fallback) or os.getenv("TP_ALLOW_SYNTHETIC_FALLBACK") == "1"
+    if allow_synthetic and "synthetic" not in chain:
+        chain.append("synthetic")
+
+    return chain
+
+
+def expected_output_depth_units_for_backend(backend_id: str) -> str:
+    """Return expected output depth units for a backend.
+
+    Args:
+        backend_id: Backend identifier
+
+    Returns:
+        "meters" for metric backends, "relative" otherwise
+    """
+    return "meters" if normalize_backend_id(backend_id) == "depth_pro" else "relative"
+
+
+def default_model_id_for_backend(
+    backend_id: str,
+    model_variant: Optional[ModelVariant] = None,
+) -> str:
+    """Return canonical backend model identifier for provenance.
+
+    Args:
+        backend_id: Backend identifier
+        model_variant: Optional model variant for DA3 backend
+
+    Returns:
+        Canonical model identifier string
+    """
+    normalized_backend = normalize_backend_id(backend_id) or ""
+
+    if normalized_backend == "depth_pro":
+        return "apple/ml-depth-pro"
+    if normalized_backend == "da2":
+        return "depth-anything/Depth-Anything-V2-Small-hf"
+    if normalized_backend == "da3":
+        if model_variant is not None:
+            return model_variant.value.huggingface_id
+        return ModelVariant.METRIC_LARGE.value.huggingface_id
+    if normalized_backend == "depthcrafter":
+        return "tencent/depthcrafter"
+    if normalized_backend == "ensemble":
+        return "ensemble/multi-backend"
+    if normalized_backend == "synthetic":
+        return "synthetic/depth-analytic-v1"
+
+    # Fallback: return backend ID or model variant ID
+    if model_variant is not None:
+        return model_variant.value.huggingface_id
+    return normalized_backend or ModelVariant.METRIC_LARGE.value.huggingface_id
+
+
+def derive_model_id_from_backend_instance(
+    backend_id: str,
+    backend: Optional[Any],
+) -> Optional[str]:
+    """Best-effort model id extraction from backend instance.
+
+    Attempts to extract a model identifier from various backend
+    attributes for provenance tracking.
+
+    Args:
+        backend_id: Backend identifier
+        backend: Backend instance to inspect
+
+    Returns:
+        Model identifier if found, None otherwise
+    """
+    if backend is None:
+        return None
+
+    # Try direct model_id attribute
+    for attr_name in ("model_id", "_model_id"):
+        candidate = getattr(backend, attr_name, None)
+        if isinstance(candidate, str) and candidate.strip():
+            return candidate.strip()
+
+    # Try model_variant path
+    model_variant = getattr(backend, "_model_variant", None)
+    if model_variant is not None:
+        variant_value = getattr(model_variant, "value", None)
+        hf_id = getattr(variant_value, "huggingface_id", None)
+        if isinstance(hf_id, str) and hf_id.strip():
+            return hf_id.strip()
+        if isinstance(variant_value, str) and variant_value.strip():
+            return variant_value.strip()
+
+    # Try nested model.variant path
+    backend_model = getattr(backend, "_model", None)
+    model_variant = getattr(backend_model, "variant", None)
+    variant_value = getattr(model_variant, "value", None)
+    if isinstance(variant_value, str) and variant_value.strip():
+        return variant_value.strip()
+
+    # Special case for depth_pro
+    if str(backend_id).strip().lower() == "depth_pro":
+        return "apple/ml-depth-pro"
+
+    return None
+
+
+def resolve_backend_model_id(
+    backend_id: str,
+    *,
+    result_metadata: Optional[Dict[str, Any]] = None,
+    backend: Optional[Any] = None,
+    model_variant: Optional[ModelVariant] = None,
+) -> str:
+    """Resolve stable model id for provenance and run-card semantics.
+
+    Attempts resolution in order:
+    1. Canonical override for depth_pro
+    2. Explicit metadata fields
+    3. Backend instance extraction
+    4. Default for backend type
+
+    Args:
+        backend_id: Backend identifier
+        result_metadata: Optional metadata dict with model info
+        backend: Optional backend instance
+        model_variant: Optional model variant for DA3
+
+    Returns:
+        Resolved model identifier string
+    """
+    normalized_backend = str(backend_id).strip().lower()
+
+    # Canonical for depth_pro
+    if normalized_backend == "depth_pro":
+        return "apple/ml-depth-pro"
+
+    # Try metadata fields
+    metadata = result_metadata or {}
+    for key in ("resolved_model_id", "requested_model_id", "model_id"):
+        candidate = metadata.get(key)
+        if isinstance(candidate, str) and candidate.strip():
+            return candidate.strip()
+
+    # Try backend instance
+    from_backend = derive_model_id_from_backend_instance(backend_id, backend)
+    if from_backend:
+        return from_backend
+
+    # Fall back to default
+    return default_model_id_for_backend(backend_id, model_variant)
+
+
+def select_backend(
+    requested: str,
+    config: EnhanceConfig,
+    registry: Any,
+    model_variant: Optional[ModelVariant] = None,
+) -> BackendSelection:
+    """Select depth backend with fallback logic.
+
+    Implements backend selection with fallback:
+    1. Try requested backend
+    2. Check availability (checkpoint + dependencies)
+    3. Fallback through operational chain
+    4. Optionally use synthetic for testing
+
+    Args:
+        requested: Requested backend ID
+        config: EnhanceConfig with fallback settings
+        registry: DepthBackendRegistry instance
+        model_variant: Optional model variant for model ID resolution
+
+    Returns:
+        BackendSelection with result
+    """
+    normalized_requested = normalize_backend_id(requested) or "da3"
+
+    allow_synthetic = bool(config.allow_synthetic_fallback) or os.getenv("TP_ALLOW_SYNTHETIC_FALLBACK") == "1"
+
+    candidate_chain = list(
+        normalize_backend_sequence(
+            (normalized_requested, "da3", "da2", "synthetic" if allow_synthetic else None),
+        )
+    )
+
+    backend = None
+    resolved = None
+    status = "error"
+    reason = None
+    init_errors: Dict[str, str] = {}
+
+    for index, backend_id in enumerate(candidate_chain):
+        try:
+            candidate_backend = registry.get_backend(backend_id, config)
+            candidate_backend.ensure_available()
+            backend = candidate_backend
+            resolved = backend_id
+
+            if index == 0:
+                status = "success"
+                reason = f"{candidate_backend.name} backend ready"
+            elif backend_id == "synthetic":
+                status = "synthetic_fallback"
+                reason = f"Test environment synthetic fallback after: {init_errors}"
+            else:
+                status = "fallback"
+                requested_error = init_errors.get(normalized_requested, "unknown error")
+                reason = f"Requested '{normalized_requested}' unavailable: {requested_error}. " f"Selected '{backend_id}'"
+            break
+
+        except LicenseRestrictionError:
+            # Never bypass explicit license restrictions on requested backend
+            if index == 0:
+                raise
+            init_errors[backend_id] = "license_restriction"
+
+        except ValueError:
+            # Unknown requested backend should remain a hard error
+            if index == 0:
+                raise
+            init_errors[backend_id] = "unknown_backend"
+
+        except (ImportError, FileNotFoundError, RuntimeError) as backend_error:
+            init_errors[backend_id] = str(backend_error)
+
+        except Exception as backend_error:  # pragma: no cover
+            init_errors[backend_id] = str(backend_error)
+
+    # Resolve model ID for successful selection
+    model_id = None
+    if backend is not None and resolved is not None:
+        model_id = resolve_backend_model_id(
+            resolved,
+            backend=backend,
+            model_variant=model_variant,
+        )
+
+    return BackendSelection(
+        requested_backend=normalized_requested,
+        resolved_backend=resolved,
+        status=status,
+        reason=reason,
+        backend=backend,
+        model_id=model_id,
+        device=config.depth_device,
+        init_errors=init_errors,
+    )
+
+
+class PipelineCoordinator:
+    """Pipeline coordination and stage planning.
+
+    Provides a unified interface for:
+    - Backend selection with fallback
+    - Execution plan generation
+    - Runtime backend chain resolution
+    - Model ID resolution
+
+    This class is the primary interface for pipeline coordination
+    per ADR-043.
+
+    Example:
+        coordinator = PipelineCoordinator(config, registry)
+
+        # Select backend
+        selection = coordinator.select_backend("da3")
+        if selection.is_success:
+            backend = selection.backend
+
+        # Create execution plan
+        plan = coordinator.plan(resolved_config)
+        for stage in plan.stages:
+            execute_stage(stage)
+    """
+
+    def __init__(
+        self,
+        config: EnhanceConfig,
+        registry: Optional[Any] = None,
+        model_variant: Optional[ModelVariant] = None,
+    ) -> None:
+        """Initialize pipeline coordinator.
+
+        Args:
+            config: EnhanceConfig instance
+            registry: Optional DepthBackendRegistry (created if not provided)
+            model_variant: Optional resolved model variant
+        """
+        self._config = config
+        self._registry = registry
+        self._model_variant = model_variant or config.model_variant
+        self._backend_cache: Dict[str, Any] = {}
+        self._current_selection: Optional[BackendSelection] = None
+
+    @property
+    def config(self) -> EnhanceConfig:
+        """Return the configuration."""
+        return self._config
+
+    def select_backend(
+        self,
+        requested: Optional[str] = None,
+    ) -> BackendSelection:
+        """Select depth backend with fallback logic.
+
+        Args:
+            requested: Optional backend ID to request (defaults to config value)
+
+        Returns:
+            BackendSelection with result
+        """
+        if self._registry is None:
+            from ..depth.backends.registry import DepthBackendRegistry
+
+            self._registry = DepthBackendRegistry()
+
+        backend_id = requested or self._config.depth_backend or "da3"
+        selection = select_backend(
+            backend_id,
+            self._config,
+            self._registry,
+            self._model_variant,
+        )
+
+        if selection.is_success and selection.resolved_backend:
+            self._backend_cache[selection.resolved_backend] = selection.backend
+
+        self._current_selection = selection
+        return selection
+
+    def get_or_create_backend(self, backend_id: str) -> Optional[Any]:
+        """Get cached backend or create new one.
+
+        Args:
+            backend_id: Backend identifier
+
+        Returns:
+            Backend instance or None if unavailable
+        """
+        if backend_id in self._backend_cache:
+            return self._backend_cache[backend_id]
+
+        if self._registry is None:
+            from ..depth.backends.registry import DepthBackendRegistry
+
+            self._registry = DepthBackendRegistry()
+
+        try:
+            backend = self._registry.get_backend(backend_id, self._config)
+            backend.ensure_available()
+            self._backend_cache[backend_id] = backend
+            return backend
+        except Exception as e:
+            logger.debug("Failed to create backend %s: %s", backend_id, e)
+            return None
+
+    def resolve_runtime_chain(
+        self,
+        primary_backend_id: Optional[str] = None,
+    ) -> List[str]:
+        """Resolve ordered runtime fallback chain.
+
+        Args:
+            primary_backend_id: Primary backend (defaults to current selection)
+
+        Returns:
+            Ordered list of backend IDs
+        """
+        backend_id = primary_backend_id
+        if backend_id is None and self._current_selection:
+            backend_id = self._current_selection.resolved_backend
+        if backend_id is None:
+            backend_id = self._config.depth_backend or "da3"
+
+        return resolve_runtime_backend_chain(backend_id, self._config)
+
+    def plan(self, enable_depth: bool = True) -> ExecutionPlan:
+        """Create execution plan based on configuration.
+
+        Args:
+            enable_depth: Whether to include depth stage
+
+        Returns:
+            ExecutionPlan describing stages to execute
+        """
+        stages: List[str] = []
+
+        # Always include preprocessing
+        stages.append("preprocess")
+
+        # Depth stage
+        if enable_depth:
+            stages.append("depth")
+
+        # PBR generation (depends on depth)
+        if self._config.generate_pbr and enable_depth:
+            stages.append("pbr")
+
+        # Materials V3 (depends on depth)
+        if self._config.enable_materials_v3 and enable_depth:
+            stages.append("materials_v3")
+
+        # V2 enhancement
+        if self._config.enable_v2 and self._config.v2_preset is not None:
+            stages.append("v2")
+
+        # Scene reconstruction
+        if self._config.enable_reconstruction:
+            stages.append("reconstruction")
+
+        # Always include postprocess/output
+        stages.append("output")
+
+        return ExecutionPlan(
+            stages=stages,
+            backend_selection=self._current_selection,
+            enable_depth=enable_depth,
+            enable_v2=self._config.enable_v2,
+            enable_pbr=self._config.generate_pbr,
+            enable_materials_v3=self._config.enable_materials_v3,
+            enable_reconstruction=self._config.enable_reconstruction,
+            quality_tier=self._config.quality_tier,
+        )
+
+    def resolve_model_id(
+        self,
+        backend_id: str,
+        *,
+        result_metadata: Optional[Dict[str, Any]] = None,
+        backend: Optional[Any] = None,
+    ) -> str:
+        """Resolve model ID for a backend.
+
+        Args:
+            backend_id: Backend identifier
+            result_metadata: Optional metadata with model info
+            backend: Optional backend instance
+
+        Returns:
+            Resolved model identifier
+        """
+        return resolve_backend_model_id(
+            backend_id,
+            result_metadata=result_metadata,
+            backend=backend,
+            model_variant=self._model_variant,
+        )
+
+    def default_model_id(self, backend_id: str) -> str:
+        """Get default model ID for a backend.
+
+        Args:
+            backend_id: Backend identifier
+
+        Returns:
+            Default model identifier
+        """
+        return default_model_id_for_backend(backend_id, self._model_variant)
+
+    @staticmethod
+    def expected_depth_units(backend_id: str) -> str:
+        """Get expected output depth units for a backend.
+
+        Args:
+            backend_id: Backend identifier
+
+        Returns:
+            "meters" or "relative"
+        """
+        return expected_output_depth_units_for_backend(backend_id)

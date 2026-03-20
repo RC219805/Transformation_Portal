@@ -137,6 +137,26 @@ _build_pbr_fingerprint_payload = build_pbr_fingerprint_payload
 _build_apex_depth_gate_fingerprint_payload = build_apex_depth_gate_fingerprint_payload
 _build_depth_cache_payload = build_depth_cache_payload
 
+# ADR-043: Pipeline coordination extracted to pipeline_coordinator.py
+from .pipeline_coordinator import (
+    BackendSelection,
+    ExecutionPlan,
+    PipelineCoordinator,
+    default_model_id_for_backend,
+    derive_model_id_from_backend_instance,
+    expected_output_depth_units_for_backend,
+    resolve_backend_model_id,
+    resolve_runtime_backend_chain,
+    select_backend,
+)
+
+# ADR-043: Pipeline coordination backward-compatible aliases
+_resolve_runtime_backend_chain = resolve_runtime_backend_chain
+_expected_output_depth_units_for_backend = expected_output_depth_units_for_backend
+_default_model_id_for_backend = default_model_id_for_backend
+_derive_model_id_from_backend_instance = derive_model_id_from_backend_instance
+_resolve_backend_model_id = resolve_backend_model_id
+
 logger = logging.getLogger(__name__)
 
 
@@ -630,44 +650,27 @@ class EnhanceOrchestrator:
             logger.error(f"Backend initialization failed: {e}")
             raise
 
+    # ADR-043: Pipeline coordination methods now delegate to pipeline_coordinator module
+
     def _resolve_runtime_backend_chain(
         self,
         primary_backend_id: str,
     ) -> List[str]:
-        """Resolve ordered runtime fallback chain."""
-        normalized_primary_backend_id = (
-            normalize_backend_id(
-                primary_backend_id,
-            )
-            or "da3"
-        )
-        chain: List[str] = [normalized_primary_backend_id]
-        configured_chain = getattr(
-            self.config,
-            "depth_operational_fallback_chain",
-            ("da3", "da2"),
-        )
-        for backend_id in normalize_backend_sequence(configured_chain):
-            if backend_id and backend_id not in chain:
-                chain.append(backend_id)
+        """Resolve ordered runtime fallback chain.
 
-        allow_synthetic = (
-            bool(self.config.allow_synthetic_fallback)
-            or os.getenv(
-                "TP_ALLOW_SYNTHETIC_FALLBACK",
-            )
-            == "1"
-        )
-        if allow_synthetic and "synthetic" not in chain:
-            chain.append("synthetic")
-        return chain
+        Delegates to pipeline_coordinator.resolve_runtime_backend_chain().
+        """
+        return resolve_runtime_backend_chain(primary_backend_id, self.config)
 
     @staticmethod
     def _expected_output_depth_units_for_backend(
         backend_id: str,
     ) -> str:
-        """Return expected output depth units."""
-        return "meters" if normalize_backend_id(backend_id) == "depth_pro" else "relative"
+        """Return expected output depth units.
+
+        Delegates to pipeline_coordinator.expected_output_depth_units_for_backend().
+        """
+        return expected_output_depth_units_for_backend(backend_id)
 
     def _build_depth_cache_fingerprint(
         self,
@@ -689,55 +692,22 @@ class EnhanceOrchestrator:
         return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
     def _default_model_id_for_backend(self, backend_id: str) -> str:
-        """Return canonical backend model identifier for provenance."""
-        normalized_backend = normalize_backend_id(backend_id) or ""
-        if normalized_backend == "depth_pro":
-            return "apple/ml-depth-pro"
-        if normalized_backend == "da2":
-            return "depth-anything/Depth-Anything-V2-Small-hf"
-        if normalized_backend == "da3":
-            return self._model_variant.value.huggingface_id
-        if normalized_backend == "depthcrafter":
-            return "tencent/depthcrafter"
-        if normalized_backend == "ensemble":
-            return "ensemble/multi-backend"
-        if normalized_backend == "synthetic":
-            return "synthetic/depth-analytic-v1"
-        return normalized_backend or self._model_variant.value.huggingface_id
+        """Return canonical backend model identifier for provenance.
+
+        Delegates to pipeline_coordinator.default_model_id_for_backend().
+        """
+        return default_model_id_for_backend(backend_id, self._model_variant)
 
     def _derive_model_id_from_backend_instance(
         self,
         backend_id: str,
         backend: Optional[Any],
     ) -> Optional[str]:
-        """Best-effort model id extraction from backend instance."""
-        if backend is None:
-            return None
+        """Best-effort model id extraction from backend instance.
 
-        for attr_name in ("model_id", "_model_id"):
-            candidate = getattr(backend, attr_name, None)
-            if isinstance(candidate, str) and candidate.strip():
-                return candidate.strip()
-
-        model_variant = getattr(backend, "_model_variant", None)
-        if model_variant is not None:
-            variant_value = getattr(model_variant, "value", None)
-            hf_id = getattr(variant_value, "huggingface_id", None)
-            if isinstance(hf_id, str) and hf_id.strip():
-                return hf_id.strip()
-            if isinstance(variant_value, str) and variant_value.strip():
-                return variant_value.strip()
-
-        backend_model = getattr(backend, "_model", None)
-        model_variant = getattr(backend_model, "variant", None)
-        variant_value = getattr(model_variant, "value", None)
-        if isinstance(variant_value, str) and variant_value.strip():
-            return variant_value.strip()
-
-        if str(backend_id).strip().lower() == "depth_pro":
-            return "apple/ml-depth-pro"
-
-        return None
+        Delegates to pipeline_coordinator.derive_model_id_from_backend_instance().
+        """
+        return derive_model_id_from_backend_instance(backend_id, backend)
 
     def _resolve_backend_model_id(
         self,
@@ -746,26 +716,16 @@ class EnhanceOrchestrator:
         result_metadata: Optional[Dict[str, Any]] = None,
         backend: Optional[Any] = None,
     ) -> str:
-        """Resolve stable model id for provenance and run-card semantics."""
-        normalized_backend = str(backend_id).strip().lower()
-        if normalized_backend == "depth_pro":
-            # Keep depth_pro model identity canonical across environments.
-            return "apple/ml-depth-pro"
+        """Resolve stable model id for provenance and run-card semantics.
 
-        metadata = result_metadata or {}
-        for key in ("resolved_model_id", "requested_model_id", "model_id"):
-            candidate = metadata.get(key)
-            if isinstance(candidate, str) and candidate.strip():
-                return candidate.strip()
-
-        from_backend = self._derive_model_id_from_backend_instance(
+        Delegates to pipeline_coordinator.resolve_backend_model_id().
+        """
+        return resolve_backend_model_id(
             backend_id,
-            backend,
+            result_metadata=result_metadata,
+            backend=backend,
+            model_variant=self._model_variant,
         )
-        if from_backend:
-            return from_backend
-
-        return self._default_model_id_for_backend(backend_id)
 
     @staticmethod
     def _normalize_sha256(value: Any) -> Optional[str]:

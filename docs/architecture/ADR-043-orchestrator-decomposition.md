@@ -1,6 +1,6 @@
 # ADR-043: Orchestrator Decomposition Strategy
 
-**Status:** IN PROGRESS (Phases 2-4 Complete)
+**Status:** IN PROGRESS (Phases 2-5 Complete)
 **Date:** 2026-03-20
 **Decision Makers:** Architect
 **Replaces:** None
@@ -198,10 +198,19 @@ class RunCardValidator:
 - New module: `config_resolver.py` (550 LOC)
 - Test coverage: 31 unit tests for config resolver
 
-### Phase 5: Extract PipelineCoordinator (Week 3-4)
-1. Extract stage planning and backend selection
-2. Create `ExecutionPlan` data class
-3. Add unit tests
+### Phase 5: Extract PipelineCoordinator (Week 3-4) ✅ COMPLETE
+1. ✅ Extract stage planning and backend selection
+2. ✅ Extract runtime backend chain resolution
+3. ✅ Extract model ID resolution methods
+4. ✅ Create `ExecutionPlan` data class
+5. ✅ Create `BackendSelection` data class
+6. ✅ Add unit tests (35 tests)
+7. ✅ Maintain backward compatibility with orchestrator imports
+
+**Metrics after Phase 5:**
+- Orchestrator LOC: 5,649 (was 5,689, -40 lines)
+- New module: `pipeline_coordinator.py` (623 LOC)
+- Test coverage: 35 unit tests for pipeline coordinator
 
 ### Phase 6: Extract ExecutionEngine (Week 4-5)
 1. Extract core processing logic
