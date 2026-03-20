@@ -13,8 +13,7 @@ These tests verify:
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -328,6 +327,21 @@ class TestBackendSelection:
         assert metadata.requested_backend == "da3"
         assert metadata.resolved_backend == "da3"
         assert metadata.resolution_status == "success"
+
+    def test_to_metadata_raises_on_error_selection(self):
+        """Test that to_metadata raises ValueError for error selections with None resolved_backend."""
+        from transformation_portal.lux_depth_v3.pipeline_coordinator import (
+            BackendSelection,
+        )
+
+        selection = BackendSelection(
+            requested_backend="da3",
+            resolved_backend=None,
+            status="error",
+        )
+
+        with pytest.raises(ValueError, match="Cannot convert error selection to metadata"):
+            selection.to_metadata()
 
 
 class TestExecutionPlan:

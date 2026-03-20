@@ -26,7 +26,7 @@ Usage:
     resolved = resolver.resolve(enhance_config)
 
     # Using standalone functions
-    da3_config = resolve_preset(preset, model_variant_override)
+    da3_config, resolved_model_variant = resolve_preset(preset, model_variant_override)
     fingerprint = compute_config_fingerprint(config)
 """
 
@@ -34,8 +34,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
-from dataclasses import dataclass, field
-from pathlib import Path
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
 from ..ingest.canonical_json import canonicalize_json

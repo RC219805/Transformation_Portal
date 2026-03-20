@@ -25,7 +25,7 @@ Usage:
     # Using PipelineCoordinator class
     coordinator = PipelineCoordinator(config, registry)
     selection = coordinator.select_backend("da3")
-    plan = coordinator.plan(resolved_config)
+    plan = coordinator.plan()
 
     # Using standalone functions
     chain = resolve_runtime_backend_chain("da3", config)
@@ -37,9 +37,9 @@ from __future__ import annotations
 import logging
 import os
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
-from ..depth.backends.protocol import DepthBackend, LicenseRestrictionError
+from ..depth.backends.protocol import LicenseRestrictionError
 
 # Use absolute import to avoid circular dependencies
 from ._backend_contract import normalize_backend_id, normalize_backend_sequence
@@ -85,7 +85,15 @@ class BackendSelection:
         return self.status in ("success", "fallback", "synthetic_fallback")
 
     def to_metadata(self, attempts: Optional[List[Dict[str, Any]]] = None) -> BackendSelectionMetadata:
-        """Convert to BackendSelectionMetadata for manifest storage."""
+        """Convert to BackendSelectionMetadata for manifest storage.
+
+        Raises:
+            ValueError: If resolved_backend is None (error state)
+        """
+        if self.resolved_backend is None:
+            raise ValueError(
+                "Cannot convert error selection to metadata: resolved_backend is None"
+            )
         return BackendSelectionMetadata(
             requested_backend=self.requested_backend,
             resolved_backend=self.resolved_backend,
@@ -202,10 +210,14 @@ def default_model_id_for_backend(
     if normalized_backend == "synthetic":
         return "synthetic/depth-analytic-v1"
 
-    # Fallback: return backend ID or model variant ID
+    # Fallback: prefer backend ID when non-empty, otherwise use model variant or default
+    # Note: normalized_backend is empty string "" when normalize_backend_id returns None and we OR with ""
+    # on line 196. An empty string is falsy, so we fall through to model_variant or default.
+    if normalized_backend:
+        return normalized_backend
     if model_variant is not None:
         return model_variant.value.huggingface_id
-    return normalized_backend or ModelVariant.METRIC_LARGE.value.huggingface_id
+    return ModelVariant.METRIC_LARGE.value.huggingface_id
 
 
 def derive_model_id_from_backend_instance(
@@ -330,11 +342,17 @@ def select_backend(
 
     allow_synthetic = bool(config.allow_synthetic_fallback) or os.getenv("TP_ALLOW_SYNTHETIC_FALLBACK") == "1"
 
-    candidate_chain = list(
-        normalize_backend_sequence(
-            (normalized_requested, "da3", "da2", "synthetic" if allow_synthetic else None),
-        )
-    )
+    # Derive operational fallback chain from config to keep behavior consistent with
+    # depth_operational_fallback_chain setting in EnhanceConfig
+    operational_chain = resolve_runtime_backend_chain(normalized_requested, config)
+
+    # Optionally extend with synthetic backend for test environments.
+    # Convert to tuple for immutable concatenation, then to list for normalize_backend_sequence.
+    full_chain = list(operational_chain)
+    if allow_synthetic and "synthetic" not in full_chain:
+        full_chain.append("synthetic")
+
+    candidate_chain = list(normalize_backend_sequence(full_chain))
 
     backend = None
     resolved = None
