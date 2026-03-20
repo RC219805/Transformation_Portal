@@ -67,22 +67,15 @@ class TestExecutionEngineImports:
         different signatures and return types. The standalone functions are the new
         canonical API, while the orchestrator methods preserve backward compatibility.
         """
-        try:
-            from transformation_portal.lux_depth_v3.orchestrator import (
-                DepthStageResult,
-                ExecutionEngine,
-                MaterialsV3StageResult,
-                PBRStageResult,
-                V2StageResult,
-                generate_pbr_stage,
-                run_v2_stage,
-            )
-        except ImportError as e:
-            # Skip if cv2 or other heavy deps are not available
-            # This can happen in minimal test environments
-            if "cv2" in str(e) or "torch" in str(e):
-                pytest.skip(f"Skipping due to missing optional dependency: {e}")
-            raise
+        from transformation_portal.lux_depth_v3.orchestrator import (
+            DepthStageResult,
+            ExecutionEngine,
+            MaterialsV3StageResult,
+            PBRStageResult,
+            V2StageResult,
+            generate_pbr_stage,
+            run_v2_stage,
+        )
 
         # Verify all classes imported correctly
         assert DepthStageResult is not None

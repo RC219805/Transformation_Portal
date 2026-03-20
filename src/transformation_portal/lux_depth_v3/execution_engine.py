@@ -1,33 +1,28 @@
-"""Execution engine for lux_depth_v3 pipeline.
+"""Execution engine helpers for the lux_depth_v3 pipeline.
 
 Extracted from orchestrator.py as part of ADR-043 decomposition (Phase 6).
 
-This module provides:
-- Result data classes for pipeline stage outputs
-- Standalone PBR generation function
-- Standalone V2 enhancement execution function
-- ExecutionEngine class for coordinating PBR and V2 stages
+This module currently provides:
+- Helpers for generating and writing PBR maps
+- Helpers for invoking the V2 enhancement subprocess
+- Result data classes for the supported stages
+- ExecutionEngine class for coordinating PBR + V2 stage execution
 
-NOTE: Depth stage and Materials V3 stage extraction is planned for future work.
-The orchestrator retains its own _generate_pbr_stage and _run_v2_stage methods
-for backward compatibility (different signatures and return types).
+Depth and Materials V3 orchestration lives in the lux_depth_v3 pipeline
+coordinator; this module does not run depth inference or Materials V3
+finishing directly.
 
 Usage:
     from transformation_portal.lux_depth_v3.execution_engine import (
+        ExecutionEngine,
         PBRStageResult,
         V2StageResult,
-        generate_pbr_stage,
-        run_v2_stage,
     )
 
-    # Standalone PBR generation
-    result = generate_pbr_stage(depth, output_key, output_root, config)
-    if result.success:
-        print(f"Normal map: {result.normal_path}")
-
-    # ExecutionEngine for class-based API
+    # Using ExecutionEngine class
     engine = ExecutionEngine(config, output_root)
     pbr_result = engine.execute_pbr_stage(depth_array, output_key)
+    v2_result = engine.execute_v2_stage(image_input, output_key, paths)
 """
 
 from __future__ import annotations
