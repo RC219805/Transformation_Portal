@@ -225,9 +225,9 @@ class RunCardValidator:
 10. ✅ Add unit tests for new functions (14 additional tests, 43 total)
 
 **Metrics after Phase 6 (complete):**
-- New module: `execution_engine.py` (880 LOC)
+- New module: `execution_engine.py` (~860 LOC)
 - Test coverage: 43 unit tests for execution engine
-- Orchestrator LOC: 5,675 (was 5,664, +11 lines for new backward-compat imports)
+- Orchestrator LOC: ~5,675 (was 5,664, +11 lines for new backward-compat imports)
 
 **Architectural Decision - Depth and Materials V3 Execution:**
 Full extraction of `_compute_depth_stage` and `_run_materials_v3_stage` was evaluated
