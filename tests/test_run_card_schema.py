@@ -638,6 +638,7 @@ def test_run_card_schema_rejects_invalid_backend_model_artifact_sha256():
 
 def test_resolve_backend_model_id_depth_pro_uses_canonical_identifier():
     orch = object.__new__(EnhanceOrchestrator)
+    orch.config = SimpleNamespace(model_variant=ModelVariant.METRIC_LARGE)
     backend = SimpleNamespace(
         _checkpoint_path=Path("/tmp/depth_pro_custom.pt"),
         model_id="apple/ml-depth-pro:depth_pro_custom.pt",
