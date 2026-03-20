@@ -135,7 +135,7 @@ class TestV2LogFilename:
 
         result = v2_log_filename("image", "2026-03-20_12:00:00")
         # Colons should be sanitized
-        assert ":" not in result or result.count(":") == 0
+        assert ":" not in result
 
 
 class TestMakeOutputKey:
