@@ -1018,7 +1018,7 @@ class EnhanceOrchestrator:
 
         Delegates to config_resolver.build_depth_cache_payload().
         """
-        return build_depth_cache_payload(self.config)
+        return build_depth_cache_payload(self.config, self._model_variant)
 
     def compute_config_fingerprint(self) -> ConfigFingerprint:
         """Compute configuration fingerprint for cache validation.

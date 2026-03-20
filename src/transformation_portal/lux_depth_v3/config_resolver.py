@@ -105,7 +105,7 @@ def discover_presets(pipeline: str = "lux_depth_v3") -> List[PresetInfo]:
     """
     if pipeline != "lux_depth_v3":
         logger.warning(
-            "Preset discovery for pipeline '%s' not supported, " "returning empty list",
+            "Preset discovery for pipeline '%s' not supported, returning empty list",
             pipeline,
         )
         return []
@@ -275,23 +275,33 @@ def build_apex_depth_gate_fingerprint_payload(config: EnhanceConfig) -> Dict[str
     }
 
 
-def build_depth_cache_payload(config: EnhanceConfig) -> Dict[str, Any]:
+def build_depth_cache_payload(
+    config: EnhanceConfig,
+    model_variant: Optional[ModelVariant] = None,
+) -> Dict[str, Any]:
     """Build depth cache fingerprint payload.
 
     Extracts depth-related configuration settings for cache key
-    computation.
+    computation. The model_variant is required for consistent cache keys.
 
     Args:
         config: EnhanceConfig instance
+        model_variant: Resolved model variant (uses config.model_variant if not provided)
 
     Returns:
         Dictionary of depth configuration for cache fingerprinting
     """
+    mv = model_variant or config.model_variant
+    if mv is None:
+        mv = ModelVariant.METRIC_LARGE
+
     return {
-        "depth_quantization": str(config.depth_quantization),
-        "depth_device": str(config.depth_device),
-        "depth_backend": str(config.depth_backend or "auto"),
-        "save_float_depth": bool(getattr(config, "save_float_depth", False)),
+        "model_variant": mv.value.name,
+        "depth_device": config.depth_device,
+        "preset": config.preset.value if config.preset else None,
+        "depth_backend": config.depth_backend,
+        "depth_pro_checkpoint_path": config.depth_pro_checkpoint_path,
+        "depth_pro_python_executable": config.depth_pro_python_executable,
     }
 
 
