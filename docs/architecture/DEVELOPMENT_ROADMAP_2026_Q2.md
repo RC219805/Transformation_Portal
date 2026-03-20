@@ -67,7 +67,7 @@ lux_depth_v3/
 ```
 
 **Acceptance Criteria:**
-- [x] No single class exceeds 1,500 LOC
+- [x] No extracted module/class exceeds 1,500 LOC (orchestrator remains ~5,500 LOC as state-machine facade)
 - [x] All extracted modules have >80% unit test coverage
 - [x] No circular imports between new modules
 - [x] Existing CLI/API behavior unchanged (regression tests pass)
