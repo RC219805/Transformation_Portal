@@ -33,12 +33,12 @@ Usage:
 from __future__ import annotations
 
 import hashlib
-import json
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+from ..ingest.canonical_json import canonicalize_json
 from .config import DA3Config, EnhanceConfig, ModelVariant, Preset
 from .manifest import ConfigFingerprint
 
@@ -408,17 +408,14 @@ def build_run_card_config_fingerprint(
         ),
     }
 
-    canonical_json = json.dumps(
-        payload,
-        sort_keys=True,
-        separators=(",", ":"),
-    )
+    canonical_json_bytes = canonicalize_json(payload)
+    canonical_json_str = canonical_json_bytes.decode("utf-8")
 
     return {
         **payload,
         "hash_algorithm": "sha256",
-        "canonical_json": canonical_json,
-        "sha256": hashlib.sha256(canonical_json.encode("utf-8")).hexdigest(),
+        "canonical_json": canonical_json_str,
+        "sha256": hashlib.sha256(canonical_json_bytes).hexdigest(),
     }
 
 
