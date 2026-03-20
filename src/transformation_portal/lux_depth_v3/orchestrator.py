@@ -37,22 +37,27 @@ from typing import Any, Callable, Dict, List, Optional, cast
 
 import numpy as np
 
-# NOTE: xxHash support is now handled in artifact_manager.py (ADR-043)
-# The XXHASH_AVAILABLE constant is imported from artifact_manager
-
 from ..depth.backends.protocol import DepthBackend, LicenseRestrictionError
-
-# Backend registry for depth estimation
 from ..depth.backends.registry import DepthBackendRegistry
 from ..ingest.canonical_json import dump_json, dumps_json
 from ..spatial_ai.reconstruction.contracts import (  # noqa: E501
     LicenseRestrictionError as ReconstructionLicenseRestrictionError,
 )
 from ._backend_contract import normalize_backend_id, normalize_backend_provenance, normalize_backend_sequence
+
+# ADR-043: Artifact management extracted to artifact_manager.py
+# NOTE: xxHash support is now handled in artifact_manager.py (ADR-043)
+# The XXHASH_AVAILABLE constant is imported from artifact_manager
+from .artifact_manager import (
+    XXHASH_AVAILABLE,
+    build_artifact_index,
+    compute_artifact_merkle_root,
+    infer_artifact_type,
+    make_output_key,
+    v2_log_filename,
+)
 from .batch_stats import compute_batch_runtime_stats, detect_runtime_outliers
 from .camera_metadata_loader import load_scene_cameras, load_sidecar_payload
-
-# Note: Imports adjusted to relative for package context compatibility
 from .config import DA3Config, EnhanceConfig, ModelVariant
 from .depth_cache import DepthCache
 from .depth_writer import atomic_write_depth_u16_png_with_stats
@@ -102,16 +107,6 @@ from .v2_runner import V2Runner, find_v2_report
 # Backward-compatible re-exports preserve existing import paths
 from .validators import validate_run_card_backend_semantics, validate_run_card_payload
 from .validators.run_card_validator import _default_schema_path as _run_card_schema_path
-
-# ADR-043: Artifact management extracted to artifact_manager.py
-from .artifact_manager import (
-    XXHASH_AVAILABLE,
-    build_artifact_index,
-    compute_artifact_merkle_root,
-    infer_artifact_type,
-    make_output_key,
-    v2_log_filename,
-)
 
 # Backward-compatible aliases for existing tests and consumers
 _validate_run_card_payload = validate_run_card_payload
