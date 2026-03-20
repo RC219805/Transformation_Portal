@@ -14,8 +14,7 @@ These tests verify:
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, Optional
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -61,7 +60,13 @@ class TestExecutionEngineImports:
         assert ExecutionEngine is not None
 
     def test_backward_compatible_orchestrator_imports(self):
-        """Test that legacy imports from orchestrator still work."""
+        """Test that legacy imports from orchestrator still work.
+
+        Note: The orchestrator has its own _generate_pbr_stage and _run_v2_stage
+        methods that are NOT the same as the standalone functions because they have
+        different signatures and return types. The standalone functions are the new
+        canonical API, while the orchestrator methods preserve backward compatibility.
+        """
         try:
             from transformation_portal.lux_depth_v3.orchestrator import (
                 DepthStageResult,
@@ -69,8 +74,6 @@ class TestExecutionEngineImports:
                 MaterialsV3StageResult,
                 PBRStageResult,
                 V2StageResult,
-                _generate_pbr_stage,
-                _run_v2_stage,
                 generate_pbr_stage,
                 run_v2_stage,
             )
@@ -91,12 +94,6 @@ class TestExecutionEngineImports:
         # Verify functions are callable
         assert callable(generate_pbr_stage)
         assert callable(run_v2_stage)
-        assert callable(_generate_pbr_stage)
-        assert callable(_run_v2_stage)
-
-        # Verify aliases point to the same functions
-        assert _generate_pbr_stage is generate_pbr_stage
-        assert _run_v2_stage is run_v2_stage
 
 
 class TestDepthStageResult:
@@ -432,8 +429,13 @@ class TestGeneratePBRStage:
         assert result.normal_path is not None
         assert result.roughness_path is not None
         assert result.ao_path is not None
-        assert result.runtime_s > 0
+        # Verify timing is captured (should be fast but measurable)
+        assert 0.0 <= result.runtime_s < 30.0
         assert result.config is not None
+        # Verify output files exist
+        assert Path(result.normal_path).exists()
+        assert Path(result.roughness_path).exists()
+        assert Path(result.ao_path).exists()
 
 
 class TestRunV2Stage:

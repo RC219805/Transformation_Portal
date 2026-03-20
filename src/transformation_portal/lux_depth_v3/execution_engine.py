@@ -3,28 +3,30 @@
 Extracted from orchestrator.py as part of ADR-043 decomposition (Phase 6).
 
 This module provides:
-- Stage execution for depth, PBR, Materials V3, and V2 enhancement
-- Result data classes for each stage type
-- ExecutionEngine class for coordinating stage execution
+- Result data classes for pipeline stage outputs
+- Standalone PBR generation function
+- Standalone V2 enhancement execution function
+- ExecutionEngine class for coordinating PBR and V2 stages
 
-The execution engine handles:
-1. Running depth inference with caching and fallback
-2. Generating PBR maps from depth data
-3. Running Materials V3 surface-aware finishing
-4. Executing V2 enhancement subprocess
+NOTE: Depth stage and Materials V3 stage extraction is planned for future work.
+The orchestrator retains its own _generate_pbr_stage and _run_v2_stage methods
+for backward compatibility (different signatures and return types).
 
 Usage:
     from transformation_portal.lux_depth_v3.execution_engine import (
-        ExecutionEngine,
-        DepthStageResult,
         PBRStageResult,
-        MaterialsV3StageResult,
         V2StageResult,
+        generate_pbr_stage,
+        run_v2_stage,
     )
 
-    # Using ExecutionEngine class
+    # Standalone PBR generation
+    result = generate_pbr_stage(depth, output_key, output_root, config)
+    if result.success:
+        print(f"Normal map: {result.normal_path}")
+
+    # ExecutionEngine for class-based API
     engine = ExecutionEngine(config, output_root)
-    depth_result = engine.execute_depth_stage(image_input, output_key, paths)
     pbr_result = engine.execute_pbr_stage(depth_array, output_key)
 """
 
@@ -34,16 +36,14 @@ import logging
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union, cast
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
-from ..depth.backends.protocol import DepthBackend, LicenseRestrictionError
-from .config import DA3Config, EnhanceConfig, ModelVariant
+from .config import EnhanceConfig
 from .manifest import BackendSelectionMetadata, DepthMetadata
 from .pbr import generate_pbr_maps
 from .pbr_writer import write_pbr_maps
-from .pipeline_coordinator import BackendSelection
 
 logger = logging.getLogger(__name__)
 
@@ -386,6 +386,10 @@ def run_v2_stage(
             status="skipped",
             skipped=True,
         )
+
+    # Ensure output directories exist
+    v2_dir.mkdir(parents=True, exist_ok=True)
+    v2_log_path.parent.mkdir(parents=True, exist_ok=True)
 
     try:
         v2_result = v2_runner.run(
