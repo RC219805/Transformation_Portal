@@ -37,28 +37,27 @@ from typing import Any, Callable, Dict, List, Optional, cast
 
 import numpy as np
 
-# Phase 3: xxHash support (optional dependency)
-try:
-    import xxhash
-
-    XXHASH_AVAILABLE = True
-except ImportError:
-    XXHASH_AVAILABLE = False
-    xxhash = None  # type: ignore
-
 from ..depth.backends.protocol import DepthBackend, LicenseRestrictionError
-
-# Backend registry for depth estimation
 from ..depth.backends.registry import DepthBackendRegistry
 from ..ingest.canonical_json import dump_json, dumps_json
 from ..spatial_ai.reconstruction.contracts import (  # noqa: E501
     LicenseRestrictionError as ReconstructionLicenseRestrictionError,
 )
 from ._backend_contract import normalize_backend_id, normalize_backend_provenance, normalize_backend_sequence
+
+# ADR-043: Artifact management extracted to artifact_manager.py
+# NOTE: xxHash support is now handled in artifact_manager.py (ADR-043)
+# The XXHASH_AVAILABLE constant is imported from artifact_manager
+from .artifact_manager import (
+    XXHASH_AVAILABLE,
+    build_artifact_index,
+    compute_artifact_merkle_root,
+    infer_artifact_type,
+    make_output_key,
+    v2_log_filename,
+)
 from .batch_stats import compute_batch_runtime_stats, detect_runtime_outliers
 from .camera_metadata_loader import load_scene_cameras, load_sidecar_payload
-
-# Note: Imports adjusted to relative for package context compatibility
 from .config import DA3Config, EnhanceConfig, ModelVariant
 from .depth_cache import DepthCache
 from .depth_writer import atomic_write_depth_u16_png_with_stats
@@ -103,6 +102,19 @@ from .scene_integrity import (
 from .scene_preflight import validate_scene_preflight, write_scene_preflight_artifact
 from .security import HashMode, sanitize_file_stem, sanitize_path_component_nonlossy
 from .v2_runner import V2Runner, find_v2_report
+
+# ADR-043: Run card validators extracted to validators/run_card_validator.py
+# Backward-compatible re-exports preserve existing import paths
+from .validators import validate_run_card_backend_semantics, validate_run_card_payload
+from .validators.run_card_validator import _default_schema_path as _run_card_schema_path
+
+# Backward-compatible aliases for existing tests and consumers
+_validate_run_card_payload = validate_run_card_payload
+_validate_run_card_backend_semantics = validate_run_card_backend_semantics
+_infer_artifact_type = infer_artifact_type
+_build_artifact_index = build_artifact_index
+_compute_artifact_merkle_root = compute_artifact_merkle_root
+_v2_log_filename = v2_log_filename
 
 logger = logging.getLogger(__name__)
 
@@ -243,376 +255,21 @@ def _load_manifest_cached(
     return CombinedManifest.load(Path(manifest_path))
 
 
-def make_output_key(
-    input_path: Path,
-    input_root: Path,
-    use_xxhash: bool = XXHASH_AVAILABLE,
-) -> Path:
-    """Compute a stable, sanitized output key for a given input image.
+# NOTE: Run card validation functions have been extracted to
+# validators/run_card_validator.py as part of ADR-043 decomposition.
+# The following are now imported:
+# - _run_card_schema_path (aliased from _default_schema_path)
+# - validate_run_card_payload (was _validate_run_card_payload)
+# - validate_run_card_backend_semantics (was _validate_run_card_backend_semantics)
 
-    The final key preserves the relative directory shape under ``input_root``
-    (when possible) and emits ``<stem>_<ext|noext>_<hash8>`` as the terminal
-    component. The 8-character suffix is derived from the POSIX-style relative
-    path, using xxh64 when enabled/available or SHA-1 otherwise.
-    """
-    input_resolved = input_path.resolve()
-    root_resolved = input_root.resolve()
-
-    try:
-        relpath = input_resolved.relative_to(root_resolved)
-    except ValueError:
-        logger.warning(
-            "%s is not relative to %s, using flat naming",
-            input_path,
-            input_root,
-        )
-        relpath = Path(input_resolved.name)
-
-    rel_dir = relpath.parent
-    name = relpath.stem
-    ext = relpath.suffix
-
-    sanitized_parts = [sanitize_path_component_nonlossy(p) for p in rel_dir.parts]
-    ext_label = sanitize_path_component_nonlossy(
-        ext.lstrip(".").lower() if ext else "noext",
-    )
-
-    hash_input = relpath.as_posix().encode("utf-8")
-
-    if use_xxhash and XXHASH_AVAILABLE:
-        hash_suffix = xxhash.xxh64(hash_input).hexdigest()[:8]
-    else:
-        hash_suffix = hashlib.sha1(
-            hash_input,
-            usedforsecurity=False,
-        ).hexdigest()[:8]
-
-    stem_sanitized = sanitize_path_component_nonlossy(name)
-    key_name = f"{stem_sanitized}_{ext_label}_{hash_suffix}"
-
-    if sanitized_parts:
-        return Path(*sanitized_parts, key_name)
-    return Path(key_name)
-
-
-def _run_card_schema_path() -> Path:
-    """Return repository-local run card schema path."""
-    return Path(__file__).resolve().parents[3] / "docs" / "schemas" / "run_card" / "run_card.v1.schema.json"
-
-
-@lru_cache(maxsize=1)
-def _load_run_card_schema(schema_path_str: str) -> Dict[str, Any]:
-    """Load run card JSON schema once per process."""
-    schema_path = Path(schema_path_str)
-    with open(schema_path, "r", encoding="utf-8") as schema_file:
-        return json.load(schema_file)
-
-
-@lru_cache(maxsize=1)
-def _load_run_card_validator(schema_path_str: str) -> Any:
-    """Build cached Draft202012 validator for run card schema."""
-    try:
-        import jsonschema
-    except ImportError as exc:  # pragma: no cover
-        raise RuntimeError(
-            "jsonschema dependency is required" " for run card schema validation",
-        ) from exc
-
-    schema = _load_run_card_schema(schema_path_str)
-    try:
-        jsonschema.Draft202012Validator.check_schema(schema)
-    except jsonschema.exceptions.SchemaError as exc:
-        raise RuntimeError(
-            "Run card schema is invalid:" f" {exc.message}",
-        ) from exc
-    return jsonschema.Draft202012Validator(schema)
-
-
-def _validate_run_card_payload(
-    payload: Dict[str, Any],
-    schema_path: Path,
-) -> None:
-    """Validate run card payload against run_card.v1 schema."""
-    validator = _load_run_card_validator(str(schema_path))
-    errors = sorted(
-        validator.iter_errors(payload),
-        key=lambda error: list(error.path),
-    )
-    if not errors:
-        return
-
-    formatted = []
-    for error in errors:
-        path = ".".join(str(p) for p in error.path) or "<root>"
-        formatted.append(f"{path}: {error.message}")
-    raise RuntimeError(
-        "Run card schema validation" " failed: " + "; ".join(formatted),
-    )
-
-
-def _validate_run_card_backend_semantics(payload: Dict[str, Any]) -> None:
-    """Validate backend resolution semantics for run-card transparency."""
-    backend_selection = payload.get("backend_selection")
-    backend_summary = payload.get("backend_summary")
-    if not isinstance(
-        backend_selection,
-        dict,
-    ) or not isinstance(
-        backend_summary,
-        dict,
-    ):
-        return
-
-    final_backends_used = backend_summary.get("final_backends_used")
-    if not isinstance(final_backends_used, list):
-        return
-
-    success_count = payload.get("success_count")
-    if not isinstance(success_count, int):
-        success_count = 0
-
-    if not final_backends_used:
-        if success_count > 0:
-            raise RuntimeError(
-                "Run card backend semantics validation failed: "
-                "backend_summary"
-                ".final_backends_used must be"
-                " non-empty when"
-                " success_count > 0."
-            )
-        return
-
-    primary_backend = final_backends_used[0]
-    if not isinstance(primary_backend, str) or not primary_backend:
-        raise RuntimeError(
-            "Run card backend semantics validation failed: "
-            "backend_summary"
-            ".final_backends_used[0]"
-            " must be a non-empty string."
-        )
-
-    summary_primary = backend_summary.get("primary_backend")
-    if summary_primary != primary_backend:
-        raise RuntimeError(
-            "Run card backend semantics validation failed: "
-            "backend_summary.primary_backend"
-            " must equal backend_summary"
-            ".final_backends_used[0]."
-        )
-
-    resolved = backend_selection.get("resolved")
-    if not isinstance(resolved, str) or not resolved:
-        raise RuntimeError(
-            "Run card backend semantics" " validation failed:" " backend_selection.resolved" " must be a non-empty string."
-        )
-
-    if resolved != primary_backend:
-        raise RuntimeError(
-            "Run card backend semantics validation failed: "
-            "backend_selection.resolved"
-            " must match backend_summary"
-            ".final_backends_used[0]."
-        )
-
-    logical_backend = backend_selection.get("logical_backend")
-    resolved_engine = backend_selection.get("resolved_engine")
-    wrapper_declared = logical_backend is not None or resolved_engine is not None
-    if not wrapper_declared:
-        return
-
-    if not isinstance(logical_backend, str) or not logical_backend:
-        raise RuntimeError(
-            "Run card backend semantics validation failed: "
-            "backend_selection"
-            ".logical_backend must be a"
-            " non-empty string when wrapper"
-            " semantics are declared."
-        )
-    if not isinstance(resolved_engine, str) or not resolved_engine:
-        raise RuntimeError(
-            "Run card backend semantics validation failed: "
-            "backend_selection"
-            ".resolved_engine must be a"
-            " non-empty string when wrapper"
-            " semantics are declared."
-        )
-    if logical_backend == resolved_engine:
-        raise RuntimeError(
-            "Run card backend semantics validation failed: "
-            "backend_selection"
-            ".logical_backend and"
-            " backend_selection"
-            ".resolved_engine must differ."
-        )
-    if resolved_engine != primary_backend:
-        raise RuntimeError(
-            "Run card backend semantics validation failed: "
-            "backend_selection"
-            ".resolved_engine must match"
-            " backend_summary"
-            ".final_backends_used[0]."
-        )
-
-    fallback_images = backend_summary.get("fallback_images")
-    if isinstance(fallback_images, int) and fallback_images != 0:
-        raise RuntimeError(
-            "Run card backend semantics validation failed: "
-            "wrapper semantics are only"
-            " valid when backend_summary"
-            ".fallback_images == 0."
-        )
-
-
-def _infer_artifact_type(relative_path: str) -> str:
-    """Infer canonical artifact type from output-root relative path."""
-    rel = relative_path.lower()
-    name = Path(rel).name
-
-    if rel.startswith("segmentation/"):
-        if name.endswith(".npz"):
-            return "segmentation_mask_npz"
-        return "segmentation_aux"
-
-    if rel.startswith("depth/"):
-        if name.endswith("_metadata.json"):
-            return "depth_metadata"
-        if name.endswith(".png"):
-            return "depth_u16_png"
-        if name.endswith(".npy"):
-            return "depth_float_npy"
-        return "depth_aux"
-
-    if rel.startswith("v2/"):
-        if name.endswith("_report.json"):
-            return "v2_report"
-        return "v2_output"
-
-    if rel.startswith("manifests/"):
-        if name.startswith("batch_") and name.endswith(".json"):
-            return "batch_manifest"
-        if name.endswith("_provenance.json"):
-            return "provenance_sidecar"
-        if name.endswith("_combined.json"):
-            return "combined_manifest"
-        return "manifest_aux"
-
-    if rel.startswith("logs/"):
-        return "v2_log"
-
-    if rel.startswith("pbr/"):
-        if "normal" in name:
-            return "pbr_normal"
-        if "roughness" in name:
-            return "pbr_roughness"
-        if name.startswith("ao_") or "_ao" in name:
-            return "pbr_ao"
-        return "pbr_aux"
-
-    if rel.startswith("reconstruction/"):
-        if "/debug/" in rel:
-            if name == "scene_manifest.json":
-                return "reconstruction_debug_scene_manifest_json"
-            if name == "cameras.json":
-                return "reconstruction_debug_cameras_json"
-            if name == "reprojection_preview.png":
-                return "reconstruction_debug_preview_png"
-            if name.endswith("_overlay.png"):
-                return "reconstruction_debug_overlay_png"
-            return "reconstruction_debug_aux"
-        if name.endswith("_scene_manifest.json"):
-            return "reconstruction_scene_manifest"
-        if name.endswith("_manifest.json"):
-            return "reconstruction_manifest_json"
-        if name.endswith("_reconstruction_report.json"):
-            return "reconstruction_report"
-        if name.endswith("_preflight.json"):
-            return "reconstruction_preflight_json"
-        if name.endswith("_reconstruction_diagnostics.json"):
-            return "reconstruction_diagnostics"
-        if name.endswith("_diagnostics.json"):
-            return "reconstruction_diagnostics_json"
-        return "reconstruction_aux"
-
-    return "artifact"
-
-
-def _v2_log_filename(
-    output_key_name: str,
-    batch_id: Optional[str] = None,
-) -> str:
-    """Build deterministic, batch-scoped V2 log filename."""
-    filename = f"v2_{output_key_name}"
-    if batch_id:
-        filename += "__" + sanitize_path_component_nonlossy(
-            str(batch_id),
-        )
-    return f"{filename}.log"
-
-
-def _build_artifact_index(
-    output_root: Path,
-    artifact_paths: List[Path],
-) -> List[Dict[str, Any]]:
-    """Build deterministic artifact index with size and SHA256."""
-    root_resolved = output_root.resolve()
-    index_by_relative_path: Dict[str, Dict[str, Any]] = {}
-
-    for candidate in artifact_paths:
-        try:
-            resolved = candidate.resolve(strict=True)
-        except FileNotFoundError:
-            continue
-        except OSError as exc:
-            logger.debug(
-                "Skipping artifact path due" " to resolution error" " (%s): %s",
-                candidate,
-                exc,
-            )
-            continue
-
-        if not resolved.is_file():
-            continue
-
-        try:
-            relative_path = resolved.relative_to(root_resolved).as_posix()
-        except ValueError:
-            logger.debug(
-                "Skipping artifact outside" + " output root: %s",
-                resolved,
-            )
-            continue
-
-        if relative_path in index_by_relative_path:
-            continue
-
-        stat = resolved.stat()
-        index_by_relative_path[relative_path] = {
-            "artifact_type": _infer_artifact_type(relative_path),
-            "path": relative_path,
-            "relative_path": relative_path,
-            "size_bytes": stat.st_size,
-            "sha256": compute_file_sha256(resolved),
-        }
-
-    return [index_by_relative_path[path] for path in sorted(index_by_relative_path)]
-
-
-def _compute_artifact_merkle_root(
-    artifact_index: List[Dict[str, Any]],
-) -> str:
-    """Compute deterministic Merkle root over artifact SHA256."""
-    sorted_artifacts = sorted(
-        artifact_index,
-        key=lambda item: item["relative_path"],
-    )
-    leaves = []
-    for artifact in sorted_artifacts:
-        digest = artifact.get("sha256")
-        if not isinstance(digest, str) or len(digest) != 64:
-            raise RuntimeError("Invalid artifact sha256 in" f" run card index: {digest!r}")
-        leaves.append(bytes.fromhex(digest))
-
-    return hashlib.sha256(b"".join(leaves)).hexdigest()
+# NOTE: Artifact management functions have been extracted to
+# artifact_manager.py as part of ADR-043 decomposition.
+# The following are now imported:
+# - make_output_key
+# - infer_artifact_type (was _infer_artifact_type)
+# - v2_log_filename (was _v2_log_filename)
+# - build_artifact_index (was _build_artifact_index)
+# - compute_artifact_merkle_root (was _compute_artifact_merkle_root)
 
 
 class EnhanceOrchestrator:
