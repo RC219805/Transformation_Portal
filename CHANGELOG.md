@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **ADR-043 Orchestrator Decomposition (Complete):** Refactored monolithic EnhanceOrchestrator class into 5 focused modules
+  - **New Modules:** `execution_engine.py` (PBR/V2 stage helpers, ~860 LOC), `config_resolver.py` (preset/config management, ~550 LOC), `pipeline_coordinator.py` (backend selection, ~620 LOC), `artifact_manager.py` (output hashing/indexing, ~420 LOC), `validators/run_card_validator.py` (schema validation, ~310 LOC)
+  - **Test Coverage:** 182+ unit tests across decomposed modules with backward compatibility verification
+  - **Backward Compatibility:** 100% maintained; existing imports from orchestrator continue to work via re-exports
+  - **Architectural Benefits:** Reduced merge conflicts, improved testability, faster onboarding (modules avg 400-860 LOC), single-responsibility enforcement
+  - **No Breaking Changes:** All Phase 6 re-exports complete, no circular imports
+  - See: `docs/architecture/ADR-043-orchestrator-decomposition.md`
+
 ### Changed
 - **Ingest Contract v1.0.2:** Bumped ingest schema version from `1.0.1` to `1.0.2` for schema-governance compliance on `schemas.py` updates.
 - **Ingest Contract Documentation:** Updated `docs/apex/ingest_contract.md` to reflect schema version `1.0.2`.

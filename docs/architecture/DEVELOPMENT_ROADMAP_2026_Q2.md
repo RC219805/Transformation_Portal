@@ -67,11 +67,11 @@ lux_depth_v3/
 ```
 
 **Acceptance Criteria:**
-- [ ] No single class exceeds 1,500 LOC
-- [ ] All extracted modules have >80% unit test coverage
-- [ ] No circular imports between new modules
-- [ ] Existing CLI/API behavior unchanged (regression tests pass)
-- [ ] ADR-043 documenting rationale and boundaries
+- [x] No single class exceeds 1,500 LOC
+- [x] All extracted modules have >80% unit test coverage
+- [x] No circular imports between new modules
+- [x] Existing CLI/API behavior unchanged (regression tests pass)
+- [x] ADR-043 documenting rationale and boundaries
 
 **Effort:** 40-60 hours across 2-3 weeks
 **Owner:** Specialist (implementation) + Architect (review)
