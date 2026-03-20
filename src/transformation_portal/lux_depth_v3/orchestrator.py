@@ -59,6 +59,21 @@ from .artifact_manager import (
 from .batch_stats import compute_batch_runtime_stats, detect_runtime_outliers
 from .camera_metadata_loader import load_scene_cameras, load_sidecar_payload
 from .config import DA3Config, EnhanceConfig, ModelVariant
+
+# ADR-043: Config resolution extracted to config_resolver.py
+from .config_resolver import (
+    ConfigResolver,
+    PresetInfo,
+    ResolvedConfig,
+    build_apex_depth_gate_fingerprint_payload,
+    build_depth_cache_payload,
+    build_materials_fingerprint_payload,
+    build_pbr_fingerprint_payload,
+    build_run_card_config_fingerprint,
+    compute_config_fingerprint,
+    discover_presets,
+    resolve_preset,
+)
 from .depth_cache import DepthCache
 from .depth_writer import atomic_write_depth_u16_png_with_stats
 from .input_discovery import DiscoveryConfig, discover_images
@@ -115,6 +130,12 @@ _infer_artifact_type = infer_artifact_type
 _build_artifact_index = build_artifact_index
 _compute_artifact_merkle_root = compute_artifact_merkle_root
 _v2_log_filename = v2_log_filename
+
+# ADR-043: Config resolution backward-compatible aliases
+_build_materials_fingerprint_payload = build_materials_fingerprint_payload
+_build_pbr_fingerprint_payload = build_pbr_fingerprint_payload
+_build_apex_depth_gate_fingerprint_payload = build_apex_depth_gate_fingerprint_payload
+_build_depth_cache_payload = build_depth_cache_payload
 
 logger = logging.getLogger(__name__)
 
@@ -1005,59 +1026,28 @@ class EnhanceOrchestrator:
             attempts=attempts,
         )
 
+    # ADR-043: Config resolution methods now delegate to config_resolver module
+
     def _build_materials_fingerprint_payload(self) -> Dict[str, Any]:
-        """Build deterministic Materials V3 fingerprint payload."""
-        return {
-            "enable_materials_v3": bool(self.config.enable_materials_v3),
-            "apply_pixel_ops": bool(self.config.apply_pixel_ops),
-            "enable_material_segmentation": bool(self.config.enable_material_segmentation),
-            "material_segmentation_backend": str(self.config.material_segmentation_backend),
-            "strict_backend": bool(self.config.strict_backend),
-            "refinement_strategy": str(self.config.refinement_strategy),
-            "min_coverage_px": int(self.config.min_coverage_px),
-            "min_mean_conf": float(self.config.min_mean_conf),
-            "glass_response_enabled": bool(self.config.glass_response_enabled),
-            "mask_feather_sigma_default": float(self.config.mask_feather_sigma_default),
-            "mask_feather_sigma_overrides": {
-                key: float(value) for key, value in sorted(self.config.mask_feather_sigma_overrides.items())
-            },
-            "mask_feather_disabled_materials": sorted(str(value) for value in self.config.mask_feather_disabled_materials),
-            "sky_top_region_fraction": float(self.config.sky_top_region_fraction),
-            "sky_gradient_threshold": float(self.config.sky_gradient_threshold),
-            "sky_brightness_threshold": float(self.config.sky_brightness_threshold),
-            "sam2_model_size": str(self.config.sam2_model_size),
-            "sam2_checkpoint_path": self.config.sam2_checkpoint_path,
-        }
+        """Build deterministic Materials V3 fingerprint payload.
+
+        Delegates to config_resolver.build_materials_fingerprint_payload().
+        """
+        return build_materials_fingerprint_payload(self.config)
 
     def _build_pbr_fingerprint_payload(self) -> Dict[str, Any]:
-        """Build deterministic PBR fingerprint payload."""
-        return {
-            "generate_pbr": bool(self.config.generate_pbr),
-            "save_float_depth": bool(getattr(self.config, "save_float_depth", False)),
-            "normal_strength": float(self.config.pbr_normal_strength),
-            "normal_blur_radius": int(self.config.pbr_normal_blur_radius),
-            "roughness_strength": float(self.config.pbr_roughness_strength),
-            "roughness_blur_radius": int(self.config.pbr_roughness_blur_radius),
-            "ao_strength": float(self.config.pbr_ao_strength),
-            "ao_blur_radius": int(self.config.pbr_ao_blur_radius),
-            "ao_bias": float(self.config.pbr_ao_bias),
-        }
+        """Build deterministic PBR fingerprint payload.
+
+        Delegates to config_resolver.build_pbr_fingerprint_payload().
+        """
+        return build_pbr_fingerprint_payload(self.config)
 
     def _build_apex_depth_gate_fingerprint_payload(self) -> Dict[str, Any]:
-        """Build deterministic APEX depth-gate fingerprint payload."""
-        return {
-            "quality_tier": str(self.config.quality_tier),
-            "min_finite_pct": float(self.config.apex_depth_min_finite_pct),
-            "min_upper_iqr": float(self.config.apex_depth_min_upper_iqr),
-            "max_high_saturation_fraction": float(self.config.apex_depth_max_high_saturation_fraction),
-            "max_low_saturation_fraction": float(self.config.apex_depth_max_low_saturation_fraction),
-            "scaled_saturation_margin": float(self.config.apex_depth_scaled_saturation_margin),
-            "saturation_high_value": float(self.config.apex_depth_saturation_high_value),
-            "saturation_low_value": float(self.config.apex_depth_saturation_low_value),
-            "min_gradient_energy": float(self.config.apex_depth_min_gradient_energy),
-            "threshold_epsilon": float(self.config.apex_depth_threshold_epsilon),
-            "hist_bins": int(self.config.apex_depth_hist_bins),
-        }
+        """Build deterministic APEX depth-gate fingerprint payload.
+
+        Delegates to config_resolver.build_apex_depth_gate_fingerprint_payload().
+        """
+        return build_apex_depth_gate_fingerprint_payload(self.config)
 
     def _build_depth_cache_payload(self) -> Dict[str, Any]:
         """Build depth-cache fingerprint payload.
@@ -1065,94 +1055,28 @@ class EnhanceOrchestrator:
         This intentionally stays narrower than manifest Stage A invalidation
         because the cache stores postprocessed float depth, not Materials V3,
         PBR, or V2 deliverables.
+
+        Delegates to config_resolver.build_depth_cache_payload().
         """
-        return {
-            "model_variant": self._model_variant.value.name,
-            "depth_device": self.config.depth_device,
-            "preset": self.config.preset.value if self.config.preset else None,
-            "depth_backend": self.config.depth_backend,
-            "depth_pro_checkpoint_path": self.config.depth_pro_checkpoint_path,
-            "depth_pro_python_executable": self.config.depth_pro_python_executable,
-        }
+        return build_depth_cache_payload(self.config)
 
     def compute_config_fingerprint(self) -> ConfigFingerprint:
-        return ConfigFingerprint(
-            model_variant=self._model_variant.value.name,
-            depth_quantization=self.config.depth_quantization,
-            depth_device=self.config.depth_device,
-            preset=self.config.preset.value if self.config.preset else None,
-            v2_preset=self.config.v2_preset,
-            v2_device=self.config.v2_device,
-            v2_upscaler_backend=self.config.v2_upscaler_backend,
-            depth_backend=self.config.depth_backend,
-            depth_pro_checkpoint_path=self.config.depth_pro_checkpoint_path,
-            depth_pro_python_executable=self.config.depth_pro_python_executable,
-            quality_tier=str(self.config.quality_tier),
-            materials_config=self._build_materials_fingerprint_payload(),
-            pbr_config=self._build_pbr_fingerprint_payload(),
-            apex_depth_gate_config=self._build_apex_depth_gate_fingerprint_payload(),
-            emit_master16=bool(self.config.emit_master16),
-            emit_upscaled16=bool(self.config.emit_upscaled16),
-            enable_v2=bool(self.config.enable_v2),
-        )
+        """Compute configuration fingerprint for cache validation.
+
+        Delegates to config_resolver.compute_config_fingerprint().
+        """
+        return compute_config_fingerprint(self.config, self._model_variant)
 
     def _build_run_card_config_fingerprint(self) -> Dict[str, Any]:
-        """Build run-card config fingerprint."""
-        from .ingest_adapter import raw_ingest_summary
+        """Build run-card config fingerprint.
 
-        base = self.compute_config_fingerprint()
-        raw_summary = raw_ingest_summary(self.config)
-
-        preset_requested = getattr(self.config, "preset_requested", None) or (
-            self.config.preset.value if self.config.preset else None
+        Delegates to config_resolver.build_run_card_config_fingerprint().
+        """
+        return build_run_card_config_fingerprint(
+            self.config,
+            self._model_variant,
+            self._backend_metadata,
         )
-        preset_resolved = self.config.preset.value if self.config.preset else f"quality_tier:{self.config.quality_tier}"
-
-        requested_backend = self._backend_metadata.requested_backend or "auto"
-        resolved_backend = self._backend_metadata.resolved_backend
-        requested_device = self.config.depth_device
-        resolved_device = self._backend_metadata.device
-
-        payload = {
-            "model_variant": base.model_variant,
-            "depth_quantization": base.depth_quantization,
-            "depth_device": base.depth_device,
-            "preset": base.preset,
-            "v2_preset": base.v2_preset,
-            "v2_device": base.v2_device,
-            "v2_upscaler_backend": base.v2_upscaler_backend,
-            "depth_pro_python_executable": base.depth_pro_python_executable,
-            "preset_requested": preset_requested,
-            "preset_resolved": preset_resolved,
-            "backend_requested": requested_backend,
-            "backend_resolved": resolved_backend,
-            "device_requested": requested_device,
-            "device_resolved": resolved_device,
-            "quality_tier": self.config.quality_tier,
-            "strict_inputs": bool(self.config.strict_inputs),
-            "strict_segmentation": bool(self.config.strict_backend),
-            "apex_strict_mode": self._is_apex_tier(),
-            "raw_ingest_profile": str(raw_summary.get("profile", "")),
-            "raw_ingest_settings_hash": str(
-                raw_summary.get(
-                    "settings_hash",
-                    "",
-                ),
-            ),
-        }
-        canonical_json = json.dumps(
-            payload,
-            sort_keys=True,
-            separators=(",", ":"),
-        )
-        return {
-            **payload,
-            "hash_algorithm": "sha256",
-            "canonical_json": canonical_json,
-            "sha256": hashlib.sha256(
-                canonical_json.encode("utf-8"),
-            ).hexdigest(),
-        }
 
     def _extract_v2_depth_handoff_status(
         self,
