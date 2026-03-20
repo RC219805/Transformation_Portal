@@ -4,7 +4,7 @@
 **Version:** 1.0.0  
 **Date:** 2026-03-20  
 **Authority:** Architect Assessment  
-**Supersedes:** Q1 2026 Codebase Audit actionable items
+**Supersedes:** Actionable items from [Q1 2026 Codebase Audit](CODEBASE_AUDIT_2026_Q1.md)
 
 ---
 
