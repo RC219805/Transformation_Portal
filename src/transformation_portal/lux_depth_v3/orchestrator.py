@@ -157,6 +157,24 @@ _default_model_id_for_backend = default_model_id_for_backend
 _derive_model_id_from_backend_instance = derive_model_id_from_backend_instance
 _resolve_backend_model_id = resolve_backend_model_id
 
+# ADR-043 Phase 6: Execution engine extracted to execution_engine.py
+# NOTE: The orchestrator keeps its own _generate_pbr_stage and _run_v2_stage methods
+# because they have different signatures and return types than the standalone functions.
+# - EnhanceOrchestrator._generate_pbr_stage(self, depth, output_key) -> Optional[dict]
+# - EnhanceOrchestrator._run_v2_stage(self, image_input, ...) -> tuple[dict, float, Optional[Path]]
+# The extracted functions are the new canonical API for standalone use:
+# - generate_pbr_stage(...) -> PBRStageResult
+# - run_v2_stage(...) -> V2StageResult
+from .execution_engine import (
+    DepthStageResult,
+    ExecutionEngine,
+    MaterialsV3StageResult,
+    PBRStageResult,
+    V2StageResult,
+    generate_pbr_stage,
+    run_v2_stage,
+)
+
 logger = logging.getLogger(__name__)
 
 
