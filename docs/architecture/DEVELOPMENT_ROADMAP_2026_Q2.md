@@ -1,9 +1,9 @@
 # Development Roadmap: Q2 2026
 
-**Status:** ACTIVE  
-**Version:** 1.0.0  
-**Date:** 2026-03-20  
-**Authority:** Architect Assessment  
+**Status:** ACTIVE
+**Version:** 1.0.0
+**Date:** 2026-03-20
+**Authority:** Architect Assessment
 **Supersedes:** Actionable items from [Q1 2026 Codebase Audit](CODEBASE_AUDIT_2026_Q1.md)
 
 ---
@@ -98,7 +98,7 @@ lux_depth_v3/
 | `@pytest.mark.benchmark` | 34 | (adequate) |
 
 **Implementation Plan:**
-1. **Batch 1 (Week 1):** Tag all `tests/unit/` with `@pytest.mark.unit` 
+1. **Batch 1 (Week 1):** Tag all `tests/unit/` with `@pytest.mark.unit`
 2. **Batch 2 (Week 1):** Tag all `tests/security/` with `@pytest.mark.security`
 3. **Batch 3 (Week 2):** Tag all `tests/integration/` appropriately
 4. **Batch 4 (Week 2):** Tag root-level tests based on actual test behavior
@@ -282,8 +282,8 @@ This roadmap generates the following ADR needs:
 
 ---
 
-**Document Owner:** Transformation Portal Architect  
-**Review Cadence:** Monthly (end of each sprint)  
+**Document Owner:** Transformation Portal Architect
+**Review Cadence:** Monthly (end of each sprint)
 **Next Review:** April 2026
 
 ---

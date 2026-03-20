@@ -59,6 +59,21 @@ from .artifact_manager import (
 from .batch_stats import compute_batch_runtime_stats, detect_runtime_outliers
 from .camera_metadata_loader import load_scene_cameras, load_sidecar_payload
 from .config import DA3Config, EnhanceConfig, ModelVariant
+
+# ADR-043: Config resolution extracted to config_resolver.py
+from .config_resolver import (
+    ConfigResolver,
+    PresetInfo,
+    ResolvedConfig,
+    build_apex_depth_gate_fingerprint_payload,
+    build_depth_cache_payload,
+    build_materials_fingerprint_payload,
+    build_pbr_fingerprint_payload,
+    build_run_card_config_fingerprint,
+    compute_config_fingerprint,
+    discover_presets,
+    resolve_preset,
+)
 from .depth_cache import DepthCache
 from .depth_writer import atomic_write_depth_u16_png_with_stats
 from .input_discovery import DiscoveryConfig, discover_images
@@ -115,6 +130,32 @@ _infer_artifact_type = infer_artifact_type
 _build_artifact_index = build_artifact_index
 _compute_artifact_merkle_root = compute_artifact_merkle_root
 _v2_log_filename = v2_log_filename
+
+# ADR-043: Config resolution backward-compatible aliases
+_build_materials_fingerprint_payload = build_materials_fingerprint_payload
+_build_pbr_fingerprint_payload = build_pbr_fingerprint_payload
+_build_apex_depth_gate_fingerprint_payload = build_apex_depth_gate_fingerprint_payload
+_build_depth_cache_payload = build_depth_cache_payload
+
+# ADR-043: Pipeline coordination extracted to pipeline_coordinator.py
+from .pipeline_coordinator import (
+    BackendSelection,
+    ExecutionPlan,
+    PipelineCoordinator,
+    default_model_id_for_backend,
+    derive_model_id_from_backend_instance,
+    expected_output_depth_units_for_backend,
+    resolve_backend_model_id,
+    resolve_runtime_backend_chain,
+    select_backend,
+)
+
+# ADR-043: Pipeline coordination backward-compatible aliases
+_resolve_runtime_backend_chain = resolve_runtime_backend_chain
+_expected_output_depth_units_for_backend = expected_output_depth_units_for_backend
+_default_model_id_for_backend = default_model_id_for_backend
+_derive_model_id_from_backend_instance = derive_model_id_from_backend_instance
+_resolve_backend_model_id = resolve_backend_model_id
 
 logger = logging.getLogger(__name__)
 
@@ -609,44 +650,27 @@ class EnhanceOrchestrator:
             logger.error(f"Backend initialization failed: {e}")
             raise
 
+    # ADR-043: Pipeline coordination methods now delegate to pipeline_coordinator module
+
     def _resolve_runtime_backend_chain(
         self,
         primary_backend_id: str,
     ) -> List[str]:
-        """Resolve ordered runtime fallback chain."""
-        normalized_primary_backend_id = (
-            normalize_backend_id(
-                primary_backend_id,
-            )
-            or "da3"
-        )
-        chain: List[str] = [normalized_primary_backend_id]
-        configured_chain = getattr(
-            self.config,
-            "depth_operational_fallback_chain",
-            ("da3", "da2"),
-        )
-        for backend_id in normalize_backend_sequence(configured_chain):
-            if backend_id and backend_id not in chain:
-                chain.append(backend_id)
+        """Resolve ordered runtime fallback chain.
 
-        allow_synthetic = (
-            bool(self.config.allow_synthetic_fallback)
-            or os.getenv(
-                "TP_ALLOW_SYNTHETIC_FALLBACK",
-            )
-            == "1"
-        )
-        if allow_synthetic and "synthetic" not in chain:
-            chain.append("synthetic")
-        return chain
+        Delegates to pipeline_coordinator.resolve_runtime_backend_chain().
+        """
+        return resolve_runtime_backend_chain(primary_backend_id, self.config)
 
     @staticmethod
     def _expected_output_depth_units_for_backend(
         backend_id: str,
     ) -> str:
-        """Return expected output depth units."""
-        return "meters" if normalize_backend_id(backend_id) == "depth_pro" else "relative"
+        """Return expected output depth units.
+
+        Delegates to pipeline_coordinator.expected_output_depth_units_for_backend().
+        """
+        return expected_output_depth_units_for_backend(backend_id)
 
     def _build_depth_cache_fingerprint(
         self,
@@ -668,55 +692,22 @@ class EnhanceOrchestrator:
         return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
     def _default_model_id_for_backend(self, backend_id: str) -> str:
-        """Return canonical backend model identifier for provenance."""
-        normalized_backend = normalize_backend_id(backend_id) or ""
-        if normalized_backend == "depth_pro":
-            return "apple/ml-depth-pro"
-        if normalized_backend == "da2":
-            return "depth-anything/Depth-Anything-V2-Small-hf"
-        if normalized_backend == "da3":
-            return self._model_variant.value.huggingface_id
-        if normalized_backend == "depthcrafter":
-            return "tencent/depthcrafter"
-        if normalized_backend == "ensemble":
-            return "ensemble/multi-backend"
-        if normalized_backend == "synthetic":
-            return "synthetic/depth-analytic-v1"
-        return normalized_backend or self._model_variant.value.huggingface_id
+        """Return canonical backend model identifier for provenance.
+
+        Delegates to pipeline_coordinator.default_model_id_for_backend().
+        """
+        return default_model_id_for_backend(backend_id, self._model_variant)
 
     def _derive_model_id_from_backend_instance(
         self,
         backend_id: str,
         backend: Optional[Any],
     ) -> Optional[str]:
-        """Best-effort model id extraction from backend instance."""
-        if backend is None:
-            return None
+        """Best-effort model id extraction from backend instance.
 
-        for attr_name in ("model_id", "_model_id"):
-            candidate = getattr(backend, attr_name, None)
-            if isinstance(candidate, str) and candidate.strip():
-                return candidate.strip()
-
-        model_variant = getattr(backend, "_model_variant", None)
-        if model_variant is not None:
-            variant_value = getattr(model_variant, "value", None)
-            hf_id = getattr(variant_value, "huggingface_id", None)
-            if isinstance(hf_id, str) and hf_id.strip():
-                return hf_id.strip()
-            if isinstance(variant_value, str) and variant_value.strip():
-                return variant_value.strip()
-
-        backend_model = getattr(backend, "_model", None)
-        model_variant = getattr(backend_model, "variant", None)
-        variant_value = getattr(model_variant, "value", None)
-        if isinstance(variant_value, str) and variant_value.strip():
-            return variant_value.strip()
-
-        if str(backend_id).strip().lower() == "depth_pro":
-            return "apple/ml-depth-pro"
-
-        return None
+        Delegates to pipeline_coordinator.derive_model_id_from_backend_instance().
+        """
+        return derive_model_id_from_backend_instance(backend_id, backend)
 
     def _resolve_backend_model_id(
         self,
@@ -725,26 +716,16 @@ class EnhanceOrchestrator:
         result_metadata: Optional[Dict[str, Any]] = None,
         backend: Optional[Any] = None,
     ) -> str:
-        """Resolve stable model id for provenance and run-card semantics."""
-        normalized_backend = str(backend_id).strip().lower()
-        if normalized_backend == "depth_pro":
-            # Keep depth_pro model identity canonical across environments.
-            return "apple/ml-depth-pro"
+        """Resolve stable model id for provenance and run-card semantics.
 
-        metadata = result_metadata or {}
-        for key in ("resolved_model_id", "requested_model_id", "model_id"):
-            candidate = metadata.get(key)
-            if isinstance(candidate, str) and candidate.strip():
-                return candidate.strip()
-
-        from_backend = self._derive_model_id_from_backend_instance(
+        Delegates to pipeline_coordinator.resolve_backend_model_id().
+        """
+        return resolve_backend_model_id(
             backend_id,
-            backend,
+            result_metadata=result_metadata,
+            backend=backend,
+            model_variant=self._model_variant,
         )
-        if from_backend:
-            return from_backend
-
-        return self._default_model_id_for_backend(backend_id)
 
     @staticmethod
     def _normalize_sha256(value: Any) -> Optional[str]:
@@ -1005,59 +986,28 @@ class EnhanceOrchestrator:
             attempts=attempts,
         )
 
+    # ADR-043: Config resolution methods now delegate to config_resolver module
+
     def _build_materials_fingerprint_payload(self) -> Dict[str, Any]:
-        """Build deterministic Materials V3 fingerprint payload."""
-        return {
-            "enable_materials_v3": bool(self.config.enable_materials_v3),
-            "apply_pixel_ops": bool(self.config.apply_pixel_ops),
-            "enable_material_segmentation": bool(self.config.enable_material_segmentation),
-            "material_segmentation_backend": str(self.config.material_segmentation_backend),
-            "strict_backend": bool(self.config.strict_backend),
-            "refinement_strategy": str(self.config.refinement_strategy),
-            "min_coverage_px": int(self.config.min_coverage_px),
-            "min_mean_conf": float(self.config.min_mean_conf),
-            "glass_response_enabled": bool(self.config.glass_response_enabled),
-            "mask_feather_sigma_default": float(self.config.mask_feather_sigma_default),
-            "mask_feather_sigma_overrides": {
-                key: float(value) for key, value in sorted(self.config.mask_feather_sigma_overrides.items())
-            },
-            "mask_feather_disabled_materials": sorted(str(value) for value in self.config.mask_feather_disabled_materials),
-            "sky_top_region_fraction": float(self.config.sky_top_region_fraction),
-            "sky_gradient_threshold": float(self.config.sky_gradient_threshold),
-            "sky_brightness_threshold": float(self.config.sky_brightness_threshold),
-            "sam2_model_size": str(self.config.sam2_model_size),
-            "sam2_checkpoint_path": self.config.sam2_checkpoint_path,
-        }
+        """Build deterministic Materials V3 fingerprint payload.
+
+        Delegates to config_resolver.build_materials_fingerprint_payload().
+        """
+        return build_materials_fingerprint_payload(self.config)
 
     def _build_pbr_fingerprint_payload(self) -> Dict[str, Any]:
-        """Build deterministic PBR fingerprint payload."""
-        return {
-            "generate_pbr": bool(self.config.generate_pbr),
-            "save_float_depth": bool(getattr(self.config, "save_float_depth", False)),
-            "normal_strength": float(self.config.pbr_normal_strength),
-            "normal_blur_radius": int(self.config.pbr_normal_blur_radius),
-            "roughness_strength": float(self.config.pbr_roughness_strength),
-            "roughness_blur_radius": int(self.config.pbr_roughness_blur_radius),
-            "ao_strength": float(self.config.pbr_ao_strength),
-            "ao_blur_radius": int(self.config.pbr_ao_blur_radius),
-            "ao_bias": float(self.config.pbr_ao_bias),
-        }
+        """Build deterministic PBR fingerprint payload.
+
+        Delegates to config_resolver.build_pbr_fingerprint_payload().
+        """
+        return build_pbr_fingerprint_payload(self.config)
 
     def _build_apex_depth_gate_fingerprint_payload(self) -> Dict[str, Any]:
-        """Build deterministic APEX depth-gate fingerprint payload."""
-        return {
-            "quality_tier": str(self.config.quality_tier),
-            "min_finite_pct": float(self.config.apex_depth_min_finite_pct),
-            "min_upper_iqr": float(self.config.apex_depth_min_upper_iqr),
-            "max_high_saturation_fraction": float(self.config.apex_depth_max_high_saturation_fraction),
-            "max_low_saturation_fraction": float(self.config.apex_depth_max_low_saturation_fraction),
-            "scaled_saturation_margin": float(self.config.apex_depth_scaled_saturation_margin),
-            "saturation_high_value": float(self.config.apex_depth_saturation_high_value),
-            "saturation_low_value": float(self.config.apex_depth_saturation_low_value),
-            "min_gradient_energy": float(self.config.apex_depth_min_gradient_energy),
-            "threshold_epsilon": float(self.config.apex_depth_threshold_epsilon),
-            "hist_bins": int(self.config.apex_depth_hist_bins),
-        }
+        """Build deterministic APEX depth-gate fingerprint payload.
+
+        Delegates to config_resolver.build_apex_depth_gate_fingerprint_payload().
+        """
+        return build_apex_depth_gate_fingerprint_payload(self.config)
 
     def _build_depth_cache_payload(self) -> Dict[str, Any]:
         """Build depth-cache fingerprint payload.
@@ -1065,94 +1015,28 @@ class EnhanceOrchestrator:
         This intentionally stays narrower than manifest Stage A invalidation
         because the cache stores postprocessed float depth, not Materials V3,
         PBR, or V2 deliverables.
+
+        Delegates to config_resolver.build_depth_cache_payload().
         """
-        return {
-            "model_variant": self._model_variant.value.name,
-            "depth_device": self.config.depth_device,
-            "preset": self.config.preset.value if self.config.preset else None,
-            "depth_backend": self.config.depth_backend,
-            "depth_pro_checkpoint_path": self.config.depth_pro_checkpoint_path,
-            "depth_pro_python_executable": self.config.depth_pro_python_executable,
-        }
+        return build_depth_cache_payload(self.config, self._model_variant)
 
     def compute_config_fingerprint(self) -> ConfigFingerprint:
-        return ConfigFingerprint(
-            model_variant=self._model_variant.value.name,
-            depth_quantization=self.config.depth_quantization,
-            depth_device=self.config.depth_device,
-            preset=self.config.preset.value if self.config.preset else None,
-            v2_preset=self.config.v2_preset,
-            v2_device=self.config.v2_device,
-            v2_upscaler_backend=self.config.v2_upscaler_backend,
-            depth_backend=self.config.depth_backend,
-            depth_pro_checkpoint_path=self.config.depth_pro_checkpoint_path,
-            depth_pro_python_executable=self.config.depth_pro_python_executable,
-            quality_tier=str(self.config.quality_tier),
-            materials_config=self._build_materials_fingerprint_payload(),
-            pbr_config=self._build_pbr_fingerprint_payload(),
-            apex_depth_gate_config=self._build_apex_depth_gate_fingerprint_payload(),
-            emit_master16=bool(self.config.emit_master16),
-            emit_upscaled16=bool(self.config.emit_upscaled16),
-            enable_v2=bool(self.config.enable_v2),
-        )
+        """Compute configuration fingerprint for cache validation.
+
+        Delegates to config_resolver.compute_config_fingerprint().
+        """
+        return compute_config_fingerprint(self.config, self._model_variant)
 
     def _build_run_card_config_fingerprint(self) -> Dict[str, Any]:
-        """Build run-card config fingerprint."""
-        from .ingest_adapter import raw_ingest_summary
+        """Build run-card config fingerprint.
 
-        base = self.compute_config_fingerprint()
-        raw_summary = raw_ingest_summary(self.config)
-
-        preset_requested = getattr(self.config, "preset_requested", None) or (
-            self.config.preset.value if self.config.preset else None
+        Delegates to config_resolver.build_run_card_config_fingerprint().
+        """
+        return build_run_card_config_fingerprint(
+            self.config,
+            self._model_variant,
+            self._backend_metadata,
         )
-        preset_resolved = self.config.preset.value if self.config.preset else f"quality_tier:{self.config.quality_tier}"
-
-        requested_backend = self._backend_metadata.requested_backend or "auto"
-        resolved_backend = self._backend_metadata.resolved_backend
-        requested_device = self.config.depth_device
-        resolved_device = self._backend_metadata.device
-
-        payload = {
-            "model_variant": base.model_variant,
-            "depth_quantization": base.depth_quantization,
-            "depth_device": base.depth_device,
-            "preset": base.preset,
-            "v2_preset": base.v2_preset,
-            "v2_device": base.v2_device,
-            "v2_upscaler_backend": base.v2_upscaler_backend,
-            "depth_pro_python_executable": base.depth_pro_python_executable,
-            "preset_requested": preset_requested,
-            "preset_resolved": preset_resolved,
-            "backend_requested": requested_backend,
-            "backend_resolved": resolved_backend,
-            "device_requested": requested_device,
-            "device_resolved": resolved_device,
-            "quality_tier": self.config.quality_tier,
-            "strict_inputs": bool(self.config.strict_inputs),
-            "strict_segmentation": bool(self.config.strict_backend),
-            "apex_strict_mode": self._is_apex_tier(),
-            "raw_ingest_profile": str(raw_summary.get("profile", "")),
-            "raw_ingest_settings_hash": str(
-                raw_summary.get(
-                    "settings_hash",
-                    "",
-                ),
-            ),
-        }
-        canonical_json = json.dumps(
-            payload,
-            sort_keys=True,
-            separators=(",", ":"),
-        )
-        return {
-            **payload,
-            "hash_algorithm": "sha256",
-            "canonical_json": canonical_json,
-            "sha256": hashlib.sha256(
-                canonical_json.encode("utf-8"),
-            ).hexdigest(),
-        }
 
     def _extract_v2_depth_handoff_status(
         self,

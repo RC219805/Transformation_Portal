@@ -1,9 +1,9 @@
 # ADR-043: Orchestrator Decomposition Strategy
 
-**Status:** IN PROGRESS (Phases 2-3 Complete)  
-**Date:** 2026-03-20  
-**Decision Makers:** Architect  
-**Replaces:** None  
+**Status:** IN PROGRESS (Phases 2-5 Complete)
+**Date:** 2026-03-20
+**Decision Makers:** Architect
+**Replaces:** None
 
 ---
 
@@ -82,9 +82,9 @@ class ConfigResolver:
     def resolve(self, config: EnhanceConfig) -> ResolvedConfig: ...
     def discover_presets(self, pipeline: str) -> list[PresetInfo]: ...
 
-# pipeline_coordinator.py  
+# pipeline_coordinator.py
 class PipelineCoordinator:
-    def plan(self, config: ResolvedConfig) -> ExecutionPlan: ...
+    def plan(self, enable_depth: bool = True) -> ExecutionPlan: ...
     def select_backend(self, requested: str) -> BackendSelection: ...
 
 # artifact_manager.py
@@ -183,15 +183,34 @@ class RunCardValidator:
 - New module: `artifact_manager.py` (350 LOC)
 - Test coverage: 52 unit tests for artifact manager
 
-### Phase 4: Extract ConfigResolver (Week 3)
-1. Extract preset discovery and config merging
-2. Create `ResolvedConfig` data class
-3. Add unit tests
+### Phase 4: Extract ConfigResolver (Week 3) ✅ COMPLETE
+1. ✅ Extract preset discovery and config merging
+2. ✅ Create `ResolvedConfig` data class
+3. ✅ Create `PresetInfo` data class for preset discovery
+4. ✅ Extract fingerprint payload builders (`build_materials_fingerprint_payload`, etc.)
+5. ✅ Extract `compute_config_fingerprint` function
+6. ✅ Extract `build_run_card_config_fingerprint` function
+7. ✅ Add unit tests (31 tests)
+8. ✅ Maintain backward compatibility with orchestrator imports
 
-### Phase 5: Extract PipelineCoordinator (Week 3-4)
-1. Extract stage planning and backend selection
-2. Create `ExecutionPlan` data class
-3. Add unit tests
+**Metrics after Phase 4:**
+- Orchestrator LOC: 5,689 (was 5,770, -81 lines)
+- New module: `config_resolver.py` (550 LOC)
+- Test coverage: 31 unit tests for config resolver
+
+### Phase 5: Extract PipelineCoordinator (Week 3-4) ✅ COMPLETE
+1. ✅ Extract stage planning and backend selection
+2. ✅ Extract runtime backend chain resolution
+3. ✅ Extract model ID resolution methods
+4. ✅ Create `ExecutionPlan` data class
+5. ✅ Create `BackendSelection` data class
+6. ✅ Add unit tests (35 tests)
+7. ✅ Maintain backward compatibility with orchestrator imports
+
+**Metrics after Phase 5:**
+- Orchestrator LOC: 5,649 (was 5,689, -40 lines)
+- New module: `pipeline_coordinator.py` (623 LOC)
+- Test coverage: 35 unit tests for pipeline coordinator
 
 ### Phase 6: Extract ExecutionEngine (Week 4-5)
 1. Extract core processing logic
@@ -237,6 +256,6 @@ class RunCardValidator:
 
 ---
 
-**Author:** Transformation Portal Architect  
-**Review Required:** Yes (Specialist implementation approval)  
+**Author:** Transformation Portal Architect
+**Review Required:** Yes (Specialist implementation approval)
 **Effective Date:** Upon merge

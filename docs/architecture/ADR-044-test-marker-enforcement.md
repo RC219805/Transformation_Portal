@@ -1,9 +1,9 @@
 # ADR-044: Test Marker Enforcement Policy
 
-**Status:** PROPOSED  
-**Date:** 2026-03-20  
-**Decision Makers:** Architect  
-**Replaces:** None  
+**Status:** PROPOSED
+**Date:** 2026-03-20
+**Decision Makers:** Architect
+**Replaces:** None
 
 ---
 
@@ -159,6 +159,6 @@ Canonical markers as registered in `pyproject.toml` under `[tool.pytest.ini_opti
 
 ---
 
-**Author:** Transformation Portal Architect  
-**Review Required:** Yes  
+**Author:** Transformation Portal Architect
+**Review Required:** Yes
 **Effective Date:** Upon merge
