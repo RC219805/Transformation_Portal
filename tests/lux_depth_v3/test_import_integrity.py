@@ -192,6 +192,18 @@ class TestBackwardCompatibleImports:
 
     def test_new_canonical_import_paths(self):
         """New canonical import paths from decomposed modules work."""
+        # artifact_manager canonical imports
+        from transformation_portal.lux_depth_v3.artifact_manager import (
+            ArtifactManager,
+        )
+
+        # config_resolver canonical imports
+        from transformation_portal.lux_depth_v3.config_resolver import (
+            ConfigResolver,
+            PresetInfo,
+            ResolvedConfig,
+        )
+
         # execution_engine canonical imports
         from transformation_portal.lux_depth_v3.execution_engine import (
             DepthArtifactPaths,
@@ -206,18 +218,6 @@ class TestBackwardCompatibleImports:
             persist_depth_artifacts,
             persist_enhanced_image,
             run_v2_stage,
-        )
-
-        # config_resolver canonical imports
-        from transformation_portal.lux_depth_v3.config_resolver import (
-            ConfigResolver,
-            PresetInfo,
-            ResolvedConfig,
-        )
-
-        # artifact_manager canonical imports
-        from transformation_portal.lux_depth_v3.artifact_manager import (
-            ArtifactManager,
         )
 
         # pipeline_coordinator canonical imports
