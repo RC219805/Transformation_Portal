@@ -552,6 +552,7 @@ def persist_depth_artifacts(
                 else None
             ),
             metadata_path=metadata_path,
+            # depth_stats is DepthWriteStats (dataclass with _asdict() method)
             scaling_stats=depth_stats._asdict() if depth_stats else None,
         )
 
