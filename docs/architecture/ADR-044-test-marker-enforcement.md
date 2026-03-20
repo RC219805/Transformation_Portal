@@ -44,16 +44,21 @@ All existing tests will be tagged with appropriate markers within Q2 2026:
 | `tests/integration/` | `@pytest.mark.integration` |
 | `tests/benchmarks/` | `@pytest.mark.benchmark` |
 | `tests/stress/` | `@pytest.mark.stress` + `@pytest.mark.slow` |
-| `tests/smoke/` | `@pytest.mark.smoke` |
+| `tests/smoke/` | `@pytest.mark.unit` |
+
+**Note on tests/smoke/:** The `tests/smoke/` directory contains quick sanity checks. While "smoke test" has a specific meaning in testing terminology, we map it to `@pytest.mark.unit` because: (1) `smoke` is not currently registered in `pyproject.toml`, and (2) smoke tests in this repository are fast, isolated checks that fit the `unit` marker semantics. If a distinct `smoke` marker becomes needed, it should be added to `pyproject.toml` first.
+
 | Root-level tests | Analyze individually, default to `@pytest.mark.unit` |
 
 ### 2. Enforce Markers on New Tests
 
 A pre-commit hook will require all new test functions to have at least one marker.
 
-**Implementation:**
+**Note:** The `scripts/validation/check_test_markers.py` script is a **planned artifact** to be implemented as part of this ADR. It does not exist yet. **Target: Week 2 of ADR-044 implementation** (see Implementation Plan below).
+
+**Planned Implementation:**
 ```yaml
-# .pre-commit-config.yaml addition
+# .pre-commit-config.yaml addition (to be added when script is implemented)
 - repo: local
   hooks:
     - id: check-test-markers
@@ -83,7 +88,7 @@ pytest tests/
 
 ## Marker Taxonomy
 
-Canonical markers aligned with `docs/testing/STRATEGY.md`:
+Canonical markers as registered in `pyproject.toml` under `[tool.pytest.ini_options].markers`:
 
 | Marker | Semantics | CI Inclusion |
 |--------|-----------|--------------|
@@ -94,7 +99,10 @@ Canonical markers aligned with `docs/testing/STRATEGY.md`:
 | `benchmark` | Performance measurement | Scheduled only |
 | `security` | Security-critical paths | PR gate |
 | `stress` | Resource-intensive | Manual/scheduled |
-| `smoke` | Quick sanity check | PR gate |
+| `regression` | Regression tests with known fixtures | PR gate |
+| `golden` | Golden master regression tests | PR gate |
+
+**Note:** This taxonomy is derived from the markers registered in `pyproject.toml` (which enforces `--strict-markers`). Any new marker must be added to `pyproject.toml` before use, otherwise pytest will fail collection.
 
 ---
 
