@@ -206,7 +206,9 @@ class TestAddPytestImport:
 
         # Verify import is after the closing paren, not inside
         lines = result.split("\n")
-        paren_close_idx = next(i for i, line in enumerate(lines) if line.strip() == ")")
+        paren_close_indices = [i for i, line in enumerate(lines) if line.strip() == ")"]
+        assert paren_close_indices, "Test fixture should contain a closing parenthesis"
+        paren_close_idx = paren_close_indices[0]
         assert lines[paren_close_idx + 1] == "import pytest"
 
 
