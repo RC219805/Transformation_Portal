@@ -35,7 +35,7 @@ pytestmark = pytest.mark.unit
 
 
 def _src(text: str) -> str:
-    """Dedent and strip leading newline from inline source text."""
+    """Dedent and strip leading newlines from inline source text."""
     return textwrap.dedent(text).lstrip("\n")
 
 
@@ -226,7 +226,10 @@ class TestAddPytestImport:
         assert result == expected
 
     def test_handles_multiline_with_trailing_comma(self) -> None:
-        """Validate proper handling of multi-line import with trailing comma."""
+        """Validate proper handling of multi-line import with trailing comma.
+
+        This uses exact-output assertion to catch any whitespace/placement drift.
+        """
         content = _src("""
             from pkg.mod import (
                 A,
@@ -240,12 +243,19 @@ class TestAddPytestImport:
 
         result = add_pytest_import(content)
 
-        # Verify import is after the closing paren, not inside
-        lines = result.split("\n")
-        paren_close_indices = [i for i, line in enumerate(lines) if line.strip() == ")"]
-        assert paren_close_indices, "Test fixture should contain a closing parenthesis"
-        paren_close_idx = paren_close_indices[0]
-        assert lines[paren_close_idx + 1] == "import pytest"
+        # Exact output validation - import pytest must be after closing paren
+        expected = _src("""
+            from pkg.mod import (
+                A,
+                B,
+                C,
+            )
+            import pytest
+
+            def test_something():
+                pass
+            """)
+        assert result == expected
 
 
 # =============================================================================
