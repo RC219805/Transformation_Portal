@@ -147,6 +147,30 @@ def get_directory_marker(file_path: Path) -> list[str]:
     return DIRECTORY_MARKERS["_default"]
 
 
+# Pattern to detect PEP 263 encoding declarations (# -*- coding: utf-8 -*- or # coding=utf-8)
+_ENCODING_PATTERN = re.compile(r"coding[:=]\s*([-\w.]+)")
+
+
+def _is_encoding_line(line: str) -> bool:
+    """Check if a line is a PEP 263 encoding declaration.
+
+    Per PEP 263, encoding declarations must match the regex:
+    ``coding[:=]\s*([-\w.]+)``
+
+    Common formats:
+    - # -*- coding: utf-8 -*-
+    - # coding=utf-8
+    - # vim: set fileencoding=utf-8 :
+
+    Args:
+        line: A source line to check.
+
+    Returns:
+        True if the line is a valid encoding declaration.
+    """
+    return line.startswith("#") and bool(_ENCODING_PATTERN.search(line))
+
+
 def _count_special_header_lines(lines: list[str]) -> int:
     """Count shebang and encoding declaration lines at the start of a file.
 
@@ -166,15 +190,11 @@ def _count_special_header_lines(lines: list[str]) -> int:
     if lines and lines[0].startswith("#!"):
         count = 1
         # Check for encoding declaration on line 2
-        if len(lines) > 1:
-            line2 = lines[1]
-            if line2.startswith("#") and ("coding" in line2 or "encoding" in line2):
-                count = 2
-    elif lines:
+        if len(lines) > 1 and _is_encoding_line(lines[1]):
+            count = 2
+    elif lines and _is_encoding_line(lines[0]):
         # No shebang, check for encoding on line 1
-        line1 = lines[0]
-        if line1.startswith("#") and ("coding" in line1 or "encoding" in line1):
-            count = 1
+        count = 1
 
     return count
 
@@ -200,10 +220,14 @@ def add_pytest_import(content: str) -> str:
     # Count special header lines that must be preserved at the top
     special_header_count = _count_special_header_lines(lines)
 
-    # Try AST-based detection
+    # AST-based detection for import/docstring positions.
+    # insert_idx is updated through the try-else block:
+    #   - Default: after special headers (shebang/encoding)
+    #   - SyntaxError fallback: after last detected import line
+    #   - AST success: after last import, or docstring, or headers
     last_import_line: int | None = None
     docstring_end_line: int | None = None
-    insert_idx = special_header_count  # Default: after special headers
+    insert_idx = special_header_count
 
     try:
         module = ast.parse(source)
