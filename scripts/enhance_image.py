@@ -125,6 +125,11 @@ def parse_arguments() -> argparse.Namespace:
         action="store_true",
         help="Allow 16-bit → 8-bit downgrade (bypasses Quality Firewall)",
     )
+    parser.add_argument(
+        "--asset-key",
+        default=None,
+        help="Canonical asset key for depth/report resolution; defaults to input_path.stem",
+    )
 
     verbosity = parser.add_mutually_exclusive_group()
     verbosity.add_argument("--verbose", "-v", action="store_true", help="Enable verbose logging")
@@ -223,6 +228,7 @@ def run_v2_enhancement(
     upscaler: str,
     allow_8bit: bool = False,
     masks_file: Path | None = None,
+    asset_key: str | None = None,
 ) -> dict[str, Any]:
     """Run V2 depth-aware enhancement.
 
@@ -235,6 +241,8 @@ def run_v2_enhancement(
         upscaler: Upscaler backend (currently unused, reserved for future)
         allow_8bit: Allow 16-bit → 8-bit downgrade (Quality Firewall bypass)
         masks_file: Explicit path to material masks NPZ file (optional, Materials V3 integration)
+        asset_key: Canonical asset key for depth/report resolution (optional,
+            defaults to input_path.stem if not provided)
 
     Returns:
         Dict containing enhancement report
@@ -265,13 +273,15 @@ def run_v2_enhancement(
         raise
 
     # Find depth map if depth_dir provided
+    # Use canonical asset key for depth lookup to align with orchestrator naming
+    canonical_key = asset_key or input_path.stem
     depth_map_path = None
     if depth_dir:
-        depth_map_path = find_depth_map(depth_dir, input_path.stem)
+        depth_map_path = find_depth_map(depth_dir, canonical_key)
         if depth_map_path:
             logger.info("Using depth map: %s", depth_map_path.name)
         else:
-            logger.warning("No depth map found in %s for %s", depth_dir, input_path.stem)
+            logger.warning("No depth map found in %s for %s", depth_dir, canonical_key)
 
     # Load material masks if masks_file provided (Materials V3 integration)
     material_masks = load_material_masks(masks_file) if masks_file else None
@@ -297,6 +307,9 @@ def main() -> int:
     args = parse_arguments()
     configure_logging(args.verbose, args.quiet, args.log_file)
 
+    # Compute canonical asset key for consistent depth/report resolution
+    asset_key = args.asset_key or Path(args.input_path).stem
+
     # Always create output dir early so we can write an error report if needed
     try:
         out_dir = validate_output_dir(args.output_dir)
@@ -306,8 +319,8 @@ def main() -> int:
 
     report_path = None
     if out_dir is not None:
-        # Keep your naming convention for compatibility
-        report_path = out_dir / f"{Path(args.input_path).stem}_report.json"
+        # Use canonical asset key for report naming to align with orchestrator
+        report_path = out_dir / f"{asset_key}_report.json"
 
     try:
         report = run_v2_enhancement(
@@ -319,6 +332,7 @@ def main() -> int:
             upscaler=args.upscaler,
             allow_8bit=args.allow_8bit,
             masks_file=args.masks_file,  # Pass through Materials V3 explicit mask file
+            asset_key=asset_key,
         )
 
         if report_path:

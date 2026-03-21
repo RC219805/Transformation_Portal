@@ -3131,6 +3131,8 @@ class EnhanceOrchestrator:
                 timeout=self.config.v2_timeout,
                 # Pass explicit NPZ file path
                 masks_file=masks_path,
+                # Pass canonical asset key for depth/report identity alignment
+                asset_key=output_key.name,
             )
             v2_runtime_s = v2_result.get("runtime_s", 0.0)
             report_path_value = v2_result.get("report_path")

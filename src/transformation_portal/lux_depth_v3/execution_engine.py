@@ -408,6 +408,8 @@ def run_v2_stage(
             log_file=v2_log_path,
             timeout=config.v2_timeout,
             masks_file=masks_path,
+            # Pass canonical asset key for depth/report identity alignment
+            asset_key=output_key.name,
         )
         v2_runtime_s = v2_result.get("runtime_s", 0.0)
 
