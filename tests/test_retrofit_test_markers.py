@@ -134,12 +134,24 @@ class TestAddPytestImport:
             """)
         assert result == expected
 
+    @pytest.mark.xfail(
+        reason=(
+            "add_pytest_import uses line-based docstring handling that fails "
+            "to correctly place import after multi-line docstrings. "
+            "The intended behavior is import AFTER docstring, not BEFORE."
+        ),
+        strict=True,
+    )
     def test_handles_no_imports_with_docstring(self) -> None:
-        """Validate pytest import handling when only docstring exists.
+        """Validate pytest import is placed AFTER module docstring when no imports.
 
-        Note: The current implementation places import pytest at the beginning
-        when the docstring scanning logic doesn't find a proper end. This test
-        validates current behavior.
+        INTENDED BEHAVIOR: import pytest should be placed after the docstring,
+        not before it. The current implementation has a limitation in the
+        line-based docstring detection that causes this to fail.
+
+        When the script is fixed to use AST-based docstring detection
+        (like add_pytestmark does), this test should pass and the xfail
+        marker can be removed.
         """
         content = _src('''
             """Test module for X."""
@@ -150,10 +162,15 @@ class TestAddPytestImport:
 
         result = add_pytest_import(content)
 
-        # Current behavior: import pytest goes at beginning (line-based fallback)
-        assert "import pytest" in result
-        # Verify the docstring is preserved
-        assert '"""Test module for X."""' in result
+        # INTENDED: import pytest should appear AFTER the docstring
+        expected = _src('''
+            """Test module for X."""
+            import pytest
+
+            def test_example():
+                assert True
+            ''')
+        assert result == expected
 
     def test_handles_no_imports_no_docstring(self) -> None:
         """Validate pytest import is placed at the start when no imports or docstring."""
@@ -221,7 +238,10 @@ class TestAddPytestmark:
     """Tests for add_pytestmark() transformation."""
 
     def test_places_marker_after_multiline_imports(self) -> None:
-        """Validate pytestmark is placed after multi-line imports."""
+        """Validate pytestmark is placed after multi-line imports.
+
+        This uses exact-output assertion to catch any whitespace/placement drift.
+        """
         content = _src("""
             from pkg.mod import (
                 A,
@@ -235,17 +255,27 @@ class TestAddPytestmark:
 
         result = add_pytestmark(content, ["unit"])
 
-        # Verify the import block is intact
-        assert "from pkg.mod import (\n    A,\n    B,\n)\nimport pytest\n" in result
-        # Verify pytestmark is present after imports
-        assert "\npytestmark = pytest.mark.unit\n" in result
-        # Verify the order: imports come before pytestmark
-        import_pos = result.index("import pytest")
-        marker_pos = result.index("pytestmark = pytest.mark.unit")
-        assert import_pos < marker_pos
+        # Exact output validation - the script adds double newline before pytestmark
+        expected = _src("""
+            from pkg.mod import (
+                A,
+                B,
+            )
+            import pytest
+
+
+            pytestmark = pytest.mark.unit
+
+            def test_example():
+                assert True
+            """)
+        assert result == expected
 
     def test_places_marker_after_simple_imports(self) -> None:
-        """Validate pytestmark is placed after simple imports."""
+        """Validate pytestmark is placed after simple imports.
+
+        Uses exact-output assertion to catch whitespace/placement drift.
+        """
         content = _src("""
             import os
             import pytest
@@ -256,17 +286,24 @@ class TestAddPytestmark:
 
         result = add_pytestmark(content, ["unit"])
 
-        # Verify imports are intact
-        assert "import os\nimport pytest\n" in result
-        # Verify pytestmark is present
-        assert "\npytestmark = pytest.mark.unit\n" in result
-        # Verify order
-        import_pos = result.index("import pytest")
-        marker_pos = result.index("pytestmark = pytest.mark.unit")
-        assert import_pos < marker_pos
+        # Exact output validation
+        expected = _src("""
+            import os
+            import pytest
+
+
+            pytestmark = pytest.mark.unit
+
+            def test_example():
+                assert True
+            """)
+        assert result == expected
 
     def test_places_marker_after_docstring_when_no_imports(self) -> None:
-        """Validate pytestmark is placed after docstring when no other imports present."""
+        """Validate pytestmark is placed after docstring when only import pytest present.
+
+        Uses exact-output assertion to catch whitespace/placement drift.
+        """
         content = _src('''
             """Test module for X."""
             import pytest
@@ -277,17 +314,24 @@ class TestAddPytestmark:
 
         result = add_pytestmark(content, ["unit"])
 
-        # Verify docstring is preserved
-        assert '"""Test module for X."""' in result
-        # Verify pytestmark is present
-        assert "\npytestmark = pytest.mark.unit\n" in result
-        # Verify order
-        import_pos = result.index("import pytest")
-        marker_pos = result.index("pytestmark = pytest.mark.unit")
-        assert import_pos < marker_pos
+        # Exact output validation
+        expected = _src('''
+            """Test module for X."""
+            import pytest
+
+
+            pytestmark = pytest.mark.unit
+
+            def test_example():
+                assert True
+            ''')
+        assert result == expected
 
     def test_places_marker_at_top_when_no_imports_or_docstring(self) -> None:
-        """Validate pytestmark is placed at the top when no docstring exists."""
+        """Validate pytestmark placement when only import pytest exists.
+
+        Uses exact-output assertion to catch whitespace/placement drift.
+        """
         content = _src("""
             import pytest
 
@@ -297,15 +341,23 @@ class TestAddPytestmark:
 
         result = add_pytestmark(content, ["unit"])
 
-        # Verify pytestmark is present
-        assert "\npytestmark = pytest.mark.unit\n" in result
-        # Verify order: import comes before marker
-        import_pos = result.index("import pytest")
-        marker_pos = result.index("pytestmark = pytest.mark.unit")
-        assert import_pos < marker_pos
+        # Exact output validation
+        expected = _src("""
+            import pytest
+
+
+            pytestmark = pytest.mark.unit
+
+            def test_example():
+                assert True
+            """)
+        assert result == expected
 
     def test_handles_multiple_markers(self) -> None:
-        """Validate multiple markers are formatted as a list."""
+        """Validate multiple markers are formatted as a list.
+
+        Uses exact-output assertion to catch whitespace/placement drift.
+        """
         content = _src("""
             import pytest
 
@@ -315,12 +367,17 @@ class TestAddPytestmark:
 
         result = add_pytestmark(content, ["stress", "slow"])
 
-        # Verify the marker list format
-        assert "pytestmark = [pytest.mark.stress, pytest.mark.slow]" in result
-        # Verify order
-        import_pos = result.index("import pytest")
-        marker_pos = result.index("pytestmark = ")
-        assert import_pos < marker_pos
+        # Exact output validation
+        expected = _src("""
+            import pytest
+
+
+            pytestmark = [pytest.mark.stress, pytest.mark.slow]
+
+            def test_example():
+                assert True
+            """)
+        assert result == expected
 
     def test_preserves_import_comments(self) -> None:
         """Validate comments around imports are preserved."""
@@ -358,8 +415,23 @@ class TestAddPytestmark:
 class TestProcessFile:
     """Tests for process_file() orchestration."""
 
+    @pytest.mark.xfail(
+        reason=(
+            "add_pytest_import has a known limitation with docstring-only files. "
+            "It places 'import pytest' BEFORE the docstring instead of after. "
+            "This is a line-based fallback issue when no imports are found."
+        ),
+        strict=True,
+    )
     def test_handles_module_docstring_without_imports(self, tmp_path: Path) -> None:
-        """Validate process_file handles docstring-only files correctly."""
+        """Validate process_file handles docstring-only files correctly.
+
+        INTENDED BEHAVIOR: The import and pytestmark should appear AFTER the
+        docstring, not before it. This is the correct Python style.
+
+        When add_pytest_import is fixed to use AST-based docstring detection,
+        this test should pass and the xfail marker can be removed.
+        """
         file_path = tmp_path / "test_docstring_case.py"
         file_path.write_text(
             _src('''
@@ -377,14 +449,24 @@ class TestProcessFile:
         assert "@pytest.mark.unit" in reason
 
         result = file_path.read_text(encoding="utf-8")
-        # Verify essential elements are present
-        assert "import pytest" in result
-        assert "pytestmark = pytest.mark.unit" in result
-        assert '"""Test module for X."""' in result
-        assert "def test_example():" in result
+        # INTENDED exact output: docstring first, then import, then marker
+        expected = _src('''
+            """Test module for X."""
+            import pytest
+
+
+            pytestmark = pytest.mark.unit
+
+            def test_example():
+                assert True
+            ''')
+        assert result == expected
 
     def test_preserves_future_import_order(self, tmp_path: Path) -> None:
-        """Validate __future__ imports remain first executable statement."""
+        """Validate __future__ imports remain first executable statement.
+
+        Uses exact-output assertion to catch any whitespace/placement drift.
+        """
         file_path = tmp_path / "test_future_imports.py"
         file_path.write_text(
             _src("""
@@ -402,12 +484,26 @@ class TestProcessFile:
         assert modified is True
 
         result = file_path.read_text(encoding="utf-8")
-        assert result.startswith("from __future__ import annotations\n")
-        assert "from pkg import x\nimport pytest\n" in result
-        assert "\npytestmark = pytest.mark.unit\n\n" in result
+        # Exact output validation
+        expected = _src("""
+            from __future__ import annotations
+
+            from pkg import x
+            import pytest
+
+
+            pytestmark = pytest.mark.unit
+
+            def test_example():
+                assert True
+            """)
+        assert result == expected
 
     def test_handles_mixed_import_groups_with_comments(self, tmp_path: Path) -> None:
-        """Validate process_file preserves import group structure with comments."""
+        """Validate process_file preserves import group structure with comments.
+
+        Uses exact-output assertion to catch any whitespace/placement drift.
+        """
         file_path = tmp_path / "test_import_groups.py"
         file_path.write_text(
             _src('''
@@ -432,13 +528,27 @@ class TestProcessFile:
         assert modified is True
 
         result = file_path.read_text(encoding="utf-8")
-        # Verify import pytest is after last import
-        assert "from app.tools import run\nimport pytest\n" in result
-        # Verify pytestmark is in place
-        assert "\npytestmark = pytest.mark.unit\n\n" in result
-        # Verify comments are preserved
-        assert "# third-party" in result
-        assert "# local imports" in result
+        # Exact output validation
+        expected = _src('''
+            """module doc"""
+
+            import os
+            import sys
+
+            # third-party
+            from PIL import Image
+
+            # local imports
+            from app.tools import run
+            import pytest
+
+
+            pytestmark = pytest.mark.unit
+
+            def test_example():
+                assert True
+            ''')
+        assert result == expected
 
     def test_skips_existing_pytestmark(self, tmp_path: Path) -> None:
         """Validate process_file skips files with existing pytestmark."""
@@ -487,7 +597,8 @@ class TestProcessFile:
     def test_handles_multiline_from_import(self, tmp_path: Path) -> None:
         """Validate full transform of multi-line import file.
 
-        This is the golden case for the PR #1242 bug fix.
+        This is the GOLDEN CASE for the PR #1242 bug fix.
+        Uses exact-output assertion - this is the primary regression test.
         """
         file_path = tmp_path / "test_multiline_import.py"
         file_path.write_text(
@@ -509,17 +620,21 @@ class TestProcessFile:
         assert "@pytest.mark.unit" in reason
 
         result = file_path.read_text(encoding="utf-8")
-        # Primary regression check: import pytest is after the closing paren, not inside
-        assert ")\nimport pytest\n" in result
-        # Verify no insertion inside the import block
-        assert "(\nimport pytest\n" not in result
-        assert "    A,\nimport pytest\n" not in result
-        # Verify pytestmark is present
-        assert "\npytestmark = pytest.mark.unit\n" in result
-        # Verify order: imports before marker
-        import_pos = result.index("import pytest")
-        marker_pos = result.index("pytestmark = pytest.mark.unit")
-        assert import_pos < marker_pos
+        # EXACT output validation - this is the primary regression test
+        expected = _src("""
+            from pkg.mod import (
+                A,
+                B,
+            )
+            import pytest
+
+
+            pytestmark = pytest.mark.unit
+
+            def test_example():
+                assert True
+            """)
+        assert result == expected
 
     def test_does_not_duplicate_existing_pytest_import(self, tmp_path: Path) -> None:
         """Validate process_file doesn't add duplicate import pytest."""
@@ -795,6 +910,38 @@ class TestHasExistingModuleMarkers:
             """)
         assert has_existing_module_markers(content) is False
 
+    def test_module_marker_regex_currently_matches_function_decorators(self) -> None:
+        """Document that MODULE_MARKER_PATTERN overmatches function decorators.
+
+        KNOWN LIMITATION: The regex r'^@pytest\\.mark\\.\\w+' matches ANY line
+        starting with @pytest.mark, including function/class decorators that are
+        indented with zero spaces. This means has_existing_module_markers()
+        returns True even when the marker is on a function, not at module level.
+
+        This causes process_file() to skip files with 'already has module-level
+        markers' when they actually only have function-level markers.
+
+        This test documents the current behavior. A future fix could:
+        1. Use AST to distinguish module-level decorators from function decorators
+        2. Or change the regex to require pytestmark = ... (stricter pattern)
+        """
+        # Content with @pytest.mark on a FUNCTION (not at module level)
+        content = _src("""
+            import pytest
+
+            @pytest.mark.slow
+            def test_example():
+                assert True
+            """)
+
+        # CURRENT BEHAVIOR: Returns True even though this is a function decorator
+        # This is an overmatch - the decorator is on a function, not at module level
+        result = has_existing_module_markers(content)
+        assert result is True, (
+            "Expected True due to MODULE_MARKER_PATTERN overmatch. "
+            "If this fails, the regex may have been fixed - update this test."
+        )
+
 
 class TestHasClassOrFunctionMarkers:
     """Tests for has_class_or_function_markers()."""
@@ -936,6 +1083,35 @@ class TestMain:
 
         assert result == 0
 
+    def test_dry_run_output_includes_prefix(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+        """Validate --dry-run output includes [DRY-RUN] prefix."""
+        file_path = tmp_path / "test_example.py"
+        file_path.write_text("def test_example(): pass", encoding="utf-8")
+
+        main(["--dry-run", str(tmp_path)])
+
+        captured = capsys.readouterr()
+        assert "[DRY-RUN] Modified:" in captured.out
+
+    def test_summary_output_includes_total_files(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+        """Validate summary output includes file count."""
+        file_path = tmp_path / "test_example.py"
+        file_path.write_text("def test_example(): pass", encoding="utf-8")
+
+        main(["--dry-run", str(tmp_path)])
+
+        captured = capsys.readouterr()
+        assert "Total files scanned:" in captured.out
+        assert "DRY-RUN SUMMARY" in captured.out
+
+    def test_empty_directory_summary(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+        """Validate summary reports zero files for empty directory."""
+        main(["--dry-run", str(tmp_path)])
+
+        captured = capsys.readouterr()
+        assert "Total files scanned: 0" in captured.out
+        assert "Files would be modified: 0" in captured.out
+
 
 # =============================================================================
 # End-to-End Scenario Tests
@@ -946,7 +1122,10 @@ class TestEndToEndScenarios:
     """End-to-end scenario tests covering full transformations."""
 
     def test_full_transform_with_future_and_docstring(self, tmp_path: Path) -> None:
-        """Validate complete transformation with __future__ import and docstring."""
+        """Validate complete transformation with __future__ import and docstring.
+
+        Uses exact-output assertion to catch any whitespace/placement drift.
+        """
         file_path = tmp_path / "test_complete.py"
         file_path.write_text(
             _src('''
@@ -967,24 +1146,23 @@ class TestEndToEndScenarios:
         assert modified is True
 
         result = file_path.read_text(encoding="utf-8")
-        # Verify all essential elements are present and in correct order
-        assert '"""A test module with all common elements."""' in result
-        assert "from __future__ import annotations" in result
-        assert "import os" in result
-        assert "from pathlib import Path" in result
-        assert "import pytest" in result
-        assert "pytestmark = pytest.mark.unit" in result
-        assert "def test_example():" in result
+        # Exact output validation
+        expected = _src('''
+            """A test module with all common elements."""
 
-        # Verify order: __future__ import should be first import
-        future_pos = result.index("from __future__ import annotations")
-        other_import_pos = result.index("import os")
-        assert future_pos < other_import_pos
+            from __future__ import annotations
 
-        # Verify order: imports come before pytestmark
-        pytest_import_pos = result.index("import pytest")
-        marker_pos = result.index("pytestmark = pytest.mark.unit")
-        assert pytest_import_pos < marker_pos
+            import os
+            from pathlib import Path
+            import pytest
+
+
+            pytestmark = pytest.mark.unit
+
+            def test_example():
+                assert True
+            ''')
+        assert result == expected
 
     def test_stress_directory_gets_both_markers(self, tmp_path: Path) -> None:
         """Validate stress directory files get both stress and slow markers."""
@@ -1007,12 +1185,25 @@ class TestEndToEndScenarios:
         result = file_path.read_text(encoding="utf-8")
         assert "pytestmark = [pytest.mark.stress, pytest.mark.slow]" in result
 
+    @pytest.mark.xfail(
+        reason=(
+            "The script has no explicit shebang/coding-cookie handling. "
+            "add_pytest_import does not detect shebang lines (#!/...) or "
+            "encoding declarations (# -*- coding: ...). The intended behavior "
+            "is: shebang stays line 1, coding cookie stays line 2, then imports."
+        ),
+        strict=True,
+    )
     def test_preserves_shebang_and_encoding(self, tmp_path: Path) -> None:
-        """Validate handling of files with shebang and encoding declarations.
+        """Validate that shebang and encoding declarations are preserved correctly.
 
-        Note: The current implementation may not perfectly preserve shebang
-        positioning in all cases. This test validates that the essential
-        elements are present after transformation.
+        INTENDED BEHAVIOR:
+        - Shebang (#!/usr/bin/env python3) must remain on line 1
+        - Encoding declaration must remain on line 2
+        - import pytest should be placed AFTER these special lines
+
+        When the script is fixed to handle shebang/encoding declarations,
+        this test should pass and the xfail marker can be removed.
         """
         file_path = tmp_path / "test_shebang.py"
         file_path.write_text(
@@ -1031,15 +1222,28 @@ class TestEndToEndScenarios:
         assert modified is True
 
         result = file_path.read_text(encoding="utf-8")
-        # Verify essential elements are present
-        assert "import pytest" in result
-        assert "pytestmark = pytest.mark.unit" in result
-        assert '"""Test module."""' in result
-        assert "def test_example():" in result
+        # INTENDED exact output: shebang line 1, encoding line 2, docstring, then imports
+        expected = _src('''
+            #!/usr/bin/env python3
+            # -*- coding: utf-8 -*-
+            """Test module."""
+            import pytest
 
-    def test_handles_complex_multiline_import(self, tmp_path: Path) -> None:
-        """Validate handling of complex multi-line imports with nested parens."""
-        file_path = tmp_path / "test_complex.py"
+
+            pytestmark = pytest.mark.unit
+
+            def test_example():
+                assert True
+            ''')
+        assert result == expected
+
+    def test_handles_large_multiline_import_block(self, tmp_path: Path) -> None:
+        """Validate handling of large multi-line import blocks.
+
+        Uses exact-output assertion to catch any whitespace/placement drift.
+        (Renamed from test_handles_complex_multiline_import for precision.)
+        """
+        file_path = tmp_path / "test_large_import.py"
         file_path.write_text(
             _src("""
                 from typing import (
@@ -1063,7 +1267,24 @@ class TestEndToEndScenarios:
         assert modified is True
 
         result = file_path.read_text(encoding="utf-8")
-        # Verify import pytest is after the closing paren
-        assert ")\nimport pytest\n" in result
-        # Verify marker is in place
-        assert "\npytestmark = pytest.mark.unit\n" in result
+        # Exact output validation
+        expected = _src("""
+            from typing import (
+                TYPE_CHECKING,
+                Any,
+                Callable,
+                Dict,
+                List,
+                Optional,
+                Tuple,
+                Union,
+            )
+            import pytest
+
+
+            pytestmark = pytest.mark.unit
+
+            def test_example():
+                assert True
+            """)
+        assert result == expected
