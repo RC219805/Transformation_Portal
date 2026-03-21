@@ -98,6 +98,41 @@ def atomic_write_json(path: Path, payload: dict[str, Any]) -> None:
     tmp.replace(path)
 
 
+def resolve_asset_key(asset_key: str | None, fallback_stem: str) -> str:
+    """Normalize and validate canonical asset key.
+
+    Validates that asset_key is a stem-like identifier, not a path-like string
+    that could enable directory traversal attacks.
+
+    Args:
+        asset_key: Provided asset key (may be None or blank)
+        fallback_stem: Fallback value to use if asset_key is None/blank
+
+    Returns:
+        Normalized, validated asset key string
+
+    Raises:
+        ValueError: If asset_key contains path separators, NUL bytes, or is "." or ".."
+    """
+    if asset_key is None:
+        return fallback_stem
+
+    normalized = str(asset_key).strip()
+    if not normalized:
+        return fallback_stem
+
+    if "\x00" in normalized:
+        raise ValueError("asset_key contains NUL byte")
+
+    if normalized in {".", ".."}:
+        raise ValueError(f"asset_key must be a stem-like identifier (no path separators), got: {asset_key!r}")
+
+    if "/" in normalized or "\\" in normalized:
+        raise ValueError(f"asset_key must be a stem-like identifier (no path separators), got: {asset_key!r}")
+
+    return normalized
+
+
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Lux Depth V2 Enhancement Script - Depth-Aware Perceptual Finishing",
@@ -124,6 +159,11 @@ def parse_arguments() -> argparse.Namespace:
         "--allow-8bit",
         action="store_true",
         help="Allow 16-bit → 8-bit downgrade (bypasses Quality Firewall)",
+    )
+    parser.add_argument(
+        "--asset-key",
+        default=None,
+        help="Canonical asset key for depth/report resolution; defaults to input_path.stem",
     )
 
     verbosity = parser.add_mutually_exclusive_group()
@@ -223,6 +263,7 @@ def run_v2_enhancement(
     upscaler: str,
     allow_8bit: bool = False,
     masks_file: Path | None = None,
+    asset_key: str | None = None,
 ) -> dict[str, Any]:
     """Run V2 depth-aware enhancement.
 
@@ -235,6 +276,8 @@ def run_v2_enhancement(
         upscaler: Upscaler backend (currently unused, reserved for future)
         allow_8bit: Allow 16-bit → 8-bit downgrade (Quality Firewall bypass)
         masks_file: Explicit path to material masks NPZ file (optional, Materials V3 integration)
+        asset_key: Canonical asset key for depth/report resolution (optional,
+            defaults to input_path.stem if not provided)
 
     Returns:
         Dict containing enhancement report
@@ -265,13 +308,16 @@ def run_v2_enhancement(
         raise
 
     # Find depth map if depth_dir provided
+    # Use canonical asset key for depth lookup to align with orchestrator naming
+    # Validate asset_key to prevent path traversal (important for direct CLI invocation)
+    lookup_key = resolve_asset_key(asset_key, input_path.stem)
     depth_map_path = None
     if depth_dir:
-        depth_map_path = find_depth_map(depth_dir, input_path.stem)
+        depth_map_path = find_depth_map(depth_dir, lookup_key)
         if depth_map_path:
             logger.info("Using depth map: %s", depth_map_path.name)
         else:
-            logger.warning("No depth map found in %s for %s", depth_dir, input_path.stem)
+            logger.warning("No depth map found in %s for %s", depth_dir, lookup_key)
 
     # Load material masks if masks_file provided (Materials V3 integration)
     material_masks = load_material_masks(masks_file) if masks_file else None
@@ -290,12 +336,38 @@ def run_v2_enhancement(
     # Add upscaler info to report (currently unused but maintained for compatibility)
     report["upscaler"] = upscaler
 
+    # Add identity metadata for provenance/debugging
+    report["asset_key"] = asset_key if asset_key else input_path.stem
+    report["input_stem"] = input_path.stem
+
+    # Enrich depth block with lookup_key (computed at this layer)
+    if "depth" in report:
+        report["depth"]["lookup_key"] = lookup_key
+        report["depth"]["depth_dir"] = str(depth_dir) if depth_dir else None
+    else:
+        # Ensure depth block exists even if enhance_image didn't create one
+        report["depth"] = {
+            "requested": depth_dir is not None,
+            "lookup_key": lookup_key,
+            "depth_dir": str(depth_dir) if depth_dir else None,
+            "resolved_path": str(depth_map_path) if depth_map_path else None,
+            "loaded": depth_map_path is not None,
+            "supplied_to_stage": depth_map_path is not None,
+            "consumed": report.get("depth_consumed", False),
+            "consumption_source": "unknown",
+            "stage_has_depth": None,
+        }
+
     return report
 
 
 def main() -> int:
     args = parse_arguments()
     configure_logging(args.verbose, args.quiet, args.log_file)
+
+    # Resolve canonical asset key for consistent depth/report resolution
+    # Validate asset_key to prevent path traversal (important for direct CLI invocation)
+    resolved_asset_key = resolve_asset_key(args.asset_key, Path(args.input_path).stem)
 
     # Always create output dir early so we can write an error report if needed
     try:
@@ -306,8 +378,10 @@ def main() -> int:
 
     report_path = None
     if out_dir is not None:
-        # Keep your naming convention for compatibility
-        report_path = out_dir / f"{Path(args.input_path).stem}_report.json"
+        # Use canonical asset key for report naming to align with orchestrator
+        # SECURITY: safe_join_under prevents traversal attacks when asset_key
+        # is provided via CLI, even though resolve_asset_key already validates
+        report_path = safe_join_under(out_dir, f"{resolved_asset_key}_report.json")
 
     try:
         report = run_v2_enhancement(
@@ -319,6 +393,7 @@ def main() -> int:
             upscaler=args.upscaler,
             allow_8bit=args.allow_8bit,
             masks_file=args.masks_file,  # Pass through Materials V3 explicit mask file
+            asset_key=resolved_asset_key,
         )
 
         if report_path:
@@ -337,6 +412,8 @@ def main() -> int:
         logger.error("V2 enhancement failed: %s", e)
 
         if report_path:
+            # Use canonical asset key for depth lookup consistency
+            lookup_key = resolved_asset_key
             error_report = {
                 "status": "error",
                 "implementation": "v2_enhance",
@@ -349,6 +426,21 @@ def main() -> int:
                 "timestamp": time.time(),
                 "error_type": type(e).__name__,
                 "error_message": str(e),
+                # Include identity metadata for provenance/debugging
+                "asset_key": resolved_asset_key,
+                "input_stem": Path(args.input_path).stem,
+                # Include structured depth block for observability
+                "depth": {
+                    "requested": args.depth_dir is not None,
+                    "lookup_key": lookup_key,
+                    "depth_dir": str(_resolve_path(args.depth_dir)) if args.depth_dir else None,
+                    "resolved_path": None,
+                    "loaded": False,
+                    "supplied_to_stage": False,
+                    "consumed": False,
+                    "consumption_source": "error_before_processing",
+                    "stage_has_depth": None,
+                },
             }
             try:
                 atomic_write_json(report_path, error_report)
@@ -362,6 +454,8 @@ def main() -> int:
         logger.exception("Enhancement failed: %s", e)
 
         if report_path:
+            # Use canonical asset key for depth lookup consistency
+            lookup_key = resolved_asset_key
             error_report = {
                 "status": "error",
                 "implementation": "placeholder",
@@ -374,6 +468,21 @@ def main() -> int:
                 "timestamp": time.time(),
                 "error_type": type(e).__name__,
                 "error_message": str(e),
+                # Include identity metadata for provenance/debugging
+                "asset_key": resolved_asset_key,
+                "input_stem": Path(args.input_path).stem,
+                # Include structured depth block for observability
+                "depth": {
+                    "requested": args.depth_dir is not None,
+                    "lookup_key": lookup_key,
+                    "depth_dir": str(_resolve_path(args.depth_dir)) if args.depth_dir else None,
+                    "resolved_path": None,
+                    "loaded": False,
+                    "supplied_to_stage": False,
+                    "consumed": False,
+                    "consumption_source": "error_before_processing",
+                    "stage_has_depth": None,
+                },
             }
             try:
                 atomic_write_json(report_path, error_report)

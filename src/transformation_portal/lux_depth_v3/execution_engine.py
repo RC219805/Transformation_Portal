@@ -408,13 +408,15 @@ def run_v2_stage(
             log_file=v2_log_path,
             timeout=config.v2_timeout,
             masks_file=masks_path,
+            # Pass canonical asset key for depth/report identity alignment
+            asset_key=output_key.name,
         )
         v2_runtime_s = v2_result.get("runtime_s", 0.0)
 
         from .v2_runner import find_v2_report
 
         report_path_value = v2_result.get("report_path")
-        v2_report_path: Optional[Path]
+        v2_report_path: Optional[Path] = None
         if isinstance(report_path_value, str) and report_path_value:
             v2_report_path = Path(report_path_value)
         else:

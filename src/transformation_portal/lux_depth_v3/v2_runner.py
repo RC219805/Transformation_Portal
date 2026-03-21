@@ -92,6 +92,7 @@ class V2Runner:
         log_file: Optional[Path] = None,
         timeout: Optional[float] = None,
         masks_file: Optional[Path] = None,
+        asset_key: Optional[str] = None,
         **kwargs: Any,
     ) -> Dict[str, Any]:
         """Run V2 depth-aware enhancement pipeline.
@@ -106,6 +107,9 @@ class V2Runner:
             log_file: Log file path (optional)
             timeout: Subprocess timeout in seconds (optional)
             masks_file: Explicit path to material masks NPZ file (optional, Materials V3 integration)
+            asset_key: Canonical asset key for depth/report resolution (optional,
+                defaults to input_path.stem if not provided). When provided, aligns
+                depth lookup and report naming with orchestrator's canonical identity.
             **kwargs: Additional arguments (reserved)
 
         Returns:
@@ -185,6 +189,17 @@ class V2Runner:
         # Ensure output directory exists
         validated_output.mkdir(parents=True, exist_ok=True)
 
+        # Validate asset_key if provided (must be stem-like, not path-like)
+        # Intentionally check for both / and \ on all platforms to prevent
+        # cross-platform path injection (e.g., Windows-style path on Unix)
+        validated_asset_key = None
+        if asset_key is not None:
+            validated_asset_key = str(asset_key).strip()
+            if not validated_asset_key:
+                validated_asset_key = None
+            elif "/" in validated_asset_key or "\\" in validated_asset_key:
+                raise ValueError(f"asset_key must be a stem-like identifier (no path separators), got: {asset_key!r}")
+
         # Build command using validated paths
         cmd = [sys.executable, str(self.script_path), str(validated_input)]
 
@@ -208,6 +223,11 @@ class V2Runner:
         # Uses explicit NPZ path to eliminate filename coupling
         if validated_masks_file is not None:
             cmd.extend(["--masks-file", str(validated_masks_file)])
+
+        # Add canonical asset key if provided (depth/report identity alignment)
+        # This aligns V2 depth lookup and report naming with orchestrator's canonical identity
+        if validated_asset_key is not None:
+            cmd.extend(["--asset-key", validated_asset_key])
 
         logger.info(f"Running V2 enhancement: {' '.join(cmd)}")
 
@@ -259,7 +279,9 @@ class V2Runner:
             ) from e
 
         # Try to find and merge report JSON
-        report_path = find_v2_report(validated_output, validated_input.stem)
+        # Use validated_asset_key if provided for consistent report discovery with orchestrator
+        report_lookup_key = validated_asset_key or validated_input.stem
+        report_path = find_v2_report(validated_output, report_lookup_key)
 
         if report_path:
             logger.info(f"Found V2 report: {report_path}")
@@ -273,7 +295,7 @@ class V2Runner:
                 logger.warning(f"Failed to load report JSON: {e}")
                 # Fall through to stdout/stderr return
         else:
-            logger.info(f"No V2 report found for {validated_input.stem} in {validated_output}")
+            logger.info(f"No V2 report found for {report_lookup_key} in {validated_output}")
 
         # Return basic success info with process output
         return {

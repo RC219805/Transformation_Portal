@@ -151,6 +151,99 @@ class TestV2RunnerExecution:
         assert "--output-dir" in cmd
         assert result["status"] == "success"
 
+    @patch("transformation_portal.lux_depth_v3.v2_runner.subprocess.run")
+    def test_asset_key_included_when_provided(self, mock_subprocess, tmp_path):
+        """Test that asset_key is included in command when provided."""
+        mock_subprocess.return_value = Mock(returncode=0, stdout="", stderr="")
+
+        runner = V2Runner()
+        runner.script_path = Path("/fake/enhance_image.py")
+
+        with patch.object(Path, "exists", return_value=True):
+            result = runner.run(
+                input_path=tmp_path / "input.jpg",
+                depth_dir=None,
+                output_dir=tmp_path / "output",
+                asset_key="input_jpg_a1b2c3d4",  # Canonical hashed key
+            )
+
+        cmd = mock_subprocess.call_args[0][0]
+
+        # Verify asset_key argument present with correct value
+        assert "--asset-key" in cmd
+        asset_key_index = cmd.index("--asset-key")
+        assert cmd[asset_key_index + 1] == "input_jpg_a1b2c3d4"
+        assert result["status"] == "success"
+
+    @patch("transformation_portal.lux_depth_v3.v2_runner.subprocess.run")
+    def test_asset_key_omitted_when_none(self, mock_subprocess, tmp_path):
+        """Test that asset_key is omitted when not provided."""
+        mock_subprocess.return_value = Mock(returncode=0, stdout="", stderr="")
+
+        runner = V2Runner()
+        runner.script_path = Path("/fake/enhance_image.py")
+
+        with patch.object(Path, "exists", return_value=True):
+            result = runner.run(
+                input_path=tmp_path / "input.jpg",
+                depth_dir=None,
+                output_dir=tmp_path / "output",
+                asset_key=None,  # Not provided
+            )
+
+        cmd = mock_subprocess.call_args[0][0]
+
+        # Verify asset_key argument is NOT present
+        assert "--asset-key" not in cmd
+        assert result["status"] == "success"
+
+    def test_asset_key_rejects_path_like_values(self, tmp_path):
+        """Test that asset_key with path separators raises ValueError."""
+        runner = V2Runner()
+        runner.script_path = Path("/fake/enhance_image.py")
+
+        # Test forward slash
+        with patch.object(Path, "exists", return_value=True):
+            with pytest.raises(ValueError, match="stem-like identifier"):
+                runner.run(
+                    input_path=tmp_path / "input.jpg",
+                    depth_dir=None,
+                    output_dir=tmp_path / "output",
+                    asset_key="../bad_traversal",
+                )
+
+        # Test backslash
+        with patch.object(Path, "exists", return_value=True):
+            with pytest.raises(ValueError, match="stem-like identifier"):
+                runner.run(
+                    input_path=tmp_path / "input.jpg",
+                    depth_dir=None,
+                    output_dir=tmp_path / "output",
+                    asset_key="subdir\\bad_traversal",
+                )
+
+    @patch("transformation_portal.lux_depth_v3.v2_runner.subprocess.run")
+    def test_asset_key_empty_string_treated_as_none(self, mock_subprocess, tmp_path):
+        """Test that empty or whitespace-only asset_key is treated as None."""
+        mock_subprocess.return_value = Mock(returncode=0, stdout="", stderr="")
+
+        runner = V2Runner()
+        runner.script_path = Path("/fake/enhance_image.py")
+
+        with patch.object(Path, "exists", return_value=True):
+            result = runner.run(
+                input_path=tmp_path / "input.jpg",
+                depth_dir=None,
+                output_dir=tmp_path / "output",
+                asset_key="   ",  # Whitespace-only
+            )
+
+        cmd = mock_subprocess.call_args[0][0]
+
+        # Whitespace-only asset_key should be treated as None
+        assert "--asset-key" not in cmd
+        assert result["status"] == "success"
+
     def test_raises_filenotfounderror_if_script_missing(self, tmp_path):
         """Test that run() raises clear error if script doesn't exist."""
         runner = V2Runner()
@@ -238,6 +331,138 @@ class TestReportMerging:
         assert "runtime_s" in result
         assert "status" in result
         assert "report_path" in result
+
+    @patch("transformation_portal.lux_depth_v3.v2_runner.subprocess.run")
+    def test_merges_report_using_asset_key_when_provided(self, mock_subprocess, tmp_path):
+        """Test that report discovery uses asset_key when provided.
+
+        This verifies the fix for stem-resolution drift where depth artifacts
+        are named with canonical hashed keys (e.g., input_jpg_a1b2c3d4) but
+        reports were being searched using raw input stem.
+        """
+        mock_subprocess.return_value = Mock(returncode=0, stdout="", stderr="")
+
+        # Create mock report JSON named with canonical hashed key
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        # Note: report is named with the HASHED asset key, not raw input stem
+        report_data = {"preset": "custom", "enhancement_strength": 0.9, "canonical": True}
+        report_path = output_dir / "input_jpg_a1b2c3d4_report.json"
+        with open(report_path, "w") as f:
+            json.dump(report_data, f)
+
+        runner = V2Runner()
+        runner.script_path = Path("/fake/enhance_image.py")
+
+        with patch.object(Path, "exists", return_value=True):
+            result = runner.run(
+                input_path=tmp_path / "input.jpg",
+                depth_dir=None,
+                output_dir=output_dir,
+                asset_key="input_jpg_a1b2c3d4",  # Canonical hashed key
+            )
+
+        # Verify report found using asset_key (not raw input.stem)
+        assert result["preset"] == "custom"
+        assert result["enhancement_strength"] == 0.9
+        assert result["canonical"] is True
+        assert "report_path" in result
+        assert result["report_path"] is not None
+
+    @patch("transformation_portal.lux_depth_v3.v2_runner.subprocess.run")
+    def test_canonical_key_depth_report_alignment_regression(self, mock_subprocess, tmp_path):
+        """Regression test: canonical key aligns depth artifacts with report naming.
+
+        This test validates the fix for stem-resolution drift where:
+        - input stem: 750Picacho_Pool
+        - canonical output key: 750Picacho_Pool_png_e33ad12e
+        - depth sidecar: 750Picacho_Pool_png_e33ad12e_depth.png
+        - V2 report: 750Picacho_Pool_png_e33ad12e_report.json
+
+        Prior to the fix, V2 enhancement searched for depth maps using the raw
+        input stem ("750Picacho_Pool") but depth artifacts were named with the
+        canonical hashed key ("750Picacho_Pool_png_e33ad12e"), causing silent
+        depth lookup failures.
+
+        Reference: PR #1241 - stem-resolution drift fix
+        """
+        mock_subprocess.return_value = Mock(returncode=0, stdout="", stderr="")
+
+        # Create output dir structure simulating orchestrator layout
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        # Simulate exactly the real-world scenario
+        input_stem = "750Picacho_Pool"
+        canonical_key = "750Picacho_Pool_png_e33ad12e"
+
+        # Create depth sidecar named with canonical key (as orchestrator does)
+        # This simulates: depth_dir/750Picacho_Pool_png_e33ad12e_depth.png
+        depth_dir = tmp_path / "depth"
+        depth_dir.mkdir()
+        depth_sidecar = depth_dir / f"{canonical_key}_depth.png"
+        depth_sidecar.write_bytes(b"fake depth data")
+
+        # Create report named with canonical key (as V2 should write)
+        report_data = {
+            "status": "success",
+            "asset_key": canonical_key,
+            "input_stem": input_stem,
+            "depth": {
+                "requested": True,
+                "lookup_key": canonical_key,
+                "depth_dir": str(depth_dir),
+                "resolved_path": str(depth_sidecar),
+                "loaded": True,
+                "consumed": True,
+                "consumption_source": "stage_metadata",
+            },
+        }
+        report_path = output_dir / f"{canonical_key}_report.json"
+        with open(report_path, "w") as f:
+            json.dump(report_data, f)
+
+        runner = V2Runner()
+        runner.script_path = Path("/fake/enhance_image.py")
+
+        with patch.object(Path, "exists", return_value=True):
+            result = runner.run(
+                input_path=tmp_path / f"{input_stem}.png",  # Raw input name
+                depth_dir=depth_dir,
+                output_dir=output_dir,
+                asset_key=canonical_key,  # Canonical hashed key (from orchestrator)
+            )
+
+        # CRITICAL ASSERTIONS: Validate the fix
+        # 1. Report was found using canonical key (not raw input stem)
+        assert (
+            result["report_path"] is not None
+        ), f"Report not found! This indicates stem-resolution drift. Expected report at: {report_path}"
+
+        # 2. Report identity metadata is correct
+        assert (
+            result["asset_key"] == canonical_key
+        ), f"asset_key mismatch: expected {canonical_key}, got {result.get('asset_key')}"
+        assert (
+            result["input_stem"] == input_stem
+        ), f"input_stem mismatch: expected {input_stem}, got {result.get('input_stem')}"
+
+        # 3. Depth block has correct lookup_key (canonical, not raw stem)
+        depth_block = result.get("depth", {})
+        assert (
+            depth_block.get("lookup_key") == canonical_key
+        ), f"depth.lookup_key mismatch: expected {canonical_key}, got {depth_block.get('lookup_key')}"
+
+        # 4. --asset-key was passed to subprocess (verify command structure)
+        cmd = mock_subprocess.call_args[0][0]
+        assert "--asset-key" in cmd
+        asset_key_index = cmd.index("--asset-key")
+        assert cmd[asset_key_index + 1] == canonical_key
+
+        # 5. Depth was successfully consumed (verifies end-to-end fix)
+        assert depth_block.get("consumed") is True
+        assert depth_block.get("resolved_path") == str(depth_sidecar)
 
     @patch("transformation_portal.lux_depth_v3.v2_runner.subprocess.run")
     def test_returns_stdout_stderr_when_no_report(self, mock_subprocess, tmp_path):
