@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 import time
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, Tuple
 
 import cv2
 import numpy as np

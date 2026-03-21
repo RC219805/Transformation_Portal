@@ -14,11 +14,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Optional, Tuple
+from typing import Any, Optional
 
 import numpy as np
 import torch
-import torch.nn.functional as F
 
 
 @dataclass(frozen=True)
