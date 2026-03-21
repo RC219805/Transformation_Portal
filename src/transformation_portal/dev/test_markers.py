@@ -249,12 +249,10 @@ def add_pytest_import(content: str) -> str:
         # Record module docstring end line, if present.
         if module.body:
             first_node = module.body[0]
-            if (
-                isinstance(first_node, ast.Expr)
-                and isinstance(getattr(first_node, "value", None), ast.Constant)
-                and isinstance(first_node.value.value, str)
-            ):
-                docstring_end_line = getattr(first_node, "end_lineno", first_node.lineno)
+            if isinstance(first_node, ast.Expr):
+                expr_value = first_node.value
+                if isinstance(expr_value, ast.Constant) and isinstance(expr_value.value, str):
+                    docstring_end_line = getattr(first_node, "end_lineno", first_node.lineno)
 
         # Find the last top-level import or from-import.
         for node in module.body:
@@ -329,12 +327,10 @@ def add_pytestmark(content: str, markers: list[str]) -> str:
         # Record module docstring end line, if present.
         if module.body:
             first_node = module.body[0]
-            if (
-                isinstance(first_node, ast.Expr)
-                and isinstance(getattr(first_node, "value", None), ast.Constant)
-                and isinstance(first_node.value.value, str)
-            ):
-                docstring_end_line = getattr(first_node, "end_lineno", first_node.lineno)
+            if isinstance(first_node, ast.Expr):
+                expr_value = first_node.value
+                if isinstance(expr_value, ast.Constant) and isinstance(expr_value.value, str):
+                    docstring_end_line = getattr(first_node, "end_lineno", first_node.lineno)
 
         # Find the last top-level import or from-import.
         for node in module.body:
