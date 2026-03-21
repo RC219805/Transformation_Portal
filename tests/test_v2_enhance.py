@@ -309,6 +309,102 @@ class TestEnhanceImage:
             assert report["depth_map"] == str(depth_path)
             assert report["depth_consumed"] is False
 
+            # Verify structured depth block reflects stage override
+            assert "depth" in report
+            assert report["depth"]["loaded"] is True
+            assert report["depth"]["supplied_to_stage"] is True
+            assert report["depth"]["consumed"] is False
+            assert report["depth"]["consumption_source"] == "stage_metadata"
+            assert report["depth"]["stage_has_depth"] is False
+
+    def test_enhance_image_depth_block_with_real_depth(self, tmp_path):
+        """Test structured depth block when depth is loaded and consumed."""
+        input_path = tmp_path / "input.png"
+        test_image = np.random.randint(0, 256, (100, 100, 3), dtype=np.uint8)
+        Image.fromarray(test_image, mode="RGB").save(input_path)
+
+        depth_path = tmp_path / "depth.png"
+        depth_data = np.random.randint(0, 256, (100, 100), dtype=np.uint8)
+        Image.fromarray(depth_data, mode="L").save(depth_path)
+
+        output_path = tmp_path / "output.png"
+
+        with patch("transformation_portal.lux_depth_v3.v2_enhance.EnhancementStage") as mock_stage_cls:
+            mock_stage = Mock()
+            mock_stage_cls.return_value = mock_stage
+
+            mock_result = Mock()
+            mock_result.status = StageStatus.COMPLETED
+            mock_result.artifacts = {"enhanced_image": test_image}
+            mock_result.metadata = {}  # No explicit has_depth
+            mock_stage.compute.return_value = mock_result
+
+            report = enhance_image(input_path, output_path, depth_map_path=depth_path)
+
+            # Verify structured depth block
+            assert "depth" in report
+            assert report["depth"]["requested"] is True
+            assert report["depth"]["resolved_path"] == str(depth_path)
+            assert report["depth"]["loaded"] is True
+            assert report["depth"]["supplied_to_stage"] is True
+            assert report["depth"]["consumed"] is True
+            assert report["depth"]["consumption_source"] == "fallback_input_presence"
+            assert report["depth"]["stage_has_depth"] is None
+
+    def test_enhance_image_depth_block_no_depth_requested(self, tmp_path):
+        """Test structured depth block when no depth is requested."""
+        input_path = tmp_path / "input.png"
+        test_image = np.random.randint(0, 256, (100, 100, 3), dtype=np.uint8)
+        Image.fromarray(test_image, mode="RGB").save(input_path)
+
+        output_path = tmp_path / "output.png"
+
+        with patch("transformation_portal.lux_depth_v3.v2_enhance.EnhancementStage") as mock_stage_cls:
+            mock_stage = Mock()
+            mock_stage_cls.return_value = mock_stage
+
+            mock_result = Mock()
+            mock_result.status = StageStatus.COMPLETED
+            mock_result.artifacts = {"enhanced_image": test_image}
+            mock_result.metadata = {}
+            mock_stage.compute.return_value = mock_result
+
+            report = enhance_image(input_path, output_path, depth_map_path=None)
+
+            # Verify structured depth block for no depth request
+            assert "depth" in report
+            assert report["depth"]["requested"] is False
+            assert report["depth"]["resolved_path"] is None
+            assert report["depth"]["loaded"] is False
+            assert report["depth"]["supplied_to_stage"] is False
+            assert report["depth"]["consumed"] is False
+            assert report["depth"]["consumption_source"] == "not_requested"
+            assert report["depth"]["stage_has_depth"] is None
+
+    def test_enhance_image_depth_block_passthrough(self, tmp_path):
+        """Test structured depth block in passthrough mode."""
+        input_path = tmp_path / "input.png"
+        test_image = np.random.randint(0, 256, (100, 100, 3), dtype=np.uint8)
+        Image.fromarray(test_image, mode="RGB").save(input_path)
+
+        depth_path = tmp_path / "depth.png"
+        depth_data = np.random.randint(0, 256, (100, 100), dtype=np.uint8)
+        Image.fromarray(depth_data, mode="L").save(depth_path)
+
+        output_path = tmp_path / "output.png"
+
+        # Use "none" preset for passthrough
+        config = V2EnhancementConfig(preset="none")
+        report = enhance_image(input_path, output_path, depth_map_path=depth_path, config=config)
+
+        assert report["status"] == "passthrough"
+        assert "depth" in report
+        assert report["depth"]["requested"] is True
+        assert report["depth"]["loaded"] is False  # Not loaded in passthrough
+        assert report["depth"]["supplied_to_stage"] is False
+        assert report["depth"]["consumed"] is False
+        assert report["depth"]["consumption_source"] == "passthrough"
+
     def test_enhance_image_with_custom_config(self, tmp_path):
         """Test enhancement with custom configuration."""
         input_path = tmp_path / "input.png"

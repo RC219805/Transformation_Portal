@@ -447,6 +447,16 @@ def enhance_image(
             "runtime_s": time.perf_counter() - start_time,
             "timestamp": time.time(),
             "message": "Preset 'none' - enhancement skipped",
+            # Structured depth resolution semantics
+            "depth": {
+                "requested": depth_map_path is not None,
+                "resolved_path": str(depth_map_path) if depth_map_path else None,
+                "loaded": False,
+                "supplied_to_stage": False,
+                "consumed": False,
+                "consumption_source": "passthrough",
+                "stage_has_depth": None,
+            },
         }
 
     try:
@@ -665,10 +675,18 @@ def enhance_image(
         runtime_s = time.perf_counter() - start_time
 
         stage_metadata = result.metadata if isinstance(result.metadata, dict) else {}
-        if "has_depth" in stage_metadata and stage_metadata["has_depth"] is not None:
-            depth_consumed = bool(stage_metadata["has_depth"])
+        stage_has_depth = stage_metadata.get("has_depth") if isinstance(stage_metadata, dict) else None
+
+        # Determine depth consumption semantics
+        if stage_has_depth is not None:
+            depth_consumed = bool(stage_has_depth)
+            consumption_source = "stage_metadata"
+        elif depth_map is not None:
+            depth_consumed = True
+            consumption_source = "fallback_input_presence"
         else:
-            depth_consumed = depth_map is not None
+            depth_consumed = False
+            consumption_source = "not_found" if depth_map_path else "not_requested"
 
         # Build metadata report with bit-depth information
         return {
@@ -693,6 +711,16 @@ def enhance_image(
                 "quality_firewall_active": input_bits == 16 and not allow_8bit_output,
                 "bit_depth_preserved": input_bits == target_bits,
                 "downgrade_allowed": allow_8bit_output,
+            },
+            # STRUCTURED DEPTH RESOLUTION SEMANTICS
+            "depth": {
+                "requested": depth_map_path is not None,
+                "resolved_path": str(depth_map_path) if depth_map_path else None,
+                "loaded": depth_map is not None,
+                "supplied_to_stage": depth_map is not None,
+                "consumed": depth_consumed,
+                "consumption_source": consumption_source,
+                "stage_has_depth": stage_has_depth,
             },
         }
 

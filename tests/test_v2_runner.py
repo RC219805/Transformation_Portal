@@ -197,6 +197,53 @@ class TestV2RunnerExecution:
         assert "--asset-key" not in cmd
         assert result["status"] == "success"
 
+    def test_asset_key_rejects_path_like_values(self, tmp_path):
+        """Test that asset_key with path separators raises ValueError."""
+        runner = V2Runner()
+        runner.script_path = Path("/fake/enhance_image.py")
+
+        # Test forward slash
+        with patch.object(Path, "exists", return_value=True):
+            with pytest.raises(ValueError, match="stem-like identifier"):
+                runner.run(
+                    input_path=tmp_path / "input.jpg",
+                    depth_dir=None,
+                    output_dir=tmp_path / "output",
+                    asset_key="../bad_traversal",
+                )
+
+        # Test backslash
+        with patch.object(Path, "exists", return_value=True):
+            with pytest.raises(ValueError, match="stem-like identifier"):
+                runner.run(
+                    input_path=tmp_path / "input.jpg",
+                    depth_dir=None,
+                    output_dir=tmp_path / "output",
+                    asset_key="subdir\\bad_traversal",
+                )
+
+    @patch("transformation_portal.lux_depth_v3.v2_runner.subprocess.run")
+    def test_asset_key_empty_string_treated_as_none(self, mock_subprocess, tmp_path):
+        """Test that empty or whitespace-only asset_key is treated as None."""
+        mock_subprocess.return_value = Mock(returncode=0, stdout="", stderr="")
+
+        runner = V2Runner()
+        runner.script_path = Path("/fake/enhance_image.py")
+
+        with patch.object(Path, "exists", return_value=True):
+            result = runner.run(
+                input_path=tmp_path / "input.jpg",
+                depth_dir=None,
+                output_dir=tmp_path / "output",
+                asset_key="   ",  # Whitespace-only
+            )
+
+        cmd = mock_subprocess.call_args[0][0]
+
+        # Whitespace-only asset_key should be treated as None
+        assert "--asset-key" not in cmd
+        assert result["status"] == "success"
+
     def test_raises_filenotfounderror_if_script_missing(self, tmp_path):
         """Test that run() raises clear error if script doesn't exist."""
         runner = V2Runner()

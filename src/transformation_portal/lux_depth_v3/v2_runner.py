@@ -189,6 +189,18 @@ class V2Runner:
         # Ensure output directory exists
         validated_output.mkdir(parents=True, exist_ok=True)
 
+        # Validate asset_key if provided (must be stem-like, not path-like)
+        validated_asset_key = None
+        if asset_key is not None:
+            validated_asset_key = str(asset_key).strip()
+            if not validated_asset_key:
+                validated_asset_key = None
+            elif "/" in validated_asset_key or "\\" in validated_asset_key:
+                raise ValueError(
+                    f"asset_key must be a stem-like identifier (no path separators), "
+                    f"got: {asset_key!r}"
+                )
+
         # Build command using validated paths
         cmd = [sys.executable, str(self.script_path), str(validated_input)]
 
@@ -215,8 +227,8 @@ class V2Runner:
 
         # Add canonical asset key if provided (depth/report identity alignment)
         # This aligns V2 depth lookup and report naming with orchestrator's canonical identity
-        if asset_key is not None:
-            cmd.extend(["--asset-key", asset_key])
+        if validated_asset_key is not None:
+            cmd.extend(["--asset-key", validated_asset_key])
 
         logger.info(f"Running V2 enhancement: {' '.join(cmd)}")
 
@@ -256,8 +268,8 @@ class V2Runner:
             ) from e
 
         # Try to find and merge report JSON
-        # Use asset_key if provided for consistent report discovery with orchestrator
-        report_lookup_key = asset_key or validated_input.stem
+        # Use validated_asset_key if provided for consistent report discovery with orchestrator
+        report_lookup_key = validated_asset_key or validated_input.stem
         report_path = find_v2_report(validated_output, report_lookup_key)
 
         if report_path:

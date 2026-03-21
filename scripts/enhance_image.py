@@ -301,6 +301,28 @@ def run_v2_enhancement(
     # Add upscaler info to report (currently unused but maintained for compatibility)
     report["upscaler"] = upscaler
 
+    # Add identity metadata for provenance/debugging
+    report["asset_key"] = asset_key if asset_key else input_path.stem
+    report["input_stem"] = input_path.stem
+
+    # Enrich depth block with lookup_key (computed at this layer)
+    if "depth" in report:
+        report["depth"]["lookup_key"] = lookup_key
+        report["depth"]["depth_dir"] = str(depth_dir) if depth_dir else None
+    else:
+        # Ensure depth block exists even if enhance_image didn't create one
+        report["depth"] = {
+            "requested": depth_dir is not None,
+            "lookup_key": lookup_key,
+            "depth_dir": str(depth_dir) if depth_dir else None,
+            "resolved_path": str(depth_map_path) if depth_map_path else None,
+            "loaded": depth_map_path is not None,
+            "supplied_to_stage": depth_map_path is not None,
+            "consumed": report.get("depth_consumed", False),
+            "consumption_source": "unknown",
+            "stage_has_depth": None,
+        }
+
     return report
 
 
