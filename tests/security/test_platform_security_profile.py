@@ -14,12 +14,12 @@ from unittest.mock import patch
 
 import pytest
 
-pytestmark = pytest.mark.security
-
 from transformation_portal.core.platform_matrix import (
     get_platform_fingerprint,
     get_security_profile,
 )
+
+pytestmark = pytest.mark.security
 
 
 def _torch_available() -> bool:

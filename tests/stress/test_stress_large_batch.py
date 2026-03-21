@@ -13,11 +13,11 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-
-pytestmark = [pytest.mark.stress, pytest.mark.slow]
 from typer.testing import CliRunner
 
 from transformation_portal.lux_depth_v3.pbr_cli import app
+
+pytestmark = [pytest.mark.stress, pytest.mark.slow]
 
 
 @pytest.fixture

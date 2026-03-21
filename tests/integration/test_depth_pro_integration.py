@@ -12,9 +12,9 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from PIL import Image
 
 pytestmark = pytest.mark.integration
-from PIL import Image
 
 # Skip if checkpoint not available
 CHECKPOINT_PATH = Path("checkpoints/depth_pro.pt")

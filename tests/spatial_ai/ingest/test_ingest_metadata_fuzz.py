@@ -7,13 +7,13 @@ from typing import Any
 
 import numpy as np
 import pytest
-
-pytestmark = pytest.mark.unit
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from tests.spatial_ai.ingest.fuzz_corpus_loader import load_corpus_cases
 from transformation_portal.spatial_ai.ingest import ColorSpaceError, LinearDecoder
+
+pytestmark = pytest.mark.unit
 
 # ---------------------------------------------------------------------------
 # Allowed exception contracts

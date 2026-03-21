@@ -119,12 +119,25 @@ def add_pytest_import(content: str) -> str:
     """Add 'import pytest' after other imports."""
     lines = content.split("\n")
 
-    # Find last import line
+    # Find last import line (handling multi-line imports)
     last_import_idx = -1
+    in_multiline_import = False
+
     for i, line in enumerate(lines):
         stripped = line.strip()
+
+        # Track multi-line imports (parentheses)
+        if in_multiline_import:
+            if ")" in stripped:
+                in_multiline_import = False
+                last_import_idx = i
+            continue
+
         if stripped.startswith("import ") or stripped.startswith("from "):
             last_import_idx = i
+            # Check if this starts a multi-line import
+            if "(" in stripped and ")" not in stripped:
+                in_multiline_import = True
 
     if last_import_idx >= 0:
         # Insert after last import
@@ -159,6 +172,7 @@ def add_pytestmark(content: str, markers: list[str]) -> str:
     in_docstring = False
     docstring_quote = None
     past_imports = False
+    in_multiline_import = False
 
     for i, line in enumerate(lines):
         stripped = line.strip()
@@ -179,10 +193,20 @@ def add_pytestmark(content: str, markers: list[str]) -> str:
                 insert_idx = i + 1
             continue
 
+        # Track multi-line imports
+        if in_multiline_import:
+            if ")" in stripped:
+                in_multiline_import = False
+                insert_idx = i + 1
+            continue
+
         # Handle imports and from imports
         if stripped.startswith("import ") or stripped.startswith("from "):
             insert_idx = i + 1
             past_imports = True
+            # Check if this starts a multi-line import
+            if "(" in stripped and ")" not in stripped:
+                in_multiline_import = True
             continue
 
         # Handle __future__ imports specially (must come first)
