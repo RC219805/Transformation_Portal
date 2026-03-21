@@ -2,8 +2,8 @@
 
 **Transformation Portal - Version Migration Guide**
 
-Version: 1.0.0
-Last Updated: 2025-11-08
+Version: 2.0.0
+Last Updated: 2026-03-21
 
 ---
 
@@ -15,17 +15,62 @@ This guide helps you migrate your code between major versions of the Transformat
 
 | Version | Release Date | Support Status | End of Support |
 |---------|--------------|----------------|----------------|
-| v0.1.x  | 2025-01-01   | ✅ Active      | TBD            |
-| v1.0.x  | TBD          | 🔄 Planned     | -              |
-| v2.0.x  | TBD          | 📋 Future      | -              |
+| v0.1.x  | 2025-01-01   | 🔴 Deprecated  | 2026-06-30     |
+| v1.0.x  | 2025-06-01   | ⚠️ Maintenance | 2026-12-31     |
+| v2.0.x  | 2026-03-01   | ✅ Active      | -              |
 
-## Current Version: v0.1.x → v1.0.x
+## Current Version: v1.0.x → v2.0.x (Golden Path)
 
-### Breaking Changes
+### Breaking Changes in v2.0.0
 
-Currently **NO BREAKING CHANGES** - all features are new additions.
+#### 1. Python Version Requirement
 
-### New Features
+**v2.0.0 requires Python 3.11+**
+
+```bash
+# Check your Python version
+python --version  # Must be 3.11 or higher
+```
+
+#### 2. Depth Backend Changes
+
+The depth estimation backend system has been unified under ADR-019:
+
+```python
+# Old (v1.x) - deprecated
+from depth_tools import estimate_depth
+depth = estimate_depth(image, model="depth_anything_v2")
+
+# New (v2.0.0) - recommended
+from transformation_portal.depth import DepthEstimator
+estimator = DepthEstimator(backend="da3")  # Depth Anything V3
+result = estimator.compute(image)
+```
+
+**Available backends:**
+- `da3` (Depth Anything V3) - Default, production-safe, commercial use OK
+- `depth_pro` (Apple Depth Pro) - Research only, requires explicit license acceptance
+
+#### 3. Configuration Format
+
+Configuration files now use structured YAML format:
+
+```yaml
+# Old format (still supported with deprecation warning)
+depth_model: depth_anything_v2
+output_dir: output/
+
+# New format (recommended)
+pipeline:
+  depth:
+    backend: da3
+    model_variant: DA3-Large
+  output:
+    directory: output/
+    format: png
+```
+
+### New Features in v2.0.0
 
 #### 1. Plugin Architecture
 
@@ -39,7 +84,7 @@ Currently **NO BREAKING CHANGES** - all features are new additions.
 from transformation_portal.plugins import get_global_registry
 
 registry = get_global_registry()
-depth_model = registry.get_plugin('depth_model', 'depth_anything_v2')
+depth_model = registry.get_plugin('depth_model', 'depth_anything_v3')
 ```
 
 #### 2. Real-Time Progress Tracking
@@ -59,25 +104,26 @@ with ProgressBar(total=100, description="Processing") as pbar:
         pbar.update(1)
 ```
 
-#### 3. Event Sourcing
+#### 3. Quality Firewall
 
-**What's New**: Automatic operation tracking for debugging and audit trails.
+**What's New**: Automatic quality enforcement with performance gates.
 
-**Migration**: None required - this is a new optional feature.
+**Migration**: None required - enabled by default for production pipelines.
 
-**Example**:
-```python
-# New event tracking (optional)
-from transformation_portal.events import event
+#### 4. Orchestrator Decomposition
 
-@event("image.processed")
-def process_image(path):
-    return enhance(path)
-```
+The monolithic orchestrator has been decomposed into focused modules:
+- `config_resolver.py` - Configuration handling
+- `pipeline_coordinator.py` - Stage sequencing
+- `artifact_manager.py` - Output management
+- `execution_engine.py` - Image processing
+- `validators/` - Validation logic
+
+**Migration**: Backward-compatible aliases maintained in `orchestrator.py`.
 
 ### Deprecated Features
 
-**None currently** - all v0.1.x APIs continue to work.
+**v1.x APIs deprecated in v2.0.0** (removal planned for v3.0.0):
 
 ---
 
@@ -359,5 +405,5 @@ grader.process(
 
 ---
 
-**Last Updated**: 2025-11-08
-**Guide Version**: 1.0.0
+**Last Updated**: 2026-03-21
+**Guide Version**: 2.0.0
