@@ -42,9 +42,9 @@ from depth_tools import estimate_depth
 depth = estimate_depth(image, model="depth_anything_v2")
 
 # New (v2.0.0) - recommended
-from transformation_portal.depth import DepthEstimator
-estimator = DepthEstimator(backend="da3")  # Depth Anything V3
-result = estimator.compute(image)
+from transformation_portal.depth import ArchitecturalDepthPipeline
+pipeline = ArchitecturalDepthPipeline(backend="da3")  # Depth Anything V3
+result = pipeline.run(image)
 ```
 
 **Available backends:**
@@ -84,7 +84,7 @@ pipeline:
 from transformation_portal.plugins import get_global_registry
 
 registry = get_global_registry()
-depth_model = registry.get_plugin('depth_model', 'depth_anything_v3')
+depth_model = registry.get_plugin('depth_model', 'edge_depth_estimator')
 ```
 
 #### 2. Real-Time Progress Tracking

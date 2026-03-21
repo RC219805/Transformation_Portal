@@ -256,7 +256,7 @@ The Transformation Portal is a **sophisticated, production-grade context-aware r
 - Retrofitted `@pytest.mark.unit` markers to 71 additional test files (81 total)
 - Added `@pytest.mark.security` markers to 7 security-focused test files
 - Golden tests exist in `/tests/golden/` with fixtures for phase4, reconstruction, and run_card
-- pytest-rerunfailures v16.1 already installed in requirements/dev.in
+- pytest-rerunfailures configured via `requirements/dev.in` (>=14,<17), currently pinned to v16.1 in `requirements/dev.txt`
 
 **Example Test Strategy Doc:**
 ```markdown
