@@ -33,7 +33,24 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
+# Configuration constants
+MAX_VIOLATIONS_DISPLAY = 20
+
+# Pytest built-in markers (not test category markers)
+BUILTIN_MARKERS = frozenset(
+    {
+        "skip",
+        "skipif",
+        "xfail",
+        "parametrize",
+        "usefixtures",
+        "filterwarnings",
+        "timeout",
+    }
+)
+
 # Valid pytest markers as registered in pyproject.toml
+# Includes both semantic markers and built-in markers for validation purposes
 VALID_MARKERS = frozenset(
     {
         "slow",
@@ -45,16 +62,8 @@ VALID_MARKERS = frozenset(
         "golden",
         "stress",
         "benchmark",
-        # Also allow common pytest built-in markers
-        "skip",
-        "skipif",
-        "xfail",
-        "parametrize",
-        "usefixtures",
-        "filterwarnings",
-        "timeout",
     }
-)
+) | BUILTIN_MARKERS
 
 # Directory-based marker requirements per ADR-044
 # Maps directory name -> required markers
@@ -222,7 +231,7 @@ def scan_file(file_path: Path) -> list[TestFunction]:
         source = file_path.read_text(encoding="utf-8")
         tree = ast.parse(source, filename=str(file_path))
     except SyntaxError as e:
-        print(f"WARNING: Syntax error in {file_path}: {e}", file=sys.stderr)
+        print(f"WARNING: Skipping {file_path} due to syntax error: {e}", file=sys.stderr)
         return []
 
     visitor = TestMarkerVisitor(file_path)
@@ -247,7 +256,7 @@ def check_marker_requirements(test_func: TestFunction) -> MarkerViolation | None
     # Filter to only semantic markers (not parametrize, skipif, etc.)
     semantic_markers = test_func.markers & VALID_MARKERS
     # Exclude built-in markers that don't indicate test category
-    category_markers = semantic_markers - {"skip", "skipif", "xfail", "parametrize", "usefixtures", "filterwarnings", "timeout"}
+    category_markers = semantic_markers - BUILTIN_MARKERS
 
     if not category_markers:
         return MarkerViolation(
@@ -280,11 +289,10 @@ def audit_test_directory(tests_root: Path, verbose: bool = False) -> AuditReport
         print(f"ERROR: Tests directory not found: {tests_root}", file=sys.stderr)
         return report
 
-    test_files = sorted(tests_root.rglob("test_*.py"))
-    # Also include files that end with _test.py
-    test_files.extend(sorted(tests_root.rglob("*_test.py")))
-    # Deduplicate
-    test_files = sorted(set(test_files))
+    # Collect and deduplicate test files efficiently
+    test_files = sorted(
+        set(tests_root.rglob("test_*.py")) | set(tests_root.rglob("*_test.py"))
+    )
 
     for test_file in test_files:
         # Skip __pycache__ and other non-source directories
@@ -394,11 +402,11 @@ def main() -> int:
 
         if report.violations:
             print(f"Violations ({len(report.violations)}):")
-            for v in report.violations[:20]:  # Show first 20
+            for v in report.violations[:MAX_VIOLATIONS_DISPLAY]:
                 print(f"  - {v.file_path}:{v.lineno} {v.name}")
                 print(f"    {v.issue}")
-            if len(report.violations) > 20:
-                print(f"  ... and {len(report.violations) - 20} more")
+            if len(report.violations) > MAX_VIOLATIONS_DISPLAY:
+                print(f"  ... and {len(report.violations) - MAX_VIOLATIONS_DISPLAY} more")
 
         # ADR-044 target: <5% unmarked
         target_coverage = 95.0
