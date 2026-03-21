@@ -189,7 +189,10 @@ class TestAddPytestImport:
         assert result == expected
 
     def test_handles_future_import(self) -> None:
-        """Validate pytest import is placed after __future__ and other imports."""
+        """Validate pytest import is placed after __future__ and other imports.
+
+        Uses exact-output assertion since __future__ positioning is structurally sensitive.
+        """
         content = _src("""
             from __future__ import annotations
 
@@ -201,10 +204,17 @@ class TestAddPytestImport:
 
         result = add_pytest_import(content)
 
-        # Verify __future__ import stays first
-        assert result.startswith("from __future__ import annotations\n")
-        # Verify import pytest is placed after all imports
-        assert "from pkg import x\nimport pytest\n" in result
+        # Exact output validation - __future__ must stay first, import pytest after last import
+        expected = _src("""
+            from __future__ import annotations
+
+            from pkg import x
+            import pytest
+
+            def test_example():
+                assert True
+            """)
+        assert result == expected
 
     def test_handles_multiline_with_trailing_comma(self) -> None:
         """Validate proper handling of multi-line import with trailing comma."""
@@ -241,6 +251,8 @@ class TestAddPytestmark:
         """Validate pytestmark is placed after multi-line imports.
 
         This uses exact-output assertion to catch any whitespace/placement drift.
+        NOTE: Double blank lines before pytestmark reflect current implementation
+        spacing behavior, not necessarily the ideal long-term formatting contract.
         """
         content = _src("""
             from pkg.mod import (
@@ -299,10 +311,12 @@ class TestAddPytestmark:
             """)
         assert result == expected
 
-    def test_places_marker_after_docstring_when_no_imports(self) -> None:
-        """Validate pytestmark is placed after docstring when only import pytest present.
+    def test_places_marker_after_docstring_and_existing_pytest_import(self) -> None:
+        """Validate pytestmark is placed after docstring when import pytest already exists.
 
         Uses exact-output assertion to catch whitespace/placement drift.
+        NOTE: Double blank lines before pytestmark reflect current implementation
+        spacing behavior, not necessarily the ideal long-term formatting contract.
         """
         content = _src('''
             """Test module for X."""
@@ -327,10 +341,12 @@ class TestAddPytestmark:
             ''')
         assert result == expected
 
-    def test_places_marker_at_top_when_no_imports_or_docstring(self) -> None:
-        """Validate pytestmark placement when only import pytest exists.
+    def test_places_marker_after_existing_pytest_import(self) -> None:
+        """Validate pytestmark placement when only import pytest exists (no docstring).
 
         Uses exact-output assertion to catch whitespace/placement drift.
+        NOTE: Double blank lines before pytestmark reflect current implementation
+        spacing behavior, not necessarily the ideal long-term formatting contract.
         """
         content = _src("""
             import pytest
