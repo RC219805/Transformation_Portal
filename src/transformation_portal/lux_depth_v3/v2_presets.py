@@ -71,11 +71,12 @@ class V2EnhancementConfig:
             raise ValueError(f"Unknown preset '{preset}'. Available presets: {available}")
 
         preset_config = PRESETS[preset]
+        # Values are Union[str, float, bool], so explicit casts ensure type safety
         return cls(
             preset=preset,
-            enhancement_strength=float(preset_config["enhancement_strength"]),  # type: ignore[arg-type]
-            clarity_strength=float(preset_config["clarity_strength"]),  # type: ignore[arg-type]
-            material_strength=float(preset_config["material_strength"]),  # type: ignore[arg-type]
+            enhancement_strength=float(preset_config["enhancement_strength"]),
+            clarity_strength=float(preset_config["clarity_strength"]),
+            material_strength=float(preset_config["material_strength"]),
             depth_aware_tone_mapping=bool(preset_config["depth_aware_tone_mapping"]),
             atmospheric_effects=bool(preset_config["atmospheric_effects"]),
         )

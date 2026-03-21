@@ -269,7 +269,9 @@ def generate(
 
     # Batch mode
     else:
-        # depth_dir is guaranteed non-None here due to validation above
+        # depth_dir is guaranteed non-None: validation at lines 144-150 ensures
+        # either --depth or --depth-dir is provided, and this else branch is
+        # only reached when --depth is not provided
         assert depth_dir is not None
         if not depth_dir.exists():
             typer.echo(f"Error: Directory not found: {depth_dir}", err=True)
