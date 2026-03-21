@@ -231,7 +231,7 @@ def apply_pixel_ops(
         Tuple of (output_image, telemetry_dict)
     """
     registry = registry or OP_REGISTRY
-    telemetry = {
+    telemetry: Dict[str, Any] = {
         "enabled": bool(getattr(config, "apply_pixel_ops", False)),
         "applied": [],
         "blocked": [],

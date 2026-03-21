@@ -26,7 +26,7 @@ From depth array::
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 
 import numpy as np
 
@@ -165,11 +165,11 @@ class PBRProcessor:
             "ao": output_dir / f"{base_name}_ao.png",
         }
 
-    def __enter__(self):
+    def __enter__(self) -> "PBRProcessor":
         """Context manager entry."""
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
         """Context manager exit - cleanup resources."""
         # Future: GPU memory cleanup if GPU acceleration added
-        return False
+        pass

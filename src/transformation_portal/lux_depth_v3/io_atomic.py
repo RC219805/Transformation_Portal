@@ -19,6 +19,7 @@ import os
 import tempfile
 from contextlib import contextmanager
 from pathlib import Path
+from typing import Any, Callable, Generator
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +40,9 @@ def _current_default_file_mode() -> int:
 
 
 @contextmanager
-def atomic_temp_file(output_path: Path, suffix: str = ".tmp", prefix: str = ".tmp_", create_file: bool = False):
+def atomic_temp_file(
+    output_path: Path, suffix: str = ".tmp", prefix: str = ".tmp_", create_file: bool = False
+) -> Generator[Path, None, None]:
     """Context manager for atomic temp file creation.
 
     Creates a temporary file path (or file) in the same directory as output_path,
@@ -148,7 +151,7 @@ def atomic_write_bytes(output_path: Path, data: bytes) -> Path:
         raise IOError(f"Failed to write {output_path}") from e
 
 
-def atomic_write_pil_png(output_path: Path, pil_image: "Image.Image", optimize: bool = True, **save_kwargs) -> Path:
+def atomic_write_pil_png(output_path: Path, pil_image: "Image.Image", optimize: bool = True, **save_kwargs: Any) -> Path:
     """Atomically write PIL Image as PNG.
 
     Args:
@@ -183,7 +186,7 @@ def atomic_write_pil_png(output_path: Path, pil_image: "Image.Image", optimize: 
         raise IOError(f"Failed to write PNG {output_path}") from e
 
 
-def atomic_write_with_fd(output_path: Path, writer_func, suffix: str = ".tmp") -> Path:
+def atomic_write_with_fd(output_path: Path, writer_func: Callable[[int, Path], None], suffix: str = ".tmp") -> Path:
     """Atomically write using a file descriptor-based writer function.
 
     For writers that need an open file descriptor (e.g., cv2.imwrite with fdopen).

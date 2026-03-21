@@ -395,7 +395,7 @@ class BatchManifest:
     results: List[Dict[str, Any]]
     stats: Dict[str, Any]
 
-    def write(self, path: Path):
+    def write(self, path: Path) -> None:
         """Write batch manifest to JSON file."""
         path.parent.mkdir(parents=True, exist_ok=True)
         with open(path, "w", encoding="utf-8") as f:
@@ -440,7 +440,7 @@ class CombinedManifest:
     end_time: Optional[str] = None
     backend_selection: Optional[BackendSelectionMetadata] = None
 
-    def save(self, path: Path):
+    def save(self, path: Path) -> None:
         """Save manifest to JSON file.
 
         Serializes all fields including timestamps for accurate execution tracking.
@@ -518,11 +518,11 @@ class CombinedManifest:
 
         return manifest
 
-    def write(self, path: Path):
+    def write(self, path: Path) -> None:
         """Alias for save() for backward compatibility."""
         self.save(path)
 
-    def save_msgpack(self, path: Path):
+    def save_msgpack(self, path: Path) -> None:
         """Save manifest in MessagePack binary format (Phase 3).
 
         Provides 60% size reduction and 3x faster parsing compared to JSON.

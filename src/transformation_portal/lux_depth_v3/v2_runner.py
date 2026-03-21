@@ -256,13 +256,21 @@ class V2Runner:
         except subprocess.TimeoutExpired as e:
             runtime_s = time.perf_counter() - start_time
 
-            # Extract partial output if available
-            partial_stdout: str = ""
-            partial_stderr: str = ""
-            if hasattr(e, "stdout") and e.stdout:
-                partial_stdout = e.stdout.decode("utf-8", errors="replace") if isinstance(e.stdout, bytes) else str(e.stdout)
-            if hasattr(e, "stderr") and e.stderr:
-                partial_stderr = e.stderr.decode("utf-8", errors="replace") if isinstance(e.stderr, bytes) else str(e.stderr)
+            # Extract partial output if available (may be bytes or str)
+            partial_stdout_raw = e.stdout if hasattr(e, "stdout") and e.stdout else b""
+            partial_stderr_raw = e.stderr if hasattr(e, "stderr") and e.stderr else b""
+
+            # Decode if bytes
+            partial_stdout = (
+                partial_stdout_raw.decode("utf-8", errors="replace")
+                if isinstance(partial_stdout_raw, bytes)
+                else str(partial_stdout_raw)
+            )
+            partial_stderr = (
+                partial_stderr_raw.decode("utf-8", errors="replace")
+                if isinstance(partial_stderr_raw, bytes)
+                else str(partial_stderr_raw)
+            )
 
             raise TimeoutError(
                 f"V2 enhancement timed out after {timeout}s (partial runtime={runtime_s:.2f}s)\n"

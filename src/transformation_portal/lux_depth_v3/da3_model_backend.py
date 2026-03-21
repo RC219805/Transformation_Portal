@@ -14,11 +14,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Any, Optional
 
 import numpy as np
 import torch
-import torch.nn.functional as F
 
 
 @dataclass(frozen=True)
@@ -35,7 +34,7 @@ class DA3ModelBackend:
         self.cfg = config
         self.model = None
 
-    def _load_model(self):
+    def _load_model(self) -> None:
         if self.model is not None:
             return
         # Logic to load model from hub (omitted for brevity, implies _require logic)
@@ -58,7 +57,7 @@ class DA3ModelBackend:
         # For now, assume mock return for syntax correctness:
         return np.zeros(x.shape[-2:], dtype=np.float32)
 
-    def predict_depth01_from_rgb01(self, rgb01: np.ndarray, preprocessor=None) -> np.ndarray:
+    def predict_depth01_from_rgb01(self, rgb01: np.ndarray, preprocessor: Any = None) -> np.ndarray:
         """
         Legacy entry point. If preprocessor is provided, uses it.
         Otherwise falls back to internal resizing.

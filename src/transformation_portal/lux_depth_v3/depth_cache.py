@@ -98,7 +98,7 @@ class DepthCache:
             logger.warning(f"Failed to load cached depth {cache_key}: {e}")
             return None
 
-    def store(self, image_sha256: str, config_fingerprint: str, depth: np.ndarray):
+    def store(self, image_sha256: str, config_fingerprint: str, depth: np.ndarray) -> None:
         """Store depth map in cache.
 
         Uses lazy size evaluation with approximate tracking to achieve O(1) performance.

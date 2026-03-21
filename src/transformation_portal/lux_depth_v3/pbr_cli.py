@@ -33,7 +33,7 @@ import sys
 import time
 from dataclasses import asdict, replace
 from pathlib import Path
-from typing import Optional
+from typing import Any, Dict, List, Optional
 
 try:
     import typer
@@ -54,7 +54,7 @@ app = typer.Typer(
 )
 
 
-def _configure_logging(verbose: bool = False, quiet: bool = False, log_level: Optional[str] = None):
+def _configure_logging(verbose: bool = False, quiet: bool = False, log_level: Optional[str] = None) -> None:
     """Configure logging at CLI entrypoint (not at import time)."""
     if quiet:
         level = logging.ERROR
@@ -118,7 +118,7 @@ def generate(
         None, "--max-files", "--limit", help="Maximum number of files to process (safety limit)"
     ),
     overwrite: bool = typer.Option(True, "--overwrite/--no-overwrite", help="Overwrite existing output files"),
-):
+) -> None:
     """Generate PBR maps from cached depth file(s).
 
     Requires either --depth (single file) or --depth-dir (batch mode).
@@ -167,7 +167,7 @@ def generate(
             typer.echo("Using default PBR configuration")
 
     # Apply parameter overrides using replace() pattern
-    overrides = {}
+    overrides: Dict[str, float] = {}
     if normal_strength is not None:
         overrides["normal_strength"] = normal_strength
     if roughness_strength is not None:
@@ -178,7 +178,7 @@ def generate(
         overrides["ao_bias"] = ao_bias
 
     if overrides:
-        config = replace(config, **overrides)
+        config = replace(config, **overrides)  # type: ignore[arg-type]
         if not quiet:
             typer.echo(f"Applied {len(overrides)} parameter override(s)")
 
@@ -211,13 +211,13 @@ def generate(
             existing_files = [f for f in expected_files if f.exists()]
             if existing_files:
                 if json_output:
-                    error_result = {
+                    overwrite_error: Dict[str, Any] = {
                         "status": "error",
                         "input": str(depth),
                         "error": "Output files already exist (use --overwrite to replace)",
                         "existing_files": [str(f) for f in existing_files],
                     }
-                    typer.echo(json.dumps(error_result, indent=2))
+                    typer.echo(json.dumps(overwrite_error, indent=2))
                 else:
                     typer.echo("Error: Output files already exist (use --overwrite to replace)", err=True)
                     for f in existing_files:
@@ -241,7 +241,7 @@ def generate(
             elapsed = time.time() - start_time
 
             if json_output:
-                result = {
+                success_result: Dict[str, Any] = {
                     "status": "success",
                     "input": str(depth),
                     "output_dir": str(output),
@@ -250,7 +250,7 @@ def generate(
                     "config_fingerprint": config_fingerprint,
                     "elapsed_seconds": round(elapsed, 3),
                 }
-                typer.echo(json.dumps(result, indent=2))
+                typer.echo(json.dumps(success_result, indent=2))
             else:
                 typer.echo(f"✓ Generated PBR maps in {output}/ ({elapsed:.2f}s)")
                 for map_type, path in paths.items():
@@ -261,14 +261,18 @@ def generate(
 
         except Exception as e:
             if json_output:
-                result = {"status": "error", "input": str(depth), "error": str(e)}
-                typer.echo(json.dumps(result, indent=2))
+                exc_result: Dict[str, Any] = {"status": "error", "input": str(depth), "error": str(e)}
+                typer.echo(json.dumps(exc_result, indent=2))
             else:
                 typer.echo(f"✗ Error: {e}", err=True)
             raise typer.Exit(1)
 
     # Batch mode
     else:
+        # depth_dir is guaranteed non-None: validation at lines 144-150 ensures
+        # either --depth or --depth-dir is provided, and this else branch is
+        # only reached when --depth is not provided
+        assert depth_dir is not None
         if not depth_dir.exists():
             typer.echo(f"Error: Directory not found: {depth_dir}", err=True)
             raise typer.Exit(1)
@@ -359,7 +363,7 @@ def generate(
 
         # Summary
         if json_output:
-            result = {
+            batch_result: Dict[str, Any] = {
                 "status": "partial" if error_count > 0 else "success",
                 "input_dir": str(depth_dir),
                 "output_dir": str(output),
@@ -371,7 +375,7 @@ def generate(
                 "config_fingerprint": config_fingerprint,
                 "elapsed_seconds": round(elapsed, 3),
             }
-            typer.echo(json.dumps(result, indent=2))
+            typer.echo(json.dumps(batch_result, indent=2))
         else:
             typer.echo(f"\nBatch complete ({elapsed:.2f}s):")
             typer.echo(f"  Success: {success_count}")
@@ -392,7 +396,7 @@ def generate(
 
 
 @app.command()
-def info():
+def info() -> None:
     """Show PBR configuration information."""
     typer.echo("\nPBR Map Generation Parameters:\n")
     typer.echo("Normal Map:")
@@ -427,11 +431,17 @@ def _get_preset_description(preset_name: str) -> str:
     return descriptions.get(preset_name, "Custom preset")
 
 
-def _write_manifest(manifest_path: Path, all_paths: list, config_fingerprint: str, preset: Optional[str]):
+def _write_manifest(
+    manifest_path: Path, all_paths: List[Dict[str, Path]], config_fingerprint: str, preset: Optional[str]
+) -> None:
     """Write manifest of generated files atomically."""
     from .io_atomic import atomic_write_bytes
 
-    manifest_data = {"config_fingerprint": config_fingerprint, "preset": preset, "generated_files": []}
+    manifest_data: Dict[str, Any] = {
+        "config_fingerprint": config_fingerprint,
+        "preset": preset,
+        "generated_files": [],
+    }
 
     for paths in all_paths:
         manifest_data["generated_files"].append({k: str(v) for k, v in paths.items()})
