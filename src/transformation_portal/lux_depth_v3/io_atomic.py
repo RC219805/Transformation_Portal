@@ -151,9 +151,7 @@ def atomic_write_bytes(output_path: Path, data: bytes) -> Path:
         raise IOError(f"Failed to write {output_path}") from e
 
 
-def atomic_write_pil_png(
-    output_path: Path, pil_image: "Image.Image", optimize: bool = True, **save_kwargs: Any
-) -> Path:
+def atomic_write_pil_png(output_path: Path, pil_image: "Image.Image", optimize: bool = True, **save_kwargs: Any) -> Path:
     """Atomically write PIL Image as PNG.
 
     Args:
@@ -188,9 +186,7 @@ def atomic_write_pil_png(
         raise IOError(f"Failed to write PNG {output_path}") from e
 
 
-def atomic_write_with_fd(
-    output_path: Path, writer_func: Callable[[int, Path], None], suffix: str = ".tmp"
-) -> Path:
+def atomic_write_with_fd(output_path: Path, writer_func: Callable[[int, Path], None], suffix: str = ".tmp") -> Path:
     """Atomically write using a file descriptor-based writer function.
 
     For writers that need an open file descriptor (e.g., cv2.imwrite with fdopen).
