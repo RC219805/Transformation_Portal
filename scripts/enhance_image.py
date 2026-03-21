@@ -375,6 +375,8 @@ def main() -> int:
         logger.error("V2 enhancement failed: %s", e)
 
         if report_path:
+            # Use canonical asset key for depth lookup consistency
+            lookup_key = resolved_asset_key
             error_report = {
                 "status": "error",
                 "implementation": "v2_enhance",
@@ -387,6 +389,21 @@ def main() -> int:
                 "timestamp": time.time(),
                 "error_type": type(e).__name__,
                 "error_message": str(e),
+                # Include identity metadata for provenance/debugging
+                "asset_key": resolved_asset_key,
+                "input_stem": Path(args.input_path).stem,
+                # Include structured depth block for observability
+                "depth": {
+                    "requested": args.depth_dir is not None,
+                    "lookup_key": lookup_key,
+                    "depth_dir": str(_resolve_path(args.depth_dir)) if args.depth_dir else None,
+                    "resolved_path": None,
+                    "loaded": False,
+                    "supplied_to_stage": False,
+                    "consumed": False,
+                    "consumption_source": "error_before_processing",
+                    "stage_has_depth": None,
+                },
             }
             try:
                 atomic_write_json(report_path, error_report)
@@ -400,6 +417,8 @@ def main() -> int:
         logger.exception("Enhancement failed: %s", e)
 
         if report_path:
+            # Use canonical asset key for depth lookup consistency
+            lookup_key = resolved_asset_key
             error_report = {
                 "status": "error",
                 "implementation": "placeholder",
@@ -412,6 +431,21 @@ def main() -> int:
                 "timestamp": time.time(),
                 "error_type": type(e).__name__,
                 "error_message": str(e),
+                # Include identity metadata for provenance/debugging
+                "asset_key": resolved_asset_key,
+                "input_stem": Path(args.input_path).stem,
+                # Include structured depth block for observability
+                "depth": {
+                    "requested": args.depth_dir is not None,
+                    "lookup_key": lookup_key,
+                    "depth_dir": str(_resolve_path(args.depth_dir)) if args.depth_dir else None,
+                    "resolved_path": None,
+                    "loaded": False,
+                    "supplied_to_stage": False,
+                    "consumed": False,
+                    "consumption_source": "error_before_processing",
+                    "stage_has_depth": None,
+                },
             }
             try:
                 atomic_write_json(report_path, error_report)
