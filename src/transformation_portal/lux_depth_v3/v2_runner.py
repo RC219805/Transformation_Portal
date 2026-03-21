@@ -190,6 +190,8 @@ class V2Runner:
         validated_output.mkdir(parents=True, exist_ok=True)
 
         # Validate asset_key if provided (must be stem-like, not path-like)
+        # Intentionally check for both / and \ on all platforms to prevent
+        # cross-platform path injection (e.g., Windows-style path on Unix)
         validated_asset_key = None
         if asset_key is not None:
             validated_asset_key = str(asset_key).strip()
