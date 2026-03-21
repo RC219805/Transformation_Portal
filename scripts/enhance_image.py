@@ -125,7 +125,7 @@ def resolve_asset_key(asset_key: str | None, fallback_stem: str) -> str:
         raise ValueError("asset_key contains NUL byte")
 
     if normalized in {".", ".."}:
-        raise ValueError(f"asset_key must be a stem-like identifier, got: {asset_key!r}")
+        raise ValueError(f"asset_key must be a stem-like identifier (no path separators), got: {asset_key!r}")
 
     if "/" in normalized or "\\" in normalized:
         raise ValueError(f"asset_key must be a stem-like identifier (no path separators), got: {asset_key!r}")
@@ -379,7 +379,8 @@ def main() -> int:
     report_path = None
     if out_dir is not None:
         # Use canonical asset key for report naming to align with orchestrator
-        # Use safe_join_under to prevent directory traversal
+        # SECURITY: safe_join_under prevents traversal attacks when asset_key
+        # is provided via CLI, even though resolve_asset_key already validates
         report_path = safe_join_under(out_dir, f"{resolved_asset_key}_report.json")
 
     try:

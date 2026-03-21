@@ -436,9 +436,9 @@ class TestReportMerging:
 
         # CRITICAL ASSERTIONS: Validate the fix
         # 1. Report was found using canonical key (not raw input stem)
-        assert result["report_path"] is not None, (
-            "Report not found! This indicates stem-resolution drift. " f"Expected report at: {report_path}"
-        )
+        assert (
+            result["report_path"] is not None
+        ), f"Report not found! This indicates stem-resolution drift. Expected report at: {report_path}"
 
         # 2. Report identity metadata is correct
         assert (
@@ -450,9 +450,9 @@ class TestReportMerging:
 
         # 3. Depth block has correct lookup_key (canonical, not raw stem)
         depth_block = result.get("depth", {})
-        assert depth_block.get("lookup_key") == canonical_key, (
-            f"depth.lookup_key mismatch: expected {canonical_key}, " f"got {depth_block.get('lookup_key')}"
-        )
+        assert (
+            depth_block.get("lookup_key") == canonical_key
+        ), f"depth.lookup_key mismatch: expected {canonical_key}, got {depth_block.get('lookup_key')}"
 
         # 4. --asset-key was passed to subprocess (verify command structure)
         cmd = mock_subprocess.call_args[0][0]

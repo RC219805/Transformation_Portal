@@ -198,7 +198,7 @@ class V2Runner:
             if not validated_asset_key:
                 validated_asset_key = None
             elif "/" in validated_asset_key or "\\" in validated_asset_key:
-                raise ValueError(f"asset_key must be a stem-like identifier (no path separators), " f"got: {asset_key!r}")
+                raise ValueError(f"asset_key must be a stem-like identifier (no path separators), got: {asset_key!r}")
 
         # Build command using validated paths
         cmd = [sys.executable, str(self.script_path), str(validated_input)]
