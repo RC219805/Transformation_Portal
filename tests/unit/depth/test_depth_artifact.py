@@ -11,6 +11,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+pytestmark = [pytest.mark.unit]
+
 from transformation_portal.lux_depth_v3.contracts import (
     CameraIntrinsics,
     DepthArtifact,

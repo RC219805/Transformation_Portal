@@ -4,6 +4,8 @@ from pathlib import Path
 
 import pytest
 
+pytestmark = [pytest.mark.unit]
+
 from scripts.lib.repo_root import RepoRootError, resolve_repo_root
 
 

@@ -15,6 +15,8 @@ import numpy as np
 import pytest
 from PIL import Image
 
+pytestmark = [pytest.mark.unit]
+
 from transformation_portal.lux_depth_v3.v2_enhance import V2EnhancementError, enhance_image, load_image_preserve_bit_depth
 from transformation_portal.stage_graph.stage import StageStatus
 
