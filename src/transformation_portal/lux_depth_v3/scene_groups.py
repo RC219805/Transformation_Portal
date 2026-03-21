@@ -89,15 +89,15 @@ def build_scene_groups(
     if mode == "parent_dir":
         # Stable ordering regardless of caller order.
         sorted_images = sorted(image_list, key=lambda p: normalize_relative_path(p, dataset_root))
-        groups: List[SceneGroup] = []
+        parent_groups: List[SceneGroup] = []
         for _, grouped_iter in groupby(sorted_images, key=lambda p: _group_key(p, dataset_root)):
             grouped_images = tuple(grouped_iter)
-            groups.append(
+            parent_groups.append(
                 SceneGroup(
                     scene_id=compute_scene_id(grouped_images, dataset_root),
                     images=grouped_images,
                 )
             )
-        return groups
+        return parent_groups
 
     raise ValueError(f"Unknown grouping_mode '{grouping_mode}'. Expected one of: single, parent_dir")

@@ -38,7 +38,7 @@ class V2Runner:
         script_path: Path to enhance_image.py script
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize V2 runner with repo root and script path resolution."""
         self.repo_root = self._find_repo_root()
         self.script_path = self.repo_root / "scripts" / "enhance_image.py"
@@ -92,7 +92,7 @@ class V2Runner:
         log_file: Optional[Path] = None,
         timeout: Optional[float] = None,
         masks_file: Optional[Path] = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> Dict[str, Any]:
         """Run V2 depth-aware enhancement pipeline.
 
@@ -236,9 +236,21 @@ class V2Runner:
         except subprocess.TimeoutExpired as e:
             runtime_s = time.perf_counter() - start_time
 
-            # Extract partial output if available
-            partial_stdout = e.stdout if hasattr(e, "stdout") and e.stdout else ""
-            partial_stderr = e.stderr if hasattr(e, "stderr") and e.stderr else ""
+            # Extract partial output if available (may be bytes or str)
+            partial_stdout_raw = e.stdout if hasattr(e, "stdout") and e.stdout else b""
+            partial_stderr_raw = e.stderr if hasattr(e, "stderr") and e.stderr else b""
+
+            # Decode if bytes
+            partial_stdout = (
+                partial_stdout_raw.decode("utf-8", errors="replace")
+                if isinstance(partial_stdout_raw, bytes)
+                else str(partial_stdout_raw)
+            )
+            partial_stderr = (
+                partial_stderr_raw.decode("utf-8", errors="replace")
+                if isinstance(partial_stderr_raw, bytes)
+                else str(partial_stderr_raw)
+            )
 
             raise TimeoutError(
                 f"V2 enhancement timed out after {timeout}s (partial runtime={runtime_s:.2f}s)\n"

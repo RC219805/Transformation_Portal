@@ -1247,11 +1247,9 @@ class EnhanceOrchestrator:
                 materials_v3.segmentation_metadata,
             )
 
-        enhanced_image_path = self._expected_materials_v3_enhanced_path(
-            output_key,
-        )
-        if not enhanced_image_path.exists():
-            enhanced_image_path = None
+        # Check if enhanced image exists, return path or None
+        expected_path = self._expected_materials_v3_enhanced_path(output_key)
+        enhanced_path: Optional[Path] = expected_path if expected_path.exists() else None
 
         runtime_seconds = materials_v3.runtime_seconds
         restored_runtime = float(runtime_seconds) if runtime_seconds is not None else 0.0
@@ -1264,7 +1262,7 @@ class EnhanceOrchestrator:
             ),
             "materials_v3_metadata": materials_v3_metadata,
         }
-        return restored_result, restored_runtime, enhanced_image_path
+        return restored_result, restored_runtime, enhanced_path
 
     def _preserved_v2_result_from_manifest(
         self,

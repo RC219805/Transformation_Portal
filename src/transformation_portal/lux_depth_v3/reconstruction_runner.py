@@ -305,7 +305,7 @@ def _load_union_mask(mask_artifact_path: Path) -> np.ndarray | None:
     return union_mask
 
 
-def _build_scene_builder(*, tier: str):
+def _build_scene_builder(*, tier: str) -> Any:
     """Lazy-load SceneBuilder to keep heavy ML deps out of module import."""
     from transformation_portal.spatial_ai.reconstruction.scene_builder import SceneBuilder
 

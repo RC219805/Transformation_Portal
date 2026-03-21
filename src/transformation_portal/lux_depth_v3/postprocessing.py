@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import importlib
 import logging
-from typing import TYPE_CHECKING, Any, List
+from typing import TYPE_CHECKING, Any, List, Tuple
 
 import numpy as np
 from scipy.ndimage import median_filter
@@ -203,14 +203,14 @@ class Postprocessor:
             # filter if cv2.ximgproc available
             # (better edges)
             try:
-                expected_joint_filter_errors = (
+                expected_joint_filter_errors: Tuple[type[Exception], ...] = (
                     AttributeError,
                     TypeError,
                     ValueError,
                 )
                 opencv_error = getattr(opencv, "error", None)
                 if isinstance(opencv_error, type) and issubclass(opencv_error, Exception):
-                    expected_joint_filter_errors += (opencv_error,)
+                    expected_joint_filter_errors = expected_joint_filter_errors + (opencv_error,)
 
                 # Ensure image is uint8 RGB
                 if image.dtype == np.float32:

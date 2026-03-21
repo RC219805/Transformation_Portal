@@ -103,7 +103,7 @@ class CoreMLDepthEstimator:
         model_name = self.model_id.replace("/", "_").replace("-", "_")
         return self.cache_dir / f"{model_name}.mlpackage"
 
-    def _load_or_convert(self, force_reconvert: bool = False):
+    def _load_or_convert(self, force_reconvert: bool = False) -> Any:
         """Load cached CoreML model or convert from PyTorch.
 
         Args:
@@ -133,7 +133,7 @@ class CoreMLDepthEstimator:
             logger.error(f"CoreML conversion failed: {e}")
             raise ValueError(f"Failed to convert {self.model_id} to CoreML: {e}") from e
 
-    def _convert_pytorch_to_coreml(self, output_path: Path):
+    def _convert_pytorch_to_coreml(self, output_path: Path) -> Any:
         """Convert PyTorch depth model to CoreML with ANE optimization.
 
         Conversion strategy:
