@@ -274,14 +274,15 @@ def run_v2_enhancement(
 
     # Find depth map if depth_dir provided
     # Use canonical asset key for depth lookup to align with orchestrator naming
-    canonical_key = asset_key or input_path.stem
+    # Note: asset_key may be None for direct API usage, so fallback to input_path.stem
+    lookup_key = asset_key if asset_key else input_path.stem
     depth_map_path = None
     if depth_dir:
-        depth_map_path = find_depth_map(depth_dir, canonical_key)
+        depth_map_path = find_depth_map(depth_dir, lookup_key)
         if depth_map_path:
             logger.info("Using depth map: %s", depth_map_path.name)
         else:
-            logger.warning("No depth map found in %s for %s", depth_dir, canonical_key)
+            logger.warning("No depth map found in %s for %s", depth_dir, lookup_key)
 
     # Load material masks if masks_file provided (Materials V3 integration)
     material_masks = load_material_masks(masks_file) if masks_file else None
@@ -307,8 +308,9 @@ def main() -> int:
     args = parse_arguments()
     configure_logging(args.verbose, args.quiet, args.log_file)
 
-    # Compute canonical asset key for consistent depth/report resolution
-    asset_key = args.asset_key or Path(args.input_path).stem
+    # Resolve canonical asset key for consistent depth/report resolution
+    # Default to input_path.stem if --asset-key not provided
+    resolved_asset_key = args.asset_key or Path(args.input_path).stem
 
     # Always create output dir early so we can write an error report if needed
     try:
@@ -320,7 +322,7 @@ def main() -> int:
     report_path = None
     if out_dir is not None:
         # Use canonical asset key for report naming to align with orchestrator
-        report_path = out_dir / f"{asset_key}_report.json"
+        report_path = out_dir / f"{resolved_asset_key}_report.json"
 
     try:
         report = run_v2_enhancement(
@@ -332,7 +334,7 @@ def main() -> int:
             upscaler=args.upscaler,
             allow_8bit=args.allow_8bit,
             masks_file=args.masks_file,  # Pass through Materials V3 explicit mask file
-            asset_key=asset_key,
+            asset_key=resolved_asset_key,
         )
 
         if report_path:
