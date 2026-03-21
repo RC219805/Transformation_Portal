@@ -304,16 +304,23 @@ docs/_archive/2026-Q1/     # Historical sessions, status, pr_archive
 
 **Effort:** 20-25 hours
 **Priority:** 🟡 MEDIUM
+**Status:** 🟢 IN PROGRESS (core items complete)
 
-| Task | Effort | Impact |
-|------|--------|--------|
-| Pin all actions to commit SHAs | 3 hours | Security |
-| Add pytest-xdist for test parallelization | 2 hours | 20-30% faster CI |
-| Make mypy hard-fail for critical modules | 2 hours | Type Safety |
-| Add per-test timeouts (`--timeout=60`) | 1 hour | Stability |
-| Set `fail-fast: false` for comprehensive detection | 1 hour | Debugging |
-| Implement nightly benchmark regression | 4 hours | Performance |
-| Add SBOM generation | 3 hours | Compliance |
+| Task | Effort | Impact | Status |
+|------|--------|--------|--------|
+| Pin all actions to commit SHAs | 3 hours | Security | ✅ Complete |
+| Add pytest-xdist for test parallelization | 2 hours | 20-30% faster CI | ✅ Complete |
+| Make mypy hard-fail for critical modules | 2 hours | Type Safety | ✅ Complete |
+| Add per-test timeouts (`--timeout=60`) | 1 hour | Stability | 🔄 Pending |
+| Set `fail-fast: false` for comprehensive detection | 1 hour | Debugging | ✅ Pre-existing |
+| Implement nightly benchmark regression | 4 hours | Performance | 🔄 Pending |
+| Add SBOM generation | 3 hours | Compliance | 🔄 Pending |
+
+**Implementation Summary (2026-03-21):**
+- Pinned all GitHub Actions to commit SHAs in `ci.yml` and `build.yml`
+- Added `pytest-xdist>=3.5,<4` to requirements for parallel test execution
+- Updated test commands to use `-n auto` for parallel execution
+- Made mypy type checking hard-fail (removed `continue-on-error: true`)
 
 **Expected CI Time Improvement:**
 - Current: 65-75 min
@@ -371,14 +378,14 @@ lux_depth_v3/orchestrator.py (6,108 LOC)
 | Phase 1: Security | 4-6 hours | Critical risk mitigation | ✅ Complete |
 | Phase 2: Testing | 10-15 hours | Governance + stability | 🟢 In Progress (core complete) |
 | Phase 3: Documentation | 15-20 hours | Developer experience | 🔄 Pending |
-| Phase 4: CI/CD | 20-25 hours | 35% faster CI | 🔄 Pending |
+| Phase 4: CI/CD | 20-25 hours | 35% faster CI | 🟢 In Progress (core complete) |
 | Phase 5: Architecture | 90-130 hours | Long-term maintainability | 🔄 Pending |
 
 ### Recommended Priority Order
 
 1. **Phase 1** (Security) - ✅ COMPLETED
 2. **Phase 2** (Testing) - 🟢 IN PROGRESS (strategy doc + markers complete)
-3. **Phase 4** (CI/CD) - Faster feedback enables more changes
+3. **Phase 4** (CI/CD) - 🟢 IN PROGRESS (action pinning + xdist + mypy hard-fail complete)
 4. **Phase 3** (Documentation) - Parallel track
 5. **Phase 5** (Architecture) - Strategic, phased over quarters
 
@@ -390,7 +397,8 @@ The Transformation Portal codebase is **production-grade with strong fundamental
 
 1. **Security fixes** (pickle, subprocess validation) - ✅ COMPLETED
 2. **Testing governance** (markers, strategy) - 🟢 IN PROGRESS
-3. **Architecture debt** (monolithic orchestrator, circular imports) - 🟠 Strategic
+3. **CI/CD optimization** (action pinning, parallelization, type safety) - 🟢 IN PROGRESS
+4. **Architecture debt** (monolithic orchestrator, circular imports) - 🟠 Strategic
 4. **Documentation organization** (fragmentation, stubs) - 🟡 Ongoing
 5. **CI optimization** (parallelization, action pinning) - 🟡 Incremental
 
