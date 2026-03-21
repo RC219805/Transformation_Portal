@@ -67,15 +67,15 @@ CATEGORY_MARKERS = frozenset(
 # Valid pytest markers: semantic markers plus built-in markers
 VALID_MARKERS = CATEGORY_MARKERS | BUILTIN_MARKERS
 
-# Directory-based marker requirements per ADR-044
+# Directory-based marker requirements per ADR-044 Section 4 (Directory Layout)
 # Maps directory name -> required markers (ALL must be present)
 DIRECTORY_MARKER_REQUIREMENTS: dict[str, list[str]] = {
     "unit": ["unit"],
-    "smoke": ["unit"],  # smoke tests map to unit per ADR-044 decision
+    "smoke": ["unit"],  # smoke tests map to unit per ADR-044 Section 4.1
     "security": ["security"],
     "integration": ["integration"],
     "benchmarks": ["benchmark"],
-    "stress": ["stress", "slow"],  # stress tests must also be marked slow
+    "stress": ["stress", "slow"],  # stress tests must also be marked slow per ADR-044 Section 5
 }
 
 
