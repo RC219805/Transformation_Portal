@@ -18,9 +18,14 @@ Key functions:
 
 from __future__ import annotations
 
+import argparse
 import ast
 import re
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 # Directory -> required marker mapping (ADR-044)
 DIRECTORY_MARKERS: dict[str, list[str]] = {
@@ -339,6 +344,79 @@ def process_file(file_path: Path, dry_run: bool = True) -> tuple[bool, str]:
     return True, f"added {', '.join(f'@pytest.mark.{m}' for m in markers)}"
 
 
+def main(argv: Sequence[str] | None = None) -> int:
+    """CLI entry point for retrofit_test_markers.
+
+    This function can be called directly for testing or via the CLI wrapper.
+
+    Args:
+        argv: Command line arguments. If None, uses sys.argv.
+
+    Returns:
+        Exit code (0 for success).
+    """
+    parser = argparse.ArgumentParser(
+        description="Retrofit pytest markers to test files per ADR-044"
+    )
+    mode_group = parser.add_mutually_exclusive_group(required=True)
+    mode_group.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show what would be changed without modifying files",
+    )
+    mode_group.add_argument(
+        "--apply",
+        action="store_true",
+        help="Apply changes to files",
+    )
+    parser.add_argument(
+        "paths",
+        nargs="*",
+        default=["tests"],
+        help="Paths to process (default: tests/)",
+    )
+
+    args = parser.parse_args(argv)
+
+    dry_run = args.dry_run
+
+    # Collect test files
+    test_files: list[Path] = []
+    for path_str in args.paths:
+        path = Path(path_str)
+        if path.is_file():
+            test_files.append(path)
+        elif path.is_dir():
+            test_files.extend(path.rglob("test_*.py"))
+
+    # Process files
+    modified_count = 0
+    skipped_reasons: dict[str, int] = {}
+
+    for file_path in sorted(test_files):
+        modified, reason = process_file(file_path, dry_run=dry_run)
+        if modified:
+            modified_count += 1
+            print(f"{'[DRY-RUN] ' if dry_run else ''}Modified: {file_path}")
+            print(f"  -> {reason}")
+        else:
+            skipped_reasons[reason] = skipped_reasons.get(reason, 0) + 1
+
+    # Summary
+    print()
+    print("=" * 60)
+    print(f"{'DRY-RUN ' if dry_run else ''}SUMMARY")
+    print("=" * 60)
+    print(f"Total files scanned: {len(test_files)}")
+    print(f"Files {'would be ' if dry_run else ''}modified: {modified_count}")
+    print()
+    print("Skipped files by reason:")
+    for reason, count in sorted(skipped_reasons.items(), key=lambda x: -x[1]):
+        print(f"  {reason}: {count}")
+
+    return 0
+
+
 __all__ = [
     # Constants
     "DIRECTORY_MARKERS",
@@ -355,4 +433,6 @@ __all__ = [
     "add_pytest_import",
     "add_pytestmark",
     "process_file",
+    # CLI
+    "main",
 ]

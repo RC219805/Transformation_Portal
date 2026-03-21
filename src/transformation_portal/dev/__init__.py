@@ -32,6 +32,7 @@ from transformation_portal.dev.test_markers import (
     has_class_or_function_markers,
     has_existing_module_markers,
     has_test_functions,
+    main,
     process_file,
 )
 
@@ -56,4 +57,5 @@ __all__ = [
     "add_pytest_import",
     "add_pytestmark",
     "process_file",
+    "main",
 ]

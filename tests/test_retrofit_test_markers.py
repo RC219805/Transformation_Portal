@@ -27,11 +27,9 @@ from transformation_portal.dev.test_markers import (
     has_class_or_function_markers,
     has_existing_module_markers,
     has_test_functions,
+    main,
     process_file,
 )
-
-# Import main from the CLI wrapper for CLI tests
-from scripts.validation.retrofit_test_markers import main
 
 pytestmark = pytest.mark.unit
 
