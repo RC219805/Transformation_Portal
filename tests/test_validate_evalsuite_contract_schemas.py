@@ -9,6 +9,9 @@ from pathlib import Path
 import jsonschema
 import pytest
 
+
+pytestmark = pytest.mark.unit
+
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 TOOL_PATH = PROJECT_ROOT / "tools" / "validate_evalsuite_contract_schemas.py"
 SPEC = importlib.util.spec_from_file_location("validate_evalsuite_contract_schemas", TOOL_PATH)

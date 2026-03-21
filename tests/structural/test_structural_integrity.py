@@ -25,6 +25,9 @@ from fnmatch import fnmatch
 from pathlib import Path
 from typing import Any
 
+
+pytestmark = pytest.mark.unit
+
 # ---------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------
@@ -469,6 +472,7 @@ def _pyproject_path() -> Path:
 def _collect_console_scripts() -> dict[str, Any]:
     """Collect deterministic [project.scripts] mapping from pyproject.toml."""
     import tomllib
+import pytest
 
     pyproject_file = _pyproject_path()
     data = tomllib.loads(pyproject_file.read_text(encoding="utf-8"))

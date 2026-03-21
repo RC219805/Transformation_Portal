@@ -23,6 +23,9 @@ import numpy as np
 import pytest
 
 from transformation_portal.core.cas_dag_executor import (
+
+pytestmark = pytest.mark.unit
+
     CASDAGConfig,
     CASDAGExecutor,
     CASExecutionResult,

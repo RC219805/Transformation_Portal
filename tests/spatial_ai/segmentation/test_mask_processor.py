@@ -7,6 +7,9 @@ from transformation_portal.spatial_ai.segmentation.contracts import MaskMetadata
 from transformation_portal.spatial_ai.segmentation.mask_processor import MaskProcessor
 
 
+
+pytestmark = pytest.mark.unit
+
 class TestMaskProcessor:
     """Test MaskProcessor initialization and configuration."""
 

@@ -4,6 +4,9 @@ import numpy as np
 import pytest
 
 from transformation_portal.spatial_ai.materials.contracts import (
+
+pytestmark = pytest.mark.unit
+
     MaterialGenerationConfig,
     MaterialInput,
     MaterialProperties,

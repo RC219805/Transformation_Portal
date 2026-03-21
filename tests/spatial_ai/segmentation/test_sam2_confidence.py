@@ -22,6 +22,8 @@ from unittest.mock import Mock
 import numpy as np
 import pytest
 
+pytestmark = pytest.mark.unit
+
 from transformation_portal.spatial_ai.segmentation.sam2_backend import SAM2Backend
 
 

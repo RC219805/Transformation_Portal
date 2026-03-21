@@ -7,7 +7,11 @@ import numpy as np
 
 from transformation_portal.lux_depth_v3.camera_metadata_loader import SCENE_CAMERA_SCHEMA, load_scene_cameras
 from transformation_portal.lux_depth_v3.scene_groups import SceneGroup
+import pytest
 
+
+
+pytestmark = pytest.mark.unit
 
 def _camera_payload(width: int, height: int) -> dict:
     return {

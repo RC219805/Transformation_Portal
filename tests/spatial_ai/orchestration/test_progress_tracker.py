@@ -12,6 +12,9 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from transformation_portal.spatial_ai.orchestration.progress_tracker import (
+
+pytestmark = pytest.mark.unit
+
     ProgressEvent,
     ProgressEventType,
     ProgressTracker,

@@ -13,6 +13,9 @@ import pytest
 from PIL import Image
 
 from transformation_portal.lux_depth_v3.v2_enhance import (
+
+pytestmark = pytest.mark.unit
+
     V2EnhancementError,
     canonical_asset_stem,
     enhance_image,

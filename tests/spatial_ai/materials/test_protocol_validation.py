@@ -10,6 +10,9 @@ from transformation_portal.spatial_ai.materials.material_backend import Material
 from transformation_portal.spatial_ai.materials.protocol import validate_backend_protocol
 
 
+
+pytestmark = pytest.mark.unit
+
 class MissingMethodBackend:
     """Backend missing required protocol method."""
 

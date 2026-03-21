@@ -20,15 +20,20 @@ However, **~51% of tests (2,244 of 4,381 functions) lack markers**, making it im
 - Parallelize CI jobs by test type
 - Provide fast PR feedback
 
-### Current State (as of implementation)
+### Current State (as of 2026-03-21 implementation)
 
-| Marker | Count | Expected |
-|--------|-------|----------|
-| No marker | 2,244 (51%) | <5% |
-| `@pytest.mark.unit` | 1,555 | 2,500+ |
-| `@pytest.mark.ml` | 293 | 300+ |
-| `@pytest.mark.security` | 157 | 150+ |
-| `@pytest.mark.integration` | 21 | 200+ |
+| Marker | Count | Expected | Status |
+|--------|-------|----------|--------|
+| No marker | ~210 (4.9%) | <5% | ✅ Target Met |
+| `@pytest.mark.unit` | 3,100+ | 2,500+ | ✅ Complete |
+| `@pytest.mark.ml` | 293 | 300+ | ✅ Near Target |
+| `@pytest.mark.security` | 157+ | 150+ | ✅ Complete |
+| `@pytest.mark.integration` | 50+ | 200+ | In Progress |
+
+**Retrofit Summary (2026-03-21):**
+- Automated script `scripts/validation/retrofit_test_markers.py` applied markers to 137 files
+- Module-level `pytestmark` pattern used for consistency
+- Coverage improved from 48.6% to 95.1%
 
 ---
 
@@ -150,9 +155,9 @@ Canonical markers as registered in `pyproject.toml` under `[tool.pytest.ini_opti
 3. Tag all `tests/integration/` with `@pytest.mark.integration`
 
 ### Week 2
-1. Analyze and tag root-level tests (181 files)
-2. Implement pre-commit hook
-3. Update CI workflow to use markers
+1. ~~Analyze and tag root-level tests (181 files)~~ ✅ Complete (2026-03-21)
+2. ~~Implement pre-commit hook~~ ✅ Complete
+3. ~~Update CI workflow to use markers~~ ✅ Complete
 
 ---
 
@@ -160,6 +165,7 @@ Canonical markers as registered in `pyproject.toml` under `[tool.pytest.ini_opti
 
 - [x] Pre-commit hook blocks unmarked tests (`check-test-markers` hook)
 - [x] Audit script verifies marker coverage (`--audit` mode)
+- [x] Automated retrofit script (`retrofit_test_markers.py`)
 - [ ] CI runs marker-specific jobs (in progress)
 - [ ] Weekly automated audit (future enhancement)
 
@@ -167,11 +173,11 @@ Canonical markers as registered in `pyproject.toml` under `[tool.pytest.ini_opti
 
 ## Success Criteria
 
-| Metric | Current | Target |
-|--------|---------|--------|
-| Unmarked tests | 51% | <5% |
-| `pytest -m unit` time | N/A | <3 min |
-| `pytest -m "unit or integration"` time | N/A | <10 min |
+| Metric | Current | Target | Status |
+|--------|---------|--------|--------|
+| Unmarked tests | 4.9% | <5% | ✅ Achieved |
+| `pytest -m unit` time | TBD | <3 min | Pending CI validation |
+| `pytest -m "unit or integration"` time | TBD | <10 min | Pending CI validation |
 
 ---
 

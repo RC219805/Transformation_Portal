@@ -9,6 +9,9 @@ Tests cover:
 
 from __future__ import annotations
 
+
+pytestmark = pytest.mark.unit
+
 # Import validator functions
 import sys
 import tempfile

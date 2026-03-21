@@ -5,6 +5,9 @@ from __future__ import annotations
 import pytest
 
 from transformation_portal.models.hf_lock import (
+
+pytestmark = pytest.mark.unit
+
     HFModelLockError,
     HFModelLockRecord,
     HFRequiredFile,

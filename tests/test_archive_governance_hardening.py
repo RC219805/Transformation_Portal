@@ -11,6 +11,9 @@ from types import SimpleNamespace
 
 import pytest
 
+
+pytestmark = pytest.mark.unit
+
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 TOOLS_DIR = PROJECT_ROOT / "tools"
 if str(TOOLS_DIR) not in sys.path:

@@ -36,6 +36,10 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+import pytest
+
+
+pytestmark = pytest.mark.unit
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 FAST_ML_MARKEXPR = "ml and not slow and not integration and not benchmark"

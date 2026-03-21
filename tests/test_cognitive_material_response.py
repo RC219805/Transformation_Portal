@@ -1,6 +1,10 @@
 """Tests for the CognitiveMaterialResponse orchestration layer."""
 
 from transformation_portal.processors.material_response.core import (
+import pytest
+
+pytestmark = pytest.mark.unit
+
     CognitiveMaterialResponse,
     EmotionalResonance,
     GlobalLuxurySemantics,

@@ -5,6 +5,9 @@ import pytest
 from transformation_portal.spatial_ai.segmentation.tiling.config import SegmentationTilingConfig
 
 
+
+pytestmark = pytest.mark.unit
+
 def test_from_dict_defaults_disabled_when_missing():
     cfg = SegmentationTilingConfig.from_dict(None)
     assert cfg.enabled is False

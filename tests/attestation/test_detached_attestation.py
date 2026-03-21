@@ -8,6 +8,9 @@ from typing import Any
 import pytest
 
 from transformation_portal.attestation.detached import (
+
+pytestmark = pytest.mark.unit
+
     build_detached_attestation_payload,
     canonical_attestation_bytes,
     canonical_attestation_preimage_bytes,

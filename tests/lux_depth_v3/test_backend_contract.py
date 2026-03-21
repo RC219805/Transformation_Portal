@@ -4,6 +4,9 @@ import pytest
 
 from transformation_portal.depth.backends.registry import DepthBackendRegistry
 from transformation_portal.lux_depth_v3._backend_contract import (
+
+pytestmark = pytest.mark.unit
+
     backend_alias_warning,
     normalize_backend_id,
     normalize_backend_sequence,

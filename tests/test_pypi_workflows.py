@@ -11,6 +11,9 @@ import pytest
 import yaml
 
 
+
+pytestmark = pytest.mark.unit
+
 @pytest.fixture
 def workflows_dir():
     """Get the workflows directory path."""

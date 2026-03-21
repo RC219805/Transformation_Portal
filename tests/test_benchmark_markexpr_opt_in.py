@@ -3,7 +3,11 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 from tests.conftest import _benchmark_run_explicitly_requested, _markexpr_requests_marker
+import pytest
 
+
+
+pytestmark = pytest.mark.unit
 
 def _make_config(*, markexpr: str = "", args: tuple[str, ...] = ()) -> SimpleNamespace:
     return SimpleNamespace(

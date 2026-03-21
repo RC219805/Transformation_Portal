@@ -17,6 +17,9 @@ from typing import Any, Dict
 import pytest
 
 from transformation_portal.spatial_ai.orchestration.graph.execution_graph import (
+
+pytestmark = pytest.mark.unit
+
     ExecutionGraph,
     ExecutionPlan,
     GraphError,

@@ -12,6 +12,9 @@ import numpy as np
 import pytest
 from PIL import Image
 
+
+pytestmark = pytest.mark.unit
+
 # Import Phase 3 features
 from transformation_portal.depth.pipeline import ArchitecturalDepthPipeline
 from transformation_portal.depth.processors.numba_kernels import NUMBA_AVAILABLE, get_numba_info

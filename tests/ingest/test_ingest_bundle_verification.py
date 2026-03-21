@@ -11,6 +11,10 @@ from pathlib import Path
 from typing import Any
 
 from transformation_portal.ingest.batch import BATCH_MANIFEST_FILENAME, run_ingest_batch
+import pytest
+
+
+pytestmark = pytest.mark.unit
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 FIXTURE_INPUT_DIR = PROJECT_ROOT / "tests" / "fixtures" / "ingest" / "batch_inputs"

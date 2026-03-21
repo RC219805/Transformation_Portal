@@ -7,6 +7,10 @@ import tomllib
 from pathlib import Path
 
 from packaging.requirements import InvalidRequirement, Requirement
+import pytest
+
+
+pytestmark = pytest.mark.unit
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 

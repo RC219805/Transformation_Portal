@@ -17,6 +17,9 @@ import numpy as np
 import pytest
 
 from transformation_portal.spatial_ai.orchestration.graph.stage import (
+
+pytestmark = pytest.mark.unit
+
     CheckpointPolicy,
     ResourceRequirements,
     Stage,

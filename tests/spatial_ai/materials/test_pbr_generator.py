@@ -7,6 +7,9 @@ from transformation_portal.spatial_ai.materials.contracts import MaterialGenerat
 from transformation_portal.spatial_ai.materials.pbr_generator import PBRGenerator
 
 
+
+pytestmark = pytest.mark.unit
+
 class TestPBRGenerator:
     """Test PBR generator orchestrator."""
 

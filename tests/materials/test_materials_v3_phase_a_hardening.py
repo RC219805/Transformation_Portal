@@ -17,6 +17,9 @@ import numpy as np
 import pytest
 
 from transformation_portal.lux_depth_v3.pixel_ops_executor import (
+
+pytestmark = pytest.mark.unit
+
     _canonical_mask,
     _expand_bbox_with_padding,
     _feather_mask,

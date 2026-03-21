@@ -11,6 +11,8 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 
+pytestmark = pytest.mark.unit
+
 from transformation_portal.depth.backends import DepthBackendRegistry, DepthResult, LicenseRestrictionError, LicenseType
 
 

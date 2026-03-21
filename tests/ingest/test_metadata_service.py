@@ -8,6 +8,9 @@ from pathlib import Path
 import pytest
 
 from transformation_portal.ingest.errors import (
+
+pytestmark = pytest.mark.unit
+
     BitDepthViolation,
     IngestExitCode,
     OtherIngestFailure,

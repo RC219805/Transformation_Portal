@@ -20,6 +20,9 @@ from transformation_portal.spatial_ai.ingest import LinearDecoder
 from transformation_portal.spatial_ai.ingest.telemetry import IngestTelemetry, NullTelemetry
 
 
+
+pytestmark = pytest.mark.unit
+
 class ListTelemetry:
     """Test helper: accumulates events in a list."""
 

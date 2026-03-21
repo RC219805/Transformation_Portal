@@ -7,6 +7,9 @@ import pytest
 from transformation_portal.spatial_ai.orchestration.resource_manager import ResourceLimits, ResourceManager
 
 
+
+pytestmark = pytest.mark.unit
+
 class TestResourceLimits:
     """Test ResourceLimits dataclass."""
 

@@ -21,6 +21,9 @@ from transformation_portal.lux_depth_v3.depth_cache import DepthCache
 from transformation_portal.lux_depth_v3.input_manager import ImageInput
 
 
+
+pytestmark = pytest.mark.unit
+
 class TestDepthCache:
     """Test content-addressable depth cache."""
 

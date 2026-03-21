@@ -8,6 +8,8 @@ from typing import Any
 
 import pytest
 
+pytestmark = pytest.mark.unit
+
 from transformation_portal.ingest.evidence import (
     _ALLOWED_MACHINE_COMMANDS,
     EVIDENCE_SCHEMA_VERSION,

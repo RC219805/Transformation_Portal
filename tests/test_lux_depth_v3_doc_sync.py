@@ -8,6 +8,10 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 from transformation_portal.lux_depth_v3.__main__ import app
+import pytest
+
+
+pytestmark = pytest.mark.unit
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DOC_FILES = (

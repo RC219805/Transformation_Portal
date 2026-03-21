@@ -11,6 +11,9 @@ from pathlib import Path
 
 from PIL import Image
 
+
+pytestmark = pytest.mark.unit
+
 # Add scripts to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
@@ -188,6 +191,7 @@ def main():
     except Exception as e:
         print(f"✗ Processor tests failed: {e}")
         import traceback
+import pytest
 
         traceback.print_exc()
         all_passed = False

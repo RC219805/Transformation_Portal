@@ -7,6 +7,8 @@ from typing import Any
 
 import numpy as np
 import pytest
+
+pytestmark = pytest.mark.unit
 from hypothesis import given, settings
 from hypothesis import strategies as st
 

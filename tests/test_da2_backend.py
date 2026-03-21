@@ -11,6 +11,9 @@ from transformation_portal.depth.backends.protocol import DepthResult, LicenseTy
 from transformation_portal.depth.backends.registry import DepthBackendRegistry
 
 
+
+pytestmark = pytest.mark.unit
+
 def test_da2_backend_implements_protocol():
     """DA2 backend exposes expected protocol attributes."""
     backend = DA2Backend()
@@ -70,6 +73,7 @@ def test_da2_backend_cuda_request_without_cuda_falls_back_to_cpu(monkeypatch):
 def test_da2_backend_cuda_request_is_normalized_to_cpu_model(monkeypatch):
     """DA2 should normalize CUDA requests to CPU to keep backend/device semantics coherent."""
     from transformation_portal.depth.models import depth_anything_v2 as da2_model_module
+import pytest
 
     captured = {}
 

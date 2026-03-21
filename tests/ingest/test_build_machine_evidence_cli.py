@@ -7,6 +7,10 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+import pytest
+
+
+pytestmark = pytest.mark.unit
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 TOOL_PATH = PROJECT_ROOT / "tools" / "build_machine_evidence.py"

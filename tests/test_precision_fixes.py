@@ -12,6 +12,9 @@ import pytest
 from PIL import Image
 
 from transformation_portal.lux_depth_v3.preprocessing import (
+
+pytestmark = pytest.mark.unit
+
     SUPPORTED_EXTENSIONS,
     _enforce_dimension_multiple,
     preprocess_image,

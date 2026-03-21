@@ -12,6 +12,9 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from transformation_portal.spatial_ai.orchestration.error_handler import (
+
+pytestmark = pytest.mark.unit
+
     ErrorContext,
     ErrorHandler,
     ErrorRecoveryStrategy,

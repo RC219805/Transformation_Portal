@@ -11,6 +11,8 @@ from typing import List
 
 import pytest
 
+pytestmark = pytest.mark.unit
+
 try:
     import numpy as np
 

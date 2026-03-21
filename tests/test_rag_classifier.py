@@ -7,6 +7,9 @@ from pathlib import Path
 
 import pytest
 
+
+pytestmark = pytest.mark.unit
+
 # Add agents directory to path
 agents_path = Path(__file__).parent.parent / ".github" / "agents"
 sys.path.insert(0, str(agents_path))

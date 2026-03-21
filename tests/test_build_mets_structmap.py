@@ -6,6 +6,10 @@ import json
 import subprocess
 import sys
 from pathlib import Path
+import pytest
+
+
+pytestmark = pytest.mark.unit
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 TOOL_PATH = PROJECT_ROOT / "tools" / "build_mets_structmap.py"

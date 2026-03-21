@@ -12,6 +12,9 @@ from transformation_portal.ingest.metadata_service import ExtractResult as CoreE
 from transformation_portal.ingest.metadata_service import MetadataExtractionService as CoreMetadataExtractionService
 from transformation_portal.ingest.metadata_service import ValidateResult as CoreValidateResult
 from transformation_portal.ingest.service import (
+
+pytestmark = pytest.mark.unit
+
     MetadataExtractionOrchestrationService,
     MetadataExtractionService,
     ServiceRunRequest,

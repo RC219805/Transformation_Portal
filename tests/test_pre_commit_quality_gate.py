@@ -7,6 +7,10 @@ import subprocess
 import sys
 from pathlib import Path
 from types import ModuleType
+import pytest
+
+
+pytestmark = pytest.mark.unit
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 

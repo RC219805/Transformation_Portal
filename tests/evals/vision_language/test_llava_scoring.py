@@ -6,6 +6,9 @@ import pytest
 
 from transformation_portal.evals.vision_language.llava_schema import VQAIssue, VQAResult
 from transformation_portal.evals.vision_language.llava_scoring import (
+
+pytestmark = pytest.mark.unit
+
     compute_quality_gate_pass,
     recompute_summary_score,
     severity_to_numeric,

@@ -9,6 +9,9 @@ import pytest
 
 from .documentation import documents
 
+
+pytestmark = pytest.mark.unit
+
 # pylint: disable=redefined-outer-name  # pytest fixtures
 
 

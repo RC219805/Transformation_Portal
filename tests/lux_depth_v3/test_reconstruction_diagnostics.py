@@ -8,7 +8,11 @@ from transformation_portal.lux_depth_v3.reconstruction_manifest import Reconstru
 from transformation_portal.lux_depth_v3.reconstruction_runner import reprojection_percentiles, write_reconstruction_diagnostics
 from transformation_portal.lux_depth_v3.scene_context import CameraProvenance, CameraWithProvenance
 from transformation_portal.spatial_ai.reconstruction.contracts import CameraParams, GaussianSplat, Scene3D
+import pytest
 
+
+
+pytestmark = pytest.mark.unit
 
 def _camera_with_provenance(tx: float) -> CameraWithProvenance:
     intrinsics = np.array(

@@ -6,6 +6,9 @@ import pytest
 from transformation_portal.spatial_ai.materials.heuristic_fallback import HeuristicFallback
 
 
+
+pytestmark = pytest.mark.unit
+
 class TestHeuristicFallback:
     """Test heuristic PBR texture generation."""
 

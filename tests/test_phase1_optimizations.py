@@ -21,6 +21,9 @@ from transformation_portal.lux_depth_v3.orchestrator import _load_manifest_cache
 from transformation_portal.lux_depth_v3.postprocessing import PostprocessingConfig, Postprocessor
 
 
+
+pytestmark = pytest.mark.unit
+
 class TestChunkedSHA256:
     """Test chunked SHA-256 computation for memory efficiency."""
 

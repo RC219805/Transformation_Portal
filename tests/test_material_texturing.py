@@ -8,6 +8,8 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+
+pytestmark = pytest.mark.unit
 from PIL import Image
 
 # Import after stubs are in place to prevent lux_render_pipeline from loading

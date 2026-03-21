@@ -7,6 +7,9 @@ from pathlib import Path
 import pytest
 
 from transformation_portal.models.hf_manifest_loader import (
+
+pytestmark = pytest.mark.unit
+
     HFManifestLoaderError,
     HFResolvedLocalModel,
     _common_local_root,

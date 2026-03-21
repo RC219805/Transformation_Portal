@@ -10,6 +10,9 @@ from pathlib import Path
 import pytest
 
 from transformation_portal.ingest.schemas import (
+
+pytestmark = pytest.mark.unit
+
     ExifMetadata,
     FileIntegrity,
     HostEnvironment,

@@ -10,6 +10,8 @@ from pathlib import Path
 
 import pytest
 
+pytestmark = pytest.mark.security
+
 from transformation_portal.core.security.path_safety import (
     PathSafetyError,
     safe_cas_path,

@@ -9,6 +9,10 @@ from transformation_portal.spatial_ai.segmentation.sam2_backend import SAM2Backe
 from transformation_portal.spatial_ai.segmentation.tiling.config import SegmentationTilingConfig
 from transformation_portal.spatial_ai.segmentation.tiling.engine import TiledSegmentationEngine
 from transformation_portal.spatial_ai.segmentation.tiling.types import (
+import pytest
+
+pytestmark = pytest.mark.unit
+
     BBox,
     SoftMaskPatch,
     TileInstance,

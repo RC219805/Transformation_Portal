@@ -18,6 +18,9 @@ from transformation_portal.lux_depth_v3.input_manager import ImageInput
 from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
 
 
+
+pytestmark = pytest.mark.unit
+
 @pytest.fixture
 def mock_depth_backend():
     """Mock depth backend to avoid ML dependencies in integration tests."""

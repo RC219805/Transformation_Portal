@@ -25,6 +25,9 @@ from transformation_portal.spatial_ai.orchestration.resource_manager import Reso
 from transformation_portal.spatial_ai.segmentation.contracts import MaskMetadata, SegmentationResult
 
 
+
+pytestmark = pytest.mark.unit
+
 class TestPipelineConfig:
     """Test PipelineConfig dataclass and validation."""
 

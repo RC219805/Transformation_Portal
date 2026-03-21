@@ -18,6 +18,9 @@ from typing import Dict
 import pytest
 from starlette.requests import Request as StarletteRequest
 
+
+pytestmark = pytest.mark.unit
+
 orchestrator_app = importlib.import_module("app")
 
 

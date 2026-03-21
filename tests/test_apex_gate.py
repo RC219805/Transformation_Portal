@@ -10,7 +10,11 @@ Tests validate:
 
 from transformation_portal.metrics.contracts import BucketStats, Judgement, RegressionReport
 from transformation_portal.metrics.gate import evaluate_gate, should_block
+import pytest
 
+
+
+pytestmark = pytest.mark.unit
 
 class TestGate:
     """Test APEX gate functionality."""

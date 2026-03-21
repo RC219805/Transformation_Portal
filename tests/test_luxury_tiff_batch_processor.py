@@ -10,6 +10,8 @@ from typing import Any, Dict
 
 import pytest
 
+pytestmark = pytest.mark.unit
+
 # pylint: disable=no-member  # False positives with package imports
 
 

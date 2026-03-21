@@ -25,6 +25,9 @@ from transformation_portal.lux_depth_v3.preprocessing import preprocess_image
 from transformation_portal.lux_depth_v3.v2_enhance import enhance_image
 
 
+
+pytestmark = pytest.mark.unit
+
 class TestFix1DoubleEXIFRotation:
     """Test fix for Issue #1: Double EXIF rotation in v2_enhance.py"""
 

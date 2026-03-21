@@ -13,6 +13,9 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 
+
+pytestmark = pytest.mark.unit
+
 @pytest.fixture
 def mock_backend_registry():
     """Create a mock backend registry with test backends."""

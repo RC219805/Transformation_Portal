@@ -10,6 +10,9 @@ from pathlib import Path
 import pytest
 
 
+
+pytestmark = pytest.mark.unit
+
 def test_stable_preset_immutable():
     """Verify stable preset hasn't changed without version bump.
 

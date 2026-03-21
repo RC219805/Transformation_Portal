@@ -6,7 +6,11 @@ import threading
 import numpy as np
 
 from transformation_portal.lux_depth_v3.depth_cache import DepthCache
+import pytest
 
+
+
+pytestmark = pytest.mark.unit
 
 def test_depth_cache_concurrent_same_key_does_not_emit_store_failures(tmp_path, caplog):
     """Concurrent same-key writes should not produce internal store-failure warnings."""

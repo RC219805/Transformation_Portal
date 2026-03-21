@@ -13,6 +13,8 @@ from pathlib import Path
 import pytest
 import yaml
 
+pytestmark = pytest.mark.unit
+
 from transformation_portal.compliance import (
     LicenseRestrictionError,
     load_and_validate_preset,

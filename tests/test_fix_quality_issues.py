@@ -9,6 +9,10 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 from unittest.mock import Mock, patch
+import pytest
+
+
+pytestmark = pytest.mark.unit
 
 # Load scripts/utilities/fix_quality_issues.py without sys.path hacks
 _REPO_ROOT = Path(__file__).resolve().parents[1]

@@ -8,6 +8,9 @@ Tests validate:
 """
 
 from transformation_portal.metrics.aggregator import (
+
+pytestmark = pytest.mark.unit
+
     compute_bucket_stats,
     compute_global_stats,
     compute_per_zone_stats,
@@ -304,5 +307,6 @@ class TestValidateWorkflowVersionConsistency:
     def test_empty_capsules_no_raise(self):
         """Test that empty capsule list doesn't raise."""
         from transformation_portal.metrics.aggregator import validate_workflow_version_consistency
+import pytest
 
         validate_workflow_version_consistency([], strict=True)

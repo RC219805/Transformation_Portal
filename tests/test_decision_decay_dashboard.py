@@ -6,6 +6,10 @@ from pathlib import Path
 
 from scripts.codebase_philosophy_auditor import Violation
 from scripts.decision_decay_dashboard import (
+import pytest
+
+pytestmark = pytest.mark.unit
+
     collect_color_token_report,
     collect_outdated_valid_until_records,
     collect_philosophy_violations,

@@ -5,6 +5,8 @@ from unittest.mock import MagicMock, mock_open, patch
 
 import numpy as np
 import pytest
+
+pytestmark = pytest.mark.unit
 from PIL import Image
 
 from transformation_portal.stage_graph.stage import StageContext, StageStatus

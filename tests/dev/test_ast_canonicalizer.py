@@ -7,6 +7,9 @@ import ast
 import pytest
 
 
+
+pytestmark = pytest.mark.unit
+
 class TestCanonicalizer:
     """Tests for the AST Canonicalizer."""
 

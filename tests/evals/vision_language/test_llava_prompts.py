@@ -5,6 +5,9 @@ from __future__ import annotations
 import pytest
 
 from transformation_portal.evals.vision_language.llava_prompts import (
+
+pytestmark = pytest.mark.unit
+
     LlavaPromptSpec,
     build_architectural_quality_prompt,
     build_depth_quality_prompt,

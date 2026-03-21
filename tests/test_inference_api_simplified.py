@@ -17,6 +17,8 @@ from unittest.mock import MagicMock, Mock, patch
 import numpy as np
 import pytest
 
+pytestmark = pytest.mark.unit
+
 from transformation_portal.lux_depth_v3.config import DA3Config, DeviceConfig, ModelVariant
 from transformation_portal.lux_depth_v3.inference import DA3InferenceEngine
 

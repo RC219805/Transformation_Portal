@@ -9,6 +9,9 @@ from transformation_portal.spatial_ai.materials.contracts import MaterialGenerat
 from transformation_portal.spatial_ai.materials.material_backend import MaterialBackend
 
 
+
+pytestmark = pytest.mark.unit
+
 class TestMaterialBackend:
     """Test material backend wrapper."""
 

@@ -6,6 +6,10 @@ import re
 from pathlib import Path
 
 from .documentation import documents, valid_until
+import pytest
+
+
+pytestmark = pytest.mark.unit
 
 ROOT = Path(__file__).resolve().parent.parent
 CSS_PATH = ROOT / "assets" / "brand" / "lantern_logo" / "lantern_logo.css"

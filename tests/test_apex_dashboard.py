@@ -20,6 +20,8 @@ from pathlib import Path
 
 import pytest
 
+pytestmark = pytest.mark.unit
+
 from transformation_portal.metrics.ledger import PerformanceLedger
 
 

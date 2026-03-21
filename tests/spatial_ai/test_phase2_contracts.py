@@ -19,6 +19,9 @@ from transformation_portal.spatial_ai.materials.contracts import MaterialInput, 
 from transformation_portal.spatial_ai.segmentation.contracts import SegmentationInput  # noqa: F401
 
 
+
+pytestmark = pytest.mark.unit
+
 @pytest.fixture
 def linear_test_image():
     """Create a test image in linear gamma space (gamma=1.0)."""

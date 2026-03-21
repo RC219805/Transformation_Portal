@@ -5,6 +5,9 @@ from __future__ import annotations
 import pytest
 
 
+
+pytestmark = pytest.mark.unit
+
 class TestActionSpace:
     """Tests for single-agent action space."""
 

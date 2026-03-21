@@ -6,6 +6,10 @@ import numpy as np
 from PIL import Image
 
 from src.transformation_portal.rendering.process_renderings_750 import (
+import pytest
+
+pytestmark = pytest.mark.unit
+
     CONVERTIBLE_IMAGE_SUFFIXES,
     SUPPORTED_IMAGE_SUFFIXES,
     convert_renderings_to_jpeg,

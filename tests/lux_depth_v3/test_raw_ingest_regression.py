@@ -9,7 +9,11 @@ from unittest.mock import patch
 import numpy as np
 
 from transformation_portal.lux_depth_v3.preprocessing import preprocess_image
+import pytest
 
+
+
+pytestmark = pytest.mark.unit
 
 def test_raw_ingest_uses_canonical_decoder(tmp_path: Path) -> None:
     raw = tmp_path / "test.DNG"

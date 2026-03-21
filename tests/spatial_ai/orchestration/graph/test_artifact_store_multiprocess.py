@@ -26,6 +26,9 @@ import numpy as np
 import pytest
 
 from transformation_portal.spatial_ai.orchestration.graph.artifact_store import (
+
+pytestmark = pytest.mark.unit
+
     ArtifactStore,
     CacheLockTimeout,
     ProvenanceMetadata,

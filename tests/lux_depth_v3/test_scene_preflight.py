@@ -9,6 +9,9 @@ import pytest
 from transformation_portal.lux_depth_v3.scene_context import CameraProvenance, CameraWithProvenance
 from transformation_portal.lux_depth_v3.scene_groups import SceneGroup
 from transformation_portal.lux_depth_v3.scene_preflight import (
+
+pytestmark = pytest.mark.unit
+
     preflight_artifact_path,
     validate_scene_preflight,
     write_scene_preflight_artifact,

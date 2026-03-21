@@ -24,6 +24,8 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
+pytestmark = pytest.mark.unit
+
 from transformation_portal.lux_depth_v3.config import EnhanceConfig
 from transformation_portal.lux_depth_v3.protocols.segmentation_backend import SegmentationBackend, SegmentationBackendInfo
 from transformation_portal.lux_depth_v3.segmentation_backend import (
