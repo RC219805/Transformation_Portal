@@ -376,6 +376,7 @@ class TestPerformanceBenchmarks:
 
 
 @pytest.mark.stress
+@pytest.mark.slow
 class TestResourceLimits:
     """Test behavior under resource constraints."""
 

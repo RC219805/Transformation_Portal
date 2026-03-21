@@ -68,14 +68,14 @@ CATEGORY_MARKERS = frozenset(
 VALID_MARKERS = CATEGORY_MARKERS | BUILTIN_MARKERS
 
 # Directory-based marker requirements per ADR-044
-# Maps directory name -> required markers
+# Maps directory name -> required markers (ALL must be present)
 DIRECTORY_MARKER_REQUIREMENTS: dict[str, list[str]] = {
     "unit": ["unit"],
-    "security": ["security"],  # Also implicitly requires unit, but we check presence of at least one
+    "smoke": ["unit"],  # smoke tests map to unit per ADR-044 decision
+    "security": ["security"],
     "integration": ["integration"],
     "benchmarks": ["benchmark"],
-    "stress": ["stress"],  # Also typically has slow
-    # smoke tests map to unit per ADR-044 decision
+    "stress": ["stress", "slow"],  # stress tests must also be marked slow
 }
 
 
@@ -270,16 +270,18 @@ def check_marker_requirements(test_func: TestFunction) -> MarkerViolation | None
             issue="missing required marker (add @pytest.mark.unit, @pytest.mark.ml, etc.)",
         )
 
-    # Check directory-specific requirements
+    # Check directory-specific requirements (ALL required markers must be present)
     dir_type = get_directory_type(test_func.file_path)
     if dir_type and dir_type in DIRECTORY_MARKER_REQUIREMENTS:
         required = set(DIRECTORY_MARKER_REQUIREMENTS[dir_type])
-        if not (category_markers & required):
+        missing = required - category_markers
+        if missing:
+            missing_str = ", ".join(f"@pytest.mark.{m}" for m in sorted(missing))
             return MarkerViolation(
                 file_path=test_func.file_path,
                 name=test_func.name,
                 lineno=test_func.lineno,
-                issue=f"tests in {dir_type}/ should have @pytest.mark.{list(required)[0]}",
+                issue=f"tests in {dir_type}/ require {missing_str}",
             )
 
     return None
@@ -293,8 +295,9 @@ def audit_test_directory(tests_root: Path, verbose: bool = False) -> AuditReport
         print(f"ERROR: Tests directory not found: {tests_root}", file=sys.stderr)
         return report
 
-    # Collect and deduplicate test files efficiently
-    test_files = sorted(set(tests_root.rglob("test_*.py")) | set(tests_root.rglob("*_test.py")))
+    # Collect test files matching pytest's python_files config (test_*.py only)
+    # This aligns with pyproject.toml [tool.pytest.ini_options] python_files = "test_*.py"
+    test_files = sorted(tests_root.rglob("test_*.py"))
 
     for test_file in test_files:
         # Skip __pycache__ and other non-source directories
@@ -330,7 +333,9 @@ def check_files(files: Sequence[Path]) -> list[MarkerViolation]:
     for file_path in files:
         if not file_path.exists():
             continue
-        if not file_path.name.startswith("test_") and not file_path.name.endswith("_test.py"):
+        # Only check files matching pytest's python_files config (test_*.py only)
+        # This aligns with pyproject.toml [tool.pytest.ini_options] python_files = "test_*.py"
+        if not file_path.name.startswith("test_"):
             continue
 
         test_functions = scan_file(file_path)
