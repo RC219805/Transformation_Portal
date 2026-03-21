@@ -66,5 +66,12 @@ repos:
         files: ^requirements/.*\.in$|^requirements/.*\.txt$
         pass_filenames: false
 
+      - id: check-test-markers
+        name: Check Test Markers (ADR-044)
+        entry: python scripts/validation/check_test_markers.py
+        language: system
+        files: ^tests/.*\.py$
+        types: [python]
+
 # Manual run: pre-commit run --all-files
 # Install: pre-commit install

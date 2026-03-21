@@ -5,6 +5,10 @@ import stat
 import subprocess
 from pathlib import Path
 
+import pytest
+
+pytestmark = [pytest.mark.unit]
+
 
 def test_shell_repo_root_fallback_without_git(tmp_path: Path) -> None:
     repo_root = Path(__file__).resolve().parents[2]

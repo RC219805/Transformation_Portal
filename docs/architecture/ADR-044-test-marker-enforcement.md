@@ -1,7 +1,8 @@
 # ADR-044: Test Marker Enforcement Policy
 
-**Status:** PROPOSED
+**Status:** ACCEPTED
 **Date:** 2026-03-20
+**Implemented:** 2026-03-21
 **Decision Makers:** Architect
 **Replaces:** None
 
@@ -14,20 +15,20 @@ The repository has a well-documented testing strategy (`docs/testing/STRATEGY.md
 - Pytest markers (`@pytest.mark.unit`, `@pytest.mark.ml`, etc.)
 - CI execution patterns
 
-However, **75% of tests (3,168 of 4,221 functions) lack markers**, making it impossible to:
+However, **~53% of tests (2,323 of 4,381 functions) lack markers**, making it impossible to:
 - Run targeted test suites efficiently
 - Parallelize CI jobs by test type
 - Provide fast PR feedback
 
-### Current State
+### Current State (as of implementation)
 
 | Marker | Count | Expected |
 |--------|-------|----------|
-| No marker | 3,168 (75%) | <5% |
-| `@pytest.mark.unit` | 10 | 2,500+ |
-| `@pytest.mark.integration` | 5 | 200+ |
-| `@pytest.mark.ml` | 50 | 150+ |
-| `@pytest.mark.security` | 18 | 50+ |
+| No marker | 2,323 (53%) | <5% |
+| `@pytest.mark.unit` | 1,476 | 2,500+ |
+| `@pytest.mark.ml` | 293 | 300+ |
+| `@pytest.mark.security` | 157 | 150+ |
+| `@pytest.mark.integration` | 21 | 200+ |
 
 ---
 
@@ -52,21 +53,36 @@ All existing tests will be tagged with appropriate markers within Q2 2026:
 
 ### 2. Enforce Markers on New Tests
 
-A pre-commit hook will require all new test functions to have at least one marker.
+A pre-commit hook requires all new test functions to have at least one marker.
 
-**Note:** The `scripts/validation/check_test_markers.py` script is a **planned artifact** to be implemented as part of this ADR. It does not exist yet. **Target: Week 2 of ADR-044 implementation** (see Implementation Plan below).
+**Implementation:** `scripts/validation/check_test_markers.py`
 
-**Planned Implementation:**
+The script supports two modes:
+1. **Pre-commit mode**: Validates specific files passed as arguments
+2. **Audit mode**: Scans entire `tests/` directory for comprehensive coverage report
+
+**Pre-commit configuration** (`.pre-commit-config.yaml`):
 ```yaml
-# .pre-commit-config.yaml addition (to be added when script is implemented)
 - repo: local
   hooks:
     - id: check-test-markers
-      name: Ensure test functions have markers
-      entry: scripts/validation/check_test_markers.py
-      language: python
+      name: Check Test Markers (ADR-044)
+      entry: python scripts/validation/check_test_markers.py
+      language: system
       files: ^tests/.*\.py$
       types: [python]
+```
+
+**Usage:**
+```bash
+# Pre-commit mode (validate specific files)
+python scripts/validation/check_test_markers.py tests/test_foo.py
+
+# Full audit mode (scan entire tests/ directory)
+python scripts/validation/check_test_markers.py --audit
+
+# Show detailed report
+python scripts/validation/check_test_markers.py --audit --verbose
 ```
 
 ### 3. CI Alignment
@@ -136,9 +152,10 @@ Canonical markers as registered in `pyproject.toml` under `[tool.pytest.ini_opti
 
 ## Enforcement
 
-- [ ] Pre-commit hook blocks unmarked tests
-- [ ] CI runs marker-specific jobs
-- [ ] Weekly audit script verifies marker coverage
+- [x] Pre-commit hook blocks unmarked tests (`check-test-markers` hook)
+- [x] Audit script verifies marker coverage (`--audit` mode)
+- [ ] CI runs marker-specific jobs (in progress)
+- [ ] Weekly automated audit (future enhancement)
 
 ---
 

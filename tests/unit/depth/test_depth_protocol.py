@@ -10,6 +10,8 @@ from typing import Iterator, List, Optional
 import numpy as np
 import pytest
 
+pytestmark = [pytest.mark.unit]
+
 from transformation_portal.lux_depth_v3.contracts import DepthArtifact, DepthProvenance, LicenseTier
 from transformation_portal.lux_depth_v3.protocols import (
     BackendCapability,

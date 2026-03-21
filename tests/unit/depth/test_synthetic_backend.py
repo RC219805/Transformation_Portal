@@ -5,7 +5,10 @@ ML frameworks, making it ideal for CI environments and fast tests.
 """
 
 import numpy as np
+import pytest
 from PIL import Image
+
+pytestmark = [pytest.mark.unit]
 
 from transformation_portal.depth.backends.protocol import LicenseType
 from transformation_portal.depth.backends.registry import DepthBackendRegistry
