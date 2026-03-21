@@ -157,7 +157,11 @@ def add_pytest_import(content: str) -> str:
 
 
 def add_pytestmark(content: str, markers: list[str]) -> str:
-    """Add pytestmark declaration to file content."""
+    """Add pytestmark declaration to file content.
+
+    Uses AST parsing to reliably find the last import statement and insert
+    the pytestmark after all imports are complete.
+    """
     lines = content.split("\n")
 
     # Build the marker line
@@ -167,72 +171,60 @@ def add_pytestmark(content: str, markers: list[str]) -> str:
         marker_parts = ", ".join(f"pytest.mark.{m}" for m in markers)
         marker_line = f"pytestmark = [{marker_parts}]"
 
-    # Find insertion point (after imports, before first non-import code)
+    # Determine insertion point using AST to avoid splitting import blocks.
+    source = "\n".join(lines)
+    last_import_line: int | None = None
+    docstring_end_line: int | None = None
     insert_idx = 0
-    in_docstring = False
-    docstring_quote = None
-    past_imports = False
-    in_multiline_import = False
 
-    for i, line in enumerate(lines):
-        stripped = line.strip()
-
-        # Handle docstrings
-        if not in_docstring:
-            if stripped.startswith('"""') or stripped.startswith("'''"):
-                docstring_quote = stripped[:3]
-                if stripped.count(docstring_quote) >= 2:
-                    # Single-line docstring
+    try:
+        module = ast.parse(source)
+    except SyntaxError:
+        # Fall back to line-based scanning if the file is not valid Python.
+        # Find last import line manually
+        in_multiline_import = False
+        for i, line in enumerate(lines):
+            stripped = line.strip()
+            if in_multiline_import:
+                if ")" in stripped:
+                    in_multiline_import = False
                     insert_idx = i + 1
-                    continue
-                in_docstring = True
                 continue
+            if stripped.startswith("import ") or stripped.startswith("from "):
+                insert_idx = i + 1
+                if "(" in stripped and ")" not in stripped:
+                    in_multiline_import = True
+    else:
+        # Record module docstring end line, if present.
+        if module.body:
+            first_node = module.body[0]
+            if (
+                isinstance(first_node, ast.Expr)
+                and isinstance(getattr(first_node, "value", None), ast.Constant)
+                and isinstance(first_node.value.value, str)
+            ):
+                docstring_end_line = getattr(first_node, "end_lineno", first_node.lineno)
+
+        # Find the last top-level import or from-import.
+        for node in module.body:
+            if isinstance(node, (ast.Import, ast.ImportFrom)):
+                end_lineno = getattr(node, "end_lineno", node.lineno)
+                if last_import_line is None or end_lineno > last_import_line:
+                    last_import_line = end_lineno
+
+        if last_import_line is not None:
+            # Insert after the last import (1-based to 0-based index).
+            insert_idx = last_import_line
+        elif docstring_end_line is not None:
+            # No imports; insert after module docstring.
+            insert_idx = docstring_end_line
         else:
-            if docstring_quote and docstring_quote in stripped:
-                in_docstring = False
-                insert_idx = i + 1
-            continue
+            # No imports or docstring; insert at the top.
+            insert_idx = 0
 
-        # Track multi-line imports
-        if in_multiline_import:
-            if ")" in stripped:
-                in_multiline_import = False
-                insert_idx = i + 1
-            continue
-
-        # Handle imports and from imports
-        if stripped.startswith("import ") or stripped.startswith("from "):
-            insert_idx = i + 1
-            past_imports = True
-            # Check if this starts a multi-line import
-            if "(" in stripped and ")" not in stripped:
-                in_multiline_import = True
-            continue
-
-        # Handle __future__ imports specially (must come first)
-        if "from __future__" in stripped:
-            insert_idx = i + 1
-            continue
-
-        # Handle blank lines after imports
-        if past_imports and not stripped:
-            insert_idx = i + 1
-            continue
-
-        # Handle comments
-        if stripped.startswith("#"):
-            if past_imports:
-                # Comments after imports - good insertion point
-                insert_idx = i
-                break
-            continue
-
-        # First real code - insert before it
-        if stripped and not stripped.startswith("#"):
-            if not past_imports:
-                # No imports found, insert after docstring
-                pass
-            break
+    # Skip over any blank lines immediately following the chosen insertion line.
+    while 0 <= insert_idx < len(lines) and not lines[insert_idx].strip():
+        insert_idx += 1
 
     # Insert marker line with appropriate spacing
     if insert_idx < len(lines) and lines[insert_idx].strip():
@@ -296,12 +288,13 @@ def process_file(file_path: Path, dry_run: bool = True) -> tuple[bool, str]:
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Retrofit pytest markers to test files per ADR-044")
-    parser.add_argument(
+    mode_group = parser.add_mutually_exclusive_group(required=True)
+    mode_group.add_argument(
         "--dry-run",
         action="store_true",
         help="Show what would be changed without modifying files",
     )
-    parser.add_argument(
+    mode_group.add_argument(
         "--apply",
         action="store_true",
         help="Apply changes to files",
@@ -315,11 +308,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     args = parser.parse_args(argv)
 
-    if not args.dry_run and not args.apply:
-        print("ERROR: Must specify --dry-run or --apply", file=sys.stderr)
-        return 1
-
-    dry_run = args.dry_run or not args.apply
+    dry_run = args.dry_run
 
     # Collect test files
     test_files: list[Path] = []

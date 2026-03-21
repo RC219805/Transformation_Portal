@@ -5,9 +5,9 @@ import json
 import numpy as np
 import pytest
 
-pytestmark = pytest.mark.unit
-
 from transformation_portal.depth.backends import DepthCacheWriter, DepthResult
+
+pytestmark = pytest.mark.unit
 
 
 @pytest.mark.unit

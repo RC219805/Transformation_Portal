@@ -5,10 +5,10 @@ import json
 import numpy as np
 import pytest
 
-pytestmark = pytest.mark.unit
-
 from transformation_portal.determinism.ingest import probe_subnormals_preserved
 from transformation_portal.determinism.jcs import dumps
+
+pytestmark = pytest.mark.unit
 
 
 @pytest.mark.unit

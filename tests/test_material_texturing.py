@@ -8,9 +8,9 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from PIL import Image
 
 pytestmark = pytest.mark.unit
-from PIL import Image
 
 # Import after stubs are in place to prevent lux_render_pipeline from loading
 # heavy ML dependencies during test setup - this will be done after stub setup
