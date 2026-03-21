@@ -9,6 +9,7 @@
 pytest>=8,<10
 pytest-cov>=4.0,<8
 pytest-json-report>=1.5,<2
+pytest-xdist>=3.5,<4  # parallel test execution (ADR-044 CI optimization)
 hypothesis>=6,<7
 jsonschema>=4.23,<5
 httpx>=0.28,<1  # required for FastAPI/Starlette TestClient in HTTP contract tests

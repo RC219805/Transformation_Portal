@@ -315,7 +315,7 @@ assert report['bit_depth']['bit_depth_preserved'] == True, 'Bit-depth regression
 
 ## References
 
-- **Quality Firewall Contract:** `docs/quality_firewall.md` (TODO: create if missing)
+- **Quality Firewall Contract:** `docs/historical/QUALITY_FIREWALL_VALIDATION_COMPLETE.md`
 - **PIL Bit-Depth Behavior:** https://pillow.readthedocs.io/en/stable/handbook/concepts.html#modes
 - **tifffile Documentation:** https://github.com/cgohlke/tifffile
 - **TIFF Specification:** https://www.itu.int/itudoc/itu-t/com16/tiff-fx/docs/tiff6.pdf (Tag 258: BitsPerSample)
