@@ -49,9 +49,8 @@ BUILTIN_MARKERS = frozenset(
     }
 )
 
-# Valid pytest markers as registered in pyproject.toml
-# Includes both semantic markers and built-in markers for validation purposes
-VALID_MARKERS = frozenset(
+# Semantic test category markers as registered in pyproject.toml
+CATEGORY_MARKERS = frozenset(
     {
         "slow",
         "unit",
@@ -63,7 +62,10 @@ VALID_MARKERS = frozenset(
         "stress",
         "benchmark",
     }
-) | BUILTIN_MARKERS
+)
+
+# Valid pytest markers: semantic markers plus built-in markers
+VALID_MARKERS = CATEGORY_MARKERS | BUILTIN_MARKERS
 
 # Directory-based marker requirements per ADR-044
 # Maps directory name -> required markers
@@ -231,7 +233,13 @@ def scan_file(file_path: Path) -> list[TestFunction]:
         source = file_path.read_text(encoding="utf-8")
         tree = ast.parse(source, filename=str(file_path))
     except SyntaxError as e:
-        print(f"WARNING: Skipping {file_path} due to syntax error: {e}", file=sys.stderr)
+        lineno_info = f" at line {e.lineno}" if e.lineno else ""
+        msg_info = f": {e.msg}" if e.msg else ""
+        print(
+            f"WARNING: Cannot validate markers in {file_path} due to syntax error{lineno_info}{msg_info}. "
+            "Fix syntax errors before running marker validation.",
+            file=sys.stderr,
+        )
         return []
 
     visitor = TestMarkerVisitor(file_path)
@@ -436,10 +444,8 @@ def main() -> int:
             "\nRemediation: Add @pytest.mark.unit (or appropriate marker) to each test function.",
             file=sys.stderr,
         )
-        print(
-            "Valid markers: unit, integration, ml, security, benchmark, slow, stress, regression, golden",
-            file=sys.stderr,
-        )
+        valid_marker_list = ", ".join(sorted(CATEGORY_MARKERS))
+        print(f"Valid markers: {valid_marker_list}", file=sys.stderr)
         return 1
 
     else:
