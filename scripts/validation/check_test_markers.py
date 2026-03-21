@@ -215,11 +215,7 @@ class TestMarkerVisitor(ast.NodeVisitor):
         # Handle: @pytest.mark.unit
         if isinstance(node, ast.Attribute):
             if isinstance(node.value, ast.Attribute):
-                if (
-                    isinstance(node.value.value, ast.Name)
-                    and node.value.value.id == "pytest"
-                    and node.value.attr == "mark"
-                ):
+                if isinstance(node.value.value, ast.Name) and node.value.value.id == "pytest" and node.value.attr == "mark":
                     return node.attr
         # Handle: @pytest.mark.unit() - marker with call
         if isinstance(node, ast.Call):
@@ -298,9 +294,7 @@ def audit_test_directory(tests_root: Path, verbose: bool = False) -> AuditReport
         return report
 
     # Collect and deduplicate test files efficiently
-    test_files = sorted(
-        set(tests_root.rglob("test_*.py")) | set(tests_root.rglob("*_test.py"))
-    )
+    test_files = sorted(set(tests_root.rglob("test_*.py")) | set(tests_root.rglob("*_test.py")))
 
     for test_file in test_files:
         # Skip __pycache__ and other non-source directories
@@ -367,7 +361,8 @@ def _parse_args() -> argparse.Namespace:
         help="Run full audit on tests/ directory",
     )
     parser.add_argument(
-        "--verbose", "-v",
+        "--verbose",
+        "-v",
         action="store_true",
         help="Show detailed output",
     )
