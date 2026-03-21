@@ -1,0 +1,9 @@
+Defaulting to user installation because normal site-packages is not writeable
+Requirement already satisfied: pip-tools in /home/runner/.local/lib/python3.12/site-packages (7.4.1)
+Requirement already satisfied: build>=1.0.0 in /home/runner/.local/lib/python3.12/site-packages (from pip-tools) (1.4.0)
+Requirement already satisfied: click>=8 in /usr/lib/python3/dist-packages (from pip-tools) (8.1.6)
+Requirement already satisfied: pip>=22.2 in /usr/lib/python3/dist-packages (from pip-tools) (24.0)
+Requirement already satisfied: pyproject-hooks in /home/runner/.local/lib/python3.12/site-packages (from pip-tools) (1.2.0)
+Requirement already satisfied: setuptools in /usr/lib/python3/dist-packages (from pip-tools) (68.1.2)
+Requirement already satisfied: wheel in /usr/lib/python3/dist-packages (from pip-tools) (0.42.0)
+Requirement already satisfied: packaging>=24.0 in /usr/lib/python3/dist-packages (from build>=1.0.0->pip-tools) (24.0)
