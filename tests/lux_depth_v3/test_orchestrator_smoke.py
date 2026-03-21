@@ -7,7 +7,10 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 import numpy as np
+import pytest
 from PIL import Image
+
+pytestmark = pytest.mark.unit
 
 PIPELINE_PACKAGE = "transformation_portal.lux_depth_v3"
 ORCHESTRATOR_MODULE = "transformation_portal.lux_depth_v3.orchestrator"

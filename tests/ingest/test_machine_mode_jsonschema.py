@@ -20,6 +20,8 @@ from transformation_portal.ingest.schemas import (
 
 from .schema_utils import normalize_machine_payload, validate_machine_payload
 
+pytestmark = pytest.mark.unit
+
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT_PATH = PROJECT_ROOT / "scripts" / "test_metadata_extraction.py"
 

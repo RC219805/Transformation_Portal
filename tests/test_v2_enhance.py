@@ -22,6 +22,8 @@ from transformation_portal.lux_depth_v3.v2_enhance import (
 from transformation_portal.lux_depth_v3.v2_presets import V2EnhancementConfig
 from transformation_portal.stage_graph.stage import StageStatus
 
+pytestmark = pytest.mark.unit
+
 
 class TestFindDepthMap:
     """Test depth map discovery logic."""

@@ -25,6 +25,8 @@ import pytest
 
 from transformation_portal.storage.cas_store import ArtifactStore, CASError, CASObject
 
+pytestmark = pytest.mark.unit
+
 
 class TestAtomicWrites:
     """Tests for atomic write guarantees."""

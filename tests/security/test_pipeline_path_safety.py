@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import pytest
 
+pytestmark = pytest.mark.security
+
 
 @pytest.mark.security
 class TestPipelineNameValidation:

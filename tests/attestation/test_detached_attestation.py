@@ -15,6 +15,8 @@ from transformation_portal.attestation.detached import (
 from transformation_portal.attestation.verify import bind_attestation_to_evidence, validate_detached_attestation_surface
 from transformation_portal.ingest.evidence import build_evidence_payload, load_projection_profile
 
+pytestmark = pytest.mark.unit
+
 
 def _machine_extract_payload(*, elapsed_seconds: float) -> dict[str, Any]:
     return {

@@ -16,6 +16,8 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+
+pytestmark = pytest.mark.unit
 import yaml
 
 repo_root = Path(__file__).parent.parent

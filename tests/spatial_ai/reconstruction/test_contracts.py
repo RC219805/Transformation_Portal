@@ -11,6 +11,8 @@ from transformation_portal.spatial_ai.reconstruction.contracts import (
     Scene3D,
 )
 
+pytestmark = pytest.mark.unit
+
 
 class TestCameraParams:
     """Test CameraParams contract."""

@@ -17,6 +17,8 @@ from transformation_portal.lux_depth_v3.scene_context import CameraProvenance, C
 from transformation_portal.lux_depth_v3.scene_groups import SceneGroup, compute_scene_id
 from transformation_portal.spatial_ai.reconstruction.contracts import CameraParams
 
+pytestmark = pytest.mark.unit
+
 
 def _camera(tx: float) -> CameraWithProvenance:
     intrinsics = np.array(

@@ -7,6 +7,10 @@ and contain expected sections.
 import re
 from pathlib import Path
 
+import pytest
+
+pytestmark = pytest.mark.unit
+
 CUSTOM_AGENT_GUIDE = Path(__file__).parents[1] / "docs" / "guides" / "CUSTOM_AGENT_GUIDE.md"
 
 

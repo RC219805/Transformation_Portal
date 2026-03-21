@@ -7,6 +7,8 @@ Tests validate:
 - Bucket matching and filtering
 """
 
+import pytest
+
 from transformation_portal.metrics.aggregator import (
     compute_bucket_stats,
     compute_global_stats,
@@ -14,6 +16,8 @@ from transformation_portal.metrics.aggregator import (
     compute_worst_zone_p95,
 )
 from transformation_portal.metrics.performance_capsule import PerformanceBucket, PerformanceCapsule
+
+pytestmark = pytest.mark.unit
 
 
 class TestAggregator:

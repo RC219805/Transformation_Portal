@@ -22,6 +22,8 @@ from typing import Any, Dict
 import numpy as np
 import pytest
 
+pytestmark = pytest.mark.unit
+
 # Performance ledger path
 PERFORMANCE_LEDGER = Path(__file__).parent / "performance_ledger.json"
 

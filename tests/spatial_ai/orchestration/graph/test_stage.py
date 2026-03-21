@@ -23,6 +23,8 @@ from transformation_portal.spatial_ai.orchestration.graph.stage import (
     StageMetadata,
 )
 
+pytestmark = pytest.mark.unit
+
 
 class TestResourceRequirements:
     """Tests for ResourceRequirements dataclass."""

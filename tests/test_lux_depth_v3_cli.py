@@ -11,6 +11,8 @@ from typer.testing import CliRunner
 
 from transformation_portal.lux_depth_v3.__main__ import _parse_bool_flag, app
 
+pytestmark = pytest.mark.unit
+
 runner = CliRunner()
 
 

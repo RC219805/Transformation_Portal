@@ -24,6 +24,8 @@ from transformation_portal.lux_depth_v3.pixel_ops_executor import (
     apply_pixel_ops,
 )
 
+pytestmark = pytest.mark.unit
+
 
 @dataclass
 class PhaseATestConfig:

@@ -14,6 +14,8 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 
+pytestmark = pytest.mark.unit
+
 from transformation_portal.depth.backends.protocol import DepthResult
 from transformation_portal.lux_depth_v3.config import EnhanceConfig, ModelVariant
 from transformation_portal.lux_depth_v3.input_manager import ImageInput

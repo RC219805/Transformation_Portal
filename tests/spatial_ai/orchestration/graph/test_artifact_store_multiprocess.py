@@ -31,6 +31,8 @@ from transformation_portal.spatial_ai.orchestration.graph.artifact_store import 
     ProvenanceMetadata,
 )
 
+pytestmark = pytest.mark.unit
+
 
 def _make_cache_key(seed: str) -> str:
     """Generate valid SHA256 cache key for testing.

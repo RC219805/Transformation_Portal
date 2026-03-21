@@ -18,6 +18,8 @@ import pytest
 from transformation_portal.spatial_ai.materials.contracts import MaterialInput, PBRTextures
 from transformation_portal.spatial_ai.segmentation.contracts import SegmentationInput  # noqa: F401
 
+pytestmark = pytest.mark.unit
+
 
 @pytest.fixture
 def linear_test_image():

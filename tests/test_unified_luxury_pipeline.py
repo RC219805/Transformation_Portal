@@ -37,6 +37,8 @@ from transformation_portal.pipelines.unified_luxury_pipeline import (
     process_luxury_render,
 )
 
+pytestmark = pytest.mark.unit
+
 
 @pytest.fixture
 def temp_dir():

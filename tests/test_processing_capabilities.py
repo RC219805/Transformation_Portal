@@ -2,6 +2,8 @@ import pytest
 
 from luxury_tiff_batch_processor import LuxuryGradeException, ProcessingCapabilities
 
+pytestmark = pytest.mark.unit
+
 pytest.importorskip("numpy")
 
 

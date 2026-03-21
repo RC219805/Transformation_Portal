@@ -9,7 +9,10 @@ import sys
 import tempfile
 from pathlib import Path
 
+import pytest
 from PIL import Image
+
+pytestmark = pytest.mark.unit
 
 # Add scripts to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))

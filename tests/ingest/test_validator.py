@@ -53,6 +53,8 @@ from transformation_portal.ingest.validator import (
     validate_schema_errors,
 )
 
+pytestmark = pytest.mark.unit
+
 
 class TestExitCodeAggregation:
     """Tests for centralized ingest exit-code classification and aggregation."""
@@ -423,6 +425,7 @@ class TestValidateLinearGamma:
         """Test gamma-corrected image is detected (deterministic fixture)."""
         try:
             import numpy as np
+
         except ImportError:
             pytest.skip("numpy not available")
 

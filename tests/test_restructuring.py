@@ -6,6 +6,10 @@ Run `pip install -e .` from the repository root before running tests.
 
 from pathlib import Path
 
+import pytest
+
+pytestmark = pytest.mark.unit
+
 
 def test_depth_module_import():
     """Test that depth module can be imported from new location."""

@@ -1,6 +1,10 @@
 from pathlib import Path
 
+import pytest
+
 from transformation_portal.lux_depth_v3.scene_groups import build_scene_groups
+
+pytestmark = pytest.mark.unit
 
 
 def test_scene_groups_default_behavior():

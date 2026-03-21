@@ -10,6 +10,8 @@ from transformation_portal.spatial_ai.materials.contracts import (
     PBRTextures,
 )
 
+pytestmark = pytest.mark.unit
+
 
 class TestMaterialInput:
     """Test MaterialInput contract validation."""

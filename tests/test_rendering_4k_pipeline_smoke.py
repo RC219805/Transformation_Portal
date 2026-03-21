@@ -6,7 +6,10 @@ import importlib
 import sys
 from pathlib import Path
 
+import pytest
 from PIL import Image
+
+pytestmark = pytest.mark.unit
 
 PIPELINE_MODULE = "transformation_portal.pipelines.rendering_4k_pipeline"
 CONTROLNET_AUX_MODULE = "controlnet_aux"

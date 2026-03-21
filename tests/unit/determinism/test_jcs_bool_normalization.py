@@ -8,6 +8,8 @@ import pytest
 from transformation_portal.determinism.ingest import probe_subnormals_preserved
 from transformation_portal.determinism.jcs import dumps
 
+pytestmark = pytest.mark.unit
+
 
 @pytest.mark.unit
 def test_probe_subnormals_preserved_returns_python_bool():

@@ -10,6 +10,8 @@ import tempfile
 from pathlib import Path
 
 import pytest
+
+pytestmark = pytest.mark.unit
 from PIL import Image
 
 # Import the modules to test

@@ -14,6 +14,8 @@ import numpy as np
 import pytest
 from PIL import Image
 
+pytestmark = pytest.mark.integration
+
 # Skip if checkpoint not available
 CHECKPOINT_PATH = Path("checkpoints/depth_pro.pt")
 CHECKPOINT_AVAILABLE = CHECKPOINT_PATH.exists()

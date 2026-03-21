@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import numpy as np
+import pytest
 from PIL import Image
 
 from src.transformation_portal.rendering.process_renderings_750 import (
@@ -11,6 +12,8 @@ from src.transformation_portal.rendering.process_renderings_750 import (
     convert_renderings_to_jpeg,
     ensure_supported_renderings,
 )
+
+pytestmark = pytest.mark.unit
 
 
 def _write_dummy_image(path: Path) -> None:

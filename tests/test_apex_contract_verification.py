@@ -16,6 +16,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+pytestmark = pytest.mark.unit
+
 from transformation_portal.metrics.contracts import BucketStats
 from transformation_portal.metrics.gate import evaluate_gate
 from transformation_portal.metrics.performance_capsule import PerformanceCapsule

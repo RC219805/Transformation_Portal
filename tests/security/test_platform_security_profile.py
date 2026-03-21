@@ -19,6 +19,8 @@ from transformation_portal.core.platform_matrix import (
     get_security_profile,
 )
 
+pytestmark = pytest.mark.security
+
 
 def _torch_available() -> bool:
     """Check if PyTorch is available."""

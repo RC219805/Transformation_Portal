@@ -39,6 +39,8 @@ from transformation_portal.stage_graph.graph import StageGraph
 from transformation_portal.stage_graph.stage import Stage, StageContext, StageResult, StageStatus
 from transformation_portal.storage.cas_store import ArtifactStore
 
+pytestmark = pytest.mark.unit
+
 
 class TestFileLock:
     """Tests for FileLock concurrency primitive."""

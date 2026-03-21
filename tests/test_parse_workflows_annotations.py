@@ -4,6 +4,8 @@ import pytest
 
 from transformation_portal.analyzers.parse_workflows import WorkflowBug, WorkflowParser, render_github_annotations
 
+pytestmark = pytest.mark.unit
+
 # pylint: disable=redefined-outer-name  # pytest fixtures
 
 

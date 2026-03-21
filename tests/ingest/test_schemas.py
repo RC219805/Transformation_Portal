@@ -26,6 +26,8 @@ from transformation_portal.ingest.schemas import (
     ToolchainVersion,
 )
 
+pytestmark = pytest.mark.unit
+
 
 class TestToolchainVersion:
     """Tests for ToolchainVersion schema."""

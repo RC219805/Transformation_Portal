@@ -13,6 +13,10 @@ import os
 import subprocess
 from pathlib import Path
 
+import pytest
+
+pytestmark = pytest.mark.unit
+
 
 def test_organization_scripts_exist():
     """Test that all organization scripts exist and are executable."""

@@ -3,6 +3,8 @@ from pathlib import Path
 
 import pytest
 
+pytestmark = pytest.mark.unit
+
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 TOOL_PATH = PROJECT_ROOT / "scripts" / "validation" / "check_requirements_lock_contract.py"
 SPEC = importlib.util.spec_from_file_location("check_requirements_lock_contract", TOOL_PATH)

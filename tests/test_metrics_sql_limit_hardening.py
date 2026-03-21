@@ -9,6 +9,8 @@ from pathlib import Path
 
 import pytest
 
+pytestmark = pytest.mark.unit
+
 from transformation_portal.metrics.comparator import query_baseline_stats
 from transformation_portal.metrics.ledger import PerformanceLedger
 from transformation_portal.metrics.performance_capsule import PerformanceCapsule

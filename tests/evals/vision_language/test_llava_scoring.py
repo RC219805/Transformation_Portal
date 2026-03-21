@@ -11,6 +11,8 @@ from transformation_portal.evals.vision_language.llava_scoring import (
     severity_to_numeric,
 )
 
+pytestmark = pytest.mark.unit
+
 
 class TestRecomputeSummaryScore:
     """Tests for recompute_summary_score function."""

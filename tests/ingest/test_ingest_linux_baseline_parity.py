@@ -12,8 +12,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 from transformation_portal.ingest.metadata_service import ExtractRequest, ExtractResult, MetadataExtractionService
 from transformation_portal.ingest.normalize_machine_json import canonical_json_bytes, normalize_machine_payload
+
+pytestmark = pytest.mark.unit
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 BASELINE_DIR = PROJECT_ROOT / "tests" / "fixtures" / "ingest" / "linux_baseline"

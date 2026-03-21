@@ -9,6 +9,8 @@ from pathlib import Path
 
 import pytest
 
+pytestmark = pytest.mark.unit
+
 from .schema_utils import validate_archive_machine_payload
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]

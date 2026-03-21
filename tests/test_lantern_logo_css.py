@@ -5,7 +5,11 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import pytest
+
 from .documentation import documents, valid_until
+
+pytestmark = pytest.mark.unit
 
 ROOT = Path(__file__).resolve().parent.parent
 CSS_PATH = ROOT / "assets" / "brand" / "lantern_logo" / "lantern_logo.css"

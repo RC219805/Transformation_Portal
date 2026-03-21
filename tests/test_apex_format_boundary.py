@@ -8,6 +8,8 @@ import logging
 
 import numpy as np
 import pytest
+
+pytestmark = pytest.mark.unit
 from PIL import Image
 
 from transformation_portal.lux_depth_v3.preprocessing import preprocess_image_linear

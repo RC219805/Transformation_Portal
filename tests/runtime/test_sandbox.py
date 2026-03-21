@@ -12,6 +12,8 @@ from pathlib import Path
 
 import pytest
 
+pytestmark = pytest.mark.unit
+
 from transformation_portal.core.security.fs_guard import FSContext, FSGuard
 from transformation_portal.core.security.path_safety import PathSafetyError
 from transformation_portal.runtime.sandbox import (

@@ -8,6 +8,8 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
+pytestmark = pytest.mark.unit
+
 pytest.importorskip("PIL.Image")
 
 

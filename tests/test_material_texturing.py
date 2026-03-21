@@ -10,6 +10,8 @@ import numpy as np
 import pytest
 from PIL import Image
 
+pytestmark = pytest.mark.unit
+
 # Import after stubs are in place to prevent lux_render_pipeline from loading
 # heavy ML dependencies during test setup - this will be done after stub setup
 # to avoid ImportError

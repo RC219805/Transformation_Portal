@@ -10,6 +10,8 @@ from transformation_portal.models.hf_lock import (
     HFRequiredFile,
 )
 
+pytestmark = pytest.mark.unit
+
 
 class TestHFRequiredFile:
     """Tests for HFRequiredFile dataclass."""

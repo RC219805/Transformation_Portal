@@ -25,6 +25,10 @@ from fnmatch import fnmatch
 from pathlib import Path
 from typing import Any
 
+import pytest
+
+pytestmark = pytest.mark.unit
+
 # ---------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------

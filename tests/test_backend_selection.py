@@ -10,6 +10,8 @@ import pytest
 
 from src.transformation_portal.lux_depth_v3.manifest import BackendSelectionMetadata, CombinedManifest
 
+pytestmark = pytest.mark.unit
+
 
 def test_backend_selection_metadata_schema():
     """Test BackendSelectionMetadata schema."""

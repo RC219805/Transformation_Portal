@@ -7,7 +7,10 @@ import sys
 import types
 from pathlib import Path
 
+import pytest
 from PIL import Image
+
+pytestmark = pytest.mark.unit
 
 PIPELINE_MODULE = "transformation_portal.pipeline_unified"
 QUALITY_BRIDGE_MODULE = "transformation_portal.pipelines.quality_feedback_bridge"

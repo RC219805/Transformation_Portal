@@ -7,6 +7,8 @@ import pytest
 
 from transformation_portal.depth.backends import DepthCacheWriter, DepthResult
 
+pytestmark = pytest.mark.unit
+
 
 @pytest.mark.unit
 class TestDepthCacheWriter:

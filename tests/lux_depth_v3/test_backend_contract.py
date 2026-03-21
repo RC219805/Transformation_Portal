@@ -11,6 +11,8 @@ from transformation_portal.lux_depth_v3._backend_contract import (
 from transformation_portal.lux_depth_v3.config import EnhanceConfig
 from transformation_portal.lux_depth_v3.manifest import BackendSelectionMetadata
 
+pytestmark = pytest.mark.unit
+
 
 def test_normalize_backend_id_warns_for_legacy_alias():
     with pytest.warns(FutureWarning, match="depth_anything_v3"):

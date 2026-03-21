@@ -5,6 +5,8 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 
+pytestmark = pytest.mark.unit
+
 from transformation_portal.stage_graph.stage import StageContext, StageStatus
 from transformation_portal.stage_graph.stages.upscaling import UpscalingStage
 

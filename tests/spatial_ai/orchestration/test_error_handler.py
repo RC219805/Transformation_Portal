@@ -18,6 +18,8 @@ from transformation_portal.spatial_ai.orchestration.error_handler import (
     PipelineError,
 )
 
+pytestmark = pytest.mark.unit
+
 
 class TestErrorRecoveryStrategy:
     """Test ErrorRecoveryStrategy enum."""

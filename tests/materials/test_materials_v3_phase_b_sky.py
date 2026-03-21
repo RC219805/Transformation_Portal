@@ -15,6 +15,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import numpy as np
+import pytest
 
 from transformation_portal.lux_depth_v3.bootstrap.sky_seed import detect_sky_seed
 from transformation_portal.lux_depth_v3.materials_v3_taxonomy import DEFAULT_MATERIAL_METADATA
@@ -24,6 +25,8 @@ from transformation_portal.lux_depth_v3.pixel_ops_registry import (
     sky_gradient_smooth,
     sky_temperature_shift,
 )
+
+pytestmark = pytest.mark.unit
 
 
 @dataclass

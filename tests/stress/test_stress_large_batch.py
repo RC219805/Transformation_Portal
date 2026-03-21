@@ -17,6 +17,8 @@ from typer.testing import CliRunner
 
 from transformation_portal.lux_depth_v3.pbr_cli import app
 
+pytestmark = [pytest.mark.stress, pytest.mark.slow]
+
 
 @pytest.fixture
 def large_batch(tmp_path):

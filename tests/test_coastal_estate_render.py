@@ -4,6 +4,8 @@ import types
 
 import pytest
 
+pytestmark = pytest.mark.unit
+
 from transformation_portal.rendering import coastal_estate_render as cer
 
 # pylint: disable=redefined-outer-name  # pytest fixtures

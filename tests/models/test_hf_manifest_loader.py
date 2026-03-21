@@ -12,6 +12,8 @@ from transformation_portal.models.hf_manifest_loader import (
     _common_local_root,
 )
 
+pytestmark = pytest.mark.unit
+
 
 class TestCommonLocalRoot:
     """Tests for _common_local_root utility."""

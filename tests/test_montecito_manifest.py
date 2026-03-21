@@ -1,6 +1,10 @@
 from pathlib import Path
 
+import pytest
+
 from tools.montecito_manifest import iter_files, write_manifest
+
+pytestmark = pytest.mark.unit
 
 
 def test_iter_files_orders_results(tmp_path: Path) -> None:

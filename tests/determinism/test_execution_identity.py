@@ -41,6 +41,8 @@ from transformation_portal.core.execution_identity import (
 )
 from transformation_portal.core.platform_matrix import PlatformMatrix, compute_lockfile_hash
 
+pytestmark = pytest.mark.unit
+
 
 class TestExecutionIdentity:
     """Tests for ExecutionIdentity dataclass."""

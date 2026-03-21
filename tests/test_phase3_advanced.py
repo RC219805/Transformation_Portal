@@ -12,6 +12,8 @@ from unittest.mock import MagicMock, Mock, patch
 import numpy as np
 import pytest
 
+pytestmark = pytest.mark.unit
+
 # Import Phase 3 features
 from src.transformation_portal.lux_depth_v3.config import DeviceConfig, EnhanceConfig
 from src.transformation_portal.lux_depth_v3.manifest import CombinedManifest, InputMetadata

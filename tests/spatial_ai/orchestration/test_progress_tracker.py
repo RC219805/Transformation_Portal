@@ -18,6 +18,8 @@ from transformation_portal.spatial_ai.orchestration.progress_tracker import (
     StageMetrics,
 )
 
+pytestmark = pytest.mark.unit
+
 
 class TestProgressEventType:
     """Test ProgressEventType enum."""

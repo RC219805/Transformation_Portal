@@ -22,6 +22,8 @@ from transformation_portal.ingest.metadata_service import (
     ValidateRequest,
 )
 
+pytestmark = pytest.mark.unit
+
 
 def _clock() -> float:
     return 100.0

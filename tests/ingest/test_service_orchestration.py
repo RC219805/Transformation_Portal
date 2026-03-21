@@ -17,6 +17,8 @@ from transformation_portal.ingest.service import (
     ServiceRunRequest,
 )
 
+pytestmark = pytest.mark.unit
+
 
 class _StubCoreService:
     def __init__(self) -> None:

@@ -4,6 +4,8 @@ import json
 from datetime import date, timedelta
 from pathlib import Path
 
+import pytest
+
 from scripts.codebase_philosophy_auditor import Violation
 from scripts.decision_decay_dashboard import (
     collect_color_token_report,
@@ -11,6 +13,8 @@ from scripts.decision_decay_dashboard import (
     collect_philosophy_violations,
     collect_valid_until_records,
 )
+
+pytestmark = pytest.mark.unit
 
 
 def test_collect_valid_until_records_sorted(tmp_path):

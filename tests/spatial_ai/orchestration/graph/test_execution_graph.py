@@ -26,6 +26,8 @@ from transformation_portal.spatial_ai.orchestration.graph.execution_graph import
 from transformation_portal.spatial_ai.orchestration.graph.stage import CheckpointPolicy, ResourceRequirements, StageMetadata
 from transformation_portal.spatial_ai.orchestration.resource_manager import ResourceLimits
 
+pytestmark = pytest.mark.unit
+
 
 class MockStage:
     """Mock stage for testing."""

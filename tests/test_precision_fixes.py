@@ -18,6 +18,8 @@ from transformation_portal.lux_depth_v3.preprocessing import (
     validate_image_format,
 )
 
+pytestmark = pytest.mark.unit
+
 
 class TestBilateralFilterPrecision:
     """Test bilateral filter precision improvements."""

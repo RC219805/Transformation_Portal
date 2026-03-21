@@ -9,8 +9,12 @@ import sys
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 from transformation_portal.attestation.detached import compute_attestation_sha256
 from transformation_portal.ingest.evidence import build_evidence_payload, load_projection_profile
+
+pytestmark = pytest.mark.unit
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 TOOL_PATH = PROJECT_ROOT / "tools" / "sign_evidence_attestation.py"

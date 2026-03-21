@@ -4,11 +4,14 @@ import sys
 from types import SimpleNamespace
 
 import numpy as np
+import pytest
 from PIL import Image
 
 from transformation_portal.depth.backends.da2 import DA2Backend
 from transformation_portal.depth.backends.protocol import DepthResult, LicenseType
 from transformation_portal.depth.backends.registry import DepthBackendRegistry
+
+pytestmark = pytest.mark.unit
 
 
 def test_da2_backend_implements_protocol():

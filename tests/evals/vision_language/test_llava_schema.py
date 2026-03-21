@@ -11,6 +11,8 @@ from transformation_portal.evals.vision_language.llava_schema import (
     parse_vqa_result,
 )
 
+pytestmark = pytest.mark.unit
+
 
 class TestVQAIssue:
     """Tests for VQAIssue dataclass."""

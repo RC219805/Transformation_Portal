@@ -4,8 +4,11 @@ import logging
 import threading
 
 import numpy as np
+import pytest
 
 from transformation_portal.lux_depth_v3.depth_cache import DepthCache
+
+pytestmark = pytest.mark.unit
 
 
 def test_depth_cache_concurrent_same_key_does_not_emit_store_failures(tmp_path, caplog):

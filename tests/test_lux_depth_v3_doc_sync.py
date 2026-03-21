@@ -5,9 +5,12 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import pytest
 from typer.testing import CliRunner
 
 from transformation_portal.lux_depth_v3.__main__ import app
+
+pytestmark = pytest.mark.unit
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DOC_FILES = (

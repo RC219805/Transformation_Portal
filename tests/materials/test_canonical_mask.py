@@ -10,6 +10,8 @@ import pytest
 
 from transformation_portal.lux_depth_v3.pixel_ops_executor import _bounding_box, _canonical_mask
 
+pytestmark = pytest.mark.unit
+
 
 class TestCanonicalMask:
     """Test _canonical_mask helper function."""

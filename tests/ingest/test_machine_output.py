@@ -24,6 +24,8 @@ from transformation_portal.ingest.machine_output import (
 )
 from transformation_portal.ingest.metadata_service import BatchExtractResult, BatchItemResult, ExtractResult, ValidateResult
 
+pytestmark = pytest.mark.unit
+
 
 def test_exit_code_to_dict_contains_name_and_value() -> None:
     payload = exit_code_to_dict(IngestExitCode.SCHEMA_DRIFT)

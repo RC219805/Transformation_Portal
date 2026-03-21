@@ -19,6 +19,8 @@ from transformation_portal.metrics.performance_capsule import (
     get_bucket_for_capsule,
 )
 
+pytestmark = pytest.mark.unit
+
 
 @pytest.fixture
 def make_capsule():

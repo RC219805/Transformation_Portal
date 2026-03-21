@@ -3,11 +3,14 @@ from __future__ import annotations
 import json
 
 import numpy as np
+import pytest
 
 from transformation_portal.lux_depth_v3.reconstruction_manifest import ReconstructionManifest
 from transformation_portal.lux_depth_v3.reconstruction_runner import reprojection_percentiles, write_reconstruction_diagnostics
 from transformation_portal.lux_depth_v3.scene_context import CameraProvenance, CameraWithProvenance
 from transformation_portal.spatial_ai.reconstruction.contracts import CameraParams, GaussianSplat, Scene3D
+
+pytestmark = pytest.mark.unit
 
 
 def _camera_with_provenance(tx: float) -> CameraWithProvenance:

@@ -11,6 +11,8 @@ from transformation_portal.evals.vision_language.llava_prompts import (
     build_segmentation_quality_prompt,
 )
 
+pytestmark = pytest.mark.unit
+
 
 class TestLlavaPromptSpec:
     """Tests for LlavaPromptSpec dataclass."""

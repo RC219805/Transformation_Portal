@@ -6,6 +6,8 @@ from transformation_portal.determinism import fp_probe, hardware_fpstate
 from transformation_portal.determinism.fpstate import FPStateError
 from transformation_portal.determinism.hardware_fpstate import enforce_fpstate_and_probe
 
+pytestmark = pytest.mark.unit
+
 
 def test_fpstate_enforcement_is_idempotent_and_preserves_subnormals():
     r1 = enforce_fpstate_and_probe(require_subnormals=True)

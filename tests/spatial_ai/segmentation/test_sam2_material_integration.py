@@ -8,6 +8,8 @@ import pytest
 from transformation_portal.spatial_ai.segmentation.contracts import MaskMetadata, SegmentationInput, SegmentationResult
 from transformation_portal.spatial_ai.segmentation.sam2_backend import SAM2Backend
 
+pytestmark = pytest.mark.unit
+
 
 class TestSAM2MaterialClassificationIntegration:
     """Test SAM2 backend material classification integration."""

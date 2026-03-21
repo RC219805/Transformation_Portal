@@ -20,6 +20,8 @@ from pathlib import Path
 
 import pytest
 
+pytestmark = pytest.mark.unit
+
 
 def test_core_import_does_not_require_torch():
     """Verify reconstruction module can be imported without torch installed.

@@ -7,6 +7,8 @@ and don't accidentally swap red/blue channels (the infamous BGR/RGB confusion).
 import numpy as np
 import pytest
 
+pytestmark = pytest.mark.unit
+
 
 def test_bicubic_preserves_red_channel():
     """Bicubic should preserve pure red (regression: BGR swap would make it blue)."""

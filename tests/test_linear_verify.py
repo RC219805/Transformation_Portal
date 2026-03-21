@@ -28,6 +28,8 @@ from transformation_portal.lux_depth_v3.linear_verify import (
     verify_range_linear,
 )
 
+pytestmark = pytest.mark.unit
+
 
 class TestVerifyDtypeFloat:
     """Test dtype validation (reject uint8/uint16)."""
