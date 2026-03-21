@@ -98,6 +98,41 @@ def atomic_write_json(path: Path, payload: dict[str, Any]) -> None:
     tmp.replace(path)
 
 
+def resolve_asset_key(asset_key: str | None, fallback_stem: str) -> str:
+    """Normalize and validate canonical asset key.
+
+    Validates that asset_key is a stem-like identifier, not a path-like string
+    that could enable directory traversal attacks.
+
+    Args:
+        asset_key: Provided asset key (may be None or blank)
+        fallback_stem: Fallback value to use if asset_key is None/blank
+
+    Returns:
+        Normalized, validated asset key string
+
+    Raises:
+        ValueError: If asset_key contains path separators, NUL bytes, or is "." or ".."
+    """
+    if asset_key is None:
+        return fallback_stem
+
+    normalized = str(asset_key).strip()
+    if not normalized:
+        return fallback_stem
+
+    if "\x00" in normalized:
+        raise ValueError("asset_key contains NUL byte")
+
+    if normalized in {".", ".."}:
+        raise ValueError(f"asset_key must be a stem-like identifier, got: {asset_key!r}")
+
+    if "/" in normalized or "\\" in normalized:
+        raise ValueError(f"asset_key must be a stem-like identifier (no path separators), got: {asset_key!r}")
+
+    return normalized
+
+
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Lux Depth V2 Enhancement Script - Depth-Aware Perceptual Finishing",
@@ -274,8 +309,8 @@ def run_v2_enhancement(
 
     # Find depth map if depth_dir provided
     # Use canonical asset key for depth lookup to align with orchestrator naming
-    # Note: asset_key may be None for direct API usage, so fallback to input_path.stem
-    lookup_key = asset_key if asset_key else input_path.stem
+    # Validate asset_key to prevent path traversal (important for direct CLI invocation)
+    lookup_key = resolve_asset_key(asset_key, input_path.stem)
     depth_map_path = None
     if depth_dir:
         depth_map_path = find_depth_map(depth_dir, lookup_key)
@@ -331,8 +366,8 @@ def main() -> int:
     configure_logging(args.verbose, args.quiet, args.log_file)
 
     # Resolve canonical asset key for consistent depth/report resolution
-    # Default to input_path.stem if --asset-key not provided
-    resolved_asset_key = args.asset_key or Path(args.input_path).stem
+    # Validate asset_key to prevent path traversal (important for direct CLI invocation)
+    resolved_asset_key = resolve_asset_key(args.asset_key, Path(args.input_path).stem)
 
     # Always create output dir early so we can write an error report if needed
     try:
@@ -344,7 +379,8 @@ def main() -> int:
     report_path = None
     if out_dir is not None:
         # Use canonical asset key for report naming to align with orchestrator
-        report_path = out_dir / f"{resolved_asset_key}_report.json"
+        # Use safe_join_under to prevent directory traversal
+        report_path = safe_join_under(out_dir, f"{resolved_asset_key}_report.json")
 
     try:
         report = run_v2_enhancement(
