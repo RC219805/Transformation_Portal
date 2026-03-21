@@ -1,11 +1,11 @@
 from textwrap import dedent
 
-from transformation_portal.analyzers.codebase_philosophy_auditor import CodebasePhilosophyAuditor, Violation
 import pytest
 
-
+from transformation_portal.analyzers.codebase_philosophy_auditor import CodebasePhilosophyAuditor, Violation
 
 pytestmark = pytest.mark.unit
+
 
 def test_audit_source_ignores_decision_examples_inside_docstrings() -> None:
     auditor = CodebasePhilosophyAuditor()

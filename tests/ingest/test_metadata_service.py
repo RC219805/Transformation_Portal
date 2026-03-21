@@ -8,9 +8,6 @@ from pathlib import Path
 import pytest
 
 from transformation_portal.ingest.errors import (
-
-pytestmark = pytest.mark.unit
-
     BitDepthViolation,
     IngestExitCode,
     OtherIngestFailure,
@@ -24,6 +21,8 @@ from transformation_portal.ingest.metadata_service import (
     MetadataExtractionService,
     ValidateRequest,
 )
+
+pytestmark = pytest.mark.unit
 
 
 def _clock() -> float:

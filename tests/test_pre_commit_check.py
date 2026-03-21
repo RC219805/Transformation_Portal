@@ -4,8 +4,8 @@ import shutil
 import stat
 import subprocess
 from pathlib import Path
-import pytest
 
+import pytest
 
 pytestmark = pytest.mark.unit
 

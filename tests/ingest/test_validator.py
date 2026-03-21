@@ -16,9 +16,6 @@ from pathlib import Path
 import pytest
 
 from transformation_portal.ingest.errors import (
-
-pytestmark = pytest.mark.unit
-
     BitDepthViolation,
     GammaViolation,
     IngestExitCode,
@@ -55,6 +52,8 @@ from transformation_portal.ingest.validator import (
     validate_schema,
     validate_schema_errors,
 )
+
+pytestmark = pytest.mark.unit
 
 
 class TestExitCodeAggregation:
@@ -426,6 +425,7 @@ class TestValidateLinearGamma:
         """Test gamma-corrected image is detected (deterministic fixture)."""
         try:
             import numpy as np
+
         except ImportError:
             pytest.skip("numpy not available")
 

@@ -7,10 +7,10 @@ import json
 from pathlib import Path
 from typing import Any
 
-from transformation_portal.ingest.batch import BATCH_MANIFEST_FILENAME, compute_batch_root_sha256, run_ingest_batch
-from transformation_portal.ingest.normalize_machine_json import canonical_json_bytes
 import pytest
 
+from transformation_portal.ingest.batch import BATCH_MANIFEST_FILENAME, compute_batch_root_sha256, run_ingest_batch
+from transformation_portal.ingest.normalize_machine_json import canonical_json_bytes
 
 pytestmark = pytest.mark.unit
 

@@ -8,9 +8,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-
-
 pytestmark = pytest.mark.unit
+
 
 def test_determinism_cli_hash(tmp_path):
     # Arrange: write canonical deterministic tensor to temp dir

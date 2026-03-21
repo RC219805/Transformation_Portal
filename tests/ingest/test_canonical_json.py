@@ -9,7 +9,6 @@ import pytest
 
 from transformation_portal.ingest.canonical_json import canonicalize_json, to_jsonable
 
-
 pytestmark = pytest.mark.unit
 
 try:

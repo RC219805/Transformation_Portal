@@ -10,9 +10,6 @@ from datetime import datetime
 import pytest
 
 from transformation_portal.metrics.performance_capsule import (
-
-pytestmark = pytest.mark.unit
-
     DEFAULT_BUCKETS,
     PerformanceBucket,
     PerformanceCapsule,
@@ -21,6 +18,8 @@ pytestmark = pytest.mark.unit
     compute_specificity,
     get_bucket_for_capsule,
 )
+
+pytestmark = pytest.mark.unit
 
 
 @pytest.fixture

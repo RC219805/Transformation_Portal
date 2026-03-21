@@ -7,16 +7,17 @@ Tests validate:
 - Bucket matching and filtering
 """
 
+import pytest
+
 from transformation_portal.metrics.aggregator import (
-
-pytestmark = pytest.mark.unit
-
     compute_bucket_stats,
     compute_global_stats,
     compute_per_zone_stats,
     compute_worst_zone_p95,
 )
 from transformation_portal.metrics.performance_capsule import PerformanceBucket, PerformanceCapsule
+
+pytestmark = pytest.mark.unit
 
 
 class TestAggregator:
@@ -307,6 +308,5 @@ class TestValidateWorkflowVersionConsistency:
     def test_empty_capsules_no_raise(self):
         """Test that empty capsule list doesn't raise."""
         from transformation_portal.metrics.aggregator import validate_workflow_version_consistency
-import pytest
 
         validate_workflow_version_consistency([], strict=True)

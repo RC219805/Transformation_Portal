@@ -6,8 +6,8 @@ and contain expected sections.
 
 import re
 from pathlib import Path
-import pytest
 
+import pytest
 
 pytestmark = pytest.mark.unit
 

@@ -23,9 +23,6 @@ import numpy as np
 import pytest
 
 from transformation_portal.core.cas_dag_executor import (
-
-pytestmark = pytest.mark.unit
-
     CASDAGConfig,
     CASDAGExecutor,
     CASExecutionResult,
@@ -41,6 +38,8 @@ from transformation_portal.core.execution_wrapper import (
 from transformation_portal.stage_graph.graph import StageGraph
 from transformation_portal.stage_graph.stage import Stage, StageContext, StageResult, StageStatus
 from transformation_portal.storage.cas_store import ArtifactStore
+
+pytestmark = pytest.mark.unit
 
 
 class TestFileLock:

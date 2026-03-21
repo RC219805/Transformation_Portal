@@ -3,22 +3,21 @@
 from unittest.mock import Mock, patch
 
 import numpy as np
+import pytest
 
 from transformation_portal.spatial_ai.segmentation.contracts import MaskMetadata, SegmentationInput, SegmentationResult
 from transformation_portal.spatial_ai.segmentation.sam2_backend import SAM2Backend
 from transformation_portal.spatial_ai.segmentation.tiling.config import SegmentationTilingConfig
 from transformation_portal.spatial_ai.segmentation.tiling.engine import TiledSegmentationEngine
 from transformation_portal.spatial_ai.segmentation.tiling.types import (
-import pytest
-
-pytestmark = pytest.mark.unit
-
     BBox,
     SoftMaskPatch,
     TileInstance,
     TileManifest,
     TileSpec,
 )
+
+pytestmark = pytest.mark.unit
 
 
 def test_segment_routes_to_tiled_engine_when_enabled(tmp_path):

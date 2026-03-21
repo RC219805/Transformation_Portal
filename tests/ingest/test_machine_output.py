@@ -7,9 +7,6 @@ from pathlib import Path
 import pytest
 
 from transformation_portal.ingest.errors import (
-
-pytestmark = pytest.mark.unit
-
     BitDepthViolation,
     IngestExitCode,
     OtherIngestFailure,
@@ -26,6 +23,8 @@ from transformation_portal.ingest.machine_output import (
     validate_result_to_dict,
 )
 from transformation_portal.ingest.metadata_service import BatchExtractResult, BatchItemResult, ExtractResult, ValidateResult
+
+pytestmark = pytest.mark.unit
 
 
 def test_exit_code_to_dict_contains_name_and_value() -> None:

@@ -8,9 +8,8 @@ from unittest import mock
 
 import pytest
 
-
-
 pytestmark = pytest.mark.unit
+
 
 class TestFormatFile:
     """Tests for format_file function."""

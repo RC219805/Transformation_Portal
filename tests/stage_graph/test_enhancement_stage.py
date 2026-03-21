@@ -1,14 +1,13 @@
 """Tests for EnhancementStage defensive shape handling."""
 
 import numpy as np
+import pytest
 
 from transformation_portal.stage_graph.stage import StageContext, StageStatus
 from transformation_portal.stage_graph.stages.enhancement import EnhancementStage
-import pytest
-
-
 
 pytestmark = pytest.mark.unit
+
 
 def test_enhancement_stage_resizes_mismatched_depth_map():
     """Depth map should be resized when it does not match image dimensions."""

@@ -9,8 +9,8 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 from unittest.mock import Mock, patch
-import pytest
 
+import pytest
 
 pytestmark = pytest.mark.unit
 

@@ -3,19 +3,18 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import numpy as np
+import pytest
 
 from transformation_portal.lux_depth_v3.pixel_ops_decider import decide_pixel_ops
 from transformation_portal.lux_depth_v3.pixel_ops_executor import _compute_delta_stats, apply_pixel_ops
 from transformation_portal.lux_depth_v3.pixel_ops_registry import (
-import pytest
-
-pytestmark = pytest.mark.unit
-
     OP_REGISTRY,
     foliage_vibrance_boost,
     stone_microcontrast,
     water_reflection_enhance,
 )
+
+pytestmark = pytest.mark.unit
 
 
 @dataclass

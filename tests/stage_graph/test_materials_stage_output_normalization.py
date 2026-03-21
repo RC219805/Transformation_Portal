@@ -18,9 +18,8 @@ import pytest
 
 from transformation_portal.stage_graph.stages.materials import MaterialSegmentationStage
 
-
-
 pytestmark = pytest.mark.unit
+
 
 @pytest.fixture
 def stage():

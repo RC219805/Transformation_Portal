@@ -26,13 +26,12 @@ import numpy as np
 import pytest
 
 from transformation_portal.spatial_ai.orchestration.graph.artifact_store import (
-
-pytestmark = pytest.mark.unit
-
     ArtifactStore,
     CacheLockTimeout,
     ProvenanceMetadata,
 )
+
+pytestmark = pytest.mark.unit
 
 
 def _make_cache_key(seed: str) -> str:

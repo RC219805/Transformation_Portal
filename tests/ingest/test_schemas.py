@@ -16,9 +16,6 @@ from pathlib import Path
 import pytest
 
 from transformation_portal.ingest.schemas import (
-
-pytestmark = pytest.mark.unit
-
     ExifMetadata,
     FileIntegrity,
     HostEnvironment,
@@ -28,6 +25,8 @@ pytestmark = pytest.mark.unit
     ProvenanceSidecar,
     ToolchainVersion,
 )
+
+pytestmark = pytest.mark.unit
 
 
 class TestToolchainVersion:

@@ -7,8 +7,8 @@ import subprocess
 import sys
 from pathlib import Path
 from types import ModuleType
-import pytest
 
+import pytest
 
 pytestmark = pytest.mark.unit
 

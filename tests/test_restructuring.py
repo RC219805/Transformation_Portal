@@ -6,9 +6,10 @@ Run `pip install -e .` from the repository root before running tests.
 
 from pathlib import Path
 
-
+import pytest
 
 pytestmark = pytest.mark.unit
+
 
 def test_depth_module_import():
     """Test that depth module can be imported from new location."""
@@ -25,7 +26,6 @@ def test_depth_module_import():
 def test_material_response_import():
     """Test that material_response can be imported from new location."""
     from transformation_portal.processors.material_response.core import _clamp
-import pytest
 
     # Test basic functionality
     assert _clamp(5, 0, 10) == 5

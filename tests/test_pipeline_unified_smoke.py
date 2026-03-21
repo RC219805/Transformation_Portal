@@ -7,9 +7,8 @@ import sys
 import types
 from pathlib import Path
 
-from PIL import Image
 import pytest
-
+from PIL import Image
 
 pytestmark = pytest.mark.unit
 

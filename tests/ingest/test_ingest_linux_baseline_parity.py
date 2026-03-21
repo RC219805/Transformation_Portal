@@ -12,10 +12,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from transformation_portal.ingest.metadata_service import ExtractRequest, ExtractResult, MetadataExtractionService
-from transformation_portal.ingest.normalize_machine_json import canonical_json_bytes, normalize_machine_payload
 import pytest
 
+from transformation_portal.ingest.metadata_service import ExtractRequest, ExtractResult, MetadataExtractionService
+from transformation_portal.ingest.normalize_machine_json import canonical_json_bytes, normalize_machine_payload
 
 pytestmark = pytest.mark.unit
 

@@ -6,12 +6,12 @@ import sys
 import types
 from unittest.mock import MagicMock
 
-from transformation_portal.ingest.provenance import _capture_toolchain_versions
 import pytest
 
-
+from transformation_portal.ingest.provenance import _capture_toolchain_versions
 
 pytestmark = pytest.mark.unit
+
 
 def test_capture_toolchain_versions_handles_rawpy_without_version_attr(monkeypatch) -> None:
     """rawpy builds without version.version should not crash extraction."""

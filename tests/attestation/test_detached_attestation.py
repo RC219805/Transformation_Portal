@@ -8,15 +8,14 @@ from typing import Any
 import pytest
 
 from transformation_portal.attestation.detached import (
-
-pytestmark = pytest.mark.unit
-
     build_detached_attestation_payload,
     canonical_attestation_bytes,
     canonical_attestation_preimage_bytes,
 )
 from transformation_portal.attestation.verify import bind_attestation_to_evidence, validate_detached_attestation_surface
 from transformation_portal.ingest.evidence import build_evidence_payload, load_projection_profile
+
+pytestmark = pytest.mark.unit
 
 
 def _machine_extract_payload(*, elapsed_seconds: float) -> dict[str, Any]:

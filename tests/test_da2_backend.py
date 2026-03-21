@@ -4,15 +4,15 @@ import sys
 from types import SimpleNamespace
 
 import numpy as np
+import pytest
 from PIL import Image
 
 from transformation_portal.depth.backends.da2 import DA2Backend
 from transformation_portal.depth.backends.protocol import DepthResult, LicenseType
 from transformation_portal.depth.backends.registry import DepthBackendRegistry
 
-
-
 pytestmark = pytest.mark.unit
+
 
 def test_da2_backend_implements_protocol():
     """DA2 backend exposes expected protocol attributes."""
@@ -73,7 +73,6 @@ def test_da2_backend_cuda_request_without_cuda_falls_back_to_cpu(monkeypatch):
 def test_da2_backend_cuda_request_is_normalized_to_cpu_model(monkeypatch):
     """DA2 should normalize CUDA requests to CPU to keep backend/device semantics coherent."""
     from transformation_portal.depth.models import depth_anything_v2 as da2_model_module
-import pytest
 
     captured = {}
 

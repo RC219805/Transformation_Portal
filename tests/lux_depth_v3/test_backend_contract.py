@@ -4,15 +4,14 @@ import pytest
 
 from transformation_portal.depth.backends.registry import DepthBackendRegistry
 from transformation_portal.lux_depth_v3._backend_contract import (
-
-pytestmark = pytest.mark.unit
-
     backend_alias_warning,
     normalize_backend_id,
     normalize_backend_sequence,
 )
 from transformation_portal.lux_depth_v3.config import EnhanceConfig
 from transformation_portal.lux_depth_v3.manifest import BackendSelectionMetadata
+
+pytestmark = pytest.mark.unit
 
 
 def test_normalize_backend_id_warns_for_legacy_alias():

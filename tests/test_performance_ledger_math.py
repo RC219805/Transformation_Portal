@@ -10,7 +10,6 @@ from typing import List
 
 import pytest
 
-
 pytestmark = pytest.mark.unit
 
 # Import both implementations

@@ -1,11 +1,11 @@
 from pathlib import Path
 
-from tools.montecito_manifest import iter_files, write_manifest
 import pytest
 
-
+from tools.montecito_manifest import iter_files, write_manifest
 
 pytestmark = pytest.mark.unit
+
 
 def test_iter_files_orders_results(tmp_path: Path) -> None:
     """Test that iter_files yields files in sorted order with correct metadata."""

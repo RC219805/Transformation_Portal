@@ -13,9 +13,6 @@ import pytest
 from PIL import Image
 
 from transformation_portal.lux_depth_v3.v2_enhance import (
-
-pytestmark = pytest.mark.unit
-
     V2EnhancementError,
     canonical_asset_stem,
     enhance_image,
@@ -24,6 +21,8 @@ pytestmark = pytest.mark.unit
 )
 from transformation_portal.lux_depth_v3.v2_presets import V2EnhancementConfig
 from transformation_portal.stage_graph.stage import StageStatus
+
+pytestmark = pytest.mark.unit
 
 
 class TestFindDepthMap:

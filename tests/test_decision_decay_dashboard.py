@@ -4,17 +4,17 @@ import json
 from datetime import date, timedelta
 from pathlib import Path
 
-from scripts.codebase_philosophy_auditor import Violation
-from scripts.decision_decay_dashboard import (
 import pytest
 
-pytestmark = pytest.mark.unit
-
+from scripts.codebase_philosophy_auditor import Violation
+from scripts.decision_decay_dashboard import (
     collect_color_token_report,
     collect_outdated_valid_until_records,
     collect_philosophy_violations,
     collect_valid_until_records,
 )
+
+pytestmark = pytest.mark.unit
 
 
 def test_collect_valid_until_records_sorted(tmp_path):

@@ -7,8 +7,8 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 import numpy as np
+import pytest
 from PIL import Image
-
 
 pytestmark = pytest.mark.unit
 
@@ -20,7 +20,6 @@ def _make_depth_result(width: int = 64, height: int = 64):
     """Create a deterministic synthetic depth result for smoke testing."""
 
     from transformation_portal.depth.backends.protocol import DepthResult
-import pytest
 
     original_image = np.array(Image.new("RGB", (width, height), color="white"))
     depth = np.linspace(0.0, 1.0, width * height, dtype=np.float32).reshape(height, width)

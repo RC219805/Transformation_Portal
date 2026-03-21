@@ -5,14 +5,13 @@ from __future__ import annotations
 import pytest
 
 from transformation_portal.evals.vision_language.llava_schema import (
-
-pytestmark = pytest.mark.unit
-
     VQAIssue,
     VQAParseError,
     VQAResult,
     parse_vqa_result,
 )
+
+pytestmark = pytest.mark.unit
 
 
 class TestVQAIssue:

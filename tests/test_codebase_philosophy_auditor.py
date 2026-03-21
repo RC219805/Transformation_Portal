@@ -5,7 +5,6 @@ import pytest
 
 from scripts.codebase_philosophy_auditor import CodebasePhilosophyAuditor, Violation
 
-
 pytestmark = pytest.mark.unit
 
 # pylint: disable=redefined-outer-name  # pytest fixtures

@@ -41,12 +41,14 @@ DIRECTORY_MARKERS: dict[str, list[str]] = {
 }
 
 # Directories that should NOT be auto-tagged (fixtures, data, etc.)
-SKIP_DIRECTORIES: frozenset[str] = frozenset({
-    "fixtures",
-    "data",
-    "baselines",
-    "__pycache__",
-})
+SKIP_DIRECTORIES: frozenset[str] = frozenset(
+    {
+        "fixtures",
+        "data",
+        "baselines",
+        "__pycache__",
+    }
+)
 
 # Pattern to detect existing pytestmark
 PYTESTMARK_PATTERN = re.compile(r"^pytestmark\s*=", re.MULTILINE)
@@ -116,14 +118,14 @@ def get_directory_marker(file_path: Path) -> list[str]:
 def add_pytest_import(content: str) -> str:
     """Add 'import pytest' after other imports."""
     lines = content.split("\n")
-    
+
     # Find last import line
     last_import_idx = -1
     for i, line in enumerate(lines):
         stripped = line.strip()
         if stripped.startswith("import ") or stripped.startswith("from "):
             last_import_idx = i
-    
+
     if last_import_idx >= 0:
         # Insert after last import
         lines.insert(last_import_idx + 1, "import pytest")
@@ -137,7 +139,7 @@ def add_pytest_import(content: str) -> str:
                     insert_idx = i + 1
                     break
         lines.insert(insert_idx, "import pytest")
-    
+
     return "\n".join(lines)
 
 
@@ -269,9 +271,7 @@ def process_file(file_path: Path, dry_run: bool = True) -> tuple[bool, str]:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(
-        description="Retrofit pytest markers to test files per ADR-044"
-    )
+    parser = argparse.ArgumentParser(description="Retrofit pytest markers to test files per ADR-044")
     parser.add_argument(
         "--dry-run",
         action="store_true",

@@ -10,9 +10,8 @@ from pathlib import Path
 import pytest
 import yaml
 
-
-
 pytestmark = pytest.mark.unit
+
 
 @pytest.fixture
 def workflows_dir():

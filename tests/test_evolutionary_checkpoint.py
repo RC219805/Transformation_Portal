@@ -8,9 +8,8 @@ import pytest
 
 from transformation_portal.streaming.checkpoint import EvolutionaryCheckpoint
 
-
-
 pytestmark = pytest.mark.unit
+
 
 def test_evolution_required_message_when_horizon_has_passed() -> None:
     checkpoint = EvolutionaryCheckpoint(horizon=date(2024, 1, 1), mutation_path="lux/v2/pipeline")

@@ -12,7 +12,6 @@ import numpy as np
 import pytest
 from PIL import Image
 
-
 pytestmark = pytest.mark.unit
 
 # Import Phase 3 features

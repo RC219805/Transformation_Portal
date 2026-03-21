@@ -7,9 +7,6 @@ import numpy as np
 import pytest
 
 from transformation_portal.lux_depth_v3.reconstruction_manifest import (
-
-pytestmark = pytest.mark.unit
-
     build_reconstruction_manifest,
     load_reconstruction_manifest,
     manifest_image_paths,
@@ -19,6 +16,8 @@ pytestmark = pytest.mark.unit
 from transformation_portal.lux_depth_v3.scene_context import CameraProvenance, CameraWithProvenance, SceneContext
 from transformation_portal.lux_depth_v3.scene_groups import SceneGroup, compute_scene_id
 from transformation_portal.spatial_ai.reconstruction.contracts import CameraParams
+
+pytestmark = pytest.mark.unit
 
 
 def _camera(tx: float) -> CameraWithProvenance:

@@ -9,8 +9,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+import pytest
 from PIL import Image
-
 
 pytestmark = pytest.mark.unit
 
@@ -191,7 +191,6 @@ def main():
     except Exception as e:
         print(f"✗ Processor tests failed: {e}")
         import traceback
-import pytest
 
         traceback.print_exc()
         all_passed = False

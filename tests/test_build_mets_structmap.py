@@ -6,8 +6,8 @@ import json
 import subprocess
 import sys
 from pathlib import Path
-import pytest
 
+import pytest
 
 pytestmark = pytest.mark.unit
 

@@ -6,9 +6,8 @@ import re
 import tomllib
 from pathlib import Path
 
-from packaging.requirements import InvalidRequirement, Requirement
 import pytest
-
+from packaging.requirements import InvalidRequirement, Requirement
 
 pytestmark = pytest.mark.unit
 

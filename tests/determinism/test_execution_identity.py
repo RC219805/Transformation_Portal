@@ -26,9 +26,6 @@ import numpy as np
 import pytest
 
 from transformation_portal.core.execution_identity import (
-
-pytestmark = pytest.mark.unit
-
     ALLOW_CROSS_PLATFORM,
     CAS_IDENTITY_VERSION,
     ArtifactMetadata,
@@ -43,6 +40,8 @@ pytestmark = pytest.mark.unit
     verify_determinism,
 )
 from transformation_portal.core.platform_matrix import PlatformMatrix, compute_lockfile_hash
+
+pytestmark = pytest.mark.unit
 
 
 class TestExecutionIdentity:

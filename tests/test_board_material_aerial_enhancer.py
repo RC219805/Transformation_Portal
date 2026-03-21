@@ -2,13 +2,12 @@ import tempfile
 from pathlib import Path
 
 import numpy as np
-
+import pytest
 
 pytestmark = pytest.mark.unit
 
 # Import from installed package
 from transformation_portal.enhancers.board_material_aerial_enhancer import (
-import pytest
     DEFAULT_TEXTURES,
     ClusterStats,
     MaterialRule,

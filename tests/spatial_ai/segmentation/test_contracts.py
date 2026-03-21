@@ -5,9 +5,8 @@ import pytest
 
 from transformation_portal.spatial_ai.segmentation.contracts import MaskMetadata, SegmentationInput, SegmentationResult
 
-
-
 pytestmark = pytest.mark.unit
+
 
 class TestSegmentationInput:
     """Test SegmentationInput contract validation."""

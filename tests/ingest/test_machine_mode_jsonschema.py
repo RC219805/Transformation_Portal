@@ -10,9 +10,6 @@ from pathlib import Path
 import pytest
 
 from transformation_portal.ingest.schemas import (
-
-pytestmark = pytest.mark.unit
-
     ExifMetadata,
     FileIntegrity,
     HostEnvironment,
@@ -22,6 +19,8 @@ pytestmark = pytest.mark.unit
 )
 
 from .schema_utils import normalize_machine_payload, validate_machine_payload
+
+pytestmark = pytest.mark.unit
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT_PATH = PROJECT_ROOT / "scripts" / "test_metadata_extraction.py"

@@ -5,11 +5,10 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import pytest
 from typer.testing import CliRunner
 
 from transformation_portal.lux_depth_v3.__main__ import app
-import pytest
-
 
 pytestmark = pytest.mark.unit
 

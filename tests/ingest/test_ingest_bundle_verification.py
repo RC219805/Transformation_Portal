@@ -10,9 +10,9 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from transformation_portal.ingest.batch import BATCH_MANIFEST_FILENAME, run_ingest_batch
 import pytest
 
+from transformation_portal.ingest.batch import BATCH_MANIFEST_FILENAME, run_ingest_batch
 
 pytestmark = pytest.mark.unit
 

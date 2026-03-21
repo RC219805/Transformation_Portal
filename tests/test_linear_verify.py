@@ -16,9 +16,6 @@ import numpy as np
 import pytest
 
 from transformation_portal.lux_depth_v3.linear_verify import (
-
-pytestmark = pytest.mark.unit
-
     DtypeViolationError,
     LinearityViolationError,
     RangeViolationError,
@@ -30,6 +27,8 @@ pytestmark = pytest.mark.unit
     verify_no_gamma,
     verify_range_linear,
 )
+
+pytestmark = pytest.mark.unit
 
 
 class TestVerifyDtypeFloat:

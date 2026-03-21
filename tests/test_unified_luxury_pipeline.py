@@ -26,9 +26,6 @@ import pytest
 from PIL import Image
 
 from transformation_portal.pipelines.unified_luxury_pipeline import (
-
-pytestmark = pytest.mark.unit
-
     OutputFormat,
     PipelineStage,
     PipelineStatistics,
@@ -39,6 +36,8 @@ pytestmark = pytest.mark.unit
     batch_process_luxury_renders,
     process_luxury_render,
 )
+
+pytestmark = pytest.mark.unit
 
 
 @pytest.fixture

@@ -1,10 +1,8 @@
 """Tests for the CognitiveMaterialResponse orchestration layer."""
 
-from transformation_portal.processors.material_response.core import (
 import pytest
 
-pytestmark = pytest.mark.unit
-
+from transformation_portal.processors.material_response.core import (
     CognitiveMaterialResponse,
     EmotionalResonance,
     GlobalLuxurySemantics,
@@ -13,6 +11,8 @@ pytestmark = pytest.mark.unit
     NeuroAestheticEngine,
     ViewerProfile,
 )
+
+pytestmark = pytest.mark.unit
 
 
 def test_perception_model_generates_clamped_scores() -> None:

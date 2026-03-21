@@ -4,15 +4,14 @@ import numpy as np
 import pytest
 
 from transformation_portal.spatial_ai.reconstruction.contracts import (
-
-pytestmark = pytest.mark.unit
-
     CameraParams,
     GaussianSplat,
     LicenseRestrictionError,
     ReconstructionInput,
     Scene3D,
 )
+
+pytestmark = pytest.mark.unit
 
 
 class TestCameraParams:

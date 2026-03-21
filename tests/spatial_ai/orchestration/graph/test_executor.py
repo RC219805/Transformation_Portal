@@ -24,9 +24,8 @@ from transformation_portal.spatial_ai.orchestration.graph.executor import Execut
 from transformation_portal.spatial_ai.orchestration.graph.stage import ResourceRequirements, StageMetadata
 from transformation_portal.spatial_ai.orchestration.resource_manager import ResourceLimits
 
-
-
 pytestmark = pytest.mark.unit
+
 
 class MockStage:
     """Mock stage for testing executor."""

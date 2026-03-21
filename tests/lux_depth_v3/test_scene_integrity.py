@@ -10,9 +10,6 @@ from transformation_portal.lux_depth_v3.manifest import compute_file_sha256
 from transformation_portal.lux_depth_v3.scene_context import CameraProvenance, CameraWithProvenance, SceneContext
 from transformation_portal.lux_depth_v3.scene_groups import SceneGroup, compute_scene_id
 from transformation_portal.lux_depth_v3.scene_integrity import (
-
-pytestmark = pytest.mark.unit
-
     build_dataset_triage_report,
     build_scene_manifest,
     check_camera_geometry_sanity,
@@ -21,6 +18,8 @@ pytestmark = pytest.mark.unit
     verify_scene_integrity,
 )
 from transformation_portal.spatial_ai.reconstruction.contracts import CameraParams
+
+pytestmark = pytest.mark.unit
 
 
 def _camera(

@@ -5,9 +5,9 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from .documentation import documents, valid_until
 import pytest
 
+from .documentation import documents, valid_until
 
 pytestmark = pytest.mark.unit
 

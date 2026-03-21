@@ -17,9 +17,6 @@ from typing import Any, Dict
 import pytest
 
 from transformation_portal.spatial_ai.orchestration.graph.execution_graph import (
-
-pytestmark = pytest.mark.unit
-
     ExecutionGraph,
     ExecutionPlan,
     GraphError,
@@ -28,6 +25,8 @@ pytestmark = pytest.mark.unit
 )
 from transformation_portal.spatial_ai.orchestration.graph.stage import CheckpointPolicy, ResourceRequirements, StageMetadata
 from transformation_portal.spatial_ai.orchestration.resource_manager import ResourceLimits
+
+pytestmark = pytest.mark.unit
 
 
 class MockStage:

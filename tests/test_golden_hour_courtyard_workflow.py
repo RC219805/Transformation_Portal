@@ -8,9 +8,8 @@ import pytest
 
 from transformation_portal.rendering import golden_hour_courtyard_workflow as ghc
 
-
-
 pytestmark = pytest.mark.unit
+
 
 class _SpyCapabilities:
     def __init__(self) -> None:

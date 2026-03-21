@@ -12,9 +12,8 @@ import pytest
 
 from transformation_portal.analyzers.parse_workflows import WorkflowBug, WorkflowParser
 
-
-
 pytestmark = pytest.mark.unit
+
 
 @pytest.fixture
 def temp_workflow_dir():

@@ -14,9 +14,8 @@ from transformation_portal.lux_depth_v3.ingest_adapter import RawIngestError, de
 from transformation_portal.lux_depth_v3.preprocessing import preprocess_image
 from transformation_portal.lux_depth_v3.provenance import capture_provenance
 
-
-
 pytestmark = pytest.mark.unit
+
 
 def _raw_cfg(mode: str = "auto") -> SimpleNamespace:
     return SimpleNamespace(raw_ingest_mode=mode, raw_wb_mode="camera", raw_demosaic="AHD")

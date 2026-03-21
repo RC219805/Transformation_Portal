@@ -13,9 +13,8 @@ from typing import List
 
 import pytest
 
-
-
 pytestmark = pytest.mark.unit
+
 
 class TestAPEXArtifactPresence:
     """Test that APEX pipeline generates expected artifacts."""

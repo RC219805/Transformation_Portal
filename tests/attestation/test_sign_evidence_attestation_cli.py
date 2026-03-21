@@ -9,10 +9,10 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from transformation_portal.attestation.detached import compute_attestation_sha256
-from transformation_portal.ingest.evidence import build_evidence_payload, load_projection_profile
 import pytest
 
+from transformation_portal.attestation.detached import compute_attestation_sha256
+from transformation_portal.ingest.evidence import build_evidence_payload, load_projection_profile
 
 pytestmark = pytest.mark.unit
 

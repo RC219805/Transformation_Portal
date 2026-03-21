@@ -13,9 +13,8 @@ from pathlib import Path
 
 import pytest
 
-
-
 pytestmark = pytest.mark.unit
+
 
 def create_test_manifests(output_dir: Path, count: int = 5, mean_time: float = 10.0):
     """Create test manifest files."""

@@ -15,18 +15,18 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import numpy as np
+import pytest
 
 from transformation_portal.lux_depth_v3.bootstrap.sky_seed import detect_sky_seed
 from transformation_portal.lux_depth_v3.materials_v3_taxonomy import DEFAULT_MATERIAL_METADATA
 from transformation_portal.lux_depth_v3.pixel_ops_registry import (
-
-pytestmark = pytest.mark.unit
-
     OP_REGISTRY,
     sky_dehaze,
     sky_gradient_smooth,
     sky_temperature_shift,
 )
+
+pytestmark = pytest.mark.unit
 
 
 @dataclass
@@ -278,7 +278,6 @@ def test_sky_temperature_shift_cool():
 def test_bootstrap_sky_integration():
     """Test B4: _bootstrap_sky method exists and works."""
     from transformation_portal.lux_depth_v3.segmentation_backend import EfficientSAMBackend
-import pytest
 
     backend = EfficientSAMBackend()
 
