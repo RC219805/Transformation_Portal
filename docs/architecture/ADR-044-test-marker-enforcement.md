@@ -87,18 +87,24 @@ python scripts/validation/check_test_markers.py --audit --verbose
 
 ### 3. CI Alignment
 
-CI will be updated to leverage markers for efficiency:
+CI has been updated to leverage markers for efficiency:
 
 ```yaml
-# Fast PR gate (<3 min)
-pytest -m "unit and not slow" tests/
+# Fast PR gate with parallel execution (<3 min)
+pytest -n auto -m "unit and not slow" tests/
 
-# Extended PR gate (<10 min)
-pytest -m "(unit or integration) and not slow" tests/
+# Extended PR gate with parallel execution (<10 min)
+pytest -n auto -m "(unit or integration) and not slow" tests/
 
 # Nightly full suite
 pytest tests/
 ```
+
+**Implementation Note (2026-03-21):**
+- Added `pytest-xdist>=3.5,<4` for parallel test execution
+- CI workflows now use `-n auto` to parallelize tests across available CPU cores
+- Pinned all GitHub Actions to commit SHAs for supply chain security
+- Made mypy type checking hard-fail for critical modules
 
 ---
 

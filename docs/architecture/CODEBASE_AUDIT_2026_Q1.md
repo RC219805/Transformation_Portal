@@ -322,9 +322,9 @@ docs/_archive/2026-Q1/     # Historical sessions, status, pr_archive
 - Updated test commands to use `-n auto` for parallel execution
 - Made mypy type checking hard-fail (removed `continue-on-error: true`)
 
-**Expected CI Time Improvement:**
-- Current: 65-75 min
-- Target: 40-50 min (-35%)
+**Projected CI Time Improvement:**
+- Before: 65-75 min (sequential tests)
+- After: 40-50 min (-35%) with parallel test execution
 
 ---
 
@@ -399,8 +399,7 @@ The Transformation Portal codebase is **production-grade with strong fundamental
 2. **Testing governance** (markers, strategy) - 🟢 IN PROGRESS
 3. **CI/CD optimization** (action pinning, parallelization, type safety) - 🟢 IN PROGRESS
 4. **Architecture debt** (monolithic orchestrator, circular imports) - 🟠 Strategic
-4. **Documentation organization** (fragmentation, stubs) - 🟡 Ongoing
-5. **CI optimization** (parallelization, action pinning) - 🟡 Incremental
+5. **Documentation organization** (fragmentation, stubs) - 🟡 Ongoing
 
 With the proposed roadmap, the overall score can improve from **7.4/10 to 8.6/10** within 6-8 weeks of focused effort, with the architecture refactoring extending over 1-2 quarters.
 
