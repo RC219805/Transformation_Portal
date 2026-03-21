@@ -38,7 +38,7 @@ class V2Runner:
         script_path: Path to enhance_image.py script
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize V2 runner with repo root and script path resolution."""
         self.repo_root = self._find_repo_root()
         self.script_path = self.repo_root / "scripts" / "enhance_image.py"
@@ -93,7 +93,7 @@ class V2Runner:
         timeout: Optional[float] = None,
         masks_file: Optional[Path] = None,
         asset_key: Optional[str] = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> Dict[str, Any]:
         """Run V2 depth-aware enhancement pipeline.
 
@@ -198,10 +198,7 @@ class V2Runner:
             if not validated_asset_key:
                 validated_asset_key = None
             elif "/" in validated_asset_key or "\\" in validated_asset_key:
-                raise ValueError(
-                    f"asset_key must be a stem-like identifier (no path separators), "
-                    f"got: {asset_key!r}"
-                )
+                raise ValueError(f"asset_key must be a stem-like identifier (no path separators), " f"got: {asset_key!r}")
 
         # Build command using validated paths
         cmd = [sys.executable, str(self.script_path), str(validated_input)]
@@ -260,8 +257,12 @@ class V2Runner:
             runtime_s = time.perf_counter() - start_time
 
             # Extract partial output if available
-            partial_stdout = e.stdout if hasattr(e, "stdout") and e.stdout else ""
-            partial_stderr = e.stderr if hasattr(e, "stderr") and e.stderr else ""
+            partial_stdout: str = ""
+            partial_stderr: str = ""
+            if hasattr(e, "stdout") and e.stdout:
+                partial_stdout = e.stdout.decode("utf-8", errors="replace") if isinstance(e.stdout, bytes) else str(e.stdout)
+            if hasattr(e, "stderr") and e.stderr:
+                partial_stderr = e.stderr.decode("utf-8", errors="replace") if isinstance(e.stderr, bytes) else str(e.stderr)
 
             raise TimeoutError(
                 f"V2 enhancement timed out after {timeout}s (partial runtime={runtime_s:.2f}s)\n"

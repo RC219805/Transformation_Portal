@@ -416,6 +416,7 @@ def run_v2_stage(
         from .v2_runner import find_v2_report
 
         report_path_value = v2_result.get("report_path")
+        v2_report_path: Optional[Path] = None
         if isinstance(report_path_value, str) and report_path_value:
             v2_report_path = Path(report_path_value)
         else:
