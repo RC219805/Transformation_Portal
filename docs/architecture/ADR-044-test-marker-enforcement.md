@@ -15,7 +15,7 @@ The repository has a well-documented testing strategy (`docs/testing/STRATEGY.md
 - Pytest markers (`@pytest.mark.unit`, `@pytest.mark.ml`, etc.)
 - CI execution patterns
 
-However, **~53% of tests (2,323 of 4,381 functions) lack markers**, making it impossible to:
+However, **~51% of tests (2,244 of 4,381 functions) lack markers**, making it impossible to:
 - Run targeted test suites efficiently
 - Parallelize CI jobs by test type
 - Provide fast PR feedback
@@ -24,8 +24,8 @@ However, **~53% of tests (2,323 of 4,381 functions) lack markers**, making it im
 
 | Marker | Count | Expected |
 |--------|-------|----------|
-| No marker | 2,323 (53%) | <5% |
-| `@pytest.mark.unit` | 1,476 | 2,500+ |
+| No marker | 2,244 (51%) | <5% |
+| `@pytest.mark.unit` | 1,555 | 2,500+ |
 | `@pytest.mark.ml` | 293 | 300+ |
 | `@pytest.mark.security` | 157 | 150+ |
 | `@pytest.mark.integration` | 21 | 200+ |
@@ -163,7 +163,7 @@ Canonical markers as registered in `pyproject.toml` under `[tool.pytest.ini_opti
 
 | Metric | Current | Target |
 |--------|---------|--------|
-| Unmarked tests | 75% | <5% |
+| Unmarked tests | 51% | <5% |
 | `pytest -m unit` time | N/A | <3 min |
 | `pytest -m "unit or integration"` time | N/A | <10 min |
 
