@@ -355,9 +355,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     Returns:
         Exit code (0 for success).
     """
-    parser = argparse.ArgumentParser(
-        description="Retrofit pytest markers to test files per ADR-044"
-    )
+    parser = argparse.ArgumentParser(description="Retrofit pytest markers to test files per ADR-044")
     mode_group = parser.add_mutually_exclusive_group(required=True)
     mode_group.add_argument(
         "--dry-run",
