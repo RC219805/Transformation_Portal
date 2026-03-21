@@ -152,7 +152,7 @@ _ENCODING_PATTERN = re.compile(r"coding[:=]\s*([-\w.]+)")
 
 
 def _is_encoding_line(line: str) -> bool:
-    """Check if a line is a PEP 263 encoding declaration.
+    r"""Check if a line is a PEP 263 encoding declaration.
 
     Per PEP 263, encoding declarations must match the regex:
     ``coding[:=]\s*([-\w.]+)``
