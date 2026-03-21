@@ -13,7 +13,7 @@ Presets provide tested parameter combinations for common use cases:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, Optional
+from typing import Any, Dict, Optional, Union
 
 
 @dataclass
@@ -44,7 +44,7 @@ class V2EnhancementConfig:
     atmospheric_effects: bool = True
     version: str = "1.0.0"
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate configuration parameters."""
         if not 0.0 <= self.enhancement_strength <= 1.0:
             raise ValueError(f"enhancement_strength must be in [0, 1], got {self.enhancement_strength}")
@@ -73,14 +73,14 @@ class V2EnhancementConfig:
         preset_config = PRESETS[preset]
         return cls(
             preset=preset,
-            enhancement_strength=preset_config["enhancement_strength"],
-            clarity_strength=preset_config["clarity_strength"],
-            material_strength=preset_config["material_strength"],
-            depth_aware_tone_mapping=preset_config["depth_aware_tone_mapping"],
-            atmospheric_effects=preset_config["atmospheric_effects"],
+            enhancement_strength=float(preset_config["enhancement_strength"]),  # type: ignore[arg-type]
+            clarity_strength=float(preset_config["clarity_strength"]),  # type: ignore[arg-type]
+            material_strength=float(preset_config["material_strength"]),  # type: ignore[arg-type]
+            depth_aware_tone_mapping=bool(preset_config["depth_aware_tone_mapping"]),
+            atmospheric_effects=bool(preset_config["atmospheric_effects"]),
         )
 
-    def to_dict(self) -> Dict[str, any]:
+    def to_dict(self) -> Dict[str, Any]:
         """Convert configuration to dictionary.
 
         Returns:
@@ -100,7 +100,7 @@ class V2EnhancementConfig:
 # Preset Definitions
 # Based on V2_ENHANCEMENT_ARCHITECTURAL_GUIDANCE.md Section 4
 
-PRESETS: Dict[str, Dict[str, any]] = {
+PRESETS: Dict[str, Dict[str, Union[str, float, bool]]] = {
     "default": {
         "description": "Balanced enhancement for general use",
         "enhancement_strength": 0.7,
@@ -150,7 +150,7 @@ def get_preset_description(preset: str) -> Optional[str]:
         Preset description or None if preset not found
     """
     if preset in PRESETS:
-        return PRESETS[preset]["description"]
+        return str(PRESETS[preset]["description"])
     return None
 
 
@@ -160,4 +160,4 @@ def list_presets() -> Dict[str, str]:
     Returns:
         Dict mapping preset names to descriptions
     """
-    return {name: config["description"] for name, config in PRESETS.items()}
+    return {name: str(config["description"]) for name, config in PRESETS.items()}

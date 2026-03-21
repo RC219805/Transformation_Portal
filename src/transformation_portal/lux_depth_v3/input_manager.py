@@ -18,7 +18,7 @@ class ImageInput:
     path: Path
     metadata: Optional[dict] = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Ensure path is a Path object."""
         if not isinstance(self.path, Path):
             self.path = Path(self.path)

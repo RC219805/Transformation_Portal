@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
+from typing import Tuple
 
 import numpy as np
 from PIL import Image
@@ -140,7 +141,7 @@ def load_raw_as_rgb(
                 # Linear RGB output (scene-referred, no gamma)
                 # Use raw color space for true linear output
                 output_color = rawpy.ColorSpace.raw
-                gamma = (1, 1)  # Linear gamma curve (no encoding)
+                gamma: Tuple[float, float] = (1.0, 1.0)  # Linear gamma curve (no encoding)
             else:
                 # Gamma-encoded sRGB output (display-referred, legacy)
                 output_color = rawpy.ColorSpace.sRGB

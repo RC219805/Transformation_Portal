@@ -47,7 +47,7 @@ from contextvars import ContextVar
 from functools import lru_cache
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Literal, Optional, Tuple, cast
 
 import numpy as np
 
@@ -177,16 +177,16 @@ class EfficientSAMBackend:
         sky_top_region_fraction: float = 0.5,
         sky_gradient_threshold: float = 0.05,
         sky_brightness_threshold: float = 0.4,
-    ):
-        self._model = None
-        self._device = None
+    ) -> None:
+        self._model: Any = None
+        self._device: Optional[str] = None
         self._model_loaded = False
         self._use_real_model = False  # Track whether real model or heuristics
-        self._mask_generator = None  # Automatic mask generator for SAM
+        self._mask_generator: Any = None  # Automatic mask generator for SAM
         # Cache CLIP model to avoid repeated loading
-        self._clip_model = None
-        self._clip_preprocess = None
-        self._clip_tokenizer = None
+        self._clip_model: Any = None
+        self._clip_preprocess: Any = None
+        self._clip_tokenizer: Any = None
         self._clip_runtime_metadata: Optional[Dict[str, Any]] = None
         self._sky_top_region_fraction = float(sky_top_region_fraction)
         self._sky_gradient_threshold = float(sky_gradient_threshold)
@@ -276,7 +276,7 @@ class EfficientSAMBackend:
             return None
         return {"clip_runtime": dict(self._clip_runtime_metadata)}
 
-    def _load_clip_runtime(self):
+    def _load_clip_runtime(self) -> Tuple[Any, Any, Any]:
         """Load CLIP model/tokenizer with cache-first offline-safe resolution."""
         if self._clip_model is not None:
             return self._clip_model, self._clip_preprocess, self._clip_tokenizer
@@ -446,7 +446,7 @@ class EfficientSAMBackend:
 
         return "cpu"
 
-    def _load_efficientvit_model(self, weights_path: Optional[Path] = None):
+    def _load_efficientvit_model(self, weights_path: Optional[Path] = None) -> Any:
         """Load real EfficientSAM model and automatic mask generator (v2).
 
         Args:
@@ -801,7 +801,7 @@ class EfficientSAMBackend:
         # Fall back to existing heuristic method
         return self._heuristic_segmentation(image)
 
-    def _create_placeholder_model(self):
+    def _create_placeholder_model(self) -> Any:
         """Create a placeholder model for v1 heuristic-only mode.
 
         Used when EfficientVIT dependencies not available.
@@ -809,13 +809,13 @@ class EfficientSAMBackend:
 
         # Simple placeholder that demonstrates the pattern
         class PlaceholderModel:
-            def __init__(self, device):
+            def __init__(self, device: Optional[str]) -> None:
                 self.device = device
 
-            def eval(self):
+            def eval(self) -> "PlaceholderModel":
                 return self
 
-            def to(self, device):
+            def to(self, device: str) -> "PlaceholderModel":
                 self.device = device
                 return self
 
@@ -964,7 +964,7 @@ class SAM2SegmentationBackend(EfficientSAMBackend):
         sky_top_region_fraction: float = 0.5,
         sky_gradient_threshold: float = 0.05,
         sky_brightness_threshold: float = 0.4,
-    ):
+    ) -> None:
         super().__init__(
             sky_top_region_fraction=sky_top_region_fraction,
             sky_gradient_threshold=sky_gradient_threshold,
@@ -974,7 +974,7 @@ class SAM2SegmentationBackend(EfficientSAMBackend):
         self._checkpoint_path = checkpoint_path
         self._enable_material_classification = enable_material_classification
         self._material_confidence_threshold = material_confidence_threshold
-        self._sam2_backend = None
+        self._sam2_backend: Any = None
 
     @property
     def info(self) -> SegmentationBackendInfo:
@@ -1042,6 +1042,10 @@ class SAM2SegmentationBackend(EfficientSAMBackend):
             raise RuntimeError(f"Invalid sam2 model size '{self._model_size}'. Expected 'base' or 'large'.")
 
         resolved_device = self._resolve_device(device)
+        # Validate device for Literal compatibility
+        if resolved_device not in {"auto", "cuda", "cpu", "mps"}:
+            raise RuntimeError(f"Invalid device '{resolved_device}'. Expected auto/cuda/cpu/mps.")
+
         checkpoint_override: Optional[str] = None
         if weights_path is not None:
             checkpoint_override = str(weights_path)
@@ -1049,9 +1053,10 @@ class SAM2SegmentationBackend(EfficientSAMBackend):
             checkpoint_override = str(self._checkpoint_path)
 
         try:
+            # Cast to Literal types after validation above
             self._sam2_backend = SpatialSAM2Backend(
-                model_size=self._model_size,
-                device=resolved_device,
+                model_size=cast(Literal["base", "large"], self._model_size),
+                device=cast(Literal["auto", "cuda", "cpu", "mps"], resolved_device),
                 checkpoint_path=checkpoint_override,
                 enable_material_classification=self._enable_material_classification,
                 material_confidence_threshold=self._material_confidence_threshold,
@@ -1192,12 +1197,12 @@ def _get_backend_instance(
         RuntimeError: If strict=True and backend fails to load
     """
     if backend_name == "stub":
-        backend = StubBackend()
-        backend.load()  # No-op for stub
-        return backend
+        stub_backend: SegmentationBackend = StubBackend()
+        stub_backend.load()  # No-op for stub
+        return stub_backend
 
     if backend_name == "efficientsam":
-        backend = EfficientSAMBackend(
+        esam_backend: SegmentationBackend = EfficientSAMBackend(
             sky_top_region_fraction=sky_top_region_fraction,
             sky_gradient_threshold=sky_gradient_threshold,
             sky_brightness_threshold=sky_brightness_threshold,
@@ -1205,7 +1210,7 @@ def _get_backend_instance(
         # Lazy load will happen on first segment() call if needed
         # But we can pre-load here for better error handling
         try:
-            backend.load(device=device)
+            esam_backend.load(device=device)
         except RuntimeError as e:
             if strict:
                 # In strict mode, propagate the error
@@ -1219,10 +1224,10 @@ def _get_backend_instance(
             )
             # Return stub instead
             return _get_backend_instance("stub", device="cpu", strict=False)
-        return backend
+        return esam_backend
 
     if backend_name == "sam2":
-        backend = SAM2SegmentationBackend(
+        sam2_backend: SegmentationBackend = SAM2SegmentationBackend(
             model_size=sam2_model_size,
             checkpoint_path=sam2_checkpoint_path,
             sky_top_region_fraction=sky_top_region_fraction,
@@ -1230,7 +1235,7 @@ def _get_backend_instance(
             sky_brightness_threshold=sky_brightness_threshold,
         )
         try:
-            backend.load(device=device)
+            sam2_backend.load(device=device)
         except RuntimeError as e:
             if strict:
                 raise RuntimeError(f"Failed to load {backend_name} backend: {e}") from e
@@ -1241,7 +1246,7 @@ def _get_backend_instance(
                 e,
             )
             return _get_backend_instance("stub", device="cpu", strict=False)
-        return backend
+        return sam2_backend
 
     raise ValueError(f"Unknown segmentation backend: {backend_name}\n" f"Valid options: 'stub', 'efficientsam', 'sam2'")
 

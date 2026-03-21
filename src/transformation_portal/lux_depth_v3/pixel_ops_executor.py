@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 import time
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, List, Tuple
 
 import cv2
 import numpy as np
@@ -231,7 +231,7 @@ def apply_pixel_ops(
         Tuple of (output_image, telemetry_dict)
     """
     registry = registry or OP_REGISTRY
-    telemetry = {
+    telemetry: Dict[str, Any] = {
         "enabled": bool(getattr(config, "apply_pixel_ops", False)),
         "applied": [],
         "blocked": [],

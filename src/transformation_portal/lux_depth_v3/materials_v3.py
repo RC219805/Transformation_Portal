@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 class MaterialsV3Engine:
-    def __init__(self, config):
+    def __init__(self, config: Any) -> None:
         self.config = config
 
     def _compute_mask_stats(self, mask: np.ndarray) -> Dict[str, Any]:
