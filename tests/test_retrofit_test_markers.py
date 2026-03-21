@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Tests for retrofit_test_markers.py script (ADR-044).
+"""Tests for test_markers module (ADR-044).
 
-This module provides regression protection for the test marker retrofit script.
+This module provides regression protection for the test marker retrofit utilities.
 It validates:
 - Pure transformation behavior of add_pytest_import() and add_pytestmark()
 - File-level orchestration via process_file()
@@ -19,16 +19,19 @@ from pathlib import Path
 
 import pytest
 
-from scripts.validation.retrofit_test_markers import (
+# Import from the src package (architectural fix: tests should not import scripts)
+from transformation_portal.dev.test_markers import (
     add_pytest_import,
     add_pytestmark,
     get_directory_marker,
     has_class_or_function_markers,
     has_existing_module_markers,
     has_test_functions,
-    main,
     process_file,
 )
+
+# Import main from the CLI wrapper for CLI tests
+from scripts.validation.retrofit_test_markers import main
 
 pytestmark = pytest.mark.unit
 
