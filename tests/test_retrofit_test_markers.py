@@ -51,6 +51,7 @@ class TestAddPytestImport:
 
         This is the primary regression test for the bug in PR #1242.
         The import must not be inserted inside the parenthesized import block.
+        Uses exact-output assertion for consistency with other high-risk tests.
         """
         content = _src("""
             from pkg.mod import (
@@ -64,11 +65,18 @@ class TestAddPytestImport:
 
         result = add_pytest_import(content)
 
-        # Verify import pytest is placed after the closing parenthesis
-        assert "from pkg.mod import (\n    A,\n    B,\n)\nimport pytest\n" in result
-        # Verify we don't have the bug where import pytest is inside the block
-        assert "(\nimport pytest\n" not in result
-        assert "    A,\nimport pytest\n" not in result
+        # Exact output validation - import pytest must be placed after closing paren
+        expected = _src("""
+            from pkg.mod import (
+                A,
+                B,
+            )
+            import pytest
+
+            def test_example():
+                assert True
+            """)
+        assert result == expected
 
     def test_handles_simple_import(self) -> None:
         """Validate pytest import is placed after simple import statement."""
