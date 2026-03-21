@@ -50,6 +50,7 @@ from ._backend_contract import normalize_backend_id, normalize_backend_provenanc
 # The XXHASH_AVAILABLE constant is imported from artifact_manager
 from .artifact_manager import (
     XXHASH_AVAILABLE,
+    ArtifactManager,
     build_artifact_index,
     compute_artifact_merkle_root,
     infer_artifact_type,
