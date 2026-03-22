@@ -168,6 +168,36 @@ class TestAddPytestImport:
             ''')
         assert result == expected
 
+    def test_handles_encoding_on_line2_without_shebang(self) -> None:
+        """Validate pytest import is placed after encoding cookie on line 2 without shebang.
+
+        Per PEP 263, encoding declarations are valid on line 2 even without a shebang
+        if line 1 is a comment or blank. This test ensures the import is placed
+        correctly without pushing the encoding declaration down.
+        """
+        content = _src('''
+            # Comment line
+            # -*- coding: utf-8 -*-
+            """Test module."""
+
+            def test_example():
+                assert True
+            ''')
+
+        result = add_pytest_import(content)
+
+        # INTENDED: import pytest should appear AFTER encoding line (preserved on line 2)
+        expected = _src('''
+            # Comment line
+            # -*- coding: utf-8 -*-
+            """Test module."""
+            import pytest
+
+            def test_example():
+                assert True
+            ''')
+        assert result == expected
+
     def test_handles_no_imports_no_docstring(self) -> None:
         """Validate pytest import is placed at the start when no imports or docstring."""
         content = _src("""

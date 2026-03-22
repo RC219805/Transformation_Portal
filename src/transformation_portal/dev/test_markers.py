@@ -168,7 +168,8 @@ def _is_encoding_line(line: str) -> bool:
     Returns:
         True if the line is a valid encoding declaration.
     """
-    return line.startswith("#") and bool(_ENCODING_PATTERN.search(line))
+    stripped = line.lstrip()
+    return stripped.startswith("#") and bool(_ENCODING_PATTERN.search(stripped))
 
 
 def _count_special_header_lines(lines: list[str]) -> int:
@@ -193,8 +194,16 @@ def _count_special_header_lines(lines: list[str]) -> int:
         if len(lines) > 1 and _is_encoding_line(lines[1]):
             count = 2
     elif lines and _is_encoding_line(lines[0]):
-        # No shebang, check for encoding on line 1
+        # No shebang, encoding on line 1
         count = 1
+        # Also check for encoding on line 2 (valid per PEP 263 without shebang)
+        if len(lines) > 1 and _is_encoding_line(lines[1]):
+            count = 2
+    elif len(lines) > 1 and _is_encoding_line(lines[1]):
+        # No shebang, no encoding on line 1, but encoding on line 2
+        # This is valid per PEP 263 if line 1 is a comment or blank
+        if not lines[0].strip() or lines[0].lstrip().startswith("#"):
+            count = 2
 
     return count
 
