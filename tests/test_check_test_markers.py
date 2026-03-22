@@ -33,10 +33,6 @@ from check_test_markers import (  # noqa: E402
     CATEGORY_MARKERS,
     DIRECTORY_MARKER_REQUIREMENTS,
     VALID_MARKERS,
-    AuditReport,
-    MarkerViolation,
-    TestFunction,
-    TestMarkerVisitor,
     audit_test_directory,
     check_files,
     check_marker_requirements,
@@ -72,15 +68,23 @@ class TestMarkerConstants:
 
     def test_builtin_markers_content(self) -> None:
         """Verify builtin markers match pytest built-ins."""
-        expected = frozenset(
-            {"skip", "skipif", "xfail", "parametrize", "usefixtures", "filterwarnings", "timeout"}
-        )
+        expected = frozenset({"skip", "skipif", "xfail", "parametrize", "usefixtures", "filterwarnings", "timeout"})
         assert BUILTIN_MARKERS == expected
 
     def test_category_markers_content(self) -> None:
         """Verify category markers match pyproject.toml registration."""
         expected = frozenset(
-            {"slow", "unit", "regression", "security", "integration", "ml", "golden", "stress", "benchmark"}
+            {
+                "slow",
+                "unit",
+                "regression",
+                "security",
+                "integration",
+                "ml",
+                "golden",
+                "stress",
+                "benchmark",
+            }
         )
         assert CATEGORY_MARKERS == expected
 
