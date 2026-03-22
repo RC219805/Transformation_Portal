@@ -225,10 +225,17 @@ The `tests/test_check_test_markers.py` file provides 54 fixture-based contract t
 
 | Test Class | Purpose |
 |------------|---------|
+| `TestMarkerConstants` | Verifies constant definitions match ADR-044 |
+| `TestDirectoryMarkerRequirements` | Verifies directory-based requirements |
 | `TestBuiltinMarkersDoNotSatisfyCoverage` | Verifies `skip`, `skipif`, etc. alone are violations |
 | `TestCategoryMarkersSatisfyCoverage` | Verifies `unit`, `ml`, etc. satisfy coverage |
 | `TestModuleLevelMarkerDetection` | Verifies `pytestmark` declarations work |
 | `TestSmokePathMapping` | Verifies `smoke/` → `unit` requirement |
+| `TestClassLevelMarkerDetection` | Verifies class-level markers propagate |
+| `TestPreCommitMode` | Verifies fail-closed pre-commit behavior |
+| `TestAuditMode` | Verifies full directory audit functionality |
+| `TestEdgeCases` | Async functions, nested classes, syntax variations |
+| `TestDirectoryTypeDetection` | Verifies directory type classification |
 | `TestStressDirectoryRequirements` | Verifies `stress/` requires both `stress` + `slow` |
 
 ---

@@ -20,7 +20,6 @@ from __future__ import annotations
 import sys
 import textwrap
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 import pytest
 
@@ -46,9 +45,6 @@ from check_test_markers import (  # noqa: E402
 )
 
 sys.path.pop(0)  # Restore original path
-
-if TYPE_CHECKING:
-    pass
 
 pytestmark = pytest.mark.unit
 
