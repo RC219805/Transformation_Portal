@@ -304,11 +304,11 @@ The repository uses a layered CI/CD architecture with distinct workflow roles.
 |----------|---------|------|-------------------|-------------|
 | `build.yml` | PR, push, dispatch | **Canonical PR Gate** | ✅ Required | SHA-pinned |
 | `ci.yml` | push | Post-merge validation | No | SHA-pinned |
-| `ci-quality-firewall.yml` | workflow_run, dispatch | Post-CI verification | No | Version-tag (migration pending) |
-| `quality-gate.yml` | PR, push | Legacy helper | No | Version-tag (migration pending) |
+| `ci-quality-firewall.yml` | workflow_run, dispatch | Post-CI verification | No | SHA-pinned |
+| `quality-gate.yml` | PR, push | Legacy helper | No | SHA-pinned |
 
 **Canonical Workflow:** `build.yml` is the only workflow required for branch protection.
-All quality-control workflows are being aligned to canonical semantics per Q2 2026 roadmap.
+All quality-control workflows use SHA-pinned action refs (normalized Q2 2026).
 
 ### Test Marker Selection
 
