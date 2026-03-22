@@ -112,18 +112,18 @@ The repository already encodes a **provisional canonical decision**: `ci.yml` ex
 - `build.yml` is the de facto PR gate and still uses legacy negative marker expressions
 - `ci.yml` and `ci-quality-firewall.yml` both run post-merge/post-CI validation with overlapping quality semantics
 - `quality-gate.yml` remains an older helper workflow with its own quality behavior
-- Version-tag action refs are still present in the scoped workflows
+- Version-tag action refs are still present in `ci-quality-firewall.yml` and `quality-gate.yml` (pinning complete in `build.yml` and `ci.yml`)
 - `-n auto` is not present in the scoped test-bearing workflows
-- Typecheck policy remains unresolved across the plane (soft-fail in some workflows, absent in the canonical PR gate)
+- Typecheck policy varies across the plane: hard-fail in `ci.yml` (critical modules), soft-fail in `ci-quality-firewall.yml`, absent in `build.yml` and `quality-gate.yml`
 
 **Quality Control Plane Inventory:**
 
 | Workflow | Trigger | Current Role | Branch-Protection Relevance | Marker Semantics | Typecheck Policy | Action Ref Style | Target Disposition |
 |----------|---------|--------------|-----------------------------|------------------|------------------|------------------|-------------------|
-| `build.yml` | PR, push, dispatch | De facto PR gate | Yes | Legacy negative selection | No dedicated typecheck gate | Version-tag refs present | Canonical |
-| `ci.yml` | push | Post-merge validation | No | Legacy negative selection | Soft-fail mypy | Version-tag refs present | Align with canonical or narrow scope |
-| `ci-quality-firewall.yml` | `workflow_run`, dispatch | Post-CI verification | No | Legacy negative selection | Soft-fail mypy | Version-tag refs present | Align, narrow, or retire |
-| `quality-gate.yml` | PR, push | Legacy helper workflow | Non-canonical / ambiguous | N/A | N/A | Version-tag refs present | Retire or scope down |
+| `build.yml` | PR, push, dispatch | De facto PR gate | Yes | Legacy negative selection | No dedicated typecheck gate | SHA-pinned | Canonical |
+| `ci.yml` | push | Post-merge validation | No | Legacy negative selection | Hard-fail mypy (critical modules) | SHA-pinned | Align with canonical or narrow scope |
+| `ci-quality-firewall.yml` | `workflow_run`, dispatch | Post-CI verification | No | Legacy negative selection | Soft-fail mypy | Version-tag refs | Align, narrow, or retire |
+| `quality-gate.yml` | PR, push | Legacy helper workflow | Non-canonical / ambiguous | N/A | N/A | Version-tag refs | Retire or scope down |
 
 **Scope note:** Workflows outside the quality-control plane (docs, security, nightly, deployment, automation) intentionally differ and are excluded from parity debt.
 
@@ -353,13 +353,18 @@ A scoped workflow counts toward **Workflow Parity Debt** if it has at least one 
 |--------|---------|--------|
 | Quality-control workflows (scoped total) | 4 | N/A (informational) |
 | QC workflows still using legacy negative marker selection | 3 | 0 |
-| QC workflows with version-tag or mixed action refs | 4 | 0 |
-| QC workflows with unresolved typecheck policy | 3 | 0 |
+| QC workflows with version-tag or mixed action refs | 2 | 0 |
+| QC workflows with unresolved typecheck policy | 2 | 0 |
 | QC workflows with divergent coverage / artifact behavior | Baseline by 2026-04-05 | 0 |
+
+**Metric derivation (verified 2026-03-22):**
+- **Marker selection (3):** `build.yml`, `ci.yml`, `ci-quality-firewall.yml` use legacy negative selection; `quality-gate.yml` has no test jobs
+- **Version-tag refs (2):** `ci-quality-firewall.yml`, `quality-gate.yml`; `build.yml` and `ci.yml` are SHA-pinned
+- **Typecheck policy (2):** `build.yml` has no dedicated typecheck gate; `ci-quality-firewall.yml` uses soft-fail; `ci.yml` has hard-fail (target state)
 
 **Composite Metric:**  
 **Workflow Parity Debt = number of scoped workflows with ≥1 unresolved parity defect.**  
-Current minimum baseline: **4**. Target: **0**.
+Current minimum baseline: **4** (all scoped workflows have at least one defect). Target: **0**.
 
 ### Orchestrator Residual Debt
 
