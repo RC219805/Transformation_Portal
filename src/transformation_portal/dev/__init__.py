@@ -64,7 +64,7 @@ __all__ = [
     "write_canonical",
     "FormattedFileWriter",
     "CanonicalFileWriter",
-    # Test markers (retrofit)
+    # Test marker retrofit utilities (batch tagging existing tests)
     "DIRECTORY_MARKERS",
     "SKIP_DIRECTORIES",
     "PYTESTMARK_PATTERN",
@@ -78,7 +78,7 @@ __all__ = [
     "add_pytestmark",
     "process_file",
     "main",
-    # Test markers (audit)
+    # Test marker audit utilities (enforcement and coverage reporting)
     "BUILTIN_MARKERS",
     "CATEGORY_MARKERS",
     "DIRECTORY_MARKER_REQUIREMENTS",

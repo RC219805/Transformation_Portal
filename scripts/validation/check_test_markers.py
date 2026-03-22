@@ -22,10 +22,8 @@ Usage:
 
 from __future__ import annotations
 
-import sys
-
 # Import all logic from the src package
 from transformation_portal.dev.check_test_markers import main
 
 if __name__ == "__main__":
-    sys.exit(main())
+    raise SystemExit(main())
