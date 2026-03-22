@@ -204,9 +204,13 @@ All pull requests must pass these automated gates before merge:
 - **isort**: Imports must be sorted
 - **Exit code**: Must be 0
 
-### 2. Type Checking (NON-BLOCKING)
-- **mypy**: Run on critical modules
-- **Warnings logged** but don't block merge
+### 2. Type Checking (BLOCKING in CI, post-merge)
+- **mypy**: Hard-fail on critical modules (`lux_depth_v3/`)
+- **ci.yml**: Type checking is a **blocking gate** (ADR-044)
+- **ci-quality-firewall.yml**: Uses soft-fail for advisory checks (post-merge only)
+
+> **Note:** `build.yml` (the canonical PR gate) does not include a dedicated typecheck gate.
+> Type enforcement is applied via `ci.yml` on push to main.
 
 ### 3. Security (BLOCKING)
 - **bandit**: No high-severity security issues
@@ -224,7 +228,7 @@ All pull requests must pass these automated gates before merge:
 
 #### Global Minimum
 - Coverage must **not decrease** vs `main` branch
-- Current baseline: **33%** (will increase over time)
+- Current baseline: **25.44%** (Q2 2026 target: 28%)
 
 #### Diff Coverage (KEY METRIC)
 - **New/changed lines must be 80%+ covered**
@@ -283,11 +287,41 @@ pytest -v tests/ -m "not slow" \
   --cov-report=html
 
 # Check coverage threshold
-coverage report --fail-under=33
+coverage report --fail-under=25
 
 # Build package
 python -m build
 twine check dist/*
+```
+
+## CI/CD Control Plane
+
+The repository uses a layered CI/CD architecture with distinct workflow roles.
+
+### Quality Control Plane (Q2 2026)
+
+| Workflow | Trigger | Role | Branch Protection | Action Refs |
+|----------|---------|------|-------------------|-------------|
+| `build.yml` | PR, push, dispatch | **Canonical PR Gate** | ✅ Required | SHA-pinned |
+| `ci.yml` | push | Post-merge validation | No | SHA-pinned |
+| `ci-quality-firewall.yml` | workflow_run, dispatch | Post-CI verification | No | Version-tag (migration pending) |
+| `quality-gate.yml` | PR, push | Legacy helper | No | Version-tag (migration pending) |
+
+**Canonical Workflow:** `build.yml` is the only workflow required for branch protection.
+All quality-control workflows are being aligned to canonical semantics per Q2 2026 roadmap.
+
+### Test Marker Selection
+
+> **Current State:** CI uses **negative marker selection** (e.g., `not ml and not slow`)
+> to exclude unwanted test tiers. ADR-044 defines a target state using positive marker
+> selection (e.g., `unit and not slow`). The transition will occur after validation.
+
+```bash
+# Current PR gating expression (negative selection)
+pytest -v tests/ -m "not ml and not slow and not benchmark" --maxfail=1
+
+# Target state (positive selection) - not yet active
+pytest -v tests/ -m "unit and not slow" --maxfail=1
 ```
 
 ## Branch Protection and Merge Requirements

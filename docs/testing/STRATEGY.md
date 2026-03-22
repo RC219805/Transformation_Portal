@@ -201,6 +201,16 @@ def mock_depth_model(deterministic_rng):
 > selection (e.g., `unit and not slow`). The transition will occur after full marker
 > retrofit is validated in production CI.
 
+### Canonical Workflow
+
+**`build.yml`** is the canonical PR gating workflow. It is the only workflow required by branch protection.
+
+| Workflow | Role | Marker Semantics | Typecheck Policy |
+|----------|------|------------------|------------------|
+| `build.yml` | **Canonical PR gate** | Legacy negative selection | No dedicated gate |
+| `ci.yml` | Post-merge validation | Legacy negative selection | Hard-fail mypy |
+| `ci-quality-firewall.yml` | Post-CI verification | Legacy negative selection | Soft-fail mypy |
+
 ### PR Gating Jobs
 
 | Job | Python | Requirements | Markers |
