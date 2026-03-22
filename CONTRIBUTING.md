@@ -204,30 +204,22 @@ All pull requests must pass these automated gates before merge:
 - **isort**: Imports must be sorted
 - **Exit code**: Must be 0
 
-### 2. Type Checking (BLOCKING in CI, post-merge)
-- **mypy**: Hard-fail on critical modules (`lux_depth_v3/`)
-- **ci.yml**: Type checking is a **blocking gate** (ADR-044)
-- **ci-quality-firewall.yml**: Uses soft-fail for advisory checks (post-merge only)
-
-> **Note:** `build.yml` (the canonical PR gate) does not include a dedicated typecheck gate.
-> Type enforcement is applied via `ci.yml` on push to main.
-
-### 3. Security (BLOCKING)
+### 2. Security (BLOCKING)
 - **bandit**: No high-severity security issues
 - **gitleaks**: No secrets in commits
 - **pip-audit**: No critical vulnerabilities
 - **Exit code**: Must be 0
 
-### 4. Tests (BLOCKING)
+### 3. Tests (BLOCKING)
 - **Core tests**: Python 3.11 and 3.12
 - **ML tests**: Python 3.11
 - **All tests must pass**
 - **No skipped tests without justification**
 
-### 5. Coverage Gates (ENFORCED)
+### 4. Coverage Gates (ENFORCED)
 
 #### Global Minimum
-- Coverage must **not decrease** vs `main` branch
+- Combined coverage must stay **≥25%** (enforced via `coverage report --fail-under=25`)
 - Current baseline: **25.44%** (Q2 2026 target: 28%)
 
 #### Diff Coverage (KEY METRIC)
@@ -242,12 +234,29 @@ Future enforcement (not yet active):
 - `pbr_cli.py`: 80% minimum
 - `preprocessing.py`: 70% minimum
 
-### 6. Build Check (BLOCKING)
+---
+
+## Post-Merge Quality Signals (Non-Blocking)
+
+The following checks run after merge and do not block PRs:
+
+### Type Checking (POST-MERGE)
+- **ci.yml**: Hard-fail mypy on critical modules (`lux_depth_v3/`) after push to main
+- **ci-quality-firewall.yml**: Soft-fail mypy for advisory checks
+
+> **Note:** `build.yml` (the canonical PR gate) does not include a dedicated typecheck gate.
+> Type enforcement is applied via `ci.yml` on push to main.
+
+---
+
+## Additional Pre-Merge Gates
+
+### 5. Build Check (BLOCKING)
 - Package must build successfully
 - Wheel install must work
 - `twine check` must pass
 
-### 7. Repository Hygiene (BLOCKING)
+### 6. Repository Hygiene (BLOCKING)
 - No workflow marker files in root
 - No coverage artifacts committed
 - Max 15 markdown files in root

@@ -211,6 +211,10 @@ def mock_depth_model(deterministic_rng):
 | `ci.yml` | Post-merge validation | Legacy negative selection | Hard-fail mypy |
 | `ci-quality-firewall.yml` | Post-CI verification | Legacy negative selection | Soft-fail mypy |
 
+> **Note:** `quality-gate.yml` is part of the broader quality-control plane but is intentionally
+> excluded from this canonical CI workflow table. It runs pre-commit style checks but is not
+> a branch-protection requirement. Its scope is governed by the Quality Firewall documentation.
+
 ### PR Gating Jobs
 
 | Job | Python | Requirements | Markers |
