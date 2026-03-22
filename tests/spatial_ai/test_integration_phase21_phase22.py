@@ -5,9 +5,12 @@ import pytest
 
 # Skip SAM2 integration tests until full model integration is complete
 # (Phase 2.1 uses stub implementation, Phase 2.2 is complete)
-pytestmark = pytest.mark.skip(
-    reason="SAM2 backend uses stub implementation. Integration tests will be enabled when full SAM2 model is integrated."
-)
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.skip(
+        reason="SAM2 backend uses stub implementation. Integration tests will be enabled when full SAM2 model is integrated."
+    ),
+]
 
 
 class TestPhase21And22Integration:

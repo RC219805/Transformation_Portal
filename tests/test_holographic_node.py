@@ -4,7 +4,7 @@ import math
 
 import pytest
 
-pytestmark = pytest.mark.skip(reason="holographic_node is deprecated and in archive")
+pytestmark = [pytest.mark.unit, pytest.mark.skip(reason="holographic_node is deprecated and in archive")]
 
 try:
     from archive.deprecated.holographic_node import EntanglementField, GlobalSystemState, HolographicNode, Superposition

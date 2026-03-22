@@ -22,7 +22,7 @@ try:
 except ImportError:
     HAS_TORCH = False
 
-pytestmark = pytest.mark.skipif(not HAS_TORCH, reason="torch not installed (optional dependency)")
+pytestmark = [pytest.mark.ml, pytest.mark.skipif(not HAS_TORCH, reason="torch not installed (optional dependency)")]
 
 
 @pytest.fixture

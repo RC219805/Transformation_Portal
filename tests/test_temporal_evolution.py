@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pytest
 
-pytestmark = pytest.mark.skip(reason="temporal_evolution module in scripts, not yet migrated")
+pytestmark = [pytest.mark.unit, pytest.mark.skip(reason="temporal_evolution module in scripts, not yet migrated")]
 
 try:
     from scripts.temporal_evolution import TemporalEvolutionRoadmap

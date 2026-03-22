@@ -9,6 +9,10 @@ Uses Hypothesis for property-based testing to explore edge cases in:
 
 import pytest
 
+# Module-level marker per ADR-044: all tests require @pytest.mark.unit
+# This must be at module level (not inside if/else) for the audit script to detect it
+pytestmark = [pytest.mark.unit]
+
 # Import Hypothesis with graceful fallback
 try:
     from hypothesis import given
@@ -19,10 +23,37 @@ try:
     HYPOTHESIS_AVAILABLE = True
 except ImportError:
     HYPOTHESIS_AVAILABLE = False
-    pytestmark = pytest.mark.skip("Hypothesis not installed")
-    # Define dummy for pylint
-    given = None  # type: ignore
-    st = None  # type: ignore
+
+    # Define stub implementations to allow module import without Hypothesis.
+    # Without these stubs, class definitions using @given decorators would fail
+    # at import time (before pytest can apply the skipif marker), because the
+    # decorator calls like @given(timeout=st.integers(...)) are evaluated during
+    # class definition.
+
+    class _DummyStrategy:
+        """Stub strategy that mimics Hypothesis strategies for import-time compatibility.
+
+        This stub enables code like `st.integers(min_value=1)` to execute without
+        errors when Hypothesis is not installed. The stub returns itself from all
+        method calls, allowing chained strategy expressions to succeed.
+        """
+
+        def __call__(self, *args, **kwargs):
+            return self
+
+        def __getattr__(self, name):
+            return self
+
+    st = _DummyStrategy()  # type: ignore
+
+    def given(*args, **kwargs):  # type: ignore  # noqa: E302
+        """Stub @given decorator that returns the original function unchanged.
+
+        Accepts both positional and keyword arguments to match the Hypothesis
+        signature (e.g., @given(st.integers()) or @given(timeout=st.integers())).
+        """
+        return lambda f: f
+
     EnhanceConfig = None  # type: ignore
 
 

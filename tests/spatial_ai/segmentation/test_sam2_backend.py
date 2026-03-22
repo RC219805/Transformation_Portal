@@ -13,7 +13,7 @@ try:
 except ImportError:
     HAS_SAM2 = False
 
-pytestmark = pytest.mark.skipif(not HAS_SAM2, reason="SAM2 package not installed (optional dependency)")
+pytestmark = [pytest.mark.ml, pytest.mark.skipif(not HAS_SAM2, reason="SAM2 package not installed (optional dependency)")]
 
 
 @pytest.fixture
