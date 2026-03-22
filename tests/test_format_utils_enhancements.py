@@ -15,7 +15,7 @@ import pytest
 from PIL import Image
 
 # Import from the enhancements module
-pytestmark = pytest.mark.skip(reason="format_utils_enhancements not yet migrated to src package")
+pytestmark = [pytest.mark.unit, pytest.mark.skip(reason="format_utils_enhancements not yet migrated to src package")]
 
 try:
     from scripts.utilities.format_utils_enhancements import (  # Option 2: Enhanced detection; Option 3: Conversion; Option 4: TIFF handling

@@ -20,7 +20,7 @@ import numpy as np
 import pytest
 from PIL import Image
 
-pytestmark = pytest.mark.skip(reason="pro_pipeline not yet migrated to src package")
+pytestmark = [pytest.mark.unit, pytest.mark.skip(reason="pro_pipeline not yet migrated to src package")]
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 

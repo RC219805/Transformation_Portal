@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-pytestmark = pytest.mark.skip(reason="material_response_optimizer not yet migrated to src package")
+pytestmark = [pytest.mark.unit, pytest.mark.skip(reason="material_response_optimizer not yet migrated to src package")]
 
 try:
     from scripts.utilities.material_response_optimizer import MaterialAwareEnhancementPlanner, RenderEnhancementPlanner

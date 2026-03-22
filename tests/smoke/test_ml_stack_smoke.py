@@ -68,7 +68,7 @@ except (ImportError, RuntimeError, TypeError):
     sklearn = None
 
 # Skip all ML tests if torch is not available
-pytestmark = pytest.mark.skipif(not TORCH_AVAILABLE, reason="torch required for ML smoke tests")
+pytestmark = [pytest.mark.unit, pytest.mark.skipif(not TORCH_AVAILABLE, reason="torch required for ML smoke tests")]
 
 
 @pytest.mark.ml

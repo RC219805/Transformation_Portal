@@ -9,6 +9,10 @@ Uses Hypothesis for property-based testing to explore edge cases in:
 
 import pytest
 
+# Module-level marker per ADR-044: all tests in root tests/ require @pytest.mark.unit
+# Combined with skip marker when Hypothesis is not available
+pytestmark = [pytest.mark.unit]
+
 # Import Hypothesis with graceful fallback
 try:
     from hypothesis import given
@@ -19,7 +23,7 @@ try:
     HYPOTHESIS_AVAILABLE = True
 except ImportError:
     HYPOTHESIS_AVAILABLE = False
-    pytestmark = pytest.mark.skip("Hypothesis not installed")
+    pytestmark = [pytest.mark.unit, pytest.mark.skip("Hypothesis not installed")]
     # Define dummy for pylint
     given = None  # type: ignore
     st = None  # type: ignore

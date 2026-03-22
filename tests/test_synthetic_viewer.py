@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-pytestmark = pytest.mark.skip(reason="synthetic_viewer module in scripts, not yet migrated")
+pytestmark = [pytest.mark.unit, pytest.mark.skip(reason="synthetic_viewer module in scripts, not yet migrated")]
 
 try:
     from scripts.synthetic_viewer import ACUScore, JourneyMoment, SyntheticViewer
