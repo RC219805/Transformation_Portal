@@ -408,7 +408,7 @@ The Q1 2026 column reflects audit-time state (2026-03-20). The **Current** colum
 | Test marker coverage | 48.6% | 100% | 100% maintained | `check_test_markers.py --audit` |
 | Code coverage | 25.44% | 25.44% | 28% | `pytest-cov` |
 | Canonical CI time (`build.yml`) | 65–75 min | TBD | 40–50 min | GitHub Actions |
-| Workflow Parity Debt (QC) | N/A | 4 (minimum baseline) | 0 | Quality-control workflows only |
+| Workflow Parity Debt (QC) | N/A | 3 (action refs normalized) | 0 | Quality-control workflows only |
 
 ---
 

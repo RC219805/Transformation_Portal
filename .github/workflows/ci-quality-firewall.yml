@@ -441,7 +441,7 @@ jobs:
 
       - name: Upload coverage to Codecov
         if: matrix.python-version == '3.12'
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@b9fd7d16f6d7d1b5d2bec1a2887e65ceed900238  # v4
         with:
           files: ./coverage.xml
           flags: core-tests
@@ -561,7 +561,7 @@ jobs:
           retention-days: 7
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@b9fd7d16f6d7d1b5d2bec1a2887e65ceed900238  # v4
         with:
           files: ./coverage.xml
           flags: ml-tests
@@ -608,7 +608,7 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION_LINT }}
 
       - name: Download coverage artifacts
-        uses: actions/download-artifact@v8.0.1
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
         with:
           pattern: coverage-*
           path: coverage-artifacts
@@ -760,7 +760,7 @@ jobs:
 
       - name: Locate previous flake ledger artifact on main
         id: find-ledger
-        uses: actions/github-script@v8
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd  # v8
         with:
           script: |
             const { owner, repo } = context.repo;
@@ -814,7 +814,7 @@ jobs:
 
       - name: Download previous flake ledger
         if: steps.find-ledger.outputs.found == 'true'
-        uses: actions/download-artifact@v8.0.1
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
         with:
           name: flake-ledger
           run-id: ${{ steps.find-ledger.outputs.run_id }}
@@ -846,7 +846,7 @@ jobs:
           python -m pip install --upgrade pip
 
       - name: Download test results
-        uses: actions/download-artifact@v8.0.1
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
         with:
           pattern: test-results-*
           path: test-results/
