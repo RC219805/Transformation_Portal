@@ -82,7 +82,7 @@ Work in this section has landed and is no longer a primary implementation track,
 | Gate | Status | Evidence |
 |------|--------|----------|
 | Decision | ✅ Complete | ADR-044 approved |
-| Implementation | ✅ Complete | 95.1% marker coverage achieved (was 48.6%) |
+| Implementation | ✅ Complete | 100% marker coverage achieved (was 48.6%) |
 | Validation | ⏳ Partial | Pre-commit works; CI runtime validation pending |
 | Governance | ⏳ Partial | ADR-044 updated; workflow semantics still being normalized |
 
@@ -113,7 +113,7 @@ The repository already encodes a **provisional canonical decision**: `ci.yml` ex
 - `ci.yml` and `ci-quality-firewall.yml` both run post-merge/post-CI validation with overlapping quality semantics
 - `quality-gate.yml` remains an older helper workflow with its own quality behavior
 - Version-tag action refs are still present in `ci-quality-firewall.yml` and `quality-gate.yml` (pinning complete in `build.yml` and `ci.yml`)
-- `-n auto` is not present in the scoped test-bearing workflows
+- `-n auto` is enabled for pytest in `ci.yml`, but remains absent in `build.yml` and `ci-quality-firewall.yml`
 - Typecheck policy varies across the plane: hard-fail in `ci.yml` (critical modules), soft-fail in `ci-quality-firewall.yml`, absent in `build.yml` and `quality-gate.yml`
 
 **Quality Control Plane Inventory:**
@@ -404,7 +404,7 @@ The Q1 2026 column reflects audit-time state (2026-03-20). The **Current** colum
 |--------|-----------------|---------|-----------|-------------|
 | Overall Score | 7.6/10 | 7.6/10 | 8.6/10 | Codebase audit |
 | `orchestrator.py` LOC | 6,108 | 5,676 | 5,476 | `wc -l orchestrator.py` |
-| Test marker coverage | 48.6% | 95.1% | 95%+ maintained | `check_test_markers.py --audit` |
+| Test marker coverage | 48.6% | 100% | 100% maintained | `check_test_markers.py --audit` |
 | Code coverage | 25.44% | 25.44% | 28% | `pytest-cov` |
 | Canonical CI time (`build.yml`) | 65–75 min | TBD | 40–50 min | GitHub Actions |
 | Workflow Parity Debt (QC) | N/A | 4 (minimum baseline) | 0 | Quality-control workflows only |
