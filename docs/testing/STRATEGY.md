@@ -57,7 +57,7 @@ pytest -v tests/ -ra -m "not ml and not slow and not benchmark" --maxfail=1
 | **CI Selection** | `ml and not slow and not integration and not benchmark` |
 | **Duration** | < 10 minutes |
 | **Dependencies** | torch (CPU), transformers (offline mode) |
-| **Test Ceiling** | 70 tests (enforced by `test_ml_fast_collection_contract.py`) |
+| **Test Ceiling** | 75 tests (enforced by `tests/enforcement/test_ml_fast_collection_contract.py`) |
 
 **Requirements:**
 - Must operate in offline mode (`TRANSFORMERS_OFFLINE=1`, `HF_HUB_OFFLINE=1`)
