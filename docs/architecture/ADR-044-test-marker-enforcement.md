@@ -56,14 +56,14 @@ All existing tests will be tagged with appropriate markers within Q2 2026:
 
 | Root-level tests | Analyze individually, default to `@pytest.mark.unit` |
 
-### 2. Enforce Markers on New Tests
+### 2. Enforce Markers on New Tests (Fail-Closed Guard)
 
-A pre-commit hook requires all new test functions to have at least one marker.
+A pre-commit hook requires all new test functions to have at least one **category** marker. This is a **fail-closed** guard: any new test file or test function without proper markers is blocked from commit.
 
 **Implementation:** `scripts/validation/check_test_markers.py`
 
 The script supports two modes:
-1. **Pre-commit mode**: Validates specific files passed as arguments
+1. **Pre-commit mode**: Validates specific files passed as arguments (fail-closed)
 2. **Audit mode**: Scans entire `tests/` directory for comprehensive coverage report
 
 **Pre-commit configuration** (`.pre-commit-config.yaml`):
@@ -77,6 +77,11 @@ The script supports two modes:
       files: ^tests/.*\.py$
       types: [python]
 ```
+
+**Fail-Closed Behavior:**
+- New `test_*.py` files without category markers are rejected
+- Tests with only built-in markers (`skip`, `skipif`, etc.) are rejected
+- Clear error messages guide remediation
 
 **Usage:**
 ```bash
@@ -115,7 +120,13 @@ pytest tests/
 
 ## Marker Taxonomy
 
-Canonical markers as registered in `pyproject.toml` under `[tool.pytest.ini_options].markers`:
+### Category Markers vs Built-in Markers
+
+**Important distinction:** Only *category markers* satisfy coverage requirements. Built-in markers like `skip`, `skipif`, `xfail`, `parametrize`, `usefixtures`, `filterwarnings`, and `timeout` do NOT count toward coverage.
+
+A test with only `@pytest.mark.skipif(...)` is considered **unmarked** and will be rejected by the pre-commit hook. You must add a category marker (e.g., `@pytest.mark.unit`) alongside any built-in markers.
+
+### Category Markers (Required for Coverage)
 
 | Marker | Semantics | CI Inclusion |
 |--------|-----------|--------------|
@@ -128,6 +139,44 @@ Canonical markers as registered in `pyproject.toml` under `[tool.pytest.ini_opti
 | `stress` | Resource-intensive | Manual/scheduled |
 | `regression` | Regression tests with known fixtures | PR gate |
 | `golden` | Golden master regression tests | PR gate |
+
+### When to Use Which Marker
+
+| Scenario | Recommended Marker |
+|----------|-------------------|
+| Fast, isolated test (<1s) | `unit` |
+| Test requires torch/diffusers/ML stack | `ml` |
+| Test spans multiple modules/systems | `integration` |
+| Test validates security invariants | `security` |
+| Test uses baseline fixtures for regression | `regression` |
+| Long-running test (>10s) | `slow` (add to another category) |
+
+### Module-Level vs Per-Test Markers
+
+**Prefer module-level `pytestmark` declarations** for consistency:
+
+```python
+import pytest
+
+pytestmark = pytest.mark.unit  # All tests in this file are unit tests
+
+def test_one():
+    pass
+
+def test_two():
+    pass
+```
+
+For mixed-category modules or when combining with built-in markers:
+
+```python
+import pytest
+
+pytestmark = [
+    pytest.mark.unit,
+    pytest.mark.timeout(60),
+]
+```
 
 **Note:** This taxonomy is derived from the markers registered in `pyproject.toml` (which enforces `--strict-markers`). Any new marker must be added to `pyproject.toml` before use, otherwise pytest will fail collection.
 
@@ -166,8 +215,28 @@ Canonical markers as registered in `pyproject.toml` under `[tool.pytest.ini_opti
 - [x] Pre-commit hook blocks unmarked tests (`check-test-markers` hook)
 - [x] Audit script verifies marker coverage (`--audit` mode)
 - [x] Automated retrofit script (`retrofit_test_markers.py`)
+- [x] Contract tests for audit semantics (`tests/test_check_test_markers.py`)
 - [ ] CI runs marker-specific jobs (in progress)
 - [ ] Weekly automated audit (future enhancement)
+
+### Audit Contract Tests (2026-03-22)
+
+The `tests/test_check_test_markers.py` file provides 54 fixture-based contract tests that pin the audit semantics:
+
+| Test Class | Purpose |
+|------------|---------|
+| `TestMarkerConstants` | Verifies constant definitions match ADR-044 |
+| `TestDirectoryMarkerRequirements` | Verifies directory-based requirements |
+| `TestBuiltinMarkersDoNotSatisfyCoverage` | Verifies `skip`, `skipif`, etc. alone are violations |
+| `TestCategoryMarkersSatisfyCoverage` | Verifies `unit`, `ml`, etc. satisfy coverage |
+| `TestModuleLevelMarkerDetection` | Verifies `pytestmark` declarations work |
+| `TestSmokePathMapping` | Verifies `smoke/` → `unit` requirement |
+| `TestClassLevelMarkerDetection` | Verifies class-level markers propagate |
+| `TestPreCommitMode` | Verifies fail-closed pre-commit behavior |
+| `TestAuditMode` | Verifies full directory audit functionality |
+| `TestEdgeCases` | Async functions, nested classes, syntax variations |
+| `TestDirectoryTypeDetection` | Verifies directory type classification |
+| `TestStressDirectoryRequirements` | Verifies `stress/` requires both `stress` + `slow` |
 
 ---
 
@@ -175,7 +244,7 @@ Canonical markers as registered in `pyproject.toml` under `[tool.pytest.ini_opti
 
 | Metric | Current | Target | Status |
 |--------|---------|--------|--------|
-| Unmarked tests | 4.9% | <5% | ✅ Achieved |
+| Unmarked tests | 0% | <5% | ✅ Achieved (100% coverage) |
 | `pytest -m unit` time | TBD | <3 min | Pending CI validation |
 | `pytest -m "unit or integration"` time | TBD | <10 min | Pending CI validation |
 
