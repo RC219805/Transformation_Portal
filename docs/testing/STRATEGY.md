@@ -25,10 +25,13 @@ This document defines the testing strategy for the Transformation Portal reposit
 
 | Attribute | Value |
 |-----------|-------|
-| **Markers** | Default (no marker), or `not ml and not slow` |
+| **Markers** | `unit`, `security`, `regression`, `golden` (any non-ML category marker) |
+| **CI Selection** | `not ml and not slow and not benchmark` |
 | **Duration** | < 2 minutes |
 | **Dependencies** | Standard library, numpy, PIL, pyyaml |
 | **Coverage Target** | 25% minimum for core modules |
+
+**Note:** Per ADR-044, all tests must have a category marker. The "no marker" convention is legacy and no longer valid.
 
 **Included Tests:**
 - Config parsing and validation
@@ -37,9 +40,9 @@ This document defines the testing strategy for the Transformation Portal reposit
 - Security functions (sanitization, validation)
 - Orchestration logic (mocked backends)
 
-**CI Command:**
+**CI Command (PR Gating):**
 ```bash
-pytest -v tests/ -ra -m "not ml and not slow" --maxfail=1
+pytest -v tests/ -ra -m "not ml and not slow and not benchmark" --maxfail=1
 ```
 
 ---
@@ -50,7 +53,8 @@ pytest -v tests/ -ra -m "not ml and not slow" --maxfail=1
 
 | Attribute | Value |
 |-----------|-------|
-| **Markers** | `ml and not slow and not integration` |
+| **Markers** | `ml` (without `slow` or `integration`) |
+| **CI Selection** | `ml and not slow and not integration and not benchmark` |
 | **Duration** | < 10 minutes |
 | **Dependencies** | torch (CPU), transformers (offline mode) |
 | **Test Ceiling** | 70 tests (enforced by `test_ml_fast_collection_contract.py`) |
@@ -60,9 +64,9 @@ pytest -v tests/ -ra -m "not ml and not slow" --maxfail=1
 - No model downloads during test execution
 - Use small fixtures or mocks for inference tests
 
-**CI Command:**
+**CI Command (PR Gating):**
 ```bash
-pytest -v tests/ -ra -m "ml and not slow" --maxfail=1
+pytest -v tests/ -ra -m "ml and not slow and not integration and not benchmark" --maxfail=1
 ```
 
 ---
@@ -264,20 +268,23 @@ def test_pipeline_latency():
 
 ## Running Tests Locally
 
+> **Note:** The commands below are convenience aliases for local development.
+> For the exact PR-gating expressions used in CI, see the [PR Gating Jobs](#pr-gating-jobs) table above.
+
 ### Quick Validation (Core)
 
 ```bash
 make test-fast
-# or
-pytest -v tests/ -ra -m "not ml and not slow" --maxfail=1
+# or (matches PR-gating expression)
+pytest -v tests/ -ra -m "not ml and not slow and not benchmark" --maxfail=1
 ```
 
 ### With ML Dependencies
 
 ```bash
 make test-novideo
-# or
-pytest -v tests/ -ra -m "ml and not slow" --maxfail=1
+# or (matches PR-gating expression)
+pytest -v tests/ -ra -m "ml and not slow and not integration and not benchmark" --maxfail=1
 ```
 
 ### Full Suite
