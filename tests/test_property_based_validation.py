@@ -9,8 +9,8 @@ Uses Hypothesis for property-based testing to explore edge cases in:
 
 import pytest
 
-# Module-level marker per ADR-044: all tests in root tests/ require @pytest.mark.unit
-# Combined with skip marker when Hypothesis is not available
+# Module-level marker per ADR-044: all tests require @pytest.mark.unit
+# This must be at module level (not inside if/else) for the audit script to detect it
 pytestmark = [pytest.mark.unit]
 
 # Import Hypothesis with graceful fallback
@@ -23,10 +23,24 @@ try:
     HYPOTHESIS_AVAILABLE = True
 except ImportError:
     HYPOTHESIS_AVAILABLE = False
-    pytestmark = [pytest.mark.unit, pytest.mark.skip("Hypothesis not installed")]
-    # Define dummy for pylint
-    given = None  # type: ignore
-    st = None  # type: ignore
+
+    # Define stub implementations to allow module import without Hypothesis
+    # These stubs enable class definitions with @given decorators without errors
+    class _DummyStrategy:
+        """Stub strategy that accepts any arguments."""
+
+        def __call__(self, *args, **kwargs):
+            return self
+
+        def __getattr__(self, name):
+            return self
+
+    st = _DummyStrategy()  # type: ignore
+
+    def given(**kwargs):  # type: ignore  # noqa: E302
+        """Stub @given decorator that does nothing."""
+        return lambda f: f
+
     EnhanceConfig = None  # type: ignore
 
 
