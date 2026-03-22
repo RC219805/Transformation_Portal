@@ -108,7 +108,7 @@ Work in this section has landed but may have **partial validation or governance 
 | mypy hard-fail (`ci-quality-firewall.yml`) | ❌ Open | Uses `continue-on-error: true` |
 | HuggingFace revision pinning | ✅ Complete | `config/model_lock_manifest.yaml` |
 
-**Note:** `build.yml` is the canonical PR gating workflow per branch protection. `ci.yml` is the post-merge validation workflow.
+**Note:** `build.yml` is designated as the canonical PR gating workflow (see `ci.yml` line 7 comment). `ci.yml` is the post-merge validation workflow. Formal documentation of this designation is pending (see Quality Control Plane Canonicalization workstream).
 
 ---
 
