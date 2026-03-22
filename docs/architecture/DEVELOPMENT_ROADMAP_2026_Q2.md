@@ -74,7 +74,7 @@ Work in this section is **done** and no longer requires active tracking.
 **Outcome:**
 - Extracted modules: `validators/run_card_validator.py`, `artifact_manager.py`, `config_resolver.py`, `pipeline_coordinator.py`, `execution_engine.py`
 - Total extracted LOC: ~2,720
-- Orchestrator remains at ~5,675 LOC (documented state-machine exception in ADR-043)
+- Orchestrator remains at 5,676 LOC (documented state-machine exception in ADR-043)
 
 ### Test Marker Retrofit (ADR-044)
 
@@ -146,7 +146,7 @@ Establish one canonical PR gating workflow with consistent enforcement, then ali
 **Status:** Partial
 
 **Problem Statement:**
-While ADR-043 decomposition is complete, the orchestrator remains at ~5,675 LOC (documented state-machine exception). Ongoing vigilance is required to:
+While ADR-043 decomposition is complete, the orchestrator remains at 5,676 LOC (documented state-machine exception). Ongoing vigilance is required to:
 - Prevent responsibility creep back into the orchestrator
 - Ensure extracted module boundaries remain durable
 - Continue incremental slimming where feasible
@@ -349,10 +349,10 @@ These metrics enable proactive steering rather than quarter-end audit.
 |--------|---------|--------|
 | Active workflows (total) | 27 | N/A (informational) |
 | Active workflows with conflicting enforcement semantics | Baseline by 04-05 | 0 |
-| Active workflows using floating action tags | 0 | 0 |
+| Active workflows using floating action tags | 0 ✅ | 0 |
 | Workflows whose test/type policy differs from canonical | Baseline by 04-05 | 0 |
 
-**Composite Metric:** Workflow Parity Debt = count of workflows with conflicting semantics + count with floating tags + count with policy divergence. Target: 0.
+**Composite Metric:** Workflow Parity Debt = sum of (conflicting semantics + floating tags + policy divergence). Target: 0. The floating tags component is retained for regression monitoring; current value is 0.
 
 ### Orchestrator Residual Debt
 
