@@ -24,10 +24,19 @@ try:
 except ImportError:
     HYPOTHESIS_AVAILABLE = False
 
-    # Define stub implementations to allow module import without Hypothesis
-    # These stubs enable class definitions with @given decorators without errors
+    # Define stub implementations to allow module import without Hypothesis.
+    # Without these stubs, class definitions using @given decorators would fail
+    # at import time (before pytest can apply the skipif marker), because the
+    # decorator calls like @given(timeout=st.integers(...)) are evaluated during
+    # class definition.
+
     class _DummyStrategy:
-        """Stub strategy that accepts any arguments."""
+        """Stub strategy that mimics Hypothesis strategies for import-time compatibility.
+
+        This stub enables code like `st.integers(min_value=1)` to execute without
+        errors when Hypothesis is not installed. The stub returns itself from all
+        method calls, allowing chained strategy expressions to succeed.
+        """
 
         def __call__(self, *args, **kwargs):
             return self
@@ -37,8 +46,12 @@ except ImportError:
 
     st = _DummyStrategy()  # type: ignore
 
-    def given(**kwargs):  # type: ignore  # noqa: E302
-        """Stub @given decorator that does nothing."""
+    def given(*args, **kwargs):  # type: ignore  # noqa: E302
+        """Stub @given decorator that returns the original function unchanged.
+
+        Accepts both positional and keyword arguments to match the Hypothesis
+        signature (e.g., @given(st.integers()) or @given(timeout=st.integers())).
+        """
         return lambda f: f
 
     EnhanceConfig = None  # type: ignore
