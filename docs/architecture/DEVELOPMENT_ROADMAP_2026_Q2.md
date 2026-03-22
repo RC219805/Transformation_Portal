@@ -1,274 +1,435 @@
 # Development Roadmap: Q2 2026
 
-**Status:** ACTIVE
-**Version:** 1.0.0
-**Date:** 2026-03-20
-**Authority:** Architect Assessment
-**Supersedes:** Actionable items from [Q1 2026 Codebase Audit](CODEBASE_AUDIT_2026_Q1.md)
+**Status:** ACTIVE  
+**Version:** 1.2.0  
+**Date:** 2026-03-22  
+**Authority:** Architect Assessment  
+**Supersedes:** v1.1.0 (2026-03-22), v1.0.0 (2026-03-20)
 
 ---
 
 ## Executive Summary
 
-This roadmap identifies the **highest-signal development priorities** for the Transformation Portal, derived from:
+This roadmap identifies the **highest-signal development priorities** for the Transformation Portal.
+
+**Sources:**
 - Q1 2026 Codebase Audit (7.6/10 overall score)
-- TODO Inventory v2.1.0 (65 items, 6% action required)
-- Portal Orchestrator Roadmap (Phase 5A complete)
-- Testing Strategy documentation vs. actual enforcement gap
+- TODO Inventory v2.2.0 (65 items, 3% action required)
+- Portal Orchestrator Roadmap (Phases 2-7 complete)
+- ADR-043 Orchestrator Decomposition (complete)
+- ADR-044 Test Marker Enforcement (implemented, validation pending)
+- Current quality-control workflow review (`build.yml`, `ci.yml`, `ci-quality-firewall.yml`, `quality-gate.yml`)
 
 **Goal:** Raise overall codebase health from **7.6/10 → 8.6/10** by end of Q2 2026.
 
 ---
 
-## Priority Matrix
+## Document Structure
 
-| Priority | Focus Area | Impact | Effort | Dependency |
-|----------|-----------|--------|--------|------------|
-| 🔴 P0 | Orchestrator Decomposition | Maintainability | 40-60h | None |
-| 🔴 P0 | Test Marker Enforcement | CI Efficiency | 10-15h | None |
-| ⚠️ P1 | Coverage Ramp Phase 1 | Quality | 15-20h | P0 markers |
-| ⚠️ P1 | CI/CD Optimization | DevX | 20-25h | None |
-| 📋 P2 | Documentation Consolidation | Onboarding | 15-20h | None |
-| 📋 P2 | Circular Import Hardening | Stability | 8-12h | P0 orchestrator |
+This roadmap is organized by **delivery state** to ensure governance clarity:
 
----
-
-## 🔴 Critical Priority (P0)
-
-### 1. Orchestrator Decomposition
-
-**Problem Statement:**
-`src/transformation_portal/lux_depth_v3/orchestrator.py` contains 6,108 lines of code, with a single `EnhanceOrchestrator` class spanning 5,491 LOC. This violates single-responsibility principle and creates:
-- Untestable monolithic code paths
-- 40-50% cyclomatic complexity
-- Onboarding friction (impossible to understand in isolation)
-- Merge conflict hotspot
-
-**Current Structure:**
-```
-EnhanceOrchestrator (5,491 LOC)
-├── Configuration resolution (~1,000 LOC)
-├── Pipeline coordination (~1,500 LOC)
-├── Artifact management (~1,500 LOC)
-├── Execution engine (~2,000 LOC)
-└── Validation helpers (~500 LOC scattered)
-```
-
-**Target Structure (ADR-043):**
-```
-lux_depth_v3/
-├── orchestrator.py (~500 LOC, facade)
-├── config_resolver.py (~1,000 LOC)
-├── pipeline_coordinator.py (~1,500 LOC)
-├── artifact_manager.py (~1,500 LOC)
-├── execution_engine.py (~2,000 LOC)
-└── validators/
-    └── run_card_validator.py (~500 LOC)
-```
-
-**Acceptance Criteria:**
-- [x] No extracted module/class exceeds 1,500 LOC (orchestrator remains ~5,500 LOC as state-machine facade)
-- [x] All extracted modules have >80% unit test coverage
-- [x] No circular imports between new modules
-- [x] Existing CLI/API behavior unchanged (regression tests pass)
-- [x] ADR-043 documenting rationale and boundaries
-
-**Effort:** 40-60 hours across 2-3 weeks
-**Owner:** Specialist (implementation) + Architect (review)
-**Milestone:** v2.4.0
+| Section | Purpose |
+|---------|---------|
+| **Completed / Implemented Since Q1 Audit** | Work landed and may have minor validation or governance follow-through pending |
+| **Carry-Forward Work** | Work partially landed, requiring normalization or validation |
+| **Q2 Commitments** | Net-new or open work that must complete this quarter |
+| **Deferred / Post-Q2** | Important but intentionally out of current scope |
 
 ---
 
-### 2. Test Marker Enforcement
+## Priority and Status Definitions
 
-**Problem Statement:**
-75% of tests (3,168 of 4,221 functions) lack pytest markers despite comprehensive `docs/testing/STRATEGY.md`. This prevents:
-- Targeted test suite execution
-- CI job parallelization
-- Fast PR feedback loops
+### Priority (Sequencing Order)
 
-**Current State (2026-03-21 Update):**
-| Marker | Count | Target | Status |
-|--------|-------|--------|--------|
-| No marker | ~210 (4.9%) | <5% | ✅ Target Met |
-| `@pytest.mark.unit` | 3,100+ | 2,500+ | ✅ Complete |
-| `@pytest.mark.integration` | 50+ | 200+ | In Progress |
-| `@pytest.mark.ml` | 293 | 300+ | ✅ Near Target |
-| `@pytest.mark.security` | 157+ | 50+ | ✅ Complete |
-| `@pytest.mark.benchmark` | 40 | (adequate) | ✅ Complete |
+| Priority | Definition |
+|----------|------------|
+| **Now** | Currently active or prerequisite for downstream work; must start immediately |
+| **Next** | Queued for work once Now items unblock |
+| **Later** | Important, scheduled for later in quarter or post-Q2 |
 
-**Implementation Plan:**
-1. ~~**Batch 1 (Week 1):** Tag all `tests/unit/` with `@pytest.mark.unit`~~ ✅
-2. ~~**Batch 2 (Week 1):** Tag all `tests/security/` with `@pytest.mark.security`~~ ✅
-3. ~~**Batch 3 (Week 2):** Tag all `tests/integration/` appropriately~~ ✅
-4. ~~**Batch 4 (Week 2):** Tag root-level tests based on actual test behavior~~ ✅
-5. ~~**Enforcement (Week 2):** Add pre-commit hook requiring marker on new tests~~ ✅
+### Status (Delivery State)
 
-**Acceptance Criteria:**
-- [x] <5% of tests unmarked (only test infrastructure) ✅ 4.9% achieved
-- [x] Pre-commit hook blocks unmarked test additions ✅
-- [ ] CI can run `pytest -m unit` in <3 minutes
-- [ ] CI can run `pytest -m "unit or integration"` in <10 minutes
-
-**Effort:** 10-15 hours across 1-2 weeks → **COMPLETE**
-**Owner:** Specialist
-**Milestone:** v2.3.1 → ✅ **ACHIEVED**
+| Status | Definition |
+|--------|------------|
+| **Open** | Work not yet started |
+| **Partial** | Code/config landed, but normalization or validation incomplete |
+| **Implemented** | Core work landed, awaiting verification |
+| **Verified** | Behavior and targets proven in CI |
+| **Complete** | All gates passed; docs synchronized |
 
 ---
 
-## ⚠️ High Priority (P1)
+## Completed / Implemented Since Q1 Audit
 
-### 3. Coverage Ramp Phase 1
+Work in this section has landed and is no longer a primary implementation track, though some items still have **validation or governance follow-through pending**.
 
-**Current Coverage:** 25.44% (6,314 of 24,820 statements)
+### 1. Orchestrator Decomposition (ADR-043)
+
+| Gate | Status | Evidence |
+|------|--------|----------|
+| Decision | ✅ Complete | ADR-043 approved |
+| Implementation | ✅ Complete | Phases 2–7 landed |
+| Validation | ✅ Complete | 180+ unit tests, integration tests pass |
+| Governance | ✅ Complete | ADR-043 updated to COMPLETE status |
+
+**Outcome:**
+- Extracted modules: `validators/run_card_validator.py`, `artifact_manager.py`, `config_resolver.py`, `pipeline_coordinator.py`, `execution_engine.py`
+- Total extracted LOC: ~2,720
+- `orchestrator.py` remains at 5,676 LOC under a documented state-machine exception in ADR-043
+
+### 2. Test Marker Retrofit (ADR-044)
+
+| Gate | Status | Evidence |
+|------|--------|----------|
+| Decision | ✅ Complete | ADR-044 approved |
+| Implementation | ✅ Complete | 100% marker coverage achieved (was 48.6%) |
+| Validation | ⏳ Partial | Pre-commit works; CI runtime validation pending |
+| Governance | ⏳ Partial | ADR-044 updated; workflow semantics still being normalized |
+
+**Outcome:**
+- 137 files tagged with appropriate markers
+- Pre-commit hook blocks unmarked new tests
+- `check_test_markers.py --audit` validates coverage
+
+**Carry-forward implications:**
+- Quality-control workflows still rely on legacy negative marker expressions in active test selection
+- Contributor guidance still teaches negative marker selection
+- Positive marker selection migration remains open and is folded into **Quality Control Plane Canonicalization**
+
+---
+
+## Carry-Forward Work
+
+Work in this section is **partially landed** and requires completion or normalization.
+
+### 3. Quality Control Plane Canonicalization
+
+**Priority:** Now  
+**Status:** Partial
+
+**Problem Statement:**  
+The repository already encodes a **provisional canonical decision**: `ci.yml` explicitly states that pull-request gating lives in `build.yml`, while `ci.yml` serves post-merge validation. However, the quality-control plane is still fragmented. Current workflow files show:
+- `build.yml` is the de facto PR gate and still uses legacy negative marker expressions
+- `ci.yml` and `ci-quality-firewall.yml` both run post-merge/post-CI validation with overlapping quality semantics
+- `quality-gate.yml` remains an older helper workflow with its own quality behavior
+- Version-tag action refs are still present in `ci-quality-firewall.yml` and `quality-gate.yml` (pinning complete in `build.yml` and `ci.yml`)
+- `-n auto` is enabled for pytest in `ci.yml`, but remains absent in `build.yml` and `ci-quality-firewall.yml`
+- Typecheck policy varies across the plane: hard-fail in `ci.yml` (critical modules), soft-fail in `ci-quality-firewall.yml`, absent in `build.yml` and `quality-gate.yml`
+
+**Quality Control Plane Inventory:**
+
+| Workflow | Trigger | Current Role | Branch-Protection Relevance | Marker Semantics | Typecheck Policy | Action Ref Style | Target Disposition |
+|----------|---------|--------------|-----------------------------|------------------|------------------|------------------|-------------------|
+| `build.yml` | PR, push, dispatch | De facto PR gate | Yes | Legacy negative selection | No dedicated typecheck gate | SHA-pinned | Canonical |
+| `ci.yml` | push | Post-merge validation | No | Legacy negative selection | Hard-fail mypy (critical modules) | SHA-pinned | Align with canonical or narrow scope |
+| `ci-quality-firewall.yml` | `workflow_run`, dispatch | Post-CI verification | No | Legacy negative selection | Soft-fail mypy | Version-tag refs | Align, narrow, or retire |
+| `quality-gate.yml` | PR, push | Legacy helper workflow | Non-canonical / ambiguous | N/A | N/A | Version-tag refs | Retire or scope down |
+
+**Scope note:** Workflows outside the quality-control plane (docs, security, nightly, deployment, automation) intentionally differ and are excluded from parity debt.
+
+**Objective:**  
+Establish one canonical PR gating workflow (`build.yml`) with explicit policy, then align or retire conflicting quality-control workflows.
+
+**Scope includes:**
+- Workflow selection and role clarification
+- Marker semantics normalization (negative → positive where policy requires)
+- Runtime validation targets for canonical CI
+- Documentation alignment (`CONTRIBUTING.md`, `docs/testing/STRATEGY.md`, workflow docs)
+- Action reference normalization within the quality-control plane
+- Typecheck policy normalization for branch-protection-relevant quality workflows
+
+**Target Outcome:**
+- `build.yml` formally designated as canonical for branch protection
+- All quality-control workflows either match canonical enforcement semantics or are retired/scoped down
+- Marker semantics moved toward explicit positive selection for intended fast paths
+- Runtime targets measured against canonical workflow only
+- Quality-control workflow roles documented and non-overlapping
+
+**Acceptance Gates:**
+
+| Gate | Criteria |
+|------|----------|
+| Decision | Formal control-plane inventory approved; canonical workflow and role boundaries documented |
+| Implementation | Workflow alignment changes merged; obsolete workflows retired or narrowed; action refs normalized |
+| Validation | Canonical CI runtime targets measured and reported |
+| Governance | Workflow documentation, `CONTRIBUTING.md`, and testing strategy aligned |
+
+**Effort:** 12–16 hours  
+**Owner:** Architect + DevOps
+
+---
+
+### 4. Orchestrator Residual Slimming & Boundary Enforcement
+
+**Priority:** Now  
+**Status:** Partial
+
+**Problem Statement:**  
+ADR-043 is complete, but `orchestrator.py` still carries a large residual facade. The remaining risk is no longer decomposition feasibility; it is **boundary drift**:
+- feature logic can creep back into the orchestrator,
+- extracted module seams can erode over time,
+- and maintainability gains can reverse if residual helpers are not ratcheted down.
+
+**Objective:**  
+Prevent new feature logic from accumulating in `orchestrator.py` and continue moving residual helpers behind stable module boundaries.
+
+**Acceptance Gates:**
+
+| Gate | Criteria |
+|------|----------|
+| Decision | ✅ ADR-043 documents target architecture |
+| Implementation | Residual helper logic continues to move behind extracted boundaries |
+| Validation | Import graph remains acyclic; delegation/contract tests increase; no new responsibility domains appear |
+| Governance | ADR-043 updated if boundary policy or state-machine exception changes |
+
+**Primary indicators (blocking):**
+1. No new responsibility domains added
+2. No new feature logic added directly to `orchestrator.py`
+3. Import graph remains acyclic
+4. Delegation contract tests increase
+5. Module boundaries remain stable
+
+**Secondary indicator (directional):**  
+Reduce `orchestrator.py` by **~200 LOC per quarter** or document why the ratchet is infeasible.
+
+**Effort:** 4–8 hours ongoing per quarter  
+**Owner:** Architect (review) + Specialist (implementation)
+
+---
+
+## Q2 Commitments
+
+Work in this section is **net-new or still open** and must complete this quarter.
+
+### 5. Governance Synchronization
+
+**Priority:** Now  
+**Status:** Open
+
+**Problem Statement:**  
+Policy and enforcement changes have landed, but supporting governance documents still encode stale assumptions. Current examples include:
+- `CONTRIBUTING.md` describing mypy as non-blocking
+- `CONTRIBUTING.md` describing an outdated coverage baseline
+- documentation and contributor guidance still teaching negative marker selection
+- workflow control-plane semantics not yet documented in one canonical place
+
+**Objective:**  
+Align all binding and operational documents with the current enforced state and the intended Q2 target state.
+
+**Scope:**
+- This roadmap
+- `CONTRIBUTING.md`
+- `docs/testing/STRATEGY.md`
+- ADR index / status pages
+- CI / workflow documentation
+
+**Rule:**  
+No policy change is considered **Complete** until the corresponding governance docs are updated.
+
+**Acceptance Gates:**
+
+| Gate | Criteria |
+|------|----------|
+| Decision | Governance document scope and owners confirmed |
+| Implementation | Documents updated |
+| Validation | No contradictions remain between enforcement and documentation |
+| Governance | Review cadence and update trigger documented |
+
+**Effort:** 4–6 hours  
+**Owner:** Architect
+
+---
+
+### 6. Coverage Ramp Phase 1
+
+**Priority:** Next  
+**Status:** Open
+
+**Current Coverage:** 25.44% (6,314 of 24,820 statements)  
 **Phase 1 Target:** 28% (+636 statements)
-**Phase 2 Target:** 33% (+1,241 additional statements)
 
 **Phase 1 Focus Modules (high ROI):**
 
 | Module | Statements | Current | Target |
-|--------|-----------|---------|--------|
+|--------|-----------:|--------:|-------:|
 | `cli/__init__.py` | ~250 | 0% | 60% |
 | `config_loader.py` | 148 | 40% | 80% |
 | `utils/input_validation.py` | 195 | 0% | 70% |
 | `utils/recipe_validator.py` | 63 | 0% | 80% |
 
-**Dependency:** Requires P0 test marker completion for efficient test execution.
+**Dependency:**  
+Benefits from Quality Control Plane Canonicalization for efficient test execution and clean runtime measurement.
 
-**Effort:** 15-20 hours
-**Owner:** Specialist
+**Acceptance Gates:**
+
+| Gate | Criteria |
+|------|----------|
+| Decision | Target modules confirmed |
+| Implementation | Tests added; overall coverage reaches 28% |
+| Validation | `pytest-cov` reports target met |
+| Governance | Coverage docs updated |
+
+**Effort:** 15–20 hours  
+**Owner:** Specialist  
 **Milestone:** v2.4.0
 
 ---
 
-### 4. CI/CD Optimization
+## Deferred / Post-Q2
 
-**Current State:**
-- Full CI suite: 65-75 minutes
-- Actions use version tags (@v6, @v7) not SHA pins
-- Sequential test execution (no parallelization)
-- mypy soft-fails (type errors don't block)
+Work in this section is **important but intentionally out of current scope**.
 
-**Target State:**
-- Full CI suite: 40-50 minutes (-35%)
-- All actions pinned to commit SHAs
-- Parallel test execution with pytest-xdist
-- mypy hard-fail for critical modules
+### 7. Documentation Consolidation
 
-**Implementation Tasks:**
-
-| Task | Effort | Impact | Status |
-|------|--------|--------|--------|
-| Pin all GitHub Actions to SHA | 3h | Security | ✅ Complete (2026-03-21) |
-| Add pytest-xdist parallelization | 2h | 20-30% faster | ✅ Complete (2026-03-21) |
-| Enable fail-fast: false | 1h | Better debugging | Pending |
-| Make mypy hard-fail (core/) | 2h | Type safety | ✅ Complete (2026-03-21) |
-| Add per-test timeouts | 1h | Stability | Pending |
-
-**Effort:** 20-25 hours → **Remaining:** ~2 hours
-**Owner:** DevOps + Architect
-**Milestone:** v2.4.0
-
----
-
-## 📋 Medium Priority (P2)
-
-### 5. Documentation Consolidation
+**Priority:** Later  
+**Status:** Open
 
 **Current State:**
 - 719 markdown files across 99 directories
-- Parallel ADR hierarchies (`architecture/`, `decisions/`, `adr/`)
+- Parallel ADR hierarchies
 - 83% missing "Last Updated" metadata
-- 15+ stub documents (<50 lines)
 
 **Target State:**
 - ~200 canonical documents across ~30 directories
-- Single ADR location with archive for superseded
-- All canonical docs have metadata headers
-- Stubs either completed or deleted
+- Single ADR location with archive for superseded items
+- All canonical docs carry metadata headers
 
-**Implementation Tasks:**
-1. Archive historical session/PR docs to `docs/_archive/`
-2. Consolidate ADRs to `docs/architecture/adr/`
-3. Add metadata headers to top 50 docs
-4. Delete or complete stub documents
+**Rationale for Deferral:**  
+Best done after execution controls and governance surfaces are normalized.
 
-**Effort:** 15-20 hours
-**Owner:** Specialist
-**Milestone:** v2.4.0
-
----
-
-### 6. Circular Import Hardening
-
-**Current State:** Mitigated via `TYPE_CHECKING` guards
-- 8 files in `depth/backends/` import from `lux_depth_v3/`
-- Fragile: can break with refactoring
-
-**Target State:**
-- Shared contracts in lightweight `lux_depth_v3/_contracts.py`
-- Documented pattern in architecture guide
-- CI check for new cross-module imports
-
-**Dependency:** Partially blocked by P0 orchestrator decomposition.
-
-**Effort:** 8-12 hours
-**Owner:** Architect
+**Effort:** 15–20 hours  
+**Owner:** Specialist  
 **Milestone:** v2.5.0
 
 ---
 
-## Quarterly Success Metrics
+### 8. Circular Import Contract Hardening
 
-| Metric | Q1 2026 | Q2 Target | Measurement |
-|--------|---------|-----------|-------------|
-| Overall Score | 7.6/10 | 8.6/10 | Codebase audit |
-| Orchestrator LOC | 6,108 | <2,000 | `wc -l orchestrator.py` |
-| Test Marker Coverage | 25% | 95% | grep analysis |
-| Code Coverage | 25.44% | 33% | pytest-cov |
-| CI Time (full) | 65-75 min | 40-50 min | GitHub Actions |
-| Doc Directories | 99 | ~30 | `find docs -type d` |
+**Priority:** Later  
+**Status:** Open
+
+**Current State:**  
+Mitigated via `TYPE_CHECKING` guards across 8 files in `depth/backends/`.
+
+**Target State:**
+- Shared contracts in `lux_depth_v3/_contracts.py`
+- Documented import-boundary pattern in the architecture guide
+- CI check for new cross-module imports
+
+**Rationale for Deferral:**  
+Best done after orchestrator boundaries and workflow governance are stabilized.
+
+**Effort:** 8–12 hours  
+**Owner:** Architect  
+**Milestone:** v2.5.0
 
 ---
 
-## ADR Requirements
+## Q2 Priority Stack
 
-This roadmap generates the following ADR needs:
+| Priority | Workstream | Status | Rationale |
+|----------|------------|--------|-----------|
+| Now | Quality Control Plane Canonicalization | Partial | Highest leverage; removes CI ambiguity and folds in marker/runtime normalization |
+| Now | Orchestrator Residual Slimming & Boundary Enforcement | Partial | Core maintainability risk remains active |
+| Now | Governance Synchronization | Open | Required for policy integrity |
+| Next | Coverage Ramp Phase 1 | Open | High ROI once CI targeting is stable |
+| Later | Documentation Consolidation | Open | Valuable, but not before execution controls are clean |
+| Later | Circular Import Contract Hardening | Open | Important follow-on once boundaries stabilize |
+
+---
+
+## Leading Indicator Metrics
+
+These metrics enable proactive steering rather than quarter-end audit.
+
+### Workflow Parity Debt (Quality Control Plane Only)
+
+**Scope:** `build.yml`, `ci.yml`, `ci-quality-firewall.yml`, `quality-gate.yml`
+
+**Definition:**  
+A scoped workflow counts toward **Workflow Parity Debt** if it has at least one unresolved parity defect relative to the approved control-plane target state.
+
+| Metric | Current | Target |
+|--------|---------|--------|
+| Quality-control workflows (scoped total) | 4 | N/A (informational) |
+| QC workflows still using legacy negative marker selection | 3 | 0 |
+| QC workflows with version-tag or mixed action refs | 2 | 0 |
+| QC workflows with unresolved typecheck policy | 2 | 0 |
+| QC workflows with divergent coverage / artifact behavior | Baseline by 2026-04-05 | 0 |
+
+**Metric derivation (verified 2026-03-22):**
+- **Marker selection (3):** `build.yml`, `ci.yml`, `ci-quality-firewall.yml` use legacy negative selection; `quality-gate.yml` has no test jobs
+- **Version-tag refs (2):** `ci-quality-firewall.yml`, `quality-gate.yml`; `build.yml` and `ci.yml` are SHA-pinned
+- **Typecheck policy (2):** `build.yml` has no dedicated typecheck gate; `ci-quality-firewall.yml` uses soft-fail; `ci.yml` has hard-fail (target state)
+
+**Composite Metric:**  
+**Workflow Parity Debt = number of scoped workflows with ≥1 unresolved parity defect.**  
+Current minimum baseline: **4** (all scoped workflows have at least one defect). Target: **0**.
+
+### Orchestrator Residual Debt
+
+| Metric | Current | Target |
+|--------|---------|--------|
+| `orchestrator.py` LOC | 5,676 | 5,476 |
+| Responsibility domains in facade | 5 | ≤5 (no new domains) |
+| Delegation / contract tests across extracted boundaries | ~180 | +10/quarter |
+
+**Responsibility domain inventory:**
+1. Depth stage execution (per-image backend fallback, cache management)
+2. V2 stage execution (subprocess coordination)
+3. PBR generation (texture pipeline)
+4. Materials V3 execution (APEX quality gates)
+5. Artifact persistence (run card, Merkle roots)
+
+### Governance Freshness
+
+**Baseline to be established during Governance Synchronization (by 2026-04-12).**
+
+| Metric | Current | Target |
+|--------|---------|--------|
+| Binding docs updated within SLA after policy change | Audit by 2026-04-12 | 100% within 1 week |
+| Stale documents contradicting current enforcement | Audit by 2026-04-12 | 0 |
+
+**Binding-doc scope:**  
+This roadmap, `CONTRIBUTING.md`, `docs/testing/STRATEGY.md`, ADR status pages, and CI / workflow documentation.
+
+---
+
+## Quarterly Success Metrics (Lagging Indicators)
+
+**Note:**  
+The Q1 2026 column reflects audit-time state (2026-03-20). The **Current** column reflects the state this roadmap is written against on 2026-03-22.
+
+| Metric | Q1 2026 (Audit) | Current | Q2 Target | Measurement |
+|--------|-----------------|---------|-----------|-------------|
+| Overall Score | 7.6/10 | 7.6/10 | 8.6/10 | Codebase audit |
+| `orchestrator.py` LOC | 6,108 | 5,676 | 5,476 | `wc -l orchestrator.py` |
+| Test marker coverage | 48.6% | 100% | 100% maintained | `check_test_markers.py --audit` |
+| Code coverage | 25.44% | 25.44% | 28% | `pytest-cov` |
+| Canonical CI time (`build.yml`) | 65–75 min | TBD | 40–50 min | GitHub Actions |
+| Workflow Parity Debt (QC) | N/A | 4 (minimum baseline) | 0 | Quality-control workflows only |
+
+---
+
+## ADR Status
 
 | ADR | Topic | Status |
 |-----|-------|--------|
-| ADR-043 | Orchestrator Decomposition | Draft required |
-| ADR-044 | Test Marker Enforcement Policy | ✅ Accepted (2026-03-21) |
-| ADR-045 | CI/CD Optimization (Action Pinning) | Optional |
-
----
-
-## Rollout Phases
-
-### Phase 1: Foundation (Weeks 1-2)
-- Start orchestrator analysis and decomposition planning
-- Complete test marker retrofit (Batches 1-4)
-- Pin GitHub Actions to SHAs
-
-### Phase 2: Execution (Weeks 3-6)
-- Execute orchestrator decomposition (incremental PRs)
-- Add pytest-xdist parallelization
-- Begin coverage ramp Phase 1
-
-### Phase 3: Polish (Weeks 7-8)
-- Documentation consolidation
-- Circular import hardening
-- Q2 retrospective and Q3 planning
+| ADR-043 | Orchestrator Decomposition | ✅ COMPLETE |
+| ADR-044 | Test Marker Enforcement Policy | ✅ ACCEPTED (validation pending) |
+| ADR-045 | CI/CD & Workflow Semantics | Required if Q2 changes branch-protection semantics, canonical workflow designation, marker taxonomy, or blocking / non-blocking policy |
 
 ---
 
 ## Risk Register
 
-| Risk | Mitigation |
-|------|------------|
-| Orchestrator decomposition introduces regressions | Comprehensive integration tests before decomposition |
-| Test marker retrofit is tedious and error-prone | Batch by directory, automated grep verification |
-| CI changes break main branch | Test in separate workflow first |
+| Risk | Probability | Impact | Mitigation |
+|------|-------------|--------|------------|
+| Quality control plane canonicalization disrupts existing CI | Low | Medium | Test changes in a separate workflow first; promote incrementally |
+| Orchestrator responsibility creep | Medium | Medium | Enforce residual ratchet and ADR-043 review gate |
+| Governance docs drift from enforcement | Medium | Low | Governance Synchronization workstream |
+| Canonical CI runtime targets are not achieved | Low | Low | Measure early and adjust workflow topology or marker strategy |
+| Retiring or narrowing `quality-gate.yml` breaks incidental tooling expectations | Low | Low | Document deprecation path and verify downstream dependencies before removal |
 
 ---
 
@@ -277,13 +438,15 @@ This roadmap generates the following ADR needs:
 - [Q1 2026 Codebase Audit](CODEBASE_AUDIT_2026_Q1.md)
 - [TODO Inventory Quick Reference](TODO_INVENTORY_QUICK_REF.md)
 - [Portal Orchestrator Roadmap](PORTAL_ORCHESTRATOR_ROADMAP.md)
+- [ADR-043 Orchestrator Decomposition](ADR-043-orchestrator-decomposition.md)
+- [ADR-044 Test Marker Enforcement](ADR-044-test-marker-enforcement.md)
 - [Testing Strategy](../testing/STRATEGY.md)
-- [Coverage Improvement Plan](../guides/coverage-improvement-plan.md)
+- [Agent Governance](agent_governance.md)
 
 ---
 
-**Document Owner:** Transformation Portal Architect
-**Review Cadence:** Monthly (end of each sprint)
+**Document Owner:** Transformation Portal Architect  
+**Review Cadence:** Monthly (end of each sprint)  
 **Next Review:** April 2026
 
 ---

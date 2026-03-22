@@ -33,10 +33,10 @@ However, **~51% of tests (2,244 of 4,381 functions) lack markers**, making it im
 | `@pytest.mark.security` | 157+ | 150+ | ✅ Complete |
 | `@pytest.mark.integration` | 50+ | 200+ | In Progress |
 
-**Retrofit Summary (2026-03-21):**
+**Retrofit Summary (2026-03-22):**
 - Automated script `scripts/validation/retrofit_test_markers.py` applied markers to 137 files
 - Module-level `pytestmark` pattern used for consistency
-- Coverage improved from 48.6% to 95.1%
+- Coverage improved from 48.6% to 100% (verified by `--audit` mode)
 
 ---
 
@@ -149,12 +149,11 @@ pytest -n auto -m "(unit or integration) and not slow" tests/
 pytest tests/
 ```
 
-**Implementation Progress (2026-03-21):**
-- [x] Added `pytest-xdist>=3.5,<4` for parallel test execution
-- [x] `ci.yml` uses `-n auto` for parallel execution
-- [x] Pinned all GitHub Actions to commit SHAs for supply chain security
-- [x] Made mypy type checking hard-fail for critical modules
-- [ ] Migrate `build.yml` to marker-specific positive selection (pending)
+**Implementation Note (2026-03-21):**
+- Added `pytest-xdist>=3.5,<4` for parallel test execution
+- Some CI workflows use `-n auto` for parallel execution; canonicalization pending for PR gate (`build.yml`)
+- Action pinning partially complete; quality-control workflow normalization in progress (see roadmap)
+- Typecheck policy varies across workflows; normalization pending (see Quality Control Plane Canonicalization)
 
 ---
 
