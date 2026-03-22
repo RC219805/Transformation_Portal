@@ -174,7 +174,7 @@ import pytest
 
 pytestmark = [
     pytest.mark.unit,
-    pytest.mark.skipif(sys.platform == "win32", reason="Unix only"),
+    pytest.mark.timeout(60),
 ]
 ```
 
