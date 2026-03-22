@@ -10,8 +10,28 @@ Key components:
 - Equivalence indexing (ASTEquivalenceIndex)
 - Deduplication (deduplicate_repo, DuplicationReport)
 - Test markers (add_pytest_import, add_pytestmark, process_file)
+- Marker audit (check_test_markers: audit_test_directory, check_files)
 """
 
+from transformation_portal.dev.check_test_markers import (
+    BUILTIN_MARKERS,
+    CATEGORY_MARKERS,
+    DIRECTORY_MARKER_REQUIREMENTS,
+    MAX_VIOLATIONS_DISPLAY,
+    VALID_MARKERS,
+    AuditReport,
+    MarkerViolation,
+    TestFunction,
+    TestMarkerVisitor,
+    audit_test_directory,
+    check_files,
+    check_marker_requirements,
+    get_directory_type,
+)
+from transformation_portal.dev.check_test_markers import main as check_test_markers_main
+from transformation_portal.dev.check_test_markers import (
+    scan_file,
+)
 from transformation_portal.dev.formatting import (
     CanonicalFileWriter,
     FormattedFileWriter,
@@ -44,7 +64,7 @@ __all__ = [
     "write_canonical",
     "FormattedFileWriter",
     "CanonicalFileWriter",
-    # Test markers
+    # Test markers (retrofit)
     "DIRECTORY_MARKERS",
     "SKIP_DIRECTORIES",
     "PYTESTMARK_PATTERN",
@@ -58,4 +78,20 @@ __all__ = [
     "add_pytestmark",
     "process_file",
     "main",
+    # Test markers (audit)
+    "BUILTIN_MARKERS",
+    "CATEGORY_MARKERS",
+    "DIRECTORY_MARKER_REQUIREMENTS",
+    "MAX_VIOLATIONS_DISPLAY",
+    "VALID_MARKERS",
+    "AuditReport",
+    "MarkerViolation",
+    "TestFunction",
+    "TestMarkerVisitor",
+    "audit_test_directory",
+    "check_files",
+    "check_marker_requirements",
+    "check_test_markers_main",
+    "get_directory_type",
+    "scan_file",
 ]

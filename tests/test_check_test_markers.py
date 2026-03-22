@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """Contract tests for the marker audit/enforcement script (ADR-044).
 
-This module validates the semantics of the check_test_markers.py audit script.
+This module validates the semantics of the check_test_markers audit logic.
 These tests pin the behavior that was fixed in #1245 and ensure it cannot drift.
 
 Key contracts tested:
@@ -17,18 +17,13 @@ See: docs/architecture/ADR-044-test-marker-enforcement.md
 
 from __future__ import annotations
 
-import sys
 import textwrap
 from pathlib import Path
 
 import pytest
 
-# Import the audit script module directly for testing
-# We add the scripts directory to the path temporarily to import it
-_SCRIPTS_DIR = Path(__file__).parent.parent / "scripts" / "validation"
-sys.path.insert(0, str(_SCRIPTS_DIR))
-
-from check_test_markers import (  # noqa: E402
+# Import from the canonical src location (proper architectural boundary)
+from transformation_portal.dev.check_test_markers import (
     BUILTIN_MARKERS,
     CATEGORY_MARKERS,
     DIRECTORY_MARKER_REQUIREMENTS,
@@ -39,8 +34,6 @@ from check_test_markers import (  # noqa: E402
     get_directory_type,
     scan_file,
 )
-
-sys.path.pop(0)  # Restore original path
 
 pytestmark = pytest.mark.unit
 
