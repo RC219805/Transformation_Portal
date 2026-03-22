@@ -143,24 +143,11 @@ class TestAddPytestImport:
             """)
         assert result == expected
 
-    @pytest.mark.xfail(
-        reason=(
-            "add_pytest_import uses line-based docstring handling that fails "
-            "to correctly place import after multi-line docstrings. "
-            "The intended behavior is import AFTER docstring, not BEFORE."
-        ),
-        strict=True,
-    )
     def test_handles_no_imports_with_docstring(self) -> None:
         """Validate pytest import is placed AFTER module docstring when no imports.
 
-        INTENDED BEHAVIOR: import pytest should be placed after the docstring,
-        not before it. The current implementation has a limitation in the
-        line-based docstring detection that causes this to fail.
-
-        When the script is fixed to use AST-based docstring detection
-        (like add_pytestmark does), this test should pass and the xfail
-        marker can be removed.
+        The implementation uses AST-based docstring detection to correctly
+        place the import after the module docstring.
         """
         content = _src('''
             """Test module for X."""
@@ -174,6 +161,36 @@ class TestAddPytestImport:
         # INTENDED: import pytest should appear AFTER the docstring
         expected = _src('''
             """Test module for X."""
+            import pytest
+
+            def test_example():
+                assert True
+            ''')
+        assert result == expected
+
+    def test_handles_encoding_on_line2_without_shebang(self) -> None:
+        """Validate pytest import is placed after encoding cookie on line 2 without shebang.
+
+        Per PEP 263, encoding declarations are valid on line 2 even without a shebang
+        if line 1 is a comment or blank. This test ensures the import is placed
+        correctly without pushing the encoding declaration down.
+        """
+        content = _src('''
+            # Comment line
+            # -*- coding: utf-8 -*-
+            """Test module."""
+
+            def test_example():
+                assert True
+            ''')
+
+        result = add_pytest_import(content)
+
+        # INTENDED: import pytest should appear AFTER encoding line (preserved on line 2)
+        expected = _src('''
+            # Comment line
+            # -*- coding: utf-8 -*-
+            """Test module."""
             import pytest
 
             def test_example():
@@ -450,22 +467,11 @@ class TestAddPytestmark:
 class TestProcessFile:
     """Tests for process_file() orchestration."""
 
-    @pytest.mark.xfail(
-        reason=(
-            "add_pytest_import has a known limitation with docstring-only files. "
-            "It places 'import pytest' BEFORE the docstring instead of after. "
-            "This is a line-based fallback issue when no imports are found."
-        ),
-        strict=True,
-    )
     def test_handles_module_docstring_without_imports(self, tmp_path: Path) -> None:
         """Validate process_file handles docstring-only files correctly.
 
-        INTENDED BEHAVIOR: The import and pytestmark should appear AFTER the
-        docstring, not before it. This is the correct Python style.
-
-        When add_pytest_import is fixed to use AST-based docstring detection,
-        this test should pass and the xfail marker can be removed.
+        The implementation uses AST-based docstring detection to correctly
+        place the import and pytestmark after the docstring.
         """
         file_path = tmp_path / "test_docstring_case.py"
         file_path.write_text(
@@ -1220,25 +1226,13 @@ class TestEndToEndScenarios:
         result = file_path.read_text(encoding="utf-8")
         assert "pytestmark = [pytest.mark.stress, pytest.mark.slow]" in result
 
-    @pytest.mark.xfail(
-        reason=(
-            "The script has no explicit shebang/coding-cookie handling. "
-            "add_pytest_import does not detect shebang lines (#!/...) or "
-            "encoding declarations (# -*- coding: ...). The intended behavior "
-            "is: shebang stays line 1, coding cookie stays line 2, then imports."
-        ),
-        strict=True,
-    )
     def test_preserves_shebang_and_encoding(self, tmp_path: Path) -> None:
         """Validate that shebang and encoding declarations are preserved correctly.
 
-        INTENDED BEHAVIOR:
-        - Shebang (#!/usr/bin/env python3) must remain on line 1
-        - Encoding declaration must remain on line 2
-        - import pytest should be placed AFTER these special lines
-
-        When the script is fixed to handle shebang/encoding declarations,
-        this test should pass and the xfail marker can be removed.
+        The implementation correctly preserves:
+        - Shebang (#!/usr/bin/env python3) on line 1
+        - Encoding declaration on line 2
+        - import pytest is placed after these special lines
         """
         file_path = tmp_path / "test_shebang.py"
         file_path.write_text(

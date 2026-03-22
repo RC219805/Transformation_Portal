@@ -147,54 +147,139 @@ def get_directory_marker(file_path: Path) -> list[str]:
     return DIRECTORY_MARKERS["_default"]
 
 
+# Pattern to detect PEP 263 encoding declarations (# -*- coding: utf-8 -*- or # coding=utf-8)
+_ENCODING_PATTERN = re.compile(r"coding[:=]\s*([-\w.]+)")
+
+
+def _is_encoding_line(line: str) -> bool:
+    r"""Check if a line is a PEP 263 encoding declaration.
+
+    Per PEP 263, encoding declarations must match the regex:
+    ``coding[:=]\s*([-\w.]+)``
+
+    Common formats:
+    - # -*- coding: utf-8 -*-
+    - # coding=utf-8
+    - # vim: set fileencoding=utf-8 :
+
+    Args:
+        line: A source line to check.
+
+    Returns:
+        True if the line is a valid encoding declaration.
+    """
+    stripped = line.lstrip()
+    return stripped.startswith("#") and bool(_ENCODING_PATTERN.search(stripped))
+
+
+def _count_special_header_lines(lines: list[str]) -> int:
+    """Count shebang and encoding declaration lines at the start of a file.
+
+    Python requires that shebang (#!/...) be on line 1 (if present), and
+    encoding declarations (# -*- coding: ... or # coding=...) be on line 1
+    or 2. This function identifies how many such lines exist at the start.
+
+    Args:
+        lines: List of source lines.
+
+    Returns:
+        Number of special header lines (0, 1, or 2).
+    """
+    count = 0
+
+    # Check for shebang on line 1
+    if lines and lines[0].startswith("#!"):
+        count = 1
+        # Check for encoding declaration on line 2
+        if len(lines) > 1 and _is_encoding_line(lines[1]):
+            count = 2
+    elif lines and _is_encoding_line(lines[0]):
+        # No shebang, encoding on line 1
+        count = 1
+        # Also check for encoding on line 2 (valid per PEP 263 without shebang)
+        if len(lines) > 1 and _is_encoding_line(lines[1]):
+            count = 2
+    elif len(lines) > 1 and _is_encoding_line(lines[1]):
+        # No shebang, no encoding on line 1, but encoding on line 2
+        # This is valid per PEP 263 if line 1 is a comment or blank
+        if not lines[0].strip() or lines[0].lstrip().startswith("#"):
+            count = 2
+
+    return count
+
+
 def add_pytest_import(content: str) -> str:
     """Add 'import pytest' after other imports.
+
+    Uses AST parsing to reliably find the last import statement and determine
+    the correct insertion point. Preserves shebang lines and encoding
+    declarations at the start of the file.
 
     Args:
         content: Python source code as a string.
 
     Returns:
-        Modified source with 'import pytest' added after last import.
-
-    Note: This implementation has a known limitation where it does not
-    properly handle files that have only a module docstring and no imports.
-    See the xfail test for this case.
+        Modified source with 'import pytest' added after last import,
+        or after module docstring if no imports exist, or after
+        shebang/encoding lines if neither imports nor docstring exist.
     """
     lines = content.split("\n")
+    source = "\n".join(lines)
 
-    # Find last import line (handling multi-line imports)
-    last_import_idx = -1
-    in_multiline_import = False
+    # Count special header lines that must be preserved at the top
+    special_header_count = _count_special_header_lines(lines)
 
-    for i, line in enumerate(lines):
-        stripped = line.strip()
+    # AST-based detection for import/docstring positions.
+    # insert_idx is updated through the try-else block:
+    #   - Default: after special headers (shebang/encoding)
+    #   - SyntaxError fallback: after last detected import line
+    #   - AST success: after last import, or docstring, or headers
+    last_import_line: int | None = None
+    docstring_end_line: int | None = None
+    insert_idx = special_header_count
 
-        # Track multi-line imports (parentheses)
-        if in_multiline_import:
-            if ")" in stripped:
-                in_multiline_import = False
-                last_import_idx = i
-            continue
-
-        if stripped.startswith("import ") or stripped.startswith("from "):
-            last_import_idx = i
-            # Check if this starts a multi-line import
-            if "(" in stripped and ")" not in stripped:
-                in_multiline_import = True
-
-    if last_import_idx >= 0:
-        # Insert after last import
-        lines.insert(last_import_idx + 1, "import pytest")
-    else:
-        # No imports found, add at beginning after docstring
-        insert_idx = 0
-        if lines and (lines[0].startswith('"""') or lines[0].startswith("'''")):
-            quote = lines[0][:3]
-            for i, line in enumerate(lines):
-                if i > 0 and quote in line:
+    try:
+        module = ast.parse(source)
+    except SyntaxError:
+        # Fall back to line-based scanning if the file is not valid Python.
+        in_multiline_import = False
+        for i, line in enumerate(lines):
+            stripped = line.strip()
+            if in_multiline_import:
+                if ")" in stripped:
+                    in_multiline_import = False
                     insert_idx = i + 1
-                    break
-        lines.insert(insert_idx, "import pytest")
+                continue
+            if stripped.startswith("import ") or stripped.startswith("from "):
+                insert_idx = i + 1
+                if "(" in stripped and ")" not in stripped:
+                    in_multiline_import = True
+    else:
+        # Record module docstring end line, if present.
+        if module.body:
+            first_node = module.body[0]
+            if isinstance(first_node, ast.Expr):
+                expr_value = first_node.value
+                if isinstance(expr_value, ast.Constant) and isinstance(expr_value.value, str):
+                    docstring_end_line = getattr(first_node, "end_lineno", first_node.lineno)
+
+        # Find the last top-level import or from-import.
+        for node in module.body:
+            if isinstance(node, (ast.Import, ast.ImportFrom)):
+                end_lineno = getattr(node, "end_lineno", node.lineno)
+                if last_import_line is None or end_lineno > last_import_line:
+                    last_import_line = end_lineno
+
+        if last_import_line is not None:
+            # Insert after the last import (1-based to 0-based index).
+            insert_idx = last_import_line
+        elif docstring_end_line is not None:
+            # No imports; insert after module docstring.
+            insert_idx = docstring_end_line
+        # else: insert_idx remains at special_header_count (after special headers)
+
+    # Insert the import
+    lines.insert(insert_idx, "import pytest")
 
     return "\n".join(lines)
 
@@ -251,12 +336,10 @@ def add_pytestmark(content: str, markers: list[str]) -> str:
         # Record module docstring end line, if present.
         if module.body:
             first_node = module.body[0]
-            if (
-                isinstance(first_node, ast.Expr)
-                and isinstance(getattr(first_node, "value", None), ast.Constant)
-                and isinstance(first_node.value.value, str)
-            ):
-                docstring_end_line = getattr(first_node, "end_lineno", first_node.lineno)
+            if isinstance(first_node, ast.Expr):
+                expr_value = first_node.value
+                if isinstance(expr_value, ast.Constant) and isinstance(expr_value.value, str):
+                    docstring_end_line = getattr(first_node, "end_lineno", first_node.lineno)
 
         # Find the last top-level import or from-import.
         for node in module.body:
