@@ -238,7 +238,7 @@ This roadmap generates the following ADR needs:
 | ADR | Topic | Status |
 |-----|-------|--------|
 | ADR-043 | Orchestrator Decomposition | Draft required |
-| ADR-044 | Test Marker Enforcement Policy | Draft required |
+| ADR-044 | Test Marker Enforcement Policy | ✅ Accepted (2026-03-21) |
 | ADR-045 | CI/CD Optimization (Action Pinning) | Optional |
 
 ---

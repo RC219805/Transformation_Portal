@@ -1,9 +1,13 @@
 # Test Strategy
 
 **Document Status:** Active
-**Last Updated:** 2026-03-16
-**Version:** 1.0.0
-**Related ADRs:** ADR-034 (Benchmark Exclusion), TODO_INVENTORY.md §2.1 (Testing Phase)
+**Last Updated:** 2026-03-22
+**Version:** 1.1.0
+**Related ADRs:** ADR-034 (Benchmark Exclusion), ADR-044 (Test Marker Enforcement)
+
+> **Note:** ADR-044 is the authoritative source for marker enforcement policy.
+> This document provides guidance for test authors. If conflicts arise between
+> this strategy document and ADR-044, ADR-044 takes precedence.
 
 ---
 
@@ -188,13 +192,18 @@ def mock_depth_model(deterministic_rng):
 
 ## CI Integration
 
+> **Current State:** CI uses **negative marker selection** (e.g., `not ml and not slow`)
+> to exclude unwanted test tiers. ADR-044 defines a target state using positive marker
+> selection (e.g., `unit and not slow`). The transition will occur after full marker
+> retrofit is validated in production CI.
+
 ### PR Gating Jobs
 
 | Job | Python | Requirements | Markers |
 |-----|--------|--------------|---------|
 | Lint | 3.12 | `requirements-lint.txt` | N/A |
-| Core Tests | 3.11, 3.12 | `requirements-ci.txt` | `not ml and not slow` |
-| ML Tests | 3.11 | CPU torch + CI deps | `ml and not slow` |
+| Core Tests | 3.11, 3.12 | `requirements-ci.txt` | `not ml and not slow and not benchmark` |
+| ML Tests | 3.11 | CPU torch + CI deps | `ml and not slow and not integration and not benchmark` |
 
 ### Excluded from PR Gating
 
@@ -234,8 +243,8 @@ For tests validating deterministic behavior:
 def test_config_validation():
     ...
 
-# Security test (Core tier)
-@pytest.mark.unit
+# Security test in tests/security/ (requires @pytest.mark.security)
+# Optionally add @pytest.mark.unit for fast security tests
 @pytest.mark.security
 def test_path_traversal_blocked():
     ...

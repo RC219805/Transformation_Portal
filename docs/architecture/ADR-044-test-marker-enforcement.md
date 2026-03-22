@@ -2,7 +2,10 @@
 
 **Status:** ACCEPTED
 **Date:** 2026-03-20
-**Implemented:** 2026-03-21
+**Implementation Status:** PARTIALLY IMPLEMENTED
+- Enforcement infrastructure: ✅ Complete (2026-03-21)
+- Marker retrofit: ✅ Complete (2026-03-21)
+- CI marker-specific jobs: 🔄 In Progress
 **Decision Makers:** Architect
 **Replaces:** None
 
@@ -46,11 +49,13 @@ All existing tests will be tagged with appropriate markers within Q2 2026:
 | Test Location | Default Marker |
 |--------------|----------------|
 | `tests/unit/` | `@pytest.mark.unit` |
-| `tests/security/` | `@pytest.mark.security` + `@pytest.mark.unit` |
+| `tests/security/` | `@pytest.mark.security` |
 | `tests/integration/` | `@pytest.mark.integration` |
 | `tests/benchmarks/` | `@pytest.mark.benchmark` |
 | `tests/stress/` | `@pytest.mark.stress` + `@pytest.mark.slow` |
 | `tests/smoke/` | `@pytest.mark.unit` |
+
+**Note on tests/security/:** Files in `tests/security/` require the `@pytest.mark.security` marker. Authors may optionally add `@pytest.mark.unit` for tests that are fast and fit the unit tier semantics, but the enforcement script requires only `security`.
 
 **Note on tests/smoke/:** The `tests/smoke/` directory contains quick sanity checks. While "smoke test" has a specific meaning in testing terminology, we map it to `@pytest.mark.unit` because: (1) `smoke` is not currently registered in `pyproject.toml`, and (2) smoke tests in this repository are fast, isolated checks that fit the `unit` marker semantics. If a distinct `smoke` marker becomes needed, it should be added to `pyproject.toml` first.
 
@@ -83,6 +88,12 @@ The script supports two modes:
 - Tests with only built-in markers (`skip`, `skipif`, etc.) are rejected
 - Clear error messages guide remediation
 
+**Known Limitations:**
+- Files with Python syntax errors emit a warning and are skipped (not hard-failed). Fix syntax errors before relying on marker validation.
+- The AST parser handles common patterns but does not replicate pytest's full collector semantics. Edge cases include:
+  - Multiple `pytestmark = ...` assignments at module scope (later assignment wins, not merged)
+  - Deeply nested `Test*` class patterns may not be fully traversed
+
 **Usage:**
 ```bash
 # Pre-commit mode (validate specific files)
@@ -97,24 +108,53 @@ python scripts/validation/check_test_markers.py --audit --verbose
 
 ### 3. CI Alignment
 
-CI has been updated to leverage markers for efficiency:
+CI workflows leverage markers for test selection. The current implementation uses **negative marker selection** (excluding unwanted tiers), while the target state is **positive marker selection** (selecting specific tiers).
+
+#### Current Implementation (build.yml)
+
+The main PR gating workflow uses negative selection:
 
 ```yaml
-# Fast PR gate with parallel execution (<3 min)
+# Core tests (build.yml matrix)
+pytest -v tests/ -ra -m "not ml and not slow and not benchmark" --maxfail=1
+
+# ML tests (build.yml matrix)
+pytest -v tests/ -ra -m "ml and not slow and not integration and not benchmark" --maxfail=1
+```
+
+#### Parallel Execution (ci.yml)
+
+A separate workflow (`ci.yml`) enables parallel execution with `pytest-xdist`:
+
+```yaml
+# Core tests with parallelization
+pytest -v tests/ -n auto -m "not ml and not slow and not benchmark and not stress"
+
+# ML tests with parallelization
+pytest -v tests/ -n auto -m "ml and not slow and not benchmark and not stress"
+```
+
+#### Target State (Future)
+
+After full marker migration, CI will transition to positive marker selection:
+
+```yaml
+# Target: Fast PR gate with parallel execution (<3 min)
 pytest -n auto -m "unit and not slow" tests/
 
-# Extended PR gate with parallel execution (<10 min)
+# Target: Extended PR gate with parallel execution (<10 min)
 pytest -n auto -m "(unit or integration) and not slow" tests/
 
 # Nightly full suite
 pytest tests/
 ```
 
-**Implementation Note (2026-03-21):**
-- Added `pytest-xdist>=3.5,<4` for parallel test execution
-- CI workflows now use `-n auto` to parallelize tests across available CPU cores
-- Pinned all GitHub Actions to commit SHAs for supply chain security
-- Made mypy type checking hard-fail for critical modules
+**Implementation Progress (2026-03-21):**
+- [x] Added `pytest-xdist>=3.5,<4` for parallel test execution
+- [x] `ci.yml` uses `-n auto` for parallel execution
+- [x] Pinned all GitHub Actions to commit SHAs for supply chain security
+- [x] Made mypy type checking hard-fail for critical modules
+- [ ] Migrate `build.yml` to marker-specific positive selection (pending)
 
 ---
 
@@ -250,6 +290,19 @@ The `tests/test_check_test_markers.py` file provides 54 fixture-based contract t
 
 ---
 
+## Authoritative Enforcement Order
+
+When marker governance rules appear in multiple documents, resolve conflicts using this precedence (highest to lowest):
+
+1. **`pyproject.toml` marker registry** — The canonical list of valid markers. `--strict-markers` enforces this at pytest collection time.
+2. **`src/transformation_portal/dev/check_test_markers.py`** — The enforcement logic. Pre-commit hook and audit mode derive their semantics from this module.
+3. **Workflow marker expressions** — CI workflows (`build.yml`, `ci.yml`) use marker expressions for test selection. These must align with the taxonomy.
+4. **Strategy documentation** (`docs/testing/STRATEGY.md`) — Guidance for test authors. Updated to align with this ADR but considered secondary if conflicts arise.
+
+This hierarchy ensures that machine-enforced rules take precedence over prose documentation.
+
+---
+
 ## References
 
 - [Testing Strategy](../testing/STRATEGY.md)
@@ -259,4 +312,4 @@ The `tests/test_check_test_markers.py` file provides 54 fixture-based contract t
 
 **Author:** Transformation Portal Architect
 **Review Required:** Yes
-**Effective Date:** Upon merge
+**Revised:** 2026-03-22 (governance alignment)
