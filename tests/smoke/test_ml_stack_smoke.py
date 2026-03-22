@@ -68,8 +68,8 @@ except (ImportError, RuntimeError, TypeError):
     sklearn = None
 
 # Skip all ML tests if torch is not available
-# These are ML stack smoke tests - they use @pytest.mark.unit per ADR-044 (smoke -> unit)
-# but are skipped when torch is not installed, so they won't pull in ML dependencies unexpectedly
+# ADR-044 Section 4.1 maps tests/smoke/ -> @pytest.mark.unit (no separate smoke marker).
+# The skipif ensures these won't run when torch is unavailable, so `-m unit` remains lightweight.
 pytestmark = [pytest.mark.unit, pytest.mark.skipif(not TORCH_AVAILABLE, reason="torch required for ML smoke tests")]
 
 
