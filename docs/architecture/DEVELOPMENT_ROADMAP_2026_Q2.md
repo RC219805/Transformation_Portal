@@ -343,26 +343,42 @@ These metrics enable proactive steering rather than quarter-end audit.
 
 ### Workflow Parity Debt
 
+**Baseline to be established during Workflow Canonicalization Decision Gate (by 2026-04-05).**
+
 | Metric | Current | Target |
 |--------|---------|--------|
-| Active workflows with conflicting enforcement semantics | TBD | 0 |
+| Active workflows (total) | 27 | N/A (informational) |
+| Active workflows with conflicting enforcement semantics | Baseline by 04-05 | 0 |
 | Active workflows using floating action tags | 0 | 0 |
-| Workflows whose test/type policy differs from canonical | TBD | 0 |
+| Workflows whose test/type policy differs from canonical | Baseline by 04-05 | 0 |
+
+**Composite Metric:** Workflow Parity Debt = count of workflows with conflicting semantics + count with floating tags + count with policy divergence. Target: 0.
 
 ### Orchestrator Residual Debt
 
 | Metric | Current | Target |
 |--------|---------|--------|
-| `orchestrator.py` LOC | ~5,675 | -200/quarter ratchet |
-| Responsibility domains in facade | TBD | Document and track |
-| Delegation contract tests | TBD | +10/quarter |
+| `orchestrator.py` LOC | 5,676 | 5,476 (-200/quarter ratchet) |
+| Responsibility domains in facade | 5 (depth, v2, PBR, materials, artifacts) | ≤5 (no new domains) |
+| Delegation contract tests | ~180 (across extracted modules) | +10/quarter (190 by Q2 end) |
+
+**Domain Inventory:**
+1. Depth stage execution (per-image backend fallback, cache management)
+2. V2 stage execution (subprocess coordination)
+3. PBR generation (texture pipeline)
+4. Materials V3 execution (APEX quality gates)
+5. Artifact persistence (run card, merkle roots)
 
 ### Governance Freshness
 
+**Baseline to be established during Governance Synchronization workstream (by 2026-04-12).**
+
 | Metric | Current | Target |
 |--------|---------|--------|
-| Binding docs updated within SLA after policy change | TBD | 100% within 1 week |
-| Stale documents contradicting current enforcement | TBD | 0 |
+| Binding docs updated within SLA after policy change | Audit by 04-12 | 100% within 1 week |
+| Stale documents contradicting current enforcement | Audit by 04-12 | 0 |
+
+**Scope of binding docs:** This roadmap, CONTRIBUTING.md, docs/testing/STRATEGY.md, ADR status pages, CI workflow documentation.
 
 ---
 
@@ -371,11 +387,11 @@ These metrics enable proactive steering rather than quarter-end audit.
 | Metric | Q1 2026 | Q2 Target | Measurement |
 |--------|---------|-----------|-------------|
 | Overall Score | 7.6/10 | 8.6/10 | Codebase audit |
-| Orchestrator LOC | 6,108 | 5,475 (-200 ratchet) | `wc -l orchestrator.py` |
+| Orchestrator LOC | 6,108 | 5,476 (-200 ratchet) | `wc -l orchestrator.py` |
 | Test Marker Coverage | 48.6% | 95%+ | `check_test_markers.py --audit` |
 | Code Coverage | 25.44% | 28% | pytest-cov |
 | CI Time (canonical workflow) | 65-75 min | 40-50 min | GitHub Actions |
-| Workflow Parity Debt | TBD | 0 | Manual audit |
+| Workflow Parity Debt (composite) | Baseline by 04-05 | 0 | Sum of leading indicators |
 
 ---
 
