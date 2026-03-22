@@ -112,9 +112,9 @@ pytest tests/
 
 **Implementation Note (2026-03-21):**
 - Added `pytest-xdist>=3.5,<4` for parallel test execution
-- CI workflows now use `-n auto` to parallelize tests across available CPU cores
-- Pinned all GitHub Actions to commit SHAs for supply chain security
-- Made mypy type checking hard-fail for critical modules
+- Some CI workflows use `-n auto` for parallel execution; canonicalization pending for PR gate (`build.yml`)
+- Action pinning partially complete; quality-control workflow normalization in progress (see roadmap)
+- Typecheck policy varies across workflows; normalization pending (see Quality Control Plane Canonicalization)
 
 ---
 
