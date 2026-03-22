@@ -349,10 +349,12 @@ These metrics enable proactive steering rather than quarter-end audit.
 |--------|---------|--------|
 | Active workflows (total) | 27 | N/A (informational) |
 | Active workflows with conflicting enforcement semantics | Baseline by 04-05 | 0 |
-| Active workflows using floating action tags | 0 ✅ | 0 |
+| Active workflows using floating action tags | 0 ✅ | 0 (maintain) |
 | Workflows whose test/type policy differs from canonical | Baseline by 04-05 | 0 |
 
-**Composite Metric:** Workflow Parity Debt = sum of (conflicting semantics + floating tags + policy divergence). Target: 0. The floating tags component is retained for regression monitoring; current value is 0.
+**Composite Metric:** Workflow Parity Debt = sum of all three components. Target: 0.
+- Floating tags = 0 ✅ (achieved; maintained as regression guard)
+- Remaining debt = conflicting semantics + policy divergence (to be measured)
 
 ### Orchestrator Residual Debt
 
@@ -384,14 +386,16 @@ These metrics enable proactive steering rather than quarter-end audit.
 
 ## Quarterly Success Metrics (Lagging Indicators)
 
-| Metric | Q1 2026 | Q2 Target | Measurement |
-|--------|---------|-----------|-------------|
-| Overall Score | 7.6/10 | 8.6/10 | Codebase audit |
-| Orchestrator LOC | 6,108 | 5,476 (-200 ratchet) | `wc -l orchestrator.py` |
-| Test Marker Coverage | 48.6% | 95%+ | `check_test_markers.py --audit` |
-| Code Coverage | 25.44% | 28% | pytest-cov |
-| CI Time (canonical workflow) | 65-75 min | 40-50 min | GitHub Actions |
-| Workflow Parity Debt (composite) | Baseline by 04-05 | 0 | Sum of leading indicators |
+**Note:** Q1 2026 column shows state at audit time (2026-03-20), before Q2 work began. Changes between audit and current state represent completed work documented in "Completed Since Q1 Audit" section.
+
+| Metric | Q1 2026 (Audit) | Current | Q2 Target | Measurement |
+|--------|-----------------|---------|-----------|-------------|
+| Overall Score | 7.6/10 | 7.6/10 | 8.6/10 | Codebase audit |
+| Orchestrator LOC | 6,108 | 5,676 | 5,476 | `wc -l orchestrator.py` |
+| Test Marker Coverage | 48.6% | 95.1% ✅ | 95%+ | `check_test_markers.py --audit` |
+| Code Coverage | 25.44% | 25.44% | 28% | pytest-cov |
+| CI Time (canonical) | 65-75 min | TBD | 40-50 min | GitHub Actions |
+| Workflow Parity Debt | N/A | Baseline by 04-05 | 0 | Sum of leading indicators |
 
 ---
 
