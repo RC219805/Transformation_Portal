@@ -66,6 +66,7 @@ Performance Targets:
 """
 
 from .contracts import CameraParams, GaussianSplat, LicenseRestrictionError, ReconstructionInput, Scene3D
+from .export_ply import PLYExportConfig, PLYExporter, export_scene_to_ply
 from .geometric_validator import GeometricValidator
 from .mesh_exporter import MeshExporter
 
@@ -80,19 +81,28 @@ __all__ = [
     # Backend and builders (lazy-loaded)
     "GaussianBackend",
     "SceneBuilder",
-    # Export and validation
+    # Export (PLY is primary for Gaussian Splatting)
+    "PLYExporter",
+    "PLYExportConfig",
+    "export_scene_to_ply",
     "MeshExporter",
+    # Validation
     "GeometricValidator",
     # Exceptions
     "LicenseRestrictionError",
+    # NVDIFFREC backend (lazy-loaded)
+    "NVDiffRecBackend",
+    "NVDiffRecConfig",
+    "NVDiffRecLicenseError",
+    "NVDiffRecEnvironmentError",
 ]
 
 
 def __getattr__(name: str):
     """Lazy import for torch-dependent modules.
 
-    GaussianBackend and SceneBuilder both depend on torch, which may not be
-    available in non-ML test environments (e.g., enforcement tests).
+    GaussianBackend, SceneBuilder, and NVDiffRecBackend all depend on torch,
+    which may not be available in non-ML test environments.
     """
     if name == "GaussianBackend":
         from .gaussian_backend import GaussianBackend
@@ -102,4 +112,20 @@ def __getattr__(name: str):
         from .scene_builder import SceneBuilder
 
         return SceneBuilder
+    if name == "NVDiffRecBackend":
+        from .nvdiffrec_backend import NVDiffRecBackend
+
+        return NVDiffRecBackend
+    if name == "NVDiffRecConfig":
+        from .nvdiffrec_backend import NVDiffRecConfig
+
+        return NVDiffRecConfig
+    if name == "NVDiffRecLicenseError":
+        from .nvdiffrec_backend import NVDiffRecLicenseError
+
+        return NVDiffRecLicenseError
+    if name == "NVDiffRecEnvironmentError":
+        from .nvdiffrec_backend import NVDiffRecEnvironmentError
+
+        return NVDiffRecEnvironmentError
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

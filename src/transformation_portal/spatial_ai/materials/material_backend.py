@@ -10,8 +10,13 @@ Architecture:
 - HuggingFace integration for model downloads
 
 Licensing:
-- NVDIFFREC: BSD-3-Clause (commercial OK)
+- NVDIFFREC: NVIDIA Source Code License (non-commercial/research only)
+  SEE: https://github.com/NVlabs/nvdiffrec/blob/main/LICENSE.txt
 - MaterialGAN: CC BY-NC 4.0 (research only)
+
+IMPORTANT: NVDIFFREC is NOT BSD-3-Clause. The NVIDIA Source Code License
+restricts use to non-commercial research and evaluation purposes only.
+For commercial use, contact NVIDIA for a commercial license.
 
 Performance:
 - 1024x1024 PBR generation: <10s on GPU (RTX 3090)
@@ -37,9 +42,13 @@ class MaterialBackend:
 
     Supports multiple backends:
     - "pbr_fusion": PBRFusion diffusion model (Apache 2.0, commercial OK)
-    - "nvdiffrec": NVIDIA Differentiable Rendering (BSD-3-Clause)
+    - "nvdiffrec": NVIDIA Differentiable Rendering (NVIDIA Source Code License, research only)
     - "material_gan": MaterialGAN (CC BY-NC 4.0, research only)
     - "heuristic": CPU fallback (no ML dependencies)
+
+    WARNING: nvdiffrec is NOT commercially licensed. The NVIDIA Source Code License
+    restricts use to non-commercial research/evaluation. See NVDiffRecBackend for
+    tier enforcement.
 
     Models are lazy-loaded on first use to minimize import time.
     """
