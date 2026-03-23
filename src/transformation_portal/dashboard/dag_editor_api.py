@@ -12,11 +12,14 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, Union
+
+from fastapi import APIRouter, HTTPException
+from fastapi.responses import HTMLResponse, JSONResponse
+from pydantic import BaseModel, Field, field_validator
 
 from transformation_portal.core.security.fs_guard import (
     FSContext,
-    FSGuard,
     FSPolicyError,
     get_fs_guard,
 )
@@ -26,18 +29,6 @@ from transformation_portal.core.security.path_safety import (
 )
 
 logger = logging.getLogger(__name__)
-
-# Optional FastAPI import
-try:
-    from fastapi import APIRouter, Body, HTTPException
-    from fastapi.responses import HTMLResponse, JSONResponse
-    from pydantic import BaseModel
-
-    FASTAPI_AVAILABLE = True
-except ImportError:
-    FASTAPI_AVAILABLE = False
-    APIRouter = None
-
 
 # Default pipelines directory and FSGuard context
 _pipelines_dir: Path = Path("pipelines")
@@ -106,13 +97,19 @@ def _get_safe_pipeline_path(name: str) -> Path:
 def set_pipelines_dir(path: Path) -> None:
     """Set the pipelines storage directory.
 
+    Creates the directory if it doesn't exist and initializes the FSContext.
+    This is the single point where the pipelines directory is created;
+    endpoint handlers rely on this initialization and do not repeat mkdir.
+
     Args:
         path: Directory path for pipeline JSON files
     """
     global _pipelines_dir, _fs_context
     _pipelines_dir = path
-    _fs_context = None  # Reset context to pick up new directory
-    _pipelines_dir.mkdir(parents=True, exist_ok=True)
+    _fs_context = None  # Reset so _get_fs_context() creates fresh context
+    fs = get_fs_guard()
+    fs.mkdir(_pipelines_dir)
+    _fs_context = _get_fs_context()  # Pre-initialize for endpoint use
 
 
 class PipelineNode(BaseModel):
@@ -122,7 +119,7 @@ class PipelineNode(BaseModel):
     type: str = "default"
     label: str
     position: dict[str, float]
-    config: dict[str, Any] = {}
+    config: dict[str, Any] = Field(default_factory=dict)
 
 
 class PipelineEdge(BaseModel):
@@ -136,32 +133,90 @@ class PipelineEdge(BaseModel):
 
 
 class PipelineDefinition(BaseModel):
-    """Complete pipeline definition."""
+    """Complete pipeline definition.
 
-    name: str
-    nodes: list[dict[str, Any]]
-    edges: list[dict[str, Any]]
-    metadata: dict[str, Any] = {}
+    Note: The name field defaults to empty because save_pipeline() always
+    overrides it with the name from the URL path for consistency.
+
+    Backward Compatibility: The nodes and edges fields accept both typed
+    objects (PipelineNode/PipelineEdge) and raw dicts for compatibility
+    with existing saved pipelines.
+    """
+
+    name: str = ""
+    nodes: list[PipelineNode] = Field(default_factory=list)
+    edges: list[PipelineEdge] = Field(default_factory=list)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("nodes", mode="before")
+    @classmethod
+    def coerce_nodes(cls, v: Any) -> list[PipelineNode]:
+        """Coerce raw dicts to PipelineNode for backward compatibility.
+
+        Validation rules:
+        - None -> [] (field omitted / null)
+        - []   -> [] (empty list)
+        - list -> coerce each item (PipelineNode passthrough or dict -> PipelineNode)
+        - anything else -> ValueError to surface 422 to the client
+        """
+        if v is None:
+            return []
+        if isinstance(v, list):
+            if not v:
+                return []
+            return [item if isinstance(item, PipelineNode) else PipelineNode(**item) for item in v]
+        raise ValueError("nodes must be a list of PipelineNode or dict items")
+
+    @field_validator("edges", mode="before")
+    @classmethod
+    def coerce_edges(cls, v: Any) -> list[PipelineEdge]:
+        """Coerce raw dicts to PipelineEdge for backward compatibility.
+
+        Validation rules:
+        - None -> [] (field omitted / null)
+        - []   -> [] (empty list)
+        - list -> coerce each item (PipelineEdge passthrough or dict -> PipelineEdge)
+        - anything else -> ValueError to surface 422 to the client
+        """
+        if v is None:
+            return []
+        if isinstance(v, list):
+            if not v:
+                return []
+            return [item if isinstance(item, PipelineEdge) else PipelineEdge(**item) for item in v]
+        raise ValueError("edges must be a list of PipelineEdge or dict items")
 
 
-def create_dag_editor_router() -> "APIRouter":
+def create_dag_editor_router() -> APIRouter:
     """Create the DAG editor router.
+
+    Note: The FSGuard instance (`fs`) is created once at router initialization.
+    The pipelines directory is created here at router creation time to ensure
+    the API is robust on fresh installs without requiring an external call to
+    set_pipelines_dir().
 
     Returns:
         FastAPI APIRouter with pipeline editing endpoints
     """
-    if not FASTAPI_AVAILABLE:
-        raise ImportError("FastAPI is required for DAG editor")
-
     router = APIRouter(prefix="/api/editor", tags=["editor"])
     fs = get_fs_guard()
+    # Ensure pipelines directory exists at router creation time
+    fs.mkdir(_pipelines_dir)
 
     @router.get("/pipelines")
-    async def list_pipelines():
-        """List all saved pipelines."""
-        _pipelines_dir.mkdir(parents=True, exist_ok=True)
+    async def list_pipelines() -> JSONResponse:
+        """List all saved pipelines.
+
+        Note: Uses FSGuard.list_dir for audit logging consistency.
+        Pipeline names are derived from validated filenames only.
+        Directory is created at router initialization in create_dag_editor_router().
+        """
         pipelines = []
-        for p in _pipelines_dir.glob("*.json"):
+        # Use FSGuard for directory listing to maintain audit trail
+        for p in fs.list_dir(_pipelines_dir):
+            # Skip directories and non-JSON files
+            if not p.is_file() or p.suffix != ".json":
+                continue
             try:
                 data = json.loads(fs.read_text(p))
                 pipelines.append(
@@ -177,9 +232,8 @@ def create_dag_editor_router() -> "APIRouter":
         return JSONResponse({"pipelines": pipelines})
 
     @router.get("/pipelines/{name}")
-    async def get_pipeline(name: str):
+    async def get_pipeline(name: str) -> JSONResponse:
         """Get a specific pipeline definition."""
-        _pipelines_dir.mkdir(parents=True, exist_ok=True)
         filepath = _get_safe_pipeline_path(name)
 
         if not fs.exists(filepath):
@@ -192,23 +246,28 @@ def create_dag_editor_router() -> "APIRouter":
             raise HTTPException(status_code=500, detail=str(exc))
 
     @router.post("/pipelines/{name}")
-    async def save_pipeline(name: str, payload: dict = Body(...)):
-        """Save a pipeline definition."""
-        _pipelines_dir.mkdir(parents=True, exist_ok=True)
+    async def save_pipeline(name: str, payload: PipelineDefinition) -> JSONResponse:
+        """Save a pipeline definition.
+
+        Args:
+            name: Pipeline name (from URL path)
+            payload: Pipeline definition (validated by Pydantic)
+        """
         filepath = _get_safe_pipeline_path(name)
 
-        # Add metadata
-        payload["name"] = name
+        # Build save data from validated model, overriding name from URL
+        save_data = payload.model_dump()
+        save_data["name"] = name
 
         try:
-            fs.write_text(filepath, json.dumps(payload, indent=2))
+            fs.write_text(filepath, json.dumps(save_data, indent=2))
             logger.info("Saved pipeline: %s", name)
             return JSONResponse({"status": "ok", "name": name})
         except Exception as exc:
             raise HTTPException(status_code=500, detail=str(exc))
 
     @router.delete("/pipelines/{name}")
-    async def delete_pipeline(name: str):
+    async def delete_pipeline(name: str) -> JSONResponse:
         """Delete a pipeline definition."""
         filepath = _get_safe_pipeline_path(name)
 
@@ -223,7 +282,7 @@ def create_dag_editor_router() -> "APIRouter":
             raise HTTPException(status_code=500, detail=str(exc))
 
     @router.get("/node-types")
-    async def get_node_types():
+    async def get_node_types() -> JSONResponse:
         """Get available node types for the editor."""
         return JSONResponse(
             {
@@ -275,7 +334,7 @@ def create_dag_editor_router() -> "APIRouter":
         )
 
     @router.get("/", response_class=HTMLResponse)
-    async def editor_ui():
+    async def editor_ui() -> str:
         """Serve the DAG editor UI."""
         return get_dag_editor_html()
 
@@ -641,14 +700,33 @@ def get_dag_editor_html() -> str:
             const name = prompt('Pipeline name:', 'my_pipeline');
             if (!name) return;
 
-            await fetch(`/api/editor/pipelines/${name}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ nodes, edges })
-            });
+            try {
+                const response = await fetch(`/api/editor/pipelines/${name}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ nodes, edges })
+                });
 
-            updateStatus(`Saved pipeline: ${name}`);
-            loadPipelinesList();
+                if (!response.ok) {
+                    let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+                    const contentType = response.headers.get('content-type');
+                    if (contentType && contentType.includes('application/json')) {
+                        try {
+                            const errorData = await response.json();
+                            errorMessage = errorData.detail || errorMessage;
+                        } catch (parseError) {
+                            console.warn('Failed to parse JSON error:', parseError);
+                        }
+                    }
+                    throw new Error(errorMessage);
+                }
+
+                updateStatus(`Saved pipeline: ${name}`);
+                loadPipelinesList();
+            } catch (error) {
+                updateStatus(`Error saving pipeline: ${error.message}`);
+                console.error('Pipeline save failed:', error);
+            }
         }
 
         async function loadPipeline() {
@@ -668,9 +746,54 @@ def get_dag_editor_html() -> str:
             updateStatus(`Loaded pipeline: ${name}`);
         }
 
-        function runPipeline() {
-            updateStatus('Running pipeline... (not implemented)');
-            // TODO: Submit to scheduler
+        async function runPipeline() {
+            if (nodes.length === 0) {
+                updateStatus('Error: No nodes in pipeline');
+                return;
+            }
+
+            updateStatus('Submitting pipeline to scheduler...');
+
+            try {
+                // Generate a descriptive default name with timestamp
+                const selectedName = document.getElementById('pipeline-select').value;
+                const timestamp = new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-');
+                const pipelineName = selectedName || `untitled-pipeline-${timestamp}`;
+
+                const response = await fetch('/api/exec/run', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        name: pipelineName,
+                        nodes: nodes,
+                        edges: edges
+                    })
+                });
+
+                if (!response.ok) {
+                    // Handle both JSON and non-JSON error responses
+                    let errorMessage;
+                    try {
+                        const errorData = await response.json();
+                        errorMessage = errorData.detail || `HTTP ${response.status}`;
+                    } catch (parseError) {
+                        // Non-JSON response (e.g., 502 Bad Gateway HTML)
+                        errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+                        console.warn('Non-JSON error response:', parseError);
+                    }
+                    throw new Error(errorMessage);
+                }
+
+                const data = await response.json();
+                // Status message with run ID (monitor opens automatically)
+                updateStatus(`Pipeline started: Run ID ${data.run_id}`);
+
+                // Automatically open execution monitor with run_id for auto-selection
+                window.open(`/api/exec/?run_id=${data.run_id}`, '_blank');
+            } catch (error) {
+                updateStatus(`Error: ${error.message}`);
+                console.error('Pipeline execution failed:', error);
+            }
         }
 
         function clearCanvas() {

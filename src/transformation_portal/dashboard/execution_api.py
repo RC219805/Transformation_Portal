@@ -10,19 +10,12 @@ import asyncio
 import logging
 from typing import Any, Dict, List, Optional
 
-logger = logging.getLogger(__name__)
-
-# Optional FastAPI import
-try:
-    from fastapi import APIRouter, Body, HTTPException, WebSocket, WebSocketDisconnect
-    from fastapi.responses import HTMLResponse, JSONResponse
-
-    FASTAPI_AVAILABLE = True
-except ImportError:
-    FASTAPI_AVAILABLE = False
-    APIRouter = None
+from fastapi import APIRouter, Body, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.responses import HTMLResponse, JSONResponse
 
 from transformation_portal.dashboard.execution_manager import ExecutionManager
+
+logger = logging.getLogger(__name__)
 
 # Global execution manager and WebSocket clients
 _manager: Optional[ExecutionManager] = None
@@ -65,19 +58,16 @@ async def broadcast(msg: Dict[str, Any]) -> None:
             _websocket_clients.remove(client)
 
 
-def create_execution_router() -> "APIRouter":
+def create_execution_router() -> APIRouter:
     """Create the execution API router.
 
     Returns:
         FastAPI APIRouter with execution endpoints
     """
-    if not FASTAPI_AVAILABLE:
-        raise ImportError("FastAPI is required for execution API")
-
     router = APIRouter(prefix="/api/exec", tags=["execution"])
 
     @router.websocket("/ws")
-    async def execution_websocket(websocket: WebSocket):
+    async def execution_websocket(websocket: WebSocket) -> None:
         """WebSocket endpoint for execution status streaming."""
         await websocket.accept()
         _websocket_clients.append(websocket)
@@ -101,30 +91,42 @@ def create_execution_router() -> "APIRouter":
                 _websocket_clients.remove(websocket)
             logger.info("Execution WebSocket disconnected (%d clients)", len(_websocket_clients))
 
-    @router.post("/run")
-    async def execute_pipeline(payload: Dict = Body(...)):
-        """Execute a pipeline.
+    @router.post("/run", status_code=202)
+    async def execute_pipeline(payload: Dict[str, Any] = Body(...)) -> JSONResponse:
+        """Execute a pipeline in the background.
+
+        This endpoint returns immediately with a run_id.
+        The actual execution happens asynchronously.
+        Connect to /ws for real-time progress updates.
 
         Args:
             payload: Pipeline definition with nodes and edges
 
         Returns:
-            Run ID
+            202 Accepted with run_id for tracking
         """
         manager = get_manager()
 
-        # Start execution in background
-        run_id = await manager.run_pipeline(payload, broadcast)
+        # Allocate run_id up front and start execution in background
+        run_id = manager.allocate_run_id()
+        try:
+            task = manager.start_pipeline_background(run_id, payload, broadcast)
+            logger.info("Started background pipeline execution: run_id=%s task=%s", run_id, task.get_name())
+        except Exception:
+            logger.exception("Failed to start pipeline execution: run_id=%s", run_id)
+            raise HTTPException(status_code=500, detail="Failed to start pipeline")
 
         return JSONResponse(
-            {
-                "status": "started",
+            content={
+                "status": "accepted",
                 "run_id": run_id,
-            }
+                "message": "Pipeline execution started. Connect to /api/exec/ws for live updates.",
+            },
+            status_code=202,
         )
 
     @router.get("/runs")
-    async def list_runs():
+    async def list_runs() -> JSONResponse:
         """List active and recent runs."""
         manager = get_manager()
         return JSONResponse(
@@ -134,7 +136,7 @@ def create_execution_router() -> "APIRouter":
         )
 
     @router.get("/runs/{run_id}")
-    async def get_run(run_id: str):
+    async def get_run(run_id: str) -> JSONResponse:
         """Get run details."""
         manager = get_manager()
         run = manager.get_run_state(run_id)
@@ -166,7 +168,7 @@ def create_execution_router() -> "APIRouter":
         )
 
     @router.post("/runs/{run_id}/cancel")
-    async def cancel_run(run_id: str):
+    async def cancel_run(run_id: str) -> JSONResponse:
         """Cancel a running pipeline."""
         manager = get_manager()
         success = await manager.cancel_run(run_id, broadcast)
@@ -177,7 +179,7 @@ def create_execution_router() -> "APIRouter":
         return JSONResponse({"status": "cancelled", "run_id": run_id})
 
     @router.get("/", response_class=HTMLResponse)
-    async def execution_ui():
+    async def execution_ui() -> str:
         """Serve the execution monitoring UI."""
         return get_execution_ui_html()
 
@@ -542,8 +544,17 @@ def get_execution_ui_html() -> str:
             }
         }, 25000);
 
+        // Check for run_id in URL parameters for auto-selection
+        const urlParams = new URLSearchParams(window.location.search);
+        const targetRunId = urlParams.get('run_id');
+
         connect();
-        loadRuns();
+        loadRuns().then(() => {
+            // Auto-select the run from URL parameter after loading runs
+            if (targetRunId) {
+                selectRun(targetRunId);
+            }
+        });
     </script>
 </body>
 </html>"""
