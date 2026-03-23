@@ -53,7 +53,7 @@ class CameraParams:
     height: int
     source: str = "synthetic"  # "explicit" | "exif" | "synthetic"
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate camera parameters."""
         if self.fx <= 0 or self.fy <= 0:
             raise ValueError(f"Focal lengths must be positive: fx={self.fx}, fy={self.fy}")
@@ -84,7 +84,7 @@ class SceneGroup:
     images: Tuple[Path, ...]
     cameras: Optional[Tuple[CameraParams, ...]] = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate SceneGroup invariants."""
         if not self.scene_id:
             raise ValueError("scene_id cannot be empty")
