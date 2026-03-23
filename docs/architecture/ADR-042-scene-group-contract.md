@@ -1,8 +1,15 @@
 # ADR-042: Scene Group Contract for Multi-View Reconstruction
 
-**Status:** Proposed
+**Status:** IMPLEMENTED
 **Date:** 2026-03-04
+**Updated:** 2026-03-23
 **Owner:** @RC219805
+**Implementation Status:**
+- Phase A (scene_id + images): ✅ Complete
+- Phase B (cameras field + eligibility): ✅ Complete (2026-03-23)
+  - Camera/image alignment validation: ✅ Complete
+  - Synthetic camera parameter bounds validation: ✅ Complete
+- Reconstruction feature gate: ✅ Complete (config flag documented)
 
 ## Executive Summary
 

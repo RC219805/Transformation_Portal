@@ -68,6 +68,7 @@ class PipelineConfig:
         reconstruction: Reconstruction configuration.
         resource_limits: Resource limits for execution.
         error_strategy: Error recovery strategy.
+        use_execution_graph: If True, use ADR-029 graph-based execution (default: False).
     """
 
     tier: str
@@ -78,6 +79,7 @@ class PipelineConfig:
     reconstruction: Dict[str, Any] = field(default_factory=dict)
     resource_limits: Optional[ResourceLimits] = None
     error_strategy: ErrorRecoveryStrategy = ErrorRecoveryStrategy.RETRY
+    use_execution_graph: bool = False
 
     def __post_init__(self):
         """Validate configuration."""
@@ -92,7 +94,11 @@ class PipelineConfig:
             raise ValueError(f"Invalid tier '{self.tier}'. Valid: {VALID_TIERS}")
 
         # Reconstruction requires research tier
-        if "reconstruction" in self.stages and self.tier not in ["apex_research", "apex_research_ultra", "experimental"]:
+        if "reconstruction" in self.stages and self.tier not in [
+            "apex_research",
+            "apex_research_ultra",
+            "experimental",
+        ]:
             raise ValueError(f"Reconstruction requires research tier, got '{self.tier}' " "(Inria 3DGS license restriction)")
 
 
@@ -327,6 +333,10 @@ class SpatialAIPipeline:
 
         logger.info(f"Starting pipeline: {input_path} -> {output_dir}")
         logger.info(f"Stages: {', '.join(self.config.stages)}")
+
+        # Use graph-based execution if enabled (ADR-029)
+        if self.config.use_execution_graph:
+            return self._process_with_graph(input_path, output_dir, save_intermediates)
 
         # Initialize result
         result = PipelineResult(
@@ -702,6 +712,238 @@ class SpatialAIPipeline:
             self.progress_tracker.complete_stage("reconstruction", success=False, error_message=str(e))
             raise PipelineError("reconstruction", f"Reconstruction failed: {e}", original_error=e) from e
 
+    def _process_with_graph(
+        self,
+        input_path: Path,
+        output_dir: Path,
+        save_intermediates: bool,
+    ) -> PipelineResult:
+        """Execute pipeline using ADR-029 execution graph abstraction.
+
+        This method provides graph-based execution with:
+        - Explicit DAG modeling of stage dependencies
+        - Content-addressable caching
+        - Automatic provenance tracking
+        - Fail-fast resource validation
+
+        Args:
+            input_path: Input image path.
+            output_dir: Output directory.
+            save_intermediates: Save intermediate outputs.
+
+        Returns:
+            PipelineResult with all outputs and metadata.
+
+        Note:
+            This is the ADR-029 compliant execution path. Enable via
+            ``use_execution_graph=True`` in PipelineConfig.
+        """
+        from .graph import ArtifactStore, Executor, build_spatial_ai_graph
+
+        logger.info("Using ADR-029 graph-based execution")
+
+        # Graph mode does not yet support reconstruction.
+        # Fail explicitly rather than silently dropping the stage.
+        if "reconstruction" in self.config.stages:
+            raise PipelineError(
+                "graph",
+                "Reconstruction is not supported in graph mode (ADR-029). "
+                "Either disable graph mode (use_execution_graph=False) or "
+                "remove reconstruction from stages.",
+            )
+
+        # Build execution graph from config
+        graph_stages = list(self.config.stages)
+
+        # Build merged config for graph
+        graph_config = {
+            "strict_ingest": self.config.ingest.get("strict_ingest", False),
+            "emit_exr": self.config.ingest.get("emit_exr", False),
+            "emit_provenance": self.config.ingest.get("emit_provenance", False),
+            "model_size": self.config.segmentation.get("model", {}).get("size", "large"),
+            "enable_material_classification": bool(self.config.segmentation.get("material_classification", False)),
+            "backend": self.config.materials.get("backend", "heuristic"),
+            "device": self.resource_manager.select_device(),
+        }
+
+        graph = build_spatial_ai_graph(stages=graph_stages, config=graph_config)
+
+        # Create artifact store for caching (optional)
+        cache_dir = output_dir / ".cache" / "spatial_ai"
+        artifact_store = ArtifactStore(cache_dir=cache_dir)
+
+        # Create executor
+        executor = Executor(
+            artifact_store=artifact_store,
+            resource_limits=self.config.resource_limits,
+            device=graph_config["device"],
+        )
+
+        # Execute graph
+        self.progress_tracker.start_pipeline()
+        try:
+            exec_result = executor.execute(
+                graph=graph,
+                inputs={"input_path": str(input_path)},
+                output_dir=output_dir,
+                config=graph_config,
+            )
+
+            # Convert ExecutionResult to PipelineResult
+            result = PipelineResult(
+                input_path=input_path,
+                output_dir=output_dir,
+                stages_completed=[sr.stage_id for sr in exec_result.stage_results],
+                execution_time=exec_result.total_time_ms / 1000.0,
+                peak_memory_mb=self.resource_manager.get_peak_memory_mb(),
+            )
+
+            # Extract outputs from graph results
+            if "ingest.linear_rgb" in exec_result.outputs:
+                from transformation_portal.spatial_ai.ingest.linear_decoder import (
+                    LinearIngestResult,
+                )
+
+                # Reconstruct LinearIngestResult from graph outputs
+                # IngestStage emits cache-safe primitives; we reconstruct the full result.
+                linear_rgb = exec_result.outputs["ingest.linear_rgb"]
+                input_size = exec_result.outputs.get("ingest.input_size", linear_rgb.shape[:2])
+
+                # Required fields with sensible defaults derived from graph outputs
+                result.linear_image = LinearIngestResult(
+                    linear_rgb=linear_rgb,
+                    input_path=input_path,
+                    input_size=tuple(input_size) if not isinstance(input_size, tuple) else input_size,
+                    gamma=1.0,
+                    bit_depth=32,  # Always float32 for linear ingest
+                    dtype="float32",
+                    input_format=exec_result.outputs.get("ingest.input_format", "TIFF"),
+                    color_space=exec_result.outputs.get("ingest.color_space", "linear_sRGB"),
+                )
+
+            if "segment.masks" in exec_result.outputs:
+                from transformation_portal.spatial_ai.segmentation.contracts import (
+                    MaskMetadata,
+                    SegmentationResult,
+                )
+
+                masks = exec_result.outputs["segment.masks"]
+                scores = exec_result.outputs.get("segment.scores", np.ones(len(masks)))
+
+                # Optional cached metadata arrays from the segmentation stage.
+                # These arrays are normally present (SegmentationStage emits them).
+                # Fallback computation only executes for legacy/external graph outputs.
+                areas = exec_result.outputs.get("segment.metadata.area")
+                bboxes = exec_result.outputs.get("segment.metadata.bbox")
+                stabilities = exec_result.outputs.get("segment.metadata.stability_score")
+
+                def _compute_bbox(mask: np.ndarray) -> tuple:
+                    """Compute a tight (x, y, w, h) bbox for a boolean/uint8 mask.
+
+                    Falls back to (0, 0, 0, 0) for empty masks to preserve determinism.
+                    Note: This fallback is rarely hit since SegmentationStage emits
+                    pre-computed metadata arrays. Consider cv2.findNonZero if profiling
+                    shows this path is a bottleneck.
+                    """
+                    ys, xs = np.where(mask)
+                    if ys.size == 0 or xs.size == 0:
+                        return (0, 0, 0, 0)
+                    x_min, x_max = int(xs.min()), int(xs.max())
+                    y_min, y_max = int(ys.min()), int(ys.max())
+                    return (x_min, y_min, x_max - x_min + 1, y_max - y_min + 1)
+
+                metadata: List[MaskMetadata] = []
+                num_masks = len(masks)
+
+                for i in range(num_masks):
+                    mask = masks[i]
+
+                    if areas is not None and i < len(areas):
+                        area = int(areas[i])
+                    else:
+                        # Fallback: derive area directly from the mask.
+                        area = int(np.count_nonzero(mask))
+
+                    if bboxes is not None and i < len(bboxes):
+                        bbox = tuple(int(v) for v in bboxes[i])
+                    else:
+                        bbox = _compute_bbox(mask)
+
+                    if stabilities is not None and i < len(stabilities):
+                        stability_score = float(stabilities[i])
+                    else:
+                        # Conservative default when stability is not available.
+                        stability_score = 0.5
+
+                    # Ensure area is at least 1 to satisfy MaskMetadata validation
+                    metadata.append(
+                        MaskMetadata(
+                            area=max(1, area),
+                            bbox=bbox,
+                            stability_score=stability_score,
+                        )
+                    )
+
+                result.segmentation = SegmentationResult(
+                    masks=masks,
+                    scores=scores,
+                    metadata=metadata,
+                )
+
+            if "materials.pbr_textures" in exec_result.outputs:
+                result.materials = exec_result.outputs["materials.pbr_textures"]
+
+            # Save summary
+            if save_intermediates:
+                summary_path = output_dir / "pipeline_summary.json"
+                result.save_summary(summary_path)
+
+                # Also save graph execution metadata
+                graph_meta_path = output_dir / "graph_execution.json"
+                import json
+
+                graph_meta = {
+                    "stages_executed": exec_result.stages_executed,
+                    "stages_cached": exec_result.stages_cached,
+                    "total_time_ms": exec_result.total_time_ms,
+                    "stage_results": [
+                        {
+                            "stage_id": sr.stage_id,
+                            "cache_hit": sr.cache_hit,
+                            "execution_time_ms": sr.execution_time_ms,
+                            "cache_key": sr.cache_key,
+                        }
+                        for sr in exec_result.stage_results
+                    ],
+                }
+                with open(graph_meta_path, "w") as f:
+                    json.dump(graph_meta, f, indent=2)
+
+            self.progress_tracker.complete_pipeline(success=True)
+            logger.info(
+                f"Graph execution completed: {exec_result.stages_executed} executed, "
+                f"{exec_result.stages_cached} cached, "
+                f"{exec_result.total_time_ms:.1f}ms total"
+            )
+
+            return result
+
+        except Exception as e:
+            self.progress_tracker.complete_pipeline(success=False)
+            logger.error(f"Graph execution failed: {e}")
+
+            result = PipelineResult(
+                input_path=input_path,
+                output_dir=output_dir,
+                stages_completed=[],
+                errors=[str(e)],
+            )
+
+            if self.config.error_strategy == ErrorRecoveryStrategy.RETURN_PARTIAL:
+                return result
+            # Wrap in PipelineError to preserve API contract (docstring states PipelineError is raised)
+            raise PipelineError("graph", f"Graph execution failed: {e}", original_error=e) from e
+
     @staticmethod
     def _load_preset(preset_name: str) -> PipelineConfig:
         """Load preset configuration.
@@ -789,6 +1031,9 @@ class SpatialAIPipeline:
         stages = list(pipeline_data.keys())
         stages = ["segmentation" if s == "segment" else s for s in stages]
 
+        # Parse use_execution_graph flag (ADR-029)
+        use_execution_graph = data.get("use_execution_graph", False)
+
         # Build config
         config = PipelineConfig(
             tier=data.get("tier", "standard"),
@@ -799,6 +1044,7 @@ class SpatialAIPipeline:
             reconstruction=pipeline_data.get("reconstruction", {}),
             resource_limits=resource_limits,
             error_strategy=error_strategy,
+            use_execution_graph=use_execution_graph,
         )
 
         return config
