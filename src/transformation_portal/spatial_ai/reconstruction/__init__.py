@@ -66,6 +66,7 @@ Performance Targets:
 """
 
 from .contracts import CameraParams, GaussianSplat, LicenseRestrictionError, ReconstructionInput, Scene3D
+from .export_ply import PLYExportConfig, PLYExporter, export_scene_to_ply
 from .geometric_validator import GeometricValidator
 from .mesh_exporter import MeshExporter
 
@@ -80,8 +81,12 @@ __all__ = [
     # Backend and builders (lazy-loaded)
     "GaussianBackend",
     "SceneBuilder",
-    # Export and validation
+    # Export (PLY is primary for Gaussian Splatting)
+    "PLYExporter",
+    "PLYExportConfig",
+    "export_scene_to_ply",
     "MeshExporter",
+    # Validation
     "GeometricValidator",
     # Exceptions
     "LicenseRestrictionError",

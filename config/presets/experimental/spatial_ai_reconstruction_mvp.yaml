@@ -1,0 +1,108 @@
+# Multi-View Reconstruction MVP Preset
+# Phase 2.3: Experimental multi-view 3D reconstruction
+#
+# License: Inria research license (non-commercial)
+# Tier: apex_research (research-only)
+#
+# This preset configures the minimum viable multi-view reconstruction
+# path with conservative defaults for validation and testing.
+
+tier: apex_research
+license_restriction: research_only  # Inria 3DGS license
+
+# Pipeline configuration
+pipeline:
+  reconstruction:
+    enabled: true
+    export_format: ply  # PLY is native for Gaussian Splatting
+
+    # Optimization parameters (conservative for MVP)
+    iterations: 2000  # Low for MVP testing, increase for production
+    optimization_seed: 12345  # Deterministic for testing
+
+    # Camera validation policy (fail-closed by default)
+    require_verified_cameras: true
+    allow_synthetic_cameras: false
+
+    # Export options
+    export_binary: true
+    export_include_attributes: true
+
+# Backend configuration
+backend:
+  type: gaussian_splatting
+  model:
+    repo_id: "graphdeco-inria/gaussian-splatting"
+    # IMPORTANT: Replace with verified commit hash before production use
+    revision: "NEEDS_VERIFICATION_0000000000000000000000"
+    cache_dir: null
+
+  device: auto  # auto-detect: cuda > mps > cpu
+
+# Optimization hyperparameters
+optimization:
+  position_lr: 0.00016
+  scaling_lr: 0.005
+  rotation_lr: 0.001
+  opacity_lr: 0.05
+
+  # Densification (disabled for MVP to keep iteration count low)
+  densify_from_iter: 500
+  densify_until_iter: 1500
+  densify_grad_threshold: 0.0002
+
+# Quality targets
+quality:
+  rmse_threshold: 0.05  # Relaxed for MVP (5% vs production 2%)
+  min_views: 2  # Minimum for multi-view
+  max_gaussians: 100000  # Lower limit for MVP
+
+  # Validation
+  enable_geometric_validation: true
+  enable_depth_consistency: false  # Disabled for MVP
+
+# Phase integration (all optional for MVP)
+integration:
+  use_depth_prior: false
+  use_segmentation: false
+  use_pbr_textures: false
+
+# Export options
+export:
+  format: ply
+  ply:
+    binary: true
+    include_attributes: true
+    include_sh: false
+
+# Provenance sidecar
+provenance:
+  enabled: true
+  include_request_metadata: true
+  include_file_hash: true
+
+# Performance constraints
+performance:
+  batch_size: 1
+  max_vram_gb: 4  # Conservative for MVP
+
+# Logging
+logging:
+  level: INFO
+  log_optimization: true
+  log_interval: 500
+
+# License notice
+license_notice: |
+  Multi-View Reconstruction MVP Preset
+
+  This preset uses 3D Gaussian Splatting from Inria (research license).
+  Non-commercial use only. Commercial applications require separate
+  license agreement with Inria GraphDeco team.
+
+  See: https://github.com/graphdeco-inria/gaussian-splatting
+
+  Camera Validation Policy:
+  - Requires verified cameras (explicit or EXIF-derived)
+  - Rejects synthetic/generated cameras by default
+  - Override with allow_synthetic_cameras: true (experimental only)

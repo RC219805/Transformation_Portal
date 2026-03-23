@@ -175,6 +175,65 @@ class PipelineResult:
         logger.info(f"Saved pipeline summary: {path}")
 
 
+@dataclass
+class MultiViewReconstructionResult:
+    """Result from multi-view reconstruction pipeline.
+
+    Attributes:
+        scene: Reconstructed 3D scene (Scene3D).
+        ply_path: Path to exported PLY file.
+        sidecar_path: Path to provenance JSON sidecar.
+        output_dir: Output directory.
+        execution_time: Total execution time in seconds.
+        peak_memory_mb: Peak GPU memory usage in MB.
+        stages_completed: List of completed stages.
+        request_metadata: Original request metadata for traceability.
+        errors: List of error messages (if any).
+        warnings: List of warning messages (if any).
+    """
+
+    scene: Scene3D
+    ply_path: Path
+    sidecar_path: Path
+    output_dir: Path
+    execution_time: float = 0.0
+    peak_memory_mb: float = 0.0
+    stages_completed: List[str] = field(default_factory=list)
+    request_metadata: Dict[str, Any] = field(default_factory=dict)
+    errors: List[str] = field(default_factory=list)
+    warnings: List[str] = field(default_factory=list)
+
+    def save_summary(self, path: Path) -> None:
+        """Save reconstruction summary as JSON.
+
+        Args:
+            path: Output path for summary JSON.
+        """
+        summary = {
+            "output_dir": str(self.output_dir),
+            "ply_path": str(self.ply_path),
+            "sidecar_path": str(self.sidecar_path),
+            "stages_completed": self.stages_completed,
+            "execution_time": self.execution_time,
+            "peak_memory_mb": self.peak_memory_mb,
+            "errors": self.errors,
+            "warnings": self.warnings,
+            "scene": {
+                "num_gaussians": self.scene.splats.num_gaussians,
+                "rmse": self.scene.rmse,
+                "convergence": self.scene.convergence,
+                "quality_score": self.scene.quality_score,
+                "iteration": self.scene.iteration,
+            },
+            "request_metadata": self.request_metadata,
+        }
+
+        with open(path, "w") as f:
+            json.dump(summary, f, indent=2)
+
+        logger.info(f"Saved reconstruction summary: {path}")
+
+
 class SpatialAIPipeline:
     """End-to-end Spatial AI pipeline orchestrator.
 
@@ -414,6 +473,275 @@ class SpatialAIPipeline:
                 return result
             else:
                 raise
+
+    def process_multiview(
+        self,
+        request: "MultiViewReconstructionRequest",
+        output_dir: Union[str, Path],
+        save_intermediates: bool = True,
+    ) -> "MultiViewReconstructionResult":
+        """Execute multi-view reconstruction pipeline.
+
+        This is the dedicated multi-view entrypoint that does NOT overload
+        the single-image ``process()`` contract. Use this for multi-view
+        3D Gaussian Splatting reconstruction.
+
+        Args:
+            request: Multi-view reconstruction request with cameras and images.
+                Must pass all contract validations (view count, camera policy, tier).
+            output_dir: Output directory for reconstruction artifacts.
+            save_intermediates: Save intermediate outputs.
+
+        Returns:
+            MultiViewReconstructionResult with Scene3D and export paths.
+
+        Raises:
+            PipelineError: If reconstruction fails.
+            CameraValidationError: If camera validation fails.
+            ValueError: If request contract is violated.
+
+        Note:
+            Reconstruction requires research tier (apex_research or higher)
+            due to Inria 3DGS license. Camera validation is fail-closed
+            by default (synthetic cameras rejected).
+
+        Example:
+            >>> from transformation_portal.core.geometry import (
+            ...     CoreCameraParams,
+            ...     MultiViewReconstructionRequest,
+            ... )
+            >>> cameras = [
+            ...     CoreCameraParams(fx=800, fy=800, cx=512, cy=384,
+            ...                      width=1024, height=768, source="explicit"),
+            ...     CoreCameraParams(fx=800, fy=800, cx=512, cy=384,
+            ...                      width=1024, height=768, source="explicit"),
+            ... ]
+            >>> request = MultiViewReconstructionRequest(
+            ...     cameras=cameras,
+            ...     image_paths=[Path("view1.png"), Path("view2.png")],
+            ...     tier="apex_research",
+            ... )
+            >>> result = pipeline.process_multiview(request, output_dir="output/")
+            >>> print(f"Exported: {result.ply_path}")
+        """
+        from transformation_portal.core.geometry import MultiViewReconstructionRequest
+        from transformation_portal.spatial_ai.reconstruction import (
+            PLYExporter,
+            PLYExportConfig,
+            SceneBuilder,
+        )
+        from transformation_portal.spatial_ai.reconstruction.contracts import (
+            CameraParams as ReconstructionCameraParams,
+            ReconstructionInput,
+        )
+
+        output_dir = Path(output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        # Validate request is properly typed
+        if not isinstance(request, MultiViewReconstructionRequest):
+            raise TypeError(
+                f"Expected MultiViewReconstructionRequest, got {type(request).__name__}. "
+                "Use process() for single-image pipeline."
+            )
+
+        logger.info(
+            f"Starting multi-view reconstruction: {request.num_views} views -> {output_dir}"
+        )
+        logger.info(
+            f"Camera sources: {request.get_camera_source_summary()}, "
+            f"tier={request.tier}"
+        )
+
+        # Re-validate tier (defense-in-depth)
+        if request.tier not in self.VALID_RECONSTRUCTION_TIERS:
+            raise ValueError(
+                f"Reconstruction requires research tier {self.VALID_RECONSTRUCTION_TIERS}, "
+                f"got '{request.tier}'."
+            )
+
+        self.progress_tracker.start_pipeline()
+        start_time = self.progress_tracker._start_time
+
+        try:
+            with self.resource_manager:
+                # Convert CoreCameraParams to reconstruction CameraParams
+                recon_cameras = self._convert_to_reconstruction_cameras(request)
+
+                # Load images if paths provided
+                images = self._load_multiview_images(request)
+
+                # Build ReconstructionInput
+                reconstruction_input = ReconstructionInput(
+                    images=images,
+                    gamma=request.gamma,
+                    cameras=recon_cameras,
+                    depth_maps=request.depth_maps,
+                    masks=request.masks,
+                    material_maps=request.material_maps,
+                    tier=request.tier,
+                )
+
+                # Build scene via SceneBuilder/GaussianBackend
+                self.progress_tracker.start_stage("reconstruction", "3D Reconstruction")
+
+                builder = SceneBuilder(
+                    tier=request.tier,
+                    device=self.resource_manager.select_device(),
+                    backend_config={
+                        "optimization_seed": request.optimization_seed,
+                    },
+                )
+
+                # Get iteration count from config or use default
+                iterations = self.config.reconstruction.get("iterations", 2000)
+
+                scene = builder.build_from_arrays(
+                    images=images,
+                    cameras=recon_cameras,
+                    depth_maps=request.depth_maps,
+                    masks=request.masks,
+                    material_maps=request.material_maps,
+                    iterations=iterations,
+                    gamma=request.gamma,
+                )
+
+                self.progress_tracker.complete_stage("reconstruction", success=True)
+                logger.info(
+                    f"Reconstruction complete: {scene.splats.num_gaussians} Gaussians, "
+                    f"RMSE={scene.rmse:.4f}, convergence={scene.convergence}"
+                )
+
+                # Export PLY
+                self.progress_tracker.start_stage("export", "PLY Export")
+
+                export_config = PLYExportConfig(
+                    binary=self.config.reconstruction.get("export_binary", True),
+                    include_attributes=self.config.reconstruction.get(
+                        "export_include_attributes", True
+                    ),
+                )
+                exporter = PLYExporter(export_config)
+
+                ply_path = output_dir / "reconstruction.ply"
+                exporter.export(
+                    scene,
+                    ply_path,
+                    write_sidecar=True,
+                    additional_metadata=request.to_metadata_dict(),
+                )
+
+                self.progress_tracker.complete_stage("export", success=True)
+
+            # Build result
+            execution_time = self.progress_tracker._get_elapsed_time()
+            peak_memory = self.resource_manager.get_peak_memory_mb()
+
+            result = MultiViewReconstructionResult(
+                scene=scene,
+                ply_path=ply_path,
+                sidecar_path=ply_path.with_suffix(".provenance.json"),
+                output_dir=output_dir,
+                execution_time=execution_time,
+                peak_memory_mb=peak_memory,
+                stages_completed=["reconstruction", "export"],
+                request_metadata=request.to_metadata_dict(),
+            )
+
+            self.progress_tracker.complete_pipeline(success=True)
+            logger.info(
+                f"Multi-view reconstruction completed in {execution_time:.1f}s, "
+                f"peak memory {peak_memory:.1f}MB"
+            )
+
+            # Save summary if requested
+            if save_intermediates:
+                summary_path = output_dir / "reconstruction_summary.json"
+                result.save_summary(summary_path)
+
+            return result
+
+        except Exception as e:
+            self.progress_tracker.complete_pipeline(success=False)
+            logger.error(f"Multi-view reconstruction failed: {e}")
+            raise PipelineError(
+                "reconstruction",
+                f"Multi-view reconstruction failed: {e}",
+                original_error=e,
+            ) from e
+
+    def _convert_to_reconstruction_cameras(
+        self,
+        request: "MultiViewReconstructionRequest",
+    ) -> list:
+        """Convert CoreCameraParams to reconstruction CameraParams.
+
+        Creates full reconstruction camera parameters with identity extrinsics
+        from the simpler core camera intrinsics.
+        """
+        from transformation_portal.spatial_ai.reconstruction.contracts import CameraParams
+
+        cameras = []
+        for i, core_cam in enumerate(request.cameras):
+            # Build intrinsics matrix
+            intrinsics = np.array(
+                [
+                    [core_cam.fx, 0.0, core_cam.cx],
+                    [0.0, core_cam.fy, core_cam.cy],
+                    [0.0, 0.0, 1.0],
+                ],
+                dtype=np.float32,
+            )
+
+            # Default to identity extrinsics (camera at origin)
+            # In production, these would come from camera pose estimation
+            extrinsics = np.eye(4, dtype=np.float32)
+
+            camera = CameraParams(
+                intrinsics=intrinsics,
+                extrinsics=extrinsics,
+                width=core_cam.width,
+                height=core_cam.height,
+                camera_id=f"view_{i:03d}",
+            )
+            cameras.append(camera)
+
+        return cameras
+
+    def _load_multiview_images(
+        self,
+        request: "MultiViewReconstructionRequest",
+    ) -> list:
+        """Load images from paths or return provided arrays."""
+        if request.images is not None:
+            return list(request.images)
+
+        if request.image_paths is None:
+            raise ValueError("Either image_paths or images must be provided")
+
+        from PIL import Image
+
+        images = []
+        for path in request.image_paths:
+            path = Path(path)
+            if not path.exists():
+                raise FileNotFoundError(f"Image not found: {path}")
+
+            img = Image.open(path)
+            img_array = np.array(img).astype(np.float32) / 255.0
+
+            # Ensure RGB
+            if img_array.ndim == 2:
+                img_array = np.stack([img_array] * 3, axis=-1)
+            elif img_array.shape[2] == 4:
+                img_array = img_array[:, :, :3]  # Drop alpha
+
+            images.append(img_array)
+
+        return images
+
+    # Valid tiers for reconstruction (research-only due to Inria 3DGS license)
+    VALID_RECONSTRUCTION_TIERS = ("apex_research", "apex_research_ultra", "experimental")
 
     def _run_ingest(self, input_path: Path, output_dir: Path, save_intermediates: bool) -> LinearIngestResult:
         """Run linear ingest stage.
