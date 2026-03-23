@@ -58,9 +58,7 @@ def client(test_app: FastAPI, manager: ExecutionManager) -> Generator[TestClient
 class TestPostRun:
     """Tests for POST /api/exec/run endpoint."""
 
-    def test_returns_202_accepted(
-        self, client: TestClient, manager: ExecutionManager
-    ) -> None:
+    def test_returns_202_accepted(self, client: TestClient, manager: ExecutionManager) -> None:
         """Test that POST /run returns 202 Accepted."""
         pipeline = {
             "nodes": [{"id": "n1", "type": "passthrough"}],
@@ -71,9 +69,7 @@ class TestPostRun:
 
         assert response.status_code == 202
 
-    def test_returns_run_id_in_response(
-        self, client: TestClient, manager: ExecutionManager
-    ) -> None:
+    def test_returns_run_id_in_response(self, client: TestClient, manager: ExecutionManager) -> None:
         """Test that response includes run_id."""
         pipeline = {"nodes": [], "edges": []}
 
@@ -84,9 +80,7 @@ class TestPostRun:
         assert isinstance(data["run_id"], str)
         assert len(data["run_id"]) > 0
 
-    def test_response_has_expected_fields(
-        self, client: TestClient, manager: ExecutionManager
-    ) -> None:
+    def test_response_has_expected_fields(self, client: TestClient, manager: ExecutionManager) -> None:
         """Test that response has status, run_id, and message fields."""
         pipeline = {"nodes": [], "edges": []}
 
@@ -97,9 +91,7 @@ class TestPostRun:
         assert "run_id" in data
         assert "message" in data
 
-    def test_run_id_immediately_queryable(
-        self, client: TestClient, manager: ExecutionManager
-    ) -> None:
+    def test_run_id_immediately_queryable(self, client: TestClient, manager: ExecutionManager) -> None:
         """Test that returned run_id is immediately visible via GET."""
         pipeline = {
             "nodes": [{"id": "n1", "type": "passthrough"}],
@@ -121,9 +113,7 @@ class TestPostRun:
 class TestGetRun:
     """Tests for GET /api/exec/runs/{run_id} endpoint."""
 
-    def test_returns_run_details(
-        self, client: TestClient, manager: ExecutionManager
-    ) -> None:
+    def test_returns_run_details(self, client: TestClient, manager: ExecutionManager) -> None:
         """Test that GET returns full run details."""
         # Create a run manually
         run_id = manager.allocate_run_id()
@@ -143,9 +133,7 @@ class TestGetRun:
         assert "nodes" in data
         assert "node-a" in data["nodes"]
 
-    def test_includes_cancel_requested_field(
-        self, client: TestClient, manager: ExecutionManager
-    ) -> None:
+    def test_includes_cancel_requested_field(self, client: TestClient, manager: ExecutionManager) -> None:
         """Test that response includes cancel_requested field."""
         run_id = manager.allocate_run_id()
         manager.prepare_run(run_id, {"nodes": [], "edges": []})
@@ -156,9 +144,7 @@ class TestGetRun:
         assert "cancel_requested" in data
         assert data["cancel_requested"] is False
 
-    def test_includes_current_node_id_field(
-        self, client: TestClient, manager: ExecutionManager
-    ) -> None:
+    def test_includes_current_node_id_field(self, client: TestClient, manager: ExecutionManager) -> None:
         """Test that response includes current_node_id field."""
         run_id = manager.allocate_run_id()
         manager.prepare_run(run_id, {"nodes": [], "edges": []})
@@ -169,9 +155,7 @@ class TestGetRun:
         assert "current_node_id" in data
         assert data["current_node_id"] is None
 
-    def test_returns_404_for_missing_run(
-        self, client: TestClient, manager: ExecutionManager
-    ) -> None:
+    def test_returns_404_for_missing_run(self, client: TestClient, manager: ExecutionManager) -> None:
         """Test that GET returns 404 for non-existent run."""
         response = client.get("/api/exec/runs/nonexistent")
 
@@ -181,9 +165,7 @@ class TestGetRun:
 class TestCancelRun:
     """Tests for POST /api/exec/runs/{run_id}/cancel endpoint."""
 
-    def test_returns_202_for_active_run(
-        self, client: TestClient, manager: ExecutionManager
-    ) -> None:
+    def test_returns_202_for_active_run(self, client: TestClient, manager: ExecutionManager) -> None:
         """Test that cancel returns 202 for an active run."""
         run_id = manager.allocate_run_id()
         manager.prepare_run(run_id, {"nodes": [], "edges": []})
@@ -196,9 +178,7 @@ class TestCancelRun:
         assert data["status"] == "cancelling"
         assert data["run_id"] == run_id
 
-    def test_returns_200_for_already_cancelled(
-        self, client: TestClient, manager: ExecutionManager
-    ) -> None:
+    def test_returns_200_for_already_cancelled(self, client: TestClient, manager: ExecutionManager) -> None:
         """Test that cancel returns 200 for already cancelled run."""
         run_id = manager.allocate_run_id()
         manager.prepare_run(run_id, {"nodes": [], "edges": []})
@@ -210,9 +190,7 @@ class TestCancelRun:
         data = response.json()
         assert data["status"] == "cancelled"
 
-    def test_returns_200_for_complete_run(
-        self, client: TestClient, manager: ExecutionManager
-    ) -> None:
+    def test_returns_200_for_complete_run(self, client: TestClient, manager: ExecutionManager) -> None:
         """Test that cancel returns 200 for complete run."""
         run_id = manager.allocate_run_id()
         manager.prepare_run(run_id, {"nodes": [], "edges": []})
@@ -224,17 +202,13 @@ class TestCancelRun:
         data = response.json()
         assert data["status"] == "complete"
 
-    def test_returns_404_for_missing_run(
-        self, client: TestClient, manager: ExecutionManager
-    ) -> None:
+    def test_returns_404_for_missing_run(self, client: TestClient, manager: ExecutionManager) -> None:
         """Test that cancel returns 404 for non-existent run."""
         response = client.post("/api/exec/runs/nonexistent/cancel")
 
         assert response.status_code == 404
 
-    def test_cancel_is_idempotent(
-        self, client: TestClient, manager: ExecutionManager
-    ) -> None:
+    def test_cancel_is_idempotent(self, client: TestClient, manager: ExecutionManager) -> None:
         """Test that multiple cancel calls are idempotent."""
         run_id = manager.allocate_run_id()
         manager.prepare_run(run_id, {"nodes": [], "edges": []})
@@ -253,9 +227,7 @@ class TestCancelRun:
 class TestListRuns:
     """Tests for GET /api/exec/runs endpoint."""
 
-    def test_returns_empty_list_initially(
-        self, client: TestClient, manager: ExecutionManager
-    ) -> None:
+    def test_returns_empty_list_initially(self, client: TestClient, manager: ExecutionManager) -> None:
         """Test that runs list is empty initially."""
         response = client.get("/api/exec/runs")
 
@@ -264,9 +236,7 @@ class TestListRuns:
         assert "runs" in data
         assert data["runs"] == []
 
-    def test_includes_registered_runs(
-        self, client: TestClient, manager: ExecutionManager
-    ) -> None:
+    def test_includes_registered_runs(self, client: TestClient, manager: ExecutionManager) -> None:
         """Test that registered runs appear in list."""
         run_id = manager.allocate_run_id()
         manager.prepare_run(run_id, {"nodes": [{"id": "n1", "type": "test"}], "edges": []})
@@ -277,9 +247,7 @@ class TestListRuns:
         assert len(data["runs"]) == 1
         assert data["runs"][0]["run_id"] == run_id
 
-    def test_run_summary_has_expected_fields(
-        self, client: TestClient, manager: ExecutionManager
-    ) -> None:
+    def test_run_summary_has_expected_fields(self, client: TestClient, manager: ExecutionManager) -> None:
         """Test that run summary has expected fields."""
         run_id = manager.allocate_run_id()
         manager.prepare_run(run_id, {"nodes": [{"id": "n1", "type": "test"}], "edges": []})
@@ -297,9 +265,7 @@ class TestListRuns:
 class TestRaceConditionPrevention:
     """Tests specifically for race condition prevention."""
 
-    def test_run_visible_before_execution_starts(
-        self, client: TestClient, manager: ExecutionManager
-    ) -> None:
+    def test_run_visible_before_execution_starts(self, client: TestClient, manager: ExecutionManager) -> None:
         """Test that run is visible even if execution hasn't started."""
         # Manually pre-register without starting execution
         run_id = manager.allocate_run_id()
@@ -312,9 +278,7 @@ class TestRaceConditionPrevention:
         data = response.json()
         assert data["status"] == "pending"  # Pre-registered but not started
 
-    def test_nodes_visible_before_execution_starts(
-        self, client: TestClient, manager: ExecutionManager
-    ) -> None:
+    def test_nodes_visible_before_execution_starts(self, client: TestClient, manager: ExecutionManager) -> None:
         """Test that nodes are visible even before execution starts."""
         run_id = manager.allocate_run_id()
         manager.prepare_run(
@@ -336,4 +300,3 @@ class TestRaceConditionPrevention:
         # All nodes should be PENDING before execution
         assert data["nodes"]["input"]["status"] == "pending"
         assert data["nodes"]["output"]["status"] == "pending"
-

@@ -589,7 +589,7 @@ def get_execution_ui_html() -> str:
             const btn = document.getElementById('cancel-btn');
             btn.disabled = true;
             btn.textContent = 'Cancelling...';
-            
+
             try {
                 const res = await fetch(`/api/exec/runs/${selectedRunId}/cancel`, { method: 'POST' });
                 const data = await res.json();
