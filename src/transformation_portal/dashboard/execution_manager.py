@@ -164,6 +164,38 @@ class ExecutionManager:
                     deps.append(source)
         return deps
 
+    def allocate_run_id(self) -> str:
+        """Allocate a new run ID without starting execution.
+
+        Returns:
+            Unique run ID
+        """
+        return str(uuid.uuid4())[:8]
+
+    def start_pipeline_background(
+        self,
+        run_id: str,
+        pipeline: Dict[str, Any],
+        broadcast: BroadcastFn,
+    ) -> asyncio.Task[None]:
+        """Start pipeline execution in a background task.
+
+        This immediately returns a Task that executes the pipeline.
+        Use this when you need the HTTP response to return immediately.
+
+        Args:
+            run_id: Pre-allocated run ID (from allocate_run_id)
+            pipeline: Pipeline definition with nodes and edges
+            broadcast: Async function to broadcast events
+
+        Returns:
+            asyncio.Task running the pipeline execution
+        """
+        return asyncio.create_task(
+            self._execute_pipeline(run_id, pipeline, broadcast),
+            name=f"pipeline-{run_id}",
+        )
+
     async def run_pipeline(
         self,
         pipeline: Dict[str, Any],
@@ -171,14 +203,33 @@ class ExecutionManager:
     ) -> str:
         """Execute a pipeline asynchronously with event streaming.
 
+        Note: This method awaits the full execution. For immediate return,
+        use allocate_run_id() + start_pipeline_background() instead.
+
         Args:
             pipeline: Pipeline definition with nodes and edges
             broadcast: Async function to broadcast events
 
         Returns:
-            Run ID
+            Run ID (after execution completes)
         """
-        run_id = str(uuid.uuid4())[:8]
+        run_id = self.allocate_run_id()
+        await self._execute_pipeline(run_id, pipeline, broadcast)
+        return run_id
+
+    async def _execute_pipeline(
+        self,
+        run_id: str,
+        pipeline: Dict[str, Any],
+        broadcast: BroadcastFn,
+    ) -> None:
+        """Internal pipeline execution implementation.
+
+        Args:
+            run_id: Run ID for this execution
+            pipeline: Pipeline definition with nodes and edges
+            broadcast: Async function to broadcast events
+        """
         nodes = pipeline.get("nodes", [])
         edges = pipeline.get("edges", [])
 
@@ -382,8 +433,6 @@ class ExecutionManager:
                     "timestamp": run_state.end_time,
                 }
             )
-
-        return run_id
 
     def get_run_state(self, run_id: str) -> Optional[RunState]:
         """Get state of a run.
