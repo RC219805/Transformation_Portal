@@ -89,6 +89,23 @@ class MultiViewReconstructionRequest:
             sources = [cam.source for cam in self.cameras]
             # Use object.__setattr__ since frozen=True
             object.__setattr__(self, "camera_sources", sources)
+        else:
+            # When camera_sources are provided explicitly, ensure they are
+            # consistent with the authoritative camera objects. This keeps
+            # provenance metadata aligned with the values used for policy checks.
+            if len(self.camera_sources) != len(self.cameras):
+                raise CameraValidationError(
+                    "camera_sources length must match cameras length: "
+                    f"got {len(self.camera_sources)} sources for "
+                    f"{len(self.cameras)} cameras"
+                )
+            for idx, (source, cam) in enumerate(zip(self.camera_sources, self.cameras)):
+                if source != cam.source:
+                    raise CameraValidationError(
+                        "camera_sources entry does not match camera.source: "
+                        f"index {idx}, camera_sources[{idx}]={source!r}, "
+                        f"camera[{idx}].source={cam.source!r}"
+                    )
 
         # Tier validation
         if self.tier not in self.VALID_TIERS:
@@ -183,15 +200,29 @@ class MultiViewReconstructionRequest:
             )
 
     def _validate_image_arrays(self) -> None:
-        """Validate image array formats."""
+        """Validate image array formats and consistent spatial dimensions."""
         if self.images is None:
             return
+
+        # Track expected dimensions from first image
+        expected_h: Optional[int] = None
+        expected_w: Optional[int] = None
 
         for i, img in enumerate(self.images):
             if img.dtype != np.float32:
                 raise ValueError(f"Image {i} must be float32, got {img.dtype}")
             if img.ndim != 3 or img.shape[2] != 3:
                 raise ValueError(f"Image {i} must be (H, W, 3), got shape {img.shape}")
+
+            h, w = img.shape[:2]
+            if expected_h is None:
+                expected_h, expected_w = h, w
+            elif (h, w) != (expected_h, expected_w):
+                raise ValueError(
+                    f"Image {i} spatial dimensions ({h}, {w}) do not match "
+                    f"expected dimensions ({expected_h}, {expected_w}). "
+                    f"All views must have matching spatial dimensions."
+                )
 
     def _validate_depth_maps(self) -> None:
         """Validate depth map formats and alignment."""

@@ -416,3 +416,93 @@ class TestMultiViewReconstructionRequestMetadata:
         assert metadata["all_cameras_verified"] is True
         assert metadata["optimization_seed"] == 42
         assert metadata["camera_source_summary"] == {"explicit": 3}
+
+
+class TestMultiViewReconstructionRequestSpatialValidation:
+    """Tests for spatial dimension validation."""
+
+    def _make_cameras(self, count: int) -> list:
+        return [
+            CoreCameraParams(fx=800, fy=800, cx=512, cy=384, width=1024, height=768, source="explicit") for _ in range(count)
+        ]
+
+    def test_reject_mismatched_image_dimensions(self):
+        """All images must have matching spatial dimensions."""
+        cameras = self._make_cameras(2)
+        images = [
+            np.ones((768, 1024, 3), dtype=np.float32),  # 768x1024
+            np.ones((480, 640, 3), dtype=np.float32),  # 480x640 - different!
+        ]
+
+        with pytest.raises(ValueError, match="spatial dimensions.*do not match"):
+            MultiViewReconstructionRequest(
+                cameras=cameras,
+                images=images,
+                tier="apex_research",
+            )
+
+    def test_accept_matching_image_dimensions(self):
+        """Matching spatial dimensions are accepted."""
+        cameras = self._make_cameras(3)
+        images = [np.ones((768, 1024, 3), dtype=np.float32) for _ in range(3)]
+
+        request = MultiViewReconstructionRequest(
+            cameras=cameras,
+            images=images,
+            tier="apex_research",
+        )
+
+        assert request.num_views == 3
+
+
+class TestMultiViewReconstructionRequestCameraSourcesValidation:
+    """Tests for explicit camera_sources validation."""
+
+    def test_reject_camera_sources_length_mismatch(self):
+        """Explicit camera_sources must match cameras length."""
+        cameras = [
+            CoreCameraParams(fx=800, fy=800, cx=512, cy=384, width=1024, height=768, source="explicit"),
+            CoreCameraParams(fx=800, fy=800, cx=512, cy=384, width=1024, height=768, source="explicit"),
+        ]
+        images = [np.ones((768, 1024, 3), dtype=np.float32) for _ in range(2)]
+
+        with pytest.raises(CameraValidationError, match="camera_sources length must match"):
+            MultiViewReconstructionRequest(
+                cameras=cameras,
+                images=images,
+                camera_sources=["explicit"],  # Only 1, but 2 cameras
+                tier="apex_research",
+            )
+
+    def test_reject_camera_sources_value_mismatch(self):
+        """Explicit camera_sources must match camera.source values."""
+        cameras = [
+            CoreCameraParams(fx=800, fy=800, cx=512, cy=384, width=1024, height=768, source="explicit"),
+            CoreCameraParams(fx=800, fy=800, cx=512, cy=384, width=1024, height=768, source="exif"),
+        ]
+        images = [np.ones((768, 1024, 3), dtype=np.float32) for _ in range(2)]
+
+        with pytest.raises(CameraValidationError, match="does not match camera.source"):
+            MultiViewReconstructionRequest(
+                cameras=cameras,
+                images=images,
+                camera_sources=["explicit", "explicit"],  # Second should be "exif"
+                tier="apex_research",
+            )
+
+    def test_accept_matching_camera_sources(self):
+        """Matching explicit camera_sources are accepted."""
+        cameras = [
+            CoreCameraParams(fx=800, fy=800, cx=512, cy=384, width=1024, height=768, source="explicit"),
+            CoreCameraParams(fx=800, fy=800, cx=512, cy=384, width=1024, height=768, source="exif"),
+        ]
+        images = [np.ones((768, 1024, 3), dtype=np.float32) for _ in range(2)]
+
+        request = MultiViewReconstructionRequest(
+            cameras=cameras,
+            images=images,
+            camera_sources=["explicit", "exif"],  # Matches cameras
+            tier="apex_research",
+        )
+
+        assert request.camera_sources == ["explicit", "exif"]

@@ -295,20 +295,21 @@ class NVDiffRecBackend:
             return
 
         try:
-            # In production, load from HuggingFace
-            # from huggingface_hub import hf_hub_download
-            # model_path = hf_hub_download(
-            #     repo_id=self.model_repo_id,
-            #     filename="nvdiffrec_model.pth",
-            #     revision=self.model_revision,
-            #     cache_dir=self.cache_dir,
-            # )
-            # self._model = load_nvdiffrec_model(model_path, device=self.device)
-
-            # For now, use mock implementation
-            self._model = None
-            self._model_loaded = True
-            logger.info(f"NVDIFFREC model loaded (repo={self.model_repo_id})")
+            # Production implementation requires:
+            # 1. HuggingFace Hub download
+            # 2. nvdiffrec model loading
+            # 3. CUDA initialization
+            #
+            # When a verified revision is provided (non-placeholder), we must
+            # raise NotImplementedError to prevent callers from believing
+            # they are running actual NVDIFFREC optimization.
+            raise NotImplementedError(
+                f"NVDIFFREC HuggingFace/nvdiffrec load path is not yet implemented. "
+                f"Model revision '{self.model_revision}' was provided but actual "
+                f"NVDIFFREC optimization is not available. "
+                f"Use placeholder revision 'NEEDS_VERIFICATION_...' for mock "
+                f"implementation during testing/development."
+            )
 
         except Exception as e:
             logger.error(f"Failed to load NVDIFFREC model: {e}")

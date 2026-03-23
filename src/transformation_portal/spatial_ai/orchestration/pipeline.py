@@ -553,6 +553,15 @@ class SpatialAIPipeline:
                 f"Reconstruction requires research tier {self.VALID_RECONSTRUCTION_TIERS}, " f"got '{request.tier}'."
             )
 
+        # Execution-graph mode is not supported for multi-view reconstruction.
+        # Fail fast rather than silently running the imperative path when the flag is enabled.
+        if getattr(self.config, "use_execution_graph", False):
+            raise PipelineError(
+                "Multi-view reconstruction does not support execution-graph mode "
+                "(use_execution_graph=True). Disable execution graph or use process() "
+                "for single-view pipelines."
+            )
+
         self.progress_tracker.start_pipeline()
 
         try:
@@ -714,16 +723,16 @@ class SpatialAIPipeline:
             if not path.exists():
                 raise FileNotFoundError(f"Image not found: {path}")
 
-            img = Image.open(path)
-            img_array = np.array(img).astype(np.float32) / 255.0
+            with Image.open(path) as img:
+                img_array = np.array(img).astype(np.float32) / 255.0
 
-            # Ensure RGB
-            if img_array.ndim == 2:
-                img_array = np.stack([img_array] * 3, axis=-1)
-            elif img_array.shape[2] == 4:
-                img_array = img_array[:, :, :3]  # Drop alpha
+                # Ensure RGB
+                if img_array.ndim == 2:
+                    img_array = np.stack([img_array] * 3, axis=-1)
+                elif img_array.shape[2] == 4:
+                    img_array = img_array[:, :, :3]  # Drop alpha
 
-            images.append(img_array)
+                images.append(img_array)
 
         return images
 
