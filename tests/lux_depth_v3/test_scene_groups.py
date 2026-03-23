@@ -283,9 +283,7 @@ class TestBuildSceneGroupsWithCameras:
             ),
         ]
 
-        groups = build_scene_groups(
-            images, dataset_root=Path("."), grouping_mode="single", cameras=cameras
-        )
+        groups = build_scene_groups(images, dataset_root=Path("."), grouping_mode="single", cameras=cameras)
 
         assert len(groups) == 2
         assert groups[0].cameras is not None
@@ -312,6 +310,4 @@ class TestBuildSceneGroupsWithCameras:
         ]  # Only 1 camera for 2 images
 
         with pytest.raises(ValueError, match="cameras must align with images"):
-            build_scene_groups(
-                images, dataset_root=Path("."), grouping_mode="single", cameras=cameras
-            )
+            build_scene_groups(images, dataset_root=Path("."), grouping_mode="single", cameras=cameras)

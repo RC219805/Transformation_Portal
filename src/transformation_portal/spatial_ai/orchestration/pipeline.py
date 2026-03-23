@@ -748,9 +748,7 @@ class SpatialAIPipeline:
             "emit_exr": self.config.ingest.get("emit_exr", False),
             "emit_provenance": self.config.ingest.get("emit_provenance", False),
             "model_size": self.config.segmentation.get("model", {}).get("size", "large"),
-            "enable_material_classification": bool(
-                self.config.segmentation.get("material_classification", False)
-            ),
+            "enable_material_classification": bool(self.config.segmentation.get("material_classification", False)),
             "backend": self.config.materials.get("backend", "heuristic"),
             "device": self.resource_manager.select_device(),
         }
