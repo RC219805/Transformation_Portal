@@ -169,14 +169,17 @@ def create_dag_editor_router() -> APIRouter:
     """Create the DAG editor router.
 
     Note: The FSGuard instance (`fs`) is created once at router initialization.
-    The pipelines directory is created by set_pipelines_dir() at startup,
-    so endpoint handlers do not need to call fs.mkdir() defensively.
+    The pipelines directory is created here at router creation time to ensure
+    the API is robust on fresh installs without requiring an external call to
+    set_pipelines_dir().
 
     Returns:
         FastAPI APIRouter with pipeline editing endpoints
     """
     router = APIRouter(prefix="/api/editor", tags=["editor"])
     fs = get_fs_guard()
+    # Ensure pipelines directory exists at router creation time
+    fs.mkdir(_pipelines_dir)
 
     @router.get("/pipelines")
     async def list_pipelines() -> JSONResponse:
@@ -184,7 +187,7 @@ def create_dag_editor_router() -> APIRouter:
 
         Note: Uses FSGuard.list_dir for audit logging consistency.
         Pipeline names are derived from validated filenames only.
-        Directory is created at startup by set_pipelines_dir().
+        Directory is created at router initialization in create_dag_editor_router().
         """
         pipelines = []
         # Use FSGuard for directory listing to maintain audit trail
