@@ -35,7 +35,7 @@ from transformation_portal.spatial_ai.orchestration.graph.execution_graph import
 from transformation_portal.spatial_ai.orchestration.graph.executor import ExecutionContext, Executor
 from transformation_portal.spatial_ai.orchestration.graph.stage import ResourceRequirements, StageMetadata
 
-pytestmark = [pytest.mark.unit, pytest.mark.integration]
+pytestmark = [pytest.mark.benchmark, pytest.mark.integration]
 
 # Performance ledger path
 GRAPH_PERFORMANCE_LEDGER = Path(__file__).parent / "graph_performance_ledger.json"
@@ -557,7 +557,7 @@ class TestGraphIntegrationSpike:
         """Full integration spike with performance recording.
 
         Implements the integration spike deliverables from Issue #923:
-        1. 10 cold/warm runs
+        1. 5 different inputs with cold/warm runs each (10 total runs)
         2. p50/p95 measurement
         3. Per-stage cache-hit rates
         4. Ledger entry committed
