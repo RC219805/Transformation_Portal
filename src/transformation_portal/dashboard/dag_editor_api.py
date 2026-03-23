@@ -12,11 +12,11 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, Union
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from transformation_portal.core.security.fs_guard import (
     FSContext,
@@ -102,9 +102,13 @@ def set_pipelines_dir(path: Path) -> None:
     """
     global _pipelines_dir, _fs_context
     _pipelines_dir = path
-    _fs_context = None  # Reset context to pick up new directory
+    # Reset context so _get_fs_context() creates fresh one with new base_dir
+    _fs_context = None
+    # Use FSGuard for directory creation
     fs = get_fs_guard()
     fs.mkdir(_pipelines_dir)
+    # Pre-initialize the context after mkdir to avoid repeated resets
+    _fs_context = _get_fs_context()
 
 
 class PipelineNode(BaseModel):
@@ -132,12 +136,32 @@ class PipelineDefinition(BaseModel):
 
     Note: The name field defaults to empty because save_pipeline() always
     overrides it with the name from the URL path for consistency.
+
+    Backward Compatibility: The nodes and edges fields accept both typed
+    objects (PipelineNode/PipelineEdge) and raw dicts for compatibility
+    with existing saved pipelines.
     """
 
     name: str = ""
     nodes: list[PipelineNode] = Field(default_factory=list)
     edges: list[PipelineEdge] = Field(default_factory=list)
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("nodes", mode="before")
+    @classmethod
+    def coerce_nodes(cls, v: list[Union[PipelineNode, dict[str, Any]]]) -> list[PipelineNode]:
+        """Coerce raw dicts to PipelineNode for backward compatibility."""
+        if not v:
+            return []
+        return [item if isinstance(item, PipelineNode) else PipelineNode(**item) for item in v]
+
+    @field_validator("edges", mode="before")
+    @classmethod
+    def coerce_edges(cls, v: list[Union[PipelineEdge, dict[str, Any]]]) -> list[PipelineEdge]:
+        """Coerce raw dicts to PipelineEdge for backward compatibility."""
+        if not v:
+            return []
+        return [item if isinstance(item, PipelineEdge) else PipelineEdge(**item) for item in v]
 
 
 def create_dag_editor_router() -> APIRouter:
@@ -656,12 +680,15 @@ def get_dag_editor_html() -> str:
                 });
 
                 if (!response.ok) {
-                    let errorMessage;
-                    try {
-                        const errorData = await response.json();
-                        errorMessage = errorData.detail || `HTTP ${response.status}`;
-                    } catch (parseError) {
-                        errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+                    let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+                    const contentType = response.headers.get('content-type');
+                    if (contentType && contentType.includes('application/json')) {
+                        try {
+                            const errorData = await response.json();
+                            errorMessage = errorData.detail || errorMessage;
+                        } catch (parseError) {
+                            console.warn('Failed to parse JSON error:', parseError);
+                        }
                     }
                     throw new Error(errorMessage);
                 }
