@@ -13,9 +13,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal, Optional
+from typing import Literal, Optional, get_args
 
 CameraSource = Literal["explicit", "exif", "synthetic"]
+
+# Valid camera sources extracted from the Literal type for runtime validation
+VALID_CAMERA_SOURCES = get_args(CameraSource)
 
 
 @dataclass(frozen=True)
@@ -56,8 +59,8 @@ class CoreCameraParams:
             raise ValueError(f"Focal lengths must be positive: fx={self.fx}, fy={self.fy}")
         if self.width <= 0 or self.height <= 0:
             raise ValueError(f"Image dimensions must be positive: {self.width}x{self.height}")
-        if self.source not in ("explicit", "exif", "synthetic"):
-            raise ValueError(f"Camera source must be 'explicit', 'exif', or 'synthetic', got '{self.source}'")
+        if self.source not in VALID_CAMERA_SOURCES:
+            raise ValueError(f"Camera source must be one of {VALID_CAMERA_SOURCES}, got '{self.source}'")
 
     @property
     def is_verified(self) -> bool:

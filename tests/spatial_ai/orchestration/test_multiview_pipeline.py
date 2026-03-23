@@ -107,7 +107,8 @@ class TestMultiviewPipelineExecution:
             for _ in range(count)
         ]
 
-    def _make_images(self, count: int) -> list:
+    def _make_images(self, count: int, seed: int = 42) -> list:
+        np.random.seed(seed)
         return [
             np.random.rand(48, 64, 3).astype(np.float32)  # Small random images
             for _ in range(count)

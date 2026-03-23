@@ -37,8 +37,9 @@ backend:
   model:
     # IMPORTANT: Replace with verified commit hash before production
     # The NVlabs repo should be mirrored to HuggingFace for provenance
-    repo_id: "your-org/nvdiffrec-bundle"
-    revision: "<commit-sha>"  # MUST be pinned
+    # NOTE: These are PLACEHOLDER values that will be caught by backend validation
+    repo_id: "nvidia/nvdiffrec"
+    revision: "NEEDS_VERIFICATION_0000000000000000000000"  # MUST be pinned before use
     cache_dir: null
 
   # CUDA required (NVDIFFREC uses compiled kernels)

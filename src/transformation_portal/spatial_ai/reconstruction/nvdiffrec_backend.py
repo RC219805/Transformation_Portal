@@ -167,9 +167,10 @@ class NVDiffRecBackend:
         self.model_revision = model_revision
         self.cache_dir = cache_dir
         self.optimization_seed = optimization_seed
+        self._skip_preflight = skip_preflight
 
         # Revision validation (no placeholders in production)
-        if "NEEDS_VERIFICATION" in model_revision and not skip_preflight:
+        if self._is_placeholder_revision() and not skip_preflight:
             raise ValueError(
                 f"NVDIFFREC requires a pinned model revision. "
                 f"Got placeholder: '{model_revision}'. "
@@ -198,6 +199,10 @@ class NVDiffRecBackend:
             f"NVDiffRecBackend initialized (tier={tier}, device={device}, "
             f"repo={model_repo_id}, revision={model_revision[:12]}...)"
         )
+
+    def _is_placeholder_revision(self) -> bool:
+        """Check if model revision is a placeholder."""
+        return "NEEDS_VERIFICATION" in self.model_revision
 
     def _detect_device(self) -> str:
         """Detect optimal device (NVDIFFREC requires CUDA)."""
@@ -280,7 +285,7 @@ class NVDiffRecBackend:
         if self._model_loaded:
             return
 
-        if "NEEDS_VERIFICATION" in self.model_revision:
+        if self._is_placeholder_revision():
             logger.warning(
                 f"Model revision '{self.model_revision}' contains placeholder. "
                 "Using mock implementation for testing. "
@@ -369,11 +374,13 @@ class NVDiffRecBackend:
             # 3. Optimize geometry/materials/lighting
             # 4. Extract final mesh and textures
 
-            # Mock: Generate placeholder output
+            # Mock: Generate placeholder output with seeding for determinism
             num_gaussians = 1000  # Placeholder
 
-            positions = np.random.rand(num_gaussians, 3).astype(np.float32) * 2 - 1
-            colors = np.random.rand(num_gaussians, 3).astype(np.float32)
+            # Use local RNG to respect seed without affecting global state
+            rng = np.random.default_rng(config.optimization_seed)
+            positions = rng.random((num_gaussians, 3), dtype=np.float32) * 2 - 1
+            colors = rng.random((num_gaussians, 3), dtype=np.float32)
             scales = np.ones((num_gaussians, 3), dtype=np.float32) * 0.01
             rotations = np.zeros((num_gaussians, 4), dtype=np.float32)
             rotations[:, 0] = 1.0

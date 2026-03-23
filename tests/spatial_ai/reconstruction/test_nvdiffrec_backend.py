@@ -212,8 +212,9 @@ class TestNVDiffRecBackendReconstruction:
             for _ in range(count)
         ]
 
-    def _make_images(self, count: int) -> list:
-        """Create test image arrays."""
+    def _make_images(self, count: int, seed: int = 42) -> list:
+        """Create test image arrays with fixed seed for determinism."""
+        np.random.seed(seed)
         return [
             np.random.rand(48, 64, 3).astype(np.float32)
             for _ in range(count)
