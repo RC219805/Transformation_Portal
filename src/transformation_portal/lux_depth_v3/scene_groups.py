@@ -100,6 +100,8 @@ class SceneGroup:
             # We compare both the raw Paths and their non-strict resolved forms
             # to be robust to minor relative-path differences while staying
             # deterministic and filesystem-independent.
+            # Note: resolve(strict=False) follows symlinks when they exist on disk.
+            # Symlinked paths may compare as equal if they resolve to the same target.
             for idx, (image_path, camera) in enumerate(zip(self.images, self.cameras)):
                 cam_image_path = camera.image_path
                 if image_path == cam_image_path:

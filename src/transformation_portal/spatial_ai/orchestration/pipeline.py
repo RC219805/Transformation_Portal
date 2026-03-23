@@ -818,6 +818,8 @@ class SpatialAIPipeline:
                 scores = exec_result.outputs.get("segment.scores", np.ones(len(masks)))
 
                 # Optional cached metadata arrays from the segmentation stage.
+                # These arrays are normally present (SegmentationStage emits them).
+                # Fallback computation only executes for legacy/external graph outputs.
                 areas = exec_result.outputs.get("segment.metadata.area")
                 bboxes = exec_result.outputs.get("segment.metadata.bbox")
                 stabilities = exec_result.outputs.get("segment.metadata.stability_score")
@@ -826,6 +828,9 @@ class SpatialAIPipeline:
                     """Compute a tight (x, y, w, h) bbox for a boolean/uint8 mask.
 
                     Falls back to (0, 0, 0, 0) for empty masks to preserve determinism.
+                    Note: This fallback is rarely hit since SegmentationStage emits
+                    pre-computed metadata arrays. Consider cv2.findNonZero if profiling
+                    shows this path is a bottleneck.
                     """
                     ys, xs = np.where(mask)
                     if ys.size == 0 or xs.size == 0:

@@ -204,6 +204,8 @@ class IngestStage:
         input_path = Path(input_path)
 
         # Hash full file content (streaming SHA256 for collision resistance)
+        # Note: For very large files (>100MB), this can impact pipeline throughput.
+        # Future optimization: Add a size threshold for hybrid approach (size + chunks).
         file_hash = "missing"
         if input_path.exists():
             try:

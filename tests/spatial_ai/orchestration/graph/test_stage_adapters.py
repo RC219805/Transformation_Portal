@@ -108,9 +108,9 @@ class TestSegmentationStageMetadata:
         large_stage = SegmentationStage(model_size="large")
         base_stage = SegmentationStage(model_size="base")
 
-        assert (
-            large_stage.metadata.resource_requirements.gpu_memory_mb > base_stage.metadata.resource_requirements.gpu_memory_mb
-        )
+        large_gpu = large_stage.metadata.resource_requirements.gpu_memory_mb
+        base_gpu = base_stage.metadata.resource_requirements.gpu_memory_mb
+        assert large_gpu > base_gpu
 
 
 class TestMaterialsStageMetadata:
