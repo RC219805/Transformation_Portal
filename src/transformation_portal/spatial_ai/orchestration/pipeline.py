@@ -745,9 +745,8 @@ class SpatialAIPipeline:
 
         logger.info("Using ADR-029 graph-based execution")
 
-        # Fail loudly if reconstruction is requested in graph mode
-        # Graph mode does not yet support reconstruction; silently dropping it
-        # would violate the principle of explicit failure.
+        # Graph mode does not yet support reconstruction.
+        # Fail explicitly rather than silently dropping the stage.
         if "reconstruction" in self.config.stages:
             raise PipelineError(
                 "graph",

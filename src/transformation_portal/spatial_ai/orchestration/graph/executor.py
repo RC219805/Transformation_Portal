@@ -297,8 +297,7 @@ class Executor:
                     stages_executed += 1
                     logger.info(f"Executed {node.stage_id} in {execution_time_ms:.1f}ms")
 
-                    # Store in cache (if enabled AND stage allows caching)
-                    # Honor stage's checkpoint_policy: NEVER means skip caching
+                    # Store in cache if enabled and checkpoint_policy is not NEVER
                     checkpoint_policy = node.stage.metadata.checkpoint_policy
                     should_cache = self.artifact_store is not None and checkpoint_policy != CheckpointPolicy.NEVER
 
