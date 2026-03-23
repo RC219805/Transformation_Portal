@@ -668,9 +668,42 @@ def get_dag_editor_html() -> str:
             updateStatus(`Loaded pipeline: ${name}`);
         }
 
-        function runPipeline() {
-            updateStatus('Running pipeline... (not implemented)');
-            // TODO: Submit to scheduler
+        async function runPipeline() {
+            if (nodes.length === 0) {
+                updateStatus('Error: No nodes in pipeline');
+                return;
+            }
+
+            updateStatus('Submitting pipeline to scheduler...');
+
+            try {
+                const pipelineName = document.getElementById('pipeline-select').value || 'untitled';
+                const response = await fetch('/api/exec/run', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        name: pipelineName,
+                        nodes: nodes,
+                        edges: edges
+                    })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(errorData.detail || `HTTP ${response.status}`);
+                }
+
+                const data = await response.json();
+                updateStatus(`Pipeline started: Run ID ${data.run_id}`);
+
+                // Open execution monitor in new tab
+                if (confirm('Pipeline submitted! Open execution monitor?')) {
+                    window.open('/api/exec/', '_blank');
+                }
+            } catch (error) {
+                updateStatus(`Error: ${error.message}`);
+                console.error('Pipeline execution failed:', error);
+            }
         }
 
         function clearCanvas() {
