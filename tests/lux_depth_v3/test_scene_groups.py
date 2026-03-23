@@ -1,3 +1,4 @@
+import math
 from pathlib import Path
 
 import pytest
@@ -243,8 +244,6 @@ class TestGenerateSyntheticCamera:
 
     def test_focal_length_computation(self):
         """Focal length should be computed correctly from FOV."""
-        import math
-
         cam = generate_synthetic_camera(
             image_path=Path("test.jpg"),
             width=1000,

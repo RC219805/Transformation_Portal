@@ -17,6 +17,7 @@ Reconstruction Feature Gate:
 from __future__ import annotations
 
 import hashlib
+import math
 from dataclasses import dataclass, field
 from itertools import groupby
 from pathlib import Path
@@ -55,18 +56,11 @@ class CameraParams:
     def __post_init__(self):
         """Validate camera parameters."""
         if self.fx <= 0 or self.fy <= 0:
-            raise ValueError(
-                f"Focal lengths must be positive: fx={self.fx}, fy={self.fy}"
-            )
+            raise ValueError(f"Focal lengths must be positive: fx={self.fx}, fy={self.fy}")
         if self.width <= 0 or self.height <= 0:
-            raise ValueError(
-                f"Image dimensions must be positive: {self.width}x{self.height}"
-            )
+            raise ValueError(f"Image dimensions must be positive: {self.width}x{self.height}")
         if self.source not in ("explicit", "exif", "synthetic"):
-            raise ValueError(
-                f"Camera source must be 'explicit', 'exif', or 'synthetic', "
-                f"got '{self.source}'"
-            )
+            raise ValueError(f"Camera source must be 'explicit', 'exif', or 'synthetic', " f"got '{self.source}'")
 
 
 @dataclass(frozen=True)
@@ -100,8 +94,7 @@ class SceneGroup:
         if self.cameras is not None:
             if len(self.cameras) != len(self.images):
                 raise ValueError(
-                    f"cameras must align with images: "
-                    f"got {len(self.cameras)} cameras for {len(self.images)} images"
+                    f"cameras must align with images: " f"got {len(self.cameras)} cameras for {len(self.images)} images"
                 )
 
     def is_reconstruction_eligible(self) -> bool:
@@ -193,8 +186,6 @@ def generate_synthetic_camera(
         The synthetic camera uses a centered principal point and focal length
         derived from the field of view.
     """
-    import math
-
     # Compute focal length from FOV: fx = width / (2 * tan(fov/2))
     fov_rad = math.radians(fov_degrees)
     fx = width / (2 * math.tan(fov_rad / 2))
@@ -249,10 +240,7 @@ def build_scene_groups(
     camera_map: dict = {}
     if cameras is not None:
         if len(cameras) != len(images):
-            raise ValueError(
-                f"cameras must align with images: "
-                f"got {len(cameras)} cameras for {len(images)} images"
-            )
+            raise ValueError(f"cameras must align with images: " f"got {len(cameras)} cameras for {len(images)} images")
         for img, cam in zip(image_list, cameras):
             camera_map[img.resolve()] = cam
 

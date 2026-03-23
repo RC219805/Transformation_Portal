@@ -57,6 +57,12 @@ from .stage import CheckpointPolicy, ResourceRequirements, StageMetadata
 
 logger = logging.getLogger(__name__)
 
+# Resource constants for GPU memory requirements (MB)
+# These values are based on empirical measurements with RTX 3090
+SAM2_LARGE_GPU_MB = 2048  # SAM2 Large model GPU memory
+SAM2_BASE_GPU_MB = 1024  # SAM2 Base model GPU memory
+MATERIALS_GPU_MB = 2048  # Neural materials backend GPU memory
+
 
 @dataclass
 class IngestStageConfig:
@@ -200,11 +206,16 @@ class IngestStage:
         # Hash file content (first 4KB + size for efficiency)
         file_hash = "missing"
         if input_path.exists():
-            hasher = hashlib.sha256()
-            hasher.update(str(input_path.stat().st_size).encode())
-            with open(input_path, "rb") as f:
-                hasher.update(f.read(4096))
-            file_hash = hasher.hexdigest()[:16]
+            try:
+                hasher = hashlib.sha256()
+                hasher.update(str(input_path.stat().st_size).encode())
+                with open(input_path, "rb") as f:
+                    hasher.update(f.read(4096))
+                file_hash = hasher.hexdigest()[:16]
+            except (OSError, IOError) as e:
+                # Handle permission errors, I/O errors gracefully
+                logger.warning(f"Could not read file for cache key: {e}")
+                file_hash = "error"
 
         # Config components
         config = context.config if hasattr(context, "config") else {}
@@ -257,7 +268,7 @@ class SegmentationStage:
     def metadata(self) -> StageMetadata:
         """Stage metadata for SegmentationStage."""
         # GPU memory depends on model size
-        gpu_mb = 2048 if self._model_size == "large" else 1024
+        gpu_mb = SAM2_LARGE_GPU_MB if self._model_size == "large" else SAM2_BASE_GPU_MB
 
         return StageMetadata(
             name="sam2_segmentation",
@@ -303,13 +314,9 @@ class SegmentationStage:
 
         # Validate input
         if not isinstance(linear_rgb, np.ndarray):
-            raise ValueError(
-                f"linear_rgb must be numpy array, got {type(linear_rgb)}"
-            )
+            raise ValueError(f"linear_rgb must be numpy array, got {type(linear_rgb)}")
         if linear_rgb.ndim != 3 or linear_rgb.shape[2] != 3:
-            raise ValueError(
-                f"linear_rgb must be (H, W, 3), got {linear_rgb.shape}"
-            )
+            raise ValueError(f"linear_rgb must be (H, W, 3), got {linear_rgb.shape}")
 
         # Get config from context
         config = context.config if hasattr(context, "config") else {}
@@ -421,7 +428,7 @@ class MaterialsStage:
     def metadata(self) -> StageMetadata:
         """Stage metadata for MaterialsStage."""
         # GPU memory depends on backend
-        gpu_mb = 0 if self._backend == "heuristic" else 2048
+        gpu_mb = 0 if self._backend == "heuristic" else MATERIALS_GPU_MB
 
         return StageMetadata(
             name="pbr_materials",
@@ -599,9 +606,7 @@ def build_spatial_ai_graph(
             "segment",
             SegmentationStage(
                 model_size=config.get("model_size", "large"),
-                enable_material_classification=config.get(
-                    "enable_material_classification", False
-                ),
+                enable_material_classification=config.get("enable_material_classification", False),
             ),
             inputs={"linear_rgb": "ingest.linear_rgb"},
         )

@@ -4,6 +4,7 @@ Tests the IngestStage, SegmentationStage, MaterialsStage adapters
 that bridge legacy pipeline functionality with ExecutionGraph.
 """
 
+import math
 from dataclasses import dataclass
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -34,7 +35,9 @@ class MockExecutionContext:
         if self.config is None:
             self.config = {}
         if self.output_dir is None:
-            self.output_dir = Path("/tmp/test_output")
+            import tempfile
+
+            self.output_dir = Path(tempfile.gettempdir()) / "test_output"
 
 
 class TestIngestStageMetadata:
@@ -109,8 +112,7 @@ class TestSegmentationStageMetadata:
         base_stage = SegmentationStage(model_size="base")
 
         assert (
-            large_stage.metadata.resource_requirements.gpu_memory_mb
-            > base_stage.metadata.resource_requirements.gpu_memory_mb
+            large_stage.metadata.resource_requirements.gpu_memory_mb > base_stage.metadata.resource_requirements.gpu_memory_mb
         )
 
 
