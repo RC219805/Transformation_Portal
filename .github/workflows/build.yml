@@ -420,8 +420,8 @@ jobs:
           pip install -e . --no-deps
 
       - name: Type check with mypy (critical modules)
-        # ADR-044/Roadmap Q2: mypy hard-fails for critical modules
-        # This normalizes typecheck policy with ci.yml (parity debt reduction)
+        # mypy hard-fails for critical modules.
+        # This normalizes typecheck policy with ci.yml (parity debt reduction).
         run: |
           mypy src/transformation_portal/lux_depth_v3/ --config-file=mypy.ini
 
