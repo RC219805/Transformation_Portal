@@ -1,6 +1,6 @@
 # ADR-044: Test Marker Enforcement Policy
 
-**Status:** ACCEPTED
+**Status:** IMPLEMENTED
 **Date:** 2026-03-20
 **Implementation Status:** IMPLEMENTED
 - Enforcement infrastructure: ✅ Complete (2026-03-21)

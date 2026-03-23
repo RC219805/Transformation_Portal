@@ -101,7 +101,7 @@ Work in this section is **partially landed** and requires completion or normaliz
 ### 3. Quality Control Plane Canonicalization
 
 **Priority:** Now
-**Status:** Partial (implementation in progress)
+**Status:** Complete
 
 **Problem Statement:**
 The repository already encodes a **provisional canonical decision**: `ci.yml` explicitly states that pull-request gating lives in `build.yml`, while `ci.yml` serves post-merge validation. The quality-control plane normalization is now largely complete:

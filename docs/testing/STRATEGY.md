@@ -1,8 +1,8 @@
 # Test Strategy
 
 **Document Status:** Active
-**Last Updated:** 2026-03-22
-**Version:** 1.1.0
+**Last Updated:** 2026-03-23
+**Version:** 1.2.0
 **Related ADRs:** ADR-034 (Benchmark Exclusion), ADR-044 (Test Marker Enforcement)
 
 > **Note:** ADR-044 is the authoritative source for marker enforcement policy.
@@ -25,7 +25,7 @@ This document defines the testing strategy for the Transformation Portal reposit
 
 | Attribute | Value |
 |-----------|-------|
-| **Markers** | `unit`, `security`, `regression`, `golden` (any non-ML category marker) |
+| **Markers** | `unit`, `security`, `regression`, `golden`, `integration` (any non-ML category marker) |
 | **CI Selection** | `(unit or security or regression or golden or integration) and not ml and not slow and not benchmark` |
 | **Duration** | < 2 minutes |
 | **Dependencies** | Standard library, numpy, PIL, pyyaml |
