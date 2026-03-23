@@ -150,19 +150,41 @@ class PipelineDefinition(BaseModel):
 
     @field_validator("nodes", mode="before")
     @classmethod
-    def coerce_nodes(cls, v: list[Union[PipelineNode, dict[str, Any]]]) -> list[PipelineNode]:
-        """Coerce raw dicts to PipelineNode for backward compatibility."""
-        if not v:
+    def coerce_nodes(cls, v: Any) -> list[PipelineNode]:
+        """Coerce raw dicts to PipelineNode for backward compatibility.
+
+        Validation rules:
+        - None -> [] (field omitted / null)
+        - []   -> [] (empty list)
+        - list -> coerce each item (PipelineNode passthrough or dict -> PipelineNode)
+        - anything else -> TypeError to surface 422 to the client
+        """
+        if v is None:
             return []
-        return [item if isinstance(item, PipelineNode) else PipelineNode(**item) for item in v]
+        if isinstance(v, list):
+            if not v:
+                return []
+            return [item if isinstance(item, PipelineNode) else PipelineNode(**item) for item in v]
+        raise TypeError("nodes must be a list of PipelineNode or dict items")
 
     @field_validator("edges", mode="before")
     @classmethod
-    def coerce_edges(cls, v: list[Union[PipelineEdge, dict[str, Any]]]) -> list[PipelineEdge]:
-        """Coerce raw dicts to PipelineEdge for backward compatibility."""
-        if not v:
+    def coerce_edges(cls, v: Any) -> list[PipelineEdge]:
+        """Coerce raw dicts to PipelineEdge for backward compatibility.
+
+        Validation rules:
+        - None -> [] (field omitted / null)
+        - []   -> [] (empty list)
+        - list -> coerce each item (PipelineEdge passthrough or dict -> PipelineEdge)
+        - anything else -> TypeError to surface 422 to the client
+        """
+        if v is None:
             return []
-        return [item if isinstance(item, PipelineEdge) else PipelineEdge(**item) for item in v]
+        if isinstance(v, list):
+            if not v:
+                return []
+            return [item if isinstance(item, PipelineEdge) else PipelineEdge(**item) for item in v]
+        raise TypeError("edges must be a list of PipelineEdge or dict items")
 
 
 def create_dag_editor_router() -> APIRouter:
