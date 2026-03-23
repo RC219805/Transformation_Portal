@@ -236,27 +236,34 @@ Future enforcement (not yet active):
 
 ---
 
+### 5. Type Checking (BLOCKING)
+
+- **mypy**: Hard-fail type checking on critical modules (`lux_depth_v3/`)
+- **Exit code**: Must be 0
+
+> **Note:** `build.yml` (the canonical PR gate) now includes a dedicated typecheck gate.
+> This aligns with `ci.yml` post-merge enforcement for parity across quality workflows.
+
+---
+
 ## Post-Merge Quality Signals (Non-Blocking)
 
 The following checks run after merge and do not block PRs:
 
-### Type Checking (POST-MERGE)
-- **ci.yml**: Hard-fail mypy on critical modules (`lux_depth_v3/`) after push to main
+### Extended Type Checking (POST-MERGE)
+- **ci.yml**: Hard-fail mypy on critical modules (same as PR gate)
 - **ci-quality-firewall.yml**: Soft-fail mypy for advisory checks
-
-> **Note:** `build.yml` (the canonical PR gate) does not include a dedicated typecheck gate.
-> Type enforcement is applied via `ci.yml` on push to main.
 
 ---
 
 ## Additional Pre-Merge Gates
 
-### 5. Build Check (BLOCKING)
+### 6. Build Check (BLOCKING)
 - Package must build successfully
 - Wheel install must work
 - `twine check` must pass
 
-### 6. Repository Hygiene (BLOCKING)
+### 7. Repository Hygiene (BLOCKING)
 - No workflow marker files in root
 - No coverage artifacts committed
 - Max 15 markdown files in root
