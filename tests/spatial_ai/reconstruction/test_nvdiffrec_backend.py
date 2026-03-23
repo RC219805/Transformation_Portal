@@ -245,7 +245,7 @@ class TestNVDiffRecBackendReconstruction:
         """Reconstruction metadata contains required fields."""
         backend = NVDiffRecBackend(
             tier="apex_research",
-            model_revision="abc123def456",
+            model_revision="NEEDS_VERIFICATION_abc123def456",
             skip_preflight=True,
         )
 
@@ -268,7 +268,7 @@ class TestNVDiffRecBackendReconstruction:
         assert metadata["license_class"] == "research_only"
         assert metadata["tier"] == "apex_research"
         assert metadata["repo_id"] == "nvidia/nvdiffrec"
-        assert metadata["revision"] == "abc123def456"
+        assert metadata["revision"] == "NEEDS_VERIFICATION_abc123def456"
 
         # Optimization fields
         assert metadata["num_views"] == 2
