@@ -4,8 +4,10 @@ Tests the IngestStage, SegmentationStage, MaterialsStage adapters
 that bridge legacy pipeline functionality with ExecutionGraph.
 """
 
-from dataclasses import dataclass
+import tempfile
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any, Dict, Optional
 
 import pytest
 
@@ -19,22 +21,19 @@ from transformation_portal.spatial_ai.orchestration.graph.stage_adapters import 
 pytestmark = pytest.mark.unit
 
 
+def _default_output_dir() -> Path:
+    """Factory for default output_dir."""
+    return Path(tempfile.gettempdir()) / "test_output"
+
+
 @dataclass
 class MockExecutionContext:
     """Mock execution context for testing."""
 
     device: str = "cpu"
-    config: dict = None
-    output_dir: Path = None
+    config: Dict[str, Any] = field(default_factory=dict)
+    output_dir: Path = field(default_factory=_default_output_dir)
     enable_caching: bool = False
-
-    def __post_init__(self):
-        if self.config is None:
-            self.config = {}
-        if self.output_dir is None:
-            import tempfile
-
-            self.output_dir = Path(tempfile.gettempdir()) / "test_output"
 
 
 class TestIngestStageMetadata:

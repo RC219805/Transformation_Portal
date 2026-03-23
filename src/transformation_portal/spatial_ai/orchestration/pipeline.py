@@ -94,8 +94,14 @@ class PipelineConfig:
             raise ValueError(f"Invalid tier '{self.tier}'. Valid: {VALID_TIERS}")
 
         # Reconstruction requires research tier
-        if "reconstruction" in self.stages and self.tier not in ["apex_research", "apex_research_ultra", "experimental"]:
-            raise ValueError(f"Reconstruction requires research tier, got '{self.tier}' " "(Inria 3DGS license restriction)")
+        if "reconstruction" in self.stages and self.tier not in [
+            "apex_research",
+            "apex_research_ultra",
+            "experimental",
+        ]:
+            raise ValueError(
+                f"Reconstruction requires research tier, got '{self.tier}' " "(Inria 3DGS license restriction)"
+            )
 
 
 @dataclass
@@ -439,7 +445,8 @@ class SpatialAIPipeline:
                     import OpenEXR  # noqa: F401
                 except ImportError:
                     raise RuntimeError(
-                        "strict_ingest=True with emit_exr=True requires OpenEXR. " "Install with: pip install OpenEXR Imath"
+                        "strict_ingest=True with emit_exr=True requires OpenEXR. "
+                        "Install with: pip install OpenEXR Imath"
                     )
 
             # Execute
@@ -738,9 +745,19 @@ class SpatialAIPipeline:
 
         logger.info("Using ADR-029 graph-based execution")
 
+        # Fail loudly if reconstruction is requested in graph mode
+        # Graph mode does not yet support reconstruction; silently dropping it
+        # would violate the principle of explicit failure.
+        if "reconstruction" in self.config.stages:
+            raise PipelineError(
+                "graph",
+                "Reconstruction is not supported in graph mode (ADR-029). "
+                "Either disable graph mode (use_execution_graph=False) or "
+                "remove reconstruction from stages.",
+            )
+
         # Build execution graph from config
-        # Filter out reconstruction for now (not supported in graph mode)
-        graph_stages = [s for s in self.config.stages if s != "reconstruction"]
+        graph_stages = list(self.config.stages)
 
         # Build merged config for graph
         graph_config = {

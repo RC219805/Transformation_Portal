@@ -51,7 +51,7 @@ import numpy as np
 
 from .artifact_store import ArtifactStore, ProvenanceMetadata
 from .execution_graph import ExecutionGraph, ExecutionPlan
-from .stage import Stage
+from .stage import CheckpointPolicy, Stage
 
 logger = logging.getLogger(__name__)
 
@@ -297,8 +297,12 @@ class Executor:
                     stages_executed += 1
                     logger.info(f"Executed {node.stage_id} in {execution_time_ms:.1f}ms")
 
-                    # Store in cache (if enabled)
-                    if self.artifact_store:
+                    # Store in cache (if enabled AND stage allows caching)
+                    # Honor stage's checkpoint_policy: NEVER means skip caching
+                    checkpoint_policy = node.stage.metadata.checkpoint_policy
+                    should_cache = self.artifact_store is not None and checkpoint_policy != CheckpointPolicy.NEVER
+
+                    if should_cache:
                         provenance = self._create_provenance(
                             cache_key=cache_key,
                             stage_id=node.stage_id,
@@ -307,6 +311,11 @@ class Executor:
                             context=context,
                         )
                         self.artifact_store.store(cache_key, outputs, provenance)
+                    else:
+                        logger.debug(
+                            f"Skipping cache storage for {node.stage_id}: "
+                            f"checkpoint_policy={checkpoint_policy.value}"
+                        )
 
                 except Exception as e:
                     logger.error(f"Stage {node.stage_id} failed: {e}")

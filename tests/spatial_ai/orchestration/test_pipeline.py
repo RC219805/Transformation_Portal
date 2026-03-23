@@ -1086,3 +1086,142 @@ class TestSpatialAIPipelineProgressTracking:
             )
 
         assert result.execution_time >= 0.0
+
+
+class TestGraphModeExecution:
+    """Test graph-mode execution path (ADR-029)."""
+
+    def test_graph_mode_rejects_reconstruction(self, tmp_path):
+        """Graph mode should fail explicitly if reconstruction is requested."""
+        config = PipelineConfig(
+            tier="apex_research",  # Use research tier (3DGS license requires it)
+            stages=["ingest", "segment", "reconstruction"],
+            use_execution_graph=True,
+        )
+        pipeline = SpatialAIPipeline(config)
+
+        input_path = tmp_path / "input.tiff"
+        input_path.touch()
+
+        with pytest.raises(PipelineError) as exc_info:
+            pipeline.process(
+                input_path=input_path,
+                output_dir=tmp_path / "output",
+            )
+
+        assert "reconstruction" in str(exc_info.value).lower()
+        assert "graph mode" in str(exc_info.value).lower()
+
+    def test_graph_mode_delegates_to_executor(self, tmp_path):
+        """Graph mode should delegate to Executor.execute()."""
+        config = PipelineConfig(
+            tier="standard",
+            stages=["ingest"],
+            use_execution_graph=True,
+        )
+        pipeline = SpatialAIPipeline(config)
+
+        input_path = tmp_path / "input.tiff"
+        input_path.touch()
+
+        # Mock the executor and its dependencies
+        mock_exec_result = MagicMock()
+        mock_exec_result.stages_executed = 1
+        mock_exec_result.stages_cached = 0
+        mock_exec_result.total_time_ms = 100.0
+        mock_exec_result.stage_results = []
+        mock_exec_result.outputs = {}
+
+        with patch("transformation_portal.spatial_ai.orchestration.graph.executor.Executor.execute") as mock_execute:
+            mock_execute.return_value = mock_exec_result
+
+            result = pipeline.process(
+                input_path=input_path,
+                output_dir=tmp_path / "output",
+            )
+
+            # Verify executor was called
+            mock_execute.assert_called_once()
+
+            # Verify result is valid
+            assert isinstance(result, PipelineResult)
+
+    def test_graph_mode_wraps_errors_as_pipeline_error(self, tmp_path):
+        """Graph mode should wrap execution errors in PipelineError."""
+        config = PipelineConfig(
+            tier="standard",
+            stages=["ingest"],
+            use_execution_graph=True,
+            error_strategy=ErrorRecoveryStrategy.FAIL_FAST,
+        )
+        pipeline = SpatialAIPipeline(config)
+
+        input_path = tmp_path / "input.tiff"
+        input_path.touch()
+
+        with patch("transformation_portal.spatial_ai.orchestration.graph.executor.Executor.execute") as mock_execute:
+            mock_execute.side_effect = RuntimeError("Test executor failure")
+
+            with pytest.raises(PipelineError) as exc_info:
+                pipeline.process(
+                    input_path=input_path,
+                    output_dir=tmp_path / "output",
+                )
+
+            # Verify error is wrapped in PipelineError
+            assert "graph" in str(exc_info.value.stage).lower()
+
+    def test_graph_mode_return_partial_on_error(self, tmp_path):
+        """Graph mode should return partial result if RETURN_PARTIAL strategy."""
+        config = PipelineConfig(
+            tier="standard",
+            stages=["ingest"],
+            use_execution_graph=True,
+            error_strategy=ErrorRecoveryStrategy.RETURN_PARTIAL,
+        )
+        pipeline = SpatialAIPipeline(config)
+
+        input_path = tmp_path / "input.tiff"
+        input_path.touch()
+
+        with patch("transformation_portal.spatial_ai.orchestration.graph.executor.Executor.execute") as mock_execute:
+            mock_execute.side_effect = RuntimeError("Test executor failure")
+
+            # Should not raise, should return partial result
+            result = pipeline.process(
+                input_path=input_path,
+                output_dir=tmp_path / "output",
+            )
+
+            assert isinstance(result, PipelineResult)
+            assert len(result.errors) > 0
+
+    def test_graph_mode_without_reconstruction_succeeds(self, tmp_path):
+        """Graph mode should succeed without reconstruction stage."""
+        config = PipelineConfig(
+            tier="standard",
+            stages=["ingest", "segment"],
+            use_execution_graph=True,
+        )
+        pipeline = SpatialAIPipeline(config)
+
+        input_path = tmp_path / "input.tiff"
+        input_path.touch()
+
+        mock_exec_result = MagicMock()
+        mock_exec_result.stages_executed = 2
+        mock_exec_result.stages_cached = 0
+        mock_exec_result.total_time_ms = 200.0
+        mock_exec_result.stage_results = []
+        mock_exec_result.outputs = {}
+
+        with patch("transformation_portal.spatial_ai.orchestration.graph.executor.Executor.execute") as mock_execute:
+            mock_execute.return_value = mock_exec_result
+
+            result = pipeline.process(
+                input_path=input_path,
+                output_dir=tmp_path / "output",
+            )
+
+            assert isinstance(result, PipelineResult)
+            mock_execute.assert_called_once()
