@@ -112,9 +112,9 @@ def create_execution_router() -> APIRouter:
         try:
             task = manager.start_pipeline_background(run_id, payload, broadcast)
             logger.info("Started background pipeline execution: run_id=%s task=%s", run_id, task.get_name())
-        except Exception as exc:
+        except Exception:
             logger.exception("Failed to start pipeline execution: run_id=%s", run_id)
-            raise HTTPException(status_code=500, detail=f"Failed to start pipeline: {exc}")
+            raise HTTPException(status_code=500, detail="Failed to start pipeline")
 
         return JSONResponse(
             content={

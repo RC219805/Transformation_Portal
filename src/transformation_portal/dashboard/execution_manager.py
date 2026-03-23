@@ -168,9 +168,13 @@ class ExecutionManager:
         """Allocate a new run ID without starting execution.
 
         Returns:
-            Unique run ID
+            Unique run ID that does not collide with active or historical runs
         """
-        return str(uuid.uuid4())[:8]
+        # Use a short UUID prefix but ensure it does not collide with existing runs.
+        run_id = str(uuid.uuid4())[:8]
+        while run_id in self.active_runs or run_id in self.run_history:
+            run_id = str(uuid.uuid4())[:8]
+        return run_id
 
     def start_pipeline_background(
         self,
@@ -183,6 +187,9 @@ class ExecutionManager:
         This immediately returns a Task that executes the pipeline.
         Use this when you need the HTTP response to return immediately.
 
+        A done-callback is attached to log exceptions, ensuring they are
+        observed and do not surface as "Task exception was never retrieved".
+
         Args:
             run_id: Pre-allocated run ID (from allocate_run_id)
             pipeline: Pipeline definition with nodes and edges
@@ -191,10 +198,25 @@ class ExecutionManager:
         Returns:
             asyncio.Task running the pipeline execution
         """
-        return asyncio.create_task(
+        task = asyncio.create_task(
             self._execute_pipeline(run_id, pipeline, broadcast),
             name=f"pipeline-{run_id}",
         )
+
+        def _log_task_result(t: asyncio.Task[None]) -> None:
+            try:
+                # Accessing result() ensures exceptions are observed and do not
+                # surface as "Task exception was never retrieved".
+                t.result()
+            except asyncio.CancelledError:
+                logger.info("Pipeline run %s was cancelled", run_id)
+            except Exception:
+                logger.error(
+                    "Unhandled exception in pipeline run %s", run_id, exc_info=True
+                )
+
+        task.add_done_callback(_log_task_result)
+        return task
 
     async def run_pipeline(
         self,
