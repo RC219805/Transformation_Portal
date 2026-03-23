@@ -865,7 +865,7 @@ jobs:
             fi
 
             if [ "${test_result}" != "success" ]; then
-              if [ "${test_result}" = "skipped" ] && ([ "${lint_result}" != "success" ] || [ "${typecheck_result}" != "success" ]); then
+              if [ "${test_result}" = "skipped" ] && { [ "${lint_result}" != "success" ] || [ "${typecheck_result}" != "success" ]; }; then
                 echo "ℹ️ test matrix skipped due to failed dependency (lint=${lint_result}, typecheck=${typecheck_result})"
               else
                 echo "❌ test matrix did not succeed (result=${test_result})"

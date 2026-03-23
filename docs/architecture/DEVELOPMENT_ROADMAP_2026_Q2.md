@@ -1,9 +1,9 @@
 # Development Roadmap: Q2 2026
 
-**Status:** ACTIVE  
-**Version:** 1.3.0  
-**Date:** 2026-03-23  
-**Authority:** Architect Assessment  
+**Status:** ACTIVE
+**Version:** 1.3.0
+**Date:** 2026-03-23
+**Authority:** Architect Assessment
 **Supersedes:** v1.2.0 (2026-03-22), v1.1.0 (2026-03-22), v1.0.0 (2026-03-20)
 
 ---
@@ -104,10 +104,10 @@ Work in this section is **partially landed** and requires completion or normaliz
 
 ### 3. Quality Control Plane Canonicalization
 
-**Priority:** Now  
+**Priority:** Now
 **Status:** Partial (implementation in progress)
 
-**Problem Statement:**  
+**Problem Statement:**
 The repository already encodes a **provisional canonical decision**: `ci.yml` explicitly states that pull-request gating lives in `build.yml`, while `ci.yml` serves post-merge validation. However, the quality-control plane is still fragmented. Current workflow files show:
 - `build.yml` is the de facto PR gate and still uses legacy negative marker expressions
 - `ci.yml` and `ci-quality-firewall.yml` both run post-merge/post-CI validation with overlapping quality semantics
@@ -127,7 +127,7 @@ The repository already encodes a **provisional canonical decision**: `ci.yml` ex
 
 **Scope note:** Workflows outside the quality-control plane (docs, security, nightly, deployment, automation) intentionally differ and are excluded from parity debt.
 
-**Objective:**  
+**Objective:**
 Establish one canonical PR gating workflow (`build.yml`) with explicit policy, then align or retire conflicting quality-control workflows.
 
 **Scope includes:**
@@ -154,23 +154,23 @@ Establish one canonical PR gating workflow (`build.yml`) with explicit policy, t
 | Validation | Canonical CI runtime targets measured and reported | ⏳ Pending |
 | Governance | Workflow documentation, `CONTRIBUTING.md`, and testing strategy aligned | ✅ Complete |
 
-**Effort:** 12–16 hours  
+**Effort:** 12–16 hours
 **Owner:** Architect + DevOps
 
 ---
 
 ### 4. Orchestrator Residual Slimming & Boundary Enforcement
 
-**Priority:** Now  
+**Priority:** Now
 **Status:** Partial
 
-**Problem Statement:**  
+**Problem Statement:**
 ADR-043 is complete, but `orchestrator.py` still carries a large residual facade. The remaining risk is no longer decomposition feasibility; it is **boundary drift**:
 - feature logic can creep back into the orchestrator,
 - extracted module seams can erode over time,
 - and maintainability gains can reverse if residual helpers are not ratcheted down.
 
-**Objective:**  
+**Objective:**
 Prevent new feature logic from accumulating in `orchestrator.py` and continue moving residual helpers behind stable module boundaries.
 
 **Acceptance Gates:**
@@ -189,10 +189,10 @@ Prevent new feature logic from accumulating in `orchestrator.py` and continue mo
 4. Delegation contract tests increase
 5. Module boundaries remain stable
 
-**Secondary indicator (directional):**  
+**Secondary indicator (directional):**
 Reduce `orchestrator.py` by **~200 LOC per quarter** or document why the ratchet is infeasible.
 
-**Effort:** 4–8 hours ongoing per quarter  
+**Effort:** 4–8 hours ongoing per quarter
 **Owner:** Architect (review) + Specialist (implementation)
 
 ---
@@ -203,10 +203,10 @@ Work in this section is **net-new or still open** and must complete this quarter
 
 ### 5. Governance Synchronization
 
-**Priority:** Now  
+**Priority:** Now
 **Status:** Partial (implementation in progress)
 
-**Problem Statement:**  
+**Problem Statement:**
 Policy and enforcement changes have landed, but supporting governance documents still encode stale assumptions. Current examples include:
 - ~~`CONTRIBUTING.md` describing mypy as non-blocking~~ → ✅ Fixed (now documents hard-fail for ci.yml)
 - ~~`CONTRIBUTING.md` describing an outdated coverage baseline~~ → ✅ Fixed (now shows 25.44%)
@@ -214,7 +214,7 @@ Policy and enforcement changes have landed, but supporting governance documents 
 - ~~`docs/testing/STRATEGY.md` missing canonical workflow info~~ → ✅ Fixed (added Canonical Workflow section)
 - documentation still teaches negative marker selection (intentional: current state; transition pending)
 
-**Objective:**  
+**Objective:**
 Align all binding and operational documents with the current enforced state and the intended Q2 target state.
 
 **Scope:**
@@ -224,7 +224,7 @@ Align all binding and operational documents with the current enforced state and 
 - ADR index / status pages
 - CI / workflow documentation
 
-**Rule:**  
+**Rule:**
 No policy change is considered **Complete** until the corresponding governance docs are updated.
 
 **Review Cadence and Update Triggers:**
@@ -244,17 +244,17 @@ No policy change is considered **Complete** until the corresponding governance d
 | Validation | No contradictions remain between enforcement and documentation | ✅ Complete |
 | Governance | Review cadence and update trigger documented | ✅ Complete |
 
-**Effort:** 4–6 hours  
+**Effort:** 4–6 hours
 **Owner:** Architect
 
 ---
 
 ### 6. Coverage Ramp Phase 1
 
-**Priority:** Next  
+**Priority:** Next
 **Status:** Open
 
-**Current Coverage:** 25.44% (6,314 of 24,820 statements)  
+**Current Coverage:** 25.44% (6,314 of 24,820 statements)
 **Phase 1 Target:** 28% (+636 statements)
 
 **Phase 1 Focus Modules (high ROI):**
@@ -266,7 +266,7 @@ No policy change is considered **Complete** until the corresponding governance d
 | `utils/input_validation.py` | 195 | 0% | 70% |
 | `utils/recipe_validator.py` | 63 | 0% | 80% |
 
-**Dependency:**  
+**Dependency:**
 Benefits from Quality Control Plane Canonicalization for efficient test execution and clean runtime measurement.
 
 **Acceptance Gates:**
@@ -278,8 +278,8 @@ Benefits from Quality Control Plane Canonicalization for efficient test executio
 | Validation | `pytest-cov` reports target met |
 | Governance | Coverage docs updated |
 
-**Effort:** 15–20 hours  
-**Owner:** Specialist  
+**Effort:** 15–20 hours
+**Owner:** Specialist
 **Milestone:** v2.4.0
 
 ---
@@ -290,7 +290,7 @@ Work in this section is **important but intentionally out of current scope**.
 
 ### 7. Documentation Consolidation
 
-**Priority:** Later  
+**Priority:** Later
 **Status:** Open
 
 **Current State:**
@@ -303,21 +303,21 @@ Work in this section is **important but intentionally out of current scope**.
 - Single ADR location with archive for superseded items
 - All canonical docs carry metadata headers
 
-**Rationale for Deferral:**  
+**Rationale for Deferral:**
 Best done after execution controls and governance surfaces are normalized.
 
-**Effort:** 15–20 hours  
-**Owner:** Specialist  
+**Effort:** 15–20 hours
+**Owner:** Specialist
 **Milestone:** v2.5.0
 
 ---
 
 ### 8. Circular Import Contract Hardening
 
-**Priority:** Later  
+**Priority:** Later
 **Status:** Open
 
-**Current State:**  
+**Current State:**
 Mitigated via `TYPE_CHECKING` guards across 8 files in `depth/backends/`.
 
 **Target State:**
@@ -325,11 +325,11 @@ Mitigated via `TYPE_CHECKING` guards across 8 files in `depth/backends/`.
 - Documented import-boundary pattern in the architecture guide
 - CI check for new cross-module imports
 
-**Rationale for Deferral:**  
+**Rationale for Deferral:**
 Best done after orchestrator boundaries and workflow governance are stabilized.
 
-**Effort:** 8–12 hours  
-**Owner:** Architect  
+**Effort:** 8–12 hours
+**Owner:** Architect
 **Milestone:** v2.5.0
 
 ---
@@ -355,7 +355,7 @@ These metrics enable proactive steering rather than quarter-end audit.
 
 **Scope:** `build.yml`, `ci.yml`, `ci-quality-firewall.yml`, `quality-gate.yml`
 
-**Definition:**  
+**Definition:**
 A scoped workflow counts toward **Workflow Parity Debt** if it has at least one unresolved parity defect relative to the approved control-plane target state.
 
 | Metric | Current | Target |
@@ -375,8 +375,8 @@ A scoped workflow counts toward **Workflow Parity Debt** if it has at least one 
   - `ci-quality-firewall.yml`: Soft-fail mypy (intentional: advisory workflow, not branch-protection)
   - `quality-gate.yml`: N/A (no typecheck job)
 
-**Composite Metric:**  
-**Workflow Parity Debt = number of scoped workflows with ≥1 unresolved parity defect.**  
+**Composite Metric:**
+**Workflow Parity Debt = number of scoped workflows with ≥1 unresolved parity defect.**
 Current baseline: **3** (`build.yml`, `ci.yml`, `ci-quality-firewall.yml` have marker selection debt). Target: **0**.
 
 ### Orchestrator Residual Debt
@@ -405,7 +405,7 @@ Current baseline: **3** (`build.yml`, `ci.yml`, `ci-quality-firewall.yml` have m
 | Binding docs updated within SLA after policy change | ✅ 100% (updated 2026-03-23) | 100% within 1 week |
 | Stale documents contradicting current enforcement | 0 (verified 2026-03-23) | 0 |
 
-**Binding-doc scope:**  
+**Binding-doc scope:**
 This roadmap ✅, `CONTRIBUTING.md` ✅, `docs/testing/STRATEGY.md` ✅, ADR status pages, and CI / workflow documentation.
 
 **Recent updates (2026-03-23):**
@@ -417,7 +417,7 @@ This roadmap ✅, `CONTRIBUTING.md` ✅, `docs/testing/STRATEGY.md` ✅, ADR sta
 
 ## Quarterly Success Metrics (Lagging Indicators)
 
-**Note:**  
+**Note:**
 The Q1 2026 column reflects audit-time state (2026-03-20). The **Current** column reflects the state as of 2026-03-23.
 
 | Metric | Q1 2026 (Audit) | Current | Q2 Target | Measurement |
@@ -465,8 +465,8 @@ The Q1 2026 column reflects audit-time state (2026-03-20). The **Current** colum
 
 ---
 
-**Document Owner:** Transformation Portal Architect  
-**Review Cadence:** Monthly (end of each sprint)  
+**Document Owner:** Transformation Portal Architect
+**Review Cadence:** Monthly (end of each sprint)
 **Next Review:** April 2026
 
 ---
