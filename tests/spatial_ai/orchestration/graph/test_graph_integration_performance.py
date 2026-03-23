@@ -22,7 +22,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import statistics
+import tempfile
 import time
 from pathlib import Path
 from typing import Any, Dict, List
@@ -84,10 +86,33 @@ class GraphPerformanceLedger:
         return {}
 
     def save(self):
-        """Save metrics to ledger."""
+        """Save metrics to ledger using atomic write pattern.
+
+        Uses temp file + fsync + rename to prevent corruption from
+        concurrent writes or crashes (same pattern as ArtifactStore).
+        """
         self.ledger_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(self.ledger_path, "w") as f:
-            json.dump(self.metrics, f, indent=2)
+
+        # Write to temp file first
+        fd, tmp_path = tempfile.mkstemp(
+            suffix=".json",
+            prefix="ledger_",
+            dir=self.ledger_path.parent,
+        )
+        try:
+            with os.fdopen(fd, "w") as f:
+                # Use allow_nan=False to ensure strict JSON compliance
+                json.dump(self.metrics, f, indent=2, allow_nan=False)
+                f.flush()
+                os.fsync(f.fileno())
+
+            # Atomic rename
+            os.replace(tmp_path, self.ledger_path)
+        except Exception:
+            # Clean up temp file on failure
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+            raise
 
     def record(
         self,
@@ -114,7 +139,9 @@ class GraphPerformanceLedger:
         )
 
         # Compute speedup factor (cold/warm at p50)
-        speedup_factor = cold_p50 / warm_p50 if warm_p50 > 0 else float("inf")
+        # Clamp to large sentinel value to avoid JSON Infinity issues
+        MAX_SPEEDUP = 1e9  # Sentinel for "effectively infinite" speedup
+        speedup_factor = cold_p50 / warm_p50 if warm_p50 > 0 else MAX_SPEEDUP
 
         # Compute cache hit rate
         total_operations = cache_hits + cache_misses
@@ -196,9 +223,9 @@ class MockIngestStage:
 
         return {
             "linear_rgb": rng.random((512, 512, 3)).astype(np.float32),
-            "input_size": (512, 512),
-            "input_dtype": "float32",
-            "gamma": 2.2,
+            "input_size": np.array([512, 512], dtype=np.int32),
+            "input_dtype": np.array("float32"),
+            "gamma": np.array(2.2, dtype=np.float32),
         }
 
     def compute_cache_key(self, inputs: Dict[str, Any], context: ExecutionContext) -> str:
@@ -252,7 +279,7 @@ class MockSegmentationStage:
         return {
             "masks": masks,
             "scores": scores,
-            "num_masks": num_masks,
+            "num_masks": np.array(num_masks, dtype=np.int32),
         }
 
     def compute_cache_key(self, inputs: Dict[str, Any], context: ExecutionContext) -> str:
@@ -267,9 +294,20 @@ class MockSegmentationStage:
 
 
 @pytest.fixture
-def performance_ledger():
-    """Provide graph performance ledger for tests."""
-    return GraphPerformanceLedger()
+def performance_ledger(tmp_path: Path):
+    """Provide graph performance ledger for tests.
+
+    Uses tmp_path by default to avoid mutating tracked repo files.
+    Set TP_UPDATE_PERF_LEDGER=1 to update the committed ledger.
+    """
+    import os
+
+    if os.environ.get("TP_UPDATE_PERF_LEDGER") == "1":
+        # Opt-in: update the committed ledger file
+        return GraphPerformanceLedger(ledger_path=GRAPH_PERFORMANCE_LEDGER)
+    else:
+        # Default: write to temp path (no repo file mutation)
+        return GraphPerformanceLedger(ledger_path=tmp_path / "graph_performance_ledger.json")
 
 
 @pytest.fixture
