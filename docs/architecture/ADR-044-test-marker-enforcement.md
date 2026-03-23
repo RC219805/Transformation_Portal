@@ -2,10 +2,10 @@
 
 **Status:** ACCEPTED
 **Date:** 2026-03-20
-**Implementation Status:** PARTIALLY IMPLEMENTED
+**Implementation Status:** IMPLEMENTED
 - Enforcement infrastructure: ✅ Complete (2026-03-21)
 - Marker retrofit: ✅ Complete (2026-03-21)
-- CI marker-specific jobs: 🔄 In Progress
+- CI marker-specific jobs: ✅ Complete (2026-03-23) — positive marker selection deployed
 **Decision Makers:** Architect
 **Replaces:** None
 
@@ -108,35 +108,34 @@ python scripts/validation/check_test_markers.py --audit --verbose
 
 ### 3. CI Alignment
 
-CI workflows leverage markers for test selection. The current implementation uses **negative marker selection** (excluding unwanted tiers), while the target state is **positive marker selection** (selecting specific tiers).
+CI workflows leverage markers for test selection. The implementation now uses **positive marker selection** (selecting specific tiers).
 
-#### Current Implementation (build.yml)
+#### Current Implementation (build.yml, ci.yml, ci-quality-firewall.yml)
 
-The main PR gating workflow uses negative selection:
+All quality-control workflows use positive marker selection for core tests:
 
 ```yaml
-# Core tests (build.yml matrix)
-pytest -v tests/ -ra -m "not ml and not slow and not benchmark" --maxfail=1
+# Core tests (build.yml, ci.yml, ci-quality-firewall.yml)
+# Positive selection: explicitly select core test categories
+pytest -v tests/ -m "(unit or security or regression or golden or integration) and not ml and not slow and not benchmark" --maxfail=1
 
-# ML tests (build.yml matrix)
+# ML tests (unchanged - already uses positive selection)
 pytest -v tests/ -ra -m "ml and not slow and not integration and not benchmark" --maxfail=1
 ```
 
 #### Parallel Execution (ci.yml)
 
-A separate workflow (`ci.yml`) enables parallel execution with `pytest-xdist`:
-
 ```yaml
 # Core tests with parallelization
-pytest -v tests/ -n auto -m "not ml and not slow and not benchmark and not stress"
+pytest -v tests/ -n auto -m "(unit or security or regression or golden or integration) and not ml and not slow and not benchmark and not stress"
 
 # ML tests with parallelization
 pytest -v tests/ -n auto -m "ml and not slow and not benchmark and not stress"
 ```
 
-#### Target State (Future)
+#### Future Simplification
 
-After full marker migration, CI will transition to positive marker selection:
+Once marker discipline is fully established and all core tests are correctly tagged, CI can simplify to:
 
 ```yaml
 # Target: Fast PR gate with parallel execution (<3 min)
@@ -149,11 +148,11 @@ pytest -n auto -m "(unit or integration) and not slow" tests/
 pytest tests/
 ```
 
-**Implementation Note (2026-03-21):**
-- Added `pytest-xdist>=3.5,<4` for parallel test execution
-- Some CI workflows use `-n auto` for parallel execution; canonicalization pending for PR gate (`build.yml`)
-- Action pinning partially complete; quality-control workflow normalization in progress (see roadmap)
-- Typecheck policy varies across workflows; normalization pending (see Quality Control Plane Canonicalization)
+**Implementation History:**
+- 2026-03-21: Added `pytest-xdist>=3.5,<4` for parallel test execution
+- 2026-03-22: Action pinning complete (SHA refs in all quality-control workflows)
+- 2026-03-23: Typecheck policy normalized (hard-fail in build.yml, ci.yml; soft-fail in ci-quality-firewall.yml)
+- 2026-03-23: **Marker selection migrated from negative to positive selection** (build.yml, ci.yml, ci-quality-firewall.yml)
 
 ---
 
@@ -255,7 +254,7 @@ pytestmark = [
 - [x] Audit script verifies marker coverage (`--audit` mode)
 - [x] Automated retrofit script (`retrofit_test_markers.py`)
 - [x] Contract tests for audit semantics (`tests/test_check_test_markers.py`)
-- [ ] CI runs marker-specific jobs (in progress)
+- [x] CI runs marker-specific jobs (2026-03-23 — positive marker selection deployed in build.yml, ci.yml, ci-quality-firewall.yml)
 - [ ] Weekly automated audit (future enhancement)
 
 ### Audit Contract Tests (2026-03-22)

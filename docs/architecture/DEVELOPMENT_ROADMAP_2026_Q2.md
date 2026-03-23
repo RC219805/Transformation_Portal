@@ -1,10 +1,10 @@
 # Development Roadmap: Q2 2026
 
 **Status:** ACTIVE
-**Version:** 1.3.0
+**Version:** 1.4.0
 **Date:** 2026-03-23
 **Authority:** Architect Assessment
-**Supersedes:** v1.2.0 (2026-03-22), v1.1.0 (2026-03-22), v1.0.0 (2026-03-20)
+**Supersedes:** v1.3.0 (2026-03-23), v1.2.0 (2026-03-22), v1.1.0 (2026-03-22), v1.0.0 (2026-03-20)
 
 ---
 
@@ -83,18 +83,14 @@ Work in this section has landed and is no longer a primary implementation track,
 |------|--------|----------|
 | Decision | ✅ Complete | ADR-044 approved |
 | Implementation | ✅ Complete | 100% marker coverage achieved (was 48.6%) |
-| Validation | ⏳ Partial | Pre-commit works; CI runtime validation pending |
-| Governance | ⏳ Partial | ADR-044 updated; workflow semantics still being normalized |
+| Validation | ✅ Complete | Pre-commit works; positive marker selection deployed (2026-03-23) |
+| Governance | ✅ Complete | ADR-044 updated to IMPLEMENTED status |
 
 **Outcome:**
 - 137 files tagged with appropriate markers
 - Pre-commit hook blocks unmarked new tests
 - `check_test_markers.py --audit` validates coverage
-
-**Carry-forward implications:**
-- Quality-control workflows still rely on legacy negative marker expressions in active test selection
-- Contributor guidance still teaches negative marker selection
-- Positive marker selection migration remains open and is folded into **Quality Control Plane Canonicalization**
+- All quality-control workflows (build.yml, ci.yml, ci-quality-firewall.yml) migrated to positive marker selection
 
 ---
 
@@ -108,8 +104,8 @@ Work in this section is **partially landed** and requires completion or normaliz
 **Status:** Partial (implementation in progress)
 
 **Problem Statement:**
-The repository already encodes a **provisional canonical decision**: `ci.yml` explicitly states that pull-request gating lives in `build.yml`, while `ci.yml` serves post-merge validation. However, the quality-control plane is still fragmented. Current workflow files show:
-- `build.yml` is the de facto PR gate and still uses legacy negative marker expressions
+The repository already encodes a **provisional canonical decision**: `ci.yml` explicitly states that pull-request gating lives in `build.yml`, while `ci.yml` serves post-merge validation. The quality-control plane normalization is now largely complete:
+- ~~`build.yml` is the de facto PR gate and still uses legacy negative marker expressions~~ → ✅ Fixed (positive marker selection as of 2026-03-23)
 - `ci.yml` and `ci-quality-firewall.yml` both run post-merge/post-CI validation with overlapping quality semantics
 - `quality-gate.yml` remains an older helper workflow with its own quality behavior
 - ~~Version-tag action refs are still present in `ci-quality-firewall.yml` and `quality-gate.yml`~~ → ✅ Fixed (SHA-pinned as of 2026-03-22)
@@ -120,9 +116,9 @@ The repository already encodes a **provisional canonical decision**: `ci.yml` ex
 
 | Workflow | Trigger | Current Role | Branch-Protection Relevance | Marker Semantics | Typecheck Policy | Action Ref Style | Target Disposition |
 |----------|---------|--------------|-----------------------------|------------------|------------------|------------------|-------------------|
-| `build.yml` | PR, push, dispatch | De facto PR gate | Yes | Legacy negative selection | ✅ Hard-fail mypy | SHA-pinned | Canonical |
-| `ci.yml` | push | Post-merge validation | No | Legacy negative selection | Hard-fail mypy (critical modules) | SHA-pinned | Align with canonical or narrow scope |
-| `ci-quality-firewall.yml` | `workflow_run`, dispatch | Post-CI verification | No | Legacy negative selection | Soft-fail mypy | ✅ SHA-pinned | Align, narrow, or retire |
+| `build.yml` | PR, push, dispatch | De facto PR gate | Yes | ✅ Positive selection | ✅ Hard-fail mypy | SHA-pinned | Canonical |
+| `ci.yml` | push | Post-merge validation | No | ✅ Positive selection | Hard-fail mypy (critical modules) | SHA-pinned | Align with canonical or narrow scope |
+| `ci-quality-firewall.yml` | `workflow_run`, dispatch | Post-CI verification | No | ✅ Positive selection | Soft-fail mypy | ✅ SHA-pinned | Align, narrow, or retire |
 | `quality-gate.yml` | PR, push | Legacy helper workflow | Non-canonical / ambiguous | N/A | N/A | ✅ SHA-pinned | Retire or scope down |
 
 **Scope note:** Workflows outside the quality-control plane (docs, security, nightly, deployment, automation) intentionally differ and are excluded from parity debt.
@@ -132,7 +128,7 @@ Establish one canonical PR gating workflow (`build.yml`) with explicit policy, t
 
 **Scope includes:**
 - Workflow selection and role clarification
-- Marker semantics normalization (negative → positive where policy requires)
+- Marker semantics normalization (negative → positive where policy requires) ✅ (2026-03-23)
 - Runtime validation targets for canonical CI
 - Documentation alignment (`CONTRIBUTING.md`, `docs/testing/STRATEGY.md`, workflow docs) ✅
 - Action reference normalization within the quality-control plane ✅
@@ -141,7 +137,7 @@ Establish one canonical PR gating workflow (`build.yml`) with explicit policy, t
 **Target Outcome:**
 - `build.yml` formally designated as canonical for branch protection ✅ (documented)
 - All quality-control workflows either match canonical enforcement semantics or are retired/scoped down
-- Marker semantics moved toward explicit positive selection for intended fast paths
+- Marker semantics moved toward explicit positive selection for intended fast paths ✅ (2026-03-23)
 - Runtime targets measured against canonical workflow only
 - Quality-control workflow roles documented and non-overlapping ✅
 
@@ -150,7 +146,7 @@ Establish one canonical PR gating workflow (`build.yml`) with explicit policy, t
 | Gate | Criteria | Status |
 |------|----------|--------|
 | Decision | Formal control-plane inventory approved; canonical workflow and role boundaries documented | ✅ Complete |
-| Implementation | Workflow alignment changes merged; obsolete workflows retired or narrowed; action refs normalized; typecheck normalized | ⏳ Partial (typecheck added to build.yml) |
+| Implementation | Workflow alignment changes merged; obsolete workflows retired or narrowed; action refs normalized; typecheck normalized; marker selection normalized | ✅ Complete (2026-03-23) |
 | Validation | Canonical CI runtime targets measured and reported | ⏳ Pending |
 | Governance | Workflow documentation, `CONTRIBUTING.md`, and testing strategy aligned | ✅ Complete |
 
@@ -338,7 +334,7 @@ Best done after orchestrator boundaries and workflow governance are stabilized.
 
 | Priority | Workstream | Status | Rationale |
 |----------|------------|--------|-----------|
-| Now | Quality Control Plane Canonicalization | ⏳ Partial (action refs ✅, docs ✅, typecheck ✅, marker selection pending) | Highest leverage; removes CI ambiguity and folds in marker/runtime normalization |
+| Now | Quality Control Plane Canonicalization | ✅ Complete (action refs ✅, docs ✅, typecheck ✅, marker selection ✅) | CI ambiguity resolved; all QC workflows use positive marker selection |
 | Now | Orchestrator Residual Slimming & Boundary Enforcement | Partial | Core maintainability risk remains active |
 | Now | Governance Synchronization | ✅ Complete | Required for policy integrity |
 | Next | Coverage Ramp Phase 1 | Open | High ROI once CI targeting is stable |
@@ -361,13 +357,13 @@ A scoped workflow counts toward **Workflow Parity Debt** if it has at least one 
 | Metric | Current | Target |
 |--------|---------|--------|
 | Quality-control workflows (scoped total) | 4 | N/A (informational) |
-| QC workflows still using legacy negative marker selection | 3 | 0 |
+| QC workflows still using legacy negative marker selection | 0 | 0 |
 | QC workflows with version-tag or mixed action refs | 0 | 0 |
 | QC workflows with unresolved typecheck policy | 0 | 0 |
 | QC workflows with divergent coverage / artifact behavior | Baseline by 2026-04-05 | 0 |
 
 **Metric derivation (updated 2026-03-23):**
-- **Marker selection (3):** `build.yml`, `ci.yml`, `ci-quality-firewall.yml` use legacy negative selection; `quality-gate.yml` has no test jobs
+- **Marker selection (0):** ✅ All quality-control workflows now use positive marker selection (build.yml, ci.yml, ci-quality-firewall.yml); `quality-gate.yml` has no test jobs
 - **Version-tag refs (0):** ✅ All quality-control workflows now use SHA-pinned action refs
 - **Typecheck policy (0):** ✅ Normalized. "Unresolved" means policy not aligned with workflow's intended role:
   - `build.yml`: Hard-fail mypy (PR blocking gate) — **aligned**
@@ -379,7 +375,7 @@ A scoped workflow counts toward **Workflow Parity Debt** if it has at least one 
 
 **Composite Metric:**
 **Workflow Parity Debt = number of scoped workflows with ≥1 unresolved parity defect.**
-Current baseline: **3** (`build.yml`, `ci.yml`, `ci-quality-firewall.yml` have marker selection debt). Target: **0**.
+Current baseline: **0** (all parity defects resolved as of 2026-03-23). Target: **0** ✅.
 
 ### Orchestrator Residual Debt
 
@@ -429,7 +425,7 @@ The Q1 2026 column reflects audit-time state (2026-03-20). The **Current** colum
 | Test marker coverage | 48.6% | 100% | 100% maintained | `check_test_markers.py --audit` |
 | Code coverage | 25.44% | 25.44% | 28% | `pytest-cov` |
 | Canonical CI time (`build.yml`) | 65–75 min | TBD | 40–50 min | GitHub Actions |
-| Workflow Parity Debt (QC) | N/A | 3 (action refs + typecheck normalized) | 0 | Quality-control workflows only |
+| Workflow Parity Debt (QC) | N/A | 0 (all parity defects resolved) | 0 | Quality-control workflows only |
 
 ---
 
@@ -438,7 +434,7 @@ The Q1 2026 column reflects audit-time state (2026-03-20). The **Current** colum
 | ADR | Topic | Status |
 |-----|-------|--------|
 | ADR-043 | Orchestrator Decomposition | ✅ COMPLETE |
-| ADR-044 | Test Marker Enforcement Policy | ✅ ACCEPTED (validation pending) |
+| ADR-044 | Test Marker Enforcement Policy | ✅ IMPLEMENTED (positive marker selection deployed 2026-03-23) |
 | ADR-045 | CI/CD & Workflow Semantics | Required if Q2 changes branch-protection semantics, canonical workflow designation, marker taxonomy, or blocking / non-blocking policy |
 
 ---

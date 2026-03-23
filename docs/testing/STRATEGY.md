@@ -26,12 +26,12 @@ This document defines the testing strategy for the Transformation Portal reposit
 | Attribute | Value |
 |-----------|-------|
 | **Markers** | `unit`, `security`, `regression`, `golden` (any non-ML category marker) |
-| **CI Selection** | `not ml and not slow and not benchmark` |
+| **CI Selection** | `(unit or security or regression or golden or integration) and not ml and not slow and not benchmark` |
 | **Duration** | < 2 minutes |
 | **Dependencies** | Standard library, numpy, PIL, pyyaml |
 | **Coverage Target** | 25% minimum for core modules |
 
-**Note:** Per ADR-044, all tests must have a category marker. The "no marker" convention is legacy and no longer valid.
+**Note:** Per ADR-044, all tests must have a category marker. CI uses **positive marker selection** to explicitly select core test categories.
 
 **Included Tests:**
 - Config parsing and validation
@@ -42,7 +42,7 @@ This document defines the testing strategy for the Transformation Portal reposit
 
 **CI Command (PR Gating):**
 ```bash
-pytest -v tests/ -ra -m "not ml and not slow and not benchmark" --maxfail=1
+pytest -v tests/ -ra -m "(unit or security or regression or golden or integration) and not ml and not slow and not benchmark" --maxfail=1
 ```
 
 ---
@@ -196,10 +196,9 @@ def mock_depth_model(deterministic_rng):
 
 ## CI Integration
 
-> **Current State:** CI uses **negative marker selection** (e.g., `not ml and not slow`)
-> to exclude unwanted test tiers. ADR-044 defines a target state using positive marker
-> selection (e.g., `unit and not slow`). The transition will occur after full marker
-> retrofit is validated in production CI.
+> **Current State (2026-03-23):** CI uses **positive marker selection** for core tests.
+> This explicitly selects test categories (unit, security, regression, golden, integration)
+> rather than excluding unwanted tiers. ML tests use positive selection (`ml and not slow...`).
 
 ### Canonical Workflow
 
@@ -207,9 +206,9 @@ def mock_depth_model(deterministic_rng):
 
 | Workflow | Role | Marker Semantics | Typecheck Policy |
 |----------|------|------------------|------------------|
-| `build.yml` | **Canonical PR gate** | Legacy negative selection | Hard-fail mypy |
-| `ci.yml` | Post-merge validation | Legacy negative selection | Hard-fail mypy |
-| `ci-quality-firewall.yml` | Post-CI verification | Legacy negative selection | Soft-fail mypy |
+| `build.yml` | **Canonical PR gate** | ✅ Positive selection | Hard-fail mypy |
+| `ci.yml` | Post-merge validation | ✅ Positive selection | Hard-fail mypy |
+| `ci-quality-firewall.yml` | Post-CI verification | ✅ Positive selection | Soft-fail mypy |
 
 > **Note:** `quality-gate.yml` is part of the broader quality-control plane but is intentionally
 > excluded from this canonical CI workflow table. It runs pre-commit style checks but is not
@@ -221,7 +220,7 @@ def mock_depth_model(deterministic_rng):
 |-----|--------|--------------|---------|
 | Lint | 3.12 | `requirements-lint.txt` | N/A |
 | Typecheck | 3.12 | `mypy`, `types-PyYAML` | N/A |
-| Core Tests | 3.11, 3.12 | `requirements-ci.txt` | `not ml and not slow and not benchmark` |
+| Core Tests | 3.11, 3.12 | `requirements-ci.txt` | `(unit or security or regression or golden or integration) and not ml and not slow and not benchmark` |
 | ML Tests | 3.11 | CPU torch + CI deps | `ml and not slow and not integration and not benchmark` |
 
 ### Excluded from PR Gating
@@ -291,7 +290,7 @@ def test_pipeline_latency():
 ```bash
 make test-fast
 # or (matches PR-gating expression)
-pytest -v tests/ -ra -m "not ml and not slow and not benchmark" --maxfail=1
+pytest -v tests/ -ra -m "(unit or security or regression or golden or integration) and not ml and not slow and not benchmark" --maxfail=1
 ```
 
 ### With ML Dependencies
