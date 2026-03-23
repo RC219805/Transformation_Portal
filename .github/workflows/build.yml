@@ -438,11 +438,14 @@ jobs:
           - python-version: "3.11"
             device: cpu
             test-type: core
-            markexpr: "not ml and not slow and not benchmark"
+            # ADR-044: Positive marker selection for core tests (unit, security, regression, golden, integration)
+            # Explicitly excludes ml/slow/benchmark for behavioral equivalence during transition
+            markexpr: "(unit or security or regression or golden or integration) and not ml and not slow and not benchmark"
           - python-version: "3.12"
             device: cpu
             test-type: core
-            markexpr: "not ml and not slow and not benchmark"
+            # ADR-044: Positive marker selection for core tests
+            markexpr: "(unit or security or regression or golden or integration) and not ml and not slow and not benchmark"
           - python-version: "3.11"
             device: cpu
             test-type: ml

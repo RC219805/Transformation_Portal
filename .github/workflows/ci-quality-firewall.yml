@@ -417,8 +417,9 @@ jobs:
       - name: Run core tests (no ML / benchmark / stress)
         run: |
           mkdir -p test-results
+          # ADR-044: Positive marker selection for core tests
           python -m pytest -v tests/ \
-            -m "not ml and not slow and not benchmark and not stress" \
+            -m "(unit or security or regression or golden or integration) and not ml and not slow and not benchmark and not stress" \
             --cov=src/transformation_portal \
             --cov-report=xml \
             --cov-report=term \
