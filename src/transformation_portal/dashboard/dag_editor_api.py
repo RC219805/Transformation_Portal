@@ -97,18 +97,19 @@ def _get_safe_pipeline_path(name: str) -> Path:
 def set_pipelines_dir(path: Path) -> None:
     """Set the pipelines storage directory.
 
+    Creates the directory if it doesn't exist and initializes the FSContext.
+    This is the single point where the pipelines directory is created;
+    endpoint handlers rely on this initialization and do not repeat mkdir.
+
     Args:
         path: Directory path for pipeline JSON files
     """
     global _pipelines_dir, _fs_context
     _pipelines_dir = path
-    # Reset context so _get_fs_context() creates fresh one with new base_dir
-    _fs_context = None
-    # Use FSGuard for directory creation
+    _fs_context = None  # Reset so _get_fs_context() creates fresh context
     fs = get_fs_guard()
     fs.mkdir(_pipelines_dir)
-    # Pre-initialize the context after mkdir to avoid repeated resets
-    _fs_context = _get_fs_context()
+    _fs_context = _get_fs_context()  # Pre-initialize for endpoint use
 
 
 class PipelineNode(BaseModel):
@@ -167,6 +168,10 @@ class PipelineDefinition(BaseModel):
 def create_dag_editor_router() -> APIRouter:
     """Create the DAG editor router.
 
+    Note: The FSGuard instance (`fs`) is created once at router initialization.
+    The pipelines directory is created by set_pipelines_dir() at startup,
+    so endpoint handlers do not need to call fs.mkdir() defensively.
+
     Returns:
         FastAPI APIRouter with pipeline editing endpoints
     """
@@ -179,8 +184,8 @@ def create_dag_editor_router() -> APIRouter:
 
         Note: Uses FSGuard.list_dir for audit logging consistency.
         Pipeline names are derived from validated filenames only.
+        Directory is created at startup by set_pipelines_dir().
         """
-        fs.mkdir(_pipelines_dir)
         pipelines = []
         # Use FSGuard for directory listing to maintain audit trail
         for p in fs.list_dir(_pipelines_dir):
@@ -204,7 +209,6 @@ def create_dag_editor_router() -> APIRouter:
     @router.get("/pipelines/{name}")
     async def get_pipeline(name: str) -> JSONResponse:
         """Get a specific pipeline definition."""
-        fs.mkdir(_pipelines_dir)
         filepath = _get_safe_pipeline_path(name)
 
         if not fs.exists(filepath):
@@ -224,7 +228,6 @@ def create_dag_editor_router() -> APIRouter:
             name: Pipeline name (from URL path)
             payload: Pipeline definition (validated by Pydantic)
         """
-        fs.mkdir(_pipelines_dir)
         filepath = _get_safe_pipeline_path(name)
 
         # Build save data from validated model, overriding name from URL
