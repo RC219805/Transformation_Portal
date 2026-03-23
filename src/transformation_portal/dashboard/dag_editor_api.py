@@ -103,7 +103,8 @@ def set_pipelines_dir(path: Path) -> None:
     global _pipelines_dir, _fs_context
     _pipelines_dir = path
     _fs_context = None  # Reset context to pick up new directory
-    _pipelines_dir.mkdir(parents=True, exist_ok=True)
+    fs = get_fs_guard()
+    fs.mkdir(_pipelines_dir)
 
 
 class PipelineNode(BaseModel):
@@ -134,8 +135,8 @@ class PipelineDefinition(BaseModel):
     """
 
     name: str = ""
-    nodes: list[dict[str, Any]] = Field(default_factory=list)
-    edges: list[dict[str, Any]] = Field(default_factory=list)
+    nodes: list[PipelineNode] = Field(default_factory=list)
+    edges: list[PipelineEdge] = Field(default_factory=list)
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -155,7 +156,7 @@ def create_dag_editor_router() -> APIRouter:
         Note: Uses FSGuard.list_dir for audit logging consistency.
         Pipeline names are derived from validated filenames only.
         """
-        _pipelines_dir.mkdir(parents=True, exist_ok=True)
+        fs.mkdir(_pipelines_dir)
         pipelines = []
         # Use FSGuard for directory listing to maintain audit trail
         for p in fs.list_dir(_pipelines_dir):
@@ -179,7 +180,7 @@ def create_dag_editor_router() -> APIRouter:
     @router.get("/pipelines/{name}")
     async def get_pipeline(name: str) -> JSONResponse:
         """Get a specific pipeline definition."""
-        _pipelines_dir.mkdir(parents=True, exist_ok=True)
+        fs.mkdir(_pipelines_dir)
         filepath = _get_safe_pipeline_path(name)
 
         if not fs.exists(filepath):
@@ -199,7 +200,7 @@ def create_dag_editor_router() -> APIRouter:
             name: Pipeline name (from URL path)
             payload: Pipeline definition (validated by Pydantic)
         """
-        _pipelines_dir.mkdir(parents=True, exist_ok=True)
+        fs.mkdir(_pipelines_dir)
         filepath = _get_safe_pipeline_path(name)
 
         # Build save data from validated model, overriding name from URL
@@ -647,14 +648,30 @@ def get_dag_editor_html() -> str:
             const name = prompt('Pipeline name:', 'my_pipeline');
             if (!name) return;
 
-            await fetch(`/api/editor/pipelines/${name}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ nodes, edges })
-            });
+            try {
+                const response = await fetch(`/api/editor/pipelines/${name}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ nodes, edges })
+                });
 
-            updateStatus(`Saved pipeline: ${name}`);
-            loadPipelinesList();
+                if (!response.ok) {
+                    let errorMessage;
+                    try {
+                        const errorData = await response.json();
+                        errorMessage = errorData.detail || `HTTP ${response.status}`;
+                    } catch (parseError) {
+                        errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+                    }
+                    throw new Error(errorMessage);
+                }
+
+                updateStatus(`Saved pipeline: ${name}`);
+                loadPipelinesList();
+            } catch (error) {
+                updateStatus(`Error saving pipeline: ${error.message}`);
+                console.error('Pipeline save failed:', error);
+            }
         }
 
         async function loadPipeline() {
