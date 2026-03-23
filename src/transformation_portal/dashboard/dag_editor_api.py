@@ -677,7 +677,11 @@ def get_dag_editor_html() -> str:
             updateStatus('Submitting pipeline to scheduler...');
 
             try {
-                const pipelineName = document.getElementById('pipeline-select').value || 'untitled';
+                // Generate a descriptive default name with timestamp
+                const selectedName = document.getElementById('pipeline-select').value;
+                const timestamp = new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-');
+                const pipelineName = selectedName || `untitled-pipeline-${timestamp}`;
+
                 const response = await fetch('/api/exec/run', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -689,17 +693,25 @@ def get_dag_editor_html() -> str:
                 });
 
                 if (!response.ok) {
-                    const errorData = await response.json().catch(() => ({}));
-                    throw new Error(errorData.detail || `HTTP ${response.status}`);
+                    // Handle both JSON and non-JSON error responses
+                    let errorMessage;
+                    try {
+                        const errorData = await response.json();
+                        errorMessage = errorData.detail || `HTTP ${response.status}`;
+                    } catch (parseError) {
+                        // Non-JSON response (e.g., 502 Bad Gateway HTML)
+                        errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+                        console.warn('Non-JSON error response:', parseError);
+                    }
+                    throw new Error(errorMessage);
                 }
 
                 const data = await response.json();
+                // Status message with run ID (monitor opens automatically)
                 updateStatus(`Pipeline started: Run ID ${data.run_id}`);
 
-                // Open execution monitor in new tab
-                if (confirm('Pipeline submitted! Open execution monitor?')) {
-                    window.open('/api/exec/', '_blank');
-                }
+                // Automatically open execution monitor for immediate feedback
+                window.open('/api/exec/', '_blank');
             } catch (error) {
                 updateStatus(`Error: ${error.message}`);
                 console.error('Pipeline execution failed:', error);
