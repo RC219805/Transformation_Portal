@@ -4,16 +4,13 @@ Tests the IngestStage, SegmentationStage, MaterialsStage adapters
 that bridge legacy pipeline functionality with ExecutionGraph.
 """
 
-import math
 from dataclasses import dataclass
 from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 import pytest
 
 from transformation_portal.spatial_ai.orchestration.graph.stage_adapters import (
     IngestStage,
-    IngestStageConfig,
     MaterialsStage,
     SegmentationStage,
     build_spatial_ai_graph,

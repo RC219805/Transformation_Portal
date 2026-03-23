@@ -792,16 +792,20 @@ class SpatialAIPipeline:
                 )
 
                 # Reconstruct LinearIngestResult from graph outputs
+                # IngestStage emits cache-safe primitives; we reconstruct the full result.
                 linear_rgb = exec_result.outputs["ingest.linear_rgb"]
                 input_size = exec_result.outputs.get("ingest.input_size", linear_rgb.shape[:2])
-                input_dtype = exec_result.outputs.get("ingest.input_dtype", "float32")
 
+                # Required fields with sensible defaults derived from graph outputs
                 result.linear_image = LinearIngestResult(
                     linear_rgb=linear_rgb,
                     input_path=input_path,
-                    input_size=input_size,
-                    input_dtype=input_dtype,
+                    input_size=tuple(input_size) if not isinstance(input_size, tuple) else input_size,
                     gamma=1.0,
+                    bit_depth=32,  # Always float32 for linear ingest
+                    dtype="float32",
+                    input_format=exec_result.outputs.get("ingest.input_format", "TIFF"),
+                    color_space=exec_result.outputs.get("ingest.color_space", "linear_sRGB"),
                 )
 
             if "segment.masks" in exec_result.outputs:
@@ -813,10 +817,59 @@ class SpatialAIPipeline:
                 masks = exec_result.outputs["segment.masks"]
                 scores = exec_result.outputs.get("segment.scores", np.ones(len(masks)))
 
+                # Optional cached metadata arrays from the segmentation stage.
+                areas = exec_result.outputs.get("segment.metadata.area")
+                bboxes = exec_result.outputs.get("segment.metadata.bbox")
+                stabilities = exec_result.outputs.get("segment.metadata.stability_score")
+
+                def _compute_bbox(mask: np.ndarray) -> tuple:
+                    """Compute a tight (x, y, w, h) bbox for a boolean/uint8 mask.
+
+                    Falls back to (0, 0, 0, 0) for empty masks to preserve determinism.
+                    """
+                    ys, xs = np.where(mask)
+                    if ys.size == 0 or xs.size == 0:
+                        return (0, 0, 0, 0)
+                    x_min, x_max = int(xs.min()), int(xs.max())
+                    y_min, y_max = int(ys.min()), int(ys.max())
+                    return (x_min, y_min, x_max - x_min + 1, y_max - y_min + 1)
+
+                metadata: List[MaskMetadata] = []
+                num_masks = len(masks)
+
+                for i in range(num_masks):
+                    mask = masks[i]
+
+                    if areas is not None and i < len(areas):
+                        area = int(areas[i])
+                    else:
+                        # Fallback: derive area directly from the mask.
+                        area = int(np.count_nonzero(mask))
+
+                    if bboxes is not None and i < len(bboxes):
+                        bbox = tuple(int(v) for v in bboxes[i])
+                    else:
+                        bbox = _compute_bbox(mask)
+
+                    if stabilities is not None and i < len(stabilities):
+                        stability_score = float(stabilities[i])
+                    else:
+                        # Conservative default when stability is not available.
+                        stability_score = 0.5
+
+                    # Ensure area is at least 1 to satisfy MaskMetadata validation
+                    metadata.append(
+                        MaskMetadata(
+                            area=max(1, area),
+                            bbox=bbox,
+                            stability_score=stability_score,
+                        )
+                    )
+
                 result.segmentation = SegmentationResult(
                     masks=masks,
                     scores=scores,
-                    metadata=[MaskMetadata(mask_id=i) for i in range(len(masks))],
+                    metadata=metadata,
                 )
 
             if "materials.pbr_textures" in exec_result.outputs:
@@ -870,7 +923,8 @@ class SpatialAIPipeline:
 
             if self.config.error_strategy == ErrorRecoveryStrategy.RETURN_PARTIAL:
                 return result
-            raise
+            # Wrap in PipelineError to preserve API contract (docstring states PipelineError is raised)
+            raise PipelineError("graph", f"Graph execution failed: {e}", original_error=e) from e
 
     @staticmethod
     def _load_preset(preset_name: str) -> PipelineConfig:

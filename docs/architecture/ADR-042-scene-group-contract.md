@@ -7,6 +7,8 @@
 **Implementation Status:**
 - Phase A (scene_id + images): ✅ Complete
 - Phase B (cameras field + eligibility): ✅ Complete (2026-03-23)
+  - Camera/image alignment validation: ✅ Complete
+  - Synthetic camera parameter bounds validation: ✅ Complete
 - Reconstruction feature gate: ✅ Complete (config flag documented)
 
 ## Executive Summary

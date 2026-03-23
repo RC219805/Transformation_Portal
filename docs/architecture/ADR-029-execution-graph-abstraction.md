@@ -13,6 +13,7 @@
 - Stage adapters (IngestStage, SegmentationStage, MaterialsStage): ✅ Complete (2026-03-23)
 - Pipeline integration (use_execution_graph flag): ✅ Complete (2026-03-23)
 - Graph-based execution path: ✅ Complete (2026-03-23)
+- MaterialsStage caching: ⚠️ Disabled (outputs contain nested PBRTextures objects not serializable by ArtifactStore)
 
 ---
 

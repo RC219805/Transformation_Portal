@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import hashlib
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from itertools import groupby
 from pathlib import Path
 from typing import List, Optional, Sequence, Tuple
@@ -96,6 +96,22 @@ class SceneGroup:
                 raise ValueError(
                     f"cameras must align with images: " f"got {len(self.cameras)} cameras for {len(self.images)} images"
                 )
+            # Ensure each camera is attached to the correct image.
+            # We compare both the raw Paths and their non-strict resolved forms
+            # to be robust to minor relative-path differences while staying
+            # deterministic and filesystem-independent.
+            for idx, (image_path, camera) in enumerate(zip(self.images, self.cameras)):
+                cam_image_path = camera.image_path
+                if image_path == cam_image_path:
+                    continue
+                image_norm = image_path.resolve(strict=False)
+                cam_norm = cam_image_path.resolve(strict=False)
+                if image_norm != cam_norm:
+                    raise ValueError(
+                        "Camera image_path mismatch at index "
+                        f"{idx}: images[{idx}]={image_path!s}, "
+                        f"camera.image_path={cam_image_path!s}"
+                    )
 
     def is_reconstruction_eligible(self) -> bool:
         """Check if scene meets reconstruction eligibility requirements.
@@ -181,11 +197,20 @@ def generate_synthetic_camera(
     Returns:
         CameraParams with synthetic intrinsics.
 
+    Raises:
+        ValueError: If fov_degrees is not in (0, 180) or width/height not positive.
+
     Note:
         This is a fallback when no explicit or EXIF camera data is available.
         The synthetic camera uses a centered principal point and focal length
         derived from the field of view.
     """
+    # Validate inputs up front for clear error messages
+    if width <= 0 or height <= 0:
+        raise ValueError(f"Image dimensions must be positive: width={width}, height={height}")
+    if not (0 < fov_degrees < 180):
+        raise ValueError(f"FOV must be in (0, 180) degrees, got {fov_degrees}")
+
     # Compute focal length from FOV: fx = width / (2 * tan(fov/2))
     fov_rad = math.radians(fov_degrees)
     fx = width / (2 * math.tan(fov_rad / 2))

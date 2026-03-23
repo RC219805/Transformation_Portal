@@ -203,15 +203,17 @@ class IngestStage:
 
         input_path = Path(input_path)
 
-        # Hash file content (first 4KB + size for efficiency)
+        # Hash full file content (streaming SHA256 for collision resistance)
         file_hash = "missing"
         if input_path.exists():
             try:
                 hasher = hashlib.sha256()
-                hasher.update(str(input_path.stat().st_size).encode())
+                # Stream file in chunks to avoid memory issues with large files
+                chunk_size = 65536  # 64KB chunks
                 with open(input_path, "rb") as f:
-                    hasher.update(f.read(4096))
-                file_hash = hasher.hexdigest()[:16]
+                    while chunk := f.read(chunk_size):
+                        hasher.update(chunk)
+                file_hash = hasher.hexdigest()
             except (OSError, IOError) as e:
                 # Handle permission errors, I/O errors gracefully
                 logger.warning(f"Could not read file for cache key: {e}")
@@ -343,10 +345,20 @@ class SegmentationStage:
 
         result = backend.segment(seg_input)
 
+        # Extract cache-safe metadata arrays from SegmentationResult
+        # These are used by pipeline.py to reconstruct MaskMetadata objects
+        areas = np.array([m.area for m in result.metadata], dtype=np.int64)
+        bboxes = np.array([m.bbox for m in result.metadata], dtype=np.int64)
+        stabilities = np.array([m.stability_score for m in result.metadata], dtype=np.float32)
+
         return {
             "masks": result.masks,
             "scores": result.scores,
             "num_masks": len(result.masks),
+            # Cache-safe metadata arrays (no object types)
+            "metadata.area": areas,
+            "metadata.bbox": bboxes,
+            "metadata.stability_score": stabilities,
         }
 
     def compute_cache_key(self, inputs: Dict[str, Any], context: Any) -> str:
@@ -426,7 +438,13 @@ class MaterialsStage:
 
     @property
     def metadata(self) -> StageMetadata:
-        """Stage metadata for MaterialsStage."""
+        """Stage metadata for MaterialsStage.
+
+        Note: checkpoint_policy is set to NEVER because this stage outputs
+        nested dicts with PBRTextures objects, which are not cache-serializable
+        by ArtifactStore (.npz format). To enable caching, the stage would need
+        to flatten PBR textures into separate numpy arrays.
+        """
         # GPU memory depends on backend
         gpu_mb = 0 if self._backend == "heuristic" else MATERIALS_GPU_MB
 
@@ -444,7 +462,7 @@ class MaterialsStage:
             ),
             deterministic=True,
             idempotent=True,
-            checkpoint_policy=CheckpointPolicy.ALWAYS,
+            checkpoint_policy=CheckpointPolicy.NEVER,  # Outputs not cache-serializable
         )
 
     def execute(self, inputs: Dict[str, Any], context: Any) -> Dict[str, Any]:

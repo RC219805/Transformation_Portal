@@ -311,3 +311,117 @@ class TestBuildSceneGroupsWithCameras:
 
         with pytest.raises(ValueError, match="cameras must align with images"):
             build_scene_groups(images, dataset_root=Path("."), grouping_mode="single", cameras=cameras)
+
+
+class TestSceneGroupCameraImageAlignment:
+    """Tests for camera image_path alignment validation (ADR-042 Phase B)."""
+
+    def test_rejects_camera_image_path_mismatch(self):
+        """SceneGroup should reject cameras with mismatched image_path."""
+        images = (Path("a.jpg"), Path("b.jpg"))
+        cameras = (
+            CameraParams(
+                image_path=Path("a.jpg"),  # Correct
+                fx=1000.0,
+                fy=1000.0,
+                cx=320.0,
+                cy=240.0,
+                width=640,
+                height=480,
+            ),
+            CameraParams(
+                image_path=Path("c.jpg"),  # Wrong! Should be b.jpg
+                fx=1000.0,
+                fy=1000.0,
+                cx=320.0,
+                cy=240.0,
+                width=640,
+                height=480,
+            ),
+        )
+
+        with pytest.raises(ValueError, match="Camera image_path mismatch"):
+            SceneGroup(scene_id="abc123456789", images=images, cameras=cameras)
+
+    def test_accepts_equivalent_paths(self):
+        """SceneGroup should accept cameras with equivalent paths (after resolution)."""
+        # Use paths that are equivalent but written differently
+        images = (Path("./a.jpg"), Path("./b.jpg"))
+        cameras = (
+            CameraParams(
+                image_path=Path("a.jpg"),  # Equivalent to ./a.jpg
+                fx=1000.0,
+                fy=1000.0,
+                cx=320.0,
+                cy=240.0,
+                width=640,
+                height=480,
+            ),
+            CameraParams(
+                image_path=Path("b.jpg"),  # Equivalent to ./b.jpg
+                fx=1000.0,
+                fy=1000.0,
+                cx=320.0,
+                cy=240.0,
+                width=640,
+                height=480,
+            ),
+        )
+
+        # Should not raise
+        group = SceneGroup(scene_id="abc123456789", images=images, cameras=cameras)
+        assert group.has_cameras is True
+
+
+class TestGenerateSyntheticCameraValidation:
+    """Tests for generate_synthetic_camera parameter validation."""
+
+    def test_rejects_invalid_fov_zero(self):
+        """generate_synthetic_camera should reject FOV of 0 degrees."""
+        with pytest.raises(ValueError, match="FOV must be in"):
+            generate_synthetic_camera(
+                image_path=Path("test.jpg"),
+                width=640,
+                height=480,
+                fov_degrees=0.0,
+            )
+
+    def test_rejects_invalid_fov_180(self):
+        """generate_synthetic_camera should reject FOV of 180 degrees."""
+        with pytest.raises(ValueError, match="FOV must be in"):
+            generate_synthetic_camera(
+                image_path=Path("test.jpg"),
+                width=640,
+                height=480,
+                fov_degrees=180.0,
+            )
+
+    def test_rejects_invalid_fov_negative(self):
+        """generate_synthetic_camera should reject negative FOV."""
+        with pytest.raises(ValueError, match="FOV must be in"):
+            generate_synthetic_camera(
+                image_path=Path("test.jpg"),
+                width=640,
+                height=480,
+                fov_degrees=-30.0,
+            )
+
+    def test_rejects_invalid_dimensions_zero_width(self):
+        """generate_synthetic_camera should reject zero width."""
+        with pytest.raises(ValueError, match="Image dimensions must be positive"):
+            generate_synthetic_camera(
+                image_path=Path("test.jpg"),
+                width=0,
+                height=480,
+                fov_degrees=60.0,
+            )
+
+    def test_rejects_invalid_dimensions_negative_height(self):
+        """generate_synthetic_camera should reject negative height."""
+        with pytest.raises(ValueError, match="Image dimensions must be positive"):
+            generate_synthetic_camera(
+                image_path=Path("test.jpg"),
+                width=640,
+                height=-100,
+                fov_degrees=60.0,
+            )
