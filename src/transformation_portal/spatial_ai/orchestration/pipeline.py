@@ -562,6 +562,10 @@ class SpatialAIPipeline:
                 "for single-view pipelines."
             )
 
+        # Multi-view reconstruction always runs 2 stages: reconstruction + export.
+        # Update total_stages to ensure progress tracking doesn't exceed 100%.
+        self.progress_tracker.total_stages = 2
+
         self.progress_tracker.start_pipeline()
 
         try:
