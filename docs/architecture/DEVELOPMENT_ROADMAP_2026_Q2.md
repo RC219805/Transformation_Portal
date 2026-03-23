@@ -355,13 +355,17 @@ A scoped workflow counts toward **Workflow Parity Debt** if it has at least one 
 | Quality-control workflows (scoped total) | 4 | N/A (informational) |
 | QC workflows still using legacy negative marker selection | 3 | 0 |
 | QC workflows with version-tag or mixed action refs | 0 | 0 |
-| QC workflows with unresolved typecheck policy | 1 | 0 |
+| QC workflows with unresolved typecheck policy | 0 | 0 |
 | QC workflows with divergent coverage / artifact behavior | Baseline by 2026-04-05 | 0 |
 
 **Metric derivation (updated 2026-03-23):**
 - **Marker selection (3):** `build.yml`, `ci.yml`, `ci-quality-firewall.yml` use legacy negative selection; `quality-gate.yml` has no test jobs
 - **Version-tag refs (0):** ✅ All quality-control workflows now use SHA-pinned action refs
-- **Typecheck policy (1):** ✅ `build.yml` now has hard-fail mypy (2026-03-23); `ci.yml` has hard-fail (aligned); `ci-quality-firewall.yml` uses soft-fail (remaining debt); `quality-gate.yml` N/A
+- **Typecheck policy (0):** ✅ Normalized:
+  - `build.yml`: Hard-fail mypy (PR blocking gate)
+  - `ci.yml`: Hard-fail mypy (post-merge validation, aligned)
+  - `ci-quality-firewall.yml`: Soft-fail mypy (intentional: advisory workflow, not branch-protection)
+  - `quality-gate.yml`: N/A (no typecheck job)
 
 **Composite Metric:**  
 **Workflow Parity Debt = number of scoped workflows with ≥1 unresolved parity defect.**  
