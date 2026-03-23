@@ -716,8 +716,8 @@ def get_dag_editor_html() -> str:
                 // Status message with run ID (monitor opens automatically)
                 updateStatus(`Pipeline started: Run ID ${data.run_id}`);
 
-                // Automatically open execution monitor for immediate feedback
-                window.open('/api/exec/', '_blank');
+                // Automatically open execution monitor with run_id for auto-selection
+                window.open(`/api/exec/?run_id=${data.run_id}`, '_blank');
             } catch (error) {
                 updateStatus(`Error: ${error.message}`);
                 console.error('Pipeline execution failed:', error);

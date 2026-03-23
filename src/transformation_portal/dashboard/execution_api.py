@@ -544,8 +544,17 @@ def get_execution_ui_html() -> str:
             }
         }, 25000);
 
+        // Check for run_id in URL parameters for auto-selection
+        const urlParams = new URLSearchParams(window.location.search);
+        const targetRunId = urlParams.get('run_id');
+
         connect();
-        loadRuns();
+        loadRuns().then(() => {
+            // Auto-select the run from URL parameter after loading runs
+            if (targetRunId) {
+                selectRun(targetRunId);
+            }
+        });
     </script>
 </body>
 </html>"""
