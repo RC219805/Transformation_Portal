@@ -42,6 +42,7 @@ class RunStatus(str, Enum):
     COMPLETE = "complete"
     ERROR = "error"
     CANCELLED = "cancelled"
+    CANCELLING = "cancelling"
 
 
 @dataclass
@@ -70,6 +71,8 @@ class RunState:
     nodes: Dict[str, NodeState] = field(default_factory=dict)
     results: Dict[str, Any] = field(default_factory=dict)
     error: Optional[str] = None
+    cancel_requested: bool = False
+    current_node_id: Optional[str] = None
 
 
 # Type alias for broadcast function
@@ -115,6 +118,7 @@ class ExecutionManager:
         self.active_runs: Dict[str, RunState] = {}
         self.run_history: List[str] = []
         self._max_history = 100
+        self._tasks_by_run_id: Dict[str, asyncio.Task[None]] = {}
 
     def _now(self) -> str:
         """Get current ISO timestamp."""
@@ -176,6 +180,50 @@ class ExecutionManager:
             run_id = str(uuid.uuid4())[:8]
         return run_id
 
+    def prepare_run(self, run_id: str, pipeline: Dict[str, Any]) -> RunState:
+        """Pre-register run state before starting execution.
+
+        This method initializes the RunState and NodeState objects for all
+        nodes in the pipeline, registers the run in active_runs and run_history,
+        and performs history trimming. The run becomes immediately queryable
+        via get_run_state() before background execution begins.
+
+        Args:
+            run_id: Pre-allocated run ID (from allocate_run_id)
+            pipeline: Pipeline definition with nodes and edges
+
+        Returns:
+            The initialized RunState object
+
+        Raises:
+            ValueError: If run_id is already registered
+        """
+        if run_id in self.active_runs:
+            raise ValueError(f"Run ID {run_id} is already registered")
+
+        nodes = pipeline.get("nodes", [])
+
+        # Initialize run state with PENDING status
+        run_state = RunState(run_id=run_id, status=RunStatus.PENDING)
+
+        # Initialize NodeState for each node
+        for node_def in nodes:
+            node_id = node_def.get("id", "")
+            if node_id:
+                run_state.nodes[node_id] = NodeState(node_id=node_id)
+
+        # Register in active_runs and history
+        self.active_runs[run_id] = run_state
+        self.run_history.append(run_id)
+
+        # Trim history if needed
+        while len(self.run_history) > self._max_history:
+            old_id = self.run_history.pop(0)
+            if old_id in self.active_runs:
+                del self.active_runs[old_id]
+
+        return run_state
+
     def start_pipeline_background(
         self,
         run_id: str,
@@ -187,8 +235,9 @@ class ExecutionManager:
         This immediately returns a Task that executes the pipeline.
         Use this when you need the HTTP response to return immediately.
 
-        A done-callback is attached to log exceptions, ensuring they are
-        observed and do not surface as "Task exception was never retrieved".
+        The run state is pre-registered via prepare_run() before starting
+        the background task, ensuring the run is immediately queryable.
+        A done-callback is attached to log exceptions and clean up task registry.
 
         Args:
             run_id: Pre-allocated run ID (from allocate_run_id)
@@ -198,12 +247,23 @@ class ExecutionManager:
         Returns:
             asyncio.Task running the pipeline execution
         """
+        # Pre-register run state so it's immediately queryable
+        if run_id not in self.active_runs:
+            self.prepare_run(run_id, pipeline)
+
         task = asyncio.create_task(
             self._execute_pipeline(run_id, pipeline, broadcast),
             name=f"pipeline-{run_id}",
         )
 
+        # Track task by run_id for cancellation support
+        self._tasks_by_run_id[run_id] = task
+
         def _log_task_result(t: asyncio.Task[None]) -> None:
+            # Clean up task registry
+            if run_id in self._tasks_by_run_id:
+                del self._tasks_by_run_id[run_id]
+
             try:
                 # Accessing result() ensures exceptions are observed and do not
                 # surface as "Task exception was never retrieved".
@@ -253,25 +313,27 @@ class ExecutionManager:
         nodes = pipeline.get("nodes", [])
         edges = pipeline.get("edges", [])
 
-        # Initialize run state
-        run_state = RunState(
-            run_id=run_id,
-            status=RunStatus.RUNNING,
-            start_time=self._now(),
-        )
+        # Get pre-registered run state or initialize (for backward compat with run_pipeline)
+        run_state = self.active_runs.get(run_id)
+        if run_state is None:
+            # Fallback: create state inline (supports legacy run_pipeline path)
+            run_state = RunState(run_id=run_id, status=RunStatus.PENDING)
+            for node_def in nodes:
+                node_id = node_def.get("id", "")
+                if node_id:
+                    run_state.nodes[node_id] = NodeState(node_id=node_id)
+            self.active_runs[run_id] = run_state
+            self.run_history.append(run_id)
 
-        for node_def in nodes:
-            node_id = node_def.get("id", "")
-            run_state.nodes[node_id] = NodeState(node_id=node_id)
+            # Trim history
+            while len(self.run_history) > self._max_history:
+                old_id = self.run_history.pop(0)
+                if old_id in self.active_runs:
+                    del self.active_runs[old_id]
 
-        self.active_runs[run_id] = run_state
-        self.run_history.append(run_id)
-
-        # Trim history
-        while len(self.run_history) > self._max_history:
-            old_id = self.run_history.pop(0)
-            if old_id in self.active_runs:
-                del self.active_runs[old_id]
+        # Transition from PENDING to RUNNING
+        run_state.status = RunStatus.RUNNING
+        run_state.start_time = self._now()
 
         # Broadcast run started
         await broadcast(
@@ -325,8 +387,43 @@ class ExecutionManager:
             results: Dict[str, Any] = {}
 
             for node_id in execution_order:
+                # Check for cancellation before starting each node
+                if run_state.cancel_requested:
+                    # Mark this and remaining nodes as SKIPPED
+                    remaining_idx = execution_order.index(node_id)
+                    for skip_id in execution_order[remaining_idx:]:
+                        skip_state = run_state.nodes.get(skip_id)
+                        if skip_state and skip_state.status in (NodeStatus.PENDING, NodeStatus.QUEUED):
+                            skip_state.status = NodeStatus.SKIPPED
+                            skip_state.end_time = self._now()
+                            await broadcast(
+                                {
+                                    "type": "node_skipped",
+                                    "run_id": run_id,
+                                    "node": skip_id,
+                                    "reason": "cancellation_requested",
+                                    "timestamp": skip_state.end_time,
+                                }
+                            )
+                    # Finalize as cancelled
+                    run_state.status = RunStatus.CANCELLED
+                    run_state.end_time = self._now()
+                    run_state.current_node_id = None
+                    run_state.results = results
+                    await broadcast(
+                        {
+                            "type": "run_cancelled",
+                            "run_id": run_id,
+                            "timestamp": run_state.end_time,
+                        }
+                    )
+                    return
+
                 scheduled_node = scheduler.nodes[node_id]
                 node_state = run_state.nodes[node_id]
+
+                # Track current node for observability
+                run_state.current_node_id = node_id
 
                 # Mark running
                 node_state.status = NodeStatus.RUNNING
@@ -422,6 +519,23 @@ class ExecutionManager:
                     # For now, continue but mark results as None
                     results[node_id] = None
 
+            # Clear current_node_id after completion
+            run_state.current_node_id = None
+
+            # Final cancellation check - don't emit run_complete if cancelled
+            if run_state.cancel_requested or run_state.status == RunStatus.CANCELLING:
+                run_state.status = RunStatus.CANCELLED
+                run_state.end_time = self._now()
+                run_state.results = results
+                await broadcast(
+                    {
+                        "type": "run_cancelled",
+                        "run_id": run_id,
+                        "timestamp": run_state.end_time,
+                    }
+                )
+                return
+
             # Run complete
             run_state.status = RunStatus.COMPLETE
             run_state.end_time = self._now()
@@ -481,30 +595,50 @@ class ExecutionManager:
             for run in self.active_runs.values()
         ]
 
-    async def cancel_run(self, run_id: str, broadcast: BroadcastFn) -> bool:
-        """Cancel a running pipeline.
+    async def cancel_run(self, run_id: str, broadcast: BroadcastFn) -> Optional[str]:
+        """Cancel a running pipeline cooperatively.
+
+        This method requests cooperative cancellation of the run. The actual
+        cancellation happens at the next safe boundary (before the next node starts).
+        Already-running nodes may complete their current work.
 
         Args:
             run_id: Run ID to cancel
             broadcast: Broadcast function
 
         Returns:
-            True if cancelled, False if not found
+            The run's current/terminal status as a string, or None if not found.
+            - "cancelling" if cancellation was requested for an active run
+            - "cancelled" if already cancelled
+            - "complete" if already complete
+            - "error" if already errored
+            - None if run not found
         """
         run = self.active_runs.get(run_id)
         if run is None:
-            return False
+            return None
 
-        if run.status == RunStatus.RUNNING:
-            run.status = RunStatus.CANCELLED
-            run.end_time = self._now()
+        # If already in terminal state, return current status
+        if run.status in (RunStatus.COMPLETE, RunStatus.ERROR, RunStatus.CANCELLED):
+            return run.status.value
+
+        # Request cooperative cancellation for active runs
+        if run.status in (RunStatus.RUNNING, RunStatus.PENDING):
+            run.cancel_requested = True
+            run.status = RunStatus.CANCELLING
 
             await broadcast(
                 {
-                    "type": "run_cancelled",
+                    "type": "run_cancelling",
                     "run_id": run_id,
-                    "timestamp": run.end_time,
+                    "timestamp": self._now(),
                 }
             )
 
-        return True
+            return RunStatus.CANCELLING.value
+
+        # Already cancelling - idempotent
+        if run.status == RunStatus.CANCELLING:
+            return RunStatus.CANCELLING.value
+
+        return run.status.value
