@@ -109,7 +109,12 @@ def create_execution_router() -> APIRouter:
 
         # Allocate run_id up front and start execution in background
         run_id = manager.allocate_run_id()
-        manager.start_pipeline_background(run_id, payload, broadcast)
+        try:
+            task = manager.start_pipeline_background(run_id, payload, broadcast)
+            logger.info("Started background pipeline execution: run_id=%s task=%s", run_id, task.get_name())
+        except Exception as exc:
+            logger.exception("Failed to start pipeline execution: run_id=%s", run_id)
+            raise HTTPException(status_code=500, detail=f"Failed to start pipeline: {exc}")
 
         return JSONResponse(
             content={
