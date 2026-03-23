@@ -192,10 +192,10 @@ class MockIngestStage:
         # Generate deterministic output based on input
         input_path = str(inputs.get("input_path", ""))
         seed = int(hashlib.sha256(input_path.encode()).hexdigest()[:8], 16) % (2**31)
-        rng = np.random.RandomState(seed)
+        rng = np.random.default_rng(seed)
 
         return {
-            "linear_rgb": rng.rand(512, 512, 3).astype(np.float32),
+            "linear_rgb": rng.random((512, 512, 3)).astype(np.float32),
             "input_size": (512, 512),
             "input_dtype": "float32",
             "gamma": 2.2,
@@ -243,11 +243,11 @@ class MockSegmentationStage:
         # Generate deterministic masks based on input
         h, w = linear_rgb.shape[:2]
         seed = int(hashlib.sha256(linear_rgb.tobytes()[:1024]).hexdigest()[:8], 16) % (2**31)
-        rng = np.random.RandomState(seed)
+        rng = np.random.default_rng(seed)
 
         num_masks = 4
-        masks = rng.randint(0, 2, (num_masks, h, w)).astype(bool)
-        scores = rng.rand(num_masks).astype(np.float32)
+        masks = rng.integers(0, 2, (num_masks, h, w)).astype(bool)
+        scores = rng.random(num_masks).astype(np.float32)
 
         return {
             "masks": masks,
