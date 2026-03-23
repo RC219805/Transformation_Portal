@@ -201,7 +201,7 @@ class TestStartPipelineBackground:
         assert run_id not in manager._tasks_by_run_id
 
 
-class TestCancelRequestSematics:
+class TestCancelRequestSemantics:
     """Tests for cancel_requested flag and CANCELLING status."""
 
     @pytest.mark.asyncio
@@ -269,8 +269,8 @@ class TestCancelRequestSematics:
         broadcast.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_cancel_returns_terminal_status_for_complete(self) -> None:
-        """Test that cancel_run returns status for already complete runs."""
+    async def test_cancel_returns_complete_status_for_complete_run(self) -> None:
+        """Test that cancel_run returns 'complete' for already complete runs."""
         manager = ExecutionManager()
         run_id = manager.allocate_run_id()
         broadcast = AsyncMock()
@@ -345,8 +345,8 @@ class TestCooperativeCancellation:
         # Check that run_cancelled was emitted
         event_types = [call[0][0]["type"] for call in broadcast.call_args_list]
         assert "run_cancelled" in event_types
-        # Complete should not be emitted after cancellation
-        # (for empty pipeline with cancel_requested, it should be cancelled)
+        # Verify run_complete is NOT emitted when cancel_requested is set
+        assert "run_complete" not in event_types
 
     @pytest.mark.asyncio
     async def test_cancellation_marks_remaining_nodes_skipped(self) -> None:

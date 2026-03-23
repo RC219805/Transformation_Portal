@@ -390,6 +390,9 @@ class ExecutionManager:
                 # Check for cancellation before starting each node
                 if run_state.cancel_requested:
                     # Mark this and remaining nodes as SKIPPED
+                    # Check both PENDING and QUEUED: nodes start as PENDING after prepare_run(),
+                    # then transition to QUEUED when added to scheduler. Either status indicates
+                    # the node hasn't started executing and can be safely skipped.
                     remaining_idx = execution_order.index(node_id)
                     for skip_id in execution_order[remaining_idx:]:
                         skip_state = run_state.nodes.get(skip_id)
@@ -522,7 +525,10 @@ class ExecutionManager:
             # Clear current_node_id after completion
             run_state.current_node_id = None
 
-            # Final cancellation check - don't emit run_complete if cancelled
+            # Final cancellation check - handles edge case where cancel_requested was set
+            # after the last node completed but before we emit run_complete. The per-node
+            # check handles most cases, but this ensures we never emit run_complete for
+            # a run that was marked as cancelling/cancelled during execution.
             if run_state.cancel_requested or run_state.status == RunStatus.CANCELLING:
                 run_state.status = RunStatus.CANCELLED
                 run_state.end_time = self._now()
