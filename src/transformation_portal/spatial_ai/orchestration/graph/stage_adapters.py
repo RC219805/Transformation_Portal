@@ -177,7 +177,7 @@ class IngestStage:
         return {
             "linear_rgb": result.linear_rgb,
             "input_size": result.input_size,
-            "input_dtype": result.input_dtype,
+            "input_dtype": result.dtype,
             "gamma": 1.0,
         }
 
@@ -515,6 +515,7 @@ class MaterialsStage:
             # Create material input
             mat_input = MaterialInput(
                 image=linear_rgb,
+                gamma=1.0,  # Always linear RGB input
                 mask=mask,
                 depth=inputs.get("depth"),
                 material_hint=inputs.get("material_hint"),

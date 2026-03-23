@@ -312,8 +312,7 @@ class Executor:
                         self.artifact_store.store(cache_key, outputs, provenance)
                     else:
                         logger.debug(
-                            f"Skipping cache storage for {node.stage_id}: "
-                            f"checkpoint_policy={checkpoint_policy.value}"
+                            f"Skipping cache storage for {node.stage_id}: " f"checkpoint_policy={checkpoint_policy.value}"
                         )
 
                 except Exception as e:

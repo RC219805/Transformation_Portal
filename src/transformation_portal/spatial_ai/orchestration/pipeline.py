@@ -99,9 +99,7 @@ class PipelineConfig:
             "apex_research_ultra",
             "experimental",
         ]:
-            raise ValueError(
-                f"Reconstruction requires research tier, got '{self.tier}' " "(Inria 3DGS license restriction)"
-            )
+            raise ValueError(f"Reconstruction requires research tier, got '{self.tier}' " "(Inria 3DGS license restriction)")
 
 
 @dataclass
@@ -445,8 +443,7 @@ class SpatialAIPipeline:
                     import OpenEXR  # noqa: F401
                 except ImportError:
                     raise RuntimeError(
-                        "strict_ingest=True with emit_exr=True requires OpenEXR. "
-                        "Install with: pip install OpenEXR Imath"
+                        "strict_ingest=True with emit_exr=True requires OpenEXR. " "Install with: pip install OpenEXR Imath"
                     )
 
             # Execute
