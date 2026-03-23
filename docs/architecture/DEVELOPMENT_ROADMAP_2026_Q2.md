@@ -227,14 +227,22 @@ Align all binding and operational documents with the current enforced state and 
 **Rule:**  
 No policy change is considered **Complete** until the corresponding governance docs are updated.
 
+**Review Cadence and Update Triggers:**
+- **Monthly review:** End of each sprint (see document footer)
+- **Immediate update triggers:**
+  - Any CI workflow policy change (marker selection, typecheck blocking, action refs)
+  - Coverage threshold changes
+  - New ADR acceptance affecting CI or testing
+- **Owner responsibility:** Architect maintains binding docs within 1-week SLA of policy change
+
 **Acceptance Gates:**
 
 | Gate | Criteria | Status |
 |------|----------|--------|
 | Decision | Governance document scope and owners confirmed | ✅ Complete |
-| Implementation | Documents updated | ⏳ Partial |
-| Validation | No contradictions remain between enforcement and documentation | ⏳ Pending |
-| Governance | Review cadence and update trigger documented | ⏳ Pending |
+| Implementation | Documents updated | ✅ Complete (2026-03-23) |
+| Validation | No contradictions remain between enforcement and documentation | ✅ Complete |
+| Governance | Review cadence and update trigger documented | ✅ Complete |
 
 **Effort:** 4–6 hours  
 **Owner:** Architect
@@ -330,9 +338,9 @@ Best done after orchestrator boundaries and workflow governance are stabilized.
 
 | Priority | Workstream | Status | Rationale |
 |----------|------------|--------|-----------|
-| Now | Quality Control Plane Canonicalization | ⏳ Partial (action refs normalized, docs aligned, typecheck added to build.yml) | Highest leverage; removes CI ambiguity and folds in marker/runtime normalization |
+| Now | Quality Control Plane Canonicalization | ⏳ Partial (action refs ✅, docs ✅, typecheck ✅, marker selection pending) | Highest leverage; removes CI ambiguity and folds in marker/runtime normalization |
 | Now | Orchestrator Residual Slimming & Boundary Enforcement | Partial | Core maintainability risk remains active |
-| Now | Governance Synchronization | ⏳ Partial (core docs updated) | Required for policy integrity |
+| Now | Governance Synchronization | ✅ Complete | Required for policy integrity |
 | Next | Coverage Ramp Phase 1 | Open | High ROI once CI targeting is stable |
 | Later | Documentation Consolidation | Open | Valuable, but not before execution controls are clean |
 | Later | Circular Import Contract Hardening | Open | Important follow-on once boundaries stabilize |
@@ -375,28 +383,35 @@ Current baseline: **3** (`build.yml`, `ci.yml`, `ci-quality-firewall.yml` have m
 
 | Metric | Current | Target |
 |--------|---------|--------|
-| `orchestrator.py` LOC | 5,676 | 5,476 |
-| Responsibility domains in facade | 5 | ≤5 (no new domains) |
+| `orchestrator.py` LOC | 5,676 (verified 2026-03-23) | 5,476 |
+| Responsibility domains in facade | 5 (verified) | ≤5 (no new domains) |
 | Delegation / contract tests across extracted boundaries | ~180 | +10/quarter |
 
-**Responsibility domain inventory:**
+**Responsibility domain inventory (verified 2026-03-23):**
 1. Depth stage execution (per-image backend fallback, cache management)
 2. V2 stage execution (subprocess coordination)
 3. PBR generation (texture pipeline)
 4. Materials V3 execution (APEX quality gates)
 5. Artifact persistence (run card, Merkle roots)
 
+**Import health:** No direct circular imports; module imports successfully when dependencies are present.
+
 ### Governance Freshness
 
-**Baseline established during Governance Synchronization (2026-03-22).**
+**Baseline established during Governance Synchronization (2026-03-22), updated 2026-03-23.**
 
 | Metric | Current | Target |
 |--------|---------|--------|
-| Binding docs updated within SLA after policy change | ✅ 100% (updated 2026-03-22) | 100% within 1 week |
-| Stale documents contradicting current enforcement | 0 (core docs aligned) | 0 |
+| Binding docs updated within SLA after policy change | ✅ 100% (updated 2026-03-23) | 100% within 1 week |
+| Stale documents contradicting current enforcement | 0 (verified 2026-03-23) | 0 |
 
 **Binding-doc scope:**  
 This roadmap ✅, `CONTRIBUTING.md` ✅, `docs/testing/STRATEGY.md` ✅, ADR status pages, and CI / workflow documentation.
+
+**Recent updates (2026-03-23):**
+- Typecheck policy documented in CONTRIBUTING.md (blocking gate)
+- Canonical workflow table updated in STRATEGY.md
+- Roadmap v1.3.0 with metrics refresh
 
 ---
 
