@@ -44,8 +44,7 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Any, Dict, List, Literal, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 
@@ -317,9 +316,9 @@ class NVDiffRecBackend:
 
     def reconstruct_with_materials(
         self,
-        request: "MultiViewReconstructionRequest",
+        request: "MultiViewReconstructionRequest",  # noqa: F821
         config: Optional[NVDiffRecConfig] = None,
-    ) -> "Scene3D":
+    ) -> "Scene3D":  # noqa: F821
         """Reconstruct 3D scene with materials from multi-view images.
 
         Performs joint optimization of:
@@ -340,7 +339,6 @@ class NVDiffRecBackend:
         """
         from transformation_portal.core.geometry import MultiViewReconstructionRequest
         from transformation_portal.spatial_ai.reconstruction.contracts import (
-            CameraParams,
             GaussianSplat,
             Scene3D,
         )
@@ -354,9 +352,7 @@ class NVDiffRecBackend:
 
         # Validate request
         if not isinstance(request, MultiViewReconstructionRequest):
-            raise TypeError(
-                f"Expected MultiViewReconstructionRequest, got {type(request).__name__}"
-            )
+            raise TypeError(f"Expected MultiViewReconstructionRequest, got {type(request).__name__}")
 
         num_views = request.num_views
         logger.info(f"NVDIFFREC reconstruction: {num_views} views, {config.iterations} iterations")
@@ -425,10 +421,7 @@ class NVDiffRecBackend:
                 },
             )
 
-            logger.info(
-                f"NVDIFFREC reconstruction complete: {num_gaussians} primitives, "
-                f"time={elapsed:.1f}s"
-            )
+            logger.info(f"NVDIFFREC reconstruction complete: {num_gaussians} primitives, " f"time={elapsed:.1f}s")
 
             return scene
 
@@ -438,8 +431,8 @@ class NVDiffRecBackend:
 
     def _create_reconstruction_cameras(
         self,
-        request: "MultiViewReconstructionRequest",
-    ) -> List["CameraParams"]:
+        request: "MultiViewReconstructionRequest",  # noqa: F821
+    ) -> List["CameraParams"]:  # noqa: F821
         """Convert request cameras to reconstruction CameraParams."""
         from transformation_portal.spatial_ai.reconstruction.contracts import CameraParams
 
@@ -480,9 +473,7 @@ class NVDiffRecBackend:
         }
 
         if torch.cuda.is_available():
-            saved_state["cuda"] = [
-                torch.cuda.get_rng_state(i) for i in range(torch.cuda.device_count())
-            ]
+            saved_state["cuda"] = [torch.cuda.get_rng_state(i) for i in range(torch.cuda.device_count())]
 
         random.seed(seed)
         torch.manual_seed(seed)

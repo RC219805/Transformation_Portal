@@ -205,20 +205,14 @@ class TestNVDiffRecBackendReconstruction:
     def _make_cameras(self, count: int) -> list:
         """Create test cameras."""
         return [
-            CoreCameraParams(
-                fx=800.0, fy=800.0, cx=32.0, cy=24.0,
-                width=64, height=48, source="explicit"
-            )
+            CoreCameraParams(fx=800.0, fy=800.0, cx=32.0, cy=24.0, width=64, height=48, source="explicit")
             for _ in range(count)
         ]
 
     def _make_images(self, count: int, seed: int = 42) -> list:
         """Create test image arrays with fixed seed for determinism."""
         np.random.seed(seed)
-        return [
-            np.random.rand(48, 64, 3).astype(np.float32)
-            for _ in range(count)
-        ]
+        return [np.random.rand(48, 64, 3).astype(np.float32) for _ in range(count)]
 
     @pytest.mark.ml
     def test_reconstruct_with_materials_returns_scene(self):
@@ -293,8 +287,13 @@ class TestNVDiffRecPreset:
         """NVDIFFREC preset file exists."""
         from pathlib import Path
 
-        preset_path = Path(__file__).parent.parent.parent.parent / \
-            "config" / "presets" / "experimental" / "nvdiffrec_reconstruction.yaml"
+        preset_path = (
+            Path(__file__).parent.parent.parent.parent
+            / "config"
+            / "presets"
+            / "experimental"
+            / "nvdiffrec_reconstruction.yaml"
+        )
 
         if not preset_path.exists():
             preset_path = Path("config/presets/experimental/nvdiffrec_reconstruction.yaml")
@@ -303,11 +302,17 @@ class TestNVDiffRecPreset:
 
     def test_preset_structure(self):
         """NVDIFFREC preset has required structure."""
-        import yaml
         from pathlib import Path
 
-        preset_path = Path(__file__).parent.parent.parent.parent / \
-            "config" / "presets" / "experimental" / "nvdiffrec_reconstruction.yaml"
+        import yaml
+
+        preset_path = (
+            Path(__file__).parent.parent.parent.parent
+            / "config"
+            / "presets"
+            / "experimental"
+            / "nvdiffrec_reconstruction.yaml"
+        )
 
         if not preset_path.exists():
             preset_path = Path("config/presets/experimental/nvdiffrec_reconstruction.yaml")

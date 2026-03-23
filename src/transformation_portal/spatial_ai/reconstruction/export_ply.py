@@ -18,15 +18,16 @@ Reference:
 from __future__ import annotations
 
 import hashlib
-import json
 import logging
 import struct
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, Optional
 
 import numpy as np
+
+from transformation_portal.ingest.canonical_json import dump_json
 
 logger = logging.getLogger(__name__)
 
@@ -119,7 +120,7 @@ class PLYExporter:
         lines = [
             "ply",
             f"format {'binary_little_endian' if binary else 'ascii'} 1.0",
-            f"comment Transformation Portal Gaussian Splatting Export",
+            "comment Transformation Portal Gaussian Splatting Export",
             f"comment Generated: {datetime.now(timezone.utc).isoformat()}",
             f"element vertex {num_points}",
             "property float x",
@@ -132,18 +133,22 @@ class PLYExporter:
 
         if include_attrs:
             # Scales (3D)
-            lines.extend([
-                "property float scale_x",
-                "property float scale_y",
-                "property float scale_z",
-            ])
+            lines.extend(
+                [
+                    "property float scale_x",
+                    "property float scale_y",
+                    "property float scale_z",
+                ]
+            )
             # Rotations (quaternion)
-            lines.extend([
-                "property float rot_w",
-                "property float rot_x",
-                "property float rot_y",
-                "property float rot_z",
-            ])
+            lines.extend(
+                [
+                    "property float rot_w",
+                    "property float rot_x",
+                    "property float rot_y",
+                    "property float rot_z",
+                ]
+            )
             # Opacity
             lines.append("property float opacity")
 
@@ -211,11 +216,18 @@ class PLYExporter:
                     scale = splats.scales[i]
                     rot = splats.rotations[i]
                     opacity = splats.opacities[i, 0]
-                    line_parts.extend([
-                        f"{scale[0]:.6f}", f"{scale[1]:.6f}", f"{scale[2]:.6f}",
-                        f"{rot[0]:.6f}", f"{rot[1]:.6f}", f"{rot[2]:.6f}", f"{rot[3]:.6f}",
-                        f"{opacity:.6f}",
-                    ])
+                    line_parts.extend(
+                        [
+                            f"{scale[0]:.6f}",
+                            f"{scale[1]:.6f}",
+                            f"{scale[2]:.6f}",
+                            f"{rot[0]:.6f}",
+                            f"{rot[1]:.6f}",
+                            f"{rot[2]:.6f}",
+                            f"{rot[3]:.6f}",
+                            f"{opacity:.6f}",
+                        ]
+                    )
 
                 f.write(" ".join(line_parts) + "\n")
 
@@ -269,7 +281,7 @@ class PLYExporter:
             provenance["request_metadata"] = additional_metadata
 
         with open(sidecar_path, "w", encoding="utf-8") as f:
-            json.dump(provenance, f, indent=2, ensure_ascii=False)
+            dump_json(provenance, f, indent=2, ensure_ascii=False)
 
         logger.debug(f"Provenance sidecar written: {sidecar_path}")
 

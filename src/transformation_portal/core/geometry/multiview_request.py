@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 
@@ -100,8 +100,7 @@ class MultiViewReconstructionRequest:
         # Gamma enforcement
         if abs(self.gamma - 1.0) > 1e-6:
             raise ValueError(
-                f"Reconstruction requires gamma=1.0 (linear RGB), got {self.gamma}. "
-                "Input images must be pre-linearized."
+                f"Reconstruction requires gamma=1.0 (linear RGB), got {self.gamma}. " "Input images must be pre-linearized."
             )
 
         # Input validation: either paths or arrays (check BEFORE view count)
@@ -117,10 +116,7 @@ class MultiViewReconstructionRequest:
 
         # Camera count alignment
         if len(self.cameras) != num_views:
-            raise ValueError(
-                f"Camera count ({len(self.cameras)}) must match "
-                f"view count ({num_views})"
-            )
+            raise ValueError(f"Camera count ({len(self.cameras)}) must match " f"view count ({num_views})")
 
         # Camera source validation
         self._validate_camera_sources()
@@ -178,9 +174,7 @@ class MultiViewReconstructionRequest:
             CameraValidationError: If synthetic cameras present and not allowed.
         """
         if self.has_synthetic_cameras and not self.allow_synthetic_cameras:
-            synthetic_indices = [
-                i for i, cam in enumerate(self.cameras) if cam.source == "synthetic"
-            ]
+            synthetic_indices = [i for i, cam in enumerate(self.cameras) if cam.source == "synthetic"]
             raise CameraValidationError(
                 f"Reconstruction requires verified cameras (explicit or exif). "
                 f"Synthetic cameras found at indices: {synthetic_indices}. "
@@ -206,10 +200,7 @@ class MultiViewReconstructionRequest:
 
         num_views = self.num_views
         if len(self.depth_maps) != num_views:
-            raise ValueError(
-                f"Depth map count ({len(self.depth_maps)}) must match "
-                f"view count ({num_views})"
-            )
+            raise ValueError(f"Depth map count ({len(self.depth_maps)}) must match " f"view count ({num_views})")
 
         for i, depth in enumerate(self.depth_maps):
             if depth.dtype != np.float32:
@@ -222,10 +213,7 @@ class MultiViewReconstructionRequest:
 
         num_views = self.num_views
         if len(self.masks) != num_views:
-            raise ValueError(
-                f"Mask count ({len(self.masks)}) must match "
-                f"view count ({num_views})"
-            )
+            raise ValueError(f"Mask count ({len(self.masks)}) must match " f"view count ({num_views})")
 
         for i, mask in enumerate(self.masks):
             if mask.dtype != bool:

@@ -476,7 +476,7 @@ class SpatialAIPipeline:
 
     def process_multiview(
         self,
-        request: "MultiViewReconstructionRequest",
+        request: "MultiViewReconstructionRequest",  # noqa: F821
         output_dir: Union[str, Path],
         save_intermediates: bool = True,
     ) -> "MultiViewReconstructionResult":
@@ -526,12 +526,11 @@ class SpatialAIPipeline:
         """
         from transformation_portal.core.geometry import MultiViewReconstructionRequest
         from transformation_portal.spatial_ai.reconstruction import (
-            PLYExporter,
             PLYExportConfig,
+            PLYExporter,
             SceneBuilder,
         )
         from transformation_portal.spatial_ai.reconstruction.contracts import (
-            CameraParams as ReconstructionCameraParams,
             ReconstructionInput,
         )
 
@@ -545,23 +544,16 @@ class SpatialAIPipeline:
                 "Use process() for single-image pipeline."
             )
 
-        logger.info(
-            f"Starting multi-view reconstruction: {request.num_views} views -> {output_dir}"
-        )
-        logger.info(
-            f"Camera sources: {request.get_camera_source_summary()}, "
-            f"tier={request.tier}"
-        )
+        logger.info(f"Starting multi-view reconstruction: {request.num_views} views -> {output_dir}")
+        logger.info(f"Camera sources: {request.get_camera_source_summary()}, " f"tier={request.tier}")
 
         # Re-validate tier (defense-in-depth)
         if request.tier not in self.VALID_RECONSTRUCTION_TIERS:
             raise ValueError(
-                f"Reconstruction requires research tier {self.VALID_RECONSTRUCTION_TIERS}, "
-                f"got '{request.tier}'."
+                f"Reconstruction requires research tier {self.VALID_RECONSTRUCTION_TIERS}, " f"got '{request.tier}'."
             )
 
         self.progress_tracker.start_pipeline()
-        start_time = self.progress_tracker._start_time
 
         try:
             with self.resource_manager:
@@ -571,8 +563,8 @@ class SpatialAIPipeline:
                 # Load images if paths provided
                 images = self._load_multiview_images(request)
 
-                # Build ReconstructionInput
-                reconstruction_input = ReconstructionInput(
+                # Validate ReconstructionInput (build but not stored)
+                ReconstructionInput(
                     images=images,
                     gamma=request.gamma,
                     cameras=recon_cameras,
@@ -617,9 +609,7 @@ class SpatialAIPipeline:
 
                 export_config = PLYExportConfig(
                     binary=self.config.reconstruction.get("export_binary", True),
-                    include_attributes=self.config.reconstruction.get(
-                        "export_include_attributes", True
-                    ),
+                    include_attributes=self.config.reconstruction.get("export_include_attributes", True),
                 )
                 exporter = PLYExporter(export_config)
 
@@ -649,10 +639,7 @@ class SpatialAIPipeline:
             )
 
             self.progress_tracker.complete_pipeline(success=True)
-            logger.info(
-                f"Multi-view reconstruction completed in {execution_time:.1f}s, "
-                f"peak memory {peak_memory:.1f}MB"
-            )
+            logger.info(f"Multi-view reconstruction completed in {execution_time:.1f}s, " f"peak memory {peak_memory:.1f}MB")
 
             # Save summary if requested
             if save_intermediates:
@@ -672,7 +659,7 @@ class SpatialAIPipeline:
 
     def _convert_to_reconstruction_cameras(
         self,
-        request: "MultiViewReconstructionRequest",
+        request: "MultiViewReconstructionRequest",  # noqa: F821
     ) -> list:
         """Convert CoreCameraParams to reconstruction CameraParams.
 
@@ -710,7 +697,7 @@ class SpatialAIPipeline:
 
     def _load_multiview_images(
         self,
-        request: "MultiViewReconstructionRequest",
+        request: "MultiViewReconstructionRequest",  # noqa: F821
     ) -> list:
         """Load images from paths or return provided arrays."""
         if request.images is not None:

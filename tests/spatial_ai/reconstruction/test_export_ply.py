@@ -1,8 +1,6 @@
 """Tests for PLY export functionality (Phase 2.3 MVP)."""
 
 import json
-import struct
-from pathlib import Path
 
 import numpy as np
 import pytest

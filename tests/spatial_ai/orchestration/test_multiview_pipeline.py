@@ -8,7 +8,6 @@ Tests the process_multiview entrypoint with:
 """
 
 import json
-from pathlib import Path
 
 import numpy as np
 import pytest
@@ -16,14 +15,18 @@ import pytest
 pytest.importorskip("torch", reason="torch is required for multiview pipeline tests")
 pytestmark = pytest.mark.ml
 
-from transformation_portal.core.geometry import CoreCameraParams, MultiViewReconstructionRequest
-from transformation_portal.core.geometry.multiview_request import CameraValidationError
-from transformation_portal.spatial_ai.orchestration.pipeline import (
+from transformation_portal.core.geometry import (  # noqa: E402
+    CoreCameraParams,
+    MultiViewReconstructionRequest,
+)
+from transformation_portal.core.geometry.multiview_request import (  # noqa: E402
+    CameraValidationError,
+)
+from transformation_portal.spatial_ai.orchestration.pipeline import (  # noqa: E402
     MultiViewReconstructionResult,
     PipelineConfig,
     SpatialAIPipeline,
 )
-from transformation_portal.spatial_ai.orchestration.error_handler import PipelineError
 
 
 class TestMultiviewPipelineValidation:
@@ -32,19 +35,13 @@ class TestMultiviewPipelineValidation:
     def _make_cameras(self, count: int, source: str = "explicit") -> list:
         """Create test cameras."""
         return [
-            CoreCameraParams(
-                fx=800.0, fy=800.0, cx=512.0, cy=384.0,
-                width=1024, height=768, source=source
-            )
+            CoreCameraParams(fx=800.0, fy=800.0, cx=512.0, cy=384.0, width=1024, height=768, source=source)
             for _ in range(count)
         ]
 
     def _make_images(self, count: int) -> list:
         """Create test image arrays."""
-        return [
-            np.ones((768, 1024, 3), dtype=np.float32) * 0.5
-            for _ in range(count)
-        ]
+        return [np.ones((768, 1024, 3), dtype=np.float32) * 0.5 for _ in range(count)]
 
     def _make_pipeline(self, tier: str = "apex_research") -> SpatialAIPipeline:
         """Create test pipeline."""
@@ -101,18 +98,14 @@ class TestMultiviewPipelineExecution:
     def _make_cameras(self, count: int, source: str = "explicit") -> list:
         return [
             CoreCameraParams(
-                fx=800.0, fy=800.0, cx=512.0, cy=384.0,
-                width=64, height=48, source=source  # Small images for tests
+                fx=800.0, fy=800.0, cx=512.0, cy=384.0, width=64, height=48, source=source  # Small images for tests
             )
             for _ in range(count)
         ]
 
     def _make_images(self, count: int, seed: int = 42) -> list:
         np.random.seed(seed)
-        return [
-            np.random.rand(48, 64, 3).astype(np.float32)  # Small random images
-            for _ in range(count)
-        ]
+        return [np.random.rand(48, 64, 3).astype(np.float32) for _ in range(count)]  # Small random images
 
     def _make_pipeline(self, iterations: int = 20) -> SpatialAIPipeline:
         config = PipelineConfig(
@@ -193,7 +186,7 @@ class TestMultiviewPipelineExecution:
             optimization_seed=42,
         )
 
-        result = pipeline.process_multiview(request, tmp_path, save_intermediates=True)
+        pipeline.process_multiview(request, tmp_path, save_intermediates=True)
 
         summary_path = tmp_path / "reconstruction_summary.json"
         assert summary_path.exists()
@@ -232,19 +225,13 @@ class TestMultiviewDeterminism:
 
     def _make_cameras(self, count: int) -> list:
         return [
-            CoreCameraParams(
-                fx=800.0, fy=800.0, cx=32.0, cy=24.0,
-                width=64, height=48, source="explicit"
-            )
+            CoreCameraParams(fx=800.0, fy=800.0, cx=32.0, cy=24.0, width=64, height=48, source="explicit")
             for _ in range(count)
         ]
 
     def _make_images(self, count: int, seed: int = 42) -> list:
         np.random.seed(seed)
-        return [
-            np.random.rand(48, 64, 3).astype(np.float32)
-            for _ in range(count)
-        ]
+        return [np.random.rand(48, 64, 3).astype(np.float32) for _ in range(count)]
 
     def _make_pipeline(self) -> SpatialAIPipeline:
         config = PipelineConfig(

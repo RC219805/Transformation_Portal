@@ -20,61 +20,40 @@ class TestCoreCameraParams:
 
     def test_valid_explicit_camera(self):
         """Explicit cameras are valid and verified."""
-        camera = CoreCameraParams(
-            fx=800.0, fy=800.0, cx=512.0, cy=384.0,
-            width=1024, height=768, source="explicit"
-        )
+        camera = CoreCameraParams(fx=800.0, fy=800.0, cx=512.0, cy=384.0, width=1024, height=768, source="explicit")
         assert camera.is_verified
         assert camera.source == "explicit"
 
     def test_valid_exif_camera(self):
         """EXIF cameras are valid and verified."""
-        camera = CoreCameraParams(
-            fx=800.0, fy=800.0, cx=512.0, cy=384.0,
-            width=1024, height=768, source="exif"
-        )
+        camera = CoreCameraParams(fx=800.0, fy=800.0, cx=512.0, cy=384.0, width=1024, height=768, source="exif")
         assert camera.is_verified
         assert camera.source == "exif"
 
     def test_valid_synthetic_camera(self):
         """Synthetic cameras are valid but not verified."""
-        camera = CoreCameraParams(
-            fx=800.0, fy=800.0, cx=512.0, cy=384.0,
-            width=1024, height=768, source="synthetic"
-        )
+        camera = CoreCameraParams(fx=800.0, fy=800.0, cx=512.0, cy=384.0, width=1024, height=768, source="synthetic")
         assert not camera.is_verified
         assert camera.source == "synthetic"
 
     def test_invalid_source_rejected(self):
         """Invalid camera source raises ValueError."""
         with pytest.raises(ValueError, match="source must be"):
-            CoreCameraParams(
-                fx=800.0, fy=800.0, cx=512.0, cy=384.0,
-                width=1024, height=768, source="unknown"
-            )
+            CoreCameraParams(fx=800.0, fy=800.0, cx=512.0, cy=384.0, width=1024, height=768, source="unknown")
 
     def test_invalid_focal_length_rejected(self):
         """Negative focal length raises ValueError."""
         with pytest.raises(ValueError, match="Focal lengths must be positive"):
-            CoreCameraParams(
-                fx=-800.0, fy=800.0, cx=512.0, cy=384.0,
-                width=1024, height=768
-            )
+            CoreCameraParams(fx=-800.0, fy=800.0, cx=512.0, cy=384.0, width=1024, height=768)
 
     def test_invalid_dimensions_rejected(self):
         """Non-positive dimensions raise ValueError."""
         with pytest.raises(ValueError, match="dimensions must be positive"):
-            CoreCameraParams(
-                fx=800.0, fy=800.0, cx=512.0, cy=384.0,
-                width=0, height=768
-            )
+            CoreCameraParams(fx=800.0, fy=800.0, cx=512.0, cy=384.0, width=0, height=768)
 
     def test_intrinsics_tuple(self):
         """to_intrinsics_tuple returns correct values."""
-        camera = CoreCameraParams(
-            fx=800.0, fy=750.0, cx=512.0, cy=384.0,
-            width=1024, height=768
-        )
+        camera = CoreCameraParams(fx=800.0, fy=750.0, cx=512.0, cy=384.0, width=1024, height=768)
         assert camera.to_intrinsics_tuple() == (800.0, 750.0, 512.0, 384.0)
 
 
@@ -84,19 +63,13 @@ class TestMultiViewReconstructionRequestValidation:
     def _make_cameras(self, count: int, source: str = "explicit") -> list:
         """Create test cameras."""
         return [
-            CoreCameraParams(
-                fx=800.0, fy=800.0, cx=512.0, cy=384.0,
-                width=1024, height=768, source=source
-            )
+            CoreCameraParams(fx=800.0, fy=800.0, cx=512.0, cy=384.0, width=1024, height=768, source=source)
             for _ in range(count)
         ]
 
     def _make_images(self, count: int) -> list:
         """Create test image arrays."""
-        return [
-            np.ones((768, 1024, 3), dtype=np.float32) * 0.5
-            for _ in range(count)
-        ]
+        return [np.ones((768, 1024, 3), dtype=np.float32) * 0.5 for _ in range(count)]
 
     def test_reject_single_view(self):
         """Single-view input is rejected."""
@@ -209,8 +182,7 @@ class TestMultiViewReconstructionRequestTierEnforcement:
 
     def _make_cameras(self, count: int) -> list:
         return [
-            CoreCameraParams(fx=800, fy=800, cx=512, cy=384, width=1024, height=768, source="explicit")
-            for _ in range(count)
+            CoreCameraParams(fx=800, fy=800, cx=512, cy=384, width=1024, height=768, source="explicit") for _ in range(count)
         ]
 
     def _make_images(self, count: int) -> list:
@@ -273,8 +245,7 @@ class TestMultiViewReconstructionRequestGammaEnforcement:
 
     def _make_cameras(self, count: int) -> list:
         return [
-            CoreCameraParams(fx=800, fy=800, cx=512, cy=384, width=1024, height=768, source="explicit")
-            for _ in range(count)
+            CoreCameraParams(fx=800, fy=800, cx=512, cy=384, width=1024, height=768, source="explicit") for _ in range(count)
         ]
 
     def _make_images(self, count: int) -> list:
@@ -313,8 +284,7 @@ class TestMultiViewReconstructionRequestInputValidation:
 
     def _make_cameras(self, count: int) -> list:
         return [
-            CoreCameraParams(fx=800, fy=800, cx=512, cy=384, width=1024, height=768, source="explicit")
-            for _ in range(count)
+            CoreCameraParams(fx=800, fy=800, cx=512, cy=384, width=1024, height=768, source="explicit") for _ in range(count)
         ]
 
     def test_reject_neither_images_nor_paths(self):
@@ -398,10 +368,7 @@ class TestMultiViewReconstructionRequestMetadata:
     """Tests for metadata and summary methods."""
 
     def _make_cameras(self, count: int, source: str = "explicit") -> list:
-        return [
-            CoreCameraParams(fx=800, fy=800, cx=512, cy=384, width=1024, height=768, source=source)
-            for _ in range(count)
-        ]
+        return [CoreCameraParams(fx=800, fy=800, cx=512, cy=384, width=1024, height=768, source=source) for _ in range(count)]
 
     def _make_images(self, count: int) -> list:
         return [np.ones((768, 1024, 3), dtype=np.float32) for _ in range(count)]

@@ -4,7 +4,6 @@ Integration tests for multi-view reconstruction orchestration.
 Tests core contracts without requiring full ML stack.
 """
 
-import json
 from pathlib import Path
 
 import numpy as np
@@ -24,19 +23,12 @@ class TestReconstructionMVPContracts:
         if sources is None:
             sources = ["explicit"] * count
         return [
-            CoreCameraParams(
-                fx=800.0, fy=800.0, cx=512.0, cy=384.0,
-                width=1024, height=768, source=src
-            )
-            for src in sources
+            CoreCameraParams(fx=800.0, fy=800.0, cx=512.0, cy=384.0, width=1024, height=768, source=src) for src in sources
         ]
 
     def _make_images(self, count: int) -> list:
         """Create test image arrays."""
-        return [
-            np.ones((768, 1024, 3), dtype=np.float32) * 0.5
-            for _ in range(count)
-        ]
+        return [np.ones((768, 1024, 3), dtype=np.float32) * 0.5 for _ in range(count)]
 
     # --- View Count Tests ---
 
@@ -282,11 +274,7 @@ class TestReconstructionMVPMetadata:
 
     def _make_cameras(self, count: int) -> list:
         return [
-            CoreCameraParams(
-                fx=800, fy=800, cx=512, cy=384,
-                width=1024, height=768, source="explicit"
-            )
-            for _ in range(count)
+            CoreCameraParams(fx=800, fy=800, cx=512, cy=384, width=1024, height=768, source="explicit") for _ in range(count)
         ]
 
     def _make_images(self, count: int) -> list:
@@ -346,7 +334,13 @@ class TestReconstructionMVPPreset:
 
     def test_preset_file_exists(self):
         """MVP preset file exists."""
-        preset_path = Path(__file__).parent.parent.parent.parent / "config" / "presets" / "experimental" / "spatial_ai_reconstruction_mvp.yaml"
+        preset_path = (
+            Path(__file__).parent.parent.parent.parent
+            / "config"
+            / "presets"
+            / "experimental"
+            / "spatial_ai_reconstruction_mvp.yaml"
+        )
 
         # Handle case where test is run from different locations
         if not preset_path.exists():
@@ -358,7 +352,13 @@ class TestReconstructionMVPPreset:
         """MVP preset has required structure."""
         import yaml
 
-        preset_path = Path(__file__).parent.parent.parent.parent / "config" / "presets" / "experimental" / "spatial_ai_reconstruction_mvp.yaml"
+        preset_path = (
+            Path(__file__).parent.parent.parent.parent
+            / "config"
+            / "presets"
+            / "experimental"
+            / "spatial_ai_reconstruction_mvp.yaml"
+        )
 
         if not preset_path.exists():
             preset_path = Path("config/presets/experimental/spatial_ai_reconstruction_mvp.yaml")
