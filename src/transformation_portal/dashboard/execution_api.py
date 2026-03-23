@@ -441,7 +441,10 @@ def get_execution_ui_html() -> str:
 
                 case 'node_skipped':
                     if (runs[msg.run_id]) {
+                        // Merge into existing node data to preserve any prior fields
+                        const existingNode = runs[msg.run_id].nodes[msg.node] || {};
                         runs[msg.run_id].nodes[msg.node] = {
+                            ...existingNode,
                             status: 'skipped',
                             reason: msg.reason
                         };

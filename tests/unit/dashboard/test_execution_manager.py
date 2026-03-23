@@ -12,45 +12,18 @@ Tests cover:
 from __future__ import annotations
 
 import asyncio
-import threading
-from typing import Any, Dict, List
 from unittest.mock import AsyncMock
 
 import pytest
 
 from transformation_portal.dashboard.execution_manager import (
     ExecutionManager,
-    NodeState,
     NodeStatus,
     RunState,
     RunStatus,
 )
 
 pytestmark = pytest.mark.unit
-
-
-class RecorderNode:
-    """Test node that records its execution for assertions."""
-
-    def __init__(self, node_id: str, record_list: List[str]) -> None:
-        self.node_id = node_id
-        self.record_list = record_list
-
-    def run(self, **inputs: Any) -> Dict[str, Any]:
-        self.record_list.append(self.node_id)
-        return {"recorded": self.node_id}
-
-
-class BlockingNode:
-    """Test node that blocks until an event is set."""
-
-    def __init__(self, event: threading.Event) -> None:
-        self.event = event
-
-    def run(self, **inputs: Any) -> Dict[str, Any]:
-        # Block until event is set (allows test to control execution timing)
-        self.event.wait(timeout=10)
-        return {"completed": True}
 
 
 class TestPrepareRun:
@@ -118,17 +91,20 @@ class TestPrepareRun:
         manager = ExecutionManager()
         manager._max_history = 5
 
-        # Create more runs than max_history
+        # Create runs and mark some as complete (terminal state)
         created_ids = []
-        for _ in range(7):
+        for i in range(7):
             run_id = manager.allocate_run_id()
             manager.prepare_run(run_id, {"nodes": [], "edges": []})
+            # Mark first few as complete so they can be trimmed
+            if i < 4:
+                manager.active_runs[run_id].status = RunStatus.COMPLETE
             created_ids.append(run_id)
 
-        # First two should be trimmed
+        # First two completed runs should be trimmed
         assert created_ids[0] not in manager.active_runs
         assert created_ids[1] not in manager.active_runs
-        # Last five should remain
+        # Last five (mix of complete and pending) should remain
         assert created_ids[2] in manager.active_runs
         assert created_ids[6] in manager.active_runs
         assert len(manager.run_history) == 5

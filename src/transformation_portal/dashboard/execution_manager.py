@@ -216,11 +216,33 @@ class ExecutionManager:
         self.active_runs[run_id] = run_state
         self.run_history.append(run_id)
 
-        # Trim history if needed
+        # Trim history if needed, but avoid evicting active runs
         while len(self.run_history) > self._max_history:
             old_id = self.run_history.pop(0)
-            if old_id in self.active_runs:
-                del self.active_runs[old_id]
+
+            # If we no longer track this run in active_runs, just drop it
+            old_run_state = self.active_runs.get(old_id)
+            if old_run_state is None:
+                continue
+
+            # Do not evict runs that still have a live task registered
+            if old_id in self._tasks_by_run_id:
+                # Put it back at the end to preserve visibility
+                self.run_history.append(old_id)
+                break
+
+            # Only evict runs that are in a terminal state
+            if old_run_state.status not in (
+                RunStatus.COMPLETE,
+                RunStatus.ERROR,
+                RunStatus.CANCELLED,
+            ):
+                # Still active; keep it in history and stop trimming
+                self.run_history.append(old_id)
+                break
+
+            # Safe to evict from active_runs
+            del self.active_runs[old_id]
 
         return run_state
 
@@ -246,7 +268,14 @@ class ExecutionManager:
 
         Returns:
             asyncio.Task running the pipeline execution
+
+        Raises:
+            ValueError: If a task is already registered for this run_id
         """
+        # Reject duplicate starts to prevent concurrent mutations
+        if run_id in self._tasks_by_run_id:
+            raise ValueError(f"Task already registered for run_id {run_id}. " "Cannot start duplicate pipeline execution.")
+
         # Pre-register run state so it's immediately queryable
         if run_id not in self.active_runs:
             self.prepare_run(run_id, pipeline)
@@ -386,15 +415,14 @@ class ExecutionManager:
             # Execute nodes in order
             results: Dict[str, Any] = {}
 
-            for node_id in execution_order:
+            for idx, node_id in enumerate(execution_order):
                 # Check for cancellation before starting each node
                 if run_state.cancel_requested:
                     # Mark this and remaining nodes as SKIPPED
                     # Check both PENDING and QUEUED: nodes start as PENDING after prepare_run(),
                     # then transition to QUEUED when added to scheduler. Either status indicates
                     # the node hasn't started executing and can be safely skipped.
-                    remaining_idx = execution_order.index(node_id)
-                    for skip_id in execution_order[remaining_idx:]:
+                    for skip_id in execution_order[idx:]:
                         skip_state = run_state.nodes.get(skip_id)
                         if skip_state and skip_state.status in (NodeStatus.PENDING, NodeStatus.QUEUED):
                             skip_state.status = NodeStatus.SKIPPED

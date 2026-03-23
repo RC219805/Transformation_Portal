@@ -11,8 +11,7 @@ Tests cover:
 
 from __future__ import annotations
 
-from typing import Any, Dict, Generator
-from unittest.mock import AsyncMock, patch
+from typing import Generator
 
 import pytest
 from fastapi import FastAPI
@@ -20,7 +19,6 @@ from fastapi.testclient import TestClient
 
 from transformation_portal.dashboard.execution_api import (
     create_execution_router,
-    get_manager,
     set_manager,
 )
 from transformation_portal.dashboard.execution_manager import (
