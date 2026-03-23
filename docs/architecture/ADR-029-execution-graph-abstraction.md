@@ -1,11 +1,18 @@
 # ADR-029: Execution Graph Abstraction for Spatial AI Orchestration
 
-**Status:** Proposed
+**Status:** IMPLEMENTED
 **Date:** 2026-02-12
+**Updated:** 2026-03-23
 **Authority:** Transformation Portal Architect
 **Supersedes:** None
 **Related:** ADR-027 (Phase 2 Extension), Phase 3 Foundation (v2.1.0-phase2-foundation)
 **Enforcement:** CI gates (determinism, cache correctness), provenance validation
+
+**Implementation Status:**
+- Core abstractions (ExecutionGraph, Stage, Executor, ArtifactStore): ✅ Complete
+- Stage adapters (IngestStage, SegmentationStage, MaterialsStage): ✅ Complete (2026-03-23)
+- Pipeline integration (use_execution_graph flag): ✅ Complete (2026-03-23)
+- Graph-based execution path: ✅ Complete (2026-03-23)
 
 ---
 

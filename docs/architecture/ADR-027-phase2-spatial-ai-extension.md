@@ -1,11 +1,30 @@
 # ADR-027: Phase 2 Spatial AI Extension Architecture
 
-**Status:** Proposed
+**Status:** PARTIALLY IMPLEMENTED
 **Date:** 2026-02-11
+**Updated:** 2026-03-23
 **Authority:** Transformation Portal Architect
 **Supersedes:** None
 **Related:** ADR-023 (Isolation), ADR-026 (APEX Research Ultra), Phase 1 (PR #906), Phase 1.1 (PR #907)
 **Enforcement:** CI gates (isolation, HF revisions), contract validation
+
+**Implementation Status:**
+- Phase 2.1 (SAM2 Segmentation): ✅ Complete
+- Phase 2.2 (Materials):
+  - Contracts and interfaces: ✅ Complete
+  - Heuristic fallback backend: ✅ Complete
+  - PBRFusion integration: ⏳ Placeholder (requires ComfyUI)
+  - NVDIFFREC integration: ⏳ Placeholder (pending HuggingFace integration)
+  - MaterialGAN integration: ⏳ Placeholder (CC BY-NC 4.0 research tier)
+- Phase 2.3 (3D Reconstruction): ⏳ Not yet implemented (single-view only)
+- Phase 2.4 (Orchestration): ✅ Complete (see ADR-029)
+
+**Note on Materials Backends:**
+The MaterialBackend class supports multiple backends (pbr_fusion, nvdiffrec, material_gan),
+but these are currently placeholder implementations that fall back to the heuristic backend.
+This is expected behavior for the initial Phase 2.2 release. Full ML-based materials
+generation is planned for a future phase once the HuggingFace model integration
+and ComfyUI subprocess infrastructure are complete.
 
 ---
 

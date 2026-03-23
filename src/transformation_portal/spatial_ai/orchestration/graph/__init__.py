@@ -44,6 +44,13 @@ from .artifact_store import ArtifactStore, CacheLockTimeout, ProvenanceMetadata
 from .execution_graph import ExecutionGraph, ExecutionPlan, StageNode
 from .executor import ExecutionContext, ExecutionResult, Executor
 from .stage import ResourceRequirements, Stage, StageMetadata
+from .stage_adapters import (
+    IngestStage,
+    IngestStageConfig,
+    MaterialsStage,
+    SegmentationStage,
+    build_spatial_ai_graph,
+)
 
 __all__ = [
     # Stage protocol
@@ -62,4 +69,10 @@ __all__ = [
     "Executor",
     "ExecutionContext",
     "ExecutionResult",
+    # Stage adapters (ADR-029 integration)
+    "IngestStage",
+    "IngestStageConfig",
+    "SegmentationStage",
+    "MaterialsStage",
+    "build_spatial_ai_graph",
 ]
