@@ -1,10 +1,10 @@
 # Development Roadmap: Q2 2026
 
 **Status:** ACTIVE  
-**Version:** 1.2.0  
-**Date:** 2026-03-22  
+**Version:** 1.3.0  
+**Date:** 2026-03-23  
 **Authority:** Architect Assessment  
-**Supersedes:** v1.1.0 (2026-03-22), v1.0.0 (2026-03-20)
+**Supersedes:** v1.2.0 (2026-03-22), v1.1.0 (2026-03-22), v1.0.0 (2026-03-20)
 
 ---
 
@@ -114,13 +114,13 @@ The repository already encodes a **provisional canonical decision**: `ci.yml` ex
 - `quality-gate.yml` remains an older helper workflow with its own quality behavior
 - ~~Version-tag action refs are still present in `ci-quality-firewall.yml` and `quality-gate.yml`~~ → ✅ Fixed (SHA-pinned as of 2026-03-22)
 - `-n auto` is enabled for pytest in `ci.yml`, but remains absent in `build.yml` and `ci-quality-firewall.yml`
-- Typecheck policy varies across the plane: hard-fail in `ci.yml` (critical modules), soft-fail in `ci-quality-firewall.yml`, absent in `build.yml` and `quality-gate.yml`
+- ~~Typecheck policy varies across the plane: hard-fail in `ci.yml` (critical modules), soft-fail in `ci-quality-firewall.yml`, absent in `build.yml` and `quality-gate.yml`~~ → ✅ `build.yml` now has hard-fail mypy (2026-03-23)
 
 **Quality Control Plane Inventory:**
 
 | Workflow | Trigger | Current Role | Branch-Protection Relevance | Marker Semantics | Typecheck Policy | Action Ref Style | Target Disposition |
 |----------|---------|--------------|-----------------------------|------------------|------------------|------------------|-------------------|
-| `build.yml` | PR, push, dispatch | De facto PR gate | Yes | Legacy negative selection | No dedicated typecheck gate | SHA-pinned | Canonical |
+| `build.yml` | PR, push, dispatch | De facto PR gate | Yes | Legacy negative selection | ✅ Hard-fail mypy | SHA-pinned | Canonical |
 | `ci.yml` | push | Post-merge validation | No | Legacy negative selection | Hard-fail mypy (critical modules) | SHA-pinned | Align with canonical or narrow scope |
 | `ci-quality-firewall.yml` | `workflow_run`, dispatch | Post-CI verification | No | Legacy negative selection | Soft-fail mypy | ✅ SHA-pinned | Align, narrow, or retire |
 | `quality-gate.yml` | PR, push | Legacy helper workflow | Non-canonical / ambiguous | N/A | N/A | ✅ SHA-pinned | Retire or scope down |
@@ -136,7 +136,7 @@ Establish one canonical PR gating workflow (`build.yml`) with explicit policy, t
 - Runtime validation targets for canonical CI
 - Documentation alignment (`CONTRIBUTING.md`, `docs/testing/STRATEGY.md`, workflow docs) ✅
 - Action reference normalization within the quality-control plane ✅
-- Typecheck policy normalization for branch-protection-relevant quality workflows
+- Typecheck policy normalization for branch-protection-relevant quality workflows ✅
 
 **Target Outcome:**
 - `build.yml` formally designated as canonical for branch protection ✅ (documented)
@@ -150,7 +150,7 @@ Establish one canonical PR gating workflow (`build.yml`) with explicit policy, t
 | Gate | Criteria | Status |
 |------|----------|--------|
 | Decision | Formal control-plane inventory approved; canonical workflow and role boundaries documented | ✅ Complete |
-| Implementation | Workflow alignment changes merged; obsolete workflows retired or narrowed; action refs normalized | ⏳ Partial |
+| Implementation | Workflow alignment changes merged; obsolete workflows retired or narrowed; action refs normalized; typecheck normalized | ⏳ Partial (typecheck added to build.yml) |
 | Validation | Canonical CI runtime targets measured and reported | ⏳ Pending |
 | Governance | Workflow documentation, `CONTRIBUTING.md`, and testing strategy aligned | ✅ Complete |
 
@@ -330,7 +330,7 @@ Best done after orchestrator boundaries and workflow governance are stabilized.
 
 | Priority | Workstream | Status | Rationale |
 |----------|------------|--------|-----------|
-| Now | Quality Control Plane Canonicalization | ⏳ Partial (action refs normalized, docs aligned) | Highest leverage; removes CI ambiguity and folds in marker/runtime normalization |
+| Now | Quality Control Plane Canonicalization | ⏳ Partial (action refs normalized, docs aligned, typecheck added to build.yml) | Highest leverage; removes CI ambiguity and folds in marker/runtime normalization |
 | Now | Orchestrator Residual Slimming & Boundary Enforcement | Partial | Core maintainability risk remains active |
 | Now | Governance Synchronization | ⏳ Partial (core docs updated) | Required for policy integrity |
 | Next | Coverage Ramp Phase 1 | Open | High ROI once CI targeting is stable |
@@ -355,17 +355,17 @@ A scoped workflow counts toward **Workflow Parity Debt** if it has at least one 
 | Quality-control workflows (scoped total) | 4 | N/A (informational) |
 | QC workflows still using legacy negative marker selection | 3 | 0 |
 | QC workflows with version-tag or mixed action refs | 0 | 0 |
-| QC workflows with unresolved typecheck policy | 2 | 0 |
+| QC workflows with unresolved typecheck policy | 1 | 0 |
 | QC workflows with divergent coverage / artifact behavior | Baseline by 2026-04-05 | 0 |
 
-**Metric derivation (updated 2026-03-22):**
+**Metric derivation (updated 2026-03-23):**
 - **Marker selection (3):** `build.yml`, `ci.yml`, `ci-quality-firewall.yml` use legacy negative selection; `quality-gate.yml` has no test jobs
 - **Version-tag refs (0):** ✅ All quality-control workflows now use SHA-pinned action refs
-- **Typecheck policy (2):** `build.yml` has no dedicated typecheck gate; `ci-quality-firewall.yml` uses soft-fail; `ci.yml` has hard-fail (target state)
+- **Typecheck policy (1):** ✅ `build.yml` now has hard-fail mypy (2026-03-23); `ci.yml` has hard-fail (aligned); `ci-quality-firewall.yml` uses soft-fail (remaining debt); `quality-gate.yml` N/A
 
 **Composite Metric:**  
 **Workflow Parity Debt = number of scoped workflows with ≥1 unresolved parity defect.**  
-Current baseline: **3** (`build.yml`, `ci.yml`, `ci-quality-firewall.yml` have marker selection debt; `quality-gate.yml` resolved via SHA-pinning). Target: **0**.
+Current baseline: **3** (`build.yml`, `ci.yml`, `ci-quality-firewall.yml` have marker selection debt). Target: **0**.
 
 ### Orchestrator Residual Debt
 
@@ -399,7 +399,7 @@ This roadmap ✅, `CONTRIBUTING.md` ✅, `docs/testing/STRATEGY.md` ✅, ADR sta
 ## Quarterly Success Metrics (Lagging Indicators)
 
 **Note:**  
-The Q1 2026 column reflects audit-time state (2026-03-20). The **Current** column reflects the state this roadmap is written against on 2026-03-22.
+The Q1 2026 column reflects audit-time state (2026-03-20). The **Current** column reflects the state as of 2026-03-23.
 
 | Metric | Q1 2026 (Audit) | Current | Q2 Target | Measurement |
 |--------|-----------------|---------|-----------|-------------|
@@ -408,7 +408,7 @@ The Q1 2026 column reflects audit-time state (2026-03-20). The **Current** colum
 | Test marker coverage | 48.6% | 100% | 100% maintained | `check_test_markers.py --audit` |
 | Code coverage | 25.44% | 25.44% | 28% | `pytest-cov` |
 | Canonical CI time (`build.yml`) | 65–75 min | TBD | 40–50 min | GitHub Actions |
-| Workflow Parity Debt (QC) | N/A | 3 (action refs normalized) | 0 | Quality-control workflows only |
+| Workflow Parity Debt (QC) | N/A | 3 (action refs + typecheck normalized) | 0 | Quality-control workflows only |
 
 ---
 

@@ -207,7 +207,7 @@ def mock_depth_model(deterministic_rng):
 
 | Workflow | Role | Marker Semantics | Typecheck Policy |
 |----------|------|------------------|------------------|
-| `build.yml` | **Canonical PR gate** | Legacy negative selection | No dedicated gate |
+| `build.yml` | **Canonical PR gate** | Legacy negative selection | Hard-fail mypy |
 | `ci.yml` | Post-merge validation | Legacy negative selection | Hard-fail mypy |
 | `ci-quality-firewall.yml` | Post-CI verification | Legacy negative selection | Soft-fail mypy |
 
@@ -220,6 +220,7 @@ def mock_depth_model(deterministic_rng):
 | Job | Python | Requirements | Markers |
 |-----|--------|--------------|---------|
 | Lint | 3.12 | `requirements-lint.txt` | N/A |
+| Typecheck | 3.12 | `mypy`, `types-PyYAML` | N/A |
 | Core Tests | 3.11, 3.12 | `requirements-ci.txt` | `not ml and not slow and not benchmark` |
 | ML Tests | 3.11 | CPU torch + CI deps | `ml and not slow and not integration and not benchmark` |
 
