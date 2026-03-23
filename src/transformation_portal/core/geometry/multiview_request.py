@@ -28,8 +28,6 @@ class CameraValidationError(ValueError):
     This indicates that camera provenance requirements are not met.
     """
 
-    pass
-
 
 @dataclass(frozen=True)
 class MultiViewReconstructionRequest:
@@ -246,7 +244,7 @@ class MultiViewReconstructionRequest:
 
         num_views = self.num_views
         if len(self.depth_maps) != num_views:
-            raise ValueError(f"Depth map count ({len(self.depth_maps)}) must match " f"view count ({num_views})")
+            raise ValueError(f"Depth map count ({len(self.depth_maps)}) must match view count ({num_views})")
 
         expected_dims = self.expected_spatial_dims
 
@@ -304,9 +302,7 @@ class MultiViewReconstructionRequest:
 
         num_views = self.num_views
         if len(self.material_maps) != num_views:
-            raise ValueError(
-                f"Material map count ({len(self.material_maps)}) must match " f"view count ({num_views})"
-            )
+            raise ValueError(f"Material map count ({len(self.material_maps)}) must match " f"view count ({num_views})")
 
         expected_dims = self.expected_spatial_dims
         valid_keys = {"albedo", "roughness", "metallic", "normal"}
@@ -317,10 +313,7 @@ class MultiViewReconstructionRequest:
 
             for key, arr in mat_dict.items():
                 if key not in valid_keys:
-                    raise ValueError(
-                        f"Material map {i} has invalid key '{key}'. "
-                        f"Valid keys: {valid_keys}"
-                    )
+                    raise ValueError(f"Material map {i} has invalid key '{key}'. " f"Valid keys: {valid_keys}")
 
                 if not isinstance(arr, np.ndarray):
                     raise ValueError(f"Material map {i}['{key}'] must be ndarray, got {type(arr)}")
