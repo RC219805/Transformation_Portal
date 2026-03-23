@@ -14,6 +14,10 @@ import logging
 from pathlib import Path
 from typing import Any, Optional
 
+from fastapi import APIRouter, HTTPException
+from fastapi.responses import HTMLResponse, JSONResponse
+from pydantic import BaseModel, Field
+
 from transformation_portal.core.security.fs_guard import (
     FSContext,
     FSPolicyError,
@@ -25,19 +29,6 @@ from transformation_portal.core.security.path_safety import (
 )
 
 logger = logging.getLogger(__name__)
-
-# Optional FastAPI import
-try:
-    from fastapi import APIRouter, HTTPException
-    from fastapi.responses import HTMLResponse, JSONResponse
-    from pydantic import BaseModel, Field
-
-    FASTAPI_AVAILABLE = True
-except ImportError:
-    FASTAPI_AVAILABLE = False
-    APIRouter = None
-    Field = None  # type: ignore[assignment,misc]
-
 
 # Default pipelines directory and FSGuard context
 _pipelines_dir: Path = Path("pipelines")
@@ -148,20 +139,17 @@ class PipelineDefinition(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
-def create_dag_editor_router() -> "APIRouter":
+def create_dag_editor_router() -> APIRouter:
     """Create the DAG editor router.
 
     Returns:
         FastAPI APIRouter with pipeline editing endpoints
     """
-    if not FASTAPI_AVAILABLE:
-        raise ImportError("FastAPI is required for DAG editor")
-
     router = APIRouter(prefix="/api/editor", tags=["editor"])
     fs = get_fs_guard()
 
     @router.get("/pipelines")
-    async def list_pipelines():
+    async def list_pipelines() -> JSONResponse:
         """List all saved pipelines.
 
         Note: Uses FSGuard.list_dir for audit logging consistency.
@@ -189,7 +177,7 @@ def create_dag_editor_router() -> "APIRouter":
         return JSONResponse({"pipelines": pipelines})
 
     @router.get("/pipelines/{name}")
-    async def get_pipeline(name: str):
+    async def get_pipeline(name: str) -> JSONResponse:
         """Get a specific pipeline definition."""
         _pipelines_dir.mkdir(parents=True, exist_ok=True)
         filepath = _get_safe_pipeline_path(name)
@@ -204,7 +192,7 @@ def create_dag_editor_router() -> "APIRouter":
             raise HTTPException(status_code=500, detail=str(exc))
 
     @router.post("/pipelines/{name}")
-    async def save_pipeline(name: str, payload: PipelineDefinition):
+    async def save_pipeline(name: str, payload: PipelineDefinition) -> JSONResponse:
         """Save a pipeline definition.
 
         Args:
@@ -226,7 +214,7 @@ def create_dag_editor_router() -> "APIRouter":
             raise HTTPException(status_code=500, detail=str(exc))
 
     @router.delete("/pipelines/{name}")
-    async def delete_pipeline(name: str):
+    async def delete_pipeline(name: str) -> JSONResponse:
         """Delete a pipeline definition."""
         filepath = _get_safe_pipeline_path(name)
 
@@ -241,7 +229,7 @@ def create_dag_editor_router() -> "APIRouter":
             raise HTTPException(status_code=500, detail=str(exc))
 
     @router.get("/node-types")
-    async def get_node_types():
+    async def get_node_types() -> JSONResponse:
         """Get available node types for the editor."""
         return JSONResponse(
             {
@@ -293,7 +281,7 @@ def create_dag_editor_router() -> "APIRouter":
         )
 
     @router.get("/", response_class=HTMLResponse)
-    async def editor_ui():
+    async def editor_ui() -> str:
         """Serve the DAG editor UI."""
         return get_dag_editor_html()
 
