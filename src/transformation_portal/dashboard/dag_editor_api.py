@@ -136,7 +136,11 @@ class PipelineEdge(BaseModel):
 
 
 class PipelineDefinition(BaseModel):
-    """Complete pipeline definition."""
+    """Complete pipeline definition.
+
+    Note: The name field defaults to empty because save_pipeline() always
+    overrides it with the name from the URL path for consistency.
+    """
 
     name: str = ""
     nodes: list[dict[str, Any]] = Field(default_factory=list)
@@ -167,7 +171,8 @@ def create_dag_editor_router() -> "APIRouter":
         pipelines = []
         # Use FSGuard for directory listing to maintain audit trail
         for p in fs.list_dir(_pipelines_dir):
-            if p.suffix != ".json":
+            # Skip directories and non-JSON files
+            if not p.is_file() or p.suffix != ".json":
                 continue
             try:
                 data = json.loads(fs.read_text(p))
