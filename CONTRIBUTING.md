@@ -7,7 +7,7 @@ Thank you for considering contributing to the Transformation Portal! This docume
 1. Fork the repository
 2. Create a feature branch: `git checkout -b feature/your-feature-name`
 3. Make your changes following the coding standards below
-4. Run local tests: `pytest -v tests/ -m "not ml and not slow"`
+4. Run local tests: `pytest -v tests/ -m "(unit or security or regression or golden or integration) and not slow"`
 5. Commit with clear messages
 6. Push and open a Pull Request
 
@@ -56,7 +56,7 @@ All contributions must include tests:
 
 | Marker | Dependencies | Python Versions | Command | Runtime Target |
 |--------|--------------|-----------------|---------|----------------|
-| *(default)* | Core only (no ML) | 3.11, 3.12 | `pytest -m "not ml and not slow"` | ~30s |
+| *(core)* | Core only (no ML) | 3.11, 3.12 | `pytest -m "(unit or security or regression or golden or integration) and not slow"` | ~30s |
 | `@pytest.mark.ml` | transformers, torch, diffusers | 3.11 | `pytest -m "ml and not slow"` | ~5min |
 | `@pytest.mark.slow` | Any | 3.11 | Manual/nightly | No limit |
 | `@pytest.mark.benchmark` | Any | 3.11 | Manual/nightly | No limit |
@@ -144,7 +144,7 @@ def test_foo(mock_clip):
 
 ```bash
 # Run core tests (what CI runs for fast feedback)
-pytest tests/ -m "not ml and not slow" -v
+pytest tests/ -m "(unit or security or regression or golden or integration) and not slow" -v
 
 # Run ML tests (requires ML dependencies installed)
 pytest tests/ -m "ml and not slow" -v
@@ -284,7 +284,7 @@ isort --check-only --profile=black --line-length=127 src/ tests/
 flake8 src/ tests/ --max-line-length=127
 
 # Core tests
-pytest -v tests/ -m "not ml and not slow" --maxfail=3
+pytest -v tests/ -m "(unit or security or regression or golden or integration) and not slow" --maxfail=3
 ```
 
 ### Full Pre-PR Check
@@ -328,16 +328,16 @@ All quality-control workflows use SHA-pinned action refs (normalized Q2 2026).
 
 ### Test Marker Selection
 
-> **Current State:** CI uses **negative marker selection** (e.g., `not ml and not slow`)
-> to exclude unwanted test tiers. ADR-044 defines a target state using positive marker
-> selection (e.g., `unit and not slow`). The transition will occur after validation.
+> **Current State (2026-03-23):** CI uses **positive marker selection** for core tests.
+> This explicitly selects test categories (unit, security, regression, golden, integration)
+> rather than excluding unwanted tiers.
 
 ```bash
-# Current PR gating expression (negative selection)
-pytest -v tests/ -m "not ml and not slow and not benchmark" --maxfail=1
+# PR gating expression (positive marker selection)
+pytest -v tests/ -m "(unit or security or regression or golden or integration) and not ml and not slow and not benchmark" --maxfail=1
 
-# Target state (positive selection) - not yet active
-pytest -v tests/ -m "unit and not slow" --maxfail=1
+# ML tier expression
+pytest -v tests/ -m "ml and not slow and not integration and not benchmark" --maxfail=1
 ```
 
 ## Branch Protection and Merge Requirements

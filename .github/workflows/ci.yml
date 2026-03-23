@@ -213,9 +213,10 @@ jobs:
         run: |
           # ADR-044: Enable parallel test execution with pytest-xdist for faster CI
           # -n auto: use all available CPU cores
+          # Positive marker selection: explicitly select core test categories (unit, security, regression, golden, integration)
           python -m pytest -v tests/ \
             -n auto \
-            -m "not ml and not slow and not benchmark and not stress" \
+            -m "(unit or security or regression or golden or integration) and not ml and not slow and not benchmark and not stress" \
             --cov=src/transformation_portal \
             --cov-report=xml \
             --cov-report=term \
