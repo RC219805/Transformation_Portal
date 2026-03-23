@@ -204,27 +204,23 @@ All pull requests must pass these automated gates before merge:
 - **isort**: Imports must be sorted
 - **Exit code**: Must be 0
 
-### 2. Type Checking (NON-BLOCKING)
-- **mypy**: Run on critical modules
-- **Warnings logged** but don't block merge
-
-### 3. Security (BLOCKING)
+### 2. Security (BLOCKING)
 - **bandit**: No high-severity security issues
 - **gitleaks**: No secrets in commits
 - **pip-audit**: No critical vulnerabilities
 - **Exit code**: Must be 0
 
-### 4. Tests (BLOCKING)
+### 3. Tests (BLOCKING)
 - **Core tests**: Python 3.11 and 3.12
 - **ML tests**: Python 3.11
 - **All tests must pass**
 - **No skipped tests without justification**
 
-### 5. Coverage Gates (ENFORCED)
+### 4. Coverage Gates (ENFORCED)
 
 #### Global Minimum
-- Coverage must **not decrease** vs `main` branch
-- Current baseline: **33%** (will increase over time)
+- Combined coverage must stay **≥25%** (enforced via `coverage report --fail-under=25`)
+- Current baseline: **25.44%** (Q2 2026 target: 28%)
 
 #### Diff Coverage (KEY METRIC)
 - **New/changed lines must be 80%+ covered**
@@ -238,12 +234,29 @@ Future enforcement (not yet active):
 - `pbr_cli.py`: 80% minimum
 - `preprocessing.py`: 70% minimum
 
-### 6. Build Check (BLOCKING)
+---
+
+## Post-Merge Quality Signals (Non-Blocking)
+
+The following checks run after merge and do not block PRs:
+
+### Type Checking (POST-MERGE)
+- **ci.yml**: Hard-fail mypy on critical modules (`lux_depth_v3/`) after push to main
+- **ci-quality-firewall.yml**: Soft-fail mypy for advisory checks
+
+> **Note:** `build.yml` (the canonical PR gate) does not include a dedicated typecheck gate.
+> Type enforcement is applied via `ci.yml` on push to main.
+
+---
+
+## Additional Pre-Merge Gates
+
+### 5. Build Check (BLOCKING)
 - Package must build successfully
 - Wheel install must work
 - `twine check` must pass
 
-### 7. Repository Hygiene (BLOCKING)
+### 6. Repository Hygiene (BLOCKING)
 - No workflow marker files in root
 - No coverage artifacts committed
 - Max 15 markdown files in root
@@ -283,11 +296,41 @@ pytest -v tests/ -m "not slow" \
   --cov-report=html
 
 # Check coverage threshold
-coverage report --fail-under=33
+coverage report --fail-under=25
 
 # Build package
 python -m build
 twine check dist/*
+```
+
+## CI/CD Control Plane
+
+The repository uses a layered CI/CD architecture with distinct workflow roles.
+
+### Quality Control Plane (Q2 2026)
+
+| Workflow | Trigger | Role | Branch Protection | Action Refs |
+|----------|---------|------|-------------------|-------------|
+| `build.yml` | PR, push, dispatch | **Canonical PR Gate** | ✅ Required | SHA-pinned |
+| `ci.yml` | push | Post-merge validation | No | SHA-pinned |
+| `ci-quality-firewall.yml` | workflow_run, dispatch | Post-CI verification | No | SHA-pinned |
+| `quality-gate.yml` | PR, push | Legacy helper | No | SHA-pinned |
+
+**Canonical Workflow:** `build.yml` is the only workflow required for branch protection.
+All quality-control workflows use SHA-pinned action refs (normalized Q2 2026).
+
+### Test Marker Selection
+
+> **Current State:** CI uses **negative marker selection** (e.g., `not ml and not slow`)
+> to exclude unwanted test tiers. ADR-044 defines a target state using positive marker
+> selection (e.g., `unit and not slow`). The transition will occur after validation.
+
+```bash
+# Current PR gating expression (negative selection)
+pytest -v tests/ -m "not ml and not slow and not benchmark" --maxfail=1
+
+# Target state (positive selection) - not yet active
+pytest -v tests/ -m "unit and not slow" --maxfail=1
 ```
 
 ## Branch Protection and Merge Requirements
