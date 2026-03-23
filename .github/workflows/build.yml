@@ -826,6 +826,16 @@ jobs:
         run: |
           set -euo pipefail
 
+          # Initialize result variables with default values for defensive coding.
+          # These variables are used in the full-suite enforcement block below.
+          # Having defaults ensures the script is robust if the structure ever changes.
+          # Note: lightweight and dependency-constraints are checked via direct
+          # ${{ needs.*.result }} syntax and exit early, so they don't need variables.
+          lint_result="skipped"
+          typecheck_result="skipped"
+          test_result="skipped"
+          manifest_result="skipped"
+
           # Lightweight must always succeed
           if [ "${{ needs.lightweight.result }}" != "success" ]; then
             echo "❌ lightweight checks failed"
@@ -865,7 +875,16 @@ jobs:
             fi
 
             if [ "${test_result}" != "success" ]; then
-              if [ "${test_result}" = "skipped" ] && { [ "${lint_result}" != "success" ] || [ "${typecheck_result}" != "success" ]; }; then
+              # Test job depends on preflight, lint, and typecheck (see workflow matrix).
+              # Preflight is a scheduling dependency (determines run_full), not an execution
+              # dependency that could cause test to be skipped. lint and typecheck are the
+              # actual execution dependencies. If test was skipped, check if it was likely
+              # due to lint or typecheck not succeeding.
+              dependency_not_success="false"
+              [ "${lint_result}" != "success" ] && dependency_not_success="true"
+              [ "${typecheck_result}" != "success" ] && dependency_not_success="true"
+
+              if [ "${test_result}" = "skipped" ] && [ "${dependency_not_success}" = "true" ]; then
                 echo "ℹ️ test matrix skipped due to failed dependency (lint=${lint_result}, typecheck=${typecheck_result})"
               else
                 echo "❌ test matrix did not succeed (result=${test_result})"

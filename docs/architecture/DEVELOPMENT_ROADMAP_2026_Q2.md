@@ -204,7 +204,7 @@ Work in this section is **net-new or still open** and must complete this quarter
 ### 5. Governance Synchronization
 
 **Priority:** Now
-**Status:** Partial (implementation in progress)
+**Status:** ✅ Complete (2026-03-23)
 
 **Problem Statement:**
 Policy and enforcement changes have landed, but supporting governance documents still encode stale assumptions. Current examples include:
@@ -369,11 +369,13 @@ A scoped workflow counts toward **Workflow Parity Debt** if it has at least one 
 **Metric derivation (updated 2026-03-23):**
 - **Marker selection (3):** `build.yml`, `ci.yml`, `ci-quality-firewall.yml` use legacy negative selection; `quality-gate.yml` has no test jobs
 - **Version-tag refs (0):** ✅ All quality-control workflows now use SHA-pinned action refs
-- **Typecheck policy (0):** ✅ Normalized:
-  - `build.yml`: Hard-fail mypy (PR blocking gate)
-  - `ci.yml`: Hard-fail mypy (post-merge validation, aligned)
-  - `ci-quality-firewall.yml`: Soft-fail mypy (intentional: advisory workflow, not branch-protection)
-  - `quality-gate.yml`: N/A (no typecheck job)
+- **Typecheck policy (0):** ✅ Normalized. "Unresolved" means policy not aligned with workflow's intended role:
+  - `build.yml`: Hard-fail mypy (PR blocking gate) — **aligned**
+  - `ci.yml`: Hard-fail mypy (post-merge validation) — **aligned**
+  - `ci-quality-firewall.yml`: Soft-fail mypy — **intentionally different** (advisory workflow, not branch-protection relevant; soft-fail is appropriate for its role)
+  - `quality-gate.yml`: No typecheck job — **N/A** (pre-commit style checks only)
+
+  The count is 0 because all workflows have typecheck policies appropriate to their roles. `ci-quality-firewall.yml` uses soft-fail intentionally as an advisory workflow.
 
 **Composite Metric:**
 **Workflow Parity Debt = number of scoped workflows with ≥1 unresolved parity defect.**
