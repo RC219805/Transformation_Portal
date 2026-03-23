@@ -506,3 +506,230 @@ class TestMultiViewReconstructionRequestCameraSourcesValidation:
         )
 
         assert request.camera_sources == ["explicit", "exif"]
+
+
+class TestDepthMapSpatialValidation:
+    """Tests for depth map spatial dimension validation."""
+
+    def test_reject_depth_map_dimension_mismatch(self):
+        """Depth maps with wrong spatial dimensions are rejected."""
+        cameras = [
+            CoreCameraParams(fx=800, fy=800, cx=512, cy=384, width=1024, height=768, source="explicit"),
+            CoreCameraParams(fx=800, fy=800, cx=512, cy=384, width=1024, height=768, source="explicit"),
+        ]
+        images = [np.ones((768, 1024, 3), dtype=np.float32) for _ in range(2)]
+        # Wrong dimensions: 512x512 instead of 768x1024
+        depth_maps = [np.ones((512, 512), dtype=np.float32) for _ in range(2)]
+
+        with pytest.raises(ValueError, match="do not match image dimensions"):
+            MultiViewReconstructionRequest(
+                cameras=cameras,
+                images=images,
+                depth_maps=depth_maps,
+                tier="apex_research",
+            )
+
+    def test_accept_matching_depth_map_dimensions(self):
+        """Depth maps with matching spatial dimensions are accepted."""
+        cameras = [
+            CoreCameraParams(fx=800, fy=800, cx=512, cy=384, width=1024, height=768, source="explicit"),
+            CoreCameraParams(fx=800, fy=800, cx=512, cy=384, width=1024, height=768, source="explicit"),
+        ]
+        images = [np.ones((768, 1024, 3), dtype=np.float32) for _ in range(2)]
+        depth_maps = [np.ones((768, 1024), dtype=np.float32) for _ in range(2)]
+
+        request = MultiViewReconstructionRequest(
+            cameras=cameras,
+            images=images,
+            depth_maps=depth_maps,
+            tier="apex_research",
+        )
+
+        assert request.has_depth_priors
+
+    def test_reject_3d_depth_map(self):
+        """3D depth maps are rejected (must be 2D)."""
+        cameras = [
+            CoreCameraParams(fx=800, fy=800, cx=512, cy=384, width=1024, height=768, source="explicit"),
+            CoreCameraParams(fx=800, fy=800, cx=512, cy=384, width=1024, height=768, source="explicit"),
+        ]
+        images = [np.ones((768, 1024, 3), dtype=np.float32) for _ in range(2)]
+        # Wrong shape: 3D instead of 2D
+        depth_maps = [np.ones((768, 1024, 1), dtype=np.float32) for _ in range(2)]
+
+        with pytest.raises(ValueError, match="must be 2D"):
+            MultiViewReconstructionRequest(
+                cameras=cameras,
+                images=images,
+                depth_maps=depth_maps,
+                tier="apex_research",
+            )
+
+
+class TestMaskSpatialValidation:
+    """Tests for mask spatial dimension validation."""
+
+    def test_reject_mask_dimension_mismatch(self):
+        """Masks with wrong spatial dimensions are rejected."""
+        cameras = [
+            CoreCameraParams(fx=800, fy=800, cx=512, cy=384, width=1024, height=768, source="explicit"),
+            CoreCameraParams(fx=800, fy=800, cx=512, cy=384, width=1024, height=768, source="explicit"),
+        ]
+        images = [np.ones((768, 1024, 3), dtype=np.float32) for _ in range(2)]
+        # Wrong dimensions: 512x512 instead of 768x1024
+        masks = [np.ones((512, 512), dtype=bool) for _ in range(2)]
+
+        with pytest.raises(ValueError, match="do not match image dimensions"):
+            MultiViewReconstructionRequest(
+                cameras=cameras,
+                images=images,
+                masks=masks,
+                tier="apex_research",
+            )
+
+    def test_accept_matching_mask_dimensions(self):
+        """Masks with matching spatial dimensions are accepted."""
+        cameras = [
+            CoreCameraParams(fx=800, fy=800, cx=512, cy=384, width=1024, height=768, source="explicit"),
+            CoreCameraParams(fx=800, fy=800, cx=512, cy=384, width=1024, height=768, source="explicit"),
+        ]
+        images = [np.ones((768, 1024, 3), dtype=np.float32) for _ in range(2)]
+        masks = [np.ones((768, 1024), dtype=bool) for _ in range(2)]
+
+        request = MultiViewReconstructionRequest(
+            cameras=cameras,
+            images=images,
+            masks=masks,
+            tier="apex_research",
+        )
+
+        assert request.has_segmentation
+
+    def test_reject_3d_mask(self):
+        """3D masks are rejected (must be 2D)."""
+        cameras = [
+            CoreCameraParams(fx=800, fy=800, cx=512, cy=384, width=1024, height=768, source="explicit"),
+            CoreCameraParams(fx=800, fy=800, cx=512, cy=384, width=1024, height=768, source="explicit"),
+        ]
+        images = [np.ones((768, 1024, 3), dtype=np.float32) for _ in range(2)]
+        # Wrong shape: 3D instead of 2D
+        masks = [np.ones((768, 1024, 1), dtype=bool) for _ in range(2)]
+
+        with pytest.raises(ValueError, match="must be 2D"):
+            MultiViewReconstructionRequest(
+                cameras=cameras,
+                images=images,
+                masks=masks,
+                tier="apex_research",
+            )
+
+
+class TestMaterialMapValidation:
+    """Tests for material map validation."""
+
+    def test_reject_material_map_count_mismatch(self):
+        """Material map count must match view count."""
+        cameras = [
+            CoreCameraParams(fx=800, fy=800, cx=512, cy=384, width=1024, height=768, source="explicit"),
+            CoreCameraParams(fx=800, fy=800, cx=512, cy=384, width=1024, height=768, source="explicit"),
+        ]
+        images = [np.ones((768, 1024, 3), dtype=np.float32) for _ in range(2)]
+        # Only 1 material map for 2 views
+        material_maps = [{"albedo": np.ones((768, 1024, 3), dtype=np.float32)}]
+
+        with pytest.raises(ValueError, match="must match.*view count"):
+            MultiViewReconstructionRequest(
+                cameras=cameras,
+                images=images,
+                material_maps=material_maps,
+                tier="apex_research",
+            )
+
+    def test_reject_invalid_material_key(self):
+        """Invalid material map keys are rejected."""
+        cameras = [
+            CoreCameraParams(fx=800, fy=800, cx=512, cy=384, width=1024, height=768, source="explicit"),
+            CoreCameraParams(fx=800, fy=800, cx=512, cy=384, width=1024, height=768, source="explicit"),
+        ]
+        images = [np.ones((768, 1024, 3), dtype=np.float32) for _ in range(2)]
+        material_maps = [
+            {"invalid_key": np.ones((768, 1024, 3), dtype=np.float32)},
+            {"albedo": np.ones((768, 1024, 3), dtype=np.float32)},
+        ]
+
+        with pytest.raises(ValueError, match="invalid key"):
+            MultiViewReconstructionRequest(
+                cameras=cameras,
+                images=images,
+                material_maps=material_maps,
+                tier="apex_research",
+            )
+
+    def test_reject_material_map_dimension_mismatch(self):
+        """Material maps with wrong spatial dimensions are rejected."""
+        cameras = [
+            CoreCameraParams(fx=800, fy=800, cx=512, cy=384, width=1024, height=768, source="explicit"),
+            CoreCameraParams(fx=800, fy=800, cx=512, cy=384, width=1024, height=768, source="explicit"),
+        ]
+        images = [np.ones((768, 1024, 3), dtype=np.float32) for _ in range(2)]
+        # Wrong dimensions: 512x512 instead of 768x1024
+        material_maps = [
+            {"albedo": np.ones((512, 512, 3), dtype=np.float32)},
+            {"albedo": np.ones((512, 512, 3), dtype=np.float32)},
+        ]
+
+        with pytest.raises(ValueError, match="do not match image dimensions"):
+            MultiViewReconstructionRequest(
+                cameras=cameras,
+                images=images,
+                material_maps=material_maps,
+                tier="apex_research",
+            )
+
+    def test_accept_valid_material_maps(self):
+        """Valid material maps are accepted."""
+        cameras = [
+            CoreCameraParams(fx=800, fy=800, cx=512, cy=384, width=1024, height=768, source="explicit"),
+            CoreCameraParams(fx=800, fy=800, cx=512, cy=384, width=1024, height=768, source="explicit"),
+        ]
+        images = [np.ones((768, 1024, 3), dtype=np.float32) for _ in range(2)]
+        material_maps = [
+            {
+                "albedo": np.ones((768, 1024, 3), dtype=np.float32),
+                "roughness": np.ones((768, 1024), dtype=np.float32),
+            },
+            {
+                "albedo": np.ones((768, 1024, 3), dtype=np.float32),
+                "roughness": np.ones((768, 1024), dtype=np.float32),
+            },
+        ]
+
+        request = MultiViewReconstructionRequest(
+            cameras=cameras,
+            images=images,
+            material_maps=material_maps,
+            tier="apex_research",
+        )
+
+        assert request.has_materials
+
+    def test_reject_wrong_material_dtype(self):
+        """Material maps must be float32."""
+        cameras = [
+            CoreCameraParams(fx=800, fy=800, cx=512, cy=384, width=1024, height=768, source="explicit"),
+            CoreCameraParams(fx=800, fy=800, cx=512, cy=384, width=1024, height=768, source="explicit"),
+        ]
+        images = [np.ones((768, 1024, 3), dtype=np.float32) for _ in range(2)]
+        # Wrong dtype: uint8 instead of float32
+        material_maps = [
+            {"albedo": np.ones((768, 1024, 3), dtype=np.uint8)},
+            {"albedo": np.ones((768, 1024, 3), dtype=np.uint8)},
+        ]
+
+        with pytest.raises(ValueError, match="must be float32"):
+            MultiViewReconstructionRequest(
+                cameras=cameras,
+                images=images,
+                material_maps=material_maps,
+                tier="apex_research",
+            )

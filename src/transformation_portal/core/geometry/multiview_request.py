@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -150,6 +150,10 @@ class MultiViewReconstructionRequest:
         if self.masks is not None:
             self._validate_masks()
 
+        # Material maps validation
+        if self.material_maps is not None:
+            self._validate_material_maps()
+
     @property
     def num_views(self) -> int:
         """Number of views in the reconstruction request."""
@@ -158,6 +162,17 @@ class MultiViewReconstructionRequest:
         if self.images is not None:
             return len(self.images)
         return 0
+
+    @property
+    def expected_spatial_dims(self) -> Optional[Tuple[int, int]]:
+        """Get expected (H, W) spatial dimensions from images.
+
+        Returns:
+            Tuple of (height, width) from first image, or None if no images.
+        """
+        if self.images is None or len(self.images) == 0:
+            return None
+        return (self.images[0].shape[0], self.images[0].shape[1])
 
     @property
     def has_depth_priors(self) -> bool:
@@ -225,7 +240,7 @@ class MultiViewReconstructionRequest:
                 )
 
     def _validate_depth_maps(self) -> None:
-        """Validate depth map formats and alignment."""
+        """Validate depth map formats, alignment, and spatial dimensions."""
         if self.depth_maps is None:
             return
 
@@ -233,12 +248,28 @@ class MultiViewReconstructionRequest:
         if len(self.depth_maps) != num_views:
             raise ValueError(f"Depth map count ({len(self.depth_maps)}) must match " f"view count ({num_views})")
 
+        expected_dims = self.expected_spatial_dims
+
         for i, depth in enumerate(self.depth_maps):
             if depth.dtype != np.float32:
                 raise ValueError(f"Depth map {i} must be float32, got {depth.dtype}")
 
+            # Validate shape is 2D (H, W)
+            if depth.ndim != 2:
+                raise ValueError(f"Depth map {i} must be 2D (H, W), got shape {depth.shape}")
+
+            # Validate spatial dimensions match images (if images provided)
+            if expected_dims is not None:
+                h, w = depth.shape
+                if (h, w) != expected_dims:
+                    raise ValueError(
+                        f"Depth map {i} spatial dimensions ({h}, {w}) do not match "
+                        f"image dimensions {expected_dims}. "
+                        f"All views must have matching spatial dimensions."
+                    )
+
     def _validate_masks(self) -> None:
-        """Validate mask formats and alignment."""
+        """Validate mask formats, alignment, and spatial dimensions."""
         if self.masks is None:
             return
 
@@ -246,9 +277,66 @@ class MultiViewReconstructionRequest:
         if len(self.masks) != num_views:
             raise ValueError(f"Mask count ({len(self.masks)}) must match " f"view count ({num_views})")
 
+        expected_dims = self.expected_spatial_dims
+
         for i, mask in enumerate(self.masks):
             if mask.dtype != bool:
                 raise ValueError(f"Mask {i} must be bool dtype, got {mask.dtype}")
+
+            # Validate shape is 2D (H, W)
+            if mask.ndim != 2:
+                raise ValueError(f"Mask {i} must be 2D (H, W), got shape {mask.shape}")
+
+            # Validate spatial dimensions match images (if images provided)
+            if expected_dims is not None:
+                h, w = mask.shape
+                if (h, w) != expected_dims:
+                    raise ValueError(
+                        f"Mask {i} spatial dimensions ({h}, {w}) do not match "
+                        f"image dimensions {expected_dims}. "
+                        f"All views must have matching spatial dimensions."
+                    )
+
+    def _validate_material_maps(self) -> None:
+        """Validate material map formats, alignment, and spatial dimensions."""
+        if self.material_maps is None:
+            return
+
+        num_views = self.num_views
+        if len(self.material_maps) != num_views:
+            raise ValueError(
+                f"Material map count ({len(self.material_maps)}) must match " f"view count ({num_views})"
+            )
+
+        expected_dims = self.expected_spatial_dims
+        valid_keys = {"albedo", "roughness", "metallic", "normal"}
+
+        for i, mat_dict in enumerate(self.material_maps):
+            if not isinstance(mat_dict, dict):
+                raise ValueError(f"Material map {i} must be a dict, got {type(mat_dict)}")
+
+            for key, arr in mat_dict.items():
+                if key not in valid_keys:
+                    raise ValueError(
+                        f"Material map {i} has invalid key '{key}'. "
+                        f"Valid keys: {valid_keys}"
+                    )
+
+                if not isinstance(arr, np.ndarray):
+                    raise ValueError(f"Material map {i}['{key}'] must be ndarray, got {type(arr)}")
+
+                if arr.dtype != np.float32:
+                    raise ValueError(f"Material map {i}['{key}'] must be float32, got {arr.dtype}")
+
+                # Validate spatial dimensions match images (if images provided)
+                if expected_dims is not None:
+                    h, w = arr.shape[:2]
+                    if (h, w) != expected_dims:
+                        raise ValueError(
+                            f"Material map {i}['{key}'] spatial dimensions ({h}, {w}) do not match "
+                            f"image dimensions {expected_dims}. "
+                            f"All views must have matching spatial dimensions."
+                        )
 
     def get_camera_source_summary(self) -> Dict[str, int]:
         """Get summary of camera sources.
