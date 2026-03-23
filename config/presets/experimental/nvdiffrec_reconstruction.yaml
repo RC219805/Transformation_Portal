@@ -1,0 +1,135 @@
+# NVDIFFREC Research Backend Preset
+# Phase 2.3: Experimental multi-view reconstruction with materials
+#
+# License: NVIDIA Source Code License (NON-COMMERCIAL/RESEARCH ONLY)
+#          See: https://github.com/NVlabs/nvdiffrec/blob/main/LICENSE.txt
+#
+# Tier: apex_research (research-only, strictly enforced)
+#
+# IMPORTANT: This preset uses NVDIFFREC which is NOT commercially licensed.
+# The NVIDIA Source Code License restricts use to non-commercial research
+# and evaluation purposes only. For commercial use, contact NVIDIA.
+
+tier: apex_research
+license_restriction: research_only  # NVIDIA Source Code License
+
+# Pipeline configuration
+pipeline:
+  reconstruction:
+    enabled: true
+    backend: nvdiffrec  # Multi-view joint reconstruction
+
+    # Optimization parameters (conservative for experimental)
+    iterations: 500  # Low for testing, increase for quality
+    optimization_seed: 12345  # Deterministic for testing
+
+    # Camera validation (same as Gaussian Splatting MVP)
+    require_verified_cameras: true
+    allow_synthetic_cameras: false
+
+    # Export options
+    export_binary: true
+    export_include_attributes: true
+
+# Backend configuration
+backend:
+  type: nvdiffrec
+  model:
+    # IMPORTANT: Replace with verified commit hash before production
+    # The NVlabs repo should be mirrored to HuggingFace for provenance
+    repo_id: "your-org/nvdiffrec-bundle"
+    revision: "<commit-sha>"  # MUST be pinned
+    cache_dir: null
+
+  # CUDA required (NVDIFFREC uses compiled kernels)
+  device: cuda
+
+# DMTet configuration (geometry representation)
+dmtet:
+  resolution: 128  # Grid resolution (128^3)
+  scale: 1.0
+  init_scale: 0.9
+
+# Texture/material configuration
+textures:
+  resolution: 1024  # Texture map resolution
+  channels: ["albedo", "roughness", "metallic", "normal"]
+
+# Optimization hyperparameters
+optimization:
+  learning_rate: 0.01
+  geometry_lr_mult: 1.0
+  texture_lr_mult: 1.0
+  light_lr_mult: 1.0
+
+  # Regularization
+  laplacian_weight: 0.1
+  normal_consistency_weight: 0.1
+
+# Quality targets
+quality:
+  min_views: 2  # Minimum for multi-view
+  max_vertices: 500000  # Mesh complexity limit
+
+# Phase integration
+integration:
+  use_depth_prior: false  # NVDIFFREC does its own geometry
+  use_segmentation: false
+  use_pbr_textures: true  # This IS the PBR generator
+
+# Environment requirements (preflight checks)
+requirements:
+  cuda: true
+  min_cuda_version: "11.3"
+  min_pytorch_version: "1.10"
+  nvdiffrast: true
+  high_end_gpu: true  # RTX series recommended
+
+# Provenance requirements
+provenance:
+  enabled: true
+  include_license_notice: true
+  include_revision: true
+  include_dependency_versions: true
+  include_input_hashes: true
+
+# Performance constraints
+performance:
+  max_vram_gb: 8  # NVDIFFREC is memory-intensive
+  batch_size: 1
+
+# Logging
+logging:
+  level: INFO
+  log_optimization: true
+  log_interval: 100
+
+# License notice (REQUIRED)
+license_notice: |
+  NVDIFFREC Research Backend Preset
+
+  This preset uses NVIDIA Differentiable Rendering (NVDIFFREC) which is
+  licensed under the NVIDIA Source Code License.
+
+  USAGE RESTRICTIONS:
+  - Non-commercial research and evaluation ONLY
+  - Commercial use is PROHIBITED without separate license
+  - Distribution restrictions apply
+
+  For commercial licensing, contact NVIDIA.
+
+  See: https://github.com/NVlabs/nvdiffrec/blob/main/LICENSE.txt
+
+  Paper:
+  "Extracting Triangular 3D Models, Materials, and Lighting From Images"
+  Munkberg et al., CVPR 2022
+
+# Citation
+citation: |
+  @inproceedings{munkberg2022extracting,
+    title={Extracting Triangular 3D Models, Materials, and Lighting From Images},
+    author={Munkberg, Jacob and Hasselgren, Jon and Shen, Tianchang and
+            Gao, Jun and Chen, Wenzheng and Evans, Alex and Müller, Thomas and Fidler, Sanja},
+    booktitle={Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition},
+    year={2022}
+  }

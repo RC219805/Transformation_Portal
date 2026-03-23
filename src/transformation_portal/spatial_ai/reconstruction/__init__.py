@@ -90,14 +90,19 @@ __all__ = [
     "GeometricValidator",
     # Exceptions
     "LicenseRestrictionError",
+    # NVDIFFREC backend (lazy-loaded)
+    "NVDiffRecBackend",
+    "NVDiffRecConfig",
+    "NVDiffRecLicenseError",
+    "NVDiffRecEnvironmentError",
 ]
 
 
 def __getattr__(name: str):
     """Lazy import for torch-dependent modules.
 
-    GaussianBackend and SceneBuilder both depend on torch, which may not be
-    available in non-ML test environments (e.g., enforcement tests).
+    GaussianBackend, SceneBuilder, and NVDiffRecBackend all depend on torch,
+    which may not be available in non-ML test environments.
     """
     if name == "GaussianBackend":
         from .gaussian_backend import GaussianBackend
@@ -107,4 +112,20 @@ def __getattr__(name: str):
         from .scene_builder import SceneBuilder
 
         return SceneBuilder
+    if name == "NVDiffRecBackend":
+        from .nvdiffrec_backend import NVDiffRecBackend
+
+        return NVDiffRecBackend
+    if name == "NVDiffRecConfig":
+        from .nvdiffrec_backend import NVDiffRecConfig
+
+        return NVDiffRecConfig
+    if name == "NVDiffRecLicenseError":
+        from .nvdiffrec_backend import NVDiffRecLicenseError
+
+        return NVDiffRecLicenseError
+    if name == "NVDiffRecEnvironmentError":
+        from .nvdiffrec_backend import NVDiffRecEnvironmentError
+
+        return NVDiffRecEnvironmentError
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
