@@ -9,6 +9,7 @@ Tests cover:
 from __future__ import annotations
 
 import pytest
+from pydantic import ValidationError
 
 from transformation_portal.dashboard.dag_editor_api import (
     PipelineDefinition,
@@ -88,21 +89,21 @@ class TestPipelineDefinitionNodeCoercion:
         assert pipeline.nodes == []
 
     def test_reject_string_nodes(self) -> None:
-        """Test that string input for nodes raises TypeError."""
-        with pytest.raises(TypeError, match="nodes must be a list"):
+        """Test that string input for nodes raises ValidationError."""
+        with pytest.raises(ValidationError, match="nodes"):
             PipelineDefinition(name="test", nodes="invalid")
 
     def test_reject_dict_nodes(self) -> None:
-        """Test that single dict (not list) for nodes raises TypeError."""
-        with pytest.raises(TypeError, match="nodes must be a list"):
+        """Test that single dict (not list) for nodes raises ValidationError."""
+        with pytest.raises(ValidationError, match="nodes"):
             PipelineDefinition(
                 name="test",
                 nodes={"id": "node-1", "type": "test", "label": "Test", "position": {"x": 0, "y": 0}},
             )
 
     def test_reject_integer_nodes(self) -> None:
-        """Test that integer input for nodes raises TypeError."""
-        with pytest.raises(TypeError, match="nodes must be a list"):
+        """Test that integer input for nodes raises ValidationError."""
+        with pytest.raises(ValidationError, match="nodes"):
             PipelineDefinition(name="test", nodes=123)
 
 
@@ -171,21 +172,21 @@ class TestPipelineDefinitionEdgeCoercion:
         assert pipeline.edges == []
 
     def test_reject_string_edges(self) -> None:
-        """Test that string input for edges raises TypeError."""
-        with pytest.raises(TypeError, match="edges must be a list"):
+        """Test that string input for edges raises ValidationError."""
+        with pytest.raises(ValidationError, match="edges"):
             PipelineDefinition(name="test", edges="invalid")
 
     def test_reject_dict_edges(self) -> None:
-        """Test that single dict (not list) for edges raises TypeError."""
-        with pytest.raises(TypeError, match="edges must be a list"):
+        """Test that single dict (not list) for edges raises ValidationError."""
+        with pytest.raises(ValidationError, match="edges"):
             PipelineDefinition(
                 name="test",
                 edges={"id": "edge-1", "source": "a", "target": "b"},
             )
 
     def test_reject_integer_edges(self) -> None:
-        """Test that integer input for edges raises TypeError."""
-        with pytest.raises(TypeError, match="edges must be a list"):
+        """Test that integer input for edges raises ValidationError."""
+        with pytest.raises(ValidationError, match="edges"):
             PipelineDefinition(name="test", edges=456)
 
 

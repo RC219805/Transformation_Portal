@@ -157,7 +157,7 @@ class PipelineDefinition(BaseModel):
         - None -> [] (field omitted / null)
         - []   -> [] (empty list)
         - list -> coerce each item (PipelineNode passthrough or dict -> PipelineNode)
-        - anything else -> TypeError to surface 422 to the client
+        - anything else -> ValueError to surface 422 to the client
         """
         if v is None:
             return []
@@ -165,7 +165,7 @@ class PipelineDefinition(BaseModel):
             if not v:
                 return []
             return [item if isinstance(item, PipelineNode) else PipelineNode(**item) for item in v]
-        raise TypeError("nodes must be a list of PipelineNode or dict items")
+        raise ValueError("nodes must be a list of PipelineNode or dict items")
 
     @field_validator("edges", mode="before")
     @classmethod
@@ -176,7 +176,7 @@ class PipelineDefinition(BaseModel):
         - None -> [] (field omitted / null)
         - []   -> [] (empty list)
         - list -> coerce each item (PipelineEdge passthrough or dict -> PipelineEdge)
-        - anything else -> TypeError to surface 422 to the client
+        - anything else -> ValueError to surface 422 to the client
         """
         if v is None:
             return []
@@ -184,7 +184,7 @@ class PipelineDefinition(BaseModel):
             if not v:
                 return []
             return [item if isinstance(item, PipelineEdge) else PipelineEdge(**item) for item in v]
-        raise TypeError("edges must be a list of PipelineEdge or dict items")
+        raise ValueError("edges must be a list of PipelineEdge or dict items")
 
 
 def create_dag_editor_router() -> APIRouter:
