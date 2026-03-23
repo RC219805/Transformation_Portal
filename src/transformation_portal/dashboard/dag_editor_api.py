@@ -16,7 +16,6 @@ from typing import Any, Optional
 
 from transformation_portal.core.security.fs_guard import (
     FSContext,
-    FSGuard,
     FSPolicyError,
     get_fs_guard,
 )
@@ -29,14 +28,15 @@ logger = logging.getLogger(__name__)
 
 # Optional FastAPI import
 try:
-    from fastapi import APIRouter, Body, HTTPException
+    from fastapi import APIRouter, HTTPException
     from fastapi.responses import HTMLResponse, JSONResponse
-    from pydantic import BaseModel
+    from pydantic import BaseModel, Field
 
     FASTAPI_AVAILABLE = True
 except ImportError:
     FASTAPI_AVAILABLE = False
     APIRouter = None
+    Field = None  # type: ignore[assignment,misc]
 
 
 # Default pipelines directory and FSGuard context
@@ -122,7 +122,7 @@ class PipelineNode(BaseModel):
     type: str = "default"
     label: str
     position: dict[str, float]
-    config: dict[str, Any] = {}
+    config: dict[str, Any] = Field(default_factory=dict)
 
 
 class PipelineEdge(BaseModel):
@@ -138,10 +138,10 @@ class PipelineEdge(BaseModel):
 class PipelineDefinition(BaseModel):
     """Complete pipeline definition."""
 
-    name: str
-    nodes: list[dict[str, Any]]
-    edges: list[dict[str, Any]]
-    metadata: dict[str, Any] = {}
+    name: str = ""
+    nodes: list[dict[str, Any]] = Field(default_factory=list)
+    edges: list[dict[str, Any]] = Field(default_factory=list)
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 def create_dag_editor_router() -> "APIRouter":
@@ -158,10 +158,17 @@ def create_dag_editor_router() -> "APIRouter":
 
     @router.get("/pipelines")
     async def list_pipelines():
-        """List all saved pipelines."""
+        """List all saved pipelines.
+
+        Note: Uses FSGuard.list_dir for audit logging consistency.
+        Pipeline names are derived from validated filenames only.
+        """
         _pipelines_dir.mkdir(parents=True, exist_ok=True)
         pipelines = []
-        for p in _pipelines_dir.glob("*.json"):
+        # Use FSGuard for directory listing to maintain audit trail
+        for p in fs.list_dir(_pipelines_dir):
+            if p.suffix != ".json":
+                continue
             try:
                 data = json.loads(fs.read_text(p))
                 pipelines.append(
@@ -192,16 +199,22 @@ def create_dag_editor_router() -> "APIRouter":
             raise HTTPException(status_code=500, detail=str(exc))
 
     @router.post("/pipelines/{name}")
-    async def save_pipeline(name: str, payload: dict = Body(...)):
-        """Save a pipeline definition."""
+    async def save_pipeline(name: str, payload: PipelineDefinition):
+        """Save a pipeline definition.
+
+        Args:
+            name: Pipeline name (from URL path)
+            payload: Pipeline definition (validated by Pydantic)
+        """
         _pipelines_dir.mkdir(parents=True, exist_ok=True)
         filepath = _get_safe_pipeline_path(name)
 
-        # Add metadata
-        payload["name"] = name
+        # Build save data from validated model, overriding name from URL
+        save_data = payload.model_dump()
+        save_data["name"] = name
 
         try:
-            fs.write_text(filepath, json.dumps(payload, indent=2))
+            fs.write_text(filepath, json.dumps(save_data, indent=2))
             logger.info("Saved pipeline: %s", name)
             return JSONResponse({"status": "ok", "name": name})
         except Exception as exc:
