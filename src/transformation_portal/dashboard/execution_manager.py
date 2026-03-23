@@ -211,9 +211,7 @@ class ExecutionManager:
             except asyncio.CancelledError:
                 logger.info("Pipeline run %s was cancelled", run_id)
             except Exception:
-                logger.error(
-                    "Unhandled exception in pipeline run %s", run_id, exc_info=True
-                )
+                logger.error("Unhandled exception in pipeline run %s", run_id, exc_info=True)
 
         task.add_done_callback(_log_task_result)
         return task
