@@ -16,6 +16,11 @@ from types import ModuleType
 
 import pytest
 
+# Mark all tests in this module as unit tests (ADR-044)
+pytestmark = [
+    pytest.mark.unit,
+]
+
 
 def _load_check_ci_dep_sync_module() -> ModuleType:
     """Load the script module via file path to avoid import boundary violations.

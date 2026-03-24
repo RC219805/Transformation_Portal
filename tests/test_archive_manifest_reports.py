@@ -716,7 +716,7 @@ class ArchiveManifestReportsCliTest(unittest.TestCase):
             self.assertIn("risk_weights", msg)
 
     def test_unc_path_normalization_produces_stable_origin_drive(self) -> None:
-        """Verify that Windows UNC paths (\\server\share\...) get normalized consistently.
+        r"""Verify that Windows UNC paths (\\server\share\...) get normalized consistently.
 
         UNC paths convert:
         - \\server\share\DriveA\file.CR2
