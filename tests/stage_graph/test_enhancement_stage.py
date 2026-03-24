@@ -10,8 +10,6 @@ Tests cover:
 7. Tone mapping with various depth distributions
 """
 
-import hashlib
-
 import numpy as np
 import pytest
 
