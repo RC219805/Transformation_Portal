@@ -6,21 +6,42 @@ Tests cover:
 2. Robust normalization (case, underscore/hyphen, version specifiers, comments, extras)
 3. File handling (missing files raise errors)
 """
+
 from __future__ import annotations
 
-import tempfile
+import importlib.util
 from pathlib import Path
 from textwrap import dedent
+from types import ModuleType
 
 import pytest
 
-# Import the module under test
-from scripts.validation.check_ci_dep_sync import (
-    CI_TOOLS,
-    CORE_TEST_DEPS,
-    TEST_RUNNER_PATTERN,
-    extract_packages,
-)
+
+def _load_check_ci_dep_sync_module() -> ModuleType:
+    """Load the script module via file path to avoid import boundary violations.
+
+    This repo's structural rules do not allow tests to import directly from
+    scripts.validation.*. Instead, we load the module dynamically by path.
+    """
+    repo_root = Path(__file__).resolve().parents[2]
+    module_path = repo_root / "scripts" / "validation" / "check_ci_dep_sync.py"
+
+    spec = importlib.util.spec_from_file_location(
+        "check_ci_dep_sync_under_test",
+        module_path,
+    )
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"Failed to load module from {module_path}")
+
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+@pytest.fixture(scope="module")
+def sync_module() -> ModuleType:
+    """Fixture providing the check_ci_dep_sync module loaded by file path."""
+    return _load_check_ci_dep_sync_module()
 
 
 # ============================================================================
@@ -31,36 +52,35 @@ from scripts.validation.check_ci_dep_sync import (
 class TestExtractPackagesNormalization:
     """Tests for robust package name extraction and normalization."""
 
-    def test_empty_file(self, tmp_path: Path) -> None:
+    def test_empty_file(self, tmp_path: Path, sync_module: ModuleType) -> None:
         """Empty file returns empty set."""
         req_file = tmp_path / "requirements.txt"
         req_file.write_text("")
-        assert extract_packages(req_file) == set()
+        assert sync_module.extract_packages(req_file) == set()
 
-    def test_comment_only_file(self, tmp_path: Path) -> None:
+    def test_comment_only_file(self, tmp_path: Path, sync_module: ModuleType) -> None:
         """Files with only comments return empty set."""
         req_file = tmp_path / "requirements.txt"
         req_file.write_text(dedent("""
             # This is a comment
             # Another comment
         """).strip())
-        assert extract_packages(req_file) == set()
+        assert sync_module.extract_packages(req_file) == set()
 
-    def test_whitespace_only_lines(self, tmp_path: Path) -> None:
+    def test_whitespace_only_lines(self, tmp_path: Path, sync_module: ModuleType) -> None:
         """Whitespace-only lines are skipped."""
         req_file = tmp_path / "requirements.txt"
         req_file.write_text(dedent("""
             pytest
-            
-               
+
             httpx
         """).strip())
-        packages = extract_packages(req_file)
+        packages = sync_module.extract_packages(req_file)
         assert packages == {"pytest", "httpx"}
 
-    def test_inline_comments(self, tmp_path: Path) -> None:
+    def test_inline_comments(self, tmp_path: Path, sync_module: ModuleType) -> None:
         """Inline comments after package names are handled correctly.
-        
+
         Note: Current implementation extracts package name before comment
         using regex that matches alphanumeric/dots/underscores/hyphens.
         """
@@ -69,11 +89,11 @@ class TestExtractPackagesNormalization:
             pytest>=8.0  # testing framework
             httpx>=0.28  # async HTTP client
         """).strip())
-        packages = extract_packages(req_file)
+        packages = sync_module.extract_packages(req_file)
         assert "pytest" in packages
         assert "httpx" in packages
 
-    def test_version_specifiers_stripped(self, tmp_path: Path) -> None:
+    def test_version_specifiers_stripped(self, tmp_path: Path, sync_module: ModuleType) -> None:
         """Version specifiers are removed from package names."""
         req_file = tmp_path / "requirements.txt"
         req_file.write_text(dedent("""
@@ -82,10 +102,10 @@ class TestExtractPackagesNormalization:
             hypothesis~=6.0
             jsonschema>=4.21.0,<5
         """).strip())
-        packages = extract_packages(req_file)
+        packages = sync_module.extract_packages(req_file)
         assert packages == {"pytest", "httpx", "hypothesis", "jsonschema"}
 
-    def test_case_insensitive_normalization(self, tmp_path: Path) -> None:
+    def test_case_insensitive_normalization(self, tmp_path: Path, sync_module: ModuleType) -> None:
         """Package names are normalized to lowercase per PEP 503."""
         req_file = tmp_path / "requirements.txt"
         req_file.write_text(dedent("""
@@ -93,12 +113,12 @@ class TestExtractPackagesNormalization:
             OpenCV-Python>=4.8.0
             HTTPX>=0.28
         """).strip())
-        packages = extract_packages(req_file)
+        packages = sync_module.extract_packages(req_file)
         assert "pyyaml" in packages
         assert "opencv-python" in packages
         assert "httpx" in packages
 
-    def test_underscore_to_hyphen_normalization(self, tmp_path: Path) -> None:
+    def test_underscore_to_hyphen_normalization(self, tmp_path: Path, sync_module: ModuleType) -> None:
         """Underscores are normalized to hyphens per PEP 503."""
         req_file = tmp_path / "requirements.txt"
         req_file.write_text(dedent("""
@@ -106,23 +126,23 @@ class TestExtractPackagesNormalization:
             pytest_cov>=4.0
             pytest_asyncio>=0.21
         """).strip())
-        packages = extract_packages(req_file)
+        packages = sync_module.extract_packages(req_file)
         assert "opencv-python" in packages
         assert "pytest-cov" in packages
         assert "pytest-asyncio" in packages
 
-    def test_dot_to_hyphen_normalization(self, tmp_path: Path) -> None:
+    def test_dot_to_hyphen_normalization(self, tmp_path: Path, sync_module: ModuleType) -> None:
         """Dots in package names are normalized to hyphens per PEP 503."""
         req_file = tmp_path / "requirements.txt"
         req_file.write_text(dedent("""
             zope.interface>=5.0
             ruamel.yaml>=0.18
         """).strip())
-        packages = extract_packages(req_file)
+        packages = sync_module.extract_packages(req_file)
         assert "zope-interface" in packages
         assert "ruamel-yaml" in packages
 
-    def test_extras_syntax_handling(self, tmp_path: Path) -> None:
+    def test_extras_syntax_handling(self, tmp_path: Path, sync_module: ModuleType) -> None:
         """Package names with extras are extracted correctly (extras stripped)."""
         req_file = tmp_path / "requirements.txt"
         # Note: Current regex captures up to the first non-alphanumeric/dot/underscore/hyphen,
@@ -131,26 +151,26 @@ class TestExtractPackagesNormalization:
             uvicorn[standard]>=0.25.0
             httpx[http2]>=0.28
         """).strip())
-        packages = extract_packages(req_file)
+        packages = sync_module.extract_packages(req_file)
         assert "uvicorn" in packages
         assert "httpx" in packages
         # Extras should NOT be in the package name
         assert not any("[" in p for p in packages)
 
-    def test_environment_markers_handling(self, tmp_path: Path) -> None:
+    def test_environment_markers_handling(self, tmp_path: Path, sync_module: ModuleType) -> None:
         """Package names with environment markers are extracted correctly."""
         req_file = tmp_path / "requirements.txt"
         req_file.write_text(dedent("""
             pyobjc-core>=10.0 ; sys_platform == 'darwin'
             pywin32>=306 ; sys_platform == 'win32'
         """).strip())
-        packages = extract_packages(req_file)
+        packages = sync_module.extract_packages(req_file)
         assert "pyobjc-core" in packages
         assert "pywin32" in packages
         # Markers should NOT be in the package name
         assert not any(";" in p for p in packages)
 
-    def test_r_include_lines_skipped(self, tmp_path: Path) -> None:
+    def test_r_include_lines_skipped(self, tmp_path: Path, sync_module: ModuleType) -> None:
         """Lines starting with -r are skipped (include directives)."""
         req_file = tmp_path / "requirements.txt"
         req_file.write_text(dedent("""
@@ -158,25 +178,25 @@ class TestExtractPackagesNormalization:
             -r ../base.txt
             pytest>=8.0
         """).strip())
-        packages = extract_packages(req_file)
+        packages = sync_module.extract_packages(req_file)
         assert packages == {"pytest"}
 
-    def test_mixed_normalization_scenarios(self, tmp_path: Path) -> None:
+    def test_mixed_normalization_scenarios(self, tmp_path: Path, sync_module: ModuleType) -> None:
         """Complex file with mixed scenarios is handled correctly."""
         req_file = tmp_path / "requirements.txt"
         req_file.write_text(dedent("""
             # Core dependencies
             -r requirements.txt
-            
+
             PyYAML>=6.0  # YAML parsing
             opencv_python>=4.8.0,<5
             ZOPE.Interface>=5.0 ; python_version >= '3.10'
-            
+
             # Testing
             pytest>=8.0
             pytest-cov>=4.0
         """).strip())
-        packages = extract_packages(req_file)
+        packages = sync_module.extract_packages(req_file)
         expected = {
             "pyyaml",
             "opencv-python",
@@ -195,11 +215,11 @@ class TestExtractPackagesNormalization:
 class TestExtractPackagesFileMissing:
     """Tests for fail-fast behavior when files are missing."""
 
-    def test_missing_file_raises_error(self, tmp_path: Path) -> None:
+    def test_missing_file_raises_error(self, tmp_path: Path, sync_module: ModuleType) -> None:
         """Missing file raises FileNotFoundError instead of returning empty set."""
         missing_file = tmp_path / "nonexistent.txt"
         with pytest.raises(FileNotFoundError) as exc_info:
-            extract_packages(missing_file)
+            sync_module.extract_packages(missing_file)
         assert "Required requirements file not found" in str(exc_info.value)
         assert "nonexistent.txt" in str(exc_info.value)
 
@@ -212,41 +232,47 @@ class TestExtractPackagesFileMissing:
 class TestPatternMatching:
     """Tests for the pattern constants used to detect package categories."""
 
-    @pytest.mark.parametrize("pkg", [
-        "pytest",
-        "pytest-cov",
-        "pytest-asyncio",
-        "pytest-xdist",
-        "pytest-json-report",
-        "pytest-rerunfailures",
-        "httpx",
-        "hypothesis",
-    ])
-    def test_test_runner_pattern_matches_test_deps(self, pkg: str) -> None:
+    @pytest.mark.parametrize(
+        "pkg",
+        [
+            "pytest",
+            "pytest-cov",
+            "pytest-asyncio",
+            "pytest-xdist",
+            "pytest-json-report",
+            "pytest-rerunfailures",
+            "httpx",
+            "hypothesis",
+        ],
+    )
+    def test_test_runner_pattern_matches_test_deps(self, pkg: str, sync_module: ModuleType) -> None:
         """TEST_RUNNER_PATTERN matches all test framework packages."""
-        assert TEST_RUNNER_PATTERN.match(pkg), f"Should match test runner: {pkg}"
+        assert sync_module.TEST_RUNNER_PATTERN.match(pkg), f"Should match test runner: {pkg}"
 
-    @pytest.mark.parametrize("pkg", [
-        "bandit",
-        "safety",
-        "build",
-        "twine",
-        "tox",
-        "pypdf",
-        "jsonschema",
-        "pyyaml",
-        "opencv-python",
-    ])
-    def test_test_runner_pattern_does_not_match_non_test_deps(self, pkg: str) -> None:
+    @pytest.mark.parametrize(
+        "pkg",
+        [
+            "bandit",
+            "safety",
+            "build",
+            "twine",
+            "tox",
+            "pypdf",
+            "jsonschema",
+            "pyyaml",
+            "opencv-python",
+        ],
+    )
+    def test_test_runner_pattern_does_not_match_non_test_deps(self, pkg: str, sync_module: ModuleType) -> None:
         """TEST_RUNNER_PATTERN does NOT match non-test packages."""
-        assert not TEST_RUNNER_PATTERN.match(pkg), f"Should NOT match non-test: {pkg}"
+        assert not sync_module.TEST_RUNNER_PATTERN.match(pkg), f"Should NOT match non-test: {pkg}"
 
-    def test_ci_tools_contains_expected_packages(self) -> None:
+    def test_ci_tools_contains_expected_packages(self, sync_module: ModuleType) -> None:
         """CI_TOOLS frozenset contains expected CI pipeline tools."""
         expected = {"bandit", "safety", "build", "twine", "tox", "pypdf"}
-        assert CI_TOOLS == expected
+        assert sync_module.CI_TOOLS == expected
 
-    def test_core_test_deps_contains_expected_packages(self) -> None:
+    def test_core_test_deps_contains_expected_packages(self, sync_module: ModuleType) -> None:
         """CORE_TEST_DEPS frozenset contains expected test framework packages."""
         expected = {
             "pytest",
@@ -257,7 +283,7 @@ class TestPatternMatching:
             "hypothesis",
             "httpx",
         }
-        assert CORE_TEST_DEPS == expected
+        assert sync_module.CORE_TEST_DEPS == expected
 
 
 # ============================================================================
@@ -283,7 +309,7 @@ class TestSymmetricDriftDetection:
 
         return repo
 
-    def test_detects_test_runners_in_ci_in(self, fake_repo: Path) -> None:
+    def test_detects_test_runners_in_ci_in(self, fake_repo: Path, sync_module: ModuleType) -> None:
         """Detects test runners incorrectly placed in ci.in (unwanted deps)."""
         # Setup: test runner in ci.in (wrong)
         root_ci = fake_repo / "requirements-ci.txt"
@@ -296,15 +322,13 @@ class TestSymmetricDriftDetection:
         nested_dev.write_text("pytest>=8.0\n")
 
         # Extract packages
-        nested_ci_packages = extract_packages(nested_ci)
-        test_deps_in_nested_ci = {
-            p for p in nested_ci_packages if TEST_RUNNER_PATTERN.match(p)
-        }
+        nested_ci_packages = sync_module.extract_packages(nested_ci)
+        test_deps_in_nested_ci = {p for p in nested_ci_packages if sync_module.TEST_RUNNER_PATTERN.match(p)}
 
         # Should detect pytest-asyncio in ci.in
         assert test_deps_in_nested_ci == {"pytest-asyncio"}
 
-    def test_detects_ci_tools_in_root_ci(self, fake_repo: Path) -> None:
+    def test_detects_ci_tools_in_root_ci(self, fake_repo: Path, sync_module: ModuleType) -> None:
         """Detects CI tools incorrectly placed in root requirements-ci.txt."""
         # Setup: CI tool in root (wrong)
         root_ci = fake_repo / "requirements-ci.txt"
@@ -317,15 +341,15 @@ class TestSymmetricDriftDetection:
         nested_dev.write_text("pytest>=8.0\n")
 
         # Extract packages
-        root_ci_packages = extract_packages(root_ci)
-        ci_tools_in_root = root_ci_packages & CI_TOOLS
+        root_ci_packages = sync_module.extract_packages(root_ci)
+        ci_tools_in_root = root_ci_packages & sync_module.CI_TOOLS
 
         # Should detect bandit in root
         assert ci_tools_in_root == {"bandit"}
 
-    def test_detects_missing_core_test_deps_in_dev_in(self, fake_repo: Path) -> None:
+    def test_detects_missing_core_test_deps_in_dev_in(self, fake_repo: Path, sync_module: ModuleType) -> None:
         """Detects missing test deps from dev.in that exist in root requirements-ci.txt.
-        
+
         This is the key "missing deps" check (symmetric drift detection).
         """
         # Setup: core test deps in root but NOT in dev.in
@@ -348,18 +372,18 @@ class TestSymmetricDriftDetection:
         """).strip())
 
         # Extract packages
-        root_ci_packages = extract_packages(root_ci)
-        nested_dev_packages = extract_packages(nested_dev)
+        root_ci_packages = sync_module.extract_packages(root_ci)
+        nested_dev_packages = sync_module.extract_packages(nested_dev)
 
         # Calculate missing
-        root_test_deps = root_ci_packages & CORE_TEST_DEPS
-        dev_test_deps = nested_dev_packages & CORE_TEST_DEPS
+        root_test_deps = root_ci_packages & sync_module.CORE_TEST_DEPS
+        dev_test_deps = nested_dev_packages & sync_module.CORE_TEST_DEPS
         missing_in_dev = root_test_deps - dev_test_deps
 
         # Should detect pytest-asyncio and httpx missing from dev.in
         assert missing_in_dev == {"pytest-asyncio", "httpx"}
 
-    def test_no_false_positives_when_synced(self, fake_repo: Path) -> None:
+    def test_no_false_positives_when_synced(self, fake_repo: Path, sync_module: ModuleType) -> None:
         """No drift detected when files are properly synced."""
         # Setup: everything correctly placed
         root_ci = fake_repo / "requirements-ci.txt"
@@ -391,23 +415,21 @@ class TestSymmetricDriftDetection:
         """).strip())
 
         # Extract packages
-        root_ci_packages = extract_packages(root_ci)
-        nested_ci_packages = extract_packages(nested_ci)
-        nested_dev_packages = extract_packages(nested_dev)
+        root_ci_packages = sync_module.extract_packages(root_ci)
+        nested_ci_packages = sync_module.extract_packages(nested_ci)
+        nested_dev_packages = sync_module.extract_packages(nested_dev)
 
         # Check 1: No test runners in ci.in
-        test_deps_in_nested_ci = {
-            p for p in nested_ci_packages if TEST_RUNNER_PATTERN.match(p)
-        }
+        test_deps_in_nested_ci = {p for p in nested_ci_packages if sync_module.TEST_RUNNER_PATTERN.match(p)}
         assert test_deps_in_nested_ci == set()
 
         # Check 2: No CI tools in root
-        ci_tools_in_root = root_ci_packages & CI_TOOLS
+        ci_tools_in_root = root_ci_packages & sync_module.CI_TOOLS
         assert ci_tools_in_root == set()
 
         # Check 3: All core test deps in dev.in
-        root_test_deps = root_ci_packages & CORE_TEST_DEPS
-        dev_test_deps = nested_dev_packages & CORE_TEST_DEPS
+        root_test_deps = root_ci_packages & sync_module.CORE_TEST_DEPS
+        dev_test_deps = nested_dev_packages & sync_module.CORE_TEST_DEPS
         missing_in_dev = root_test_deps - dev_test_deps
         assert missing_in_dev == set()
 
@@ -420,7 +442,7 @@ class TestSymmetricDriftDetection:
 class TestEdgeCases:
     """Tests for edge cases and unusual input."""
 
-    def test_duplicate_packages_deduplicated(self, tmp_path: Path) -> None:
+    def test_duplicate_packages_deduplicated(self, tmp_path: Path, sync_module: ModuleType) -> None:
         """Duplicate packages in file result in single entry."""
         req_file = tmp_path / "requirements.txt"
         req_file.write_text(dedent("""
@@ -428,10 +450,10 @@ class TestEdgeCases:
             pytest>=7.0
             pytest>=8.0
         """).strip())
-        packages = extract_packages(req_file)
+        packages = sync_module.extract_packages(req_file)
         assert packages == {"pytest"}
 
-    def test_normalized_duplicates_merged(self, tmp_path: Path) -> None:
+    def test_normalized_duplicates_merged(self, tmp_path: Path, sync_module: ModuleType) -> None:
         """Packages that normalize to same name are merged."""
         req_file = tmp_path / "requirements.txt"
         req_file.write_text(dedent("""
@@ -439,17 +461,17 @@ class TestEdgeCases:
             pyyaml>=5.0
             PYYAML>=7.0
         """).strip())
-        packages = extract_packages(req_file)
+        packages = sync_module.extract_packages(req_file)
         assert packages == {"pyyaml"}
 
-    def test_package_starting_with_number_handled(self, tmp_path: Path) -> None:
+    def test_package_starting_with_number_handled(self, tmp_path: Path, sync_module: ModuleType) -> None:
         """Packages starting with numbers are extracted (though rare)."""
         req_file = tmp_path / "requirements.txt"
         req_file.write_text(dedent("""
             3to2>=1.0
             2to3>=0.1
         """).strip())
-        packages = extract_packages(req_file)
+        packages = sync_module.extract_packages(req_file)
         assert "3to2" in packages
         assert "2to3" in packages
 
@@ -477,7 +499,9 @@ class TestMainIntegration:
         # We need to import main fresh after patching
         return repo
 
-    def test_main_returns_zero_when_synced(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_main_returns_zero_when_synced(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, sync_module: ModuleType
+    ) -> None:
         """main() returns 0 when no drift is detected."""
         # Create synced repo structure
         repo = tmp_path / "repo"
@@ -515,40 +539,31 @@ class TestMainIntegration:
             black>=24.0
         """).strip())
 
-        # Monkeypatch the module to use our repo
-        import scripts.validation.check_ci_dep_sync as sync_module
-        original_main = sync_module.main
+        # Run checks manually using sync_module
+        errors: list[str] = []
+        root_ci_packages = sync_module.extract_packages(root_ci)
+        nested_ci_packages = sync_module.extract_packages(nested_ci)
+        nested_dev_packages = sync_module.extract_packages(nested_dev)
 
-        def patched_main() -> int:
-            # Override repo_root detection
-            errors = []
-            root_ci_packages = sync_module.extract_packages(root_ci)
-            nested_ci_packages = sync_module.extract_packages(nested_ci)
-            nested_dev_packages = sync_module.extract_packages(nested_dev)
+        # Run the same checks
+        test_deps_in_nested_ci = {p for p in nested_ci_packages if sync_module.TEST_RUNNER_PATTERN.match(p)}
+        if test_deps_in_nested_ci:
+            errors.append(f"ERROR: test deps in ci.in: {test_deps_in_nested_ci}")
 
-            # Run the same checks
-            test_deps_in_nested_ci = {
-                p for p in nested_ci_packages if sync_module.TEST_RUNNER_PATTERN.match(p)
-            }
-            if test_deps_in_nested_ci:
-                errors.append(f"ERROR: test deps in ci.in: {test_deps_in_nested_ci}")
+        ci_tools_in_root = root_ci_packages & sync_module.CI_TOOLS
+        if ci_tools_in_root:
+            errors.append(f"ERROR: CI tools in root: {ci_tools_in_root}")
 
-            ci_tools_in_root = root_ci_packages & sync_module.CI_TOOLS
-            if ci_tools_in_root:
-                errors.append(f"ERROR: CI tools in root: {ci_tools_in_root}")
+        root_test_deps = root_ci_packages & sync_module.CORE_TEST_DEPS
+        dev_test_deps = nested_dev_packages & sync_module.CORE_TEST_DEPS
+        missing_in_dev = root_test_deps - dev_test_deps
+        if missing_in_dev:
+            errors.append(f"ERROR: missing in dev: {missing_in_dev}")
 
-            root_test_deps = root_ci_packages & sync_module.CORE_TEST_DEPS
-            dev_test_deps = nested_dev_packages & sync_module.CORE_TEST_DEPS
-            missing_in_dev = root_test_deps - dev_test_deps
-            if missing_in_dev:
-                errors.append(f"ERROR: missing in dev: {missing_in_dev}")
-
-            return 1 if errors else 0
-
-        result = patched_main()
+        result = 1 if errors else 0
         assert result == 0, "Expected main() to return 0 when synced"
 
-    def test_main_returns_one_when_drift_detected(self, tmp_path: Path) -> None:
+    def test_main_returns_one_when_drift_detected(self, tmp_path: Path, sync_module: ModuleType) -> None:
         """main() returns 1 when drift is detected."""
         # Create drifted repo structure
         repo = tmp_path / "repo"
@@ -575,16 +590,11 @@ class TestMainIntegration:
         nested_dev.write_text("pytest>=8.0\n")
 
         # Run checks manually
-        import scripts.validation.check_ci_dep_sync as sync_module
-
-        errors = []
+        errors: list[str] = []
         root_ci_packages = sync_module.extract_packages(root_ci)
         nested_ci_packages = sync_module.extract_packages(nested_ci)
-        nested_dev_packages = sync_module.extract_packages(nested_dev)
 
-        test_deps_in_nested_ci = {
-            p for p in nested_ci_packages if sync_module.TEST_RUNNER_PATTERN.match(p)
-        }
+        test_deps_in_nested_ci = {p for p in nested_ci_packages if sync_module.TEST_RUNNER_PATTERN.match(p)}
         if test_deps_in_nested_ci:
             errors.append(f"ERROR: test deps in ci.in: {test_deps_in_nested_ci}")
 
@@ -592,7 +602,7 @@ class TestMainIntegration:
         assert result == 1, "Expected main() to return 1 when drift detected"
         assert "pytest-xdist" in str(test_deps_in_nested_ci)
 
-    def test_main_returns_one_when_missing_deps(self, tmp_path: Path) -> None:
+    def test_main_returns_one_when_missing_deps(self, tmp_path: Path, sync_module: ModuleType) -> None:
         """main() returns 1 when core test deps are missing from dev.in."""
         repo = tmp_path / "repo"
         repo.mkdir()
@@ -616,8 +626,6 @@ class TestMainIntegration:
         nested_dev.write_text("pytest>=8.0\n")
 
         # Run checks manually
-        import scripts.validation.check_ci_dep_sync as sync_module
-
         root_ci_packages = sync_module.extract_packages(root_ci)
         nested_dev_packages = sync_module.extract_packages(nested_dev)
 
@@ -628,4 +636,3 @@ class TestMainIntegration:
         result = 1 if missing_in_dev else 0
         assert result == 1, "Expected main() to return 1 when deps missing from dev.in"
         assert missing_in_dev == {"pytest-asyncio", "httpx"}
-
