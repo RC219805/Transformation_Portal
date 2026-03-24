@@ -11,7 +11,6 @@ import os
 from pathlib import Path
 
 import pytest
-import yaml
 
 pytestmark = [
     pytest.mark.unit,
@@ -130,13 +129,17 @@ class TestResolveRelativePaths:
 
         base_dir = temp_workspace["root"]
 
+        # Create the results directory to trigger actual path resolution
+        results_dir = base_dir / "results"
+        results_dir.mkdir(parents=True, exist_ok=True)
+
         obj = {"output_dir": "results"}
 
         result = _resolve_relative_paths(obj, base_dir)
 
-        # Will be resolved if path separator exists or it's a relative path
-        # Since "results" doesn't contain a separator, check behavior
-        assert "results" in result["output_dir"]
+        # Should be resolved to full path since the directory exists
+        expected = str(base_dir / "results")
+        assert result["output_dir"] == expected
 
     def test_resolve_lut_key(self, temp_workspace):
         """Test resolution of keys containing 'lut'."""

@@ -8,7 +8,6 @@ Coverage Target: 70% of input_validation.py (195 statements)
 
 from __future__ import annotations
 
-import tempfile
 from pathlib import Path
 
 import numpy as np
@@ -700,9 +699,9 @@ class TestVeryHighResolutionWarning:
 
         validator = ImageValidator()
 
-        # Create a PIL image that exceeds 50 megapixels (e.g., 8000x7000 = 56MP)
-        # Using a smaller size that still triggers the warning
-        img = Image.new("RGB", (8000, 7000), color="blue")
+        # Create a PIL image that exceeds 50 megapixels using minimal dimensions
+        # 7072 x 7072 = 50,013,184 pixels (> 50MP); use grayscale to reduce memory
+        img = Image.new("L", (7072, 7072), color=0)
 
         result = validator.validate(img)
 
