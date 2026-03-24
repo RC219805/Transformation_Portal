@@ -2327,19 +2327,32 @@ async def job_events(
                 },
             )
             if job.finished_at is not None:
-                # Drain any queued events that arrived before the client connected.
-                # This ensures late-connecting clients receive all events from the job.
-                # If a 'done' event is found in the queue, we use it directly (with its
-                # original payload) rather than generating a synthetic one.
-                while True:
-                    try:
-                        ev = q.get_nowait()
+                # At this point, the job is marked finished but we have not yet seen a
+                # 'done' event in the queue. There is a potential race where
+                # job.finished_at is set before the real 'artifact'/'done' events are
+                # published. To avoid dropping those real events for late-connecting
+                # clients, wait briefly for an event to arrive before falling back to
+                # generating a synthetic 'done'.
+                try:
+                    ev = await asyncio.wait_for(q.get(), timeout=0.5)
+                except asyncio.TimeoutError:
+                    ev = None
+
+                if ev is not None:
+                    # We received at least one real event after finished_at was set.
+                    # Yield it, then drain any remaining queued events until we see
+                    # a real 'done' event or the queue is empty.
+                    while True:
                         yield _sse(ev["event"], ev["data"])
                         if ev["event"] == "done":
                             return
-                    except asyncio.QueueEmpty:
-                        break
-                # No 'done' event was queued; generate a synthetic one from job state.
+                        try:
+                            ev = q.get_nowait()
+                        except asyncio.QueueEmpty:
+                            break
+
+                # No 'done' event was observed even after the brief wait; generate a
+                # synthetic one from job state as a fallback.
                 yield _sse(
                     "done",
                     {

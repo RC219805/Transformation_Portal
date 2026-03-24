@@ -156,7 +156,8 @@ class TestPyPIWorkflows:
         assert setup_python_match, "Should use recent setup-python action (v5+)"
 
         # upload-artifact: require v4+
-        # Match either @v7 or @<sha> # v7 patterns (SHA can be upper or lowercase hex)
+        # Match either @v<major> or @<sha> # v<major> patterns (SHA can be upper or lowercase hex);
+        # the assertion below enforces v4+ as the minimum major version.
         m = re.search(r"actions/upload-artifact@(?:v(\d+)|[a-fA-F0-9]+\s*#\s*v(\d+))", content)
         if m:
             version = int(m.group(1) or m.group(2))
