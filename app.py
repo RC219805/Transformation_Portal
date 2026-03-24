@@ -294,6 +294,7 @@ class Job:
     created_at: float
     started_at: Optional[float] = None
     finished_at: Optional[float] = None
+    done_published_at: Optional[float] = None  # Set after 'done' event is published
     state: str = "queued"  # queued|running|succeeded|failed|canceled
     progress: int = 0
     exit_code: Optional[int] = None
@@ -2326,33 +2327,19 @@ async def job_events(
                     "progress": job.progress,
                 },
             )
-            if job.finished_at is not None:
-                # At this point, the job is marked finished but we have not yet seen a
-                # 'done' event in the queue. There is a potential race where
-                # job.finished_at is set before the real 'artifact'/'done' events are
-                # published. To avoid dropping those real events for late-connecting
-                # clients, wait briefly for an event to arrive before falling back to
-                # generating a synthetic 'done'.
-                try:
-                    ev = await asyncio.wait_for(q.get(), timeout=0.5)
-                except asyncio.TimeoutError:
-                    ev = None
-
-                if ev is not None:
-                    # We received at least one real event after finished_at was set.
-                    # Yield it, then drain any remaining queued events until we see
-                    # a real 'done' event or the queue is empty.
-                    while True:
+            if job.done_published_at is not None:
+                # The 'done' event has already been published to all subscribers.
+                # For a late-connecting client, we can safely drain any queued
+                # events (artifact, done, etc.) and synthesize if needed.
+                while True:
+                    try:
+                        ev = q.get_nowait()
                         yield _sse(ev["event"], ev["data"])
                         if ev["event"] == "done":
                             return
-                        try:
-                            ev = q.get_nowait()
-                        except asyncio.QueueEmpty:
-                            break
-
-                # No 'done' event was observed even after the brief wait; generate a
-                # synthetic one from job state as a fallback.
+                    except asyncio.QueueEmpty:
+                        break
+                # No 'done' event was queued; generate a synthetic one from job state.
                 yield _sse(
                     "done",
                     {
@@ -2364,6 +2351,11 @@ async def job_events(
                     },
                 )
                 return
+            elif job.finished_at is not None:
+                # Job processing finished (state is terminal) but done_published_at
+                # is not set yet. This means artifact indexing and event publication
+                # are still in progress. Wait for real events rather than synthesizing.
+                pass  # Fall through to the normal event loop below
 
             last_beat = _now()
             while True:
@@ -2506,7 +2498,10 @@ async def _run_job(job: Job, argv: List[str]) -> None:
             except Exception:
                 pass
 
-        job.finished_at = _now()
+        # Index artifacts and publish terminal events BEFORE setting finished_at.
+        # This ensures late-connecting SSE clients can deterministically check
+        # done_published_at to know if they need to wait for real events or can
+        # safely synthesize a 'done' from job state.
         indexed_artifacts = _index_job_artifacts(job)
         for artifact in indexed_artifacts:
             await _publish_event(
@@ -2526,4 +2521,8 @@ async def _run_job(job: Job, argv: List[str]) -> None:
                 "artifacts": job.artifacts,
             },
         )
+        # Mark timestamps AFTER all events are published, so SSE endpoint knows
+        # it's safe to synthesize 'done' if done_published_at is set.
+        job.done_published_at = _now()
+        job.finished_at = job.done_published_at
         _cleanup_expired_jobs(_now())

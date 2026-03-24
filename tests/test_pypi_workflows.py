@@ -151,9 +151,14 @@ class TestPyPIWorkflows:
             raise AssertionError("Should use recent checkout action (v4+)")
 
         # setup-python: require v5+
-        # Match either @v5/@v6 or @<sha> # v5/@<sha> # v6 patterns
-        setup_python_match = re.search(r"actions/setup-python@(?:v([56])|[a-fA-F0-9]+\s*#\s*v([56]))", content)
-        assert setup_python_match, "Should use recent setup-python action (v5+)"
+        # Match either @v<major> or @<sha> # v<major> patterns (SHA can be upper or lowercase hex);
+        # the assertion below enforces v5+ as the minimum major version.
+        m = re.search(r"actions/setup-python@(?:v(\d+)|[a-fA-F0-9]+\s*#\s*v(\d+))", content)
+        if m:
+            version = int(m.group(1) or m.group(2))
+            assert version >= 5, "Should use recent setup-python action (v5+)"
+        else:
+            raise AssertionError("Should use recent setup-python action (v5+)")
 
         # upload-artifact: require v4+
         # Match either @v<major> or @<sha> # v<major> patterns (SHA can be upper or lowercase hex);

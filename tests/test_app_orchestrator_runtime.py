@@ -1555,3 +1555,124 @@ def test_get_job_includes_artifacts_and_error() -> None:
     assert response.status_code == 200
     assert body["data"]["artifacts"]["output_dir"] == "/tmp/out"
     assert body["data"]["error"]["code"] == "RUNNER_ERROR"
+
+
+def test_late_connecting_client_receives_real_events_during_artifact_indexing() -> None:
+    """Regression test: client connecting during artifact indexing gets real events.
+
+    This tests the race condition where:
+    1. Job state becomes terminal (succeeded/failed)
+    2. Artifact indexing starts (can be slow on large directories)
+    3. Client connects during this window (after terminal state, before done_published_at)
+    4. Artifact and done events are published
+
+    The client should receive the real artifact/done events, NOT a synthetic done.
+    The deterministic fix uses done_published_at to distinguish between:
+    - job.finished_at is set but events not published yet -> wait for real events
+    - job.done_published_at is set -> safe to synthesize from job state
+    """
+
+    async def scenario() -> None:
+        # Setup: create job in terminal state but WITHOUT done_published_at set
+        # This simulates the window during artifact indexing
+        job = orchestrator_app.Job(
+            id="job_late_connect_test",
+            created_at=orchestrator_app._now(),
+            state="succeeded",
+            exit_code=0,
+        )
+        # Do NOT set done_published_at yet - simulates artifact indexing in progress
+        # Note: finished_at is also not set, matching the new behavior where both
+        # timestamps are set AFTER event publication
+        orchestrator_app.JOBS[job.id] = job
+        orchestrator_app.EVENT_SUBSCRIBERS[job.id] = {}
+
+        request = _FakeRequest()
+        response = await orchestrator_app.job_events(request, job.id)
+
+        collected_events = []
+
+        async def collect_events() -> None:
+            async for chunk in response.body_iterator:
+                collected_events.append(chunk)
+                if "event: done" in chunk:
+                    break
+
+        # Start collecting events in background
+        collect_task = asyncio.create_task(collect_events())
+        await asyncio.sleep(0)  # Let collector start
+
+        # Simulate the real artifact and done events being published
+        # (as would happen after artifact indexing completes)
+        await orchestrator_app._publish_event(
+            job.id,
+            "artifact",
+            {"id": job.id, "path": "output.jpg", "size": 1234, "mime_type": "image/jpeg"},
+        )
+        await orchestrator_app._publish_event(
+            job.id,
+            "done",
+            {"id": job.id, "state": "succeeded", "exit_code": 0, "error": None, "artifacts": {}},
+        )
+
+        # Wait for collector to complete
+        await asyncio.wait_for(collect_task, timeout=3)
+
+        # Join all chunks
+        full_output = "".join(collected_events)
+
+        # Verify we received the REAL artifact event (not just a synthetic done)
+        assert "event: artifact" in full_output, "Client should receive real artifact event"
+        assert '"path": "output.jpg"' in full_output or "output.jpg" in full_output
+        assert "event: done" in full_output
+
+        # Cleanup
+        orchestrator_app.JOBS.pop(job.id, None)
+        orchestrator_app.EVENT_SUBSCRIBERS.pop(job.id, None)
+
+    asyncio.run(scenario())
+
+
+def test_late_connecting_client_synthesizes_done_after_done_published_at() -> None:
+    """Test that late clients get synthetic done when done_published_at is set.
+
+    When done_published_at is set, the real events have already been published,
+    so the endpoint can safely synthesize a done event from job state.
+    """
+
+    async def scenario() -> None:
+        now = orchestrator_app._now()
+        job = orchestrator_app.Job(
+            id="job_fully_finished",
+            created_at=now - 10,
+            state="succeeded",
+            exit_code=0,
+            artifacts={"output_dir": "/tmp/out", "items": [{"path": "result.png"}]},
+        )
+        # Set both timestamps - this means events were already published
+        job.finished_at = now
+        job.done_published_at = now
+        orchestrator_app.JOBS[job.id] = job
+        orchestrator_app.EVENT_SUBSCRIBERS[job.id] = {}
+
+        request = _FakeRequest()
+        response = await orchestrator_app.job_events(request, job.id)
+
+        collected_events = []
+        async for chunk in response.body_iterator:
+            collected_events.append(chunk)
+            if "event: done" in chunk:
+                break
+
+        full_output = "".join(collected_events)
+
+        # Should get state and done events
+        assert "event: state" in full_output
+        assert "event: done" in full_output
+        assert '"state":"succeeded"' in full_output
+
+        # Cleanup
+        orchestrator_app.JOBS.pop(job.id, None)
+        orchestrator_app.EVENT_SUBSCRIBERS.pop(job.id, None)
+
+    asyncio.run(scenario())
