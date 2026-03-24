@@ -1581,9 +1581,9 @@ def test_late_connecting_client_receives_real_events_during_artifact_indexing() 
             state="succeeded",
             exit_code=0,
         )
-        # Do NOT set done_published_at yet - simulates artifact indexing in progress
-        # Note: finished_at is also not set, matching the new behavior where both
-        # timestamps are set AFTER event publication
+        # Do NOT set done_published_at yet - simulates artifact indexing in progress.
+        # Note: Neither finished_at nor done_published_at is set, simulating the
+        # window after terminal state is reached but before events are published.
         orchestrator_app.JOBS[job.id] = job
         orchestrator_app.EVENT_SUBSCRIBERS[job.id] = {}
 
