@@ -27,8 +27,8 @@ from pathlib import Path
 # ============================================================================
 
 # Packages that are test runners/frameworks (should be in dev.in, NOT ci.in)
-# Pattern matches pytest, pytest-*, httpx, hypothesis
-TEST_RUNNER_PATTERN = re.compile(r"^pytest$|^pytest-|^httpx$|^hypothesis$")
+# Pattern matches exact names: pytest, httpx, hypothesis, or any pytest-* plugin
+TEST_RUNNER_PATTERN = re.compile(r"^(pytest|pytest-.+|httpx|hypothesis)$")
 
 # CI pipeline tools (should be in ci.in, NOT root requirements-ci.txt)
 # These are security/packaging/release tools, not test runners
@@ -63,7 +63,9 @@ def extract_packages(filepath: Path) -> set[str]:
         # Pattern handles: standard names, dots (zope.interface), underscores, hyphens
         match = re.match(r"^([a-zA-Z0-9._-]+)", line)
         if match:
-            packages.add(match.group(1).lower().replace("_", "-"))
+            # Normalize per PEP 503: lowercase, convert underscores/dots/hyphens to hyphens
+            normalized = match.group(1).lower().replace("_", "-").replace(".", "-")
+            packages.add(normalized)
     return packages
 
 

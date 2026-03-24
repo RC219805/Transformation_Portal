@@ -5,7 +5,7 @@
 #
 # NOTE: Test runner dependencies (pytest, pytest-*, httpx, hypothesis) belong in dev.in,
 # NOT here. This file is for CI/CD pipeline *tools* only (security analysis, packaging, reports).
-# The root requirements-ci.txt references requirements.txt and test deps are in dev.in.
+# The root requirements-ci.txt includes requirements.txt via `-r` and has test deps.
 
 # Security and analysis tools
 bandit>=1.7,<2         # static security analyzer
