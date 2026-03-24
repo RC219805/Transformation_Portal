@@ -1,9 +1,9 @@
 # TODO Inventory - Transformation Portal
 
-**Document Version:** 2.2.0
-**Date:** March 16, 2026
-**Last Updated:** 2026-03-16 (Architect Review)
-**Previous Version:** 2.1.0 (2026-03-15)
+**Document Version:** 2.3.0
+**Date:** March 24, 2026
+**Last Updated:** 2026-03-24 (Architect Review)
+**Previous Version:** 2.2.0 (2026-03-16)
 
 ---
 
@@ -16,6 +16,15 @@ This document provides a **complete, categorized inventory** of all TODOs, NotIm
 - Audit trail for architectural decisions
 - Integration with issue tracking systems
 - Binding inventory enforced by Architect governance
+
+## Version 2.3.0 Changes (2026-03-24)
+
+**Major Updates:**
+- ✅ Rollback Procedures **VERIFIED AS COMPLETE** (docs/operations/ROLLBACK_PROCEDURES.md, v1.0.0)
+- 📊 Reduced P1 items from 3 to 2 (rollback docs confirmed existing)
+- 📊 Updated CI/CD Gaps: 5 Done, 1 Missing (was 4 Done, 2 Missing)
+- 📊 Total completed items: 10 of 65 action-tracked items (15%)
+- 🔍 Corrected documentation inconsistency: TODO_INVENTORY claimed rollback docs missing while they exist
 
 ## Version 2.2.0 Changes (2026-03-16)
 
@@ -797,7 +806,7 @@ Multiple TODOs:
 | Enforce 70% coverage threshold | 🟡 **PARTIAL** (25% floor, 80% diff ratchet) | Coverage improvement roadmap: docs/guides/coverage-improvement-plan.md |
 | Add security scan to PR workflow | ✅ **COMPLETED** | Bandit, pip-audit, gitleaks, CodeQL, Safety (ci.yml + security-unified.yml) |
 | Configure branch protection | ❓ **UNKNOWN** (repo setting, not in code) | Requires GitHub UI inspection |
-| Document rollback procedures | ❌ **NOT DONE** | No docs/deployment/rollback_procedures.md found |
+| Document rollback procedures | ✅ **COMPLETED** | docs/operations/ROLLBACK_PROCEDURES.md (v1.0.0) |
 | Define staging validation | ❌ **NOT DONE** | No docker-compose.staging.yml or staging workflow |
 
 **Current Production Release:** v2.2.0-phase3-l1-foundation (2026-02-13)
@@ -806,14 +815,15 @@ Multiple TODOs:
 - **v2.0.0 was released WITHOUT all P0 items** (pragmatic decision)
 - Critical items (coverage, security) were completed post-v2.0.0
 - v2.2.0 is in **SIGNIFICANTLY BETTER** state than original v2.0.0 checklist
-- Remaining gaps (rollback docs, staging) are **operational**, not blocking
+- Rollback procedures now fully documented (operational maturity achieved)
+- Remaining gaps (staging) are **operational/optional**, not blocking
 
 **Architect Decision:**
 
 **ACCEPT current state as v2.2.0 baseline** with conditions:
 
 1. **Coverage Goal:** Continue incremental improvement to 33% by Q2 2026 (roadmap exists)
-2. **Rollback Procedures:** Create docs/deployment/rollback_procedures.md (P1, 2h effort)
+2. ~~**Rollback Procedures:**~~ ✅ DONE - docs/operations/ROLLBACK_PROCEDURES.md exists (v1.0.0, 2025-01-28)
 3. **Staging Environment:** Defer to v2.3.0 or v3.0.0 (P2, 16h effort, low ROI for current users)
 4. **Branch Protection:** Verify via GitHub UI (Architect or admin to check)
 
@@ -823,17 +833,17 @@ Multiple TODOs:
 - ✅ Security scanning (DONE)
 - ✅ Contract/schema validation (DONE - ingest_contract_validation.yml)
 - ✅ Nightly regression suite (DONE - nightly.yml)
-- ❌ Rollback procedures documentation (NEW P1)
+- ✅ Rollback procedures documentation (DONE - docs/operations/ROLLBACK_PROCEDURES.md)
 - ❌ Staging environment (DEFERRED to v2.3.0)
 - ❓ Branch protection verification (ACTION REQUIRED)
 
 **Action Items:**
-- [ ] Create rollback procedures doc (P1, 2h)
+- [x] Create rollback procedures doc (P1, 2h) → ✅ Already exists
 - [ ] Verify branch protection settings (P1, 15min)
 - [ ] Update V2_0_0_RELEASE_REVIEW.md with "SUPERSEDED BY v2.2.0 REALITY" notice
 - [ ] Create V2_3_0_RELEASE_CHECKLIST.md for next cycle
 
-**Effort:** 3 hours total
+**Effort:** ~~3 hours total~~ 1 hour remaining (rollback docs done)
 **Deadline:** Before v2.3.0 planning (est. March 2026)
 
 ---
@@ -1032,35 +1042,31 @@ GitHub UI → Settings → Branches → Branch protection rules → main
 
 ### 5.6 Rollback Procedures Documentation
 
-**Status:** ❌ **NOT IMPLEMENTED**
-**Priority:** P1 (HIGH - operational safety)
-**Effort:** 2 hours
-**Deadline:** Before v2.3.0 release
+**Status:** ✅ **IMPLEMENTED**
+**Priority:** ~~P1~~ → DONE
+**Effort:** 2 hours (actual)
+**Completion Date:** 2025-01-28
 
 **Current State:**
-- No documented rollback procedures
-- Git tag reversion process undefined
-- Dependency pinning rollback unclear
+- ✅ Comprehensive rollback procedures documented
+- ✅ Git tag reversion process defined (Section 2)
+- ✅ Dependency pinning rollback covered (Section 3)
+- ✅ Communication templates included (Section 5)
+- ✅ Post-rollback checklist provided (Section 6)
 
-**Required Documentation:**
-- [ ] Git tag reversion: How to roll back to previous version
-- [ ] PyPI package handling: Can we yank releases? (probably not applicable - not published to PyPI)
-- [ ] Dependency pinning rollback: constraints.txt management
-- [ ] Data migration rollback: None (stateless tool, N/A)
-- [ ] Incident response: Integrate with incident_response.md
+**Implementation:**
+- File: `docs/operations/ROLLBACK_PROCEDURES.md`
+- Version: 1.0.0, Production-Ready
+- Authority: Transformation Portal Architect
 
-**Files to Create:**
-- `docs/deployment/rollback_procedures.md` (new)
-- Update `docs/operations/incident_response.md` (if exists)
+**Coverage:**
+- [x] Git tag reversion: How to roll back to previous version
+- [x] PyPI package handling: Documented as N/A (not published)
+- [x] Dependency pinning rollback: constraints.txt management
+- [x] Data migration rollback: Documented as N/A (stateless tool)
+- [x] Incident response: Integrated with post-rollback checklist
 
-**Architect Decision:** **REQUIRED** for operational maturity
-
-**Implementation Ownership:**
-- Content: Architect + DevOps
-- Review: Specialist
-- Approval: Architect
-
-**Deadline:** 2 weeks (before v2.3.0 planning begins)
+**Architect Assessment:** ✅ VERIFIED COMPLETE - Exceeds original specification with comprehensive coverage
 
 ---
 
@@ -1280,13 +1286,13 @@ pytestmark = pytest.mark.skipif(not TORCH_AVAILABLE, reason="torch required for 
 | Stub Implementations | 29 | 0 | 0 | 25 | 0 | 0 | 4 |
 | Code TODOs | 11 | 0 | 0 | 4 | 0 | 0 | 7 |
 | Documentation TODOs | 7 | 2 | 0 | 2 | 0 | 0 | 3 |
-| CI/CD Gaps | 8 | 4 | 1 | 0 | 1 | 2 | 0 |
+| CI/CD Gaps | 8 | 5 | 1 | 0 | 1 | 1 | 0 |
 | Test Infrastructure | 4 | 2 | 1 | 1 | 0 | 0 | 0 |
-| **TOTAL** | **65** | **9** | **2** | **32** | **3** | **2** | **17** |
+| **TOTAL** | **65** | **10** | **2** | **32** | **3** | **1** | **17** |
 
 **Change from v1.0.0:**
 - Total items: 36 → 65 (+29, mostly new NotImplementedError instances from Phase 2)
-- Completed: 8 → 9 (+1, ADR-019)
+- Completed: 8 → 10 (+2, ADR-019 + Rollback docs)
 - Obsolete: 5 → 17 (+12, major cleanup identified)
 
 ### By Priority
@@ -1294,23 +1300,23 @@ pytestmark = pytest.mark.skipif(not TORCH_AVAILABLE, reason="torch required for 
 | Priority | Count | v1.0.0 Count | Change | Examples |
 |----------|-------|--------------|--------|----------|
 | ~~P0~~ DONE | 3 | 5 | -2 | ADR-019, Coverage CI, Security scanning |
-| P1 (High) | 3 | 2 | +1 | Rollback docs, branch protection, CLI e2e tests |
+| P1 (High) | 2 | 2 | 0 | Branch protection, CLI e2e tests (rollback docs done) |
 | P2 (Medium) | 6 | 6 | 0 | SAM2 auto mode, dependency pinning, staging |
 | P3 (Low) | 8 | 8 | 0 | ADR checks, SLERP interpolation, RAW format |
 | P4 (Nice-to-have) | 7 | 10 | -3 | Backend CLI commands, golden fixtures |
 | P5 (Research) | 1 | 1 | 0 | Parallax occlusion mapping |
-| N/A (Correct/Obsolete) | 37 | 4 | +33 | Most stubs are correct (25), obsolete items (12) |
+| N/A (Correct/Obsolete) | 38 | 4 | +34 | Most stubs are correct (25), obsolete items (12) |
 
 ### By Effort
 
 | Effort Range | Count | v1.0.0 | Change | Cumulative Hours |
 |--------------|-------|--------|--------|------------------|
 | < 1 hour | 12 | 3 | +9 | ~8 hours |
-| 1-4 hours | 18 | 5 | +13 | ~45 hours |
+| 1-4 hours | 17 | 5 | +12 | ~43 hours |
 | 4-8 hours | 8 | 12 | -4 | ~48 hours |
 | 1-2 days | 6 | 10 | -4 | ~80 hours |
 | > 1 week | 4 | 6 | -2 | ~200 hours |
-| N/A (Done/Obsolete) | 17 | 0 | +17 | 0 hours |
+| N/A (Done/Obsolete) | 18 | 0 | +18 | 0 hours |
 
 **Total Remaining Effort:** ~381 hours (was ~450 hours in v1.0.0)
 **Effort Reduction:** 69 hours (15% reduction due to completions)
@@ -1367,12 +1373,12 @@ pytestmark = pytest.mark.skipif(not TORCH_AVAILABLE, reason="torch required for 
 
 **Deadline:** 2 weeks (by March 1, 2026)
 **Owner:** Architect + DevOps
-**Total Effort:** 4 hours
+**Total Effort:** ~~4 hours~~ 2 hours remaining (rollback docs done)
 
-1. **Create Rollback Procedures** (P1, 2h)
-   - File: `docs/deployment/rollback_procedures.md`
-   - Content: Git tag reversion, dependency rollback, incident response
-   - Owner: Architect (draft) + DevOps (review)
+1. ~~**Create Rollback Procedures** (P1, 2h)~~ ✅ DONE
+   - File: `docs/operations/ROLLBACK_PROCEDURES.md` (v1.0.0, 2025-01-28)
+   - Content: Git tag reversion, dependency rollback, incident response, communication templates
+   - Status: Production-Ready
 
 2. **Verify Branch Protection Settings** (P1, 15min)
    - Method: GitHub UI → Settings → Branches
@@ -1384,10 +1390,11 @@ pytestmark = pytest.mark.skipif(not TORCH_AVAILABLE, reason="torch required for 
    - Link to this TODO inventory
    - Archive to `docs/architecture/archive/`
 
-4. **Archive Obsolete Modules** (P2, 1h)
-   - Move `context_aware_rendering.py` → `archive/scripts/`
-   - Move `lux_render_pipeline_plus_v3.py` → `archive/scripts/` (if unused)
-   - Add README explaining supersession
+4. ~~**Archive Obsolete Modules** (P2, 1h)~~ ✅ DONE
+   - ✅ `context_aware_rendering.py` → `archive/scripts/` (already moved)
+   - ✅ `lux_render_pipeline_plus_v3.py` → `archive/scripts/` (already moved)
+   - ✅ `depth_canonical/` → `archive/depth_canonical/` (already moved)
+   - ✅ README explaining supersession exists (`archive/scripts/README.md`)
 
 ---
 
@@ -1395,10 +1402,10 @@ pytestmark = pytest.mark.skipif(not TORCH_AVAILABLE, reason="torch required for 
 
 **Goal:** Remove technical debt, improve discoverability
 
-1. **Delete depth_canonical Module** (1h)
-   - Remove `src/transformation_portal/depth_canonical/`
-   - Verify no imports (grep confirms safe)
-   - Update CHANGELOG.md
+1. ~~**Delete depth_canonical Module** (1h)~~ ✅ DONE
+   - ✅ Moved to `archive/depth_canonical/`
+   - ✅ No active imports in src/ (verified)
+   - Update CHANGELOG.md with archival note
 
 2. **Archive Obsolete PR Tracking Docs** (30min)
    - Move `docs/pr_reports/PR98_ACTION_ITEMS.md` → `archive/`
