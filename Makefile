@@ -27,7 +27,7 @@ PHASE6_SMOKE_TESTS := \
 .PHONY: help test-fast test-novideo test-full test-integration test-structure test-utils test-orchestrator-contract coverage-fast-scope venv setup clean \
         lint lint-parity ci ci-full pre-commit install-hooks quality-check fix-quality validate-ci organize-docs check-json-serialization check-piptools-cache \
         check-stale-docs lock lock-prod lock-ci lock-dev install-core install-ml install-ml-core install-ml-raw install-ml-sam2 install-ml-coreml docs docs-clean \
-        check-test-markers
+        check-test-markers check-ci-sync
 
 help:
 	@echo "Targets:"
@@ -61,6 +61,7 @@ help:
 	@echo "  check-piptools-cache  Fail if requirements/.pip-tools-cache is tracked in git"
 	@echo "  check-stale-docs   Detect changed-file references to deleted docs root paths"
 	@echo "  check-test-markers Audit test marker coverage (ADR-044)"
+	@echo "  check-ci-sync      Verify CI dependency files are in sync (no drift)"
 	@echo "  fix-quality        Auto-fix common quality issues"
 	@echo "  validate-ci        Validate GitHub Actions workflow configs"
 	@echo "  organize-docs      Organize markdown files to docs/ subdirectories"
@@ -208,7 +209,7 @@ lint-parity:
 	@echo "Running CI-aligned lint parity..."
 	@./scripts/setup/run_lint_tool.sh parity
 
-ci: lint check-json-serialization check-piptools-cache test-fast test-orchestrator-contract
+ci: lint check-json-serialization check-piptools-cache check-ci-sync test-fast test-orchestrator-contract
 	@echo "✅ Local CI checks completed successfully."
 
 # Comprehensive CI simulation
@@ -267,6 +268,10 @@ check-piptools-cache:
 check-test-markers:
 	@echo "Auditing test marker coverage (ADR-044)..."
 	@"$(PY)" scripts/validation/check_test_markers.py --audit
+
+check-ci-sync:
+	@echo "Checking CI dependency file sync..."
+	@"$(PY)" scripts/validation/check_ci_dep_sync.py
 
 # Organize documentation
 organize-docs:

@@ -34,6 +34,7 @@ Quick reference for common workflows and commands in this repo.
 - `make check-json-serialization` fail when raw `json.dump`/`json.dumps` usage is detected outside approved modules.
 - `make check-piptools-cache` fail if `requirements/.pip-tools-cache` is tracked in git.
 - `make check-test-markers` audit test marker coverage (ADR-044) - reports unmarked test functions.
+- `make check-ci-sync` verify CI dependency files are in sync (no drift between `requirements-ci.txt` and `requirements/ci.in`).
 - `make organize-docs` move markdown files into `docs/` (repo hygiene).
 - `make check-docs` dry-run docs organization.
 - `make lock` regenerate all requirements lockfiles.

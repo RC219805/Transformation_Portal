@@ -2,6 +2,10 @@
 # These dependencies are typically only needed in continuous integration or release workflows.
 # This file contains abstract requirements with version ranges.
 # Run `make compile` in this directory to generate pinned ci.txt
+#
+# NOTE: Test runner dependencies (pytest, pytest-*, httpx, hypothesis) belong in dev.in,
+# NOT here. This file is for CI/CD pipeline *tools* only (security analysis, packaging, reports).
+# The root requirements-ci.txt defines test deps inline (must sync with dev.in).
 
 # Security and analysis tools
 bandit>=1.7,<2         # static security analyzer
@@ -14,7 +18,3 @@ tox>=4.5,<5            # test runner for multiple envs (future compatibility)
 
 # Additional CI utilities
 pypdf>=3.9.0           # PDF processing for reports
-pytest-json-report>=1.5,<2  # JSON test result reporting for flake tracking
-pytest-xdist>=3.5,<4   # parallel test execution (ADR-044 CI optimization)
-pytest-asyncio>=0.21,<1  # async test support for ExecutionManager tests
-httpx>=0.28,<1         # required for FastAPI/Starlette TestClient in HTTP contract tests

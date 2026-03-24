@@ -74,8 +74,6 @@ dparse==0.6.4
     #   -c all.txt
     #   safety
     #   safety-schemas
-execnet==2.1.2
-    # via pytest-xdist
 filelock==3.25.0
     # via
     #   -c all.txt
@@ -94,7 +92,6 @@ httpcore==1.0.9
 httpx==0.28.1
     # via
     #   -c all.txt
-    #   -r ci.in
     #   safety
 id==1.6.1
     # via
@@ -106,10 +103,6 @@ idna==3.11
     #   anyio
     #   httpx
     #   requests
-iniconfig==2.3.0
-    # via
-    #   -c all.txt
-    #   pytest
 jaraco-classes==3.4.0
     # via
     #   -c all.txt
@@ -174,7 +167,6 @@ packaging==26.0
     #   build
     #   dparse
     #   pyproject-api
-    #   pytest
     #   safety
     #   safety-schemas
     #   tox
@@ -188,7 +180,6 @@ platformdirs==4.9.2
 pluggy==1.6.0
     # via
     #   -c all.txt
-    #   pytest
     #   tox
 pycparser==3.0
     # via
@@ -206,7 +197,6 @@ pydantic-core==2.41.5
 pygments==2.19.2
     # via
     #   -c all.txt
-    #   pytest
     #   readme-renderer
     #   rich
 pypdf==6.9.1
@@ -221,25 +211,6 @@ pyproject-hooks==1.2.0
     # via
     #   -c all.txt
     #   build
-pytest==9.0.2
-    # via
-    #   -c all.txt
-    #   pytest-asyncio
-    #   pytest-json-report
-    #   pytest-metadata
-    #   pytest-xdist
-pytest-asyncio==0.23.3
-    # via -r ci.in
-pytest-json-report==1.5.0
-    # via
-    #   -c all.txt
-    #   -r ci.in
-pytest-metadata==3.1.1
-    # via
-    #   -c all.txt
-    #   pytest-json-report
-pytest-xdist==3.8.0
-    # via -r ci.in
 python-discovery==1.1.0
     # via
     #   -c all.txt
