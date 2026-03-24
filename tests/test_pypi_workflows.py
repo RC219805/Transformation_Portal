@@ -131,24 +131,40 @@ class TestPyPIWorkflows:
         assert any("test pypi" in name.lower() for name in step_names), "Deploy job should include Test PyPI upload"
 
     def test_workflows_use_modern_actions(self, workflows_dir):
-        """Test that workflows use modern action versions."""
+        """Test that workflows use modern action versions.
+
+        Actions may be pinned using either version tags (e.g., @v6) or
+        commit SHAs with version comments (e.g., @<sha> # v6).
+        """
         pypi_workflow = workflows_dir / "submit-pypi.yml"
 
         with open(pypi_workflow, "r", encoding="utf-8") as f:
             content = f.read()
 
         # checkout: require v4+
-        m = re.search(r"actions/checkout@v(\d+)", content)
-        assert m and int(m.group(1)) >= 4, "Should use recent checkout action (v4+)"
+        # Match either @v6 or @<sha> # v6 patterns
+        m = re.search(r"actions/checkout@(?:v(\d+)|[a-f0-9]+\s*#\s*v(\d+))", content)
+        if m:
+            version = int(m.group(1) or m.group(2))
+            assert version >= 4, "Should use recent checkout action (v4+)"
+        else:
+            raise AssertionError("Should use recent checkout action (v4+)")
 
         # setup-python: require v5+
-        assert (
-            "actions/setup-python@v6" in content or "actions/setup-python@v5" in content
-        ), "Should use recent setup-python action"
+        # Match either @v5/@v6 or @<sha> # v5/@<sha> # v6 patterns
+        setup_python_match = re.search(
+            r"actions/setup-python@(?:v([56])|[a-f0-9]+\s*#\s*v([56]))", content
+        )
+        assert setup_python_match, "Should use recent setup-python action (v5+)"
 
         # upload-artifact: require v4+
-        m = re.search(r"actions/upload-artifact@v(\d+)", content)
-        assert m and int(m.group(1)) >= 4, "Should use recent upload-artifact action (v4+)"
+        # Match either @v7 or @<sha> # v7 patterns
+        m = re.search(r"actions/upload-artifact@(?:v(\d+)|[a-f0-9]+\s*#\s*v(\d+))", content)
+        if m:
+            version = int(m.group(1) or m.group(2))
+            assert version >= 4, "Should use recent upload-artifact action (v4+)"
+        else:
+            raise AssertionError("Should use recent upload-artifact action (v4+)")
 
     def test_submit_pypi_has_package_verification(self, workflows_dir):
         """Test that submit-pypi.yml verifies package contents."""
