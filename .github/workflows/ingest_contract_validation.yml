@@ -7,19 +7,20 @@ on:
     branches: [main, develop]
   workflow_dispatch:
 
+# Workflow-level permissions with least privilege defaults
+permissions:
+  contents: read
+
 jobs:
   validate-ingest-contract:
     name: Validate Ingest Contract
     runs-on: ubuntu-latest
 
-    permissions:
-      contents: read  # Security: lock down permissions
-
     steps:
       - name: Checkout code (attempt 1)
         id: checkout_validate_1
         continue-on-error: true
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           fetch-depth: 1
           lfs: false
@@ -29,7 +30,7 @@ jobs:
         id: checkout_validate_2
         if: steps.checkout_validate_1.outcome == 'failure'
         continue-on-error: true
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           fetch-depth: 1
           lfs: false
@@ -43,7 +44,7 @@ jobs:
           exit 1
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
         with:
           python-version: "3.11"
 
@@ -76,14 +77,11 @@ jobs:
     if: github.event_name == 'pull_request'
     timeout-minutes: 10
 
-    permissions:
-      contents: read  # Security: lock down permissions
-
     steps:
       - name: Checkout PR branch (attempt 1)
         id: checkout_schema_1
         continue-on-error: true
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           ref: ${{ github.head_ref }}
           fetch-depth: 1
@@ -94,7 +92,7 @@ jobs:
         id: checkout_schema_2
         if: steps.checkout_schema_1.outcome == 'failure'
         continue-on-error: true
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           ref: ${{ github.head_ref }}
           fetch-depth: 1
@@ -109,7 +107,7 @@ jobs:
           exit 1
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
         with:
           python-version: "3.11"
 

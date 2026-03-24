@@ -16,13 +16,15 @@ concurrency:
   group: apex-policy-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
+# Workflow-level permissions with least privilege defaults
+permissions:
+  contents: read
+
 jobs:
   validate-policy:
     name: Validate APEX Policy Files
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    permissions:
-      contents: read
 
     steps:
       - name: Checkout
