@@ -186,7 +186,7 @@ def mock_config():
 
 **Status:** ✅ **IMPLEMENTED**
 
-`tests/conftest.py` now has 381 lines with comprehensive shared fixtures:
+`tests/conftest.py` now has comprehensive shared fixtures with a tiered architecture:
 
 - **Tier 1 (Pure fixtures):** `deterministic_rng`, `sample_config_dict`, `sample_pbr_config_dict`
 - **Tier 2 (IO fixtures):** `temp_workspace`, `sample_rgb_image`, `sample_rgb_pil`, `sample_depth_map`, `sample_depth_pil`, `sample_image_file`, `sample_depth_file`, `sample_yaml_config`

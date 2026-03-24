@@ -25,7 +25,7 @@ Documentation TODO instances were reviewed for governance and archival value, bu
 
 ### Priority Summary
 
-- **P1 (Immediate)**: ~~3 items~~ 0 items remaining (HuggingFace revision pinning ✅, Rollback docs ✅ verified existing)
+- **P1 (Immediate)**: ~~3 items~~ 1 item remaining (HuggingFace revision pinning ✅, Rollback docs ✅ verified existing; Branch protection verification: 15 min pending)
 - **P2 (Near-term)**: ~~4 items~~ 3 items remaining (ICC preservation ✅ completed)
 - **P3 (Deferred)**: ~~4 items~~ 3 items remaining (SLERP interpolation ✅ completed 2026-03-16)
 - **No Action Required**: 195 items (95%; historical, observational, or intentionally retained)
@@ -329,15 +329,15 @@ Require for all preset changes:
 **Total Items Reviewed**: 206 TODO instances
 **Action Required**: 10 items total (5%)
   - 9 active source code TODOs (see Key Findings table)
-  - 1 test observational TODO (tracking only)
-**No Action Required**: 196 items (95%)
+  - 2 test observational TODOs (tracking only)
+**No Action Required**: 195 items (95%)
 
 **Completion Progress (2026-03-24)**:
 - ✅ 7 items completed (HF pinning, ICC preservation, rollback docs verified, depth_canonical archived, PR docs archived, SLERP interpolation, TODO_INVENTORY corrected)
 - ⏳ 1 item pending external action (branch protection - requires admin UI access)
 - ⏳ 3 items pending future phases (ComfyUI, NVDIFFREC, MaterialGAN)
 
-**Key Takeaway**: The majority of reviewed TODO instances are **historical documentation notes**, **intentional validation patterns**, or **observational tracking**. Only 10 items require actual implementation work, with 0 remaining P1 priority items (all P1s verified complete or verified existing).
+**Key Takeaway**: The majority of reviewed TODO instances are **historical documentation notes**, **intentional validation patterns**, or **observational tracking**. Only 10 items require actual implementation work, with 1 remaining P1 item (branch protection verification pending external admin access).
 
 The codebase demonstrates mature TODO management with proper documentation and categorization. The existing [TODO_INVENTORY.md](./TODO_INVENTORY.md) provides comprehensive tracking and should continue to be the authoritative source for TODO governance.
 

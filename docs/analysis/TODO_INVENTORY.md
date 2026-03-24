@@ -20,7 +20,7 @@ This document provides a **complete, categorized inventory** of all TODOs, NotIm
 ## Version 2.3.0 Changes (2026-03-24)
 
 **Major Updates:**
-- ✅ Rollback Procedures **VERIFIED AS COMPLETE** (docs/operations/ROLLBACK_PROCEDURES.md, 1123 lines, v1.0.0)
+- ✅ Rollback Procedures **VERIFIED AS COMPLETE** (docs/operations/ROLLBACK_PROCEDURES.md, v1.0.0)
 - 📊 Reduced P1 items from 3 to 2 (rollback docs confirmed existing)
 - 📊 Updated CI/CD Gaps: 5 Done, 1 Missing (was 4 Done, 2 Missing)
 - 📊 Total completed items: 10 of 65 action-tracked items (15%)
@@ -806,7 +806,7 @@ Multiple TODOs:
 | Enforce 70% coverage threshold | 🟡 **PARTIAL** (25% floor, 80% diff ratchet) | Coverage improvement roadmap: docs/guides/coverage-improvement-plan.md |
 | Add security scan to PR workflow | ✅ **COMPLETED** | Bandit, pip-audit, gitleaks, CodeQL, Safety (ci.yml + security-unified.yml) |
 | Configure branch protection | ❓ **UNKNOWN** (repo setting, not in code) | Requires GitHub UI inspection |
-| Document rollback procedures | ✅ **COMPLETED** | docs/operations/ROLLBACK_PROCEDURES.md (1123 lines, v1.0.0) |
+| Document rollback procedures | ✅ **COMPLETED** | docs/operations/ROLLBACK_PROCEDURES.md (v1.0.0) |
 | Define staging validation | ❌ **NOT DONE** | No docker-compose.staging.yml or staging workflow |
 
 **Current Production Release:** v2.2.0-phase3-l1-foundation (2026-02-13)
@@ -1048,7 +1048,7 @@ GitHub UI → Settings → Branches → Branch protection rules → main
 **Completion Date:** 2025-01-28
 
 **Current State:**
-- ✅ Comprehensive rollback procedures documented (1123 lines)
+- ✅ Comprehensive rollback procedures documented
 - ✅ Git tag reversion process defined (Section 2)
 - ✅ Dependency pinning rollback covered (Section 3)
 - ✅ Communication templates included (Section 5)
@@ -1376,7 +1376,7 @@ pytestmark = pytest.mark.skipif(not TORCH_AVAILABLE, reason="torch required for 
 **Total Effort:** ~~4 hours~~ 2 hours remaining (rollback docs done)
 
 1. ~~**Create Rollback Procedures** (P1, 2h)~~ ✅ DONE
-   - File: `docs/operations/ROLLBACK_PROCEDURES.md` (1123 lines, v1.0.0, 2025-01-28)
+   - File: `docs/operations/ROLLBACK_PROCEDURES.md` (v1.0.0, 2025-01-28)
    - Content: Git tag reversion, dependency rollback, incident response, communication templates
    - Status: Production-Ready
 
