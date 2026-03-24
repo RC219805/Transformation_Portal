@@ -49,11 +49,16 @@ CORE_TEST_DEPS = frozenset({
 
 
 def extract_packages(filepath: Path) -> set[str]:
-    """Extract package names from a requirements file, ignoring comments and -r lines."""
-    packages = set()
-    if not filepath.exists():
-        return packages
+    """Extract package names from a requirements file, ignoring comments and -r lines.
 
+    Missing files are treated as errors to avoid silently passing CI drift checks
+    with incomplete inputs.
+    """
+    if not filepath.exists():
+        # Fail fast: this script is a CI gate and expects all configured files
+        raise FileNotFoundError(f"Required requirements file not found: {filepath}")
+
+    packages: set[str] = set()
     for line in filepath.read_text().splitlines():
         line = line.strip()
         # Skip empty lines, comments, and -r includes
@@ -98,8 +103,8 @@ def main() -> int:
     ci_tools_in_root = root_ci_packages & CI_TOOLS
     if ci_tools_in_root:
         errors.append(
-            f"WARNING: CI pipeline tools found in requirements-ci.txt (should be in requirements/ci.in):\n"
-            f"         {sorted(ci_tools_in_root)}"
+            f"ERROR: CI pipeline tools found in requirements-ci.txt (should be in requirements/ci.in):\n"
+            f"       {sorted(ci_tools_in_root)}"
         )
 
     # Check 3: Core test deps in root should also be in dev.in (sync requirement)
@@ -115,13 +120,8 @@ def main() -> int:
             f"       Add these to requirements/dev.in to maintain sync."
         )
 
-    # Check 4: Detect any pytest-* packages in nested ci.in that should be in dev.in
-    pytest_plugins_in_ci = {p for p in nested_ci_packages if p.startswith("pytest-")}
-    if pytest_plugins_in_ci:
-        errors.append(
-            f"ERROR: pytest plugins found in requirements/ci.in (should be in dev.in):\n"
-            f"       {sorted(pytest_plugins_in_ci)}"
-        )
+    # Note: Check 4 (pytest-* detection) was removed because TEST_RUNNER_PATTERN in Check 1
+    # already matches pytest-* plugins, so violations would be reported twice.
 
     # Report results
     if errors:
