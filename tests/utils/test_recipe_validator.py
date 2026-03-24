@@ -9,7 +9,6 @@ Coverage Target: 80% of recipe_validator.py (63 statements)
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict
 
 import pytest
 
