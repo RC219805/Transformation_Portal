@@ -401,14 +401,12 @@ class TestPipelineCommands:
 
         # Create valid recipe file
         recipe_path = temp_workspace["root"] / "recipe.yaml"
-        recipe_path.write_text(
-            """
+        recipe_path.write_text("""
 name: Test Recipe
 stages:
   - depth_estimation
   - color_grading
-"""
-        )
+""")
 
         result = runner.invoke(
             pipeline_app,
@@ -424,11 +422,9 @@ stages:
 
         # Create invalid recipe file (missing required fields)
         recipe_path = temp_workspace["root"] / "recipe.yaml"
-        recipe_path.write_text(
-            """
+        recipe_path.write_text("""
 description: No name or stages
-"""
-        )
+""")
 
         result = runner.invoke(
             pipeline_app,
@@ -443,16 +439,14 @@ description: No name or stages
 
         # Create valid recipe file
         recipe_path = temp_workspace["root"] / "recipe.yaml"
-        recipe_path.write_text(
-            """
+        recipe_path.write_text("""
 name: Test Recipe
 description: A test recipe
 stages:
   - depth_estimation
 output:
   format: png
-"""
-        )
+""")
 
         result = runner.invoke(
             pipeline_app,

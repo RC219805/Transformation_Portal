@@ -17,7 +17,7 @@ repos:
         entry: python scripts/dev/auto_format_changed.py
         language: system
         pass_filenames: false
-        stages: [commit]
+        stages: [pre-commit]
 
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.5.0

@@ -333,14 +333,12 @@ class TestRecipeValidatorValidateFile:
     def test_validate_valid_file(self, validator, temp_workspace):
         """Test validation of valid YAML file."""
         recipe_path = temp_workspace["root"] / "recipe.yaml"
-        recipe_path.write_text(
-            """
+        recipe_path.write_text("""
 name: Test Recipe
 stages:
   - depth_estimation
   - color_grading
-"""
-        )
+""")
 
         is_valid, errors = validator.validate_file(recipe_path)
 
@@ -383,13 +381,11 @@ class TestValidateRecipeFileFunction:
         from transformation_portal.utils.recipe_validator import validate_recipe_file
 
         recipe_path = temp_workspace["root"] / "recipe.yaml"
-        recipe_path.write_text(
-            """
+        recipe_path.write_text("""
 name: Test
 stages:
   - depth_estimation
-"""
-        )
+""")
 
         is_valid, errors = validate_recipe_file(recipe_path)
 
@@ -401,12 +397,10 @@ stages:
         from transformation_portal.utils.recipe_validator import validate_recipe_file
 
         recipe_path = temp_workspace["root"] / "recipe.yaml"
-        recipe_path.write_text(
-            """
+        recipe_path.write_text("""
 stages:
   - depth_estimation
-"""
-        )
+""")
 
         is_valid, errors = validate_recipe_file(recipe_path)
 

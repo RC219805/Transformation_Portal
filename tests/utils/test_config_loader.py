@@ -223,15 +223,13 @@ class TestLoadRecipe:
         from transformation_portal.config_loader import load_recipe
 
         recipe_path = temp_workspace["root"] / "recipe.yaml"
-        recipe_path.write_text(
-            """
+        recipe_path.write_text("""
 name: Test Recipe
 description: A test recipe
 stages:
   - depth_estimation
   - color_grading
-"""
-        )
+""")
 
         recipe = load_recipe(recipe_path)
 
@@ -275,14 +273,12 @@ stages:
         monkeypatch.setenv("TEST_OUTPUT", "/custom/output")
 
         recipe_path = temp_workspace["root"] / "recipe.yaml"
-        recipe_path.write_text(
-            """
+        recipe_path.write_text("""
 name: Test
 stages:
   - depth_estimation
 output_dir: ${TEST_OUTPUT}
-"""
-        )
+""")
 
         recipe = load_recipe(recipe_path, expand_env=True)
 
@@ -295,14 +291,12 @@ output_dir: ${TEST_OUTPUT}
         monkeypatch.setenv("TEST_OUTPUT", "/custom/output")
 
         recipe_path = temp_workspace["root"] / "recipe.yaml"
-        recipe_path.write_text(
-            """
+        recipe_path.write_text("""
 name: Test
 stages:
   - depth_estimation
 output_dir: ${TEST_OUTPUT}
-"""
-        )
+""")
 
         recipe = load_recipe(recipe_path, expand_env=False)
 
@@ -313,15 +307,13 @@ output_dir: ${TEST_OUTPUT}
         from transformation_portal.config_loader import load_recipe
 
         recipe_path = temp_workspace["root"] / "recipe.yaml"
-        recipe_path.write_text(
-            """
+        recipe_path.write_text("""
 name: Test
 stages:
   - color_grading
 color_grading:
   lut_path: assets/luts/signature.cube
-"""
-        )
+""")
 
         recipe = load_recipe(recipe_path, resolve_paths=True)
 
@@ -333,15 +325,13 @@ color_grading:
         from transformation_portal.config_loader import load_recipe
 
         recipe_path = temp_workspace["root"] / "recipe.yaml"
-        recipe_path.write_text(
-            """
+        recipe_path.write_text("""
 name: Test
 stages:
   - color_grading
 color_grading:
   lut_path: assets/luts/signature.cube
-"""
-        )
+""")
 
         recipe = load_recipe(recipe_path, resolve_paths=False)
 
@@ -352,13 +342,11 @@ color_grading:
         from transformation_portal.config_loader import load_recipe
 
         recipe_path = temp_workspace["root"] / "recipe.yaml"
-        recipe_path.write_text(
-            """
+        recipe_path.write_text("""
 name: Test
 stages:
   - depth_estimation
-"""
-        )
+""")
 
         recipe = load_recipe(recipe_path)
 
@@ -762,22 +750,18 @@ class TestListRecipes:
         from transformation_portal.config_loader import list_recipes
 
         # Create recipe files
-        (temp_workspace["root"] / "recipe1.yaml").write_text(
-            """
+        (temp_workspace["root"] / "recipe1.yaml").write_text("""
 name: Recipe One
 description: First recipe
 stages:
   - depth_estimation
-"""
-        )
-        (temp_workspace["root"] / "recipe2.yaml").write_text(
-            """
+""")
+        (temp_workspace["root"] / "recipe2.yaml").write_text("""
 name: Recipe Two
 description: Second recipe
 stages:
   - color_grading
-"""
-        )
+""")
 
         recipes = list_recipes(temp_workspace["root"])
 
@@ -791,13 +775,11 @@ stages:
         from transformation_portal.config_loader import list_recipes
 
         recipe_path = temp_workspace["root"] / "test.yaml"
-        recipe_path.write_text(
-            """
+        recipe_path.write_text("""
 name: Test
 stages:
   - depth_estimation
-"""
-        )
+""")
 
         recipes = list_recipes(temp_workspace["root"])
 
@@ -810,13 +792,11 @@ stages:
         from transformation_portal.config_loader import list_recipes
 
         # Create valid recipe
-        (temp_workspace["root"] / "valid.yaml").write_text(
-            """
+        (temp_workspace["root"] / "valid.yaml").write_text("""
 name: Valid
 stages:
   - depth_estimation
-"""
-        )
+""")
         # Create invalid recipe (empty)
         (temp_workspace["root"] / "invalid.yaml").write_text("")
 

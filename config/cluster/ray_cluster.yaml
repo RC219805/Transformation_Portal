@@ -102,7 +102,7 @@ head_setup_commands:
 worker_setup_commands:
   # Verify GPU access
   - nvidia-smi || echo "No GPU detected"
-  - python -c "import torch; print(f'CUDA available: {torch.cuda.is_available()}')"
+  - python -c "import torch; print('CUDA available:', torch.cuda.is_available())"
 
 # Commands to start Ray on each node
 head_start_ray_commands:

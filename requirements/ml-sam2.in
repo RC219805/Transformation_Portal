@@ -26,4 +26,4 @@
 # SAM2 - Meta Segment Anything 2 for advanced segmentation
 # NOTE: This file exists for documentation and fallback compilation.
 # Primary install path is via bootstrap script, not pip install -r.
-sam2==1.1.0
+sam2==1.1.0  # Deterministic builds
