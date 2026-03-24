@@ -151,6 +151,8 @@ def create_execution_router() -> APIRouter:
                 "start_time": run.start_time,
                 "end_time": run.end_time,
                 "error": run.error,
+                "cancel_requested": run.cancel_requested,
+                "current_node_id": run.current_node_id,
                 "nodes": {
                     node_id: {
                         "status": state.status.value,
@@ -169,14 +171,27 @@ def create_execution_router() -> APIRouter:
 
     @router.post("/runs/{run_id}/cancel")
     async def cancel_run(run_id: str) -> JSONResponse:
-        """Cancel a running pipeline."""
-        manager = get_manager()
-        success = await manager.cancel_run(run_id, broadcast)
+        """Cancel a running pipeline.
 
-        if not success:
+        Semantics:
+        - Active run: returns 202 with status "cancelling"
+        - Already cancelled: returns 200 with status "cancelled"
+        - Already complete/error: returns 200 with current status
+        - Not found: returns 404
+        """
+        manager = get_manager()
+        result_status = await manager.cancel_run(run_id, broadcast)
+
+        if result_status is None:
             raise HTTPException(status_code=404, detail="Run not found")
 
-        return JSONResponse({"status": "cancelled", "run_id": run_id})
+        # Use 202 for in-progress cancellation, 200 for terminal states
+        status_code = 202 if result_status == "cancelling" else 200
+
+        return JSONResponse(
+            {"status": result_status, "run_id": run_id},
+            status_code=status_code,
+        )
 
     @router.get("/", response_class=HTMLResponse)
     async def execution_ui() -> str:
@@ -256,6 +271,9 @@ def get_execution_ui_html() -> str:
         .status.error { background: #ff5252; }
         .status.pending { background: #94a3b8; color: #000; }
         .status.queued { background: #0d6efd; }
+        .status.cancelling { background: #ff9800; color: #000; animation: pulse 1s infinite; }
+        .status.cancelled { background: #9e9e9e; color: #000; }
+        .status.skipped { background: #607d8b; color: #fff; }
         .nodes-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
@@ -271,6 +289,7 @@ def get_execution_ui_html() -> str:
         .node-card.running { border-left-color: #ffc107; animation: pulse 1s infinite; }
         .node-card.complete { border-left-color: #00d25b; }
         .node-card.error { border-left-color: #ff5252; }
+        .node-card.skipped { border-left-color: #607d8b; opacity: 0.7; }
         .node-card h4 { font-size: 0.9rem; margin-bottom: 0.5rem; }
         .node-card .meta { font-size: 0.75rem; color: #94a3b8; }
         .node-card .outputs {
@@ -325,7 +344,10 @@ def get_execution_ui_html() -> str:
                 <div class="card" style="margin-bottom: 1rem;">
                     <div class="card-header">
                         <span>Nodes</span>
-                        <span id="current-run">No run selected</span>
+                        <div style="display:flex;align-items:center;gap:0.5rem;">
+                            <span id="current-run">No run selected</span>
+                            <button id="cancel-btn" onclick="cancelRun()" style="display:none;background:#ff5252;border:none;color:#fff;padding:0.25rem 0.75rem;border-radius:0.25rem;cursor:pointer;font-size:0.75rem;">Cancel</button>
+                        </div>
                     </div>
                     <div id="nodes" class="nodes-grid">
                         <div class="empty">Select a run to view nodes</div>
@@ -417,11 +439,41 @@ def get_execution_ui_html() -> str:
                     }
                     break;
 
+                case 'node_skipped':
+                    if (runs[msg.run_id]) {
+                        // Merge into existing node data to preserve any prior fields
+                        const existingNode = runs[msg.run_id].nodes[msg.node] || {};
+                        runs[msg.run_id].nodes[msg.node] = {
+                            ...existingNode,
+                            status: 'skipped',
+                            reason: msg.reason
+                        };
+                        if (selectedRunId === msg.run_id) renderNodes();
+                    }
+                    break;
+
+                case 'run_cancelling':
+                    if (runs[msg.run_id]) {
+                        runs[msg.run_id].status = 'cancelling';
+                        loadRuns();
+                        updateCancelButton();
+                    }
+                    break;
+
+                case 'run_cancelled':
+                    if (runs[msg.run_id]) {
+                        runs[msg.run_id].status = 'cancelled';
+                        loadRuns();
+                        updateCancelButton();
+                    }
+                    break;
+
                 case 'run_complete':
                     if (runs[msg.run_id]) {
                         runs[msg.run_id].status = 'complete';
                         runs[msg.run_id].results = msg.results;
                         loadRuns();
+                        updateCancelButton();
                     }
                     break;
 
@@ -430,6 +482,7 @@ def get_execution_ui_html() -> str:
                         runs[msg.run_id].status = 'error';
                         runs[msg.run_id].error = msg.error;
                         loadRuns();
+                        updateCancelButton();
                     }
                     break;
             }
@@ -506,8 +559,52 @@ def get_execution_ui_html() -> str:
                 const data = await res.json();
                 runs[runId] = { ...runs[runId], ...data };
                 renderNodes();
+                updateCancelButton();
             } catch (e) {
                 renderNodes();
+                updateCancelButton();
+            }
+        }
+
+        function updateCancelButton() {
+            const btn = document.getElementById('cancel-btn');
+            if (!selectedRunId || !runs[selectedRunId]) {
+                btn.style.display = 'none';
+                return;
+            }
+            const run = runs[selectedRunId];
+            // Show button only for active runs (running, pending)
+            if (run.status === 'running' || run.status === 'pending') {
+                btn.style.display = 'inline-block';
+                btn.disabled = false;
+                btn.textContent = 'Cancel';
+            } else if (run.status === 'cancelling') {
+                btn.style.display = 'inline-block';
+                btn.disabled = true;
+                btn.textContent = 'Cancelling...';
+            } else {
+                btn.style.display = 'none';
+            }
+        }
+
+        async function cancelRun() {
+            if (!selectedRunId) return;
+            const btn = document.getElementById('cancel-btn');
+            btn.disabled = true;
+            btn.textContent = 'Cancelling...';
+
+            try {
+                const res = await fetch(`/api/exec/runs/${selectedRunId}/cancel`, { method: 'POST' });
+                const data = await res.json();
+                if (runs[selectedRunId]) {
+                    runs[selectedRunId].status = data.status;
+                }
+                loadRuns();
+                updateCancelButton();
+            } catch (e) {
+                console.error('Failed to cancel run:', e);
+                btn.disabled = false;
+                btn.textContent = 'Cancel';
             }
         }
 
