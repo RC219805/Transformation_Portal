@@ -28,59 +28,84 @@ The Transformation Portal is a mature, production-ready toolkit at v2.0.0 with c
 
 ### SEC-001: Fix shell=True in subprocess call [CRITICAL]
 
-**Location:** `scripts/utilities/fix_quality_issues.py:16`
+**Status:** ✅ **IMPLEMENTED**
 
-**Current Code:**
+**Location:** `scripts/utilities/fix_quality_issues.py:13-25`
+
+**Current Code (FIXED):**
 ```python
-result = subprocess.run(cmd, shell=True, capture_output=True, text=True, check=False)
+def run_command(cmd, description):
+    """Run a command and report results.
+
+    Security Note: Uses shlex.split() instead of shell=True to prevent
+    command injection vulnerabilities (SEC-001). This safely parses the
+    command string into a list of arguments without invoking a shell.
+    """
+    # Convert string to list for safe subprocess execution (no shell injection risk)
+    cmd_list = shlex.split(cmd) if isinstance(cmd, str) else cmd
+    result = subprocess.run(cmd_list, capture_output=True, text=True, check=False)
 ```
 
-**Risk:** Command injection vulnerability if `cmd` variable contains user-controlled input. The `shell=True` parameter executes commands through the shell, making it susceptible to shell metacharacter injection.
+~~**Risk:** Command injection vulnerability if `cmd` variable contains user-controlled input.~~ **MITIGATED**
 
-**Recommendation:** Convert to shell=False with list arguments:
-```python
-import shlex
-result = subprocess.run(shlex.split(cmd), capture_output=True, text=True, check=False)
-```
-Or refactor to pass command as a list directly:
-```python
-result = subprocess.run(["flake8", file_path], capture_output=True, text=True, check=False)
-```
+~~**Recommendation:**~~ **IMPLEMENTED:** Uses `shlex.split()` to safely parse command strings without shell invocation.
 
 | Aspect | Assessment |
 |--------|------------|
-| **Issue Severity** | Critical |
-| **Implementation Risk** | Low |
-| **Effort** | Low (15 minutes) |
-| **Reward** | Eliminates command injection vulnerability |
+| **Issue Severity** | ~~Critical~~ → N/A |
+| **Implementation Risk** | N/A |
+| **Effort** | ~~Low (15 minutes)~~ → DONE |
+| **Reward** | ✅ Command injection vulnerability eliminated |
 | **Breaking Change** | No |
 
 ---
 
 ### SEC-002: Implement Input Validation for Config Loader [HIGH]
 
-**Location:** `src/transformation_portal/config_loader.py:_expand_env_vars`
+**Status:** ✅ **IMPLEMENTED**
 
-**Issue:** Environment variable expansion uses `${VAR_NAME}` pattern without output sanitization. While this is low-risk for internal config files, malicious config files could potentially inject values.
+**Location:** `src/transformation_portal/config_loader.py:_expand_env_vars` (lines 35-93)
 
-**Recommendation:** Add validation for expanded values, especially paths:
+**Current Code (IMPLEMENTED):**
 ```python
-from transformation_portal.utils.security import validate_filepath
-
 def _expand_env_vars(value: str) -> str:
-    expanded = os.path.expandvars(value)
-    # Validate if it looks like a path
-    if os.path.sep in expanded or expanded.startswith(('.', '/')):
-        validate_filepath(expanded)
+    """Expand environment variables in a string with path validation.
+
+    Validates expanded values that appear to be paths for basic safety checks.
+    """
+    # ... expansion logic ...
+
+    # Validate expanded values that look like paths
+    if expanded != value and (os.path.sep in expanded or "/" in expanded or expanded.startswith((".", "/"))):
+        try:
+            test_path = Path(expanded)
+            # Check for excessive parent directory traversal (>5 levels)
+            parent_count = sum(1 for part in test_path.parts if part == "..")
+            if parent_count > 5:
+                logger.warning(f"Config path contains excessive parent traversal (..): {expanded}")
+
+            # Check for sensitive system directories
+            if test_path.exists():
+                resolved = test_path.resolve()
+                sensitive_dirs = {"/etc", "/sys", "/proc", "/dev", "/root"}
+                if any(str(resolved).startswith(d) for d in sensitive_dirs):
+                    logger.warning(f"Config path resolves to sensitive system directory: {resolved}")
+        except (OSError, RuntimeError, ValueError) as e:
+            logger.debug(f"Config path validation warning for '{expanded}': {e}")
+
     return expanded
 ```
 
+~~**Issue:** Environment variable expansion without output sanitization.~~ **RESOLVED**
+
+~~**Recommendation:**~~ **IMPLEMENTED:** Defense-in-depth path validation with parent traversal checks (>5 levels) and sensitive directory detection.
+
 | Aspect | Assessment |
 |--------|------------|
-| **Issue Severity** | High |
-| **Implementation Risk** | Low |
-| **Effort** | Medium (1-2 hours) |
-| **Reward** | Defense-in-depth for config loading |
+| **Issue Severity** | ~~High~~ → N/A |
+| **Implementation Risk** | N/A |
+| **Effort** | ~~Medium (1-2 hours)~~ → DONE |
+| **Reward** | ✅ Defense-in-depth for config loading |
 | **Breaking Change** | No |
 
 ---
@@ -153,17 +178,27 @@ def mock_config():
 
 | Aspect | Assessment |
 |--------|------------|
-| **Issue Severity** | Low |
-| **Implementation Risk** | Low |
-| **Effort** | Medium (4-6 hours) |
-| **Reward** | Reduced test duplication, consistent test behavior |
+| **Issue Severity** | ~~Low~~ → N/A |
+| **Implementation Risk** | N/A |
+| **Effort** | ~~Medium (4-6 hours)~~ → DONE |
+| **Reward** | ✅ Reduced test duplication, consistent test behavior |
 | **Breaking Change** | No |
+
+**Status:** ✅ **IMPLEMENTED**
+
+`tests/conftest.py` now has 381 lines with comprehensive shared fixtures:
+
+- **Tier 1 (Pure fixtures):** `deterministic_rng`, `sample_config_dict`, `sample_pbr_config_dict`
+- **Tier 2 (IO fixtures):** `temp_workspace`, `sample_rgb_image`, `sample_rgb_pil`, `sample_depth_map`, `sample_depth_pil`, `sample_image_file`, `sample_depth_file`, `sample_yaml_config`
+- **Tier 3 (ML fixtures):** `transformers_offline`, `mock_depth_model`
+- **Availability helpers:** `has_depth_anything_v3()`, `has_torch()`, `has_transformers()`, `is_offline_mode()`, `can_run_da3_compute()`
+- **Benchmark guard:** `pytest_collection_modifyitems()` skips benchmark tests unless explicitly requested
 
 ---
 
 ### TEST-002: Add Tests for Untested Modules [HIGH]
 
-**Gap Analysis:**
+**Gap Analysis (Updated 2026-03-24):**
 
 | Module | Path | Lines of Code | Test Status |
 |--------|------|---------------|-------------|
@@ -171,7 +206,7 @@ def mock_config():
 | rendering/ | `src/transformation_portal/rendering/` | ~800 | ⚠️ Partial |
 | comfyui/ | `src/transformation_portal/comfyui/` | ~300 | ❌ No tests |
 | scene_types.py | `src/transformation_portal/` | 185 | ❌ No tests |
-| config_loader.py | `src/transformation_portal/` | 385 | ❌ No tests |
+| config_loader.py | `src/transformation_portal/` | 385 | ✅ Tests exist (tests/utils/test_config_loader.py + tests/test_config_loader_security.py) |
 | pipeline_unified.py | `src/transformation_portal/` | 1,077 | ❌ No tests |
 
 *Note: Line counts measured via `wc -l` for consistency and reproducibility.*
@@ -580,26 +615,22 @@ def enhance_batch(
 
 ### CI-002: Add Caching to build.yml [HIGH]
 
-**Location:** `.github/workflows/build.yml:123-125`
+**Status:** ✅ **IMPLEMENTED**
 
-**Issue:** build.yml reinstalls dependencies on every run (no pip cache).
+**Location:** `.github/workflows/build.yml:356-360, 407-411, 506-510`
 
-**Recommendation:**
-```yaml
-- name: Cache pip packages
-  uses: actions/cache@v4
-  with:
-    path: ~/.cache/pip
-    key: ${{ runner.os }}-pip-${{ hashFiles('requirements*.txt') }}
-    restore-keys: |
-      ${{ runner.os }}-pip-
-```
+**Issue:** ~~build.yml reinstalls dependencies on every run (no pip cache).~~ **RESOLVED**
+
+**Implementation:**
+- `actions/cache@v5` now caches `~/.cache/pip` (lines 356-360, 407-411, 506-510)
+- Cache key based on `requirements*.txt` hash files
+- Comments note 3-5 min savings per job (line 25)
 
 | Aspect | Assessment |
 |--------|------------|
-| **Issue Severity** | Low |
-| **Implementation Risk** | Low |
-| **Effort** | Low (30 minutes) |
+| **Issue Severity** | ~~Low~~ → N/A |
+| **Implementation Risk** | N/A |
+| **Effort** | ~~Low (30 minutes)~~ → DONE |
 | **Reward** | 2-5 minute reduction per run |
 | **Breaking Change** | No |
 
@@ -607,12 +638,20 @@ def enhance_batch(
 
 ### CI-003: Add Concurrency Control [MEDIUM]
 
-**Location:** `.github/workflows/ci.yml`, `.github/workflows/python-app.yml`
+**Status:** ✅ **IMPLEMENTED**
 
-**Issue:** Missing concurrency control, allowing redundant parallel runs.
+**Location:** `.github/workflows/ci.yml:11`, `.github/workflows/build.yml:14`
 
-**Recommendation:**
+**Issue:** ~~Missing concurrency control, allowing redundant parallel runs.~~ **RESOLVED**
+
+**Implementation:**
 ```yaml
+# ci.yml:11
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# build.yml:14
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -620,9 +659,9 @@ concurrency:
 
 | Aspect | Assessment |
 |--------|------------|
-| **Issue Severity** | Low |
-| **Implementation Risk** | Low |
-| **Effort** | Low (15 minutes) |
+| **Issue Severity** | ~~Low~~ → N/A |
+| **Implementation Risk** | N/A |
+| **Effort** | ~~Low (15 minutes)~~ → DONE |
 | **Reward** | Reduced CI minutes, faster feedback |
 | **Breaking Change** | No |
 
@@ -632,11 +671,15 @@ concurrency:
 
 ### CODE-001: Complete Phase 2 Configuration [MEDIUM]
 
-**Location:** `src/transformation_portal/depth_canonical/config.py:143`
+**Status:** 📦 **OBSOLETE** - Module archived to `archive/depth_canonical/`
 
-**Issue:** YAML configuration loading marked as Phase 2 TODO remains incomplete.
+**Location:** ~~`src/transformation_portal/depth_canonical/config.py:143`~~
 
-**Recommendation:** Implement full YAML support:
+**Issue:** ~~YAML configuration loading marked as Phase 2 TODO remains incomplete.~~
+
+**Resolution:** The `depth_canonical` module was superseded by `src/transformation_portal/depth/backends/` (ADR-019) and archived. No action required.
+
+**Recommendation:** ~~Implement full YAML support:~~
 ```python
 @classmethod
 def from_yaml(cls, path: Path) -> "CanonicalConfig":
