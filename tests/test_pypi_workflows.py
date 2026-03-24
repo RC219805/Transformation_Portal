@@ -152,9 +152,7 @@ class TestPyPIWorkflows:
 
         # setup-python: require v5+
         # Match either @v5/@v6 or @<sha> # v5/@<sha> # v6 patterns
-        setup_python_match = re.search(
-            r"actions/setup-python@(?:v([56])|[a-fA-F0-9]+\s*#\s*v([56]))", content
-        )
+        setup_python_match = re.search(r"actions/setup-python@(?:v([56])|[a-fA-F0-9]+\s*#\s*v([56]))", content)
         assert setup_python_match, "Should use recent setup-python action (v5+)"
 
         # upload-artifact: require v4+
