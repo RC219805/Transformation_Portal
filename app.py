@@ -2327,6 +2327,15 @@ async def job_events(
                 },
             )
             if job.finished_at is not None:
+                # Drain any queued events that arrived before the client connected.
+                while not q.empty():
+                    try:
+                        ev = q.get_nowait()
+                        yield _sse(ev["event"], ev["data"])
+                        if ev["event"] == "done":
+                            return
+                    except asyncio.QueueEmpty:
+                        break
                 yield _sse(
                     "done",
                     {
