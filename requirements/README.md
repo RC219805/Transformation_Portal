@@ -111,7 +111,7 @@ The repository has **root-level** requirements files that reference this layered
 **Important distinctions:**
 - `requirements-ci.txt` (root) contains **test runner** deps (pytest, hypothesis, etc.)
 - `requirements/ci.in` contains **CI pipeline tools** (bandit, safety, build, twine, etc.)
-- Core test runner deps in root `requirements-ci.txt` (the `CORE_TEST_DEPS` set: pytest, hypothesis, pytest-cov, etc.) should match `requirements/dev.in`
+- Core test runner deps in root `requirements-ci.txt` must match `requirements/dev.in`. The enforced set is defined as `CORE_TEST_DEPS` in `scripts/validation/check_ci_dep_sync.py` (currently: pytest, pytest-cov, pytest-asyncio, pytest-json-report, pytest-xdist, hypothesis, httpx)
 - Run `make check-ci-sync` to verify no drift for this core test runner set between the root files
 
 ### Layered ML Strategy

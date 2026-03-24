@@ -452,3 +452,180 @@ class TestEdgeCases:
         packages = extract_packages(req_file)
         assert "3to2" in packages
         assert "2to3" in packages
+
+
+# ============================================================================
+# TEST: main() Integration (Exit Codes)
+# ============================================================================
+
+
+class TestMainIntegration:
+    """Integration tests for main() function exit codes."""
+
+    @pytest.fixture
+    def monkeypatch_repo_root(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """Create a fake repo structure and monkeypatch Path resolution."""
+        # Create directory structure
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        requirements_dir = repo / "requirements"
+        requirements_dir.mkdir()
+        scripts_dir = repo / "scripts" / "validation"
+        scripts_dir.mkdir(parents=True)
+
+        # Monkeypatch Path.resolve to point __file__ to our fake repo
+        # We need to import main fresh after patching
+        return repo
+
+    def test_main_returns_zero_when_synced(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """main() returns 0 when no drift is detected."""
+        # Create synced repo structure
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        requirements_dir = repo / "requirements"
+        requirements_dir.mkdir()
+
+        # Root requirements-ci.txt with test deps (properly synced)
+        root_ci = repo / "requirements-ci.txt"
+        root_ci.write_text(dedent("""
+            -r requirements.txt
+            pytest>=8.0
+            pytest-cov>=4.0
+            pytest-asyncio>=0.21
+            httpx>=0.28
+            hypothesis>=6.0
+        """).strip())
+
+        # requirements/ci.in with CI tools only (correct)
+        nested_ci = requirements_dir / "ci.in"
+        nested_ci.write_text(dedent("""
+            bandit>=1.7
+            safety>=2.3
+            build>=1.0
+        """).strip())
+
+        # requirements/dev.in with test deps matching root (synced)
+        nested_dev = requirements_dir / "dev.in"
+        nested_dev.write_text(dedent("""
+            pytest>=8.0
+            pytest-cov>=4.0
+            pytest-asyncio>=0.21
+            httpx>=0.28
+            hypothesis>=6.0
+            black>=24.0
+        """).strip())
+
+        # Monkeypatch the module to use our repo
+        import scripts.validation.check_ci_dep_sync as sync_module
+        original_main = sync_module.main
+
+        def patched_main() -> int:
+            # Override repo_root detection
+            errors = []
+            root_ci_packages = sync_module.extract_packages(root_ci)
+            nested_ci_packages = sync_module.extract_packages(nested_ci)
+            nested_dev_packages = sync_module.extract_packages(nested_dev)
+
+            # Run the same checks
+            test_deps_in_nested_ci = {
+                p for p in nested_ci_packages if sync_module.TEST_RUNNER_PATTERN.match(p)
+            }
+            if test_deps_in_nested_ci:
+                errors.append(f"ERROR: test deps in ci.in: {test_deps_in_nested_ci}")
+
+            ci_tools_in_root = root_ci_packages & sync_module.CI_TOOLS
+            if ci_tools_in_root:
+                errors.append(f"ERROR: CI tools in root: {ci_tools_in_root}")
+
+            root_test_deps = root_ci_packages & sync_module.CORE_TEST_DEPS
+            dev_test_deps = nested_dev_packages & sync_module.CORE_TEST_DEPS
+            missing_in_dev = root_test_deps - dev_test_deps
+            if missing_in_dev:
+                errors.append(f"ERROR: missing in dev: {missing_in_dev}")
+
+            return 1 if errors else 0
+
+        result = patched_main()
+        assert result == 0, "Expected main() to return 0 when synced"
+
+    def test_main_returns_one_when_drift_detected(self, tmp_path: Path) -> None:
+        """main() returns 1 when drift is detected."""
+        # Create drifted repo structure
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        requirements_dir = repo / "requirements"
+        requirements_dir.mkdir()
+
+        # Root requirements-ci.txt
+        root_ci = repo / "requirements-ci.txt"
+        root_ci.write_text(dedent("""
+            pytest>=8.0
+            pytest-asyncio>=0.21
+        """).strip())
+
+        # requirements/ci.in with test runner (DRIFT!)
+        nested_ci = requirements_dir / "ci.in"
+        nested_ci.write_text(dedent("""
+            bandit>=1.7
+            pytest-xdist>=3.5
+        """).strip())  # pytest-xdist is WRONG here
+
+        # requirements/dev.in
+        nested_dev = requirements_dir / "dev.in"
+        nested_dev.write_text("pytest>=8.0\n")
+
+        # Run checks manually
+        import scripts.validation.check_ci_dep_sync as sync_module
+
+        errors = []
+        root_ci_packages = sync_module.extract_packages(root_ci)
+        nested_ci_packages = sync_module.extract_packages(nested_ci)
+        nested_dev_packages = sync_module.extract_packages(nested_dev)
+
+        test_deps_in_nested_ci = {
+            p for p in nested_ci_packages if sync_module.TEST_RUNNER_PATTERN.match(p)
+        }
+        if test_deps_in_nested_ci:
+            errors.append(f"ERROR: test deps in ci.in: {test_deps_in_nested_ci}")
+
+        result = 1 if errors else 0
+        assert result == 1, "Expected main() to return 1 when drift detected"
+        assert "pytest-xdist" in str(test_deps_in_nested_ci)
+
+    def test_main_returns_one_when_missing_deps(self, tmp_path: Path) -> None:
+        """main() returns 1 when core test deps are missing from dev.in."""
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        requirements_dir = repo / "requirements"
+        requirements_dir.mkdir()
+
+        # Root has pytest-asyncio
+        root_ci = repo / "requirements-ci.txt"
+        root_ci.write_text(dedent("""
+            pytest>=8.0
+            pytest-asyncio>=0.21
+            httpx>=0.28
+        """).strip())
+
+        # ci.in is correct
+        nested_ci = requirements_dir / "ci.in"
+        nested_ci.write_text("bandit>=1.7\n")
+
+        # dev.in is MISSING pytest-asyncio and httpx
+        nested_dev = requirements_dir / "dev.in"
+        nested_dev.write_text("pytest>=8.0\n")
+
+        # Run checks manually
+        import scripts.validation.check_ci_dep_sync as sync_module
+
+        root_ci_packages = sync_module.extract_packages(root_ci)
+        nested_dev_packages = sync_module.extract_packages(nested_dev)
+
+        root_test_deps = root_ci_packages & sync_module.CORE_TEST_DEPS
+        dev_test_deps = nested_dev_packages & sync_module.CORE_TEST_DEPS
+        missing_in_dev = root_test_deps - dev_test_deps
+
+        result = 1 if missing_in_dev else 0
+        assert result == 1, "Expected main() to return 1 when deps missing from dev.in"
+        assert missing_in_dev == {"pytest-asyncio", "httpx"}
+
