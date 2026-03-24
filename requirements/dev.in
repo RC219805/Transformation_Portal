@@ -6,6 +6,7 @@
 # Testing frameworks
 pytest>=8.0,<10
 pytest-cov>=4.0,<8
+pytest-asyncio>=0.21,<1  # async test support for ExecutionManager/async tests
 pytest-json-report>=1.5,<2  # JSON test result reporting for flake tracking
 pytest-rerunfailures>=14.0,<17  # Rerun flaky tests automatically
 pytest-xdist>=3.5,<4  # parallel test execution (ADR-044 CI optimization)

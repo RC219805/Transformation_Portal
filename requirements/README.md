@@ -94,9 +94,25 @@ Dependencies are organized into logical layers:
 - **ml-coreml**: Apple CoreML acceleration - macOS only
 - **ml-research**: Research/experimental extras - reserved for future use
 - **dev**: Developer tools for testing, linting, and formatting
-- **ci**: CI/CD pipeline tools for builds, security scanning, and releases
+- **ci**: CI/CD pipeline tools for builds, security scanning, and releases (NOT test runners)
 - **tools-archive**: dependencies for `tools/archive_manifest_reports.py`
 - **all**: Convenience layer that includes everything
+
+### Relationship to Root Requirements Files
+
+The repository has **root-level** requirements files that reference this layered system:
+
+| Root File | Purpose | Structure |
+|-----------|---------|-----------|
+| `requirements.txt` | Core runtime | References `requirements/base.txt` |
+| `requirements-ci.txt` | CI test runs | References `requirements.txt` + inline test deps |
+| `requirements-dev.txt` | Development | References `requirements-ci.txt` + dev tools |
+
+**Important distinctions:**
+- `requirements-ci.txt` (root) contains **test runner** deps (pytest, hypothesis, etc.)
+- `requirements/ci.in` contains **CI pipeline tools** (bandit, safety, build, twine, etc.)
+- Test deps in root `requirements-ci.txt` should match `requirements/dev.in` (minus linters)
+- Run `make check-ci-sync` to verify no drift between these files
 
 ### Layered ML Strategy
 

@@ -1,11 +1,18 @@
 # CI environment: runtime + test deps (base layer)
+# ==================================================
 # This file defines the *base* dependencies used across CI for fast installs.
 # The dedicated `test-ml` job installs additional ML wheels (e.g., CPU-only torch/torchvision)
 # on top of this base layer for ML tier tests.
 # Heavy benchmark/stress suites are marker-gated and not part of the default fast CI run.
+#
+# IMPORTANT: This file is the canonical source for CI test dependencies.
+# Dependencies here must be kept in sync with requirements/dev.in (test frameworks).
+# The nested requirements/ci.in is for CI *pipeline tools* only (bandit, safety, etc.),
+# NOT for test runners. Run `make check-ci-sync` to verify no drift.
 -r requirements.txt
 
 # Testing / coverage / property-based tests
+# NOTE: These MUST match requirements/dev.in (minus linters/formatters)
 pytest>=8,<10
 pytest-cov>=4.0,<8
 pytest-asyncio>=0.21,<1  # async test support for ExecutionManager tests
