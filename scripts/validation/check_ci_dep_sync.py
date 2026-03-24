@@ -22,6 +22,31 @@ import re
 import sys
 from pathlib import Path
 
+# ============================================================================
+# CONFIGURATION: Canonical lists maintained here as the single source of truth
+# ============================================================================
+
+# Packages that are test runners/frameworks (should be in dev.in, NOT ci.in)
+# Pattern matches pytest, pytest-*, httpx, hypothesis
+TEST_RUNNER_PATTERN = re.compile(r"^pytest$|^pytest-|^httpx$|^hypothesis$")
+
+# CI pipeline tools (should be in ci.in, NOT root requirements-ci.txt)
+# These are security/packaging/release tools, not test runners
+CI_TOOLS = frozenset({"bandit", "safety", "build", "twine", "tox", "pypdf"})
+
+# Core test framework packages that MUST be in both root requirements-ci.txt
+# AND requirements/dev.in to ensure sync. This is a contract.
+# Update this set when adding new core test dependencies.
+CORE_TEST_DEPS = frozenset({
+    "pytest",
+    "pytest-cov",
+    "pytest-asyncio",
+    "pytest-json-report",
+    "pytest-xdist",
+    "hypothesis",
+    "httpx",
+})
+
 
 def extract_packages(filepath: Path) -> set[str]:
     """Extract package names from a requirements file, ignoring comments and -r lines."""
@@ -35,7 +60,8 @@ def extract_packages(filepath: Path) -> set[str]:
         if not line or line.startswith("#") or line.startswith("-r"):
             continue
         # Extract package name (before any version specifier)
-        match = re.match(r"^([a-zA-Z0-9_-]+)", line)
+        # Pattern handles: standard names, dots (zope.interface), underscores, hyphens
+        match = re.match(r"^([a-zA-Z0-9._-]+)", line)
         if match:
             packages.add(match.group(1).lower().replace("_", "-"))
     return packages
@@ -56,9 +82,8 @@ def main() -> int:
     nested_dev_packages = extract_packages(nested_dev_in)
 
     # Check 1: Test runner deps should NOT be in nested ci.in (they belong in dev.in or root)
-    test_runner_pattern = re.compile(r"^pytest-|^httpx$|^hypothesis$")
     test_deps_in_nested_ci = {
-        p for p in nested_ci_packages if test_runner_pattern.match(p)
+        p for p in nested_ci_packages if TEST_RUNNER_PATTERN.match(p)
     }
     if test_deps_in_nested_ci:
         errors.append(
@@ -68,8 +93,7 @@ def main() -> int:
 
     # Check 2: CI pipeline tools in nested ci.in should NOT be in root requirements-ci.txt
     # (CI tools like bandit, safety, build, twine are specialized and not needed for test runs)
-    ci_tools_pattern = re.compile(r"^(bandit|safety|build|twine|tox|pypdf)$")
-    ci_tools_in_root = {p for p in root_ci_packages if ci_tools_pattern.match(p)}
+    ci_tools_in_root = root_ci_packages & CI_TOOLS
     if ci_tools_in_root:
         errors.append(
             f"WARNING: CI pipeline tools found in requirements-ci.txt (should be in requirements/ci.in):\n"
@@ -77,10 +101,9 @@ def main() -> int:
         )
 
     # Check 3: Core test deps in root should also be in dev.in (sync requirement)
-    # These are the pytest and test framework packages
-    core_test_deps = {"pytest", "pytest-cov", "pytest-asyncio", "pytest-json-report", "pytest-xdist", "hypothesis", "httpx"}
-    root_test_deps = root_ci_packages & core_test_deps
-    dev_test_deps = nested_dev_packages & core_test_deps
+    # Uses CORE_TEST_DEPS as the canonical contract
+    root_test_deps = root_ci_packages & CORE_TEST_DEPS
+    dev_test_deps = nested_dev_packages & CORE_TEST_DEPS
 
     missing_in_dev = root_test_deps - dev_test_deps
     if missing_in_dev:
