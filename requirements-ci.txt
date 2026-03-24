@@ -15,7 +15,7 @@
 # NOTE: These MUST match requirements/dev.in (minus linters/formatters)
 pytest>=8,<10
 pytest-cov>=4.0,<8
-pytest-asyncio>=0.21,<1  # async test support for ExecutionManager tests
+pytest-asyncio>=1.3.0,<2  # async test support for ExecutionManager tests; 1.3.0+ required for pytest 9
 pytest-json-report>=1.5,<2
 pytest-xdist>=3.5,<4  # parallel test execution (ADR-044 CI optimization)
 hypothesis>=6,<7
