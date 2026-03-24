@@ -2328,7 +2328,10 @@ async def job_events(
             )
             if job.finished_at is not None:
                 # Drain any queued events that arrived before the client connected.
-                while not q.empty():
+                # This ensures late-connecting clients receive all events from the job.
+                # If a 'done' event is found in the queue, we use it directly (with its
+                # original payload) rather than generating a synthetic one.
+                while True:
                     try:
                         ev = q.get_nowait()
                         yield _sse(ev["event"], ev["data"])
@@ -2336,6 +2339,7 @@ async def job_events(
                             return
                     except asyncio.QueueEmpty:
                         break
+                # No 'done' event was queued; generate a synthetic one from job state.
                 yield _sse(
                     "done",
                     {
