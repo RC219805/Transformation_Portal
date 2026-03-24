@@ -154,12 +154,20 @@ class TestEnhancementStageMaterialProcessing:
         assert result.status == StageStatus.COMPLETED
         assert "metal" in result.artifacts["enhancement_metadata"]["materials_applied"]
 
-    def test_skips_empty_material_masks(self) -> None:
-        """Empty material masks should be skipped."""
+    def test_empty_mask_does_not_modify_image(self) -> None:
+        """Empty material mask (all zeros) should not modify the image pixels.
+
+        The mask key is still reported in materials_applied (it was provided),
+        but the actual enhancement is skipped because mask.max() == 0.
+        """
         image = np.full((32, 32, 3), 128, dtype=np.uint8)
         empty_mask = np.zeros((32, 32), dtype=np.float32)
 
-        stage = EnhancementStage(material_strength=1.0)
+        stage = EnhancementStage(
+            enhancement_strength=0.0,  # Disable other enhancements
+            clarity_strength=0.0,
+            material_strength=1.0,
+        )
         context = StageContext(
             artifacts={
                 "image": image,
@@ -170,8 +178,10 @@ class TestEnhancementStageMaterialProcessing:
         result = stage.compute(context)
 
         assert result.status == StageStatus.COMPLETED
-        # Empty masks are still listed but no processing happens
+        # Mask key is reported (it was provided)
         assert "wood" in result.artifacts["enhancement_metadata"]["materials_applied"]
+        # Image should be unchanged since empty mask causes skip
+        assert np.array_equal(result.artifacts["enhanced_image"], image)
 
 
 class TestEnhancementStageCacheKey:
@@ -179,8 +189,10 @@ class TestEnhancementStageCacheKey:
 
     def test_cache_key_changes_with_image(self) -> None:
         """Cache key should change when image changes."""
-        image1 = np.random.randint(0, 256, (32, 32, 3), dtype=np.uint8)
-        image2 = np.random.randint(0, 256, (32, 32, 3), dtype=np.uint8)
+        # Use deterministic fixtures to avoid flaky tests from random collisions
+        image1 = np.full((32, 32, 3), 100, dtype=np.uint8)
+        image2 = image1.copy()
+        image2[0, 0, 0] = 200  # Single pixel difference guarantees different hash
 
         stage = EnhancementStage()
         context1 = StageContext(artifacts={"image": image1})
@@ -193,9 +205,11 @@ class TestEnhancementStageCacheKey:
 
     def test_cache_key_changes_with_depth_map(self) -> None:
         """Cache key should change when depth map changes."""
-        image = np.random.randint(0, 256, (32, 32, 3), dtype=np.uint8)
-        depth1 = np.random.random((32, 32)).astype(np.float32)
-        depth2 = np.random.random((32, 32)).astype(np.float32)
+        # Use deterministic fixtures to avoid flaky tests from random collisions
+        image = np.full((32, 32, 3), 128, dtype=np.uint8)
+        depth1 = np.full((32, 32), 0.5, dtype=np.float32)
+        depth2 = depth1.copy()
+        depth2[0, 0] = 1.0  # Single pixel difference guarantees different hash
 
         stage = EnhancementStage()
         context1 = StageContext(artifacts={"image": image, "depth_map": depth1})
@@ -217,8 +231,9 @@ class TestEnhancementStageCacheKey:
 
     def test_cache_key_deterministic(self) -> None:
         """Same inputs should produce same cache key."""
-        np.random.seed(42)
-        image = np.random.randint(0, 256, (32, 32, 3), dtype=np.uint8)
+        # Use local RNG to avoid leaking state to other tests
+        rng = np.random.default_rng(42)
+        image = rng.integers(0, 256, (32, 32, 3), dtype=np.uint8)
 
         stage = EnhancementStage(enhancement_strength=0.5, clarity_strength=0.3)
         context = StageContext(artifacts={"image": image})

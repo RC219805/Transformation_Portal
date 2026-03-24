@@ -188,12 +188,13 @@ class TestDepthCacheConcurrencyClear:
     """Tests for thread-safe cache clearing."""
 
     def test_clear_during_concurrent_writes(self, tmp_path) -> None:
-        """Clear operation should not raise exceptions during concurrent writes.
+        """Clear operation should not corrupt cache state during concurrent writes.
 
-        Note: When clear() runs concurrently with store operations, some stores may
-        fail gracefully because their temporary files get deleted. This is expected
-        behavior - the test verifies no uncaught exceptions propagate, not that all
-        operations succeed.
+        When clear() runs concurrently with store operations, some stores may
+        fail gracefully (logged as warnings). This test verifies:
+        1. No uncaught exceptions propagate from threads
+        2. The cache remains usable after concurrent operations
+        3. Stats remain consistent and valid
         """
         cache = DepthCache(tmp_path, max_size_gb=1.0)
         exceptions_raised: List[Exception] = []
@@ -224,9 +225,21 @@ class TestDepthCacheConcurrencyClear:
         for t in threads:
             t.join()
 
-        # No uncaught exceptions should propagate from the threads
-        # (Warnings are acceptable and expected for race conditions)
+        # Verification 1: No uncaught exceptions should propagate from threads
         assert len(exceptions_raised) == 0, f"Uncaught exceptions during concurrent clear: {exceptions_raised}"
+
+        # Verification 2: Cache remains usable - can still perform operations
+        test_depth = np.full((10, 10), 42.0, dtype=np.float32)
+        cache.store("post_clear_key", "config", test_depth)
+        retrieved = cache.get("post_clear_key", "config")
+        assert retrieved is not None, "Cache should be usable after concurrent clear"
+        assert np.allclose(retrieved, test_depth), "Retrieved value should match stored value"
+
+        # Verification 3: Stats remain consistent and valid
+        stats = cache.stats()
+        assert stats["entry_count"] >= 1, "At least our post-clear entry should exist"
+        assert stats["size_gb"] >= 0.0, "Cache size should be non-negative"
+        assert stats["max_size_gb"] == 1.0, "Max size should be unchanged"
 
 
 class TestDepthCacheConcurrencyThreadPool:
