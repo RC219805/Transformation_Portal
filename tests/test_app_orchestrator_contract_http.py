@@ -129,10 +129,12 @@ def test_jobs_list_and_detail_include_recovery_fields(client: TestClient) -> Non
 
 def test_v1_routes_enforce_api_key_for_reads_and_events(client: TestClient) -> None:
     orchestrator_app.API_KEY_SECRET = "contract-secret"
+    now = orchestrator_app._now()
     finished_job = orchestrator_app.Job(
         id="job_auth",
-        created_at=orchestrator_app._now(),
-        finished_at=orchestrator_app._now(),
+        created_at=now,
+        finished_at=now,
+        done_published_at=now,  # Required for SSE endpoint to synthesize done event
         state="succeeded",
         exit_code=0,
         request={"pipeline": "lux-depth-v3"},
@@ -182,7 +184,9 @@ def test_archive_gate_pipeline_submission_returns_job_envelope(client: TestClien
     async def fake_run_job(job, _argv):  # noqa: ANN001
         job.state = "succeeded"
         job.exit_code = 0
-        job.finished_at = orchestrator_app._now()
+        now = orchestrator_app._now()
+        job.done_published_at = now
+        job.finished_at = now
 
     monkeypatch.setattr(orchestrator_app, "_run_job", fake_run_job)
 
@@ -334,7 +338,6 @@ def test_job_events_stream_emits_state_log_progress_artifact_done(client: TestCl
 
         job.state = "succeeded"
         job.exit_code = 0
-        job.finished_at = orchestrator_app._now()
         await orchestrator_app._publish_event(
             job.id,
             "done",
@@ -346,6 +349,10 @@ def test_job_events_stream_emits_state_log_progress_artifact_done(client: TestCl
                 "artifacts": job.artifacts,
             },
         )
+        # Set timestamps AFTER publishing done event (matches real _run_job behavior)
+        now = orchestrator_app._now()
+        job.done_published_at = now
+        job.finished_at = now
 
     monkeypatch.setattr(orchestrator_app, "_run_job", fake_run_job)
 

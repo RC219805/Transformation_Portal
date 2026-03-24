@@ -13,6 +13,11 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.issue.number || github.event.pull_request.number || github.run_id }}
   cancel-in-progress: true
 
+# Workflow-level permissions with least privilege defaults
+# Individual jobs may request additional permissions as needed
+permissions:
+  contents: read
+
 jobs:
   summarize:
     name: AI Advisory / Summary
