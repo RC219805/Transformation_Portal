@@ -1,7 +1,7 @@
 # Outstanding TODOs for Advanced Features - Transformation Portal
 
 **Generated**: 2026-02-18
-**Last Updated**: 2026-03-16
+**Last Updated**: 2026-03-25
 **Status**: Based on experimental preset analysis and codebase review
 
 ---
@@ -438,9 +438,15 @@ python -m transformation_portal.spatial_ai segment \
 
 ---
 
-## 📊 Status Update (2026-03-17)
+## 📊 Status Update (2026-03-25)
 
-**Completed since document creation:**
+**Current Status:**
+- All source code TODOs in `src/` have been cleaned up
+- 3 test observational TODOs remain (performance tracking only)
+- 12 NotImplementedError instances are intentional (abstract methods, phase gates, platform limitations)
+- P3 experimental features (ComfyUI, NVDIFFREC, MaterialGAN) remain deferred
+
+**Historical Progress (through 2026-03-17):**
 - ✅ HF Revision Pinning for DA3 - Completed 2026-03-14
 - ✅ Multi-Model Depth Ensemble - EMA temporal filter implemented
 - ✅ Documentation Gaps - All guides now exist (2026-03-17)

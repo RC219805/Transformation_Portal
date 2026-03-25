@@ -187,10 +187,10 @@ All NotImplementedError must include context:
 A: 0 P0 blockers. 1 P1 item (branch protection - GitHub Admin task).
 
 **Q: How many items are technical debt?**
-A: Of the 25 NotImplementedError instances, only 3 are technical debt requiring future work (NVDIFFREC, MaterialGAN, PBRFusion). The rest are intentional stubs (abstract methods, phase gates, platform limitations).
+A: Of the 12 NotImplementedError instances, only 3 are technical debt requiring future work (NVDIFFREC, MaterialGAN, PBRFusion). The rest are intentional stubs (abstract methods, phase gates, platform limitations).
 
 **Q: When should we update the inventory?**
-A: Monthly or per-release. This review: 2026-03-15 (v2.3.0 planning).
+A: Monthly or per-release. This review: 2026-03-25 (v2.4.0 planning).
 
 **Q: Can we release v2.3.0 with pending items?**
 A: Yes. All P1 items except branch protection are complete.
@@ -209,8 +209,8 @@ A: None identified. Repository health is excellent.
 
 ---
 
-**Last Updated:** 2026-03-15
-**Next Review:** April 2026 (v2.4.0 planning)
+**Last Updated:** 2026-03-25
+**Next Review:** April 2026 (v2.5.0 planning)
 **Authority:** Binding under architectural governance
 
 ---

@@ -1,6 +1,6 @@
 # Transformation Portal: Improvement Opportunities
 
-**Document Version:** 1.1.1
+**Document Version:** 1.1.2
 **Date:** February 2026
 **Last Updated:** March 25, 2026
 **Last Validated Against `main`:** 2026-03-25
@@ -27,14 +27,14 @@ The Transformation Portal is a mature, production-ready toolkit at v2.0.0 with c
 | Sector | Critical | High | Medium | Low | Original | Remaining |
 |--------|----------|------|--------|-----|----------|-----------|
 | **Security** | ~~1~~ ✅ | ~~1~~ ✅ | 1 | 0 | 3 | 1 |
-| **Testing** | ~~1~~ ✅ | ~~2~~ ✅ | 2 | 1 | 6 | 3 |
-| **Performance** | 0 | ~~2~~ ✅ | ~~2~~ ✅ | 0 | 4 | 0 |
-| **Documentation** | 0 | 1 | ~~2~~ ✅ | 1 | 4 | 2 |
+| **Testing** | ~~1~~ ✅ | ~~1~~ ✅ | 2 | 1 | 6 | 4 |
+| **Performance** | 0 | 1 | 1 | 0 | 4 | 2 |
+| **Documentation** | 0 | 1 | 1 | 1 | 4 | 3 |
 | **CI/CD** | 0 | ~~2~~ ✅ | 1 | 0 | 3 | 1 |
 | **Code Quality** | 0 | 0 | ~~1~~ 📦 | 0 | 1 | 0 |
-| **Total** | **2** | **8** | **9** | **2** | **21** | **7** |
+| **Total** | **2** | **8** | **9** | **2** | **21** | **11** |
 
-*Note: "Remaining" excludes re-scoped items (SEC-003, DOC-001, CI-001) which are lower priority than originally framed.*
+*Note: "Remaining" includes re-scoped items (SEC-003, DOC-001, CI-001) which may be lower priority than originally framed but are still actionable.*
 
 ---
 
@@ -847,6 +847,7 @@ Effort Distribution:
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.1.2 | 2026-03-25 | Consistency fix: Sector table "Remaining" column corrected to match 11 pending items (SEC-003:1, TEST-002/4/5/6:4, PERF-002/4:2, DOC-001/3/4:3, CI-001:1) |
 | 1.1.1 | 2026-03-25 | Accuracy pass: TEST-003, DOC-002, PERF-001, PERF-003 marked implemented; TEST-002 re-scoped; appendix updated |
 | 1.1.0 | 2026-03 | Added completion tracking; marked SEC-001, SEC-002, TEST-001, CI-002, CI-003 as implemented |
 | 1.0.0 | 2026-02 | Initial analysis with 21 improvement opportunities |
