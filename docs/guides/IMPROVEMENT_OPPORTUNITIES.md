@@ -205,16 +205,16 @@ def mock_config():
 | enhancers/ | `src/transformation_portal/enhancers/` | ~500 | ⚠️ Partial (aerial/board enhancers tested) |
 | rendering/ | `src/transformation_portal/rendering/` | ~800 | ⚠️ Partial |
 | comfyui/ | `src/transformation_portal/comfyui/` | ~300 | ❌ No tests |
-| scene_types.py | `src/transformation_portal/` | 185 | ❌ No tests |
+| scene_types.py | `src/transformation_portal/` | 185 | ✅ Tests exist (tests/test_scene_types.py - 524 LOC, 101 tests) |
 | config_loader.py | `src/transformation_portal/` | 385 | ✅ Tests exist (tests/utils/test_config_loader.py + tests/test_config_loader_security.py) |
-| pipeline_unified.py | `src/transformation_portal/` | 1,077 | ❌ No tests |
+| pipeline_unified.py | `src/transformation_portal/` | 1,077 | ✅ **IMPLEMENTED (2026-03-25)** - 53 tests in tests/test_pipeline_unified.py |
 | security.py | `src/transformation_portal/utils/` | 448 | ✅ **IMPLEMENTED (2026-03-25)** - 77 tests in tests/utils/test_security.py |
 
 *Note: Line counts measured via `wc -l` for consistency and reproducibility.*
 
 **Recommendation:** Prioritize tests by usage frequency:
-1. `config_loader.py` - Core functionality, high usage
-2. `scene_types.py` - Data structures used throughout
+1. ~~`config_loader.py` - Core functionality, high usage~~ ✅ Tests exist
+2. ~~`scene_types.py` - Data structures used throughout~~ ✅ Tests exist
 3. `enhancers/` - Production workflows rely on these
 4. `comfyui/` - Integration point with external system
 
@@ -222,7 +222,7 @@ def mock_config():
 |--------|------------|
 | **Issue Severity** | Medium |
 | **Implementation Risk** | Low |
-| **Effort** | High (8-16 hours) |
+| **Effort** | ~~High (8-16 hours)~~ Medium (4-8 hours remaining - enhancers/comfyui) |
 | **Reward** | 15-20% coverage increase, regression protection |
 | **Breaking Change** | No |
 
