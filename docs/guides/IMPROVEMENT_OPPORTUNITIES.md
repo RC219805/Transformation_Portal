@@ -1,6 +1,6 @@
 # Transformation Portal: Improvement Opportunities
 
-**Document Version:** 1.1.2
+**Document Version:** 1.1.3
 **Date:** February 2026
 **Last Updated:** March 25, 2026
 **Last Validated Against `main`:** 2026-03-25
@@ -158,7 +158,7 @@ The more relevant remaining security item is **attestation/provenance surfacing*
 
 **Status:** ✅ **IMPLEMENTED**
 
-**Location:** `tests/conftest.py` (381 lines, 14 fixtures)
+**Location:** `tests/conftest.py` (comprehensive shared fixtures)
 
 **Original Issue:** Tests created fixtures locally, leading to duplication and inconsistency. Critical fixtures like temp directories, mock images, and model mocks were recreated in many test files.
 
@@ -223,11 +223,11 @@ def mock_config():
 
 | Module | Path | Lines of Code | Test Status | Evidence |
 |--------|------|---------------|-------------|----------|
-| pipeline_unified.py | `src/transformation_portal/` | 1,077 | ✅ **IMPLEMENTED** | `tests/test_pipeline_unified.py` (1,136 lines, 53+ tests) |
-| utils/security.py | `src/transformation_portal/utils/` | 448 | ✅ **IMPLEMENTED** | `tests/utils/test_security.py` (862 lines) |
-| config_loader.py | `src/transformation_portal/` | 385 | ✅ **IMPLEMENTED** | `tests/utils/test_config_loader.py` (841 lines) |
-| scene_types.py | `src/transformation_portal/` | 185 | ✅ **IMPLEMENTED** | `tests/test_scene_types.py` (524 lines, 101 tests) |
-| comfyui/ | `src/transformation_portal/comfyui/` | ~300 | ✅ **IMPLEMENTED** | `tests/test_comfyui.py` (655 lines) |
+| pipeline_unified.py | `src/transformation_portal/` | 1,077 | ✅ **IMPLEMENTED** | `tests/test_pipeline_unified.py` (comprehensive, 50+ tests) |
+| utils/security.py | `src/transformation_portal/utils/` | 448 | ✅ **IMPLEMENTED** | `tests/utils/test_security.py` (comprehensive) |
+| config_loader.py | `src/transformation_portal/` | 385 | ✅ **IMPLEMENTED** | `tests/utils/test_config_loader.py` (comprehensive) |
+| scene_types.py | `src/transformation_portal/` | 185 | ✅ **IMPLEMENTED** | `tests/test_scene_types.py` (comprehensive, 100+ tests) |
+| comfyui/ | `src/transformation_portal/comfyui/` | ~300 | ✅ **IMPLEMENTED** | `tests/test_comfyui.py` (comprehensive) |
 | enhancers/ | `src/transformation_portal/enhancers/` | ~500 | ⚠️ **Partial** | board-material + aerial tested; other enhancers sparse |
 | rendering/ | `src/transformation_portal/rendering/` | ~800 | ⚠️ **Partial** | smoke/conversion coverage exists; depth tests needed |
 
@@ -763,7 +763,7 @@ def from_yaml(cls, path: Path) -> "CanonicalConfig":
 |----|----------------|--------|----------|
 | SEC-001 | Fix shell=True subprocess | ✅ DONE | `scripts/utilities/fix_quality_issues.py` uses `shlex.split()` |
 | SEC-002 | Input validation for config loader | ✅ DONE | `config_loader.py:_expand_env_vars` has path validation |
-| TEST-001 | Create shared fixtures | ✅ DONE | `tests/conftest.py` (381 lines, 14 fixtures) |
+| TEST-001 | Create shared fixtures | ✅ DONE | `tests/conftest.py` (comprehensive shared fixtures) |
 | TEST-003 | Add test-integration target | ✅ DONE | `Makefile:166` |
 | CI-002 | Add caching to build.yml | ✅ DONE | `actions/cache@v5` in build.yml |
 | CI-003 | Add concurrency control | ✅ DONE | `concurrency:` block in ci.yml, build.yml |
@@ -847,6 +847,7 @@ Effort Distribution:
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.1.3 | 2026-03-25 | Removed brittle line-count evidence (TEST-001, TEST-002, matrix); replaced with generalized coverage descriptions |
 | 1.1.2 | 2026-03-25 | Consistency fix: Corrected sector table "Remaining" column to sum to 11 (matching stated pending count) |
 | 1.1.1 | 2026-03-25 | Accuracy pass: TEST-003, DOC-002, PERF-001, PERF-003 marked implemented; TEST-002 re-scoped; appendix updated |
 | 1.1.0 | 2026-03 | Added completion tracking; marked SEC-001, SEC-002, TEST-001, CI-002, CI-003 as implemented |

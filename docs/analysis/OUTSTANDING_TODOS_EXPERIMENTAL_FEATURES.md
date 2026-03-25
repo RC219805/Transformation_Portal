@@ -429,7 +429,9 @@ python -m transformation_portal.spatial_ai segment \
 **TODO Statistics (Updated 2026-03-25):**
 - **Source code TODOs (`src/`):** 0 (all cleaned up)
 - **Test TODOs (`tests/`):** 3 (observational tracking only)
-- **Documentation TODO markers:** ~38 (mostly status/historical notes)
+- **Documentation TODO markers:** ~38 (experimental-feature-focused subset; see Note below)
+
+> **Note on Documentation TODO counts:** This ~38 count represents markers within **experimental feature documentation** (this file and related guides). The broader ~190 repository-wide TODO markers are tracked in `TODO_ACTION_PLAN.md`. Neither set requires implementation action—they are documentation annotations retained for context.
 
 **Experimental Feature Tracking:**
 - **Blocked on external artifact source**: 1 (3DGS canonical Inria checkpoint)

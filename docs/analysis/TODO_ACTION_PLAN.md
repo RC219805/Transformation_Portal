@@ -19,9 +19,11 @@ This action plan consolidates findings from a codebase-wide TODO review and prov
 | **Test Observational TODOs** | 3 | Track only (2 perf + 1 fixture) |
 | **Config/Preset TODOs** | 0 | ✅ Completed (2026-03-14) |
 | **Security Pattern TODOs** | 2 | Intentional (no action) |
-| **Documentation TODOs** | ~190 | Mostly no action; retain/archive historical notes |
+| **Documentation TODOs** | ~190 | Non-actionable historical markers (see Note below) |
 
 All source code TODOs in `src/` have been cleaned up. The remaining test TODOs are observational notes for performance tracking.
+
+> **Note on Documentation TODO counts:** The ~190 count represents **repository-wide TODO markers** found in markdown files (historical notes, status markers, archive candidates). This is distinct from the ~38 **experimental-feature-focused markers** tracked in `OUTSTANDING_TODOS_EXPERIMENTAL_FEATURES.md`. Neither set requires implementation action—they are documentation annotations retained for context.
 
 ### Priority Summary
 
@@ -280,7 +282,7 @@ test_file.write_text("""# TODO: Consider using spatial_ai for this
 
 The following categories require **no action**:
 
-1. **Documentation TODO markers** (190 items): Historical notes, status markers, or archive candidates reviewed for context rather than implementation
+1. **Documentation TODO markers** (~190 items): Repository-wide historical notes, status markers, or archive candidates reviewed for context rather than implementation. This broader count includes all markdown TODO annotations; the ~38 experimental-feature-focused subset is tracked separately in `OUTSTANDING_TODOS_EXPERIMENTAL_FEATURES.md`.
 2. **Security Patterns** (2 items): `TODO_REPLACE` regex patterns used to detect placeholder values
 3. **Observational Notes** (2 items): Performance investigation tracking already captured in follow-up documentation
 4. **Test Fixture Content** (1 item): Embedded `TODO` text used as scanner test data
