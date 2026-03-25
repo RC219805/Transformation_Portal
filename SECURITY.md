@@ -96,7 +96,7 @@ Given our image/video processing nature, special attention is required for:
 - **Supply Chain**:
   - All dependencies use version constraints to balance security and compatibility
   - For security-critical deployments, consider strict version pinning (e.g., via lock files)
-  - Regular dependency audits via `pip-audit` and `safety`
+  - Regular dependency audits via `pip-audit` (governed scanner in CI)
   - Automated security scanning in CI/CD pipeline
 
 - **Recent Security Updates**:
@@ -230,13 +230,14 @@ make quality-check
 # Run full test suite
 make test-full
 
-# Optional: Install and run security tools (not included by default)
-# pip install bandit
-# bandit -r src/ -ll
+# Install governed security tools from requirements/security.txt
+pip install -r requirements/security.txt
 
-# Note: Additional security testing tools like bandit, pip-audit, safety,
-# semgrep, etc. are recommended but not included in project dependencies.
-# Install them separately if needed for security auditing.
+# Run static security analysis
+bandit -r src/ -ll
+
+# Run dependency vulnerability scan
+pip-audit
 ```
 
 ## Incident Response
@@ -299,20 +300,19 @@ This project aims to maintain compliance with:
 
 ## Security Tools
 
-Recommended external tools for security testing (require separate installation):
+Security scanning tools are governed in CI via `requirements/security.txt`:
 
 ```bash
-# Dependency scanning
-pip install pip-audit
+# Install governed security tools (bandit, pip-audit)
+pip install -r requirements/security.txt
+
+# Run dependency vulnerability scan
 pip-audit
 
-pip install safety
-safety check
-
-# Static analysis
-pip install bandit
+# Run static security analysis
 bandit -r src/
 
+# Additional optional tools (not governed)
 pip install semgrep
 semgrep --config=auto
 
@@ -324,7 +324,7 @@ pylint --enable=security
 trivy image transformation_portal:latest
 ```
 
-**Note**: These tools are not included in the project's dependencies. Install them separately as needed for security auditing.
+**Note**: `pip-audit` and `bandit` are the governed security tools installed from `requirements/security.txt` in CI. Additional tools like semgrep can be installed separately as needed for security auditing.
 
 ## Responsible Disclosure
 
