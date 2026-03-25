@@ -1815,14 +1815,21 @@ raise NotImplementedError("TODO: Implement NVDIFFREC integration")
 - All source code TODOs have been cleaned up or addressed
 
 **Tests (`tests/`):** 3 TODO comments
-- **Performance investigations (2):** `test_stress_large_batch.py` - observational tracking only
-- **Test fixture content (1):** `test_pipeline_isolation.py` - embedded test data, not actionable
+- **Performance investigations (2):** `tests/stress/test_stress_large_batch.py:328,374` - observational tracking only
+- **Test fixture content (1):** `tests/security/test_pipeline_isolation.py:92` - embedded test data, not actionable
 
 **NotImplementedError Count:** 12 instances (all intentional)
-- **ABC pattern (5):** Abstract base class methods (ComfyUI nodes, depth processors, exec graph)
-- **Phase gates (4):** NVDIFFREC, single-view reconstruction, non-linear interpolation
-- **Platform limits (1):** Unix-only security features
-- **Defensive (2):** Unknown backend handling
+- **ABC pattern (5):**
+  - `src/transformation_portal/comfyui/custom_nodes.py:61,67,72` - BaseNode abstract methods
+  - `src/transformation_portal/execution_graph/nodes/base.py:68` - BaseExecutionNode.run()
+  - `src/transformation_portal/depth/processors/base.py:38,49` - DepthProcessor abstract methods
+- **Phase gates (4):**
+  - `src/transformation_portal/spatial_ai/reconstruction/nvdiffrec_backend.py:306` - NVDIFFREC integration
+  - `src/transformation_portal/spatial_ai/orchestration/pipeline.py:1033` - Single-view reconstruction
+  - `src/transformation_portal/spatial_ai/reconstruction/scene_builder.py:262` - Non-linear interpolation
+  - `src/transformation_portal/depth/models/depth_anything_v2.py:311` - Unknown backend
+- **Platform limits (1):**
+  - `src/transformation_portal/utils/security.py:418` - Unix-only timeout() function
 
 **Priority Recommendation:**
 - No source code TODOs requiring action
@@ -1836,31 +1843,30 @@ raise NotImplementedError("TODO: Implement NVDIFFREC integration")
 
 | Item | Type | Location | Action | Effort | Status |
 |------|------|----------|--------|--------|--------|
-| depth_canonical module | Module | `src/transformation_portal/depth_canonical/` | DELETE | 1h | 🔴 PENDING |
+| depth_canonical module | Module | ~~`src/transformation_portal/depth_canonical/`~~ | ~~DELETE~~ | ~~1h~~ | ✅ **DELETED** (verified 2026-03-25) |
 | context_aware_rendering.py | Script | ~~`scripts/context_aware_rendering.py`~~ | ~~ARCHIVE~~ | ~~30min~~ | ✅ **ARCHIVED** 2026-02-10 |
 | premium_context_pipeline.py | Script | ~~`scripts/premium_context_pipeline.py`~~ | ~~ARCHIVE~~ | ~~20min~~ | ✅ **ARCHIVED** 2026-02-10 |
 | lux_render_pipeline_plus_v3.py | Script | ~~`scripts/pipelines/lux_render_pipeline_plus_v3.py`~~ | ~~ARCHIVE~~ | ~~30min~~ | ✅ **ARCHIVED** 2026-02-10 |
-| PR #98 action items | Docs | `docs/pr_reports/PR98_ACTION_ITEMS.md` | ARCHIVE | 15min | 🔴 PENDING |
-| PR #98 action items (dup) | Docs | `docs/development/pr/PR98_ACTION_ITEMS.md` | ARCHIVE | 15min | 🔴 PENDING |
-| Binary cleanup TODOs | Docs | `docs/fixes/BINARY_FILE_BEST_PRACTICES.md:133,140` | REMOVE | 15min | 🔴 PENDING |
+| PR #98 action items | Docs | ~~`docs/pr_reports/PR98_ACTION_ITEMS.md`~~ | ~~ARCHIVE~~ | ~~15min~~ | ✅ **ARCHIVED** (verified 2026-03-25) |
+| PR #98 action items (dup) | Docs | ~~`docs/development/pr/PR98_ACTION_ITEMS.md`~~ | ~~ARCHIVE~~ | ~~15min~~ | ✅ **ARCHIVED** (verified 2026-03-25) |
+| Binary cleanup TODOs | Docs | `docs/fixes/BINARY_FILE_BEST_PRACTICES.md` | N/A | 0min | ✅ **NO ACTION NEEDED** (action items, not code TODOs) |
 | V2.0.0 release checklist | Docs | ~~`docs/architecture/V2_0_0_RELEASE_REVIEW.md`~~ | ~~UPDATE~~ | ~~30min~~ | ✅ **UPDATED** 2026-02-10 |
 
 **Total Cleanup Effort:** ~3.5 hours
-**Completed Effort:** 1.5 hours (archival of 3 scripts + V2.0.0 review update)
-**Remaining Effort:** ~2 hours
-**Recommended Sprint:** Sprint 1 (Week 1)
+**Completed Effort:** 3.5 hours (all items verified complete)
+**Remaining Effort:** 0 hours
+**Recommended Sprint:** ✅ **COMPLETE**
+
+**Completed Actions (2026-03-25 verification):**
+- ✅ depth_canonical module: Directory does not exist in src/ (already deleted/archived)
+- ✅ PR #98 docs: Verified archived to `archive/docs/pr_reports/` and `docs/_archive/2026-03-legacy-prs/`
+- ✅ Binary cleanup TODOs: Not actual code TODOs, just action item descriptions in documentation
 
 **Completed Actions (2026-02-10):**
 - ✅ Archived 3 obsolete scripts with git history preservation (`git mv`)
 - ✅ Created comprehensive `archive/scripts/README.md` documenting rationale
 - ✅ Updated V2_0_0_RELEASE_REVIEW.md with SUPERSEDED notice
 - ✅ Updated TODO_INVENTORY.md to mark items as archived
-
-**Cleanup Procedure:**
-1. Create `archive/` directories if not exist:
-   - `archive/scripts/`
-   - `archive/docs/pr_reports/`
-2. Move (not delete) obsolete items with git history preservation
 3. Add README.md in archive explaining why items were archived
 4. Update CHANGELOG.md with removal notices
 5. Search for references in active docs and remove/update

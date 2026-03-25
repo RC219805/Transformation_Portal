@@ -25,7 +25,7 @@ The Quality Firewall is a multi-layer enforcement system that prevents regressio
 | `lint` | flake8 + black + isort | ✅ |
 | `typecheck` | mypy on critical modules | ⚠️ Non-blocking |
 | `security` | bandit + pip-audit + gitleaks | ✅ |
-| `test-core` | Python 3.10 & 3.12 | ✅ |
+| `test-core` | Python 3.11 & 3.12 | ✅ |
 | `test-ml` | ML-specific tests (3.11) | ✅ |
 | `coverage-gate` | Diff coverage 80%+ | ✅ |
 | `build` | Package build + install check | ✅ |
