@@ -1,9 +1,9 @@
 # TODO Inventory Quick Reference
 
-**Version:** 2.2.0 | **Date:** 2026-03-21 | **Status:** ACTIVE
+**Version:** 2.4.0 | **Date:** 2026-03-25 | **Status:** ACTIVE
 
-**Full Inventory:** [docs/analysis/TODO_INVENTORY.md](../../analysis/TODO_INVENTORY.md)
-**Executive Summary:** [TODO_INVENTORY_EXECUTIVE_SUMMARY.md](TODO_INVENTORY_EXECUTIVE_SUMMARY.md)
+**Full Inventory:** [docs/analysis/TODO_INVENTORY.md](../analysis/TODO_INVENTORY.md)
+**Action Plan:** [docs/analysis/TODO_ACTION_PLAN.md](../analysis/TODO_ACTION_PLAN.md)
 
 ---
 
@@ -11,60 +11,55 @@
 
 | Metric | Value |
 |--------|-------|
-| **Total Items** | 65 |
-| **✅ Completed** | 22 (34%) |
-| **🟢 Correct (No Action)** | 32 (49%) |
-| **📦 Obsolete (Archived)** | 14 (22%) |
-| **⏳ Action Required** | 2 (3%) |
+| **Source Code TODOs (`src/`)** | 0 ✅ |
+| **Test TODOs** | 3 (observational) |
+| **NotImplementedError** | 12 (all intentional) |
 | **P0 Blockers** | 0 |
+| **P1 Pending** | 1 (branch protection verification) |
+| **P2 Pending** | 3 (sample uploads) |
+| **P3 Deferred** | 3 (ComfyUI, NVDIFFREC, MaterialGAN) |
 | **Repository Health** | **EXCELLENT** ✅ |
 
-**Recently Completed (2026-03-21):**
-- P0: Test Marker Enforcement (ADR-044) ✅ - 95.1% coverage achieved
-- P0: GitHub Actions SHA Pinning ✅
-- P0: pytest-xdist parallelization ✅
-- P0: mypy hard-fail for critical modules ✅
-- P1: HuggingFace model revision pinning ✅
-- P1: Rollback procedures documented ✅ (docs/operations/ROLLBACK_PROCEDURES.md)
-- P2: ICC profile preservation in 16-bit TIFF ✅
-- P2: depth_canonical module archived ✅
+**Recently Completed (2026-03-25):**
+- Source code TODOs: All cleaned up ✅
+- Quality Firewall docs: Created ✅
+- SLERP interpolation: Implemented ✅
+- ICC profile preservation: Implemented ✅
+- depth_canonical module: Archived ✅
 - P2: context_aware_rendering.py archived ✅
 - P2: lux_render_pipeline_plus_v3.py archived ✅
 
 ---
 
-## Immediate Actions (v2.4.0 Planning - Q2 2026)
+## Immediate Actions (v2.4.0+ Planning)
 
-**Total Effort:** 4 hours → **Remaining:** 15min
-**Owner:** Architect + DevOps
-**Last Updated:** 2026-03-21
+**Total Effort:** ~4 hours
+**Last Updated:** 2026-03-25
 
 | # | Task | Priority | Effort | Owner | Status |
 |---|------|----------|--------|-------|--------|
-| 1 | Create rollback procedures | P1 | 2h | Architect | ✅ Complete |
-| 2 | Verify branch protection | P1 | 15min | Admin | Pending (GitHub Admin) |
-| 3 | Update V2_0_0_RELEASE_REVIEW.md | P2 | 30min | Architect | Low priority (historical) |
-| 4 | Archive obsolete modules | P2 | 1h | Specialist | ✅ Complete |
+| 1 | Verify branch protection | P1 | 15min | Admin | Pending (GitHub Admin) |
+| 2 | Upload sample data to GitHub Release | P2 | 4h | DevOps | Pending |
+| 3 | ComfyUI subprocess integration | P3 | 1-2w | ML | Deferred |
+| 4 | NVDIFFREC integration | P3 | 3-4w | ML Research | Deferred |
+| 5 | MaterialGAN integration | P3 | 2-3w | ML Research | Deferred |
 
 ---
 
 ## Sprint Planning
 
-### Sprint 1: Cleanup (Week 1, 8h) - **✅ Complete**
-1. ~~Delete depth_canonical module (1h)~~ ✅ Archived
-2. ~~Archive obsolete PR docs (30min)~~ ✅ Completed 2026-03-14
-3. ~~Update binary cleanup docs (30min)~~ ✅ Completed
-4. Complete CLI e2e tests (4h) - Deferred to v2.4.0
-5. ~~Audit ADR-023 manifest (2h)~~ ✅ Verified current
+### ✅ Completed (v2.1.0 - v2.4.0)
+- ~~Delete depth_canonical module~~ ✅ Archived
+- ~~Archive obsolete PR docs~~ ✅ Completed 2026-03-14
+- ~~Dependency pinning validation~~ ✅ HuggingFace revisions pinned (2026-03-14)
+- ~~SLERP interpolation~~ ✅ Completed 2026-03-16
+- ~~ICC profile preservation~~ ✅ Completed 2026-03-14
+- ~~Source code TODO cleanup~~ ✅ All cleaned up 2026-03-25
 
-### Sprint 2: Phase 2 Foundation (Week 2-3, 16h)
-6. SAM2 auto mask generation (P2, 3-4 days) - Roadmap item
-7. ~~Dependency pinning validation (P2, 4h)~~ ✅ HuggingFace revisions pinned (2026-03-14)
-8. Create V2_3_0 release checklist (P2, 2h) - As needed
-
-### Sprint 3: Nice-to-Have (v2.3.0+, 12h)
-9. Sample data GitHub release (P2, 4h) - Low priority
-10. Golden fixture tests (P3, 8h) - Nice to have
+### Deferred to v2.5.0+
+- SAM2 auto mask generation (P3)
+- Sample data GitHub release (P2, 4h)
+- Golden fixture tests (P3, 8h)
 
 ---
 
@@ -73,37 +68,35 @@
 ### ✅ COMPLETED (Since v1.0.0)
 - ADR-019 Backend Registry Integration (PR #906)
 - CI Coverage Enforcement (PR #832)
-- Security Scanning (Bandit, pip-audit, gitleaks, CodeQL, Safety)
+- Security Scanning (Bandit, pip-audit, gitleaks, CodeQL)
 - Contract Validation (ingest_contract_validation.yml)
 - Nightly Regression Suite (nightly.yml)
 - HuggingFace model revision pinning (config/model_lock_manifest.yaml)
 - Rollback procedures (docs/operations/ROLLBACK_PROCEDURES.md)
 - ICC profile preservation in 16-bit TIFF
+- SLERP interpolation (scene_builder.py)
+- All source code TODOs cleaned up
 
 ### 🟢 CORRECT (No Action Required)
-- 25 NotImplementedError instances (abstract methods, phase gates, limitations)
-- 4 Code TODOs (observational performance tracking)
-- 2 Documentation TODOs (status markers)
-- 2 Test patterns (dependency-conditional skips)
+- 12 NotImplementedError instances (abstract methods, phase gates, limitations)
+- 3 Test TODOs (observational performance tracking)
+- 2 Security patterns (TODO_REPLACE regex matchers)
 
 ### 📦 ARCHIVED (Cleanup Complete)
 - ~~`depth_canonical/` module~~ ✅ Removed from src/
 - ~~`context_aware_rendering.py`~~ ✅ archive/scripts/
 - ~~`lux_render_pipeline_plus_v3.py`~~ ✅ archive/scripts/pipelines/
-- PR #98 action items → Historical reference
+- PR #98 action items → docs/_archive/2026-03-legacy-prs/
 - Binary cleanup TODOs → Historical reference
 
 ### ⏳ PENDING (Action Required)
 - Branch protection verification (P1, GitHub Admin task)
-- CLI e2e test suite (P2, deferred to v2.4.0)
-- SAM2 auto mode (P2, roadmap item)
 - Sample data upload (P2, low priority)
 
 ### 🔴 DEFERRED (No Action for v2.x)
-- Staging environment (P3, LOW ROI)
-- ADR consistency checks (P3)
-- Backend CLI commands (P4)
-- ~~Parallax occlusion mapping (P5)~~ ✅ Archived
+- ComfyUI subprocess integration (P3)
+- NVDIFFREC integration (P3)
+- MaterialGAN integration (P3)
 
 ---
 
@@ -111,12 +104,11 @@
 
 | Priority | Count | Definition | Examples |
 |----------|-------|------------|----------|
-| **P0** | 3 (DONE) | Critical, release blocker | ADR-019, Coverage, Security |
+| **P0** | 0 | Critical, release blocker | (All resolved) |
 | **P1** | 1 | High, complete before next release | Branch protection verification |
-| **P2** | 3 | Medium, schedule for v2.4.0 | SAM2, CLI e2e tests, samples |
-| **P3** | 8 | Low, nice-to-have | ADR checks, SLERP, golden fixtures |
-| **P4** | 7 | Enhancement, user request driven | Backend CLI, MaterialGAN |
-| **P5** | 0 | Research, defer indefinitely | (All archived) |
+| **P2** | 3 | Medium, schedule for v2.4.0+ | Sample uploads |
+| **P3** | 3 | Low, deferred | ComfyUI, NVDIFFREC, MaterialGAN |
+| **P4** | 1 | Enhancement, nice-to-have | Upscaling weights cache |
 
 ---
 

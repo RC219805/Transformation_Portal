@@ -426,11 +426,15 @@ python -m transformation_portal.spatial_ai segment \
 3. **Performance targets are estimates** - need real-world validation
 4. **Fallback chains are critical** - graceful degradation to stable backends
 
-**Total TODOs in codebase**: 254
-**High-priority items**: 7
-**Blocked on external artifact source**: 1 (3DGS canonical Inria checkpoint)
-**Pending exact revision pinning**: 8 (SAM2 + LLaVA model sources identified, revisions not yet locked)
-**Pending implementation**: 3 (LLaVA, NVDIFFREC, MaterialGAN backends)
+**TODO Statistics (Updated 2026-03-25):**
+- **Source code TODOs (`src/`):** 0 (all cleaned up)
+- **Test TODOs (`tests/`):** 3 (observational tracking only)
+- **Documentation TODO markers:** ~38 (mostly status/historical notes)
+
+**Experimental Feature Tracking:**
+- **Blocked on external artifact source**: 1 (3DGS canonical Inria checkpoint)
+- **Pending exact revision pinning**: 7 (SAM2 + LLaVA model sources identified, revisions not yet locked)
+- **Pending implementation**: 3 (LLaVA, NVDIFFREC, MaterialGAN backends)
 
 ---
 

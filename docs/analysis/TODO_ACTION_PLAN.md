@@ -15,20 +15,20 @@ This action plan consolidates findings from a codebase-wide TODO review and prov
 
 | Category | Count | Action Required |
 |----------|-------|-----------------|
-| **Active Source Code TODOs** | 9 | Mixed (see details) |
-| **Test Observational TODOs** | 2 | Track only |
-| **Config/Preset TODOs** | 2 | ✅ Completed (2026-03-14) |
+| **Active Source Code TODOs** | 0 | ✅ All cleaned up |
+| **Test Observational TODOs** | 3 | Track only (2 perf + 1 fixture) |
+| **Config/Preset TODOs** | 0 | ✅ Completed (2026-03-14) |
 | **Security Pattern TODOs** | 2 | Intentional (no action) |
-| **Documentation TODOs** | 190 | Mostly no action; retain/archive historical notes |
+| **Documentation TODOs** | ~190 | Mostly no action; retain/archive historical notes |
 
-Documentation TODO instances were reviewed for governance and archival value, but they are not part of the 9-item active source code backlog unless explicitly called out in the consolidated plan below.
+All source code TODOs in `src/` have been cleaned up. The remaining test TODOs are observational notes for performance tracking.
 
 ### Priority Summary
 
 - **P1 (Immediate)**: ~~3 items~~ 1 item remaining (HuggingFace revision pinning ✅, Rollback docs ✅ verified existing; Branch protection verification: 15 min pending)
 - **P2 (Near-term)**: ~~4 items~~ 3 items remaining (ICC preservation ✅ completed)
 - **P3 (Deferred)**: ~~4 items~~ 3 items remaining (SLERP interpolation ✅ completed 2026-03-16)
-- **No Action Required**: 195 items (95%; historical, observational, or intentionally retained)
+- **No Action Required**: ~195 items (95%; historical, observational, or intentionally retained)
 
 ---
 
