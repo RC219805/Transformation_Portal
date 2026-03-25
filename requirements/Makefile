@@ -216,8 +216,8 @@ check:
 	repo_dir="$$(pwd)"; \
 	tmp_dir="$$(mktemp -d)"; \
 	trap 'rm -rf "$$tmp_dir"' EXIT; \
-	cp all.in base.in ml.in ml-core.in ml-core-darwin.in ml-core-linux.in ml-cpu.in ml-mps.in ml-cuda.in ml-raw.in ml-coreml.in ml-research.in dev.in ci.in tools-archive.in "$$tmp_dir"/; \
-	for f in all.txt base.txt ml.txt dev.txt ci.txt tools-archive.txt; do \
+	cp all.in base.in ml.in ml-core.in ml-core-darwin.in ml-core-linux.in ml-cpu.in ml-mps.in ml-cuda.in ml-raw.in ml-coreml.in ml-research.in dev.in ci.in security.in tools-archive.in "$$tmp_dir"/; \
+	for f in all.txt base.txt ml.txt dev.txt ci.txt security.txt tools-archive.txt; do \
 		if [ -f "$$repo_dir/$$f" ]; then \
 			cp "$$repo_dir/$$f" "$$tmp_dir"/; \
 		else \
@@ -247,11 +247,12 @@ check:
 	$(PIP_COMPILE) $(PYTORCH_CPU_INDEX) -c all.txt ml.in -o ml.txt >/dev/null; \
 	$(PIP_COMPILE) -c all.txt dev.in -o dev.txt >/dev/null; \
 	$(PIP_COMPILE) -c all.txt ci.in -o ci.txt >/dev/null; \
+	$(PIP_COMPILE) security.in -o security.txt >/dev/null; \
 	$(PIP_COMPILE) -c all.txt tools-archive.in -o tools-archive.txt >/dev/null; \
 	normalize_req() { \
 		awk 'BEGIN{start=0} { if (!start) { if ($$0 ~ /^#/ || $$0 ~ /^[[:space:]]*$$/) next; start=1 } print }' "$$1"; \
 	}; \
-	for f in all.txt base.txt ml.txt dev.txt ci.txt tools-archive.txt; do \
+	for f in all.txt base.txt ml.txt dev.txt ci.txt security.txt tools-archive.txt; do \
 		if ! diff -u <(normalize_req "$$tmp_dir/$$f") <(normalize_req "$$repo_dir/$$f") >/dev/null; then \
 			echo "❌ $$f is out of date. Run 'make compile' to update."; \
 			exit 1; \
