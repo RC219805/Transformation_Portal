@@ -22,11 +22,8 @@ from __future__ import annotations
 
 import os
 import signal
-import sys
-import tempfile
 import warnings
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 import pytest
 
@@ -39,7 +36,9 @@ from transformation_portal.utils.security import (
     MAX_VIDEO_SIZE,
     VIDEO_EXTENSIONS,
     SecurityError,
-    TimeoutError as SecurityTimeoutError,
+)
+from transformation_portal.utils.security import TimeoutError as SecurityTimeoutError
+from transformation_portal.utils.security import (
     build_ffmpeg_command,
     build_safe_command,
     sanitize_filename,
@@ -52,6 +51,10 @@ from transformation_portal.utils.security import (
     validate_video_path,
 )
 
+# Module-level pytest marker - all tests in this module are unit tests (ADR-044)
+pytestmark = [
+    pytest.mark.unit,
+]
 
 # =============================================================================
 # Fixtures
@@ -96,25 +99,19 @@ def allowed_dirs(temp_workspace: Path) -> list[Path]:
 class TestValidateFilepath:
     """Tests for validate_filepath function (CWE-22 Path Traversal)."""
 
-    def test_valid_path_within_allowed_directory(
-        self, temp_workspace: Path, allowed_dirs: list[Path]
-    ) -> None:
+    def test_valid_path_within_allowed_directory(self, temp_workspace: Path, allowed_dirs: list[Path]) -> None:
         """Test that valid paths within allowed directories pass validation."""
         test_file = temp_workspace / "data" / "test.jpg"
         result = validate_filepath(test_file, allowed_dirs)
         assert result == test_file.resolve()
 
-    def test_valid_path_in_subdirectory(
-        self, temp_workspace: Path, allowed_dirs: list[Path]
-    ) -> None:
+    def test_valid_path_in_subdirectory(self, temp_workspace: Path, allowed_dirs: list[Path]) -> None:
         """Test that paths in subdirectories of allowed dirs pass validation."""
         nested_file = temp_workspace / "data" / "subdir" / "nested.txt"
         result = validate_filepath(nested_file, allowed_dirs)
         assert result == nested_file.resolve()
 
-    def test_rejects_path_outside_allowed_directories(
-        self, temp_workspace: Path
-    ) -> None:
+    def test_rejects_path_outside_allowed_directories(self, temp_workspace: Path) -> None:
         """Test that paths outside allowed directories are rejected."""
         # Create a file outside allowed dir
         outside_file = temp_workspace / "outside.txt"
@@ -125,9 +122,7 @@ class TestValidateFilepath:
         with pytest.raises(SecurityError, match="outside allowed directories"):
             validate_filepath(outside_file, allowed_dirs)
 
-    def test_rejects_path_traversal_attack_dotdot(
-        self, temp_workspace: Path, allowed_dirs: list[Path]
-    ) -> None:
+    def test_rejects_path_traversal_attack_dotdot(self, temp_workspace: Path, allowed_dirs: list[Path]) -> None:
         """Test rejection of classic ../ path traversal attack (CWE-22)."""
         # Craft a path that tries to escape allowed directory
         attack_path = temp_workspace / "data" / ".." / "outside.txt"
@@ -138,89 +133,63 @@ class TestValidateFilepath:
         with pytest.raises(SecurityError, match="outside allowed directories"):
             validate_filepath(attack_path, allowed_dirs)
 
-    def test_rejects_deep_path_traversal(
-        self, temp_workspace: Path, allowed_dirs: list[Path]
-    ) -> None:
+    def test_rejects_deep_path_traversal(self, temp_workspace: Path, allowed_dirs: list[Path]) -> None:
         """Test rejection of deep path traversal with multiple ../ segments."""
         # Try multiple levels of traversal
-        attack_path = (
-            temp_workspace / "data" / ".." / ".." / ".." / "etc" / "passwd"
-        )
+        attack_path = temp_workspace / "data" / ".." / ".." / ".." / "etc" / "passwd"
 
         with pytest.raises(SecurityError):
             validate_filepath(attack_path, allowed_dirs)
 
-    def test_accepts_string_input(
-        self, temp_workspace: Path, allowed_dirs: list[Path]
-    ) -> None:
+    def test_accepts_string_input(self, temp_workspace: Path, allowed_dirs: list[Path]) -> None:
         """Test that string paths are accepted and converted to Path."""
         test_file = str(temp_workspace / "data" / "test.jpg")
         result = validate_filepath(test_file, allowed_dirs)
         assert isinstance(result, Path)
 
-    def test_nonexistent_file_with_must_exist_true(
-        self, temp_workspace: Path, allowed_dirs: list[Path]
-    ) -> None:
+    def test_nonexistent_file_with_must_exist_true(self, temp_workspace: Path, allowed_dirs: list[Path]) -> None:
         """Test that nonexistent files raise error when must_exist=True."""
         nonexistent = temp_workspace / "data" / "nonexistent.jpg"
 
         with pytest.raises(SecurityError, match="Cannot resolve path"):
             validate_filepath(nonexistent, allowed_dirs, must_exist=True)
 
-    def test_nonexistent_file_with_must_exist_false(
-        self, temp_workspace: Path, allowed_dirs: list[Path]
-    ) -> None:
+    def test_nonexistent_file_with_must_exist_false(self, temp_workspace: Path, allowed_dirs: list[Path]) -> None:
         """Test that nonexistent files pass when must_exist=False."""
         nonexistent = temp_workspace / "data" / "new_output.jpg"
         result = validate_filepath(nonexistent, allowed_dirs, must_exist=False)
         assert result.parent == (temp_workspace / "data").resolve()
 
-    def test_file_size_limit_enforcement(
-        self, temp_workspace: Path, allowed_dirs: list[Path]
-    ) -> None:
+    def test_file_size_limit_enforcement(self, temp_workspace: Path, allowed_dirs: list[Path]) -> None:
         """Test that file size limits are enforced."""
         large_file = temp_workspace / "data" / "large_file.txt"
         # File has 1000 bytes, set limit to 500
         with pytest.raises(SecurityError, match="exceeds size limit"):
             validate_filepath(large_file, allowed_dirs, max_file_size=500)
 
-    def test_file_size_within_limit(
-        self, temp_workspace: Path, allowed_dirs: list[Path]
-    ) -> None:
+    def test_file_size_within_limit(self, temp_workspace: Path, allowed_dirs: list[Path]) -> None:
         """Test that files within size limit pass validation."""
         large_file = temp_workspace / "data" / "large_file.txt"
         # File has 1000 bytes, set limit to 2000
         result = validate_filepath(large_file, allowed_dirs, max_file_size=2000)
         assert result == large_file.resolve()
 
-    def test_extension_whitelist_pass(
-        self, temp_workspace: Path, allowed_dirs: list[Path]
-    ) -> None:
+    def test_extension_whitelist_pass(self, temp_workspace: Path, allowed_dirs: list[Path]) -> None:
         """Test that allowed extensions pass validation."""
         test_file = temp_workspace / "data" / "test.jpg"
-        result = validate_filepath(
-            test_file, allowed_dirs, allowed_extensions=[".jpg", ".png"]
-        )
+        result = validate_filepath(test_file, allowed_dirs, allowed_extensions=[".jpg", ".png"])
         assert result == test_file.resolve()
 
-    def test_extension_whitelist_reject(
-        self, temp_workspace: Path, allowed_dirs: list[Path]
-    ) -> None:
+    def test_extension_whitelist_reject(self, temp_workspace: Path, allowed_dirs: list[Path]) -> None:
         """Test that disallowed extensions are rejected."""
         test_file = temp_workspace / "data" / "test.jpg"
         with pytest.raises(SecurityError, match="not in whitelist"):
-            validate_filepath(
-                test_file, allowed_dirs, allowed_extensions=[".png", ".gif"]
-            )
+            validate_filepath(test_file, allowed_dirs, allowed_extensions=[".png", ".gif"])
 
-    def test_extension_case_insensitive(
-        self, temp_workspace: Path, allowed_dirs: list[Path]
-    ) -> None:
+    def test_extension_case_insensitive(self, temp_workspace: Path, allowed_dirs: list[Path]) -> None:
         """Test that extension matching is case-insensitive."""
         test_file = temp_workspace / "data" / "test.jpg"
-        result = validate_filepath(
-            test_file, allowed_dirs, allowed_extensions=[".JPG", ".PNG"]
-        )
+        result = validate_filepath(test_file, allowed_dirs, allowed_extensions=[".JPG", ".PNG"])
         assert result == test_file.resolve()
 
     def test_multiple_allowed_directories(self, temp_workspace: Path) -> None:
@@ -232,9 +201,7 @@ class TestValidateFilepath:
         allowed = [temp_workspace / "data", extra_dir]
 
         # Both directories should work
-        result1 = validate_filepath(
-            temp_workspace / "data" / "test.jpg", allowed
-        )
+        result1 = validate_filepath(temp_workspace / "data" / "test.jpg", allowed)
         result2 = validate_filepath(extra_dir / "file.txt", allowed)
 
         assert result1.is_file()
@@ -249,49 +216,37 @@ class TestValidateFilepath:
 class TestTypeSpecificValidators:
     """Tests for validate_image_path, validate_video_path, validate_config_path."""
 
-    def test_validate_image_path_accepts_image_extensions(
-        self, temp_workspace: Path, allowed_dirs: list[Path]
-    ) -> None:
+    def test_validate_image_path_accepts_image_extensions(self, temp_workspace: Path, allowed_dirs: list[Path]) -> None:
         """Test that validate_image_path accepts standard image extensions."""
         test_file = temp_workspace / "data" / "test.jpg"
         result = validate_image_path(test_file, allowed_dirs)
         assert result == test_file.resolve()
 
-    def test_validate_image_path_rejects_non_image(
-        self, temp_workspace: Path, allowed_dirs: list[Path]
-    ) -> None:
+    def test_validate_image_path_rejects_non_image(self, temp_workspace: Path, allowed_dirs: list[Path]) -> None:
         """Test that validate_image_path rejects non-image extensions."""
         test_file = temp_workspace / "data" / "test.mp4"
         with pytest.raises(SecurityError, match="not in whitelist"):
             validate_image_path(test_file, allowed_dirs)
 
-    def test_validate_video_path_accepts_video_extensions(
-        self, temp_workspace: Path, allowed_dirs: list[Path]
-    ) -> None:
+    def test_validate_video_path_accepts_video_extensions(self, temp_workspace: Path, allowed_dirs: list[Path]) -> None:
         """Test that validate_video_path accepts standard video extensions."""
         test_file = temp_workspace / "data" / "test.mp4"
         result = validate_video_path(test_file, allowed_dirs)
         assert result == test_file.resolve()
 
-    def test_validate_video_path_rejects_non_video(
-        self, temp_workspace: Path, allowed_dirs: list[Path]
-    ) -> None:
+    def test_validate_video_path_rejects_non_video(self, temp_workspace: Path, allowed_dirs: list[Path]) -> None:
         """Test that validate_video_path rejects non-video extensions."""
         test_file = temp_workspace / "data" / "test.jpg"
         with pytest.raises(SecurityError, match="not in whitelist"):
             validate_video_path(test_file, allowed_dirs)
 
-    def test_validate_config_path_accepts_config_extensions(
-        self, temp_workspace: Path, allowed_dirs: list[Path]
-    ) -> None:
+    def test_validate_config_path_accepts_config_extensions(self, temp_workspace: Path, allowed_dirs: list[Path]) -> None:
         """Test that validate_config_path accepts standard config extensions."""
         test_file = temp_workspace / "data" / "test.yaml"
         result = validate_config_path(test_file, allowed_dirs)
         assert result == test_file.resolve()
 
-    def test_validate_config_path_rejects_non_config(
-        self, temp_workspace: Path, allowed_dirs: list[Path]
-    ) -> None:
+    def test_validate_config_path_rejects_non_config(self, temp_workspace: Path, allowed_dirs: list[Path]) -> None:
         """Test that validate_config_path rejects non-config extensions."""
         test_file = temp_workspace / "data" / "test.jpg"
         with pytest.raises(SecurityError, match="not in whitelist"):
@@ -633,10 +588,7 @@ class TestValidateFilterGraph:
 
     def test_complex_filter_graph(self) -> None:
         """Test complex but valid filter graph."""
-        complex_filter = (
-            "[0:v]scale=1920:1080[scaled];"
-            "[scaled]fps=30[out]"
-        )
+        complex_filter = "[0:v]scale=1920:1080[scaled];[scaled]fps=30[out]"
         # This contains semicolons which are dangerous
         with pytest.raises(SecurityError, match="dangerous characters"):
             validate_filter_graph(complex_filter)
@@ -738,9 +690,7 @@ class TestTimeout:
 class TestDeprecatedFunctions:
     """Tests for deprecated function aliases."""
 
-    def test_validate_file_path_deprecation_warning(
-        self, temp_workspace: Path, allowed_dirs: list[Path]
-    ) -> None:
+    def test_validate_file_path_deprecation_warning(self, temp_workspace: Path, allowed_dirs: list[Path]) -> None:
         """Test that validate_file_path emits deprecation warning."""
         test_file = temp_workspace / "data" / "test.jpg"
 
@@ -752,9 +702,7 @@ class TestDeprecatedFunctions:
             assert issubclass(w[0].category, DeprecationWarning)
             assert "deprecated" in str(w[0].message).lower()
 
-    def test_validate_file_path_still_works(
-        self, temp_workspace: Path, allowed_dirs: list[Path]
-    ) -> None:
+    def test_validate_file_path_still_works(self, temp_workspace: Path, allowed_dirs: list[Path]) -> None:
         """Test that deprecated validate_file_path still functions correctly."""
         test_file = temp_workspace / "data" / "test.jpg"
 
@@ -846,9 +794,7 @@ class TestEdgeCases:
         # Should resolve to the target
         assert result == target.resolve()
 
-    def test_directory_instead_of_file(
-        self, temp_workspace: Path, allowed_dirs: list[Path]
-    ) -> None:
+    def test_directory_instead_of_file(self, temp_workspace: Path, allowed_dirs: list[Path]) -> None:
         """Test behavior when directory is passed instead of file."""
         directory = temp_workspace / "data" / "subdir"
         # Should not raise for existence, but may fail size check
@@ -869,9 +815,7 @@ class TestEdgeCases:
             os.chdir(temp_workspace / "data")
 
             # Use relative path
-            result = validate_filepath(
-                Path("test.jpg"), [temp_workspace / "data"]
-            )
+            result = validate_filepath(Path("test.jpg"), [temp_workspace / "data"])
 
             assert result.is_absolute()
             assert result.exists()
@@ -891,9 +835,7 @@ class TestEdgeCases:
         result = validate_filepath(deep_path / "file.txt", allowed_dirs)
         assert result.exists()
 
-    def test_special_characters_in_filename(
-        self, temp_workspace: Path, allowed_dirs: list[Path]
-    ) -> None:
+    def test_special_characters_in_filename(self, temp_workspace: Path, allowed_dirs: list[Path]) -> None:
         """Test files with special (but safe) characters in name."""
         special_file = temp_workspace / "data" / "test file (1).jpg"
         special_file.write_bytes(b"\xff\xd8\xff")
