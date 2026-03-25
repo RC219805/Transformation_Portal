@@ -15,20 +15,22 @@ This action plan consolidates findings from a codebase-wide TODO review and prov
 
 | Category | Count | Action Required |
 |----------|-------|-----------------|
-| **Active Source Code TODOs** | 9 | Mixed (see details) |
-| **Test Observational TODOs** | 2 | Track only |
-| **Config/Preset TODOs** | 2 | ✅ Completed (2026-03-14) |
+| **Active Source Code TODOs** | 0 | ✅ All cleaned up |
+| **Test Observational TODOs** | 3 | Track only (2 perf + 1 fixture) |
+| **Config/Preset TODOs** | 0 | ✅ Completed (2026-03-14) |
 | **Security Pattern TODOs** | 2 | Intentional (no action) |
-| **Documentation TODOs** | 190 | Mostly no action; retain/archive historical notes |
+| **Documentation TODOs** | ~190 | Non-actionable historical markers (see Note below) |
 
-Documentation TODO instances were reviewed for governance and archival value, but they are not part of the 9-item active source code backlog unless explicitly called out in the consolidated plan below.
+All source code TODOs in `src/` have been cleaned up. The remaining test TODOs are observational notes for performance tracking.
+
+> **Note on Documentation TODO counts:** The ~190 count represents **repository-wide TODO markers** found in markdown files (historical notes, status markers, archive candidates). This is distinct from the ~38 **experimental-feature-focused markers** tracked in `OUTSTANDING_TODOS_EXPERIMENTAL_FEATURES.md`. Neither set requires implementation action—they are documentation annotations retained for context.
 
 ### Priority Summary
 
 - **P1 (Immediate)**: ~~3 items~~ 1 item remaining (HuggingFace revision pinning ✅, Rollback docs ✅ verified existing; Branch protection verification: 15 min pending)
 - **P2 (Near-term)**: ~~4 items~~ 3 items remaining (ICC preservation ✅ completed)
 - **P3 (Deferred)**: ~~4 items~~ 3 items remaining (SLERP interpolation ✅ completed 2026-03-16)
-- **No Action Required**: 195 items (95%; historical, observational, or intentionally retained)
+- **No Action Required**: ~195 items (95%; historical, observational, or intentionally retained)
 
 ---
 
@@ -280,7 +282,7 @@ test_file.write_text("""# TODO: Consider using spatial_ai for this
 
 The following categories require **no action**:
 
-1. **Documentation TODO markers** (190 items): Historical notes, status markers, or archive candidates reviewed for context rather than implementation
+1. **Documentation TODO markers** (~190 items): Repository-wide historical notes, status markers, or archive candidates reviewed for context rather than implementation. This broader count includes all markdown TODO annotations; the ~38 experimental-feature-focused subset is tracked separately in `OUTSTANDING_TODOS_EXPERIMENTAL_FEATURES.md`.
 2. **Security Patterns** (2 items): `TODO_REPLACE` regex patterns used to detect placeholder values
 3. **Observational Notes** (2 items): Performance investigation tracking already captured in follow-up documentation
 4. **Test Fixture Content** (1 item): Embedded `TODO` text used as scanner test data
@@ -317,7 +319,7 @@ Require for all preset changes:
 
 | Document | Purpose | Status |
 |----------|---------|--------|
-| [TODO_INVENTORY.md](./TODO_INVENTORY.md) | Comprehensive v2.3.0 inventory | ✅ Current |
+| [TODO_INVENTORY.md](./TODO_INVENTORY.md) | Comprehensive v2.4.0 inventory | ✅ Current |
 | [OUTSTANDING_TODOS_EXPERIMENTAL_FEATURES.md](./OUTSTANDING_TODOS_EXPERIMENTAL_FEATURES.md) | Experimental feature tracking | ✅ Current |
 | [HF_REVISION_PINNING_GUIDE.md](./HF_REVISION_PINNING_GUIDE.md) | Model pinning procedures | ✅ Current |
 | [IMPROVEMENT_OPPORTUNITIES.md](../guides/IMPROVEMENT_OPPORTUNITIES.md) | Performance optimization tracking | ✅ Current |
@@ -327,23 +329,24 @@ Require for all preset changes:
 ## Summary
 
 **Total Items Reviewed**: 206 TODO instances
-**Action Required**: 10 items total (5%)
-  - 9 active source code TODOs (see Key Findings table)
-  - 2 test observational TODOs (tracking only)
-**No Action Required**: 195 items (95%)
+**Action Required**: 4 items total (2%)
+  - 0 active source code TODOs (all cleaned up)
+  - 3 test observational TODOs (tracking only)
+  - 1 admin action (branch protection verification)
+**No Action Required**: 202 items (98%)
 
-**Completion Progress (2026-03-24)**:
-- ✅ 7 items completed (HF pinning, ICC preservation, rollback docs verified, depth_canonical archived, PR docs archived, SLERP interpolation, TODO_INVENTORY corrected)
+**Completion Progress (2026-03-25)**:
+- ✅ 10 items completed (HF pinning, ICC preservation, rollback docs verified, depth_canonical archived, PR docs archived, SLERP interpolation, TODO_INVENTORY corrected, source code TODO cleanup)
 - ⏳ 1 item pending external action (branch protection - requires admin UI access)
 - ⏳ 3 items pending future phases (ComfyUI, NVDIFFREC, MaterialGAN)
 
-**Key Takeaway**: The majority of reviewed TODO instances are **historical documentation notes**, **intentional validation patterns**, or **observational tracking**. Only 10 items require actual implementation work, with 1 remaining P1 item (branch protection verification pending external admin access).
+**Key Takeaway**: The majority of reviewed TODO instances are **historical documentation notes**, **intentional validation patterns**, or **observational tracking**. Only 4 items require actual action, with 1 remaining P1 item (branch protection verification pending external admin access). All source code TODOs in `src/` have been cleaned up.
 
 The codebase demonstrates mature TODO management with proper documentation and categorization. The existing [TODO_INVENTORY.md](./TODO_INVENTORY.md) provides comprehensive tracking and should continue to be the authoritative source for TODO governance.
 
 ---
 
-**Document Version**: 1.2.0
+**Document Version**: 1.3.0
 **Author**: Transformation Portal Architect Review
-**Last Updated**: 2026-03-24
-**Next Review**: Before v2.4.0 release planning
+**Last Updated**: 2026-03-25
+**Next Review**: Before v2.5.0 release planning
