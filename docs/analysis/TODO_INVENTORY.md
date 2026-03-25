@@ -383,46 +383,37 @@ raise NotImplementedError("RAW format handling is a Phase II feature")
 
 ### 2.1 Lux Depth V3 Preprocessing (2 functions)
 
-**Status:** 🟢 LEGITIMATE STUBS
-**Priority:** P4 (Low)
-**Action:** Document as optional, remove if never implemented
+**Status:** ✅ **IMPLEMENTED** (2026-03-25 verification)
+**Priority:** ~~P4~~ → DONE
+**Action:** None - functions are fully implemented
 
 **Location:** `src/transformation_portal/lux_depth_v3/preprocessing.py`
 
 #### 2.1.1 `normalize_exif_orientation()`
 
-**Line:** 227
+**Line:** 542
 **Purpose:** EXIF orientation normalization
-**Reason:** Not required for V3 depth inference (PIL handles automatically)
+**Status:** ✅ **FULLY IMPLEMENTED** - Function rotates images based on EXIF orientation tags, preserves metadata, and handles edge cases.
 
-```python
-raise NotImplementedError(
-    "normalize_exif_orientation() is a stub - full implementation pending. "
-    "This module was created to enable package imports."
-)
-```
-
-**Decision:**
-- [ ] Option A: Implement if EXIF issues reported (2h effort)
-- [ ] Option B: Remove stub and function signature (30m cleanup)
-- [ ] Option C: Keep as documented limitation (status quo)
-
-**Recommendation:** Option C (keep stub, document as "not required for current workflow")
+**Implementation Details:**
+- Uses PIL `exif_transpose()` for rotation
+- Preserves EXIF metadata with normalized orientation tag
+- Avoids lossy re-encoding for JPEGs when no rotation needed
+- Proper error handling with ValueError wrapping
 
 #### 2.1.2 `validate_depth_image_alignment()`
 
-**Line:** 248
+**Line:** 631
 **Purpose:** Validate depth map and image dimension matching
-**Reason:** Not required for V3 (orchestrator handles validation)
+**Status:** ✅ **FULLY IMPLEMENTED** - Function validates RGB/depth dimension compatibility.
 
-```python
-raise NotImplementedError(
-    "validate_depth_image_alignment() is a stub - full implementation pending. "
-    "This module was created to enable package imports."
-)
-```
+**Implementation Details:**
+- Supports PNG, NPY, and TIFF depth formats
+- Uses memory-mapped loading for NPY files (mmap_mode="r")
+- Allows tolerance for DA3 padding (multiples of 14)
+- Validates both exact and padded dimension matches
 
-**Decision:** Same as 2.1.1 (keep as documented limitation)
+**Note:** The TODO_INVENTORY previously listed these as stubs, but code review and test verification confirm full implementations exist with test coverage in `tests/test_preprocessing.py`.
 
 ---
 
