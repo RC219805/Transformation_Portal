@@ -542,37 +542,166 @@ def preprocess_image_linear(
 def normalize_exif_orientation(input_path: Path, output_path: Path) -> None:
     """Normalize EXIF orientation by rotating image to upright position.
 
-    STUB: Not implemented. Not required for V3 depth inference.
+    Applies EXIF orientation tag to physically rotate/flip the image so it
+    displays correctly regardless of viewer EXIF support. The output image
+    will have orientation=1/Normal.
+
+    Note: This function preserves EXIF metadata (with normalized orientation)
+    but may re-encode the image. For JPEG inputs where no rotation is needed,
+    the file is copied byte-for-byte to avoid lossy re-encoding.
 
     Args:
         input_path: Input image path
-        output_path: Output image path (normalized)
+        output_path: Output image path (normalized). Can be same as input.
 
     Raises:
-        NotImplementedError: This is a stub implementation
+        FileNotFoundError: If input_path doesn't exist
+        ValueError: If input_path is not a valid image
+        OSError: If output cannot be written
     """
-    raise NotImplementedError(
-        "normalize_exif_orientation() is a stub - full implementation pending. "
-        "This module was created to enable package imports."
-    )
+    import shutil
+
+    from PIL import Image
+    from PIL.ImageOps import exif_transpose
+
+    # Validate input exists
+    input_path = Path(input_path)
+    if not input_path.exists():
+        raise FileNotFoundError(f"Input image not found: {input_path}")
+
+    output_path = Path(output_path)
+
+    # Ensure parent directory exists
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Open image and check if transpose is needed
+    try:
+        img = Image.open(input_path)
+    except (OSError, ValueError) as exc:
+        # Normalize PIL-specific errors to a stable ValueError contract
+        raise ValueError(f"Invalid image file: {input_path}") from exc
+
+    try:
+        # exif_transpose returns None if no transpose needed, else new image
+        corrected = exif_transpose(img)
+
+        if corrected is None:
+            # No rotation needed - for JPEG, copy byte-for-byte to avoid lossy re-encode
+            img.close()
+            if input_path.suffix.lower() in {".jpg", ".jpeg"} and input_path != output_path:
+                shutil.copy2(input_path, output_path)
+                logger.debug("No EXIF rotation needed, copied file: %s -> %s", input_path, output_path)
+                return
+            elif input_path == output_path:
+                # In-place, no changes needed
+                logger.debug("No EXIF rotation needed, file unchanged: %s", input_path)
+                return
+            else:
+                # Non-JPEG or same path - use PIL to copy (may re-encode)
+                corrected = img.copy()
+                img.close()
+                img = Image.open(input_path)  # Re-open to get fresh copy
+
+        # Extract and preserve EXIF data with normalized orientation
+        exif_data = None
+        try:
+            exif_obj = img.getexif()
+            if exif_obj:
+                # Set orientation to Normal (1) since image is now physically rotated
+                exif_obj[0x0112] = 1  # Orientation tag
+                exif_data = exif_obj.tobytes()
+        except Exception:
+            # Image doesn't support EXIF or EXIF is malformed - continue without it
+            pass
+
+        # Save with preserved EXIF (orientation normalized)
+        save_kwargs = {}
+        if exif_data:
+            save_kwargs["exif"] = exif_data
+
+        corrected.save(output_path, **save_kwargs)
+        logger.debug("Normalized EXIF orientation: %s -> %s", input_path, output_path)
+
+    except (OSError, ValueError) as exc:
+        raise ValueError(f"Failed to process image: {input_path}") from exc
+    finally:
+        img.close()
 
 
 def validate_depth_image_alignment(image_path: Path, depth_path: Path) -> bool:
     """Validate that depth map and image have matching dimensions.
 
-    STUB: Not implemented. Not required for V3 depth inference.
+    Checks that the RGB image and depth map dimensions are compatible.
+    Allows tolerance for model-induced padding (Depth Anything V3 uses
+    multiples of 14).
 
     Args:
-        image_path: Path to image
-        depth_path: Path to depth map
+        image_path: Path to RGB image
+        depth_path: Path to depth map (PNG, NPY, or TIFF)
 
     Returns:
-        True if dimensions match, False otherwise
+        True if dimensions match (within padding tolerance), False otherwise
 
     Raises:
-        NotImplementedError: This is a stub implementation
+        FileNotFoundError: If either path doesn't exist
+        ValueError: If files cannot be read as images/arrays
     """
-    raise NotImplementedError(
-        "validate_depth_image_alignment() is a stub - full implementation pending. "
-        "This module was created to enable package imports."
+    image_path = Path(image_path)
+    depth_path = Path(depth_path)
+
+    # Validate both exist
+    if not image_path.exists():
+        raise FileNotFoundError(f"Image not found: {image_path}")
+    if not depth_path.exists():
+        raise FileNotFoundError(f"Depth map not found: {depth_path}")
+
+    # Load RGB image dimensions
+    try:
+        with Image.open(image_path) as img:
+            img_width, img_height = img.size
+    except Exception as e:
+        raise ValueError(f"Cannot read image {image_path}: {e}") from e
+
+    # Load depth map dimensions (supports .npy and image formats)
+    try:
+        if depth_path.suffix.lower() == ".npy":
+            # Use memory-mapped loading so we can read the shape without
+            # materializing potentially large depth arrays into memory.
+            depth_arr = np.load(depth_path, mmap_mode="r")
+            depth_height, depth_width = depth_arr.shape[:2]
+        else:
+            with Image.open(depth_path) as depth_img:
+                depth_width, depth_height = depth_img.size
+    except Exception as e:
+        raise ValueError(f"Cannot read depth map {depth_path}: {e}") from e
+
+    # Check exact match first
+    if img_width == depth_width and img_height == depth_height:
+        return True
+
+    # Allow tolerance for DA3 padding (multiples of 14)
+    # The depth map may be padded to the nearest multiple of 14
+    # Note: This is a simple rounding helper. The _enforce_dimension_multiple()
+    # function exists but operates on arrays. For integer arithmetic, local
+    # helper is clearer and avoids unnecessary coupling.
+    def round_to_multiple(val: int, multiple: int = DIMENSION_MULTIPLE) -> int:
+        return ((val + multiple - 1) // multiple) * multiple
+
+    padded_img_width = round_to_multiple(img_width)
+    padded_img_height = round_to_multiple(img_height)
+
+    if depth_width == padded_img_width and depth_height == padded_img_height:
+        return True
+
+    # Also check if image was padded from depth dimensions
+    if img_width == round_to_multiple(depth_width) and img_height == round_to_multiple(depth_height):
+        return True
+
+    logger.debug(
+        "Dimension mismatch: image=(%d, %d), depth=(%d, %d)",
+        img_width,
+        img_height,
+        depth_width,
+        depth_height,
     )
+    return False

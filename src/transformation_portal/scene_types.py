@@ -105,9 +105,9 @@ def normalize_scene_type(raw_input: str) -> str:
     if raw_lower in SCENE_TYPES:
         return raw_lower
 
-    # Check aliases
+    # Check aliases (exact match only to avoid substring collisions)
     for canonical, config in SCENE_TYPES.items():
-        if any(alias in raw_lower for alias in config["aliases"]):
+        if raw_lower in config["aliases"]:
             return canonical
 
     # Not found

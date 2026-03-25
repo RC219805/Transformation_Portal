@@ -295,5 +295,178 @@ class TestEndToEnd:
         assert original_shape == (75, 100)  # H, W
 
 
+class TestNormalizeExifOrientation:
+    """Tests for normalize_exif_orientation function."""
+
+    def test_normalize_unrotated_image(self, tmp_path):
+        """Test normalization of image without EXIF orientation."""
+        from transformation_portal.lux_depth_v3.preprocessing import normalize_exif_orientation
+
+        # Create simple image without EXIF
+        input_path = tmp_path / "input.jpg"
+        output_path = tmp_path / "output.jpg"
+
+        img = Image.new("RGB", (100, 50), color="red")
+        img.save(input_path)
+
+        # Should complete without error
+        normalize_exif_orientation(input_path, output_path)
+
+        # Output should exist and have same dimensions
+        assert output_path.exists()
+        with Image.open(output_path) as out_img:
+            assert out_img.size == (100, 50)
+
+    def test_normalize_creates_output_directory(self, tmp_path):
+        """Test that output directory is created if needed."""
+        from transformation_portal.lux_depth_v3.preprocessing import normalize_exif_orientation
+
+        input_path = tmp_path / "input.jpg"
+        output_path = tmp_path / "subdir" / "nested" / "output.jpg"
+
+        img = Image.new("RGB", (64, 64), color="blue")
+        img.save(input_path)
+
+        normalize_exif_orientation(input_path, output_path)
+
+        assert output_path.exists()
+
+    def test_normalize_input_not_found_raises(self, tmp_path):
+        """Test FileNotFoundError for missing input."""
+        from transformation_portal.lux_depth_v3.preprocessing import normalize_exif_orientation
+
+        fake_input = tmp_path / "nonexistent.jpg"
+        output_path = tmp_path / "output.jpg"
+
+        with pytest.raises(FileNotFoundError, match="Input image not found"):
+            normalize_exif_orientation(fake_input, output_path)
+
+    def test_normalize_in_place(self, tmp_path):
+        """Test in-place normalization (same input/output path)."""
+        from transformation_portal.lux_depth_v3.preprocessing import normalize_exif_orientation
+
+        image_path = tmp_path / "test.jpg"
+        img = Image.new("RGB", (80, 60), color="green")
+        img.save(image_path)
+
+        # Should work with same input and output
+        normalize_exif_orientation(image_path, image_path)
+
+        assert image_path.exists()
+        with Image.open(image_path) as out_img:
+            assert out_img.size == (80, 60)
+
+    def test_normalize_invalid_image_raises_valueerror(self, tmp_path):
+        """Test ValueError for corrupt/invalid image file."""
+        from transformation_portal.lux_depth_v3.preprocessing import normalize_exif_orientation
+
+        corrupt_path = tmp_path / "corrupt.jpg"
+        output_path = tmp_path / "output.jpg"
+
+        # Write invalid data
+        corrupt_path.write_text("not a valid image")
+
+        with pytest.raises(ValueError, match="Invalid image file"):
+            normalize_exif_orientation(corrupt_path, output_path)
+
+
+class TestValidateDepthImageAlignment:
+    """Tests for validate_depth_image_alignment function."""
+
+    def test_exact_match_returns_true(self, tmp_path):
+        """Test exact dimension match."""
+        from transformation_portal.lux_depth_v3.preprocessing import validate_depth_image_alignment
+
+        # Create matching images
+        img_path = tmp_path / "image.png"
+        depth_path = tmp_path / "depth.png"
+
+        Image.new("RGB", (100, 80)).save(img_path)
+        Image.new("L", (100, 80)).save(depth_path)
+
+        assert validate_depth_image_alignment(img_path, depth_path) is True
+
+    def test_mismatch_returns_false(self, tmp_path):
+        """Test dimension mismatch."""
+        from transformation_portal.lux_depth_v3.preprocessing import validate_depth_image_alignment
+
+        img_path = tmp_path / "image.png"
+        depth_path = tmp_path / "depth.png"
+
+        Image.new("RGB", (100, 80)).save(img_path)
+        Image.new("L", (200, 160)).save(depth_path)
+
+        assert validate_depth_image_alignment(img_path, depth_path) is False
+
+    def test_padded_depth_returns_true(self, tmp_path):
+        """Test that padded depth maps (multiples of 14) match."""
+        from transformation_portal.lux_depth_v3.preprocessing import (
+            DIMENSION_MULTIPLE,
+            validate_depth_image_alignment,
+        )
+
+        img_path = tmp_path / "image.png"
+        depth_path = tmp_path / "depth.png"
+
+        # Image at 100x80, depth padded to 112x84 (next multiple of 14)
+        Image.new("RGB", (100, 80)).save(img_path)
+
+        def next_multiple(val):
+            return ((val + DIMENSION_MULTIPLE - 1) // DIMENSION_MULTIPLE) * DIMENSION_MULTIPLE
+
+        padded_w = next_multiple(100)  # 112
+        padded_h = next_multiple(80)  # 84
+        Image.new("L", (padded_w, padded_h)).save(depth_path)
+
+        assert validate_depth_image_alignment(img_path, depth_path) is True
+
+    def test_npy_depth_format(self, tmp_path):
+        """Test .npy depth map format."""
+        from transformation_portal.lux_depth_v3.preprocessing import validate_depth_image_alignment
+
+        img_path = tmp_path / "image.png"
+        depth_path = tmp_path / "depth.npy"
+
+        Image.new("RGB", (64, 48)).save(img_path)
+        np.save(depth_path, np.zeros((48, 64), dtype=np.float32))
+
+        assert validate_depth_image_alignment(img_path, depth_path) is True
+
+    def test_missing_image_raises(self, tmp_path):
+        """Test FileNotFoundError for missing image."""
+        from transformation_portal.lux_depth_v3.preprocessing import validate_depth_image_alignment
+
+        fake_img = tmp_path / "nonexistent.png"
+        depth_path = tmp_path / "depth.png"
+        Image.new("L", (64, 64)).save(depth_path)
+
+        with pytest.raises(FileNotFoundError, match="Image not found"):
+            validate_depth_image_alignment(fake_img, depth_path)
+
+    def test_missing_depth_raises(self, tmp_path):
+        """Test FileNotFoundError for missing depth."""
+        from transformation_portal.lux_depth_v3.preprocessing import validate_depth_image_alignment
+
+        img_path = tmp_path / "image.png"
+        Image.new("RGB", (64, 64)).save(img_path)
+        fake_depth = tmp_path / "nonexistent.npy"
+
+        with pytest.raises(FileNotFoundError, match="Depth map not found"):
+            validate_depth_image_alignment(img_path, fake_depth)
+
+    def test_corrupt_image_raises(self, tmp_path):
+        """Test ValueError for corrupt image."""
+        from transformation_portal.lux_depth_v3.preprocessing import validate_depth_image_alignment
+
+        img_path = tmp_path / "corrupt.png"
+        depth_path = tmp_path / "depth.png"
+
+        img_path.write_text("not an image")
+        Image.new("L", (64, 64)).save(depth_path)
+
+        with pytest.raises(ValueError, match="Cannot read image"):
+            validate_depth_image_alignment(img_path, depth_path)
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
