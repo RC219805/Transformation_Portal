@@ -691,20 +691,34 @@ class TestStageExecution:
     def test_unknown_stage_skipped(
         self, pipeline_module, sample_input_image, caplog
     ):
-        """Test unknown stage is skipped with warning."""
+        """Test unknown stage is skipped with warning logged."""
+        # Create a minimal recipe with a known stage
         recipe = {
             "name": "Unknown Stage Test",
-            "stages": ["unknown_stage"],
+            "stages": ["color_grading"],
+            "color_grading": {"enabled": True},
             "quality_feedback": {"enabled": False},
             "output": {"format": "png"},
         }
 
         pipeline = pipeline_module.UnifiedPipeline(recipe)
 
+        # Inject an unknown stage directly into pipeline.stages to trigger
+        # the else branch in _execute_stage()
+        unknown_stage = pipeline_module.PipelineStage(
+            name="totally_unknown_stage",
+            display_name="Unknown Stage",
+            enabled=True,
+            required=False,
+        )
+        pipeline.stages.insert(0, unknown_stage)
+
         with caplog.at_level(logging.WARNING):
             result = pipeline.process_single(sample_input_image)
 
         assert result.success is True
+        # Verify the warning was logged for the unknown stage
+        assert any("Unknown stage" in record.message for record in caplog.records)
 
     def test_branding_disabled(
         self, pipeline_module, sample_input_image
@@ -961,28 +975,37 @@ class TestErrorHandling:
     def test_required_stage_failure(
         self, pipeline_module, sample_input_image
     ):
-        """Test that required stage failure stops pipeline."""
+        """Test that required stage failure stops pipeline and sets error message."""
         recipe = {
             "name": "Required Stage Test",
-            "stages": ["depth_estimation", "color_grading"],
-            "depth_estimation": {"enabled": True},
+            "stages": ["color_grading"],
             "color_grading": {"enabled": True},
             "quality_feedback": {"enabled": False},
             "output": {"format": "png"},
         }
 
-        # Make depth_estimation required
         pipeline = pipeline_module.UnifiedPipeline(recipe)
+
+        # Find the color_grading stage and mark it as required
         for stage in pipeline.stages:
-            if stage.name == "depth_estimation":
+            if stage.name == "color_grading":
                 stage.required = True
 
-        # Depth estimation will fail (no actual depth processor in stub env)
-        # but should continue since we're using stubs
-        result = pipeline.process_single(sample_input_image)
+        # Patch the _execute_stage to raise an exception for color_grading
+        original_execute = pipeline._execute_stage
 
-        # With stubbed environment, should succeed
-        assert result.success is True
+        def mock_execute(stage, image):
+            if stage.name == "color_grading":
+                raise RuntimeError("Simulated required stage failure")
+            return original_execute(stage, image)
+
+        with patch.object(pipeline, "_execute_stage", side_effect=mock_execute):
+            result = pipeline.process_single(sample_input_image)
+
+        # Required stage failure should stop the pipeline
+        assert result.success is False
+        assert result.error_message is not None
+        assert "Simulated required stage failure" in result.error_message
 
     def test_optional_stage_failure_continues(
         self, pipeline_module, sample_input_image, caplog
@@ -998,11 +1021,25 @@ class TestErrorHandling:
         }
 
         pipeline = pipeline_module.UnifiedPipeline(recipe)
-        result = pipeline.process_single(sample_input_image)
 
-        # Should succeed despite ai_enhancement being a placeholder
+        # Patch the _execute_stage to raise for ai_enhancement (optional stage)
+        original_execute = pipeline._execute_stage
+
+        def mock_execute(stage, image):
+            if stage.name == "ai_enhancement":
+                raise RuntimeError("Simulated optional stage failure")
+            return original_execute(stage, image)
+
+        with patch.object(pipeline, "_execute_stage", side_effect=mock_execute):
+            with caplog.at_level(logging.WARNING):
+                result = pipeline.process_single(sample_input_image)
+
+        # Pipeline should still succeed despite optional stage failure
         assert result.success is True
+        # Color grading should still have run
         assert "color_grading" in result.stages_executed
+        # Warning should be logged for the failed optional stage
+        assert any("failed" in record.message.lower() for record in caplog.records)
 
 
 # =============================================================================
@@ -1021,9 +1058,8 @@ class TestRecipeLoading:
     def test_from_recipe_valid_file(self, pipeline_module, tmp_path: Path):
         """Test from_recipe with valid YAML file.
         
-        Note: This test may be skipped if config_loader is not available
-        in the test environment. The config_loader module has its own
-        comprehensive tests in tests/utils/test_config_loader.py.
+        The config_loader module is a core dependency and should always be
+        available. If the import fails, it indicates a real regression.
         """
         import yaml
 
@@ -1040,13 +1076,10 @@ class TestRecipeLoading:
         with open(recipe_path, "w") as f:
             yaml.safe_dump(recipe, f)
 
-        try:
-            # Attempt to use from_recipe - this exercises the full loading path
-            pipeline = pipeline_module.UnifiedPipeline.from_recipe(recipe_path)
-            assert pipeline.name == "File Recipe"
-        except (ImportError, ModuleNotFoundError) as e:
-            # config_loader may not be available in minimal test environments
-            pytest.skip(f"config_loader not available: {e}")
+        # from_recipe uses config_loader which is a core module
+        # If this fails, it's a real regression that should fail the test
+        pipeline = pipeline_module.UnifiedPipeline.from_recipe(recipe_path)
+        assert pipeline.name == "File Recipe"
 
 
 # =============================================================================
