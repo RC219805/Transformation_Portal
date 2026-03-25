@@ -640,12 +640,7 @@ class TestWorkflowIntegration:
         from transformation_portal.comfyui.workflow_builder import WorkflowBuilder
 
         builder = WorkflowBuilder()
-        workflow = (
-            builder.add_input("test.jpg")
-            .add_flux_enhancement(strength=0.5)
-            .add_output("output.jpg")
-            .build()
-        )
+        workflow = builder.add_input("test.jpg").add_flux_enhancement(strength=0.5).add_output("output.jpg").build()
 
         comfyui_format = workflow.to_comfyui_format()
 

@@ -57,9 +57,9 @@ class TestSceneTypeConstants:
         """Canonical names should follow naming convention (interior_/exterior_/aerial_/twilight_/night_)."""
         valid_prefixes = ("interior_", "exterior_", "aerial_", "twilight_", "night_")
         for scene_type in SCENE_TYPES:
-            assert any(scene_type.startswith(prefix) for prefix in valid_prefixes), (
-                f"Scene type '{scene_type}' doesn't follow naming convention"
-            )
+            assert any(
+                scene_type.startswith(prefix) for prefix in valid_prefixes
+            ), f"Scene type '{scene_type}' doesn't follow naming convention"
 
 
 class TestNormalizeSceneType:
@@ -483,8 +483,7 @@ class TestAliasUniqueness:
                 unexpected_overlaps.append((alias, types))
 
         assert not unexpected_overlaps, (
-            f"Unexpected alias overlaps found: {unexpected_overlaps}. "
-            "If intentional, add to known_overlaps set."
+            f"Unexpected alias overlaps found: {unexpected_overlaps}. " "If intentional, add to known_overlaps set."
         )
 
 
@@ -520,7 +519,6 @@ class TestSceneTypeIntegration:
                 normalized = normalize_scene_type(alias)
                 assert validate_scene_type(normalized), f"Alias '{alias}' normalized to invalid type"
                 if alias not in known_overlapping_aliases:
-                    assert normalized == scene_type, (
-                        f"Alias '{alias}' should normalize to '{scene_type}' but got '{normalized}'"
-                    )
-
+                    assert (
+                        normalized == scene_type
+                    ), f"Alias '{alias}' should normalize to '{scene_type}' but got '{normalized}'"
