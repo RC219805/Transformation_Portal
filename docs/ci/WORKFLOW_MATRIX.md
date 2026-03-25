@@ -51,7 +51,7 @@
 1. **Preflight**: Classify changes to determine suite scope
 2. **Lightweight checks**: pip-tools cache, docs structure, sanity checks
 3. **Lint** (Python 3.12): flake8, pylint, black, isort
-4. **Test - Core** (Python 3.10, 3.12): `pytest -m "not ml and not slow and not benchmark"`
+4. **Test - Core** (Python 3.11, 3.12): `pytest -m "not ml and not slow and not benchmark"`
 5. **Test - ML** (Python 3.11): `pytest -m "ml and not slow and not benchmark"`
 6. **Manifest Validation**: MANIFEST.in correctness
 7. **Coverage Gate**: Minimum coverage enforcement

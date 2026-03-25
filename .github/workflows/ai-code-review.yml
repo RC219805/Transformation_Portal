@@ -109,7 +109,7 @@ jobs:
               
               while url:
                   print(f"Fetching: {url}")
-                  r = requests.get(url, headers=headers)
+                  r = requests.get(url, headers=headers, timeout=20)
                   
                   if r.status_code != 200:
                       print(f"GitHub API error fetching PR files: {r.status_code} {r.text}")
@@ -251,7 +251,7 @@ jobs:
               comment_data = {'body': comment_body}
 
               try:
-                  post_response = requests.post(comment_url, headers=headers, json=comment_data)
+                  post_response = requests.post(comment_url, headers=headers, json=comment_data, timeout=20)
                   if post_response.status_code == 201:
                       print("AI review posted successfully!")
                   else:

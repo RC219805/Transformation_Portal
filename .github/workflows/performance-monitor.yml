@@ -75,18 +75,27 @@ jobs:
         run: |
           set -euo pipefail
           
-          BENCHMARK_EXIT=0
+          # Check if any benchmark tests exist using exit-code semantics
+          # Exit code 5 = no tests collected (pytest convention)
+          # Exit code 0 = collection succeeded
+          # Other exit codes = collection/import failure
+          set +e
+          pytest tests/ -m "benchmark" --collect-only -q > benchmark-collect.log 2>&1
+          COLLECT_EXIT=$?
+          set -e
           
-          # Check if any benchmark tests exist
-          BENCHMARK_COUNT=$(pytest tests/ -m "benchmark" --collect-only -q 2>/dev/null | grep -c "test" || echo "0")
-          
-          if [ "$BENCHMARK_COUNT" = "0" ]; then
+          if [ "$COLLECT_EXIT" -eq 5 ]; then
             echo "status=no_tests" >> $GITHUB_OUTPUT
             echo "⚠️ No benchmark tests found (tests marked with @pytest.mark.benchmark)"
             exit 0
+          elif [ "$COLLECT_EXIT" -ne 0 ]; then
+            echo "status=failed" >> $GITHUB_OUTPUT
+            echo "❌ Benchmark collection failed with exit code $COLLECT_EXIT"
+            cat benchmark-collect.log || true
+            exit "$COLLECT_EXIT"
           fi
           
-          echo "Found $BENCHMARK_COUNT benchmark tests"
+          echo "Benchmark collection succeeded"
           
           COMPARE_ARGS=()
           BASELINE_FILE="${{ steps.baseline.outputs.baseline_file }}"
