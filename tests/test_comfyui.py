@@ -25,7 +25,9 @@ try:
     from transformation_portal.comfyui import custom_nodes, workflow_builder
 
     _comfyui_available = True
-except ImportError as e:
+except (ImportError, OSError, RuntimeError) as e:
+    # Catch broader exceptions: ImportError for missing deps, OSError/RuntimeError
+    # for broken wheels or missing shared libraries (consistent with conftest.py patterns)
     _skip_reason = f"comfyui module not importable: {e}"
 
 # Pytest markers - ML marker required because comfyui has heavy deps

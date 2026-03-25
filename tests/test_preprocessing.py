@@ -356,6 +356,19 @@ class TestNormalizeExifOrientation:
         with Image.open(image_path) as out_img:
             assert out_img.size == (80, 60)
 
+    def test_normalize_invalid_image_raises_valueerror(self, tmp_path):
+        """Test ValueError for corrupt/invalid image file."""
+        from transformation_portal.lux_depth_v3.preprocessing import normalize_exif_orientation
+
+        corrupt_path = tmp_path / "corrupt.jpg"
+        output_path = tmp_path / "output.jpg"
+
+        # Write invalid data
+        corrupt_path.write_text("not a valid image")
+
+        with pytest.raises(ValueError, match="Invalid image file"):
+            normalize_exif_orientation(corrupt_path, output_path)
+
 
 class TestValidateDepthImageAlignment:
     """Tests for validate_depth_image_alignment function."""

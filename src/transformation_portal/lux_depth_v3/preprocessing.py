@@ -544,7 +544,11 @@ def normalize_exif_orientation(input_path: Path, output_path: Path) -> None:
 
     Applies EXIF orientation tag to physically rotate/flip the image so it
     displays correctly regardless of viewer EXIF support. The output image
-    will have no orientation tag (or orientation=1/Normal).
+    will have orientation=1/Normal.
+
+    Note: This function preserves EXIF metadata (with normalized orientation)
+    but may re-encode the image. For JPEG inputs where no rotation is needed,
+    the file is copied byte-for-byte to avoid lossy re-encoding.
 
     Args:
         input_path: Input image path
@@ -555,6 +559,8 @@ def normalize_exif_orientation(input_path: Path, output_path: Path) -> None:
         ValueError: If input_path is not a valid image
         OSError: If output cannot be written
     """
+    import shutil
+
     from PIL import Image
     from PIL.ImageOps import exif_transpose
 
@@ -565,26 +571,61 @@ def normalize_exif_orientation(input_path: Path, output_path: Path) -> None:
 
     output_path = Path(output_path)
 
-    # Open image and apply EXIF transpose
-    # Note: We load and process outside context manager to ensure the copied
-    # image is fully independent before saving
-    img = Image.open(input_path)
-    try:
-        # exif_transpose returns None if no transpose needed, else new image
-        corrected = exif_transpose(img)
-        if corrected is None:
-            corrected = img.copy()
-    finally:
-        img.close()
-
     # Ensure parent directory exists
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Save without EXIF orientation (physically rotated)
-    # Preserve format based on output extension
-    corrected.save(output_path)
+    # Open image and check if transpose is needed
+    try:
+        img = Image.open(input_path)
+    except (OSError, ValueError) as exc:
+        # Normalize PIL-specific errors to a stable ValueError contract
+        raise ValueError(f"Invalid image file: {input_path}") from exc
 
-    logger.debug("Normalized EXIF orientation: %s -> %s", input_path, output_path)
+    try:
+        # exif_transpose returns None if no transpose needed, else new image
+        corrected = exif_transpose(img)
+
+        if corrected is None:
+            # No rotation needed - for JPEG, copy byte-for-byte to avoid lossy re-encode
+            img.close()
+            if input_path.suffix.lower() in {".jpg", ".jpeg"} and input_path != output_path:
+                shutil.copy2(input_path, output_path)
+                logger.debug("No EXIF rotation needed, copied file: %s -> %s", input_path, output_path)
+                return
+            elif input_path == output_path:
+                # In-place, no changes needed
+                logger.debug("No EXIF rotation needed, file unchanged: %s", input_path)
+                return
+            else:
+                # Non-JPEG or same path - use PIL to copy (may re-encode)
+                corrected = img.copy()
+                img.close()
+                img = Image.open(input_path)  # Re-open to get fresh copy
+
+        # Extract and preserve EXIF data with normalized orientation
+        exif_data = None
+        try:
+            exif_obj = img.getexif()
+            if exif_obj:
+                # Set orientation to Normal (1) since image is now physically rotated
+                exif_obj[0x0112] = 1  # Orientation tag
+                exif_data = exif_obj.tobytes()
+        except Exception:
+            # Image doesn't support EXIF or EXIF is malformed - continue without it
+            pass
+
+        # Save with preserved EXIF (orientation normalized)
+        save_kwargs = {}
+        if exif_data:
+            save_kwargs["exif"] = exif_data
+
+        corrected.save(output_path, **save_kwargs)
+        logger.debug("Normalized EXIF orientation: %s -> %s", input_path, output_path)
+
+    except (OSError, ValueError) as exc:
+        raise ValueError(f"Failed to process image: {input_path}") from exc
+    finally:
+        img.close()
 
 
 def validate_depth_image_alignment(image_path: Path, depth_path: Path) -> bool:
@@ -624,7 +665,9 @@ def validate_depth_image_alignment(image_path: Path, depth_path: Path) -> bool:
     # Load depth map dimensions (supports .npy and image formats)
     try:
         if depth_path.suffix.lower() == ".npy":
-            depth_arr = np.load(depth_path)
+            # Use memory-mapped loading so we can read the shape without
+            # materializing potentially large depth arrays into memory.
+            depth_arr = np.load(depth_path, mmap_mode="r")
             depth_height, depth_width = depth_arr.shape[:2]
         else:
             with Image.open(depth_path) as depth_img:
