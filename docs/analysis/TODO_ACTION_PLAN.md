@@ -317,7 +317,7 @@ Require for all preset changes:
 
 | Document | Purpose | Status |
 |----------|---------|--------|
-| [TODO_INVENTORY.md](./TODO_INVENTORY.md) | Comprehensive v2.3.0 inventory | ✅ Current |
+| [TODO_INVENTORY.md](./TODO_INVENTORY.md) | Comprehensive v2.4.0 inventory | ✅ Current |
 | [OUTSTANDING_TODOS_EXPERIMENTAL_FEATURES.md](./OUTSTANDING_TODOS_EXPERIMENTAL_FEATURES.md) | Experimental feature tracking | ✅ Current |
 | [HF_REVISION_PINNING_GUIDE.md](./HF_REVISION_PINNING_GUIDE.md) | Model pinning procedures | ✅ Current |
 | [IMPROVEMENT_OPPORTUNITIES.md](../guides/IMPROVEMENT_OPPORTUNITIES.md) | Performance optimization tracking | ✅ Current |
