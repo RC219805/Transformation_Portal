@@ -6,6 +6,11 @@ on:
     - cron: '0 2 * * *'
   workflow_dispatch:  # Allow manual trigger
 
+# Prevent overlapping scheduled runs - nightly is heavy and should not overlap
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
 permissions:
   contents: read
   issues: write
@@ -20,7 +25,7 @@ jobs:
     timeout-minutes: 120
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
 
       - name: Free disk space
         run: |
@@ -31,7 +36,7 @@ jobs:
           df -h
 
       - name: Set up Python ${{ env.PYTHON_VERSION }}
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
@@ -57,24 +62,25 @@ jobs:
 
       - name: Upload stress test logs
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08  # v4.6.0
         with:
           name: stress-test-logs
           path: |
             logs/
             *.log
+          retention-days: 14
 
   performance-benchmarks:
     name: Performance Regression Tests
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
           fetch-depth: 0  # Need history for comparisons
 
       - name: Set up Python ${{ env.PYTHON_VERSION }}
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
@@ -86,14 +92,51 @@ jobs:
           pip install pytest-benchmark
           pip install -e .
 
-      - name: Run performance benchmarks
+      - name: Check for baseline
+        id: baseline
         run: |
-          pytest tests/ \
+          # Check for checked-in baseline file (nightly owns benchmark baselines)
+          if [ -f "tools/benchmarks/baseline.json" ]; then
+            echo "baseline_file=tools/benchmarks/baseline.json" >> $GITHUB_OUTPUT
+            echo "has_baseline=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_baseline=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run performance benchmarks
+        id: benchmark
+        run: |
+          set -euo pipefail
+          
+          # Check if any benchmark tests exist
+          BENCHMARK_COUNT=$(pytest tests/ -m "benchmark" --collect-only -q 2>/dev/null | grep -c "test" || echo "0")
+          
+          if [ "$BENCHMARK_COUNT" = "0" ]; then
+            echo "status=no_tests" >> $GITHUB_OUTPUT
+            echo "⚠️ No benchmark tests found"
+            exit 0
+          fi
+          
+          COMPARE_ARGS=()
+          if [ "${{ steps.baseline.outputs.has_baseline }}" = "true" ]; then
+            echo "Using baseline: ${{ steps.baseline.outputs.baseline_file }}"
+            COMPARE_ARGS=(
+              "--benchmark-compare=${{ steps.baseline.outputs.baseline_file }}"
+              "--benchmark-compare-fail=mean:10%"
+            )
+          else
+            echo "No baseline found; running without regression comparison."
+          fi
+          
+          if pytest tests/ \
             -m "benchmark" \
             --benchmark-only \
             --benchmark-json=benchmark-results.json \
-            --benchmark-compare=baseline \
-            --benchmark-compare-fail=mean:10%
+            "${COMPARE_ARGS[@]}"; then
+            echo "status=passed" >> $GITHUB_OUTPUT
+          else
+            echo "status=regression" >> $GITHUB_OUTPUT
+          fi
         env:
           PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/src
 
@@ -124,33 +167,58 @@ jobs:
           fi
 
       - name: Upload benchmark results
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08  # v4.6.0
         with:
           name: benchmark-results
           path: benchmark-results.json
+          retention-days: 30
 
-      - name: Comment on performance regression
-        if: failure()
-        uses: actions/github-script@v8
+      - name: Create issue on performance regression (deduplicated)
+        if: steps.benchmark.outputs.status == 'regression'
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd  # v8
         with:
           script: |
-            github.rest.issues.create({
+            // Check for existing open regression issue to avoid duplicates
+            const { data: issues } = await github.rest.issues.listForRepo({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              title: '⚠️ Performance Regression Detected',
-              body: 'Nightly performance benchmarks detected regression beyond acceptable threshold. Check benchmark artifacts for details.',
-              labels: ['performance', 'regression', 'automated']
-            })
+              state: 'open',
+              labels: 'performance,regression,automated',
+              per_page: 10
+            });
+            
+            const existingIssue = issues.find(i => 
+              i.title.includes('Performance Regression Detected')
+            );
+            
+            if (existingIssue) {
+              // Update existing issue
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existingIssue.number,
+                body: `🔄 **Nightly regression detected again**\n\nWorkflow run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}\n\nTimestamp: ${new Date().toISOString()}`
+              });
+              console.log(`Updated existing issue #${existingIssue.number}`);
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: '⚠️ Performance Regression Detected',
+                body: `Nightly performance benchmarks detected regression beyond acceptable threshold.\n\nCheck the workflow run for details: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+                labels: ['performance', 'regression', 'automated']
+              });
+            }
 
   memory-leak-detection:
     name: Memory Leak Detection
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
 
       - name: Set up Python ${{ env.PYTHON_VERSION }}
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
@@ -197,22 +265,23 @@ jobs:
 
       - name: Upload memory profile
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08  # v4.6.0
         with:
           name: memory-profile
           path: |
             *.dat
             memory_profile.txt
+          retention-days: 14
 
   dependency-audit-deep:
     name: Deep Dependency Audit
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
 
       - name: Set up Python ${{ env.PYTHON_VERSION }}
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
@@ -249,22 +318,23 @@ jobs:
           fi
 
       - name: Upload SBOM and audit reports
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08  # v4.6.0
         with:
           name: dependency-audit
           path: |
             sbom.json
             audit-report.json
+          retention-days: 30
 
   integration-tests-full:
     name: Full Integration Tests
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
 
       - name: Set up Python ${{ env.PYTHON_VERSION }}
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
@@ -308,26 +378,51 @@ jobs:
           echo "- Dependencies: ${{ needs.dependency-audit-deep.result }}" >> $GITHUB_STEP_SUMMARY
           echo "- Integration: ${{ needs.integration-tests-full.result }}" >> $GITHUB_STEP_SUMMARY
 
-      - name: Create issue on failure
+      - name: Create issue on failure (deduplicated)
         if: |
           needs.stress-tests.result == 'failure' ||
           needs.performance-benchmarks.result == 'failure' ||
           needs.memory-leak-detection.result == 'failure'
-        uses: actions/github-script@v8
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd  # v8
         with:
           script: |
-            github.rest.issues.create({
+            // Check for existing open nightly failure issue to avoid duplicates
+            const { data: issues } = await github.rest.issues.listForRepo({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              title: '🚨 Nightly Deep Checks Failed',
-              body: `One or more nightly deep checks failed:
-
-              - Stress Tests: ${{ needs.stress-tests.result }}
-              - Performance Benchmarks: ${{ needs.performance-benchmarks.result }}
-              - Memory Leak Detection: ${{ needs.memory-leak-detection.result }}
-              - Dependency Audit: ${{ needs.dependency-audit-deep.result }}
-              - Integration Tests: ${{ needs.integration-tests-full.result }}
-
-              Check the workflow run for details: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
-              labels: ['nightly-failure', 'automated', 'quality']
-            })
+              state: 'open',
+              labels: 'nightly-failure,automated',
+              per_page: 10
+            });
+            
+            const existingIssue = issues.find(i => 
+              i.title.includes('Nightly Deep Checks Failed')
+            );
+            
+            const failureDetails = `
+            - Stress Tests: ${{ needs.stress-tests.result }}
+            - Performance Benchmarks: ${{ needs.performance-benchmarks.result }}
+            - Memory Leak Detection: ${{ needs.memory-leak-detection.result }}
+            - Dependency Audit: ${{ needs.dependency-audit-deep.result }}
+            - Integration Tests: ${{ needs.integration-tests-full.result }}
+            
+            Check the workflow run for details: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            
+            if (existingIssue) {
+              // Update existing issue with new failure info
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existingIssue.number,
+                body: `🔄 **Nightly checks failed again** (${new Date().toISOString()})\n${failureDetails}`
+              });
+              console.log(`Updated existing issue #${existingIssue.number}`);
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: '🚨 Nightly Deep Checks Failed',
+                body: `One or more nightly deep checks failed:\n${failureDetails}`,
+                labels: ['nightly-failure', 'automated', 'quality']
+              });
+            }

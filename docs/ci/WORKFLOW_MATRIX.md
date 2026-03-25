@@ -2,214 +2,169 @@
 
 **Purpose**: Canonical reference for all GitHub Actions workflows
 **Owner**: Transformation Portal Architect
-**Last Updated**: 2026-03-05
+**Last Updated**: 2026-03-25
+
+---
+
+## Workflow Design Principles
+
+1. **`build.yml` is the blocking CI gate** - All PR merge requirements go through this workflow
+2. **Scheduled workflows own their domain** - `nightly.yml`, `ml-slow-suite.yml`, `performance-monitor.yml` are non-blocking validation
+3. **Actions are SHA-pinned** - All third-party actions reference commit SHAs for supply-chain security
+4. **Issue creation is deduplicated** - Automated workflows check for existing open issues before creating new ones
 
 ---
 
 ## Active Workflows
 
-| Workflow | File | Trigger | Blocking | Purpose | Key Checks |
-|----------|------|---------|----------|---------|------------|
-| **CI (Lint, Tests & Manifest)** | `build.yml` | PR, push to main | ✅ Yes | Primary quality gate | Lint (flake8, pylint), Tests (3.10, 3.12), Manifest validation |
-| **Quality Gate** | `quality-gate.yml` | PR, push to main | ⚠️ Partial | Formatting enforcement | Autopep8, flake8 critical, pylint (non-blocking), markdown count |
-| **Security Unified** | `security-unified.yml` | PR, push to main | ✅ Yes | Security scanning | Bandit, Safety, Trivy |
-| **CodeQL** | `codeql.yml` | PR, push to main, schedule | ✅ Yes | Code security analysis | Static analysis for vulnerabilities |
-| **Dependency Submission** | `dependency-submission.yml` | Push to main | ❌ No | Dependency graph | Submit dependencies to GitHub |
-| **Performance Monitor** | `performance-monitor.yml` | Schedule (nightly) | ❌ No | Performance regression | Benchmark tracking |
-| **Nightly** | `nightly.yml` | Schedule | ❌ No | Extended test suite | ML tests, integration tests |
-| **ML Slow Suite** | `ml-slow-suite.yml` | Schedule, manual dispatch | ❌ No | Slow-lane ML verification | `pytest -m "ml and slow"`, duration report, artifacts |
-| **Python App** | `python-app.yml` | PR, push to main | ⚠️ Unknown | Legacy/duplicate? | Needs audit |
-| **Enforcement** | `enforcement.yml` | PR, push to main | ⚠️ Unknown | Policy enforcement | Needs audit |
-| **Summary** | `summary.yml` | Workflow completion | ❌ No | Reporting | Aggregate workflow results |
+| Workflow | File | Trigger | Blocking | Purpose |
+|----------|------|---------|----------|---------|
+| **CI (Lint, Tests & Manifest)** | `build.yml` | PR, push to main, manual | ✅ Yes | Primary quality gate with preflight classifier |
+| **Quality Gate** | `quality-gate.yml` | PR, push to main | ⚠️ Advisory | Formatting and structure checks |
+| **Security Unified** | `security-unified.yml` | Schedule, PR, push to main, manual | ✅ Yes | Dependency scanning (pip-audit), security gates |
+| **CodeQL** | `codeql.yml` | PR, push to main, schedule | ✅ Yes | GitHub semantic code analysis |
+| **Enforcement** | `enforcement.yml` | PR, push to main/develop, schedule | ⚠️ Partial | Policy enforcement (action pins, banned deps, HF revisions, artifact boundary) |
+| **Dependency Submission** | `dependency-submission.yml` | Push to main/develop, PR, manual | ❌ No | Submit dependencies to GitHub dependency graph |
+| **Performance Monitor** | `performance-monitor.yml` | Schedule (3:30 AM UTC), manual | ❌ No | Performance regression tracking (schedule-only) |
+| **Nightly** | `nightly.yml` | Schedule (2 AM UTC), manual | ❌ No | Extended validation: stress tests, benchmarks, memory, integration |
+| **ML Slow Suite** | `ml-slow-suite.yml` | Schedule (3:30 AM UTC), manual | ❌ No | Slow ML test coverage |
+| **AI Code Review** | `ai-code-review.yml` | PR | ❌ No | AI-powered code review comments (advisory) |
+| **Issue Summarizer** | `summary.yml` | Issues, PRs, comments | ❌ No | AI-powered issue/PR summarization |
+| **Smart Issue Management** | `smart-issue-management.yml` | Issues, PRs (opened/labeled) | ❌ No | AI-powered issue triage and labeling |
 
 ---
 
 ## Workflow Responsibilities
 
 ### Primary Quality Gate: `build.yml`
+
 **Purpose**: Enforce code quality, type safety, and test coverage
 **Runs on**: Every PR and push to main
 **Blocking**: Yes (required for merge)
 
+**Key Features**:
+- **Preflight classifier**: Determines if full or lightweight suite runs based on changed files
+- **SHA-pinned actions**: All third-party actions pinned to commit SHAs
+- **Concurrency control**: Cancels outdated runs on new pushes
+
 **Jobs**:
-1. **Lint** (Python 3.12):
-   - flake8 (critical errors only: E9, F63, F7, F82)
-   - pylint (on changed files, falls back to filtered full repo)
-   - Caches pip dependencies for speed
+1. **Preflight**: Classify changes to determine suite scope
+2. **Lightweight checks**: pip-tools cache, docs structure, sanity checks
+3. **Lint** (Python 3.12): flake8, pylint, black, isort
+4. **Test - Core** (Python 3.10, 3.12): `pytest -m "not ml and not slow and not benchmark"`
+5. **Test - ML** (Python 3.11): `pytest -m "ml and not slow and not benchmark"`
+6. **Manifest Validation**: MANIFEST.in correctness
+7. **Coverage Gate**: Minimum coverage enforcement
 
-2. **Test - Core** (Python 3.10, 3.12):
-   - pytest with markers: `not ml and not slow`
-   - Runs on minimal dependencies (`requirements-ci.txt`)
-   - Produces coverage reports
+### Enforcement: `enforcement.yml`
 
-3. **Test - ML** (Python 3.11):
-   - pytest with markers: `ml and not slow`
-   - Requires ML dependencies
-   - Offline mode: `TRANSFORMERS_OFFLINE=1`
+**Purpose**: Policy enforcement and governance checks
+**Runs on**: PR, push to main/develop, nightly schedule
+**Blocking**: Partial (some jobs are required)
 
-4. **Manifest Validation**:
-   - Verifies MANIFEST.in correctness
-   - Ensures package completeness
+**Key Features**:
+- **Reliable change detection**: Uses `dorny/paths-filter` for accurate PR file detection
+- **ML-aware**: Only runs ML tier when ML-related files change
 
-5. **Coverage Gate**:
-   - Downloads coverage from test jobs
-   - Combines reports
-   - Enforces minimum coverage threshold
+**Jobs**:
+1. **Changes**: Classify file changes for conditional job execution
+2. **Action Pins**: Verify all workflow actions are SHA-pinned
+3. **Banned Dependencies**: Check for prohibited packages
+4. **HF Revision Policy**: Validate HuggingFace model revisions
+5. **Layer 1 Tests**: Fast unit/regression tests
+6. **Layer 2 ML Tests**: ML-specific tests (conditional)
+7. **Golden Regression**: Golden path contract tests (conditional)
+8. **Artifact Boundary**: Ensure no large artifacts in git
 
-**Concurrency**: Cancels outdated runs on new pushes to same branch/PR
+### Performance Monitor: `performance-monitor.yml`
+
+**Purpose**: Performance regression detection
+**Runs on**: Schedule (3:30 AM UTC daily), manual dispatch
+**Blocking**: No
+
+**Key Features**:
+- **Schedule-only**: Does NOT run on PRs (baseline persistence requires cross-run storage)
+- **Proper baseline handling**: Reads from `tools/benchmarks/baseline.json` if present
+- **No blanket success masking**: Distinguishes no tests, passed, regression, and failure states
+- **Deduplicated issues**: Checks for existing open issues before creating new ones
+
+### Nightly Deep Checks: `nightly.yml`
+
+**Purpose**: Extended validation suite
+**Runs on**: Schedule (2 AM UTC daily), manual dispatch
+**Blocking**: No
+
+**Key Features**:
+- **Concurrency control**: Prevents overlapping scheduled runs
+- **Proper benchmark baseline**: Uses repo-stored baseline if available
+- **Deduplicated issues**: Updates existing issues instead of creating duplicates
+
+**Jobs**:
+1. **Stress Tests**: Long-running endurance tests
+2. **Performance Benchmarks**: Regression testing with proper baseline handling
+3. **Memory Leak Detection**: Memory growth profiling
+4. **Deep Dependency Audit**: pip-audit + SBOM generation
+5. **Full Integration Tests**: Complete integration suite
+6. **Nightly Summary**: Aggregated results and failure notification
+
+### ML Slow Suite: `ml-slow-suite.yml`
+
+**Purpose**: Slow ML test coverage
+**Runs on**: Schedule (3:30 AM UTC daily), manual dispatch
+**Blocking**: No
+
+**Key Features**:
+- **Concurrency control**: Prevents overlapping scheduled runs
+- **Model caching**: Caches HuggingFace models
+- **Deduplicated issues**: Updates existing issues instead of creating duplicates
 
 ---
 
-### Formatting Enforcement: `quality-gate.yml`
-**Purpose**: Auto-fix and enforce formatting standards
-**Runs on**: Every PR and push to main
-**Blocking**: Partial (some checks non-blocking)
+## Governance Notes
 
-**Jobs**:
-1. **Pre-commit Checks**:
-   - Auto-fix trailing whitespace with autopep8 (max line length 127)
-   - flake8 critical errors only
-   - pylint (non-blocking, `continue-on-error: true`)
-   - Markdown file count limit (max 10 in root)
+### Action Pinning
 
-**Current Status**: ⚠️ Does NOT enforce black or isort (creates drift risk)
-
-**Recommendation**: Gate 0 should add:
+All workflows must pin third-party actions to commit SHAs:
 ```yaml
-- name: Check black formatting
-  run: black --check src/ tests/
+# ✅ Good - SHA pinned
+- uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
 
-- name: Check isort
-  run: isort --check-only src/ tests/
+# ❌ Bad - floating tag
+- uses: actions/checkout@v6
 ```
 
----
+Enforcement: `enforcement.yml` → `action-pins` job
 
-### Security Scanning: `security-unified.yml`
-**Purpose**: Detect vulnerabilities in code and dependencies
-**Runs on**: Every PR and push to main
-**Blocking**: Yes
+### Issue Deduplication
 
-**Jobs**:
-1. **Bandit**: Python security linter
-2. **Safety**: Dependency vulnerability scanner
-3. **Trivy**: Container and filesystem vulnerability scanner
+Automated failure notifications must check for existing open issues:
+```javascript
+const { data: issues } = await github.rest.issues.listForRepo({
+  owner: context.repo.owner,
+  repo: context.repo.repo,
+  state: 'open',
+  labels: 'relevant,labels',
+  per_page: 10
+});
 
----
+const existingIssue = issues.find(i => i.title.includes('Expected Title'));
+if (existingIssue) {
+  // Update existing issue
+} else {
+  // Create new issue
+}
+```
 
-### Code Analysis: `codeql.yml`
-**Purpose**: GitHub's semantic code analysis
-**Runs on**: PR, push to main, weekly schedule
-**Blocking**: Yes
+### PR Change Detection
 
-**Languages**: Python
-
----
-
-## Identified Duplication and Consolidation Opportunities
-
-### Duplication 1: Lint Checks
-- **build.yml** runs: flake8 (critical), pylint (on changed files)
-- **quality-gate.yml** runs: flake8 (critical), pylint (non-blocking)
-
-**Recommendation**: Consolidate lint to `build.yml` only. Make `quality-gate.yml` focus on formatting (black, isort).
-
----
-
-### Duplication 2: Multiple Workflows on Same Trigger
-- `build.yml`, `quality-gate.yml`, `security-unified.yml`, `python-app.yml`, `enforcement.yml` all trigger on `pull_request` and `push` to main
-
-**Audit Required**: Determine if `python-app.yml` and `enforcement.yml` are:
-- Legacy workflows (safe to remove)
-- Specialized workflows (document distinct purpose)
-- Duplicate workflows (consolidate into `build.yml`)
-
----
-
-### Optimization 1: Change-Aware Execution
-**Current**: All tests run on every change (regardless of affected code)
-
-**Proposal**: Use `dorny/paths-filter` to conditionally run:
-- ML tests only when `src/transformation_portal/lux_depth_v3/**` changes
-- Doc checks only when `docs/**` or `**.md` changes
-- Full suite when core modules or CI config changes
-
-**Example**:
+For conditional job execution on PRs, use `dorny/paths-filter` instead of unreliable `github.event.head_commit.modified`:
 ```yaml
-- name: Detect changes
-  id: changes
-  uses: dorny/paths-filter@v2
+- uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36  # v3.0.2
   with:
     filters: |
       ml:
-        - 'src/transformation_portal/lux_depth_v3/**'
-      docs:
-        - 'docs/**'
-        - '**.md'
-      core:
-        - 'src/**'
-        - 'tests/**'
-        - '.github/workflows/**'
-
-- name: Run ML tests
-  if: steps.changes.outputs.ml == 'true' || steps.changes.outputs.core == 'true'
-  run: pytest -m ml
+        - 'src/transformation_portal/ml/**'
 ```
-
-**Impact**: Reduces CI minutes without compromising safety
-
----
-
-## Workflow Naming and Branch Protection
-
-### Required Status Checks (Branch Protection)
-Current required checks for main branch (needs verification via GitHub settings):
-- `CI (Lint, Tests & Manifest) / lint`
-- `CI (Lint, Tests & Manifest) / test-core (3.10)`
-- `CI (Lint, Tests & Manifest) / test-core (3.12)`
-- `CI (Lint, Tests & Manifest) / test-ml (3.11)`
-- `Security Unified / security-scan`
-- `CodeQL`
-
-**Critical Rule**: Never rename a required check without:
-1. Updating branch protection settings first
-2. Announcing change in PR description
-3. Verifying merge queue still works
-
----
-
-## CI Runtime Metrics (Baseline)
-
-**Measured on**: 2026-02-04 (commit 1fe9e3c8)
-
-| Workflow | Avg Runtime | Success Rate | Notes |
-|----------|-------------|--------------|-------|
-| build.yml | ~8-12 min | 95%+ | Stable |
-| quality-gate.yml | ~2-3 min | 90%+ | Occasional markdown count failures |
-| security-unified.yml | ~5-7 min | 95%+ | Stable |
-| codeql.yml | ~10-15 min | 95%+ | Stable |
-
-**Target**: Maintain or improve runtimes with consolidation changes
-
----
-
-## CI Health Monitoring
-
-### Green CI Criteria
-A "green CI" state requires:
-- All required checks passing on latest main commit
-- No flaky tests (failures that pass on retry)
-- No formatting drift (black/isort compliance)
-
-### Red Flags
-- Consistent failures in same job across multiple PRs
-- Increasing runtime trend (>20% increase over 30 days)
-- Coverage decreasing trend
-
-### Monthly Audit
-- Review CI runtime trends
-- Identify flaky tests
-- Update this matrix with any workflow changes
 
 ---
 
@@ -217,15 +172,8 @@ A "green CI" state requires:
 
 | Date | Change | Rationale |
 |------|--------|-----------|
-| 2026-02-04 | Initial creation | Baseline documentation for Gate 0 |
-
----
-
-## References
-
-- `docs/architecture/TRANCHE_EXECUTION_PLAN.md`: Gate 0 and tranche execution
-- `docs/architecture/agent_governance.md`: Governance policy
-- `.github/workflows/`: Workflow implementations
+| 2026-03-25 | Major update: Fixed enforcement.yml PR detection, performance-monitor.yml baseline handling, nightly.yml deduplication, pinned all actions | Address workflow correctness bugs and governance hygiene |
+| 2026-02-04 | Initial creation | Baseline documentation |
 
 ---
 
