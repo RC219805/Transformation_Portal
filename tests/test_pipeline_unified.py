@@ -48,11 +48,11 @@ RENDERING_4K_MODULE = "transformation_portal.pipelines.rendering_4k_pipeline"
 
 def _create_stub_module(name: str, classes: Dict[str, type]) -> types.ModuleType:
     """Create a stub module with the given classes.
-    
+
     Args:
         name: Full module name (e.g., 'transformation_portal.pipelines.quality_feedback_bridge')
         classes: Dictionary mapping class names to class types
-        
+
     Returns:
         ModuleType with the specified classes attached
     """
@@ -445,9 +445,7 @@ class TestUnifiedPipelineInit:
 class TestProcessSingle:
     """Tests for single image processing."""
 
-    def test_process_single_success(
-        self, pipeline_module, minimal_recipe, sample_input_image, tmp_path: Path
-    ):
+    def test_process_single_success(self, pipeline_module, minimal_recipe, sample_input_image, tmp_path: Path):
         """Test successful single image processing."""
         pipeline = pipeline_module.UnifiedPipeline(minimal_recipe)
         result = pipeline.process_single(sample_input_image)
@@ -467,9 +465,7 @@ class TestProcessSingle:
         assert result.error_message is not None
         assert "not found" in result.error_message.lower()
 
-    def test_process_single_converts_mode(
-        self, pipeline_module, minimal_recipe, tmp_path: Path
-    ):
+    def test_process_single_converts_mode(self, pipeline_module, minimal_recipe, tmp_path: Path):
         """Test that non-RGB images are converted."""
         # Create RGBA image
         rgba_image = Image.new("RGBA", (32, 24), color=(100, 120, 140, 255))
@@ -484,9 +480,7 @@ class TestProcessSingle:
         with Image.open(result.output_path) as output:
             assert output.mode == "RGB"
 
-    def test_process_single_timing(
-        self, pipeline_module, minimal_recipe, sample_input_image
-    ):
+    def test_process_single_timing(self, pipeline_module, minimal_recipe, sample_input_image):
         """Test that timing information is recorded."""
         pipeline = pipeline_module.UnifiedPipeline(minimal_recipe)
         result = pipeline.process_single(sample_input_image)
@@ -495,9 +489,7 @@ class TestProcessSingle:
         assert "color_grading" in result.stage_times
         assert result.stage_times["color_grading"] >= 0
 
-    def test_process_single_path_as_string(
-        self, pipeline_module, minimal_recipe, sample_input_image
-    ):
+    def test_process_single_path_as_string(self, pipeline_module, minimal_recipe, sample_input_image):
         """Test processing with string path."""
         pipeline = pipeline_module.UnifiedPipeline(minimal_recipe)
         result = pipeline.process_single(str(sample_input_image))
@@ -513,9 +505,7 @@ class TestProcessSingle:
 class TestStageExecution:
     """Tests for individual stage execution."""
 
-    def test_color_grading_defaults(
-        self, pipeline_module, minimal_recipe, sample_input_image
-    ):
+    def test_color_grading_defaults(self, pipeline_module, minimal_recipe, sample_input_image):
         """Test color grading with default parameters."""
         pipeline = pipeline_module.UnifiedPipeline(minimal_recipe)
         result = pipeline.process_single(sample_input_image)
@@ -523,9 +513,7 @@ class TestStageExecution:
         assert result.success is True
         assert "color_grading" in result.stages_executed
 
-    def test_color_grading_adjustments(
-        self, pipeline_module, sample_input_image, tmp_path: Path
-    ):
+    def test_color_grading_adjustments(self, pipeline_module, sample_input_image, tmp_path: Path):
         """Test color grading applies adjustments."""
         recipe = {
             "name": "Color Test",
@@ -554,9 +542,7 @@ class TestStageExecution:
                 # Exposure increase should make it brighter
                 assert np.mean(proc_arr) > np.mean(orig_arr)
 
-    def test_photo_finishing_aces(
-        self, pipeline_module, sample_input_image, tmp_path: Path
-    ):
+    def test_photo_finishing_aces(self, pipeline_module, sample_input_image, tmp_path: Path):
         """Test photo finishing with ACES tone mapping."""
         recipe = {
             "name": "Photo Test",
@@ -578,9 +564,7 @@ class TestStageExecution:
         assert result.success is True
         assert "photo_finishing" in result.stages_executed
 
-    def test_photo_finishing_bloom(
-        self, pipeline_module, tmp_path: Path
-    ):
+    def test_photo_finishing_bloom(self, pipeline_module, tmp_path: Path):
         """Test photo finishing bloom effect."""
         # Create bright image to trigger bloom
         bright_img = Image.new("RGB", (32, 24), color=(240, 240, 240))
@@ -606,9 +590,7 @@ class TestStageExecution:
 
         assert result.success is True
 
-    def test_photo_finishing_vignette(
-        self, pipeline_module, sample_input_image
-    ):
+    def test_photo_finishing_vignette(self, pipeline_module, sample_input_image):
         """Test photo finishing vignette effect."""
         recipe = {
             "name": "Vignette Test",
@@ -640,9 +622,7 @@ class TestStageExecution:
                 f"should be greater than corner brightness ({np.mean(corner):.2f})"
             )
 
-    def test_photo_finishing_grain(
-        self, pipeline_module, sample_input_image
-    ):
+    def test_photo_finishing_grain(self, pipeline_module, sample_input_image):
         """Test photo finishing grain effect."""
         recipe = {
             "name": "Grain Test",
@@ -663,9 +643,7 @@ class TestStageExecution:
 
         assert result.success is True
 
-    def test_upscaling_fallback(
-        self, pipeline_module, sample_input_image
-    ):
+    def test_upscaling_fallback(self, pipeline_module, sample_input_image):
         """Test 4K upscaling fallback to Lanczos."""
         recipe = {
             "name": "Upscale Test",
@@ -688,9 +666,7 @@ class TestStageExecution:
         with Image.open(result.output_path) as processed:
             assert processed.width >= 64  # Should be upscaled
 
-    def test_unknown_stage_skipped(
-        self, pipeline_module, sample_input_image, caplog
-    ):
+    def test_unknown_stage_skipped(self, pipeline_module, sample_input_image, caplog):
         """Test unknown stage is skipped with warning logged."""
         # Create a minimal recipe with a known stage
         recipe = {
@@ -720,9 +696,7 @@ class TestStageExecution:
         # Verify the warning was logged for the unknown stage
         assert any("Unknown stage" in record.message for record in caplog.records)
 
-    def test_branding_disabled(
-        self, pipeline_module, sample_input_image
-    ):
+    def test_branding_disabled(self, pipeline_module, sample_input_image):
         """Test branding stage is skipped when disabled."""
         recipe = {
             "name": "Branding Test",
@@ -737,9 +711,7 @@ class TestStageExecution:
 
         assert result.success is True
 
-    def test_branding_text_overlay(
-        self, pipeline_module, sample_input_image
-    ):
+    def test_branding_text_overlay(self, pipeline_module, sample_input_image):
         """Test branding with text overlay."""
         recipe = {
             "name": "Branding Test",
@@ -766,9 +738,7 @@ class TestStageExecution:
 class TestBatchProcessing:
     """Tests for batch image processing."""
 
-    def test_batch_processing_success(
-        self, pipeline_module, minimal_recipe, sample_input_directory, tmp_path: Path
-    ):
+    def test_batch_processing_success(self, pipeline_module, minimal_recipe, sample_input_directory, tmp_path: Path):
         """Test successful batch processing."""
         output_dir = tmp_path / "outputs"
 
@@ -784,9 +754,7 @@ class TestBatchProcessing:
         assert batch_result.total_time > 0
         assert output_dir.exists()
 
-    def test_batch_processing_dry_run(
-        self, pipeline_module, minimal_recipe, sample_input_directory, tmp_path: Path
-    ):
+    def test_batch_processing_dry_run(self, pipeline_module, minimal_recipe, sample_input_directory, tmp_path: Path):
         """Test batch processing dry run mode."""
         output_dir = tmp_path / "outputs"
 
@@ -803,9 +771,7 @@ class TestBatchProcessing:
         # Output directory should NOT be created in dry run
         assert not output_dir.exists()
 
-    def test_batch_empty_glob(
-        self, pipeline_module, minimal_recipe, tmp_path: Path
-    ):
+    def test_batch_empty_glob(self, pipeline_module, minimal_recipe, tmp_path: Path):
         """Test batch processing with no matching files."""
         output_dir = tmp_path / "outputs"
 
@@ -818,9 +784,7 @@ class TestBatchProcessing:
         assert len(batch_result.results) == 0
         assert batch_result.successful_count == 0
 
-    def test_batch_creates_output_directory(
-        self, pipeline_module, minimal_recipe, sample_input_directory, tmp_path: Path
-    ):
+    def test_batch_creates_output_directory(self, pipeline_module, minimal_recipe, sample_input_directory, tmp_path: Path):
         """Test batch processing creates output directory."""
         output_dir = tmp_path / "nested" / "outputs"
         assert not output_dir.exists()
@@ -833,9 +797,7 @@ class TestBatchProcessing:
 
         assert output_dir.exists()
 
-    def test_batch_partial_failure(
-        self, pipeline_module, minimal_recipe, tmp_path: Path
-    ):
+    def test_batch_partial_failure(self, pipeline_module, minimal_recipe, tmp_path: Path):
         """Test batch processing handles partial failures."""
         input_dir = tmp_path / "inputs"
         input_dir.mkdir()
@@ -866,9 +828,7 @@ class TestBatchProcessing:
 class TestOutputGeneration:
     """Tests for output file generation."""
 
-    def test_output_format_png(
-        self, pipeline_module, sample_input_image
-    ):
+    def test_output_format_png(self, pipeline_module, sample_input_image):
         """Test PNG output format."""
         recipe = {
             "name": "PNG Test",
@@ -884,9 +844,7 @@ class TestOutputGeneration:
         assert result.success is True
         assert result.output_path.suffix == ".png"
 
-    def test_output_format_jpeg(
-        self, pipeline_module, sample_input_image
-    ):
+    def test_output_format_jpeg(self, pipeline_module, sample_input_image):
         """Test JPEG output format."""
         recipe = {
             "name": "JPEG Test",
@@ -902,9 +860,7 @@ class TestOutputGeneration:
         assert result.success is True
         assert result.output_path.suffix == ".jpg"
 
-    def test_output_format_tiff(
-        self, pipeline_module, sample_input_image
-    ):
+    def test_output_format_tiff(self, pipeline_module, sample_input_image):
         """Test TIFF output format."""
         recipe = {
             "name": "TIFF Test",
@@ -920,9 +876,7 @@ class TestOutputGeneration:
         assert result.success is True
         assert result.output_path.suffix == ".tif"
 
-    def test_output_filename_includes_recipe(
-        self, pipeline_module, sample_input_image
-    ):
+    def test_output_filename_includes_recipe(self, pipeline_module, sample_input_image):
         """Test output filename includes recipe name."""
         recipe = {
             "name": "Custom Recipe Name",
@@ -937,9 +891,7 @@ class TestOutputGeneration:
 
         assert "custom_recipe_name" in result.output_path.name.lower()
 
-    def test_output_directory_created(
-        self, pipeline_module, minimal_recipe, sample_input_image, tmp_path: Path
-    ):
+    def test_output_directory_created(self, pipeline_module, minimal_recipe, sample_input_image, tmp_path: Path):
         """Test output directory is created if not exists."""
         # Set custom output directory via recipe
         minimal_recipe["_output_dir"] = str(tmp_path / "custom_output")
@@ -959,9 +911,7 @@ class TestOutputGeneration:
 class TestErrorHandling:
     """Tests for error handling."""
 
-    def test_corrupted_image_handling(
-        self, pipeline_module, minimal_recipe, tmp_path: Path
-    ):
+    def test_corrupted_image_handling(self, pipeline_module, minimal_recipe, tmp_path: Path):
         """Test handling of corrupted image file."""
         corrupt_path = tmp_path / "corrupt.png"
         corrupt_path.write_text("not a valid image")
@@ -972,9 +922,7 @@ class TestErrorHandling:
         assert result.success is False
         assert result.error_message is not None
 
-    def test_required_stage_failure(
-        self, pipeline_module, sample_input_image
-    ):
+    def test_required_stage_failure(self, pipeline_module, sample_input_image):
         """Test that required stage failure stops pipeline and sets error message."""
         recipe = {
             "name": "Required Stage Test",
@@ -1007,9 +955,7 @@ class TestErrorHandling:
         assert result.error_message is not None
         assert "Simulated required stage failure" in result.error_message
 
-    def test_optional_stage_failure_continues(
-        self, pipeline_module, sample_input_image, caplog
-    ):
+    def test_optional_stage_failure_continues(self, pipeline_module, sample_input_image, caplog):
         """Test that optional stage failure allows pipeline to continue."""
         recipe = {
             "name": "Optional Stage Test",
@@ -1057,7 +1003,7 @@ class TestRecipeLoading:
 
     def test_from_recipe_valid_file(self, pipeline_module, tmp_path: Path):
         """Test from_recipe with valid YAML file.
-        
+
         The config_loader module is a core dependency and should always be
         available. If the import fails, it indicates a real regression.
         """
@@ -1090,9 +1036,7 @@ class TestRecipeLoading:
 class TestQualityAssessment:
     """Tests for quality assessment functionality."""
 
-    def test_basic_quality_metrics(
-        self, pipeline_module, sample_input_image
-    ):
+    def test_basic_quality_metrics(self, pipeline_module, sample_input_image):
         """Test basic quality metrics computation."""
         recipe = {
             "name": "Quality Test",
@@ -1111,9 +1055,7 @@ class TestQualityAssessment:
             assert "overall_score" in result.quality_metrics
             assert 0 <= result.quality_metrics["overall_score"] <= 1
 
-    def test_quality_disabled(
-        self, pipeline_module, sample_input_image
-    ):
+    def test_quality_disabled(self, pipeline_module, sample_input_image):
         """Test pipeline without quality assessment."""
         recipe = {
             "name": "No Quality Test",
@@ -1139,9 +1081,7 @@ class TestQualityAssessment:
 class TestIntegration:
     """Integration tests for full pipeline workflows."""
 
-    def test_full_pipeline_workflow(
-        self, pipeline_module, full_recipe, sample_input_image
-    ):
+    def test_full_pipeline_workflow(self, pipeline_module, full_recipe, sample_input_image):
         """Test complete pipeline with all stages."""
         # Disable stages that require external dependencies
         full_recipe["depth_estimation"]["enabled"] = False
@@ -1154,9 +1094,7 @@ class TestIntegration:
         assert len(result.stages_executed) > 0
         assert result.output_path.exists()
 
-    def test_pipeline_immutability(
-        self, pipeline_module, minimal_recipe, sample_input_image
-    ):
+    def test_pipeline_immutability(self, pipeline_module, minimal_recipe, sample_input_image):
         """Test that processing doesn't modify input image."""
         with Image.open(sample_input_image) as original:
             original_data = np.array(original).copy()
@@ -1169,9 +1107,7 @@ class TestIntegration:
 
         np.testing.assert_array_equal(original_data, after_data)
 
-    def test_multiple_sequential_runs(
-        self, pipeline_module, minimal_recipe, sample_input_image
-    ):
+    def test_multiple_sequential_runs(self, pipeline_module, minimal_recipe, sample_input_image):
         """Test multiple sequential processing runs."""
         pipeline = pipeline_module.UnifiedPipeline(minimal_recipe)
 
