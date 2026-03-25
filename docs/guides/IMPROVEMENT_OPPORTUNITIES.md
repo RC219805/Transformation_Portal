@@ -847,7 +847,7 @@ Effort Distribution:
 
 | Version | Date | Changes |
 |---------|------|---------|
-| 1.1.2 | 2026-03-25 | Consistency fix: Sector table "Remaining" column corrected to match 11 pending items (SEC-003:1, TEST-002/4/5/6:4, PERF-002/4:2, DOC-001/3/4:3, CI-001:1) |
+| 1.1.2 | 2026-03-25 | Consistency fix: Corrected sector table "Remaining" column to sum to 11 (matching stated pending count) |
 | 1.1.1 | 2026-03-25 | Accuracy pass: TEST-003, DOC-002, PERF-001, PERF-003 marked implemented; TEST-002 re-scoped; appendix updated |
 | 1.1.0 | 2026-03 | Added completion tracking; marked SEC-001, SEC-002, TEST-001, CI-002, CI-003 as implemented |
 | 1.0.0 | 2026-02 | Initial analysis with 21 improvement opportunities |
