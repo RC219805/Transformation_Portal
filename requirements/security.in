@@ -1,0 +1,21 @@
+# Security scanning tools for CI/CD pipeline
+# This file contains tools specifically for the security job in CI workflows.
+# Run `make compile` in this directory to generate pinned security.txt
+#
+# NOTE: These tools are ONLY used for scanning/auditing the codebase and
+# its dependencies. They are NOT runtime dependencies of the application.
+#
+# Governance: ADR pending - Security toolchain must be locked and deterministic.
+# See .github/workflows/ci.yml security job for usage.
+
+# Static security analyzer for Python code
+# Detects common security issues (hardcoded passwords, SQL injection, etc.)
+bandit[toml]>=1.9,<2
+
+# Dependency vulnerability scanner
+# Audits requirements files for known CVEs via PyPI advisory database
+pip-audit>=2.10,<3
+
+# Safety is available but currently unused in CI workflow
+# Uncomment and add workflow step to enable safety scanning:
+# safety>=3.7,<4

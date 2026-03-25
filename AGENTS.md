@@ -41,9 +41,9 @@ Quick reference for common workflows and commands in this repo.
 - `make lock-prod` regenerate `requirements.lock.txt`.
 - `make lock-ci` regenerate `requirements-ci.lock.txt`.
 - `make lock-dev` regenerate `requirements-dev.lock.txt`.
-- `cd requirements && make compile LOCK_PYTHON_VERSION=3.11` compile all layered lockfiles (including ML layers).
+- `cd requirements && make compile LOCK_PYTHON_VERSION=3.11` compile all layered lockfiles (including ML layers and security tools).
 - `cd requirements && make compile-ml-layers LOCK_PYTHON_VERSION=3.11` compile only ML layer lockfiles.
-- `cd requirements && make update LOCK_PYTHON_VERSION=3.11` update layered lockfiles (`all/base/ml-*/dev/ci/tools-archive`).
+- `cd requirements && make update LOCK_PYTHON_VERSION=3.11` update layered lockfiles (`all/base/ml-*/dev/ci/security/tools-archive`).
 - `cd requirements && make check LOCK_PYTHON_VERSION=3.11` verify layered lockfiles are current.
 - `python3 scripts/validation/check_requirements_lock_contract.py` validate layered lock contract (headers + CPU-only ML lockfiles + layer structure).
 - `make docs` build API docs with Sphinx.

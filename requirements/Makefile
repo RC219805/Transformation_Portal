@@ -84,11 +84,12 @@ help:
 	@echo "Other targets:"
 	@echo "  dev.txt              Compile dev.txt (constrained by all.txt)"
 	@echo "  ci.txt               Compile ci.txt (constrained by all.txt)"
+	@echo "  security.txt         Compile security.txt (CI security scanning tools)"
 	@echo "  tools-archive.txt    Compile tools-archive.txt (constrained by all.txt)"
 
 # Compile all requirements in correct order
 # Note: SAM2 is scripted-only and NOT compiled here - use bootstrap script
-compile: all.txt base.txt ml-core-darwin.txt ml-core-linux.txt ml-cpu.txt ml-mps.txt ml-cuda.txt ml-raw.txt ml-coreml.txt ml-research.txt ml.txt dev.txt ci.txt tools-archive.txt
+compile: all.txt base.txt ml-core-darwin.txt ml-core-linux.txt ml-cpu.txt ml-mps.txt ml-cuda.txt ml-raw.txt ml-coreml.txt ml-research.txt ml.txt dev.txt ci.txt security.txt tools-archive.txt
 	@echo "✓ All requirements compiled successfully"
 
 compile-all: compile
@@ -175,6 +176,12 @@ ci.txt: ci.in all.txt
 	@echo "Compiling ci.txt..."
 	@$(PIP_COMPILE) -c all.txt ci.in -o ci.txt
 
+# Security scanning tools (standalone layer for CI security job)
+# NOT constrained by all.txt to ensure latest security tool versions
+security.txt: security.in
+	@echo "Compiling security.txt..."
+	@$(PIP_COMPILE) security.in -o security.txt
+
 tools-archive.txt: tools-archive.in all.txt
 	@echo "Compiling tools-archive.txt..."
 	@$(PIP_COMPILE) -c all.txt tools-archive.in -o tools-archive.txt
@@ -197,6 +204,7 @@ update:
 	@$(PIP_COMPILE) --upgrade $(PYTORCH_CPU_INDEX) -c all.txt ml.in -o ml.txt
 	@$(PIP_COMPILE) --upgrade -c all.txt dev.in -o dev.txt
 	@$(PIP_COMPILE) --upgrade -c all.txt ci.in -o ci.txt
+	@$(PIP_COMPILE) --upgrade security.in -o security.txt
 	@$(PIP_COMPILE) --upgrade -c all.txt tools-archive.in -o tools-archive.txt
 	@echo "✓ All requirements updated successfully"
 
@@ -263,5 +271,5 @@ check:
 # Note: ml-sam2.txt removed if present (historical artifact)
 clean:
 	@echo "Removing compiled .txt files..."
-	@rm -f all.txt base.txt ml.txt ml-core.txt ml-core-darwin.txt ml-core-linux.txt ml-cpu.txt ml-mps.txt ml-cuda.txt ml-raw.txt ml-sam2.txt ml-coreml.txt ml-research.txt dev.txt ci.txt tools-archive.txt
+	@rm -f all.txt base.txt ml.txt ml-core.txt ml-core-darwin.txt ml-core-linux.txt ml-cpu.txt ml-mps.txt ml-cuda.txt ml-raw.txt ml-sam2.txt ml-coreml.txt ml-research.txt dev.txt ci.txt security.txt tools-archive.txt
 	@echo "✓ Cleanup complete"

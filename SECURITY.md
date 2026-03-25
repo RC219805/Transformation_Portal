@@ -127,6 +127,15 @@ Given our image/video processing nature, special attention is required for:
   - Pillow: Critical for image parsing vulnerabilities
   - NumPy: Monitor for numerical computation exploits
 
+- **Temporary CVE Exceptions** (Awaiting Upstream Fix):
+  - **CVE-2026-4539 (Pygments <=2.19.2)**: DoS via inefficient regex in AdlLexer
+    - **Status**: No upstream fix available as of March 2026
+    - **Impact**: Low - affects syntax highlighting only (typer → rich → pygments)
+    - **Exposure**: CLI help text rendering, not production image processing
+    - **Mitigation**: CI pip-audit configured with `--ignore-vuln CVE-2026-4539`
+    - **Tracking**: https://github.com/pygments/pygments/issues/3058
+    - **Action Required**: Remove exception when fixed Pygments is released
+
 ### API Security
 
 If exposing Transformation Portal as a service:
