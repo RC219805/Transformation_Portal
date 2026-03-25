@@ -26,7 +26,7 @@ This document provides a **complete, categorized inventory** of all TODOs, NotIm
 - 📊 **NotImplementedError count: 12** - All intentional (ABCs, phase gates, platform limits)
 - 🔍 Verified depth_canonical module already archived (no action needed)
 - 🔍 Verified PR tracking docs already archived (no action needed)
-- 🔍 Updated CRITICAL_BIT_DEPTH_FIX_SUMMARY.md reference to quality_firewall.md
+- 🔍 Updated CRITICAL_BIT_DEPTH_FIX_SUMMARY.md reference to `docs/guides/QUALITY_FIREWALL.md`
 
 ## Version 2.3.0 Changes (2026-03-24)
 

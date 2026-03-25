@@ -61,7 +61,7 @@ else:
 #### 3. **CI: Automated Regression Test**
 
 ```python
-# tests/test_quality_firewall_bit_depth.py
+# tests/unit/lux_depth_v3/test_v2_enhance_quality_firewall.py
 
 def test_16bit_preservation_enforced():
     """Quality Firewall: 16-bit input must produce 16-bit output."""
@@ -437,8 +437,8 @@ WARNING: Saved as 8-bit (16-bit save failed): output.tiff
 - ✅ Quality Firewall active for 16-bit inputs
 - ✅ Bit-depth metadata in all reports
 - ✅ CLI flag `--allow-8bit` for explicit bypass
-- ✅ Automated verification in progress
-- ⏳ CI regression test pending
+- ✅ Automated verification implemented
+- ✅ CI regression test active
 
 ---
 

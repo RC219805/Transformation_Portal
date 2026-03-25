@@ -23,7 +23,7 @@ The Quality Firewall is a multi-layer enforcement system that prevents regressio
 | Job | Purpose | Blocking | Notes |
 |-----|---------|----------|-------|
 | `lint` | flake8 + black + isort | ✅ Required | |
-| `typecheck` | mypy on critical modules | ⚠️ Advisory | Non-blocking |
+| `typecheck` | mypy on critical modules | ✅ Required | Hard-fail when full suite runs; skipped for docs-only/non-runtime PRs |
 | `security` | bandit + pip-audit + gitleaks | ✅ Required | |
 | `test-core` | Python 3.11 & 3.12 | ✅ Required | |
 | `test-ml` | ML-specific tests (3.11) | ✅ Required | |
@@ -87,12 +87,12 @@ twine check dist/*
 
 | Document | Purpose |
 |----------|---------|
-| [QUALITY_FIREWALL_QUICK_REF.md](./implementation_notes/QUALITY_FIREWALL_QUICK_REF.md) | Detailed implementation reference |
-| [QUALITY_FIREWALL_IMPLEMENTATION.md](./guides/QUALITY_FIREWALL_IMPLEMENTATION.md) | Bug fixes and feature additions |
-| [QUALITY_FIREWALL_VALIDATED.md](./guides/QUALITY_FIREWALL_VALIDATED.md) | Validation status and evidence |
-| [QUALITY_FIREWALL_BIT_DEPTH_CONTRACT.md](./contracts/QUALITY_FIREWALL_BIT_DEPTH_CONTRACT.md) | Bit-depth preservation contract |
-| [ci.yml](../.github/workflows/ci.yml) | CI workflow definition |
-| [nightly.yml](../.github/workflows/nightly.yml) | Nightly deep checks |
+| [QUALITY_FIREWALL_QUICK_REF.md](../implementation_notes/QUALITY_FIREWALL_QUICK_REF.md) | Detailed implementation reference |
+| [QUALITY_FIREWALL_IMPLEMENTATION.md](./QUALITY_FIREWALL_IMPLEMENTATION.md) | Bug fixes and feature additions |
+| [QUALITY_FIREWALL_VALIDATED.md](./QUALITY_FIREWALL_VALIDATED.md) | Validation status and evidence |
+| [QUALITY_FIREWALL_BIT_DEPTH_CONTRACT.md](../contracts/QUALITY_FIREWALL_BIT_DEPTH_CONTRACT.md) | Bit-depth preservation contract |
+| [ci.yml](../../.github/workflows/ci.yml) | CI workflow definition |
+| [nightly.yml](../../.github/workflows/nightly.yml) | Nightly deep checks |
 
 ---
 
