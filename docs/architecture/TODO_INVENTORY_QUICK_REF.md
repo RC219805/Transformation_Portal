@@ -190,9 +190,9 @@ A: 0 P0 blockers. 1 P1 item (branch protection - GitHub Admin task).
 A: Of the 12 NotImplementedError instances, only 3 are technical debt requiring future work (NVDIFFREC, MaterialGAN, PBRFusion). The rest are intentional stubs (abstract methods, phase gates, platform limitations).
 
 **Q: When should we update the inventory?**
-A: Monthly or per-release. This review: 2026-03-25 (v2.4.0 planning).
+A: Monthly or per-release. This review: 2026-03-25 (v2.5.0 planning).
 
-**Q: Can we release v2.3.0 with pending items?**
+**Q: Can we release v2.4.0 with pending items?**
 A: Yes. All P1 items except branch protection are complete.
 
 **Q: What's the biggest risk?**
