@@ -20,7 +20,7 @@ This document provides a **complete, categorized inventory** of all TODOs, NotIm
 ## Version 2.4.0 Changes (2026-03-25)
 
 **Major Updates:**
-- ✅ **Quality Firewall documentation created** (`docs/quality_firewall.md`) - landing page now exists
+- ✅ **Quality Firewall documentation created** (`docs/guides/QUALITY_FIREWALL.md`) - landing page now exists
 - 📊 **Source code TODO count: 0** - All `# TODO:` comments in `src/` have been cleaned up
 - 📊 **Test TODO count: 3** - 2 observational (performance), 1 test fixture content
 - 📊 **NotImplementedError count: 12** - All intentional (ABCs, phase gates, platform limits)
