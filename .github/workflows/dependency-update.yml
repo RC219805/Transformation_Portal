@@ -83,6 +83,14 @@ jobs:
           # CVE-2026-4539 (pygments): No fix available yet - temporary exception
           pip-audit --ignore-vuln CVE-2026-4539 -r requirements/all.txt --format json --output audit-report.json || true
 
+      - name: Upload pip-audit report
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f  # v7
+        with:
+          name: pip-audit-report
+          path: audit-report.json
+          if-no-files-found: warn
+          retention-days: 30
+
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v8
         with:
@@ -99,7 +107,6 @@ jobs:
             - `requirements/ml.txt` - ML umbrella (all ML capabilities)
             - `requirements/ml-core.txt` - ML core layer (cross-platform baseline)
             - `requirements/ml-raw.txt` - ML RAW ingest layer
-            - `requirements/ml-sam2.txt` - ML SAM2 segmentation layer
             - `requirements/ml-coreml.txt` - ML CoreML layer (macOS)
             - `requirements/ml-research.txt` - ML research/experimental layer
             - `requirements/dev.txt` - Development tools
@@ -110,19 +117,19 @@ jobs:
             ML dependencies are now organized into capability layers:
             - **ml-core**: Cross-platform ML baseline (torch, diffusers, transformers)
             - **ml-raw**: RAW camera file ingest (rawpy)
-            - **ml-sam2**: SAM2 segmentation backend
+            - **ml-sam2**: SAM2 segmentation backend (scripted install only - not compiled)
             - **ml-coreml**: Apple CoreML acceleration (macOS only)
             - **ml-research**: Reserved for experimental features
 
             ### 🔍 Security Report
-            See attached audit-report.json for pip-audit vulnerability scan results.
+            View the `pip-audit-report` artifact in the workflow run for vulnerability scan results.
 
             ### ⚠️ Review Required
             - [ ] Check for breaking changes
             - [ ] Review security report
             - [ ] Validate tests pass
             - [ ] Verify compatibility
-            - [ ] Confirm ML layer contracts (CPU-only PyTorch in ml-core.txt, ml-sam2.txt, ml.txt)
+            - [ ] Confirm ML layer contracts (CPU-only PyTorch in ml-core.txt, ml.txt)
 
             **Generated automatically by GitHub Actions**
           branch: automated/dependency-updates

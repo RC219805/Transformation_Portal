@@ -230,13 +230,14 @@ make quality-check
 # Run full test suite
 make test-full
 
-# Optional: Install and run security tools (not included by default)
-# pip install bandit
-# bandit -r src/ -ll
+# Install governed security tools from requirements/security.txt
+pip install -r requirements/security.txt
 
-# Note: Additional security testing tools like bandit, pip-audit, safety,
-# semgrep, etc. are recommended but not included in project dependencies.
-# Install them separately if needed for security auditing.
+# Run static security analysis
+bandit -r src/ -ll
+
+# Run dependency vulnerability scan
+pip-audit
 ```
 
 ## Incident Response
@@ -299,17 +300,19 @@ This project aims to maintain compliance with:
 
 ## Security Tools
 
-Recommended external tools for security testing (require separate installation):
+Security scanning tools are governed in CI via `requirements/security.txt`:
 
 ```bash
-# Dependency scanning (governed in CI via requirements/security.txt)
-pip install pip-audit
+# Install governed security tools (bandit, pip-audit)
+pip install -r requirements/security.txt
+
+# Run dependency vulnerability scan
 pip-audit
 
-# Static analysis (governed in CI via requirements/security.txt)
-pip install bandit
+# Run static security analysis
 bandit -r src/
 
+# Additional optional tools (not governed)
 pip install semgrep
 semgrep --config=auto
 
