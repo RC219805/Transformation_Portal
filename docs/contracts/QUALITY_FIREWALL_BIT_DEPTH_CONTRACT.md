@@ -425,7 +425,7 @@ WARNING: Saved as 8-bit (16-bit save failed): output.tiff
 
 - **ADR-007:** `docs/architecture/decisions/ADR-007-bit-depth-preservation.md`
 - **Implementation:** `src/transformation_portal/lux_depth_v3/v2_enhance.py`
-- **Test Suite:** `tests/test_quality_firewall_bit_depth.py` (TODO: create)
+- **Test Suite:** `tests/unit/lux_depth_v3/test_v2_enhance_quality_firewall.py`
 - **TIFF Specification:** Tag 258 (BitsPerSample)
 
 ---
