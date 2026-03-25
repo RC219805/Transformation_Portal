@@ -84,11 +84,12 @@ help:
 	@echo "Other targets:"
 	@echo "  dev.txt              Compile dev.txt (constrained by all.txt)"
 	@echo "  ci.txt               Compile ci.txt (constrained by all.txt)"
+	@echo "  security.txt         Compile security.txt (CI security scanning tools)"
 	@echo "  tools-archive.txt    Compile tools-archive.txt (constrained by all.txt)"
 
 # Compile all requirements in correct order
 # Note: SAM2 is scripted-only and NOT compiled here - use bootstrap script
-compile: all.txt base.txt ml-core-darwin.txt ml-core-linux.txt ml-cpu.txt ml-mps.txt ml-cuda.txt ml-raw.txt ml-coreml.txt ml-research.txt ml.txt dev.txt ci.txt tools-archive.txt
+compile: all.txt base.txt ml-core-darwin.txt ml-core-linux.txt ml-cpu.txt ml-mps.txt ml-cuda.txt ml-raw.txt ml-coreml.txt ml-research.txt ml.txt dev.txt ci.txt security.txt tools-archive.txt
 	@echo "✓ All requirements compiled successfully"
 
 compile-all: compile
@@ -175,6 +176,12 @@ ci.txt: ci.in all.txt
 	@echo "Compiling ci.txt..."
 	@$(PIP_COMPILE) -c all.txt ci.in -o ci.txt
 
+# Security scanning tools (standalone layer for CI security job)
+# NOT constrained by all.txt to ensure latest security tool versions
+security.txt: security.in
+	@echo "Compiling security.txt..."
+	@$(PIP_COMPILE) security.in -o security.txt
+
 tools-archive.txt: tools-archive.in all.txt
 	@echo "Compiling tools-archive.txt..."
 	@$(PIP_COMPILE) -c all.txt tools-archive.in -o tools-archive.txt
@@ -197,6 +204,7 @@ update:
 	@$(PIP_COMPILE) --upgrade $(PYTORCH_CPU_INDEX) -c all.txt ml.in -o ml.txt
 	@$(PIP_COMPILE) --upgrade -c all.txt dev.in -o dev.txt
 	@$(PIP_COMPILE) --upgrade -c all.txt ci.in -o ci.txt
+	@$(PIP_COMPILE) --upgrade security.in -o security.txt
 	@$(PIP_COMPILE) --upgrade -c all.txt tools-archive.in -o tools-archive.txt
 	@echo "✓ All requirements updated successfully"
 
@@ -208,8 +216,8 @@ check:
 	repo_dir="$$(pwd)"; \
 	tmp_dir="$$(mktemp -d)"; \
 	trap 'rm -rf "$$tmp_dir"' EXIT; \
-	cp all.in base.in ml.in ml-core.in ml-core-darwin.in ml-core-linux.in ml-cpu.in ml-mps.in ml-cuda.in ml-raw.in ml-coreml.in ml-research.in dev.in ci.in tools-archive.in "$$tmp_dir"/; \
-	for f in all.txt base.txt ml.txt dev.txt ci.txt tools-archive.txt; do \
+	cp all.in base.in ml.in ml-core.in ml-core-darwin.in ml-core-linux.in ml-cpu.in ml-mps.in ml-cuda.in ml-raw.in ml-coreml.in ml-research.in dev.in ci.in security.in tools-archive.in "$$tmp_dir"/; \
+	for f in all.txt base.txt ml.txt dev.txt ci.txt security.txt tools-archive.txt; do \
 		if [ -f "$$repo_dir/$$f" ]; then \
 			cp "$$repo_dir/$$f" "$$tmp_dir"/; \
 		else \
@@ -239,11 +247,12 @@ check:
 	$(PIP_COMPILE) $(PYTORCH_CPU_INDEX) -c all.txt ml.in -o ml.txt >/dev/null; \
 	$(PIP_COMPILE) -c all.txt dev.in -o dev.txt >/dev/null; \
 	$(PIP_COMPILE) -c all.txt ci.in -o ci.txt >/dev/null; \
+	$(PIP_COMPILE) security.in -o security.txt >/dev/null; \
 	$(PIP_COMPILE) -c all.txt tools-archive.in -o tools-archive.txt >/dev/null; \
 	normalize_req() { \
 		awk 'BEGIN{start=0} { if (!start) { if ($$0 ~ /^#/ || $$0 ~ /^[[:space:]]*$$/) next; start=1 } print }' "$$1"; \
 	}; \
-	for f in all.txt base.txt ml.txt dev.txt ci.txt tools-archive.txt; do \
+	for f in all.txt base.txt ml.txt dev.txt ci.txt security.txt tools-archive.txt; do \
 		if ! diff -u <(normalize_req "$$tmp_dir/$$f") <(normalize_req "$$repo_dir/$$f") >/dev/null; then \
 			echo "❌ $$f is out of date. Run 'make compile' to update."; \
 			exit 1; \
@@ -263,5 +272,5 @@ check:
 # Note: ml-sam2.txt removed if present (historical artifact)
 clean:
 	@echo "Removing compiled .txt files..."
-	@rm -f all.txt base.txt ml.txt ml-core.txt ml-core-darwin.txt ml-core-linux.txt ml-cpu.txt ml-mps.txt ml-cuda.txt ml-raw.txt ml-sam2.txt ml-coreml.txt ml-research.txt dev.txt ci.txt tools-archive.txt
+	@rm -f all.txt base.txt ml.txt ml-core.txt ml-core-darwin.txt ml-core-linux.txt ml-cpu.txt ml-mps.txt ml-cuda.txt ml-raw.txt ml-sam2.txt ml-coreml.txt ml-research.txt dev.txt ci.txt security.txt tools-archive.txt
 	@echo "✓ Cleanup complete"

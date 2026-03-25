@@ -219,7 +219,8 @@ jobs:
       - name: Install audit tools
         run: |
           python -m pip install --upgrade pip
-          pip install pip-audit safety cyclonedx-bom
+          # Install pip-audit from locked security layer, plus cyclonedx-bom for SBOM generation
+          pip install -r requirements/security.txt cyclonedx-bom
 
       - name: Generate SBOM
         run: |
@@ -228,7 +229,9 @@ jobs:
 
       - name: Audit all dependencies
         run: |
-          pip-audit --desc -r requirements.txt --format json --output audit-report.json || true
+          # CVE-2026-4539 (pygments): No fix available yet - temporary exception
+          # See: https://github.com/pygments/pygments/issues/3058
+          pip-audit --desc -r requirements.txt --ignore-vuln CVE-2026-4539 --format json --output audit-report.json || true
 
       - name: Check for banned dependencies
         run: |
