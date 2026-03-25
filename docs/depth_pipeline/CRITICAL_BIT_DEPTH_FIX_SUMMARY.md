@@ -490,7 +490,7 @@ Implement ICC/EXIF preservation for 16-bit output:
 ## References
 
 - **ADR-007:** `docs/architecture/decisions/ADR-007-bit-depth-preservation.md`
-- **Quality Firewall:** `docs/quality_firewall.md` (TODO: create)
+- **Quality Firewall:** `docs/guides/QUALITY_FIREWALL.md`
 - **tifffile:** https://github.com/cgohlke/tifffile
 - **PIL Modes:** https://pillow.readthedocs.io/en/stable/handbook/concepts.html#modes
 
