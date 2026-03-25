@@ -2,7 +2,7 @@
 # Performance Regression Testing - Schedule and Manual Only
 # NOTE: This workflow does NOT run on PRs to avoid baseline comparison issues.
 # Benchmark baselines require cross-run persistence which workflow artifacts don't provide.
-# For PR-triggered performance monitoring, see nightly.yml which owns benchmark baselines.
+# Baselines are stored in tools/benchmarks/baseline.json (if present).
 name: Performance Monitor
 
 on:
@@ -10,11 +10,7 @@ on:
     # Run nightly at 3:30 AM UTC (staggered from nightly.yml at 2 AM)
     - cron: '30 3 * * *'
   workflow_dispatch:
-    inputs:
-      reset_baseline:
-        description: 'Reset the performance baseline (only on main branch)'
-        type: boolean
-        default: false
+    # Manual dispatch available for ad-hoc performance checks
 
 # Prevent overlapping scheduled runs
 concurrency:

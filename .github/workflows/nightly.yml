@@ -117,6 +117,8 @@ jobs:
             exit 0
           fi
           
+          echo "Found $BENCHMARK_COUNT benchmark tests"
+          
           COMPARE_ARGS=()
           if [ "${{ steps.baseline.outputs.has_baseline }}" = "true" ]; then
             echo "Using baseline: ${{ steps.baseline.outputs.baseline_file }}"
@@ -128,6 +130,7 @@ jobs:
             echo "No baseline found; running without regression comparison."
           fi
           
+          # Run benchmarks - capture exit code to distinguish regression vs failure
           if pytest tests/ \
             -m "benchmark" \
             --benchmark-only \
@@ -135,7 +138,16 @@ jobs:
             "${COMPARE_ARGS[@]}"; then
             echo "status=passed" >> $GITHUB_OUTPUT
           else
-            echo "status=regression" >> $GITHUB_OUTPUT
+            BENCHMARK_EXIT=$?
+            # Exit code 1 typically indicates pytest assertion/comparison failure (regression)
+            # Exit codes > 1 indicate setup/environment/tool failures
+            if [ $BENCHMARK_EXIT -eq 1 ]; then
+              echo "status=regression" >> $GITHUB_OUTPUT
+              echo "⚠️ Performance regression detected (>10% mean increase)"
+            else
+              echo "status=failed" >> $GITHUB_OUTPUT
+              echo "❌ Benchmark execution failed with exit code $BENCHMARK_EXIT"
+            fi
           fi
         env:
           PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/src

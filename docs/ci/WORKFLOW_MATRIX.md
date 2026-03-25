@@ -84,8 +84,8 @@
 
 **Key Features**:
 - **Schedule-only**: Does NOT run on PRs (baseline persistence requires cross-run storage)
-- **Proper baseline handling**: Reads from `tools/benchmarks/baseline.json` if present
-- **No blanket success masking**: Distinguishes no tests, passed, regression, and failure states
+- **Baseline reading**: Reads from `tools/benchmarks/baseline.json` if present (baseline refresh is manual)
+- **Proper status classification**: Distinguishes no tests, passed, regression, and generic failure states
 - **Deduplicated issues**: Checks for existing open issues before creating new ones
 
 ### Nightly Deep Checks: `nightly.yml`
@@ -96,7 +96,8 @@
 
 **Key Features**:
 - **Concurrency control**: Prevents overlapping scheduled runs
-- **Proper benchmark baseline**: Uses repo-stored baseline if available
+- **Baseline reading**: Uses repo-stored baseline (`tools/benchmarks/baseline.json`) if available
+- **Proper status classification**: Distinguishes regression vs generic benchmark failure
 - **Deduplicated issues**: Updates existing issues instead of creating duplicates
 
 **Jobs**:
