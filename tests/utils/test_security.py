@@ -135,10 +135,21 @@ class TestValidateFilepath:
 
     def test_rejects_deep_path_traversal(self, temp_workspace: Path, allowed_dirs: list[Path]) -> None:
         """Test rejection of deep path traversal with multiple ../ segments."""
-        # Try multiple levels of traversal
-        attack_path = temp_workspace / "data" / ".." / ".." / ".." / "etc" / "passwd"
+        # Create a real file outside the allowed "data" directory but still within temp_workspace
+        sensitive_dir = temp_workspace / "secret" / "deep"
+        sensitive_dir.mkdir(parents=True, exist_ok=True)
+        sensitive_file = sensitive_dir / "etc_passwd"
+        sensitive_file.write_text("sensitive data")
 
-        with pytest.raises(SecurityError):
+        # Create the intermediate directory structure so resolve(strict=True) can succeed
+        nested_dir = temp_workspace / "data" / "subdir" / "nested"
+        nested_dir.mkdir(parents=True, exist_ok=True)
+
+        # Craft a path that starts inside the allowed dir tree and uses multiple ../ segments
+        # to escape into the sibling "secret/deep" directory.
+        attack_path = temp_workspace / "data" / "subdir" / "nested" / ".." / ".." / ".." / "secret" / "deep" / "etc_passwd"
+
+        with pytest.raises(SecurityError, match="outside allowed directories"):
             validate_filepath(attack_path, allowed_dirs)
 
     def test_accepts_string_input(self, temp_workspace: Path, allowed_dirs: list[Path]) -> None:
@@ -672,14 +683,15 @@ class TestTimeout:
     )
     def test_timeout_cancels_alarm_on_success(self) -> None:
         """Test that alarm is cancelled when operation succeeds."""
-        import time
-
         with timeout(10):
             # Quick operation
             pass
 
-        # If alarm wasn't cancelled, this would trigger timeout
-        time.sleep(0.1)  # Should not raise
+        # After a successful operation, no alarm should remain scheduled.
+        # signal.alarm(0) cancels any pending alarm and returns the remaining
+        # seconds; this should be 0 if the timeout context cleared it.
+        remaining = signal.alarm(0)
+        assert remaining == 0
 
 
 # =============================================================================
@@ -774,7 +786,10 @@ class TestEdgeCases:
         target.write_text("sensitive data")
 
         link = temp_workspace / "data" / "link_to_outside"
-        link.symlink_to(target)
+        try:
+            link.symlink_to(target)
+        except OSError:
+            pytest.skip("Symlinks not supported on this platform")
 
         allowed_dirs = [temp_workspace / "data"]
 
@@ -786,7 +801,10 @@ class TestEdgeCases:
         """Test that symlinks within allowed directories work."""
         target = temp_workspace / "data" / "test.jpg"
         link = temp_workspace / "data" / "link_to_test.jpg"
-        link.symlink_to(target)
+        try:
+            link.symlink_to(target)
+        except OSError:
+            pytest.skip("Symlinks not supported on this platform")
 
         allowed_dirs = [temp_workspace / "data"]
         result = validate_filepath(link, allowed_dirs)
