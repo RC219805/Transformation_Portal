@@ -6,9 +6,9 @@ on:
     - cron: "30 3 * * *"
   workflow_dispatch:
 
-# Prevent overlapping scheduled runs
+# Prevent overlapping scheduled runs while allowing manual runs during scheduled runs
 concurrency:
-  group: ${{ github.workflow }}
+  group: ${{ github.workflow }}-${{ github.event_name }}
   cancel-in-progress: false
 
 permissions:

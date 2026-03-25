@@ -6,9 +6,9 @@ on:
     - cron: '0 2 * * *'
   workflow_dispatch:  # Allow manual trigger
 
-# Prevent overlapping scheduled runs - nightly is heavy and should not overlap
+# Prevent overlapping scheduled runs while allowing manual runs during scheduled runs
 concurrency:
-  group: ${{ github.workflow }}
+  group: ${{ github.workflow }}-${{ github.event_name }}
   cancel-in-progress: false
 
 permissions:

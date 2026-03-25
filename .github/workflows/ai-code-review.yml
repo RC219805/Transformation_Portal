@@ -97,9 +97,13 @@ jobs:
           }
 
           # --- Fetch PR files with pagination -----------------------------------
-          # GitHub paginates this endpoint, so we must follow Link headers
+          # GitHub paginates the /pulls/{pr}/files endpoint (max 100 per page).
+          # We must follow Link headers to get all files for large PRs.
           def fetch_all_pr_files(repo, pr_number, headers):
-              """Fetch all PR files, handling GitHub pagination."""
+              """Fetch all PR files, handling GitHub pagination.
+              
+              Uses per_page=100 (GitHub's maximum) to minimize API calls.
+              """
               all_files = []
               url = f"https://api.github.com/repos/{repo}/pulls/{pr_number}/files?per_page=100"
               

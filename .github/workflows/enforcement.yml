@@ -160,8 +160,8 @@ jobs:
     name: Golden Regression Tests
     runs-on: ubuntu-latest
     needs: [changes]
-    # Only run when core code changes - avoid duplicate runs with test-layer1
-    if: needs.changes.outputs.core_changed == 'true'
+    # Run when core code changes OR on scheduled nightly runs
+    if: needs.changes.outputs.core_changed == 'true' || github.event_name == 'schedule'
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
@@ -180,8 +180,9 @@ jobs:
           python -m pip check
           python -c "import numpy, pandas, jsonschema"
 
-      - name: Run golden tests
-        run: pytest tests/ -m "golden" --maxfail=1
+      - name: Run golden regression tests
+        # Uses same marker as test-layer1 to ensure contract/regression coverage
+        run: pytest tests/ -m "not ml and not slow and not benchmark" --maxfail=1
 
   artifact-boundary:
     name: Verify Artifact Boundary
