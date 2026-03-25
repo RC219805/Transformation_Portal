@@ -7,7 +7,7 @@
 #
 # IMPORTANT: This file is the canonical source for CI test dependencies.
 # Dependencies here must be kept in sync with requirements/dev.in (test frameworks).
-# The nested requirements/ci.in is for CI *pipeline tools* only (bandit, safety, etc.),
+# The nested requirements/ci.in is for CI *pipeline tools* only (bandit, build, twine),
 # NOT for test runners. Run `make check-ci-sync` to verify no drift.
 -r requirements.txt
 
