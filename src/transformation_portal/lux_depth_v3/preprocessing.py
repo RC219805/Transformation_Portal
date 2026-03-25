@@ -566,18 +566,23 @@ def normalize_exif_orientation(input_path: Path, output_path: Path) -> None:
     output_path = Path(output_path)
 
     # Open image and apply EXIF transpose
-    with Image.open(input_path) as img:
+    # Note: We load and process outside context manager to ensure the copied
+    # image is fully independent before saving
+    img = Image.open(input_path)
+    try:
         # exif_transpose returns None if no transpose needed, else new image
         corrected = exif_transpose(img)
         if corrected is None:
             corrected = img.copy()
+    finally:
+        img.close()
 
-        # Ensure parent directory exists
-        output_path.parent.mkdir(parents=True, exist_ok=True)
+    # Ensure parent directory exists
+    output_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # Save without EXIF orientation (physically rotated)
-        # Preserve format based on output extension
-        corrected.save(output_path)
+    # Save without EXIF orientation (physically rotated)
+    # Preserve format based on output extension
+    corrected.save(output_path)
 
     logger.debug("Normalized EXIF orientation: %s -> %s", input_path, output_path)
 
@@ -633,6 +638,9 @@ def validate_depth_image_alignment(image_path: Path, depth_path: Path) -> bool:
 
     # Allow tolerance for DA3 padding (multiples of 14)
     # The depth map may be padded to the nearest multiple of 14
+    # Note: This is a simple rounding helper. The _enforce_dimension_multiple()
+    # function exists but operates on arrays. For integer arithmetic, local
+    # helper is clearer and avoids unnecessary coupling.
     def round_to_multiple(val: int, multiple: int = DIMENSION_MULTIPLE) -> int:
         return ((val + multiple - 1) // multiple) * multiple
 

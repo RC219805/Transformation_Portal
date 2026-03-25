@@ -94,8 +94,10 @@ class TestCustomNodeRegistry:
         assert CustomNodeRegistry.get_node("TestRegisteredNode") is TestRegisteredNode
 
         # Clean up - remove from registry to avoid test pollution
-        if "TestRegisteredNode" in CustomNodeRegistry._nodes:
-            del CustomNodeRegistry._nodes["TestRegisteredNode"]
+        # Note: Accessing _nodes directly is intentional for test cleanup since
+        # CustomNodeRegistry doesn't expose an unregister() method. This is
+        # acceptable in test code to prevent state leakage between tests.
+        CustomNodeRegistry._nodes.pop("TestRegisteredNode", None)
 
 
 class TestBaseNode:

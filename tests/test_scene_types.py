@@ -459,11 +459,11 @@ class TestAliasUniqueness:
             aliases = config["aliases"]
             assert len(aliases) == len(set(aliases)), f"Duplicate aliases in {scene_type}"
 
-    def test_warn_on_overlapping_aliases(self):
-        """Document known alias overlaps (not necessarily an error).
+    def test_no_unexpected_overlapping_aliases(self):
+        """Verify no unexpected alias overlaps exist across scene types.
 
         Some aliases like 'entry' may match multiple scene types.
-        The current implementation returns first match, which is deterministic.
+        This test documents known overlaps and fails if new ones are introduced.
         """
         # Collect all aliases and their mappings
         alias_to_types = {}
@@ -476,12 +476,16 @@ class TestAliasUniqueness:
         # Known overlapping aliases that are intentionally shared
         known_overlaps = {"entry"}  # Used in both hallway and facade
 
-        # Check for unexpected overlaps
+        # Check for unexpected overlaps - fail if found
+        unexpected_overlaps = []
         for alias, types in alias_to_types.items():
             if len(types) > 1 and alias not in known_overlaps:
-                # This is a potential issue but not necessarily a test failure
-                # Just document it for awareness
-                pass
+                unexpected_overlaps.append((alias, types))
+
+        assert not unexpected_overlaps, (
+            f"Unexpected alias overlaps found: {unexpected_overlaps}. "
+            "If intentional, add to known_overlaps set."
+        )
 
 
 class TestSceneTypeIntegration:
