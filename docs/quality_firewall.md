@@ -18,19 +18,19 @@ The Quality Firewall is a multi-layer enforcement system that prevents regressio
 
 ## Quick Reference
 
-### CI Jobs (All Required for Merge)
+### CI Jobs
 
-| Job | Purpose | Blocking |
-|-----|---------|----------|
-| `lint` | flake8 + black + isort | ✅ |
-| `typecheck` | mypy on critical modules | ⚠️ Non-blocking |
-| `security` | bandit + pip-audit + gitleaks | ✅ |
-| `test-core` | Python 3.11 & 3.12 | ✅ |
-| `test-ml` | ML-specific tests (3.11) | ✅ |
-| `coverage-gate` | Diff coverage 80%+ | ✅ |
-| `build` | Package build + install check | ✅ |
-| `repo-hygiene` | Root cleanliness | ✅ |
-| `quality-summary` | Aggregate gate | ✅ |
+| Job | Purpose | Blocking | Notes |
+|-----|---------|----------|-------|
+| `lint` | flake8 + black + isort | ✅ Required | |
+| `typecheck` | mypy on critical modules | ⚠️ Advisory | Non-blocking |
+| `security` | bandit + pip-audit + gitleaks | ✅ Required | |
+| `test-core` | Python 3.11 & 3.12 | ✅ Required | |
+| `test-ml` | ML-specific tests (3.11) | ✅ Required | |
+| `coverage-gate` | Diff coverage 80%+ | ✅ Required | |
+| `build` | Package build + install check | ✅ Required | |
+| `repo-hygiene` | Root cleanliness | ✅ Required | |
+| `quality-summary` | Aggregate gate | ✅ Required | |
 
 ### Performance Thresholds (Scene-Dependent)
 
@@ -87,10 +87,10 @@ twine check dist/*
 
 | Document | Purpose |
 |----------|---------|
-| [QUALITY_FIREWALL_QUICK_REF.md](implementation_notes/QUALITY_FIREWALL_QUICK_REF.md) | Detailed implementation reference |
-| [QUALITY_FIREWALL_IMPLEMENTATION.md](guides/QUALITY_FIREWALL_IMPLEMENTATION.md) | Bug fixes and feature additions |
-| [QUALITY_FIREWALL_VALIDATED.md](guides/QUALITY_FIREWALL_VALIDATED.md) | Validation status and evidence |
-| [QUALITY_FIREWALL_BIT_DEPTH_CONTRACT.md](contracts/QUALITY_FIREWALL_BIT_DEPTH_CONTRACT.md) | Bit-depth preservation contract |
+| [QUALITY_FIREWALL_QUICK_REF.md](./implementation_notes/QUALITY_FIREWALL_QUICK_REF.md) | Detailed implementation reference |
+| [QUALITY_FIREWALL_IMPLEMENTATION.md](./guides/QUALITY_FIREWALL_IMPLEMENTATION.md) | Bug fixes and feature additions |
+| [QUALITY_FIREWALL_VALIDATED.md](./guides/QUALITY_FIREWALL_VALIDATED.md) | Validation status and evidence |
+| [QUALITY_FIREWALL_BIT_DEPTH_CONTRACT.md](./contracts/QUALITY_FIREWALL_BIT_DEPTH_CONTRACT.md) | Bit-depth preservation contract |
 | [ci.yml](../.github/workflows/ci.yml) | CI workflow definition |
 | [nightly.yml](../.github/workflows/nightly.yml) | Nightly deep checks |
 
