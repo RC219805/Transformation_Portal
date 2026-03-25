@@ -96,7 +96,7 @@ Given our image/video processing nature, special attention is required for:
 - **Supply Chain**:
   - All dependencies use version constraints to balance security and compatibility
   - For security-critical deployments, consider strict version pinning (e.g., via lock files)
-  - Regular dependency audits via `pip-audit` and `safety`
+  - Regular dependency audits via `pip-audit` (governed scanner in CI)
   - Automated security scanning in CI/CD pipeline
 
 - **Recent Security Updates**:
@@ -302,14 +302,11 @@ This project aims to maintain compliance with:
 Recommended external tools for security testing (require separate installation):
 
 ```bash
-# Dependency scanning
+# Dependency scanning (governed in CI via requirements/security.txt)
 pip install pip-audit
 pip-audit
 
-pip install safety
-safety check
-
-# Static analysis
+# Static analysis (governed in CI via requirements/security.txt)
 pip install bandit
 bandit -r src/
 
@@ -324,7 +321,7 @@ pylint --enable=security
 trivy image transformation_portal:latest
 ```
 
-**Note**: These tools are not included in the project's dependencies. Install them separately as needed for security auditing.
+**Note**: `pip-audit` and `bandit` are the governed security tools installed from `requirements/security.txt` in CI. Additional tools like semgrep can be installed separately as needed for security auditing.
 
 ## Responsible Disclosure
 

@@ -6,7 +6,7 @@
 # its dependencies. They are NOT runtime dependencies of the application.
 #
 # Governance: ADR pending - Security toolchain must be locked and deterministic.
-# See .github/workflows/ci.yml security job for usage.
+# See .github/workflows/security-unified.yml for security job usage.
 
 # Static security analyzer for Python code
 # Detects common security issues (hardcoded passwords, SQL injection, etc.)
@@ -14,8 +14,11 @@ bandit[toml]>=1.9,<2
 
 # Dependency vulnerability scanner
 # Audits requirements files for known CVEs via PyPI advisory database
+# This is the SOLE governed blocking dependency scanner for CI
 pip-audit>=2.10,<3
 
-# Safety is available but currently unused in CI workflow
-# Uncomment and add workflow step to enable safety scanning:
-# safety>=3.7,<4
+# Safety was removed from the security toolchain (March 2026):
+# - Safety pulls nltk as a transitive dependency, triggering security alerts
+# - pip-audit provides equivalent CVE/advisory scanning via PyPI database
+# - Removing Safety simplifies the toolchain and eliminates alert noise
+# To re-enable Safety, add it here and update security-unified.yml workflow.
