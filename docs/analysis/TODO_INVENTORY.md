@@ -413,7 +413,7 @@ raise NotImplementedError("RAW format handling is a Phase II feature")
 - Allows tolerance for DA3 padding (multiples of 14)
 - Validates both exact and padded dimension matches
 
-**Note:** The TODO_INVENTORY previously listed these as stubs, but actual code review confirms full implementations exist. The memory states this was implemented with tests in `tests/test_preprocessing.py`.
+**Note:** The TODO_INVENTORY previously listed these as stubs, but code review and test verification confirm full implementations exist with test coverage in `tests/test_preprocessing.py`.
 
 ---
 

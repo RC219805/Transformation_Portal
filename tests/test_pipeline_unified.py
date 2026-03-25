@@ -11,6 +11,11 @@ Tests cover:
 - Output generation
 
 This implements TEST-002 from the improvement opportunities tracking.
+
+Test Categories:
+- Unit tests (@pytest.mark.unit): Pure unit tests for data classes, initialization
+- Integration tests: Full pipeline workflows with I/O operations
+  (These are fast enough to include in the default test run per ADR-044)
 """
 
 from __future__ import annotations
@@ -21,7 +26,7 @@ import logging
 import sys
 import types
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Callable, Dict
 from unittest.mock import MagicMock, patch
 
 import numpy as np
@@ -37,6 +42,27 @@ RENDERING_4K_MODULE = "transformation_portal.pipelines.rendering_4k_pipeline"
 
 
 # =============================================================================
+# Stub Helpers
+# =============================================================================
+
+
+def _create_stub_module(name: str, classes: Dict[str, type]) -> types.ModuleType:
+    """Create a stub module with the given classes.
+    
+    Args:
+        name: Full module name (e.g., 'transformation_portal.pipelines.quality_feedback_bridge')
+        classes: Dictionary mapping class names to class types
+        
+    Returns:
+        ModuleType with the specified classes attached
+    """
+    module = types.ModuleType(name)
+    for class_name, class_type in classes.items():
+        setattr(module, class_name, class_type)
+    return module
+
+
+# =============================================================================
 # Test Fixtures
 # =============================================================================
 
@@ -44,8 +70,6 @@ RENDERING_4K_MODULE = "transformation_portal.pipelines.rendering_4k_pipeline"
 @pytest.fixture
 def stub_optional_dependencies(monkeypatch):
     """Stub optional pipeline dependencies for isolated testing."""
-    # Create stub quality bridge module
-    quality_module = types.ModuleType(QUALITY_BRIDGE_MODULE)
 
     class StubQualityTargets:
         def __init__(self, **kwargs):
@@ -67,16 +91,21 @@ def stub_optional_dependencies(monkeypatch):
                 to_rag_document=lambda: {"image_id": "test"},
             )
 
-    quality_module.QualityFeedbackBridge = StubQualityFeedbackBridge
-    quality_module.QualityTargets = StubQualityTargets
-
-    # Create stub rendering 4K module
-    rendering_module = types.ModuleType(RENDERING_4K_MODULE)
-
     class StubRendering4KPipeline:
         pass
 
-    rendering_module.Rendering4KPipeline = StubRendering4KPipeline
+    # Create stub modules using helper
+    quality_module = _create_stub_module(
+        QUALITY_BRIDGE_MODULE,
+        {
+            "QualityFeedbackBridge": StubQualityFeedbackBridge,
+            "QualityTargets": StubQualityTargets,
+        },
+    )
+    rendering_module = _create_stub_module(
+        RENDERING_4K_MODULE,
+        {"Rendering4KPipeline": StubRendering4KPipeline},
+    )
 
     # Install stubs
     monkeypatch.setitem(sys.modules, QUALITY_BRIDGE_MODULE, quality_module)
@@ -600,13 +629,16 @@ class TestStageExecution:
 
         assert result.success is True
 
-        # Vignette should darken edges
+        # Vignette should darken edges - center must be strictly brighter than corner
         with Image.open(result.output_path) as processed:
             arr = np.array(processed)
             center = arr[arr.shape[0] // 2, arr.shape[1] // 2]
             corner = arr[0, 0]
-            # Center should be brighter than corner
-            assert np.mean(center) >= np.mean(corner)
+            # Center should be strictly brighter than corner (vignette effect)
+            assert np.mean(center) > np.mean(corner), (
+                f"Vignette effect not applied: center brightness ({np.mean(center):.2f}) "
+                f"should be greater than corner brightness ({np.mean(corner):.2f})"
+            )
 
     def test_photo_finishing_grain(
         self, pipeline_module, sample_input_image
@@ -987,7 +1019,12 @@ class TestRecipeLoading:
             pipeline_module.UnifiedPipeline.from_recipe(tmp_path / "nonexistent.yaml")
 
     def test_from_recipe_valid_file(self, pipeline_module, tmp_path: Path):
-        """Test from_recipe with valid YAML file."""
+        """Test from_recipe with valid YAML file.
+        
+        Note: This test may be skipped if config_loader is not available
+        in the test environment. The config_loader module has its own
+        comprehensive tests in tests/utils/test_config_loader.py.
+        """
         import yaml
 
         recipe = {
@@ -1003,19 +1040,13 @@ class TestRecipeLoading:
         with open(recipe_path, "w") as f:
             yaml.safe_dump(recipe, f)
 
-        # Mock the config_loader functions
-        with patch.object(
-            pipeline_module.UnifiedPipeline,
-            "from_recipe",
-            wraps=pipeline_module.UnifiedPipeline.from_recipe,
-        ):
-            try:
-                # This may fail if config_loader doesn't exist, which is expected
-                pipeline = pipeline_module.UnifiedPipeline.from_recipe(recipe_path)
-                assert pipeline.name == "File Recipe"
-            except (ImportError, ModuleNotFoundError):
-                # config_loader may not be available in test environment
-                pytest.skip("config_loader not available")
+        try:
+            # Attempt to use from_recipe - this exercises the full loading path
+            pipeline = pipeline_module.UnifiedPipeline.from_recipe(recipe_path)
+            assert pipeline.name == "File Recipe"
+        except (ImportError, ModuleNotFoundError) as e:
+            # config_loader may not be available in minimal test environments
+            pytest.skip(f"config_loader not available: {e}")
 
 
 # =============================================================================
