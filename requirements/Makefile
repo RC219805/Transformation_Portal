@@ -118,16 +118,18 @@ base.txt: base.in all.txt
 
 # ML Layer lockfiles - compiled with CPU-only PyTorch index for deterministic CI
 # Each layer is compiled independently to allow fine-grained capability installs
+# Platform-specific core lockfiles are constrained by base.txt so host-resolved
+# ML pins in all.txt cannot leak into darwin/linux target outputs.
 # NOTE: SAM2 is scripted-only and NOT compiled here - use bootstrap script
 
 # Platform-specific ml-core lockfiles (pip-compile cannot resolve multi-platform .in)
-ml-core-darwin.txt: ml-core-darwin.in all.txt
+ml-core-darwin.txt: ml-core-darwin.in base.txt
 	@echo "Compiling ml-core-darwin.txt (macOS, torch 2.2.2)..."
-	@$(PIP_COMPILE) $(PYTORCH_CPU_INDEX) -c all.txt ml-core-darwin.in -o ml-core-darwin.txt
+	@$(PIP_COMPILE) $(PYTORCH_CPU_INDEX) -c base.txt ml-core-darwin.in -o ml-core-darwin.txt
 
-ml-core-linux.txt: ml-core-linux.in all.txt
+ml-core-linux.txt: ml-core-linux.in base.txt
 	@echo "Compiling ml-core-linux.txt (Linux, torch 2.2.2)..."
-	@$(PIP_COMPILE) $(PYTORCH_CPU_INDEX) -c all.txt ml-core-linux.in -o ml-core-linux.txt
+	@$(PIP_COMPILE) $(PYTORCH_CPU_INDEX) -c base.txt ml-core-linux.in -o ml-core-linux.txt
 
 # Legacy ml-core.txt (for backward compatibility - compiled on current platform)
 ml-core.txt: ml-core.in all.txt
@@ -192,8 +194,8 @@ update:
 	@echo "Updating all dependencies to latest versions..."
 	@$(PIP_COMPILE) --upgrade all.in -o all.txt
 	@$(PIP_COMPILE) --upgrade -c all.txt base.in -o base.txt
-	@$(PIP_COMPILE) --upgrade $(PYTORCH_CPU_INDEX) -c all.txt ml-core-darwin.in -o ml-core-darwin.txt
-	@$(PIP_COMPILE) --upgrade $(PYTORCH_CPU_INDEX) -c all.txt ml-core-linux.in -o ml-core-linux.txt
+	@$(PIP_COMPILE) --upgrade $(PYTORCH_CPU_INDEX) -c base.txt ml-core-darwin.in -o ml-core-darwin.txt
+	@$(PIP_COMPILE) --upgrade $(PYTORCH_CPU_INDEX) -c base.txt ml-core-linux.in -o ml-core-linux.txt
 	@$(PIP_COMPILE) --upgrade $(PYTORCH_CPU_INDEX) -c all.txt ml-core.in -o ml-core.txt
 	@$(PIP_COMPILE) --upgrade $(PYTORCH_CPU_INDEX) -c all.txt ml-cpu.in -o ml-cpu.txt
 	@$(PIP_COMPILE) --upgrade $(PYTORCH_CPU_INDEX) -c all.txt ml-mps.in -o ml-mps.txt
@@ -235,8 +237,8 @@ check:
 	cd "$$tmp_dir"; \
 	$(PIP_COMPILE) all.in -o all.txt >/dev/null; \
 	$(PIP_COMPILE) -c all.txt base.in -o base.txt >/dev/null; \
-	$(PIP_COMPILE) $(PYTORCH_CPU_INDEX) -c all.txt ml-core-darwin.in -o ml-core-darwin.txt >/dev/null; \
-	$(PIP_COMPILE) $(PYTORCH_CPU_INDEX) -c all.txt ml-core-linux.in -o ml-core-linux.txt >/dev/null; \
+	$(PIP_COMPILE) $(PYTORCH_CPU_INDEX) -c base.txt ml-core-darwin.in -o ml-core-darwin.txt >/dev/null; \
+	$(PIP_COMPILE) $(PYTORCH_CPU_INDEX) -c base.txt ml-core-linux.in -o ml-core-linux.txt >/dev/null; \
 	$(PIP_COMPILE) $(PYTORCH_CPU_INDEX) -c all.txt ml-core.in -o ml-core.txt >/dev/null; \
 	$(PIP_COMPILE) $(PYTORCH_CPU_INDEX) -c all.txt ml-cpu.in -o ml-cpu.txt >/dev/null; \
 	$(PIP_COMPILE) $(PYTORCH_CPU_INDEX) -c all.txt ml-mps.in -o ml-mps.txt >/dev/null; \
