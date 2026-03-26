@@ -1,12 +1,14 @@
 # Transformation Portal: Improvement Opportunities
 
-**Document Version:** 1.1.3
+**Document Version:** 1.1.4
 **Date:** February 2026
-**Last Updated:** March 25, 2026
-**Last Validated Against `main`:** 2026-03-25
+**Last Updated:** March 26, 2026
+**Last Validated Against `main`:** 2026-03-26
 **Status:** Active Recommendations (with completion tracking)
 
 This document identifies improvement opportunities across all sectors of the Transformation Portal repository, with risk/reward analysis for each recommendation.
+
+**Recent repository change outside this improvement epic:** The curated web-stack compatibility update landed on 2026-03-26 with FastAPI `0.135.1`, Starlette `1.0.0`, and Uvicorn `0.42.0`. That work is complete and should not be tracked here as a pending improvement item. The separate platform-specific ML lock-generation trust issue remains open under `#1279`.
 
 ---
 

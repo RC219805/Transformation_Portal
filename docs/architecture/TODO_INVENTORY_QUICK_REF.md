@@ -1,6 +1,6 @@
 # TODO Inventory Quick Reference
 
-**Version:** 2.4.0 | **Date:** 2026-03-25 | **Status:** ACTIVE
+**Version:** 2.4.1 | **Date:** 2026-03-26 | **Status:** ACTIVE
 
 **Full Inventory:** [docs/analysis/TODO_INVENTORY.md](../analysis/TODO_INVENTORY.md)
 **Action Plan:** [docs/analysis/TODO_ACTION_PLAN.md](../analysis/TODO_ACTION_PLAN.md)
@@ -20,7 +20,7 @@
 | **P3 Deferred** | 3 (ComfyUI, NVDIFFREC, MaterialGAN) |
 | **Repository Health** | **EXCELLENT** ✅ |
 
-**Recently Completed (2026-03-25):**
+**Recently Completed (2026-03-26):**
 - Source code TODOs: All cleaned up ✅
 - Quality Firewall docs: Created ✅
 - SLERP interpolation: Implemented ✅
@@ -28,6 +28,7 @@
 - depth_canonical module: Archived ✅
 - P2: context_aware_rendering.py archived ✅
 - P2: lux_render_pipeline_plus_v3.py archived ✅
+- Curated web-stack compatibility update merged (FastAPI 0.135.1 / Starlette 1.0.0 / Uvicorn 0.42.0) ✅
 
 ---
 
@@ -76,6 +77,7 @@
 - ICC profile preservation in 16-bit TIFF
 - SLERP interpolation (scene_builder.py)
 - All source code TODOs cleaned up
+- Curated Starlette 1.0 compatibility validation and merge (#1278)
 
 ### 🟢 CORRECT (No Action Required)
 - 12 NotImplementedError instances (abstract methods, phase gates, limitations)
@@ -92,6 +94,7 @@
 ### ⏳ PENDING (Action Required)
 - Branch protection verification (P1, GitHub Admin task)
 - Sample data upload (P2, low priority)
+- ML lock generation trust model (`#1279`, packaging / requirements follow-up)
 
 ### 🔴 DEFERRED (No Action for v2.x)
 - ComfyUI subprocess integration (P3)
@@ -209,7 +212,7 @@ A: None identified. Repository health is excellent.
 
 ---
 
-**Last Updated:** 2026-03-25
+**Last Updated:** 2026-03-26
 **Next Review:** April 2026 (v2.5.0 planning)
 **Authority:** Binding under architectural governance
 
