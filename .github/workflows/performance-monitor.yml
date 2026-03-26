@@ -56,15 +56,22 @@ jobs:
       - name: Fetch baseline from repository (if exists)
         id: baseline
         run: |
-          # Baseline storage: repo-stored file at tools/benchmarks/baseline.json
-          # This is the supported persistent baseline mechanism.
+          # Baseline storage: prefer canonical path, fall back to committed baselines
           # Future enhancement: could also fetch from release assets or dedicated baseline branch.
           BASELINE_FILE=""
           
+          # Prefer a canonical checked-in baseline owned by performance-monitor, if present
           if [ -f "tools/benchmarks/baseline.json" ]; then
             BASELINE_FILE="tools/benchmarks/baseline.json"
             echo "baseline_source=repo" >> $GITHUB_OUTPUT
+          # Fall back to any existing committed baselines under tests/benchmarks/baselines/
+          elif ls tests/benchmarks/baselines/*.json >/dev/null 2>&1; then
+            FIRST_BASELINE_FILE="$(ls tests/benchmarks/baselines/*.json | head -n 1)"
+            echo "Using fallback baseline at $FIRST_BASELINE_FILE"
+            BASELINE_FILE="$FIRST_BASELINE_FILE"
+            echo "baseline_source=fallback" >> $GITHUB_OUTPUT
           else
+            echo "No benchmark baseline file found; regression comparison will be skipped."
             echo "baseline_source=none" >> $GITHUB_OUTPUT
           fi
           

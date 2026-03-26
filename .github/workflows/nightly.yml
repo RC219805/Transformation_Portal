@@ -95,12 +95,19 @@ jobs:
       - name: Check for baseline
         id: baseline
         run: |
-          # Check for checked-in baseline file (nightly owns benchmark baselines)
+          # Prefer a canonical checked-in baseline owned by nightly, if present
           if [ -f "tools/benchmarks/baseline.json" ]; then
-            echo "baseline_file=tools/benchmarks/baseline.json" >> $GITHUB_OUTPUT
-            echo "has_baseline=true" >> $GITHUB_OUTPUT
+            echo "baseline_file=tools/benchmarks/baseline.json" >> "$GITHUB_OUTPUT"
+            echo "has_baseline=true" >> "$GITHUB_OUTPUT"
+          # Fall back to any existing committed baselines under tests/benchmarks/baselines/
+          elif ls tests/benchmarks/baselines/*.json >/dev/null 2>&1; then
+            FIRST_BASELINE_FILE="$(ls tests/benchmarks/baselines/*.json | head -n 1)"
+            echo "Using fallback baseline at $FIRST_BASELINE_FILE"
+            echo "baseline_file=$FIRST_BASELINE_FILE" >> "$GITHUB_OUTPUT"
+            echo "has_baseline=true" >> "$GITHUB_OUTPUT"
           else
-            echo "has_baseline=false" >> $GITHUB_OUTPUT
+            echo "No benchmark baseline file found; regression comparison will be skipped."
+            echo "has_baseline=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Run performance benchmarks
