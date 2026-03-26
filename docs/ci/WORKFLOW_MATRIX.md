@@ -169,10 +169,17 @@ For conditional job execution on PRs, use `dorny/paths-filter` instead of unreli
 
 ---
 
+## Related Documentation
+
+- [Dependabot PR Governance](../governance/DEPENDABOT_PR_GOVERNANCE.md) - Triage policy and merge criteria for Dependabot-generated PRs
+
+---
+
 ## Change Log
 
 | Date | Change | Rationale |
 |------|--------|-----------|
+| 2026-03-26 | Added link to Dependabot PR governance documentation | Cross-reference dependency update policy |
 | 2026-03-25 | Major update: Fixed enforcement.yml PR detection, performance-monitor.yml baseline handling, nightly.yml deduplication, pinned all actions | Address workflow correctness bugs and governance hygiene |
 | 2026-02-04 | Initial creation | Baseline documentation |
 
