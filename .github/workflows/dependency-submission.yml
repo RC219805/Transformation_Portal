@@ -143,7 +143,7 @@ jobs:
 
       - name: Submit dependencies to GitHub (attempt 1)
         id: dependency_submission_attempt_1
-        uses: advanced-security/component-detection-dependency-submission-action@b0312ae733678f2f3cea9b6626d29556356d2534 # v2
+        uses: advanced-security/component-detection-dependency-submission-action@c2001e05156a4694419ca56612f8671b27c0ad15 # v2
         env:
           # Critical: Disable pip caching to save disk space
           PIP_NO_CACHE_DIR: '1'
@@ -167,7 +167,7 @@ jobs:
       - name: Submit dependencies to GitHub (attempt 2)
         id: dependency_submission_attempt_2
         if: steps.dependency_submission_attempt_1.outcome == 'failure'
-        uses: advanced-security/component-detection-dependency-submission-action@b0312ae733678f2f3cea9b6626d29556356d2534 # v2
+        uses: advanced-security/component-detection-dependency-submission-action@c2001e05156a4694419ca56612f8671b27c0ad15 # v2
         env:
           # Critical: Disable pip caching to save disk space
           PIP_NO_CACHE_DIR: '1'
