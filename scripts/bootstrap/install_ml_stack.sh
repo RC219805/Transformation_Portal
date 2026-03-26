@@ -36,7 +36,7 @@
 #   research    Research/experimental extras (reserved)
 #
 # Convenience:
-#   full        All ML capabilities (equivalent to ml.txt umbrella)
+#   full        Reserved until a trusted umbrella contract exists again
 #
 # Environment Variables:
 #   PYTORCH_INDEX   Custom PyTorch index URL (default: https://download.pytorch.org/whl/cpu)
@@ -109,7 +109,7 @@ PROFILES (Platform Matrix - ADR-032):
       research    Research/experimental extras (reserved)
 
     Convenience profiles:
-      full        All ML capabilities (equivalent to ml.txt umbrella)
+      full        Reserved until a trusted umbrella contract exists again
 
 PLATFORM TARGETS:
     darwin-x86_64-cpu   macOS Intel (core-cpu)
@@ -132,13 +132,14 @@ EXAMPLES:
     # Install NVIDIA CUDA acceleration (Linux only)
     PYTORCH_INDEX=https://download.pytorch.org/whl/cu121 $(basename "$0") --profile core-cuda
 
-    # Install ML baseline with RAW ingest capability
-    $(basename "$0") --profile core-cpu,raw
+    # Install SAM2 on top of a trusted core profile
+    $(basename "$0") --profile core-mps,sam2
 
-    # Install full ML stack
+    # full/raw/coreml/research are disabled until trusted target-correct
+    # checked-in contracts exist again
     $(basename "$0") --profile full
 
-    # Dry run to see what would be installed
+    # Dry run to see what a trusted profile would install
     $(basename "$0") --profile core-mps,sam2 --dry-run
 
 EOF
@@ -297,31 +298,15 @@ install_profile() {
             # CPU baseline: platform-specific lockfile selection
             platform_id="$(get_platform_id cpu)"
 
-            # Use platform-specific lockfile if available, fallback to generic
-            if [[ -f "${REQUIREMENTS_DIR}/${platform_lockfile}" ]]; then
-                check_lockfile "${platform_lockfile}"
-                log_info "Installing ML core layer + CPU baseline (${platform_id})..."
-                log_info "Using platform-specific lockfile: ${platform_lockfile}"
-                log_verbose "Using PyTorch index: ${PYTORCH_INDEX}"
-                if [[ "${DRY_RUN}" == "true" ]]; then
-                    log_info "[DRY-RUN] Would install: requirements/${platform_lockfile}"
-                    log_info "[DRY-RUN] With extra-index-url: ${PYTORCH_INDEX}"
-                else
-                    "${pip_cmd[@]}" --extra-index-url "${PYTORCH_INDEX}" -r "${REQUIREMENTS_DIR}/${platform_lockfile}"
-                fi
+            check_lockfile "${platform_lockfile}"
+            log_info "Installing ML core layer + CPU baseline (${platform_id})..."
+            log_info "Using platform-specific lockfile: ${platform_lockfile}"
+            log_verbose "Using PyTorch index: ${PYTORCH_INDEX}"
+            if [[ "${DRY_RUN}" == "true" ]]; then
+                log_info "[DRY-RUN] Would install: requirements/${platform_lockfile}"
+                log_info "[DRY-RUN] With extra-index-url: ${PYTORCH_INDEX}"
             else
-                # Fallback to ml-cpu.txt
-                check_lockfile "ml-cpu.txt"
-                log_warn "Platform-specific lockfile not found: ${platform_lockfile}"
-                log_info "Falling back to ml-cpu.txt..."
-                log_info "Installing ML core layer + CPU baseline (${platform_id})..."
-                log_verbose "Using PyTorch index: ${PYTORCH_INDEX}"
-                if [[ "${DRY_RUN}" == "true" ]]; then
-                    log_info "[DRY-RUN] Would install: requirements/ml-cpu.txt"
-                    log_info "[DRY-RUN] With extra-index-url: ${PYTORCH_INDEX}"
-                else
-                    "${pip_cmd[@]}" --extra-index-url "${PYTORCH_INDEX}" -r "${REQUIREMENTS_DIR}/ml-cpu.txt"
-                fi
+                "${pip_cmd[@]}" --extra-index-url "${PYTORCH_INDEX}" -r "${REQUIREMENTS_DIR}/${platform_lockfile}"
             fi
             ;;
         core-mps)
@@ -336,31 +321,15 @@ install_profile() {
             fi
             platform_id="$(get_platform_id mps)"
 
-            # MPS always uses darwin lockfile
-            if [[ -f "${REQUIREMENTS_DIR}/ml-core-darwin.txt" ]]; then
-                check_lockfile "ml-core-darwin.txt"
-                log_info "Installing ML core layer + MPS acceleration (${platform_id})..."
-                log_info "Using platform-specific lockfile: ml-core-darwin.txt"
-                log_verbose "Using PyTorch index: ${PYTORCH_INDEX}"
-                if [[ "${DRY_RUN}" == "true" ]]; then
-                    log_info "[DRY-RUN] Would install: requirements/ml-core-darwin.txt"
-                    log_info "[DRY-RUN] With extra-index-url: ${PYTORCH_INDEX}"
-                else
-                    "${pip_cmd[@]}" --extra-index-url "${PYTORCH_INDEX}" -r "${REQUIREMENTS_DIR}/ml-core-darwin.txt"
-                fi
+            check_lockfile "ml-core-darwin.txt"
+            log_info "Installing ML core layer + MPS acceleration (${platform_id})..."
+            log_info "Using platform-specific lockfile: ml-core-darwin.txt"
+            log_verbose "Using PyTorch index: ${PYTORCH_INDEX}"
+            if [[ "${DRY_RUN}" == "true" ]]; then
+                log_info "[DRY-RUN] Would install: requirements/ml-core-darwin.txt"
+                log_info "[DRY-RUN] With extra-index-url: ${PYTORCH_INDEX}"
             else
-                # Fallback to ml-mps.txt
-                check_lockfile "ml-mps.txt"
-                log_warn "Platform-specific lockfile not found: ml-core-darwin.txt"
-                log_info "Falling back to ml-mps.txt..."
-                log_info "Installing ML core layer + MPS acceleration (${platform_id})..."
-                log_verbose "Using PyTorch index: ${PYTORCH_INDEX}"
-                if [[ "${DRY_RUN}" == "true" ]]; then
-                    log_info "[DRY-RUN] Would install: requirements/ml-mps.txt"
-                    log_info "[DRY-RUN] With extra-index-url: ${PYTORCH_INDEX}"
-                else
-                    "${pip_cmd[@]}" --extra-index-url "${PYTORCH_INDEX}" -r "${REQUIREMENTS_DIR}/ml-mps.txt"
-                fi
+                "${pip_cmd[@]}" --extra-index-url "${PYTORCH_INDEX}" -r "${REQUIREMENTS_DIR}/ml-core-darwin.txt"
             fi
             ;;
         core-cuda)
@@ -371,43 +340,22 @@ install_profile() {
             fi
             platform_id="$(get_platform_id cuda)"
 
-            # CUDA always uses linux lockfile + cuda packages
-            if [[ -f "${REQUIREMENTS_DIR}/ml-core-linux.txt" ]]; then
-                check_lockfile "ml-core-linux.txt"
-                log_info "Installing ML core layer + CUDA acceleration (${platform_id})..."
-                log_info "Using platform-specific lockfile: ml-core-linux.txt"
-                log_info "Using PyTorch CUDA index: ${PYTORCH_INDEX}"
-                log_warn "Ensure NVIDIA drivers (compatible with CUDA 12.x) are installed on the host system."
-                if [[ "${DRY_RUN}" == "true" ]]; then
-                    log_info "[DRY-RUN] Would install: requirements/ml-core-linux.txt"
-                    log_info "[DRY-RUN] With extra-index-url: ${PYTORCH_INDEX}"
-                else
-                    "${pip_cmd[@]}" --extra-index-url "${PYTORCH_INDEX}" -r "${REQUIREMENTS_DIR}/ml-core-linux.txt"
-                fi
+            check_lockfile "ml-core-linux.txt"
+            log_info "Installing ML core layer + CUDA acceleration (${platform_id})..."
+            log_info "Using platform-specific lockfile: ml-core-linux.txt"
+            log_info "Using PyTorch CUDA index: ${PYTORCH_INDEX}"
+            log_warn "Ensure NVIDIA drivers (compatible with CUDA 12.x) are installed on the host system."
+            if [[ "${DRY_RUN}" == "true" ]]; then
+                log_info "[DRY-RUN] Would install: requirements/ml-core-linux.txt"
+                log_info "[DRY-RUN] With extra-index-url: ${PYTORCH_INDEX}"
             else
-                # Fallback to ml-cuda.txt
-                check_lockfile "ml-cuda.txt"
-                log_warn "Platform-specific lockfile not found: ml-core-linux.txt"
-                log_info "Falling back to ml-cuda.txt..."
-                log_info "Installing ML core layer + CUDA acceleration (${platform_id})..."
-                log_info "Using PyTorch CUDA index: ${PYTORCH_INDEX}"
-                log_warn "Ensure NVIDIA drivers (compatible with CUDA 12.x) are installed on the host system."
-                if [[ "${DRY_RUN}" == "true" ]]; then
-                    log_info "[DRY-RUN] Would install: requirements/ml-cuda.txt"
-                    log_info "[DRY-RUN] With extra-index-url: ${PYTORCH_INDEX}"
-                else
-                    "${pip_cmd[@]}" --extra-index-url "${PYTORCH_INDEX}" -r "${REQUIREMENTS_DIR}/ml-cuda.txt"
-                fi
+                "${pip_cmd[@]}" --extra-index-url "${PYTORCH_INDEX}" -r "${REQUIREMENTS_DIR}/ml-core-linux.txt"
             fi
             ;;
         raw)
-            check_lockfile "ml-raw.txt"
-            log_info "Installing ML RAW ingest layer..."
-            if [[ "${DRY_RUN}" == "true" ]]; then
-                log_info "[DRY-RUN] Would install: requirements/ml-raw.txt"
-            else
-                "${pip_cmd[@]}" -r "${REQUIREMENTS_DIR}/ml-raw.txt"
-            fi
+            log_error "raw profile no longer has a trusted checked-in lockfile contract."
+            log_error "Generate a target-correct raw lockfile in the appropriate environment before using this profile."
+            exit 1
             ;;
         sam2)
             # SAM2 is a SCRIPTED-ONLY capability - not a standard lockfile contract.
@@ -448,33 +396,19 @@ install_profile() {
                 log_warn "CoreML layer is only available on macOS. Skipping."
                 return 0
             fi
-            check_lockfile "ml-coreml.txt"
-            log_info "Installing ML CoreML layer (macOS)..."
-            if [[ "${DRY_RUN}" == "true" ]]; then
-                log_info "[DRY-RUN] Would install: requirements/ml-coreml.txt"
-            else
-                "${pip_cmd[@]}" -r "${REQUIREMENTS_DIR}/ml-coreml.txt"
-            fi
+            log_error "coreml profile no longer has a trusted checked-in lockfile contract."
+            log_error "Generate a target-correct CoreML lockfile in the appropriate environment before using this profile."
+            exit 1
             ;;
         research)
-            check_lockfile "ml-research.txt"
-            log_info "Installing ML research/experimental layer..."
-            if [[ "${DRY_RUN}" == "true" ]]; then
-                log_info "[DRY-RUN] Would install: requirements/ml-research.txt"
-            else
-                "${pip_cmd[@]}" -r "${REQUIREMENTS_DIR}/ml-research.txt"
-            fi
+            log_error "research profile no longer has a trusted checked-in lockfile contract."
+            log_error "Generate a target-correct research lockfile in the appropriate environment before using this profile."
+            exit 1
             ;;
         full)
-            check_lockfile "ml.txt"
-            log_info "Installing full ML stack (umbrella)..."
-            log_verbose "Using PyTorch index: ${PYTORCH_INDEX}"
-            if [[ "${DRY_RUN}" == "true" ]]; then
-                log_info "[DRY-RUN] Would install: requirements/ml.txt"
-                log_info "[DRY-RUN] With extra-index-url: ${PYTORCH_INDEX}"
-            else
-                "${pip_cmd[@]}" --extra-index-url "${PYTORCH_INDEX}" -r "${REQUIREMENTS_DIR}/ml.txt"
-            fi
+            log_error "full profile is disabled until a trusted umbrella lockfile contract exists again."
+            log_error "Use target-specific core profiles explicitly instead."
+            exit 1
             ;;
         *)
             log_error "Unknown profile: ${profile}"

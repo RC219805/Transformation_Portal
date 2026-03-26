@@ -11,34 +11,34 @@ requirements/
 ├── base.in                 # Core runtime dependencies (abstract)
 ├── base.txt                # Core runtime dependencies (pinned)
 ├── ml.in                   # ML umbrella (references ml-*.in layers)
-├── ml.txt                  # ML umbrella (pinned, backward compatible)
+├── ml.txt                  # Removed umbrella lock (not part of checked-in contract)
 ├── ml-core.in              # ML core layer - cross-platform (legacy)
 ├── ml-core-darwin.in       # ML core layer - macOS (torch 2.2.2)
 ├── ml-core-darwin.txt      # ML core layer - macOS (pinned)
 ├── ml-core-linux.in        # ML core layer - Linux (torch 2.2.2)
 ├── ml-core-linux.txt       # ML core layer - Linux (pinned)
 ├── ml-cpu.in               # ML CPU acceleration layer
-├── ml-cpu.txt              # ML CPU layer (pinned)
+├── ml-cpu.txt              # Deprecated optional ML lock (not checked in)
 ├── ml-mps.in               # ML MPS acceleration layer (Apple Silicon)
-├── ml-mps.txt              # ML MPS layer (pinned)
+├── ml-mps.txt              # Deprecated optional ML lock (not checked in)
 ├── ml-cuda.in              # ML CUDA acceleration layer (Linux + NVIDIA)
-├── ml-cuda.txt             # ML CUDA layer (pinned)
+├── ml-cuda.txt             # Deprecated optional ML lock (not checked in)
 ├── ml-raw.in               # ML RAW ingest layer - rawpy
-├── ml-raw.txt              # ML RAW ingest layer (pinned)
+├── ml-raw.txt              # Deprecated optional ML lock (not checked in)
 ├── ml-sam2.in              # ML SAM2 layer - Meta Segment Anything 2
 ├── ml-sam2.txt             # ML SAM2 layer (scripted-only)
 ├── ml-coreml.in            # ML CoreML layer - macOS only
-├── ml-coreml.txt           # ML CoreML layer (pinned)
+├── ml-coreml.txt           # Deprecated optional ML lock (not checked in)
 ├── ml-research.in          # ML research/experimental layer
-├── ml-research.txt         # ML research layer (pinned)
+├── ml-research.txt         # Deprecated optional ML lock (not checked in)
 ├── dev.in                  # Development tools (abstract)
 ├── dev.txt                 # Development tools (pinned)
 ├── ci.in                   # CI/CD tools (abstract)
 ├── ci.txt                  # CI/CD tools (pinned)
 ├── tools-archive.in        # Archive reporting tool deps (abstract)
 ├── tools-archive.txt       # Archive reporting tool deps (pinned)
-├── all.in                  # Aggregate of all dependencies
-└── all.txt                 # Aggregate pinned requirements
+├── all.in                  # Aggregate of checked-in contract dependencies
+└── all.txt                 # Aggregate pinned checked-in contract
 ```
 
 ## 🎯 Design Principles
@@ -65,7 +65,7 @@ ML dependencies use an explicit platform matrix with three orthogonal axes:
 
 **IMPORTANT:** pip-compile cannot resolve multi-platform conditional dependencies in a single graph.
 
-To ensure deterministic builds, ml-core has platform-specific lockfiles:
+To ensure deterministic builds, the checked-in ML contract is limited to platform-specific core lockfiles:
 
 | Platform     | Lockfile              | Torch Version |
 |--------------|----------------------|---------------|
@@ -84,19 +84,19 @@ To ensure deterministic builds, ml-core has platform-specific lockfiles:
 Dependencies are organized into logical layers:
 
 - **base**: Core runtime essentials needed for the application to function
-- **ml**: Optional machine learning and deep learning dependencies (umbrella)
+- **ml**: Optional machine learning and deep learning dependencies (umbrella, no checked-in lockfile contract)
 - **ml-core**: Cross-platform ML baseline (torch with platform-aware pins, diffusers, transformers, etc.)
-- **ml-cpu**: CPU acceleration layer (cross-platform, no GPU packages)
-- **ml-mps**: MPS acceleration layer (Apple Silicon, Metal Performance Shaders)
-- **ml-cuda**: CUDA acceleration layer (Linux + NVIDIA GPU)
-- **ml-raw**: RAW camera file ingest (rawpy) - platform-scoped
+- **ml-cpu**: CPU acceleration layer (cross-platform capability, not a checked-in lock artifact)
+- **ml-mps**: MPS acceleration layer (Apple Silicon, Metal Performance Shaders; installed via bootstrap/profile flow)
+- **ml-cuda**: CUDA acceleration layer (Linux + NVIDIA GPU; installed via bootstrap/profile flow)
+- **ml-raw**: RAW camera file ingest (rawpy) - no trusted checked-in lockfile contract
 - **ml-sam2**: SAM2 segmentation backend - scripted-only (non-standard install)
 - **ml-coreml**: Apple CoreML acceleration - macOS only
 - **ml-research**: Research/experimental extras - reserved for future use
 - **dev**: Developer tools for testing, linting, and formatting
 - **ci**: CI/CD pipeline tools for builds, security scanning, and releases (NOT test runners)
 - **tools-archive**: dependencies for `tools/archive_manifest_reports.py`
-- **all**: Convenience layer that includes everything
+- **all**: Aggregate of the checked-in contract (does not include optional ML layers)
 
 ### Relationship to Root Requirements Files
 
@@ -160,16 +160,14 @@ The bootstrap script provides profile-based installation with platform validatio
 # Install NVIDIA CUDA acceleration (Linux only)
 PYTORCH_INDEX=https://download.pytorch.org/whl/cu121 ./scripts/bootstrap/install_ml_stack.sh --profile core-cuda
 
-# Install with RAW ingest capability
-./scripts/bootstrap/install_ml_stack.sh --profile core-cpu,raw
-
 # Install with SAM2 segmentation
 ./scripts/bootstrap/install_ml_stack.sh --profile core-mps,sam2
 
 # Dry run to preview what would be installed
-./scripts/bootstrap/install_ml_stack.sh --profile core-cpu,raw --dry-run
+./scripts/bootstrap/install_ml_stack.sh --profile core-mps,sam2 --dry-run
 
-# Install full ML stack (umbrella)
+# RAW/coreml/research/full profiles are disabled until trusted target-correct
+# checked-in contracts exist again
 ./scripts/bootstrap/install_ml_stack.sh --profile full
 ```
 
@@ -181,14 +179,13 @@ To install the package with specific dependency sets:
 # Install core dependencies only
 pip install -r requirements/base.txt
 
-# Install ML core layer (cross-platform baseline)
-pip install -r requirements/ml-core.txt
+# Install ML core layer (platform-specific baseline)
+pip install -r requirements/ml-core-darwin.txt   # macOS
+# or
+pip install -r requirements/ml-core-linux.txt    # Linux
 
-# Install ML with RAW ingest capability
-pip install -r requirements/ml-core.txt -r requirements/ml-raw.txt
-
-# Install all ML capabilities (umbrella)
-pip install -r requirements/ml.txt
+# Optional non-core ML layers no longer have trusted checked-in lockfiles.
+# Use target-specific bootstrap flows once those contracts exist again.
 
 # Install everything (development environment)
 pip install -r requirements/all.txt
@@ -201,15 +198,17 @@ Or use the Makefile targets:
 make install-ml-core
 
 # Install ML RAW ingest layer
+# Fails closed until a trusted target-correct lockfile contract exists
 make install-ml-raw
 
 # Install ML SAM2 layer
 make install-ml-sam2
 
 # Install ML CoreML layer (macOS only)
+# Fails closed unless a trusted target-correct CoreML lockfile exists
 make install-ml-coreml
 
-# Install all ML capabilities
+# Umbrella install is disabled until a trusted checked-in contract exists again
 make install-ml
 ```
 
@@ -255,7 +254,7 @@ cd requirements/
 make compile
 ```
 
-4. Commit both the `.in` and `.txt` files
+4. Commit the `.in` file and any `.txt` files that are part of the checked-in contract for that layer
 
 #### Updating Dependencies
 
@@ -291,15 +290,19 @@ Targets:
   check             Verify that .txt files are up-to-date with .in files
   clean             Remove all compiled .txt files
 
-ML Layer targets (CPU-only PyTorch index):
-  ml-core.txt       Cross-platform ML baseline
-  ml-cpu.txt        CPU baseline acceleration layer
-  ml-mps.txt        Apple Silicon MPS acceleration layer
-  ml-cuda.txt       NVIDIA CUDA acceleration layer
-  ml-raw.txt        RAW ingest capability layer
-  ml-coreml.txt     Apple CoreML acceleration layer
-  ml-research.txt   Research/experimental extras layer
-  ml.txt            Umbrella ML layer (backward compatibility)
+Checked-in ML layer targets (CPU-only PyTorch index):
+  ml-core-darwin.txt  macOS ML baseline
+  ml-core-linux.txt   Linux ML baseline
+
+Forbidden checked-in optional ML lock targets:
+  ml-core.txt       not part of checked-in contract
+  ml-cpu.txt        not part of checked-in contract
+  ml-mps.txt        not part of checked-in contract
+  ml-cuda.txt       not part of checked-in contract
+  ml-raw.txt        not part of checked-in contract
+  ml-coreml.txt     not part of checked-in contract
+  ml-research.txt   not part of checked-in contract
+  ml.txt            not part of checked-in contract
 
 Scripted-only layers (NOT compiled here):
   ml-sam2           SAM2 segmentation - use bootstrap script
@@ -311,11 +314,11 @@ Scripted-only layers (NOT compiled here):
 
 The system uses a two-phase compilation strategy:
 
-1. **Global Resolution**: First, `all.in` is compiled to produce `all.txt` with all dependencies resolved together. This ensures a consistent set of versions across all layers.
+1. **Checked-in Contract Resolution**: First, `all.in` is compiled to produce `all.txt` for the checked-in contract layers. Optional non-core ML layers are excluded so host-resolved outputs do not leak into repository state.
 
 2. **Layer-Specific Outputs**: Then, each individual `.in` file is compiled using `all.txt` as a constraint file. This ensures that the subset of packages in each layer uses the same versions as in the global resolution.
 
-3. **CPU-Only PyTorch**: ML layers that include PyTorch (ml-core, ml-sam2, ml.txt) are compiled with `--extra-index-url https://download.pytorch.org/whl/cpu` to ensure CPU-only packages without GPU dependencies.
+3. **CPU-Only PyTorch**: The checked-in ML platform-core lockfiles are compiled with `--extra-index-url https://download.pytorch.org/whl/cpu` to ensure CPU-only packages without GPU dependencies.
 
 This approach prevents conflicts between layers and ensures reproducible builds.
 
@@ -387,7 +390,7 @@ Example CI workflow step:
 
 - **GPU vs CPU**: All ML lockfiles use CPU-only PyTorch for compatibility and determinism. For GPU environments, torch should be installed from the CUDA index before installing other ML dependencies.
 
-- **Platform-specific layers**: Some layers (ml-coreml) are platform-specific. Install commands will skip these on unsupported platforms.
+- **Optional non-core ML layers**: raw/coreml/research/full are fail-closed until target-correct trusted lockfile contracts are defined.
 
 - **SAM2 build isolation**: sam2 may require `pip install --no-build-isolation sam2==1.1.0` on some platforms due to build-time torch requirements.
 

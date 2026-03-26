@@ -61,16 +61,32 @@ def test_header_mismatch_is_reported(isolated_repo: Path) -> None:
     assert errors == [f"{isolated_repo / 'requirements' / 'base.txt'} was generated with Python 3.12; " "expected Python 3.11"]
 
 
-def test_ml_lock_rejects_gpu_linked_packages(isolated_repo: Path) -> None:
+def test_missing_platform_core_lockfile_is_reported(isolated_repo: Path) -> None:
+    (isolated_repo / "requirements" / "ml-core-linux.txt").unlink()
+    expected = contract.read_expected_lock_python_version()
+    errors = contract.validate_lockfile_headers(expected)
+    assert errors == [f"Missing required lockfile: {isolated_repo / 'requirements' / 'ml-core-linux.txt'}"]
+
+
+def test_noncore_optional_lockfile_is_reported(isolated_repo: Path) -> None:
+    write_lockfile(isolated_repo, "ml.txt", "3.11")
+    errors = contract.validate_noncore_optional_lockfiles_absent()
+    assert errors == [
+        f"{isolated_repo / 'requirements' / 'ml.txt'} is not part of the checked-in "
+        "lockfile contract; remove host-generated non-core ML layer artifacts from the repository"
+    ]
+
+
+def test_platform_lock_wrong_os_marker_is_reported(isolated_repo: Path) -> None:
     write_lockfile(
         isolated_repo,
-        "ml.txt",
+        "ml-core-linux.txt",
         "3.11",
-        body="nvidia-cublas-cu12==12.8.4.1\n",
+        body='torch==2.2.2 ; platform_system == "Darwin"\n',
     )
-    errors = contract.validate_ml_lock_contract()
+    errors = contract.validate_platform_lock_markers()
+    pattern = contract.PLATFORM_LOCK_FORBIDDEN_PATTERNS["ml-core-linux.txt"][0]
     assert errors == [
-        f"{isolated_repo / 'requirements' / 'ml.txt'} contains GPU-linked package "
-        "'nvidia-cublas-cu12==12.8.4.1', but the documented contract is CPU-only "
-        "PyTorch in ML lockfiles"
+        f"{isolated_repo / 'requirements' / 'ml-core-linux.txt'}:6 contains forbidden platform marker pattern "
+        f"{pattern!r} for this target lockfile"
     ]
