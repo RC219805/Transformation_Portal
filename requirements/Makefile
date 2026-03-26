@@ -21,16 +21,13 @@
 # darwin-*          ml-core-darwin.txt       2.2.2
 # linux-*           ml-core-linux.txt        2.2.2
 #
-# Standard Lockfile Layers (compiled via this Makefile):
+# Checked-In ML Lockfiles (compiled via this Makefile):
 #   ml-core-darwin.txt  macOS ML baseline (torch 2.2.2)
 #   ml-core-linux.txt   Linux ML baseline (torch 2.2.2)
-#   ml-cpu.txt          CPU baseline acceleration layer (thin, includes ml-core)
-#   ml-mps.txt          Apple Silicon MPS acceleration layer (darwin-arm64-mps)
-#   ml-cuda.txt         NVIDIA CUDA acceleration layer (linux-x86_64-cuda)
-#   ml-raw.txt          RAW camera file ingest (rawpy) - may have platform limitations
-#   ml-coreml.txt       Apple CoreML acceleration - macOS only
-#   ml-research.txt     Research/experimental extras - reserved for future use
-#   ml.txt              Standard umbrella layer (ml-core + ml-raw)
+#
+# Non-core optional ML layers are not part of the checked-in lockfile contract.
+# Host-generated outputs for ml-core.txt, ml-cpu.txt, ml-mps.txt, ml-cuda.txt,
+# ml-raw.txt, ml-coreml.txt, ml-research.txt, and ml.txt must not be checked in.
 #
 # Scripted-Only Layers (NOT compiled here - use bootstrap script):
 #   ml-sam2          SAM2 segmentation - requires non-standard install semantics
@@ -69,14 +66,13 @@ help:
 	@echo "  ml-core-darwin.txt   macOS ML baseline (torch 2.2.2)"
 	@echo "  ml-core-linux.txt    Linux ML baseline (torch 2.2.2)"
 	@echo ""
-	@echo "ML Layer targets (CPU-only PyTorch index):"
-	@echo "  ml-cpu.txt           CPU baseline acceleration layer"
-	@echo "  ml-mps.txt           Apple Silicon MPS acceleration layer"
-	@echo "  ml-cuda.txt          NVIDIA CUDA acceleration layer"
-	@echo "  ml-raw.txt           RAW ingest capability layer"
-	@echo "  ml-coreml.txt        Apple CoreML acceleration layer"
-	@echo "  ml-research.txt      Research/experimental extras layer"
-	@echo "  ml.txt               Standard umbrella layer (ml-core + ml-raw)"
+	@echo "Checked-in ML lockfiles:"
+	@echo "  ml-core-darwin.txt   macOS ML baseline (torch 2.2.2)"
+	@echo "  ml-core-linux.txt    Linux ML baseline (torch 2.2.2)"
+	@echo ""
+	@echo "Non-core optional ML layers are not part of the checked-in lock contract:"
+	@echo "  ml-core.txt, ml-cpu.txt, ml-mps.txt, ml-cuda.txt,"
+	@echo "  ml-raw.txt, ml-coreml.txt, ml-research.txt, ml.txt"
 	@echo ""
 	@echo "Scripted-only layers (NOT compiled here):"
 	@echo "  ml-sam2              SAM2 segmentation - use bootstrap script"
@@ -89,18 +85,18 @@ help:
 
 # Compile all requirements in correct order
 # Note: SAM2 is scripted-only and NOT compiled here - use bootstrap script
-compile: all.txt base.txt ml-core-darwin.txt ml-core-linux.txt ml-cpu.txt ml-mps.txt ml-cuda.txt ml-raw.txt ml-coreml.txt ml-research.txt ml.txt dev.txt ci.txt security.txt tools-archive.txt
+compile: all.txt base.txt ml-core-darwin.txt ml-core-linux.txt dev.txt ci.txt security.txt tools-archive.txt
 	@echo "✓ All requirements compiled successfully"
 
 compile-all: compile
 
 # Compile only ML layers (useful for ML-focused updates)
 # Note: SAM2 is scripted-only and NOT compiled here
-compile-ml-layers: all.txt ml-core-darwin.txt ml-core-linux.txt ml-cpu.txt ml-mps.txt ml-cuda.txt ml-raw.txt ml-coreml.txt ml-research.txt ml.txt
+compile-ml-layers: all.txt base.txt ml-core-darwin.txt ml-core-linux.txt
 	@echo "✓ ML layer requirements compiled successfully"
 
 # Compile only acceleration layers (useful for profile updates)
-compile-accel: all.txt ml-core-darwin.txt ml-core-linux.txt ml-cpu.txt ml-mps.txt ml-cuda.txt
+compile-accel: all.txt base.txt ml-core-darwin.txt ml-core-linux.txt
 	@echo "✓ Acceleration layer requirements compiled successfully"
 
 # Compile all.txt first for global resolution
@@ -116,10 +112,10 @@ base.txt: base.in all.txt
 	@echo "Compiling base.txt..."
 	@$(PIP_COMPILE) -c all.txt base.in -o base.txt
 
-# ML Layer lockfiles - compiled with CPU-only PyTorch index for deterministic CI
-# Each layer is compiled independently to allow fine-grained capability installs
+# ML Layer lockfiles - checked-in contract is limited to platform-specific core.
 # Platform-specific core lockfiles are constrained by base.txt so host-resolved
 # ML pins in all.txt cannot leak into darwin/linux target outputs.
+# NOTE: Non-core optional ML layers are not compiled here.
 # NOTE: SAM2 is scripted-only and NOT compiled here - use bootstrap script
 
 # Platform-specific ml-core lockfiles (pip-compile cannot resolve multi-platform .in)
@@ -131,44 +127,10 @@ ml-core-linux.txt: ml-core-linux.in base.txt
 	@echo "Compiling ml-core-linux.txt (Linux, torch 2.2.2)..."
 	@$(PIP_COMPILE) $(PYTORCH_CPU_INDEX) -c base.txt ml-core-linux.in -o ml-core-linux.txt
 
-# Legacy ml-core.txt (for backward compatibility - compiled on current platform)
-ml-core.txt: ml-core.in all.txt
-	@echo "Compiling ml-core.txt (CPU-only PyTorch)..."
-	@$(PIP_COMPILE) $(PYTORCH_CPU_INDEX) -c all.txt ml-core.in -o ml-core.txt
-
-# Acceleration layers (platform matrix profiles)
-ml-cpu.txt: ml-cpu.in ml-core.in all.txt
-	@echo "Compiling ml-cpu.txt (CPU baseline)..."
-	@$(PIP_COMPILE) $(PYTORCH_CPU_INDEX) -c all.txt ml-cpu.in -o ml-cpu.txt
-
-ml-mps.txt: ml-mps.in ml-core.in all.txt
-	@echo "Compiling ml-mps.txt (Apple Silicon MPS)..."
-	@$(PIP_COMPILE) $(PYTORCH_CPU_INDEX) -c all.txt ml-mps.in -o ml-mps.txt
-
-ml-cuda.txt: ml-cuda.in ml-core.in all.txt
-	@echo "Compiling ml-cuda.txt (NVIDIA CUDA)..."
-	@# NOTE: ml-cuda.txt is compiled with CPU index for consistency,
-	@# but contains CUDA packages with platform markers.
-	@# Actual CUDA wheel installation uses PyTorch CUDA index at install time.
-	@$(PIP_COMPILE) $(PYTORCH_CPU_INDEX) -c all.txt ml-cuda.in -o ml-cuda.txt
-
-ml-raw.txt: ml-raw.in all.txt
-	@echo "Compiling ml-raw.txt..."
-	@$(PIP_COMPILE) -c all.txt ml-raw.in -o ml-raw.txt
-
-ml-coreml.txt: ml-coreml.in all.txt
-	@echo "Compiling ml-coreml.txt..."
-	@$(PIP_COMPILE) -c all.txt ml-coreml.in -o ml-coreml.txt
-
-ml-research.txt: ml-research.in all.txt
-	@echo "Compiling ml-research.txt..."
-	@$(PIP_COMPILE) -c all.txt ml-research.in -o ml-research.txt
-
-# Standard umbrella lockfile - includes ml-core + ml-raw
-# Does NOT include: sam2 (scripted-only), coreml (platform-specific), research (experimental)
-ml.txt: ml.in ml-core.in ml-raw.in all.txt
-	@echo "Compiling ml.txt (standard umbrella, CPU-only PyTorch)..."
-	@$(PIP_COMPILE) $(PYTORCH_CPU_INDEX) -c all.txt ml.in -o ml.txt
+ml-core.txt ml-cpu.txt ml-mps.txt ml-cuda.txt ml-raw.txt ml-coreml.txt ml-research.txt ml.txt:
+	@echo "ERROR: $@ is not part of the checked-in lockfile contract."
+	@echo "ERROR: Use target-specific bootstrap/install flows instead of checking in host-generated optional ML layer locks."
+	@exit 1
 
 dev.txt: dev.in all.txt
 	@echo "Compiling dev.txt..."
@@ -196,14 +158,6 @@ update:
 	@$(PIP_COMPILE) --upgrade -c all.txt base.in -o base.txt
 	@$(PIP_COMPILE) --upgrade $(PYTORCH_CPU_INDEX) -c base.txt ml-core-darwin.in -o ml-core-darwin.txt
 	@$(PIP_COMPILE) --upgrade $(PYTORCH_CPU_INDEX) -c base.txt ml-core-linux.in -o ml-core-linux.txt
-	@$(PIP_COMPILE) --upgrade $(PYTORCH_CPU_INDEX) -c all.txt ml-core.in -o ml-core.txt
-	@$(PIP_COMPILE) --upgrade $(PYTORCH_CPU_INDEX) -c all.txt ml-cpu.in -o ml-cpu.txt
-	@$(PIP_COMPILE) --upgrade $(PYTORCH_CPU_INDEX) -c all.txt ml-mps.in -o ml-mps.txt
-	@$(PIP_COMPILE) --upgrade $(PYTORCH_CPU_INDEX) -c all.txt ml-cuda.in -o ml-cuda.txt
-	@$(PIP_COMPILE) --upgrade -c all.txt ml-raw.in -o ml-raw.txt
-	@$(PIP_COMPILE) --upgrade -c all.txt ml-coreml.in -o ml-coreml.txt
-	@$(PIP_COMPILE) --upgrade -c all.txt ml-research.in -o ml-research.txt
-	@$(PIP_COMPILE) --upgrade $(PYTORCH_CPU_INDEX) -c all.txt ml.in -o ml.txt
 	@$(PIP_COMPILE) --upgrade -c all.txt dev.in -o dev.txt
 	@$(PIP_COMPILE) --upgrade -c all.txt ci.in -o ci.txt
 	@$(PIP_COMPILE) --upgrade security.in -o security.txt
@@ -219,7 +173,7 @@ check:
 	tmp_dir="$$(mktemp -d)"; \
 	trap 'rm -rf "$$tmp_dir"' EXIT; \
 	cp all.in base.in ml.in ml-core.in ml-core-darwin.in ml-core-linux.in ml-cpu.in ml-mps.in ml-cuda.in ml-raw.in ml-coreml.in ml-research.in dev.in ci.in security.in tools-archive.in "$$tmp_dir"/; \
-	for f in all.txt base.txt ml.txt dev.txt ci.txt security.txt tools-archive.txt; do \
+	for f in all.txt base.txt dev.txt ci.txt security.txt tools-archive.txt; do \
 		if [ -f "$$repo_dir/$$f" ]; then \
 			cp "$$repo_dir/$$f" "$$tmp_dir"/; \
 		else \
@@ -227,7 +181,7 @@ check:
 			exit 1; \
 		fi; \
 	done; \
-	for f in ml-core.txt ml-core-darwin.txt ml-core-linux.txt ml-cpu.txt ml-mps.txt ml-cuda.txt ml-raw.txt ml-coreml.txt ml-research.txt; do \
+	for f in ml-core-darwin.txt ml-core-linux.txt; do \
 		if [ -f "$$repo_dir/$$f" ]; then \
 			cp "$$repo_dir/$$f" "$$tmp_dir"/; \
 		else \
@@ -239,14 +193,6 @@ check:
 	$(PIP_COMPILE) -c all.txt base.in -o base.txt >/dev/null; \
 	$(PIP_COMPILE) $(PYTORCH_CPU_INDEX) -c base.txt ml-core-darwin.in -o ml-core-darwin.txt >/dev/null; \
 	$(PIP_COMPILE) $(PYTORCH_CPU_INDEX) -c base.txt ml-core-linux.in -o ml-core-linux.txt >/dev/null; \
-	$(PIP_COMPILE) $(PYTORCH_CPU_INDEX) -c all.txt ml-core.in -o ml-core.txt >/dev/null; \
-	$(PIP_COMPILE) $(PYTORCH_CPU_INDEX) -c all.txt ml-cpu.in -o ml-cpu.txt >/dev/null; \
-	$(PIP_COMPILE) $(PYTORCH_CPU_INDEX) -c all.txt ml-mps.in -o ml-mps.txt >/dev/null; \
-	$(PIP_COMPILE) $(PYTORCH_CPU_INDEX) -c all.txt ml-cuda.in -o ml-cuda.txt >/dev/null; \
-	$(PIP_COMPILE) -c all.txt ml-raw.in -o ml-raw.txt >/dev/null; \
-	$(PIP_COMPILE) -c all.txt ml-coreml.in -o ml-coreml.txt >/dev/null; \
-	$(PIP_COMPILE) -c all.txt ml-research.in -o ml-research.txt >/dev/null; \
-	$(PIP_COMPILE) $(PYTORCH_CPU_INDEX) -c all.txt ml.in -o ml.txt >/dev/null; \
 	$(PIP_COMPILE) -c all.txt dev.in -o dev.txt >/dev/null; \
 	$(PIP_COMPILE) -c all.txt ci.in -o ci.txt >/dev/null; \
 	$(PIP_COMPILE) security.in -o security.txt >/dev/null; \
@@ -254,13 +200,13 @@ check:
 	normalize_req() { \
 		awk 'BEGIN{start=0} { if (!start) { if ($$0 ~ /^#/ || $$0 ~ /^[[:space:]]*$$/) next; start=1 } print }' "$$1"; \
 	}; \
-	for f in all.txt base.txt ml.txt dev.txt ci.txt security.txt tools-archive.txt; do \
+	for f in all.txt base.txt dev.txt ci.txt security.txt tools-archive.txt; do \
 		if ! diff -u <(normalize_req "$$tmp_dir/$$f") <(normalize_req "$$repo_dir/$$f") >/dev/null; then \
 			echo "❌ $$f is out of date. Run 'make compile' to update."; \
 			exit 1; \
 		fi; \
 	done; \
-	for f in ml-core.txt ml-core-darwin.txt ml-core-linux.txt ml-cpu.txt ml-mps.txt ml-cuda.txt ml-raw.txt ml-coreml.txt ml-research.txt; do \
+	for f in ml-core-darwin.txt ml-core-linux.txt; do \
 		if [ -f "$$repo_dir/$$f" ]; then \
 			if ! diff -u <(normalize_req "$$tmp_dir/$$f") <(normalize_req "$$repo_dir/$$f") >/dev/null; then \
 				echo "❌ $$f is out of date. Run 'make compile' to update."; \
@@ -274,5 +220,5 @@ check:
 # Note: ml-sam2.txt removed if present (historical artifact)
 clean:
 	@echo "Removing compiled .txt files..."
-	@rm -f all.txt base.txt ml.txt ml-core.txt ml-core-darwin.txt ml-core-linux.txt ml-cpu.txt ml-mps.txt ml-cuda.txt ml-raw.txt ml-sam2.txt ml-coreml.txt ml-research.txt dev.txt ci.txt security.txt tools-archive.txt
+	@rm -f all.txt base.txt ml-core-darwin.txt ml-core-linux.txt ml-sam2.txt dev.txt ci.txt security.txt tools-archive.txt
 	@echo "✓ Cleanup complete"

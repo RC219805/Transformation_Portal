@@ -114,11 +114,14 @@ install-ml: venv
 
 install-ml-core: venv
 	@echo "Installing ML core layer (cross-platform baseline)..."
-	@if [ -f requirements/ml-core.txt ]; then \
-		"$(PY)" -m pip install -r requirements/ml-core.txt && \
+	@if [ "$$(uname -s)" = "Darwin" ] && [ -f requirements/ml-core-darwin.txt ]; then \
+		"$(PY)" -m pip install -r requirements/ml-core-darwin.txt && \
+		"$(PY)" -m pip install -e .; \
+	elif [ "$$(uname -s)" = "Linux" ] && [ -f requirements/ml-core-linux.txt ]; then \
+		"$(PY)" -m pip install -r requirements/ml-core-linux.txt && \
 		"$(PY)" -m pip install -e .; \
 	else \
-		echo "Error: requirements/ml-core.txt not found. Run 'cd requirements && make compile' first."; \
+		echo "Error: platform-specific ML core lockfile not found. Run 'cd requirements && make compile' first."; \
 		exit 1; \
 	fi
 
@@ -127,9 +130,13 @@ install-ml-raw: venv
 	@if [ -f requirements/ml-raw.txt ]; then \
 		"$(PY)" -m pip install -r requirements/ml-raw.txt && \
 		"$(PY)" -m pip install -e .; \
+	elif [ -f requirements/constraints.txt ]; then \
+		"$(PY)" -m pip install -c requirements/constraints.txt -r requirements/ml-raw.in && \
+		"$(PY)" -m pip install -e .; \
 	else \
-		echo "Error: requirements/ml-raw.txt not found. Run 'cd requirements && make compile' first."; \
-		exit 1; \
+		echo "Warning: requirements/ml-raw.txt not found, installing raw layer from abstract input"; \
+		"$(PY)" -m pip install -r requirements/ml-raw.in && \
+		"$(PY)" -m pip install -e .; \
 	fi
 
 install-ml-sam2: venv
@@ -145,8 +152,11 @@ install-ml-coreml: venv
 	elif [ -f requirements/ml-coreml.txt ]; then \
 		"$(PY)" -m pip install -r requirements/ml-coreml.txt && \
 		"$(PY)" -m pip install -e .; \
+	elif [ -f requirements/constraints.txt ]; then \
+		"$(PY)" -m pip install -c requirements/constraints.txt -r requirements/ml-coreml.in && \
+		"$(PY)" -m pip install -e .; \
 	else \
-		echo "Error: requirements/ml-coreml.txt not found. Run 'cd requirements && make compile' first."; \
+		echo "Error: requirements/ml-coreml.txt not found and no constraints file is available."; \
 		exit 1; \
 	fi
 
