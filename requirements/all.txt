@@ -435,7 +435,7 @@ shellingham==1.5.4
     # via typer
 sortedcontainers==2.4.0
     # via hypothesis
-starlette==0.52.1
+starlette==1.0.0
     # via
     #   -r base.in
     #   fastapi
@@ -521,7 +521,7 @@ urllib3==2.6.3
     #   id
     #   requests
     #   twine
-uvicorn==0.41.0
+uvicorn==0.42.0
     # via -r base.in
 virtualenv==21.1.0
     # via tox
@@ -529,4 +529,3 @@ wcwidth==0.6.0
     # via ftfy
 zipp==3.23.0
     # via importlib-metadata
-
