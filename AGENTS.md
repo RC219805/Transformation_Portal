@@ -6,7 +6,7 @@ Quick reference for common workflows and commands in this repo.
 - `make venv` create local `.venv` if missing.
 - `make setup` install package in editable mode.
 - `make install-core` install core runtime + dev tooling dependencies (with constraints if present).
-- `make install-ml` install full ML tier dependencies (umbrella, all ML capabilities).
+- `make install-ml` disabled; no trusted checked-in umbrella ML lockfile contract.
 - `make install-ml-core` install ML core layer only (cross-platform baseline: torch, diffusers, transformers).
 - `make install-ml-raw` install ML RAW ingest layer (rawpy, platform-scoped).
 - `make install-ml-sam2` install ML SAM2 layer (Meta Segment Anything 2, optional).
@@ -59,7 +59,7 @@ Quick reference for common workflows and commands in this repo.
 - `./scripts/bootstrap/install_ml_stack.sh --profile core-cpu,raw` install ML baseline + RAW ingest.
 - `./scripts/bootstrap/install_ml_stack.sh --profile core-mps,sam2` install MPS + SAM2 segmentation.
 - `./scripts/bootstrap/install_ml_stack.sh --profile core-cpu,coreml` install ML baseline + CoreML (macOS only).
-- `./scripts/bootstrap/install_ml_stack.sh --profile full` install all ML capabilities (equivalent to `make install-ml`).
+- `./scripts/bootstrap/install_ml_stack.sh --profile full` disabled until a trusted umbrella ML lockfile contract exists again.
 
 ### Utility options
 - `./scripts/bootstrap/install_ml_stack.sh --profile core-cpu --dry-run` show what would be installed without installing.

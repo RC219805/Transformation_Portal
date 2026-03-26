@@ -60,36 +60,27 @@ This installs:
 
 ### Step 2: ML Dependencies (Optional)
 
-For AI-powered features (Stable Diffusion, ControlNet, depth estimation):
+For AI-powered features such as DA3 depth inference, use a trusted target-specific ML profile rather than the disabled umbrella install path:
 
 ```bash
-# Full ML stack
-pip install torch torchvision  # or pytorch with CUDA for GPU
-pip install diffusers transformers controlnet-aux huggingface-hub
+# Cross-platform baseline
+make install-ml-core
 
-# Or use the convenience extras:
-pip install -e ".[ml]"
-
-# Contributor workflow with constraints:
-make install-ml
+# Or use the bootstrap profiles directly:
+./scripts/bootstrap/install_ml_stack.sh --profile core-cpu
+./scripts/bootstrap/install_ml_stack.sh --profile core-mps    # macOS Apple Silicon only
+PYTORCH_INDEX=https://download.pytorch.org/whl/cu121 ./scripts/bootstrap/install_ml_stack.sh --profile core-cuda  # Linux + NVIDIA only
 ```
+
+Optional profiles for `raw`, `coreml`, `research`, and `full` are currently fail-closed until trusted target-correct lockfile contracts exist again.
+
+These trusted ML profile flows are currently supported on macOS and Linux only. They are not Windows-native; on Windows, use WSL2 or another Unix-like environment. The `core-cuda` profile is Linux + NVIDIA only.
 
 **Platform-specific notes:**
 
-- **Apple Silicon (M1/M2/M3/M4)**: Install PyTorch with MPS support
-  ```bash
-  pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
-  ```
-
-- **NVIDIA GPU**: Install PyTorch with CUDA
-  ```bash
-  pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
-  ```
-
-- **CPU only**: Standard PyTorch (slower but works)
-  ```bash
-  pip install torch torchvision
-  ```
+- **Apple Silicon macOS (M1/M2/M3/M4):** use `make install-ml-core` or `./scripts/bootstrap/install_ml_stack.sh --profile core-mps`
+- **Linux with NVIDIA GPU:** use `PYTORCH_INDEX=https://download.pytorch.org/whl/cu121 ./scripts/bootstrap/install_ml_stack.sh --profile core-cuda`
+- **CPU only (macOS/Linux):** use `make install-ml-core` or `./scripts/bootstrap/install_ml_stack.sh --profile core-cpu`
 
 ### Step 3: Depth Processing (Optional)
 
