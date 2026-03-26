@@ -124,7 +124,7 @@ shellingham==1.5.4
     # via
     #   -c all.txt
     #   typer
-starlette==0.52.1
+starlette==1.0.0
     # via
     #   -c all.txt
     #   -r base.in
@@ -160,7 +160,7 @@ typing-inspection==0.4.2
     #   -c all.txt
     #   fastapi
     #   pydantic
-uvicorn==0.41.0
+uvicorn==0.42.0
     # via
     #   -c all.txt
     #   -r base.in

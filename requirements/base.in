@@ -15,8 +15,8 @@ tqdm>=4.66,<5              # progress bar utility
 
 # Web orchestration service stack (exact pins for API/UI parity)
 # Security: keep FastAPI + Starlette on patched baseline for CVE-2025-62727.
-fastapi==0.135.1           # orchestrator API framework (compatible with Starlette 0.49.x)
-starlette==0.52.1          # direct runtime import + security pin (GHSA-7f5h-v6xp-fcq8)
+fastapi==0.135.1           # orchestrator API framework (validated against curated Starlette 1.x upgrade)
+starlette==1.0.0           # direct runtime import + curated Starlette 1.x validation target
 uvicorn==0.42.0            # ASGI server runtime pin
 aiofiles==25.1.0           # async file I/O support for FastAPI file responses
 
