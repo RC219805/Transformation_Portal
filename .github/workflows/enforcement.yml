@@ -151,7 +151,9 @@ jobs:
 
       - name: Install ML dependencies with constraints
         run: |
-          pip install -e ".[ml]" -c requirements/constraints.txt
+          python -m pip install -c requirements/constraints.txt -r requirements-dev.txt
+          python -m pip install -e ".[ml]" -c requirements/constraints.txt
+          python -m pip check
 
       - name: Run ML tests
         # Exclude slow/benchmark markers to keep PR runtime predictable
