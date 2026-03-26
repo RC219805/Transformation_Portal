@@ -47,7 +47,7 @@ jobs:
 
       - name: Get changed files
         id: changes
-        uses: tj-actions/changed-files@v47
+        uses: tj-actions/changed-files@22103cc46bda19c2b464ffe86db46df6922fd323  # v47.0.5
         with:
           files: "**/*.{py,js,ts,jsx,tsx,md,json,yml,yaml}"
 
@@ -96,16 +96,45 @@ jobs:
               "Accept": "application/vnd.github.v3+json"
           }
 
-          # --- Fetch PR files ---------------------------------------------------
-          files_url = f"https://api.github.com/repos/{repo}/pulls/{pr_number}/files"
-          print(f"Fetching file list from {files_url}")
-          r = requests.get(files_url, headers=headers)
+          # --- Fetch PR files with pagination -----------------------------------
+          # GitHub paginates the /pulls/{pr}/files endpoint (max 100 per page).
+          # We must follow Link headers to get all files for large PRs.
+          def fetch_all_pr_files(repo, pr_number, headers):
+              """Fetch all PR files, handling GitHub pagination.
+              
+              Uses per_page=100 (GitHub's maximum) to minimize API calls.
+              """
+              all_files = []
+              url = f"https://api.github.com/repos/{repo}/pulls/{pr_number}/files?per_page=100"
+              
+              while url:
+                  print(f"Fetching: {url}")
+                  r = requests.get(url, headers=headers, timeout=20)
+                  
+                  if r.status_code != 200:
+                      print(f"GitHub API error fetching PR files: {r.status_code} {r.text}")
+                      return None
+                  
+                  all_files.extend(r.json())
+                  
+                  # Check for next page in Link header
+                  link_header = r.headers.get("Link", "")
+                  url = None
+                  for link in link_header.split(","):
+                      if 'rel="next"' in link:
+                          # Extract URL from <url>; rel="next"
+                          url = link.split(";")[0].strip().strip("<>")
+                          break
+              
+              return all_files
 
-          if r.status_code != 200:
-              print("GitHub API error fetching PR files:", r.status_code, r.text)
+          print(f"Fetching PR #{pr_number} files from {repo}")
+          all_files = fetch_all_pr_files(repo, pr_number, headers)
+          
+          if all_files is None:
               sys.exit(1)
-
-          all_files = r.json()
+          
+          print(f"Total files in PR: {len(all_files)}")
 
           # Filter allowable extensions
           allow = {".py", ".js", ".ts", ".jsx", ".tsx", ".yml", ".yaml", ".json", ".md"}
@@ -114,10 +143,12 @@ jobs:
           if not code_files:
               print("No relevant code files changed.")
               sys.exit(0)
+          
+          print(f"Relevant code files: {len(code_files)}")
 
-          # Build diff text
+          # Build diff text (limit to first 10 files to stay within token limits)
           changes_text = ""
-          for f in code_files[:10]:  # Limit to first 10 files
+          for f in code_files[:10]:
               changes_text += f"\n### {f['filename']}\n"
               if "patch" in f and f["patch"]:
                   changes_text += f["patch"][:2000]  # Limit patch size
@@ -220,7 +251,7 @@ jobs:
               comment_data = {'body': comment_body}
 
               try:
-                  post_response = requests.post(comment_url, headers=headers, json=comment_data)
+                  post_response = requests.post(comment_url, headers=headers, json=comment_data, timeout=20)
                   if post_response.status_code == 201:
                       print("AI review posted successfully!")
                   else:

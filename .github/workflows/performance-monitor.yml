@@ -1,48 +1,49 @@
 # .github/workflows/performance-monitor.yml
-# Phase 2: Performance Regression Testing
+# Performance Regression Testing - Schedule and Manual Only
+# NOTE: This workflow does NOT run on PRs to avoid baseline comparison issues.
+# Benchmark baselines require cross-run persistence which workflow artifacts don't provide.
+# Baselines are stored in tools/benchmarks/baseline.json (if present).
 name: Performance Monitor
 
 on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+  schedule:
+    # Run nightly at 3:30 AM UTC (staggered from nightly.yml at 2 AM)
+    - cron: '30 3 * * *'
   workflow_dispatch:
+    # Manual dispatch available for ad-hoc performance checks
 
-# Concurrency control: Cancel outdated runs on new pushes to the same branch/PR
-# This reduces CI minutes and speeds up feedback on the latest code
+# Prevent overlapping scheduled runs
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.ref || github.run_id }}
+  cancel-in-progress: false  # Don't cancel scheduled runs
 
 permissions:
   contents: read
-  pull-requests: write
   issues: write
 
 jobs:
   performance-test:
     name: Performance Regression Check
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
           fetch-depth: 0  # Need history for comparison
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
         with:
           python-version: "3.12"
 
       - name: Cache dependencies
-        uses: actions/cache@v5
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684  # v4.2.3
         with:
           path: |
             ~/.cache/pip
             ~/.cache/huggingface
             ~/.cache/torch
-          key: ${{ runner.os }}-perf-${{ hashFiles('requirements.txt') }}
+          key: ${{ runner.os }}-perf-${{ hashFiles('requirements.txt', 'pyproject.toml') }}
 
       - name: Install dependencies
         run: |
@@ -52,25 +53,61 @@ jobs:
           pip install -e ".[ml]"
           pip install pytest pytest-benchmark memory-profiler
 
-      - name: Download baseline results
-        continue-on-error: true
-        uses: actions/download-artifact@v8.0.1
-        with:
-          name: baseline-benchmark
-          path: baseline/
+      - name: Fetch baseline from repository (if exists)
+        id: baseline
+        run: |
+          # Baseline storage: prefer canonical path, fall back to committed baselines
+          # Future enhancement: could also fetch from release assets or dedicated baseline branch.
+          BASELINE_FILE=""
+          
+          # Prefer a canonical checked-in baseline owned by performance-monitor, if present
+          if [ -f "tools/benchmarks/baseline.json" ]; then
+            BASELINE_FILE="tools/benchmarks/baseline.json"
+            echo "baseline_source=repo" >> $GITHUB_OUTPUT
+          # Fall back to any existing committed baselines under tests/benchmarks/baselines/
+          elif ls tests/benchmarks/baselines/*.json >/dev/null 2>&1; then
+            FIRST_BASELINE_FILE="$(ls tests/benchmarks/baselines/*.json | head -n 1)"
+            echo "Using fallback baseline at $FIRST_BASELINE_FILE"
+            BASELINE_FILE="$FIRST_BASELINE_FILE"
+            echo "baseline_source=fallback" >> $GITHUB_OUTPUT
+          else
+            echo "No benchmark baseline file found; regression comparison will be skipped."
+            echo "baseline_source=none" >> $GITHUB_OUTPUT
+          fi
+          
+          echo "baseline_file=$BASELINE_FILE" >> $GITHUB_OUTPUT
 
       - name: Run performance tests
+        id: benchmark
         run: |
-          BASELINE_FILE=""
-          for candidate in baseline/benchmark.json baseline/current-benchmark.json; do
-            if [ -f "$candidate" ]; then
-              BASELINE_FILE="$candidate"
-              break
-            fi
-          done
-
+          set -euo pipefail
+          
+          # Check if any benchmark tests exist using exit-code semantics
+          # Exit code 5 = no tests collected (pytest convention)
+          # Exit code 0 = collection succeeded
+          # Other exit codes = collection/import failure
+          set +e
+          pytest tests/ -m "benchmark" --collect-only -q > benchmark-collect.log 2>&1
+          COLLECT_EXIT=$?
+          set -e
+          
+          if [ "$COLLECT_EXIT" -eq 5 ]; then
+            echo "status=no_tests" >> $GITHUB_OUTPUT
+            echo "⚠️ No benchmark tests found (tests marked with @pytest.mark.benchmark)"
+            exit 0
+          elif [ "$COLLECT_EXIT" -ne 0 ]; then
+            echo "status=failed" >> $GITHUB_OUTPUT
+            echo "❌ Benchmark collection failed with exit code $COLLECT_EXIT"
+            cat benchmark-collect.log || true
+            exit "$COLLECT_EXIT"
+          fi
+          
+          echo "Benchmark collection succeeded"
+          
           COMPARE_ARGS=()
-          if [ -n "$BASELINE_FILE" ]; then
+          BASELINE_FILE="${{ steps.baseline.outputs.baseline_file }}"
+          
+          if [ -n "$BASELINE_FILE" ] && [ -f "$BASELINE_FILE" ]; then
             echo "Using baseline benchmark file: $BASELINE_FILE"
             COMPARE_ARGS=(
               "--benchmark-compare=$BASELINE_FILE"
@@ -79,10 +116,23 @@ jobs:
           else
             echo "No baseline benchmark found; running without regression comparison."
           fi
-
-          pytest tests/ -m "benchmark" \
+          
+          # Run benchmarks - capture exit code properly
+          if pytest tests/ -m "benchmark" \
+            --benchmark-only \
             --benchmark-json=current-benchmark.json \
-            "${COMPARE_ARGS[@]}" || true
+            "${COMPARE_ARGS[@]}"; then
+            echo "status=passed" >> $GITHUB_OUTPUT
+          else
+            BENCHMARK_EXIT=$?
+            if [ $BENCHMARK_EXIT -eq 1 ]; then
+              echo "status=regression" >> $GITHUB_OUTPUT
+              echo "⚠️ Performance regression detected (>10% mean increase)"
+            else
+              echo "status=failed" >> $GITHUB_OUTPUT
+              echo "❌ Benchmark execution failed with exit code $BENCHMARK_EXIT"
+            fi
+          fi
 
       - name: Analyze memory usage
         run: |
@@ -102,27 +152,29 @@ jobs:
               test_import()
           EOF
 
-          python -m memory_profiler mem_test.py > memory-report.txt || true
+          python -m memory_profiler mem_test.py > memory-report.txt 2>&1 || echo "Memory profiling skipped"
 
       - name: Generate performance report
         run: |
-          cat > performance-summary.md << 'EOF'
+          BENCHMARK_STATUS="${{ steps.benchmark.outputs.status }}"
+          
+          cat > performance-summary.md << EOF
           # 📊 Performance Test Results
 
+          ## Status
+          - Benchmark Status: **${BENCHMARK_STATUS:-unknown}**
+          - Baseline Source: **${{ steps.baseline.outputs.baseline_source }}**
+
           ## Benchmark Summary
-          See `current-benchmark.json` for detailed results.
+          $(if [ -f current-benchmark.json ]; then echo "See \`current-benchmark.json\` for detailed results."; else echo "No benchmark results generated."; fi)
 
           ## Memory Profile
-          See `memory-report.txt` for memory usage analysis.
-
-          ## Status
-          - ✅ Tests completed
-          - Check for regressions > 10%
+          $(if [ -f memory-report.txt ]; then echo "See \`memory-report.txt\` for memory usage analysis."; else echo "Memory profiling not available."; fi)
           EOF
 
       - name: Upload results
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08  # v4.6.0
         with:
           name: performance-results
           path: |
@@ -130,51 +182,43 @@ jobs:
             memory-report.txt
             performance-summary.md
           if-no-files-found: warn
+          retention-days: 30
+          overwrite: true  # Allow overwriting for baseline storage
 
-      - name: Save as baseline (main branch only)
-        if: github.ref == 'refs/heads/main' && hashFiles('current-benchmark.json') != ''
-        uses: actions/upload-artifact@v7
+      - name: Create issue on regression (deduplicated)
+        if: steps.benchmark.outputs.status == 'regression'
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd  # v8
         with:
-          name: baseline-benchmark
-          path: current-benchmark.json
-          if-no-files-found: warn
-
-      - name: Comment on PR
-        if: github.event_name == 'pull_request'
-        continue-on-error: true
-        uses: actions/github-script@v8
-        with:
-          retries: 3
           script: |
-            const fs = require('fs');
-
-            let summary = '# 📊 Performance Test Results\n\n';
-
-            // Check if performance summary exists
-            if (fs.existsSync('performance-summary.md')) {
-              summary = fs.readFileSync('performance-summary.md', 'utf8');
-            } else {
-              summary += 'ℹ️  No performance benchmarks generated.\n\n';
-              summary += 'To enable performance tracking, add benchmark tests:\n';
-              summary += '```python\n';
-              summary += 'def test_performance(benchmark):\n';
-              summary += '    result = benchmark(your_function)\n';
-              summary += '```\n';
-            }
-
-            // Add memory report if available
-            if (fs.existsSync('memory-report.txt')) {
-              const memReport = fs.readFileSync('memory-report.txt', 'utf8');
-              summary += '\n## Memory Profile\n```\n' + memReport.slice(0, 500) + '\n```\n';
-            }
-
-            try {
+            // Check for existing open regression issue to avoid duplicates
+            const { data: issues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'performance,regression,automated',
+              per_page: 10
+            });
+            
+            const existingIssue = issues.find(i => 
+              i.title.includes('Performance Regression Detected')
+            );
+            
+            if (existingIssue) {
+              // Update existing issue with new run info
               await github.rest.issues.createComment({
-                issue_number: context.issue.number,
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                body: summary
+                issue_number: existingIssue.number,
+                body: `🔄 **New regression detected**\n\nWorkflow run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}\n\nThis regression was detected again on ${new Date().toISOString()}.`
               });
-            } catch (error) {
-              core.warning(`Performance PR comment failed: ${error.message}`);
+              console.log(`Updated existing issue #${existingIssue.number}`);
+            } else {
+              // Create new issue
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: '⚠️ Performance Regression Detected',
+                body: `Performance benchmarks detected regression beyond acceptable threshold (>10% mean increase).\n\nCheck the workflow run for details: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+                labels: ['performance', 'regression', 'automated']
+              });
             }

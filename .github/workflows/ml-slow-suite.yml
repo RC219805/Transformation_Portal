@@ -6,6 +6,11 @@ on:
     - cron: "30 3 * * *"
   workflow_dispatch:
 
+# Prevent overlapping scheduled runs while allowing manual runs during scheduled runs
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}
+  cancel-in-progress: false
+
 permissions:
   contents: read
   issues: write
@@ -17,22 +22,22 @@ jobs:
     timeout-minutes: 120
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
         with:
           python-version: "3.11"
 
       - name: Cache pip packages
-        uses: actions/cache@v5
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684  # v4.2.3
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-ml-slow-${{ hashFiles('requirements-ci.txt') }}
+          key: ${{ runner.os }}-pip-ml-slow-${{ hashFiles('requirements-ci.txt', 'pyproject.toml') }}
 
       - name: Cache ML models
         id: cache-models
-        uses: actions/cache@v5
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684  # v4.2.3
         with:
           path: |
             ~/.cache/huggingface
@@ -107,21 +112,44 @@ jobs:
 
       - name: Upload slow-suite artifacts
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08  # v4.6.0
         with:
           name: ml-slow-suite-artifacts
           path: test-results/
           retention-days: 14
 
-      - name: Create issue on nightly failure
+      - name: Create issue on nightly failure (deduplicated)
         if: failure() && github.event_name == 'schedule'
-        uses: actions/github-script@v8
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd  # v8
         with:
           script: |
-            github.rest.issues.create({
+            // Check for existing open ML slow suite failure issue
+            const { data: issues } = await github.rest.issues.listForRepo({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              title: '🚨 ML Slow Suite failed',
-              body: `Nightly slow-ML suite failed.\n\nRun: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
-              labels: ['nightly-failure', 'ML', 'automated']
-            })
+              state: 'open',
+              labels: 'nightly-failure,ML,automated',
+              per_page: 10
+            });
+            
+            const existingIssue = issues.find(i => 
+              i.title.includes('ML Slow Suite failed')
+            );
+            
+            if (existingIssue) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existingIssue.number,
+                body: `🔄 **ML slow suite failed again**\n\nRun: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}\n\nTimestamp: ${new Date().toISOString()}`
+              });
+              console.log(`Updated existing issue #${existingIssue.number}`);
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: '🚨 ML Slow Suite failed',
+                body: `Nightly slow-ML suite failed.\n\nRun: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+                labels: ['nightly-failure', 'ML', 'automated']
+              });
+            }
