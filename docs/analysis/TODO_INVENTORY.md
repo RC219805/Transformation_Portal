@@ -22,7 +22,7 @@ This document provides a **complete, categorized inventory** of all TODOs, NotIm
 **Major Updates:**
 - ✅ Synchronized inventory references with the merged curated web-stack compatibility update
 - ✅ Added documentation-level acknowledgement that Starlette 1.0 compatibility work is complete, not pending
-- ✅ Kept invalid ML lock regeneration out of active TODO tracking because it was removed from the merged curated PR
+- ✅ Clarified that the curated web-stack PR removed invalid ML lock regeneration churn, while the underlying ML lock-generation trust defect remains active and is tracked as follow-up issue #1279, so it is not duplicated here as a separate inventory item
 
 ## Version 2.4.0 Changes (2026-03-25)
 
