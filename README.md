@@ -86,7 +86,7 @@ Transformation Portal supports depth models across two tiers with different lice
 ### Production Path
 - **DA3 (`da3` backend):** Primary production backend for Lux Depth V3
 - **Use for:** The default governed depth workflow, with a commercial-safe model tier
-- **Requirement:** Install a trusted ML core profile for actual DA3 inference, for example `make install-ml-core` or `./scripts/bootstrap/install_ml_stack.sh --profile core-cpu`
+- **Requirement:** Install a trusted ML core profile for actual DA3 inference. These trusted ML install flows are currently supported on macOS and Linux only; Windows users should use WSL2 or another Unix-like environment. For example: `make install-ml-core` or `./scripts/bootstrap/install_ml_stack.sh --profile core-cpu`. CUDA-accelerated profiles are Linux-only.
 - **Default:** Standard CLI flows resolve here unless a research-only backend is explicitly requested
 
 ### Research & Non-Commercial
