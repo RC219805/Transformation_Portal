@@ -86,7 +86,7 @@ Transformation Portal supports depth models across two tiers with different lice
 ### Production Path
 - **DA3 (`da3` backend):** Primary production backend for Lux Depth V3
 - **Use for:** The default governed depth workflow, with a commercial-safe model tier
-- **Requirement:** Install the ML tier for actual DA3 inference (`make install-ml` or `pip install -e ".[ml]"`)
+- **Requirement:** Install a trusted ML core profile for actual DA3 inference, for example `make install-ml-core` or `./scripts/bootstrap/install_ml_stack.sh --profile core-cpu`
 - **Default:** Standard CLI flows resolve here unless a research-only backend is explicitly requested
 
 ### Research & Non-Commercial
@@ -264,12 +264,16 @@ lux-depth-v3 --help
 
 Core-only installs are useful for documentation, contract checks, portal/orchestrator surfaces, and non-ML utilities. Actual depth inference with the default `da3` backend requires the ML tier unless you are intentionally exercising synthetic fallback in a constrained test setup.
 
-Add the ML tier when you need DA3 depth inference, research backends, segmentation, or other model-heavy workflows:
+Add a trusted ML profile when you need DA3 depth inference, research backends, segmentation, or other model-heavy workflows:
 
 ```bash
-make install-ml
+make install-ml-core
+# or use the target-specific bootstrap flow:
+./scripts/bootstrap/install_ml_stack.sh --profile core-cpu
 make test-fast
 ```
+
+The umbrella ML install path is intentionally disabled until a trusted checked-in umbrella lockfile contract exists again.
 
 For a more guided environment bring-up, see [SETUP_GUIDE.md](docs/guides/SETUP_GUIDE.md).
 
