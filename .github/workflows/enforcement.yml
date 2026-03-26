@@ -154,7 +154,8 @@ jobs:
           pip install -e ".[ml]" -c requirements/constraints.txt
 
       - name: Run ML tests
-        run: pytest tests/ -m "ml" --maxfail=3
+        # Exclude slow/benchmark markers to keep PR runtime predictable
+        run: pytest tests/ -m "ml and not slow and not benchmark" --maxfail=3
 
   golden-regression:
     name: Golden Regression Tests
