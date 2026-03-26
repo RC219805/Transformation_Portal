@@ -61,7 +61,7 @@ The following dependencies are **exact-pinned** in `requirements/base.in` for AP
 
 ```
 fastapi==0.135.1
-starlette==0.52.1
+starlette==1.0.0
 uvicorn==0.42.0
 aiofiles==25.1.0
 ```
@@ -86,18 +86,19 @@ Dependabot PRs that bump exact-pinned dependencies **must not be merged as routi
 
 ---
 
-## Current Open Dependabot PRs (2026-03-26)
+## Resolved Dependabot Wave (2026-03-26)
 
 ### Merge Order Recommendations
 
-| Order | PR | Change | Risk | Recommendation |
-|-------|-----|--------|------|----------------|
-| 1 | #1273 | `actions/download-artifact` 8.0.0 → 8.0.1 | Low | ✅ **Merge now** |
-| 2 | #1274 | `component-detection-dependency-submission-action` SHA bump | Low | ✅ **Merge now** |
-| 3 | #1270 | `actions/github-script` 7.0.1 → 8.0.0 | Low-Medium | ✅ **Merge after quick smoke** |
-| 4 | #1272 | `actions/deploy-pages` 4.0.5 → 5.0.0 | Medium | ⚠️ **Merge after targeted Pages smoke** |
-| 5 | #1271 | `codecov/codecov-action` 4.6.0 → 5.5.3 | Medium | ⚠️ **Do not blind-merge; smoke first** |
-| 6 | #1275 | `starlette` 0.52.1 → 1.0.0 | High | 🛑 **HOLD - do not merge as-is** |
+| Order | PR | Change | Risk | Outcome |
+|-------|-----|--------|------|---------|
+| 1 | #1273 | `actions/download-artifact` 8.0.0 → 8.0.1 | Low | ✅ Merged |
+| 2 | #1274 | `component-detection-dependency-submission-action` SHA bump | Low | ✅ Merged |
+| 3 | #1270 | `actions/github-script` 7.0.1 → 8.0.0 | Low-Medium | ✅ Merged after validation |
+| 4 | #1272 | `actions/deploy-pages` 4.0.5 → 5.0.0 | Medium | ✅ Merged after targeted review |
+| 5 | #1271 | `codecov/codecov-action` 4.6.0 → 5.5.3 | Medium | ✅ Merged after targeted review |
+| 6 | #1275 | `starlette` 0.52.1 → 1.0.0 | Critical | ✅ Closed in favor of curated issue/PR flow |
+| 7 | #1278 | Curated Starlette 1.0 compatibility PR | High | ✅ Merged |
 
 ### PR Details
 
@@ -131,12 +132,18 @@ Dependabot PRs that bump exact-pinned dependencies **must not be merged as routi
 - **Limitation**: Coverage upload behavior may change; PR CI doesn't fully validate
 - **Validation**: Test coverage upload on a non-critical branch before merge
 
-#### #1275 - starlette (HOLD - DO NOT MERGE)
+#### #1275 - starlette (CLOSED, REPLACED BY CURATED PR)
 - **Scope**: Core web stack dependency
 - **Impact**: Framework major (0.x → 1.0), exact-pinned dependency
 - **Conflict**: Violates `requirements/base.in` exact-pin policy
-- **mergeable_state**: `behind` (not mergeable as-is)
-- **Required Action**: Close this PR; create a curated compatibility PR that validates FastAPI/Starlette pair
+- **Disposition**: Closed and replaced with issue `#1277` + curated PR `#1278`
+- **Result**: Starlette 1.0 validated and merged without bundling the invalid cross-platform ML lock regeneration
+
+#### #1278 - curated Starlette compatibility (MERGED)
+- **Scope**: `pyproject.toml`, `requirements/base.in`, `requirements/base.txt`, `requirements/all.txt`
+- **Validated Set**: FastAPI `0.135.1`, Starlette `1.0.0`, Uvicorn `0.42.0`
+- **Validation**: `make test-orchestrator-contract`, `make ci`, curated live orchestrator smoke
+- **Governance Lesson**: Exact-pinned web stack updates require issue-first / PR-second handling when Dependabot crosses a compatibility boundary
 
 ---
 
@@ -174,6 +181,7 @@ Before merging any Dependabot PR:
 | Date | Change | Author |
 |------|--------|--------|
 | 2026-03-26 | Initial creation with PR #1270-#1275 assessment | Architect |
+| 2026-03-26 | Updated after #1275 closure and curated Starlette merge via #1278 | Architect |
 
 ---
 

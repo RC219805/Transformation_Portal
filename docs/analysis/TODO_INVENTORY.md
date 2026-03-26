@@ -1,9 +1,9 @@
 # TODO Inventory - Transformation Portal
 
-**Document Version:** 2.4.0
-**Date:** March 25, 2026
-**Last Updated:** 2026-03-25 (Codebase Audit)
-**Previous Version:** 2.3.0 (2026-03-24)
+**Document Version:** 2.4.1
+**Date:** March 26, 2026
+**Last Updated:** 2026-03-26 (Documentation synchronization)
+**Previous Version:** 2.4.0 (2026-03-25)
 
 ---
 
@@ -16,6 +16,13 @@ This document provides a **complete, categorized inventory** of all TODOs, NotIm
 - Audit trail for architectural decisions
 - Integration with issue tracking systems
 - Binding inventory enforced by Architect governance
+
+## Version 2.4.1 Changes (2026-03-26)
+
+**Major Updates:**
+- ✅ Synchronized inventory references with the merged curated web-stack compatibility update
+- ✅ Added documentation-level acknowledgement that Starlette 1.0 compatibility work is complete, not pending
+- ✅ Kept invalid ML lock regeneration out of active TODO tracking because it was removed from the merged curated PR
 
 ## Version 2.4.0 Changes (2026-03-25)
 

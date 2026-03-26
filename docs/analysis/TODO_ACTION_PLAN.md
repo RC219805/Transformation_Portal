@@ -1,9 +1,9 @@
 # TODO Action Plan - Transformation Portal
 
 **Generated**: 2026-03-13
-**Last Updated**: 2026-03-25
+**Last Updated**: 2026-03-26
 **Scope**: Comprehensive review of all outstanding TODOs across the codebase
-**Cross-Reference**: [TODO_INVENTORY.md](./TODO_INVENTORY.md) (v2.4.0)
+**Cross-Reference**: [TODO_INVENTORY.md](./TODO_INVENTORY.md) (v2.4.1)
 
 ---
 
@@ -24,6 +24,14 @@ This action plan consolidates findings from a codebase-wide TODO review and prov
 All source code TODOs in `src/` have been cleaned up. The remaining test TODOs are observational notes for performance tracking.
 
 > **Note on Documentation TODO counts:** The ~190 count represents **repository-wide TODO markers** found in markdown files (historical notes, status markers, archive candidates). This is distinct from the ~38 **experimental-feature-focused markers** tracked in `OUTSTANDING_TODOS_EXPERIMENTAL_FEATURES.md`. Neither set requires implementation action—they are documentation annotations retained for context.
+
+### Recent Governance Completion (2026-03-26)
+
+- Exact-pinned web stack compatibility work is no longer pending.
+- Dependabot PR `#1275` was closed and replaced by curated issue `#1277` and PR `#1278`.
+- The merged validated set is FastAPI `0.135.1`, Starlette `1.0.0`, Uvicorn `0.42.0`.
+- Invalid cross-platform ML lock regeneration was explicitly removed from that change set.
+- Separate follow-up is now tracked in issue `#1279` ("Fix trust model for platform-specific ML lock generation").
 
 ### Priority Summary
 

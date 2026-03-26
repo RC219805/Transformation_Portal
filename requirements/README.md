@@ -15,7 +15,7 @@ requirements/
 ├── ml-core.in              # ML core layer - cross-platform (legacy)
 ├── ml-core-darwin.in       # ML core layer - macOS (torch 2.2.2)
 ├── ml-core-darwin.txt      # ML core layer - macOS (pinned)
-├── ml-core-linux.in        # ML core layer - Linux (torch 2.10.0)
+├── ml-core-linux.in        # ML core layer - Linux (torch 2.2.2)
 ├── ml-core-linux.txt       # ML core layer - Linux (pinned)
 ├── ml-cpu.in               # ML CPU acceleration layer
 ├── ml-cpu.txt              # ML CPU layer (pinned)
@@ -113,6 +113,18 @@ The repository has **root-level** requirements files that reference this layered
 - `requirements/ci.in` contains **CI pipeline tools** (bandit, safety, build, twine, etc.)
 - Core test runner deps in root `requirements-ci.txt` must match `requirements/dev.in`. The enforced set is defined as `CORE_TEST_DEPS` in `scripts/validation/check_ci_dep_sync.py` (currently: pytest, pytest-cov, pytest-asyncio, pytest-json-report, pytest-xdist, hypothesis, httpx)
 - Run `make check-ci-sync` to verify no drift for this core test runner set between the root files
+
+### Current Web Runtime Baseline
+
+The repository's governed web stack currently resolves to:
+
+| Dependency | Source of Truth | Current Version |
+|-----------|-----------------|-----------------|
+| FastAPI | `requirements/base.in` | `0.135.1` |
+| Starlette | `requirements/base.in` + `pyproject.toml` bound | `1.0.0` |
+| Uvicorn | `requirements/base.in` | `0.42.0` |
+
+This baseline was validated and merged via the curated compatibility path on 2026-03-26. Do not treat future updates to these exact pins as routine dependency bumps; use the governance flow documented in `docs/governance/DEPENDABOT_PR_GOVERNANCE.md`.
 
 ### Layered ML Strategy
 

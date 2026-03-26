@@ -1,8 +1,8 @@
 # Development Roadmap: Q2 2026
 
 **Status:** ACTIVE
-**Version:** 1.4.0
-**Date:** 2026-03-23
+**Version:** 1.4.1
+**Date:** 2026-03-26
 **Authority:** Architect Assessment
 **Supersedes:** v1.3.0 (2026-03-23), v1.2.0 (2026-03-22), v1.1.0 (2026-03-22), v1.0.0 (2026-03-20)
 
@@ -19,6 +19,7 @@ This roadmap identifies the **highest-signal development priorities** for the Tr
 - ADR-043 Orchestrator Decomposition (complete)
 - ADR-044 Test Marker Enforcement (implemented, validation pending)
 - Current quality-control workflow review (`build.yml`, `ci.yml`, `ci-quality-firewall.yml`, `quality-gate.yml`)
+- Curated web-stack compatibility merge (`#1278`)
 
 **Goal:** Raise overall codebase health from **7.6/10 → 8.6/10** by end of Q2 2026.
 
@@ -91,6 +92,21 @@ Work in this section has landed and is no longer a primary implementation track,
 - Pre-commit hook blocks unmarked new tests
 - `check_test_markers.py --audit` validates coverage
 - All quality-control workflows (build.yml, ci.yml, ci-quality-firewall.yml) migrated to positive marker selection
+
+### 2A. Exact-Pinned Web Stack Compatibility Update
+
+| Gate | Status | Evidence |
+|------|--------|----------|
+| Decision | ✅ Complete | Exact-pinned web stack treated as curated compatibility work, not routine Dependabot merge |
+| Implementation | ✅ Complete | `pyproject.toml`, `requirements/base.in`, `requirements/base.txt`, `requirements/all.txt` updated |
+| Validation | ✅ Complete | `make test-orchestrator-contract`, `make ci`, curated live orchestrator smoke |
+| Governance | ✅ Complete | `#1275` closed; issue `#1277` and PR `#1278` documented and merged |
+
+**Outcome:**
+- Current validated runtime set: FastAPI `0.135.1`, Starlette `1.0.0`, Uvicorn `0.42.0`
+- Invalid cross-platform ML lock regeneration was explicitly removed from the curated PR before merge
+- Separate packaging follow-up is tracked in issue `#1279`
+- Future exact-pin web-stack upgrades should follow the same issue-first / PR-second governance path
 
 ---
 
