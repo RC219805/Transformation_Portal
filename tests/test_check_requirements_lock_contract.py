@@ -61,6 +61,13 @@ def test_header_mismatch_is_reported(isolated_repo: Path) -> None:
     assert errors == [f"{isolated_repo / 'requirements' / 'base.txt'} was generated with Python 3.12; " "expected Python 3.11"]
 
 
+def test_missing_platform_core_lockfile_is_reported(isolated_repo: Path) -> None:
+    (isolated_repo / "requirements" / "ml-core-linux.txt").unlink()
+    expected = contract.read_expected_lock_python_version()
+    errors = contract.validate_lockfile_headers(expected)
+    assert errors == [f"Missing required lockfile: {isolated_repo / 'requirements' / 'ml-core-linux.txt'}"]
+
+
 def test_noncore_optional_lockfile_is_reported(isolated_repo: Path) -> None:
     write_lockfile(isolated_repo, "ml.txt", "3.11")
     errors = contract.validate_noncore_optional_lockfiles_absent()

@@ -36,7 +36,7 @@
 #   research    Research/experimental extras (reserved)
 #
 # Convenience:
-#   full        Core CPU baseline + RAW ingest capability
+#   full        Reserved until a trusted umbrella contract exists again
 #
 # Environment Variables:
 #   PYTORCH_INDEX   Custom PyTorch index URL (default: https://download.pytorch.org/whl/cpu)
@@ -109,7 +109,7 @@ PROFILES (Platform Matrix - ADR-032):
       research    Research/experimental extras (reserved)
 
     Convenience profiles:
-      full        Core CPU baseline + RAW ingest capability
+      full        Reserved until a trusted umbrella contract exists again
 
 PLATFORM TARGETS:
     darwin-x86_64-cpu   macOS Intel (core-cpu)
@@ -132,13 +132,14 @@ EXAMPLES:
     # Install NVIDIA CUDA acceleration (Linux only)
     PYTORCH_INDEX=https://download.pytorch.org/whl/cu121 $(basename "$0") --profile core-cuda
 
-    # Install ML baseline with RAW ingest capability
-    $(basename "$0") --profile core-cpu,raw
+    # Install SAM2 on top of a trusted core profile
+    $(basename "$0") --profile core-mps,sam2
 
-    # Install full ML stack
+    # full/raw/coreml/research are disabled until trusted target-correct
+    # checked-in contracts exist again
     $(basename "$0") --profile full
 
-    # Dry run to see what would be installed
+    # Dry run to see what a trusted profile would install
     $(basename "$0") --profile core-mps,sam2 --dry-run
 
 EOF
@@ -352,13 +353,9 @@ install_profile() {
             fi
             ;;
         raw)
-            log_info "Installing ML RAW ingest layer from requirements/ml-raw.in under constraints..."
-            if [[ "${DRY_RUN}" == "true" ]]; then
-                log_info "[DRY-RUN] Would install: requirements/ml-raw.in"
-                log_info "[DRY-RUN] With constraint file: requirements/constraints.txt"
-            else
-                "${pip_cmd[@]}" -c "${REQUIREMENTS_DIR}/constraints.txt" -r "${REQUIREMENTS_DIR}/ml-raw.in"
-            fi
+            log_error "raw profile no longer has a trusted checked-in lockfile contract."
+            log_error "Generate a target-correct raw lockfile in the appropriate environment before using this profile."
+            exit 1
             ;;
         sam2)
             # SAM2 is a SCRIPTED-ONLY capability - not a standard lockfile contract.
@@ -399,27 +396,19 @@ install_profile() {
                 log_warn "CoreML layer is only available on macOS. Skipping."
                 return 0
             fi
-            log_info "Installing ML CoreML layer from requirements/ml-coreml.in under constraints..."
-            if [[ "${DRY_RUN}" == "true" ]]; then
-                log_info "[DRY-RUN] Would install: requirements/ml-coreml.in"
-                log_info "[DRY-RUN] With constraint file: requirements/constraints.txt"
-            else
-                "${pip_cmd[@]}" -c "${REQUIREMENTS_DIR}/constraints.txt" -r "${REQUIREMENTS_DIR}/ml-coreml.in"
-            fi
+            log_error "coreml profile no longer has a trusted checked-in lockfile contract."
+            log_error "Generate a target-correct CoreML lockfile in the appropriate environment before using this profile."
+            exit 1
             ;;
         research)
-            log_info "Installing ML research/experimental layer from requirements/ml-research.in under constraints..."
-            if [[ "${DRY_RUN}" == "true" ]]; then
-                log_info "[DRY-RUN] Would install: requirements/ml-research.in"
-                log_info "[DRY-RUN] With constraint file: requirements/constraints.txt"
-            else
-                "${pip_cmd[@]}" -c "${REQUIREMENTS_DIR}/constraints.txt" -r "${REQUIREMENTS_DIR}/ml-research.in"
-            fi
+            log_error "research profile no longer has a trusted checked-in lockfile contract."
+            log_error "Generate a target-correct research lockfile in the appropriate environment before using this profile."
+            exit 1
             ;;
         full)
-            log_info "Installing full ML stack as composed profiles: core-cpu + raw"
-            install_profile "core-cpu"
-            install_profile "raw"
+            log_error "full profile is disabled until a trusted umbrella lockfile contract exists again."
+            log_error "Use target-specific core profiles explicitly instead."
+            exit 1
             ;;
         *)
             log_error "Unknown profile: ${profile}"

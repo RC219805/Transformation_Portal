@@ -46,7 +46,8 @@ PIP_COMPILE := mkdir -p "$(PIP_TOOLS_CACHE_DIR)" && PIP_TOOLS_CACHE_DIR="$(PIP_T
 PYTORCH_CPU_INDEX := --extra-index-url https://download.pytorch.org/whl/cpu
 
 # Default target: compile all requirements
-.PHONY: all compile compile-all compile-ml-layers update help clean check
+.PHONY: all compile compile-all compile-ml-layers update help clean check \
+	ml-core.txt ml-cpu.txt ml-mps.txt ml-cuda.txt ml-raw.txt ml-coreml.txt ml-research.txt ml.txt
 
 help:
 	@echo "Targets:"
@@ -59,7 +60,7 @@ help:
 	@echo "  clean             Remove all compiled .txt files"
 	@echo ""
 	@echo "Individual compilation targets:"
-	@echo "  all.txt              Compile all.txt (global resolution)"
+	@echo "  all.txt              Compile all.txt (checked-in contract aggregate)"
 	@echo "  base.txt             Compile base.txt (constrained by all.txt)"
 	@echo ""
 	@echo "Platform-specific ML Core targets:"
@@ -100,11 +101,9 @@ compile-accel: all.txt base.txt ml-core-darwin.txt ml-core-linux.txt
 	@echo "✓ Acceleration layer requirements compiled successfully"
 
 # Compile all.txt first for global resolution
-# Note: ml-sam2.in included for global resolution but NOT compiled as lockfile
-# Note: ml-cpu.in, ml-mps.in, ml-cuda.in included for acceleration layers
-# Note: Platform-specific ml-core-darwin.in and ml-core-linux.in used instead of ml-core.in
-all.txt: all.in base.in ml.in ml-core.in ml-core-darwin.in ml-core-linux.in ml-cpu.in ml-mps.in ml-cuda.in ml-raw.in ml-sam2.in ml-coreml.in ml-research.in dev.in ci.in
-	@echo "Compiling all.txt (global resolution)..."
+# Note: all.txt intentionally excludes optional ML layers from the checked-in contract.
+all.txt: all.in base.in dev.in ci.in
+	@echo "Compiling all.txt (checked-in contract aggregate)..."
 	@$(PIP_COMPILE) all.in -o all.txt
 
 # Compile individual files constrained by all.txt
@@ -185,7 +184,8 @@ check:
 		if [ -f "$$repo_dir/$$f" ]; then \
 			cp "$$repo_dir/$$f" "$$tmp_dir"/; \
 		else \
-			echo "INFO: Optional ML layer lockfile not found: $$f (will be compiled by CI)"; \
+			echo "ERROR: Required lockfile missing: $$f"; \
+			exit 1; \
 		fi; \
 	done; \
 	cd "$$tmp_dir"; \

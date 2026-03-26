@@ -36,6 +36,7 @@ CORE_LOCK_FILES = (
     "base.txt",
     "dev.txt",
     "ci.txt",
+    "security.txt",
     "tools-archive.txt",
 )
 
@@ -100,7 +101,6 @@ def validate_lockfile_headers(expected_python: str) -> list[str]:
     - Scripted-only layers: validated if present but not required
     """
     errors: list[str] = []
-    warnings: list[str] = []
     for lock_name in ALL_LOCK_FILES:
         lock_path = REQUIREMENTS_DIR / lock_name
         if not lock_path.is_file():
@@ -108,11 +108,6 @@ def validate_lockfile_headers(expected_python: str) -> list[str]:
             if lock_name in SCRIPTED_ONLY_ML_LAYERS:
                 # Silently skip - scripted-only layers may not have lockfiles
                 continue
-            # Platform-specific ML core files are optional during transition
-            if lock_name in PLATFORM_ML_CORE_LOCK_FILES:
-                warnings.append(f"Optional platform-specific lockfile not found (will be compiled by CI): {lock_name}")
-                continue
-            # Core files must exist
             errors.append(f"Missing required lockfile: {lock_path}")
             continue
 
@@ -129,10 +124,6 @@ def validate_lockfile_headers(expected_python: str) -> list[str]:
         actual_python = header_match.group(1)
         if actual_python != expected_python:
             errors.append(f"{lock_path} was generated with Python {actual_python}; " f"expected Python {expected_python}")
-
-    # Print warnings to stderr (informational, not blocking)
-    for warning in warnings:
-        print(f"WARNING: {warning}", file=sys.stderr)
 
     return errors
 

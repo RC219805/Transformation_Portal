@@ -33,11 +33,11 @@ help:
 	@echo "Targets:"
 	@echo "  setup              Install package in editable mode (pip install -e .)"
 	@echo "  install-core       Install core dependencies with constraints"
-	@echo "  install-ml         Install all ML tier dependencies (umbrella)"
+	@echo "  install-ml         Disabled: no trusted umbrella ML lockfile contract"
 	@echo "  install-ml-core    Install ML core layer only (cross-platform baseline)"
-	@echo "  install-ml-raw     Install ML RAW ingest layer (platform-scoped)"
+	@echo "  install-ml-raw     Disabled: no trusted checked-in RAW lockfile contract"
 	@echo "  install-ml-sam2    Install ML SAM2 layer (optional segmentation)"
-	@echo "  install-ml-coreml  Install ML CoreML layer (macOS only)"
+	@echo "  install-ml-coreml  Disabled unless a trusted CoreML lockfile is present"
 	@echo "  test-fast          Run fast subset plus Phase 6 smoke coverage"
 	@echo "  test-novideo       Run all tests excluding video suite via -k filter"
 	@echo "  test-full          Run entire test suite (parallel if xdist present)"
@@ -101,16 +101,12 @@ install-core: venv
 # See requirements/README.md for layer documentation.
 
 install-ml: venv
-	@echo "Installing full ML tier dependencies (umbrella)..."
-	@if [ -f requirements/ml.txt ]; then \
-		"$(PY)" -m pip install -r requirements/ml.txt && \
-		"$(PY)" -m pip install -e .; \
-	elif [ -f requirements/constraints.txt ]; then \
-		"$(PY)" -m pip install -e ".[ml]" -c requirements/constraints.txt; \
-	else \
-		echo "Warning: No lockfile or constraints, installing with loose ranges"; \
-		"$(PY)" -m pip install -e ".[ml]"; \
-	fi
+	@echo "Error: install-ml no longer has a trusted checked-in umbrella lockfile contract."
+	@echo "Error: use target-specific bootstrap profiles instead, for example:"
+	@echo "Error:   ./scripts/bootstrap/install_ml_stack.sh --profile core-cpu"
+	@echo "Error:   ./scripts/bootstrap/install_ml_stack.sh --profile core-mps"
+	@echo "Error:   ./scripts/bootstrap/install_ml_stack.sh --profile core-cuda"
+	@exit 1
 
 install-ml-core: venv
 	@echo "Installing ML core layer (cross-platform baseline)..."
@@ -126,18 +122,9 @@ install-ml-core: venv
 	fi
 
 install-ml-raw: venv
-	@echo "Installing ML RAW ingest layer..."
-	@if [ -f requirements/ml-raw.txt ]; then \
-		"$(PY)" -m pip install -r requirements/ml-raw.txt && \
-		"$(PY)" -m pip install -e .; \
-	elif [ -f requirements/constraints.txt ]; then \
-		"$(PY)" -m pip install -c requirements/constraints.txt -r requirements/ml-raw.in && \
-		"$(PY)" -m pip install -e .; \
-	else \
-		echo "Warning: requirements/ml-raw.txt not found, installing raw layer from abstract input"; \
-		"$(PY)" -m pip install -r requirements/ml-raw.in && \
-		"$(PY)" -m pip install -e .; \
-	fi
+	@echo "Error: install-ml-raw no longer has a trusted checked-in lockfile contract."
+	@echo "Error: use a trusted target-specific flow or regenerate a target-correct lockfile in the appropriate environment."
+	@exit 1
 
 install-ml-sam2: venv
 	@echo "Installing ML SAM2 segmentation layer via bootstrap script..."
@@ -152,11 +139,9 @@ install-ml-coreml: venv
 	elif [ -f requirements/ml-coreml.txt ]; then \
 		"$(PY)" -m pip install -r requirements/ml-coreml.txt && \
 		"$(PY)" -m pip install -e .; \
-	elif [ -f requirements/constraints.txt ]; then \
-		"$(PY)" -m pip install -c requirements/constraints.txt -r requirements/ml-coreml.in && \
-		"$(PY)" -m pip install -e .; \
 	else \
-		echo "Error: requirements/ml-coreml.txt not found and no constraints file is available."; \
+		echo "Error: install-ml-coreml no longer has a trusted checked-in lockfile contract."; \
+		echo "Error: regenerate a target-correct CoreML lockfile in the appropriate environment first."; \
 		exit 1; \
 	fi
 

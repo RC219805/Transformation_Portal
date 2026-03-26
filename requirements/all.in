@@ -1,8 +1,7 @@
-# Aggregate of all dependencies for full install
-# This file includes all other .in files for a complete development environment.
+# Aggregate of the checked-in dependency contract
+# Optional ML layers are excluded because they do not have trusted checked-in lockfiles.
 # Run `make compile` in this directory to generate pinned all.txt
 
 -r base.in
--r ml.in
 -r dev.in
 -r ci.in
