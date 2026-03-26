@@ -26,9 +26,9 @@ The following are the enforced controls that constrain Dependabot PR acceptance:
 |---------|---------------------|-------------|
 | Python `>=3.11` | `pyproject.toml` | Dependencies must support Python 3.11+ |
 | Web stack exact pins | `requirements/base.in` | FastAPI/Starlette/uvicorn are intentionally pinned for API/UI parity |
-| Action SHA pinning | `enforcement.yml` → `action-pins` job | All workflow actions must be SHA-pinned |
+| Action SHA pinning | `enforcement.yml` → `action-pins` job | Third-party actions must be SHA-pinned; official `actions/*@v...` tags are currently allowed, and enforcement is strictest in critical workflows |
 | Banned dependencies | `enforcement.yml` → `banned-dependencies` job | Blocked packages cannot be introduced |
-| Dependency constraints | `build.yml` → `validate_constraints` job | ADR-032 constraint validation |
+| Dependency constraints | `build.yml` → `dependency-constraints` job; `ci-quality-firewall.yml` → `validate-dependency-constraints` job | ADR-032 constraint validation |
 
 ---
 
@@ -102,7 +102,7 @@ Dependabot PRs that bump exact-pinned dependencies **must not be merged as routi
 ### PR Details
 
 #### #1273 - actions/download-artifact (MERGE NOW)
-- **Scope**: `submit-pypi.yml` only (release upload jobs)
+- **Scope in this PR**: `submit-pypi.yml` only (release upload jobs)
 - **Impact**: Patch bump with minimal blast radius
 - **CI Status**: Green
 - **Validation**: PR CI is sufficient
