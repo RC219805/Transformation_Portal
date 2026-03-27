@@ -86,9 +86,9 @@ def test_agent_has_frontmatter():
 
     max_frontmatter_lines = 50
     has_closing_delimiter = any(line == "---" for line in lines[1:max_frontmatter_lines])
-    assert has_closing_delimiter, (
-        "Agent file must include a closing YAML frontmatter delimiter ('---') within the first 50 lines"
-    )
+    assert (
+        has_closing_delimiter
+    ), "Agent file must include a closing YAML frontmatter delimiter ('---') within the first 50 lines"
 
 
 def test_agent_frontmatter_has_name_and_description():
