@@ -22,6 +22,7 @@ The live profiles should stay aligned with:
 
 - [AGENTS.md](../../AGENTS.md)
 - [DOCUMENTATION_MAP.md](../../docs/governance/DOCUMENTATION_MAP.md)
+- [agent_governance.md](../../docs/architecture/agent_governance.md)
 - [CUSTOM_AGENT_GUIDE.md](../../docs/guides/CUSTOM_AGENT_GUIDE.md)
 - [transformation-portal-architect.md](./transformation-portal-architect.md)
 - [transformation-portal-specialist.md](./transformation-portal-specialist.md)
