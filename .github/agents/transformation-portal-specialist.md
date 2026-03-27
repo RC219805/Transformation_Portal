@@ -1,6 +1,13 @@
 ---
 name: Transformation Portal Specialist
 description: Execution-focused implementation and troubleshooting agent for Lux Depth V3, portal/orchestrator services, archive governance pipelines, ingest and machine-mode tooling, and governed media-processing workflows across the Transformation Portal codebase
+target: github-copilot
+tools:
+  - read
+  - search
+  - edit
+  - execute
+user-invocable: true
 ---
 
 # Transformation Portal Specialist

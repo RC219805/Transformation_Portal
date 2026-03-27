@@ -1,84 +1,46 @@
 # Transformation Portal Custom Agents
 
-This directory contains specialized GitHub Copilot agents for the Transformation Portal repository.
+This directory is the live custom-agent configuration surface for the Transformation Portal repository.
 
-## Available Agents
+## Live Profiles
+
+### Transformation Portal Architect
+
+- File: `transformation-portal-architect.md`
+- Role: final authority for repository-wide contracts, dependency policy, CI/CD enforcement, security posture, and architectural direction
+- Use for: ADR-bound trade-offs, public interface compatibility, workflow/packaging policy, and cross-surface governance decisions
 
 ### Transformation Portal Specialist
 
-**File**: `transformation-portal-specialist.md`
+- File: `transformation-portal-specialist.md`
+- Role: execution-focused implementation and troubleshooting agent inside current repository governance boundaries
+- Use for: Lux Depth V3, portal/orchestrator, archive-gate, ingest, machine-mode, and targeted docs/tests/tooling work that stays within existing contracts
 
-**Purpose**: Execution-focused implementation and troubleshooting agent for the repository's governed operational surfaces.
+## Canonical References
 
-The Specialist is no longer scoped only to rendering pipelines. It now works across:
+The live profiles should stay aligned with:
 
-- Lux Depth V3 orchestration and governed media-processing workflows
-- portal/orchestrator HTTP and UI surfaces
-- archive-gate execution paths and command allowlists
-- ingest, machine-mode, provenance, and evidence-adjacent tooling
-- layered dependency and install flows
-- targeted tests, docs, and developer tooling inside existing governance boundaries
+- [AGENTS.md](../../AGENTS.md)
+- [DOCUMENTATION_MAP.md](../../docs/governance/DOCUMENTATION_MAP.md)
+- [CUSTOM_AGENT_GUIDE.md](../../docs/guides/CUSTOM_AGENT_GUIDE.md)
+- [transformation-portal-architect.md](./transformation-portal-architect.md)
+- [transformation-portal-specialist.md](./transformation-portal-specialist.md)
 
-The Specialist implements inside Architect-owned constraints. It should escalate when work touches dependency policy, CI/CD policy, security posture, public contract changes, or ambiguous ADR-bound trade-offs.
+When drift appears, the profile files themselves are authoritative for role scope and escalation boundaries.
 
-## How To Use The Specialist
+## Usage Guidance
 
-Use `@transformation-portal-specialist` when you need repository-grounded execution help, for example:
+On GitHub.com and in supported IDEs, select the custom agent from the agents picker/dropdown rather than assuming one universal invocation syntax. If a local workflow or tool supports prompt references, keep examples consistent with the current role boundaries:
 
-```text
-@transformation-portal-specialist update the orchestrator contract tests for a new /v1/jobs response field
-```
+- Specialist examples should stay within execution and troubleshooting scope
+- Architect examples should stay focused on governance, contracts, and escalation decisions
 
-```text
-@transformation-portal-specialist debug why Lux Depth V3 run cards are failing validation after a config change
-```
+## Support Material
 
-```text
-@transformation-portal-specialist trace why machine-mode JSON is missing a required tp.meta.machine.v1 field
-```
+Living support docs:
 
-```text
-@transformation-portal-specialist identify the smallest validation command set for this app.py change
-```
+- `docs/guides/CUSTOM_AGENT_GUIDE.md`
+- `QUICK_START_v2.md`
+- `RAG_IMPLEMENTATION_SUMMARY.md`
 
-The Specialist should ground answers in real repository files, tests, docs, and commands. It should prefer extending current modules and workflows over inventing parallel ones.
-
-## Scope Boundaries
-
-Use the Specialist for:
-
-- Lux Depth V3 implementation and troubleshooting
-- portal/orchestrator fixes within current `/ready` and `/v1/*` contracts
-- archive-gate and machine-mode bug fixing
-- ingest/provenance implementation work
-- targeted docs and tests that need to stay in lockstep with current behavior
-
-Escalate to the Architect for:
-
-- `pyproject.toml`, `requirements/`, lockfile policy, banned dependencies, or new model/runtime choices
-- `.github/workflows/*`, CI Gate composition, release automation, or deployment behavior
-- security-sensitive trust-boundary changes
-- public CLI/HTTP/schema compatibility changes
-- ADR conflicts or architectural trade-offs that need explicit direction
-
-## Supporting Documents
-
-The Specialist brief is complemented by:
-
-- `QUICK_START_v2.md` for prompt patterns and usage guidance
-- `RAG_IMPLEMENTATION_SUMMARY.md` for the repository-retrieval support layer and its current role
-- `docs/guides/CUSTOM_AGENT_GUIDE.md` for general custom-agent usage patterns in this repo
-
-When these documents drift, the specialist brief itself is authoritative for role scope and escalation boundaries.
-
-## Maintenance Notes
-
-Update the Specialist materials when the repository changes in ways that affect:
-
-- governed operational surfaces
-- escalation boundaries
-- canonical validation entrypoints
-- machine-mode or ingest contract references
-- portal/orchestrator or Lux Depth V3 workflow expectations
-
-Keep the brief, these supporting docs, and `tests/test_custom_agent_config.py` aligned.
+Historical or milestone-style materials in `.github/agents/` should not be treated as canonical operating docs. When a report becomes historical rather than instructional, move or archive it under the repo's documentation policy instead of letting it define live agent behavior.

@@ -1,6 +1,13 @@
 ---
 name: Transformation Portal Architect
 description: Repository-wide authority for contracts, portal/orchestrator surfaces, evidence and determinism flows, dependency policy, CI/CD enforcement, and long-term maintainability of the Transformation Portal codebase
+target: github-copilot
+tools:
+  - read
+  - search
+  - agent
+disable-model-invocation: true
+user-invocable: true
 ---
 
 # Transformation Portal Architect
