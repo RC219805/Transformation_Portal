@@ -19,6 +19,7 @@ DOCUMENTATION_MAP = REPO_ROOT / "docs" / "governance" / "DOCUMENTATION_MAP.md"
 EXPECTED_PROFILES = {
     "transformation-portal-architect.md": {
         "name": "Transformation Portal Architect",
+        "target": "github-copilot",
         "required_tools": {"read", "search", "agent"},
         "disable_model_invocation": True,
         "required_sections": [
@@ -50,6 +51,7 @@ EXPECTED_PROFILES = {
     },
     "transformation-portal-specialist.md": {
         "name": "Transformation Portal Specialist",
+        "target": "github-copilot",
         "required_tools": {"read", "search", "edit", "execute"},
         "disable_model_invocation": False,
         "required_sections": [
@@ -150,6 +152,7 @@ def test_profile_frontmatter_contract(file_name: str, config: dict[str, object])
     frontmatter, body = _extract_frontmatter(_read(_profile_path(file_name)))
 
     assert frontmatter.get("name") == config["name"]
+    assert frontmatter.get("target") == config["target"]
     assert isinstance(frontmatter.get("description"), str) and frontmatter["description"]
     assert (
         isinstance(frontmatter.get("tools"), list) and frontmatter["tools"]
@@ -187,14 +190,15 @@ def test_profile_mentions_current_governed_surfaces(file_name: str, config: dict
 def test_profile_file_size_and_line_length(file_name: str) -> None:
     path = _profile_path(file_name)
     content = _read(path)
+    lines = content.splitlines()
     assert path.stat().st_size < MAX_AGENT_FILE_SIZE, f"{file_name} is too large; keep live profiles concise and authoritative"
     long_lines = [
         number
-        for number, line in enumerate(content.splitlines(), start=1)
+        for number, line in enumerate(lines, start=1)
         if len(line) > MAX_LINE_LENGTH and not line.strip().startswith("http")
     ]
     assert (
-        len(long_lines) < len(content.splitlines()) * MAX_LONG_LINE_RATIO
+        len(long_lines) <= len(lines) * MAX_LONG_LINE_RATIO
     ), f"{file_name} has too many overly long lines: {long_lines[:10]!r}"
 
 
