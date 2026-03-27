@@ -83,9 +83,7 @@ def test_agent_has_frontmatter():
 def test_agent_frontmatter_has_name_and_description():
     frontmatter = _extract_frontmatter(_read_specialist())
     assert re.search(r"^name:\s*.+", frontmatter, re.MULTILINE), "Frontmatter must include 'name:' field"
-    assert re.search(
-        r"^description:\s*.+", frontmatter, re.MULTILINE
-    ), "Frontmatter must include 'description:' field"
+    assert re.search(r"^description:\s*.+", frontmatter, re.MULTILINE), "Frontmatter must include 'description:' field"
 
 
 def test_agent_has_title():
@@ -102,9 +100,9 @@ def test_agent_has_required_contract_sections():
 def test_agent_covers_current_operational_surfaces():
     content_lower = _read_specialist().lower()
     for label, patterns in REQUIRED_SURFACE_PATTERNS.items():
-        assert any(re.search(pattern, content_lower) for pattern in patterns), (
-            f"Agent file must cover operational surface: {label}"
-        )
+        assert any(
+            re.search(pattern, content_lower) for pattern in patterns
+        ), f"Agent file must cover operational surface: {label}"
 
 
 def test_agent_lists_mandatory_escalation_domains():
