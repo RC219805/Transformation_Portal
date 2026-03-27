@@ -1,500 +1,578 @@
 # Copilot Instructions - Transformation Portal (RC219805)
 
-You are working in a production-grade **Image + Video Processing Transformation Portal**.
+You are working in a governed production repository for **luxury real estate / ArchViz rendering, ingest, archive, and portal orchestration**.
 
-This repo is a **context-aware rendering engine** for luxury real estate / ArchViz post-production: raw pixels enter; semantic + geometric intelligence (depth, materials, room context) drives deterministic, repeatable enhancements; finished assets exit.
+This codebase is broader than a single enhancement pipeline. It includes:
+
+- **Lux Depth V3**: depth-aware orchestration, PBR map generation, Materials V3, optional V2 enhancement, and governed deliverables
+- **Portal / orchestrator HTTP surfaces**: readiness and job-oriented endpoints for governed execution
+- **Ingest + provenance + machine-mode contracts**: audit-grade metadata capture, typed JSON automation, evidence projection, and detached attestation flows
+- **Archive / fixity / governance tooling**: manifests, Merkle roots, signatures, rights policy, and export utilities
+- **Workflow assets**: ComfyUI examples/templates and operational scripts for repeatable execution
 
 Optimize for:
 
-* **Correctness and determinism**
-* **Contract stability** (v2.0.0 "Golden Path" is the baseline)
-* **Performance under the Quality Firewall** (no regressions)
-* **Safe change management** (small PRs, reviewable diffs, docs + tests updated)
+- **Contract integrity**
+- **Deterministic behavior**
+- **Import-surface stability**
+- **Performance under APEX / Quality Firewall rules**
+- **Small, reviewable, low-risk changes**
+- **Documentation and tests that stay in lockstep with behavior**
 
-This repository is **not** a government / health IT "portal". Do not introduce assumptions, workflows, or terminology from those domains.
+This repository is **not** a generic CRUD portal, government portal, or health IT system. Do not import assumptions, workflows, naming, or compliance language from those domains.
 
 ---
 
 ## Non-Negotiables
 
-1. **Preserve Golden Path behavior**
+### 1) Preserve public contract surfaces
 
-   * Do not change default outputs, preset defaults, schema semantics, or public CLI/API behavior unless the change is explicitly contract-scoped and versioned.
-2. **Keep CI green**
+Treat these as binding until a versioned change explicitly says otherwise:
 
-   * No model downloads in tests.
-   * Minimal disk usage.
-   * Fast feedback loops: isolate heavy tests behind markers.
-3. **Never paper over failures**
+- `lux-depth-v3` CLI behavior and `python -m transformation_portal.lux_depth_v3`
+- Portal / orchestrator HTTP behavior, including readiness and job endpoints
+- Import surfaces for both `transformation_portal` **and** `tp`
+- Schema-backed automation and provenance contracts:
+  - ingest contract (`v1.0.2`)
+  - machine-mode JSON (`tp.meta.machine.v1`)
+  - evidence / attestation artifacts
+- Stable presets, quality-tier semantics, and deliverable naming where already governed
 
-   * Fix root causes rather than broadly skipping tests or weakening assertions.
-   * Comments must match reality (if CI runs a test, do not claim it is skipped).
-4. **Precision over speed**
+Do **not** silently change:
+- default quality behavior
+- preset meanings
+- output file semantics
+- machine JSON envelope keys
+- portal request/response shapes
+- import paths that CI or wheel installs rely on
 
-   * Be explicit. Validate inputs early. Handle optional deps safely. Avoid fragile mocks.
+### 2) Keep minimal environments working
 
----
-
-## Repository Map
-
-Place changes in the correct zone. Avoid new root-level scripts unless truly necessary.
-
-| Area       | Purpose                                      | Rules of thumb                                                 |
-| ---------- | -------------------------------------------- | -------------------------------------------------------------- |
-| `src/`     | Installable package code                     | Preferred for new production logic. Keep APIs stable.          |
-| `scripts/` | Thin orchestration runners                   | CLI glue only; delegate logic into `src/`.                     |
-| `config/`  | YAML presets and configuration               | Stable/canary/experimental taxonomy enforced.                  |
-| `assets/`  | LUTs + look assets                           | Treat as brand-critical assets; keep versioned + reproducible. |
-| `docs/`    | Architecture + guides + governance docs      | Update whenever workflows/behavior change.                     |
-| `tools/`   | DevOps utilities (Quality Firewall, ledgers) | Deterministic, testable, safe file IO.                         |
-| `tests/`   | Pytest suite                                 | Fast by default; heavy isolated via markers.                   |
-
-**Import discipline (important):**
-
-* Use absolute imports from the installed package under `src/`.
-* Never rely on "local folder imports" that pass in dev but fail in CI.
-
----
-
-## Golden Path Contract Rules (v2.0.0)
-
-The Golden Path is the stable contract baseline. Treat it like an API.
+Core CI and wheel-smoke paths must work without full ML stacks.
 
 You must:
 
-* Preserve schema field meanings and defaults.
-* Preserve preset behavior and naming.
-* Preserve stable output characteristics (quality/perf envelopes).
+- avoid eager imports of heavy optional dependencies in `__init__.py`, CLI entrypoints, or help-path imports
+- keep `transformation_portal` lazy-load friendly
+- keep `transformation_portal.lux_depth_v3` lazy-load friendly
+- preserve `tp` importability in both source-tree and wheel installs
+- avoid making `torch`, `transformers`, `diffusers`, `rawpy`, or backend-specific packages mandatory for core import paths unless the change is explicitly scoped and documented
 
-If you need a contract-impacting change:
+### 3) Do not collapse independent version planes
 
-* Provide a migration story.
-* Add or extend contract tests.
-* Bump versions in lockstep (see "Version Alignment").
+This repository has **multiple valid version planes**. Do **not** "clean them up" by forcing them into one number unless the change is intentionally version-governed.
 
----
+Common planes include:
 
-## Architecture Principles for a Context-Aware Rendering Engine
+- repo/release baseline and stable contract era
+- package metadata version
+- runtime `transformation_portal.__version__`
+- submodule-specific versions such as `lux_depth_v3.__version__`
+- schema versions (for example ingest)
+- machine/evidence/attestation schema identifiers
+- feature/preset versioning in docs and changelog
 
-This system is a pipeline: it must remain **composable**, **testable**, and **backend-agnostic**.
+Rule: **only bump the version plane you are actually changing**, and update all tests/docs/schemas/changelog entries that govern that plane.
 
-### Preferred high-level structure
+### 4) Keep Lux Depth V3 behavior stable unless a contract says otherwise
 
-* **Orchestrator**: coordinates stages; owns run lifecycle and error handling.
-* **Stages**: pure-ish transformations (load -> infer -> postprocess -> export).
-* **Backends**: device/model-specific implementations behind stable interfaces.
-* **Config**: validated, typed, serializable; supports presets + overrides.
+Preserve:
 
-### Use design patterns intentionally (avoid if/elif soup)
+- quality-tier semantics (`standard`, `premium`, `apex`)
+- distinction between `--quality-tier` and `--preset`
+- optional V2 stage behavior and backward-compatibility defaults
+- input discovery hygiene that excludes derived artifacts / output directories
+- governed deliverables such as manifests, run cards, depth and PBR artifacts
+- backend-resolution transparency and license enforcement
 
-**Strategy pattern**
+Do not reintroduce older API shapes that have already changed. Example: if a PBR API now returns a dataclass, do not casually revert it to tuple unpacking.
 
-* Use when behavior varies by room/zone, preset tier, or rendering objective.
-* Example: different tone mapping strategies for Sunroom vs Home Cinema.
+### 5) Keep portal hardening intact
 
-**Adapter pattern**
+When touching `app.py`, request validation, or orchestration endpoints:
 
-* Use when integrating multiple depth backends (Depth Anything V3, Apple Depth Pro, research models) with inconsistent APIs.
-* Standardize on one internal interface.
+- preserve allowed-root path validation for input/output locations
+- preserve API key and request-hardening behavior
+- preserve trusted-host, request-size, concurrency, and rate-limit protections
+- preserve pipeline allowlists and typed validation for archive-gate flows
+- fail closed, not open
 
-**Factory / registry pattern**
+### 6) Never paper over failures
 
-* Use to create pipeline stages/backends from config without deep branching.
-* Keep selection logic centralized and testable.
+Do not fix CI by:
 
-**Template Method**
+- weakening assertions without cause
+- broad-skipping test families
+- suppressing typed errors with generic fallbacks
+- changing docs/comments to claim checks are skipped when CI still runs them
 
-* Use for stage skeletons where subclasses override only safe extension points.
+Fix root causes. If behavior changed intentionally, update tests and docs to match reality.
 
-Anti-pattern: scattering backend selection and device checks throughout the codebase.
+### 7) Respect the repository organization system
 
-### Interface guidance
+This repo uses an automated organization policy.
 
-* Prefer small Protocols / ABCs for stage and backend contracts.
-* Keep contracts explicit: input types, output types, shape expectations, and units.
+You must:
 
----
-
-## Model and Licensing Governance (Depth + Materials)
-
-This repo uses a multi-backend depth strategy and must enforce compliance.
-
-### Backend policy (encode as code-as-compliance)
-
-| Backend key    | Model/Tier         | Default? | Offline? | Commercial allowed?              | Notes                                                                        |
-| -------------- | ------------------ | -------- | -------- | -------------------------------- | ---------------------------------------------------------------------------- |
-| `da3`          | Depth Anything V3  | Yes      | Yes      | Yes ✅                           | Default for production runs.                                                 |
-| `depth_pro`    | Apple Depth Pro    | No       | Yes      | No ❌ (research-only)            | Requires `non_commercial_ok=True` AND `accept_apple_depth_pro_research_license=True`. |
-
-Hard rule: if a model requires non-commercial gating, the code must raise a clear, typed exception **before any processing begins**.
-
-Example guard (using actual exception type from codebase):
-
-```python
-from transformation_portal.depth.backends.protocol import LicenseRestrictionError
-
-if backend == "depth_pro":
-    if not cfg.non_commercial_ok:
-        raise LicenseRestrictionError(
-            "Depth Pro is restricted to non-commercial research use. "
-            "Set non_commercial_ok=True to acknowledge this restriction."
-        )
-    if not cfg.accept_apple_depth_pro_research_license:
-        raise LicenseRestrictionError(
-            "Depth Pro requires explicit acceptance of Apple ML Research license. "
-            "Set accept_apple_depth_pro_research_license=True in config."
-        )
-```
-
-### No-download policy in tests
-
-ML tests must honor offline patterns:
-
-* `TRANSFORMERS_OFFLINE=1`
-* `HF_HUB_OFFLINE=1` (if used)
-
-**Offline vs. Availability distinction:**
-
-* **"Offline"** means no network/model downloads during test runs
-* **"Availability"** means backend package is importable (e.g., `depth_anything_3` module installed)
-* Tests must skip gracefully when optional backend modules are not importable (use module-level availability guards)
-* Tests should NOT weaken assertions or skip coverage when the backend IS expected to be available in that CI tier
-
-Tests must use tiny local fixtures or mocks (no network calls, no hub downloads).
+- keep the repository root minimal and operational
+- avoid introducing new root files unless they clearly belong there
+- place scripts in the correct `scripts/` subdirectory
+- place documentation in the right `docs/` subtree
+- keep generated artifacts out of source roots unless explicitly governed
+- update organization docs/rules if you intentionally extend the file-placement policy
 
 ---
 
-## Hardware Acceleration: Apple Silicon (MPS) First-Class
+## Repository Reality Map
 
-This repo is optimized for MPS on Apple Silicon, with CUDA/CPU fallbacks.
+Place work in the right zone.
 
-### Device selection requirements
+| Area | Purpose | Guidance |
+| --- | --- | --- |
+| `src/transformation_portal/` | Main package | Preferred home for production logic |
+| `src/transformation_portal/lux_depth_v3/` | Governed orchestration pipeline | Keep public behavior stable; prefer decomposed modules over monolith growth |
+| `src/tp/` | Contract / fixity / phase tooling import surface | Preserve import stability and cross-runtime correctness |
+| `app.py` + `portal.html` | Portal / orchestrator surface | Preserve request validation and security defaults |
+| `config/` | Presets and config | Keep preset taxonomy and compatibility stable |
+| `schemas/` + `docs/schemas/` | Canonical schema artifacts | Update with validators/tests/docs in the same change |
+| `tools/` | Governance, performance, metadata, archive, evidence utilities | Deterministic file IO; typed outputs; safe CLI behavior |
+| `scripts/` | Operational runners, setup, validation, diagnostics | Thin orchestration and maintenance helpers; not the home for core domain logic |
+| `workflows/` | ComfyUI examples/templates | Treat as workflow assets/examples, not hidden production logic |
+| `tests/` | Contract, regression, ML, smoke, enforcement, security, performance coverage | Match marker policy and keep default lanes fast |
+| `docs/` | Architecture, contracts, governance, troubleshooting, guides | Update whenever behavior or workflow changes |
 
-* Never hardcode `cuda:0`.
-* Prefer a single, tested device selector utility used everywhere.
-* Be defensive: torch may be missing in core test environments.
-
-Pattern:
-
-```python
-def choose_device():
-    try:
-        import torch
-    except Exception:
-        # Core/fast CI may not install torch.
-        return "cpu"
-
-    if (
-        hasattr(torch, "backends")
-        and hasattr(torch.backends, "mps")
-        and torch.backends.mps.is_available()
-    ):
-        return "mps"  # Return string, consistent with codebase pattern
-    if hasattr(torch, "cuda") and torch.cuda.is_available():
-        return "cuda"
-    return "cpu"
-```
-
-### Determinism caveats
-
-Some ops differ across CPU/CUDA/MPS. When determinism matters:
-
-* seed RNGs (`random`, `numpy`, `torch`)
-* avoid nondeterministic kernels where possible
-* compare outputs using tolerant metrics (PSNR/SSIM thresholds) rather than exact bytes unless the stage is known to be bitwise stable
+Additional repo areas such as `assets/`, `textures/`, `archive/`, `artifacts/`, `data/`, `dashboard/`, and project-specific directories are first-class parts of the repository. Do not treat them as disposable clutter.
 
 ---
 
-## Quality Firewall: Performance Is a Contract
+## Architecture Rules
 
-Performance regressions are treated as correctness failures.
+### Lux Depth V3 is now a decomposed orchestrator system
 
-### Firewall rules (treat as blocking)
+Do not keep stuffing behavior into one giant orchestrator file.
 
-* Block if **p95 latency** increases by **> 10%**
-* Block if **mean latency** increases by **> 15%**
-* Block if **failure rate > 0%** (for stages that are required by the Golden Path)
-* Block if disk usage or temp artifacts scale unexpectedly
+Prefer these seams:
 
-### Performance engineering rules
+- `config_resolver.py` for preset/config normalization
+- `pipeline_coordinator.py` for backend/stage resolution
+- `execution_engine.py` for stage execution logic
+- `artifact_manager.py` for output hashing/indexing/provenance assembly
+- `validators/` for schema/run-card validation
+- `orchestrator.py` as the compatibility-facing orchestration surface, not the dumping ground
 
-* Avoid Python loops over pixels. Prefer vectorized NumPy / Torch ops.
-* Avoid re-loading models per frame/image. Cache backends safely.
-* Avoid unnecessary copies (watch dtype conversions and `.cpu()`/`.numpy()` ping-pong).
-* Stream large files; do not read entire videos into memory.
-* Use atomic writes for outputs and ledgers.
+If you touch `EnhanceOrchestrator`, ask first:
 
-### Benchmark tests
+1. Should this live in a focused helper/module instead?
+2. Is this change preserving orchestrator re-export compatibility?
+3. Will this reduce or increase coupling and test friction?
 
-* Benchmark/performance regression tests must be explicitly marked and kept out of fast PR gating CI.
-* Nightly/deep-check workflows may run benchmarks; PR gating workflows should not.
-* Ensure markers and CI selection logic match. Do not rely on comments like "CI skips these" unless markers/config truly enforce it.
+### Prefer explicit contracts over implicit branching
 
----
+Use:
 
-## Tests: Taxonomy, Markers, Methodology
+- Protocols / ABCs for backend and stage contracts
+- registries / factories for backend selection
+- adapters for backend normalization
+- typed config objects and validated schemas
+- pure-ish helpers for deterministic transforms and file projections
 
-### Marker taxonomy
+Avoid:
 
-| Marker           | Typical command                  | What it covers                                             | Constraints                                                               |
-| ---------------- | -------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------- |
-| (default / core) | `-m "not ml and not slow"`       | config parsing, schemas, IO utilities, orchestration logic | Must run fast; no torch/model loads.                                      |
-| `ml`             | `-m "ml and not slow"`           | backend wiring, inference shape rules, device placement    | Must be offline; small fixtures only.                                     |
-| `slow`           | (excluded by default)            | stress, large fixtures, full pipelines                     | Run manually or scheduled.                                                |
-| `benchmark`      | (manual / scheduled)             | performance ledger updates, regression thresholds          | **EXCLUDED from PR gating CI** (enforced in build.yml).                   |
+- backend/device selection scattered across many modules
+- hidden global state
+- config-dependent `if/elif` chains spread across unrelated files
+- top-level imports with heavy side effects
 
-**Enforcement:** CI workflows use marker expressions with explicit `not benchmark` exclusion to ensure deterministic PR gating.
+### Preserve lazy loading
 
-### CI matrix (do not break this)
+This repo intentionally uses lazy imports to keep:
 
-Minimum supported Python for this repo is **Python 3.11+**.
+- CLI help paths working
+- core test lanes working
+- wheel-smoke installs working
+- optional ML dependencies optional
 
-| CI job     | Python      | Requirements                        | Notes                                                           |
-| ---------- | ----------- | ----------------------------------- | --------------------------------------------------------------- |
-| Lint       | 3.12        | `requirements-lint.txt`             | Fast static checks.                                             |
-| Core tests | 3.11 + 3.12 | `requirements-ci.txt`               | Offline; no heavy deps.                                         |
-| ML tests   | 3.11        | CPU torch + `requirements-ci.txt`   | Offline; transformers/diffusers NOT installed; mock heavy deps. |
-
-### Testing methodology expectations
-
-* Prefer TDD for bug fixes and non-trivial changes:
-
-  1. write failing test
-  2. implement minimal fix
-  3. refactor with confidence
-* Use contract tests for stable outputs:
-
-  * validate schema invariants
-  * validate preset parameter invariants
-  * validate deterministic transforms (where applicable)
-* Use golden master tests sparingly:
-
-  * small fixtures only
-  * store tiny reference outputs (or metrics) in-repo
-* Use property-based tests (Hypothesis) when validating invariants (shapes, ranges, idempotence of config serialization), but keep them bounded and deterministic.
-
-### Mocking guidance (be precise)
-
-Mock boundaries where external systems exist:
-
-* FFmpeg subprocess calls
-* file system IO (use temp dirs)
-* model inference in core tests
-* network/hub calls (should not exist)
-
-Do not over-mock internal logic. Prefer small real tensors for ML unit tests when feasible.
+Do not move heavy imports into module top-level code for convenience.
 
 ---
 
-## Presets: Stability Taxonomy + Rules
+## Public Surface Guidance
 
-### Taxonomy
+### CLI surfaces
 
-| Tier           | Promise                              | Allowed change cadence | Tests required                          |
-| -------------- | ------------------------------------ | ---------------------- | --------------------------------------- |
-| `stable`       | production-safe, backward-compatible | rare, deliberate       | strong coverage, contract + perf checks |
-| `canary`       | production trial                     | iterative              | tests for schema + key params           |
-| `experimental` | research                             | flexible               | basic validation + clear docs           |
+`lux-depth-v3` is a primary public entrypoint.
 
-### When adding/modifying presets
+Preserve:
 
-* Document intent + expected impact in `docs/` (and/or changelog).
-* Add tests validating:
+- argument semantics
+- default values unless version-scoped
+- `--quality-tier` vs `--preset` distinction
+- typed error behavior
+- deterministic deliverable naming where governed
+- machine-readable modes where supported
 
-  * required keys exist
-  * parameter ranges
-  * compatibility with Golden Path schema
-* Keep names human-meaningful and consistent.
+### Machine-mode JSON is a contract
 
----
+For commands that support `--json`:
 
-## Dependency Management: Layered, Reproducible, Lean
+- preserve the envelope contract
+- preserve stable top-level keys and typed error shape
+- route automation by typed fields and exit codes, not human prose
+- do not add shape drift casually
+- update schemas, contract docs, validators, and tests together
 
-* Root requirement `.txt` files are convenience pins.
-* Source of truth is `requirements/*.in`.
+### Portal/orchestrator HTTP surfaces
 
-To change dependencies:
+Treat request/response payloads and readiness behavior as contract-sensitive.
 
-1. edit the correct `.in` file
+When changing portal behavior:
 
-2. recompile:
-
-   ```bash
-   cd requirements && make compile
-   ```
-
-3. keep CI lean:
-
-   * do not pull heavy ML dependencies into the core runtime unless strictly necessary
-   * prefer optional extras (e.g., `.[ml]`, `.[dev]`, `.[ci]`, `.[coreml]`) if supported
+- validate inputs early
+- preserve secure defaults
+- preserve error typing and reason codes where already established
+- keep path normalization and allowlist enforcement explicit
+- avoid implicit filesystem trust
 
 ---
 
-## File IO, Safety, and Operational Rigor
+## Contract Families You Must Understand Before Editing
 
-### IO safety rules
+### 1) Repo / release stability
+The stable release era begins at the governed repository baseline. Preserve backward-compatible behavior by default.
 
-* Use `pathlib.Path`.
-* Use atomic writes for outputs and ledgers:
+### 2) Ingest contract
+The ingest layer has its own official schema version and quality-firewall semantics. Preserve:
+- schema field meanings
+- exit-code semantics
+- deterministic file-derived fields
+- audit-grade provenance guarantees
 
-  * write to temp file
-  * fsync if needed
-  * rename into place
-* Never assume directories exist; create explicitly.
-* Clean up temp artifacts deterministically.
+### 3) Machine-mode contract
+`tp.meta.machine.v1` is an automation wire contract. Preserve:
+- `schema`, `command`, `success`, `exit_code`, `data`, `error`
+- typed errors
+- stable per-command payload shape
+- deterministic structure
 
-### Security + privacy (luxury real estate context)
+Do **not** assume machine-mode bytes are the same thing as evidence canonicalization.
 
-* Treat inputs/outputs as sensitive client assets.
-* Do not log raw image paths that leak addresses/client names when avoidable.
-* Avoid embedding metadata unless explicitly requested.
+### 4) Evidence / attestation flows
+Evidence projection, canonicalization, Merkle/signature flows, and detached attestations are governed separately from machine-mode wire output. Keep those layers distinct.
 
-### Subprocess rules (FFmpeg)
-
-* Prefer `subprocess.run([...], check=True, capture_output=True, text=True)`
-* Never use `shell=True` unless there is a documented, reviewed reason.
-* Add timeouts for long-running subprocesses unless a workflow explicitly requires unbounded runtime.
-
----
-
-## Version Alignment
-
-For contract-impacting changes, keep versions aligned:
-
-* contract schema version
-* package version
-* runtime `__version__`
-
-A single PR should update all relevant version sites and tests.
+### 5) PBR and preset contracts
+Stable presets and governed PBR surfaces are contract-bearing. Preserve stable preset behavior; treat canary/experimental paths as more flexible but still documented and validated.
 
 ---
 
-## Documentation Expectations
+## Backend, ML, and License Governance
 
-Any workflow/behavior change must update:
+### Depth backend policy
 
-* `README` (if user-facing)
-* relevant `docs/` pages (architecture, Quality Firewall quick refs, etc.)
-* examples (if present)
+Assume:
 
-Docs are governance, not optional.
+- `da3` is the default commercial-safe production backend
+- `depth_pro` is research-only and requires explicit acknowledgments
+- research presets remain opt-in, not the default production path
+- fallback behavior must stay transparent and traceable
+
+If a backend is gated by license or research-only use:
+
+- validate before processing starts
+- raise clear typed exceptions
+- do not silently downgrade rights requirements
+- capture resolved backend/provenance where the current system does so
+
+### Optional dependency discipline
+
+- Core/import/test lanes must not require optional ML stacks
+- ML code must degrade gracefully when optional packages are absent
+- Tests must distinguish **offline** from **backend availability**
+- Never add surprise model downloads to default tests
+
+### Installation / dependency layering
+
+Dependency policy is layered.
+
+Rules:
+
+- broad runtime ranges live in `pyproject.toml`
+- operational dependency truth lives in layered `requirements/`
+- edit the right `.in` source
+- regenerate the matching lockfiles
+- keep the core runtime lean
+- use platform/capability layers instead of dragging heavy ML packages into the base path
+
+Do not bypass the layered strategy because a one-off local install "worked on your machine".
+
+### Banned / risky dependency changes
+
+If the repo explicitly bans or constrains a dependency, respect that policy. Do not reintroduce blocked packages or broaden constraints casually.
 
 ---
 
-## PR Hygiene: Make Review Easy
+## Performance and APEX Rules
 
-### PR size and scope
+Performance is a governed signal, not an afterthought.
 
-* Prefer one feature/fix per PR.
-* Avoid formatting-only churn.
-* Explain the why, not just the what.
+### Quality Firewall mindset
 
-### Required preflight (local)
+Treat regressions as blocking when they affect:
 
-Run the same split CI expects:
+- p95 latency budgets
+- mean latency budgets
+- failure rate
+- disk/temp-artifact growth
+- determinism or reproducibility metadata
+
+### Performance engineering defaults
+
+- avoid Python loops over pixels when vectorization is practical
+- avoid repeated model loads per image/frame
+- avoid needless tensor/NumPy/device ping-pong
+- stream large media rather than loading entire videos eagerly
+- use atomic writes for outputs, manifests, ledgers, and evidence artifacts
+- preserve depth caching and artifact reuse when current flows depend on them
+
+### Benchmark and real-pipeline separation
+
+Keep lightweight PR lanes lightweight.
+
+Do not:
+- pull benchmark-only work into default gating lanes
+- make PR CI depend on heavyweight real-pipeline runs unless explicitly intended
+- claim a suite is "CI-excluded" unless marker selection and workflows actually enforce it
+
+---
+
+## Testing and CI
+
+### Use the repo's actual test split
+
+Prefer the repo's existing commands first:
 
 ```bash
-pytest -v tests/ -ra -m "not ml and not slow" --maxfail=1
+make test-fast
+make test-orchestrator-contract
+make ci
 ```
 
-If ML deps are installed:
+If your change is ML-specific and the environment is provisioned for it, use the ML-targeted lane as well.
 
-```bash
-pytest -v tests/ -ra -m "ml and not slow" --maxfail=1
-```
+### Marker discipline matters
 
-### Performance changes checklist (if touching pipeline/inference/postprocess)
+This repo is no longer just `ml` vs `slow`.
 
-* Explain expected perf impact.
-* Add/adjust benchmark coverage if required.
-* Confirm Quality Firewall thresholds will not regress.
+Respect the broader taxonomy in CI and tests, including families such as:
+
+- `unit`
+- `security`
+- `regression`
+- `golden`
+- `integration`
+- `ml`
+- `slow`
+- `benchmark`
+
+Guidelines:
+
+- keep default/core lanes fast and deterministic
+- keep benchmark work explicitly marked and out of normal PR gates
+- keep ML unit coverage offline and small-fixture based
+- do not move slow/integration behavior into the wrong lane without updating CI
+
+### CI guardrails are part of the contract
+
+Preserve checks such as:
+
+- docs structure / stale-doc-path validation
+- raw JSON usage guardrails where restricted
+- dependency-constraint validation
+- `tp` import surface checks
+- wheel install smoke
+- relocatability / contained-output proof
+- compliance schema validation
+
+If you change packaging, imports, docs paths, workflow files, or output locations, expect to update the relevant tests and validators.
+
+### Testing methodology
+
+For non-trivial changes:
+
+1. add or update a failing test
+2. implement the narrowest fix
+3. refactor only after behavior is locked
+
+Favor:
+
+- contract tests
+- small regression tests
+- deterministic golden/metric checks
+- tiny fixtures
+- typed error assertions
+- explicit coverage of migration/backward-compat paths
+
+Avoid over-mocking internal logic when a small real object/tensor/file will do.
 
 ---
 
-## Mistake-Proofing Checklist (Use This Before You Commit)
+## Lux Depth V3-Specific Guidance
 
-* [ ] Did you validate inputs early (before model load / heavy IO)?
-* [ ] Did you keep behavior stable for Golden Path?
-* [ ] Are optional deps handled safely (torch missing/mocked in core env)?
-* [ ] Are pytest markers correct (core vs ml vs slow vs benchmark)?
-* [ ] Does every comment match what CI actually does?
-* [ ] Are outputs deterministic or appropriately tolerance-tested?
-* [ ] Did you update docs/tests alongside behavior changes?
-* [ ] Are you using the correct directory (logic in `src/`, wrappers in `scripts/`)?
+### Preserve optional-V2 semantics
 
----
+The V2 enhancement stage is optional, but backward-compatibility defaults matter. Do not silently flip defaults or remove fail-fast validation just because a local workflow doesn't need V2.
 
-## Concrete Examples (Patterns to Copy)
+### Preserve input hygiene
 
-### 1) Backend Adapter interface (depth)
+Input discovery intentionally excludes derived artifacts and output directories. Do not weaken this and allow "depth of depth" or self-reprocessing loops back into the pipeline.
 
-```python
-from __future__ import annotations
+### Keep deliverables governed
 
-from dataclasses import dataclass
-from typing import Protocol
-from transformation_portal.depth.backends.protocol import LicenseRestrictionError
+Artifacts such as depth outputs, PBR maps, manifests, run cards, master/upscaled outputs, and marketing derivatives are part of the governed output surface in many workflows. Preserve naming and generation semantics unless the change is explicitly contract-scoped.
 
-class DepthBackend(Protocol):
-    def infer_depth(self, image: "np.ndarray") -> "np.ndarray":
-        ...
+### Preserve separation of concerns
 
-@dataclass(frozen=True)
-class DepthConfig:
-    backend: str
-    non_commercial_ok: bool = False
-    accept_apple_depth_pro_research_license: bool = False
-
-def create_depth_backend(cfg: DepthConfig) -> DepthBackend:
-    # Registry validation enforces licensing before instantiation
-    if cfg.backend == "depth_pro":
-        if not cfg.non_commercial_ok:
-            raise LicenseRestrictionError(
-                "Depth Pro requires non_commercial_ok=True for research use"
-            )
-        if not cfg.accept_apple_depth_pro_research_license:
-            raise LicenseRestrictionError(
-                "Depth Pro requires accept_apple_depth_pro_research_license=True"
-            )
-
-    # Factory/registry lookup goes here.
-    return backend_registry[cfg.backend]()
-```
-
-### 2) Strategy for room-specific rendering
-
-```python
-from typing import Protocol
-
-class RoomStrategy(Protocol):
-    def apply(self, rgb: "np.ndarray", ctx: "RenderContext") -> "np.ndarray":
-        ...
-
-class SunroomStrategy:
-    def apply(self, rgb, ctx):
-        return preserve_highlights_and_warmth(rgb, ctx)
-
-class CinemaStrategy:
-    def apply(self, rgb, ctx):
-        return deepen_blacks_and_boost_contrast(rgb, ctx)
-```
-
-### 3) Tests that enforce preset invariants
-
-```python
-def test_stable_preset_schema_invariants(stable_preset):
-    assert stable_preset["tier"] == "stable"
-    assert 0.0 <= stable_preset["tone"]["strength"] <= 1.0
-```
+- preprocessing should stay preprocessing
+- backend inference should stay backend inference
+- postprocessing should stay postprocessing
+- provenance/manifest logic should stay provenance/manifest logic
+- scene/material decisions should stay explicit and testable
 
 ---
 
-## Default Decision Rules (When Unsure)
+## Portal / Security / Filesystem Rules
 
-* Prefer stability over novelty.
-* Prefer explicitness over cleverness.
-* Prefer small, testable units over monolith functions.
-* Prefer offline, deterministic tests over integration-by-accident.
-* Prefer vectorized operations over Python loops.
+### Filesystem safety
 
-If you must make a risky change (contract/perf), surface the risk clearly in code comments, tests, docs, and PR notes.
+- use `pathlib.Path`
+- normalize and validate untrusted paths
+- enforce allowlisted roots
+- create directories explicitly
+- use atomic writes
+- keep outputs inside the requested destination, not hardcoded repo paths
+- avoid mutating the original workspace in scripts that claim relocatability
+
+### Subprocess safety
+
+- use `subprocess.run([...], check=True, capture_output=True, text=True)` unless streaming is necessary
+- prefer explicit argument lists
+- avoid `shell=True`
+- apply timeouts when appropriate
+- surface stderr/stdout meaningfully on failure
+
+### Security posture
+
+Inputs/outputs may be sensitive client or archive assets.
+
+Do not:
+
+- log unnecessarily sensitive paths or identifiers
+- weaken API key or trusted-host defaults without explicit scope
+- trust environment-derived paths without validation
+- mix evidence generation with mutable in-place editing
+
+---
+
+## Documentation Rules
+
+Docs are governance here, not optional garnish.
+
+When behavior changes, update the right documentation layer:
+
+- `README.md` for top-level user-facing behavior
+- `AGENTS.md` for maintainer workflows and commands
+- `docs/architecture/` for design and ADR-impacting changes
+- `docs/api/` and `docs/schemas/` for contract surfaces
+- `docs/apex/`, `docs/guides/`, `docs/cli/`, `docs/compliance/`, etc. for workflow-specific behavior
+- `workflows/README.md` or related workflow docs if ComfyUI/workflow assets change
+- changelog entries when the repo already treats the surface as release-notable
+
+Do not update one doc while leaving the canonical contract doc stale.
+
+---
+
+## File Placement and Repo Hygiene
+
+This repo enforces file-placement hygiene.
+
+Before adding a file, ask:
+
+1. Does it belong in `src/`, `tests/`, `docs/`, `schemas/`, `scripts/`, `tools/`, `workflows/`, `data/`, `archive/`, or `assets/`?
+2. Is the repository root truly the correct place?
+3. Does an existing helper / README / organization rule already define the destination?
+
+Prefer:
+- `scripts/validation/` for validation helpers
+- `scripts/verification/` for verification entrypoints
+- `scripts/bootstrap/` or `scripts/setup/` for install/bootstrap flows
+- `scripts/pipelines/` for operational pipeline runners
+- `tools/` for governed utilities and archive/performance/evidence CLIs
+- `docs/` for analysis, plans, migration notes, and governance docs
+
+---
+
+## When Touching Workflows or ComfyUI Assets
+
+- treat `workflows/` as examples/templates and generated assets, not as the home for hidden business logic
+- keep reusable workflow-building logic in package code
+- preserve example readability
+- do not hardcode template output if a generator/builder already exists
+- update the workflow README/examples when structure changes
+
+---
+
+## PR Hygiene
+
+### Keep scope narrow
+Prefer one clear feature/fix per PR. Avoid mixing:
+- contract changes
+- dependency overhauls
+- broad formatting churn
+- unrelated refactors
+
+### Explain the "why"
+PR notes and code comments should explain:
+- what contract or invariant is being preserved
+- what changed
+- why the change is safe
+- what tests/docs were updated
+
+### Backward compatibility first
+If a change is intentionally breaking:
+- say so explicitly
+- document the migration path
+- update schemas/contracts/tests/docs/changelog in the same change
+- do not hide the break behind silent behavioral drift
+
+---
+
+## Mistake-Proofing Checklist
+
+Before you finish, check:
+
+- [ ] Did I preserve both `transformation_portal` and `tp` import surfaces?
+- [ ] Did I avoid eager heavy imports in package entrypoints?
+- [ ] Did I keep the correct version plane(s) intact?
+- [ ] Did I preserve CLI / HTTP / schema / machine-mode contract semantics?
+- [ ] Did I keep Lux Depth V3 quality-tier, preset, V2, and input-hygiene behavior stable?
+- [ ] Did I place new logic in decomposed modules instead of bloating a monolith?
+- [ ] Did I keep tests offline where required and markers correctly assigned?
+- [ ] Did I avoid benchmark/heavy-suite leakage into PR gates?
+- [ ] Did I preserve atomic IO, path validation, and safe output placement?
+- [ ] Did I update the right docs, schemas, and changelog entries?
+- [ ] Did I avoid creating unnecessary root files?
+
+---
+
+## Default Decision Rules
+
+When unsure:
+
+- prefer existing contracts over local convenience
+- prefer decomposition over monolith expansion
+- prefer explicit typing/validation over inference-by-accident
+- prefer lazy imports over eager heavy imports
+- prefer offline deterministic tests over networked tests
+- prefer additive, backward-compatible changes over silent semantic drift
+- prefer small PRs with clear docs/tests over large "cleanup" rewrites
+
+If a change touches contracts, schemas, portal behavior, archive governance, evidence/attestation, or performance thresholds, treat it as **governed work**, not routine refactoring.
