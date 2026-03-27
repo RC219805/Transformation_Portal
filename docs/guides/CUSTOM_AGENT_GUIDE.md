@@ -2,93 +2,90 @@
 
 ## Overview
 
-The **Transformation Portal Specialist** is a custom GitHub Copilot agent specifically designed for this repository. It has deep expertise in luxury real estate rendering, architectural visualization, and professional image/video processing workflows.
+The **Transformation Portal Specialist** is a custom GitHub Copilot agent designed for the repository's current governed execution surfaces.
 
-**NEW in v2.0**: The agent has been significantly enhanced with 8 advanced capabilities that transform it into an intelligent development platform. See [Agent Enhancements v2.0](../.github/agents/AGENT_ENHANCEMENTS_v2.md) for complete details.
+It is no longer just a luxury-rendering or image/video pipeline assistant. The current role spans:
+
+- Lux Depth V3 implementation and troubleshooting
+- portal/orchestrator HTTP and UI surfaces
+- archive-gate execution flows
+- machine-mode, ingest, provenance, and evidence-adjacent tooling
+- tests, docs, and developer-tooling updates that must stay aligned with current contracts
+
+The Specialist implements inside Architect-owned constraints. When work touches dependency policy, CI/CD policy, security posture, or public contract changes, it should escalate instead of freelancing a design decision.
 
 ## What Makes This Agent Special?
 
 Unlike general-purpose AI assistants, the Transformation Portal Specialist has:
 
 ### 1. **Domain-Specific Knowledge**
-- **Image Processing Pipelines**: Depth-aware processing, Material Response, batch workflows
-- **AI/ML Integration**: Stable Diffusion XL, ControlNet, Depth Anything V2, Real-ESRGAN
-- **Professional Color Science**: LUTs, HDR tone mapping, ACES ODT, color space transforms
-- **Hardware Optimization**: Apple Silicon (CoreML), CUDA, MPS acceleration strategies
-
-### 1b. **Advanced Capabilities (v2.0)** 🚀
-- **Multi-Modal Intelligence**: Analyze image/video artifacts and quality issues
-- **Proactive Automation**: Suggest next steps and optimize workflows
-- **Deep Debugging**: Root cause analysis with memory/GPU profiling
-- **Performance Engine**: Automated optimization recommendations
-- **CI/CD Intelligence**: Smart test selection and build optimization
-- **Interactive Learning**: Adapts to your expertise and preferences
-- **Context-Aware Responses**: Tailored formatting (tutorial/quick-ref/debug modes)
-- **Quality Assurance**: Automated code review and security scanning
-
-See [Enhancement Details](../.github/agents/AGENT_ENHANCEMENTS_v2.md) for comprehensive documentation.
+- **Lux Depth V3**: orchestration, presets, validators, run cards, artifacts, and backend-aware workflows
+- **Portal / Orchestrator**: `/ready`, typed `/v1/*` endpoints, job lifecycle behavior, SSE events, and request-hardening expectations
+- **Archive / Ingest / Machine Mode**: archive-gate flows, `tp.meta.machine.v1`, ingest contract behavior, and provenance-adjacent surfaces
+- **Validation Discipline**: tests, docs, and commands that move with governed behavior
+- **Repository Grounding**: file-path, doc, test, and command-based reasoning rather than generic advice
 
 ### 2. **Repository Architecture Understanding**
-The agent knows the modular structure:
+The agent is expected to understand the current modular structure:
 ```
-depth_pipeline/              # Depth Anything V2 integration
-lux_render_pipeline.py      # AI-powered refinement
-material_response.py        # Surface enhancement
-luxury_video_master_grader.py  # Professional color grading
-config/                     # YAML presets
+app.py                                               # portal/orchestrator HTTP surface
+src/transformation_portal/lux_depth_v3/orchestrator.py
+src/transformation_portal/lux_depth_v3/config_resolver.py
+src/transformation_portal/lux_depth_v3/pipeline_coordinator.py
+src/transformation_portal/lux_depth_v3/artifact_manager.py
+src/transformation_portal/lux_depth_v3/execution_engine.py
+src/transformation_portal/lux_depth_v3/validators/run_card_validator.py
+tools/                                               # archive, evidence, parser, and developer tooling
+requirements/                                        # layered dependency source of truth
 ```
 
 ### 3. **Best Practices & Standards**
-- **Code Quality**: Pytest, hypothesis, mocking strategies, linting standards
-- **Performance**: Lazy loading, LRU caching, batch optimization, profiling
-- **Metadata**: IPTC/XMP/GPS preservation, 16-bit precision, color space metadata
-- **FFmpeg**: Filter graphs, HDR handling, metadata preservation
+- **Code Quality**: narrow diffs, fast tests, contract-aware docs updates, and CI-aligned validation
+- **Performance**: targeted measurement, APEX-aware thinking, and avoiding regressions hidden behind convenience
+- **Contracts**: preserve current CLI, HTTP, machine-mode, ingest, and import-surface behavior unless explicitly escalated
+- **Imports/Packaging**: keep optional-heavy paths lazy and respect layered requirements and install-profile boundaries
 
 ### 4. **Troubleshooting Expertise**
-- Import errors and dependency issues
-- FFmpeg filter graph problems
-- GPU/MPS/CoreML acceleration issues
-- Memory optimization for large batches
-- HDR video processing challenges
+- Lux Depth V3 orchestration and validator failures
+- portal/orchestrator contract-test failures
+- archive-gate allowlist or payload rejection issues
+- machine-mode and ingest schema drift
+- environment-sensitive install and import-path problems
 
 ## When to Use the Custom Agent
 
 ### Perfect For:
-✅ **Pipeline Development**
-- Implementing new depth-aware effects
-- Adding Material Response enhancements
-- Creating video processing workflows
-- Optimizing batch processing performance
+✅ **Lux Depth V3 execution work**
+- debugging orchestration issues
+- updating validators, run cards, or artifact behavior
+- refining implementation inside current module boundaries
 
-✅ **AI/ML Integration**
-- Working with diffusion models
-- Implementing ControlNet features
-- Optimizing model inference speed
-- Managing GPU/CoreML acceleration
+✅ **Portal / orchestrator work**
+- fixing route behavior without changing public contracts
+- updating contract tests
+- tracing request-hardening or job-lifecycle failures
 
-✅ **Professional Color Grading**
-- Creating LUT-based presets
-- Implementing tone mapping operators
-- HDR workflow development
-- Color space transformations
+✅ **Archive / machine-mode / ingest work**
+- debugging archive-gate flows
+- fixing typed machine-mode behavior
+- keeping ingest docs, schemas, tests, and code aligned
 
-✅ **Performance Optimization**
-- Profiling memory usage
-- Implementing caching strategies
-- Batch processing optimization
-- Hardware-specific acceleration
-
-✅ **Testing & Quality**
-- Writing comprehensive tests
-- Mocking heavy dependencies
-- Property-based testing
-- CI/CD optimization
+✅ **Docs-and-tests sync work**
+- updating tests when agent or contract docs change
+- keeping examples aligned with current repo commands and surfaces
 
 ### Use General Copilot For:
 - Basic Python syntax questions
 - Generic file operations
 - Simple utility functions
 - Non-domain-specific tasks
+
+### Escalate To The Architect For:
+- dependency policy or lockfile changes
+- CI/CD policy or workflow changes
+- security posture or trust-boundary changes
+- public interface or schema changes
+- ADR ambiguity or architectural trade-offs
 
 ## How to Use the Agent
 
@@ -104,159 +101,104 @@ In GitHub Copilot Chat, prefix your prompt with the agent name:
 
 #### 1. **Implementing Features**
 ```
-@transformation-portal-specialist Add a depth-based atmospheric haze effect
-to the ArchitecturalDepthPipeline that increases with distance from camera
-```
-
-**What you'll get (v2.0 Enhanced)**:
-- 🔍 **Semantic Search**: Finds similar depth effects in codebase
-- 🧠 **Impact Analysis**: Shows what components will be affected
-- 💡 **Implementation**: Complete code with intelligent completion
-- 🎯 **Multiple Approaches**: Alternative implementations with trade-offs
-- ⚡ **Performance Baseline**: Sets monitoring for regression detection
-- 📚 **Auto-Documentation**: Generates API docs and usage examples
-- 🧪 **Smart Tests**: Creates tests for affected components only
-- 🚀 **Proactive Suggestions**: "Also consider adding depth-based vignette..."
-
-#### 2. **Optimizing Performance** (Enhanced)
-```
-@transformation-portal-specialist The batch processor is using 18GB RAM for
-4K images. How can I reduce memory usage while maintaining quality?
-```
-
-**What you'll get (v2.0 Enhanced)**:
-- 📊 **Automatic Profiling**: Memory breakdown by pipeline stage
-- 🎯 **Ranked Solutions**: 3-5 optimizations sorted by impact/effort
-- ⚡ **Expected Results**: Throughput and memory predictions
-- 🔬 **Bottleneck Identification**: GPU utilization, cache efficiency
-- 📈 **Baseline Setting**: Automatic regression detection setup
-- 💡 **Hardware-Specific**: CoreML vs CUDA recommendations based on system
-- ✅ **Validation Plan**: Step-by-step testing strategy
-- 🤖 **Proactive**: "I notice GPU utilization is only 42%, consider..."
-
-#### 3. **Troubleshooting** (Enhanced)
-```
-@transformation-portal-specialist Getting "RuntimeError: CUDA out of memory"
-when processing more than 5 images in batch
-```
-
-**What you'll get (v2.0 Enhanced)**:
-- 🔍 **Stack Trace Analysis**: Parses error with code citations
-- 🌳 **Diagnostic Decision Tree**: Probability-ranked causes
-- 📊 **Memory Profiling**: Real-time memory breakdown
-- 🎯 **Immediate Fix**: Quick solution to unblock you
-- 🔧 **Long-term Solution**: Prevents future occurrences
-- ⚡ **Performance Impact**: Quantified trade-offs for each solution
-- 🧪 **Validation Steps**: Test plan to verify fix
-- 📚 **Prevention**: Adds monitoring/alerts for similar issues
-
-#### 4. **Creating Presets**
-```
-@transformation-portal-specialist Create a new video grading preset for
-beachfront properties with warm sunset tones
+@transformation-portal-specialist Update Lux Depth V3 run-card validation so
+the error includes the missing field name and add the smallest matching tests
 ```
 
 **What you'll get**:
-- Preset configuration code
-- LUT selection reasoning
-- Parameter explanations
-- Integration steps
-- Usage examples
+- repository-grounded implementation guidance
+- affected files and tests
+- smallest safe validation set
+- explicit contract and compatibility notes
 
-#### 5. **Testing Complex Features**
+#### 2. **Troubleshooting**
 ```
-@transformation-portal-specialist Write comprehensive tests for the new
-zone-based tone mapping feature including edge cases
+@transformation-portal-specialist Debug why /v1/jobs/{id}/events is missing the
+terminal done event in contract tests
 ```
 
 **What you'll get**:
-- Unit tests with fixtures
-- Property-based tests using hypothesis
-- Mocking strategies for ML models
-- Edge case coverage
-- Performance benchmarks
+- likely cause analysis tied to real files and tests
+- smallest safe fix path
+- commands to prove the change
+
+#### 3. **Machine-Mode / Ingest**
+```
+@transformation-portal-specialist Fix this tp.meta.machine.v1 payload drift and
+list the docs, tests, and schema references that must move together
+```
+
+**What you'll get**:
+- contract-focused change guidance
+- synchronized docs/tests/schema checklist
+- escalation callout if the change crosses role boundaries
 
 ## Real-World Workflow Examples
 
-### Example 1: Adding New Pipeline Feature
+### Example 1: Lux Depth V3
 
 **Step 1**: Ask for implementation
 ```
-@transformation-portal-specialist I want to add depth-based bokeh simulation
-to blur background more than foreground in architectural renders
+@transformation-portal-specialist I need to adjust pipeline_coordinator.py so
+research-only backend acknowledgements are enforced earlier
 ```
 
 **Step 2**: Review the response
-- Implementation in depth_pipeline/processors/
-- Configuration additions
-- Integration with main pipeline
-- Test cases
+- Affected Lux Depth V3 modules
+- Contract and compatibility notes
+- Matching tests and validation commands
 
 **Step 3**: Iterate with follow-ups
 ```
-@transformation-portal-specialist Can you add a parameter to control the
-transition zone between sharp and blurred areas?
+@transformation-portal-specialist Now update the smallest validator/test set to
+cover that acknowledgment path
 ```
 
-**Step 4**: Ask for optimization
-```
-@transformation-portal-specialist Profile this bokeh implementation and
-optimize if it takes more than 50ms per image
-```
-
-### Example 2: Debugging Production Issue
+### Example 2: Portal / Orchestrator
 
 **Step 1**: Describe the problem
 ```
-@transformation-portal-specialist Video processing is failing with
-"Invalid pixel format" when processing HDR content from iPhone 15 Pro Max
+@transformation-portal-specialist The orchestrator is returning the wrong typed
+404 envelope for an unknown /v1 route
 ```
 
 **Step 2**: Get diagnostic commands
 ```
-@transformation-portal-specialist Show me how to inspect the video metadata
-with ffprobe to diagnose this issue
+@transformation-portal-specialist Show me the smallest route-level tests and
+runtime checks I should run before changing app.py
 ```
 
 **Step 3**: Implement the fix
 ```
-@transformation-portal-specialist Based on the metadata showing HLG color
-transfer, what's the correct filter graph to handle this?
+@transformation-portal-specialist Patch the typed error response without
+changing /ready or job-envelope semantics
 ```
 
 **Step 4**: Add test coverage
 ```
-@transformation-portal-specialist Add tests to prevent this HDR detection
-issue in the future
+@transformation-portal-specialist Add the matching contract test and keep the
+validation set minimal
 ```
 
-### Example 3: Performance Optimization
+### Example 3: Docs-And-Tests Sync
 
-**Step 1**: Request profiling
+**Step 1**: Identify the stale surface
 ```
-@transformation-portal-specialist Profile the Material Response batch
-processor and identify bottlenecks
-```
-
-**Step 2**: Implement optimizations
-```
-@transformation-portal-specialist Implement the top 3 optimizations you
-identified that don't sacrifice quality
+@transformation-portal-specialist The Specialist brief changed. Which tests and
+agent docs should change with it?
 ```
 
-**Step 3**: Verify improvements
+**Step 2**: Apply the update
 ```
-@transformation-portal-specialist Create benchmark tests to measure the
-performance improvement
-```
-
-**Step 4**: Document changes
-```
-@transformation-portal-specialist Update the performance documentation with
-the new throughput numbers
+@transformation-portal-specialist Replace the legacy keyword-based test with a
+contract test and sync the supporting agent docs
 ```
 
-## Agent Communication Style
+**Step 3**: Validate narrowly
+```
+@transformation-portal-specialist Run the smallest targeted validation set for
+that docs-and-tests sync
+```
 
 The agent follows a structured response pattern:
 
@@ -296,9 +238,9 @@ The depth thing isn't working
 
 **✅ Good Prompt:**
 ```
-@transformation-portal-specialist The ArchitecturalDepthPipeline is throwing
-"RuntimeError: Expected tensor for argument #1 'input' to have size 518x518"
-when processing 4K images. How should I handle variable image sizes?
+@transformation-portal-specialist The /v1/jobs contract test is failing because
+the typed 400 envelope changed after an app.py validation update. What is the
+safest fix path and what tests should I run?
 ```
 
 **❌ Bad Prompt:**
@@ -308,10 +250,9 @@ Add tests
 
 **✅ Good Prompt:**
 ```
-@transformation-portal-specialist Write comprehensive tests for the new
-AtmosphericEffects processor, including unit tests for the fog calculation
-and integration tests with the full pipeline. Mock the depth model to avoid
-CI timeouts.
+@transformation-portal-specialist Write the smallest contract-focused tests for
+this Lux Depth V3 validator change and keep the validation set fast enough for
+normal contributor workflows.
 ```
 
 ## Advanced Usage
@@ -322,19 +263,18 @@ For complex tasks, break them into steps:
 
 ```
 1. @transformation-portal-specialist Design the architecture for a new
-   real-time preview pipeline that shows depth effects before full processing
+   portal/orchestrator artifact-preview flow without changing the public /v1 job contract
 
-2. @transformation-portal-specialist Implement the core preview rendering
-   with 256px resolution for speed
+2. @transformation-portal-specialist Implement the smallest compatible app.py
+   and UI changes inside the approved route shape
 
-3. @transformation-portal-specialist Add a WebSocket server to stream
-   previews to a browser interface
+3. @transformation-portal-specialist Add the matching contract tests and
+   validation commands
 
-4. @transformation-portal-specialist Create tests for the preview pipeline
-   including latency measurements
+4. @transformation-portal-specialist Update the docs that define the changed
+   behavior and flag any Architect escalation points
 
-5. @transformation-portal-specialist Write user documentation for the
-   preview feature
+5. @transformation-portal-specialist Summarize rollback risk and follow-up work
 ```
 
 ### Combining with Code Review
@@ -342,9 +282,9 @@ For complex tasks, break them into steps:
 Use the agent to review code before committing:
 
 ```
-@transformation-portal-specialist Review this implementation of zone-based
-tone mapping. Check for performance issues, correctness, and alignment
-with repository standards.
+@transformation-portal-specialist Review this portal/orchestrator change.
+Check contract safety, validation coverage, and alignment with current
+repository standards.
 
 [paste code]
 ```
@@ -354,9 +294,9 @@ with repository standards.
 Use it as a teacher:
 
 ```
-@transformation-portal-specialist Explain how the Material Response
-technology works, including the physics behind surface enhancement and
-how it differs from simple sharpening
+@transformation-portal-specialist Explain how the tp.meta.machine.v1 contract
+is structured, what fields are stable, and which docs and tests I should read
+before changing a machine-mode command
 ```
 
 ## Agent Limitations
@@ -365,8 +305,8 @@ The agent acknowledges when:
 - GPU resources aren't available for testing
 - Changes might impact production workflows (suggests careful testing)
 - Real-world profiling data would be beneficial
-- FFmpeg version-specific features might vary
-- Large ML models can't be tested in CI (suggests mocking)
+- optional environment capabilities are not provisioned locally
+- a change crosses into Architect-owned dependency, CI/CD, security, or contract decisions
 
 It will guide you toward appropriate testing and validation strategies.
 
