@@ -226,7 +226,7 @@ def test_agent_readme_exists_and_references_both_live_profiles():
     assert "CUSTOM_AGENT_GUIDE.md" in content
 
 
-def test_specialist_supporting_docs_exist():
+def test_agent_supporting_docs_exist():
     assert AGENT_QUICK_START.exists(), f"Quick start doc not found: {AGENT_QUICK_START}"
     assert AGENT_RAG_SUMMARY.exists(), f"Summary doc not found: {AGENT_RAG_SUMMARY}"
     assert CUSTOM_AGENT_GUIDE.exists(), f"Custom agent guide not found: {CUSTOM_AGENT_GUIDE}"
