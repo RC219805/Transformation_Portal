@@ -50,7 +50,13 @@ REQUIRED_CORE_REFERENCES = [
 
 
 def _read_specialist() -> str:
+    assert SPECIALIST_FILE.exists(), f"Agent file not found: {SPECIALIST_FILE}"
     return SPECIALIST_FILE.read_text()
+
+
+def _read_custom_agent_guide() -> str:
+    assert CUSTOM_AGENT_GUIDE.exists(), f"Custom agent guide not found: {CUSTOM_AGENT_GUIDE}"
+    return CUSTOM_AGENT_GUIDE.read_text()
 
 
 def _extract_frontmatter(content: str) -> str:
@@ -75,9 +81,14 @@ def test_agent_file_exists():
 
 
 def test_agent_has_frontmatter():
-    content = _read_specialist()
-    assert content.startswith("---\n"), "Agent file must start with YAML frontmatter (---)"
-    assert "\n---\n" in content, "Agent file must include a closing frontmatter delimiter (---)"
+    lines = _read_specialist().splitlines()
+    assert lines and lines[0] == "---", "Agent file must start with YAML frontmatter delimiter line (---)"
+
+    max_frontmatter_lines = 50
+    has_closing_delimiter = any(line == "---" for line in lines[1:max_frontmatter_lines])
+    assert has_closing_delimiter, (
+        "Agent file must include a closing YAML frontmatter delimiter ('---') within the first 50 lines"
+    )
 
 
 def test_agent_frontmatter_has_name_and_description():
@@ -133,7 +144,7 @@ def test_agent_supporting_docs_exist():
 
 
 def test_custom_agent_guide_has_specialist_usage_examples():
-    content = CUSTOM_AGENT_GUIDE.read_text()
+    content = _read_custom_agent_guide()
     example_count = content.count("@transformation-portal-specialist")
     assert "@transformation-portal-specialist" in content
     assert example_count >= 5, f"Guide should include at least 5 usage examples, found {example_count}"
