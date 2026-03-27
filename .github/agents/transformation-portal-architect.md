@@ -48,7 +48,7 @@ Consult when relevant:
 - `docs/architecture/adr-0015-da3-1-1-non-commercial-research-tier.md`
 - `docs/api/MACHINE_MODE_CONTRACT.md`
 - `docs/apex/ingest_contract.md`
-- `docs/decisions/ADR-024-performance-regression-authority-canonicalization.md`
+- Architect decision record: `docs/decisions/ADR-024-performance-regression-authority-canonicalization.md`
 - `docs/governance/REPO_ORGANIZATION.md`
 
 Do not cite nonexistent governance documents as canonical.
