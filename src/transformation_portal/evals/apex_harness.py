@@ -73,6 +73,7 @@ class EvalResult:
 
 
 MetricFn = Callable[[list[Path]], float]
+PromptSpecBuilder = Callable[[Optional[dict[str, Any]]], Any]
 
 
 class ApexEvaluationHarness:
@@ -108,6 +109,7 @@ class ApexEvaluationHarness:
         *,
         llava_backend: Optional[Any] = None,
         metric_fns: Optional[list[MetricFn]] = None,
+        prompt_spec_builder: Optional[PromptSpecBuilder] = None,
         threshold: float = 0.70,
         metric_weight: float = 0.5,
         fail_on_vlm_error: bool = False,
@@ -117,12 +119,14 @@ class ApexEvaluationHarness:
         Args:
             llava_backend: LLaVA quality backend (optional)
             metric_fns: List of metric functions
+            prompt_spec_builder: Optional builder for dimension-specific VLM prompts
             threshold: Pass/fail threshold (0.0-1.0)
             metric_weight: Weight for metric scores vs VLM (0.0-1.0)
             fail_on_vlm_error: If True, fail evaluation on VLM errors
         """
         self.llava_backend = llava_backend
         self.metric_fns = metric_fns or []
+        self.prompt_spec_builder = prompt_spec_builder
         self.threshold = threshold
         self.metric_weight = metric_weight
         self.vlm_weight = 1.0 - metric_weight
@@ -258,8 +262,13 @@ class ApexEvaluationHarness:
             return {"score": 0.0, "issues": [], "skipped": True}
 
         try:
+            prompt_spec = None
+            if self.prompt_spec_builder is not None:
+                prompt_spec = self.prompt_spec_builder(context)
+
             result = self.llava_backend.evaluate_images(
                 image_paths=image_paths,
+                prompt_spec=prompt_spec,
                 context=context,
             )
 
