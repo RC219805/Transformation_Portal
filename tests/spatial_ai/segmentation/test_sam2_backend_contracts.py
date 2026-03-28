@@ -248,9 +248,19 @@ def test_prompted_mode_accepts_tuple_predictor_output_and_orders_scores(
     assert [meta.area for meta in result.metadata] == [3, 1]
 
 
-def test_hf_prompted_points_keep_sam2_processor_nesting(segmentation_surface: tuple[Any, Any], checkpoint_path: str) -> None:
+def test_hf_prompted_points_keep_sam2_processor_nesting(
+    segmentation_surface: tuple[Any, Any], checkpoint_path: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
     SAM2Backend, SegmentationInput = segmentation_surface
     backend = SAM2Backend(model_size="large", device="cpu", checkpoint_path=checkpoint_path)
+
+    class _NoGrad:
+        def __enter__(self) -> None:
+            return None
+
+        def __exit__(self, exc_type: Any, exc: Any, tb: Any) -> bool:
+            del exc_type, exc, tb
+            return False
 
     class FakeTensor:
         def __init__(self, value: Any) -> None:
@@ -288,6 +298,7 @@ def test_hf_prompted_points_keep_sam2_processor_nesting(segmentation_surface: tu
 
     backend._hf_model = FakeModel()
     backend._hf_processor = FakeProcessor()
+    monkeypatch.setitem(sys.modules, "torch", SimpleNamespace(no_grad=lambda: _NoGrad()))
 
     result = backend._segment_prompted(_points_input(SegmentationInput))
 
