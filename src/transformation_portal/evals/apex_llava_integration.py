@@ -38,7 +38,6 @@ See Also:
 from __future__ import annotations
 
 import importlib.util
-import json
 import logging
 from dataclasses import dataclass, field
 from functools import lru_cache
@@ -53,6 +52,7 @@ from transformation_portal.evals.apex_harness import (
     contrast_metric,
     sharpness_metric,
 )
+from transformation_portal.ingest.canonical_json import dumps_json
 
 logger = logging.getLogger(__name__)
 
@@ -185,7 +185,7 @@ def build_material_quality_prompt(
 
     context_suffix = ""
     if context:
-        context_suffix = "\nAdditional context (JSON):\n" + json.dumps(context, sort_keys=True, indent=2) + "\n"
+        context_suffix = "\nAdditional context (JSON):\n" + dumps_json(context, sort_keys=True, indent=2) + "\n"
 
     return LlavaPromptSpec(
         name="material_pbr_quality",

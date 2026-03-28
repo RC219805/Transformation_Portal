@@ -16,7 +16,6 @@ Coverage:
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -184,12 +183,13 @@ class TestBuildMaterialQualityPrompt:
     def test_prompt_with_context(self):
         """Test that context is included in prompt."""
         from transformation_portal.evals import build_material_quality_prompt
+        from transformation_portal.ingest.canonical_json import dumps_json
 
         context = {"material_type": "marble", "expected_roughness": 0.3}
         prompt = build_material_quality_prompt(context=context)
 
         assert "Additional context" in prompt.user_text
-        assert json.dumps(context, sort_keys=True, indent=2) in prompt.user_text
+        assert dumps_json(context, sort_keys=True, indent=2) in prompt.user_text
 
     def test_prompt_json_schema(self):
         """Test that prompt requests JSON schema output."""
@@ -400,6 +400,7 @@ class TestHarnessEvaluationFlow:
     ):
         """Test evaluation flow wires the selected prompt into the backend call."""
         from transformation_portal.evals import ApexLlavaConfig, create_apex_harness_with_llava
+        from transformation_portal.ingest.canonical_json import dumps_json
         from transformation_portal.evals.vision_language import VQAResult
 
         config = ApexLlavaConfig(
@@ -445,4 +446,4 @@ class TestHarnessEvaluationFlow:
             assert call_kwargs["prompt_spec"].name == expected_prompt_name
 
             if quality_dimension == "material":
-                assert json.dumps(context, sort_keys=True, indent=2) in call_kwargs["prompt_spec"].user_text
+                assert dumps_json(context, sort_keys=True, indent=2) in call_kwargs["prompt_spec"].user_text
