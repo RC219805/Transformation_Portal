@@ -17,8 +17,6 @@ import pytest
 
 # pylint: disable=redefined-outer-name
 
-
-
 pytestmark = pytest.mark.unit
 
 PINNED_REVISION = "a" * 40
