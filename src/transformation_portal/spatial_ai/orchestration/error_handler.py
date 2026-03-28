@@ -147,7 +147,8 @@ class ErrorHandler:
         stage: str,
         strategy: ErrorRecoveryStrategy = ErrorRecoveryStrategy.RETRY,
         device: str = "cuda",
-        **kwargs,
+        on_device_change: Optional[Callable[[str, int, Exception], None]] = None,
+        **kwargs: Any,
     ) -> Any:
         """Execute function with retry logic.
 
@@ -168,10 +169,24 @@ class ErrorHandler:
             return self._execute_fail_fast(func, stage, device, **kwargs)
 
         elif strategy == ErrorRecoveryStrategy.RETRY:
-            return self._execute_with_retry(func, stage, device, allow_cpu_fallback=False, **kwargs)
+            return self._execute_with_retry(
+                func,
+                stage,
+                device,
+                allow_cpu_fallback=False,
+                on_device_change=on_device_change,
+                **kwargs,
+            )
 
         elif strategy == ErrorRecoveryStrategy.RETRY_WITH_CPU_FALLBACK:
-            return self._execute_with_retry(func, stage, device, allow_cpu_fallback=True, **kwargs)
+            return self._execute_with_retry(
+                func,
+                stage,
+                device,
+                allow_cpu_fallback=True,
+                on_device_change=on_device_change,
+                **kwargs,
+            )
 
         elif strategy == ErrorRecoveryStrategy.SKIP_STAGE:
             return self._execute_skip_on_error(func, stage, device, **kwargs)
@@ -179,7 +194,7 @@ class ErrorHandler:
         else:
             raise ValueError(f"Unsupported strategy: {strategy}")
 
-    def _execute_fail_fast(self, func: Callable, stage: str, device: str, **kwargs) -> Any:
+    def _execute_fail_fast(self, func: Callable[..., Any], stage: str, device: str, **kwargs: Any) -> Any:
         """Execute with fail-fast strategy (no retry).
 
         Args:
@@ -200,7 +215,15 @@ class ErrorHandler:
             self._record_error(stage, 1, device, e)
             raise PipelineError(stage=stage, message=str(e), original_error=e) from e
 
-    def _execute_with_retry(self, func: Callable, stage: str, device: str, allow_cpu_fallback: bool, **kwargs) -> Any:
+    def _execute_with_retry(
+        self,
+        func: Callable[..., Any],
+        stage: str,
+        device: str,
+        allow_cpu_fallback: bool,
+        on_device_change: Optional[Callable[[str, int, Exception], None]] = None,
+        **kwargs: Any,
+    ) -> Any:
         """Execute with retry and optional CPU fallback.
 
         Args:
@@ -216,7 +239,7 @@ class ErrorHandler:
         Raises:
             PipelineError: If all retries exhausted.
         """
-        last_error = None
+        last_error: Optional[Exception] = None
         delay = self.initial_delay
 
         for attempt in range(1, self.max_retries + 1):
@@ -234,8 +257,10 @@ class ErrorHandler:
                 # Check if GPU OOM and CPU fallback allowed
                 is_oom = self._is_gpu_oom(e)
                 if is_oom and allow_cpu_fallback and device != "cpu":
-                    logger.warning(f"GPU OOM detected in stage '{stage}', falling back to CPU")
+                    logger.warning("GPU OOM detected in stage '%s'; rebuilding execution on CPU", stage)
                     device = "cpu"
+                    if on_device_change is not None:
+                        on_device_change(device, attempt, e)
                     continue
 
                 # If this is the last attempt, raise
@@ -244,7 +269,12 @@ class ErrorHandler:
 
                 # Exponential backoff
                 logger.warning(
-                    f"Stage '{stage}' failed (attempt {attempt}/{self.max_retries}), " f"retrying in {delay:.1f}s: {e}"
+                    "Stage '%s' failed (attempt %d/%d), retrying in %.1fs: %s",
+                    stage,
+                    attempt,
+                    self.max_retries,
+                    delay,
+                    e,
                 )
 
                 time.sleep(delay)
@@ -258,7 +288,7 @@ class ErrorHandler:
             context={"attempts": self.max_retries, "device": device},
         ) from last_error
 
-    def _execute_skip_on_error(self, func: Callable, stage: str, device: str, **kwargs) -> Optional[Any]:
+    def _execute_skip_on_error(self, func: Callable[..., Any], stage: str, device: str, **kwargs: Any) -> Optional[Any]:
         """Execute and skip stage on error (return None).
 
         Args:

@@ -35,7 +35,7 @@ import json
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Union, cast
 
 import numpy as np
 import yaml
@@ -44,7 +44,7 @@ from transformation_portal.spatial_ai.ingest.linear_decoder import LinearDecoder
 from transformation_portal.spatial_ai.materials.contracts import MaterialInput, PBRTextures
 from transformation_portal.spatial_ai.materials.material_backend import MaterialBackend
 from transformation_portal.spatial_ai.reconstruction.contracts import Scene3D
-from transformation_portal.spatial_ai.segmentation.contracts import SegmentationInput, SegmentationResult
+from transformation_portal.spatial_ai.segmentation.contracts import MaskMetadata, SegmentationInput, SegmentationResult
 from transformation_portal.spatial_ai.segmentation.sam2_backend import SAM2Backend
 from transformation_portal.spatial_ai.segmentation.tiling.config import SegmentationTilingConfig
 
@@ -54,6 +54,9 @@ from .resource_manager import ResourceLimits, ResourceManager
 
 logger = logging.getLogger(__name__)
 
+if TYPE_CHECKING:
+    from transformation_portal.core.geometry import MultiViewReconstructionRequest
+
 
 @dataclass
 class PipelineConfig:
@@ -61,7 +64,7 @@ class PipelineConfig:
 
     Attributes:
         tier: Tier level (standard, apex_research, experimental).
-        stages: Stages to execute (["ingest", "segment", "materials", "reconstruct"]).
+        stages: Stages to execute (["ingest", "segmentation", "materials", "reconstruction"]).
         ingest: Ingest configuration.
         segmentation: Segmentation configuration.
         materials: Materials configuration.
@@ -81,8 +84,9 @@ class PipelineConfig:
     error_strategy: ErrorRecoveryStrategy = ErrorRecoveryStrategy.RETRY
     use_execution_graph: bool = False
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate configuration."""
+        self.stages = ["reconstruction" if stage == "reconstruct" else stage for stage in self.stages]
         VALID_STAGES = ["ingest", "segment", "segmentation", "materials", "reconstruction"]
         for stage in self.stages:
             if stage not in VALID_STAGES:
@@ -99,7 +103,7 @@ class PipelineConfig:
             "apex_research_ultra",
             "experimental",
         ]:
-            raise ValueError(f"Reconstruction requires research tier, got '{self.tier}' " "(Inria 3DGS license restriction)")
+            raise ValueError(f"Reconstruction requires research tier, got '{self.tier}' (Inria 3DGS license restriction)")
 
 
 @dataclass
@@ -113,7 +117,7 @@ class PipelineResult:
         linear_image: Linear ingest result (if ingest stage run).
         segmentation: Segmentation result (if segment stage run).
         materials: PBR textures per segment (if materials stage run).
-        scene_3d: 3D scene reconstruction (if reconstruct stage run).
+        scene_3d: 3D scene reconstruction (if reconstruction stage run).
         execution_time: Total execution time in seconds.
         peak_memory_mb: Peak GPU memory usage in MB.
         errors: List of error messages.
@@ -271,12 +275,12 @@ class SpatialAIPipeline:
             # Try as preset name first, then as file path
             try:
                 self.config = self._load_preset(str(config))
-            except FileNotFoundError:
+            except FileNotFoundError as exc:
                 config_path = Path(config)
                 if config_path.exists():
                     self.config = self._load_config_file(config_path)
                 else:
-                    raise FileNotFoundError(f"Config not found as preset or file: {config}")
+                    raise FileNotFoundError(f"Config not found as preset or file: {config}") from exc
         else:
             raise TypeError(f"config must be PipelineConfig, dict, str, or Path, got {type(config)}")
 
@@ -319,7 +323,7 @@ class SpatialAIPipeline:
         reset_fn = getattr(backend, "reset_state", None)
         if not callable(reset_fn):
             logger.warning(
-                "Backend '%s' has no callable reset_state() method; " "skipping stateful registration.",
+                "Backend '%s' has no callable reset_state() method; skipping stateful registration.",
                 name,
             )
             return
@@ -437,9 +441,7 @@ class SpatialAIPipeline:
                     if result.linear_image is None:
                         raise PipelineError("reconstruction", "Ingest stage required before reconstruction")
 
-                    result.scene_3d = self._run_reconstruction(
-                        result.linear_image, result.segmentation, output_dir, save_intermediates
-                    )
+                    self._run_reconstruction(result.linear_image, result.segmentation, output_dir, save_intermediates)
                     result.stages_completed.append("reconstruction")
 
             # Complete
@@ -549,17 +551,16 @@ class SpatialAIPipeline:
 
         # Re-validate tier (defense-in-depth)
         if request.tier not in self.VALID_RECONSTRUCTION_TIERS:
-            raise ValueError(
-                f"Reconstruction requires research tier {self.VALID_RECONSTRUCTION_TIERS}, " f"got '{request.tier}'."
-            )
+            raise ValueError(f"Reconstruction requires research tier {self.VALID_RECONSTRUCTION_TIERS}, got '{request.tier}'.")
 
         # Execution-graph mode is not supported for multi-view reconstruction.
         # Fail fast rather than silently running the imperative path when the flag is enabled.
         if getattr(self.config, "use_execution_graph", False):
             raise PipelineError(
+                "reconstruction",
                 "Multi-view reconstruction does not support execution-graph mode "
                 "(use_execution_graph=True). Disable execution graph or use process() "
-                "for single-view pipelines."
+                "for single-view pipelines.",
             )
 
         # Multi-view reconstruction always runs 2 stages: reconstruction + export.
@@ -652,7 +653,7 @@ class SpatialAIPipeline:
             )
 
             self.progress_tracker.complete_pipeline(success=True)
-            logger.info(f"Multi-view reconstruction completed in {execution_time:.1f}s, " f"peak memory {peak_memory:.1f}MB")
+            logger.info("Multi-view reconstruction completed in %.1fs, peak memory %.1fMB", execution_time, peak_memory)
 
             # Save summary if requested
             if save_intermediates:
@@ -769,15 +770,15 @@ class SpatialAIPipeline:
             if strict_ingest and emit_exr:
                 try:
                     import OpenEXR  # noqa: F401
-                except ImportError:
+                except ImportError as exc:
                     raise RuntimeError(
-                        "strict_ingest=True with emit_exr=True requires OpenEXR. " "Install with: pip install OpenEXR Imath"
-                    )
+                        "strict_ingest=True with emit_exr=True requires OpenEXR. Install with: pip install OpenEXR Imath"
+                    ) from exc
 
             # Execute
             decoder = LinearDecoder(gamma=1.0, bit_depth=32, strict_ingest=strict_ingest)
 
-            def _decode():
+            def _decode() -> LinearIngestResult:
                 return decoder.decode(
                     input_path=input_path,
                     output_dir=output_dir,
@@ -835,24 +836,45 @@ class SpatialAIPipeline:
 
             model_cfg = self.config.segmentation.get("model", {})
             model_size = model_cfg.get("size", "large")
+            repo_id = model_cfg.get("repo_id")
+            revision = model_cfg.get("revision")
+            checkpoint_path = model_cfg.get("checkpoint_path")
+            prefer_hf_pipeline = bool(model_cfg.get("prefer_hf_pipeline", False))
+            generator_kwargs = dict(self.config.segmentation.get("generator", {}))
             enable_material = bool(self.config.segmentation.get("material_classification", False))
             material_threshold = float(self.config.segmentation.get("material_confidence_threshold", 0.3))
             tiling_cfg = SegmentationTilingConfig.from_dict(self.config.segmentation.get("tiling"))
 
-            # Select device
-            device = self.resource_manager.select_device()
+            active_device: Dict[str, Literal["cuda", "mps", "cpu"]] = {
+                "value": cast(Literal["cuda", "mps", "cpu"], self.resource_manager.select_device())
+            }
+            backend_holder: Dict[str, SAM2Backend] = {}
 
-            # Create backend (no repo_id/revision - backend uses direct checkpoint loading)
-            backend = SAM2Backend(
-                model_size=model_size,
-                device=device,
-                enable_material_classification=enable_material,
-                material_confidence_threshold=material_threshold,
-                tiling=tiling_cfg,
-            )
+            def _build_backend(exec_device: Literal["cuda", "mps", "cpu"], *, replace_tracking: bool = False) -> SAM2Backend:
+                active_device["value"] = exec_device
+                if replace_tracking:
+                    try:
+                        self.resource_manager.unload_model("sam2")
+                    except Exception:
+                        pass
 
-            # Register model for tracking
-            self.resource_manager.register_model("sam2", backend)
+                backend = SAM2Backend(
+                    model_size=model_size,
+                    device=exec_device,
+                    checkpoint_path=checkpoint_path,
+                    repo_id=repo_id,
+                    revision=revision,
+                    prefer_hf_pipeline=prefer_hf_pipeline,
+                    generator_kwargs=generator_kwargs,
+                    enable_material_classification=enable_material,
+                    material_confidence_threshold=material_threshold,
+                    tiling=tiling_cfg,
+                )
+                backend_holder["backend"] = backend
+                self.resource_manager.register_model("sam2", backend)
+                return backend
+
+            _build_backend(active_device["value"])
 
             # Create input contract
             seg_input = SegmentationInput(
@@ -862,8 +884,18 @@ class SpatialAIPipeline:
             )
 
             # Execute
-            def _segment():
-                return backend.segment(seg_input)
+            def _segment() -> SegmentationResult:
+                return backend_holder["backend"].segment(seg_input)
+
+            def _on_device_change(new_device: str, attempt: int, exc: Exception) -> None:
+                rebuilt_device = cast(Literal["cuda", "mps", "cpu"], new_device)
+                logger.warning(
+                    "Rebuilding SAM2 backend on %s after attempt %d failed: %s",
+                    rebuilt_device,
+                    attempt,
+                    exc,
+                )
+                _build_backend(rebuilt_device, replace_tracking=True)
 
             # Map RETURN_PARTIAL to FAIL_FAST for stage execution
             # Pipeline level will catch and return partial results
@@ -877,7 +909,8 @@ class SpatialAIPipeline:
                 func=_segment,
                 stage="segment",
                 strategy=stage_strategy,
-                device=device,
+                device=active_device["value"],
+                on_device_change=_on_device_change,
             )
 
             # Save masks if requested
@@ -927,20 +960,71 @@ class SpatialAIPipeline:
 
         try:
             # Parse config
-            backend_cfg = self.config.materials.get("backend", "heuristic")
-            material_hints = self.config.materials.get("material_hints", True)
+            materials_cfg = dict(self.config.materials)
+            backend_cfg = materials_cfg.get("backend", "heuristic")
+            material_hints = materials_cfg.get("material_hints", True)
+            model_repo_id = materials_cfg.get("model_repo_id")
+            model_revision = materials_cfg.get("model_revision")
 
-            # Select device
-            device = self.resource_manager.select_device()
+            active_device: Dict[str, Literal["cuda", "mps", "cpu"]] = {
+                "value": cast(Literal["cuda", "mps", "cpu"], self.resource_manager.select_device())
+            }
+            backend_holder: Dict[str, MaterialBackend] = {}
 
-            # Create backend
-            backend = MaterialBackend(backend=backend_cfg, device=device)
+            def _build_backend(
+                exec_device: Literal["cuda", "mps", "cpu"], *, replace_tracking: bool = False
+            ) -> MaterialBackend:
+                active_device["value"] = exec_device
+                if replace_tracking:
+                    try:
+                        self.resource_manager.unload_model("materials")
+                    except Exception:
+                        pass
 
-            # Register model for resource tracking (C3: match segmentation lifecycle)
-            self.resource_manager.register_model("materials", backend)
+                generation_overrides = {
+                    "backend": backend_cfg,
+                    "device": exec_device,
+                    "resolution": materials_cfg.get("resolution"),
+                    "optimize_iterations": materials_cfg.get("optimize_iterations"),
+                    "use_depth": materials_cfg.get("use_depth"),
+                    "normal_strength": materials_cfg.get("normal_strength"),
+                    "ao_intensity": materials_cfg.get("ao_intensity"),
+                }
+
+                backend = MaterialBackend(
+                    backend=backend_cfg,
+                    device=exec_device,
+                    model_repo_id=model_repo_id,
+                    model_revision=model_revision,
+                    generation_config_overrides=generation_overrides,
+                )
+                backend_holder["backend"] = backend
+                self.resource_manager.register_model("materials", backend)
+                return backend
+
+            _build_backend(active_device["value"])
+
+            depth_map = None
+            if materials_cfg.get("use_depth", False):
+                depth_map = getattr(ingest_result, "depth", None)
+                if depth_map is None:
+                    depth_message = "Material generation requested use_depth=True, but no depth map is available from ingest"
+                    if self.config.tier in {"apex_research", "apex_research_ultra", "experimental"}:
+                        raise RuntimeError(depth_message)
+                    logger.warning("%s; continuing without depth", depth_message)
 
             # Generate materials for each segment
             materials = {}
+
+            if self.config.error_strategy in {
+                ErrorRecoveryStrategy.FAIL_FAST,
+                ErrorRecoveryStrategy.RETURN_PARTIAL,
+            }:
+                per_segment_strategy = ErrorRecoveryStrategy.FAIL_FAST
+            elif self.config.error_strategy == ErrorRecoveryStrategy.RETRY_WITH_CPU_FALLBACK:
+                per_segment_strategy = ErrorRecoveryStrategy.RETRY_WITH_CPU_FALLBACK
+            else:
+                per_segment_strategy = ErrorRecoveryStrategy.SKIP_STAGE
 
             for i, (mask, metadata) in enumerate(zip(seg_result.masks, seg_result.metadata)):
                 # Create material input
@@ -950,19 +1034,37 @@ class SpatialAIPipeline:
                     image=ingest_result.linear_rgb,
                     gamma=ingest_result.gamma,
                     mask=mask,
+                    depth=depth_map,
                     material_hint=material_hint,
                 )
 
                 # Generate PBR textures
-                def _generate():
-                    return backend.generate(mat_input)
+                def _generate(material_input: MaterialInput = mat_input) -> PBRTextures:
+                    return backend_holder["backend"].generate(material_input)
 
-                pbr_textures = self.error_handler.execute_with_retry(
-                    func=_generate,
-                    stage="materials",
-                    strategy=ErrorRecoveryStrategy.SKIP_STAGE,  # Skip failed segments
-                    device=device,
-                )
+                def _on_device_change(new_device: str, attempt: int, exc: Exception) -> None:
+                    rebuilt_device = cast(Literal["cuda", "mps", "cpu"], new_device)
+                    logger.warning(
+                        "Rebuilding material backend on %s after attempt %d failed: %s",
+                        rebuilt_device,
+                        attempt,
+                        exc,
+                    )
+                    _build_backend(rebuilt_device, replace_tracking=True)
+
+                try:
+                    pbr_textures = self.error_handler.execute_with_retry(
+                        func=_generate,
+                        stage="materials",
+                        strategy=per_segment_strategy,
+                        device=active_device["value"],
+                        on_device_change=_on_device_change,
+                    )
+                except PipelineError:
+                    if per_segment_strategy == ErrorRecoveryStrategy.FAIL_FAST:
+                        raise
+                    logger.warning("Material generation failed for segment_%d; skipping", i)
+                    pbr_textures = None
 
                 if pbr_textures is not None:
                     materials[f"segment_{i}"] = pbr_textures
@@ -1128,10 +1230,6 @@ class SpatialAIPipeline:
 
             # Extract outputs from graph results
             if "ingest.linear_rgb" in exec_result.outputs:
-                from transformation_portal.spatial_ai.ingest.linear_decoder import (
-                    LinearIngestResult,
-                )
-
                 # Reconstruct LinearIngestResult from graph outputs
                 # IngestStage emits cache-safe primitives; we reconstruct the full result.
                 linear_rgb = exec_result.outputs["ingest.linear_rgb"]
@@ -1150,11 +1248,6 @@ class SpatialAIPipeline:
                 )
 
             if "segment.masks" in exec_result.outputs:
-                from transformation_portal.spatial_ai.segmentation.contracts import (
-                    MaskMetadata,
-                    SegmentationResult,
-                )
-
                 masks = exec_result.outputs["segment.masks"]
                 scores = exec_result.outputs.get("segment.scores", np.ones(len(masks)))
 
@@ -1165,7 +1258,7 @@ class SpatialAIPipeline:
                 bboxes = exec_result.outputs.get("segment.metadata.bbox")
                 stabilities = exec_result.outputs.get("segment.metadata.stability_score")
 
-                def _compute_bbox(mask: np.ndarray) -> tuple:
+                def _compute_bbox(mask: np.ndarray) -> tuple[int, int, int, int]:
                     """Compute a tight (x, y, w, h) bbox for a boolean/uint8 mask.
 
                     Falls back to (0, 0, 0, 0) for empty masks to preserve determinism.
@@ -1193,7 +1286,7 @@ class SpatialAIPipeline:
                         area = int(np.count_nonzero(mask))
 
                     if bboxes is not None and i < len(bboxes):
-                        bbox = tuple(int(v) for v in bboxes[i])
+                        bbox = cast(tuple[int, int, int, int], tuple(int(v) for v in bboxes[i]))
                     else:
                         bbox = _compute_bbox(mask)
 
@@ -1228,8 +1321,6 @@ class SpatialAIPipeline:
 
                 # Also save graph execution metadata
                 graph_meta_path = output_dir / "graph_execution.json"
-                import json
-
                 graph_meta = {
                     "stages_executed": exec_result.stages_executed,
                     "stages_cached": exec_result.stages_cached,
@@ -1354,10 +1445,12 @@ class SpatialAIPipeline:
             else:
                 logger.warning(f"Unknown error strategy '{strategy_str}', using RETRY")
 
-        # Normalize stage aliases: "segment" → "segmentation" (C1 correctness fix)
+        # Normalize stage aliases while preserving backward compatibility.
         segmentation_data = pipeline_data.get("segmentation") or pipeline_data.get("segment", {})
+        reconstruction_data = pipeline_data.get("reconstruction") or pipeline_data.get("reconstruct", {})
         stages = list(pipeline_data.keys())
-        stages = ["segmentation" if s == "segment" else s for s in stages]
+        stage_aliases = {"segment": "segmentation", "reconstruct": "reconstruction"}
+        stages = [stage_aliases.get(stage_name, stage_name) for stage_name in stages]
 
         # Parse use_execution_graph flag (ADR-029)
         use_execution_graph = data.get("use_execution_graph", False)
@@ -1369,7 +1462,7 @@ class SpatialAIPipeline:
             ingest=pipeline_data.get("ingest", {}),
             segmentation=segmentation_data,
             materials=pipeline_data.get("materials", {}),
-            reconstruction=pipeline_data.get("reconstruction", {}),
+            reconstruction=reconstruction_data,
             resource_limits=resource_limits,
             error_strategy=error_strategy,
             use_execution_graph=use_execution_graph,

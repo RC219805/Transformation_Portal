@@ -23,7 +23,8 @@ Performance:
 - Memory: ~2-4GB VRAM
 """
 
-from typing import Literal, Optional
+import inspect
+from typing import Any, Dict, Literal, Optional, cast
 
 import numpy as np
 
@@ -59,6 +60,7 @@ class MaterialBackend:
         device: Literal["cuda", "mps", "cpu"] = "cuda",
         model_repo_id: Optional[str] = None,
         model_revision: Optional[str] = None,
+        generation_config_overrides: Optional[Dict[str, Any]] = None,
     ):
         """Initialize material backend.
 
@@ -72,6 +74,9 @@ class MaterialBackend:
         self.device = device
         self.model_repo_id = model_repo_id
         self.model_revision = model_revision
+        self.generation_config_overrides = {
+            key: value for key, value in (generation_config_overrides or {}).items() if value is not None
+        }
 
         # Lazy-loaded model instance
         self._model = None
@@ -80,6 +85,38 @@ class MaterialBackend:
         # Heuristic fallback (always available)
         self._heuristic = HeuristicFallback()
         self._bilateral_filter_available = self._is_bilateral_filter_available()
+
+    def clone_for_device(self, device: str) -> "MaterialBackend":
+        """Create an equivalent backend bound to a new execution device."""
+        overrides = dict(self.generation_config_overrides)
+        overrides["device"] = device
+        return MaterialBackend(
+            backend=self.backend,
+            device=cast(Literal["cuda", "mps", "cpu"], device),
+            model_repo_id=self.model_repo_id,
+            model_revision=self.model_revision,
+            generation_config_overrides=overrides,
+        )
+
+    def _build_generation_config(
+        self,
+        *,
+        device: Optional[str] = None,
+        overrides: Optional[Dict[str, Any]] = None,
+    ) -> MaterialGenerationConfig:
+        """Build MaterialGenerationConfig from backend defaults plus overrides."""
+        raw = {
+            "backend": self.backend,
+            "device": device or self.device,
+            "model_repo_id": self.model_repo_id,
+            "model_revision": self.model_revision,
+        }
+        raw.update(self.generation_config_overrides)
+        raw.update({key: value for key, value in (overrides or {}).items() if value is not None})
+
+        signature = inspect.signature(MaterialGenerationConfig)
+        filtered: Dict[str, Any] = {key: value for key, value in raw.items() if key in signature.parameters}
+        return MaterialGenerationConfig(**filtered)
 
     @staticmethod
     def _is_bilateral_filter_available() -> bool:
@@ -106,10 +143,7 @@ class MaterialBackend:
         # Contract is already validated in MaterialInput.__post_init__
 
         # Create config if not using default
-        config = MaterialGenerationConfig(
-            backend=self.backend,
-            device=self.device,
-        )
+        config = self._build_generation_config()
 
         # Call generate_pbr_textures - returns PBRTextures now
         return self.generate_pbr_textures(
@@ -142,10 +176,7 @@ class MaterialBackend:
         """
         # Use default config if not provided
         if config is None:
-            config = MaterialGenerationConfig(
-                backend=self.backend,
-                device=self.device,
-            )
+            config = self._build_generation_config()
 
         # Route to appropriate backend (returns metadata tuple now)
         result = None
@@ -379,7 +410,7 @@ class MaterialBackend:
 
         return self._generate_heuristic(rgb, mask, depth, material_hint, config)
 
-    def unload_model(self):
+    def unload_model(self) -> None:
         """Unload model from memory to free resources."""
         if self._model is not None:
             del self._model
