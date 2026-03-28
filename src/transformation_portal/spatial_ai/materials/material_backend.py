@@ -71,6 +71,16 @@ class MaterialBackend:
             device: Compute device ("cuda", "mps", "cpu").
             model_repo_id: HuggingFace model repo ID (e.g., "nvidia/nvdiffrec").
             model_revision: HuggingFace commit SHA for reproducibility.
+            generation_config_overrides: Optional mapping of MaterialGenerationConfig
+                fields to override at the instance level. Keys must match valid
+                ``MaterialGenerationConfig`` parameters; ``None`` values are
+                filtered out and ignored. These overrides are merged into the
+                generation config using the following precedence (lowest to
+                highest): 1) backend/constructor defaults, 2) instance-level
+                ``generation_config_overrides``, 3) per-call overrides passed to
+                ``_build_generation_config()``. The normalized override map is
+                persisted on the backend instance for use across all generation
+                calls.
         """
         self.backend = backend
         self.device = device

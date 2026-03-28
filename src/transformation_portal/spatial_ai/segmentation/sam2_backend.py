@@ -126,15 +126,41 @@ class SAM2Backend:
 
         Args:
             model_size: Model variant ("base" or "large").
-            device: Compute device.
-            checkpoint_path: Path to checkpoint file. If None, uses default
-                location in checkpoints/ directory.
+            device: Compute device. Accepted values are "auto", "cuda", "cpu",
+                or "mps". When "auto", device selection prefers MPS > CUDA > CPU
+                based on availability. Requested device falls back to an
+                available alternative if unavailable.
+            checkpoint_path: Path to local checkpoint file. If None and
+                ``prefer_hf_pipeline`` is False (the default), defaults to
+                ``checkpoints/<model>.pt``. May be None when repo-backed
+                HuggingFace loading is enabled via ``prefer_hf_pipeline=True``.
+            repo_id: HuggingFace Hub repository ID for model weights
+                (e.g., "facebook/sam2-hiera-large"). Required when
+                ``prefer_hf_pipeline=True``.
+            revision: HuggingFace commit SHA or branch for reproducibility.
+                When ``prefer_hf_pipeline=True``, this must be a pinned 40-char
+                commit SHA (resolved via model lock manifest). An unpinned
+                revision raises ``ValueError``.
+            prefer_hf_pipeline: When True, load model weights from HuggingFace
+                Hub using ``repo_id`` and ``revision`` instead of a local
+                checkpoint. This path is opt-in; the default loading model
+                remains checkpoint-first. If the HuggingFace load fails and a
+                local checkpoint exists, it falls back to checkpoint loading.
+            generator_kwargs: Optional overrides for SAM2AutomaticMaskGenerator
+                parameters (e.g., ``points_per_side``, ``pred_iou_thresh``,
+                ``stability_score_thresh``, ``box_nms_thresh``).
             enable_material_classification: Enable CLIP-based material labeling.
             material_confidence_threshold: Confidence threshold for material labels.
+            tiling: Optional tiling configuration for large-image segmentation.
+                When enabled, processes images in tiles to manage memory.
 
         Raises:
-            ValueError: If model_size invalid or checkpoint not found.
-            ImportError: If SAM2 package missing.
+            ValueError: If ``model_size`` is invalid, ``prefer_hf_pipeline=True``
+                without ``repo_id``, or repo-backed loading lacks a pinned
+                revision.
+            FileNotFoundError: If local checkpoint path does not exist (when
+                checkpoint loading is required).
+            ImportError: If SAM2 package or required dependencies are missing.
         """
         if model_size not in self.MODEL_CONFIGS:
             raise ValueError(f"Invalid model_size '{model_size}', " f"must be one of {list(self.MODEL_CONFIGS.keys())}")
