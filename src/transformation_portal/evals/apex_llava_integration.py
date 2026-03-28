@@ -37,9 +37,13 @@ See Also:
 
 from __future__ import annotations
 
+import importlib.util
+import json
 import logging
 from dataclasses import dataclass, field
+from functools import lru_cache
 from pathlib import Path
+from types import ModuleType
 from typing import Any, Literal, Optional
 
 from transformation_portal.evals.apex_harness import (
@@ -116,10 +120,30 @@ class ApexLlavaConfig:
             self.threshold = _DEFAULT_THRESHOLDS.get(self.quality_dimension, 0.70)
         if self.metric_weight is None:
             self.metric_weight = _DEFAULT_METRIC_WEIGHTS.get(self.quality_dimension, 0.5)
+        if not 0.0 <= self.threshold <= 1.0:
+            raise ApexLlavaIntegrationError(
+                f"Invalid threshold {self.threshold!r}; expected a value in the range [0.0, 1.0]."
+            )
+        if not 0.0 <= self.metric_weight <= 1.0:
+            raise ApexLlavaIntegrationError(
+                f"Invalid metric_weight {self.metric_weight!r}; expected a value in the range [0.0, 1.0]."
+            )
 
 
 class ApexLlavaIntegrationError(RuntimeError):
     """Raised for APEX + LLaVA integration failures."""
+
+
+@lru_cache(maxsize=1)
+def _load_model_lock_helpers() -> ModuleType:
+    """Load central model-lock helpers without importing heavy core package init."""
+    module_path = Path(__file__).resolve().parents[1] / "core" / "security" / "model_lock.py"
+    spec = importlib.util.spec_from_file_location("_tp_apex_model_lock_helpers", module_path)
+    if spec is None or spec.loader is None:
+        raise ApexLlavaIntegrationError(f"Unable to load model lock helpers from {module_path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def _get_prompt_builder_for_dimension(
@@ -163,7 +187,7 @@ def build_material_quality_prompt(
 
     context_suffix = ""
     if context:
-        context_suffix = f"\nAdditional context:\n{context}\n"
+        context_suffix = "\nAdditional context (JSON):\n" + json.dumps(context, sort_keys=True, indent=2) + "\n"
 
     return LlavaPromptSpec(
         name="material_pbr_quality",
@@ -187,7 +211,7 @@ def build_material_quality_prompt(
             '  "issues": [\n'
             "    {\n"
             '      "issue_type": string,\n'
-            '      "severity": "low|medium|high",\n'
+            '      "severity": one of "low", "medium", "high",\n'
             '      "evidence": string\n'
             "    }\n"
             "  ]\n"
@@ -209,34 +233,37 @@ def _load_model_manifest_entry(model_tier: str) -> dict[str, Any]:
     Raises:
         ApexLlavaIntegrationError: If manifest not found or invalid
     """
-    import yaml
-
     manifest_key = _MODEL_TIER_MANIFEST_KEYS.get(model_tier)
     if not manifest_key:
         raise ApexLlavaIntegrationError(f"Unknown model tier: {model_tier}")
 
-    # Try to load from model_lock_manifest.yaml
-    manifest_path = Path(__file__).parents[3] / "config" / "model_lock_manifest.yaml"
-
-    if not manifest_path.exists():
-        # Fallback: try relative to working directory
-        manifest_path = Path("config/model_lock_manifest.yaml")
-
-    if not manifest_path.exists():
-        raise ApexLlavaIntegrationError(f"Model lock manifest not found at {manifest_path}")
-
-    with open(manifest_path) as f:
-        manifest = yaml.safe_load(f)
+    helpers = _load_model_lock_helpers()
+    manifest_path = helpers.model_lock_manifest_path()
+    try:
+        manifest = helpers.load_model_lock_manifest(manifest_path)
+    except (FileNotFoundError, ValueError) as exc:
+        raise ApexLlavaIntegrationError(f"Failed to load model lock manifest: {exc}") from exc
 
     repositories = manifest.get("repositories", {})
-    if manifest_key not in repositories:
-        raise ApexLlavaIntegrationError(f"Model key '{manifest_key}' not found in manifest")
+    entry = repositories.get(manifest_key)
+    if not isinstance(entry, dict):
+        raise ApexLlavaIntegrationError(f"Model key '{manifest_key}' not found in manifest: {manifest_path}")
 
-    entry = repositories[manifest_key]
+    revision = helpers.resolve_model_lock_revision(
+        manifest_key,
+        entry.get("revision"),
+        manifest=manifest,
+        manifest_path=manifest_path,
+        context="APEX LLaVA",
+    )
+    if not helpers.is_pinned_revision(revision):
+        raise ApexLlavaIntegrationError(
+            f"Model key '{manifest_key}' must resolve to a pinned 40-char revision in {manifest_path}"
+        )
 
     return {
         "repo_id": manifest_key,
-        "revision": entry.get("revision"),
+        "revision": revision,
         "owner": entry.get("owner"),
         "tier": entry.get("tier"),
         "license": entry.get("license"),
@@ -337,6 +364,7 @@ def create_apex_harness_with_llava(
     harness = ApexEvaluationHarness(
         llava_backend=llava_backend,
         metric_fns=metrics,
+        prompt_spec_builder=_get_prompt_builder_for_dimension(config.quality_dimension),
         threshold=config.threshold,
         metric_weight=config.metric_weight,
         fail_on_vlm_error=config.fail_on_vlm_error,

@@ -16,6 +16,7 @@ Coverage:
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -107,6 +108,16 @@ class TestApexLlavaConfig:
             config = ApexLlavaConfig(model_tier=tier)
             assert config.model_tier == tier
 
+    @pytest.mark.parametrize("field_name", ["threshold", "metric_weight"])
+    @pytest.mark.parametrize("bad_value", [-0.1, 1.1])
+    def test_probability_fields_must_be_in_range(self, field_name, bad_value):
+        """Test that probability-like config values are validated."""
+        from transformation_portal.evals import ApexLlavaConfig, ApexLlavaIntegrationError
+
+        kwargs = {field_name: bad_value}
+        with pytest.raises(ApexLlavaIntegrationError, match=field_name):
+            ApexLlavaConfig(**kwargs)
+
 
 class TestCreateApexHarnessWithoutLlava:
     """Test create_apex_harness_without_llava factory."""
@@ -178,6 +189,7 @@ class TestBuildMaterialQualityPrompt:
         prompt = build_material_quality_prompt(context=context)
 
         assert "Additional context" in prompt.user_text
+        assert json.dumps(context, sort_keys=True, indent=2) in prompt.user_text
 
     def test_prompt_json_schema(self):
         """Test that prompt requests JSON schema output."""
@@ -190,6 +202,7 @@ class TestBuildMaterialQualityPrompt:
         assert "issues" in prompt.user_text
         assert "issue_type" in prompt.user_text
         assert "severity" in prompt.user_text
+        assert 'one of "low", "medium", "high"' in prompt.user_text
 
 
 class TestManifestLoading:
@@ -371,12 +384,29 @@ class TestPromptBuilderSelection:
 class TestHarnessEvaluationFlow:
     """Test the evaluation flow through the harness."""
 
-    def test_evaluate_with_mocked_backend(self):
-        """Test evaluation flow with mocked LLaVA backend."""
+    @pytest.mark.parametrize(
+        ("quality_dimension", "expected_prompt_name"),
+        [
+            ("segmentation", "segmentation_mask_quality"),
+            ("architectural", "architectural_quality"),
+            ("depth", "depth_map_quality"),
+            ("material", "material_pbr_quality"),
+        ],
+    )
+    def test_evaluate_with_mocked_backend_uses_dimension_prompt(
+        self,
+        quality_dimension,
+        expected_prompt_name,
+    ):
+        """Test evaluation flow wires the selected prompt into the backend call."""
         from transformation_portal.evals import ApexLlavaConfig, create_apex_harness_with_llava
         from transformation_portal.evals.vision_language import VQAResult
 
-        config = ApexLlavaConfig(model_tier="ci_smoke")
+        config = ApexLlavaConfig(
+            model_tier="ci_smoke",
+            quality_dimension=quality_dimension,
+            include_standard_metrics=False,
+        )
 
         # Create mock backend
         mock_backend = MagicMock()
@@ -396,9 +426,10 @@ class TestHarnessEvaluationFlow:
 
             # Mock image paths (don't need real files for mocked backend)
             image_paths = [Path("/tmp/test_image.png")]
+            context = {"scene": "kitchen", "material": "oak"}
 
             # Evaluate
-            result = harness.evaluate(image_paths=image_paths)
+            result = harness.evaluate(image_paths=image_paths, context=context)
 
             # Check result structure
             assert hasattr(result, "score")
@@ -408,3 +439,10 @@ class TestHarnessEvaluationFlow:
 
             # Backend should have been called
             mock_backend.evaluate_images.assert_called_once()
+            call_kwargs = mock_backend.evaluate_images.call_args.kwargs
+            assert call_kwargs["image_paths"] == image_paths
+            assert call_kwargs["context"] == context
+            assert call_kwargs["prompt_spec"].name == expected_prompt_name
+
+            if quality_dimension == "material":
+                assert json.dumps(context, sort_keys=True, indent=2) in call_kwargs["prompt_spec"].user_text
