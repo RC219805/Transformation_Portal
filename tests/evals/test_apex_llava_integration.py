@@ -227,9 +227,7 @@ class TestCreateApexHarnessWithLlava:
 
         config = ApexLlavaConfig(model_tier="ci_smoke")
 
-        with patch(
-            "transformation_portal.evals.apex_llava_integration.create_llava_backend"
-        ) as mock_create_backend:
+        with patch("transformation_portal.evals.apex_llava_integration.create_llava_backend") as mock_create_backend:
             mock_backend = MagicMock()
             mock_create_backend.return_value = mock_backend
 
@@ -243,9 +241,7 @@ class TestCreateApexHarnessWithLlava:
         """Test creating harness with default config."""
         from transformation_portal.evals import create_apex_harness_with_llava
 
-        with patch(
-            "transformation_portal.evals.apex_llava_integration.create_llava_backend"
-        ) as mock_create_backend:
+        with patch("transformation_portal.evals.apex_llava_integration.create_llava_backend") as mock_create_backend:
             mock_backend = MagicMock()
             mock_create_backend.return_value = mock_backend
 
@@ -262,9 +258,7 @@ class TestCreateApexHarnessWithLlava:
 
         config = ApexLlavaConfig(model_tier="ci_smoke")
 
-        with patch(
-            "transformation_portal.evals.apex_llava_integration.create_llava_backend"
-        ) as mock_create_backend:
+        with patch("transformation_portal.evals.apex_llava_integration.create_llava_backend") as mock_create_backend:
             mock_backend = MagicMock()
             mock_create_backend.return_value = mock_backend
 
@@ -278,9 +272,7 @@ class TestCreateApexHarnessWithLlava:
 
         config = ApexLlavaConfig(model_tier="ci_smoke")
 
-        with patch(
-            "transformation_portal.evals.apex_llava_integration.create_llava_backend"
-        ) as mock_create_backend:
+        with patch("transformation_portal.evals.apex_llava_integration.create_llava_backend") as mock_create_backend:
             mock_backend = MagicMock()
             mock_create_backend.return_value = mock_backend
 
@@ -296,9 +288,7 @@ class TestConvenienceFactories:
         """Test create_ci_smoke_harness factory."""
         from transformation_portal.evals import create_ci_smoke_harness
 
-        with patch(
-            "transformation_portal.evals.apex_llava_integration.create_llava_backend"
-        ) as mock_create_backend:
+        with patch("transformation_portal.evals.apex_llava_integration.create_llava_backend") as mock_create_backend:
             mock_backend = MagicMock()
             mock_create_backend.return_value = mock_backend
 
@@ -313,9 +303,7 @@ class TestConvenienceFactories:
         """Test create_production_harness factory."""
         from transformation_portal.evals import create_production_harness
 
-        with patch(
-            "transformation_portal.evals.apex_llava_integration.create_llava_backend"
-        ) as mock_create_backend:
+        with patch("transformation_portal.evals.apex_llava_integration.create_llava_backend") as mock_create_backend:
             mock_backend = MagicMock()
             mock_create_backend.return_value = mock_backend
 
@@ -330,9 +318,7 @@ class TestConvenienceFactories:
         """Test create_quality_max_harness factory."""
         from transformation_portal.evals import create_quality_max_harness
 
-        with patch(
-            "transformation_portal.evals.apex_llava_integration.create_llava_backend"
-        ) as mock_create_backend:
+        with patch("transformation_portal.evals.apex_llava_integration.create_llava_backend") as mock_create_backend:
             mock_backend = MagicMock()
             mock_create_backend.return_value = mock_backend
 
@@ -403,9 +389,7 @@ class TestHarnessEvaluationFlow:
         mock_backend.evaluate_images.return_value = mock_result
         mock_backend.is_loaded.return_value = True
 
-        with patch(
-            "transformation_portal.evals.apex_llava_integration.create_llava_backend"
-        ) as mock_create:
+        with patch("transformation_portal.evals.apex_llava_integration.create_llava_backend") as mock_create:
             mock_create.return_value = mock_backend
 
             harness = create_apex_harness_with_llava(config)
