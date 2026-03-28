@@ -35,70 +35,76 @@ from typing import Any, Callable, Dict, List, Optional
 logger = logging.getLogger(__name__)
 
 
-class ErrorRecoveryStrategy(str, Enum):
-    """Strategy for recovering from errors.
+if "ErrorRecoveryStrategy" not in globals():
 
-    - FAIL_FAST: Stop immediately on error
-    - RETRY: Retry with exponential backoff
-    - RETRY_WITH_CPU_FALLBACK: Retry, then try CPU if GPU OOM
-    - SKIP_STAGE: Skip failed stage and continue
-    - RETURN_PARTIAL: Return partial results up to failure point
-    """
+    class ErrorRecoveryStrategy(str, Enum):
+        """Strategy for recovering from errors.
 
-    FAIL_FAST = "fail_fast"
-    RETRY = "retry"
-    RETRY_WITH_CPU_FALLBACK = "retry_cpu_fallback"
-    SKIP_STAGE = "skip_stage"
-    RETURN_PARTIAL = "return_partial"
+        - FAIL_FAST: Stop immediately on error
+        - RETRY: Retry with exponential backoff
+        - RETRY_WITH_CPU_FALLBACK: Retry, then try CPU if GPU OOM
+        - SKIP_STAGE: Skip failed stage and continue
+        - RETURN_PARTIAL: Return partial results up to failure point
+        """
 
-
-class PipelineError(Exception):
-    """Base exception for pipeline errors.
-
-    Attributes:
-        stage: Pipeline stage where error occurred.
-        message: Error message.
-        original_error: Original exception that triggered this error.
-        context: Additional context (device, memory, etc.).
-    """
-
-    def __init__(
-        self,
-        stage: str,
-        message: str,
-        original_error: Optional[Exception] = None,
-        context: Optional[Dict[str, Any]] = None,
-    ):
-        self.stage = stage
-        self.message = message
-        self.original_error = original_error
-        self.context = context or {}
-        super().__init__(f"[{stage}] {message}")
-
-    def __repr__(self) -> str:
-        """String representation."""
-        return f"PipelineError(stage='{self.stage}', message='{self.message}')"
+        FAIL_FAST = "fail_fast"
+        RETRY = "retry"
+        RETRY_WITH_CPU_FALLBACK = "retry_cpu_fallback"
+        SKIP_STAGE = "skip_stage"
+        RETURN_PARTIAL = "return_partial"
 
 
-@dataclass
-class ErrorContext:
-    """Context for an error occurrence.
+if "PipelineError" not in globals():
 
-    Attributes:
-        stage: Stage name.
-        attempt: Retry attempt number (1-indexed).
-        device: Device where error occurred.
-        memory_mb: Memory usage at time of error.
-        timestamp: Error timestamp.
-        traceback: Exception traceback.
-    """
+    class PipelineError(Exception):
+        """Base exception for pipeline errors.
 
-    stage: str
-    attempt: int
-    device: str
-    memory_mb: float = 0.0
-    timestamp: float = field(default_factory=time.time)
-    traceback: Optional[str] = None
+        Attributes:
+            stage: Pipeline stage where error occurred.
+            message: Error message.
+            original_error: Original exception that triggered this error.
+            context: Additional context (device, memory, etc.).
+        """
+
+        def __init__(
+            self,
+            stage: str,
+            message: str,
+            original_error: Optional[Exception] = None,
+            context: Optional[Dict[str, Any]] = None,
+        ):
+            self.stage = stage
+            self.message = message
+            self.original_error = original_error
+            self.context = context or {}
+            super().__init__(f"[{stage}] {message}")
+
+        def __repr__(self) -> str:
+            """String representation."""
+            return f"PipelineError(stage='{self.stage}', message='{self.message}')"
+
+
+if "ErrorContext" not in globals():
+
+    @dataclass
+    class ErrorContext:
+        """Context for an error occurrence.
+
+        Attributes:
+            stage: Stage name.
+            attempt: Retry attempt number (1-indexed).
+            device: Device where error occurred.
+            memory_mb: Memory usage at time of error.
+            timestamp: Error timestamp.
+            traceback: Exception traceback.
+        """
+
+        stage: str
+        attempt: int
+        device: str
+        memory_mb: float = 0.0
+        timestamp: float = field(default_factory=time.time)
+        traceback: Optional[str] = None
 
 
 class ErrorHandler:

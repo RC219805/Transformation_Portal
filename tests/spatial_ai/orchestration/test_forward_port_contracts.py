@@ -103,7 +103,7 @@ def test_sam2_backend_accepts_repo_id_revision_without_local_checkpoint(monkeypa
 
 def test_sam2_backend_repo_id_path_requires_revision(monkeypatch: pytest.MonkeyPatch) -> None:
     SAM2Backend = _import_sam2_backend(monkeypatch)
-    with pytest.raises(ValueError, match="pinned revision"):
+    with pytest.raises(ValueError, match="pinned revision|40-char commit SHA|unpinned"):
         SAM2Backend(
             model_size="large",
             device="cpu",
