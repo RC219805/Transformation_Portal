@@ -57,6 +57,4 @@ def test_unsupported_update_target_is_reported() -> None:
 def test_missing_open_pr_limit_is_reported() -> None:
     broken = valid_dependabot_text().replace("    open-pull-requests-limit: 5\n", "", 1)
     errors = dependabot_contract.validate_dependabot_config(broken)
-    assert (
-        "dependabot update ('pip', '/') must set open-pull-requests-limit to 5"
-    ) in errors
+    assert ("dependabot update ('pip', '/') must set open-pull-requests-limit to 5") in errors
