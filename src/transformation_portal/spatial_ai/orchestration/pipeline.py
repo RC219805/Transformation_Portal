@@ -146,77 +146,79 @@ class PipelineConfig:
             raise ValueError(f"Reconstruction requires research tier, got '{self.tier}' (Inria 3DGS license restriction)")
 
 
-@dataclass
-class PipelineResult:
-    """Result from end-to-end pipeline execution.
+if "PipelineResult" not in globals():
 
-    Attributes:
-        input_path: Input file path.
-        output_dir: Output directory.
-        stages_completed: List of completed stages.
-        linear_image: Linear ingest result (if ingest stage run).
-        segmentation: Segmentation result (if the segmentation stage ran).
-        materials: PBR textures per segment (if materials stage run).
-        scene_3d: 3D scene reconstruction (if reconstruction stage run).
-        execution_time: Total execution time in seconds.
-        peak_memory_mb: Peak GPU memory usage in MB.
-        errors: List of error messages.
-        warnings: List of warning messages.
-        metadata: Additional metadata.
-    """
+    @dataclass
+    class PipelineResult:
+        """Result from end-to-end pipeline execution.
 
-    input_path: Path
-    output_dir: Path
-    stages_completed: List[str]
-
-    linear_image: Optional[LinearIngestResult] = None
-    segmentation: Optional[SegmentationResult] = None
-    materials: Optional[Dict[str, PBRTextures]] = None
-    scene_3d: Optional[Scene3D] = None
-
-    execution_time: float = 0.0
-    peak_memory_mb: float = 0.0
-    errors: List[str] = field(default_factory=list)
-    warnings: List[str] = field(default_factory=list)
-    metadata: Dict[str, Any] = field(default_factory=dict)
-
-    def save_summary(self, path: Path) -> None:
-        """Save execution summary as JSON.
-
-        Args:
-            path: Output path for summary JSON.
+        Attributes:
+            input_path: Input file path.
+            output_dir: Output directory.
+            stages_completed: List of completed stages.
+            linear_image: Linear ingest result (if ingest stage run).
+            segmentation: Segmentation result (if the segmentation stage ran).
+            materials: PBR textures per segment (if materials stage run).
+            scene_3d: 3D scene reconstruction (if reconstruction stage run).
+            execution_time: Total execution time in seconds.
+            peak_memory_mb: Peak GPU memory usage in MB.
+            errors: List of error messages.
+            warnings: List of warning messages.
+            metadata: Additional metadata.
         """
-        summary = {
-            "input": str(self.input_path),
-            "output_dir": str(self.output_dir),
-            "stages_completed": self.stages_completed,
-            "execution_time": self.execution_time,
-            "peak_memory_mb": self.peak_memory_mb,
-            "errors": self.errors,
-            "warnings": self.warnings,
-            "results": {
-                "linear_image": self.linear_image is not None,
-                "segmentation": {
-                    "completed": self.segmentation is not None,
-                    "num_masks": len(self.segmentation.masks) if self.segmentation else 0,
-                },
-                "materials": {
-                    "completed": self.materials is not None,
-                    "num_segments": len(self.materials) if self.materials else 0,
-                },
-                "scene_3d": {
-                    "completed": self.scene_3d is not None,
-                    "num_gaussians": self.scene_3d.splats.num_gaussians if self.scene_3d else 0,
-                    "rmse": self.scene_3d.rmse if self.scene_3d else None,
-                },
-            },
-            "metadata": self.metadata,
-        }
 
-        with open(path, "w") as f:
-            json.dump(summary, f, indent=2)
+        input_path: Path
+        output_dir: Path
+        stages_completed: List[str]
 
-        logger.info(f"Saved pipeline summary: {path}")
+        linear_image: Optional[LinearIngestResult] = None
+        segmentation: Optional[SegmentationResult] = None
+        materials: Optional[Dict[str, PBRTextures]] = None
+        scene_3d: Optional[Scene3D] = None
+
+        execution_time: float = 0.0
+        peak_memory_mb: float = 0.0
+        errors: List[str] = field(default_factory=list)
+        warnings: List[str] = field(default_factory=list)
+        metadata: Dict[str, Any] = field(default_factory=dict)
+
+        def save_summary(self, path: Path) -> None:
+            """Save execution summary as JSON.
+
+            Args:
+                path: Output path for summary JSON.
+            """
+            summary = {
+                "input": str(self.input_path),
+                "output_dir": str(self.output_dir),
+                "stages_completed": self.stages_completed,
+                "execution_time": self.execution_time,
+                "peak_memory_mb": self.peak_memory_mb,
+                "errors": self.errors,
+                "warnings": self.warnings,
+                "results": {
+                    "linear_image": self.linear_image is not None,
+                    "segmentation": {
+                        "completed": self.segmentation is not None,
+                        "num_masks": len(self.segmentation.masks) if self.segmentation else 0,
+                    },
+                    "materials": {
+                        "completed": self.materials is not None,
+                        "num_segments": len(self.materials) if self.materials else 0,
+                    },
+                    "scene_3d": {
+                        "completed": self.scene_3d is not None,
+                        "num_gaussians": self.scene_3d.splats.num_gaussians if self.scene_3d else 0,
+                        "rmse": self.scene_3d.rmse if self.scene_3d else None,
+                    },
+                },
+                "metadata": self.metadata,
+            }
+
+            with open(path, "w") as f:
+                json.dump(summary, f, indent=2)
+
+            logger.info(f"Saved pipeline summary: {path}")
 
 
 @dataclass

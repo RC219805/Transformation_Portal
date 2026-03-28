@@ -426,3 +426,13 @@ def test_pipeline_rejects_unrelated_pipelineconfig_shape(monkeypatch: pytest.Mon
 
     with pytest.raises(TypeError, match="config must be PipelineConfig, dict, str, or Path"):
         pipeline_mod.SpatialAIPipeline(PipelineConfig())
+
+
+def test_pipeline_result_identity_survives_reload(monkeypatch: pytest.MonkeyPatch) -> None:
+    _install_material_classifier_stub(monkeypatch)
+    pipeline_module = importlib.import_module("transformation_portal.spatial_ai.orchestration.pipeline")
+    PipelineResult = pipeline_module.PipelineResult
+
+    reloaded = _import_pipeline_module(monkeypatch)
+
+    assert reloaded.PipelineResult is PipelineResult
