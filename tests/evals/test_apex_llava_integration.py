@@ -400,8 +400,8 @@ class TestHarnessEvaluationFlow:
     ):
         """Test evaluation flow wires the selected prompt into the backend call."""
         from transformation_portal.evals import ApexLlavaConfig, create_apex_harness_with_llava
-        from transformation_portal.ingest.canonical_json import dumps_json
         from transformation_portal.evals.vision_language import VQAResult
+        from transformation_portal.ingest.canonical_json import dumps_json
 
         config = ApexLlavaConfig(
             model_tier="ci_smoke",
