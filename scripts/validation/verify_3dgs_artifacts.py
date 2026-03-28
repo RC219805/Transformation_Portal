@@ -34,7 +34,7 @@ import argparse
 import hashlib
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 
 # Attempt to import yaml; provide clear guidance if missing
 try:
@@ -65,7 +65,7 @@ def load_manifest(manifest_path: Path) -> dict[str, Any] | None:
     """Load and parse the model lock manifest.
 
     Returns:
-        Parsed YAML dict, or None if loading fails.
+        Parsed YAML mapping, or None if loading fails or the root is invalid.
     """
     if not manifest_path.exists():
         print(f"❌ Manifest file not found: {manifest_path}")
@@ -76,10 +76,16 @@ def load_manifest(manifest_path: Path) -> dict[str, Any] | None:
 
     try:
         with open(manifest_path, "r", encoding="utf-8") as f:
-            return yaml.safe_load(f)
+            parsed = yaml.safe_load(f)
     except yaml.YAMLError as e:
         print(f"❌ Failed to parse manifest YAML: {e}")
         return None
+
+    if not isinstance(parsed, dict):
+        print(f"❌ Manifest root must be a mapping/dict, got: {type(parsed).__name__}")
+        return None
+
+    return parsed
 
 
 def is_pending(value: Any) -> bool:
@@ -302,7 +308,7 @@ def print_guidance() -> None:
     print("━" * 70)
 
 
-def main() -> int:
+def main(argv: Sequence[str] | None = None) -> int:
     """Main entry point.
 
     Returns:
@@ -353,7 +359,7 @@ Examples:
         action="store_true",
         help="Suppress guidance output on warnings"
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     print("━" * 70)
     print("  3DGS Artifact Attestation Verification")
@@ -430,6 +436,7 @@ Examples:
     file_verified = 0
     file_mismatched = 0
     file_missing = 0
+    checkpoint_dir_missing = False
 
     if args.check_files:
         print("━" * 70)
@@ -438,9 +445,11 @@ Examples:
         print()
 
         if not args.checkpoint_dir.exists():
-            print(f"⚠️  Checkpoint directory not found: {args.checkpoint_dir}")
+            checkpoint_dir_missing = True
+            all_errors.append(f"Checkpoint directory not found: {args.checkpoint_dir}")
+            print(f"❌ Checkpoint directory not found: {args.checkpoint_dir}")
             print()
-            print("Skipping file verification. To verify files:")
+            print("File verification cannot proceed. To verify files:")
             print(f"  1. Create directory: mkdir -p {args.checkpoint_dir}")
             print("  2. Place checkpoint files in the directory")
             print("  3. Re-run with --check-files")
@@ -461,7 +470,7 @@ Examples:
     print(f"  Errors:               {len(all_errors)}")
     print(f"  Warnings:             {len(all_warnings)}")
 
-    if args.check_files and args.checkpoint_dir.exists():
+    if args.check_files and not checkpoint_dir_missing:
         print()
         print(f"  Files verified:       {file_verified}")
         print(f"  Files mismatched:     {file_mismatched}")
@@ -483,7 +492,7 @@ Examples:
         print()
 
     # Determine exit code
-    if all_errors or file_mismatched > 0:
+    if all_errors or (args.check_files and (file_mismatched > 0 or file_missing > 0)):
         print("━" * 70)
         print("❌ VERIFICATION FAILED")
         print("━" * 70)
