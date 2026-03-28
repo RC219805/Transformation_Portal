@@ -64,7 +64,9 @@ class PipelineConfig:
 
     Attributes:
         tier: Tier level (standard, apex_research, experimental).
-        stages: Stages to execute (["ingest", "segmentation", "materials", "reconstruction"]).
+        stages: Stages to execute. Defaults to ["ingest", "segment"]. The segmentation
+            stage may be specified as either "segment" or "segmentation"; both are
+            accepted. Common conceptual stages are ingest/segmentation/materials/reconstruction.
         ingest: Ingest configuration.
         segmentation: Segmentation configuration.
         materials: Materials configuration.
@@ -133,7 +135,7 @@ class PipelineResult:
         output_dir: Output directory.
         stages_completed: List of completed stages.
         linear_image: Linear ingest result (if ingest stage run).
-        segmentation: Segmentation result (if segment stage run).
+        segmentation: Segmentation result (if the segmentation stage ran).
         materials: PBR textures per segment (if materials stage run).
         scene_3d: 3D scene reconstruction (if reconstruction stage run).
         execution_time: Total execution time in seconds.

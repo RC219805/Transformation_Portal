@@ -86,6 +86,18 @@ def test_hf_opt_in_requires_pinned_revision(segmentation_surface: tuple[Any, Any
         )
 
 
+def test_hf_opt_in_rejects_unpinned_revision(segmentation_surface: tuple[Any, Any]) -> None:
+    SAM2Backend, _ = segmentation_surface
+    with pytest.raises(ValueError, match="40-char commit SHA|unpinned"):
+        SAM2Backend(
+            model_size="large",
+            device="cpu",
+            repo_id=SAM2_REPO_ID,
+            revision="main",
+            prefer_hf_pipeline=True,
+        )
+
+
 def test_repo_id_metadata_alone_does_not_disable_checkpoint_enforcement(segmentation_surface: tuple[Any, Any]) -> None:
     SAM2Backend, _ = segmentation_surface
     with pytest.raises(FileNotFoundError, match="SAM2 checkpoint not found"):

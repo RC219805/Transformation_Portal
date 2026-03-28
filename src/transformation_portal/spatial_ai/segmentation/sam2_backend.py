@@ -43,6 +43,7 @@ from typing import Any, Callable, Dict, Literal, Optional, cast
 import numpy as np
 from PIL import Image
 
+from transformation_portal.core.security import ModelLockError, resolve_model_lock_revision
 from transformation_portal.spatial_ai.segmentation.contracts import MaskMetadata, SegmentationInput, SegmentationResult
 from transformation_portal.spatial_ai.segmentation.tiling.config import SegmentationTilingConfig
 from transformation_portal.spatial_ai.segmentation.tiling.engine import TiledSegmentationEngine
@@ -147,8 +148,19 @@ class SAM2Backend:
 
         if self.prefer_hf_pipeline and not self.repo_id:
             raise ValueError("prefer_hf_pipeline=True requires repo_id")
-        if self.prefer_hf_pipeline and not self.revision:
-            raise ValueError("repo_id-based SAM2 loading requires a pinned revision")
+        if self.prefer_hf_pipeline:
+            assert self.repo_id is not None
+            try:
+                self.revision = resolve_model_lock_revision(
+                    self.repo_id,
+                    self.revision,
+                    strict=True,
+                    context="SAM2",
+                )
+            except ModelLockError as exc:
+                raise ValueError(str(exc)) from exc
+            if not self.revision:
+                raise ValueError("repo_id-based SAM2 loading requires a pinned revision (40-char commit SHA)")
 
         # Determine checkpoint path
         if checkpoint_path is None and not self.prefer_hf_pipeline:
