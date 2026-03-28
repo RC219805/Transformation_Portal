@@ -184,7 +184,7 @@ python scripts/validation/verify_3dgs_artifacts.py
 ---
 
 ### 5. LLaVA Vision-Language Quality Validation
-**Status**: ✅ **BACKEND IMPLEMENTED** (2026-03-27) + Model Revisions Pinned
+**Status**: ✅ **FULLY IMPLEMENTED** (2026-03-28) + Model Revisions Pinned + APEX Integration
 **Required For**: apex_research_ultra preset
 **Phase**: 2.2B (Structured Visual QA)
 
@@ -201,7 +201,15 @@ python scripts/validation/verify_3dgs_artifacts.py
 - [x] Structured prompt templates — `src/transformation_portal/evals/vision_language/llava_prompts.py`
 - [x] Schema-constrained scoring — `src/transformation_portal/evals/vision_language/llava_scoring.py`
 - [x] Model revision pinning in manifest
-- [ ] Integration with APEX evaluation harness (pending - requires runtime model loading)
+- [x] Integration with APEX evaluation harness — `src/transformation_portal/evals/apex_llava_integration.py`
+
+**APEX + LLaVA Integration** (2026-03-28):
+- `ApexLlavaConfig` dataclass for configuration
+- `create_apex_harness_with_llava()` factory function
+- `create_production_harness()`, `create_ci_smoke_harness()`, `create_quality_max_harness()` convenience functions
+- Quality dimensions: `segmentation`, `architectural`, `depth`, `material`
+- `build_material_quality_prompt()` for PBR texture quality assessment
+- Tests: `tests/evals/test_apex_llava_integration.py` (25 tests)
 
 **IMPORTANT**: LLaVA should be a **quality-evaluation backend**, not a generative UX feature.
 Use for structured observations on:
@@ -354,7 +362,7 @@ and serve as integration test targets for Phase 2.2/5 completion.
 
 ---
 
-## 📊 Priority Matrix (Updated 2026-03-17)
+## 📊 Priority Matrix (Updated 2026-03-28)
 
 ### Recommended Execution Sequence
 
@@ -370,7 +378,7 @@ Add manifest validation that fails on missing revision, floating refs, or missin
 
 | Order | Phase | Feature | Rationale |
 |-------|-------|---------|-----------|
-| 1st | **2.2B** | LLaVA Quality Validation | Lowest risk, easiest isolation, immediate utility across artifact classes |
+| ~~1st~~ | ~~**2.2B**~~ | ~~LLaVA Quality Validation~~ | ✅ COMPLETED (2026-03-28) |
 | 2nd | **2.2D** | 3DGS Verification Plumbing | Infrastructure can land before canonical source is resolved |
 | 3rd | **2.2A** | NVDIFFREC Backend | Higher strategic value, but more fragile operationally |
 | 4th | **2.2C** | MaterialGAN Backend | Optional enrichment, only after normalized contract exists |
@@ -381,8 +389,8 @@ Add manifest validation that fails on missing revision, floating refs, or missin
 |---------|-----------|-------|--------------|----------|--------|
 | **Model-Lock Hardening** | Low | Critical | Manual revision pinning | **CRITICAL** | ✅ COMPLETED (2026-03-27) |
 | SAM2 Segmentation | Medium | High | pip install, sources identified | **HIGH** | ✅ Backend done, sources identified |
-| LLaVA Validation | Medium | High | HF sources identified | **HIGH** | ✅ Backend + Tests done, model loading pending |
-| NVDIFFREC | High | High | Graphics deps, worker isolation | **HIGH** | ⏳ Phase C (after LLaVA) |
+| LLaVA Validation | Medium | High | HF sources identified | **HIGH** | ✅ **FULLY IMPLEMENTED** (2026-03-28) |
+| NVDIFFREC | High | High | Graphics deps, worker isolation | **HIGH** | ⏳ Phase C (next up) |
 | 3DGS Verification | Medium | Medium | Framework ready, source blocked | **MEDIUM** | ✅ Verification script done, canonical source pending |
 | MaterialGAN | High | Medium | After NVDIFFREC contract | **MEDIUM** | ⏳ Phase D (last) |
 | Depth Ensemble | High | Medium | DepthCrafter | **MEDIUM** | ✅ EMA implemented |
@@ -438,13 +446,22 @@ python -m transformation_portal.spatial_ai segment \
 
 ---
 
-## 📊 Status Update (2026-03-27)
+## 📊 Status Update (2026-03-28)
 
 **Current Status:**
 - All source code TODOs in `src/` have been cleaned up
 - 3 test observational TODOs remain (performance tracking only)
 - 12 NotImplementedError instances are intentional (abstract methods, phase gates, platform limitations)
 - P3 experimental features (ComfyUI, NVDIFFREC, MaterialGAN) remain deferred
+
+**2026-03-28 Updates:**
+- ✅ **LLaVA + APEX Integration COMPLETED**
+  - `src/transformation_portal/evals/apex_llava_integration.py` - Factory functions and config
+  - `ApexLlavaConfig` dataclass with quality-dimension-specific defaults
+  - `create_apex_harness_with_llava()`, `create_production_harness()`, `create_ci_smoke_harness()` factories
+  - `build_material_quality_prompt()` for PBR texture quality assessment
+  - 25 new tests in `tests/evals/test_apex_llava_integration.py`
+- ✅ Phase 2.2B (LLaVA Quality Validation) now FULLY IMPLEMENTED
 
 **2026-03-27 Updates:**
 - ✅ Phase A (Model-Lock Hardening) completed
@@ -464,11 +481,10 @@ python -m transformation_portal.spatial_ai segment \
 
 **IMPORTANT DISTINCTION:**
 - **Model source identification ✅** = repository locators discovered
-- **Model revision verification ⏳** = exact commit SHAs + file hashes pending
+- **Model revision verification ✅** = exact commit SHAs pinned (2026-03-27)
+- **APEX integration ✅** = harness factory functions implemented (2026-03-28)
 
-Until revisions are pinned, manifests are **repository locators**, not **deterministic locks**.
-
-**Model Sources Identified (Revisions Pending):**
+**Model Sources Identified (All Pinned):**
 
 | Feature | HuggingFace Repo | Source Status | Revision Status |
 |---------|------------------|---------------|-----------------|
@@ -497,6 +513,7 @@ Until revisions are pinned, manifests are **repository locators**, not **determi
 - `tests/spatial_ai/reconstruction/test_convergence_tracking.py` - 3DGS convergence
 - `tests/spatial_ai/materials/test_materialgan_integration.py` - MaterialGAN
 - `tests/validation/test_llava_quality_validation.py` - LLaVA quality validation
+- `tests/evals/test_apex_llava_integration.py` - APEX + LLaVA integration (25 tests, NEW)
 
 **Recommended Execution Sequence:**
 | Order | Phase | Feature | Status | Prerequisite |
