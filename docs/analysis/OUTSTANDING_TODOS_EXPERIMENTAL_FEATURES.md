@@ -1,7 +1,7 @@
 # Outstanding TODOs for Advanced Features - Transformation Portal
 
 **Generated**: 2026-02-18
-**Last Updated**: 2026-03-25
+**Last Updated**: 2026-03-27
 **Status**: Based on experimental preset analysis and codebase review
 
 ---
@@ -50,7 +50,7 @@
 | Quality Max | Large | `MackinationsAi/segment-anything-model-v2-large-hf` |
 | ONNX Portable | ONNX | `vietanhdev/segment-anything-2-onnx-models` |
 
-**Model Lock Status**: Added to `config/model_lock_manifest.yaml` (revisions pending verification)
+**Model Lock Status**: ✅ All 6 models pinned in `config/model_lock_manifest.yaml` (revisions verified 2026-03-27)
 
 **Files**:
 - `src/transformation_portal/spatial_ai/segmentation/sam2_backend.py` (backend)
@@ -58,17 +58,10 @@
 - `config/model_lock_manifest.yaml` (model registry)
 - `docs/guides/SAM2_INTEGRATION_GUIDE.md` (documentation)
 
-**Remaining Action Items**:
+**Installation**:
 ```bash
-# Step 1: Verify and pin HF revisions for each model tier
-# Visit: https://huggingface.co/MackinationsAi/segment-anything-model-v2-base-plus-hf
-# Copy commit SHA and update config/model_lock_manifest.yaml
-
-# Step 2: Install SAM2
+# Install SAM2
 pip install sam2
-
-# Step 3: Download checkpoint (or use HF integration)
-python scripts/download_sam2_checkpoint.py
 ```
 
 ---
@@ -181,7 +174,7 @@ gaussian_splatting:
 # Install gsplat
 pip install gsplat
 
-# Implement verification framework
+# Run verification (shows pending canonical source)
 python scripts/validation/verify_3dgs_artifacts.py
 
 # Verify Inria 3DGS repo (canonical source pending)
@@ -191,7 +184,7 @@ python scripts/validation/verify_3dgs_artifacts.py
 ---
 
 ### 5. LLaVA Vision-Language Quality Validation
-**Status**: ✅ **Model Sources Verified** (2026-03-17) — Implementation Pending
+**Status**: ✅ **BACKEND IMPLEMENTED** (2026-03-27) + Model Revisions Pinned
 **Required For**: apex_research_ultra preset
 **Phase**: 2.2B (Structured Visual QA)
 
@@ -203,11 +196,12 @@ python scripts/validation/verify_3dgs_artifacts.py
 | **Legacy** | LLaVA 1.5 7B | Backward compatibility | `llava-hf/llava-1.5-7b-hf` |
 | **Quality Max** | LLaVA 1.5 13B | Highest quality (existing) | `llava-hf/llava-1.5-13b-hf` |
 
-**Components Needed**:
-- [ ] LLaVA backend implementation — `src/transformation_portal/evals/vision_language/llava_backend.py`
-- [ ] Structured prompt templates — `src/transformation_portal/evals/vision_language/prompts.py`
-- [ ] Schema-constrained scoring — `src/transformation_portal/evals/vision_language/scoring.py`
-- [ ] Integration with APEX evaluation harness
+**Components**:
+- [x] LLaVA backend implementation — `src/transformation_portal/evals/vision_language/llava_backend.py`
+- [x] Structured prompt templates — `src/transformation_portal/evals/vision_language/llava_prompts.py`
+- [x] Schema-constrained scoring — `src/transformation_portal/evals/vision_language/llava_scoring.py`
+- [x] Model revision pinning in manifest
+- [ ] Integration with APEX evaluation harness (pending - requires runtime model loading)
 
 **IMPORTANT**: LLaVA should be a **quality-evaluation backend**, not a generative UX feature.
 Use for structured observations on:
@@ -252,7 +246,7 @@ Use for structured observations on:
 ## 📋 Medium Priority: Model Pinning & Verification
 
 ### 6. HuggingFace Model Revision Pinning
-**Status**: ✅ **COMPLETED** (2026-03-14)
+**Status**: ✅ **COMPLETED** (2026-03-14, updated 2026-03-27)
 **Affected Presets**:
 - apex_research.yaml
 - apex_research_canary.yaml
@@ -263,6 +257,10 @@ Use for structured observations on:
 - [x] Pinned to 40-char commit SHA: `b2359bdf726fb44ef62acca04d629dcf158053e7`
 - [x] Model ID corrected from `DA3-NESTED-GIANT-LARGE-1.1` to `DA3NESTED-GIANT-LARGE-1.1`
 - [x] Validation script passed
+- [x] SAM2 revisions pinned (6 models) — 2026-03-27
+- [x] LLaVA revisions pinned (4 models total, 3 newly pinned) — 2026-03-27
+
+**Total Models Pinned**: DA3 + SAM2 (6 models) + LLaVA (4 models)
 
 **Verification Command**:
 ```bash
@@ -340,7 +338,7 @@ shasum -a 256 checkpoints/*.pt checkpoints/*.pth
 - [x] SAM2 temporal propagation tests — `tests/spatial_ai/segmentation/test_sam2_backend_integration.py` (2 temporal tests)
 - [x] 3DGS convergence tests — `tests/spatial_ai/reconstruction/test_convergence_tracking.py` (skeleton with skipif markers)
 - [x] MaterialGAN material classification tests — `tests/spatial_ai/materials/test_materialgan_integration.py` (skeleton with skipif markers)
-- [x] LLaVA quality validation tests — `tests/validation/test_llava_quality_validation.py` (skeleton with skipif markers)
+- [x] LLaVA quality validation tests — `tests/validation/test_llava_quality_validation.py` (21 active tests, 10 with skipif markers for model loading)
 
 **Pattern (updated to match actual implementation)**:
 ```python
@@ -381,11 +379,11 @@ Add manifest validation that fails on missing revision, floating refs, or missin
 
 | Feature | Complexity | Value | Dependencies | Priority | Status |
 |---------|-----------|-------|--------------|----------|--------|
-| **Model-Lock Hardening** | Low | Critical | Manual revision pinning | **CRITICAL** | 🔜 Phase A prerequisite |
+| **Model-Lock Hardening** | Low | Critical | Manual revision pinning | **CRITICAL** | ✅ COMPLETED (2026-03-27) |
 | SAM2 Segmentation | Medium | High | pip install, sources identified | **HIGH** | ✅ Backend done, sources identified |
-| LLaVA Validation | Medium | High | HF sources identified | **HIGH** | 🔜 Phase B priority |
+| LLaVA Validation | Medium | High | HF sources identified | **HIGH** | ✅ Backend + Tests done, model loading pending |
 | NVDIFFREC | High | High | Graphics deps, worker isolation | **HIGH** | ⏳ Phase C (after LLaVA) |
-| 3DGS Verification | Medium | Medium | Framework ready, source blocked | **MEDIUM** | ⚠️ Plumbing can land, attestation incomplete |
+| 3DGS Verification | Medium | Medium | Framework ready, source blocked | **MEDIUM** | ✅ Verification script done, canonical source pending |
 | MaterialGAN | High | Medium | After NVDIFFREC contract | **MEDIUM** | ⏳ Phase D (last) |
 | Depth Ensemble | High | Medium | DepthCrafter | **MEDIUM** | ✅ EMA implemented |
 | Real-ESRGAN Fix | Medium | Low | Alternative upscaler | **LOW** | ❌ Blocked (CVE) |
@@ -435,18 +433,25 @@ python -m transformation_portal.spatial_ai segment \
 
 **Experimental Feature Tracking:**
 - **Blocked on external artifact source**: 1 (3DGS canonical Inria checkpoint)
-- **Pending exact revision pinning**: 7 (SAM2 + LLaVA model sources identified, revisions not yet locked)
-- **Pending implementation**: 3 (LLaVA, NVDIFFREC, MaterialGAN backends)
+- **Pending exact revision pinning**: 0 (all completed 2026-03-27)
+- **Pending implementation**: 2 (NVDIFFREC, MaterialGAN backends)
 
 ---
 
-## 📊 Status Update (2026-03-25)
+## 📊 Status Update (2026-03-27)
 
 **Current Status:**
 - All source code TODOs in `src/` have been cleaned up
 - 3 test observational TODOs remain (performance tracking only)
 - 12 NotImplementedError instances are intentional (abstract methods, phase gates, platform limitations)
 - P3 experimental features (ComfyUI, NVDIFFREC, MaterialGAN) remain deferred
+
+**2026-03-27 Updates:**
+- ✅ Phase A (Model-Lock Hardening) completed
+- ✅ SAM2 revisions pinned (all 6 models verified)
+- ✅ LLaVA revisions pinned (4 models total, 3 newly pinned)
+- ✅ 3DGS verification script created (`scripts/validation/verify_3dgs_artifacts.py`)
+- ✅ LLaVA backend implemented with tests enabled (21 active tests)
 
 **Historical Progress (through 2026-03-17):**
 - ✅ HF Revision Pinning for DA3 - Completed 2026-03-14
@@ -467,13 +472,13 @@ Until revisions are pinned, manifests are **repository locators**, not **determi
 
 | Feature | HuggingFace Repo | Source Status | Revision Status |
 |---------|------------------|---------------|-----------------|
-| SAM2 Tiny | `MackinationsAi/segment-anything-model-v2-tiny-hf` | ✅ Identified | ⏳ Pin pending |
-| SAM2 Small | `MackinationsAi/segment-anything-model-v2-small-hf` | ✅ Identified | ⏳ Pin pending |
-| SAM2 Base+ | `MackinationsAi/segment-anything-model-v2-base-plus-hf` | ✅ Identified | ⏳ Pin pending |
-| SAM2 Large | `MackinationsAi/segment-anything-model-v2-large-hf` | ✅ Identified | ⏳ Pin pending |
-| SAM2 ONNX | `vietanhdev/segment-anything-2-onnx-models` | ✅ Identified | ⏳ Pin pending |
-| LLaVA v1.6 7B | `llava-hf/llava-v1.6-mistral-7b-hf` | ✅ Identified | ⏳ Pin pending |
-| LLaVA 0.5B | `llava-hf/llava-onevision-qwen2-0.5b-ov-hf` | ✅ Identified | ⏳ Pin pending |
+| SAM2 Tiny | `MackinationsAi/segment-anything-model-v2-tiny-hf` | ✅ Identified | ✅ Pinned (2026-03-27) |
+| SAM2 Small | `MackinationsAi/segment-anything-model-v2-small-hf` | ✅ Identified | ✅ Pinned (2026-03-27) |
+| SAM2 Base+ | `MackinationsAi/segment-anything-model-v2-base-plus-hf` | ✅ Identified | ✅ Pinned (2026-03-27) |
+| SAM2 Large | `MackinationsAi/segment-anything-model-v2-large-hf` | ✅ Identified | ✅ Pinned (2026-03-27) |
+| SAM2 ONNX | `vietanhdev/segment-anything-2-onnx-models` | ✅ Identified | ✅ Pinned (2026-03-27) |
+| LLaVA v1.6 7B | `llava-hf/llava-v1.6-mistral-7b-hf` | ✅ Identified | ✅ Pinned (2026-03-27) |
+| LLaVA 0.5B | `llava-hf/llava-onevision-qwen2-0.5b-ov-hf` | ✅ Identified | ✅ Pinned (2026-03-27) |
 | LLaVA 1.5 13B | `llava-hf/llava-1.5-13b-hf` | ✅ Pinned | ✅ Complete |
 
 **3DGS Attestation Status:**
@@ -496,9 +501,9 @@ Until revisions are pinned, manifests are **repository locators**, not **determi
 **Recommended Execution Sequence:**
 | Order | Phase | Feature | Status | Prerequisite |
 |-------|-------|---------|--------|--------------|
-| 0 | **A** | Model-Lock Hardening | 🔜 Next | None |
-| 1 | **B** | LLaVA Backend | ⏳ Waiting | Phase A complete |
-| 2 | **D** | 3DGS Verification Plumbing | ⏳ Waiting | Phase A complete |
+| 0 | **A** | Model-Lock Hardening | ✅ Complete (2026-03-27) | None |
+| 1 | **B** | LLaVA Backend | ✅ Complete (2026-03-27) | Phase A complete |
+| 2 | **D** | 3DGS Verification Plumbing | ✅ Script done, source pending | Phase A complete |
 | 3 | **C** | NVDIFFREC Backend | ⏳ Waiting | Phase B complete |
 | 4 | **E** | MaterialGAN Backend | ⏳ Waiting | Phase C complete |
 
