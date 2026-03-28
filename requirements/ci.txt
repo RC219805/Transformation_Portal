@@ -6,7 +6,7 @@
 #
 backports-tarfile==1.2.0
 bandit==1.9.4
-build==1.4.0
+build==1.4.2
 cachetools==7.0.2
 certifi==2026.2.25
 cffi==2.0.0
