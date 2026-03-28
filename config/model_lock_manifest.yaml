@@ -1,30 +1,30 @@
 version: 1
-updated_at: "2026-03-17"
+updated_at: "2026-03-27"
 description: >
-  Repository-wide HuggingFace model lock manifest. Replace placeholders with
-  verified 40-character commit SHAs before enabling strict model lock in CI/production.
+  Repository-wide HuggingFace model lock manifest. All production models must have
+  verified 40-character commit SHAs for reproducibility and supply-chain integrity.
 
 repositories:
   # --- SAM2 Segmentation Models (HuggingFace converted) ---
   # Primary SAM2 backend models (Apache 2.0, commercial OK)
   # Source: MackinationsAi SAM2 HF conversions (updated 2024-08-01)
   MackinationsAi/segment-anything-model-v2-tiny-hf:
-    revision: "NEEDS_VERIFICATION"  # CI/smoke/low-VRAM fallback tier
+    revision: "f9b5db551edb7481b96b6ea605f48cb131c83056"  # CI/smoke/low-VRAM fallback tier
     owner: "segmentation"
     tier: "ci_smoke"
     license: "Apache-2.0"
   MackinationsAi/segment-anything-model-v2-small-hf:
-    revision: "NEEDS_VERIFICATION"  # Developer default tier
+    revision: "13e949d9dd62d45f3aef91ffd11532bfb9576764"  # Developer default tier
     owner: "segmentation"
     tier: "dev_default"
     license: "Apache-2.0"
   MackinationsAi/segment-anything-model-v2-base-plus-hf:
-    revision: "NEEDS_VERIFICATION"  # Production default tier (balanced)
+    revision: "30d2d3c6fcd85e71b69b536d4957d2a8239fe655"  # Production default tier (balanced)
     owner: "segmentation"
     tier: "production_default"
     license: "Apache-2.0"
   MackinationsAi/segment-anything-model-v2-large-hf:
-    revision: "NEEDS_VERIFICATION"  # Highest-quality offline tier
+    revision: "813b0a46aa888212dabdc9213ab0c1d0c4230334"  # Highest-quality offline tier
     owner: "segmentation"
     tier: "quality_max"
     license: "Apache-2.0"
@@ -32,12 +32,12 @@ repositories:
   # SAM2 ONNX backend (alternate portable backend)
   # Source: vietanhdev (updated 2026-02-21)
   vietanhdev/segment-anything-2-onnx-models:
-    revision: "NEEDS_VERIFICATION"  # ONNX portable backend
+    revision: "146d646354aeeedd9ac8d7aee49b7c3aa42f1781"  # ONNX portable backend
     owner: "segmentation"
     tier: "onnx_portable"
     license: "Apache-2.0"
   vietanhdev/segment-anything-2.1-onnx-models:
-    revision: "NEEDS_VERIFICATION"  # ONNX 2.1 update
+    revision: "0544279a1de3a5c7e99ab1d026e82d370cc44be5"  # ONNX 2.1 update
     owner: "segmentation"
     tier: "onnx_portable"
     license: "Apache-2.0"
@@ -97,19 +97,19 @@ repositories:
   # LLaVA Quality Validation (APEX Research Ultra evaluation backend)
   # Primary: llava-v1.6-mistral-7b (balanced capability)
   llava-hf/llava-v1.6-mistral-7b-hf:
-    revision: "NEEDS_VERIFICATION"  # Primary quality validation backend
+    revision: "2424fdd47412fccc66d91719126b420e9fbd7065"  # Primary quality validation backend
     owner: "evals/vision_language"
     tier: "quality_validation_primary"
     license: "Apache-2.0"
   # Lightweight: llava-onevision-qwen2-0.5b (CI/smoke/contract testing)
   llava-hf/llava-onevision-qwen2-0.5b-ov-hf:
-    revision: "NEEDS_VERIFICATION"  # CI/smoke tier
+    revision: "74dd0bf867a4cda7950c17663794267c60cf4b40"  # CI/smoke tier
     owner: "evals/vision_language"
     tier: "ci_smoke"
     license: "Apache-2.0"
   # Legacy: llava-1.5-7b (backward compatibility)
   llava-hf/llava-1.5-7b-hf:
-    revision: "NEEDS_VERIFICATION"  # Legacy fallback
+    revision: "b234b804b114d9e37bb655e11cbbb5f5e971b7a9"  # Legacy fallback
     owner: "evals/vision_language"
     tier: "legacy_fallback"
     license: "Apache-2.0"
@@ -119,6 +119,8 @@ repositories:
     owner: "vlm"
     tier: "quality_max"
     license: "Apache-2.0"
+
+# Note: SAM2 and LLaVA revisions pinned on 2026-03-27 via huggingface_hub API.
 
 # --- 3DGS Artifact Attestation ---
 # Note: 3DGS artifacts require source-attestation verification, not just HF model lock.

@@ -32,15 +32,18 @@ License: Apache 2.0 (commercial OK, no tier restrictions)
 from __future__ import annotations
 
 import hashlib
+import inspect
 import logging
 import os
 import re
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Dict, Literal, Optional
+from typing import Any, Callable, Dict, Literal, Optional, cast
 
 import numpy as np
+from PIL import Image
 
+from transformation_portal.core.security import ModelLockError, resolve_model_lock_revision
 from transformation_portal.spatial_ai.segmentation.contracts import MaskMetadata, SegmentationInput, SegmentationResult
 from transformation_portal.spatial_ai.segmentation.tiling.config import SegmentationTilingConfig
 from transformation_portal.spatial_ai.segmentation.tiling.engine import TiledSegmentationEngine
@@ -56,6 +59,7 @@ from transformation_portal.spatial_ai.segmentation.tiling.types import (
 logger = logging.getLogger(__name__)
 
 _SHA256_HEX_RE = re.compile(r"^[a-fA-F0-9]{64}$")
+_MASK_METADATA_FIELDS = frozenset(inspect.signature(MaskMetadata).parameters)
 
 
 def _compute_file_sha256(file_path: Path, chunk_size: int = 1024 * 1024) -> str:
@@ -110,10 +114,14 @@ class SAM2Backend:
         model_size: Literal["base", "large"] = "base",
         device: Literal["auto", "cuda", "cpu", "mps"] = "cuda",
         checkpoint_path: Optional[str] = None,
+        repo_id: Optional[str] = None,
+        revision: Optional[str] = None,
+        prefer_hf_pipeline: Optional[bool] = None,
+        generator_kwargs: Optional[Dict[str, Any]] = None,
         enable_material_classification: bool = False,
         material_confidence_threshold: float = 0.3,
         tiling: Optional[SegmentationTilingConfig] = None,
-    ):
+    ) -> None:
         """Initialize SAM2 backend.
 
         Args:
@@ -133,27 +141,52 @@ class SAM2Backend:
 
         self.model_size = model_size
         self.device = self._resolve_device(device)
+        self.repo_id = repo_id
+        self.revision = revision
+        self.prefer_hf_pipeline = False if prefer_hf_pipeline is None else bool(prefer_hf_pipeline)
+        self.generator_kwargs = dict(generator_kwargs or {})
+
+        if self.prefer_hf_pipeline and not self.repo_id:
+            raise ValueError("prefer_hf_pipeline=True requires repo_id")
+        if self.prefer_hf_pipeline:
+            assert self.repo_id is not None
+            try:
+                self.revision = resolve_model_lock_revision(
+                    self.repo_id,
+                    self.revision,
+                    strict=True,
+                    context="SAM2",
+                )
+            except ModelLockError as exc:
+                raise ValueError(str(exc)) from exc
+            if not self.revision:
+                raise ValueError("repo_id-based SAM2 loading requires a pinned revision (40-char commit SHA)")
 
         # Determine checkpoint path
-        if checkpoint_path is None:
+        if checkpoint_path is None and not self.prefer_hf_pipeline:
             checkpoint_path = os.path.join("checkpoints", self.DEFAULT_CHECKPOINTS[model_size])
-        self.checkpoint_path = Path(checkpoint_path)
+        self.checkpoint_path = Path(checkpoint_path) if checkpoint_path is not None else None
 
         # Check checkpoint exists (with helpful error message)
-        if not self.checkpoint_path.exists():
+        if self.checkpoint_path is not None and not self.checkpoint_path.exists():
             raise FileNotFoundError(
                 f"SAM2 checkpoint not found: {self.checkpoint_path}\n"
                 f"Download from: https://github.com/facebookresearch/sam2\n"
                 f"Or use: python scripts/download_sam2_checkpoint.py"
             )
 
-        self._model = None
-        self._mask_generator = None
-        self._video_predictor = None  # Initialized by _segment_video when needed
+        self._model: Any = None
+        self._mask_generator: Any = None
+        self._image_predictor: Any = None
+        self._video_predictor: Any = None  # Initialized by _segment_video when needed
+        self._hf_mask_generator: Any = None
+        self._hf_model: Any = None
+        self._hf_processor: Any = None
 
         # Material classification (optional)
         self.enable_material_classification = enable_material_classification
-        self._material_classifier = None
+        self.material_confidence_threshold = material_confidence_threshold
+        self._material_classifier: Any = None
         if enable_material_classification:
             from transformation_portal.spatial_ai.segmentation.material_classifier import MaterialClassifier
 
@@ -167,9 +200,15 @@ class SAM2Backend:
         self.tiled_engine: Optional[TiledSegmentationEngine] = None
 
         logger.info(
-            f"SAM2Backend initialized: model={model_size}, "
-            f"device={self.device}, checkpoint={self.checkpoint_path.name}, "
-            f"material_classification={enable_material_classification}"
+            "SAM2Backend initialized: model=%s device=%s checkpoint=%s repo_id=%s revision=%s "
+            "prefer_hf_pipeline=%s material_classification=%s",
+            model_size,
+            self.device,
+            None if self.checkpoint_path is None else self.checkpoint_path.name,
+            self.repo_id,
+            self.revision,
+            self.prefer_hf_pipeline,
+            enable_material_classification,
         )
 
     @classmethod
@@ -214,25 +253,45 @@ class SAM2Backend:
 
         return requested_device
 
-    def _load_model(self):
+    def _load_model(self) -> None:
         """Lazy load SAM2 model and mask generator.
 
         Raises:
             ImportError: If sam2 package missing.
             RuntimeError: If model loading fails.
         """
-        if self._model is not None:
+        if self._model is not None or self._hf_mask_generator is not None:
             return  # Already loaded
 
+        if self.repo_id and self.prefer_hf_pipeline:
+            try:
+                self._load_huggingface_path()
+                return
+            except Exception as exc:
+                self.unload_model()
+                if self.checkpoint_path is None:
+                    raise RuntimeError(
+                        f"Failed to load SAM2 from repo_id={self.repo_id} revision={self.revision}: {exc}"
+                    ) from exc
+                logger.warning(
+                    "Falling back from Hugging Face SAM2 load to local checkpoint path due to error: %s",
+                    exc,
+                )
+
         try:
-            import torch
             from sam2.automatic_mask_generator import SAM2AutomaticMaskGenerator
             from sam2.build_sam import build_sam2
             from sam2.sam2_image_predictor import SAM2ImagePredictor
         except ImportError as e:
-            raise ImportError("SAM2 requires sam2 and torch. " "Install with: pip install sam2 torch torchvision") from e
+            raise ImportError("SAM2 requires sam2 and torch. Install with: pip install sam2 torch torchvision") from e
 
         # Config name for Hydra (sam2 package initializes config module in __init__.py)
+        if self.checkpoint_path is None:
+            raise RuntimeError(
+                "No SAM2 checkpoint_path is available for the official loader. "
+                "Either provide checkpoint_path or enable the pinned Hugging Face path."
+            )
+
         config_name = self.MODEL_CONFIGS[self.model_size]
         logger.info(f"Loading SAM2 model: {config_name} @ {self.checkpoint_path.name}")
 
@@ -248,13 +307,13 @@ class SAM2Backend:
             # Create automatic mask generator (for auto mode)
             self._mask_generator = SAM2AutomaticMaskGenerator(
                 model=self._model,
-                points_per_side=32,  # Quality vs speed tradeoff
-                points_per_batch=64,
-                pred_iou_thresh=0.88,  # High confidence threshold
-                stability_score_thresh=0.85,
-                box_nms_thresh=0.7,
-                crop_n_layers=1,
-                crop_nms_thresh=0.7,
+                points_per_side=self.generator_kwargs.get("points_per_side", 32),
+                points_per_batch=self.generator_kwargs.get("points_per_batch", 64),
+                pred_iou_thresh=self.generator_kwargs.get("pred_iou_thresh", 0.88),
+                stability_score_thresh=self.generator_kwargs.get("stability_score_thresh", 0.85),
+                box_nms_thresh=self.generator_kwargs.get("box_nms_thresh", 0.7),
+                crop_n_layers=self.generator_kwargs.get("crop_n_layers", 1),
+                crop_nms_thresh=self.generator_kwargs.get("crop_nms_thresh", 0.7),
             )
 
             # Create image predictor (for prompted mode)
@@ -353,7 +412,7 @@ class SAM2Backend:
         seg_input = SegmentationInput(
             image=tile_linear,
             gamma=1.0,
-            mode=mode,
+            mode=cast(Literal["auto", "points", "bbox", "video"], mode),
             prompts=tile_prompts,
         )
         seg_result = self._segment_auto(seg_input) if mode == "auto" else self._segment_prompted(seg_input)
@@ -415,7 +474,9 @@ class SAM2Backend:
 
     def _build_default_tiled_engine(self) -> TiledSegmentationEngine:
         class _Planner:
-            def plan(self, *, image_hash, W, H, config, global_hints, prompts, mode):
+            def plan(
+                self, *, image_hash: str, W: int, H: int, config: Any, global_hints: Any, prompts: Any, mode: str
+            ) -> TileManifest:
                 del global_hints
                 if mode in {"points", "bbox"} and prompts:
                     tile = TileSpec(
@@ -466,7 +527,17 @@ class SAM2Backend:
                 )
 
         class _Merger:
-            def merge(self, *, image_hash, W, H, manifest, tile_results, global_hints, merge_config):
+            def merge(
+                self,
+                *,
+                image_hash: str,
+                W: int,
+                H: int,
+                manifest: Any,
+                tile_results: Any,
+                global_hints: Any,
+                merge_config: Any,
+            ) -> tuple[np.ndarray, np.ndarray, list[MaskMetadata], dict[str, Any]]:
                 del image_hash, manifest, global_hints, merge_config
                 masks = []
                 scores = []
@@ -521,7 +592,7 @@ class SAM2Backend:
                 )
 
         class _Validator:
-            def validate(self, *, manifest, merge_stats, config):
+            def validate(self, *, manifest: Any, merge_stats: Any, config: Any) -> tuple[bool, dict[str, Any]]:
                 del manifest, merge_stats, config
                 return True, {}
 
@@ -545,10 +616,17 @@ class SAM2Backend:
 
     def unload(self) -> None:
         """Release loaded model/material references and best-effort device cache."""
+        self.unload_model()
+
+    def unload_model(self) -> None:
+        """Release loaded model/material references and best-effort device cache."""
         self._model = None
         self._mask_generator = None
         self._image_predictor = None
         self._video_predictor = None
+        self._hf_mask_generator = None
+        self._hf_model = None
+        self._hf_processor = None
         self._material_classifier = None
         try:
             import torch
@@ -559,8 +637,23 @@ class SAM2Backend:
         if hasattr(torch, "cuda") and torch.cuda.is_available():
             torch.cuda.empty_cache()
 
+    def clone_for_device(self, device: str) -> "SAM2Backend":
+        """Create an equivalent backend bound to a new execution device."""
+        return SAM2Backend(
+            model_size=self.model_size,
+            device=cast(Literal["auto", "cuda", "cpu", "mps"], device),
+            checkpoint_path=None if self.checkpoint_path is None else str(self.checkpoint_path),
+            repo_id=self.repo_id,
+            revision=self.revision,
+            prefer_hf_pipeline=self.prefer_hf_pipeline,
+            generator_kwargs=self.generator_kwargs,
+            enable_material_classification=self.enable_material_classification,
+            material_confidence_threshold=self.material_confidence_threshold,
+            tiling=self.tiling,
+        )
+
     @staticmethod
-    def _to_numpy_array(value, *, dtype=None) -> np.ndarray:
+    def _to_numpy_array(value: Any, *, dtype: Any = None) -> np.ndarray:
         """Convert SAM2-style outputs to NumPy arrays without assuming tensor type."""
         if hasattr(value, "detach"):
             value = value.detach()
@@ -573,7 +666,94 @@ class SAM2Backend:
             array = array.astype(dtype, copy=False)
         return array
 
-    def _extract_sam2_predictions(self, output) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    @staticmethod
+    def _ensure_uint8_rgb(image: np.ndarray) -> np.ndarray:
+        """Normalize arrays to uint8 RGB for SAM2 backends."""
+        if image.dtype in (np.float32, np.float64):
+            return (np.clip(image, 0.0, 1.0) * 255.0).astype(np.uint8)
+        if image.dtype != np.uint8:
+            return np.clip(image, 0, 255).astype(np.uint8)
+        return image
+
+    def _make_mask_metadata(
+        self,
+        *,
+        area: int,
+        bbox: tuple[int, int, int, int],
+        stability_score: float,
+        material_label: Optional[str] = None,
+        material_confidence: Optional[float] = None,
+    ) -> MaskMetadata:
+        """Build MaskMetadata while tolerating future field changes."""
+        kwargs = {
+            "area": max(int(area), 1),
+            "bbox": bbox,
+            "stability_score": float(stability_score),
+            "material_label": material_label,
+            "material_confidence": material_confidence,
+        }
+        filtered = {key: value for key, value in kwargs.items() if key in _MASK_METADATA_FIELDS}
+        return cast(MaskMetadata, MaskMetadata(**cast(Any, filtered)))
+
+    def _apply_material_labels(
+        self,
+        image_uint8: np.ndarray,
+        masks: np.ndarray,
+        metadata_list: list[MaskMetadata],
+    ) -> None:
+        """Populate optional material labels when classifier support is enabled."""
+        if (
+            self.enable_material_classification
+            and self._material_classifier is not None
+            and self._material_classifier.is_available()
+        ):
+            logger.info("Running material classification...")
+            material_results = self._material_classifier.classify_masks(image_uint8, masks)
+            for idx, (label, confidence) in enumerate(material_results):
+                if idx >= len(metadata_list):
+                    break
+                metadata_list[idx].material_label = label
+                metadata_list[idx].material_confidence = confidence
+
+    def _load_huggingface_path(self) -> None:
+        """Load SAM2 via pinned Hugging Face repo-backed surfaces."""
+        if not self.repo_id or not self.revision:
+            raise RuntimeError("Hugging Face SAM2 loading requires pinned repo_id and revision")
+
+        from transformers import Sam2Model, Sam2Processor, pipeline
+
+        pipeline_device: Any
+        if self.device == "cuda":
+            pipeline_device = 0
+        elif self.device == "cpu":
+            pipeline_device = -1
+        else:
+            pipeline_device = self.device
+
+        hf_mask_generator = pipeline(
+            "mask-generation",
+            model=self.repo_id,
+            revision=self.revision,
+            device=pipeline_device,
+        )
+        hf_model = getattr(hf_mask_generator, "model", None)
+        hf_processor = getattr(hf_mask_generator, "image_processor", None)
+        if hf_processor is None:
+            hf_processor = getattr(hf_mask_generator, "processor", None)
+
+        if hf_model is None:
+            hf_model = Sam2Model.from_pretrained(self.repo_id, revision=self.revision)
+        target_device = self.device if self.device in {"cuda", "mps"} else "cpu"
+        hf_model = cast(Any, hf_model).to(target_device)
+        cast(Any, hf_model).eval()
+        if hf_processor is None or not hasattr(hf_processor, "post_process_masks"):
+            hf_processor = Sam2Processor.from_pretrained(self.repo_id, revision=self.revision)
+
+        self._hf_mask_generator = hf_mask_generator
+        self._hf_model = hf_model
+        self._hf_processor = hf_processor
+
+    def _extract_sam2_predictions(self, output: Any) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Extract masks plus IoU/stability scores from a SAM2 output object.
 
         ``pred_masks`` is required. Missing or ``None`` confidence attributes
@@ -618,17 +798,72 @@ class SAM2Backend:
             RuntimeError: If mask generation fails.
         """
         image = seg_input.image
+        assert image is not None
+        image_uint8 = self._ensure_uint8_rgb(image)
 
-        # Convert to uint8 RGB for SAM2 (expects 0-255 range)
-        if image.dtype == np.float32 or image.dtype == np.float64:
-            # Assume [0, 1] range, scale to [0, 255]
-            image_uint8 = (np.clip(image, 0, 1) * 255).astype(np.uint8)
-        else:
-            image_uint8 = image.astype(np.uint8)
+        if self._hf_mask_generator is not None:
+            try:
+                pil_image = Image.fromarray(image_uint8, mode="RGB")
+                outputs = self._hf_mask_generator(pil_image, **self.generator_kwargs)
+
+                raw_masks = outputs.get("masks", [])
+                raw_scores = outputs.get("scores")
+
+                if not raw_masks:
+                    logger.warning("SAM2 HF pipeline found no masks in auto mode")
+                    return SegmentationResult(
+                        masks=np.zeros((0, *image_uint8.shape[:2]), dtype=bool),
+                        scores=np.zeros((0,), dtype=np.float32),
+                        metadata=[],
+                    )
+
+                mask_arrays: list[np.ndarray] = []
+                for raw_mask in raw_masks:
+                    arr = self._to_numpy_array(raw_mask)
+                    arr = np.squeeze(arr)
+                    if arr.ndim != 2:
+                        raise RuntimeError(f"Unexpected HF SAM2 auto-mask shape: {arr.shape}")
+                    mask_arrays.append(arr.astype(bool, copy=False))
+
+                masks = np.stack(mask_arrays, axis=0)
+                if raw_scores is not None:
+                    scores = self._to_numpy_array(raw_scores, dtype=np.float32).reshape(-1)
+                else:
+                    scores = np.ones((masks.shape[0],), dtype=np.float32)
+                if scores.shape != (masks.shape[0],):
+                    scores = np.ones((masks.shape[0],), dtype=np.float32)
+
+                order = np.argsort(-scores, kind="stable")
+                masks = masks[order]
+                scores = np.clip(scores[order], 0.0, 1.0)
+
+                metadata_list = []
+                for idx, mask in enumerate(masks):
+                    ys, xs = np.where(mask)
+                    if xs.size == 0 or ys.size == 0:
+                        bbox = (0, 0, 1, 1)
+                        area = 1
+                    else:
+                        x0, x1 = int(xs.min()), int(xs.max())
+                        y0, y1 = int(ys.min()), int(ys.max())
+                        bbox = (x0, y0, x1 - x0 + 1, y1 - y0 + 1)
+                        area = int(mask.sum())
+                    metadata_list.append(
+                        self._make_mask_metadata(
+                            area=area,
+                            bbox=bbox,
+                            stability_score=float(scores[idx]),
+                        )
+                    )
+
+                self._apply_material_labels(image_uint8, masks, metadata_list)
+                return SegmentationResult(masks=masks, scores=scores, metadata=metadata_list)
+            except Exception as e:
+                raise RuntimeError(f"SAM2 HF auto mode segmentation failed: {e}") from e
 
         try:
             # Generate masks
-            masks_data = self._mask_generator.generate(image_uint8)
+            masks_data: list[dict[str, Any]] = self._mask_generator.generate(image_uint8)
 
             # Extract masks and scores
             if not masks_data:
@@ -660,22 +895,10 @@ class SAM2Backend:
                     int(bbox_raw[3]),
                 )
                 metadata_list.append(
-                    MaskMetadata(
-                        area=int(m["area"]),
-                        bbox=bbox_xywh,
-                        stability_score=float(stab_score),
-                    )
+                    self._make_mask_metadata(area=int(m["area"]), bbox=bbox_xywh, stability_score=float(stab_score))
                 )
 
-            # Material classification (optional)
-            if self.enable_material_classification and self._material_classifier.is_available():
-                logger.info("Running material classification...")
-                # Convert to uint8 for classifier
-                material_results = self._material_classifier.classify_masks(image_uint8, masks)
-                for i, (label, confidence) in enumerate(material_results):
-                    metadata_list[i].material_label = label
-                    metadata_list[i].material_confidence = confidence
-                logger.info(f"Material classification complete: {sum(1 for l, _ in material_results if l)} labeled")
+            self._apply_material_labels(image_uint8, masks, metadata_list)
 
             logger.info(f"SAM2 auto mode: generated {len(masks)} masks")
 
@@ -702,13 +925,89 @@ class SAM2Backend:
             RuntimeError: If segmentation fails.
         """
         image = seg_input.image
+        assert image is not None
         mode = seg_input.mode
+        image_uint8 = self._ensure_uint8_rgb(image)
 
-        # Convert to uint8 RGB for SAM2
-        if image.dtype == np.float32 or image.dtype == np.float64:
-            image_uint8 = (np.clip(image, 0, 1) * 255).astype(np.uint8)
-        else:
-            image_uint8 = image.astype(np.uint8)
+        if self._hf_model is not None and self._hf_processor is not None:
+            try:
+                import torch
+
+                pil_image = Image.fromarray(image_uint8, mode="RGB")
+
+                if mode == "points":
+                    if seg_input.prompts is None or "points" not in seg_input.prompts:
+                        raise ValueError("Points mode requires 'points' in prompts dict")
+                    raw_points = seg_input.prompts["points"]
+                    raw_labels = seg_input.prompts.get("labels", [1] * len(raw_points))
+                    point_batch = [[[float(x), float(y)] for x, y in raw_points]]
+                    label_batch = [[int(v) for v in raw_labels]]
+                    inputs = self._hf_processor(
+                        images=pil_image,
+                        input_points=[point_batch],
+                        input_labels=[label_batch],
+                        return_tensors="pt",
+                    )
+                elif mode == "bbox":
+                    if seg_input.prompts is None or "bbox" not in seg_input.prompts:
+                        raise ValueError("Bbox mode requires 'bbox' in prompts dict")
+                    bbox = [float(v) for v in seg_input.prompts["bbox"]]
+                    inputs = self._hf_processor(
+                        images=pil_image,
+                        input_boxes=[[bbox]],
+                        return_tensors="pt",
+                    )
+                else:
+                    raise ValueError(f"Unsupported prompted mode: {mode}")
+
+                inputs = {
+                    key: value.to(self._hf_model.device) if hasattr(value, "to") else value for key, value in inputs.items()
+                }
+                with torch.no_grad():
+                    outputs = self._hf_model(**inputs, multimask_output=True)
+
+                post_masks = self._hf_processor.post_process_masks(
+                    outputs.pred_masks.cpu(),
+                    inputs["original_sizes"],
+                )[0]
+                masks = self._to_numpy_array(post_masks)
+                if masks.ndim == 4:
+                    masks = masks.reshape(-1, masks.shape[-2], masks.shape[-1])
+                elif masks.ndim != 3:
+                    raise RuntimeError(f"Unexpected HF prompted mask shape: {masks.shape}")
+                masks = masks > 0
+
+                scores = self._to_numpy_array(outputs.iou_scores, dtype=np.float32).reshape(-1)
+                if scores.shape != (masks.shape[0],):
+                    scores = np.ones((masks.shape[0],), dtype=np.float32)
+
+                order = np.argsort(-scores, kind="stable")
+                masks = masks[order]
+                scores = np.clip(scores[order], 0.0, 1.0)
+
+                metadata_list = []
+                for idx, mask in enumerate(masks):
+                    ys, xs = np.where(mask)
+                    if xs.size == 0 or ys.size == 0:
+                        bbox_xywh = (0, 0, 1, 1)
+                        area = 1
+                    else:
+                        x0, x1 = int(xs.min()), int(xs.max())
+                        y0, y1 = int(ys.min()), int(ys.max())
+                        bbox_xywh = (x0, y0, x1 - x0 + 1, y1 - y0 + 1)
+                        area = int(mask.sum())
+                    metadata_list.append(
+                        self._make_mask_metadata(
+                            area=area,
+                            bbox=bbox_xywh,
+                            stability_score=float(scores[idx]),
+                        )
+                    )
+
+                self._apply_material_labels(image_uint8, masks, metadata_list)
+                return SegmentationResult(masks=masks, scores=scores, metadata=metadata_list)
+            except Exception as e:
+                raise RuntimeError(f"SAM2 HF {mode} mode segmentation failed: {e}") from e
 
         try:
             # Set image in predictor
@@ -734,11 +1033,11 @@ class SAM2Backend:
                 if seg_input.prompts is None or "bbox" not in seg_input.prompts:
                     raise ValueError("Bbox mode requires 'bbox' in prompts dict")
 
-                bbox = np.array(seg_input.prompts["bbox"])  # [x1, y1, x2, y2]
+                bbox_prompt = np.array(seg_input.prompts["bbox"])  # [x1, y1, x2, y2]
 
                 # Predict masks
                 prediction = self._image_predictor.predict(
-                    box=bbox,
+                    box=bbox_prompt,
                     multimask_output=True,
                 )
 
@@ -771,49 +1070,51 @@ class SAM2Backend:
 
             if masks.shape[0] > 1:
                 areas = masks.reshape(masks.shape[0], -1).sum(axis=1, dtype=np.int64)
-                ordered_indices = sorted(
-                    range(masks.shape[0]),
-                    key=lambda idx: (float(scores[idx]), int(areas[idx])),
-                    reverse=True,
-                )
+                ordered_indices = [
+                    idx
+                    for idx, _ in sorted(
+                        enumerate(zip(scores, areas)),
+                        key=lambda item: (float(item[1][0]), int(item[1][1])),
+                        reverse=True,
+                    )
+                ]
                 masks = masks[ordered_indices]
                 scores = scores[ordered_indices]
                 stability_scores = stability_scores[ordered_indices]
 
             # Create metadata for each mask
             metadata_list = []
-            for i in range(len(masks)):
-                mask = masks[i]
+            valid_indices: list[int] = []
+            for i, mask in enumerate(masks):
                 area = int(mask.sum())
+                if area <= 0:
+                    continue
 
                 # Compute bounding box
-                if area > 0:
-                    ys, xs = np.where(mask)
-                    bbox_xywh = (
-                        int(xs.min()),
-                        int(ys.min()),
-                        int(xs.max() - xs.min() + 1),
-                        int(ys.max() - ys.min() + 1),
-                    )
-                else:
-                    bbox_xywh = (0, 0, 0, 0)
-
-                metadata_list.append(
-                    MaskMetadata(
-                        area=area,
-                        bbox=bbox_xywh,
-                        stability_score=float(stability_scores[i]),
-                    )
+                ys, xs = np.where(mask)
+                bbox_xywh = (
+                    int(xs.min()),
+                    int(ys.min()),
+                    int(xs.max() - xs.min() + 1),
+                    int(ys.max() - ys.min() + 1),
                 )
 
-            # Material classification (optional)
-            if self.enable_material_classification and self._material_classifier.is_available():
-                logger.info("Running material classification...")
-                material_results = self._material_classifier.classify_masks(image_uint8, masks)
-                for i, (label, confidence) in enumerate(material_results):
-                    metadata_list[i].material_label = label
-                    metadata_list[i].material_confidence = confidence
-                logger.info(f"Material classification complete: {sum(1 for l, _ in material_results if l)} labeled")
+                metadata_list.append(
+                    self._make_mask_metadata(area=area, bbox=bbox_xywh, stability_score=float(stability_scores[i]))
+                )
+                valid_indices.append(i)
+
+            if not metadata_list:
+                logger.info("SAM2 %s mode produced only zero-area masks; returning empty result", mode)
+                return SegmentationResult(
+                    masks=np.zeros((0, *image_uint8.shape[:2]), dtype=bool),
+                    scores=np.zeros((0,), dtype=np.float32),
+                    metadata=[],
+                )
+
+            masks = masks[valid_indices]
+            scores = scores[valid_indices]
+            self._apply_material_labels(image_uint8, masks, metadata_list)
 
             logger.info(f"SAM2 {mode} mode: generated {len(masks)} masks")
 
@@ -844,12 +1145,18 @@ class SAM2Backend:
             RuntimeError: If video tracking fails.
             ImportError: If SAM2 video components missing.
         """
+        if self._hf_model is not None or self._hf_mask_generator is not None:
+            raise NotImplementedError(
+                "Hugging Face repo_id-based SAM2 loading currently supports auto / points / bbox. "
+                "Use the official checkpoint path for video tracking."
+            )
         try:
             from sam2.build_sam import build_sam2_video_predictor
         except ImportError as e:
-            raise ImportError("SAM2 video predictor not available. " "Install sam2 package: pip install sam2") from e
+            raise ImportError("SAM2 video predictor not available. Install sam2 package: pip install sam2") from e
 
         # Validate video file exists
+        assert seg_input.video_path is not None
         video_path = Path(seg_input.video_path)
         if not video_path.exists():
             raise FileNotFoundError(f"Video file not found: {video_path}")
@@ -875,6 +1182,7 @@ class SAM2Backend:
 
         # Extract prompt information
         prompts = seg_input.prompts
+        assert prompts is not None
         frame_idx = prompts.get("frame_idx", 0)
         object_id = prompts.get("object_id", 1)
 
@@ -893,23 +1201,24 @@ class SAM2Backend:
             )
 
         elif "bbox" in prompts:
-            bbox = np.array(prompts["bbox"])  # [x1, y1, x2, y2]
+            bbox_prompt = np.array(prompts["bbox"])  # [x1, y1, x2, y2]
             logger.info(f"Adding bbox prompt at frame {frame_idx}, object {object_id}")
 
             # Prefer native SAM2 bbox API when available.
             add_points_or_box = getattr(self._video_predictor, "add_new_points_or_box", None)
             if callable(add_points_or_box):
-                _, out_obj_ids, out_mask_logits = add_points_or_box(
+                add_points_or_box = cast(Callable[..., Any], add_points_or_box)
+                _, out_obj_ids, out_mask_logits = add_points_or_box(  # pylint: disable=not-callable
                     inference_state=inference_state,
                     frame_idx=frame_idx,
                     obj_id=object_id,
-                    box=bbox,
+                    box=bbox_prompt,
                     clear_old_points=True,
                 )
             else:
                 # Backward compatibility for older predictor API:
                 # bbox corners are represented with SAM2-special labels 2 and 3.
-                points = np.array([[bbox[0], bbox[1]], [bbox[2], bbox[3]]])
+                points = np.array([[bbox_prompt[0], bbox_prompt[1]], [bbox_prompt[2], bbox_prompt[3]]])
                 labels = np.array([2, 3], dtype=np.int32)
                 _, out_obj_ids, out_mask_logits = self._video_predictor.add_new_points(
                     inference_state=inference_state,
@@ -955,7 +1264,12 @@ class SAM2Backend:
                 area = int(mask.sum())
                 ys, xs = np.where(mask)
                 if len(xs) > 0:
-                    bbox = (int(xs.min()), int(ys.min()), int(xs.max() - xs.min() + 1), int(ys.max() - ys.min() + 1))
+                    bbox: tuple[int, int, int, int] = (
+                        int(xs.min()),
+                        int(ys.min()),
+                        int(xs.max() - xs.min() + 1),
+                        int(ys.max() - ys.min() + 1),
+                    )
                 else:
                     bbox = (0, 0, 1, 1)
 
@@ -1018,7 +1332,6 @@ def download_sam2_checkpoint(
         RuntimeError: If download fails.
     """
     import http.client
-    from pathlib import Path
     from urllib.parse import urlparse
 
     CHECKPOINT_URLS = {
@@ -1032,7 +1345,7 @@ def download_sam2_checkpoint(
     expected = expected_sha256 or SAM2Backend.CHECKPOINT_SHA256.get(model_size)
     if not expected:
         raise RuntimeError(
-            f"No expected SHA256 configured for SAM2 {model_size} checkpoint. " "Provide expected_sha256 explicitly."
+            f"No expected SHA256 configured for SAM2 {model_size} checkpoint. Provide expected_sha256 explicitly."
         )
     expected = _validate_sha256_hex(expected)
     allowed_hosts = {"dl.fbaipublicfiles.com"}
@@ -1058,7 +1371,7 @@ def download_sam2_checkpoint(
         raise RuntimeError(f"Refusing to download checkpoint from untrusted URL: {url}")
 
     logger.info(f"Downloading SAM2 {model_size} checkpoint from {url}...")
-    logger.info(f"This may take several minutes (checkpoint is ~200-400 MB)...")
+    logger.info("This may take several minutes (checkpoint is ~200-400 MB)...")
 
     temp_path = output_path.with_suffix(f"{output_path.suffix}.tmp")
     current_url = url
