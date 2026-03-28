@@ -736,11 +736,18 @@ class SAM2Backend:
             revision=self.revision,
             device=pipeline_device,
         )
-        hf_model = Sam2Model.from_pretrained(self.repo_id, revision=self.revision)
+        hf_model = getattr(hf_mask_generator, "model", None)
+        hf_processor = getattr(hf_mask_generator, "image_processor", None)
+        if hf_processor is None:
+            hf_processor = getattr(hf_mask_generator, "processor", None)
+
+        if hf_model is None:
+            hf_model = Sam2Model.from_pretrained(self.repo_id, revision=self.revision)
         target_device = self.device if self.device in {"cuda", "mps"} else "cpu"
         hf_model = cast(Any, hf_model).to(target_device)
         cast(Any, hf_model).eval()
-        hf_processor = Sam2Processor.from_pretrained(self.repo_id, revision=self.revision)
+        if hf_processor is None or not hasattr(hf_processor, "post_process_masks"):
+            hf_processor = Sam2Processor.from_pretrained(self.repo_id, revision=self.revision)
 
         self._hf_mask_generator = hf_mask_generator
         self._hf_model = hf_model

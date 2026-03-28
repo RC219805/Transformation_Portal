@@ -414,3 +414,15 @@ def test_pipeline_normalizes_reconstruct_alias(monkeypatch: pytest.MonkeyPatch, 
 
     direct = PipelineConfig(tier="apex_research", stages=["reconstruct"])
     assert direct.stages == ["reconstruction"]
+
+
+def test_pipeline_rejects_unrelated_pipelineconfig_shape(monkeypatch: pytest.MonkeyPatch) -> None:
+    pipeline_mod = _import_pipeline_module(monkeypatch)
+
+    class PipelineConfig:
+        def __init__(self) -> None:
+            self.tier = "standard"
+            self.stages = ["ingest"]
+
+    with pytest.raises(TypeError, match="config must be PipelineConfig, dict, str, or Path"):
+        pipeline_mod.SpatialAIPipeline(PipelineConfig())

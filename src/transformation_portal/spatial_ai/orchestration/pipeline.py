@@ -58,6 +58,26 @@ if TYPE_CHECKING:
     from transformation_portal.core.geometry import MultiViewReconstructionRequest
 
 
+def _is_reload_safe_pipeline_config(candidate: object) -> bool:
+    """Accept reloaded PipelineConfig objects by structure, not class identity."""
+    candidate_type = type(candidate)
+    if candidate_type.__name__ != "PipelineConfig":
+        return False
+
+    required_fields = {
+        "tier",
+        "stages",
+        "ingest",
+        "segmentation",
+        "materials",
+        "reconstruction",
+        "resource_limits",
+        "error_strategy",
+        "use_execution_graph",
+    }
+    return all(hasattr(candidate, field_name) for field_name in required_fields)
+
+
 @dataclass
 class PipelineConfig:
     """Configuration for Spatial AI pipeline.
@@ -289,7 +309,7 @@ class SpatialAIPipeline:
         """
         if isinstance(config, PipelineConfig):
             self.config = config
-        elif type(config).__name__ == "PipelineConfig":
+        elif _is_reload_safe_pipeline_config(config):
             self.config = cast(PipelineConfig, config)
         elif isinstance(config, dict):
             self.config = self._dict_to_config(config)

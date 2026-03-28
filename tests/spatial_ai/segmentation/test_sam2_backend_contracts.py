@@ -77,7 +77,7 @@ def _points_input(SegmentationInput: Any) -> Any:
 
 def test_hf_opt_in_requires_pinned_revision(segmentation_surface: tuple[Any, Any]) -> None:
     SAM2Backend, _ = segmentation_surface
-    with pytest.raises(ValueError, match="pinned revision"):
+    with pytest.raises(ValueError, match="pinned revision|40-char commit SHA|unpinned"):
         SAM2Backend(
             model_size="large",
             device="cpu",
@@ -108,6 +108,54 @@ def test_repo_id_metadata_alone_does_not_disable_checkpoint_enforcement(segmenta
             revision=PINNED_REVISION,
             prefer_hf_pipeline=False,
         )
+
+
+def test_hf_loader_reuses_pipeline_components_when_available(
+    segmentation_surface: tuple[Any, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    SAM2Backend, _ = segmentation_surface
+    backend = SAM2Backend(
+        model_size="large",
+        device="cpu",
+        repo_id=SAM2_REPO_ID,
+        revision=PINNED_REVISION,
+        prefer_hf_pipeline=True,
+    )
+    fake_model = SimpleNamespace(to=lambda device: fake_model, eval=lambda: None)
+    fake_processor = SimpleNamespace(post_process_masks=lambda *args, **kwargs: [])
+    fake_pipeline_instance = SimpleNamespace(model=fake_model, image_processor=fake_processor)
+    pipeline_calls: list[tuple[str, str]] = []
+
+    transformers_module = ModuleType("transformers")
+
+    def fake_pipeline(task: str, **kwargs: Any) -> Any:
+        assert task == "mask-generation"
+        assert kwargs["model"] == SAM2_REPO_ID
+        assert kwargs["revision"] == PINNED_REVISION
+        pipeline_calls.append((kwargs["model"], kwargs["revision"]))
+        return fake_pipeline_instance
+
+    class _ForbiddenSam2Model:
+        @staticmethod
+        def from_pretrained(*args: Any, **kwargs: Any) -> Any:
+            raise AssertionError("Sam2Model.from_pretrained should not be called when pipeline exposes the model")
+
+    class _ForbiddenSam2Processor:
+        @staticmethod
+        def from_pretrained(*args: Any, **kwargs: Any) -> Any:
+            raise AssertionError("Sam2Processor.from_pretrained should not be called when pipeline exposes the processor")
+
+    setattr(transformers_module, "pipeline", fake_pipeline)
+    setattr(transformers_module, "Sam2Model", _ForbiddenSam2Model)
+    setattr(transformers_module, "Sam2Processor", _ForbiddenSam2Processor)
+    monkeypatch.setitem(sys.modules, "transformers", transformers_module)
+
+    backend._load_huggingface_path()
+
+    assert pipeline_calls == [(SAM2_REPO_ID, PINNED_REVISION)]
+    assert backend._hf_mask_generator is fake_pipeline_instance
+    assert backend._hf_model is fake_model
+    assert backend._hf_processor is fake_processor
 
 
 def test_clone_for_device_preserves_loading_contract(segmentation_surface: tuple[Any, Any], checkpoint_path: str) -> None:
