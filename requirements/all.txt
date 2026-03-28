@@ -144,7 +144,7 @@ mypy-extensions==1.1.0
     #   mypy
 nh3==0.3.3
     # via readme-renderer
-numpy==2.4.2
+numpy==2.4.3
     # via
     #   -r requirements/base.in
     #   imagecodecs
