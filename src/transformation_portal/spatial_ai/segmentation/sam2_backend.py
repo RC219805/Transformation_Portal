@@ -131,16 +131,19 @@ class SAM2Backend:
                 based on availability. Requested device falls back to an
                 available alternative if unavailable.
             checkpoint_path: Path to local checkpoint file. If None and
-                ``prefer_hf_pipeline`` is False (the default), defaults to
-                ``checkpoints/<model>.pt``. May be None when repo-backed
-                HuggingFace loading is enabled via ``prefer_hf_pipeline=True``.
+                ``prefer_hf_pipeline`` is False (the default), a model-size
+                specific default checkpoint name under ``checkpoints/`` is used
+                (for example, ``checkpoints/sam2_hiera_large.pt``). May be None
+                when repo-backed HuggingFace loading is enabled via
+                ``prefer_hf_pipeline=True``.
             repo_id: HuggingFace Hub repository ID for model weights
                 (e.g., "facebook/sam2-hiera-large"). Required when
                 ``prefer_hf_pipeline=True``.
-            revision: HuggingFace commit SHA or branch for reproducibility.
-                When ``prefer_hf_pipeline=True``, this must be a pinned 40-char
-                commit SHA (resolved via model lock manifest). An unpinned
-                revision raises ``ValueError``.
+            revision: HuggingFace revision string used when loading from the Hub.
+                When ``prefer_hf_pipeline=True``, this must resolve to a pinned
+                40-character commit SHA, either passed directly or via the
+                model lock manifest. Branch names or other unpinned revisions
+                are rejected and raise ``ValueError``.
             prefer_hf_pipeline: When True, load model weights from HuggingFace
                 Hub using ``repo_id`` and ``revision`` instead of a local
                 checkpoint. This path is opt-in; the default loading model
