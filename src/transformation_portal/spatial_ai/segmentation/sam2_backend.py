@@ -58,6 +58,7 @@ from transformation_portal.spatial_ai.segmentation.tiling.types import (
 logger = logging.getLogger(__name__)
 
 _SHA256_HEX_RE = re.compile(r"^[a-fA-F0-9]{64}$")
+_MASK_METADATA_FIELDS = frozenset(inspect.signature(MaskMetadata).parameters)
 
 
 def _compute_file_sha256(file_path: Path, chunk_size: int = 1024 * 1024) -> str:
@@ -255,6 +256,7 @@ class SAM2Backend:
                 self._load_huggingface_path()
                 return
             except Exception as exc:
+                self.unload_model()
                 if self.checkpoint_path is None:
                     raise RuntimeError(
                         f"Failed to load SAM2 from repo_id={self.repo_id} revision={self.revision}: {exc}"
@@ -678,8 +680,7 @@ class SAM2Backend:
             "material_label": material_label,
             "material_confidence": material_confidence,
         }
-        signature = inspect.signature(MaskMetadata)
-        filtered = {key: value for key, value in kwargs.items() if key in signature.parameters}
+        filtered = {key: value for key, value in kwargs.items() if key in _MASK_METADATA_FIELDS}
         return cast(MaskMetadata, MaskMetadata(**cast(Any, filtered)))
 
     def _apply_material_labels(
@@ -717,17 +718,21 @@ class SAM2Backend:
         else:
             pipeline_device = self.device
 
-        self._hf_mask_generator = pipeline(
+        hf_mask_generator = pipeline(
             "mask-generation",
             model=self.repo_id,
             revision=self.revision,
             device=pipeline_device,
         )
-        self._hf_model = Sam2Model.from_pretrained(self.repo_id, revision=self.revision)
+        hf_model = Sam2Model.from_pretrained(self.repo_id, revision=self.revision)
         target_device = self.device if self.device in {"cuda", "mps"} else "cpu"
-        self._hf_model = self._hf_model.to(target_device)
-        self._hf_model.eval()
-        self._hf_processor = Sam2Processor.from_pretrained(self.repo_id, revision=self.revision)
+        hf_model = cast(Any, hf_model).to(target_device)
+        cast(Any, hf_model).eval()
+        hf_processor = Sam2Processor.from_pretrained(self.repo_id, revision=self.revision)
+
+        self._hf_mask_generator = hf_mask_generator
+        self._hf_model = hf_model
+        self._hf_processor = hf_processor
 
     def _extract_sam2_predictions(self, output: Any) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Extract masks plus IoU/stability scores from a SAM2 output object.

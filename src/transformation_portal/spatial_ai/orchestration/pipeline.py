@@ -441,7 +441,12 @@ class SpatialAIPipeline:
                     if result.linear_image is None:
                         raise PipelineError("reconstruction", "Ingest stage required before reconstruction")
 
-                    self._run_reconstruction(result.linear_image, result.segmentation, output_dir, save_intermediates)
+                    result.scene_3d = self._run_reconstruction(
+                        result.linear_image,
+                        result.segmentation,
+                        output_dir,
+                        save_intermediates,
+                    )
                     result.stages_completed.append("reconstruction")
 
             # Complete
@@ -1006,12 +1011,18 @@ class SpatialAIPipeline:
 
             depth_map = None
             if materials_cfg.get("use_depth", False):
+                depth_required = bool(materials_cfg.get("require_depth", False))
                 depth_map = getattr(ingest_result, "depth", None)
                 if depth_map is None:
                     depth_message = "Material generation requested use_depth=True, but no depth map is available from ingest"
-                    if self.config.tier in {"apex_research", "apex_research_ultra", "experimental"}:
-                        raise RuntimeError(depth_message)
-                    logger.warning("%s; continuing without depth", depth_message)
+                    if depth_required:
+                        raise RuntimeError(f"{depth_message} (require_depth=True, tier={self.config.tier!r})")
+                    logger.warning(
+                        "%s; continuing without depth (tier=%s, require_depth=%s)",
+                        depth_message,
+                        self.config.tier,
+                        depth_required,
+                    )
 
             # Generate materials for each segment
             materials = {}
