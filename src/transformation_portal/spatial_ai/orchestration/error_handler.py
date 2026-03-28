@@ -163,6 +163,16 @@ class ErrorHandler:
             stage: Stage name for error context.
             strategy: Recovery strategy to use.
             device: Device for execution.
+            on_device_change: Optional callback invoked when retry logic switches
+                execution device (e.g., GPU OOM triggers CPU fallback). Signature
+                is ``(new_device: str, attempt: int, exception: Exception) -> None``.
+                The callback receives the new device string, the attempt number
+                (1-indexed) of the execution that just failed and triggered the
+                device change, and the exception that caused that failure. It is
+                called after the failing attempt completes but before the next
+                retry is scheduled to run on the new device. Only relevant when
+                ``strategy`` is ``RETRY_WITH_CPU_FALLBACK`` or another
+                retry-based strategy that supports device migration.
             **kwargs: Arguments to pass to func.
 
         Returns:
