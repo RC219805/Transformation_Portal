@@ -79,15 +79,33 @@ jobs:
 
       - name: Check for vulnerabilities
         run: |
-          # Check all requirement files for vulnerabilities using governed pip-audit
+          set -euo pipefail
+
+          mkdir -p audit-reports
+          audit_targets=(
+            requirements/all.txt
+            requirements/security.txt
+            requirements/tools-archive.txt
+            requirements/ml-core-darwin.txt
+            requirements/ml-core-linux.txt
+          )
+
           # CVE-2026-4539 (pygments): No fix available yet - temporary exception
-          pip-audit --ignore-vuln CVE-2026-4539 -r requirements/all.txt --format json --output audit-report.json || true
+          for requirement_file in "${audit_targets[@]}"; do
+            report_path="audit-reports/$(basename "${requirement_file%.txt}").json"
+            echo "Auditing ${requirement_file} -> ${report_path}"
+            pip-audit \
+              --ignore-vuln CVE-2026-4539 \
+              -r "${requirement_file}" \
+              --format json \
+              --output "${report_path}" || true
+          done
 
       - name: Upload pip-audit report
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f  # v7
         with:
           name: pip-audit-report
-          path: audit-report.json
+          path: audit-reports/
           if-no-files-found: warn
           retention-days: 30
 
@@ -104,22 +122,19 @@ jobs:
 
             ### 📁 Updated Files
             - `requirements/base.txt` - Core runtime dependencies
-            - `requirements/ml.txt` - ML umbrella (all ML capabilities)
-            - `requirements/ml-core.txt` - ML core layer (cross-platform baseline)
-            - `requirements/ml-raw.txt` - ML RAW ingest layer
-            - `requirements/ml-coreml.txt` - ML CoreML layer (macOS)
-            - `requirements/ml-research.txt` - ML research/experimental layer
             - `requirements/dev.txt` - Development tools
             - `requirements/ci.txt` - CI/CD tools
+            - `requirements/security.txt` - Governed security scanning toolchain
+            - `requirements/tools-archive.txt` - Archive reporting toolchain
             - `requirements/all.txt` - Combined requirements
+            - `requirements/ml-core-darwin.txt` - macOS ML core contract
+            - `requirements/ml-core-linux.txt` - Linux ML core contract
 
             ### 🎯 ML Layer Strategy
-            ML dependencies are now organized into capability layers:
-            - **ml-core**: Cross-platform ML baseline (torch, diffusers, transformers)
-            - **ml-raw**: RAW camera file ingest (rawpy)
-            - **ml-sam2**: SAM2 segmentation backend (scripted install only - not compiled)
-            - **ml-coreml**: Apple CoreML acceleration (macOS only)
-            - **ml-research**: Reserved for experimental features
+            The checked-in ML contract is limited to platform-specific core lockfiles:
+            - **ml-core-darwin.txt**: macOS ML baseline
+            - **ml-core-linux.txt**: Linux ML baseline
+            - **ml-sam2.in** remains scripted-only and is not a standard checked-in lockfile
 
             ### 🔍 Security Report
             View the `pip-audit-report` artifact in the workflow run for vulnerability scan results.
@@ -129,7 +144,7 @@ jobs:
             - [ ] Review security report
             - [ ] Validate tests pass
             - [ ] Verify compatibility
-            - [ ] Confirm ML layer contracts (CPU-only PyTorch in ml-core.txt, ml.txt)
+            - [ ] Confirm platform ML core contracts still match ADR-032
 
             **Generated automatically by GitHub Actions**
           branch: automated/dependency-updates
