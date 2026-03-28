@@ -22,7 +22,10 @@ REQUIRED_OPEN_PR_LIMIT = 5
 
 
 def _load_config(text: str) -> dict[str, Any]:
-    loaded = yaml.safe_load(text)
+    try:
+        loaded = yaml.safe_load(text)
+    except yaml.YAMLError as exc:
+        raise ValueError(f"invalid YAML: {exc}") from exc
     if not isinstance(loaded, dict):
         raise ValueError("dependabot config must be a YAML mapping")
     return loaded
@@ -52,8 +55,16 @@ def validate_dependabot_config(text: str) -> list[str]:
             continue
 
         ecosystem = entry.get("package-ecosystem")
+        if not isinstance(ecosystem, str) or not ecosystem:
+            errors.append(f"updates[{index}] package-ecosystem must be a non-empty string")
+            continue
+
         directory = entry.get("directory")
-        pair = (str(ecosystem), str(directory))
+        if not isinstance(directory, str) or not directory:
+            errors.append(f"updates[{index}] directory must be a non-empty string")
+            continue
+
+        pair = (ecosystem, directory)
         seen_pairs.add(pair)
 
         if pair not in REQUIRED_UPDATES:
@@ -87,7 +98,13 @@ def validate_dependabot_config(text: str) -> list[str]:
 
 
 def main() -> int:
-    errors = validate_dependabot_config(DEPENDABOT_PATH.read_text(encoding="utf-8"))
+    try:
+        config_text = DEPENDABOT_PATH.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        print(f"ERROR: Dependabot config not found at {DEPENDABOT_PATH}", file=sys.stderr)
+        return 1
+
+    errors = validate_dependabot_config(config_text)
     if errors:
         print("ERROR: Dependabot config contract validation failed:", file=sys.stderr)
         for error in errors:

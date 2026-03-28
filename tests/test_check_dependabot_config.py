@@ -58,3 +58,54 @@ def test_missing_open_pr_limit_is_reported() -> None:
     broken = valid_dependabot_text().replace("    open-pull-requests-limit: 5\n", "", 1)
     errors = dependabot_contract.validate_dependabot_config(broken)
     assert ("dependabot update ('pip', '/') must set open-pull-requests-limit to 5") in errors
+
+
+def test_invalid_yaml_is_reported() -> None:
+    errors = dependabot_contract.validate_dependabot_config("updates: [")
+    assert len(errors) == 1
+    assert errors[0].startswith("invalid YAML:")
+
+
+def test_non_mapping_yaml_root_is_reported() -> None:
+    errors = dependabot_contract.validate_dependabot_config("- package-ecosystem: pip")
+    assert errors == ["dependabot config must be a YAML mapping"]
+
+
+def test_missing_package_ecosystem_is_reported() -> None:
+    broken = """
+version: 2
+updates:
+  - directory: "/"
+    target-branch: "main"
+    open-pull-requests-limit: 5
+    schedule:
+      interval: "weekly"
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    target-branch: "main"
+    open-pull-requests-limit: 5
+    schedule:
+      interval: "weekly"
+"""
+    errors = dependabot_contract.validate_dependabot_config(broken)
+    assert "updates[0] package-ecosystem must be a non-empty string" in errors
+
+
+def test_missing_directory_is_reported() -> None:
+    broken = """
+version: 2
+updates:
+  - package-ecosystem: "pip"
+    target-branch: "main"
+    open-pull-requests-limit: 5
+    schedule:
+      interval: "weekly"
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    target-branch: "main"
+    open-pull-requests-limit: 5
+    schedule:
+      interval: "weekly"
+"""
+    errors = dependabot_contract.validate_dependabot_config(broken)
+    assert "updates[0] directory must be a non-empty string" in errors
