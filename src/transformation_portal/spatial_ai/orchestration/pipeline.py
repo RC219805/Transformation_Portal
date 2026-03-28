@@ -86,19 +86,22 @@ class PipelineConfig:
 
     def __post_init__(self) -> None:
         """Validate configuration."""
-        strategy_value = getattr(self.error_strategy, "value", self.error_strategy)
-        if not isinstance(self.error_strategy, ErrorRecoveryStrategy):
-            strategy_map = {
-                "retry": ErrorRecoveryStrategy.RETRY,
-                "retry_cpu_fallback": ErrorRecoveryStrategy.RETRY_WITH_CPU_FALLBACK,
-                "retry_with_cpu_fallback": ErrorRecoveryStrategy.RETRY_WITH_CPU_FALLBACK,
-                "skip_stage": ErrorRecoveryStrategy.SKIP_STAGE,
-                "fail_fast": ErrorRecoveryStrategy.FAIL_FAST,
-                "return_partial": ErrorRecoveryStrategy.RETURN_PARTIAL,
-            }
-            if strategy_value not in strategy_map:
-                raise ValueError(f"Invalid error strategy '{strategy_value}'")
-            self.error_strategy = strategy_map[strategy_value]
+        strategy_value = (
+            self.error_strategy.value if isinstance(self.error_strategy, ErrorRecoveryStrategy) else self.error_strategy
+        )
+        strategy_map = {
+            "retry": ErrorRecoveryStrategy.RETRY,
+            "retry_cpu_fallback": ErrorRecoveryStrategy.RETRY_WITH_CPU_FALLBACK,
+            "retry_with_cpu_fallback": ErrorRecoveryStrategy.RETRY_WITH_CPU_FALLBACK,
+            "skip_stage": ErrorRecoveryStrategy.SKIP_STAGE,
+            "fail_fast": ErrorRecoveryStrategy.FAIL_FAST,
+            "return_partial": ErrorRecoveryStrategy.RETURN_PARTIAL,
+        }
+        if not isinstance(strategy_value, str):
+            raise ValueError(f"Invalid error strategy '{strategy_value}'")
+        if strategy_value not in strategy_map:
+            raise ValueError(f"Invalid error strategy '{strategy_value}'")
+        self.error_strategy = strategy_map[strategy_value]
 
         self.stages = ["reconstruction" if stage == "reconstruct" else stage for stage in self.stages]
         VALID_STAGES = ["ingest", "segment", "segmentation", "materials", "reconstruction"]
@@ -284,17 +287,7 @@ class SpatialAIPipeline:
         if isinstance(config, PipelineConfig):
             self.config = config
         elif type(config).__name__ == "PipelineConfig":
-            self.config = PipelineConfig(
-                tier=getattr(config, "tier"),
-                stages=list(getattr(config, "stages")),
-                ingest=dict(getattr(config, "ingest", {})),
-                segmentation=dict(getattr(config, "segmentation", {})),
-                materials=dict(getattr(config, "materials", {})),
-                reconstruction=dict(getattr(config, "reconstruction", {})),
-                resource_limits=getattr(config, "resource_limits", None),
-                error_strategy=getattr(config, "error_strategy", ErrorRecoveryStrategy.RETRY),
-                use_execution_graph=bool(getattr(config, "use_execution_graph", False)),
-            )
+            self.config = cast(PipelineConfig, config)
         elif isinstance(config, dict):
             self.config = self._dict_to_config(config)
         elif isinstance(config, (str, Path)):

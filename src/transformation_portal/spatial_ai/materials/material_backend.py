@@ -37,6 +37,8 @@ from transformation_portal.spatial_ai.materials.contracts import (
 )
 from transformation_portal.spatial_ai.materials.heuristic_fallback import HeuristicFallback
 
+_MATERIAL_GENERATION_CONFIG_FIELDS = frozenset(inspect.signature(MaterialGenerationConfig).parameters)
+
 
 class MaterialBackend:
     """Unified backend for neural PBR texture generation.
@@ -114,8 +116,7 @@ class MaterialBackend:
         raw.update(self.generation_config_overrides)
         raw.update({key: value for key, value in (overrides or {}).items() if value is not None})
 
-        signature = inspect.signature(MaterialGenerationConfig)
-        filtered: Dict[str, Any] = {key: value for key, value in raw.items() if key in signature.parameters}
+        filtered: Dict[str, Any] = {key: value for key, value in raw.items() if key in _MATERIAL_GENERATION_CONFIG_FIELDS}
         return MaterialGenerationConfig(**filtered)
 
     @staticmethod
