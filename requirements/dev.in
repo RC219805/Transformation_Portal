@@ -13,7 +13,7 @@ pytest-xdist>=3.5,<4  # parallel test execution (ADR-044 CI optimization)
 httpx>=0.28,<1  # required for FastAPI/Starlette TestClient in HTTP contract tests
 hypothesis>=6.0,<7
 jsonschema>=4.21.0,<5  # required for machine-mode contract schema validation tests
-cryptography==46.0.5  # CAS determinism + Security: CVE-2024-0727 / GHSA-9v9h-cgj8-h64p fixed
+cryptography==46.0.6  # CAS determinism + Security: CVE-2024-0727 / GHSA-9v9h-cgj8-h64p fixed
 
 # Type checking and linting
 mypy>=1.10
