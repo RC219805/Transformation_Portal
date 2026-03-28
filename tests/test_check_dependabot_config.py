@@ -109,3 +109,30 @@ updates:
 """
     errors = dependabot_contract.validate_dependabot_config(broken)
     assert "updates[0] directory must be a non-empty string" in errors
+
+
+def test_duplicate_update_target_is_reported() -> None:
+    broken = """
+version: 2
+updates:
+  - package-ecosystem: "pip"
+    directory: "/"
+    target-branch: "main"
+    open-pull-requests-limit: 5
+    schedule:
+      interval: "weekly"
+  - package-ecosystem: "pip"
+    directory: "/"
+    target-branch: "main"
+    open-pull-requests-limit: 5
+    schedule:
+      interval: "weekly"
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    target-branch: "main"
+    open-pull-requests-limit: 5
+    schedule:
+      interval: "weekly"
+"""
+    errors = dependabot_contract.validate_dependabot_config(broken)
+    assert "dependabot config contains duplicate update target ('pip', '/')" in errors

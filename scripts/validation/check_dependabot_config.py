@@ -7,7 +7,10 @@ import sys
 from pathlib import Path
 from typing import Any
 
-import yaml
+try:
+    import yaml
+except ImportError:
+    yaml = None
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEPENDABOT_PATH = REPO_ROOT / ".github" / "dependabot.yml"
@@ -22,6 +25,8 @@ REQUIRED_OPEN_PR_LIMIT = 5
 
 
 def _load_config(text: str) -> dict[str, Any]:
+    if yaml is None:
+        raise ValueError("PyYAML not installed (pip install PyYAML)")
     try:
         loaded = yaml.safe_load(text)
     except yaml.YAMLError as exc:
@@ -65,6 +70,9 @@ def validate_dependabot_config(text: str) -> list[str]:
             continue
 
         pair = (ecosystem, directory)
+        if pair in seen_pairs:
+            errors.append(f"dependabot config contains duplicate update target {pair!r}")
+            continue
         seen_pairs.add(pair)
 
         if pair not in REQUIRED_UPDATES:
