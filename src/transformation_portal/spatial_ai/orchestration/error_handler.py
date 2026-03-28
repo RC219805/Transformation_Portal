@@ -35,7 +35,7 @@ from typing import Any, Callable, Dict, List, Optional
 logger = logging.getLogger(__name__)
 
 
-class ErrorRecoveryStrategy(Enum):
+class ErrorRecoveryStrategy(str, Enum):
     """Strategy for recovering from errors.
 
     - FAIL_FAST: Stop immediately on error
