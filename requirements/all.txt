@@ -202,7 +202,7 @@ pygments==2.19.2
     #   rich
 pylint==4.0.5
     # via -r requirements/dev.in
-pypdf==6.9.1
+pypdf==6.9.2
     # via -r requirements/ci.in
 pyproject-api==1.10.0
     # via tox
