@@ -249,7 +249,7 @@ class TestCreateApexHarnessWithLlava:
             mock_backend = MagicMock()
             mock_create_backend.return_value = mock_backend
 
-            harness = create_apex_harness_with_llava()
+            create_apex_harness_with_llava()
 
             # Should use default config
             call_args = mock_create_backend.call_args[0][0]
@@ -319,7 +319,7 @@ class TestConvenienceFactories:
             mock_backend = MagicMock()
             mock_create_backend.return_value = mock_backend
 
-            harness = create_production_harness(quality_dimension="depth")
+            create_production_harness(quality_dimension="depth")
 
             # Should use quality_validation_primary tier
             call_args = mock_create_backend.call_args[0][0]
