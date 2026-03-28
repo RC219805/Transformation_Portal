@@ -902,10 +902,18 @@ class SpatialAIPipeline:
             def _build_backend(exec_device: Literal["cuda", "mps", "cpu"], *, replace_tracking: bool = False) -> SAM2Backend:
                 active_device["value"] = exec_device
                 if replace_tracking:
+                    old_backend = backend_holder.pop("backend", None)
+                    if old_backend is not None:
+                        teardown = getattr(old_backend, "unload_model", None) or getattr(old_backend, "unload", None)
+                        if callable(teardown):
+                            try:
+                                teardown()
+                            except Exception as cleanup_exc:
+                                logger.debug("SAM2 backend teardown failed during CPU fallback rebuild: %s", cleanup_exc)
                     try:
                         self.resource_manager.unload_model("sam2")
-                    except Exception:
-                        pass
+                    except Exception as cleanup_exc:
+                        logger.debug("SAM2 ResourceManager cleanup failed during CPU fallback rebuild: %s", cleanup_exc)
 
                 backend = SAM2Backend(
                     model_size=model_size,
@@ -1025,10 +1033,18 @@ class SpatialAIPipeline:
             ) -> MaterialBackend:
                 active_device["value"] = exec_device
                 if replace_tracking:
+                    old_backend = backend_holder.pop("backend", None)
+                    if old_backend is not None:
+                        teardown = getattr(old_backend, "unload_model", None) or getattr(old_backend, "unload", None)
+                        if callable(teardown):
+                            try:
+                                teardown()
+                            except Exception as cleanup_exc:
+                                logger.debug("Material backend teardown failed during CPU fallback rebuild: %s", cleanup_exc)
                     try:
                         self.resource_manager.unload_model("materials")
-                    except Exception:
-                        pass
+                    except Exception as cleanup_exc:
+                        logger.debug("Material ResourceManager cleanup failed during CPU fallback rebuild: %s", cleanup_exc)
 
                 generation_overrides = {
                     "backend": backend_cfg,
