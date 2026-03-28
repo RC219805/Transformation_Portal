@@ -1084,25 +1084,36 @@ class SAM2Backend:
 
             # Create metadata for each mask
             metadata_list = []
+            valid_indices: list[int] = []
             for i, mask in enumerate(masks):
                 area = int(mask.sum())
+                if area <= 0:
+                    continue
 
                 # Compute bounding box
-                if area > 0:
-                    ys, xs = np.where(mask)
-                    bbox_xywh = (
-                        int(xs.min()),
-                        int(ys.min()),
-                        int(xs.max() - xs.min() + 1),
-                        int(ys.max() - ys.min() + 1),
-                    )
-                else:
-                    bbox_xywh = (0, 0, 0, 0)
+                ys, xs = np.where(mask)
+                bbox_xywh = (
+                    int(xs.min()),
+                    int(ys.min()),
+                    int(xs.max() - xs.min() + 1),
+                    int(ys.max() - ys.min() + 1),
+                )
 
                 metadata_list.append(
                     self._make_mask_metadata(area=area, bbox=bbox_xywh, stability_score=float(stability_scores[i]))
                 )
+                valid_indices.append(i)
 
+            if not metadata_list:
+                logger.info("SAM2 %s mode produced only zero-area masks; returning empty result", mode)
+                return SegmentationResult(
+                    masks=np.zeros((0, *image_uint8.shape[:2]), dtype=bool),
+                    scores=np.zeros((0,), dtype=np.float32),
+                    metadata=[],
+                )
+
+            masks = masks[valid_indices]
+            scores = scores[valid_indices]
             self._apply_material_labels(image_uint8, masks, metadata_list)
 
             logger.info(f"SAM2 {mode} mode: generated {len(masks)} masks")

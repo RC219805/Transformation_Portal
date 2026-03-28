@@ -246,3 +246,77 @@ def test_prompted_mode_accepts_tuple_predictor_output_and_orders_scores(
     assert result.masks.shape == (2, 2, 2)
     assert result.scores.tolist() == pytest.approx([0.9, 0.2])
     assert [meta.area for meta in result.metadata] == [3, 1]
+
+
+def test_hf_prompted_points_keep_sam2_processor_nesting(segmentation_surface: tuple[Any, Any], checkpoint_path: str) -> None:
+    SAM2Backend, SegmentationInput = segmentation_surface
+    backend = SAM2Backend(model_size="large", device="cpu", checkpoint_path=checkpoint_path)
+
+    class FakeTensor:
+        def __init__(self, value: Any) -> None:
+            self.value = value
+
+        def to(self, device: Any) -> FakeTensor:
+            return self
+
+        def cpu(self) -> FakeTensor:
+            return self
+
+    processor_calls: list[dict[str, Any]] = []
+
+    class FakeProcessor:
+        def __call__(self, **kwargs: Any) -> dict[str, Any]:
+            processor_calls.append(kwargs)
+            return {
+                "original_sizes": FakeTensor([(4, 4)]),
+                "reshaped_input_sizes": FakeTensor([(4, 4)]),
+            }
+
+        def post_process_masks(self, pred_masks: Any, original_sizes: Any) -> list[np.ndarray]:
+            del pred_masks, original_sizes
+            return [np.array([[[1, 0], [0, 0]]], dtype=np.float32)]
+
+    class FakeModel:
+        device = "cpu"
+
+        def __call__(self, **kwargs: Any) -> Any:
+            del kwargs
+            return SimpleNamespace(
+                pred_masks=FakeTensor(np.array([[[[1, 0], [0, 0]]]], dtype=np.float32)),
+                iou_scores=np.array([[0.9]], dtype=np.float32),
+            )
+
+    backend._hf_model = FakeModel()
+    backend._hf_processor = FakeProcessor()
+
+    result = backend._segment_prompted(_points_input(SegmentationInput))
+
+    assert result.masks.shape == (1, 2, 2)
+    assert processor_calls
+    assert processor_calls[0]["input_points"] == [[[[1.0, 1.0]]]]
+    assert processor_calls[0]["input_labels"] == [[[1]]]
+
+
+def test_prompted_mode_returns_empty_result_for_zero_area_masks(
+    segmentation_surface: tuple[Any, Any], checkpoint_path: str
+) -> None:
+    SAM2Backend, SegmentationInput = segmentation_surface
+    backend = SAM2Backend(model_size="large", device="cpu", checkpoint_path=checkpoint_path)
+
+    class FakePredictor:
+        def set_image(self, image_uint8: np.ndarray) -> None:
+            assert image_uint8.shape == (4, 4, 3)
+
+        def predict(self, **kwargs: Any) -> tuple[np.ndarray, np.ndarray]:
+            assert kwargs["multimask_output"] is True
+            masks = np.zeros((1, 2, 2), dtype=bool)
+            scores = np.array([0.3], dtype=np.float32)
+            return masks, scores
+
+    backend._image_predictor = FakePredictor()
+
+    result = backend._segment_prompted(_points_input(SegmentationInput))
+
+    assert result.masks.shape == (0, 4, 4)
+    assert result.scores.shape == (0,)
+    assert result.metadata == []
