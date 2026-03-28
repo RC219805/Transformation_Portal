@@ -86,9 +86,12 @@ class PipelineConfig:
 
     def __post_init__(self) -> None:
         """Validate configuration."""
-        strategy_value = (
-            self.error_strategy.value if isinstance(self.error_strategy, ErrorRecoveryStrategy) else self.error_strategy
-        )
+        strategy_value_obj: object = getattr(self.error_strategy, "value", self.error_strategy)
+        if not isinstance(strategy_value_obj, str):
+            strategy_value_obj = getattr(strategy_value_obj, "value", strategy_value_obj)
+        if not isinstance(strategy_value_obj, str):
+            raise ValueError(f"Invalid error strategy '{strategy_value_obj}'")
+        strategy_value = strategy_value_obj
         strategy_map = {
             "retry": ErrorRecoveryStrategy.RETRY,
             "retry_cpu_fallback": ErrorRecoveryStrategy.RETRY_WITH_CPU_FALLBACK,
@@ -97,8 +100,6 @@ class PipelineConfig:
             "fail_fast": ErrorRecoveryStrategy.FAIL_FAST,
             "return_partial": ErrorRecoveryStrategy.RETURN_PARTIAL,
         }
-        if not isinstance(strategy_value, str):
-            raise ValueError(f"Invalid error strategy '{strategy_value}'")
         if strategy_value not in strategy_map:
             raise ValueError(f"Invalid error strategy '{strategy_value}'")
         self.error_strategy = strategy_map[strategy_value]
