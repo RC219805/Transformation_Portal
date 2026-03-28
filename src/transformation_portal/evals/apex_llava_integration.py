@@ -121,9 +121,7 @@ class ApexLlavaConfig:
         if self.metric_weight is None:
             self.metric_weight = _DEFAULT_METRIC_WEIGHTS.get(self.quality_dimension, 0.5)
         if not 0.0 <= self.threshold <= 1.0:
-            raise ApexLlavaIntegrationError(
-                f"Invalid threshold {self.threshold!r}; expected a value in the range [0.0, 1.0]."
-            )
+            raise ApexLlavaIntegrationError(f"Invalid threshold {self.threshold!r}; expected a value in the range [0.0, 1.0].")
         if not 0.0 <= self.metric_weight <= 1.0:
             raise ApexLlavaIntegrationError(
                 f"Invalid metric_weight {self.metric_weight!r}; expected a value in the range [0.0, 1.0]."
