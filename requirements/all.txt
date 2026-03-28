@@ -90,7 +90,7 @@ idna==3.11
     #   anyio
     #   httpx
     #   requests
-imagecodecs==2026.1.14
+imagecodecs==2026.3.6
     # via -r requirements/base.in
 importlib-metadata==8.7.1
     # via keyring
