@@ -7,7 +7,10 @@ import sys
 from pathlib import Path
 from typing import Any
 
-import yaml
+try:
+    import yaml
+except ImportError:
+    yaml = None
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEPENDABOT_PATH = REPO_ROOT / ".github" / "dependabot.yml"
@@ -22,7 +25,12 @@ REQUIRED_OPEN_PR_LIMIT = 5
 
 
 def _load_config(text: str) -> dict[str, Any]:
-    loaded = yaml.safe_load(text)
+    if yaml is None:
+        raise ValueError("PyYAML not installed (pip install PyYAML)")
+    try:
+        loaded = yaml.safe_load(text)
+    except yaml.YAMLError as exc:
+        raise ValueError(f"invalid YAML: {exc}") from exc
     if not isinstance(loaded, dict):
         raise ValueError("dependabot config must be a YAML mapping")
     return loaded
@@ -52,14 +60,18 @@ def validate_dependabot_config(text: str) -> list[str]:
             continue
 
         ecosystem = entry.get("package-ecosystem")
-        directory = entry.get("directory")
-        pair = (str(ecosystem), str(directory))
+        if not isinstance(ecosystem, str) or not ecosystem:
+            errors.append(f"updates[{index}] package-ecosystem must be a non-empty string")
+            continue
 
+        directory = entry.get("directory")
+        if not isinstance(directory, str) or not directory:
+            errors.append(f"updates[{index}] directory must be a non-empty string")
+            continue
+
+        pair = (ecosystem, directory)
         if pair in seen_pairs:
-            errors.append(
-                "dependabot config contains duplicate update target "
-                f"{pair!r}; each (package-ecosystem, directory) pair must appear once"
-            )
+            errors.append(f"dependabot config contains duplicate update target {pair!r}")
             continue
         seen_pairs.add(pair)
 
@@ -94,7 +106,13 @@ def validate_dependabot_config(text: str) -> list[str]:
 
 
 def main() -> int:
-    errors = validate_dependabot_config(DEPENDABOT_PATH.read_text(encoding="utf-8"))
+    try:
+        config_text = DEPENDABOT_PATH.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        print(f"ERROR: Dependabot config not found at {DEPENDABOT_PATH}", file=sys.stderr)
+        return 1
+
+    errors = validate_dependabot_config(config_text)
     if errors:
         print("ERROR: Dependabot config contract validation failed:", file=sys.stderr)
         for error in errors:

@@ -5,6 +5,7 @@ pipeline outputs including:
 - Vision-language models (LLaVA) for quality validation
 - Traditional image quality metrics (PSNR, SSIM, LPIPS, IoU)
 - APEX Research Ultra evaluation harness
+- APEX + LLaVA integration for VLM-based quality assessment
 - Full benchmark suite
 """
 
@@ -15,6 +16,17 @@ from transformation_portal.evals.apex_harness import (
     brightness_metric,
     contrast_metric,
     sharpness_metric,
+)
+from transformation_portal.evals.apex_llava_integration import (
+    ApexLlavaConfig,
+    ApexLlavaIntegrationError,
+    build_material_quality_prompt,
+    create_apex_harness_with_llava,
+    create_apex_harness_without_llava,
+    create_ci_smoke_harness,
+    create_llava_backend,
+    create_production_harness,
+    create_quality_max_harness,
 )
 from transformation_portal.evals.benchmark_suite import (
     BenchmarkResult,
@@ -41,6 +53,16 @@ __all__ = [
     "brightness_metric",
     "contrast_metric",
     "sharpness_metric",
+    # APEX + LLaVA integration
+    "ApexLlavaConfig",
+    "ApexLlavaIntegrationError",
+    "build_material_quality_prompt",
+    "create_apex_harness_with_llava",
+    "create_apex_harness_without_llava",
+    "create_ci_smoke_harness",
+    "create_llava_backend",
+    "create_production_harness",
+    "create_quality_max_harness",
     # Benchmark suite
     "BenchmarkResult",
     "BenchmarkSuite",
