@@ -251,6 +251,8 @@ check-stale-docs:
 validate-ci:
 	@echo "Validating GitHub Actions workflows..."
 	@"$(PY)" scripts/validate_ci_config.py
+	@echo "Validating dependency-update workflow contract..."
+	@"$(PY)" scripts/validation/check_dependency_update_workflow.py
 	@echo "Validating Dependabot config contract..."
 	@"$(PY)" scripts/validation/check_dependabot_config.py
 
