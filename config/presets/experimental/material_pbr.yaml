@@ -10,7 +10,7 @@
 #   metallic, and ambient occlusion maps.
 #
 # Model:
-#   - NVDIFFREC (preferred): nvidia/nvdiffrec (BSD-3-Clause, commercial OK)
+#   - NVDIFFREC (preferred future path): research-only multiview optimization
 #   - MaterialGAN (alternative): research-only (CC BY-NC 4.0)
 #   - Heuristic (fallback): CPU-based classical image processing
 #   - Revision: NEEDS_VERIFICATION - placeholder until verified
@@ -36,13 +36,13 @@
 
 name: "PBR Material Generation (Experimental)"
 version: "2.2.0"
-tier: "dev"  # Available to all tiers (BSD-3-Clause license for NVDIFFREC)
+tier: "dev"  # Experimental preset; neural research backends require separate runtime/contracts
 
 # Model Configuration
 model:
-  backend: "nvdiffrec"  # Options: "nvdiffrec", "material_gan", "heuristic"
-  repo_id: "nvidia/nvdiffrec"  # Placeholder - actual repo TBD
-  revision: "NEEDS_VERIFICATION_NVDIFFREC_20260211"  # Placeholder
+  backend: "nvdiffrec"  # Single-image path currently falls back explicitly to heuristic
+  repo_id: null  # Source ref unresolved until research backend attestation/runtime integration lands
+  revision: null  # Revision unresolved until a real attested runtime source is wired in
   device: "cuda"  # Options: "cuda", "mps", "cpu"
 
 # Alternative Backend (Research Only)

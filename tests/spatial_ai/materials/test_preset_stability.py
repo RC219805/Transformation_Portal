@@ -152,3 +152,13 @@ def test_material_pbr_release_documented_in_changelog():
     changelog = changelog_path.read_text(encoding="utf-8")
     assert "material_pbr.yaml" in changelog, "Stable PBR preset entry missing from CHANGELOG.md"
     assert "material_pbr_canary.yaml" in changelog, "Canary PBR preset entry missing from CHANGELOG.md"
+
+
+def test_experimental_material_pbr_preset_allows_unresolved_source_tuple():
+    """Experimental material preset should load cleanly with unresolved source refs."""
+    from transformation_portal.compliance.licensing import load_and_validate_preset
+
+    preset = load_and_validate_preset(Path("config/presets/experimental/material_pbr.yaml"))
+
+    assert preset["model"]["repo_id"] is None
+    assert preset["model"]["revision"] is None

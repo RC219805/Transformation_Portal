@@ -29,6 +29,8 @@ from typing import Any, Dict, Literal, Optional, cast
 import numpy as np
 
 from transformation_portal.spatial_ai.materials.contracts import (
+    AvailabilityState,
+    BackendDecision,
     MaterialGenerationConfig,
     MaterialInput,
     MaterialProperties,
@@ -38,6 +40,10 @@ from transformation_portal.spatial_ai.materials.contracts import (
 from transformation_portal.spatial_ai.materials.heuristic_fallback import HeuristicFallback
 
 _MATERIAL_GENERATION_CONFIG_FIELDS = frozenset(inspect.signature(MaterialGenerationConfig).parameters)
+
+
+class BackendResolutionWarning(UserWarning):
+    """Warn when a requested materials backend resolves to a different executor."""
 
 
 class MaterialBackend:
@@ -189,18 +195,23 @@ class MaterialBackend:
         if config is None:
             config = self._build_generation_config()
 
+        decision = self._resolve_backend_decision()
+
+        if decision.requested_backend != decision.executed_backend:
+            self._warn_backend_resolution(decision)
+
         # Route to appropriate backend (returns metadata tuple now)
         result = None
-        if self.backend == "pbr_fusion":
-            result = self._generate_pbr_fusion(rgb, mask, depth, material_hint, config)
-        elif self.backend == "nvdiffrec":
-            result = self._generate_nvdiffrec(rgb, mask, depth, material_hint, config)
-        elif self.backend == "material_gan":
-            result = self._generate_material_gan(rgb, mask, depth, material_hint, config)
-        elif self.backend == "heuristic":
-            result = self._generate_heuristic(rgb, mask, depth, material_hint, config)
+        if decision.executed_backend == "pbr_fusion":
+            result = self._generate_pbr_fusion(rgb, mask, depth, material_hint, config, decision)
+        elif decision.executed_backend == "nvdiffrec":
+            result = self._generate_nvdiffrec(rgb, mask, depth, material_hint, config, decision)
+        elif decision.executed_backend == "material_gan":
+            result = self._generate_material_gan(rgb, mask, depth, material_hint, config, decision)
+        elif decision.executed_backend == "heuristic":
+            result = self._generate_heuristic(rgb, mask, depth, material_hint, config, decision)
         else:
-            raise ValueError(f"Unknown backend: {self.backend}")
+            raise ValueError(f"Unknown backend: {decision.executed_backend}")
 
         # Validate/unpack result - handle both old (7-tuple) and new (8-tuple with metadata) formats
         if not isinstance(result, tuple):
@@ -240,6 +251,7 @@ class MaterialBackend:
         depth: Optional[np.ndarray],
         material_hint: Optional[str],
         config: MaterialGenerationConfig,
+        backend_decision: BackendDecision,
     ) -> tuple:
         """Generate textures using heuristic fallback."""
         albedo, normal, roughness, metallic, ao, height = self._heuristic.generate_pbr_textures(
@@ -272,6 +284,7 @@ class MaterialBackend:
             bilateral_enabled=self._bilateral_filter_available,
             material_hint=material_hint,
             depth_used=(depth is not None),
+            backend_decision=backend_decision,
         )
 
         return albedo, normal, roughness, metallic, ao, height, properties, metadata
@@ -283,6 +296,7 @@ class MaterialBackend:
         depth: Optional[np.ndarray],
         material_hint: Optional[str],
         config: MaterialGenerationConfig,
+        backend_decision: BackendDecision,
     ) -> tuple:
         """Generate textures using PBRFusion diffusion model.
 
@@ -323,7 +337,6 @@ class MaterialBackend:
             Falls back to heuristic if PBRFusion not installed.
         """
         import os
-        import warnings
 
         # Check if PBRFusion is available
         pbrfusion_path = os.getenv("PBRFUSION_PATH")
@@ -335,23 +348,31 @@ class MaterialBackend:
             # 2. Spawn ComfyUI with PBRFusion workflow
             # 3. Parse output PBR maps
             # 4. Return as tuple
-            warnings.warn(
-                "PBRFusion ComfyUI integration not yet implemented. "
-                "Falling back to enhanced heuristic. "
-                "Track progress: Phase 5B implementation.",
-                UserWarning,
+            backend_decision = BackendDecision(
+                requested_backend="pbr_fusion",
+                executed_backend="heuristic",
+                availability_state=AvailabilityState.RUNTIME_MISSING,
+                fallback_reason=("PBRFusion runtime path exists, but direct ComfyUI integration is not implemented yet."),
+                required_inputs=[],
+                required_runtime=["comfyui_pbrfusion_workflow"],
             )
+            self._warn_backend_resolution(backend_decision)
         else:
-            warnings.warn(
-                "PBRFusion not installed (PBRFUSION_PATH not set). "
-                "Falling back to enhanced heuristic. "
-                "To enable: Install ComfyUI + PBRFusion nodes and set PBRFUSION_PATH. "
-                "See docs/guides/MATERIAL_PBR_GUIDE.md for instructions.",
-                UserWarning,
+            backend_decision = BackendDecision(
+                requested_backend="pbr_fusion",
+                executed_backend="heuristic",
+                availability_state=AvailabilityState.RUNTIME_MISSING,
+                fallback_reason=(
+                    "PBRFusion runtime is not installed or PBRFUSION_PATH is not set. "
+                    "Install ComfyUI + PBRFusion nodes to enable it."
+                ),
+                required_inputs=[],
+                required_runtime=["PBRFUSION_PATH", "comfyui_pbrfusion_workflow"],
             )
+            self._warn_backend_resolution(backend_decision)
 
         # Fallback to enhanced heuristic (Phase 5C)
-        return self._generate_heuristic(rgb, mask, depth, material_hint, config)
+        return self._generate_heuristic(rgb, mask, depth, material_hint, config, backend_decision)
 
     def _generate_nvdiffrec(
         self,
@@ -360,34 +381,14 @@ class MaterialBackend:
         depth: Optional[np.ndarray],
         material_hint: Optional[str],
         config: MaterialGenerationConfig,
+        backend_decision: BackendDecision,
     ) -> tuple:
         """Generate textures using NVDIFFREC.
 
-        NOTE: This is a placeholder implementation. In production, this would:
-        1. Load NVDIFFREC model from HuggingFace
-        2. Run neural material decomposition
-        3. Optimize PBR parameters via differentiable rendering
-        4. Return high-quality PBR textures
-
-        For Phase 2.2, we fall back to heuristic until NVDIFFREC is integrated.
+        This materials API does not satisfy the multiview input contract
+        required by NVDIFFREC, so execution is currently routed elsewhere.
         """
-        # Phase 2.2 roadmap item: NVDIFFREC integration
-        # Implementation when ready:
-        # - self._load_nvdiffrec_model()
-        # - Run neural optimization
-        # - Return optimized PBR textures
-        # See: docs/analysis/TODO_INVENTORY.md for the NVDIFFREC backend roadmap entry.
-
-        # Fallback warning
-        import warnings
-
-        warnings.warn(
-            "NVDIFFREC backend not yet implemented. Falling back to heuristic. "
-            "This is expected for Phase 2.2 initial implementation.",
-            UserWarning,
-        )
-
-        return self._generate_heuristic(rgb, mask, depth, material_hint, config)
+        return self._generate_heuristic(rgb, mask, depth, material_hint, config, backend_decision)
 
     def _generate_material_gan(
         self,
@@ -396,30 +397,74 @@ class MaterialBackend:
         depth: Optional[np.ndarray],
         material_hint: Optional[str],
         config: MaterialGenerationConfig,
+        backend_decision: BackendDecision,
     ) -> tuple:
         """Generate textures using MaterialGAN.
 
-        NOTE: This is a placeholder implementation. In production, this would:
-        1. Load MaterialGAN model from HuggingFace
-        2. Run GAN-based material synthesis
-        3. Generate PBR texture maps
-        4. Return results
+        MaterialGAN is a research-only backend (CC BY-NC 4.0).
 
-        For Phase 2.2, we fall back to heuristic until MaterialGAN is integrated.
+        This materials API does not satisfy the richer capture contract
+        required by MaterialGAN, so execution is currently routed elsewhere.
         """
-        # Phase 2.2 roadmap item: MaterialGAN integration
-        # See: docs/analysis/TODO_INVENTORY.md for the MaterialGAN backend roadmap entry.
+        return self._generate_heuristic(rgb, mask, depth, material_hint, config, backend_decision)
 
-        # Fallback warning
+    def _resolve_backend_decision(self) -> BackendDecision:
+        """Resolve requested backend to the backend actually executable in this API."""
+        if self.backend == "heuristic":
+            return BackendDecision(
+                requested_backend="heuristic",
+                executed_backend="heuristic",
+                availability_state=AvailabilityState.AVAILABLE,
+                fallback_reason=None,
+                required_inputs=[],
+                required_runtime=[],
+            )
+
+        if self.backend == "nvdiffrec":
+            return BackendDecision(
+                requested_backend="nvdiffrec",
+                executed_backend="heuristic",
+                availability_state=AvailabilityState.INPUT_CONTRACT_MISMATCH,
+                fallback_reason=(
+                    "NVDIFFREC requires a multiview capture bundle with camera poses "
+                    "and lighting context; MaterialBackend only exposes single-image input."
+                ),
+                required_inputs=["multi_view_images", "camera_poses", "lighting_context"],
+                required_runtime=["cuda", "nvdiffrast", "pinned_nvdiffrec_revision"],
+            )
+
+        if self.backend == "material_gan":
+            return BackendDecision(
+                requested_backend="material_gan",
+                executed_backend="heuristic",
+                availability_state=AvailabilityState.INPUT_CONTRACT_MISMATCH,
+                fallback_reason=(
+                    "MaterialGAN expects multi-image capture evidence with lighting "
+                    "variation metadata; MaterialBackend only exposes single-image input."
+                ),
+                required_inputs=["multi_lighting_images", "capture_metadata_json"],
+                required_runtime=["materialgan_runtime", "checkpoint_weights"],
+            )
+
+        if self.backend == "pbr_fusion":
+            return BackendDecision(
+                requested_backend="pbr_fusion",
+                executed_backend="pbr_fusion",
+                availability_state=AvailabilityState.AVAILABLE,
+                fallback_reason=None,
+                required_inputs=[],
+                required_runtime=["PBRFUSION_PATH", "comfyui_pbrfusion_workflow"],
+            )
+
+        raise ValueError(f"Unknown backend: {self.backend}")
+
+    @staticmethod
+    def _warn_backend_resolution(decision: BackendDecision) -> None:
+        """Emit a typed warning for backend fallback or unavailability."""
         import warnings
 
-        warnings.warn(
-            "MaterialGAN backend not yet implemented. Falling back to heuristic. "
-            "This is expected for Phase 2.2 initial implementation.",
-            UserWarning,
-        )
-
-        return self._generate_heuristic(rgb, mask, depth, material_hint, config)
+        if decision.fallback_reason:
+            warnings.warn(decision.fallback_reason, BackendResolutionWarning, stacklevel=2)
 
     def unload_model(self) -> None:
         """Unload model from memory to free resources."""
