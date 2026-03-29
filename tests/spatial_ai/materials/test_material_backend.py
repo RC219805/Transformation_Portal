@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 from transformation_portal.spatial_ai.materials.contracts import MaterialGenerationConfig
-from transformation_portal.spatial_ai.materials.material_backend import MaterialBackend
+from transformation_portal.spatial_ai.materials.material_backend import BackendResolutionWarning, MaterialBackend
 
 pytestmark = pytest.mark.unit
 
@@ -44,26 +44,29 @@ class TestMaterialBackend:
         assert result.properties is not None
 
     def test_nvdiffrec_fallback(self, sample_rgb):
-        """Test NVDIFFREC falls back to heuristic (not yet implemented)."""
+        """Test NVDIFFREC surfaces explicit input-contract mismatch metadata."""
         backend = MaterialBackend(backend="nvdiffrec", device="cpu")
 
-        # Should warn and fall back to heuristic
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
             result = backend.generate_pbr_textures(
                 rgb=sample_rgb,
             )
 
-            # Check warning was raised
             assert len(w) == 1
-            assert "not yet implemented" in str(w[0].message).lower()
-            assert "falling back" in str(w[0].message).lower()
+            assert issubclass(w[0].category, BackendResolutionWarning)
+            assert "single-image input" in str(w[0].message).lower()
 
-        # Should still return valid outputs
         assert result.albedo.shape == sample_rgb.shape
+        assert result.metadata is not None
+        assert result.metadata.backend_decision is not None
+        assert result.metadata.backend_decision.requested_backend == "nvdiffrec"
+        assert result.metadata.backend_decision.executed_backend == "heuristic"
+        assert result.metadata.backend_decision.availability_state.value == "input_contract_mismatch"
+        assert "multi_view_images" in result.metadata.backend_decision.required_inputs
 
     def test_material_gan_fallback(self, sample_rgb):
-        """Test MaterialGAN falls back to heuristic (not yet implemented)."""
+        """Test MaterialGAN surfaces explicit input-contract mismatch metadata."""
         backend = MaterialBackend(backend="material_gan", device="cpu")
 
         with warnings.catch_warnings(record=True) as w:
@@ -72,9 +75,16 @@ class TestMaterialBackend:
                 rgb=sample_rgb,
             )
 
-            # Check warning was raised
             assert len(w) == 1
-            assert "not yet implemented" in str(w[0].message).lower()
+            assert issubclass(w[0].category, BackendResolutionWarning)
+            assert "single-image input" in str(w[0].message).lower()
+
+        assert result.metadata is not None
+        assert result.metadata.backend_decision is not None
+        assert result.metadata.backend_decision.requested_backend == "material_gan"
+        assert result.metadata.backend_decision.executed_backend == "heuristic"
+        assert result.metadata.backend_decision.availability_state.value == "input_contract_mismatch"
+        assert "multi_lighting_images" in result.metadata.backend_decision.required_inputs
 
     def test_with_config(self, sample_rgb):
         """Test backend with custom configuration."""
@@ -135,22 +145,21 @@ class TestMaterialBackend:
         result = backend.generate_pbr_textures(rgb=rgb)
         assert result.albedo.shape == rgb.shape
 
-    def test_pbr_fusion_fallback(self, sample_rgb):
+    def test_pbr_fusion_fallback(self, sample_rgb, monkeypatch):
         """Test PBRFusion falls back to heuristic when not installed (Phase 5B)."""
+        monkeypatch.delenv("PBRFUSION_PATH", raising=False)
         backend = MaterialBackend(backend="pbr_fusion", device="cpu")
 
-        # Should warn and fall back to heuristic
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
             result = backend.generate_pbr_textures(
                 rgb=sample_rgb,
             )
 
-            # Check warning was issued
             assert len(w) == 1
-            assert "PBRFusion not installed" in str(w[0].message) or "not yet implemented" in str(w[0].message)
+            assert issubclass(w[0].category, BackendResolutionWarning)
+            assert "pbrfusion runtime is not installed" in str(w[0].message).lower()
 
-        # Should still produce valid output (via heuristic fallback)
         assert result.albedo.shape == sample_rgb.shape
         assert result.normal.shape == sample_rgb.shape
         assert result.roughness.shape == sample_rgb.shape[:2]
@@ -158,6 +167,31 @@ class TestMaterialBackend:
         assert result.ambient_occlusion.shape == sample_rgb.shape[:2]
         assert result.height.shape == sample_rgb.shape[:2]
         assert result.properties is not None
+        assert result.metadata is not None
+        assert result.metadata.backend_decision is not None
+        assert result.metadata.backend_decision.requested_backend == "pbr_fusion"
+        assert result.metadata.backend_decision.executed_backend == "heuristic"
+        assert result.metadata.backend_decision.availability_state.value == "runtime_missing"
+
+    def test_pbr_fusion_reports_integration_missing_when_runtime_path_exists(self, sample_rgb, monkeypatch, tmp_path):
+        """PBRFusion should report integration-missing when a runtime path exists."""
+        runtime_root = tmp_path / "pbrfusion"
+        runtime_root.mkdir()
+        monkeypatch.setenv("PBRFUSION_PATH", str(runtime_root))
+
+        backend = MaterialBackend(backend="pbr_fusion", device="cpu")
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            result = backend.generate_pbr_textures(rgb=sample_rgb)
+
+        assert len(w) == 1
+        assert issubclass(w[0].category, BackendResolutionWarning)
+        assert "direct comfyui integration is not implemented yet" in str(w[0].message).lower()
+        assert result.metadata is not None
+        assert result.metadata.backend_decision is not None
+        assert result.metadata.backend_decision.executed_backend == "heuristic"
+        assert result.metadata.backend_decision.availability_state.value == "integration_missing"
 
     def test_metadata_bilateral_flag_reflects_available_backend(self, sample_rgb):
         """Metadata should record the actual albedo filtering capability."""
@@ -169,3 +203,43 @@ class TestMaterialBackend:
         backend._bilateral_filter_available = True
         result = backend.generate_pbr_textures(rgb=sample_rgb)
         assert result.metadata.bilateral_enabled is True
+
+    def test_heuristic_metadata_records_direct_backend_execution(self, sample_rgb):
+        """Direct heuristic requests should not look like fallbacks."""
+        backend = MaterialBackend(backend="heuristic", device="cpu")
+        result = backend.generate_pbr_textures(rgb=sample_rgb)
+
+        assert result.metadata is not None
+        assert result.metadata.backend_decision is not None
+        assert result.metadata.backend_decision.requested_backend == "heuristic"
+        assert result.metadata.backend_decision.executed_backend == "heuristic"
+        assert result.metadata.backend_decision.availability_state.value == "available"
+        assert result.metadata.backend_decision.fallback_reason is None
+
+    def test_metadata_to_dict_serializes_backend_decision(self, sample_rgb):
+        """Metadata serialization should expose backend-decision structure stably."""
+        backend = MaterialBackend(backend="nvdiffrec", device="cpu")
+        result = backend.generate_pbr_textures(rgb=sample_rgb)
+
+        metadata_dict = result.metadata.to_dict()
+        assert metadata_dict["backend_decision"] is not None
+        assert metadata_dict["backend_decision"]["requested_backend"] == "nvdiffrec"
+        assert metadata_dict["backend_decision"]["executed_backend"] == "heuristic"
+        assert metadata_dict["backend_decision"]["availability_state"] == "input_contract_mismatch"
+
+    def test_explicit_config_backend_drives_resolution_metadata(self, sample_rgb):
+        """Config backend should drive requested-backend resolution semantics."""
+        backend = MaterialBackend(backend="heuristic", device="cpu")
+        config = MaterialGenerationConfig(backend="nvdiffrec", device="cpu")
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            result = backend.generate_pbr_textures(rgb=sample_rgb, config=config)
+
+        assert len(w) == 1
+        assert issubclass(w[0].category, BackendResolutionWarning)
+        assert result.metadata is not None
+        assert result.metadata.backend_decision is not None
+        assert result.metadata.backend_decision.requested_backend == "nvdiffrec"
+        assert result.metadata.backend_decision.executed_backend == "heuristic"
+        assert result.metadata.backend_decision.availability_state.value == "input_contract_mismatch"

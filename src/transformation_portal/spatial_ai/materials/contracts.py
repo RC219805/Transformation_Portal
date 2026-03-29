@@ -17,6 +17,7 @@ Architecture (ADR-027):
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import Enum
 from typing import Literal, Optional
 
 import numpy as np
@@ -133,6 +134,40 @@ class MaterialProperties:
             raise ValueError(f"Subsurface scattering must be in [0, 1], got {self.subsurface_scattering}")
 
 
+class AvailabilityState(str, Enum):
+    """Explicit availability state for a requested materials backend."""
+
+    AVAILABLE = "available"
+    INPUT_CONTRACT_MISMATCH = "input_contract_mismatch"
+    RUNTIME_MISSING = "runtime_missing"
+    INTEGRATION_MISSING = "integration_missing"
+    LICENSE_GATED = "license_gated"
+    ATTESTATION_INCOMPLETE = "attestation_incomplete"
+
+
+@dataclass
+class BackendDecision:
+    """Describe how a requested materials backend resolved at runtime."""
+
+    requested_backend: str
+    executed_backend: str
+    availability_state: AvailabilityState
+    fallback_reason: Optional[str]
+    required_inputs: list[str]
+    required_runtime: list[str]
+
+    def to_dict(self) -> dict:
+        """Convert decision metadata to a JSON-serializable dictionary."""
+        return {
+            "requested_backend": self.requested_backend,
+            "executed_backend": self.executed_backend,
+            "availability_state": self.availability_state.value,
+            "fallback_reason": self.fallback_reason,
+            "required_inputs": list(self.required_inputs),
+            "required_runtime": list(self.required_runtime),
+        }
+
+
 @dataclass
 class PBRGenerationMetadata:
     """Metadata for PBR generation reproducibility.
@@ -144,6 +179,7 @@ class PBRGenerationMetadata:
         bilateral_enabled: Whether bilateral filtering was used for albedo.
         material_hint: Optional material hint used during generation.
         depth_used: Whether depth map was provided and used.
+        backend_decision: Explicit requested-vs-executed backend resolution.
     """
 
     backend: str
@@ -152,6 +188,7 @@ class PBRGenerationMetadata:
     bilateral_enabled: bool
     material_hint: Optional[str] = None
     depth_used: bool = False
+    backend_decision: Optional[BackendDecision] = None
 
     def to_dict(self) -> dict:
         """Convert metadata to dictionary for serialization."""
@@ -162,6 +199,7 @@ class PBRGenerationMetadata:
             "bilateral_enabled": self.bilateral_enabled,
             "material_hint": self.material_hint,
             "depth_used": self.depth_used,
+            "backend_decision": (self.backend_decision.to_dict() if self.backend_decision is not None else None),
         }
 
 

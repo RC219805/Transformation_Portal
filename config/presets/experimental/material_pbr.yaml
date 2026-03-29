@@ -1,6 +1,6 @@
 # PBR Material Generation Preset (Experimental)
 #
-# Status: EXPERIMENTAL - HF revision needs verification before promotion
+# Status: EXPERIMENTAL - research backend source tuple remains unresolved pending attestation/runtime integration
 # Phase: 2.2 (MaterialGAN/NVDIFFREC Integration)
 # Last Updated: 2026-02-11
 #
@@ -10,10 +10,10 @@
 #   metallic, and ambient occlusion maps.
 #
 # Model:
-#   - NVDIFFREC (preferred): nvidia/nvdiffrec (BSD-3-Clause, commercial OK)
+#   - NVDIFFREC (preferred future path): research-only multiview optimization
 #   - MaterialGAN (alternative): research-only (CC BY-NC 4.0)
 #   - Heuristic (fallback): CPU-based classical image processing
-#   - Revision: NEEDS_VERIFICATION - placeholder until verified
+#   - Source tuple unresolved until a real attested runtime path is wired in
 #
 # Usage:
 #   transformation_portal spatial-ai generate-pbr \
@@ -23,26 +23,26 @@
 #     --backend nvdiffrec
 #
 # Promotion Checklist:
-#   [ ] Verify HF revision from nvidia/nvdiffrec/commits/main
-#   [ ] Update revision to 40-char commit SHA
-#   [ ] Run validation: python scripts/validation/validate_hf_revisions.py
+#   [ ] Resolve attested runtime source tuple for the selected research backend
+#   [ ] Wire a real executable backend path instead of heuristic fallback
+#   [ ] Add provenance validation for the chosen runtime source
 #   [ ] Move to config/presets/material_pbr.yaml
 #
 # ADR-027 Compliance:
 #   ✅ Isolated from lux_depth_v3 (no cross-pipeline imports)
 #   ✅ Contract-driven (gamma=1.0 enforcement)
-#   ✅ Experimental preset (HF placeholder allowed)
+#   ✅ Experimental preset (unresolved source tuple allowed)
 #   ✅ Integration with Phase 2.1 segmentation
 
 name: "PBR Material Generation (Experimental)"
 version: "2.2.0"
-tier: "dev"  # Available to all tiers (BSD-3-Clause license for NVDIFFREC)
+tier: "dev"  # Experimental preset; neural research backends require separate runtime/contracts
 
 # Model Configuration
 model:
-  backend: "nvdiffrec"  # Options: "nvdiffrec", "material_gan", "heuristic"
-  repo_id: "nvidia/nvdiffrec"  # Placeholder - actual repo TBD
-  revision: "NEEDS_VERIFICATION_NVDIFFREC_20260211"  # Placeholder
+  backend: "nvdiffrec"  # Single-image path currently falls back explicitly to heuristic
+  repo_id: null  # Source ref unresolved until research backend attestation/runtime integration lands
+  revision: null  # Revision unresolved until a real attested runtime source is wired in
   device: "cuda"  # Options: "cuda", "mps", "cpu"
 
 # Alternative Backend (Research Only)

@@ -52,7 +52,7 @@ class TestMaterialGANFallback:
         return np.random.rand(256, 256, 3).astype(np.float32)
 
     def test_materialgan_fallback_warning(self, sample_rgb):
-        """MaterialGAN should emit warning and fall back to heuristic."""
+        """MaterialGAN should emit input-contract warning and fall back to heuristic."""
         from transformation_portal.spatial_ai.materials.material_backend import MaterialBackend
 
         backend = MaterialBackend(backend="material_gan", device="cpu")
@@ -61,14 +61,15 @@ class TestMaterialGANFallback:
             warnings.simplefilter("always")
             result = backend.generate_pbr_textures(rgb=sample_rgb)
 
-            # Verify warning was raised
             assert len(w) == 1
-            assert "not yet implemented" in str(w[0].message).lower()
+            assert "single-image input" in str(w[0].message).lower()
 
-        # Verify valid output from fallback
         assert result.albedo.shape == sample_rgb.shape
         assert result.normal.shape == sample_rgb.shape
         assert result.roughness.shape == sample_rgb.shape[:2]
+        assert result.metadata is not None
+        assert result.metadata.backend_decision is not None
+        assert result.metadata.backend_decision.availability_state.value == "input_contract_mismatch"
 
     def test_materialgan_produces_valid_pbr_output(self, sample_rgb):
         """Even in fallback mode, output should be valid PBR textures."""
@@ -167,9 +168,7 @@ class TestMaterialGANLicenseCompliance:
 
         backend = MaterialBackend(backend="material_gan", device="cpu")
 
-        # Check docstring mentions license
         docstring = backend._generate_material_gan.__doc__ or ""
-        # License info should be documented
         assert "CC BY-NC" in docstring or "research" in docstring.lower() or "placeholder" in docstring.lower()
 
 
