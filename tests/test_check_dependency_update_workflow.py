@@ -40,6 +40,12 @@ def remove_from_audit_targets(text: str, needle: str) -> str:
     return text.replace(f"{needle}\n", "", 1)
 
 
+def remove_audit_targets_block(text: str) -> str:
+    before_block, rest = text.split("        audit_targets=(\n", maxsplit=1)
+    _, after_block = rest.split("        )\n", maxsplit=1)
+    return f"{before_block}{after_block}"
+
+
 def add_to_pr_body(text: str, line: str) -> str:
     before_body, body = text.split("        body: |\n", maxsplit=1)
     body_with_ref = body + f"          {line}\n"
@@ -68,8 +74,8 @@ def test_missing_required_pr_body_reference_is_reported() -> None:
     assert ("dependency-update PR body must reference checked-in contract file " "'requirements/security.txt'") in errors
 
 
-def test_missing_audit_target_is_reported_independently_of_pr_body_references() -> None:
-    broken = remove_from_audit_targets(valid_workflow_text(), "requirements/security.txt")
+def test_missing_audit_targets_block_is_reported_independently_of_pr_body_references() -> None:
+    broken = remove_audit_targets_block(valid_workflow_text())
     errors = workflow_contract.validate_dependency_update_workflow(broken)
-    assert ("dependency-update workflow must audit governed lockfile target " "'requirements/security.txt'") in errors
+    assert "dependency-update workflow must define an audit_targets block" in errors
     assert ("dependency-update PR body must reference checked-in contract file " "'requirements/security.txt'") not in errors

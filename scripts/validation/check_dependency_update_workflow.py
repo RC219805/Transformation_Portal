@@ -20,6 +20,8 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "dependency-update.yml"
 
+AUDIT_TARGETS_BLOCK_RE = re.compile(r"(?ms)^[ \t]*audit_targets\s*=\s*\(\s*$\n(?P<body>.*?)^\s*\)\s*$")
+
 REQUIRED_AUDIT_TARGETS = (
     "requirements/all.txt",
     "requirements/security.txt",
@@ -92,7 +94,7 @@ def _extract_create_pr_body(text: str) -> str | None:
 
 def _extract_audit_targets_block(text: str) -> str | None:
     """Return the audit_targets block content, if present."""
-    match = re.search(r"audit_targets=\(\n(?P<body>.*?)\n\s*\)", text, re.DOTALL)
+    match = AUDIT_TARGETS_BLOCK_RE.search(text)
     if match is None:
         return None
     return match.group("body")
@@ -109,30 +111,23 @@ def validate_dependency_update_workflow(text: str) -> list[str]:
     else:
         for target in REQUIRED_AUDIT_TARGETS:
             if target not in audit_targets_block:
-                errors.append(
-                    f"dependency-update workflow must audit governed lockfile target {target!r}"
-                )
+                errors.append(f"dependency-update workflow must audit governed lockfile target {target!r}")
 
     if pr_body is None:
         return errors + ["dependency-update workflow must define a Create Pull Request body block"]
 
     for ref in REQUIRED_PR_BODY_REFERENCES:
         if ref not in pr_body:
-            errors.append(
-                f"dependency-update PR body must reference checked-in contract file {ref!r}"
-            )
+            errors.append(f"dependency-update PR body must reference checked-in contract file {ref!r}")
 
     for ref in FORBIDDEN_PR_BODY_REFERENCES:
         if ref in pr_body:
-            errors.append(
-                f"dependency-update workflow still references non-contract ML lockfile {ref!r}"
-            )
+            errors.append(f"dependency-update workflow still references non-contract ML lockfile {ref!r}")
 
     for snippet in FORBIDDEN_REVIEW_TEXT:
         if snippet in pr_body:
             errors.append(
-                "dependency-update workflow review checklist still points at deprecated "
-                f"ML lockfile text {snippet!r}"
+                "dependency-update workflow review checklist still points at deprecated " f"ML lockfile text {snippet!r}"
             )
 
     return errors
