@@ -68,7 +68,8 @@ def test_missing_required_pr_body_reference_is_reported() -> None:
     assert ("dependency-update PR body must reference checked-in contract file " "'requirements/security.txt'") in errors
 
 
-def test_missing_audit_target_is_reported_even_if_pr_body_still_mentions_it() -> None:
+def test_missing_audit_target_is_reported_independently_of_pr_body_references() -> None:
     broken = remove_from_audit_targets(valid_workflow_text(), "requirements/security.txt")
     errors = workflow_contract.validate_dependency_update_workflow(broken)
     assert ("dependency-update workflow must audit governed lockfile target " "'requirements/security.txt'") in errors
+    assert ("dependency-update PR body must reference checked-in contract file " "'requirements/security.txt'") not in errors

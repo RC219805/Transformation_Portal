@@ -388,6 +388,10 @@ jobs:
         run: |
           python scripts/validation/check_raw_json_usage.py
 
+      - name: Validate CI contracts
+        run: |
+          make validate-ci
+
   typecheck:
     name: Type Check
     needs: [preflight, lint]

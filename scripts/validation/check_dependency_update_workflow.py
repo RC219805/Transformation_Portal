@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
-"""Validate dependency-update workflow against the layered lockfile contract.
+"""Validate dependency-update workflow contract.
 
 This guard prevents the scheduled dependency-update workflow from drifting away
 from the repository's actual checked-in dependency contract.
 
 Contracts enforced:
-1. The workflow must audit the governed lockfiles that sit outside all.txt.
-2. The PR body must not reference deprecated/non-contract ML lockfiles.
-3. The PR body must describe the currently checked-in lockfile contract.
+1. The workflow must audit the governed lockfile targets listed in
+   REQUIRED_AUDIT_TARGETS.
+2. The Create Pull Request body must mention the required lockfile / ML
+   contract references and must not mention superseded references.
 """
 
 from __future__ import annotations
