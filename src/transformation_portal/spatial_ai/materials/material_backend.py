@@ -419,9 +419,7 @@ class MaterialBackend:
                     requested_backend="pbr_fusion",
                     executed_backend="heuristic",
                     availability_state=AvailabilityState.INTEGRATION_MISSING,
-                    fallback_reason=(
-                        "PBRFusion runtime path exists, but direct ComfyUI integration is not implemented yet."
-                    ),
+                    fallback_reason=("PBRFusion runtime path exists, but direct ComfyUI integration is not implemented yet."),
                     required_inputs=[],
                     required_runtime=["comfyui_pbrfusion_workflow"],
                 )
