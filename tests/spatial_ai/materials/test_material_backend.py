@@ -145,8 +145,9 @@ class TestMaterialBackend:
         result = backend.generate_pbr_textures(rgb=rgb)
         assert result.albedo.shape == rgb.shape
 
-    def test_pbr_fusion_fallback(self, sample_rgb):
+    def test_pbr_fusion_fallback(self, sample_rgb, monkeypatch):
         """Test PBRFusion falls back to heuristic when not installed (Phase 5B)."""
+        monkeypatch.delenv("PBRFUSION_PATH", raising=False)
         backend = MaterialBackend(backend="pbr_fusion", device="cpu")
 
         with warnings.catch_warnings(record=True) as w:
@@ -171,6 +172,26 @@ class TestMaterialBackend:
         assert result.metadata.backend_decision.requested_backend == "pbr_fusion"
         assert result.metadata.backend_decision.executed_backend == "heuristic"
         assert result.metadata.backend_decision.availability_state.value == "runtime_missing"
+
+    def test_pbr_fusion_reports_integration_missing_when_runtime_path_exists(self, sample_rgb, monkeypatch, tmp_path):
+        """PBRFusion should report integration-missing when a runtime path exists."""
+        runtime_root = tmp_path / "pbrfusion"
+        runtime_root.mkdir()
+        monkeypatch.setenv("PBRFUSION_PATH", str(runtime_root))
+
+        backend = MaterialBackend(backend="pbr_fusion", device="cpu")
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            result = backend.generate_pbr_textures(rgb=sample_rgb)
+
+        assert len(w) == 1
+        assert issubclass(w[0].category, BackendResolutionWarning)
+        assert "direct comfyui integration is not implemented yet" in str(w[0].message).lower()
+        assert result.metadata is not None
+        assert result.metadata.backend_decision is not None
+        assert result.metadata.backend_decision.executed_backend == "heuristic"
+        assert result.metadata.backend_decision.availability_state.value == "integration_missing"
 
     def test_metadata_bilateral_flag_reflects_available_backend(self, sample_rgb):
         """Metadata should record the actual albedo filtering capability."""

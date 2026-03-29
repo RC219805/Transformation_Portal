@@ -140,6 +140,7 @@ class AvailabilityState(str, Enum):
     AVAILABLE = "available"
     INPUT_CONTRACT_MISMATCH = "input_contract_mismatch"
     RUNTIME_MISSING = "runtime_missing"
+    INTEGRATION_MISSING = "integration_missing"
     LICENSE_GATED = "license_gated"
     ATTESTATION_INCOMPLETE = "attestation_incomplete"
 

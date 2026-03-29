@@ -24,6 +24,7 @@ Performance:
 """
 
 import inspect
+import os
 from typing import Any, Dict, Literal, Optional, cast
 
 import numpy as np
@@ -336,42 +337,7 @@ class MaterialBackend:
         Note:
             Falls back to heuristic if PBRFusion not installed.
         """
-        import os
-
-        # Check if PBRFusion is available
-        pbrfusion_path = os.getenv("PBRFUSION_PATH")
-
-        if pbrfusion_path and os.path.exists(pbrfusion_path):
-            # Phase 5B roadmap item: ComfyUI subprocess integration
-            # Implementation steps when ready:
-            # 1. Write rgb to temp file
-            # 2. Spawn ComfyUI with PBRFusion workflow
-            # 3. Parse output PBR maps
-            # 4. Return as tuple
-            backend_decision = BackendDecision(
-                requested_backend="pbr_fusion",
-                executed_backend="heuristic",
-                availability_state=AvailabilityState.RUNTIME_MISSING,
-                fallback_reason=("PBRFusion runtime path exists, but direct ComfyUI integration is not implemented yet."),
-                required_inputs=[],
-                required_runtime=["comfyui_pbrfusion_workflow"],
-            )
-            self._warn_backend_resolution(backend_decision)
-        else:
-            backend_decision = BackendDecision(
-                requested_backend="pbr_fusion",
-                executed_backend="heuristic",
-                availability_state=AvailabilityState.RUNTIME_MISSING,
-                fallback_reason=(
-                    "PBRFusion runtime is not installed or PBRFUSION_PATH is not set. "
-                    "Install ComfyUI + PBRFusion nodes to enable it."
-                ),
-                required_inputs=[],
-                required_runtime=["PBRFUSION_PATH", "comfyui_pbrfusion_workflow"],
-            )
-            self._warn_backend_resolution(backend_decision)
-
-        # Fallback to enhanced heuristic (Phase 5C)
+        # Resolution already accounts for the currently reachable PBRFusion state.
         return self._generate_heuristic(rgb, mask, depth, material_hint, config, backend_decision)
 
     def _generate_nvdiffrec(
@@ -447,11 +413,27 @@ class MaterialBackend:
             )
 
         if self.backend == "pbr_fusion":
+            pbrfusion_path = os.getenv("PBRFUSION_PATH")
+            if pbrfusion_path and os.path.exists(pbrfusion_path):
+                return BackendDecision(
+                    requested_backend="pbr_fusion",
+                    executed_backend="heuristic",
+                    availability_state=AvailabilityState.INTEGRATION_MISSING,
+                    fallback_reason=(
+                        "PBRFusion runtime path exists, but direct ComfyUI integration is not implemented yet."
+                    ),
+                    required_inputs=[],
+                    required_runtime=["comfyui_pbrfusion_workflow"],
+                )
+
             return BackendDecision(
                 requested_backend="pbr_fusion",
-                executed_backend="pbr_fusion",
-                availability_state=AvailabilityState.AVAILABLE,
-                fallback_reason=None,
+                executed_backend="heuristic",
+                availability_state=AvailabilityState.RUNTIME_MISSING,
+                fallback_reason=(
+                    "PBRFusion runtime is not installed or PBRFUSION_PATH is not set. "
+                    "Install ComfyUI + PBRFusion nodes to enable it."
+                ),
                 required_inputs=[],
                 required_runtime=["PBRFUSION_PATH", "comfyui_pbrfusion_workflow"],
             )
