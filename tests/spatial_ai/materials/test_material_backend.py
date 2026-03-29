@@ -226,3 +226,20 @@ class TestMaterialBackend:
         assert metadata_dict["backend_decision"]["requested_backend"] == "nvdiffrec"
         assert metadata_dict["backend_decision"]["executed_backend"] == "heuristic"
         assert metadata_dict["backend_decision"]["availability_state"] == "input_contract_mismatch"
+
+    def test_explicit_config_backend_drives_resolution_metadata(self, sample_rgb):
+        """Config backend should drive requested-backend resolution semantics."""
+        backend = MaterialBackend(backend="heuristic", device="cpu")
+        config = MaterialGenerationConfig(backend="nvdiffrec", device="cpu")
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            result = backend.generate_pbr_textures(rgb=sample_rgb, config=config)
+
+        assert len(w) == 1
+        assert issubclass(w[0].category, BackendResolutionWarning)
+        assert result.metadata is not None
+        assert result.metadata.backend_decision is not None
+        assert result.metadata.backend_decision.requested_backend == "nvdiffrec"
+        assert result.metadata.backend_decision.executed_backend == "heuristic"
+        assert result.metadata.backend_decision.availability_state.value == "input_contract_mismatch"

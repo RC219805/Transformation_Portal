@@ -196,7 +196,7 @@ class MaterialBackend:
         if config is None:
             config = self._build_generation_config()
 
-        decision = self._resolve_backend_decision()
+        decision = self._resolve_backend_decision(config.backend)
 
         if decision.requested_backend != decision.executed_backend:
             self._warn_backend_resolution(decision)
@@ -374,9 +374,9 @@ class MaterialBackend:
         """
         return self._generate_heuristic(rgb, mask, depth, material_hint, config, backend_decision)
 
-    def _resolve_backend_decision(self) -> BackendDecision:
-        """Resolve requested backend to the backend actually executable in this API."""
-        if self.backend == "heuristic":
+    def _resolve_backend_decision(self, requested_backend: str) -> BackendDecision:
+        """Resolve the requested backend to the backend actually executable in this API."""
+        if requested_backend == "heuristic":
             return BackendDecision(
                 requested_backend="heuristic",
                 executed_backend="heuristic",
@@ -386,7 +386,7 @@ class MaterialBackend:
                 required_runtime=[],
             )
 
-        if self.backend == "nvdiffrec":
+        if requested_backend == "nvdiffrec":
             return BackendDecision(
                 requested_backend="nvdiffrec",
                 executed_backend="heuristic",
@@ -399,7 +399,7 @@ class MaterialBackend:
                 required_runtime=["cuda", "nvdiffrast", "pinned_nvdiffrec_revision"],
             )
 
-        if self.backend == "material_gan":
+        if requested_backend == "material_gan":
             return BackendDecision(
                 requested_backend="material_gan",
                 executed_backend="heuristic",
@@ -412,7 +412,7 @@ class MaterialBackend:
                 required_runtime=["materialgan_runtime", "checkpoint_weights"],
             )
 
-        if self.backend == "pbr_fusion":
+        if requested_backend == "pbr_fusion":
             pbrfusion_path = os.getenv("PBRFUSION_PATH")
             if pbrfusion_path and os.path.exists(pbrfusion_path):
                 return BackendDecision(
@@ -436,7 +436,7 @@ class MaterialBackend:
                 required_runtime=["PBRFUSION_PATH", "comfyui_pbrfusion_workflow"],
             )
 
-        raise ValueError(f"Unknown backend: {self.backend}")
+        raise ValueError(f"Unknown backend: {requested_backend}")
 
     @staticmethod
     def _warn_backend_resolution(decision: BackendDecision) -> None:
@@ -444,7 +444,7 @@ class MaterialBackend:
         import warnings
 
         if decision.fallback_reason:
-            warnings.warn(decision.fallback_reason, BackendResolutionWarning, stacklevel=2)
+            warnings.warn(decision.fallback_reason, BackendResolutionWarning, stacklevel=3)
 
     def unload_model(self) -> None:
         """Unload model from memory to free resources."""
