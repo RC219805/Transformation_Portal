@@ -964,6 +964,17 @@ class TestSpatialAIPipelineE2E:
         mock_pbr.metallic = np.random.rand(128, 128).astype(np.float32)
         mock_pbr.ambient_occlusion = np.random.rand(128, 128).astype(np.float32)
         mock_pbr.height = None
+        mock_pbr.properties = MaterialProperties(roughness_mean=0.4, metallic_mean=0.1, ao_strength=0.6)
+        mock_pbr.metadata = MagicMock()
+        mock_pbr.metadata.to_dict.return_value = {
+            "backend": "heuristic_v5.0.0",
+            "material_hint": None,
+            "backend_decision": {
+                "requested_backend": "heuristic",
+                "executed_backend": "heuristic",
+                "availability_state": "ready",
+            },
+        }
 
         with (
             patch("transformation_portal.spatial_ai.orchestration.pipeline.LinearDecoder") as MockDecoder,
