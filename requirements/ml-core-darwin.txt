@@ -167,7 +167,7 @@ psutil==6.1.1
     #   -r ml-core-darwin.in
     #   accelerate
     #   memory-profiler
-pygments==2.19.2
+pygments==2.20.0
     # via rich
 pyyaml==6.0.3
     # via
