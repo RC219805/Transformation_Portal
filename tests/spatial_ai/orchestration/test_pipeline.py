@@ -18,7 +18,13 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from transformation_portal.spatial_ai.ingest.linear_decoder import LinearIngestResult
-from transformation_portal.spatial_ai.materials.contracts import MaterialProperties, PBRTextures
+from transformation_portal.spatial_ai.materials.contracts import (
+    AvailabilityState,
+    BackendDecision,
+    MaterialProperties,
+    PBRGenerationMetadata,
+    PBRTextures,
+)
 from transformation_portal.spatial_ai.orchestration.error_handler import ErrorRecoveryStrategy, PipelineError
 from transformation_portal.spatial_ai.orchestration.pipeline import PipelineConfig, PipelineResult, SpatialAIPipeline
 from transformation_portal.spatial_ai.orchestration.resource_manager import ResourceLimits
@@ -705,23 +711,22 @@ class TestSpatialAIPipelineMaterialsStage:
         mock_pbr.ambient_occlusion = np.random.rand(128, 128).astype(np.float32)
         mock_pbr.height = None
         mock_pbr.properties = MaterialProperties(roughness_mean=0.4, metallic_mean=0.1, ao_strength=0.6)
-        mock_pbr.metadata = MagicMock()
-        mock_pbr.metadata.to_dict.return_value = {
-            "backend": "heuristic_v5.0.0",
-            "normal_scale": 1.0,
-            "ao_blend_ratio": "0.7_concavity_0.3_variance",
-            "bilateral_enabled": True,
-            "material_hint": "wood",
-            "depth_used": False,
-            "backend_decision": {
-                "requested_backend": "nvdiffrec",
-                "executed_backend": "heuristic",
-                "availability_state": "input_contract_mismatch",
-                "fallback_reason": "single-image input only",
-                "required_inputs": ["multi_view_images"],
-                "required_runtime": ["cuda"],
-            },
-        }
+        mock_pbr.metadata = PBRGenerationMetadata(
+            backend="heuristic_v5.0.0",
+            normal_scale=1.0,
+            ao_blend_ratio="0.7_concavity_0.3_variance",
+            bilateral_enabled=True,
+            material_hint="wood",
+            depth_used=False,
+            backend_decision=BackendDecision(
+                requested_backend="nvdiffrec",
+                executed_backend="heuristic",
+                availability_state=AvailabilityState.INPUT_CONTRACT_MISMATCH,
+                fallback_reason="single-image input only",
+                required_inputs=["multi_view_images"],
+                required_runtime=["cuda"],
+            ),
+        )
 
         with patch("transformation_portal.spatial_ai.orchestration.pipeline.MaterialBackend") as MockBackend:
             mock_backend = MockBackend.return_value
@@ -799,16 +804,22 @@ class TestSpatialAIPipelineMaterialsStage:
             mock_pbr.ambient_occlusion = np.random.rand(128, 128).astype(np.float32)
             mock_pbr.height = None
             mock_pbr.properties = MaterialProperties(roughness_mean=0.4, metallic_mean=0.1, ao_strength=0.6)
-            mock_pbr.metadata = MagicMock()
-            mock_pbr.metadata.to_dict.return_value = {
-                "backend": "heuristic_v5.0.0",
-                "material_hint": material_hint,
-                "backend_decision": {
-                    "requested_backend": "heuristic",
-                    "executed_backend": "heuristic",
-                    "availability_state": "ready",
-                },
-            }
+            mock_pbr.metadata = PBRGenerationMetadata(
+                backend="heuristic_v5.0.0",
+                normal_scale=1.0,
+                ao_blend_ratio="0.7_concavity_0.3_variance",
+                bilateral_enabled=True,
+                material_hint=material_hint,
+                depth_used=False,
+                backend_decision=BackendDecision(
+                    requested_backend="heuristic",
+                    executed_backend="heuristic",
+                    availability_state=AvailabilityState.AVAILABLE,
+                    fallback_reason=None,
+                    required_inputs=[],
+                    required_runtime=[],
+                ),
+            )
             return mock_pbr
 
         first_pbr = make_mock_pbr("wood")
@@ -985,16 +996,22 @@ class TestSpatialAIPipelineE2E:
         mock_pbr.ambient_occlusion = np.random.rand(128, 128).astype(np.float32)
         mock_pbr.height = None
         mock_pbr.properties = MaterialProperties(roughness_mean=0.4, metallic_mean=0.1, ao_strength=0.6)
-        mock_pbr.metadata = MagicMock()
-        mock_pbr.metadata.to_dict.return_value = {
-            "backend": "heuristic_v5.0.0",
-            "material_hint": None,
-            "backend_decision": {
-                "requested_backend": "heuristic",
-                "executed_backend": "heuristic",
-                "availability_state": "ready",
-            },
-        }
+        mock_pbr.metadata = PBRGenerationMetadata(
+            backend="heuristic_v5.0.0",
+            normal_scale=1.0,
+            ao_blend_ratio="0.7_concavity_0.3_variance",
+            bilateral_enabled=True,
+            material_hint=None,
+            depth_used=False,
+            backend_decision=BackendDecision(
+                requested_backend="heuristic",
+                executed_backend="heuristic",
+                availability_state=AvailabilityState.AVAILABLE,
+                fallback_reason=None,
+                required_inputs=[],
+                required_runtime=[],
+            ),
+        )
 
         with (
             patch("transformation_portal.spatial_ai.orchestration.pipeline.LinearDecoder") as MockDecoder,
