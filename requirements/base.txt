@@ -24,7 +24,7 @@ opencv-python==4.13.0.92
 pillow==12.1.1
 pydantic==2.12.5
 pydantic-core==2.41.5
-pygments==2.19.2
+pygments==2.20.0
 referencing==0.37.0
 rich==14.3.3
 rpds-py==0.30.0

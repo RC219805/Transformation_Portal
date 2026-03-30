@@ -32,7 +32,7 @@ packaging==26.0
 platformdirs==4.9.2
 pluggy==1.6.0
 pycparser==3.0
-pygments==2.19.2
+pygments==2.20.0
 pypdf==6.9.2
 pyproject-api==1.10.0
 pyproject-hooks==1.2.0
