@@ -82,7 +82,8 @@ def _is_reload_safe_pipeline_config(candidate: object) -> bool:
 
 def _sha256_array(array: np.ndarray) -> str:
     """Return a deterministic SHA-256 for a numpy array payload."""
-    return hashlib.sha256(np.ascontiguousarray(array).tobytes()).hexdigest()
+    contiguous = array if array.flags["C_CONTIGUOUS"] else np.ascontiguousarray(array)
+    return hashlib.sha256(memoryview(contiguous.view(np.uint8))).hexdigest()
 
 
 @dataclass
