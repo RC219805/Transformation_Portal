@@ -31,6 +31,7 @@ Example:
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 from dataclasses import dataclass, field
@@ -40,6 +41,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Union, cas
 import numpy as np
 import yaml
 
+from transformation_portal.ingest.canonical_json import dump_json
 from transformation_portal.spatial_ai.ingest.linear_decoder import LinearDecoder, LinearIngestResult
 from transformation_portal.spatial_ai.materials.contracts import MaterialInput, PBRTextures
 from transformation_portal.spatial_ai.materials.material_backend import MaterialBackend
@@ -76,6 +78,11 @@ def _is_reload_safe_pipeline_config(candidate: object) -> bool:
         "use_execution_graph",
     }
     return all(hasattr(candidate, field_name) for field_name in required_fields)
+
+
+def _sha256_array(array: np.ndarray) -> str:
+    """Return a deterministic SHA-256 for a numpy array payload."""
+    return hashlib.sha256(np.ascontiguousarray(array).tobytes()).hexdigest()
 
 
 @dataclass
@@ -1149,7 +1156,7 @@ class SpatialAIPipeline:
                 textures_dir = output_dir / "materials"
                 textures_dir.mkdir(exist_ok=True)
 
-                for seg_id, pbr in materials.items():
+                for i, (seg_id, pbr) in enumerate(materials.items()):
                     seg_dir = textures_dir / seg_id
                     seg_dir.mkdir(exist_ok=True)
 
@@ -1161,6 +1168,16 @@ class SpatialAIPipeline:
                     np.save(seg_dir / "ao.npy", pbr.ambient_occlusion)
                     if pbr.height is not None:
                         np.save(seg_dir / "height.npy", pbr.height)
+                    self._save_material_artifacts(
+                        seg_dir=seg_dir,
+                        seg_id=seg_id,
+                        segment_index=i,
+                        pbr=pbr,
+                        mask=seg_result.masks[i],
+                        segment_metadata=seg_result.metadata[i],
+                        ingest_result=ingest_result,
+                        backend_cfg=backend_cfg,
+                    )
 
                 logger.debug(f"Saved PBR textures: {textures_dir}")
 
@@ -1175,6 +1192,70 @@ class SpatialAIPipeline:
         except Exception as e:
             self.progress_tracker.complete_stage("materials", success=False, error_message=str(e))
             raise PipelineError("materials", f"Materials generation failed: {e}", original_error=e) from e
+
+    def _save_material_artifacts(
+        self,
+        *,
+        seg_dir: Path,
+        seg_id: str,
+        segment_index: int,
+        pbr: PBRTextures,
+        mask: np.ndarray,
+        segment_metadata: MaskMetadata,
+        ingest_result: LinearIngestResult,
+        backend_cfg: str,
+    ) -> None:
+        """Persist materials diagnostics and provenance sidecars for a segment."""
+        metadata_dict = pbr.metadata.to_dict() if pbr.metadata is not None else None
+        diagnostics_payload = {
+            "schema_version": "1.0.0",
+            "segment_id": seg_id,
+            "segment_index": segment_index,
+            "requested_backend": backend_cfg,
+            "generation_metadata": metadata_dict,
+            "material_properties": pbr.properties,
+            "mask_area": int(np.count_nonzero(mask)),
+            "texture_shapes": {
+                "albedo": list(pbr.albedo.shape),
+                "normal": list(pbr.normal.shape),
+                "roughness": list(pbr.roughness.shape),
+                "metallic": list(pbr.metallic.shape),
+                "ambient_occlusion": list(pbr.ambient_occlusion.shape),
+                "height": None if pbr.height is None else list(pbr.height.shape),
+            },
+        }
+        provenance_payload = {
+            "schema_version": "1.0.0",
+            "segment_id": seg_id,
+            "segment_index": segment_index,
+            "input_path": str(getattr(ingest_result, "input_path", "")) or None,
+            "input_content_hash": getattr(ingest_result, "content_hash", None),
+            "input_gamma": getattr(ingest_result, "gamma", None),
+            "input_size": list(getattr(ingest_result, "input_size", pbr.albedo.shape[:2])),
+            "mask_metadata": {
+                "area": segment_metadata.area,
+                "bbox": list(segment_metadata.bbox),
+                "stability_score": segment_metadata.stability_score,
+                "material_label": getattr(segment_metadata, "material_label", None),
+            },
+            "backend_decision": None if metadata_dict is None else metadata_dict.get("backend_decision"),
+            "artifacts": {
+                "albedo_sha256": _sha256_array(pbr.albedo),
+                "normal_sha256": _sha256_array(pbr.normal),
+                "roughness_sha256": _sha256_array(pbr.roughness),
+                "metallic_sha256": _sha256_array(pbr.metallic),
+                "ambient_occlusion_sha256": _sha256_array(pbr.ambient_occlusion),
+                "height_sha256": None if pbr.height is None else _sha256_array(pbr.height),
+            },
+        }
+
+        with open(seg_dir / "diagnostics.json", "w", encoding="utf-8") as handle:
+            dump_json(diagnostics_payload, handle, indent=2, sort_keys=True, ensure_ascii=False, allow_nan=False)
+            handle.write("\n")
+
+        with open(seg_dir / "provenance.json", "w", encoding="utf-8") as handle:
+            dump_json(provenance_payload, handle, indent=2, sort_keys=True, ensure_ascii=False, allow_nan=False)
+            handle.write("\n")
 
     def _run_reconstruction(
         self,

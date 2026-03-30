@@ -18,7 +18,7 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from transformation_portal.spatial_ai.ingest.linear_decoder import LinearIngestResult
-from transformation_portal.spatial_ai.materials.contracts import PBRTextures
+from transformation_portal.spatial_ai.materials.contracts import MaterialProperties, PBRTextures
 from transformation_portal.spatial_ai.orchestration.error_handler import ErrorRecoveryStrategy, PipelineError
 from transformation_portal.spatial_ai.orchestration.pipeline import PipelineConfig, PipelineResult, SpatialAIPipeline
 from transformation_portal.spatial_ai.orchestration.resource_manager import ResourceLimits
@@ -668,18 +668,21 @@ class TestSpatialAIPipelineMaterialsStage:
         assert "segment_1" in result
 
     def test_run_materials_saves_intermediates(self, tmp_path):
-        """Test materials saves textures when save_intermediates=True."""
+        """Test materials saves textures plus diagnostics/provenance sidecars."""
         config = PipelineConfig(tier="standard", stages=["materials"])
         pipeline = SpatialAIPipeline(config)
 
         ingest_result = MagicMock(spec=LinearIngestResult)
         ingest_result.linear_rgb = np.random.rand(128, 128, 3).astype(np.float32)
         ingest_result.gamma = 1.0
+        ingest_result.input_path = Path("input.tiff")
+        ingest_result.content_hash = "abc123"
+        ingest_result.input_size = (128, 128)
 
         seg_result = MagicMock(spec=SegmentationResult)
         seg_result.masks = [np.ones((128, 128), dtype=bool)]
         seg_result.scores = np.array([0.9])
-        seg_result.metadata = [MaskMetadata(area=128 * 128, bbox=(0, 0, 128, 128), stability_score=0.9)]
+        seg_result.metadata = [MaskMetadata(area=128 * 128, bbox=(0, 0, 128, 128), stability_score=0.9, material_label="wood")]
 
         mock_pbr = MagicMock(spec=PBRTextures)
         mock_pbr.albedo = np.random.rand(128, 128, 3).astype(np.float32)
@@ -688,6 +691,24 @@ class TestSpatialAIPipelineMaterialsStage:
         mock_pbr.metallic = np.random.rand(128, 128).astype(np.float32)
         mock_pbr.ambient_occlusion = np.random.rand(128, 128).astype(np.float32)
         mock_pbr.height = None
+        mock_pbr.properties = MaterialProperties(roughness_mean=0.4, metallic_mean=0.1, ao_strength=0.6)
+        mock_pbr.metadata = MagicMock()
+        mock_pbr.metadata.to_dict.return_value = {
+            "backend": "heuristic_v5.0.0",
+            "normal_scale": 1.0,
+            "ao_blend_ratio": "0.7_concavity_0.3_variance",
+            "bilateral_enabled": True,
+            "material_hint": "wood",
+            "depth_used": False,
+            "backend_decision": {
+                "requested_backend": "nvdiffrec",
+                "executed_backend": "heuristic",
+                "availability_state": "input_contract_mismatch",
+                "fallback_reason": "single-image input only",
+                "required_inputs": ["multi_view_images"],
+                "required_runtime": ["cuda"],
+            },
+        }
 
         with patch("transformation_portal.spatial_ai.orchestration.pipeline.MaterialBackend") as MockBackend:
             mock_backend = MockBackend.return_value
@@ -705,6 +726,21 @@ class TestSpatialAIPipelineMaterialsStage:
         assert textures_dir.exists()
         assert (textures_dir / "albedo.npy").exists()
         assert (textures_dir / "normal.npy").exists()
+        assert (textures_dir / "diagnostics.json").exists()
+        assert (textures_dir / "provenance.json").exists()
+
+        diagnostics = json.loads((textures_dir / "diagnostics.json").read_text(encoding="utf-8"))
+        provenance = json.loads((textures_dir / "provenance.json").read_text(encoding="utf-8"))
+
+        assert diagnostics["segment_id"] == "segment_0"
+        assert diagnostics["requested_backend"] == "heuristic"
+        assert diagnostics["generation_metadata"]["backend_decision"]["requested_backend"] == "nvdiffrec"
+        assert diagnostics["generation_metadata"]["backend_decision"]["executed_backend"] == "heuristic"
+
+        assert provenance["segment_id"] == "segment_0"
+        assert provenance["input_content_hash"] == "abc123"
+        assert provenance["backend_decision"]["availability_state"] == "input_contract_mismatch"
+        assert provenance["artifacts"]["albedo_sha256"]
 
 
 class TestSpatialAIPipelineReconstructionStage:
