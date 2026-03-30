@@ -738,9 +738,11 @@ class TestSpatialAIPipelineMaterialsStage:
         assert diagnostics["generation_metadata"]["backend_decision"]["executed_backend"] == "heuristic"
 
         assert provenance["segment_id"] == "segment_0"
+        assert provenance["segment_index"] == 0
         assert provenance["input_content_hash"] == "abc123"
         assert provenance["backend_decision"]["availability_state"] == "input_contract_mismatch"
-        assert provenance["artifacts"]["albedo_sha256"]
+        assert provenance["artifact_payload_hashes"]["hash_target"] == "numpy_array_bytes"
+        assert provenance["artifact_payload_hashes"]["albedo"]
 
 
 class TestSpatialAIPipelineReconstructionStage:

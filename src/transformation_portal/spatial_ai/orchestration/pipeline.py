@@ -1156,7 +1156,8 @@ class SpatialAIPipeline:
                 textures_dir = output_dir / "materials"
                 textures_dir.mkdir(exist_ok=True)
 
-                for i, (seg_id, pbr) in enumerate(materials.items()):
+                for seg_id, pbr in materials.items():
+                    segment_index = int(seg_id.rsplit("_", 1)[1])
                     seg_dir = textures_dir / seg_id
                     seg_dir.mkdir(exist_ok=True)
 
@@ -1171,10 +1172,10 @@ class SpatialAIPipeline:
                     self._save_material_artifacts(
                         seg_dir=seg_dir,
                         seg_id=seg_id,
-                        segment_index=i,
+                        segment_index=segment_index,
                         pbr=pbr,
-                        mask=seg_result.masks[i],
-                        segment_metadata=seg_result.metadata[i],
+                        mask=seg_result.masks[segment_index],
+                        segment_metadata=seg_result.metadata[segment_index],
                         ingest_result=ingest_result,
                         backend_cfg=backend_cfg,
                     )
@@ -1239,13 +1240,15 @@ class SpatialAIPipeline:
                 "material_label": getattr(segment_metadata, "material_label", None),
             },
             "backend_decision": None if metadata_dict is None else metadata_dict.get("backend_decision"),
-            "artifacts": {
-                "albedo_sha256": _sha256_array(pbr.albedo),
-                "normal_sha256": _sha256_array(pbr.normal),
-                "roughness_sha256": _sha256_array(pbr.roughness),
-                "metallic_sha256": _sha256_array(pbr.metallic),
-                "ambient_occlusion_sha256": _sha256_array(pbr.ambient_occlusion),
-                "height_sha256": None if pbr.height is None else _sha256_array(pbr.height),
+            "artifact_payload_hashes": {
+                "hash_algorithm": "sha256",
+                "hash_target": "numpy_array_bytes",
+                "albedo": _sha256_array(pbr.albedo),
+                "normal": _sha256_array(pbr.normal),
+                "roughness": _sha256_array(pbr.roughness),
+                "metallic": _sha256_array(pbr.metallic),
+                "ambient_occlusion": _sha256_array(pbr.ambient_occlusion),
+                "height": None if pbr.height is None else _sha256_array(pbr.height),
             },
         }
 
