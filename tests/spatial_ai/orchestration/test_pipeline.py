@@ -744,6 +744,91 @@ class TestSpatialAIPipelineMaterialsStage:
         assert provenance["artifact_payload_hashes"]["hash_target"] == "numpy_array_bytes"
         assert provenance["artifact_payload_hashes"]["albedo"]
 
+    def test_run_materials_save_intermediates_preserves_original_segment_metadata_after_middle_failure(self, tmp_path):
+        """Test save_intermediates keeps original segment metadata when a middle segment is skipped."""
+        config = PipelineConfig(tier="standard", stages=["materials"])
+        pipeline = SpatialAIPipeline(config)
+
+        ingest_result = MagicMock(spec=LinearIngestResult)
+        ingest_result.linear_rgb = np.random.rand(128, 128, 3).astype(np.float32)
+        ingest_result.gamma = 1.0
+        ingest_result.input_path = Path("input.tiff")
+        ingest_result.content_hash = "abc123"
+        ingest_result.input_size = (128, 128)
+
+        masks = [
+            np.pad(np.ones((16, 16), dtype=bool), ((0, 112), (0, 112))),
+            np.pad(np.ones((20, 20), dtype=bool), ((32, 76), (32, 76))),
+            np.pad(np.ones((24, 24), dtype=bool), ((64, 40), (64, 40))),
+        ]
+        metadata = [
+            MaskMetadata(area=16 * 16, bbox=(0, 0, 16, 16), stability_score=0.91, material_label="wood"),
+            MaskMetadata(area=20 * 20, bbox=(32, 32, 20, 20), stability_score=0.82, material_label="metal"),
+            MaskMetadata(area=24 * 24, bbox=(64, 64, 24, 24), stability_score=0.73, material_label="stone"),
+        ]
+
+        seg_result = MagicMock(spec=SegmentationResult)
+        seg_result.masks = masks
+        seg_result.scores = np.array([0.95, 0.85, 0.75])
+        seg_result.metadata = metadata
+
+        def make_mock_pbr(material_hint: str) -> MagicMock:
+            mock_pbr = MagicMock(spec=PBRTextures)
+            mock_pbr.albedo = np.random.rand(128, 128, 3).astype(np.float32)
+            mock_pbr.normal = np.random.rand(128, 128, 3).astype(np.float32)
+            mock_pbr.roughness = np.random.rand(128, 128).astype(np.float32)
+            mock_pbr.metallic = np.random.rand(128, 128).astype(np.float32)
+            mock_pbr.ambient_occlusion = np.random.rand(128, 128).astype(np.float32)
+            mock_pbr.height = None
+            mock_pbr.properties = MaterialProperties(roughness_mean=0.4, metallic_mean=0.1, ao_strength=0.6)
+            mock_pbr.metadata = MagicMock()
+            mock_pbr.metadata.to_dict.return_value = {
+                "backend": "heuristic_v5.0.0",
+                "material_hint": material_hint,
+                "backend_decision": {
+                    "requested_backend": "heuristic",
+                    "executed_backend": "heuristic",
+                    "availability_state": "ready",
+                },
+            }
+            return mock_pbr
+
+        first_pbr = make_mock_pbr("wood")
+        third_pbr = make_mock_pbr("stone")
+
+        with patch("transformation_portal.spatial_ai.orchestration.pipeline.MaterialBackend") as MockBackend:
+            mock_backend = MockBackend.return_value
+            mock_backend.generate.side_effect = [first_pbr, RuntimeError("segment 1 failed"), third_pbr]
+
+            result = pipeline._run_materials(
+                ingest_result=ingest_result,
+                seg_result=seg_result,
+                output_dir=tmp_path,
+                save_intermediates=True,
+            )
+
+        assert set(result.keys()) == {"segment_0", "segment_2"}
+
+        materials_dir = tmp_path / "materials"
+        assert (materials_dir / "segment_0").exists()
+        assert not (materials_dir / "segment_1").exists()
+        assert (materials_dir / "segment_2").exists()
+
+        diagnostics = json.loads((materials_dir / "segment_2" / "diagnostics.json").read_text(encoding="utf-8"))
+        provenance = json.loads((materials_dir / "segment_2" / "provenance.json").read_text(encoding="utf-8"))
+
+        assert diagnostics["segment_id"] == "segment_2"
+        assert diagnostics["segment_index"] == 2
+        assert diagnostics["generation_metadata"]["material_hint"] == "stone"
+        assert diagnostics["mask_area"] == int(np.count_nonzero(masks[2]))
+
+        assert provenance["segment_id"] == "segment_2"
+        assert provenance["segment_index"] == 2
+        assert provenance["mask_metadata"]["area"] == metadata[2].area
+        assert provenance["mask_metadata"]["bbox"] == list(metadata[2].bbox)
+        assert provenance["mask_metadata"]["stability_score"] == metadata[2].stability_score
+        assert provenance["mask_metadata"]["material_label"] == metadata[2].material_label
+
 
 class TestSpatialAIPipelineReconstructionStage:
     """Test reconstruction stage execution."""
