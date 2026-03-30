@@ -1222,7 +1222,7 @@ class SpatialAIPipeline:
                 "normal": list(pbr.normal.shape),
                 "roughness": list(pbr.roughness.shape),
                 "metallic": list(pbr.metallic.shape),
-                "ambient_occlusion": list(pbr.ambient_occlusion.shape),
+                "ao": list(pbr.ambient_occlusion.shape),
                 "height": None if pbr.height is None else list(pbr.height.shape),
             },
         }
@@ -1248,7 +1248,7 @@ class SpatialAIPipeline:
                 "normal": _sha256_array(pbr.normal),
                 "roughness": _sha256_array(pbr.roughness),
                 "metallic": _sha256_array(pbr.metallic),
-                "ambient_occlusion": _sha256_array(pbr.ambient_occlusion),
+                "ao": _sha256_array(pbr.ambient_occlusion),
                 "height": None if pbr.height is None else _sha256_array(pbr.height),
             },
         }
