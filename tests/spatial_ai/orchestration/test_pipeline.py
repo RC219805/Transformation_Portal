@@ -484,6 +484,7 @@ class TestSpatialAIPipelineSegmentationStage:
             tier="standard",
             stages=["segment"],
             segmentation={"backend": "sam2"},
+            resource_limits=ResourceLimits(device_preference=["cpu"]),
         )
         pipeline = SpatialAIPipeline(config)
 
@@ -519,6 +520,7 @@ class TestSpatialAIPipelineSegmentationStage:
             tier="standard",
             stages=["segment"],
             segmentation={"backend": "sam2", "tiling": {"enabled": True, "tile_size_px": 512, "overlap_px": 64}},
+            resource_limits=ResourceLimits(device_preference=["cpu"]),
         )
         pipeline = SpatialAIPipeline(config)
 
@@ -552,6 +554,7 @@ class TestSpatialAIPipelineSegmentationStage:
             tier="standard",
             stages=["segment"],
             segmentation={"backend": "sam2"},
+            resource_limits=ResourceLimits(device_preference=["cpu"]),
         )
         pipeline = SpatialAIPipeline(config)
 
@@ -578,7 +581,11 @@ class TestSpatialAIPipelineSegmentationStage:
 
     def test_run_segmentation_saves_intermediates(self, tmp_path):
         """Test segmentation saves masks when save_intermediates=True."""
-        config = PipelineConfig(tier="standard", stages=["segment"])
+        config = PipelineConfig(
+            tier="standard",
+            stages=["segment"],
+            resource_limits=ResourceLimits(device_preference=["cpu"]),
+        )
         pipeline = SpatialAIPipeline(config)
 
         ingest_result = MagicMock(spec=LinearIngestResult)
@@ -610,6 +617,7 @@ class TestSpatialAIPipelineSegmentationStage:
             tier="standard",
             stages=["segment"],
             segmentation={"backend": "invalid_backend"},
+            resource_limits=ResourceLimits(device_preference=["cpu"]),
         )
         pipeline = SpatialAIPipeline(config)
 
@@ -633,6 +641,7 @@ class TestSpatialAIPipelineMaterialsStage:
             tier="standard",
             stages=["materials"],
             materials={"backend": "heuristic", "material_hints": True},
+            resource_limits=ResourceLimits(device_preference=["cpu"]),
         )
         pipeline = SpatialAIPipeline(config)
 
@@ -669,7 +678,11 @@ class TestSpatialAIPipelineMaterialsStage:
 
     def test_run_materials_saves_intermediates(self, tmp_path):
         """Test materials saves textures plus diagnostics/provenance sidecars."""
-        config = PipelineConfig(tier="standard", stages=["materials"])
+        config = PipelineConfig(
+            tier="standard",
+            stages=["materials"],
+            resource_limits=ResourceLimits(device_preference=["cpu"]),
+        )
         pipeline = SpatialAIPipeline(config)
 
         ingest_result = MagicMock(spec=LinearIngestResult)
@@ -746,7 +759,12 @@ class TestSpatialAIPipelineMaterialsStage:
 
     def test_run_materials_save_intermediates_preserves_original_segment_metadata_after_middle_failure(self, tmp_path):
         """Test save_intermediates keeps original segment metadata when a middle segment is skipped."""
-        config = PipelineConfig(tier="standard", stages=["materials"])
+        config = PipelineConfig(
+            tier="standard",
+            stages=["materials"],
+            resource_limits=ResourceLimits(device_preference=["cpu"]),
+            error_strategy=ErrorRecoveryStrategy.RETRY,
+        )
         pipeline = SpatialAIPipeline(config)
 
         ingest_result = MagicMock(spec=LinearIngestResult)
@@ -897,6 +915,7 @@ class TestSpatialAIPipelineE2E:
         config = PipelineConfig(
             tier="standard",
             stages=["ingest", "segment"],
+            resource_limits=ResourceLimits(device_preference=["cpu"]),
         )
         pipeline = SpatialAIPipeline(config)
 
@@ -939,6 +958,7 @@ class TestSpatialAIPipelineE2E:
         config = PipelineConfig(
             tier="standard",
             stages=["ingest", "segment", "materials"],
+            resource_limits=ResourceLimits(device_preference=["cpu"]),
         )
         pipeline = SpatialAIPipeline(config)
 
