@@ -31,15 +31,21 @@ Example:
 
 from __future__ import annotations
 
+import contextlib
+import hashlib
 import json
 import logging
-from dataclasses import dataclass, field
+import math
+import os
+import tempfile
+from dataclasses import asdict, dataclass, field, is_dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Union, cast
 
 import numpy as np
 import yaml
 
+from transformation_portal.ingest.canonical_json import dump_json
 from transformation_portal.spatial_ai.ingest.linear_decoder import LinearDecoder, LinearIngestResult
 from transformation_portal.spatial_ai.materials.contracts import MaterialInput, PBRTextures
 from transformation_portal.spatial_ai.materials.material_backend import MaterialBackend
@@ -76,6 +82,58 @@ def _is_reload_safe_pipeline_config(candidate: object) -> bool:
         "use_execution_graph",
     }
     return all(hasattr(candidate, field_name) for field_name in required_fields)
+
+
+def _sha256_array(array: np.ndarray) -> str:
+    """Return a deterministic SHA-256 for a numpy array payload."""
+    contiguous = array if array.flags["C_CONTIGUOUS"] else np.ascontiguousarray(array)
+    return hashlib.sha256(memoryview(contiguous.view(np.uint8))).hexdigest()
+
+
+def _sanitize_json_value(value: Any) -> Any:
+    """Convert values into canonical-JSON-safe primitives."""
+    if is_dataclass(value):
+        return _sanitize_json_value(asdict(value))
+
+    if isinstance(value, dict):
+        return {str(key): _sanitize_json_value(inner) for key, inner in value.items()}
+
+    if isinstance(value, (list, tuple)):
+        return [_sanitize_json_value(inner) for inner in value]
+
+    if isinstance(value, np.ndarray):
+        return _sanitize_json_value(value.tolist())
+
+    if isinstance(value, np.generic):
+        return _sanitize_json_value(value.item())
+
+    if isinstance(value, float):
+        return value if math.isfinite(value) else None
+
+    return value
+
+
+def _write_json_atomic(path: Path, payload: dict[str, Any]) -> None:
+    """Write deterministic JSON atomically via temp file + fsync + replace."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=path.parent, delete=False) as handle:
+        temp_path = Path(handle.name)
+        try:
+            dump_json(payload, handle, indent=2, sort_keys=True, ensure_ascii=False, allow_nan=False)
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        except Exception:
+            with contextlib.suppress(FileNotFoundError):
+                temp_path.unlink()
+            raise
+
+    try:
+        temp_path.replace(path)
+    except Exception:
+        with contextlib.suppress(FileNotFoundError):
+            temp_path.unlink()
+        raise
 
 
 @dataclass
@@ -1086,6 +1144,7 @@ class SpatialAIPipeline:
 
             # Generate materials for each segment
             materials = {}
+            material_artifact_entries: list[tuple[str, int, PBRTextures]] = []
 
             if self.config.error_strategy in {
                 ErrorRecoveryStrategy.FAIL_FAST,
@@ -1138,7 +1197,9 @@ class SpatialAIPipeline:
                     pbr_textures = None
 
                 if pbr_textures is not None:
-                    materials[f"segment_{i}"] = pbr_textures
+                    seg_id = f"segment_{i}"
+                    materials[seg_id] = pbr_textures
+                    material_artifact_entries.append((seg_id, i, pbr_textures))
 
                 # Update progress
                 progress = ((i + 1) / len(seg_result.masks)) * 100.0
@@ -1149,7 +1210,7 @@ class SpatialAIPipeline:
                 textures_dir = output_dir / "materials"
                 textures_dir.mkdir(exist_ok=True)
 
-                for seg_id, pbr in materials.items():
+                for seg_id, segment_index, pbr in material_artifact_entries:
                     seg_dir = textures_dir / seg_id
                     seg_dir.mkdir(exist_ok=True)
 
@@ -1161,6 +1222,16 @@ class SpatialAIPipeline:
                     np.save(seg_dir / "ao.npy", pbr.ambient_occlusion)
                     if pbr.height is not None:
                         np.save(seg_dir / "height.npy", pbr.height)
+                    self._save_material_artifacts(
+                        seg_dir=seg_dir,
+                        seg_id=seg_id,
+                        segment_index=segment_index,
+                        pbr=pbr,
+                        mask=seg_result.masks[segment_index],
+                        segment_metadata=seg_result.metadata[segment_index],
+                        ingest_result=ingest_result,
+                        backend_cfg=backend_cfg,
+                    )
 
                 logger.debug(f"Saved PBR textures: {textures_dir}")
 
@@ -1175,6 +1246,72 @@ class SpatialAIPipeline:
         except Exception as e:
             self.progress_tracker.complete_stage("materials", success=False, error_message=str(e))
             raise PipelineError("materials", f"Materials generation failed: {e}", original_error=e) from e
+
+    def _save_material_artifacts(
+        self,
+        *,
+        seg_dir: Path,
+        seg_id: str,
+        segment_index: int,
+        pbr: PBRTextures,
+        mask: np.ndarray,
+        segment_metadata: MaskMetadata,
+        ingest_result: LinearIngestResult,
+        backend_cfg: str,
+    ) -> None:
+        """Persist materials diagnostics and provenance sidecars for a segment."""
+        metadata_dict = pbr.metadata.to_dict() if pbr.metadata is not None else None
+        diagnostics_payload = {
+            "schema_version": "1.0.0",
+            "segment_id": seg_id,
+            "segment_index": segment_index,
+            "requested_backend": backend_cfg,
+            "generation_metadata": _sanitize_json_value(metadata_dict),
+            "material_properties": _sanitize_json_value(pbr.properties),
+            "mask_area": int(np.count_nonzero(mask)),
+            "texture_shapes": {
+                "albedo": list(pbr.albedo.shape),
+                "normal": list(pbr.normal.shape),
+                "roughness": list(pbr.roughness.shape),
+                "metallic": list(pbr.metallic.shape),
+                "ao": list(pbr.ambient_occlusion.shape),
+                "height": None if pbr.height is None else list(pbr.height.shape),
+            },
+        }
+        provenance_payload = {
+            "schema_version": "1.0.0",
+            "segment_id": seg_id,
+            "segment_index": segment_index,
+            "input_path": str(getattr(ingest_result, "input_path", "")) or None,
+            "input_content_hash": getattr(ingest_result, "content_hash", None),
+            "input_gamma": getattr(ingest_result, "gamma", None),
+            "input_size": list(getattr(ingest_result, "input_size", pbr.albedo.shape[:2])),
+            "mask_metadata": {
+                "area": segment_metadata.area,
+                "bbox": list(segment_metadata.bbox),
+                "stability_score": segment_metadata.stability_score,
+                "material_label": getattr(segment_metadata, "material_label", None),
+            },
+            "backend_decision": None if metadata_dict is None else metadata_dict.get("backend_decision"),
+            "artifact_payload_hashes": {
+                "hash_algorithm": "sha256",
+                "hash_target": "numpy_array_bytes",
+                "albedo": _sha256_array(pbr.albedo),
+                "normal": _sha256_array(pbr.normal),
+                "roughness": _sha256_array(pbr.roughness),
+                "metallic": _sha256_array(pbr.metallic),
+                "ao": _sha256_array(pbr.ambient_occlusion),
+                "height": None if pbr.height is None else _sha256_array(pbr.height),
+            },
+        }
+        for filename, payload in (
+            ("diagnostics.json", diagnostics_payload),
+            ("provenance.json", provenance_payload),
+        ):
+            try:
+                _write_json_atomic(seg_dir / filename, _sanitize_json_value(payload))
+            except Exception as exc:
+                logger.warning("Failed to write materials %s for %s: %s", filename, seg_id, exc)
 
     def _run_reconstruction(
         self,
