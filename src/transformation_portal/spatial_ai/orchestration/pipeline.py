@@ -31,10 +31,14 @@ Example:
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import logging
-from dataclasses import dataclass, field
+import math
+import os
+import tempfile
+from dataclasses import asdict, dataclass, field, is_dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Union, cast
 
@@ -84,6 +88,52 @@ def _sha256_array(array: np.ndarray) -> str:
     """Return a deterministic SHA-256 for a numpy array payload."""
     contiguous = array if array.flags["C_CONTIGUOUS"] else np.ascontiguousarray(array)
     return hashlib.sha256(memoryview(contiguous.view(np.uint8))).hexdigest()
+
+
+def _sanitize_json_value(value: Any) -> Any:
+    """Convert values into canonical-JSON-safe primitives."""
+    if is_dataclass(value):
+        return _sanitize_json_value(asdict(value))
+
+    if isinstance(value, dict):
+        return {str(key): _sanitize_json_value(inner) for key, inner in value.items()}
+
+    if isinstance(value, (list, tuple)):
+        return [_sanitize_json_value(inner) for inner in value]
+
+    if isinstance(value, np.ndarray):
+        return _sanitize_json_value(value.tolist())
+
+    if isinstance(value, np.generic):
+        return _sanitize_json_value(value.item())
+
+    if isinstance(value, float):
+        return value if math.isfinite(value) else None
+
+    return value
+
+
+def _write_json_atomic(path: Path, payload: dict[str, Any]) -> None:
+    """Write deterministic JSON atomically via temp file + fsync + replace."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=path.parent, delete=False) as handle:
+        temp_path = Path(handle.name)
+        try:
+            dump_json(payload, handle, indent=2, sort_keys=True, ensure_ascii=False, allow_nan=False)
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        except Exception:
+            with contextlib.suppress(FileNotFoundError):
+                temp_path.unlink()
+            raise
+
+    try:
+        temp_path.replace(path)
+    except Exception:
+        with contextlib.suppress(FileNotFoundError):
+            temp_path.unlink()
+        raise
 
 
 @dataclass
@@ -1094,6 +1144,7 @@ class SpatialAIPipeline:
 
             # Generate materials for each segment
             materials = {}
+            material_artifact_entries: list[tuple[str, int, PBRTextures]] = []
 
             if self.config.error_strategy in {
                 ErrorRecoveryStrategy.FAIL_FAST,
@@ -1146,7 +1197,9 @@ class SpatialAIPipeline:
                     pbr_textures = None
 
                 if pbr_textures is not None:
-                    materials[f"segment_{i}"] = pbr_textures
+                    seg_id = f"segment_{i}"
+                    materials[seg_id] = pbr_textures
+                    material_artifact_entries.append((seg_id, i, pbr_textures))
 
                 # Update progress
                 progress = ((i + 1) / len(seg_result.masks)) * 100.0
@@ -1157,8 +1210,7 @@ class SpatialAIPipeline:
                 textures_dir = output_dir / "materials"
                 textures_dir.mkdir(exist_ok=True)
 
-                for seg_id, pbr in materials.items():
-                    segment_index = int(seg_id.rsplit("_", 1)[1])
+                for seg_id, segment_index, pbr in material_artifact_entries:
                     seg_dir = textures_dir / seg_id
                     seg_dir.mkdir(exist_ok=True)
 
@@ -1214,8 +1266,8 @@ class SpatialAIPipeline:
             "segment_id": seg_id,
             "segment_index": segment_index,
             "requested_backend": backend_cfg,
-            "generation_metadata": metadata_dict,
-            "material_properties": pbr.properties,
+            "generation_metadata": _sanitize_json_value(metadata_dict),
+            "material_properties": _sanitize_json_value(pbr.properties),
             "mask_area": int(np.count_nonzero(mask)),
             "texture_shapes": {
                 "albedo": list(pbr.albedo.shape),
@@ -1252,14 +1304,14 @@ class SpatialAIPipeline:
                 "height": None if pbr.height is None else _sha256_array(pbr.height),
             },
         }
-
-        with open(seg_dir / "diagnostics.json", "w", encoding="utf-8") as handle:
-            dump_json(diagnostics_payload, handle, indent=2, sort_keys=True, ensure_ascii=False, allow_nan=False)
-            handle.write("\n")
-
-        with open(seg_dir / "provenance.json", "w", encoding="utf-8") as handle:
-            dump_json(provenance_payload, handle, indent=2, sort_keys=True, ensure_ascii=False, allow_nan=False)
-            handle.write("\n")
+        for filename, payload in (
+            ("diagnostics.json", diagnostics_payload),
+            ("provenance.json", provenance_payload),
+        ):
+            try:
+                _write_json_atomic(seg_dir / filename, _sanitize_json_value(payload))
+            except Exception as exc:
+                logger.warning("Failed to write materials %s for %s: %s", filename, seg_id, exc)
 
     def _run_reconstruction(
         self,
