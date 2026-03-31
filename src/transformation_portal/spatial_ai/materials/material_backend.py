@@ -30,6 +30,7 @@ from typing import Any, Dict, Literal, Optional, cast
 import numpy as np
 
 from transformation_portal.spatial_ai.materials.contracts import (
+    VALID_MATERIAL_BACKENDS,
     AvailabilityState,
     BackendDecision,
     MaterialGenerationConfig,
@@ -37,7 +38,6 @@ from transformation_portal.spatial_ai.materials.contracts import (
     MaterialProperties,
     PBRGenerationMetadata,
     PBRTextures,
-    VALID_MATERIAL_BACKENDS,
 )
 from transformation_portal.spatial_ai.materials.heuristic_fallback import HeuristicFallback
 
