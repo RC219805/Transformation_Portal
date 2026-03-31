@@ -8,7 +8,12 @@ import re
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-import yaml
+from transformation_portal.attestation.model_lock_manifest import (
+    DEFAULT_MANIFEST_ENV_VAR,
+    DEFAULT_MANIFEST_RELATIVE_PATH,
+)
+from transformation_portal.attestation.model_lock_manifest import load_model_lock_manifest as _shared_load_model_lock_manifest
+from transformation_portal.attestation.model_lock_manifest import repo_root as _shared_repo_root
 
 logger = logging.getLogger(__name__)
 
@@ -21,8 +26,6 @@ _PLACEHOLDER_PATTERNS = (
 _UNPINNED_KEYWORDS = {"main", "master", "latest", "head", "null", "none"}
 
 _STRICT_ENV_VAR = "TP_STRICT_MODEL_LOCK"
-_MANIFEST_ENV_VAR = "TP_MODEL_LOCK_MANIFEST"
-_DEFAULT_MANIFEST_RELATIVE_PATH = Path("config/model_lock_manifest.yaml")
 
 
 class ModelLockError(RuntimeError):
@@ -30,31 +33,40 @@ class ModelLockError(RuntimeError):
 
 
 def _repo_root() -> Path:
-    """Best-effort repository root discovery."""
-    this_file = Path(__file__).resolve()
-    for parent in this_file.parents:
-        if (parent / _DEFAULT_MANIFEST_RELATIVE_PATH).exists():
-            return parent
-    for parent in this_file.parents:
-        if (parent / "pyproject.toml").exists() or (parent / ".git").exists():
-            return parent
-    return this_file.parents[0]
+    """Best-effort repository root discovery.
+
+    Kept as a local wrapper for backward-compatible monkeypatching in tests.
+    """
+    return _shared_repo_root()
 
 
 def model_lock_manifest_path(path: Optional[Path] = None) -> Path:
-    """Resolve model lock manifest path."""
+    """Resolve model lock manifest path.
+
+    Kept local so existing tests can monkeypatch ``_repo_root`` without
+    reaching into the shared attestation helper module.
+    """
     if path is not None:
         return Path(path)
-    env_path = os.getenv(_MANIFEST_ENV_VAR)
+
+    env_path = os.getenv(DEFAULT_MANIFEST_ENV_VAR)
     if env_path:
         return Path(env_path)
-    repo_candidate = _repo_root() / _DEFAULT_MANIFEST_RELATIVE_PATH
+
+    repo_candidate = _repo_root() / DEFAULT_MANIFEST_RELATIVE_PATH
     if repo_candidate.exists():
         return repo_candidate
-    cwd_candidate = Path.cwd() / _DEFAULT_MANIFEST_RELATIVE_PATH
+
+    cwd_candidate = Path.cwd() / DEFAULT_MANIFEST_RELATIVE_PATH
     if cwd_candidate.exists():
         return cwd_candidate
+
     return repo_candidate
+
+
+def load_model_lock_manifest(path: Optional[Path] = None) -> Dict[str, Any]:
+    """Load model lock manifest from disk."""
+    return _shared_load_model_lock_manifest(model_lock_manifest_path(path))
 
 
 def _parse_bool(raw: Optional[str]) -> bool:
@@ -101,25 +113,6 @@ def is_pinned_revision(revision: Optional[str]) -> bool:
         if pattern.search(normalized):
             return False
     return bool(_HEX40_RE.fullmatch(lowered))
-
-
-def load_model_lock_manifest(path: Optional[Path] = None) -> Dict[str, Any]:
-    """Load model lock manifest from disk."""
-    manifest_path = model_lock_manifest_path(path)
-    if not manifest_path.exists():
-        raise FileNotFoundError(f"Model lock manifest not found: {manifest_path}")
-
-    with manifest_path.open("r", encoding="utf-8") as handle:
-        payload = yaml.safe_load(handle) or {}
-
-    if not isinstance(payload, dict):
-        raise ValueError(f"Model lock manifest root must be an object: {manifest_path}")
-    repos = payload.get("repositories")
-    if repos is None:
-        payload["repositories"] = {}
-    elif not isinstance(repos, dict):
-        raise ValueError(f"Model lock manifest 'repositories' must be an object: {manifest_path}")
-    return payload
 
 
 def manifest_revision_for_repo(

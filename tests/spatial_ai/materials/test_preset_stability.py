@@ -154,23 +154,13 @@ def test_material_pbr_release_documented_in_changelog():
     assert "material_pbr_canary.yaml" in changelog, "Canary PBR preset entry missing from CHANGELOG.md"
 
 
-def test_experimental_material_pbr_preset_requires_explicit_governance_opt_in():
-    """Experimental material preset should require explicit governance opt-ins."""
-    from transformation_portal.compliance.licensing import LicenseRestrictionError, load_and_validate_preset
-
-    with pytest.raises(LicenseRestrictionError, match="allow_research_materials=True"):
-        load_and_validate_preset(Path("config/presets/experimental/material_pbr.yaml"))
-
-
-def test_experimental_material_pbr_preset_allows_unresolved_source_tuple_with_explicit_opt_in():
-    """Experimental material preset may opt in to unresolved source refs intentionally."""
+def test_experimental_material_pbr_preset_declares_governance_opt_ins():
+    """Experimental material preset should self-declare governance overrides explicitly."""
     from transformation_portal.compliance.licensing import load_and_validate_preset
 
-    preset = load_and_validate_preset(
-        Path("config/presets/experimental/material_pbr.yaml"),
-        allow_research_materials=True,
-        allow_unattested_materials=True,
-    )
+    preset = load_and_validate_preset(Path("config/presets/experimental/material_pbr.yaml"))
 
+    assert preset["governance"]["materials"]["allow_research_materials"] is True
+    assert preset["governance"]["materials"]["allow_unattested_materials"] is True
     assert preset["model"]["repo_id"] is None
     assert preset["model"]["revision"] is None

@@ -74,7 +74,7 @@ def resolve_material_backend_decision(requested_backend: str) -> BackendDecision
                 "and lighting context; MaterialBackend only exposes single-image input."
             ),
             required_inputs=["multi_view_images", "camera_poses", "lighting_context"],
-            required_runtime=["cuda", "nvdiffrast", "pinned_nvdiffrec_revision"],
+            required_runtime=["isolated_worker_process", "cuda", "nvdiffrast", "pinned_nvdiffrec_revision"],
         )
 
     if requested_backend == "material_gan":
@@ -87,7 +87,7 @@ def resolve_material_backend_decision(requested_backend: str) -> BackendDecision
                 "variation metadata; MaterialBackend only exposes single-image input."
             ),
             required_inputs=["multi_lighting_images", "capture_metadata_json"],
-            required_runtime=["materialgan_runtime", "checkpoint_weights"],
+            required_runtime=["isolated_worker_process", "materialgan_runtime", "checkpoint_weights"],
         )
 
     if requested_backend == "pbr_fusion":
@@ -99,7 +99,7 @@ def resolve_material_backend_decision(requested_backend: str) -> BackendDecision
                 availability_state=AvailabilityState.INTEGRATION_MISSING,
                 fallback_reason=("PBRFusion runtime path exists, but direct ComfyUI integration is not implemented yet."),
                 required_inputs=[],
-                required_runtime=["comfyui_pbrfusion_workflow"],
+                required_runtime=["isolated_worker_process", "comfyui_pbrfusion_workflow"],
             )
 
         return BackendDecision(
@@ -111,7 +111,7 @@ def resolve_material_backend_decision(requested_backend: str) -> BackendDecision
                 "Install ComfyUI + PBRFusion nodes to enable it."
             ),
             required_inputs=[],
-            required_runtime=["PBRFUSION_PATH", "comfyui_pbrfusion_workflow"],
+            required_runtime=["isolated_worker_process", "PBRFUSION_PATH", "comfyui_pbrfusion_workflow"],
         )
 
     raise ValueError(f"Unknown backend: {requested_backend}. Valid: {VALID_MATERIAL_BACKENDS}")

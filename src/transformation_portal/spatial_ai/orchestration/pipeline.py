@@ -43,8 +43,12 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Union, cast
 
 import numpy as np
-import yaml
 
+from transformation_portal.compliance import (
+    load_and_validate_preset,
+    validate_materials_preset,
+    validate_non_commercial_preset,
+)
 from transformation_portal.ingest.canonical_json import dump_json
 from transformation_portal.spatial_ai.ingest.linear_decoder import LinearDecoder, LinearIngestResult
 from transformation_portal.spatial_ai.materials.contracts import MaterialInput, PBRTextures
@@ -138,6 +142,34 @@ def _write_json_atomic(path: Path, payload: dict[str, Any]) -> None:
         with contextlib.suppress(FileNotFoundError):
             temp_path.unlink()
         raise
+
+
+def _extract_materials_governance_overrides(data: dict[str, Any]) -> dict[str, bool]:
+    """Extract auditable materials governance overrides from preset/config data."""
+    governance = data.get("governance", {})
+    materials_governance = governance.get("materials", {}) if isinstance(governance, dict) else {}
+    pipeline_cfg = data.get("pipeline", {})
+    pipeline_materials = pipeline_cfg.get("materials", {}) if isinstance(pipeline_cfg, dict) else {}
+    top_level_materials = data.get("materials", {})
+
+    def _coerce_bool(mapping: Any, key: str) -> Optional[bool]:
+        if not isinstance(mapping, dict) or key not in mapping:
+            return None
+        value = mapping[key]
+        if not isinstance(value, bool):
+            raise ValueError(f"{key} must be a boolean, got {type(value).__name__}.")
+        return value
+
+    resolved: dict[str, bool] = {}
+    for key in ("allow_research_materials", "allow_unattested_materials"):
+        candidates = (
+            _coerce_bool(materials_governance, key),
+            _coerce_bool(top_level_materials, key),
+            _coerce_bool(pipeline_materials, key),
+        )
+        resolved[key] = any(value is True for value in candidates)
+
+    return resolved
 
 
 @dataclass
@@ -399,6 +431,7 @@ class SpatialAIPipeline:
         elif _is_reload_safe_pipeline_config(config):
             self.config = cast(PipelineConfig, config)
         elif isinstance(config, dict):
+            self._validate_runtime_config_dict(config)
             self.config = self._dict_to_config(config)
         elif isinstance(config, (str, Path)):
             # Try as preset name first, then as file path
@@ -1289,11 +1322,16 @@ class SpatialAIPipeline:
     ) -> None:
         """Persist materials diagnostics and provenance sidecars for a segment."""
         metadata_dict = pbr.metadata.to_dict() if pbr.metadata is not None else None
+        governance_overrides = {
+            "allow_research_materials": bool(self.config.materials.get("allow_research_materials", False)),
+            "allow_unattested_materials": bool(self.config.materials.get("allow_unattested_materials", False)),
+        }
         diagnostics_payload = {
             "schema_version": "1.0.0",
             "segment_id": seg_id,
             "segment_index": segment_index,
             "requested_backend": backend_cfg,
+            "governance_overrides": governance_overrides,
             "generation_metadata": _sanitize_json_value(metadata_dict),
             "material_properties": _sanitize_json_value(pbr.properties),
             "mask_area": int(np.count_nonzero(mask)),
@@ -1321,6 +1359,7 @@ class SpatialAIPipeline:
                 "material_label": getattr(segment_metadata, "material_label", None),
             },
             "backend_decision": None if metadata_dict is None else metadata_dict.get("backend_decision"),
+            "governance_overrides": governance_overrides,
             "artifact_payload_hashes": {
                 "hash_algorithm": "sha256",
                 "hash_target": "numpy_array_bytes",
@@ -1634,10 +1673,14 @@ class SpatialAIPipeline:
         Returns:
             PipelineConfig.
         """
-        with open(path) as f:
-            data = yaml.safe_load(f)
-
+        data = load_and_validate_preset(path)
         return SpatialAIPipeline._dict_to_config(data)
+
+    @staticmethod
+    def _validate_runtime_config_dict(data: Dict[str, Any]) -> None:
+        """Apply runtime governance checks before config normalization."""
+        validate_non_commercial_preset(data)
+        validate_materials_preset(data)
 
     @staticmethod
     def _dict_to_config(data: Dict) -> PipelineConfig:
@@ -1684,6 +1727,8 @@ class SpatialAIPipeline:
         # Normalize stage aliases while preserving backward compatibility.
         segmentation_data = pipeline_data.get("segmentation") or pipeline_data.get("segment", {})
         reconstruction_data = pipeline_data.get("reconstruction") or pipeline_data.get("reconstruct", {})
+        materials_data = dict(pipeline_data.get("materials", {}))
+        materials_data.update(_extract_materials_governance_overrides(data))
         stages = list(pipeline_data.keys())
         stage_aliases = {"segment": "segmentation", "reconstruct": "reconstruction"}
         stages = [stage_aliases.get(stage_name, stage_name) for stage_name in stages]
@@ -1697,7 +1742,7 @@ class SpatialAIPipeline:
             stages=stages,
             ingest=pipeline_data.get("ingest", {}),
             segmentation=segmentation_data,
-            materials=pipeline_data.get("materials", {}),
+            materials=materials_data,
             reconstruction=reconstruction_data,
             resource_limits=resource_limits,
             error_strategy=error_strategy,
