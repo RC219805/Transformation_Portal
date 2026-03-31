@@ -549,6 +549,37 @@ class TestValidateMaterialsPreset:
                 manifest_path=Path("/definitely/missing/model_lock_manifest.yaml"),
             )
 
+    def test_manifest_mismatch_error_reports_resolved_manifest_path(self, tmp_path: Path):
+        """Repo-backed attestation errors should reference the resolved manifest path."""
+        manifest_path = tmp_path / "custom_manifest.yaml"
+        _write_model_lock_manifest(
+            manifest_path,
+            repositories={
+                "NightRaven109/PBRFusion4-RTXREMIX-Portable": {
+                    "revision": "0123456789abcdef0123456789abcdef01234567",
+                    "owner": "materials",
+                }
+            },
+        )
+        preset = {
+            "name": "PBR Material Generation (Canary)",
+            "tier": "canary",
+            "backend": {
+                "type": "pbr_fusion",
+                "model": {
+                    "repo_id": "NightRaven109/PBRFusion4-RTXREMIX-Portable",
+                    "revision": "89abcdef0123456789abcdef0123456789abcdef",
+                },
+            },
+        }
+
+        with pytest.raises(LicenseRestrictionError, match=str(manifest_path)):
+            validate_materials_preset(
+                preset,
+                preset_path=Path("config/presets/material_pbr_canary.yaml"),
+                manifest_path=manifest_path,
+            )
+
     def test_nested_materials_backend_alias_is_validated(self):
         """Nested materials configs should normalize legacy backend aliases."""
         preset = {
@@ -657,6 +688,62 @@ class TestValidateMaterialsPreset:
                 manifest_path=manifest_path,
                 verify_runtime_bytes=True,
             )
+
+    def test_runtime_checkpoint_bytes_are_not_verified_by_default(self, tmp_path: Path):
+        """Runtime-byte hashing should remain opt-in during preset load."""
+        checkpoint_dir = tmp_path / "checkpoints"
+        checkpoint_dir.mkdir()
+        checkpoint_path = checkpoint_dir / "materialgan_v2.pth"
+        checkpoint_path.write_bytes(b"tampered-checkpoint")
+        manifest_digest = hashlib.sha256(b"materialgan-checkpoint").hexdigest()
+
+        manifest_path = tmp_path / "model_lock_manifest.yaml"
+        _write_model_lock_manifest(
+            manifest_path,
+            artifact_attestation={
+                "materials": {
+                    "material_gan": {
+                        "artifacts": [
+                            {
+                                "filename": "checkpoints/materialgan_v2.pth",
+                                "sha256": manifest_digest,
+                            }
+                        ]
+                    }
+                }
+            },
+        )
+
+        preset_path = tmp_path / "materialgan.yaml"
+        preset_path.write_text(
+            yaml.safe_dump(
+                {
+                    "name": "Experimental MaterialGAN",
+                    "tier": "apex_research_ultra",
+                    "license_restriction": "research_only",
+                    "governance": {
+                        "materials": {
+                            "allow_research_materials": True,
+                        }
+                    },
+                    "materials": {
+                        "backend": "material_gan",
+                        "model": {
+                            "checkpoint": "checkpoints/materialgan_v2.pth",
+                            "expected_sha256": manifest_digest,
+                        },
+                    },
+                },
+                sort_keys=True,
+            ),
+            encoding="utf-8",
+        )
+
+        preset = load_and_validate_preset(
+            preset_path,
+            manifest_path=manifest_path,
+        )
+        assert preset["materials"]["backend"] == "material_gan"
 
     def test_runtime_checkpoint_verification_rejects_path_traversal(self, tmp_path: Path):
         """Checkpoint verification must reject paths that escape the allowed roots."""

@@ -1673,14 +1673,14 @@ class SpatialAIPipeline:
         Returns:
             PipelineConfig.
         """
-        data = load_and_validate_preset(path, verify_runtime_bytes=True)
+        data = load_and_validate_preset(path)
         return SpatialAIPipeline._dict_to_config(data)
 
     @staticmethod
     def _validate_runtime_config_dict(data: Dict[str, Any]) -> None:
         """Apply runtime governance checks before config normalization."""
         validate_non_commercial_preset(data)
-        validate_materials_preset(data, verify_runtime_bytes=True)
+        validate_materials_preset(data)
 
     @staticmethod
     def _dict_to_config(data: Dict) -> PipelineConfig:

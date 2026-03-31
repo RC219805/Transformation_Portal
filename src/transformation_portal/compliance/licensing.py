@@ -7,6 +7,7 @@ attested source metadata.
 
 import functools
 import hashlib
+import os
 import re
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional, TypeVar, cast
@@ -45,6 +46,7 @@ FLOATING_REVISIONS = frozenset({"main", "master", "latest", "head", "tip", "defa
 PLACEHOLDER_MARKERS = ("NEEDS_VERIFICATION", "PLACEHOLDER", "PENDING", "TODO", "TBD", "UPDATE_WHEN")
 _HEX40_RE = re.compile(r"^[0-9a-f]{40}$")
 _HEX64_RE = re.compile(r"^[0-9a-f]{64}$")
+_VERIFY_RUNTIME_BYTES_ENV_VAR = "TP_VERIFY_MATERIAL_RUNTIME_BYTES"
 
 
 def require_non_commercial(reason: str = "") -> Callable[[F], F]:
@@ -211,6 +213,25 @@ def _has_attested_material_source(model_dict: Dict[str, Any]) -> bool:
 def _load_model_lock_manifest(path: Optional[Path] = None) -> Dict[str, Any]:
     """Load the model lock manifest used for materials attestation checks."""
     return _shared_load_model_lock_manifest(path)
+
+
+def _manifest_location_label(path: Optional[Path]) -> str:
+    """Return the resolved model-lock manifest path used for validation messages."""
+    return str(_shared_model_lock_manifest_path(path))
+
+
+def _parse_bool_env(raw: Optional[str]) -> bool:
+    """Parse a permissive boolean environment variable value."""
+    if raw is None:
+        return False
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _should_verify_runtime_bytes(verify_runtime_bytes: Optional[bool]) -> bool:
+    """Resolve whether local checkpoint bytes should be hashed during validation."""
+    if verify_runtime_bytes is not None:
+        return verify_runtime_bytes
+    return _parse_bool_env(os.getenv(_VERIFY_RUNTIME_BYTES_ENV_VAR))
 
 
 def _compute_file_sha256(path: Path, chunk_size: int = 1024 * 1024) -> str:
@@ -398,6 +419,7 @@ def _validate_repo_source_against_manifest(
     source_path: str,
     model_dict: Dict[str, Any],
     manifest: Dict[str, Any],
+    manifest_location: str,
 ) -> None:
     """Ensure repo-backed materials sources match an approved manifest entry."""
     if not _has_pinned_repo_revision(model_dict):
@@ -409,7 +431,7 @@ def _validate_repo_source_against_manifest(
     if entry is None:
         raise LicenseRestrictionError(
             f"Materials backend '{backend}' in {source_path} references repo_id='{repo_id}', "
-            "which is not approved in config/model_lock_manifest.yaml."
+            f"which is not approved in {manifest_location}."
         )
 
     if not _manifest_entry_allows_materials(entry):
@@ -423,7 +445,7 @@ def _validate_repo_source_against_manifest(
     if normalized_manifest_revision != revision:
         raise LicenseRestrictionError(
             f"Materials backend '{backend}' in {source_path} must use the exact approved revision from "
-            f"config/model_lock_manifest.yaml (preset={revision}, manifest={normalized_manifest_revision})."
+            f"{manifest_location} (preset={revision}, manifest={normalized_manifest_revision})."
         )
 
 
@@ -445,6 +467,7 @@ def _validate_checkpoint_source_against_manifest(
     source_path: str,
     model_dict: Dict[str, Any],
     manifest: Dict[str, Any],
+    manifest_location: str,
 ) -> None:
     """Ensure checkpoint-backed materials sources match manifest artifact attestation."""
     if not _has_attested_checkpoint(model_dict):
@@ -456,13 +479,14 @@ def _validate_checkpoint_source_against_manifest(
     if entry is None:
         raise LicenseRestrictionError(
             f"Materials backend '{backend}' in {source_path} uses checkpoint='{checkpoint}', "
-            "but config/model_lock_manifest.yaml has no artifact_attestation.materials entry for it."
+            f"but {manifest_location} has no artifact_attestation.materials entry for it."
         )
 
     artifacts = entry.get("artifacts")
     if not isinstance(artifacts, list):
         raise LicenseRestrictionError(
-            f"Materials backend '{backend}' in {source_path} requires a valid artifact_attestation.materials entry."
+            f"Materials backend '{backend}' in {source_path} requires a valid artifact_attestation.materials entry "
+            f"in {manifest_location}."
         )
 
     for artifact in artifacts:
@@ -475,7 +499,7 @@ def _validate_checkpoint_source_against_manifest(
 
     raise LicenseRestrictionError(
         f"Materials backend '{backend}' in {source_path} must match an approved checkpoint+sha256 entry "
-        "in config/model_lock_manifest.yaml."
+        f"in {manifest_location}."
     )
 
 
@@ -486,6 +510,7 @@ def _verify_runtime_checkpoint_bytes(
     model_dict: Dict[str, Any],
     manifest: Dict[str, Any],
     preset_path: Optional[Path],
+    manifest_location: str,
 ) -> None:
     """Verify local checkpoint bytes when the checkpoint is present on disk at runtime."""
     if not _has_attested_checkpoint(model_dict):
@@ -522,7 +547,7 @@ def _verify_runtime_checkpoint_bytes(
             if normalized_manifest_sha != actual_sha256:
                 raise LicenseRestrictionError(
                     f"Materials backend '{backend}' in {source_path} has checkpoint bytes that do not match "
-                    "config/model_lock_manifest.yaml artifact attestation."
+                    f"{manifest_location} artifact attestation."
                 )
             return
 
@@ -534,7 +559,7 @@ def validate_materials_preset(
     allow_research_materials: Optional[bool] = None,
     allow_unattested_materials: Optional[bool] = None,
     manifest_path: Optional[Path] = None,
-    verify_runtime_bytes: bool = False,
+    verify_runtime_bytes: Optional[bool] = None,
 ) -> bool:
     """Validate materials backend tier, licensing, and attestation policy."""
     if not isinstance(preset_dict, dict):
@@ -559,6 +584,8 @@ def validate_materials_preset(
         return True
 
     manifest: Optional[Dict[str, Any]] = None
+    manifest_location = _manifest_location_label(manifest_path)
+    verify_runtime_bytes_enabled = _should_verify_runtime_bytes(verify_runtime_bytes)
 
     def _manifest() -> Dict[str, Any]:
         nonlocal manifest
@@ -566,11 +593,11 @@ def validate_materials_preset(
             try:
                 manifest = _load_model_lock_manifest(manifest_path)
             except (FileNotFoundError, ValueError) as exc:
-                resolved_manifest_path = _shared_model_lock_manifest_path(manifest_path)
                 raise LicenseRestrictionError(
                     "Materials licensing validation requires a valid model lock manifest. "
-                    f"Resolved manifest path: {resolved_manifest_path}. "
-                    "Set TP_MODEL_LOCK_MANIFEST or pass manifest_path= to load_and_validate_preset()."
+                    f"Resolved manifest path: {manifest_location}. "
+                    f"Set {_VERIFY_RUNTIME_BYTES_ENV_VAR}=1 only when runtime byte hashing is desired, "
+                    "and set TP_MODEL_LOCK_MANIFEST or pass manifest_path= to load_and_validate_preset()."
                 ) from exc
         return manifest
 
@@ -603,6 +630,7 @@ def validate_materials_preset(
                 source_path=source_path,
                 model_dict=model_dict,
                 manifest=_manifest(),
+                manifest_location=manifest_location,
             )
             continue
 
@@ -612,14 +640,16 @@ def validate_materials_preset(
                 source_path=source_path,
                 model_dict=model_dict,
                 manifest=_manifest(),
+                manifest_location=manifest_location,
             )
-            if verify_runtime_bytes:
+            if verify_runtime_bytes_enabled:
                 _verify_runtime_checkpoint_bytes(
                     backend=backend,
                     source_path=source_path,
                     model_dict=model_dict,
                     manifest=_manifest(),
                     preset_path=preset_path,
+                    manifest_location=manifest_location,
                 )
             continue
 
@@ -641,7 +671,7 @@ def load_and_validate_preset(
     allow_research_materials: Optional[bool] = None,
     allow_unattested_materials: Optional[bool] = None,
     manifest_path: Optional[Path] = None,
-    verify_runtime_bytes: bool = False,
+    verify_runtime_bytes: Optional[bool] = None,
 ) -> Dict[str, Any]:
     """Load a preset YAML file and validate licensing compliance.
 
@@ -654,6 +684,8 @@ def load_and_validate_preset(
         manifest_path: Optional override for the model lock manifest path.
         verify_runtime_bytes: If True, verify on-disk checkpoint bytes when
             the referenced materials runtime artifacts are present locally.
+            If omitted, this remains disabled unless
+            ``TP_VERIFY_MATERIAL_RUNTIME_BYTES=1`` is set.
 
     Returns:
         Loaded preset dictionary
