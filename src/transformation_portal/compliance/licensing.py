@@ -203,7 +203,9 @@ def _looks_like_material_preset(preset_dict: Dict[str, Any], preset_path: Option
     return isinstance(name, str) and "pbr material" in name.lower()
 
 
-def _iter_material_backend_specs(preset_dict: Dict[str, Any], preset_path: Optional[Path]) -> list[tuple[str, str, Dict[str, Any]]]:
+def _iter_material_backend_specs(
+    preset_dict: Dict[str, Any], preset_path: Optional[Path]
+) -> list[tuple[str, str, Dict[str, Any]]]:
     """Collect material backend declarations embedded in a preset."""
     specs: list[tuple[str, str, Dict[str, Any]]] = []
 
@@ -255,8 +257,7 @@ def validate_materials_preset(
         if backend in RESEARCH_ONLY_MATERIAL_BACKENDS:
             if license_restriction != "research_only":
                 raise LicenseRestrictionError(
-                    f"Materials backend '{backend}' in {source_path} requires "
-                    "license_restriction='research_only'."
+                    f"Materials backend '{backend}' in {source_path} requires " "license_restriction='research_only'."
                 )
 
             if tier not in RESEARCH_ALLOWED_MATERIAL_TIERS:
