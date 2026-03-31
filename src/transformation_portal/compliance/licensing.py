@@ -41,7 +41,7 @@ F = TypeVar("F", bound=Callable[..., Any])
 
 RESEARCH_ONLY_MATERIAL_BACKENDS = frozenset({"nvdiffrec", "material_gan"})
 RESEARCH_ALLOWED_MATERIAL_TIERS = frozenset({"dev", "experimental", "research", "apex_research", "apex_research_ultra"})
-UNATTESTED_ALLOWED_MATERIAL_TIERS = frozenset({"dev", "experimental"})
+UNATTESTED_ALLOWED_MATERIAL_TIERS = frozenset({"dev", "experimental", "apex_research_ultra"})
 FLOATING_REVISIONS = frozenset({"main", "master", "latest", "head", "tip", "default"})
 PLACEHOLDER_MARKERS = ("NEEDS_VERIFICATION", "PLACEHOLDER", "PENDING", "TODO", "TBD", "UPDATE_WHEN")
 _HEX40_RE = re.compile(r"^[0-9a-f]{40}$")
@@ -115,9 +115,10 @@ def require_non_commercial(reason: str = "") -> Callable[[F], F]:
 def validate_non_commercial_preset(preset_dict: Dict[str, Any]) -> bool:
     """Validate that non-commercial presets have required licensing markers.
 
-    Checks if a preset dictionary (from YAML) contains a known non-commercial
-    model. If so, ensures the preset has explicit `license_restriction: non_commercial`
-    marker.
+    Checks if a preset dictionary (from YAML) contains an exact Hugging Face
+    model ID known to be non-commercial. If so, ensures the preset has an
+    explicit `license_restriction` acknowledgement marker of either
+    `non_commercial` or `research_only`.
 
     Args:
         preset_dict: Dictionary loaded from a preset YAML file

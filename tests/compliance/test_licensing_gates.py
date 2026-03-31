@@ -7,6 +7,7 @@ Validates that:
 """
 
 import hashlib
+import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -24,6 +25,7 @@ from transformation_portal.compliance import (
     validate_materials_preset,
     validate_non_commercial_preset,
 )
+from transformation_portal.compliance.validate_licenses import main as validate_licenses_main
 from transformation_portal.compliance.validate_licenses import validate_preset_file
 
 
@@ -408,6 +410,29 @@ class TestValidateMaterialsPreset:
             validate_materials_preset(
                 preset,
                 preset_path=Path("config/presets/experimental/material_pbr.yaml"),
+                allow_research_materials=True,
+                allow_unattested_materials=True,
+            )
+            is True
+        )
+
+    def test_apex_research_ultra_can_opt_in_to_unattested_sources(self):
+        """apex_research_ultra should be treated as an explicit experimental research tier."""
+        preset = {
+            "name": "apex-research-ultra-experimental",
+            "tier": "apex_research_ultra",
+            "license_restriction": "research_only",
+            "model": {
+                "backend": "nvdiffrec",
+                "repo_id": None,
+                "revision": None,
+            },
+        }
+
+        assert (
+            validate_materials_preset(
+                preset,
+                preset_path=Path("config/presets/experimental/apex_research_ultra.yaml"),
                 allow_research_materials=True,
                 allow_unattested_materials=True,
             )
@@ -939,3 +964,27 @@ class TestValidateLicensesScript:
             assert any("allow_research_materials=True" in issue for issue in issues)
         finally:
             path.unlink()
+
+    def test_script_scans_nested_preset_directories(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys):
+        """The standalone validator should scan preset trees recursively."""
+        nested_dir = tmp_path / "experimental"
+        nested_dir.mkdir()
+        preset_path = nested_dir / "nested_preset.yaml"
+        preset_path.write_text(
+            yaml.safe_dump(
+                {
+                    "name": "nested-commercial-preset",
+                    "tier": "experimental",
+                    "model": {"hf_id": "depth-anything/DA3-Large-1.1"},
+                },
+                sort_keys=True,
+            ),
+            encoding="utf-8",
+        )
+
+        monkeypatch.setattr(sys, "argv", ["validate_licenses.py", "--check-presets", str(tmp_path)])
+        exit_code = validate_licenses_main()
+        captured = capsys.readouterr()
+
+        assert exit_code == 0
+        assert "nested_preset.yaml" in captured.out

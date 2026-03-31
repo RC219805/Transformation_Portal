@@ -25,8 +25,6 @@ def validate_preset_file(preset_path: Path) -> tuple[bool, List[str]]:
     Returns:
         (is_valid, list_of_issues)
     """
-    issues = []
-
     try:
         load_and_validate_preset(preset_path)
     except yaml.YAMLError as e:
@@ -38,7 +36,7 @@ def validate_preset_file(preset_path: Path) -> tuple[bool, List[str]]:
     except Exception as e:
         return False, [f"Read error: {e}"]
 
-    return True, issues
+    return True, []
 
 
 def main() -> int:
@@ -48,7 +46,7 @@ def main() -> int:
         Exit code: 0 if all presets are compliant, 1 otherwise.
     """
     parser = argparse.ArgumentParser(description="Validate license compliance of presets")
-    parser.add_argument("--check-presets", type=Path, help="Directory containing preset YAML files")
+    parser.add_argument("--check-presets", type=Path, help="Directory containing preset YAML files (scanned recursively)")
     args = parser.parse_args()
 
     if not args.check_presets:
@@ -59,7 +57,7 @@ def main() -> int:
         print(f"Error: Directory not found: {args.check_presets}")
         return 1
 
-    preset_files = list(args.check_presets.glob("*.yaml"))
+    preset_files = [path for path in args.check_presets.rglob("*.yaml") if path.is_file()]
     if not preset_files:
         print(f"No YAML preset files found in {args.check_presets}")
         return 0
