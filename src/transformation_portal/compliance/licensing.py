@@ -1,8 +1,8 @@
 """Licensing compliance enforcement and validation.
 
-Provides decorators and validators to ensure non-commercial models
-(e.g., Depth Anything V3.1 with CC BY-NC 4.0) are used only with
-explicit authorization.
+Provides decorators and validators to ensure non-commercial and
+research-only backends are used only with explicit authorization and
+attested source metadata.
 """
 
 import functools
@@ -10,6 +10,8 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Optional, TypeVar
 
 import yaml
+
+from transformation_portal.spatial_ai.materials.contracts import VALID_MATERIAL_BACKENDS
 
 
 class LicenseRestrictionError(Exception):
@@ -23,6 +25,13 @@ class LicenseRestrictionError(Exception):
 
 
 F = TypeVar("F", bound=Callable[..., Any])
+
+RESEARCH_ONLY_MATERIAL_BACKENDS = frozenset({"nvdiffrec", "material_gan"})
+RESEARCH_ALLOWED_MATERIAL_TIERS = frozenset({"dev", "experimental", "research", "apex_research", "apex_research_ultra"})
+UNATTESTED_ALLOWED_MATERIAL_TIERS = frozenset({"dev", "experimental"})
+FLOATING_REVISIONS = frozenset({"main", "master", "latest", "head", "tip", "default"})
+PLACEHOLDER_MARKERS = ("NEEDS_VERIFICATION", "PLACEHOLDER", "PENDING", "TODO", "TBD", "UPDATE_WHEN")
+MATERIAL_BACKEND_ALIASES = {"materialgan": "material_gan"}
 
 
 def require_non_commercial(reason: str = "") -> Callable[[F], F]:
@@ -99,6 +108,9 @@ def validate_non_commercial_preset(preset_dict: Dict[str, Any]) -> bool:
         LicenseRestrictionError: If preset uses non-commercial model
                                 without proper marker
     """
+    if not isinstance(preset_dict, dict):
+        return True
+
     model = preset_dict.get("model", {})
     hf_id = model.get("hf_id", "")
 
@@ -125,11 +137,169 @@ def validate_non_commercial_preset(preset_dict: Dict[str, Any]) -> bool:
     return True
 
 
-def load_and_validate_preset(preset_path: Path) -> Dict[str, Any]:
+def _normalize_material_backend(backend: Any) -> Optional[str]:
+    """Normalize backend identifiers used in materials presets."""
+    if not isinstance(backend, str):
+        return None
+
+    normalized = backend.strip().lower()
+    return MATERIAL_BACKEND_ALIASES.get(normalized, normalized)
+
+
+def _looks_placeholder(value: Any) -> bool:
+    """Return True when a preset field is clearly unresolved."""
+    if not isinstance(value, str):
+        return False
+
+    normalized = value.strip()
+    if not normalized:
+        return True
+
+    upper = normalized.upper()
+    return any(marker in upper for marker in PLACEHOLDER_MARKERS)
+
+
+def _has_pinned_repo_revision(model_dict: Dict[str, Any]) -> bool:
+    """Return True when repo_id/revision look pinned and non-placeholder."""
+    repo_id = model_dict.get("repo_id")
+    revision = model_dict.get("revision")
+
+    if not isinstance(repo_id, str) or not repo_id.strip() or _looks_placeholder(repo_id):
+        return False
+    if not isinstance(revision, str) or not revision.strip() or _looks_placeholder(revision):
+        return False
+
+    return revision.strip().lower() not in FLOATING_REVISIONS
+
+
+def _has_attested_checkpoint(model_dict: Dict[str, Any]) -> bool:
+    """Return True when a local checkpoint has an expected SHA-256."""
+    checkpoint = model_dict.get("checkpoint")
+    expected_sha256 = model_dict.get("expected_sha256")
+
+    if not isinstance(checkpoint, str) or not checkpoint.strip() or _looks_placeholder(checkpoint):
+        return False
+    if not isinstance(expected_sha256, str) or len(expected_sha256.strip()) != 64 or _looks_placeholder(expected_sha256):
+        return False
+
+    try:
+        int(expected_sha256, 16)
+    except ValueError:
+        return False
+    return True
+
+
+def _has_attested_material_source(model_dict: Dict[str, Any]) -> bool:
+    """Return True when model metadata identifies a pinned material source."""
+    return _has_pinned_repo_revision(model_dict) or _has_attested_checkpoint(model_dict)
+
+
+def _looks_like_material_preset(preset_dict: Dict[str, Any], preset_path: Optional[Path]) -> bool:
+    """Heuristically detect the dedicated material PBR preset family."""
+    if preset_path is not None and "material_pbr" in preset_path.as_posix().lower():
+        return True
+
+    name = preset_dict.get("name")
+    return isinstance(name, str) and "pbr material" in name.lower()
+
+
+def _iter_material_backend_specs(preset_dict: Dict[str, Any], preset_path: Optional[Path]) -> list[tuple[str, str, Dict[str, Any]]]:
+    """Collect material backend declarations embedded in a preset."""
+    specs: list[tuple[str, str, Dict[str, Any]]] = []
+
+    materials_cfg = preset_dict.get("materials")
+    if isinstance(materials_cfg, dict):
+        backend = _normalize_material_backend(materials_cfg.get("backend"))
+        if backend in VALID_MATERIAL_BACKENDS:
+            model_cfg = materials_cfg.get("model")
+            specs.append(("materials.backend", backend, model_cfg if isinstance(model_cfg, dict) else {}))
+
+    if not _looks_like_material_preset(preset_dict, preset_path):
+        return specs
+
+    backend_cfg = preset_dict.get("backend")
+    if isinstance(backend_cfg, dict):
+        backend = _normalize_material_backend(backend_cfg.get("type"))
+        if backend in VALID_MATERIAL_BACKENDS:
+            model_cfg = backend_cfg.get("model")
+            specs.append(("backend.type", backend, model_cfg if isinstance(model_cfg, dict) else {}))
+            return specs
+
+    model_cfg = preset_dict.get("model")
+    if isinstance(model_cfg, dict):
+        backend = _normalize_material_backend(model_cfg.get("backend"))
+        if backend in VALID_MATERIAL_BACKENDS:
+            specs.append(("model.backend", backend, model_cfg))
+
+    return specs
+
+
+def validate_materials_preset(
+    preset_dict: Dict[str, Any],
+    *,
+    preset_path: Optional[Path] = None,
+    allow_research_materials: bool = False,
+    allow_unattested_materials: bool = False,
+) -> bool:
+    """Validate materials backend tier, licensing, and attestation policy."""
+    if not isinstance(preset_dict, dict):
+        return True
+
+    tier = str(preset_dict.get("tier", "")).strip().lower()
+    license_restriction = preset_dict.get("license_restriction")
+
+    for source_path, backend, model_dict in _iter_material_backend_specs(preset_dict, preset_path):
+        if backend == "heuristic":
+            continue
+
+        if backend in RESEARCH_ONLY_MATERIAL_BACKENDS:
+            if license_restriction != "research_only":
+                raise LicenseRestrictionError(
+                    f"Materials backend '{backend}' in {source_path} requires "
+                    "license_restriction='research_only'."
+                )
+
+            if tier not in RESEARCH_ALLOWED_MATERIAL_TIERS:
+                raise LicenseRestrictionError(
+                    f"Materials backend '{backend}' is research-only and cannot be used in tier='{tier}'. "
+                    f"Allowed tiers: {sorted(RESEARCH_ALLOWED_MATERIAL_TIERS)}."
+                )
+
+            if not allow_research_materials:
+                raise LicenseRestrictionError(
+                    f"Materials backend '{backend}' is research-only. "
+                    "Reload this preset with allow_research_materials=True to acknowledge the restriction."
+                )
+
+        if _has_attested_material_source(model_dict):
+            continue
+
+        if allow_unattested_materials and tier in UNATTESTED_ALLOWED_MATERIAL_TIERS:
+            continue
+
+        raise LicenseRestrictionError(
+            f"Materials backend '{backend}' in {source_path} lacks an attested source tuple "
+            "(repo_id+revision or checkpoint+expected_sha256). "
+            "Only dev/experimental presets may bypass this with allow_unattested_materials=True."
+        )
+
+    return True
+
+
+def load_and_validate_preset(
+    preset_path: Path,
+    *,
+    allow_research_materials: bool = False,
+    allow_unattested_materials: bool = False,
+) -> Dict[str, Any]:
     """Load a preset YAML file and validate licensing compliance.
 
     Args:
         preset_path: Path to preset YAML file
+        allow_research_materials: Explicit opt-in required for research-only
+            materials backends such as NVDIFFREC and MaterialGAN.
+        allow_unattested_materials: Allow unresolved material source tuples in
+            dev/experimental presets only.
 
     Returns:
         Loaded preset dictionary
@@ -146,4 +316,10 @@ def load_and_validate_preset(preset_path: Path) -> Dict[str, Any]:
         preset = yaml.safe_load(f)
 
     validate_non_commercial_preset(preset)
+    validate_materials_preset(
+        preset,
+        preset_path=preset_path,
+        allow_research_materials=allow_research_materials,
+        allow_unattested_materials=allow_unattested_materials,
+    )
     return preset

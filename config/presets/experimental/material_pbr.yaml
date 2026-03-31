@@ -32,11 +32,13 @@
 #   ✅ Isolated from lux_depth_v3 (no cross-pipeline imports)
 #   ✅ Contract-driven (gamma=1.0 enforcement)
 #   ✅ Experimental preset (unresolved source tuple allowed)
+#   ✅ Preset validation requires explicit research + unattested-source opt-in
 #   ✅ Integration with Phase 2.1 segmentation
 
 name: "PBR Material Generation (Experimental)"
 version: "2.2.0"
 tier: "dev"  # Experimental preset; neural research backends require separate runtime/contracts
+license_restriction: research_only  # Research-only backends require explicit governance opt-in
 
 # Model Configuration
 model:

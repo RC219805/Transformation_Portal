@@ -19,6 +19,7 @@ from transformation_portal.compliance import (
     LicenseRestrictionError,
     load_and_validate_preset,
     require_non_commercial,
+    validate_materials_preset,
     validate_non_commercial_preset,
 )
 
@@ -220,6 +221,158 @@ class TestLoadAndValidatePreset:
                 load_and_validate_preset(path)
         finally:
             path.unlink()
+
+
+class TestValidateMaterialsPreset:
+    """Test materials-specific tier, license, and attestation gates."""
+
+    def test_research_materials_backend_requires_marker(self):
+        """Research-only materials backends must declare a research restriction marker."""
+        preset = {
+            "name": "experimental-materials",
+            "tier": "dev",
+            "model": {
+                "backend": "nvdiffrec",
+                "repo_id": "nvidia/nvdiffrec",
+                "revision": "4ebe0ed10266bca0d7593e5461618e61d064cd9e",
+            },
+        }
+
+        with pytest.raises(LicenseRestrictionError, match="license_restriction='research_only'"):
+            validate_materials_preset(
+                preset,
+                preset_path=Path("config/presets/experimental/material_pbr.yaml"),
+                allow_research_materials=True,
+            )
+
+    def test_research_materials_backend_rejected_in_stable_tier(self):
+        """Stable and canary material presets must not select research-only backends."""
+        preset = {
+            "name": "bad-stable-materials",
+            "tier": "stable",
+            "license_restriction": "research_only",
+            "model": {
+                "backend": "nvdiffrec",
+                "repo_id": "nvidia/nvdiffrec",
+                "revision": "4ebe0ed10266bca0d7593e5461618e61d064cd9e",
+            },
+        }
+
+        with pytest.raises(LicenseRestrictionError, match="tier='stable'"):
+            validate_materials_preset(
+                preset,
+                preset_path=Path("config/presets/material_pbr.yaml"),
+                allow_research_materials=True,
+            )
+
+    def test_research_materials_backend_requires_explicit_opt_in(self):
+        """Research-only materials presets should fail closed without explicit opt-in."""
+        preset = {
+            "name": "experimental-materials",
+            "tier": "dev",
+            "license_restriction": "research_only",
+            "model": {
+                "backend": "nvdiffrec",
+                "repo_id": "nvidia/nvdiffrec",
+                "revision": "4ebe0ed10266bca0d7593e5461618e61d064cd9e",
+            },
+        }
+
+        with pytest.raises(LicenseRestrictionError, match="allow_research_materials=True"):
+            validate_materials_preset(
+                preset,
+                preset_path=Path("config/presets/experimental/material_pbr.yaml"),
+            )
+
+    def test_unattested_materials_backend_requires_explicit_opt_in(self):
+        """Unresolved source tuples should remain blocked unless explicitly allowed."""
+        preset = {
+            "name": "experimental-materials",
+            "tier": "dev",
+            "license_restriction": "research_only",
+            "model": {
+                "backend": "nvdiffrec",
+                "repo_id": None,
+                "revision": None,
+            },
+        }
+
+        with pytest.raises(LicenseRestrictionError, match="allow_unattested_materials=True"):
+            validate_materials_preset(
+                preset,
+                preset_path=Path("config/presets/experimental/material_pbr.yaml"),
+                allow_research_materials=True,
+            )
+
+    def test_experimental_materials_backend_can_opt_in_to_unattested_sources(self):
+        """Dev/experimental presets may explicitly opt in to unresolved source tuples."""
+        preset = {
+            "name": "experimental-materials",
+            "tier": "dev",
+            "license_restriction": "research_only",
+            "model": {
+                "backend": "nvdiffrec",
+                "repo_id": None,
+                "revision": None,
+            },
+        }
+
+        assert (
+            validate_materials_preset(
+                preset,
+                preset_path=Path("config/presets/experimental/material_pbr.yaml"),
+                allow_research_materials=True,
+                allow_unattested_materials=True,
+            )
+            is True
+        )
+
+    def test_canary_pbrfusion_requires_attested_source_tuple(self):
+        """Commercial materials backends still need pinned source metadata outside dev/experimental tiers."""
+        preset = {
+            "name": "PBR Material Generation (Canary)",
+            "tier": "canary",
+            "backend": {
+                "type": "pbr_fusion",
+                "model": {
+                    "repo_id": "NightRaven109/PBRFusion4-RTXREMIX-Portable",
+                    "revision": None,
+                },
+            },
+        }
+
+        with pytest.raises(LicenseRestrictionError, match="attested source tuple"):
+            validate_materials_preset(
+                preset,
+                preset_path=Path("config/presets/material_pbr_canary.yaml"),
+            )
+
+    def test_actual_canary_material_preset_passes(self):
+        """The checked-in canary preset should satisfy attestation requirements."""
+        preset = load_and_validate_preset(Path("config/presets/material_pbr_canary.yaml"))
+        assert preset["backend"]["type"] == "pbr_fusion"
+
+    def test_nested_materials_backend_alias_is_validated(self):
+        """Nested materials configs should normalize legacy backend aliases."""
+        preset = {
+            "name": "apex-research-ultra-experimental",
+            "tier": "apex_research_ultra",
+            "license_restriction": "research_only",
+            "materials": {
+                "backend": "materialgan",
+                "model": {
+                    "checkpoint": "checkpoints/materialgan_v2.pth",
+                    "expected_sha256": "PLACEHOLDER_UPDATE_WHEN_INTEGRATED",
+                },
+            },
+        }
+
+        with pytest.raises(LicenseRestrictionError, match="attested source tuple"):
+            validate_materials_preset(
+                preset,
+                preset_path=Path("config/presets/experimental/apex_research_ultra.yaml"),
+                allow_research_materials=True,
+            )
 
 
 class TestBackwardCompatibility:
