@@ -6,9 +6,11 @@ Validates that:
 3. Commercial workflows are unaffected (backward compatibility)
 """
 
+import hashlib
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import pytest
 import yaml
@@ -22,6 +24,22 @@ from transformation_portal.compliance import (
     validate_materials_preset,
     validate_non_commercial_preset,
 )
+
+
+def _write_model_lock_manifest(
+    path: Path,
+    *,
+    repositories: dict[str, dict[str, Any]] | None = None,
+    artifact_attestation: dict[str, Any] | None = None,
+) -> None:
+    """Write a minimal model lock manifest for tests."""
+    payload = {
+        "version": 1,
+        "updated_at": "2026-03-31",
+        "repositories": repositories or {},
+        "artifact_attestation": artifact_attestation or {},
+    }
+    path.write_text(yaml.safe_dump(payload, sort_keys=True), encoding="utf-8")
 
 
 @dataclass
@@ -345,6 +363,21 @@ class TestValidateMaterialsPreset:
             is True
         )
 
+    def test_unknown_materials_backend_schema_location_is_rejected(self):
+        """Materials backend declarations must stay within the approved schema paths."""
+        preset = {
+            "name": "bad-materials-schema",
+            "tier": "dev",
+            "materials": {
+                "runtime": {
+                    "backend": "nvdiffrec",
+                }
+            },
+        }
+
+        with pytest.raises(LicenseRestrictionError, match="Unknown paths"):
+            validate_materials_preset(preset, preset_path=Path("config/presets/experimental/material_pbr.yaml"))
+
     def test_canary_pbrfusion_requires_attested_source_tuple(self):
         """Commercial materials backends still need pinned source metadata outside dev/experimental tiers."""
         preset = {
@@ -390,6 +423,37 @@ class TestValidateMaterialsPreset:
         preset = load_and_validate_preset(Path("config/presets/material_pbr_canary.yaml"))
         assert preset["backend"]["type"] == "pbr_fusion"
 
+    def test_repo_backed_materials_backend_must_match_manifest(self, tmp_path: Path):
+        """Pinned repo-backed materials sources must be approved in the model lock manifest."""
+        manifest_path = tmp_path / "model_lock_manifest.yaml"
+        _write_model_lock_manifest(
+            manifest_path,
+            repositories={
+                "NightRaven109/PBRFusion4-RTXREMIX-Portable": {
+                    "revision": "0123456789abcdef0123456789abcdef01234567",
+                    "owner": "materials",
+                }
+            },
+        )
+        preset = {
+            "name": "PBR Material Generation (Canary)",
+            "tier": "canary",
+            "backend": {
+                "type": "pbr_fusion",
+                "model": {
+                    "repo_id": "NightRaven109/PBRFusion4-RTXREMIX-Portable",
+                    "revision": "89abcdef0123456789abcdef0123456789abcdef",
+                },
+            },
+        }
+
+        with pytest.raises(LicenseRestrictionError, match="exact approved revision"):
+            validate_materials_preset(
+                preset,
+                preset_path=Path("config/presets/material_pbr_canary.yaml"),
+                manifest_path=manifest_path,
+            )
+
     def test_nested_materials_backend_alias_is_validated(self):
         """Nested materials configs should normalize legacy backend aliases."""
         preset = {
@@ -432,6 +496,71 @@ class TestValidateMaterialsPreset:
                 preset,
                 preset_path=Path("config/presets/experimental/apex_research_ultra.yaml"),
                 allow_research_materials=True,
+            )
+
+    def test_runtime_checkpoint_bytes_are_verified_when_present(self, tmp_path: Path):
+        """Runtime loading should verify local checkpoint bytes against preset and manifest hashes."""
+        checkpoint_dir = tmp_path / "checkpoints"
+        checkpoint_dir.mkdir()
+        checkpoint_path = checkpoint_dir / "materialgan_v2.pth"
+        checkpoint_path.write_bytes(b"materialgan-checkpoint")
+        digest = hashlib.sha256(b"materialgan-checkpoint").hexdigest()
+
+        manifest_path = tmp_path / "model_lock_manifest.yaml"
+        _write_model_lock_manifest(
+            manifest_path,
+            artifact_attestation={
+                "materials": {
+                    "material_gan": {
+                        "artifacts": [
+                            {
+                                "filename": "checkpoints/materialgan_v2.pth",
+                                "sha256": digest,
+                            }
+                        ]
+                    }
+                }
+            },
+        )
+
+        preset_path = tmp_path / "materialgan.yaml"
+        preset_path.write_text(
+            yaml.safe_dump(
+                {
+                    "name": "Experimental MaterialGAN",
+                    "tier": "apex_research_ultra",
+                    "license_restriction": "research_only",
+                    "governance": {
+                        "materials": {
+                            "allow_research_materials": True,
+                        }
+                    },
+                    "materials": {
+                        "backend": "material_gan",
+                        "model": {
+                            "checkpoint": "checkpoints/materialgan_v2.pth",
+                            "expected_sha256": digest,
+                        },
+                    },
+                },
+                sort_keys=True,
+            ),
+            encoding="utf-8",
+        )
+
+        preset = load_and_validate_preset(
+            preset_path,
+            manifest_path=manifest_path,
+            verify_runtime_bytes=True,
+        )
+        assert preset["materials"]["backend"] == "material_gan"
+
+        checkpoint_path.write_bytes(b"tampered-checkpoint")
+        with pytest.raises(LicenseRestrictionError, match="checkpoint bytes"):
+            load_and_validate_preset(
+                preset_path,
+                manifest_path=manifest_path,
+                verify_runtime_bytes=True,
             )
 
 

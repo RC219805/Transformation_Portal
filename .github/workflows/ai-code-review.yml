@@ -101,22 +101,22 @@ jobs:
           # We must follow Link headers to get all files for large PRs.
           def fetch_all_pr_files(repo, pr_number, headers):
               """Fetch all PR files, handling GitHub pagination.
-              
+
               Uses per_page=100 (GitHub's maximum) to minimize API calls.
               """
               all_files = []
               url = f"https://api.github.com/repos/{repo}/pulls/{pr_number}/files?per_page=100"
-              
+
               while url:
                   print(f"Fetching: {url}")
                   r = requests.get(url, headers=headers, timeout=20)
-                  
+
                   if r.status_code != 200:
                       print(f"GitHub API error fetching PR files: {r.status_code} {r.text}")
                       return None
-                  
+
                   all_files.extend(r.json())
-                  
+
                   # Check for next page in Link header
                   link_header = r.headers.get("Link", "")
                   url = None
@@ -125,15 +125,15 @@ jobs:
                           # Extract URL from <url>; rel="next"
                           url = link.split(";")[0].strip().strip("<>")
                           break
-              
+
               return all_files
 
           print(f"Fetching PR #{pr_number} files from {repo}")
           all_files = fetch_all_pr_files(repo, pr_number, headers)
-          
+
           if all_files is None:
               sys.exit(1)
-          
+
           print(f"Total files in PR: {len(all_files)}")
 
           # Filter allowable extensions
@@ -143,7 +143,7 @@ jobs:
           if not code_files:
               print("No relevant code files changed.")
               sys.exit(0)
-          
+
           print(f"Relevant code files: {len(code_files)}")
 
           # Build diff text (limit to first 10 files to stay within token limits)

@@ -114,7 +114,7 @@ jobs:
         id: benchmark
         run: |
           set -euo pipefail
-          
+
           # Check if any benchmark tests exist using exit-code semantics
           # Exit code 5 = no tests collected (pytest convention)
           # Exit code 0 = collection succeeded
@@ -123,7 +123,7 @@ jobs:
           pytest tests/ -m "benchmark" --collect-only -q > benchmark-collect.log 2>&1
           COLLECT_EXIT=$?
           set -e
-          
+
           if [ "$COLLECT_EXIT" -eq 5 ]; then
             echo "status=no_tests" >> $GITHUB_OUTPUT
             echo "⚠️ No benchmark tests found"
@@ -134,9 +134,9 @@ jobs:
             cat benchmark-collect.log || true
             exit "$COLLECT_EXIT"
           fi
-          
+
           echo "Benchmark collection succeeded"
-          
+
           COMPARE_ARGS=()
           if [ "${{ steps.baseline.outputs.has_baseline }}" = "true" ]; then
             echo "Using baseline: ${{ steps.baseline.outputs.baseline_file }}"
@@ -147,7 +147,7 @@ jobs:
           else
             echo "No baseline found; running without regression comparison."
           fi
-          
+
           # Run benchmarks - capture exit code to distinguish regression vs failure
           if pytest tests/ \
             -m "benchmark" \
@@ -216,11 +216,11 @@ jobs:
               labels: 'performance,regression,automated',
               per_page: 10
             });
-            
-            const existingIssue = issues.find(i => 
+
+            const existingIssue = issues.find(i =>
               i.title.includes('Performance Regression Detected')
             );
-            
+
             if (existingIssue) {
               // Update existing issue
               await github.rest.issues.createComment({
@@ -424,20 +424,20 @@ jobs:
               labels: 'nightly-failure,automated',
               per_page: 10
             });
-            
-            const existingIssue = issues.find(i => 
+
+            const existingIssue = issues.find(i =>
               i.title.includes('Nightly Deep Checks Failed')
             );
-            
+
             const failureDetails = `
             - Stress Tests: ${{ needs.stress-tests.result }}
             - Performance Benchmarks: ${{ needs.performance-benchmarks.result }}
             - Memory Leak Detection: ${{ needs.memory-leak-detection.result }}
             - Dependency Audit: ${{ needs.dependency-audit-deep.result }}
             - Integration Tests: ${{ needs.integration-tests-full.result }}
-            
+
             Check the workflow run for details: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
-            
+
             if (existingIssue) {
               // Update existing issue with new failure info
               await github.rest.issues.createComment({

@@ -6,9 +6,10 @@ attested source metadata.
 """
 
 import functools
+import hashlib
 import re
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional, TypeVar
+from typing import Any, Callable, Dict, Optional, TypeVar, cast
 
 import yaml
 
@@ -36,6 +37,15 @@ PLACEHOLDER_MARKERS = ("NEEDS_VERIFICATION", "PLACEHOLDER", "PENDING", "TODO", "
 MATERIAL_BACKEND_ALIASES = {"materialgan": "material_gan"}
 _HEX40_RE = re.compile(r"^[0-9a-f]{40}$")
 _HEX64_RE = re.compile(r"^[0-9a-f]{64}$")
+_DEFAULT_MODEL_LOCK_MANIFEST_RELATIVE_PATH = Path("config/model_lock_manifest.yaml")
+_ALLOWED_MATERIAL_BACKEND_PATHS = frozenset(
+    {
+        "materials.backend",
+        "pipeline.materials.backend",
+        "backend.type",
+        "model.backend",
+    }
+)
 
 
 def require_non_commercial(reason: str = "") -> Callable[[F], F]:
@@ -208,13 +218,168 @@ def _has_attested_material_source(model_dict: Dict[str, Any]) -> bool:
     return _has_pinned_repo_revision(model_dict) or _has_attested_checkpoint(model_dict)
 
 
+def _repo_root() -> Path:
+    """Best-effort repository root discovery."""
+    this_file = Path(__file__).resolve()
+    for parent in this_file.parents:
+        if (parent / _DEFAULT_MODEL_LOCK_MANIFEST_RELATIVE_PATH).exists():
+            return parent
+    for parent in this_file.parents:
+        if (parent / "pyproject.toml").exists() or (parent / ".git").exists():
+            return parent
+    return this_file.parents[0]
+
+
+def _model_lock_manifest_path(path: Optional[Path] = None) -> Path:
+    """Resolve the model lock manifest path without importing heavy runtime modules."""
+    if path is not None:
+        return Path(path)
+    return _repo_root() / _DEFAULT_MODEL_LOCK_MANIFEST_RELATIVE_PATH
+
+
+def _load_model_lock_manifest(path: Optional[Path] = None) -> Dict[str, Any]:
+    """Load the model lock manifest used for materials attestation checks."""
+    manifest_path = _model_lock_manifest_path(path)
+    if not manifest_path.exists():
+        raise FileNotFoundError(f"Model lock manifest not found: {manifest_path}")
+
+    with manifest_path.open("r", encoding="utf-8") as handle:
+        payload = yaml.safe_load(handle) or {}
+
+    if not isinstance(payload, dict):
+        raise ValueError(f"Model lock manifest root must be a mapping (dict): {manifest_path}")
+
+    repositories = payload.get("repositories")
+    if repositories is None:
+        payload["repositories"] = {}
+    elif not isinstance(repositories, dict):
+        raise ValueError(f"Model lock manifest 'repositories' must be a mapping: {manifest_path}")
+
+    artifact_attestation = payload.get("artifact_attestation")
+    if artifact_attestation is None:
+        payload["artifact_attestation"] = {}
+    elif not isinstance(artifact_attestation, dict):
+        raise ValueError(f"Model lock manifest 'artifact_attestation' must be a mapping: {manifest_path}")
+
+    return payload
+
+
+def _compute_file_sha256(path: Path, chunk_size: int = 1024 * 1024) -> str:
+    """Compute SHA-256 for a local file using streaming reads."""
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(chunk_size), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _resolve_material_checkpoint_path(checkpoint: str, *, preset_path: Optional[Path]) -> Path:
+    """Resolve a checkpoint path relative to the preset file or repo root."""
+    candidate = Path(checkpoint)
+    if candidate.is_absolute():
+        return candidate
+    if preset_path is not None:
+        return (preset_path.parent / candidate).resolve()
+    return (_repo_root() / candidate).resolve()
+
+
+def _extract_materials_governance_overrides(
+    preset_dict: Dict[str, Any],
+    *,
+    allow_research_materials: Optional[bool],
+    allow_unattested_materials: Optional[bool],
+) -> dict[str, bool]:
+    """Resolve materials governance overrides from explicit args and preset metadata."""
+    governance = preset_dict.get("governance", {})
+    materials_governance = governance.get("materials", {}) if isinstance(governance, dict) else {}
+    materials_cfg = preset_dict.get("materials", {})
+    pipeline_cfg = preset_dict.get("pipeline", {})
+    pipeline_materials = pipeline_cfg.get("materials", {}) if isinstance(pipeline_cfg, dict) else {}
+
+    sources = {
+        "allow_research_materials": [
+            allow_research_materials,
+            materials_governance.get("allow_research_materials") if isinstance(materials_governance, dict) else None,
+            materials_cfg.get("allow_research_materials") if isinstance(materials_cfg, dict) else None,
+            pipeline_materials.get("allow_research_materials") if isinstance(pipeline_materials, dict) else None,
+        ],
+        "allow_unattested_materials": [
+            allow_unattested_materials,
+            materials_governance.get("allow_unattested_materials") if isinstance(materials_governance, dict) else None,
+            materials_cfg.get("allow_unattested_materials") if isinstance(materials_cfg, dict) else None,
+            pipeline_materials.get("allow_unattested_materials") if isinstance(pipeline_materials, dict) else None,
+        ],
+    }
+
+    resolved: dict[str, bool] = {}
+    for key, candidates in sources.items():
+        values = [value for value in candidates if value is not None]
+        if any(not isinstance(value, bool) for value in values):
+            bad_value = next(value for value in values if not isinstance(value, bool))
+            raise ValueError(f"{key} must be a boolean when provided, got {type(bad_value).__name__}.")
+        resolved[key] = any(cast(bool, value) for value in values)
+
+    return resolved
+
+
+def iter_material_backend_declaration_paths(preset_dict: Dict[str, Any], preset_path: Optional[Path]) -> list[str]:
+    """Return all recognized material backend declaration paths in a preset."""
+    paths: list[str] = []
+
+    def _walk(node: Any, path: tuple[str, ...]) -> None:
+        if isinstance(node, dict):
+            for key, value in node.items():
+                next_path = path + (str(key),)
+                normalized = _normalize_material_backend(value) if key in {"backend", "type"} else None
+                joined = ".".join(next_path)
+                if normalized in VALID_MATERIAL_BACKENDS:
+                    paths.append(joined)
+                _walk(value, next_path)
+        elif isinstance(node, list):
+            for index, value in enumerate(node):
+                _walk(value, path + (str(index),))
+
+    if isinstance(preset_dict.get("materials"), dict):
+        _walk(preset_dict["materials"], ("materials",))
+
+    pipeline_cfg = preset_dict.get("pipeline")
+    if isinstance(pipeline_cfg, dict) and isinstance(pipeline_cfg.get("materials"), dict):
+        _walk(pipeline_cfg["materials"], ("pipeline", "materials"))
+
+    if _looks_like_material_preset(preset_dict, preset_path):
+        backend_cfg = preset_dict.get("backend")
+        if isinstance(backend_cfg, dict):
+            _walk(backend_cfg, ("backend",))
+        model_cfg = preset_dict.get("model")
+        if isinstance(model_cfg, dict):
+            _walk(model_cfg, ("model",))
+
+    return sorted(set(paths))
+
+
+def find_unknown_material_backend_schema_locations(preset_dict: Dict[str, Any], preset_path: Optional[Path]) -> list[str]:
+    """Return backend declaration paths that are not part of the approved materials schema."""
+    return [
+        path
+        for path in iter_material_backend_declaration_paths(preset_dict, preset_path)
+        if path not in _ALLOWED_MATERIAL_BACKEND_PATHS
+    ]
+
+
 def _looks_like_material_preset(preset_dict: Dict[str, Any], preset_path: Optional[Path]) -> bool:
     """Heuristically detect the dedicated material PBR preset family."""
     if preset_path is not None and "material_pbr" in preset_path.as_posix().lower():
         return True
 
     name = preset_dict.get("name")
-    return isinstance(name, str) and "pbr material" in name.lower()
+    if isinstance(name, str) and "pbr material" in name.lower():
+        return True
+
+    pipeline_cfg = preset_dict.get("pipeline")
+    if isinstance(pipeline_cfg, dict) and isinstance(pipeline_cfg.get("materials"), dict):
+        return True
+
+    return isinstance(preset_dict.get("materials"), dict)
 
 
 def _iter_material_backend_specs(
@@ -229,6 +394,15 @@ def _iter_material_backend_specs(
         if backend in VALID_MATERIAL_BACKENDS:
             model_cfg = materials_cfg.get("model")
             specs.append(("materials.backend", backend, model_cfg if isinstance(model_cfg, dict) else {}))
+
+    pipeline_cfg = preset_dict.get("pipeline")
+    if isinstance(pipeline_cfg, dict):
+        pipeline_materials = pipeline_cfg.get("materials")
+        if isinstance(pipeline_materials, dict):
+            backend = _normalize_material_backend(pipeline_materials.get("backend"))
+            if backend in VALID_MATERIAL_BACKENDS:
+                model_cfg = pipeline_materials.get("model")
+                specs.append(("pipeline.materials.backend", backend, model_cfg if isinstance(model_cfg, dict) else {}))
 
     if not _looks_like_material_preset(preset_dict, preset_path):
         return specs
@@ -250,21 +424,192 @@ def _iter_material_backend_specs(
     return specs
 
 
+def _get_manifest_repo_entry(manifest: Dict[str, Any], repo_id: str) -> Optional[Dict[str, Any]]:
+    """Return a manifest repository entry for the given repo_id."""
+    repositories = manifest.get("repositories", {})
+    if not isinstance(repositories, dict):
+        return None
+    entry = repositories.get(repo_id)
+    return entry if isinstance(entry, dict) else None
+
+
+def _manifest_entry_allows_materials(entry: Dict[str, Any]) -> bool:
+    """Return True when the manifest entry is explicitly approved for materials."""
+    owner = entry.get("owner")
+    if not isinstance(owner, str):
+        return False
+    return "materials" in owner.lower()
+
+
+def _validate_repo_source_against_manifest(
+    *,
+    backend: str,
+    source_path: str,
+    model_dict: Dict[str, Any],
+    manifest: Dict[str, Any],
+) -> None:
+    """Ensure repo-backed materials sources match an approved manifest entry."""
+    if not _has_pinned_repo_revision(model_dict):
+        return
+
+    repo_id = cast(str, model_dict["repo_id"]).strip()
+    revision = cast(str, model_dict["revision"]).strip().lower()
+    entry = _get_manifest_repo_entry(manifest, repo_id)
+    if entry is None:
+        raise LicenseRestrictionError(
+            f"Materials backend '{backend}' in {source_path} references repo_id='{repo_id}', "
+            "which is not approved in config/model_lock_manifest.yaml."
+        )
+
+    if not _manifest_entry_allows_materials(entry):
+        raise LicenseRestrictionError(
+            f"Materials backend '{backend}' in {source_path} references repo_id='{repo_id}', "
+            "but that manifest entry is not owned/approved for materials use."
+        )
+
+    manifest_revision = entry.get("revision")
+    normalized_manifest_revision = manifest_revision.strip().lower() if isinstance(manifest_revision, str) else None
+    if normalized_manifest_revision != revision:
+        raise LicenseRestrictionError(
+            f"Materials backend '{backend}' in {source_path} must use the exact approved revision from "
+            f"config/model_lock_manifest.yaml (preset={revision}, manifest={normalized_manifest_revision})."
+        )
+
+
+def _get_material_artifact_attestation_entry(manifest: Dict[str, Any], backend: str) -> Optional[Dict[str, Any]]:
+    """Return the manifest artifact-attestation entry for a materials backend."""
+    artifact_attestation = manifest.get("artifact_attestation", {})
+    if not isinstance(artifact_attestation, dict):
+        return None
+    materials_attestation = artifact_attestation.get("materials")
+    if not isinstance(materials_attestation, dict):
+        return None
+    entry = materials_attestation.get(backend)
+    return entry if isinstance(entry, dict) else None
+
+
+def _validate_checkpoint_source_against_manifest(
+    *,
+    backend: str,
+    source_path: str,
+    model_dict: Dict[str, Any],
+    manifest: Dict[str, Any],
+) -> None:
+    """Ensure checkpoint-backed materials sources match manifest artifact attestation."""
+    if not _has_attested_checkpoint(model_dict):
+        return
+
+    checkpoint = cast(str, model_dict["checkpoint"]).strip()
+    expected_sha256 = cast(str, model_dict["expected_sha256"]).strip().lower()
+    entry = _get_material_artifact_attestation_entry(manifest, backend)
+    if entry is None:
+        raise LicenseRestrictionError(
+            f"Materials backend '{backend}' in {source_path} uses checkpoint='{checkpoint}', "
+            "but config/model_lock_manifest.yaml has no artifact_attestation.materials entry for it."
+        )
+
+    artifacts = entry.get("artifacts")
+    if not isinstance(artifacts, list):
+        raise LicenseRestrictionError(
+            f"Materials backend '{backend}' in {source_path} requires a valid artifact_attestation.materials entry."
+        )
+
+    for artifact in artifacts:
+        if not isinstance(artifact, dict):
+            continue
+        filename = artifact.get("filename")
+        manifest_sha256 = artifact.get("sha256")
+        if filename == checkpoint and isinstance(manifest_sha256, str) and manifest_sha256.strip().lower() == expected_sha256:
+            return
+
+    raise LicenseRestrictionError(
+        f"Materials backend '{backend}' in {source_path} must match an approved checkpoint+sha256 entry "
+        "in config/model_lock_manifest.yaml."
+    )
+
+
+def _verify_runtime_checkpoint_bytes(
+    *,
+    backend: str,
+    source_path: str,
+    model_dict: Dict[str, Any],
+    manifest: Dict[str, Any],
+    preset_path: Optional[Path],
+) -> None:
+    """Verify local checkpoint bytes when the checkpoint is present on disk at runtime."""
+    if not _has_attested_checkpoint(model_dict):
+        return
+
+    checkpoint = cast(str, model_dict["checkpoint"]).strip()
+    expected_sha256 = cast(str, model_dict["expected_sha256"]).strip().lower()
+    checkpoint_path = _resolve_material_checkpoint_path(checkpoint, preset_path=preset_path)
+    if not checkpoint_path.exists():
+        return
+
+    actual_sha256 = _compute_file_sha256(checkpoint_path)
+    if actual_sha256 != expected_sha256:
+        raise LicenseRestrictionError(
+            f"Materials backend '{backend}' in {source_path} has checkpoint bytes that do not match "
+            f"expected_sha256 for '{checkpoint_path}'."
+        )
+
+    entry = _get_material_artifact_attestation_entry(manifest, backend)
+    if entry is None:
+        return
+
+    artifacts = entry.get("artifacts")
+    if not isinstance(artifacts, list):
+        return
+
+    for artifact in artifacts:
+        if not isinstance(artifact, dict):
+            continue
+        filename = artifact.get("filename")
+        manifest_sha256 = artifact.get("sha256")
+        if filename == checkpoint and isinstance(manifest_sha256, str):
+            normalized_manifest_sha = manifest_sha256.strip().lower()
+            if normalized_manifest_sha != actual_sha256:
+                raise LicenseRestrictionError(
+                    f"Materials backend '{backend}' in {source_path} has checkpoint bytes that do not match "
+                    "config/model_lock_manifest.yaml artifact attestation."
+                )
+            return
+
+
 def validate_materials_preset(
     preset_dict: Dict[str, Any],
     *,
     preset_path: Optional[Path] = None,
-    allow_research_materials: bool = False,
-    allow_unattested_materials: bool = False,
+    allow_research_materials: Optional[bool] = None,
+    allow_unattested_materials: Optional[bool] = None,
+    manifest_path: Optional[Path] = None,
+    verify_runtime_bytes: bool = False,
 ) -> bool:
     """Validate materials backend tier, licensing, and attestation policy."""
     if not isinstance(preset_dict, dict):
         raise ValueError(f"Preset must be a mapping (dict), got {type(preset_dict).__name__}.")
 
+    unknown_paths = find_unknown_material_backend_schema_locations(preset_dict, preset_path)
+    if unknown_paths:
+        raise LicenseRestrictionError(
+            "Materials backend declarations must use approved schema locations. "
+            f"Unknown paths: {unknown_paths}. Allowed paths: {sorted(_ALLOWED_MATERIAL_BACKEND_PATHS)}."
+        )
+
+    overrides = _extract_materials_governance_overrides(
+        preset_dict,
+        allow_research_materials=allow_research_materials,
+        allow_unattested_materials=allow_unattested_materials,
+    )
     tier = str(preset_dict.get("tier", "")).strip().lower()
     license_restriction = preset_dict.get("license_restriction")
+    specs = _iter_material_backend_specs(preset_dict, preset_path)
+    if not specs:
+        return True
 
-    for source_path, backend, model_dict in _iter_material_backend_specs(preset_dict, preset_path):
+    manifest = _load_model_lock_manifest(manifest_path)
+
+    for source_path, backend, model_dict in specs:
         if backend == "heuristic":
             continue
 
@@ -280,16 +625,39 @@ def validate_materials_preset(
                     f"Allowed tiers: {sorted(RESEARCH_ALLOWED_MATERIAL_TIERS)}."
                 )
 
-            if not allow_research_materials:
+            if not overrides["allow_research_materials"]:
                 raise LicenseRestrictionError(
                     f"Materials backend '{backend}' is research-only. "
                     "Reload this preset with allow_research_materials=True to acknowledge the restriction."
                 )
 
-        if _has_attested_material_source(model_dict):
+        if _has_pinned_repo_revision(model_dict):
+            _validate_repo_source_against_manifest(
+                backend=backend,
+                source_path=source_path,
+                model_dict=model_dict,
+                manifest=manifest,
+            )
             continue
 
-        if allow_unattested_materials and tier in UNATTESTED_ALLOWED_MATERIAL_TIERS:
+        if _has_attested_checkpoint(model_dict):
+            _validate_checkpoint_source_against_manifest(
+                backend=backend,
+                source_path=source_path,
+                model_dict=model_dict,
+                manifest=manifest,
+            )
+            if verify_runtime_bytes:
+                _verify_runtime_checkpoint_bytes(
+                    backend=backend,
+                    source_path=source_path,
+                    model_dict=model_dict,
+                    manifest=manifest,
+                    preset_path=preset_path,
+                )
+            continue
+
+        if overrides["allow_unattested_materials"] and tier in UNATTESTED_ALLOWED_MATERIAL_TIERS:
             continue
 
         raise LicenseRestrictionError(
@@ -304,8 +672,10 @@ def validate_materials_preset(
 def load_and_validate_preset(
     preset_path: Path,
     *,
-    allow_research_materials: bool = False,
-    allow_unattested_materials: bool = False,
+    allow_research_materials: Optional[bool] = None,
+    allow_unattested_materials: Optional[bool] = None,
+    manifest_path: Optional[Path] = None,
+    verify_runtime_bytes: bool = False,
 ) -> Dict[str, Any]:
     """Load a preset YAML file and validate licensing compliance.
 
@@ -315,6 +685,9 @@ def load_and_validate_preset(
             materials backends such as NVDIFFREC and MaterialGAN.
         allow_unattested_materials: Allow unresolved material source tuples in
             dev/experimental presets only.
+        manifest_path: Optional override for the model lock manifest path.
+        verify_runtime_bytes: If True, verify on-disk checkpoint bytes when
+            the referenced materials runtime artifacts are present locally.
 
     Returns:
         Loaded preset dictionary
@@ -340,5 +713,7 @@ def load_and_validate_preset(
         preset_path=preset_path,
         allow_research_materials=allow_research_materials,
         allow_unattested_materials=allow_unattested_materials,
+        manifest_path=manifest_path,
+        verify_runtime_bytes=verify_runtime_bytes,
     )
     return preset

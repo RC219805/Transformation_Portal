@@ -120,6 +120,14 @@ repositories:
     tier: "quality_max"
     license: "Apache-2.0"
 
+  # --- Materials Backends ---
+  NightRaven109/PBRFusion4-RTXREMIX-Portable:
+    revision: "4ebe0ed10266bca0d7593e5461618e61d064cd9e"
+    owner: "materials"
+    tier: "canary"
+    license: "Apache-2.0"
+    execution_policy: "isolated_worker_required"
+
 # Note: SAM2 and LLaVA revisions pinned on 2026-03-27 via huggingface_hub API.
 
 # --- 3DGS Artifact Attestation ---

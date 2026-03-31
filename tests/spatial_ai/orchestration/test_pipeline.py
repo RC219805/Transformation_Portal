@@ -17,6 +17,7 @@ import yaml
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
+from transformation_portal.compliance import LicenseRestrictionError
 from transformation_portal.spatial_ai.ingest.linear_decoder import LinearIngestResult
 from transformation_portal.spatial_ai.materials.contracts import (
     AvailabilityState,
@@ -423,6 +424,51 @@ class TestSpatialAIPipelinePresetLoading:
         assert "ingest" in config.stages
         assert "segment" in config.stages or "segmentation" in config.stages
 
+    def test_load_config_file_enforces_materials_governance_before_runtime_selection(self, tmp_path):
+        """Runtime preset loading should validate materials policy before backend selection occurs."""
+        config_data = {
+            "tier": "dev",
+            "license_restriction": "research_only",
+            "pipeline": {
+                "materials": {
+                    "backend": "nvdiffrec",
+                }
+            },
+        }
+
+        config_path = tmp_path / "bad_materials.yaml"
+        with open(config_path, "w", encoding="utf-8") as handle:
+            yaml.safe_dump(config_data, handle, sort_keys=True)
+
+        with pytest.raises(LicenseRestrictionError, match="allow_research_materials=True"):
+            SpatialAIPipeline._load_config_file(config_path)
+
+    def test_load_config_file_propagates_materials_governance_overrides(self, tmp_path):
+        """Preset governance markers should propagate into the runtime materials config."""
+        config_data = {
+            "tier": "dev",
+            "license_restriction": "research_only",
+            "governance": {
+                "materials": {
+                    "allow_research_materials": True,
+                    "allow_unattested_materials": True,
+                }
+            },
+            "pipeline": {
+                "materials": {
+                    "backend": "nvdiffrec",
+                }
+            },
+        }
+
+        config_path = tmp_path / "experimental_materials.yaml"
+        with open(config_path, "w", encoding="utf-8") as handle:
+            yaml.safe_dump(config_data, handle, sort_keys=True)
+
+        config = SpatialAIPipeline._load_config_file(config_path)
+        assert config.materials["allow_research_materials"] is True
+        assert config.materials["allow_unattested_materials"] is True
+
     def test_dict_to_config(self):
         """Test converting dict to PipelineConfig."""
         data = {
@@ -790,6 +836,8 @@ class TestSpatialAIPipelineMaterialsStage:
 
         assert diagnostics["segment_id"] == "segment_0"
         assert diagnostics["requested_backend"] == "heuristic"
+        assert diagnostics["governance_overrides"]["allow_research_materials"] is False
+        assert diagnostics["governance_overrides"]["allow_unattested_materials"] is False
         assert diagnostics["generation_metadata"]["backend_decision"]["requested_backend"] == "nvdiffrec"
         assert diagnostics["generation_metadata"]["backend_decision"]["executed_backend"] == "heuristic"
 
@@ -797,6 +845,8 @@ class TestSpatialAIPipelineMaterialsStage:
         assert provenance["segment_index"] == 0
         assert provenance["input_content_hash"] == "abc123"
         assert provenance["backend_decision"]["availability_state"] == "input_contract_mismatch"
+        assert provenance["governance_overrides"]["allow_research_materials"] is False
+        assert provenance["governance_overrides"]["allow_unattested_materials"] is False
         assert provenance["artifact_payload_hashes"]["hash_target"] == "numpy_array_bytes"
         assert provenance["artifact_payload_hashes"]["albedo"]
 

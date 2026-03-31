@@ -80,6 +80,9 @@ pip install sam2
 - [x] Experimental preset accepts unresolved `repo_id` / `revision` as `null`
 - [x] Config-time validation plus `strict_backend` fail-fast behavior for the single-image materials pipeline
 - [x] Materials preset loader enforces research-tier opt-in and blocks unattested non-heuristic backends unless explicitly allowed for dev/experimental review
+- [x] Runtime Spatial AI preset/config loading now applies materials governance validation before backend selection
+- [x] Manifest-backed materials attestation checks for approved `repo_id` / exact `revision` tuples and checkpoint hash tuples
+- [x] Materials provenance sidecars record governance overrides (`allow_research_materials`, `allow_unattested_materials`) for auditability
 
 **Current emitted artifact contract**:
 - `albedo.npy` - RGB diffuse color
@@ -93,7 +96,7 @@ pip install sam2
 
 **Still pending (real execution)**:
 - Real backend execution for NVDIFFREC, MaterialGAN, and PBRFusion
-- Runtime attestation/license enforcement for executable backends once real integrations land
+- Isolated-worker execution and full runtime artifact verification for executable backends once real integrations land
 - Continued schema discipline around availability-state vocabulary and provenance consumers
 
 #### MaterialGAN (Phase 2.2C - Optional Enrichment)

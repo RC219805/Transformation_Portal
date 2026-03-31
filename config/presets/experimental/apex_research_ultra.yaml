@@ -41,6 +41,11 @@ tier: apex_research_ultra
 license_restriction: research_only
 stability: experimental
 
+governance:
+  materials:
+    allow_research_materials: true
+    allow_unattested_materials: true
+
 # Spatial AI Foundation Integration (Issue #890 Phase I)
 spatial_ai:
   # Linear light preservation (no 8-bit sRGB collapse)

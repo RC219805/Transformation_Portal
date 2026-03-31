@@ -40,6 +40,11 @@ version: "2.2.0"
 tier: "dev"  # Experimental preset; neural research backends require separate runtime/contracts
 license_restriction: research_only  # Research-only backends require explicit governance opt-in
 
+governance:
+  materials:
+    allow_research_materials: true
+    allow_unattested_materials: true
+
 # Model Configuration
 model:
   backend: "nvdiffrec"  # Single-image path currently falls back explicitly to heuristic
