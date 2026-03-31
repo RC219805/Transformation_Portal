@@ -186,18 +186,20 @@ class TestIntegration:
             time.sleep(0.01)
             return x * 2
 
-        # First call - slow
-        start = time.perf_counter()
-        result1 = expensive_operation(5)
-        elapsed1 = time.perf_counter() - start
+        info_before = expensive_operation.cache_info()
 
-        # Second call - fast (cached)
-        start = time.perf_counter()
+        # First call should populate the cache.
+        result1 = expensive_operation(5)
+        info_after_first = expensive_operation.cache_info()
+
+        # Second call should hit the cache without recomputing.
         result2 = expensive_operation(5)
-        elapsed2 = time.perf_counter() - start
+        info_after_second = expensive_operation.cache_info()
 
         assert result1 == result2 == 10
-        assert elapsed2 < elapsed1 / 2  # Much faster due to cache
+        assert info_after_first.misses == info_before.misses + 1
+        assert info_after_second.misses == info_after_first.misses
+        assert info_after_second.hits == info_after_first.hits + 1
 
 
 if __name__ == "__main__":
