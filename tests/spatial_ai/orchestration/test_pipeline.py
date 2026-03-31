@@ -126,6 +126,44 @@ class TestPipelineConfig:
         )
         assert "reconstruction" in config.stages
 
+    def test_materials_non_strict_backend_allows_documented_fallback(self):
+        """Non-strict materials config should allow runtime fallback semantics."""
+        config = PipelineConfig(
+            tier="standard",
+            stages=["ingest", "segment", "materials"],
+            materials={"backend": "nvdiffrec", "strict_backend": False},
+        )
+        assert config.materials["backend"] == "nvdiffrec"
+        assert config.materials["strict_backend"] is False
+
+    def test_materials_strict_backend_rejects_single_image_nvdiffrec(self):
+        """Strict materials mode should fail fast on single-image NVDIFFREC requests."""
+        with pytest.raises(ValueError, match="materials.strict_backend=True forbids fallback"):
+            PipelineConfig(
+                tier="standard",
+                stages=["ingest", "segment", "materials"],
+                materials={"backend": "nvdiffrec", "strict_backend": True},
+            )
+
+    def test_materials_strict_backend_rejects_pbr_fusion_without_runtime(self, monkeypatch):
+        """Strict materials mode should fail fast when PBRFusion runtime is unavailable."""
+        monkeypatch.delenv("PBRFUSION_PATH", raising=False)
+        with pytest.raises(ValueError, match="runtime_missing"):
+            PipelineConfig(
+                tier="standard",
+                stages=["ingest", "segment", "materials"],
+                materials={"backend": "pbr_fusion", "strict_backend": True},
+            )
+
+    def test_materials_invalid_backend_rejected_when_stage_enabled(self):
+        """Unknown materials backends should be rejected during config validation."""
+        with pytest.raises(ValueError, match="Unknown backend"):
+            PipelineConfig(
+                tier="standard",
+                stages=["ingest", "segment", "materials"],
+                materials={"backend": "not_real"},
+            )
+
     @given(
         tier=st.sampled_from(["standard", "apex_research", "experimental"]),
         stages=st.lists(

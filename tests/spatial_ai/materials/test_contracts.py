@@ -249,12 +249,21 @@ class TestMaterialGenerationConfig:
     def test_valid_config(self):
         """Test valid configuration."""
         config = MaterialGenerationConfig(
-            backend="nvdiffrec",
+            backend="pbr_fusion",
             resolution=1024,
             optimize_iterations=100,
+            strict_backend=True,
         )
-        assert config.backend == "nvdiffrec"
+        assert config.backend == "pbr_fusion"
         assert config.resolution == 1024
+        assert config.strict_backend is True
+
+    def test_backend_validation(self):
+        """Test backend name must be recognized."""
+        with pytest.raises(ValueError, match="Backend must be one of"):
+            MaterialGenerationConfig(
+                backend="unknown",
+            )
 
     def test_resolution_validation(self):
         """Test resolution must be power of 2."""
@@ -286,4 +295,12 @@ class TestMaterialGenerationConfig:
             MaterialGenerationConfig(
                 backend="nvdiffrec",
                 ao_intensity=1.5,  # Out of range
+            )
+
+    def test_strict_backend_type_validation(self):
+        """Test strict_backend must be a bool."""
+        with pytest.raises(ValueError, match="strict_backend must be bool"):
+            MaterialGenerationConfig(
+                backend="heuristic",
+                strict_backend="yes",  # type: ignore[arg-type]
             )

@@ -78,6 +78,7 @@ pip install sam2
 - [x] Atomic JSON writes for materials diagnostics/provenance
 - [x] Regression coverage for backend decision serialization and persistence
 - [x] Experimental preset accepts unresolved `repo_id` / `revision` as `null`
+- [x] Config-time validation plus `strict_backend` fail-fast behavior for the single-image materials pipeline
 
 **Current emitted artifact contract**:
 - `albedo.npy` - RGB diffuse color
@@ -90,7 +91,6 @@ pip install sam2
 - `provenance.json` - Per-segment backend decision and artifact payload hashes
 
 **Still pending (real execution)**:
-- Config-time validation / optional strict mode so impossible backend requests fail instead of silently falling back
 - Real backend execution for NVDIFFREC, MaterialGAN, and PBRFusion
 - Continued schema discipline around availability-state vocabulary and provenance consumers
 
@@ -155,9 +155,9 @@ not the primary material path. Best introduced after NVDIFFREC normalization exi
 - Separate CI leg (avoid contaminating deterministic baseline)
 
 **Next steps**:
-1. Add config-time validation and an optional strict mode to fail when fallback occurs.
-2. Keep `AvailabilityState` values as the canonical availability vocabulary across emitted provenance.
-3. Start PBRFusion integration behind optional dependencies and pinned revision gates.
+1. Keep `AvailabilityState` values as the canonical availability vocabulary across emitted provenance.
+2. Start PBRFusion integration behind optional dependencies and pinned revision gates.
+3. Introduce a dedicated multi-view materials entrypoint before attempting real NVDIFFREC or MaterialGAN execution.
 
 ---
 
