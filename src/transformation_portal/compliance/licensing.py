@@ -7,6 +7,7 @@ attested source metadata.
 
 import functools
 import hashlib
+import os
 import re
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional, TypeVar, cast
@@ -231,10 +232,23 @@ def _repo_root() -> Path:
 
 
 def _model_lock_manifest_path(path: Optional[Path] = None) -> Path:
-    """Resolve the model lock manifest path without importing heavy runtime modules."""
+    """Resolve the model-lock manifest path with shared env/CWD fallback semantics."""
     if path is not None:
         return Path(path)
-    return _repo_root() / _DEFAULT_MODEL_LOCK_MANIFEST_RELATIVE_PATH
+
+    env_path = os.getenv("TP_MODEL_LOCK_MANIFEST")
+    if env_path:
+        return Path(env_path)
+
+    repo_candidate = _repo_root() / _DEFAULT_MODEL_LOCK_MANIFEST_RELATIVE_PATH
+    if repo_candidate.exists():
+        return repo_candidate
+
+    cwd_candidate = Path.cwd() / _DEFAULT_MODEL_LOCK_MANIFEST_RELATIVE_PATH
+    if cwd_candidate.exists():
+        return cwd_candidate
+
+    return repo_candidate
 
 
 def _load_model_lock_manifest(path: Optional[Path] = None) -> Dict[str, Any]:
@@ -273,14 +287,58 @@ def _compute_file_sha256(path: Path, chunk_size: int = 1024 * 1024) -> str:
     return digest.hexdigest()
 
 
+def _ensure_path_within_allowed_roots(path: Path, allowed_roots: list[Path]) -> Path:
+    """Ensure a resolved path remains within one of the explicitly allowed roots."""
+    resolved = path.resolve()
+    for root in allowed_roots:
+        try:
+            resolved.relative_to(root)
+            return resolved
+        except ValueError:
+            continue
+
+    formatted_roots = ", ".join(str(root) for root in allowed_roots)
+    raise LicenseRestrictionError(f"Checkpoint path '{resolved}' is outside allowed roots: {formatted_roots}.")
+
+
 def _resolve_material_checkpoint_path(checkpoint: str, *, preset_path: Optional[Path]) -> Path:
-    """Resolve a checkpoint path relative to the preset file or repo root."""
+    """Resolve a checkpoint path relative to the preset file or repo root.
+
+    Relative paths are only allowed to resolve within the preset directory or
+    repository root so user-controlled checkpoint values cannot traverse the
+    filesystem and trigger arbitrary file hashing.
+    """
     candidate = Path(checkpoint)
-    if candidate.is_absolute():
-        return candidate
+    repo_root = _repo_root().resolve()
+    allowed_roots: list[Path] = []
     if preset_path is not None:
-        return (preset_path.parent / candidate).resolve()
-    return (_repo_root() / candidate).resolve()
+        allowed_roots.append(preset_path.parent.resolve())
+    if repo_root not in allowed_roots:
+        allowed_roots.append(repo_root)
+
+    if candidate.is_absolute():
+        return _ensure_path_within_allowed_roots(candidate, allowed_roots)
+
+    candidate_paths: list[Path] = []
+    if preset_path is not None:
+        candidate_paths.append(preset_path.parent / candidate)
+    candidate_paths.append(repo_root / candidate)
+
+    first_valid: Optional[Path] = None
+    for candidate_path in candidate_paths:
+        try:
+            resolved = _ensure_path_within_allowed_roots(candidate_path, allowed_roots)
+        except LicenseRestrictionError:
+            continue
+        if first_valid is None:
+            first_valid = resolved
+        if resolved.exists():
+            return resolved
+
+    if first_valid is not None:
+        return first_valid
+
+    return _ensure_path_within_allowed_roots(candidate_paths[0], allowed_roots)
 
 
 def _extract_materials_governance_overrides(
@@ -313,11 +371,18 @@ def _extract_materials_governance_overrides(
 
     resolved: dict[str, bool] = {}
     for key, candidates in sources.items():
-        values = [value for value in candidates if value is not None]
-        if any(not isinstance(value, bool) for value in values):
-            bad_value = next(value for value in values if not isinstance(value, bool))
+        provided_values = [value for value in candidates if value is not None]
+        if any(not isinstance(value, bool) for value in provided_values):
+            bad_value = next(value for value in provided_values if not isinstance(value, bool))
             raise ValueError(f"{key} must be a boolean when provided, got {type(bad_value).__name__}.")
-        resolved[key] = any(cast(bool, value) for value in values)
+
+        explicit_override = candidates[0]
+        if explicit_override is not None:
+            resolved[key] = cast(bool, explicit_override)
+            continue
+
+        fallback_values = [value for value in candidates[1:] if value is not None]
+        resolved[key] = any(cast(bool, value) for value in fallback_values)
 
     return resolved
 
@@ -607,7 +672,13 @@ def validate_materials_preset(
     if not specs:
         return True
 
-    manifest = _load_model_lock_manifest(manifest_path)
+    manifest: Optional[Dict[str, Any]] = None
+
+    def _manifest() -> Dict[str, Any]:
+        nonlocal manifest
+        if manifest is None:
+            manifest = _load_model_lock_manifest(manifest_path)
+        return manifest
 
     for source_path, backend, model_dict in specs:
         if backend == "heuristic":
@@ -628,7 +699,8 @@ def validate_materials_preset(
             if not overrides["allow_research_materials"]:
                 raise LicenseRestrictionError(
                     f"Materials backend '{backend}' is research-only. "
-                    "Reload this preset with allow_research_materials=True to acknowledge the restriction."
+                    "Reload this preset with allow_research_materials=True or set "
+                    "governance.materials.allow_research_materials=true to acknowledge the restriction."
                 )
 
         if _has_pinned_repo_revision(model_dict):
@@ -636,7 +708,7 @@ def validate_materials_preset(
                 backend=backend,
                 source_path=source_path,
                 model_dict=model_dict,
-                manifest=manifest,
+                manifest=_manifest(),
             )
             continue
 
@@ -645,14 +717,14 @@ def validate_materials_preset(
                 backend=backend,
                 source_path=source_path,
                 model_dict=model_dict,
-                manifest=manifest,
+                manifest=_manifest(),
             )
             if verify_runtime_bytes:
                 _verify_runtime_checkpoint_bytes(
                     backend=backend,
                     source_path=source_path,
                     model_dict=model_dict,
-                    manifest=manifest,
+                    manifest=_manifest(),
                     preset_path=preset_path,
                 )
             continue

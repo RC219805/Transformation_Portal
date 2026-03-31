@@ -44,7 +44,7 @@ stability: experimental
 governance:
   materials:
     allow_research_materials: true
-    allow_unattested_materials: true
+    allow_unattested_materials: false
 
 # Spatial AI Foundation Integration (Issue #890 Phase I)
 spatial_ai:

@@ -454,6 +454,53 @@ class TestValidateMaterialsPreset:
                 manifest_path=manifest_path,
             )
 
+    def test_explicit_false_override_beats_preset_governance_opt_in(self):
+        """Explicit call-site overrides must take precedence over preset opt-ins."""
+        preset = {
+            "name": "Experimental MaterialGAN",
+            "tier": "experimental",
+            "license_restriction": "research_only",
+            "governance": {
+                "materials": {
+                    "allow_research_materials": True,
+                }
+            },
+            "materials": {
+                "backend": "material_gan",
+                "model": {
+                    "checkpoint": "checkpoints/materialgan_v2.pth",
+                    "expected_sha256": "f" * 64,
+                },
+            },
+        }
+
+        with pytest.raises(LicenseRestrictionError, match="allow_research_materials=True"):
+            validate_materials_preset(
+                preset,
+                preset_path=Path("config/presets/experimental/material_pbr.yaml"),
+                allow_research_materials=False,
+                allow_unattested_materials=False,
+            )
+
+    def test_heuristic_materials_backend_does_not_require_manifest(self):
+        """Pure heuristic materials configs should not load the model-lock manifest."""
+        preset = {
+            "name": "Heuristic Materials",
+            "tier": "standard",
+            "materials": {
+                "backend": "heuristic",
+            },
+        }
+
+        assert (
+            validate_materials_preset(
+                preset,
+                preset_path=Path("config/presets/material_pbr.yaml"),
+                manifest_path=Path("/definitely/missing/model_lock_manifest.yaml"),
+            )
+            is True
+        )
+
     def test_nested_materials_backend_alias_is_validated(self):
         """Nested materials configs should normalize legacy backend aliases."""
         preset = {
@@ -557,6 +604,63 @@ class TestValidateMaterialsPreset:
 
         checkpoint_path.write_bytes(b"tampered-checkpoint")
         with pytest.raises(LicenseRestrictionError, match="checkpoint bytes"):
+            load_and_validate_preset(
+                preset_path,
+                manifest_path=manifest_path,
+                verify_runtime_bytes=True,
+            )
+
+    def test_runtime_checkpoint_verification_rejects_path_traversal(self, tmp_path: Path):
+        """Checkpoint verification must reject paths that escape the allowed roots."""
+        preset_dir = tmp_path / "presets"
+        preset_dir.mkdir()
+        escaped_checkpoint = tmp_path / "materialgan_v2.pth"
+        escaped_checkpoint.write_bytes(b"materialgan-checkpoint")
+        digest = hashlib.sha256(b"materialgan-checkpoint").hexdigest()
+
+        manifest_path = tmp_path / "model_lock_manifest.yaml"
+        _write_model_lock_manifest(
+            manifest_path,
+            artifact_attestation={
+                "materials": {
+                    "material_gan": {
+                        "artifacts": [
+                            {
+                                "filename": "../materialgan_v2.pth",
+                                "sha256": digest,
+                            }
+                        ]
+                    }
+                }
+            },
+        )
+
+        preset_path = preset_dir / "materialgan.yaml"
+        preset_path.write_text(
+            yaml.safe_dump(
+                {
+                    "name": "Experimental MaterialGAN",
+                    "tier": "experimental",
+                    "license_restriction": "research_only",
+                    "governance": {
+                        "materials": {
+                            "allow_research_materials": True,
+                        }
+                    },
+                    "materials": {
+                        "backend": "material_gan",
+                        "model": {
+                            "checkpoint": "../materialgan_v2.pth",
+                            "expected_sha256": digest,
+                        },
+                    },
+                },
+                sort_keys=True,
+            ),
+            encoding="utf-8",
+        )
+
+        with pytest.raises(LicenseRestrictionError, match="outside allowed roots"):
             load_and_validate_preset(
                 preset_path,
                 manifest_path=manifest_path,
