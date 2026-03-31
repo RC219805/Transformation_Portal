@@ -6,7 +6,11 @@ import numpy as np
 import pytest
 
 from transformation_portal.spatial_ai.materials.contracts import MaterialGenerationConfig
-from transformation_portal.spatial_ai.materials.material_backend import BackendResolutionWarning, MaterialBackend
+from transformation_portal.spatial_ai.materials.material_backend import (
+    BackendResolutionError,
+    BackendResolutionWarning,
+    MaterialBackend,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -243,3 +247,11 @@ class TestMaterialBackend:
         assert result.metadata.backend_decision.requested_backend == "nvdiffrec"
         assert result.metadata.backend_decision.executed_backend == "heuristic"
         assert result.metadata.backend_decision.availability_state.value == "input_contract_mismatch"
+
+    def test_strict_backend_raises_on_resolution_fallback(self, sample_rgb):
+        """Strict backend mode should fail instead of warning/falling back."""
+        backend = MaterialBackend(backend="nvdiffrec", device="cpu")
+        config = MaterialGenerationConfig(backend="nvdiffrec", device="cpu", strict_backend=True)
+
+        with pytest.raises(BackendResolutionError, match="Strict materials backend requested"):
+            backend.generate_pbr_textures(rgb=sample_rgb, config=config)

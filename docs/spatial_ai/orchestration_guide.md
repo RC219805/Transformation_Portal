@@ -72,6 +72,7 @@ config = PipelineConfig(
     },
     materials={
         "backend": "heuristic",
+        "strict_backend": False,
         "resolution": 2048,
     },
     resource_limits=ResourceLimits(
@@ -176,7 +177,8 @@ pipeline:
     material_classification: false  # Use CLIP?
 
   materials:
-    backend: heuristic  # heuristic | nvdiffrec
+    backend: heuristic  # heuristic | pbr_fusion | nvdiffrec | material_gan
+    strict_backend: false  # If true, fail instead of falling back when the backend cannot execute
     material_hints: true
     resolution: 1024  # 512 | 1024 | 2048 | 4096
     optimize_iterations: 50

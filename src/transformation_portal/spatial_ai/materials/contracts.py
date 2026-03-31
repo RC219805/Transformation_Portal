@@ -22,6 +22,8 @@ from typing import Literal, Optional
 
 import numpy as np
 
+VALID_MATERIAL_BACKENDS = ("pbr_fusion", "nvdiffrec", "material_gan", "heuristic")
+
 
 @dataclass
 class MaterialInput:
@@ -296,7 +298,7 @@ class MaterialGenerationConfig:
     """Configuration for PBR texture generation.
 
     Attributes:
-        backend: Backend engine ("nvdiffrec" or "material_gan").
+        backend: Backend engine ("pbr_fusion", "nvdiffrec", "material_gan", or "heuristic").
         resolution: Target texture resolution (power of 2: 512, 1024, 2048, 4096).
         optimize_iterations: Number of optimization iterations (10-500).
             More iterations = better quality but slower.
@@ -304,18 +306,24 @@ class MaterialGenerationConfig:
         normal_strength: Normal map intensity multiplier [0, 2].
         ao_intensity: AO darkness multiplier [0, 1].
         device: Compute device ("cuda", "mps", "cpu").
+        strict_backend: If True, fail instead of falling back when the requested
+            backend cannot execute under the current runtime/input contract.
     """
 
-    backend: Literal["nvdiffrec", "material_gan", "heuristic"]
+    backend: Literal["pbr_fusion", "nvdiffrec", "material_gan", "heuristic"]
     resolution: int = 1024
     optimize_iterations: int = 100
     use_depth: bool = True
     normal_strength: float = 1.0
     ao_intensity: float = 0.7
     device: Literal["cuda", "mps", "cpu"] = "cuda"
+    strict_backend: bool = False
 
     def __post_init__(self):
         """Validate config."""
+        if self.backend not in VALID_MATERIAL_BACKENDS:
+            raise ValueError(f"Backend must be one of {VALID_MATERIAL_BACKENDS}, got '{self.backend}'")
+
         # Resolution must be power of 2
         if self.resolution not in [512, 1024, 2048, 4096]:
             raise ValueError(f"Resolution must be 512/1024/2048/4096, got {self.resolution}")
@@ -331,3 +339,6 @@ class MaterialGenerationConfig:
         # AO intensity in [0, 1]
         if not 0.0 <= self.ao_intensity <= 1.0:
             raise ValueError(f"AO intensity must be in [0, 1], got {self.ao_intensity}")
+
+        if not isinstance(self.strict_backend, bool):
+            raise ValueError(f"strict_backend must be bool, got {type(self.strict_backend).__name__}")

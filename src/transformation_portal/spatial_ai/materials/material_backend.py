@@ -37,6 +37,7 @@ from transformation_portal.spatial_ai.materials.contracts import (
     MaterialProperties,
     PBRGenerationMetadata,
     PBRTextures,
+    VALID_MATERIAL_BACKENDS,
 )
 from transformation_portal.spatial_ai.materials.heuristic_fallback import HeuristicFallback
 
@@ -45,6 +46,10 @@ _MATERIAL_GENERATION_CONFIG_FIELDS = frozenset(inspect.signature(MaterialGenerat
 
 class BackendResolutionWarning(UserWarning):
     """Warn when a requested materials backend resolves to a different executor."""
+
+
+class BackendResolutionError(RuntimeError):
+    """Raised when strict materials backend resolution forbids fallback."""
 
 
 class MaterialBackend:
@@ -196,9 +201,16 @@ class MaterialBackend:
         if config is None:
             config = self._build_generation_config()
 
-        decision = self._resolve_backend_decision(config.backend)
+        decision = self.resolve_backend_decision(config.backend)
 
         if decision.requested_backend != decision.executed_backend:
+            if config.strict_backend:
+                raise BackendResolutionError(
+                    self.format_backend_resolution_message(
+                        decision,
+                        context="Strict materials backend requested, but the current contract cannot execute it",
+                    )
+                )
             self._warn_backend_resolution(decision)
 
         # Route to appropriate backend (returns metadata tuple now)
@@ -374,7 +386,8 @@ class MaterialBackend:
         """
         return self._generate_heuristic(rgb, mask, depth, material_hint, config, backend_decision)
 
-    def _resolve_backend_decision(self, requested_backend: str) -> BackendDecision:
+    @classmethod
+    def resolve_backend_decision(cls, requested_backend: str) -> BackendDecision:
         """Resolve the requested backend to the backend actually executable in this API."""
         if requested_backend == "heuristic":
             return BackendDecision(
@@ -436,7 +449,27 @@ class MaterialBackend:
                 required_runtime=["PBRFUSION_PATH", "comfyui_pbrfusion_workflow"],
             )
 
-        raise ValueError(f"Unknown backend: {requested_backend}")
+        raise ValueError(f"Unknown backend: {requested_backend}. Valid: {VALID_MATERIAL_BACKENDS}")
+
+    def _resolve_backend_decision(self, requested_backend: str) -> BackendDecision:
+        """Backward-compatible instance wrapper around the shared resolver."""
+        return self.resolve_backend_decision(requested_backend)
+
+    @staticmethod
+    def format_backend_resolution_message(decision: BackendDecision, *, context: str) -> str:
+        """Render a stable operator-facing explanation for a backend resolution result."""
+        details = [
+            f"requested_backend='{decision.requested_backend}'",
+            f"executed_backend='{decision.executed_backend}'",
+            f"availability_state='{decision.availability_state.value}'",
+        ]
+        if decision.fallback_reason:
+            details.append(f"reason={decision.fallback_reason}")
+        if decision.required_inputs:
+            details.append("required_inputs=" + ", ".join(decision.required_inputs))
+        if decision.required_runtime:
+            details.append("required_runtime=" + ", ".join(decision.required_runtime))
+        return f"{context}. " + "; ".join(details)
 
     @staticmethod
     def _warn_backend_resolution(decision: BackendDecision) -> None:
