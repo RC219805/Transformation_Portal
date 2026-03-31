@@ -22,7 +22,7 @@ from typing import Literal, Optional
 
 import numpy as np
 
-VALID_MATERIAL_BACKENDS = ("pbr_fusion", "nvdiffrec", "material_gan", "heuristic")
+from transformation_portal.attestation.materials_policy import VALID_MATERIAL_BACKENDS
 
 
 @dataclass

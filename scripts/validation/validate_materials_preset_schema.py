@@ -10,7 +10,6 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
-from typing import Any
 
 import yaml
 
@@ -19,7 +18,7 @@ SRC_ROOT = PROJECT_ROOT / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-from transformation_portal.compliance.materials_policy import (  # noqa: E402
+from transformation_portal.attestation.materials_policy import (  # noqa: E402
     ALLOWED_MATERIAL_BACKEND_PATHS,
     find_unknown_material_backend_schema_locations,
     looks_like_material_preset,

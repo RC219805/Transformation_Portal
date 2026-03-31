@@ -9,9 +9,11 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 from transformation_portal.attestation.model_lock_manifest import (
-    load_model_lock_manifest,
-    model_lock_manifest_path,
+    DEFAULT_MANIFEST_ENV_VAR,
+    DEFAULT_MANIFEST_RELATIVE_PATH,
 )
+from transformation_portal.attestation.model_lock_manifest import load_model_lock_manifest as _shared_load_model_lock_manifest
+from transformation_portal.attestation.model_lock_manifest import repo_root as _shared_repo_root
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +30,44 @@ _STRICT_ENV_VAR = "TP_STRICT_MODEL_LOCK"
 
 class ModelLockError(RuntimeError):
     """Raised when strict model lock policy is violated."""
+
+
+def _repo_root() -> Path:
+    """Best-effort repository root discovery.
+
+    Kept as a local wrapper for backward-compatible monkeypatching in tests.
+    """
+    return _shared_repo_root()
+
+
+def model_lock_manifest_path(path: Optional[Path] = None) -> Path:
+    """Resolve model lock manifest path.
+
+    Kept local so existing tests can monkeypatch ``_repo_root`` without
+    reaching into the shared attestation helper module.
+    """
+    if path is not None:
+        return Path(path)
+
+    env_path = os.getenv(DEFAULT_MANIFEST_ENV_VAR)
+    if env_path:
+        return Path(env_path)
+
+    repo_candidate = _repo_root() / DEFAULT_MANIFEST_RELATIVE_PATH
+    if repo_candidate.exists():
+        return repo_candidate
+
+    cwd_candidate = Path.cwd() / DEFAULT_MANIFEST_RELATIVE_PATH
+    if cwd_candidate.exists():
+        return cwd_candidate
+
+    return repo_candidate
+
+
+def load_model_lock_manifest(path: Optional[Path] = None) -> Dict[str, Any]:
+    """Load model lock manifest from disk."""
+    return _shared_load_model_lock_manifest(model_lock_manifest_path(path))
+
 
 def _parse_bool(raw: Optional[str]) -> bool:
     if raw is None:
@@ -73,6 +113,7 @@ def is_pinned_revision(revision: Optional[str]) -> bool:
         if pattern.search(normalized):
             return False
     return bool(_HEX40_RE.fullmatch(lowered))
+
 
 def manifest_revision_for_repo(
     repo_id: str,

@@ -13,16 +13,16 @@ from typing import Any, Callable, Dict, Optional, TypeVar, cast
 
 import yaml
 
+from transformation_portal.attestation.materials_policy import (
+    ALLOWED_MATERIAL_BACKEND_PATHS,
+    VALID_MATERIAL_BACKENDS,
+    find_unknown_material_backend_schema_locations,
+)
+from transformation_portal.attestation.materials_policy import looks_like_material_preset as _looks_like_material_preset
+from transformation_portal.attestation.materials_policy import normalize_material_backend as _normalize_material_backend
 from transformation_portal.attestation.model_lock_manifest import load_model_lock_manifest as _shared_load_model_lock_manifest
 from transformation_portal.attestation.model_lock_manifest import model_lock_manifest_path as _shared_model_lock_manifest_path
 from transformation_portal.attestation.model_lock_manifest import repo_root as _shared_repo_root
-from transformation_portal.compliance.materials_policy import (
-    ALLOWED_MATERIAL_BACKEND_PATHS,
-    find_unknown_material_backend_schema_locations,
-)
-from transformation_portal.compliance.materials_policy import looks_like_material_preset as _looks_like_material_preset
-from transformation_portal.compliance.materials_policy import normalize_material_backend as _normalize_material_backend
-from transformation_portal.spatial_ai.materials.contracts import VALID_MATERIAL_BACKENDS
 
 
 class LicenseRestrictionError(Exception):

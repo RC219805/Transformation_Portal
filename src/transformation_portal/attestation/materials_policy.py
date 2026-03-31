@@ -1,12 +1,11 @@
-"""Shared materials governance policy helpers used by runtime and CI validation."""
+"""Lightweight shared materials governance policy helpers."""
 
 from __future__ import annotations
 
 from pathlib import Path
 from typing import Any, Optional
 
-from transformation_portal.spatial_ai.materials.contracts import VALID_MATERIAL_BACKENDS
-
+VALID_MATERIAL_BACKENDS = ("pbr_fusion", "nvdiffrec", "material_gan", "heuristic")
 MATERIAL_BACKEND_ALIASES = {"materialgan": "material_gan"}
 ALLOWED_MATERIAL_BACKEND_PATHS = frozenset(
     {
