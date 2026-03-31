@@ -482,6 +482,33 @@ class TestValidateMaterialsPreset:
                 allow_unattested_materials=False,
             )
 
+    def test_conflicting_governance_values_fail_closed(self):
+        """Conflicting preset governance flags should raise instead of resolving permissively."""
+        preset = {
+            "name": "Experimental MaterialGAN",
+            "tier": "experimental",
+            "license_restriction": "research_only",
+            "governance": {
+                "materials": {
+                    "allow_research_materials": False,
+                }
+            },
+            "materials": {
+                "allow_research_materials": True,
+                "backend": "material_gan",
+                "model": {
+                    "checkpoint": "checkpoints/materialgan_v2.pth",
+                    "expected_sha256": "f" * 64,
+                },
+            },
+        }
+
+        with pytest.raises(ValueError, match="Conflicting non-None values for allow_research_materials"):
+            validate_materials_preset(
+                preset,
+                preset_path=Path("config/presets/experimental/material_pbr.yaml"),
+            )
+
     def test_heuristic_materials_backend_does_not_require_manifest(self):
         """Pure heuristic materials configs should not load the model-lock manifest."""
         preset = {
@@ -500,6 +527,27 @@ class TestValidateMaterialsPreset:
             )
             is True
         )
+
+    def test_manifest_load_failure_is_wrapped_as_license_error(self):
+        """Manifest load failures should surface as actionable licensing errors."""
+        preset = {
+            "name": "PBR Material Generation (Canary)",
+            "tier": "canary",
+            "backend": {
+                "type": "pbr_fusion",
+                "model": {
+                    "repo_id": "NightRaven109/PBRFusion4-RTXREMIX-Portable",
+                    "revision": "89abcdef0123456789abcdef0123456789abcdef",
+                },
+            },
+        }
+
+        with pytest.raises(LicenseRestrictionError, match="requires a valid model lock manifest"):
+            validate_materials_preset(
+                preset,
+                preset_path=Path("config/presets/material_pbr_canary.yaml"),
+                manifest_path=Path("/definitely/missing/model_lock_manifest.yaml"),
+            )
 
     def test_nested_materials_backend_alias_is_validated(self):
         """Nested materials configs should normalize legacy backend aliases."""

@@ -10,7 +10,8 @@ import yaml
 
 pytestmark = pytest.mark.unit
 
-SCRIPT_PATH = Path("scripts/validation/validate_materials_preset_schema.py")
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+SCRIPT_PATH = PROJECT_ROOT / "scripts/validation/validate_materials_preset_schema.py"
 
 
 def _load_module():
@@ -24,9 +25,9 @@ def _load_module():
 def test_actual_material_presets_use_known_backend_paths():
     module = _load_module()
 
-    assert module.check_preset(Path("config/presets/experimental/material_pbr.yaml")) == []
-    assert module.check_preset(Path("config/presets/material_pbr_canary.yaml")) == []
-    assert module.check_preset(Path("config/presets/experimental/apex_research_ultra.yaml")) == []
+    assert module.check_preset(PROJECT_ROOT / "config/presets/experimental/material_pbr.yaml") == []
+    assert module.check_preset(PROJECT_ROOT / "config/presets/material_pbr_canary.yaml") == []
+    assert module.check_preset(PROJECT_ROOT / "config/presets/experimental/apex_research_ultra.yaml") == []
 
 
 def test_unknown_material_backend_schema_path_is_rejected(tmp_path: Path):

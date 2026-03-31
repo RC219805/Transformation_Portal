@@ -7,13 +7,21 @@ attested source metadata.
 
 import functools
 import hashlib
-import os
 import re
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional, TypeVar, cast
 
 import yaml
 
+from transformation_portal.attestation.model_lock_manifest import load_model_lock_manifest as _shared_load_model_lock_manifest
+from transformation_portal.attestation.model_lock_manifest import model_lock_manifest_path as _shared_model_lock_manifest_path
+from transformation_portal.attestation.model_lock_manifest import repo_root as _shared_repo_root
+from transformation_portal.compliance.materials_policy import (
+    ALLOWED_MATERIAL_BACKEND_PATHS,
+    find_unknown_material_backend_schema_locations,
+)
+from transformation_portal.compliance.materials_policy import looks_like_material_preset as _looks_like_material_preset
+from transformation_portal.compliance.materials_policy import normalize_material_backend as _normalize_material_backend
 from transformation_portal.spatial_ai.materials.contracts import VALID_MATERIAL_BACKENDS
 
 
@@ -35,18 +43,8 @@ RESEARCH_ALLOWED_MATERIAL_TIERS = frozenset({"dev", "experimental", "research", 
 UNATTESTED_ALLOWED_MATERIAL_TIERS = frozenset({"dev", "experimental"})
 FLOATING_REVISIONS = frozenset({"main", "master", "latest", "head", "tip", "default"})
 PLACEHOLDER_MARKERS = ("NEEDS_VERIFICATION", "PLACEHOLDER", "PENDING", "TODO", "TBD", "UPDATE_WHEN")
-MATERIAL_BACKEND_ALIASES = {"materialgan": "material_gan"}
 _HEX40_RE = re.compile(r"^[0-9a-f]{40}$")
 _HEX64_RE = re.compile(r"^[0-9a-f]{64}$")
-_DEFAULT_MODEL_LOCK_MANIFEST_RELATIVE_PATH = Path("config/model_lock_manifest.yaml")
-_ALLOWED_MATERIAL_BACKEND_PATHS = frozenset(
-    {
-        "materials.backend",
-        "pipeline.materials.backend",
-        "backend.type",
-        "model.backend",
-    }
-)
 
 
 def require_non_commercial(reason: str = "") -> Callable[[F], F]:
@@ -153,15 +151,6 @@ def validate_non_commercial_preset(preset_dict: Dict[str, Any]) -> bool:
     return True
 
 
-def _normalize_material_backend(backend: Any) -> Optional[str]:
-    """Normalize backend identifiers used in materials presets."""
-    if not isinstance(backend, str):
-        return None
-
-    normalized = backend.strip().lower()
-    return MATERIAL_BACKEND_ALIASES.get(normalized, normalized)
-
-
 def _looks_placeholder(value: Any) -> bool:
     """Return True when a preset field is clearly unresolved."""
     if not isinstance(value, str):
@@ -219,63 +208,9 @@ def _has_attested_material_source(model_dict: Dict[str, Any]) -> bool:
     return _has_pinned_repo_revision(model_dict) or _has_attested_checkpoint(model_dict)
 
 
-def _repo_root() -> Path:
-    """Best-effort repository root discovery."""
-    this_file = Path(__file__).resolve()
-    for parent in this_file.parents:
-        if (parent / _DEFAULT_MODEL_LOCK_MANIFEST_RELATIVE_PATH).exists():
-            return parent
-    for parent in this_file.parents:
-        if (parent / "pyproject.toml").exists() or (parent / ".git").exists():
-            return parent
-    return this_file.parents[0]
-
-
-def _model_lock_manifest_path(path: Optional[Path] = None) -> Path:
-    """Resolve the model-lock manifest path with shared env/CWD fallback semantics."""
-    if path is not None:
-        return Path(path)
-
-    env_path = os.getenv("TP_MODEL_LOCK_MANIFEST")
-    if env_path:
-        return Path(env_path)
-
-    repo_candidate = _repo_root() / _DEFAULT_MODEL_LOCK_MANIFEST_RELATIVE_PATH
-    if repo_candidate.exists():
-        return repo_candidate
-
-    cwd_candidate = Path.cwd() / _DEFAULT_MODEL_LOCK_MANIFEST_RELATIVE_PATH
-    if cwd_candidate.exists():
-        return cwd_candidate
-
-    return repo_candidate
-
-
 def _load_model_lock_manifest(path: Optional[Path] = None) -> Dict[str, Any]:
     """Load the model lock manifest used for materials attestation checks."""
-    manifest_path = _model_lock_manifest_path(path)
-    if not manifest_path.exists():
-        raise FileNotFoundError(f"Model lock manifest not found: {manifest_path}")
-
-    with manifest_path.open("r", encoding="utf-8") as handle:
-        payload = yaml.safe_load(handle) or {}
-
-    if not isinstance(payload, dict):
-        raise ValueError(f"Model lock manifest root must be a mapping (dict): {manifest_path}")
-
-    repositories = payload.get("repositories")
-    if repositories is None:
-        payload["repositories"] = {}
-    elif not isinstance(repositories, dict):
-        raise ValueError(f"Model lock manifest 'repositories' must be a mapping: {manifest_path}")
-
-    artifact_attestation = payload.get("artifact_attestation")
-    if artifact_attestation is None:
-        payload["artifact_attestation"] = {}
-    elif not isinstance(artifact_attestation, dict):
-        raise ValueError(f"Model lock manifest 'artifact_attestation' must be a mapping: {manifest_path}")
-
-    return payload
+    return _shared_load_model_lock_manifest(path)
 
 
 def _compute_file_sha256(path: Path, chunk_size: int = 1024 * 1024) -> str:
@@ -309,7 +244,7 @@ def _resolve_material_checkpoint_path(checkpoint: str, *, preset_path: Optional[
     filesystem and trigger arbitrary file hashing.
     """
     candidate = Path(checkpoint)
-    repo_root = _repo_root().resolve()
+    repo_root = _shared_repo_root().resolve()
     allowed_roots: list[Path] = []
     if preset_path is not None:
         allowed_roots.append(preset_path.parent.resolve())
@@ -381,70 +316,21 @@ def _extract_materials_governance_overrides(
             resolved[key] = cast(bool, explicit_override)
             continue
 
-        fallback_values = [value for value in candidates[1:] if value is not None]
-        resolved[key] = any(cast(bool, value) for value in fallback_values)
+        fallback_values = [cast(bool, value) for value in candidates[1:] if value is not None]
+        if not fallback_values:
+            resolved[key] = False
+            continue
+
+        unique_values = set(fallback_values)
+        if len(unique_values) > 1:
+            raise ValueError(
+                f"Conflicting non-None values for {key}; ensure a single boolean value across "
+                "governance/materials/pipeline configuration."
+            )
+
+        resolved[key] = fallback_values[0]
 
     return resolved
-
-
-def iter_material_backend_declaration_paths(preset_dict: Dict[str, Any], preset_path: Optional[Path]) -> list[str]:
-    """Return all recognized material backend declaration paths in a preset."""
-    paths: list[str] = []
-
-    def _walk(node: Any, path: tuple[str, ...]) -> None:
-        if isinstance(node, dict):
-            for key, value in node.items():
-                next_path = path + (str(key),)
-                normalized = _normalize_material_backend(value) if key in {"backend", "type"} else None
-                joined = ".".join(next_path)
-                if normalized in VALID_MATERIAL_BACKENDS:
-                    paths.append(joined)
-                _walk(value, next_path)
-        elif isinstance(node, list):
-            for index, value in enumerate(node):
-                _walk(value, path + (str(index),))
-
-    if isinstance(preset_dict.get("materials"), dict):
-        _walk(preset_dict["materials"], ("materials",))
-
-    pipeline_cfg = preset_dict.get("pipeline")
-    if isinstance(pipeline_cfg, dict) and isinstance(pipeline_cfg.get("materials"), dict):
-        _walk(pipeline_cfg["materials"], ("pipeline", "materials"))
-
-    if _looks_like_material_preset(preset_dict, preset_path):
-        backend_cfg = preset_dict.get("backend")
-        if isinstance(backend_cfg, dict):
-            _walk(backend_cfg, ("backend",))
-        model_cfg = preset_dict.get("model")
-        if isinstance(model_cfg, dict):
-            _walk(model_cfg, ("model",))
-
-    return sorted(set(paths))
-
-
-def find_unknown_material_backend_schema_locations(preset_dict: Dict[str, Any], preset_path: Optional[Path]) -> list[str]:
-    """Return backend declaration paths that are not part of the approved materials schema."""
-    return [
-        path
-        for path in iter_material_backend_declaration_paths(preset_dict, preset_path)
-        if path not in _ALLOWED_MATERIAL_BACKEND_PATHS
-    ]
-
-
-def _looks_like_material_preset(preset_dict: Dict[str, Any], preset_path: Optional[Path]) -> bool:
-    """Heuristically detect the dedicated material PBR preset family."""
-    if preset_path is not None and "material_pbr" in preset_path.as_posix().lower():
-        return True
-
-    name = preset_dict.get("name")
-    if isinstance(name, str) and "pbr material" in name.lower():
-        return True
-
-    pipeline_cfg = preset_dict.get("pipeline")
-    if isinstance(pipeline_cfg, dict) and isinstance(pipeline_cfg.get("materials"), dict):
-        return True
-
-    return isinstance(preset_dict.get("materials"), dict)
 
 
 def _iter_material_backend_specs(
@@ -658,7 +544,7 @@ def validate_materials_preset(
     if unknown_paths:
         raise LicenseRestrictionError(
             "Materials backend declarations must use approved schema locations. "
-            f"Unknown paths: {unknown_paths}. Allowed paths: {sorted(_ALLOWED_MATERIAL_BACKEND_PATHS)}."
+            f"Unknown paths: {unknown_paths}. Allowed paths: {sorted(ALLOWED_MATERIAL_BACKEND_PATHS)}."
         )
 
     overrides = _extract_materials_governance_overrides(
@@ -677,7 +563,15 @@ def validate_materials_preset(
     def _manifest() -> Dict[str, Any]:
         nonlocal manifest
         if manifest is None:
-            manifest = _load_model_lock_manifest(manifest_path)
+            try:
+                manifest = _load_model_lock_manifest(manifest_path)
+            except (FileNotFoundError, ValueError) as exc:
+                resolved_manifest_path = _shared_model_lock_manifest_path(manifest_path)
+                raise LicenseRestrictionError(
+                    "Materials licensing validation requires a valid model lock manifest. "
+                    f"Resolved manifest path: {resolved_manifest_path}. "
+                    "Set TP_MODEL_LOCK_MANIFEST or pass manifest_path= to load_and_validate_preset()."
+                ) from exc
         return manifest
 
     for source_path, backend, model_dict in specs:
