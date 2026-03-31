@@ -7,6 +7,7 @@ Validates that:
 """
 
 import hashlib
+import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -24,6 +25,8 @@ from transformation_portal.compliance import (
     validate_materials_preset,
     validate_non_commercial_preset,
 )
+from transformation_portal.compliance.validate_licenses import main as validate_licenses_main
+from transformation_portal.compliance.validate_licenses import validate_preset_file
 
 
 def _write_model_lock_manifest(
@@ -76,7 +79,7 @@ class TestRequireNonCommercialDecorator:
 
     def test_decorator_includes_reason_in_error(self):
         """Verify error message includes provided reason."""
-        reason = "DA3 1.1 uses CC BY-NC 4.0 models"
+        reason = "DA3 Giant 1.1 uses CC BY-NC 4.0"
 
         @require_non_commercial(reason=reason)
         def load_model(config: MockConfig):
@@ -123,11 +126,18 @@ class TestValidateNonCommercialPreset:
         preset = {"name": "commercial-preset", "model": {"hf_id": "depth-anything/Depth-Anything-V3-Metric-Large-hf"}}
         assert validate_non_commercial_preset(preset) is True
 
-    def test_non_commercial_preset_requires_marker(self):
-        """Verify non-commercial presets require license_restriction marker."""
+    @pytest.mark.parametrize(
+        "model_id",
+        [
+            "depth-anything/DA3-GIANT-1.1",
+            "depth-anything/DA3NESTED-GIANT-LARGE-1.1",
+        ],
+    )
+    def test_non_commercial_preset_requires_marker(self, model_id):
+        """Only known CC BY-NC DA3 variants should require license markers."""
         preset = {
             "name": "da31-preset",
-            "model": {"hf_id": "depth-anything/DA3-Large-1.1"},
+            "model": {"hf_id": model_id},
             # Missing: license_restriction: non_commercial
         }
         with pytest.raises(LicenseRestrictionError, match="license_restriction='non_commercial'"):
@@ -137,10 +147,32 @@ class TestValidateNonCommercialPreset:
         """Verify properly marked non-commercial presets pass validation."""
         preset = {
             "name": "da31-preset",
-            "model": {"hf_id": "depth-anything/DA3-Large-1.1"},
+            "model": {"hf_id": "depth-anything/DA3NESTED-GIANT-LARGE-1.1"},
             "license_restriction": "non_commercial",
         }
         assert validate_non_commercial_preset(preset) is True
+
+    def test_non_commercial_preset_with_research_only_marker_passes(self):
+        """Research-only markers should satisfy the non-commercial acknowledgement gate."""
+        preset = {
+            "name": "da31-preset",
+            "model": {"hf_id": "depth-anything/DA3NESTED-GIANT-LARGE-1.1"},
+            "license_restriction": "research_only",
+        }
+        assert validate_non_commercial_preset(preset) is True
+
+    @pytest.mark.parametrize(
+        "model_id",
+        [
+            "depth-anything/DA3-GIANT-1.1",
+            "depth-anything/DA3NESTED-GIANT-LARGE-1.1",
+        ],
+    )
+    def test_known_non_commercial_da31_variants_detected(self, model_id):
+        """Verify only the known CC BY-NC DA3 variants are detected."""
+        preset = {"name": "test", "model": {"hf_id": model_id}}
+        with pytest.raises(LicenseRestrictionError):
+            validate_non_commercial_preset(preset)
 
     @pytest.mark.parametrize(
         "model_id",
@@ -148,14 +180,12 @@ class TestValidateNonCommercialPreset:
             "depth-anything/DA3-Large-1.1",
             "depth-anything/DA3-Base-1.1",
             "depth-anything/DA3-Small-1.1",
-            "depth-anything/DA3NESTED-GIANT-LARGE-1.1",
         ],
     )
-    def test_all_da31_variants_detected(self, model_id):
-        """Verify all known DA3 1.1 variants are detected."""
+    def test_apache_da31_variants_do_not_require_marker(self, model_id):
+        """Apache-licensed DA3 variants should not be gated as non-commercial."""
         preset = {"name": "test", "model": {"hf_id": model_id}}
-        with pytest.raises(LicenseRestrictionError):
-            validate_non_commercial_preset(preset)
+        assert validate_non_commercial_preset(preset) is True
 
     def test_missing_model_section_passes(self):
         """Verify presets without model section pass validation."""
@@ -194,7 +224,10 @@ class TestLoadAndValidatePreset:
     def test_load_non_commercial_preset_without_marker_fails(self):
         """Verify non-commercial presets without marker fail validation."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
-            yaml.dump({"name": "da31-preset", "tier": "research", "model": {"hf_id": "depth-anything/DA3-Large-1.1"}}, f)
+            yaml.dump(
+                {"name": "da31-preset", "tier": "research", "model": {"hf_id": "depth-anything/DA3NESTED-GIANT-LARGE-1.1"}},
+                f,
+            )
             f.flush()
             path = Path(f.name)
 
@@ -212,7 +245,7 @@ class TestLoadAndValidatePreset:
                     "name": "da31-research-preset",
                     "tier": "research",
                     "license_restriction": "non_commercial",
-                    "model": {"hf_id": "depth-anything/DA3-Large-1.1"},
+                    "model": {"hf_id": "depth-anything/DA3NESTED-GIANT-LARGE-1.1"},
                 },
                 f,
             )
@@ -223,6 +256,26 @@ class TestLoadAndValidatePreset:
             preset = load_and_validate_preset(path)
             assert preset["name"] == "da31-research-preset"
             assert preset["license_restriction"] == "non_commercial"
+        finally:
+            path.unlink()
+
+    def test_load_apache_da31_preset_without_marker_succeeds(self):
+        """Apache-licensed DA3 presets should not require a non-commercial marker."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            yaml.dump(
+                {
+                    "name": "da31-large-preset",
+                    "tier": "research",
+                    "model": {"hf_id": "depth-anything/DA3-Large-1.1"},
+                },
+                f,
+            )
+            f.flush()
+            path = Path(f.name)
+
+        try:
+            preset = load_and_validate_preset(path)
+            assert preset["model"]["hf_id"] == "depth-anything/DA3-Large-1.1"
         finally:
             path.unlink()
 
@@ -357,6 +410,29 @@ class TestValidateMaterialsPreset:
             validate_materials_preset(
                 preset,
                 preset_path=Path("config/presets/experimental/material_pbr.yaml"),
+                allow_research_materials=True,
+                allow_unattested_materials=True,
+            )
+            is True
+        )
+
+    def test_apex_research_ultra_can_opt_in_to_unattested_sources(self):
+        """apex_research_ultra should be treated as an explicit experimental research tier."""
+        preset = {
+            "name": "apex-research-ultra-experimental",
+            "tier": "apex_research_ultra",
+            "license_restriction": "research_only",
+            "model": {
+                "backend": "nvdiffrec",
+                "repo_id": None,
+                "revision": None,
+            },
+        }
+
+        assert (
+            validate_materials_preset(
+                preset,
+                preset_path=Path("config/presets/experimental/apex_research_ultra.yaml"),
                 allow_research_materials=True,
                 allow_unattested_materials=True,
             )
@@ -835,3 +911,80 @@ class TestBackwardCompatibility:
         }
         # Should not raise
         assert validate_non_commercial_preset(preset) is True
+
+
+class TestValidateLicensesScript:
+    """Test the standalone preset compliance script."""
+
+    def test_script_accepts_apache_da31_large_without_noncommercial_marker(self):
+        """The standalone validator should share the updated DA3 license policy."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            yaml.dump(
+                {
+                    "name": "da31-large-preset",
+                    "tier": "research",
+                    "model": {"hf_id": "depth-anything/DA3-Large-1.1"},
+                },
+                f,
+            )
+            f.flush()
+            path = Path(f.name)
+
+        try:
+            is_valid, issues = validate_preset_file(path)
+            assert is_valid is True
+            assert issues == []
+        finally:
+            path.unlink()
+
+    def test_script_uses_shared_loader_for_materials_governance(self):
+        """The standalone validator must reject the same materials policy violations as runtime loading."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            yaml.dump(
+                {
+                    "name": "materialgan-preset",
+                    "tier": "experimental",
+                    "license_restriction": "research_only",
+                    "materials": {
+                        "backend": "material_gan",
+                        "model": {
+                            "checkpoint": "checkpoints/materialgan_v2.pth",
+                            "expected_sha256": "f" * 64,
+                        },
+                    },
+                },
+                f,
+            )
+            f.flush()
+            path = Path(f.name)
+
+        try:
+            is_valid, issues = validate_preset_file(path)
+            assert is_valid is False
+            assert any("allow_research_materials=True" in issue for issue in issues)
+        finally:
+            path.unlink()
+
+    def test_script_scans_nested_preset_directories(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys):
+        """The standalone validator should scan preset trees recursively."""
+        nested_dir = tmp_path / "experimental"
+        nested_dir.mkdir()
+        preset_path = nested_dir / "nested_preset.yaml"
+        preset_path.write_text(
+            yaml.safe_dump(
+                {
+                    "name": "nested-commercial-preset",
+                    "tier": "experimental",
+                    "model": {"hf_id": "depth-anything/DA3-Large-1.1"},
+                },
+                sort_keys=True,
+            ),
+            encoding="utf-8",
+        )
+
+        monkeypatch.setattr(sys, "argv", ["validate_licenses.py", "--check-presets", str(tmp_path)])
+        exit_code = validate_licenses_main()
+        captured = capsys.readouterr()
+
+        assert exit_code == 0
+        assert "nested_preset.yaml" in captured.out
