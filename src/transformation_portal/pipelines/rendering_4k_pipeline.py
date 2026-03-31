@@ -1477,7 +1477,7 @@ class Rendering4KPipeline:
         if not config_path.exists():
             raise FileNotFoundError(f"Config file not found: {config_path}")
 
-        with open(config_path) as f:
+        with config_path.open(encoding="utf-8") as f:
             # YAML_GOVERNANCE_EXEMPT: legacy render pipeline config, not a preset/governance entrypoint.
             data = yaml.safe_load(f)
 

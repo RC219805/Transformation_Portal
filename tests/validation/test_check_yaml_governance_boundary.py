@@ -49,6 +49,46 @@ def test_unmarked_raw_safe_load_is_rejected(tmp_path: Path):
     assert "bad_loader.py" in violations[0]
 
 
+def test_single_python_file_path_is_scanned(tmp_path: Path):
+    module = _load_module()
+    bad_file = tmp_path / "single_loader.py"
+    bad_file.write_text(
+        dedent("""
+            import yaml as y
+
+            def load_payload(path):
+                with open(path) as handle:
+                    return y.safe_load(handle)
+            """).strip() + "\n",
+        encoding="utf-8",
+    )
+
+    violations = module.find_violations([bad_file])
+    assert len(violations) == 1
+    assert "single_loader.py" in violations[0]
+
+
+def test_direct_safe_load_import_is_rejected(tmp_path: Path):
+    module = _load_module()
+    source_dir = tmp_path / "src"
+    source_dir.mkdir()
+    bad_file = source_dir / "direct_loader.py"
+    bad_file.write_text(
+        dedent("""
+            from yaml import safe_load
+
+            def load_payload(path):
+                with open(path) as handle:
+                    return safe_load(handle)
+            """).strip() + "\n",
+        encoding="utf-8",
+    )
+
+    violations = module.find_violations([source_dir])
+    assert len(violations) == 1
+    assert "direct_loader.py" in violations[0]
+
+
 def test_exempt_raw_safe_load_is_allowed(tmp_path: Path):
     module = _load_module()
     source_dir = tmp_path / "src"
