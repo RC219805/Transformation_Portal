@@ -1,7 +1,7 @@
 # Outstanding TODOs for Advanced Features - Transformation Portal
 
 **Generated**: 2026-02-18
-**Last Updated**: 2026-03-30
+**Last Updated**: 2026-03-31
 **Status**: Based on experimental preset analysis and codebase review
 
 ---
@@ -79,6 +79,7 @@ pip install sam2
 - [x] Regression coverage for backend decision serialization and persistence
 - [x] Experimental preset accepts unresolved `repo_id` / `revision` as `null`
 - [x] Config-time validation plus `strict_backend` fail-fast behavior for the single-image materials pipeline
+- [x] Materials preset loader enforces research-tier opt-in and blocks unattested non-heuristic backends unless explicitly allowed for dev/experimental review
 
 **Current emitted artifact contract**:
 - `albedo.npy` - RGB diffuse color
@@ -92,6 +93,7 @@ pip install sam2
 
 **Still pending (real execution)**:
 - Real backend execution for NVDIFFREC, MaterialGAN, and PBRFusion
+- Runtime attestation/license enforcement for executable backends once real integrations land
 - Continued schema discipline around availability-state vocabulary and provenance consumers
 
 #### MaterialGAN (Phase 2.2C - Optional Enrichment)
