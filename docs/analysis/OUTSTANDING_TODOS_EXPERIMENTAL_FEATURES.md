@@ -1,7 +1,7 @@
 # Outstanding TODOs for Advanced Features - Transformation Portal
 
 **Generated**: 2026-02-18
-**Last Updated**: 2026-03-27
+**Last Updated**: 2026-03-30
 **Status**: Based on experimental preset analysis and codebase review
 
 ---
@@ -67,11 +67,38 @@ pip install sam2
 ---
 
 ### 3. Physics-Based Material Estimation
-**Status**: ❌ Not Implemented
+**Status**: ⚠️ Contract + provenance emission implemented; neural backends not implemented
 **Required For**: apex_research_ultra, material_pbr presets
-**Components Needed**:
+
+**Done (contract-hardening)**:
+- [x] `AvailabilityState` / `BackendDecision` resolution model
+- [x] `backend_decision` threaded into `PBRGenerationMetadata`
+- [x] Per-segment `diagnostics.json` and `provenance.json` sidecars under `output/materials/segment_*`
+- [x] Deterministic payload hashing for emitted texture artifacts
+- [x] Atomic JSON writes for materials diagnostics/provenance
+- [x] Regression coverage for backend decision serialization and persistence
+- [x] Experimental preset accepts unresolved `repo_id` / `revision` as `null`
+
+**Current emitted artifact contract**:
+- `albedo.npy` - RGB diffuse color
+- `normal.npy` - Normal map
+- `roughness.npy` - Surface roughness map
+- `metallic.npy` - Metalness map (or specular proxy for dielectric)
+- `ao.npy` - Ambient occlusion map
+- `height.npy` - Optional displacement / height map
+- `diagnostics.json` - Per-segment generation metadata and texture shape diagnostics
+- `provenance.json` - Per-segment backend decision and artifact payload hashes
+
+**Still pending (real execution)**:
+- Config-time validation / optional strict mode so impossible backend requests fail instead of silently falling back
+- Real backend execution for NVDIFFREC, MaterialGAN, and PBRFusion
+- Continued schema discipline around availability-state vocabulary and provenance consumers
 
 #### MaterialGAN (Phase 2.2C - Optional Enrichment)
+**Current behavior**:
+- `material_gan` requests resolve to `heuristic` with `input_contract_mismatch`
+
+**Still Pending**:
 - [ ] MaterialGAN backend implementation
 - [ ] Model checkpoint download
 - [ ] Geometric normal fusion
@@ -80,42 +107,57 @@ pip install sam2
 **Position in Roadmap**: MaterialGAN should be treated as an **optional SVBRDF enrichment backend**,
 not the primary material path. Best introduced after NVDIFFREC normalization exists.
 
-**Missing**:
-- `checkpoints/materialgan_v2.pth` (PLACEHOLDER)
-- `src/transformation_portal/spatial_ai/materials/material_backend.py:238` - Falls back to heuristic
+**Notes**:
+- `src/transformation_portal/spatial_ai/materials/material_backend.py` currently records the fallback in metadata/provenance instead of attempting execution
+- Packaging and license verification still need explicit resolution before shipping any real integration
 
 #### NVDIFFREC (Phase 2.2A - Primary Material Path)
+**Current behavior**:
+- `nvdiffrec` requests resolve to `heuristic` with `input_contract_mismatch`
+
+**Still Pending**:
 - [ ] NVDIFFREC backend implementation
 - [ ] Optimization loop (200 iterations)
 - [ ] Learning rate tuning
-- [ ] Normalized artifact contract output
+- [ ] Multi-view input contract and camera-pose ingestion path
 
 **Recommended Integration Priority**: NVDIFFREC should be implemented **first** because:
 1. Better alignment with geometry-first pipeline
 2. Better fit with mesh extraction / SuGaR / Poisson downstreams
 3. Easier to frame as deterministic optimization vs GAN synthesis
 
-**Missing**:
-- `src/transformation_portal/spatial_ai/materials/material_backend.py:202` - Falls back to heuristic
+**Notes**:
+- `src/transformation_portal/spatial_ai/materials/material_backend.py` now emits explicit fallback provenance rather than implying NVDIFFREC executed
+- Real execution belongs behind a richer multiview capture bundle than the current single-image materials API exposes
 
-**Normalized Output Contract** (both backends should emit):
-- `albedo` - RGB diffuse color
-- `roughness` - Surface roughness map
-- `metallic` - Metalness map (or specular for dielectric)
-- `normal` - Normal map
-- `height` - Displacement/height if available
-- `diagnostics.json` - Confidence and pipeline info
-- `provenance.json` - Full artifact provenance
+#### PBRFusion (Phase 5B - Optional Runtime-Gated Backend)
+**Current behavior**:
+- `pbr_fusion` requests resolve to `heuristic`
+- Availability is recorded as `runtime_missing` when `PBRFUSION_PATH` is absent
+- Availability is recorded as `integration_missing` when a runtime path exists but integration is not implemented
+
+**Still Pending**:
+- [ ] Direct PyTorch or ComfyUI worker integration
+- [ ] Runtime bootstrap / pinned model revision contract
+- [ ] Optional GPU-backed integration test lane
 
 **Files**:
 - `config/presets/experimental/apex_research_ultra.yaml` (lines 122-138)
 - `config/presets/experimental/material_pbr.yaml`
 - `src/transformation_portal/spatial_ai/materials/material_backend.py`
+- `src/transformation_portal/spatial_ai/orchestration/pipeline.py`
+- `tests/spatial_ai/materials/test_material_backend.py`
+- `tests/spatial_ai/orchestration/test_pipeline.py`
 
 **Governance**: Both backends should be gated under:
 - Explicit optional extras in pyproject.toml
 - Isolated env/worker (no core import coupling)
 - Separate CI leg (avoid contaminating deterministic baseline)
+
+**Next steps**:
+1. Add config-time validation and an optional strict mode to fail when fallback occurs.
+2. Keep `AvailabilityState` values as the canonical availability vocabulary across emitted provenance.
+3. Start PBRFusion integration behind optional dependencies and pinned revision gates.
 
 ---
 
