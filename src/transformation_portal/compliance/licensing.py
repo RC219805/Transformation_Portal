@@ -18,8 +18,9 @@ from transformation_portal.spatial_ai.materials.contracts import VALID_MATERIAL_
 class LicenseRestrictionError(Exception):
     """Raised when a licensing restriction is violated.
 
-    This exception is raised when attempting to use a non-commercial model
-    without explicit opt-in via `non_commercial_ok=True`.
+    This exception covers commercial-use restrictions, research-only backend
+    gates, and missing/insufficient attestation metadata for materials
+    backends that require explicit governance approval.
     """
 
     pass
@@ -108,6 +109,7 @@ def validate_non_commercial_preset(preset_dict: Dict[str, Any]) -> bool:
         True if preset is valid (either commercial or properly marked non-commercial)
 
     Raises:
+        ValueError: If the preset root is not a mapping.
         LicenseRestrictionError: If preset uses non-commercial model
                                 without proper marker
     """
@@ -319,6 +321,7 @@ def load_and_validate_preset(
 
     Raises:
         FileNotFoundError: If preset file does not exist
+        ValueError: If the loaded preset root is not a mapping.
         yaml.YAMLError: If YAML is malformed
         LicenseRestrictionError: If licensing markers are missing
     """

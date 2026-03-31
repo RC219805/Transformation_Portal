@@ -1,7 +1,8 @@
 """Compliance and licensing module for Transformation Portal.
 
-This module provides tools for enforcing licensing constraints, particularly
-around non-commercial models like Depth Anything V3.1 (DA3 1.1, CC BY-NC 4.0).
+This module provides tools for enforcing licensing constraints, including
+non-commercial model restrictions plus research-only and attestation gates
+for materials backends.
 
 Key exports:
 - require_non_commercial: Decorator to enforce non-commercial opt-in
