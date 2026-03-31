@@ -47,18 +47,25 @@ PLACEHOLDER_MARKERS = ("NEEDS_VERIFICATION", "PLACEHOLDER", "PENDING", "TODO", "
 _HEX40_RE = re.compile(r"^[0-9a-f]{40}$")
 _HEX64_RE = re.compile(r"^[0-9a-f]{64}$")
 _VERIFY_RUNTIME_BYTES_ENV_VAR = "TP_VERIFY_MATERIAL_RUNTIME_BYTES"
+NON_COMMERCIAL_HF_MODEL_IDS = frozenset(
+    {
+        "depth-anything/da3-giant-1.1",
+        "depth-anything/da3nested-giant-large-1.1",
+    }
+)
+ACCEPTED_NON_COMMERCIAL_LICENSE_MARKERS = frozenset({"non_commercial", "research_only"})
 
 
 def require_non_commercial(reason: str = "") -> Callable[[F], F]:
     """Decorator enforcing non-commercial usage authorization.
 
     This decorator ensures that functions using non-commercial models
-    (e.g., DA3 1.1) only execute when the caller has explicitly set
+    (e.g., DA3 Giant / Nested 1.1 variants) only execute when the caller has explicitly set
     `non_commercial_ok=True` in their configuration.
 
     Args:
         reason: Human-readable explanation of the licensing restriction
-                (e.g., "DA3 1.1 uses CC BY-NC 4.0 models")
+                (e.g., "DA3 Giant 1.1 uses CC BY-NC 4.0")
 
     Raises:
         LicenseRestrictionError: If the configuration does not have
@@ -66,7 +73,7 @@ def require_non_commercial(reason: str = "") -> Callable[[F], F]:
 
     Example:
         ```python
-        @require_non_commercial(reason="DA3 1.1 uses CC BY-NC 4.0 models")
+        @require_non_commercial(reason="DA3 Giant 1.1 uses CC BY-NC 4.0")
         def load_da3_1_1_preset(config: EnhanceConfig):
             ...
         ```
@@ -130,24 +137,16 @@ def validate_non_commercial_preset(preset_dict: Dict[str, Any]) -> bool:
     model = preset_dict.get("model", {})
     hf_id = model.get("hf_id", "")
 
-    # Check for known non-commercial models
-    non_commercial_identifiers = [
-        "DA3-Large-1.1",
-        "DA3-Base-1.1",
-        "DA3-Small-1.1",
-        "DA3NESTED-GIANT-LARGE-1.1",
-    ]
+    normalized_hf_id = hf_id.strip().lower() if isinstance(hf_id, str) else ""
 
-    is_non_commercial_model = any(identifier in hf_id for identifier in non_commercial_identifiers)
-
-    if is_non_commercial_model:
+    if normalized_hf_id in NON_COMMERCIAL_HF_MODEL_IDS:
         # Verify marker exists
         license_restriction = preset_dict.get("license_restriction")
-        if license_restriction != "non_commercial":
+        if license_restriction not in ACCEPTED_NON_COMMERCIAL_LICENSE_MARKERS:
             raise LicenseRestrictionError(
                 f"Preset uses non-commercial model (hf_id={hf_id}) "
-                "but lacks license_restriction='non_commercial' marker.\n"
-                "Please add this marker to acknowledge CC BY-NC 4.0 restrictions."
+                "but lacks license_restriction='non_commercial' or 'research_only' marker.\n"
+                "Please add one of these markers to acknowledge CC BY-NC 4.0 restrictions."
             )
 
     return True

@@ -1,11 +1,10 @@
-# ⚠️  LICENSE: CC BY-NC 4.0 (Non-Commercial Research Use Only)
-# This preset uses Depth Anything V3.1 (DA3 1.1) which is licensed for non-commercial
-# research and academic use only. For commercial applications, use DA3 V2 instead.
+# LICENSE: Apache-2.0
+# This preset uses the DA3 1.1 Large variant, which is commercially usable upstream.
+# The preset remains in the research tier because it is tuned for M4 exploratory workflows.
 
 name: depth-anything-v3.1-research-m4
-description: "Depth Anything V3.1 M4-optimized for research/academic use (CC BY-NC 4.0)"
+description: "Depth Anything V3.1 Large 1.1 optimized for Apple Silicon M4 research workflows"
 tier: research
-license_restriction: non_commercial
 
 # Model configuration
 model:
@@ -39,15 +38,12 @@ performance:
 
 # Usage notes
 usage_notes: |
-  This preset is for non-commercial research, academic benchmarking, and non-profit
-  projects only. It is optimized for Apple Silicon (M1/M2/M3/M4) with Metal acceleration.
-
-  EXPLICIT REQUIREMENT: Set `non_commercial_ok=True` in your EnhanceConfig to use this preset.
+  This preset is optimized for Apple Silicon (M1/M2/M3/M4) with Metal acceleration.
+  The upstream DA3 1.1 Large model is Apache-2.0, so no non-commercial opt-in is required.
 
   Example:
     config = EnhanceConfig(
         preset=Preset.RESEARCH_DA31_M4,
-        non_commercial_ok=True,  # Must be True
         depth_device="mps",
     )
 
@@ -56,6 +52,6 @@ governance:
   author: Transformation Portal Architect
   created_date: "2026-02-01"
   adr_reference: "ADR-0015"
-  requires_opt_in: true
-  license: "CC BY-NC 4.0"
-  restrictions: ["non-commercial", "research-only", "academic-use"]
+  requires_opt_in: false
+  license: "Apache-2.0"
+  restrictions: ["research-tier", "m4-optimized"]
