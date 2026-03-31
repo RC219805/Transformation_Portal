@@ -103,6 +103,9 @@ jobs:
       - name: Validate materials preset schema locations
         run: python scripts/validation/validate_materials_preset_schema.py
 
+      - name: Check YAML governance boundary
+        run: python scripts/validation/check_yaml_governance_boundary.py
+
   test-layer1:
     name: Layer 1 Tests (Fast)
     runs-on: ubuntu-latest

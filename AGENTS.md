@@ -22,7 +22,7 @@ Quick reference for common workflows and commands in this repo.
 - `make clean` remove Python caches and build/test artifacts.
 - `make lint` run flake8 + pylint (non-blocking).
 - `make lint-parity` run the GitHub lint job locally with the CI-pinned Python 3.12 lint environment.
-- `make ci` run local CI checks (lint + check-json-serialization + check-piptools-cache + test-fast + test-orchestrator-contract).
+- `make ci` run local CI checks (lint + check-json-serialization + check-yaml-governance + check-piptools-cache + test-fast + test-orchestrator-contract).
 - `make ci-full` run comprehensive local CI (`./scripts/local_ci_check.sh`).
 - `make ci-quick` run quick local CI (`./scripts/local_ci_check.sh --quick`).
 - `make pre-commit` run pre-commit hooks with CI-aligned Black/isort versions.
@@ -32,6 +32,7 @@ Quick reference for common workflows and commands in this repo.
 - `make check-quality` dry-run quality auto-fix checks (`scripts/auto_fix_quality.py --dry-run`).
 - `make validate-ci` validate GitHub Actions configs.
 - `make check-json-serialization` fail when raw `json.dump`/`json.dumps` usage is detected outside approved modules.
+- `make check-yaml-governance` fail when raw `yaml.safe_load` usage appears outside the shared preset loader or explicitly exempt non-preset loaders.
 - `make check-piptools-cache` fail if `requirements/.pip-tools-cache` is tracked in git.
 - `make check-test-markers` audit test marker coverage (ADR-044) - reports unmarked test functions.
 - `make check-ci-sync` verify CI dependency files are in sync (no drift between `requirements-ci.txt` and `requirements/ci.in`).

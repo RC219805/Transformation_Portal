@@ -368,6 +368,7 @@ class RecipeValidator:
 
         try:
             with open(recipe_path, "r", encoding="utf-8") as f:
+                # YAML_GOVERNANCE_EXEMPT: recipe validation reads internal recipe files, not presets.
                 recipe_dict = yaml.safe_load(f)
         except yaml.YAMLError as e:
             return (False, [f"Invalid YAML: {e}"])

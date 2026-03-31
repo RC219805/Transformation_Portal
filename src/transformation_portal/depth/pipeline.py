@@ -87,7 +87,8 @@ class ArchitecturalDepthPipeline:
         if not config_path.exists():
             raise FileNotFoundError(f"Config file not found: {config_path}")
 
-        with open(config_path, "r") as f:
+        with open(config_path, "r", encoding="utf-8") as f:
+            # YAML_GOVERNANCE_EXEMPT: internal depth pipeline config, not config/presets/**.
             config = yaml.safe_load(f)
 
         logger.info(f"Loaded configuration from {config_path}")

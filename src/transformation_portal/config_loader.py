@@ -174,6 +174,7 @@ def load_recipe(path: Union[str, Path], expand_env: bool = True, resolve_paths: 
         raise FileNotFoundError(f"Recipe file not found: {path}")
 
     with open(path, "r", encoding="utf-8") as f:
+        # YAML_GOVERNANCE_EXEMPT: recipe loader for internal workflow recipes, not preset governance.
         recipe = yaml.safe_load(f)
 
     if recipe is None:

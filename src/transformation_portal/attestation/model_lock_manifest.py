@@ -51,6 +51,7 @@ def load_model_lock_manifest(path: Optional[Path] = None) -> Dict[str, Any]:
         raise FileNotFoundError(f"Model lock manifest not found: {manifest_path}")
 
     with manifest_path.open("r", encoding="utf-8") as handle:
+        # YAML_GOVERNANCE_EXEMPT: internal attestation-manifest loader, not a preset contract.
         payload = yaml.safe_load(handle) or {}
 
     if not isinstance(payload, dict):

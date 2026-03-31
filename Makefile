@@ -26,7 +26,7 @@ PHASE6_SMOKE_TESTS := \
 
 .PHONY: help test-fast test-novideo test-full test-integration test-structure test-utils test-orchestrator-contract coverage-fast-scope venv setup clean \
         lint lint-parity ci ci-full pre-commit install-hooks quality-check fix-quality validate-ci organize-docs check-json-serialization check-piptools-cache \
-        check-stale-docs lock lock-prod lock-ci lock-dev install-core install-ml install-ml-core install-ml-raw install-ml-sam2 install-ml-coreml docs docs-clean \
+        check-yaml-governance check-stale-docs lock lock-prod lock-ci lock-dev install-core install-ml install-ml-core install-ml-raw install-ml-sam2 install-ml-coreml docs docs-clean \
         check-test-markers check-ci-sync
 
 help:
@@ -58,6 +58,7 @@ help:
 	@echo "  install-hooks      Install git pre-commit hook"
 	@echo "  quality-check      Run all quality checks (lint + structure + tests)"
 	@echo "  check-json-serialization  Fail on raw json.dump/json.dumps outside approved modules"
+	@echo "  check-yaml-governance  Fail on raw yaml.safe_load outside approved preset/exempt boundaries"
 	@echo "  check-piptools-cache  Fail if requirements/.pip-tools-cache is tracked in git"
 	@echo "  check-stale-docs   Detect changed-file references to deleted docs root paths"
 	@echo "  check-test-markers Audit test marker coverage (ADR-044)"
@@ -204,7 +205,7 @@ lint-parity:
 	@echo "Running CI-aligned lint parity..."
 	@./scripts/setup/run_lint_tool.sh parity
 
-ci: lint check-json-serialization check-piptools-cache check-ci-sync test-fast test-orchestrator-contract
+ci: lint check-json-serialization check-yaml-governance check-piptools-cache check-ci-sync test-fast test-orchestrator-contract
 	@echo "✅ Local CI checks completed successfully."
 
 # Comprehensive CI simulation
@@ -259,6 +260,10 @@ validate-ci:
 check-json-serialization:
 	@echo "Checking JSON serialization guardrails..."
 	@"$(PY)" scripts/validation/check_raw_json_usage.py
+
+check-yaml-governance:
+	@echo "Checking YAML governance boundary..."
+	@"$(PY)" scripts/validation/check_yaml_governance_boundary.py
 
 check-piptools-cache:
 	@echo "Checking pip-tools cache guardrails..."
