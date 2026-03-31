@@ -6,6 +6,7 @@ attested source metadata.
 """
 
 import functools
+import re
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional, TypeVar
 
@@ -32,6 +33,8 @@ UNATTESTED_ALLOWED_MATERIAL_TIERS = frozenset({"dev", "experimental"})
 FLOATING_REVISIONS = frozenset({"main", "master", "latest", "head", "tip", "default"})
 PLACEHOLDER_MARKERS = ("NEEDS_VERIFICATION", "PLACEHOLDER", "PENDING", "TODO", "TBD", "UPDATE_WHEN")
 MATERIAL_BACKEND_ALIASES = {"materialgan": "material_gan"}
+_HEX40_RE = re.compile(r"^[0-9a-f]{40}$")
+_HEX64_RE = re.compile(r"^[0-9a-f]{64}$")
 
 
 def require_non_commercial(reason: str = "") -> Callable[[F], F]:
@@ -109,7 +112,7 @@ def validate_non_commercial_preset(preset_dict: Dict[str, Any]) -> bool:
                                 without proper marker
     """
     if not isinstance(preset_dict, dict):
-        return True
+        raise ValueError(f"Preset must be a mapping (dict), got {type(preset_dict).__name__}.")
 
     model = preset_dict.get("model", {})
     hf_id = model.get("hf_id", "")
@@ -163,13 +166,29 @@ def _has_pinned_repo_revision(model_dict: Dict[str, Any]) -> bool:
     """Return True when repo_id/revision look pinned and non-placeholder."""
     repo_id = model_dict.get("repo_id")
     revision = model_dict.get("revision")
+    normalized_revision = revision.strip().lower() if isinstance(revision, str) else None
 
     if not isinstance(repo_id, str) or not repo_id.strip() or _looks_placeholder(repo_id):
         return False
     if not isinstance(revision, str) or not revision.strip() or _looks_placeholder(revision):
         return False
 
-    return revision.strip().lower() not in FLOATING_REVISIONS
+    if normalized_revision in FLOATING_REVISIONS or not _HEX40_RE.fullmatch(normalized_revision):
+        return False
+
+    return not all(ch == normalized_revision[0] for ch in normalized_revision)
+
+
+def _is_valid_sha256_digest(expected_sha256: Any) -> bool:
+    """Return True when the supplied SHA-256 digest is pinned and non-placeholder."""
+    if not isinstance(expected_sha256, str) or _looks_placeholder(expected_sha256):
+        return False
+
+    normalized = expected_sha256.strip().lower()
+    if not _HEX64_RE.fullmatch(normalized):
+        return False
+
+    return not all(ch == normalized[0] for ch in normalized)
 
 
 def _has_attested_checkpoint(model_dict: Dict[str, Any]) -> bool:
@@ -179,14 +198,7 @@ def _has_attested_checkpoint(model_dict: Dict[str, Any]) -> bool:
 
     if not isinstance(checkpoint, str) or not checkpoint.strip() or _looks_placeholder(checkpoint):
         return False
-    if not isinstance(expected_sha256, str) or len(expected_sha256.strip()) != 64 or _looks_placeholder(expected_sha256):
-        return False
-
-    try:
-        int(expected_sha256, 16)
-    except ValueError:
-        return False
-    return True
+    return _is_valid_sha256_digest(expected_sha256)
 
 
 def _has_attested_material_source(model_dict: Dict[str, Any]) -> bool:
@@ -245,7 +257,7 @@ def validate_materials_preset(
 ) -> bool:
     """Validate materials backend tier, licensing, and attestation policy."""
     if not isinstance(preset_dict, dict):
-        return True
+        raise ValueError(f"Preset must be a mapping (dict), got {type(preset_dict).__name__}.")
 
     tier = str(preset_dict.get("tier", "")).strip().lower()
     license_restriction = preset_dict.get("license_restriction")
@@ -315,6 +327,9 @@ def load_and_validate_preset(
 
     with open(preset_path) as f:
         preset = yaml.safe_load(f)
+
+    if not isinstance(preset, dict):
+        raise ValueError(f"Preset must be a mapping (dict), got {type(preset).__name__}.")
 
     validate_non_commercial_preset(preset)
     validate_materials_preset(

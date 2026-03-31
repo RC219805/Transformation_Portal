@@ -95,6 +95,11 @@ class TestRequireNonCommercialDecorator:
 class TestValidateNonCommercialPreset:
     """Test preset validation for non-commercial licensing markers."""
 
+    def test_non_mapping_preset_raises_value_error(self):
+        """Validators should fail fast on invalid YAML roots."""
+        with pytest.raises(ValueError, match="Preset must be a mapping"):
+            validate_non_commercial_preset(None)  # type: ignore[arg-type]
+
     def test_commercial_preset_passes_validation(self):
         """Verify commercial presets pass without markers."""
         preset = {"name": "commercial-preset", "model": {"hf_id": "depth-anything/Depth-Anything-V3-Metric-Large-hf"}}
@@ -218,6 +223,19 @@ class TestLoadAndValidatePreset:
 
         try:
             with pytest.raises(Exception):  # YAML error
+                load_and_validate_preset(path)
+        finally:
+            path.unlink()
+
+    def test_load_non_mapping_preset_raises_value_error(self):
+        """Preset loader should reject YAML roots that are not mappings."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            yaml.dump(["not", "a", "mapping"], f)
+            f.flush()
+            path = Path(f.name)
+
+        try:
+            with pytest.raises(ValueError, match="Preset must be a mapping"):
                 load_and_validate_preset(path)
         finally:
             path.unlink()
@@ -347,6 +365,26 @@ class TestValidateMaterialsPreset:
                 preset_path=Path("config/presets/material_pbr_canary.yaml"),
             )
 
+    def test_canary_pbrfusion_rejects_all_zero_revision(self):
+        """Obvious placeholder revisions must not count as attested."""
+        preset = {
+            "name": "PBR Material Generation (Canary)",
+            "tier": "canary",
+            "backend": {
+                "type": "pbr_fusion",
+                "model": {
+                    "repo_id": "NightRaven109/PBRFusion4-RTXREMIX-Portable",
+                    "revision": "0" * 40,
+                },
+            },
+        }
+
+        with pytest.raises(LicenseRestrictionError, match="attested source tuple"):
+            validate_materials_preset(
+                preset,
+                preset_path=Path("config/presets/material_pbr_canary.yaml"),
+            )
+
     def test_actual_canary_material_preset_passes(self):
         """The checked-in canary preset should satisfy attestation requirements."""
         preset = load_and_validate_preset(Path("config/presets/material_pbr_canary.yaml"))
@@ -363,6 +401,28 @@ class TestValidateMaterialsPreset:
                 "model": {
                     "checkpoint": "checkpoints/materialgan_v2.pth",
                     "expected_sha256": "PLACEHOLDER_UPDATE_WHEN_INTEGRATED",
+                },
+            },
+        }
+
+        with pytest.raises(LicenseRestrictionError, match="attested source tuple"):
+            validate_materials_preset(
+                preset,
+                preset_path=Path("config/presets/experimental/apex_research_ultra.yaml"),
+                allow_research_materials=True,
+            )
+
+    def test_nested_materials_backend_rejects_all_zero_checkpoint_digest(self):
+        """All-zero checkpoint digests must not count as attested."""
+        preset = {
+            "name": "apex-research-ultra-experimental",
+            "tier": "apex_research_ultra",
+            "license_restriction": "research_only",
+            "materials": {
+                "backend": "materialgan",
+                "model": {
+                    "checkpoint": "checkpoints/materialgan_v2.pth",
+                    "expected_sha256": "0" * 64,
                 },
             },
         }
