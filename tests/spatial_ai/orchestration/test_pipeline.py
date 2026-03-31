@@ -446,7 +446,7 @@ class TestSpatialAIPipelinePresetLoading:
     def test_load_config_file_propagates_materials_governance_overrides(self, tmp_path):
         """Preset governance markers should propagate into the runtime materials config."""
         config_data = {
-            "tier": "dev",
+            "tier": "experimental",
             "license_restriction": "research_only",
             "governance": {
                 "materials": {
