@@ -700,6 +700,7 @@ def load_and_validate_preset(
         raise FileNotFoundError(f"Preset file not found: {preset_path}")
 
     with open(preset_path) as f:
+        # YAML_GOVERNANCE_AUTHORITY: shared preset loader for config/presets/** and preset-like runtime entrypoints.
         preset = yaml.safe_load(f)
 
     if not isinstance(preset, dict):

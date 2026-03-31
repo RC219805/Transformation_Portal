@@ -1478,6 +1478,7 @@ class Rendering4KPipeline:
             raise FileNotFoundError(f"Config file not found: {config_path}")
 
         with open(config_path) as f:
+            # YAML_GOVERNANCE_EXEMPT: legacy render pipeline config, not a preset/governance entrypoint.
             data = yaml.safe_load(f)
 
         # Build config from YAML data

@@ -315,6 +315,7 @@ def validate_preset(
         return report
 
     with open(preset_path) as f:
+        # YAML_GOVERNANCE_EXEMPT: diagnostic preset scanner reads YAML for health checks without executing presets.
         data = yaml.safe_load(f) or {}
 
     preset_name = data.get("name", preset_path.stem)

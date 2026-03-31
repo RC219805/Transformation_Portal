@@ -46,6 +46,7 @@ def _load_config_data(path: Path) -> Mapping[str, Any]:
         if suffix in {".yaml", ".yml"}:
             if yaml is None:
                 raise RuntimeError("YAML configuration files require the optional 'pyyaml' dependency")
+            # YAML_GOVERNANCE_EXEMPT: generic batch CLI config mapping, not a Transformation Portal preset contract.
             data = yaml.safe_load(path.read_text())  # type: ignore[no-untyped-call]
         else:
             data = json.loads(path.read_text())
