@@ -52,6 +52,87 @@ class BackendResolutionError(RuntimeError):
     """Raised when strict materials backend resolution forbids fallback."""
 
 
+def resolve_material_backend_decision(requested_backend: str) -> BackendDecision:
+    """Resolve the requested backend to the backend actually executable in this API."""
+    if requested_backend == "heuristic":
+        return BackendDecision(
+            requested_backend="heuristic",
+            executed_backend="heuristic",
+            availability_state=AvailabilityState.AVAILABLE,
+            fallback_reason=None,
+            required_inputs=[],
+            required_runtime=[],
+        )
+
+    if requested_backend == "nvdiffrec":
+        return BackendDecision(
+            requested_backend="nvdiffrec",
+            executed_backend="heuristic",
+            availability_state=AvailabilityState.INPUT_CONTRACT_MISMATCH,
+            fallback_reason=(
+                "NVDIFFREC requires a multiview capture bundle with camera poses "
+                "and lighting context; MaterialBackend only exposes single-image input."
+            ),
+            required_inputs=["multi_view_images", "camera_poses", "lighting_context"],
+            required_runtime=["cuda", "nvdiffrast", "pinned_nvdiffrec_revision"],
+        )
+
+    if requested_backend == "material_gan":
+        return BackendDecision(
+            requested_backend="material_gan",
+            executed_backend="heuristic",
+            availability_state=AvailabilityState.INPUT_CONTRACT_MISMATCH,
+            fallback_reason=(
+                "MaterialGAN expects multi-image capture evidence with lighting "
+                "variation metadata; MaterialBackend only exposes single-image input."
+            ),
+            required_inputs=["multi_lighting_images", "capture_metadata_json"],
+            required_runtime=["materialgan_runtime", "checkpoint_weights"],
+        )
+
+    if requested_backend == "pbr_fusion":
+        pbrfusion_path = os.getenv("PBRFUSION_PATH")
+        if pbrfusion_path and os.path.exists(pbrfusion_path):
+            return BackendDecision(
+                requested_backend="pbr_fusion",
+                executed_backend="heuristic",
+                availability_state=AvailabilityState.INTEGRATION_MISSING,
+                fallback_reason=("PBRFusion runtime path exists, but direct ComfyUI integration is not implemented yet."),
+                required_inputs=[],
+                required_runtime=["comfyui_pbrfusion_workflow"],
+            )
+
+        return BackendDecision(
+            requested_backend="pbr_fusion",
+            executed_backend="heuristic",
+            availability_state=AvailabilityState.RUNTIME_MISSING,
+            fallback_reason=(
+                "PBRFusion runtime is not installed or PBRFUSION_PATH is not set. "
+                "Install ComfyUI + PBRFusion nodes to enable it."
+            ),
+            required_inputs=[],
+            required_runtime=["PBRFUSION_PATH", "comfyui_pbrfusion_workflow"],
+        )
+
+    raise ValueError(f"Unknown backend: {requested_backend}. Valid: {VALID_MATERIAL_BACKENDS}")
+
+
+def format_backend_resolution_message(decision: BackendDecision, *, context: str) -> str:
+    """Render a stable operator-facing explanation for a backend resolution result."""
+    details = [
+        f"requested_backend='{decision.requested_backend}'",
+        f"executed_backend='{decision.executed_backend}'",
+        f"availability_state='{decision.availability_state.value}'",
+    ]
+    if decision.fallback_reason:
+        details.append(f"reason={decision.fallback_reason}")
+    if decision.required_inputs:
+        details.append("required_inputs=" + ", ".join(decision.required_inputs))
+    if decision.required_runtime:
+        details.append("required_runtime=" + ", ".join(decision.required_runtime))
+    return f"{context}. " + "; ".join(details)
+
+
 class MaterialBackend:
     """Unified backend for neural PBR texture generation.
 
@@ -389,67 +470,7 @@ class MaterialBackend:
     @classmethod
     def resolve_backend_decision(cls, requested_backend: str) -> BackendDecision:
         """Resolve the requested backend to the backend actually executable in this API."""
-        if requested_backend == "heuristic":
-            return BackendDecision(
-                requested_backend="heuristic",
-                executed_backend="heuristic",
-                availability_state=AvailabilityState.AVAILABLE,
-                fallback_reason=None,
-                required_inputs=[],
-                required_runtime=[],
-            )
-
-        if requested_backend == "nvdiffrec":
-            return BackendDecision(
-                requested_backend="nvdiffrec",
-                executed_backend="heuristic",
-                availability_state=AvailabilityState.INPUT_CONTRACT_MISMATCH,
-                fallback_reason=(
-                    "NVDIFFREC requires a multiview capture bundle with camera poses "
-                    "and lighting context; MaterialBackend only exposes single-image input."
-                ),
-                required_inputs=["multi_view_images", "camera_poses", "lighting_context"],
-                required_runtime=["cuda", "nvdiffrast", "pinned_nvdiffrec_revision"],
-            )
-
-        if requested_backend == "material_gan":
-            return BackendDecision(
-                requested_backend="material_gan",
-                executed_backend="heuristic",
-                availability_state=AvailabilityState.INPUT_CONTRACT_MISMATCH,
-                fallback_reason=(
-                    "MaterialGAN expects multi-image capture evidence with lighting "
-                    "variation metadata; MaterialBackend only exposes single-image input."
-                ),
-                required_inputs=["multi_lighting_images", "capture_metadata_json"],
-                required_runtime=["materialgan_runtime", "checkpoint_weights"],
-            )
-
-        if requested_backend == "pbr_fusion":
-            pbrfusion_path = os.getenv("PBRFUSION_PATH")
-            if pbrfusion_path and os.path.exists(pbrfusion_path):
-                return BackendDecision(
-                    requested_backend="pbr_fusion",
-                    executed_backend="heuristic",
-                    availability_state=AvailabilityState.INTEGRATION_MISSING,
-                    fallback_reason=("PBRFusion runtime path exists, but direct ComfyUI integration is not implemented yet."),
-                    required_inputs=[],
-                    required_runtime=["comfyui_pbrfusion_workflow"],
-                )
-
-            return BackendDecision(
-                requested_backend="pbr_fusion",
-                executed_backend="heuristic",
-                availability_state=AvailabilityState.RUNTIME_MISSING,
-                fallback_reason=(
-                    "PBRFusion runtime is not installed or PBRFUSION_PATH is not set. "
-                    "Install ComfyUI + PBRFusion nodes to enable it."
-                ),
-                required_inputs=[],
-                required_runtime=["PBRFUSION_PATH", "comfyui_pbrfusion_workflow"],
-            )
-
-        raise ValueError(f"Unknown backend: {requested_backend}. Valid: {VALID_MATERIAL_BACKENDS}")
+        return resolve_material_backend_decision(requested_backend)
 
     def _resolve_backend_decision(self, requested_backend: str) -> BackendDecision:
         """Backward-compatible instance wrapper around the shared resolver."""
@@ -458,18 +479,7 @@ class MaterialBackend:
     @staticmethod
     def format_backend_resolution_message(decision: BackendDecision, *, context: str) -> str:
         """Render a stable operator-facing explanation for a backend resolution result."""
-        details = [
-            f"requested_backend='{decision.requested_backend}'",
-            f"executed_backend='{decision.executed_backend}'",
-            f"availability_state='{decision.availability_state.value}'",
-        ]
-        if decision.fallback_reason:
-            details.append(f"reason={decision.fallback_reason}")
-        if decision.required_inputs:
-            details.append("required_inputs=" + ", ".join(decision.required_inputs))
-        if decision.required_runtime:
-            details.append("required_runtime=" + ", ".join(decision.required_runtime))
-        return f"{context}. " + "; ".join(details)
+        return format_backend_resolution_message(decision, context=context)
 
     @staticmethod
     def _warn_backend_resolution(decision: BackendDecision) -> None:

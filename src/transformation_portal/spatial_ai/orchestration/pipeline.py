@@ -48,7 +48,11 @@ import yaml
 from transformation_portal.ingest.canonical_json import dump_json
 from transformation_portal.spatial_ai.ingest.linear_decoder import LinearDecoder, LinearIngestResult
 from transformation_portal.spatial_ai.materials.contracts import MaterialInput, PBRTextures
-from transformation_portal.spatial_ai.materials.material_backend import MaterialBackend
+from transformation_portal.spatial_ai.materials.material_backend import (
+    MaterialBackend,
+    format_backend_resolution_message,
+    resolve_material_backend_decision,
+)
 from transformation_portal.spatial_ai.reconstruction.contracts import Scene3D
 from transformation_portal.spatial_ai.segmentation.contracts import MaskMetadata, SegmentationInput, SegmentationResult
 from transformation_portal.spatial_ai.segmentation.sam2_backend import SAM2Backend
@@ -215,22 +219,16 @@ class PipelineConfig:
         strict_backend = materials_cfg.get("strict_backend", False)
 
         if not isinstance(strict_backend, bool):
-            raise ValueError(
-                f"materials.strict_backend must be a boolean, got {type(strict_backend).__name__}"
-            )
+            raise ValueError(f"materials.strict_backend must be a boolean, got {type(strict_backend).__name__}")
 
-        decision = MaterialBackend.resolve_backend_decision(requested_backend)
+        decision = resolve_material_backend_decision(requested_backend)
 
         if strict_backend and decision.requested_backend != decision.executed_backend:
-            message = MaterialBackend.format_backend_resolution_message(
+            message = format_backend_resolution_message(
                 decision,
-                context=(
-                    "materials.strict_backend=True forbids fallback in the single-image materials pipeline"
-                ),
+                context="materials.strict_backend=True forbids fallback in the single-image materials pipeline",
             )
-            raise ValueError(
-                f"{message}. Use backend='heuristic' or disable strict_backend for permissive fallback behavior."
-            )
+            raise ValueError(f"{message}. Use backend='heuristic' or disable strict_backend for permissive fallback behavior.")
 
 
 if "PipelineResult" not in globals():
