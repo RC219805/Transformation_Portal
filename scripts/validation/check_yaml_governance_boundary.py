@@ -22,6 +22,7 @@ SOURCE_ROOTS = (PROJECT_ROOT / "src",)
 SAFE_LOAD_PATTERN = re.compile(r"\byaml\.safe_load\s*\(")
 AUTHORITY_MARKER = "YAML_GOVERNANCE_AUTHORITY:"
 EXEMPT_MARKER = "YAML_GOVERNANCE_EXEMPT:"
+AUTHORITY_FILE_PATHS = frozenset({(PROJECT_ROOT / "src" / "transformation_portal" / "compliance" / "licensing.py").resolve()})
 
 
 def iter_python_files(roots: Iterable[Path]) -> list[Path]:
@@ -97,13 +98,27 @@ def file_has_yaml_safe_load(path: Path) -> bool:
     return detector.found
 
 
-def file_has_boundary_marker(path: Path) -> bool:
-    """Return True when a file is explicitly marked as authority or exempt."""
+def _read_text(path: Path) -> str:
+    """Read a source file as UTF-8, replacing undecodable bytes when needed."""
     try:
-        text = path.read_text(encoding="utf-8")
+        return path.read_text(encoding="utf-8")
     except UnicodeDecodeError:
-        text = path.read_text(encoding="utf-8", errors="replace")
-    return AUTHORITY_MARKER in text or EXEMPT_MARKER in text
+        return path.read_text(encoding="utf-8", errors="replace")
+
+
+def file_has_authority_marker(path: Path) -> bool:
+    """Return True when a file declares YAML governance authority."""
+    return AUTHORITY_MARKER in _read_text(path)
+
+
+def file_has_exempt_marker(path: Path) -> bool:
+    """Return True when a file is explicitly exempt from preset governance loading."""
+    return EXEMPT_MARKER in _read_text(path)
+
+
+def file_is_yaml_governance_authority(path: Path) -> bool:
+    """Return True when a file is an approved shared authority module."""
+    return path.resolve() in AUTHORITY_FILE_PATHS and file_has_authority_marker(path)
 
 
 def find_violations(roots: Iterable[Path] | None = None) -> list[str]:
@@ -113,7 +128,13 @@ def find_violations(roots: Iterable[Path] | None = None) -> list[str]:
     for path in iter_python_files(scan_roots):
         if not file_has_yaml_safe_load(path):
             continue
-        if file_has_boundary_marker(path):
+        if file_has_exempt_marker(path) or file_is_yaml_governance_authority(path):
+            continue
+        if file_has_authority_marker(path):
+            violations.append(
+                f"{path}: {AUTHORITY_MARKER} is reserved for approved shared preset loaders; "
+                f"use {EXEMPT_MARKER} for non-preset/internal YAML loaders"
+            )
             continue
         violations.append(
             f"{path}: raw yaml.safe_load() requires either {AUTHORITY_MARKER} or {EXEMPT_MARKER}"

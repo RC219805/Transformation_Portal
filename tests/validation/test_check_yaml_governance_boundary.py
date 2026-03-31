@@ -109,7 +109,7 @@ def test_exempt_raw_safe_load_is_allowed(tmp_path: Path):
     assert module.find_violations([source_dir]) == []
 
 
-def test_authority_raw_safe_load_is_allowed(tmp_path: Path):
+def test_authority_raw_safe_load_is_allowed_for_known_authority_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     module = _load_module()
     source_dir = tmp_path / "src"
     source_dir.mkdir()
@@ -126,4 +126,28 @@ def test_authority_raw_safe_load_is_allowed(tmp_path: Path):
         encoding="utf-8",
     )
 
+    monkeypatch.setattr(module, "AUTHORITY_FILE_PATHS", frozenset({authority_file.resolve()}))
     assert module.find_violations([source_dir]) == []
+
+
+def test_authority_marker_is_rejected_outside_known_authority_file(tmp_path: Path):
+    module = _load_module()
+    source_dir = tmp_path / "src"
+    source_dir.mkdir()
+    authority_file = source_dir / "random_loader.py"
+    authority_file.write_text(
+        dedent("""
+            import yaml
+
+            def load_payload(path):
+                with open(path) as handle:
+                    # YAML_GOVERNANCE_AUTHORITY: shared preset loader.
+                    return yaml.safe_load(handle)
+            """).strip() + "\n",
+        encoding="utf-8",
+    )
+
+    violations = module.find_violations([source_dir])
+    assert len(violations) == 1
+    assert "reserved for approved shared preset loaders" in violations[0]
+    assert "YAML_GOVERNANCE_EXEMPT:" in violations[0]
