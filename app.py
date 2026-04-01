@@ -84,6 +84,23 @@ def _normalize_root_path(value: str | Path) -> Path:
     return Path(os.path.realpath(candidate))
 
 
+def _default_allowed_path_roots() -> List[Path]:
+    roots: List[Path] = [REPO_ROOT]
+    candidate_paths: List[Path] = [Path(tempfile.gettempdir()).resolve()]
+    if os.name != "nt":
+        # Accept the common POSIX temp aliases used by operators and local tooling.
+        candidate_paths.extend([Path("/tmp"), Path("/private/tmp")])
+
+    for candidate in candidate_paths:
+        try:
+            normalized = _normalize_root_path(candidate)
+        except (OSError, RuntimeError, ValueError):
+            continue
+        if normalized not in roots:
+            roots.append(normalized)
+    return roots
+
+
 def _env_path_roots(name: str, default: List[Path]) -> List[Path]:
     raw = os.getenv(name)
     if raw is None:
@@ -196,10 +213,7 @@ MAX_REQUEST_BYTES = _env_int("TP_MAX_REQUEST_BYTES", 1024 * 1024, minimum=1024)
 RATE_LIMIT_PER_MINUTE = _env_int("TP_RATE_LIMIT_PER_MINUTE", 60, minimum=0)
 MAX_CONCURRENT_JOBS = _env_int("TP_MAX_CONCURRENT_JOBS", 4, minimum=1)
 RATE_LIMIT_WINDOW_SECONDS = 60.0
-DEFAULT_ALLOWED_PATH_ROOTS = [
-    REPO_ROOT,
-    Path(tempfile.gettempdir()).resolve(),
-]
+DEFAULT_ALLOWED_PATH_ROOTS = _default_allowed_path_roots()
 ALLOWED_INPUT_ROOTS = _env_path_roots(
     "TP_ALLOWED_INPUT_ROOTS",
     DEFAULT_ALLOWED_PATH_ROOTS,

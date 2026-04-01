@@ -6,25 +6,72 @@
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self';" />
     <title>Transformation Portal — Orchestrator</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
     <script>
         tailwind.config = {
             darkMode: 'class',
             theme: {
                 extend: {
                     fontFamily: {
-                        sans: ['Inter', 'sans-serif'],
-                        mono: ['JetBrains Mono', 'monospace'],
+                        sans: ['Manrope', 'sans-serif'],
+                        mono: ['IBM Plex Mono', 'monospace'],
                     },
                     boxShadow: {
                         'soft': '0 4px 20px rgba(15, 23, 42, 0.05)',
                         'soft-dark': '0 4px 20px rgba(0, 0, 0, 0.4)',
+                        'glow': '0 18px 50px rgba(17, 24, 39, 0.12)',
                     }
                 }
             }
         };
     </script>
     <style>
+        html {
+            scroll-behavior: smooth;
+        }
+
+        :root {
+            color-scheme: light;
+            --shell-ink: #0f172a;
+            --shell-muted: #4b5563;
+            --shell-border: rgba(148, 163, 184, 0.25);
+            --shell-panel: rgba(255, 255, 255, 0.78);
+            --shell-panel-strong: rgba(255, 255, 255, 0.92);
+            --shell-accent: #0f766e;
+            --shell-accent-soft: rgba(15, 118, 110, 0.12);
+            --shell-signal: #b45309;
+            --shell-danger: #b91c1c;
+            --ambient-shift-x: 0px;
+            --ambient-shift-y: 0px;
+            --ambient-focus-x: 52%;
+            --ambient-focus-y: 26%;
+            --ambient-stage-x: 0px;
+            --ambient-stage-y: 0px;
+            --ambient-stage-scale: 1;
+            --ambient-stage-rotate: 0deg;
+            --ambient-color-a: 45 212 191;
+            --ambient-color-b: 245 158 11;
+            --ambient-color-c: 56 189 248;
+            --ambient-focus-color: 125 211 252;
+        }
+
+        .dark:root {
+            color-scheme: dark;
+            --shell-ink: #e5eef6;
+            --shell-muted: #94a3b8;
+            --shell-border: rgba(71, 85, 105, 0.55);
+            --shell-panel: rgba(15, 23, 42, 0.76);
+            --shell-panel-strong: rgba(15, 23, 42, 0.9);
+            --shell-accent: #2dd4bf;
+            --shell-accent-soft: rgba(45, 212, 191, 0.14);
+            --shell-signal: #fbbf24;
+            --shell-danger: #f87171;
+            --ambient-color-a: 45 212 191;
+            --ambient-color-b: 96 165 250;
+            --ambient-color-c: 125 211 252;
+            --ambient-focus-color: 34 211 238;
+        }
+
         @media (prefers-reduced-motion: reduce) {
             *, *::before, *::after {
                 animation-duration: 0.01ms !important;
@@ -41,7 +88,7 @@
         .custom-scrollbar:hover::-webkit-scrollbar-thumb { background-color: #94a3b8; }
 
         .kbd {
-            font-family: "JetBrains Mono", monospace;
+            font-family: "IBM Plex Mono", monospace;
             font-size: 10px;
             padding: 3px 6px;
             border-radius: 4px;
@@ -84,33 +131,721 @@
         .toast-enter { transform: translateY(10px); opacity: 0; }
         .toast-active { transform: translateY(0); opacity: 1; transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
         .toast-exit { transform: translateY(10px); opacity: 0; transition: all 0.2s ease; }
+
+        .shell-bg {
+            background:
+                radial-gradient(circle at var(--ambient-focus-x) var(--ambient-focus-y), rgb(255 255 255 / 0.48), rgb(var(--ambient-focus-color) / 0.18) 13%, rgb(255 255 255 / 0) 24%),
+                radial-gradient(circle at top left, rgb(var(--ambient-color-a) / 0.18), transparent 28%),
+                radial-gradient(circle at top right, rgb(var(--ambient-color-b) / 0.14), transparent 22%),
+                linear-gradient(180deg, #f8fafc 0%, #eef2ff 45%, #f8fafc 100%);
+            background-size: 100% 100%, 130% 130%, 125% 125%, 100% 100%;
+            animation: shellGradientShift 32s ease-in-out infinite alternate;
+        }
+        .dark .shell-bg {
+            background:
+                radial-gradient(circle at var(--ambient-focus-x) var(--ambient-focus-y), rgb(var(--ambient-focus-color) / 0.22), rgba(15, 23, 42, 0) 20%),
+                radial-gradient(circle at top left, rgb(var(--ambient-color-a) / 0.16), transparent 24%),
+                radial-gradient(circle at top right, rgb(var(--ambient-color-c) / 0.14), transparent 22%),
+                linear-gradient(180deg, #020617 0%, #0f172a 45%, #020617 100%);
+            background-size: 100% 100%, 135% 135%, 130% 130%, 100% 100%;
+        }
+
+        .shell-panel {
+            border: 1px solid var(--shell-border);
+            background: var(--shell-panel);
+            backdrop-filter: blur(18px);
+        }
+
+        .shell-panel-strong {
+            border: 1px solid var(--shell-border);
+            background: var(--shell-panel-strong);
+            backdrop-filter: blur(22px);
+        }
+
+        .section-kicker {
+            font-size: 10px;
+            font-weight: 800;
+            letter-spacing: 0.28em;
+            text-transform: uppercase;
+            color: var(--shell-accent);
+        }
+
+        .mission-grid {
+            background-image:
+                linear-gradient(rgba(148, 163, 184, 0.08) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(148, 163, 184, 0.08) 1px, transparent 1px);
+            background-size: 26px 26px;
+            background-position: center center;
+        }
+
+        .stat-tile {
+            border: 1px solid var(--shell-border);
+            background: rgba(255, 255, 255, 0.58);
+            border-radius: 1.2rem;
+            padding: 0.95rem 1rem;
+        }
+        .dark .stat-tile {
+            background: rgba(15, 23, 42, 0.52);
+        }
+
+        .accent-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.45rem;
+            border-radius: 999px;
+            border: 1px solid rgba(15, 118, 110, 0.18);
+            background: var(--shell-accent-soft);
+            color: var(--shell-ink);
+            padding: 0.5rem 0.8rem;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+        }
+        .dark .accent-chip {
+            border-color: rgba(45, 212, 191, 0.24);
+        }
+
+        .hero-action {
+            border-radius: 999px;
+            padding: 0.85rem 1.05rem;
+            font-size: 12px;
+            font-weight: 800;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            transition: transform 0.2s ease, opacity 0.2s ease, background-color 0.2s ease;
+        }
+        .hero-action:hover {
+            transform: translateY(-1px);
+        }
+
+        .hero-action-primary {
+            background: linear-gradient(135deg, #0f766e, #0891b2);
+            color: white;
+            box-shadow: 0 12px 28px rgba(8, 145, 178, 0.2);
+        }
+
+        .hero-action-secondary {
+            border: 1px solid var(--shell-border);
+            background: rgba(255, 255, 255, 0.74);
+            color: var(--shell-ink);
+        }
+        .dark .hero-action-secondary {
+            background: rgba(15, 23, 42, 0.65);
+        }
+
+        .signal-badge {
+            display: inline-flex;
+            align-items: center;
+            border-radius: 999px;
+            border: 1px solid var(--shell-border);
+            background: rgba(255, 255, 255, 0.74);
+            padding: 0.35rem 0.65rem;
+            font-size: 10px;
+            font-weight: 800;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+        }
+        .dark .signal-badge {
+            background: rgba(15, 23, 42, 0.65);
+        }
+
+        .panel-subtle {
+            border: 1px solid var(--shell-border);
+            background: rgba(255, 255, 255, 0.5);
+        }
+        .dark .panel-subtle {
+            background: rgba(15, 23, 42, 0.45);
+        }
+
+        .workspace-shell {
+            position: relative;
+            transition:
+                transform 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+                border-color 0.35s ease,
+                box-shadow 0.35s ease,
+                background-color 0.35s ease;
+        }
+        .workspace-shell[data-ambient-active="true"] {
+            border-color: rgba(34, 211, 238, 0.42);
+            box-shadow:
+                0 18px 40px rgba(8, 145, 178, 0.12),
+                inset 0 1px 0 rgba(255, 255, 255, 0.25);
+            transform: translateY(-2px);
+        }
+        .dark .workspace-shell[data-ambient-active="true"] {
+            border-color: rgba(45, 212, 191, 0.36);
+            box-shadow:
+                0 20px 48px rgba(14, 165, 233, 0.12),
+                inset 0 1px 0 rgba(148, 163, 184, 0.06);
+        }
+
+        @keyframes shellGradientShift {
+            0% {
+                background-position: center center, 0% 0%, 100% 0%, 0% 0%;
+            }
+            50% {
+                background-position: center center, 15% 8%, 88% 10%, 0% 0%;
+            }
+            100% {
+                background-position: center center, 4% 18%, 100% 16%, 0% 0%;
+            }
+        }
+
+        @keyframes ambientFloatA {
+            0% {
+                transform: translate3d(calc(var(--ambient-shift-x) * 0.18), calc(var(--ambient-shift-y) * 0.18), 0) scale(1);
+            }
+            50% {
+                transform: translate3d(calc((var(--ambient-shift-x) * 0.22) + 4%), calc((var(--ambient-shift-y) * 0.18) - 3%), 0) scale(1.08);
+            }
+            100% {
+                transform: translate3d(calc((var(--ambient-shift-x) * 0.12) - 3%), calc((var(--ambient-shift-y) * 0.22) + 4%), 0) scale(0.98);
+            }
+        }
+
+        @keyframes ambientFloatB {
+            0% {
+                transform: translate3d(calc(var(--ambient-shift-x) * -0.16), calc(var(--ambient-shift-y) * -0.16), 0) scale(1);
+            }
+            50% {
+                transform: translate3d(calc((var(--ambient-shift-x) * -0.22) - 5%), calc((var(--ambient-shift-y) * -0.12) + 4%), 0) scale(1.05);
+            }
+            100% {
+                transform: translate3d(calc((var(--ambient-shift-x) * -0.14) + 3%), calc((var(--ambient-shift-y) * -0.2) - 2%), 0) scale(0.97);
+            }
+        }
+
+        @keyframes ambientSpin {
+            0% {
+                transform: translate3d(calc(var(--ambient-shift-x) * 0.08), calc(var(--ambient-shift-y) * 0.08), 0) rotate(0deg) scale(1);
+            }
+            50% {
+                transform: translate3d(calc(var(--ambient-shift-x) * 0.1), calc(var(--ambient-shift-y) * 0.1), 0) rotate(12deg) scale(1.03);
+            }
+            100% {
+                transform: translate3d(calc(var(--ambient-shift-x) * 0.06), calc(var(--ambient-shift-y) * 0.06), 0) rotate(0deg) scale(0.98);
+            }
+        }
+
+        @keyframes ambientGridDrift {
+            0% {
+                transform: translate3d(calc(var(--ambient-shift-x) * -0.05), calc(var(--ambient-shift-y) * -0.05), 0);
+            }
+            100% {
+                transform: translate3d(calc((var(--ambient-shift-x) * -0.08) - 2%), calc((var(--ambient-shift-y) * -0.08) + 2%), 0);
+            }
+        }
+
+        @keyframes ambientSweep {
+            0% {
+                transform: translate3d(calc(var(--ambient-shift-x) * 0.04), calc(var(--ambient-shift-y) * 0.04), 0) rotate(0deg) scale(1);
+                opacity: 0.22;
+            }
+            50% {
+                transform: translate3d(calc(var(--ambient-shift-x) * 0.06), calc(var(--ambient-shift-y) * 0.06), 0) rotate(24deg) scale(1.08);
+                opacity: 0.36;
+            }
+            100% {
+                transform: translate3d(calc(var(--ambient-shift-x) * 0.03), calc(var(--ambient-shift-y) * 0.03), 0) rotate(360deg) scale(1);
+                opacity: 0.2;
+            }
+        }
+
+        @keyframes ambientFocusPulse {
+            0% {
+                transform: translate3d(calc(var(--ambient-shift-x) * 0.1), calc(var(--ambient-shift-y) * 0.1), 0) scale(0.94);
+                opacity: 0.32;
+            }
+            50% {
+                transform: translate3d(calc(var(--ambient-shift-x) * 0.14), calc(var(--ambient-shift-y) * 0.14), 0) scale(1.02);
+                opacity: 0.5;
+            }
+            100% {
+                transform: translate3d(calc(var(--ambient-shift-x) * 0.1), calc(var(--ambient-shift-y) * 0.1), 0) scale(0.96);
+                opacity: 0.34;
+            }
+        }
+
+        .ambient-veil,
+        .ambient-grid,
+        .ambient-sweep,
+        .ambient-focus,
+        .ambient-orb,
+        .ambient-ring {
+            position: absolute;
+            inset: auto;
+            will-change: transform, opacity;
+        }
+
+        .ambient-stage {
+            position: absolute;
+            inset: -6%;
+            transform:
+                translate3d(var(--ambient-stage-x), var(--ambient-stage-y), 0)
+                scale(var(--ambient-stage-scale))
+                rotate(var(--ambient-stage-rotate));
+            transform-origin: center center;
+            transition: transform 900ms cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .ambient-veil {
+            inset: -12%;
+            background:
+                radial-gradient(circle at 20% 25%, rgb(var(--ambient-color-a) / 0.12), transparent 24%),
+                radial-gradient(circle at 82% 18%, rgb(var(--ambient-color-b) / 0.12), transparent 20%),
+                radial-gradient(circle at 55% 72%, rgb(var(--ambient-color-c) / 0.08), transparent 22%);
+            filter: blur(28px);
+            opacity: 0.95;
+            animation: ambientSpin 36s ease-in-out infinite;
+        }
+        .dark .ambient-veil {
+            background:
+                radial-gradient(circle at 18% 24%, rgb(var(--ambient-color-a) / 0.12), transparent 24%),
+                radial-gradient(circle at 80% 16%, rgb(var(--ambient-color-b) / 0.12), transparent 22%),
+                radial-gradient(circle at 58% 72%, rgb(var(--ambient-color-c) / 0.08), transparent 20%);
+            opacity: 0.88;
+        }
+
+        .ambient-grid {
+            inset: -10%;
+            background-image:
+                linear-gradient(rgba(15, 23, 42, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(15, 23, 42, 0.03) 1px, transparent 1px);
+            background-size: 44px 44px;
+            mask-image: radial-gradient(circle at center, rgba(0, 0, 0, 0.5), transparent 78%);
+            opacity: 0.55;
+            animation: ambientGridDrift 24s linear infinite alternate;
+        }
+        .dark .ambient-grid {
+            background-image:
+                linear-gradient(rgba(148, 163, 184, 0.06) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(148, 163, 184, 0.06) 1px, transparent 1px);
+            opacity: 0.38;
+        }
+
+        .ambient-sweep {
+            inset: -24%;
+            background:
+                conic-gradient(from 140deg at 50% 50%, transparent 0deg, rgb(var(--ambient-color-c) / 0.12) 38deg, transparent 102deg, rgb(var(--ambient-color-a) / 0.08) 150deg, transparent 232deg, rgb(var(--ambient-color-b) / 0.08) 286deg, transparent 360deg);
+            mix-blend-mode: screen;
+            filter: blur(34px);
+            opacity: 0.28;
+            animation: ambientSweep 26s linear infinite;
+        }
+        .dark .ambient-sweep {
+            background:
+                conic-gradient(from 150deg at 50% 50%, transparent 0deg, rgb(var(--ambient-color-c) / 0.12) 40deg, transparent 108deg, rgb(var(--ambient-color-a) / 0.12) 154deg, transparent 230deg, rgb(var(--ambient-color-b) / 0.08) 294deg, transparent 360deg);
+            opacity: 0.22;
+        }
+
+        .ambient-focus {
+            inset: -12%;
+            background:
+                radial-gradient(circle at var(--ambient-focus-x) var(--ambient-focus-y), rgb(255 255 255 / 0.4), rgb(var(--ambient-focus-color) / 0.18) 10%, rgb(255 255 255 / 0) 28%);
+            filter: blur(18px);
+            mix-blend-mode: screen;
+            animation: ambientFocusPulse 14s ease-in-out infinite;
+            opacity: 0.42;
+        }
+        .dark .ambient-focus {
+            background:
+                radial-gradient(circle at var(--ambient-focus-x) var(--ambient-focus-y), rgb(var(--ambient-focus-color) / 0.24), rgb(var(--ambient-color-a) / 0.14) 12%, rgba(15, 23, 42, 0) 28%);
+            opacity: 0.34;
+        }
+
+        .ambient-orb {
+            border-radius: 999px;
+            filter: blur(34px);
+            opacity: 0.65;
+        }
+
+        .ambient-orb--a {
+            left: -6rem;
+            top: 8rem;
+            height: 22rem;
+            width: 22rem;
+            background: radial-gradient(circle, rgb(var(--ambient-color-c) / 0.22), rgb(var(--ambient-color-c) / 0.02) 68%, transparent 72%);
+            animation: ambientFloatA 18s ease-in-out infinite alternate;
+        }
+
+        .ambient-orb--b {
+            right: -4rem;
+            top: 1rem;
+            height: 28rem;
+            width: 28rem;
+            background: radial-gradient(circle, rgb(var(--ambient-color-b) / 0.16), rgb(var(--ambient-color-b) / 0.02) 66%, transparent 72%);
+            animation: ambientFloatB 24s ease-in-out infinite alternate;
+        }
+
+        .ambient-orb--c {
+            left: 28%;
+            bottom: -8rem;
+            height: 24rem;
+            width: 24rem;
+            background: radial-gradient(circle, rgb(var(--ambient-color-a) / 0.12), rgb(var(--ambient-color-a) / 0.02) 64%, transparent 72%);
+            animation: ambientSpin 30s ease-in-out infinite alternate;
+        }
+
+        .dark .ambient-orb--a {
+            background: radial-gradient(circle, rgb(var(--ambient-color-c) / 0.18), rgb(var(--ambient-color-c) / 0.02) 68%, transparent 72%);
+        }
+        .dark .ambient-orb--b {
+            background: radial-gradient(circle, rgb(var(--ambient-color-b) / 0.16), rgb(var(--ambient-color-b) / 0.02) 68%, transparent 72%);
+        }
+        .dark .ambient-orb--c {
+            background: radial-gradient(circle, rgb(var(--ambient-color-a) / 0.12), rgb(var(--ambient-color-a) / 0.02) 66%, transparent 72%);
+        }
+
+        .ambient-ring {
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, 0.22);
+            opacity: 0.35;
+            filter: blur(0.4px);
+        }
+
+        .ambient-ring--a {
+            left: 10%;
+            top: 18%;
+            height: 18rem;
+            width: 18rem;
+            animation: ambientFloatB 22s ease-in-out infinite alternate;
+        }
+
+        .ambient-ring--b {
+            right: 14%;
+            bottom: 10%;
+            height: 14rem;
+            width: 14rem;
+            animation: ambientFloatA 20s ease-in-out infinite alternate;
+        }
+
+        .dark .ambient-ring {
+            border-color: rgba(148, 163, 184, 0.16);
+            opacity: 0.24;
+        }
+
+        .section-link {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 999px;
+            border: 1px solid var(--shell-border);
+            background: rgba(255, 255, 255, 0.7);
+            padding: 0.7rem 0.95rem;
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: var(--shell-muted);
+            transition: transform 0.2s ease, border-color 0.2s ease, color 0.2s ease, background-color 0.2s ease;
+        }
+        .section-link:hover {
+            transform: translateY(-1px);
+            color: var(--shell-ink);
+            border-color: rgba(15, 118, 110, 0.3);
+        }
+        .dark .section-link {
+            background: rgba(15, 23, 42, 0.72);
+        }
+
+        .governance-banner {
+            border: 1px solid rgba(15, 118, 110, 0.18);
+            background:
+                linear-gradient(135deg, rgba(15, 118, 110, 0.08), rgba(6, 95, 70, 0.03)),
+                rgba(255, 255, 255, 0.78);
+        }
+        .dark .governance-banner {
+            border-color: rgba(45, 212, 191, 0.2);
+            background:
+                linear-gradient(135deg, rgba(45, 212, 191, 0.1), rgba(8, 145, 178, 0.05)),
+                rgba(15, 23, 42, 0.72);
+        }
+
+        .governance-item {
+            border: 1px solid var(--shell-border);
+            background: rgba(255, 255, 255, 0.56);
+            border-radius: 1rem;
+            padding: 0.85rem 0.95rem;
+        }
+        .dark .governance-item {
+            background: rgba(15, 23, 42, 0.48);
+        }
+
+        .disclosure-panel {
+            border-top: 1px solid rgba(148, 163, 184, 0.18);
+            padding-top: 1.2rem;
+        }
+
+        .disclosure-summary {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            cursor: pointer;
+            list-style: none;
+            user-select: none;
+        }
+        .disclosure-summary::-webkit-details-marker {
+            display: none;
+        }
+        .disclosure-chevron {
+            transition: transform 0.2s ease;
+        }
+        details[open] .disclosure-chevron {
+            transform: rotate(180deg);
+        }
+
+        .workspace-rail {
+            display: grid;
+            gap: 1rem;
+            border: 1px solid var(--shell-border);
+            background: rgba(255, 255, 255, 0.68);
+            backdrop-filter: blur(16px);
+            box-shadow: 0 16px 40px rgba(15, 23, 42, 0.06);
+        }
+
+        .dark .workspace-rail {
+            background: rgba(15, 23, 42, 0.7);
+            box-shadow: 0 18px 44px rgba(2, 6, 23, 0.28);
+        }
+
+        .workspace-rail-copy {
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+        }
+
+        .workspace-rail-text {
+            max-width: 42rem;
+            font-size: 12px;
+            line-height: 1.65;
+            color: var(--shell-muted);
+        }
+
+        .workspace-rail-links {
+            display: grid;
+            gap: 0.75rem;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        }
+
+        .workspace-link {
+            display: flex;
+            min-height: 78px;
+            flex-direction: column;
+            justify-content: space-between;
+            gap: 0.55rem;
+            border-radius: 1.25rem;
+            border: 1px solid rgba(148, 163, 184, 0.2);
+            background: rgba(255, 255, 255, 0.62);
+            padding: 0.95rem 1rem;
+            text-decoration: none;
+            color: var(--shell-ink);
+            transition:
+                transform 0.2s ease,
+                border-color 0.2s ease,
+                background-color 0.2s ease,
+                box-shadow 0.2s ease;
+        }
+
+        .workspace-link:hover,
+        .workspace-link:focus-visible {
+            transform: translateY(-1px);
+            border-color: rgba(8, 145, 178, 0.28);
+            background: rgba(255, 255, 255, 0.84);
+            box-shadow: 0 14px 28px rgba(14, 116, 144, 0.08);
+            outline: none;
+        }
+
+        .workspace-link.is-active {
+            border-color: rgba(8, 145, 178, 0.34);
+            background:
+                linear-gradient(135deg, rgba(34, 211, 238, 0.16), rgba(245, 158, 11, 0.08)),
+                rgba(255, 255, 255, 0.88);
+            box-shadow:
+                inset 0 1px 0 rgba(255, 255, 255, 0.35),
+                0 16px 32px rgba(8, 145, 178, 0.1);
+        }
+
+        .dark .workspace-link {
+            border-color: rgba(71, 85, 105, 0.55);
+            background: rgba(15, 23, 42, 0.58);
+        }
+
+        .dark .workspace-link:hover,
+        .dark .workspace-link:focus-visible {
+            border-color: rgba(34, 211, 238, 0.3);
+            background: rgba(15, 23, 42, 0.78);
+            box-shadow: 0 16px 32px rgba(8, 145, 178, 0.14);
+        }
+
+        .dark .workspace-link.is-active {
+            border-color: rgba(45, 212, 191, 0.34);
+            background:
+                linear-gradient(135deg, rgba(34, 211, 238, 0.18), rgba(14, 165, 233, 0.08)),
+                rgba(15, 23, 42, 0.86);
+        }
+
+        .workspace-link-label {
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+        }
+
+        .workspace-link-meta {
+            font-size: 12px;
+            line-height: 1.45;
+            color: var(--shell-muted);
+        }
+
+        .workspace-link.is-active .workspace-link-meta {
+            color: rgba(15, 23, 42, 0.78);
+        }
+
+        .dark .workspace-link.is-active .workspace-link-meta {
+            color: rgba(226, 232, 240, 0.82);
+        }
+
+        .micro-status {
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: var(--shell-muted);
+        }
+
+        .job-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            border-radius: 999px;
+            border: 1px solid var(--shell-border);
+            background: rgba(255, 255, 255, 0.72);
+            padding: 0.28rem 0.55rem;
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--shell-muted);
+        }
+
+        .dark .job-chip {
+            background: rgba(15, 23, 42, 0.72);
+        }
+
+        .sticky-shell {
+            align-self: start;
+        }
+
+        .command-frame {
+            background:
+                linear-gradient(180deg, rgba(15, 23, 42, 0.96), rgba(11, 16, 32, 0.98)),
+                #0b1020;
+            box-shadow:
+                inset 0 1px 0 rgba(255, 255, 255, 0.04),
+                inset 0 0 0 1px rgba(56, 189, 248, 0.1),
+                0 20px 36px rgba(2, 6, 23, 0.22);
+        }
+
+        .log-surface {
+            background:
+                radial-gradient(circle at top right, rgba(34, 211, 238, 0.12), transparent 24%),
+                linear-gradient(180deg, rgba(15, 23, 42, 0.96), rgba(11, 16, 32, 0.98)),
+                #0b1020;
+        }
+
+        .deferred-shell {
+            content-visibility: auto;
+            contain-intrinsic-size: 640px;
+        }
+
+        .deferred-shell[data-shell-size="compact"] {
+            contain-intrinsic-size: 360px;
+        }
+
+        .deferred-shell[data-shell-size="tall"] {
+            contain-intrinsic-size: 760px;
+        }
+
+        .performance-lite .ambient-stage {
+            display: none;
+        }
+
+        .performance-lite .shell-bg {
+            animation: none;
+            background-size: 100% 100%, 110% 110%, 110% 110%, 100% 100%;
+        }
+
+        .performance-lite .shell-panel,
+        .performance-lite .shell-panel-strong,
+        .performance-lite .workspace-rail,
+        .performance-lite header {
+            backdrop-filter: blur(12px);
+        }
+
+        .performance-lite .workspace-shell[data-ambient-active="true"] {
+            transform: none;
+            box-shadow: none;
+        }
+
+        @media (min-width: 1280px) {
+            .sticky-shell {
+                position: sticky;
+                top: 6rem;
+                z-index: 12;
+            }
+        }
+
+        @media (max-width: 767px) {
+            .workspace-rail-links {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
     </style>
 </head>
-<body class="bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 antialiased selection:bg-indigo-500/30 transition-colors duration-300">
+<body class="shell-bg text-slate-900 dark:text-slate-100 antialiased selection:bg-cyan-500/25 transition-colors duration-300">
 
     <a href="#main-content" class="skip-link rounded-lg px-4 py-2 text-sm font-medium text-white bg-indigo-600 shadow-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
         Skip to main content
     </a>
 
+    <div aria-hidden="true" class="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
+        <div class="ambient-stage">
+            <div class="ambient-veil"></div>
+            <div class="ambient-grid"></div>
+            <div class="ambient-sweep"></div>
+            <div class="ambient-focus"></div>
+            <div class="ambient-orb ambient-orb--a"></div>
+            <div class="ambient-orb ambient-orb--b"></div>
+            <div class="ambient-orb ambient-orb--c"></div>
+            <div class="ambient-ring ambient-ring--a"></div>
+            <div class="ambient-ring ambient-ring--b"></div>
+        </div>
+    </div>
+
     <!-- Header -->
-    <header class="sticky top-0 z-40 border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md transition-colors duration-300">
+    <header class="sticky top-0 z-40 border-b border-white/40 dark:border-slate-800 bg-white/55 dark:bg-slate-950/45 backdrop-blur-xl transition-colors duration-300">
         <div class="mx-auto max-w-7xl px-6 py-4 flex items-center justify-between gap-4">
             <div class="flex items-center gap-4">
-                <div class="flex flex-col">
-                    <p class="text-[10px] uppercase tracking-[0.25em] font-semibold text-indigo-600 dark:text-indigo-400">APEX Phase 4</p>
-                    <h1 class="text-sm font-semibold tracking-tight mt-0.5">Transformation Portal</h1>
+                <div class="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/50 bg-white/70 text-sm font-black tracking-[0.24em] text-cyan-800 shadow-glow dark:border-slate-700 dark:bg-slate-900/80 dark:text-cyan-200">
+                    TP
                 </div>
-                <div class="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 ml-4 shadow-inner">
+                <div class="flex flex-col">
+                    <p class="section-kicker">Operator Console</p>
+                    <h1 class="mt-0.5 text-lg font-extrabold tracking-tight">Transformation Portal</h1>
+                    <p class="text-[12px] text-slate-500 dark:text-slate-400">Governed orchestration for depth, materials, and archive workflows.</p>
+                </div>
+                <div class="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-full shell-panel ml-4">
                     <span id="healthIndicator" class="status-dot"></span>
                     <span id="healthText" class="text-[11px] font-mono font-semibold text-slate-600 dark:text-slate-400">Checking...</span>
                 </div>
             </div>
 
             <div class="flex items-center gap-4">
-                <button id="shortcutsBtn" type="button" class="text-[11px] font-semibold text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white transition-colors focus:outline-none">
+                <button id="shortcutsBtn" type="button" class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white transition-colors focus:outline-none">
                     Shortcuts
                 </button>
-                <button id="themeBtn" type="button" class="rounded-lg px-3 py-1.5 text-xs font-semibold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500" aria-label="Toggle theme">
+                <button id="themeBtn" type="button" class="rounded-full px-4 py-2 text-xs font-semibold border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/80 hover:bg-white dark:hover:bg-slate-800 transition-colors focus:outline-none focus:ring-2 focus:ring-cyan-500" aria-label="Toggle theme">
                     Toggle Theme
                 </button>
             </div>
@@ -118,13 +853,134 @@
     </header>
 
     <main id="main-content" tabindex="-1" class="mx-auto max-w-7xl px-6 py-8 outline-none">
+        <section class="mb-8 grid grid-cols-1 xl:grid-cols-12 gap-6">
+            <div id="mission-shell" data-ambient-zone="mission" data-ambient-focus-x="30" data-ambient-focus-y="18" data-ambient-shift-x="-18" data-ambient-shift-y="-12" data-ambient-stage-scale="1.035" data-ambient-stage-rotate="-0.6" data-ambient-color-a="#2dd4bf" data-ambient-color-b="#fbbf24" data-ambient-color-c="#38bdf8" data-ambient-focus-color="#67e8f9" class="workspace-shell xl:col-span-8 relative overflow-hidden rounded-[2rem] shell-panel-strong shadow-glow p-6 sm:p-8 mission-grid">
+                <div class="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-400/70 to-transparent"></div>
+                <div class="relative">
+                    <div class="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+                        <div class="max-w-2xl">
+                            <p class="section-kicker">Mission Control</p>
+                            <h2 class="mt-3 text-3xl font-extrabold tracking-tight text-slate-950 dark:text-white sm:text-4xl">
+                                Launch governed runs with live operational context.
+                            </h2>
+                            <p class="mt-3 text-sm leading-7 text-slate-600 dark:text-slate-300">
+                                Configure the pipeline, inspect governance posture, and dispatch jobs from a single command surface
+                                with live health, capability, and queue awareness.
+                            </p>
+                        </div>
+                        <div class="flex flex-wrap gap-3">
+                            <button id="heroRunBtn" type="button" class="hero-action hero-action-primary focus:outline-none focus:ring-2 focus:ring-cyan-500">
+                                Dispatch Current Job
+                            </button>
+                            <button id="heroExportBtn" type="button" class="hero-action hero-action-secondary focus:outline-none focus:ring-2 focus:ring-cyan-500">
+                                Export Config
+                            </button>
+                            <button id="refreshHealthBtn" type="button" class="hero-action hero-action-secondary focus:outline-none focus:ring-2 focus:ring-cyan-500">
+                                Refresh Status
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="mt-8 grid grid-cols-2 gap-3 lg:grid-cols-4">
+                        <div class="stat-tile">
+                            <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Pipeline</p>
+                            <p id="heroPipelineValue" class="mt-2 text-sm font-extrabold text-slate-900 dark:text-white">lux-depth-v3</p>
+                        </div>
+                        <div class="stat-tile">
+                            <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Preset</p>
+                            <p id="heroPresetValue" class="mt-2 text-sm font-extrabold text-slate-900 dark:text-white">premium</p>
+                        </div>
+                        <div class="stat-tile">
+                            <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Runtime Mode</p>
+                            <p id="heroModeValue" class="mt-2 text-sm font-extrabold text-slate-900 dark:text-white">Checking…</p>
+                        </div>
+                        <div class="stat-tile">
+                            <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Active Queue</p>
+                            <p id="heroQueueValue" class="mt-2 text-sm font-extrabold text-slate-900 dark:text-white">0 live jobs</p>
+                        </div>
+                    </div>
+
+                    <div class="mt-6">
+                        <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Enabled Capability Stack</p>
+                        <div id="capabilityChips" class="mt-3 flex flex-wrap gap-2"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="intelligence-shell" data-ambient-zone="intelligence" data-ambient-focus-x="76" data-ambient-focus-y="18" data-ambient-shift-x="16" data-ambient-shift-y="-10" data-ambient-stage-scale="1.03" data-ambient-stage-rotate="0.45" data-ambient-color-a="#22d3ee" data-ambient-color-b="#93c5fd" data-ambient-color-c="#38bdf8" data-ambient-focus-color="#bae6fd" class="workspace-shell xl:col-span-4 rounded-[2rem] shell-panel p-6 shadow-soft dark:shadow-soft-dark">
+                <div class="flex items-start justify-between gap-4">
+                    <div>
+                        <p class="section-kicker">Preset Intelligence</p>
+                        <h3 id="presetHeadline" class="mt-3 text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">premium</h3>
+                    </div>
+                    <div class="flex flex-wrap justify-end gap-2">
+                        <span id="presetStabilityBadge" class="signal-badge">Stable</span>
+                        <span id="backendModeBadge" class="signal-badge">Offline</span>
+                    </div>
+                </div>
+                <p id="presetDescription" class="mt-4 text-sm leading-7 text-slate-600 dark:text-slate-300">
+                    Balanced production quality preset.
+                </p>
+
+                <div class="mt-6 grid grid-cols-2 gap-3">
+                    <div class="panel-subtle rounded-2xl p-4">
+                        <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Input Root</p>
+                        <p id="heroInputDir" class="mt-2 text-[12px] font-mono leading-6 text-slate-700 dark:text-slate-200 break-all">./input_images</p>
+                    </div>
+                    <div class="panel-subtle rounded-2xl p-4">
+                        <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Output Root</p>
+                        <p id="heroOutputDir" class="mt-2 text-[12px] font-mono leading-6 text-slate-700 dark:text-slate-200 break-all">./output/lux_depth_v3_apex</p>
+                    </div>
+                    <div class="panel-subtle rounded-2xl p-4">
+                        <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Readiness</p>
+                        <p id="heroReadinessLabel" class="mt-2 text-sm font-bold text-slate-900 dark:text-white">No warnings</p>
+                    </div>
+                    <div class="panel-subtle rounded-2xl p-4">
+                        <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Warning Count</p>
+                        <p id="heroWarningCount" class="mt-2 text-sm font-bold text-slate-900 dark:text-white">0</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <nav aria-label="Workspace sections" class="workspace-rail mb-8 rounded-[1.75rem] px-4 py-4 lg:sticky lg:top-24 lg:z-30">
+            <div class="workspace-rail-copy">
+                <p class="section-kicker">Workspace Rail</p>
+                <p class="workspace-rail-text">
+                    Move between configuration, dispatch, and live telemetry without losing the operational thread.
+                </p>
+            </div>
+            <div class="workspace-rail-links">
+                <a class="workspace-link is-active" data-section-link="profile-shell" href="#profile-shell">
+                    <span class="workspace-link-label">Profile</span>
+                    <span class="workspace-link-meta">Pipeline, profiles, and auth posture.</span>
+                </a>
+                <a class="workspace-link" data-section-link="parameters-shell" href="#parameters-shell">
+                    <span class="workspace-link-label">Parameters</span>
+                    <span class="workspace-link-meta">I/O roots, preset selection, and compute controls.</span>
+                </a>
+                <a class="workspace-link" data-section-link="flags-shell" href="#flags-shell">
+                    <span class="workspace-link-label">Flags</span>
+                    <span class="workspace-link-meta">Advanced toggles, governance, and runtime constraints.</span>
+                </a>
+                <a class="workspace-link" data-section-link="cli-shell" href="#cli-shell">
+                    <span class="workspace-link-label">Dispatch</span>
+                    <span class="workspace-link-meta">Command preview, validation, and launch surface.</span>
+                </a>
+                <a class="workspace-link" data-section-link="jobs-shell" href="#jobs-shell">
+                    <span class="workspace-link-label">Live Jobs</span>
+                    <span class="workspace-link-meta">Inspector, queue, artifacts, and streaming logs.</span>
+                </a>
+            </div>
+        </nav>
+
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
 
             <!-- Left Column: Configuration -->
             <section class="lg:col-span-7 flex flex-col gap-6">
 
                 <!-- Orchestration Profile -->
-                <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-soft dark:shadow-soft-dark p-6 transition-colors duration-300">
+                <div id="profile-shell" data-ambient-zone="profile" data-ambient-focus-x="18" data-ambient-focus-y="28" data-ambient-shift-x="-22" data-ambient-shift-y="-4" data-ambient-stage-scale="1.02" data-ambient-stage-rotate="-0.45" data-ambient-color-a="#34d399" data-ambient-color-b="#f59e0b" data-ambient-color-c="#67e8f9" data-ambient-focus-color="#99f6e4" class="workspace-shell deferred-shell rounded-[1.75rem] shell-panel p-6 shadow-soft dark:shadow-soft-dark transition-colors duration-300" data-shell-size="compact">
                     <h2 class="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-4">Governance & Profiles</h2>
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
@@ -160,8 +1016,22 @@
                     </div>
                 </div>
 
+                <section id="governance-shell" data-ambient-zone="governance" data-ambient-focus-x="28" data-ambient-focus-y="42" data-ambient-shift-x="-14" data-ambient-shift-y="4" data-ambient-stage-scale="1.028" data-ambient-stage-rotate="-0.2" data-ambient-color-a="#14b8a6" data-ambient-color-b="#f59e0b" data-ambient-color-c="#fde68a" data-ambient-focus-color="#fdba74" class="workspace-shell deferred-shell governance-banner rounded-[1.75rem] p-6 shadow-soft dark:shadow-soft-dark" data-shell-size="compact">
+                    <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                        <div class="max-w-2xl">
+                            <p class="section-kicker">Governance Brief</p>
+                            <h2 id="governanceBannerTitle" class="mt-2 text-xl font-extrabold tracking-tight text-slate-900 dark:text-white">Run posture is clear.</h2>
+                            <p id="governanceBannerBody" class="mt-2 text-sm leading-7 text-slate-600 dark:text-slate-300">
+                                The current configuration is valid for dispatch. Any license acknowledgments or runtime caveats will surface here before execution.
+                            </p>
+                        </div>
+                        <div class="signal-badge">Live contract checks</div>
+                    </div>
+                    <div id="governanceChecklist" class="mt-5 grid grid-cols-1 gap-3"></div>
+                </section>
+
                 <!-- Parameters -->
-                <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-soft dark:shadow-soft-dark p-6 transition-colors duration-300">
+                <div id="parameters-shell" data-ambient-zone="parameters" data-ambient-focus-x="22" data-ambient-focus-y="46" data-ambient-shift-x="-20" data-ambient-shift-y="8" data-ambient-stage-scale="1.038" data-ambient-stage-rotate="-0.35" data-ambient-color-a="#0ea5e9" data-ambient-color-b="#22d3ee" data-ambient-color-c="#93c5fd" data-ambient-focus-color="#bae6fd" class="workspace-shell deferred-shell rounded-[1.75rem] shell-panel p-6 shadow-soft dark:shadow-soft-dark transition-colors duration-300" data-shell-size="tall">
                     <h2 class="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-4">Pipeline Parameters</h2>
 
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
@@ -252,6 +1122,11 @@
                     <!-- Archive Gate Fields -->
                     <div id="fieldsArchiveGate" class="pipeline-fields hidden space-y-4 pt-4 border-t border-slate-200 dark:border-slate-800">
                         <p class="text-[12px] text-slate-500 dark:text-slate-400">Archiving parameters for deterministic packaging and export. Align with repository governance.</p>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="archiveIndexPath">Archive Index Path</label>
+                            <input type="text" id="archiveIndexPath" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors" value="./archive_index_normalized.csv.gz" placeholder="./archive_index_normalized.csv.gz" autocomplete="off" spellcheck="false" />
+                            <p class="mt-1 text-[11px] leading-5 text-slate-500 dark:text-slate-400">Defaults to an index adjacent to the archive root. Override when the manifest lives elsewhere.</p>
+                        </div>
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <label class="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300"><input type="checkbox" id="gateDedup" checked class="rounded w-4 h-4 text-indigo-600 focus:ring-indigo-500 bg-white border-slate-300 dark:bg-slate-800 dark:border-slate-600"> Generate Dedup Ledger</label>
                             <label class="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300"><input type="checkbox" id="gateSign" checked class="rounded w-4 h-4 text-indigo-600 focus:ring-indigo-500 bg-white border-slate-300 dark:bg-slate-800 dark:border-slate-600"> Sign Artifact Payload</label>
@@ -260,7 +1135,7 @@
                 </div>
 
                 <!-- Pipeline Flags -->
-                <fieldset class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-soft dark:shadow-soft-dark p-6 transition-colors duration-300">
+                <fieldset id="flags-shell" data-ambient-zone="flags" data-ambient-focus-x="36" data-ambient-focus-y="66" data-ambient-shift-x="-6" data-ambient-shift-y="14" data-ambient-stage-scale="1.045" data-ambient-stage-rotate="0.3" data-ambient-color-a="#10b981" data-ambient-color-b="#f59e0b" data-ambient-color-c="#38bdf8" data-ambient-focus-color="#fef08a" class="workspace-shell deferred-shell rounded-[1.75rem] shell-panel p-6 shadow-soft dark:shadow-soft-dark transition-colors duration-300" data-shell-size="tall">
                     <legend class="block text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-4">Core Flags & Emit Artifacts</legend>
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
 
@@ -315,9 +1190,15 @@
                         </div>
                     </div>
 
-                    <div class="mt-6 border-t border-slate-200 dark:border-slate-800 pt-6">
-                        <p class="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-3">Advanced Flags</p>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+                    <details id="advancedFlagsDetails" class="disclosure-panel mt-6" open>
+                        <summary class="disclosure-summary">
+                            <div>
+                                <p class="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Advanced Flags</p>
+                                <p class="mt-1 text-[12px] text-slate-500 dark:text-slate-400">Diagnostics, fallback, and runtime strictness controls.</p>
+                            </div>
+                            <span class="disclosure-chevron text-slate-400">▾</span>
+                        </summary>
+                        <div class="mt-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
                             <label class="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
                                 <input type="checkbox" id="saveFloatDepth" class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 dark:bg-slate-900" />
                                 <span class="text-[11px] font-mono select-none truncate text-slate-600 dark:text-slate-300">save_float_depth</span>
@@ -350,7 +1231,7 @@
                                 <span class="text-[11px] font-mono select-none truncate text-slate-600 dark:text-slate-300">quiet</span>
                             </label>
                         </div>
-                    </div>
+                    </details>
 
                     <!-- Native Emit Checkboxes -->
                     <div class="mt-6 grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3">
@@ -377,9 +1258,15 @@
                     </div>
 
                     <!-- Licenses -->
-                    <div class="mt-6 p-4 rounded-xl border border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-900/10 transition-colors">
-                        <p class="text-[11px] font-bold uppercase tracking-widest text-amber-600 dark:text-amber-500 mb-3">Compliance & Research Acknowledgments</p>
-                        <div class="space-y-3">
+                    <details id="governanceDetails" class="disclosure-panel mt-6" open>
+                        <summary class="disclosure-summary">
+                            <div>
+                                <p class="text-[11px] font-bold uppercase tracking-widest text-amber-600 dark:text-amber-500">Compliance & Research Acknowledgments</p>
+                                <p class="mt-1 text-[12px] text-slate-500 dark:text-slate-400">Only expand this when the current preset or backend requires explicit acknowledgments.</p>
+                            </div>
+                            <span class="disclosure-chevron text-slate-400">▾</span>
+                        </summary>
+                        <div class="mt-4 p-4 rounded-xl border border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-900/10 transition-colors space-y-3">
                             <label class="flex items-start gap-3 cursor-pointer group">
                                 <input type="checkbox" id="licenseNonCommercial" class="w-4 h-4 mt-0.5 rounded text-amber-600 focus:ring-amber-500 border-amber-300 dark:border-amber-700 dark:bg-slate-900" />
                                 <span class="text-[12px] leading-tight select-none text-slate-700 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-white transition-colors">I acknowledge this run is strictly for <strong>Non-Commercial</strong> purposes.</span>
@@ -393,10 +1280,17 @@
                                 <span class="text-[12px] leading-tight select-none text-slate-700 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-white transition-colors">I accept the <strong>Research Tools License</strong> terms required for scene reconstruction.</span>
                             </label>
                         </div>
-                    </div>
+                    </details>
 
-                    <div class="mt-6 border-t border-slate-200 dark:border-slate-800 pt-6 space-y-4">
-                        <p class="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Reconstruction & Runtime</p>
+                    <details id="reconstructionDetails" class="disclosure-panel mt-6">
+                        <summary class="disclosure-summary">
+                            <div>
+                                <p class="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Reconstruction & Runtime</p>
+                                <p class="mt-1 text-[12px] text-slate-500 dark:text-slate-400">Scene reconstruction, RAW ingest, worker limits, and operator runtime controls.</p>
+                            </div>
+                            <span class="disclosure-chevron text-slate-400">▾</span>
+                        </summary>
+                        <div class="mt-4 space-y-4">
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <label class="flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 px-4 py-3.5 cursor-pointer group transition-colors">
                                 <span class="flex items-center gap-2 text-[12px] font-medium select-none text-slate-700 dark:text-slate-300">
@@ -486,11 +1380,12 @@
                                 </select>
                             </div>
                         </div>
-                    </div>
+                        </div>
+                    </details>
                 </fieldset>
 
                 <!-- CLI Preview & Actions -->
-                <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-soft dark:shadow-soft-dark p-6 transition-colors duration-300">
+                <div id="cli-shell" data-ambient-zone="dispatch" data-ambient-focus-x="42" data-ambient-focus-y="82" data-ambient-shift-x="-4" data-ambient-shift-y="18" data-ambient-stage-scale="1.05" data-ambient-stage-rotate="0.35" data-ambient-color-a="#06b6d4" data-ambient-color-b="#f97316" data-ambient-color-c="#14b8a6" data-ambient-focus-color="#fdba74" class="workspace-shell deferred-shell rounded-[1.75rem] shell-panel p-6 shadow-soft dark:shadow-soft-dark transition-colors duration-300" data-shell-size="compact">
                     <div class="flex items-center justify-between mb-4">
                         <h3 class="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Equivalent Command</h3>
                         <div class="flex gap-2 items-center">
@@ -502,7 +1397,7 @@
                             <input type="file" id="fileInput" accept=".json" title="Import JSON configuration" class="hidden" />
                         </div>
                     </div>
-                    <textarea id="cliPreview" readonly title="Generated CLI command preview" class="w-full min-h-[140px] rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 p-4 text-[12px] font-mono leading-relaxed text-slate-600 dark:text-slate-300 overflow-y-auto custom-scrollbar resize-y focus:outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
+                    <textarea id="cliPreview" readonly title="Generated CLI command preview" class="command-frame w-full min-h-[140px] rounded-xl border border-slate-200 dark:border-slate-800 p-4 text-[12px] font-mono leading-relaxed text-slate-300 overflow-y-auto custom-scrollbar resize-y focus:outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
 
                     <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
                         <section class="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/70 p-4">
@@ -523,7 +1418,7 @@
                     </div>
 
                     <div class="mt-6 border-t border-slate-200 dark:border-slate-800 pt-6">
-                        <button id="runJobBtn" type="button" class="w-full rounded-xl px-6 py-3.5 text-[14px] font-semibold text-white shadow-md transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed bg-indigo-600 hover:bg-indigo-700 dark:focus:ring-offset-slate-900">
+                        <button id="runJobBtn" type="button" class="w-full rounded-2xl px-6 py-4 text-[14px] font-extrabold uppercase tracking-[0.14em] text-white shadow-glow transition-all focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed bg-gradient-to-r from-teal-700 via-cyan-600 to-sky-600 hover:from-teal-600 hover:via-cyan-500 hover:to-sky-500 dark:focus:ring-offset-slate-900">
                             Execute Job
                         </button>
                     </div>
@@ -532,12 +1427,63 @@
             </section>
 
             <!-- Right Column: Queue & Logs -->
-            <aside class="lg:col-span-5 flex flex-col gap-6">
+            <aside id="jobs-shell" class="lg:col-span-5 flex flex-col gap-6">
+
+                <!-- Selected Job Inspector -->
+                <div id="selected-job-shell" data-ambient-zone="inspector" data-ambient-focus-x="78" data-ambient-focus-y="30" data-ambient-shift-x="18" data-ambient-shift-y="-2" data-ambient-stage-scale="1.032" data-ambient-stage-rotate="0.35" data-ambient-color-a="#38bdf8" data-ambient-color-b="#60a5fa" data-ambient-color-c="#22d3ee" data-ambient-focus-color="#bfdbfe" class="workspace-shell sticky-shell rounded-[1.75rem] shell-panel p-6 shadow-soft dark:shadow-soft-dark transition-colors duration-300">
+                    <div class="flex items-start justify-between gap-3 pb-4 border-b border-slate-200 dark:border-slate-800">
+                        <div>
+                            <p class="section-kicker">Selected Job</p>
+                            <h2 class="mt-2 text-lg font-extrabold tracking-tight text-slate-900 dark:text-white">Live Run Inspector</h2>
+                            <p id="selectedJobMetaLine" class="mt-2 text-[12px] leading-6 text-slate-500 dark:text-slate-400">
+                                Queue idle. Select a run to inspect transport, recency, and output state.
+                            </p>
+                        </div>
+                        <div class="flex flex-col items-end gap-2">
+                            <span id="selectedJobStateBadge" class="signal-badge">Idle</span>
+                            <span id="selectedJobFreshness" class="micro-status">No live telemetry</span>
+                        </div>
+                    </div>
+
+                    <div class="mt-5 grid grid-cols-2 gap-3">
+                        <div class="panel-subtle rounded-2xl p-4">
+                            <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Job ID</p>
+                            <p id="selectedJobIdLabel" class="mt-2 text-[12px] font-mono text-slate-700 dark:text-slate-200 break-all">No job selected</p>
+                        </div>
+                        <div class="panel-subtle rounded-2xl p-4">
+                            <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Pipeline</p>
+                            <p id="selectedJobPipelineLabel" class="mt-2 text-[12px] font-semibold text-slate-700 dark:text-slate-200">Awaiting dispatch</p>
+                        </div>
+                        <div class="panel-subtle rounded-2xl p-4">
+                            <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Artifacts</p>
+                            <p id="selectedJobArtifactCount" class="mt-2 text-[12px] font-semibold text-slate-700 dark:text-slate-200">0 indexed</p>
+                        </div>
+                        <div class="panel-subtle rounded-2xl p-4">
+                            <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Stream</p>
+                            <p id="selectedJobStreamStatus" class="mt-2 text-[12px] font-semibold text-slate-700 dark:text-slate-200">Inactive</p>
+                        </div>
+                    </div>
+
+                    <div class="mt-5">
+                        <div class="flex items-center justify-between text-[11px] font-mono text-slate-500 dark:text-slate-400">
+                            <span>Progress</span>
+                            <span id="selectedJobProgressText">0%</span>
+                        </div>
+                        <progress id="selectedJobProgressBar" class="mt-2 w-full" max="100" value="0"></progress>
+                    </div>
+
+                    <p id="selectedJobSummary" class="mt-4 text-[12px] leading-6 text-slate-600 dark:text-slate-300">
+                        Choose a job from the queue or dispatch a new run to inspect progress, artifacts, and live stream state.
+                    </p>
+                </div>
 
                 <!-- Job Queue -->
-                <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-soft dark:shadow-soft-dark p-6 transition-colors duration-300 flex flex-col max-h-[350px]">
+                <div id="queue-shell" data-ambient-zone="queue" data-ambient-focus-x="82" data-ambient-focus-y="46" data-ambient-shift-x="20" data-ambient-shift-y="6" data-ambient-stage-scale="1.036" data-ambient-stage-rotate="0.28" data-ambient-color-a="#14b8a6" data-ambient-color-b="#84cc16" data-ambient-color-c="#38bdf8" data-ambient-focus-color="#bbf7d0" class="workspace-shell deferred-shell rounded-[1.75rem] shell-panel p-6 shadow-soft dark:shadow-soft-dark transition-colors duration-300 flex flex-col max-h-[350px]" data-shell-size="compact">
                     <div class="flex items-center justify-between mb-4 pb-4 border-b border-slate-200 dark:border-slate-800">
-                        <h2 class="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Job Queue</h2>
+                        <div>
+                            <h2 class="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Job Queue</h2>
+                            <p id="queueStatusSummary" class="mt-1 text-[11px] text-slate-500 dark:text-slate-400">Newest jobs stay pinned to the top.</p>
+                        </div>
                         <span id="queueCount" class="text-[11px] text-slate-500 dark:text-slate-400 font-mono">0 jobs</span>
                     </div>
 
@@ -550,7 +1496,7 @@
                 </div>
 
                 <!-- Artifacts -->
-                <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-soft dark:shadow-soft-dark p-6 transition-colors duration-300">
+                <div id="artifacts-shell" data-ambient-zone="artifacts" data-ambient-focus-x="76" data-ambient-focus-y="64" data-ambient-shift-x="14" data-ambient-shift-y="12" data-ambient-stage-scale="1.03" data-ambient-stage-rotate="-0.2" data-ambient-color-a="#0ea5e9" data-ambient-color-b="#f59e0b" data-ambient-color-c="#14b8a6" data-ambient-focus-color="#fde68a" class="workspace-shell deferred-shell rounded-[1.75rem] shell-panel p-6 shadow-soft dark:shadow-soft-dark transition-colors duration-300" data-shell-size="compact">
                     <div class="flex items-center justify-between mb-4 pb-3 border-b border-slate-200 dark:border-slate-800">
                         <h2 class="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Artifacts</h2>
                         <span id="artifactMeta" class="text-[11px] text-slate-500 dark:text-slate-400 font-mono">No job selected</span>
@@ -575,15 +1521,18 @@
                 </div>
 
                 <!-- Live Logs -->
-                <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-soft dark:shadow-soft-dark flex flex-col flex-1 min-h-[400px] overflow-hidden transition-colors duration-300">
+                <div id="logs-shell" data-ambient-zone="logs" data-ambient-focus-x="70" data-ambient-focus-y="84" data-ambient-shift-x="10" data-ambient-shift-y="18" data-ambient-stage-scale="1.04" data-ambient-stage-rotate="0.18" data-ambient-color-a="#22d3ee" data-ambient-color-b="#60a5fa" data-ambient-color-c="#f97316" data-ambient-focus-color="#fed7aa" class="workspace-shell deferred-shell rounded-[1.75rem] shell-panel flex flex-col flex-1 min-h-[400px] overflow-hidden transition-colors duration-300 shadow-soft dark:shadow-soft-dark" data-shell-size="tall">
                     <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-900">
-                        <h2 class="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400 flex items-center gap-2">
-                            Live Logs
-                            <span id="logStatusIndicator" class="hidden h-2 w-2 rounded-full bg-emerald-500 animate-pulse shrink-0"></span>
-                        </h2>
+                        <div>
+                            <h2 class="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                                Live Logs
+                                <span id="logStatusIndicator" class="hidden h-2 w-2 rounded-full bg-emerald-500 animate-pulse shrink-0"></span>
+                            </h2>
+                            <p id="logMetaLabel" class="mt-1 text-[11px] text-slate-500 dark:text-slate-400">Select a job to stream or inspect its log output.</p>
+                        </div>
                         <button id="clearLogsBtn" class="text-[10px] uppercase font-bold text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors focus:outline-none">Clear</button>
                     </div>
-                    <pre id="logPane" class="flex-1 p-6 text-[11px] font-mono leading-relaxed bg-[#0b1020] text-slate-300 overflow-y-auto custom-scrollbar whitespace-pre-wrap break-words"></pre>
+                    <pre id="logPane" class="log-surface flex-1 p-6 text-[11px] font-mono leading-relaxed text-slate-300 overflow-y-auto custom-scrollbar whitespace-pre-wrap break-words"></pre>
                 </div>
 
             </aside>
@@ -669,7 +1618,7 @@
                 emits: {
                     master16: true, upscaled16: true, marketing: false, report: true, runCard: true
                 },
-                gate: { dedup: true, sign: true },
+                gate: { dedup: true, sign: true, archiveIndex: './archive_index_normalized.csv.gz' },
                 licenses: { nonCommercialOk: false, acceptApple: false, acceptResearchTools: false },
                 reconstruction: {
                     enable: false,
@@ -694,10 +1643,36 @@
             selectedJobId: null,
             backendOk: false,
             theme: 'light',
-            presetsByPipeline: {}
+            presetsByPipeline: {},
+            lastDiagnostics: {
+                warnings: [],
+                expectedOutputs: [],
+                healthState: 'good',
+                healthLabel: 'good'
+            }
         };
 
         const els = {
+            heroRunBtn: document.getElementById('heroRunBtn'),
+            heroExportBtn: document.getElementById('heroExportBtn'),
+            refreshHealthBtn: document.getElementById('refreshHealthBtn'),
+            heroPipelineValue: document.getElementById('heroPipelineValue'),
+            heroPresetValue: document.getElementById('heroPresetValue'),
+            heroModeValue: document.getElementById('heroModeValue'),
+            heroQueueValue: document.getElementById('heroQueueValue'),
+            capabilityChips: document.getElementById('capabilityChips'),
+            presetHeadline: document.getElementById('presetHeadline'),
+            presetStabilityBadge: document.getElementById('presetStabilityBadge'),
+            backendModeBadge: document.getElementById('backendModeBadge'),
+            presetDescription: document.getElementById('presetDescription'),
+            heroInputDir: document.getElementById('heroInputDir'),
+            heroOutputDir: document.getElementById('heroOutputDir'),
+            heroReadinessLabel: document.getElementById('heroReadinessLabel'),
+            heroWarningCount: document.getElementById('heroWarningCount'),
+            governanceBannerTitle: document.getElementById('governanceBannerTitle'),
+            governanceBannerBody: document.getElementById('governanceBannerBody'),
+            governanceChecklist: document.getElementById('governanceChecklist'),
+
             pipelineSelect: document.getElementById('pipelineSelect'),
             presetSelect: document.getElementById('presetSelect'),
             profileSelect: document.getElementById('profileSelect'),
@@ -707,6 +1682,7 @@
 
             inputDir: document.getElementById('inputDir'),
             outputDir: document.getElementById('outputDir'),
+            archiveIndexPath: document.getElementById('archiveIndexPath'),
             qualityTier: document.getElementById('qualityTier'),
             depthBackend: document.getElementById('depthBackend'),
             depthDevice: document.getElementById('depthDevice'),
@@ -771,6 +1747,9 @@
 
             fieldsLuxDepth: document.getElementById('fieldsLuxDepth'),
             fieldsArchiveGate: document.getElementById('fieldsArchiveGate'),
+            advancedFlagsDetails: document.getElementById('advancedFlagsDetails'),
+            governanceDetails: document.getElementById('governanceDetails'),
+            reconstructionDetails: document.getElementById('reconstructionDetails'),
 
             cliPreview: document.getElementById('cliPreview'),
             copyCliBtn: document.getElementById('copyCliBtn'),
@@ -787,6 +1766,16 @@
             jobList: document.getElementById('jobList'),
             emptyQueueState: document.getElementById('emptyQueueState'),
             queueCount: document.getElementById('queueCount'),
+            selectedJobStateBadge: document.getElementById('selectedJobStateBadge'),
+            selectedJobIdLabel: document.getElementById('selectedJobIdLabel'),
+            selectedJobPipelineLabel: document.getElementById('selectedJobPipelineLabel'),
+            selectedJobArtifactCount: document.getElementById('selectedJobArtifactCount'),
+            selectedJobStreamStatus: document.getElementById('selectedJobStreamStatus'),
+            selectedJobProgressText: document.getElementById('selectedJobProgressText'),
+            selectedJobProgressBar: document.getElementById('selectedJobProgressBar'),
+            selectedJobMetaLine: document.getElementById('selectedJobMetaLine'),
+            selectedJobFreshness: document.getElementById('selectedJobFreshness'),
+            selectedJobSummary: document.getElementById('selectedJobSummary'),
             artifactList: document.getElementById('artifactList'),
             artifactMeta: document.getElementById('artifactMeta'),
             emptyArtifactState: document.getElementById('emptyArtifactState'),
@@ -795,8 +1784,10 @@
             copyRunCardPathBtn: document.getElementById('copyRunCardPathBtn'),
             copyRunCardFingerprintBtn: document.getElementById('copyRunCardFingerprintBtn'),
             logPane: document.getElementById('logPane'),
+            logMetaLabel: document.getElementById('logMetaLabel'),
             logStatusIndicator: document.getElementById('logStatusIndicator'),
             clearLogsBtn: document.getElementById('clearLogsBtn'),
+            queueStatusSummary: document.getElementById('queueStatusSummary'),
 
             themeBtn: document.getElementById('themeBtn'),
             shortcutsBtn: document.getElementById('shortcutsBtn'),
@@ -808,6 +1799,742 @@
             healthText: document.getElementById('healthText'),
             toastContainer: document.getElementById('toastContainer')
         };
+
+        const ambientMotion = {
+            rafId: null,
+            recomputeId: null,
+            currentShiftX: 0,
+            currentShiftY: 0,
+            targetShiftX: 0,
+            targetShiftY: 0,
+            currentFocusX: 52,
+            currentFocusY: 26,
+            targetFocusX: 52,
+            targetFocusY: 26,
+            currentStageX: 0,
+            currentStageY: 0,
+            targetStageX: 0,
+            targetStageY: 0,
+            currentStageScale: 1,
+            targetStageScale: 1,
+            currentStageRotate: 0,
+            targetStageRotate: 0,
+            currentColorA: [45, 212, 191],
+            currentColorB: [245, 158, 11],
+            currentColorC: [56, 189, 248],
+            currentFocusColor: [125, 211, 252],
+            targetColorA: [45, 212, 191],
+            targetColorB: [245, 158, 11],
+            targetColorC: [56, 189, 248],
+            targetFocusColor: [125, 211, 252],
+            pointerX: 0,
+            pointerY: 0,
+            pointerActive: false,
+            activeZoneEl: null,
+            activeZoneConfig: null,
+            motionQuery: null,
+            performanceLite: false,
+            enabled: true
+        };
+
+        function clamp(value, min, max) {
+            return Math.min(max, Math.max(min, value));
+        }
+
+        function parseZoneNumber(value, fallback) {
+            const parsed = Number.parseFloat(String(value ?? '').trim());
+            return Number.isFinite(parsed) ? parsed : fallback;
+        }
+
+        const DEFAULT_AMBIENT_PALETTE = {
+            colorA: [45, 212, 191],
+            colorB: [245, 158, 11],
+            colorC: [56, 189, 248],
+            focusColor: [125, 211, 252]
+        };
+
+        function cloneAmbientColor(color) {
+            return [color[0], color[1], color[2]];
+        }
+
+        function parseAmbientColor(value, fallback) {
+            const raw = String(value ?? '').trim();
+            if (!raw) return cloneAmbientColor(fallback);
+
+            const normalizedHex = raw.startsWith('#') ? raw.slice(1) : raw;
+            if (/^[0-9a-fA-F]{6}$/.test(normalizedHex)) {
+                return [
+                    Number.parseInt(normalizedHex.slice(0, 2), 16),
+                    Number.parseInt(normalizedHex.slice(2, 4), 16),
+                    Number.parseInt(normalizedHex.slice(4, 6), 16)
+                ];
+            }
+
+            const channels = raw
+                .split(/[,\s]+/)
+                .map((part) => Number.parseFloat(part))
+                .filter((part) => Number.isFinite(part));
+            if (channels.length >= 3) {
+                return channels.slice(0, 3).map((channel) => clamp(Math.round(channel), 0, 255));
+            }
+
+            return cloneAmbientColor(fallback);
+        }
+
+        function stepAmbientColor(current, target, easing) {
+            for (let index = 0; index < 3; index += 1) {
+                current[index] += (target[index] - current[index]) * easing;
+            }
+        }
+
+        function ambientColorDistance(current, target) {
+            return Math.abs(target[0] - current[0])
+                + Math.abs(target[1] - current[1])
+                + Math.abs(target[2] - current[2]);
+        }
+
+        function readAmbientZoneConfig(element) {
+            if (!element || !element.dataset) return null;
+            return {
+                focusX: clamp(parseZoneNumber(element.dataset.ambientFocusX, 52), 8, 92),
+                focusY: clamp(parseZoneNumber(element.dataset.ambientFocusY, 26), 8, 92),
+                shiftX: parseZoneNumber(element.dataset.ambientShiftX, 0),
+                shiftY: parseZoneNumber(element.dataset.ambientShiftY, 0),
+                stageScale: clamp(parseZoneNumber(element.dataset.ambientStageScale, 1), 1, 1.08),
+                stageRotate: clamp(parseZoneNumber(element.dataset.ambientStageRotate, 0), -1.5, 1.5),
+                colorA: parseAmbientColor(element.dataset.ambientColorA, DEFAULT_AMBIENT_PALETTE.colorA),
+                colorB: parseAmbientColor(element.dataset.ambientColorB, DEFAULT_AMBIENT_PALETTE.colorB),
+                colorC: parseAmbientColor(element.dataset.ambientColorC, DEFAULT_AMBIENT_PALETTE.colorC),
+                focusColor: parseAmbientColor(element.dataset.ambientFocusColor, DEFAULT_AMBIENT_PALETTE.focusColor)
+            };
+        }
+
+        function _writeAmbientVariables() {
+            const root = document.documentElement;
+            root.style.setProperty('--ambient-shift-x', `${ambientMotion.currentShiftX.toFixed(2)}px`);
+            root.style.setProperty('--ambient-shift-y', `${ambientMotion.currentShiftY.toFixed(2)}px`);
+            root.style.setProperty('--ambient-focus-x', `${ambientMotion.currentFocusX.toFixed(2)}%`);
+            root.style.setProperty('--ambient-focus-y', `${ambientMotion.currentFocusY.toFixed(2)}%`);
+            root.style.setProperty('--ambient-stage-x', `${ambientMotion.currentStageX.toFixed(2)}px`);
+            root.style.setProperty('--ambient-stage-y', `${ambientMotion.currentStageY.toFixed(2)}px`);
+            root.style.setProperty('--ambient-stage-scale', ambientMotion.currentStageScale.toFixed(4));
+            root.style.setProperty('--ambient-stage-rotate', `${ambientMotion.currentStageRotate.toFixed(3)}deg`);
+            root.style.setProperty('--ambient-color-a', ambientMotion.currentColorA.map((value) => Math.round(value)).join(' '));
+            root.style.setProperty('--ambient-color-b', ambientMotion.currentColorB.map((value) => Math.round(value)).join(' '));
+            root.style.setProperty('--ambient-color-c', ambientMotion.currentColorC.map((value) => Math.round(value)).join(' '));
+            root.style.setProperty('--ambient-focus-color', ambientMotion.currentFocusColor.map((value) => Math.round(value)).join(' '));
+        }
+
+        function _queueAmbientFrame() {
+            if (ambientMotion.rafId !== null) return;
+            ambientMotion.rafId = window.requestAnimationFrame(_stepAmbientMotion);
+        }
+
+        function shouldUsePerformanceLiteMode() {
+            const saveData = Boolean(navigator.connection && navigator.connection.saveData);
+            const coarsePointer = window.matchMedia('(pointer: coarse)').matches;
+            const noHover = window.matchMedia('(hover: none)').matches;
+            const narrowViewport = window.innerWidth < 960;
+            const limitedCpu = Number(navigator.hardwareConcurrency || 8) <= 4;
+            return saveData || coarsePointer || (noHover && narrowViewport) || (noHover && limitedCpu);
+        }
+
+        function applyAmbientCapabilityMode() {
+            ambientMotion.performanceLite = shouldUsePerformanceLiteMode();
+            document.documentElement.classList.toggle('performance-lite', ambientMotion.performanceLite);
+            return ambientMotion.performanceLite;
+        }
+
+        function _scheduleAmbientTargetRecompute() {
+            if (ambientMotion.recomputeId !== null) return;
+            ambientMotion.recomputeId = window.requestAnimationFrame(() => {
+                ambientMotion.recomputeId = null;
+                _recomputeAmbientTargets();
+            });
+        }
+
+        function _recomputeAmbientTargets() {
+            const zone = ambientMotion.activeZoneConfig;
+            const width = Math.max(window.innerWidth || 1, 1);
+            const height = Math.max(window.innerHeight || 1, 1);
+            const pointerX = ambientMotion.pointerActive ? ambientMotion.pointerX : width / 2;
+            const pointerY = ambientMotion.pointerActive ? ambientMotion.pointerY : height / 2;
+            const xRatio = (pointerX / width) - 0.5;
+            const yRatio = (pointerY / height) - 0.5;
+            const pointerWeight = zone ? 0.42 : 1;
+
+            const baseFocusX = zone ? zone.focusX : 52;
+            const baseFocusY = zone ? zone.focusY : 26;
+            const baseShiftX = zone ? zone.shiftX : 0;
+            const baseShiftY = zone ? zone.shiftY : 0;
+            const baseStageScale = zone ? zone.stageScale : 1;
+            const baseStageRotate = zone ? zone.stageRotate : 0;
+            const baseColorA = zone ? zone.colorA : DEFAULT_AMBIENT_PALETTE.colorA;
+            const baseColorB = zone ? zone.colorB : DEFAULT_AMBIENT_PALETTE.colorB;
+            const baseColorC = zone ? zone.colorC : DEFAULT_AMBIENT_PALETTE.colorC;
+            const baseFocusColor = zone ? zone.focusColor : DEFAULT_AMBIENT_PALETTE.focusColor;
+
+            ambientMotion.targetFocusX = clamp(baseFocusX + (xRatio * 18 * pointerWeight), 8, 92);
+            ambientMotion.targetFocusY = clamp(baseFocusY + (yRatio * 16 * pointerWeight), 8, 92);
+            ambientMotion.targetShiftX = clamp(baseShiftX + (xRatio * 52 * pointerWeight), -72, 72);
+            ambientMotion.targetShiftY = clamp(baseShiftY + (yRatio * 44 * pointerWeight), -64, 64);
+            ambientMotion.targetStageX = clamp((zone ? zone.shiftX * 0.8 : 0) + (xRatio * 14 * pointerWeight), -30, 30);
+            ambientMotion.targetStageY = clamp((zone ? zone.shiftY * 0.8 : 0) + (yRatio * 12 * pointerWeight), -28, 28);
+            ambientMotion.targetStageScale = baseStageScale;
+            ambientMotion.targetStageRotate = baseStageRotate + (xRatio * 0.22 * pointerWeight);
+            ambientMotion.targetColorA = cloneAmbientColor(baseColorA);
+            ambientMotion.targetColorB = cloneAmbientColor(baseColorB);
+            ambientMotion.targetColorC = cloneAmbientColor(baseColorC);
+            ambientMotion.targetFocusColor = cloneAmbientColor(baseFocusColor);
+            _queueAmbientFrame();
+        }
+
+        function _resetAmbientTargets() {
+            ambientMotion.pointerActive = false;
+            _scheduleAmbientTargetRecompute();
+        }
+
+        function _clearAmbientActiveZone() {
+            if (ambientMotion.activeZoneEl) {
+                ambientMotion.activeZoneEl.removeAttribute('data-ambient-active');
+            }
+            ambientMotion.activeZoneEl = null;
+            ambientMotion.activeZoneConfig = null;
+            _scheduleAmbientTargetRecompute();
+        }
+
+        function _activateAmbientZone(element) {
+            if (!element) return;
+            if (ambientMotion.activeZoneEl === element) return;
+            if (ambientMotion.activeZoneEl) {
+                ambientMotion.activeZoneEl.removeAttribute('data-ambient-active');
+            }
+            ambientMotion.activeZoneEl = element;
+            ambientMotion.activeZoneConfig = readAmbientZoneConfig(element);
+            element.setAttribute('data-ambient-active', 'true');
+            _scheduleAmbientTargetRecompute();
+        }
+
+        function _stepAmbientMotion() {
+            ambientMotion.rafId = null;
+            const easing = ambientMotion.enabled ? 0.085 : 0.16;
+            ambientMotion.currentShiftX += (ambientMotion.targetShiftX - ambientMotion.currentShiftX) * easing;
+            ambientMotion.currentShiftY += (ambientMotion.targetShiftY - ambientMotion.currentShiftY) * easing;
+            ambientMotion.currentFocusX += (ambientMotion.targetFocusX - ambientMotion.currentFocusX) * easing;
+            ambientMotion.currentFocusY += (ambientMotion.targetFocusY - ambientMotion.currentFocusY) * easing;
+            ambientMotion.currentStageX += (ambientMotion.targetStageX - ambientMotion.currentStageX) * easing;
+            ambientMotion.currentStageY += (ambientMotion.targetStageY - ambientMotion.currentStageY) * easing;
+            ambientMotion.currentStageScale += (ambientMotion.targetStageScale - ambientMotion.currentStageScale) * easing;
+            ambientMotion.currentStageRotate += (ambientMotion.targetStageRotate - ambientMotion.currentStageRotate) * easing;
+            stepAmbientColor(ambientMotion.currentColorA, ambientMotion.targetColorA, easing);
+            stepAmbientColor(ambientMotion.currentColorB, ambientMotion.targetColorB, easing);
+            stepAmbientColor(ambientMotion.currentColorC, ambientMotion.targetColorC, easing);
+            stepAmbientColor(ambientMotion.currentFocusColor, ambientMotion.targetFocusColor, easing);
+            _writeAmbientVariables();
+
+            const remaining = Math.abs(ambientMotion.targetShiftX - ambientMotion.currentShiftX)
+                + Math.abs(ambientMotion.targetShiftY - ambientMotion.currentShiftY)
+                + Math.abs(ambientMotion.targetFocusX - ambientMotion.currentFocusX)
+                + Math.abs(ambientMotion.targetFocusY - ambientMotion.currentFocusY)
+                + Math.abs(ambientMotion.targetStageX - ambientMotion.currentStageX)
+                + Math.abs(ambientMotion.targetStageY - ambientMotion.currentStageY)
+                + Math.abs(ambientMotion.targetStageScale - ambientMotion.currentStageScale)
+                + Math.abs(ambientMotion.targetStageRotate - ambientMotion.currentStageRotate)
+                + ambientColorDistance(ambientMotion.currentColorA, ambientMotion.targetColorA)
+                + ambientColorDistance(ambientMotion.currentColorB, ambientMotion.targetColorB)
+                + ambientColorDistance(ambientMotion.currentColorC, ambientMotion.targetColorC)
+                + ambientColorDistance(ambientMotion.currentFocusColor, ambientMotion.targetFocusColor);
+            if (remaining > 0.2) {
+                _queueAmbientFrame();
+            }
+        }
+
+        function _updateAmbientTargetsFromPointer(clientX, clientY) {
+            if (!ambientMotion.enabled) return;
+            ambientMotion.pointerActive = true;
+            ambientMotion.pointerX = clientX;
+            ambientMotion.pointerY = clientY;
+            _scheduleAmbientTargetRecompute();
+        }
+
+        function setupAmbientMotion() {
+            ambientMotion.motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+            const applyPreference = () => {
+                const performanceLite = applyAmbientCapabilityMode();
+                ambientMotion.enabled = !ambientMotion.motionQuery.matches && !performanceLite;
+                if (!ambientMotion.enabled) {
+                    if (ambientMotion.activeZoneEl) {
+                        ambientMotion.activeZoneEl.removeAttribute('data-ambient-active');
+                    }
+                    ambientMotion.activeZoneEl = null;
+                    ambientMotion.activeZoneConfig = null;
+                    _resetAmbientTargets();
+                } else {
+                    _scheduleAmbientTargetRecompute();
+                }
+            };
+
+            document.querySelectorAll('[data-ambient-zone]').forEach((zone) => {
+                zone.addEventListener('mouseenter', () => _activateAmbientZone(zone));
+                zone.addEventListener('mouseleave', () => {
+                    if (!zone.matches(':focus-within')) {
+                        _clearAmbientActiveZone();
+                    }
+                });
+                zone.addEventListener('focusin', () => _activateAmbientZone(zone));
+                zone.addEventListener('focusout', (event) => {
+                    const next = event.relatedTarget;
+                    if (next && zone.contains(next)) return;
+                    if (!zone.matches(':hover')) {
+                        _clearAmbientActiveZone();
+                    }
+                });
+            });
+
+            window.addEventListener('pointermove', (event) => {
+                if (!ambientMotion.enabled) return;
+                _updateAmbientTargetsFromPointer(event.clientX, event.clientY);
+            }, { passive: true });
+            window.addEventListener('pointerout', (event) => {
+                if (event.relatedTarget === null) {
+                    _resetAmbientTargets();
+                }
+            });
+            window.addEventListener('scroll', () => {
+                if (ambientMotion.activeZoneEl) {
+                    _scheduleAmbientTargetRecompute();
+                }
+            }, { passive: true });
+            window.addEventListener('blur', _resetAmbientTargets);
+            window.addEventListener('resize', () => {
+                applyPreference();
+                _resetAmbientTargets();
+            });
+            ambientMotion.motionQuery.addEventListener('change', applyPreference);
+            applyPreference();
+            _writeAmbientVariables();
+        }
+
+        function setActiveWorkspaceLink(sectionId) {
+            document.querySelectorAll('[data-section-link]').forEach((link) => {
+                const active = String(link.dataset.sectionLink || '') === String(sectionId || '');
+                link.classList.toggle('is-active', active);
+                if (active) {
+                    link.setAttribute('aria-current', 'location');
+                } else {
+                    link.removeAttribute('aria-current');
+                }
+            });
+        }
+
+        function setupSectionRail() {
+            const links = Array.from(document.querySelectorAll('[data-section-link]'));
+            if (!links.length) return;
+
+            const sections = links
+                .map((link) => document.getElementById(String(link.dataset.sectionLink || '')))
+                .filter(Boolean);
+
+            const fallbackSectionId = sections[0]?.id || links[0]?.dataset.sectionLink;
+            if (fallbackSectionId) setActiveWorkspaceLink(fallbackSectionId);
+
+            links.forEach((link) => {
+                link.addEventListener('click', () => {
+                    const targetId = String(link.dataset.sectionLink || '').trim();
+                    if (targetId) setActiveWorkspaceLink(targetId);
+                });
+            });
+
+            if (!('IntersectionObserver' in window) || !sections.length) return;
+
+            const visibleSections = new Map();
+            const resolveActiveSection = () => {
+                if (visibleSections.size > 0) {
+                    const nextId = [...visibleSections.entries()]
+                        .sort((left, right) => right[1] - left[1])[0][0];
+                    setActiveWorkspaceLink(nextId);
+                    return;
+                }
+
+                const nearest = sections
+                    .map((section) => ({
+                        id: section.id,
+                        distance: Math.abs(section.getBoundingClientRect().top - 140)
+                    }))
+                    .sort((left, right) => left.distance - right.distance)[0];
+                if (nearest) setActiveWorkspaceLink(nearest.id);
+            };
+
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach((entry) => {
+                    if (entry.isIntersecting) {
+                        visibleSections.set(entry.target.id, entry.intersectionRatio);
+                    } else {
+                        visibleSections.delete(entry.target.id);
+                    }
+                });
+                resolveActiveSection();
+            }, {
+                rootMargin: '-18% 0px -58% 0px',
+                threshold: [0.12, 0.32, 0.6]
+            });
+
+            sections.forEach((section) => observer.observe(section));
+            resolveActiveSection();
+        }
+
+        function truncateMiddle(value, maxLength = 44) {
+            const text = String(value || '').trim();
+            if (text.length <= maxLength) return text || '—';
+            const edge = Math.max(8, Math.floor((maxLength - 1) / 2));
+            return `${text.slice(0, edge)}…${text.slice(-edge)}`;
+        }
+
+        function titleCaseToken(value, fallback = 'Unknown') {
+            const text = String(value || '').trim();
+            if (!text) return fallback;
+            return text
+                .split(/[_\-\s]+/)
+                .filter(Boolean)
+                .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+                .join(' ');
+        }
+
+        function parseTimestamp(value, fallback = Date.now()) {
+            if (typeof value === 'number' && Number.isFinite(value)) return value;
+            if (typeof value === 'string' && value.trim()) {
+                const parsed = Date.parse(value);
+                if (Number.isFinite(parsed)) return parsed;
+            }
+            return fallback;
+        }
+
+        function formatRelativeTime(timestamp) {
+            if (!Number.isFinite(timestamp) || timestamp <= 0) return 'just now';
+            const diffMs = Math.max(0, Date.now() - timestamp);
+            const diffSeconds = Math.round(diffMs / 1000);
+            if (diffSeconds < 10) return 'just now';
+            if (diffSeconds < 60) return `${diffSeconds}s ago`;
+            const diffMinutes = Math.round(diffSeconds / 60);
+            if (diffMinutes < 60) return `${diffMinutes}m ago`;
+            const diffHours = Math.round(diffMinutes / 60);
+            if (diffHours < 24) return `${diffHours}h ago`;
+            const diffDays = Math.round(diffHours / 24);
+            return `${diffDays}d ago`;
+        }
+
+        function formatTransportLabel(job) {
+            if (!job) return 'idle';
+            if (job.reconnectBlocked) return 'auth blocked';
+            if (_jobHasActiveStream(job)) return job.usesFetchSse ? 'fetch stream' : 'event stream';
+            if (job.state === 'running' || job.state === 'queued') return 'awaiting stream';
+            return 'closed';
+        }
+
+        function currentPresetDescriptor() {
+            if (state.pipeline !== 'lux-depth-v3') {
+                return {
+                    name: 'default',
+                    label: 'default',
+                    stability: 'stable',
+                    description: 'Archive governance workflow preset.'
+                };
+            }
+            const presets = Array.isArray(state.presetsByPipeline[state.pipeline]) ? state.presetsByPipeline[state.pipeline] : [];
+            const selected = presets.find((preset) => String(preset.name) === String(state.config.preset));
+            if (selected) return selected;
+            return {
+                name: state.config.preset || 'custom',
+                label: state.config.preset || 'custom',
+                stability: 'custom',
+                description: state.pipeline === 'lux-depth-v3'
+                    ? 'Custom or offline preset selection.'
+                    : 'Archive governance workflow preset.'
+            };
+        }
+
+        function renderCapabilityChips(payload) {
+            if (!els.capabilityChips) return;
+            const args = payload?.args || {};
+            const chips = [];
+            if (state.pipeline === 'lux-depth-v3') {
+                chips.push(`Preset ${String(args.preset || state.config.preset || 'custom')}`);
+            } else {
+                chips.push('Archive governance preset');
+            }
+            chips.push(state.backendOk ? 'Live backend connected' : 'Mock-safe dispatch mode');
+            if (parseBoolLike(args.enable_segmentation, false)) {
+                chips.push(`Segmentation ${String(args.segmentation_backend || 'enabled')}`);
+            }
+            if (parseBoolLike(args.materials_v3, false)) chips.push('Materials V3');
+            if (parseBoolLike(args.pbr, false)) chips.push('PBR generation');
+            if (parseBoolLike(args.enable_reconstruction, false)) chips.push('Scene reconstruction');
+            if (parseBoolLike(args.emit_run_card, false)) chips.push('Run card emission');
+            if (parseBoolLike(args.dedup, false)) chips.push('Dedup ledger');
+            if (parseBoolLike(args.sign, false)) chips.push('Signed artifacts');
+
+            els.capabilityChips.innerHTML = '';
+            chips.forEach((chip) => {
+                const tag = document.createElement('span');
+                tag.className = 'accent-chip';
+                tag.textContent = chip;
+                els.capabilityChips.appendChild(tag);
+            });
+        }
+
+        function syncDisclosurePanels(payload = null) {
+            const args = payload?.args || generatePayload().args || {};
+            const advancedActive = parseBoolLike(args.save_float_depth, false)
+                || parseBoolLike(args.force_depth, false)
+                || parseBoolLike(args.strict_inputs, false)
+                || parseBoolLike(args.verify_images, false)
+                || parseBoolLike(args.allow_semantic_fallback, false)
+                || parseBoolLike(args.verbose, false)
+                || parseBoolLike(args.quiet, false)
+                || String(args.log_level || '').trim() !== ''
+                || String(args.max_workers || '').trim() !== ''
+                || String(args.max_gpu_workers || '').trim() !== '';
+            const governanceActive = parseBoolLike(args.non_commercial_ok, false)
+                || parseBoolLike(args.accept_apple_depth_pro_research_license, false)
+                || parseBoolLike(args.accept_research_tools_license, false)
+                || String(args.preset || '').toLowerCase().includes('v3.1')
+                || String(args.depth_backend || '').toLowerCase() === 'depth_pro'
+                || parseBoolLike(args.enable_reconstruction, false);
+            const reconstructionActive = parseBoolLike(args.enable_reconstruction, false)
+                || String(args.cameras_sidecar_path || '').trim() !== ''
+                || String(args.grouping_mode || 'single').trim().toLowerCase() !== 'single'
+                || String(args.raw_ingest_mode || 'auto').trim().toLowerCase() !== 'auto'
+                || String(args.max_workers || '').trim() !== ''
+                || String(args.max_gpu_workers || '').trim() !== ''
+                || String(args.log_level || '').trim() !== '';
+
+            if (els.advancedFlagsDetails) els.advancedFlagsDetails.open = advancedActive;
+            if (els.governanceDetails) els.governanceDetails.open = governanceActive;
+            if (els.reconstructionDetails) els.reconstructionDetails.open = reconstructionActive;
+        }
+
+        function renderGovernanceBanner(payload) {
+            if (!els.governanceChecklist) return;
+            const args = payload?.args || {};
+            const items = [];
+            let title = 'Run posture is clear.';
+            let body = 'The current configuration is valid for dispatch. Any license acknowledgments or runtime caveats will surface here before execution.';
+
+            if (state.pipeline === 'lux-depth-v3') {
+                if (String(args.preset || '').toLowerCase().includes('v3.1')) {
+                    items.push({
+                        tone: parseBoolLike(args.non_commercial_ok, false) ? 'ok' : 'warn',
+                        label: 'Research preset',
+                        detail: parseBoolLike(args.non_commercial_ok, false)
+                            ? 'Non-commercial acknowledgment is already set.'
+                            : 'This preset requires non-commercial acknowledgment before dispatch.'
+                    });
+                }
+                if (String(args.depth_backend || '').toLowerCase() === 'depth_pro') {
+                    const ok = parseBoolLike(args.non_commercial_ok, false) && parseBoolLike(args.accept_apple_depth_pro_research_license, false);
+                    items.push({
+                        tone: ok ? 'ok' : 'warn',
+                        label: 'Depth Pro license',
+                        detail: ok
+                            ? 'Depth Pro research acknowledgments are complete.'
+                            : 'Depth Pro requires non-commercial and Apple research-license acknowledgment.'
+                    });
+                }
+                if (parseBoolLike(args.enable_reconstruction, false)) {
+                    const ok = parseBoolLike(args.non_commercial_ok, false) && parseBoolLike(args.accept_research_tools_license, false);
+                    items.push({
+                        tone: ok ? 'ok' : 'warn',
+                        label: 'Reconstruction governance',
+                        detail: ok
+                            ? 'Scene reconstruction acknowledgments are complete.'
+                            : 'Scene reconstruction requires non-commercial and research-tools acknowledgment.'
+                    });
+                }
+                if (parseBoolLike(args.materials_v3, false) && String(args.quality_tier || '').toLowerCase() === 'apex') {
+                    const segmentationReady = parseBoolLike(args.enable_segmentation, false)
+                        && String(args.segmentation_backend || '').toLowerCase() !== 'stub'
+                        && parseBoolLike(args.strict_segmentation, false);
+                    items.push({
+                        tone: segmentationReady ? 'ok' : 'warn',
+                        label: 'APEX materials guardrail',
+                        detail: segmentationReady
+                            ? 'Segmentation prerequisites for APEX materials are satisfied.'
+                            : 'APEX + Materials V3 expects enabled strict segmentation with a non-stub backend.'
+                    });
+                }
+            } else {
+                items.push({
+                    tone: 'ok',
+                    label: 'Archive governance',
+                    detail: 'This workflow stays within deterministic archive and provenance outputs.'
+                });
+            }
+
+            items.push({
+                tone: state.backendOk ? 'ok' : 'info',
+                label: state.backendOk ? 'Backend live' : 'Backend offline',
+                detail: state.backendOk
+                    ? 'Jobs will be submitted to the live orchestrator API.'
+                    : 'The UI remains usable in mock mode while the backend is unreachable.'
+            });
+
+            const hasWarnings = items.some((item) => item.tone === 'warn');
+            if (hasWarnings) {
+                title = 'Operator checks are still outstanding.';
+                body = 'Before dispatch, complete the required acknowledgments or prerequisite toggles listed below.';
+            } else if (items.some((item) => item.tone === 'info')) {
+                title = 'Configuration is valid with runtime caveats.';
+                body = 'The run contract is coherent, but the runtime environment is not fully live yet.';
+            }
+
+            if (els.governanceBannerTitle) els.governanceBannerTitle.textContent = title;
+            if (els.governanceBannerBody) els.governanceBannerBody.textContent = body;
+
+            els.governanceChecklist.innerHTML = '';
+            items.forEach((item) => {
+                const card = document.createElement('div');
+                const toneClass = item.tone === 'warn'
+                    ? 'border-amber-200 bg-amber-50/90 dark:border-amber-900/60 dark:bg-amber-900/20'
+                    : item.tone === 'ok'
+                        ? 'border-emerald-200 bg-emerald-50/90 dark:border-emerald-900/60 dark:bg-emerald-900/20'
+                        : 'border-slate-200 bg-white/80 dark:border-slate-700 dark:bg-slate-900/60';
+                card.className = `governance-item ${toneClass}`;
+
+                const heading = document.createElement('p');
+                heading.className = 'text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400';
+                heading.textContent = item.label;
+                card.appendChild(heading);
+
+                const detail = document.createElement('p');
+                detail.className = 'mt-2 text-[12px] leading-6 text-slate-700 dark:text-slate-200';
+                detail.textContent = item.detail;
+                card.appendChild(detail);
+
+                els.governanceChecklist.appendChild(card);
+            });
+        }
+
+        function renderPresetIntelligence(payload) {
+            const preset = currentPresetDescriptor();
+            const diagnostics = state.lastDiagnostics || {};
+            const warnings = Array.isArray(diagnostics.warnings) ? diagnostics.warnings : [];
+
+            if (els.presetHeadline) els.presetHeadline.textContent = String(preset.label || preset.name || 'custom');
+            if (els.presetDescription) {
+                els.presetDescription.textContent = String(
+                    preset.description ||
+                    (state.pipeline === 'lux-depth-v3'
+                        ? 'Preset metadata unavailable while offline.'
+                        : 'Archive governance preset.')
+                );
+            }
+            if (els.presetStabilityBadge) {
+                els.presetStabilityBadge.textContent = titleCaseToken(preset.stability, 'Custom');
+            }
+            if (els.backendModeBadge) {
+                els.backendModeBadge.textContent = state.backendOk ? 'Backend Live' : 'Mock Mode';
+            }
+            if (els.heroInputDir) {
+                els.heroInputDir.textContent = truncateMiddle(payload?.args?.input_dir || state.config.inputDir || './input_images', 52);
+                els.heroInputDir.title = String(payload?.args?.input_dir || state.config.inputDir || './input_images');
+            }
+            if (els.heroOutputDir) {
+                els.heroOutputDir.textContent = truncateMiddle(payload?.args?.output_dir || state.config.outputDir || './output', 52);
+                els.heroOutputDir.title = String(payload?.args?.output_dir || state.config.outputDir || './output');
+            }
+            if (els.heroReadinessLabel) {
+                els.heroReadinessLabel.textContent = warnings.length === 0
+                    ? 'No pre-run warnings'
+                    : titleCaseToken(diagnostics.healthLabel || 'warnings detected', 'Warnings detected');
+            }
+            if (els.heroWarningCount) {
+                els.heroWarningCount.textContent = String(warnings.length);
+            }
+        }
+
+        function renderMissionControl(payload = null) {
+            const currentPayload = payload || generatePayload();
+            const activeJobs = state.jobs.filter((job) => job && (job.state === 'running' || job.state === 'queued')).length;
+            const selected = state.jobs.find((job) => job.id === state.selectedJobId) || null;
+
+            if (els.heroPipelineValue) els.heroPipelineValue.textContent = String(state.pipeline || 'lux-depth-v3');
+            if (els.heroPresetValue) els.heroPresetValue.textContent = String(currentPayload?.args?.preset || state.config.preset || 'custom');
+            if (els.heroModeValue) {
+                els.heroModeValue.textContent = state.backendOk ? 'Live backend' : 'Offline / mock mode';
+            }
+            if (els.heroQueueValue) {
+                els.heroQueueValue.textContent = activeJobs > 0 ? `${activeJobs} live job${activeJobs === 1 ? '' : 's'}` : '0 live jobs';
+            }
+
+            renderCapabilityChips(currentPayload);
+            renderPresetIntelligence(currentPayload);
+            renderGovernanceBanner(currentPayload);
+            syncDisclosurePanels(currentPayload);
+
+            if (selected && els.heroQueueValue) {
+                const selectedState = titleCaseToken(selected.state, 'Unknown');
+                els.heroQueueValue.textContent = `${activeJobs} live job${activeJobs === 1 ? '' : 's'} • selected ${selectedState}`;
+            }
+        }
+
+        function renderSelectedJobInspector() {
+            const selected = state.jobs.find((job) => job.id === state.selectedJobId) || null;
+            if (!selected) {
+                if (els.selectedJobStateBadge) els.selectedJobStateBadge.textContent = 'Idle';
+                if (els.selectedJobIdLabel) els.selectedJobIdLabel.textContent = 'No job selected';
+                if (els.selectedJobPipelineLabel) els.selectedJobPipelineLabel.textContent = 'Awaiting dispatch';
+                if (els.selectedJobArtifactCount) els.selectedJobArtifactCount.textContent = '0 indexed';
+                if (els.selectedJobStreamStatus) els.selectedJobStreamStatus.textContent = 'Inactive';
+                if (els.selectedJobProgressText) els.selectedJobProgressText.textContent = '0%';
+                if (els.selectedJobProgressBar) els.selectedJobProgressBar.value = 0;
+                if (els.selectedJobMetaLine) els.selectedJobMetaLine.textContent = 'Queue idle. Select a run to inspect transport, recency, and output state.';
+                if (els.selectedJobFreshness) els.selectedJobFreshness.textContent = 'No live telemetry';
+                if (els.logMetaLabel) els.logMetaLabel.textContent = 'Select a job to stream or inspect its log output.';
+                if (els.selectedJobSummary) {
+                    els.selectedJobSummary.textContent = 'Choose a job from the queue or dispatch a new run to inspect progress, artifacts, and live stream state.';
+                }
+                return;
+            }
+
+            const artifactCount = Array.isArray(selected.artifacts) ? selected.artifacts.length : 0;
+            const readableError = getReadableError(selected.error);
+            const streamStatus = selected.reconnectBlocked
+                ? 'Blocked by auth'
+                : _jobHasActiveStream(selected)
+                    ? (selected.usesFetchSse ? 'Fetch stream active' : 'SSE stream active')
+                    : (selected.state === 'running' || selected.state === 'queued' ? 'Waiting for stream' : 'Closed');
+            const lastActivityAt = Number(selected.updatedAt || selected.createdAt || 0);
+            const activityLabel = formatRelativeTime(lastActivityAt);
+            const transportLabel = formatTransportLabel(selected);
+
+            if (els.selectedJobStateBadge) els.selectedJobStateBadge.textContent = titleCaseToken(selected.state, 'Unknown');
+            if (els.selectedJobIdLabel) {
+                els.selectedJobIdLabel.textContent = String(selected.id || 'unknown');
+                els.selectedJobIdLabel.title = String(selected.id || 'unknown');
+            }
+            if (els.selectedJobPipelineLabel) els.selectedJobPipelineLabel.textContent = String(selected.pipeline || 'unknown');
+            if (els.selectedJobArtifactCount) els.selectedJobArtifactCount.textContent = `${artifactCount} indexed`;
+            if (els.selectedJobStreamStatus) els.selectedJobStreamStatus.textContent = streamStatus;
+            if (els.selectedJobProgressText) els.selectedJobProgressText.textContent = `${Math.max(0, Math.min(100, Number(selected.progress) || 0))}%`;
+            if (els.selectedJobProgressBar) {
+                els.selectedJobProgressBar.max = 100;
+                els.selectedJobProgressBar.value = Math.max(0, Math.min(100, Number(selected.progress) || 0));
+            }
+            if (els.selectedJobMetaLine) {
+                els.selectedJobMetaLine.textContent = `${titleCaseToken(selected.pipeline, 'Unknown')} • ${transportLabel} • updated ${activityLabel}`;
+            }
+            if (els.selectedJobFreshness) {
+                els.selectedJobFreshness.textContent = `Updated ${activityLabel}`;
+            }
+            if (els.logMetaLabel) {
+                els.logMetaLabel.textContent = `${String(selected.pipeline || 'unknown')} • ${transportLabel} • ${artifactCount} artifact${artifactCount === 1 ? '' : 's'}`;
+            }
+            if (els.selectedJobSummary) {
+                els.selectedJobSummary.textContent = readableError
+                    ? readableError
+                    : `Tracking ${titleCaseToken(selected.state, 'job')} state for ${String(selected.pipeline || 'unknown')} with ${artifactCount} indexed artifact${artifactCount === 1 ? '' : 's'}.`;
+            }
+        }
 
         function createToast(message, type = 'info') {
             const toast = document.createElement('div');
@@ -927,10 +2654,13 @@
         }
 
         function appendJobLog(job, line) {
+            if (!job || typeof line !== 'string' || !line.trim()) return;
+            if (!Array.isArray(job.logs)) job.logs = [];
             job.logs.push(line);
             if (job.logs.length > MAX_JOB_LOG_LINES) {
                 job.logs.splice(0, job.logs.length - MAX_JOB_LOG_LINES);
             }
+            job.updatedAt = Date.now();
         }
 
         function getReadableError(errorObj) {
@@ -1010,6 +2740,7 @@
                 els.artifactList.innerHTML = '';
                 updateRunCardActions(null);
                 if (els.emptyArtifactState) els.emptyArtifactState.style.display = 'block';
+                renderSelectedJobInspector();
                 return;
             }
 
@@ -1020,6 +2751,7 @@
                 els.artifactList.innerHTML = '';
                 updateRunCardActions(selected);
                 if (els.emptyArtifactState) els.emptyArtifactState.style.display = 'block';
+                renderSelectedJobInspector();
                 return;
             }
 
@@ -1044,6 +2776,7 @@
             els.artifactList.innerHTML = '';
             els.artifactList.appendChild(fragment);
             updateRunCardActions(selected);
+            renderSelectedJobInspector();
         }
 
         function selectJob(jobId) {
@@ -1054,12 +2787,16 @@
                 els.logPane.scrollTop = els.logPane.scrollHeight;
             }
             renderArtifactPanel();
+            renderSelectedJobInspector();
+            renderMissionControl();
             scheduleRenderJobQueue();
         }
 
         function hydrateJobFromServer(rawJob) {
             if (!rawJob || !rawJob.id) return null;
             const id = String(rawJob.id);
+            const createdAt = parseTimestamp(rawJob.created_at || rawJob.started_at || rawJob.updated_at, Date.now());
+            const updatedAt = parseTimestamp(rawJob.updated_at || rawJob.started_at || rawJob.created_at, createdAt);
             return {
                 id,
                 pipeline: String(rawJob.pipeline || 'unknown'),
@@ -1075,7 +2812,9 @@
                 sseRetry: { attempt: 0, timer: null },
                 reconnectBlocked: false,
                 lastEventAt: 0,
-                mockInterval: null
+                mockInterval: null,
+                createdAt,
+                updatedAt
             };
         }
 
@@ -1135,6 +2874,7 @@
             if (!job) return;
             _ensureJobStreamState(job);
             job.lastEventAt = Date.now();
+            job.updatedAt = job.lastEventAt;
             if (job.sseRetry && job.sseRetry.attempt > 0) {
                 job.sseRetry.attempt = 0;
             }
@@ -1148,6 +2888,8 @@
             existing.logs = hydrated.logs;
             existing.error = hydrated.error;
             existing.artifacts = hydrated.artifacts;
+            existing.createdAt = hydrated.createdAt || existing.createdAt || Date.now();
+            existing.updatedAt = hydrated.updatedAt || existing.updatedAt || existing.createdAt;
             if (rawJob && typeof rawJob.events_url === 'string' && rawJob.events_url.trim()) {
                 existing.eventStreamUrl = rawJob.events_url.trim();
             } else if (!existing.eventStreamUrl) {
@@ -1615,10 +3357,23 @@
                     state.presetsByPipeline[pipelineName] = presets;
                     applyPipelinePresetOptions(pipelineName);
                     renderCLI();
+                    renderMissionControl();
                 }
             } catch (err) {
                 if (!silent) createToast('Failed to refresh presets from backend.', 'error');
             }
+        }
+
+        function deriveArchiveIndexPath(inputDir) {
+            const raw = String(inputDir || '').trim();
+            if (!raw) return './archive_index_normalized.csv.gz';
+            const normalized = raw.replace(/[\\/]+$/, '');
+            if (!normalized) return './archive_index_normalized.csv.gz';
+            const segments = normalized.split(/[\\/]/);
+            if (segments.length <= 1) return './archive_index_normalized.csv.gz';
+            segments.pop();
+            const parent = segments.join('/');
+            return `${parent || '.'}/archive_index_normalized.csv.gz`;
         }
 
         function updateUIFromState() {
@@ -1664,6 +3419,7 @@
             c.gate = c.gate || {};
             c.gate.dedup = parseBoolLike(c.gate.dedup, true);
             c.gate.sign = parseBoolLike(c.gate.sign, true);
+            c.gate.archiveIndex = _textOrFallback(c.gate.archiveIndex, deriveArchiveIndexPath(c.inputDir));
             c.licenses = c.licenses || {};
             c.licenses.nonCommercialOk = parseBoolLike(c.licenses.nonCommercialOk, false);
             c.licenses.acceptApple = parseBoolLike(c.licenses.acceptApple, false);
@@ -1687,6 +3443,7 @@
             if (els.presetSelect) els.presetSelect.value = c.preset;
             if (els.inputDir) els.inputDir.value = c.inputDir;
             if (els.outputDir) els.outputDir.value = c.outputDir;
+            if (els.archiveIndexPath) els.archiveIndexPath.value = c.gate.archiveIndex;
             if (els.qualityTier) els.qualityTier.value = c.qualityTier;
             if (els.depthBackend) els.depthBackend.value = c.depthBackend;
             if (els.depthDevice) els.depthDevice.value = c.depthDevice;
@@ -1756,10 +3513,12 @@
         function generatePayload() {
             const p = state.pipeline;
             const c = state.config;
+            const inputDirValue = _textOrFallback(els.inputDir ? els.inputDir.value : c.inputDir, c.inputDir);
+            const outputDirValue = _textOrFallback(els.outputDir ? els.outputDir.value : c.outputDir, c.outputDir);
 
             let args = {
-                input_dir: _textOrFallback(els.inputDir ? els.inputDir.value : c.inputDir, c.inputDir),
-                output_dir: _textOrFallback(els.outputDir ? els.outputDir.value : c.outputDir, c.outputDir),
+                input_dir: inputDirValue,
+                output_dir: outputDirValue,
                 overwrite: els.flags.overwrite
                     ? Boolean(els.flags.overwrite.checked)
                     : parseBoolLike(c.flags.overwrite, false)
@@ -1771,8 +3530,14 @@
                     ...buildCanonicalLuxDepthArgs(c)
                 };
             } else {
+                const derivedArchiveIndex = deriveArchiveIndexPath(inputDirValue);
                 args = {
                     ...args,
+                    archive_root: inputDirValue,
+                    archive_index: _textOrFallback(
+                        els.archiveIndexPath ? els.archiveIndexPath.value : c.gate.archiveIndex,
+                        c.gate.archiveIndex || derivedArchiveIndex
+                    ),
                     dedup: els.gateDedup
                         ? Boolean(els.gateDedup.checked)
                         : parseBoolLike(c.gate.dedup, true),
@@ -1839,9 +3604,17 @@
                     }
                 }
             } else {
+                const args = payload.args || {};
+                const archiveIndex = String(args.archive_index || '').trim();
                 expectedOutputs.push('Archive governance outputs');
                 expectedOutputs.push('Pipeline execution logs');
-                healthLabel = 'n/a (archive pipeline)';
+                if (!archiveIndex) {
+                    warnings.push('Archive index path is missing; fixity-scan will fail before artifact generation.');
+                    healthState = 'risk';
+                    healthLabel = 'missing archive index';
+                } else {
+                    healthLabel = 'archive pipeline ready';
+                }
             }
 
             if (els.preRunWarnings) {
@@ -1874,6 +3647,14 @@
             if (els.datasetHealthText) {
                 els.datasetHealthText.textContent = `Dataset health: ${healthLabel}`;
             }
+
+            state.lastDiagnostics = {
+                warnings,
+                expectedOutputs,
+                healthState,
+                healthLabel
+            };
+            renderMissionControl(payload);
         }
 
         function renderCLI() {
@@ -1954,6 +3735,12 @@
                 if (parseBoolLike(payload.args.quiet, false)) cliLines.push(`  --quiet`);
                 if (payload.args.log_level) cliLines.push(`  --log-level ${q(payload.args.log_level)}`);
             } else {
+                if (payload.args.archive_root) {
+                    cliLines.push(`  --archive-root ${q(payload.args.archive_root)}`);
+                }
+                if (payload.args.archive_index) {
+                    cliLines.push(`  --archive-index ${q(payload.args.archive_index)}`);
+                }
                 if (parseBoolLike(payload.args.dedup, false)) cliLines.push(`  --dedup "on"`);
                 if (parseBoolLike(payload.args.sign, false)) cliLines.push(`  --sign "true"`);
             }
@@ -1984,6 +3771,16 @@
             const safeBindInput = (el, category, key) => {
                 if (!el) return;
                 el.addEventListener('input', (e) => {
+                    if (!category && key === 'inputDir') {
+                        const nextValue = e.target.value;
+                        const currentArchiveIndex = els.archiveIndexPath ? String(els.archiveIndexPath.value || '').trim() : '';
+                        const previousDerivedArchiveIndex = deriveArchiveIndexPath(state.config.inputDir);
+                        if (els.archiveIndexPath && (!currentArchiveIndex || currentArchiveIndex === previousDerivedArchiveIndex)) {
+                            const nextDerivedArchiveIndex = deriveArchiveIndexPath(nextValue);
+                            els.archiveIndexPath.value = nextDerivedArchiveIndex;
+                            state.config.gate.archiveIndex = nextDerivedArchiveIndex;
+                        }
+                    }
                     if (category) state.config[category][key] = e.target.value;
                     else state.config[key] = e.target.value;
                     renderCLI();
@@ -2019,6 +3816,7 @@
             safeBindText(els.presetSelect, null, 'preset');
             safeBindInput(els.inputDir, null, 'inputDir');
             safeBindInput(els.outputDir, null, 'outputDir');
+            safeBindInput(els.archiveIndexPath, 'gate', 'archiveIndex');
             safeBindText(els.qualityTier, null, 'qualityTier');
             safeBindText(els.depthBackend, null, 'depthBackend');
             safeBindText(els.depthDevice, null, 'depthDevice');
@@ -2107,8 +3905,11 @@
             if (els.queueCount) els.queueCount.textContent = `${state.jobs.length} jobs`;
             if (state.jobs.length === 0) {
                 if (els.emptyQueueState) els.emptyQueueState.style.display = 'flex';
+                if (els.queueStatusSummary) els.queueStatusSummary.textContent = 'Newest jobs stay pinned to the top.';
                 els.jobList.innerHTML = '';
                 renderArtifactPanel();
+                renderSelectedJobInspector();
+                renderMissionControl();
                 return;
             }
             if (els.emptyQueueState) els.emptyQueueState.style.display = 'none';
@@ -2118,7 +3919,7 @@
                 const li = document.createElement('li');
                 li.dataset.jobId = job.id;
                 const isSelected = state.selectedJobId === job.id;
-                li.className = `rounded-xl border p-4 cursor-pointer transition-colors ${isSelected ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30' : 'border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 hover:bg-slate-100 dark:hover:bg-slate-800'}`;
+                li.className = `rounded-2xl border p-4 cursor-pointer transition-all ${isSelected ? 'border-cyan-500 bg-cyan-50/80 dark:bg-cyan-900/20 shadow-md ring-1 ring-cyan-500/15' : 'border-slate-200 dark:border-slate-800 bg-slate-50/75 dark:bg-slate-900/45 hover:bg-white/90 dark:hover:bg-slate-800/80'}`;
 
                 let badgeColor = 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700';
                 if (job.state === 'running') badgeColor = 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800';
@@ -2130,6 +3931,10 @@
                 const safeId = String(job.id || 'job_unknown');
                 const safeProgress = Math.max(0, Math.min(100, Number(job.progress) || 0));
                 const canCancel = job.state === 'running' || job.state === 'queued';
+                const artifactCount = Array.isArray(job.artifacts) ? job.artifacts.length : 0;
+                const errorLine = getReadableError(job.error);
+                const transportLabel = formatTransportLabel(job);
+                const freshnessLabel = formatRelativeTime(Number(job.updatedAt || job.createdAt || 0));
 
                 const header = document.createElement('div');
                 header.className = 'flex items-center justify-between mb-3';
@@ -2157,17 +3962,42 @@
                 li.appendChild(header);
 
                 const meta = document.createElement('div');
-                meta.className = 'flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400 font-mono mb-2';
+                meta.className = 'flex items-center justify-between gap-2 text-[10px] text-slate-500 dark:text-slate-400 font-mono mb-2';
 
                 const idSpan = document.createElement('span');
                 idSpan.textContent = `${safeId.substring(0, 8)}...`;
                 meta.appendChild(idSpan);
 
+                const metaRight = document.createElement('div');
+                metaRight.className = 'flex items-center gap-1.5';
+
+                const transportChip = document.createElement('span');
+                transportChip.className = 'job-chip';
+                transportChip.textContent = transportLabel;
+                metaRight.appendChild(transportChip);
+
                 const stateBadge = document.createElement('span');
                 stateBadge.className = `px-2 py-0.5 rounded-full border ${badgeColor}`;
                 stateBadge.textContent = safeState;
-                meta.appendChild(stateBadge);
+                metaRight.appendChild(stateBadge);
+
+                meta.appendChild(metaRight);
                 li.appendChild(meta);
+
+                const subMeta = document.createElement('div');
+                subMeta.className = 'mb-3 flex items-center justify-between gap-2 text-[10px] text-slate-500 dark:text-slate-400';
+
+                const freshness = document.createElement('span');
+                freshness.className = 'micro-status';
+                freshness.textContent = `Updated ${freshnessLabel}`;
+                subMeta.appendChild(freshness);
+
+                const artifacts = document.createElement('span');
+                artifacts.className = 'job-chip';
+                artifacts.textContent = `${artifactCount} artifact${artifactCount === 1 ? '' : 's'}`;
+                subMeta.appendChild(artifacts);
+
+                li.appendChild(subMeta);
 
                 const progressRow = document.createElement('div');
                 progressRow.className = 'flex items-center gap-2 mt-1';
@@ -2184,12 +4014,27 @@
                 progressRow.appendChild(progressText);
                 li.appendChild(progressRow);
 
+                const summary = document.createElement('p');
+                summary.className = 'mt-3 text-[11px] leading-5 text-slate-500 dark:text-slate-400';
+                summary.textContent = errorLine
+                    ? errorLine
+                    : `${artifactCount} artifact${artifactCount === 1 ? '' : 's'} indexed`;
+                li.appendChild(summary);
+
                 fragment.appendChild(li);
             });
 
             els.jobList.innerHTML = '';
             els.jobList.appendChild(fragment);
+            if (els.queueStatusSummary) {
+                const selected = state.jobs.find((job) => job.id === state.selectedJobId) || null;
+                els.queueStatusSummary.textContent = selected
+                    ? `Selected ${String(selected.pipeline || 'job')} • updated ${formatRelativeTime(Number(selected.updatedAt || selected.createdAt || 0))}`
+                    : 'Newest jobs stay pinned to the top.';
+            }
             renderArtifactPanel();
+            renderSelectedJobInspector();
+            renderMissionControl();
         }
 
         function logToPane(jobId, line) {
@@ -2227,6 +4072,7 @@
                 if (els.healthIndicator) els.healthIndicator.className = 'status-dot offline';
                 if (els.healthText) els.healthText.textContent = 'Offline / Mock Mode';
             } finally {
+                renderMissionControl();
                 healthCheckInFlight = false;
             }
         }
@@ -2600,7 +4446,9 @@
                 sseRetry: { attempt: 0, timer: null },
                 reconnectBlocked: false,
                 lastEventAt: 0,
-                mockInterval: null
+                mockInterval: null,
+                createdAt: Date.now(),
+                updatedAt: Date.now()
             };
             state.jobs.push(job);
             state.selectedJobId = job.id;
@@ -2767,6 +4615,12 @@
             URL.revokeObjectURL(url);
         });
 
+        if (els.heroExportBtn) {
+            els.heroExportBtn.addEventListener('click', () => {
+                if (els.exportBtn) els.exportBtn.click();
+            });
+        }
+
         if (els.importBtn) els.importBtn.addEventListener('click', () => els.fileInput.click());
         if (els.fileInput) els.fileInput.addEventListener('change', async (e) => {
             const file = e.target.files[0];
@@ -2776,7 +4630,7 @@
                 if (data.pipeline) state.pipeline = data.pipeline;
                 if (data.args) {
                     const c = state.config;
-                    c.inputDir = data.args.input_dir || c.inputDir;
+                    c.inputDir = data.args.archive_root || data.args.input_dir || c.inputDir;
                     c.outputDir = data.args.output_dir || c.outputDir;
                     c.preset = data.args.preset || c.preset;
                     c.qualityTier = _resolveQualityTier(data.args.quality_tier || c.qualityTier);
@@ -2816,6 +4670,11 @@
                     c.emits.report = parseBoolLike(data.args.emit_report, c.emits.report);
                     c.emits.runCard = parseBoolLike(data.args.emit_run_card, c.emits.runCard);
 
+                    c.gate = c.gate || {};
+                    c.gate.archiveIndex = _textOrFallback(
+                        data.args.archive_index,
+                        c.gate.archiveIndex || deriveArchiveIndexPath(c.inputDir)
+                    );
                     c.gate.dedup = parseBoolLike(data.args.dedup, c.gate.dedup);
                     c.gate.sign = parseBoolLike(data.args.sign, c.gate.sign);
                     c.licenses.nonCommercialOk = parseBoolLike(
@@ -2938,6 +4797,13 @@
             if (els.logPane) els.logPane.textContent = '';
         });
         if (els.runJobBtn) els.runJobBtn.addEventListener('click', submitJob);
+        if (els.heroRunBtn) els.heroRunBtn.addEventListener('click', submitJob);
+        if (els.refreshHealthBtn) {
+            els.refreshHealthBtn.addEventListener('click', async () => {
+                await checkBackend(true);
+                createToast(state.backendOk ? 'Backend status refreshed.' : 'Backend still offline; mock mode remains active.', state.backendOk ? 'success' : 'info');
+            });
+        }
         if (els.jobList) els.jobList.addEventListener('click', handleJobListClick);
 
         function setTheme(mode) {
@@ -3001,6 +4867,7 @@
 
         document.addEventListener('visibilitychange', () => {
             if (document.hidden) {
+                _resetAmbientTargets();
                 stopHealthPolling();
                 return;
             }
@@ -3014,6 +4881,7 @@
         function init() {
             const savedTheme = localStorage.getItem('tp_theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
             setTheme(savedTheme);
+            setupAmbientMotion();
 
             window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
                 if (!localStorage.getItem('tp_theme')) setTheme(e.matches ? 'dark' : 'light');
@@ -3024,8 +4892,11 @@
             refreshProfileDropdown();
             updateUIFromState();
             bindInputs();
+            setupSectionRail();
             renderJobQueue();
             renderArtifactPanel();
+            renderSelectedJobInspector();
+            renderMissionControl();
             void checkBackend(true);
             startHealthPolling();
         }

@@ -1403,6 +1403,16 @@ def test_env_path_roots_rejects_invalid_configured_allowlist(monkeypatch: pytest
         orchestrator_app._env_path_roots("TP_ALLOWED_INPUT_ROOTS", [orchestrator_app.REPO_ROOT])
 
 
+def test_default_allowed_path_roots_accept_tmp_alias_on_posix() -> None:
+    if os.name == "nt":
+        pytest.skip("POSIX-only tmp alias behavior")
+
+    candidate = "/tmp/tp-default-allowlist-smoke"
+    roots = orchestrator_app._default_allowed_path_roots()
+
+    assert orchestrator_app._validate_path_against_roots(candidate, roots) == os.path.realpath(candidate)
+
+
 def test_argv_rejects_tilde_prefixed_paths() -> None:
     payload: Dict[str, object] = {
         "pipeline": "lux-depth-v3",

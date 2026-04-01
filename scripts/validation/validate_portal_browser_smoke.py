@@ -1,0 +1,654 @@
+#!/usr/bin/env python3
+"""
+Browser smoke validation for the portal UI against a live backend.
+
+This script launches a disposable Chrome instance with the DevTools protocol
+enabled, drives the real portal UI in a browser context, and verifies a safe
+archive-gate submission end-to-end.
+
+Coverage:
+1. Portal loads in a real browser and renders expected controls.
+2. Health check reports the backend as online.
+3. Pipeline switch updates the UI from lux-depth-v3 to archive-gate-a.
+4. API key and path fields can be populated through the browser.
+5. A safe archive-gate job can be dispatched from the UI.
+6. Queue, inspector, artifacts, and live log surfaces reflect completion.
+
+Run via:
+    python scripts/validation/validate_portal_browser_smoke.py
+    make validate-portal-browser
+
+Environment overrides:
+    TP_ORCHESTRATOR_BASE_URL   Backend URL (default: http://127.0.0.1:8000)
+    TP_API_KEY                 API key for protected job endpoints
+    TP_PORTAL_BROWSER_BINARY   Chrome binary path override
+"""
+
+from __future__ import annotations
+
+import argparse
+import base64
+import hashlib
+import json
+import os
+import secrets
+import shutil
+import socket
+import struct
+import subprocess
+import sys
+import tempfile
+import time
+import urllib.parse
+import urllib.request
+from pathlib import Path
+from typing import Any, Dict, Iterable, Optional
+
+
+class SmokeFailure(RuntimeError):
+    """Raised when the browser smoke validation fails."""
+
+
+def _repo_root() -> Path:
+    return Path(__file__).resolve().parents[2]
+
+
+def _fixture_archive_root() -> Path:
+    return _repo_root() / "tests" / "fixtures" / "archive_small" / "archive_root"
+
+
+def _fixture_archive_index() -> Path:
+    return _repo_root() / "tests" / "fixtures" / "archive_small" / "archive_index_normalized.csv.gz"
+
+
+def _find_free_port() -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(("127.0.0.1", 0))
+        return int(sock.getsockname()[1])
+
+
+def _default_output_dir() -> Path:
+    kwargs: Dict[str, Any] = {"prefix": "tp-portal-browser-smoke-"}
+    if os.name != "nt" and Path("/tmp").exists():
+        kwargs["dir"] = "/tmp"
+    return Path(tempfile.mkdtemp(**kwargs))
+
+
+def _default_profile_dir() -> Path:
+    kwargs: Dict[str, Any] = {"prefix": "tp-portal-browser-profile-"}
+    if os.name != "nt" and Path("/tmp").exists():
+        kwargs["dir"] = "/tmp"
+    return Path(tempfile.mkdtemp(**kwargs))
+
+
+def _default_chrome_binary() -> str:
+    candidates = [
+        os.getenv("TP_PORTAL_BROWSER_BINARY", "").strip(),
+        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+        shutil.which("google-chrome") or "",
+        shutil.which("chrome") or "",
+    ]
+    for candidate in candidates:
+        if candidate and Path(candidate).exists():
+            return candidate
+    raise SmokeFailure("Google Chrome binary not found. Set TP_PORTAL_BROWSER_BINARY to a valid Chrome executable.")
+
+
+def _http_get_json(url: str, timeout: float = 10.0) -> Any:
+    with urllib.request.urlopen(url, timeout=timeout) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def _wait_for_devtools(port: int, timeout_seconds: float = 20.0) -> Dict[str, Any]:
+    deadline = time.monotonic() + timeout_seconds
+    last_error: Optional[Exception] = None
+    while time.monotonic() < deadline:
+        try:
+            return _http_get_json(f"http://127.0.0.1:{port}/json/version", timeout=2.0)
+        except Exception as exc:  # pragma: no cover - best effort polling
+            last_error = exc
+            time.sleep(0.25)
+    raise SmokeFailure(f"DevTools endpoint on port {port} did not become ready: {last_error}")
+
+
+def _list_devtools_targets(port: int) -> list[Dict[str, Any]]:
+    payload = _http_get_json(f"http://127.0.0.1:{port}/json/list", timeout=5.0)
+    if not isinstance(payload, list):
+        raise SmokeFailure(f"Unexpected DevTools target payload: {payload!r}")
+    return [item for item in payload if isinstance(item, dict)]
+
+
+def _expect(condition: bool, message: str) -> None:
+    if not condition:
+        raise SmokeFailure(message)
+
+
+class DevToolsConnection:
+    """Minimal Chrome DevTools WebSocket client using only the stdlib."""
+
+    def __init__(self, websocket_url: str, timeout_seconds: float = 20.0) -> None:
+        parsed = urllib.parse.urlparse(websocket_url)
+        if parsed.scheme != "ws":
+            raise SmokeFailure(f"Unsupported DevTools websocket URL: {websocket_url}")
+        host = parsed.hostname or "127.0.0.1"
+        port = parsed.port or 80
+        path = parsed.path or "/"
+        if parsed.query:
+            path = f"{path}?{parsed.query}"
+
+        self._sock = socket.create_connection((host, port), timeout_seconds)
+        self._sock.settimeout(timeout_seconds)
+        self._next_id = 1
+        self._handshake(host, port, path)
+
+    def _handshake(self, host: str, port: int, path: str) -> None:
+        raw_key = secrets.token_bytes(16)
+        key = base64.b64encode(raw_key).decode("ascii")
+        request = (
+            f"GET {path} HTTP/1.1\r\n"
+            f"Host: {host}:{port}\r\n"
+            "Upgrade: websocket\r\n"
+            "Connection: Upgrade\r\n"
+            f"Sec-WebSocket-Key: {key}\r\n"
+            "Sec-WebSocket-Version: 13\r\n\r\n"
+        )
+        self._sock.sendall(request.encode("ascii"))
+        response = self._read_http_headers()
+        header_text = response.decode("latin-1", errors="replace")
+        if "101" not in header_text.splitlines()[0]:
+            raise SmokeFailure(f"DevTools websocket handshake failed: {header_text}")
+
+        expected_accept = base64.b64encode(
+            hashlib.sha1((key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").encode("ascii")).digest()
+        ).decode("ascii")
+        if f"Sec-WebSocket-Accept: {expected_accept}" not in header_text:
+            raise SmokeFailure("DevTools websocket handshake returned invalid Sec-WebSocket-Accept header")
+
+    def _read_http_headers(self) -> bytes:
+        data = bytearray()
+        while b"\r\n\r\n" not in data:
+            chunk = self._sock.recv(4096)
+            if not chunk:
+                raise SmokeFailure("Unexpected EOF while reading DevTools websocket handshake")
+            data.extend(chunk)
+        return bytes(data)
+
+    def close(self) -> None:
+        try:
+            self._send_frame(0x8, b"")
+        except Exception:
+            pass
+        try:
+            self._sock.close()
+        except Exception:
+            pass
+
+    def _recv_exact(self, size: int) -> bytes:
+        chunks = bytearray()
+        while len(chunks) < size:
+            chunk = self._sock.recv(size - len(chunks))
+            if not chunk:
+                raise SmokeFailure("Unexpected EOF while reading DevTools websocket frame")
+            chunks.extend(chunk)
+        return bytes(chunks)
+
+    def _send_frame(self, opcode: int, payload: bytes) -> None:
+        frame = bytearray()
+        frame.append(0x80 | (opcode & 0x0F))
+        payload_length = len(payload)
+        mask_bit = 0x80
+        if payload_length < 126:
+            frame.append(mask_bit | payload_length)
+        elif payload_length < (1 << 16):
+            frame.append(mask_bit | 126)
+            frame.extend(struct.pack("!H", payload_length))
+        else:
+            frame.append(mask_bit | 127)
+            frame.extend(struct.pack("!Q", payload_length))
+
+        mask = secrets.token_bytes(4)
+        frame.extend(mask)
+        masked = bytes(value ^ mask[index % 4] for index, value in enumerate(payload))
+        frame.extend(masked)
+        self._sock.sendall(frame)
+
+    def _recv_message(self, timeout_seconds: float) -> Dict[str, Any]:
+        deadline = time.monotonic() + timeout_seconds
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise SmokeFailure("Timed out waiting for DevTools response")
+            self._sock.settimeout(remaining)
+            header = self._recv_exact(2)
+            first, second = header[0], header[1]
+            opcode = first & 0x0F
+            masked = bool(second & 0x80)
+            length = second & 0x7F
+            if length == 126:
+                length = struct.unpack("!H", self._recv_exact(2))[0]
+            elif length == 127:
+                length = struct.unpack("!Q", self._recv_exact(8))[0]
+            mask = self._recv_exact(4) if masked else b""
+            payload = self._recv_exact(length) if length else b""
+            if masked:
+                payload = bytes(value ^ mask[index % 4] for index, value in enumerate(payload))
+
+            if opcode == 0x9:  # ping
+                self._send_frame(0xA, payload)
+                continue
+            if opcode == 0xA:  # pong
+                continue
+            if opcode == 0x8:  # close
+                raise SmokeFailure("DevTools websocket closed unexpectedly")
+            if opcode != 0x1:
+                continue
+            try:
+                return json.loads(payload.decode("utf-8"))
+            except json.JSONDecodeError as exc:
+                raise SmokeFailure(f"Received invalid DevTools JSON payload: {payload!r}") from exc
+
+    def call(self, method: str, params: Optional[Dict[str, Any]] = None, timeout_seconds: float = 20.0) -> Dict[str, Any]:
+        command_id = self._next_id
+        self._next_id += 1
+        payload = {"id": command_id, "method": method, "params": params or {}}
+        self._send_frame(0x1, json.dumps(payload).encode("utf-8"))
+
+        deadline = time.monotonic() + timeout_seconds
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise SmokeFailure(f"Timed out waiting for DevTools response to {method}")
+            message = self._recv_message(remaining)
+            if message.get("id") != command_id:
+                continue
+            if "error" in message:
+                raise SmokeFailure(f"DevTools call {method} failed: {message['error']}")
+            return message.get("result", {})
+
+    def evaluate(self, expression: str, timeout_seconds: float = 20.0) -> Any:
+        result = self.call(
+            "Runtime.evaluate",
+            {
+                "expression": expression,
+                "returnByValue": True,
+                "awaitPromise": True,
+            },
+            timeout_seconds=timeout_seconds,
+        )
+        if "exceptionDetails" in result:
+            raise SmokeFailure(f"Browser evaluation failed: {result['exceptionDetails']}")
+        remote_object = result.get("result") or {}
+        return remote_object.get("value")
+
+
+def _wait_for_page_target(port: int, timeout_seconds: float = 20.0) -> Dict[str, Any]:
+    deadline = time.monotonic() + timeout_seconds
+    while time.monotonic() < deadline:
+        targets = _list_devtools_targets(port)
+        for target in targets:
+            if target.get("type") == "page" and target.get("webSocketDebuggerUrl"):
+                return target
+        time.sleep(0.25)
+    raise SmokeFailure("Chrome did not expose a page target for browser smoke validation")
+
+
+def _poll(
+    connection: DevToolsConnection,
+    expression: str,
+    *,
+    predicate,
+    timeout_seconds: float,
+    interval_seconds: float = 0.25,
+    description: str,
+) -> Any:
+    deadline = time.monotonic() + timeout_seconds
+    last_value: Any = None
+    while time.monotonic() < deadline:
+        last_value = connection.evaluate(expression)
+        if predicate(last_value):
+            return last_value
+        time.sleep(interval_seconds)
+    raise SmokeFailure(f"Timed out waiting for {description}: last value={last_value!r}")
+
+
+def _state_probe_expression() -> str:
+    return r"""
+(() => {
+  const text = (id) => {
+    const el = document.getElementById(id);
+    return el ? (el.textContent || '').trim() : '';
+  };
+  const value = (id) => {
+    const el = document.getElementById(id);
+    return el ? String(el.value || '') : '';
+  };
+  return {
+    title: document.title,
+    readyState: document.readyState,
+    pipeline: value('pipelineSelect'),
+    healthText: text('healthText'),
+    queueCount: text('queueCount'),
+    selectedJobState: text('selectedJobStateBadge'),
+    selectedJobId: text('selectedJobIdLabel'),
+    selectedJobArtifactCount: text('selectedJobArtifactCount'),
+    selectedJobStreamStatus: text('selectedJobStreamStatus'),
+    selectedJobSummary: text('selectedJobSummary'),
+    cliFirstLine: (() => {
+      const preview = text('cliPreview');
+      return preview ? preview.split('\n')[0].trim() : '';
+    })(),
+    logHasFixityWrite: (() => {
+      const el = document.getElementById('logPane');
+      return !!(el && (el.textContent || '').includes('Wrote 3 rows'));
+    })(),
+    queueRows: document.querySelectorAll('#jobList li[data-job-id]').length,
+    firstQueueJobId: (() => {
+      const row = document.querySelector('#jobList li[data-job-id]');
+      return row ? String(row.getAttribute('data-job-id') || '') : '';
+    })(),
+    archiveFieldsVisible: (() => {
+      const el = document.getElementById('fieldsArchiveGate');
+      return !!(el && !el.classList.contains('hidden'));
+    })(),
+    luxFieldsVisible: (() => {
+      const el = document.getElementById('fieldsLuxDepth');
+      return !!(el && !el.classList.contains('hidden'));
+    })()
+  };
+})()
+"""
+
+
+def _set_archive_gate_form_expression(api_key: str, archive_root: str, archive_index: str, output_dir: str) -> str:
+    payload = json.dumps(
+        {
+            "api_key": api_key,
+            "archive_root": archive_root,
+            "archive_index": archive_index,
+            "output_dir": output_dir,
+        }
+    )
+    return f"""
+(() => {{
+  const cfg = {payload};
+  const dispatch = (el, type) => el.dispatchEvent(new Event(type, {{ bubbles: true }}));
+  const setValue = (id, value) => {{
+    const el = document.getElementById(id);
+    if (!el) throw new Error(`missing #${{id}}`);
+    el.value = value;
+    dispatch(el, 'input');
+    dispatch(el, 'change');
+  }};
+  const setChecked = (id, checked) => {{
+    const el = document.getElementById(id);
+    if (!el) throw new Error(`missing #${{id}}`);
+    el.checked = !!checked;
+    dispatch(el, 'input');
+    dispatch(el, 'change');
+  }};
+  setChecked('rememberApiKey', false);
+  setValue('apiKeyInput', cfg.api_key);
+  setValue('pipelineSelect', 'archive-gate-a');
+  setValue('inputDir', cfg.archive_root);
+  setValue('archiveIndexPath', cfg.archive_index);
+  setValue('outputDir', cfg.output_dir);
+  return {{
+    pipeline: document.getElementById('pipelineSelect').value,
+    archiveFieldsVisible: !document.getElementById('fieldsArchiveGate').classList.contains('hidden'),
+    luxFieldsVisible: !document.getElementById('fieldsLuxDepth').classList.contains('hidden'),
+    archiveIndexPath: document.getElementById('archiveIndexPath').value,
+    cliFirstLine: ((document.getElementById('cliPreview').textContent || '').trim().split('\\n')[0] || '').trim()
+  }};
+}})()
+"""
+
+
+def _click_expression(selector: str) -> str:
+    encoded = json.dumps(selector)
+    return f"""
+(() => {{
+  const el = document.querySelector({encoded});
+  if (!el) throw new Error('missing element for selector ' + {encoded});
+  el.click();
+  return true;
+}})()
+"""
+
+
+def _parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--base-url",
+        default=os.getenv("TP_ORCHESTRATOR_BASE_URL", "http://127.0.0.1:8000"),
+        help="Portal/backend base URL (default: %(default)s)",
+    )
+    parser.add_argument(
+        "--api-key",
+        default=os.getenv("TP_API_KEY", "local-dev-key"),
+        help="API key for protected job endpoints (default: TP_API_KEY or %(default)s)",
+    )
+    parser.add_argument(
+        "--chrome-binary",
+        default=os.getenv("TP_PORTAL_BROWSER_BINARY", _default_chrome_binary()),
+        help="Chrome executable path",
+    )
+    parser.add_argument(
+        "--archive-root",
+        default=str(_fixture_archive_root()),
+        help="Archive root for the safe archive-gate fixture job",
+    )
+    parser.add_argument(
+        "--archive-index",
+        default=str(_fixture_archive_index()),
+        help="Archive index for the safe archive-gate fixture job",
+    )
+    parser.add_argument(
+        "--output-dir",
+        default="",
+        help="Optional output directory for the browser-submitted job (defaults to a temp dir)",
+    )
+    parser.add_argument(
+        "--keep-output",
+        action="store_true",
+        help="Preserve the browser-submitted job output directory instead of deleting it",
+    )
+    parser.add_argument(
+        "--keep-profile",
+        action="store_true",
+        help="Preserve the temporary Chrome profile for debugging",
+    )
+    parser.add_argument(
+        "--debugging-port",
+        type=int,
+        default=0,
+        help="Chrome remote debugging port (default: auto-select free port)",
+    )
+    parser.add_argument(
+        "--timeout-seconds",
+        type=float,
+        default=45.0,
+        help="Overall wait budget for portal/job transitions (default: %(default)s)",
+    )
+    return parser.parse_args()
+
+
+def main() -> int:
+    args = _parse_args()
+    base_url = str(args.base_url).strip().rstrip("/")
+    if not base_url:
+        raise SmokeFailure("Base URL cannot be empty")
+
+    archive_root = Path(args.archive_root).resolve()
+    _expect(archive_root.is_dir(), f"Archive root fixture does not exist: {archive_root}")
+    archive_index = Path(args.archive_index).resolve()
+    _expect(archive_index.is_file(), f"Archive index fixture does not exist: {archive_index}")
+
+    output_dir = Path(args.output_dir).resolve() if args.output_dir else _default_output_dir()
+    output_dir.mkdir(parents=True, exist_ok=True)
+    profile_dir = _default_profile_dir()
+    port = int(args.debugging_port or _find_free_port())
+    chrome_binary = args.chrome_binary
+    _expect(Path(chrome_binary).exists(), f"Chrome binary does not exist: {chrome_binary}")
+
+    chrome_process: Optional[subprocess.Popen[str]] = None
+    connection: Optional[DevToolsConnection] = None
+
+    try:
+        print("portal-browser-smoke: launching chrome", flush=True)
+        command = [
+            chrome_binary,
+            f"--remote-debugging-port={port}",
+            f"--user-data-dir={profile_dir}",
+            "--headless=new",
+            "--disable-gpu",
+            "--no-first-run",
+            "--no-default-browser-check",
+            "--disable-background-networking",
+            "--disable-component-update",
+            "--disable-sync",
+            "--disable-extensions",
+            "--disable-popup-blocking",
+            "about:blank",
+        ]
+        chrome_process = subprocess.Popen(
+            command,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
+        print("portal-browser-smoke: connecting devtools", flush=True)
+        _wait_for_devtools(port)
+        target = _wait_for_page_target(port)
+        websocket_url = str(target.get("webSocketDebuggerUrl") or "").strip()
+        _expect(websocket_url.startswith("ws://"), f"Invalid DevTools websocket URL: {websocket_url!r}")
+
+        connection = DevToolsConnection(websocket_url)
+        connection.call("Page.enable")
+        connection.call("Runtime.enable")
+        connection.call("Page.navigate", {"url": base_url}, timeout_seconds=20.0)
+
+        print("portal-browser-smoke: waiting for portal shell", flush=True)
+        initial_state = _poll(
+            connection,
+            _state_probe_expression(),
+            predicate=lambda value: isinstance(value, dict) and value.get("readyState") == "complete" and value.get("title"),
+            timeout_seconds=args.timeout_seconds,
+            description="portal document ready",
+        )
+        _expect("Transformation Portal" in str(initial_state.get("title", "")), f"Unexpected title: {initial_state}")
+
+        print("portal-browser-smoke: waiting for backend health", flush=True)
+        online_state = _poll(
+            connection,
+            _state_probe_expression(),
+            predicate=lambda value: isinstance(value, dict) and "Online" in str(value.get("healthText", "")),
+            timeout_seconds=args.timeout_seconds,
+            description="portal backend health to become online",
+        )
+        _expect(
+            str(online_state.get("pipeline", "")) == "lux-depth-v3",
+            f"Portal did not default to lux-depth-v3: {online_state}",
+        )
+
+        print("portal-browser-smoke: configuring archive-gate form", flush=True)
+        configured_state = connection.evaluate(
+            _set_archive_gate_form_expression(
+                args.api_key,
+                str(archive_root),
+                str(archive_index),
+                str(output_dir),
+            )
+        )
+        _expect(isinstance(configured_state, dict), f"Unexpected configured portal state: {configured_state!r}")
+        _expect(
+            configured_state.get("pipeline") == "archive-gate-a",
+            f"Pipeline switch to archive-gate-a failed: {configured_state}",
+        )
+        _expect(
+            bool(configured_state.get("archiveFieldsVisible")) and not bool(configured_state.get("luxFieldsVisible")),
+            f"Archive-specific UI did not toggle correctly: {configured_state}",
+        )
+        _expect(
+            str(configured_state.get("archiveIndexPath", "")) == str(archive_index),
+            f"Archive index field did not update for archive-gate-a: {configured_state}",
+        )
+        _expect(
+            str(configured_state.get("cliFirstLine", "")).startswith("archive-gate-a"),
+            f"CLI preview did not update for archive-gate-a: {configured_state}",
+        )
+
+        print("portal-browser-smoke: dispatching job", flush=True)
+        connection.evaluate(_click_expression("#runJobBtn"))
+
+        queued_state = _poll(
+            connection,
+            _state_probe_expression(),
+            predicate=lambda value: isinstance(value, dict) and int(value.get("queueRows") or 0) >= 1,
+            timeout_seconds=args.timeout_seconds,
+            description="queue to receive a job row",
+        )
+        first_job_id = str(queued_state.get("firstQueueJobId") or "").strip()
+        _expect(first_job_id.startswith("job_"), f"Portal queue did not expose a real backend job id: {queued_state}")
+
+        connection.evaluate(_click_expression("#jobList li[data-job-id]"))
+
+        print("portal-browser-smoke: waiting for terminal ui state", flush=True)
+        terminal_state = _poll(
+            connection,
+            _state_probe_expression(),
+            predicate=lambda value: (
+                isinstance(value, dict)
+                and str(value.get("selectedJobId", "")).startswith("job_")
+                and str(value.get("selectedJobState", "")).strip().lower() == "succeeded"
+                and "3 indexed" in str(value.get("selectedJobArtifactCount", ""))
+                and bool(value.get("logHasFixityWrite"))
+            ),
+            timeout_seconds=args.timeout_seconds,
+            description="browser-submitted job to succeed with artifacts and logs",
+        )
+
+        _expect(
+            str(terminal_state.get("selectedJobId")) == first_job_id,
+            f"Queue selection did not target the submitted job: {terminal_state}",
+        )
+        _expect(
+            "Closed" in str(terminal_state.get("selectedJobStreamStatus", ""))
+            or "Inactive" not in str(terminal_state.get("selectedJobStreamStatus", "")),
+            f"Unexpected stream status after completion: {terminal_state}",
+        )
+
+        print("portal-browser-smoke: ok")
+        print(f"base_url: {base_url}")
+        print(f"job_id: {first_job_id}")
+        if args.keep_output:
+            print(f"output_dir: {output_dir}")
+        else:
+            print(f"output_dir_cleaned: {output_dir}")
+        print(f"state: {terminal_state.get('selectedJobState')}")
+        print(f"artifacts: {terminal_state.get('selectedJobArtifactCount')}")
+        print(f"health: {terminal_state.get('healthText')}")
+        return 0
+    finally:
+        if connection is not None:
+            connection.close()
+        if chrome_process is not None:
+            try:
+                chrome_process.terminate()
+                chrome_process.wait(timeout=5)
+            except Exception:
+                try:
+                    chrome_process.kill()
+                except Exception:
+                    pass
+        if not args.keep_profile:
+            shutil.rmtree(profile_dir, ignore_errors=True)
+        if not args.keep_output:
+            shutil.rmtree(output_dir, ignore_errors=True)
+
+
+if __name__ == "__main__":
+    try:
+        raise SystemExit(main())
+    except SmokeFailure as exc:
+        print(f"portal-browser-smoke: failed: {exc}", file=sys.stderr)
+        raise SystemExit(1) from exc
