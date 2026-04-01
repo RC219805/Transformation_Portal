@@ -14,8 +14,17 @@ _EXPORTS: Dict[str, Tuple[str, str]] = {
     "DepthAnythingV2Model": (".depth_anything_v2", "DepthAnythingV2Model"),
     "ModelBackend": (".depth_anything_v2", "ModelBackend"),
     "ModelVariant": (".depth_anything_v2", "ModelVariant"),
-    "CoreMLExporter": (".coreml_exporter", "CoreMLExporter"),
-    "CoreMLDepthEstimator": (".coreml_exporter", "CoreMLDepthEstimator"),
+    # CoreML exports are implemented in the lux_depth_v3 CoreML backend.
+    # Keep these names as lazy aliases to preserve the public import surface
+    # without requiring a local coreml_exporter module.
+    "CoreMLExporter": (
+        "transformation_portal.lux_depth_v3.coreml_backend",
+        "CoreMLDepthEstimator",
+    ),
+    "CoreMLDepthEstimator": (
+        "transformation_portal.lux_depth_v3.coreml_backend",
+        "CoreMLDepthEstimator",
+    ),
 }
 
 __all__ = [

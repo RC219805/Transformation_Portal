@@ -94,7 +94,10 @@ NUMERIC_VERSION_PATTERN = re.compile(r"\d+")
 
 DARWIN_X86_NUMPY_GUARD_PATTERN = re.compile(r"^numpy\s*<\s*2(?:\.0+)?(?:\s|$)", re.IGNORECASE)
 DARWIN_X86_TRANSFORMERS_GUARD_PATTERN = re.compile(r"^transformers[^#\n]*<\s*5(?:\.0+)?(?:\s|$)", re.IGNORECASE)
-DARWIN_ARM64_COREML_PATTERN = re.compile(r"^coremltools(?:[^#\n]*)$", re.IGNORECASE)
+DARWIN_ARM64_COREML_PATTERN = re.compile(r"^coremltools\b[^\n]*$", re.IGNORECASE)
+# Note: [^\n]* (not [^#\n]*) intentionally matches lines that carry inline comments,
+# because ml-core-darwin-arm64.in declares coremltools with a trailing # comment.
+# The x86 guard patterns check stripped non-comment lines, so they use [^#\n]*.
 
 
 def read_expected_lock_python_version() -> str:
