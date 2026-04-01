@@ -15,22 +15,19 @@ from __future__ import annotations
 
 import json
 import logging
-import re
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import yaml
 
-logger = logging.getLogger(__name__)
+from transformation_portal.attestation.materials_policy import (
+    find_unknown_material_backend_schema_locations,
+    material_preset_family_error,
+)
+from transformation_portal.preset_governance import iter_placeholder_string_paths
 
-# Patterns that indicate unresolved placeholders
-_PLACEHOLDER_PATTERNS: list[re.Pattern] = [
-    re.compile(r"NEEDS_VERIFICATION", re.IGNORECASE),
-    re.compile(r"PLACEHOLDER", re.IGNORECASE),
-    re.compile(r"TODO_REPLACE", re.IGNORECASE),
-    re.compile(r"^0{20,}$"),  # All-zero hashes
-]
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -150,39 +147,43 @@ def _resolve_yaml_path(data: Dict, dotted_path: str) -> Any:
 def _check_placeholders(data: Dict, prefix: str = "") -> List[HealthIssue]:
     """Recursively scan YAML values for placeholder strings."""
     issues: List[HealthIssue] = []
-    for key, value in data.items():
-        path = f"{prefix}.{key}" if prefix else key
-        if isinstance(value, dict):
-            issues.extend(_check_placeholders(value, path))
-        elif isinstance(value, list):
-            for idx, item in enumerate(value):
-                item_path = f"{path}[{idx}]"
-                if isinstance(item, dict):
-                    issues.extend(_check_placeholders(item, item_path))
-                elif isinstance(item, str):
-                    for pat in _PLACEHOLDER_PATTERNS:
-                        if pat.search(item):
-                            issues.append(
-                                HealthIssue(
-                                    severity="error",
-                                    category="placeholder",
-                                    message=f"Placeholder value detected: '{item}'",
-                                    path=item_path,
-                                )
-                            )
-                            break
-        elif isinstance(value, str):
-            for pat in _PLACEHOLDER_PATTERNS:
-                if pat.search(value):
-                    issues.append(
-                        HealthIssue(
-                            severity="error",
-                            category="placeholder",
-                            message=f"Placeholder value detected: '{value}'",
-                            path=path,
-                        )
-                    )
-                    break
+    for path, value in iter_placeholder_string_paths(data, prefix, treat_empty_as_placeholder=False):
+        issues.append(
+            HealthIssue(
+                severity="error",
+                category="placeholder",
+                message=f"Placeholder value detected: '{value}'",
+                path=path,
+            )
+        )
+    return issues
+
+
+def _check_materials_governance(data: Dict[str, Any], preset_path: Path) -> List[HealthIssue]:
+    """Report materials governance/schema issues in the same vocabulary as runtime validation."""
+    issues: List[HealthIssue] = []
+
+    family_error = material_preset_family_error(data, preset_path)
+    if family_error is not None:
+        issues.append(
+            HealthIssue(
+                severity="error",
+                category="preset_family",
+                message=family_error,
+                path="preset_family",
+            )
+        )
+
+    for path in find_unknown_material_backend_schema_locations(data, preset_path):
+        issues.append(
+            HealthIssue(
+                severity="error",
+                category="materials_schema",
+                message=f"Materials backend declaration '{path}' is outside the approved schema locations.",
+                path=path,
+            )
+        )
+
     return issues
 
 
@@ -326,6 +327,9 @@ def validate_preset(
 
     # 1. Check for placeholder strings
     report.issues.extend(_check_placeholders(data))
+
+    # 1b. Check materials governance/schema markers for parity with runtime validation.
+    report.issues.extend(_check_materials_governance(data, preset_path))
 
     # 2. Check depth backend IDs against registry
     depth_issues, resolved_depth_backend_ids = _check_depth_backend_ids(

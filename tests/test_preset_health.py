@@ -73,6 +73,29 @@ class TestPlaceholderDetection:
         placeholder_issues = [i for i in report.issues if i.category == "placeholder"]
         assert len(placeholder_issues) >= 1
 
+    def test_detects_pending_verification_placeholder(self, tmp_path):
+        """PENDING_VERIFICATION strings should be caught by the shared placeholder policy."""
+        preset = tmp_path / "test.yaml"
+        preset.write_text(
+            yaml.dump(
+                {
+                    "name": "test-preset",
+                    "materials": {
+                        "backend": "heuristic",
+                        "model": {
+                            "revision": "PENDING_VERIFICATION",
+                        },
+                    },
+                }
+            )
+        )
+
+        report = validate_preset(preset, available_depth_backend_ids=["da3"])
+
+        placeholder_issues = [i for i in report.issues if i.category == "placeholder"]
+        assert len(placeholder_issues) >= 1
+        assert "PENDING_VERIFICATION" in placeholder_issues[0].message
+
     def test_clean_preset_has_no_placeholder_errors(self, tmp_path):
         """A preset without placeholders should have no placeholder errors."""
         preset = tmp_path / "test.yaml"
@@ -315,6 +338,68 @@ class TestStageStatusReporting:
         )
         stage_map_invalid = {s.name: s for s in report_invalid.stages}
         assert stage_map_invalid["depth"].backend_available is False
+
+
+class TestMaterialsGovernanceParity:
+    """Preset health should report the same materials schema/family issues as runtime validation."""
+
+    def test_missing_materials_preset_family_is_reported(self, tmp_path):
+        preset = tmp_path / "material_pbr.yaml"
+        preset.write_text(
+            yaml.dump(
+                {
+                    "name": "PBR Material Generation (Stable)",
+                    "tier": "stable",
+                    "backend": {"type": "heuristic"},
+                }
+            )
+        )
+
+        report = validate_preset(preset, available_depth_backend_ids=["da3"])
+        family_issues = [i for i in report.issues if i.category == "preset_family"]
+        assert len(family_issues) == 1
+        assert "preset_family='materials_pbr'" in family_issues[0].message
+
+    def test_incorrect_materials_preset_family_is_reported(self, tmp_path):
+        preset = tmp_path / "material_pbr.yaml"
+        preset.write_text(
+            yaml.dump(
+                {
+                    "name": "PBR Material Generation (Stable)",
+                    "tier": "stable",
+                    "preset_family": "material-pbr",
+                    "backend": {"type": "heuristic"},
+                    "pbr": {"resolution": "match_input"},
+                }
+            )
+        )
+
+        report = validate_preset(preset, available_depth_backend_ids=["da3"])
+        family_issues = [i for i in report.issues if i.category == "preset_family"]
+        assert len(family_issues) == 1
+        assert "got 'material-pbr'" in family_issues[0].message
+
+    def test_unknown_materials_schema_path_is_reported(self, tmp_path):
+        preset = tmp_path / "bad_materials.yaml"
+        preset.write_text(
+            yaml.dump(
+                {
+                    "name": "Bad Materials Schema",
+                    "tier": "experimental",
+                    "preset_family": "materials_pbr",
+                    "materials": {
+                        "runtime": {
+                            "backend": "nvdiffrec",
+                        }
+                    },
+                }
+            )
+        )
+
+        report = validate_preset(preset, available_depth_backend_ids=["da3"])
+        schema_issues = [i for i in report.issues if i.category == "materials_schema"]
+        assert len(schema_issues) == 1
+        assert schema_issues[0].path == "materials.runtime.backend"
 
 
 class TestHealthReportSerialization:

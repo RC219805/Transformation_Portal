@@ -320,6 +320,7 @@ class TestValidateMaterialsPreset:
         preset = {
             "name": "experimental-materials",
             "tier": "dev",
+            "preset_family": "materials_pbr",
             "model": {
                 "backend": "nvdiffrec",
                 "repo_id": "nvidia/nvdiffrec",
@@ -339,6 +340,7 @@ class TestValidateMaterialsPreset:
         preset = {
             "name": "bad-stable-materials",
             "tier": "stable",
+            "preset_family": "materials_pbr",
             "license_restriction": "research_only",
             "model": {
                 "backend": "nvdiffrec",
@@ -359,6 +361,7 @@ class TestValidateMaterialsPreset:
         preset = {
             "name": "experimental-materials",
             "tier": "dev",
+            "preset_family": "materials_pbr",
             "license_restriction": "research_only",
             "model": {
                 "backend": "nvdiffrec",
@@ -378,6 +381,7 @@ class TestValidateMaterialsPreset:
         preset = {
             "name": "experimental-materials",
             "tier": "dev",
+            "preset_family": "materials_pbr",
             "license_restriction": "research_only",
             "model": {
                 "backend": "nvdiffrec",
@@ -398,6 +402,7 @@ class TestValidateMaterialsPreset:
         preset = {
             "name": "experimental-materials",
             "tier": "dev",
+            "preset_family": "materials_pbr",
             "license_restriction": "research_only",
             "model": {
                 "backend": "nvdiffrec",
@@ -421,6 +426,7 @@ class TestValidateMaterialsPreset:
         preset = {
             "name": "apex-research-ultra-experimental",
             "tier": "apex_research_ultra",
+            "preset_family": "materials_pbr",
             "license_restriction": "research_only",
             "model": {
                 "backend": "nvdiffrec",
@@ -454,11 +460,54 @@ class TestValidateMaterialsPreset:
         with pytest.raises(LicenseRestrictionError, match="Unknown paths"):
             validate_materials_preset(preset, preset_path=Path("config/presets/experimental/material_pbr.yaml"))
 
+    def test_top_level_materials_preset_requires_explicit_family_marker(self):
+        """Top-level materials presets should declare an explicit preset family marker."""
+        preset = {
+            "name": "PBR Material Generation (Canary)",
+            "tier": "canary",
+            "backend": {
+                "type": "pbr_fusion",
+                "model": {
+                    "repo_id": "NightRaven109/PBRFusion4-RTXREMIX-Portable",
+                    "revision": "4ebe0ed10266bca0d7593e5461618e61d064cd9e",
+                },
+            },
+        }
+
+        with pytest.raises(LicenseRestrictionError, match="preset_family='materials_pbr'"):
+            validate_materials_preset(
+                preset,
+                preset_path=Path("config/presets/material_pbr_canary.yaml"),
+            )
+
+    def test_top_level_materials_preset_rejects_incorrect_family_marker(self):
+        """Typos in the explicit preset family marker must fail closed."""
+        preset = {
+            "name": "PBR Material Generation (Canary)",
+            "tier": "canary",
+            "preset_family": "material-pbr",
+            "backend": {
+                "type": "pbr_fusion",
+                "model": {
+                    "repo_id": "NightRaven109/PBRFusion4-RTXREMIX-Portable",
+                    "revision": "4ebe0ed10266bca0d7593e5461618e61d064cd9e",
+                },
+            },
+            "pbr": {"resolution": 1024},
+        }
+
+        with pytest.raises(LicenseRestrictionError, match="got 'material-pbr'"):
+            validate_materials_preset(
+                preset,
+                preset_path=Path("config/presets/material_pbr_canary.yaml"),
+            )
+
     def test_canary_pbrfusion_requires_attested_source_tuple(self):
         """Commercial materials backends still need pinned source metadata outside dev/experimental tiers."""
         preset = {
             "name": "PBR Material Generation (Canary)",
             "tier": "canary",
+            "preset_family": "materials_pbr",
             "backend": {
                 "type": "pbr_fusion",
                 "model": {
@@ -479,6 +528,7 @@ class TestValidateMaterialsPreset:
         preset = {
             "name": "PBR Material Generation (Canary)",
             "tier": "canary",
+            "preset_family": "materials_pbr",
             "backend": {
                 "type": "pbr_fusion",
                 "model": {
@@ -514,6 +564,7 @@ class TestValidateMaterialsPreset:
         preset = {
             "name": "PBR Material Generation (Canary)",
             "tier": "canary",
+            "preset_family": "materials_pbr",
             "backend": {
                 "type": "pbr_fusion",
                 "model": {
@@ -609,6 +660,7 @@ class TestValidateMaterialsPreset:
         preset = {
             "name": "PBR Material Generation (Canary)",
             "tier": "canary",
+            "preset_family": "materials_pbr",
             "backend": {
                 "type": "pbr_fusion",
                 "model": {
@@ -640,6 +692,7 @@ class TestValidateMaterialsPreset:
         preset = {
             "name": "PBR Material Generation (Canary)",
             "tier": "canary",
+            "preset_family": "materials_pbr",
             "backend": {
                 "type": "pbr_fusion",
                 "model": {

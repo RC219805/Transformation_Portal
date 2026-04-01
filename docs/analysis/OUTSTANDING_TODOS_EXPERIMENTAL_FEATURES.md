@@ -79,6 +79,9 @@ pip install sam2
 - [x] Regression coverage for backend decision serialization and persistence
 - [x] Experimental preset accepts unresolved `repo_id` / `revision` as `null`
 - [x] Config-time validation plus `strict_backend` fail-fast behavior for the single-image materials pipeline
+- [x] Explicit `preset_family: materials_pbr` marker added for top-level materials presets to reduce schema drift
+- [x] Placeholder/governance scanning aligned between preset health and materials schema policy
+- [x] Runtime artifact attestation and isolated-worker requirements kept as execution-phase constraints in emitted backend/runtime requirements
 - [x] Materials preset loader enforces research-tier opt-in and blocks unattested non-heuristic backends unless explicitly allowed for dev/experimental review
 - [x] Runtime Spatial AI preset/config loading now applies materials governance validation before backend selection
 - [x] Manifest-backed materials attestation checks for approved `repo_id` / exact `revision` tuples and checkpoint hash tuples

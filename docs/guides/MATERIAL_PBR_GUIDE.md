@@ -1,8 +1,8 @@
 # Material PBR Integration Guide
 
-**Version:** 5.0.0
+**Version:** 5.1.0
 **Status:** Stable
-**Last Updated:** 2026-02-18
+**Last Updated:** 2026-04-01
 
 ---
 
@@ -86,7 +86,7 @@ result = backend.generate_pbr_textures(
 
 ## Preset Selection
 
-### Stable v5.0.0 (`material_pbr.yaml`)
+### Stable v5.1.0 (`material_pbr.yaml`)
 
 **Use When:**
 - Production deployments requiring determinism

@@ -22,6 +22,7 @@ from transformation_portal.attestation.materials_policy import (  # noqa: E402
     ALLOWED_MATERIAL_BACKEND_PATHS,
     find_unknown_material_backend_schema_locations,
     looks_like_material_preset,
+    material_preset_family_error,
 )
 
 
@@ -38,10 +39,14 @@ def check_preset(preset_path: Path) -> list[str]:
     if not isinstance(payload, dict):
         return [f"{preset_path}: preset root must be a mapping"]
 
-    if not looks_like_material_preset(payload, preset_path):
-        return []
-
     issues: list[str] = []
+    family_error = material_preset_family_error(payload, preset_path)
+    if family_error is not None:
+        issues.append(f"{preset_path}: {family_error}")
+
+    if not looks_like_material_preset(payload, preset_path):
+        return issues
+
     for path in find_unknown_material_backend_schema_locations(payload, preset_path):
         issues.append(
             f"{preset_path}: materials backend declaration at '{path}' is not allowed "
