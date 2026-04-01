@@ -209,9 +209,9 @@ class DA3InferenceEngine:
             return ModelBackend.COREML
 
         # Explicit device override
-        if device_spec == "cuda" and TORCH_AVAILABLE and torch.cuda.is_available():
+        if device_spec == "cuda" and TORCH_AVAILABLE and torch is not None and torch.cuda.is_available():
             return ModelBackend.PYTORCH_CUDA
-        if device_spec == "mps" and TORCH_AVAILABLE and torch.backends.mps.is_available():
+        if device_spec == "mps" and TORCH_AVAILABLE and torch is not None and torch.backends.mps.is_available():
             return ModelBackend.PYTORCH_MPS
         if device_spec == "coreml" and COREML_AVAILABLE:
             return ModelBackend.COREML
@@ -220,11 +220,11 @@ class DA3InferenceEngine:
 
         # Auto-detect (device_spec == "auto" or default)
         # Prefer MPS on Apple Silicon for V3 (CoreML support TBD)
-        if TORCH_AVAILABLE and torch.backends.mps.is_available():
+        if TORCH_AVAILABLE and torch is not None and torch.backends.mps.is_available():
             return ModelBackend.PYTORCH_MPS
 
         # CUDA if available
-        if TORCH_AVAILABLE and torch.cuda.is_available():
+        if TORCH_AVAILABLE and torch is not None and torch.cuda.is_available():
             return ModelBackend.PYTORCH_CUDA
 
         # CPU fallback
@@ -347,7 +347,7 @@ class DA3InferenceEngine:
             # Determine dtype for FP16 optimization
             use_fp16 = getattr(self.config.device, "use_fp16", True)
             torch_dtype = None
-            if use_fp16 and self.device in ("mps", "cuda"):
+            if use_fp16 and self.device in ("mps", "cuda") and torch is not None:
                 torch_dtype = torch.float16
                 logger.info(
                     "Enabling FP16 for %s " "(1.3-1.5x speedup, 2x memory reduction)",
@@ -355,6 +355,8 @@ class DA3InferenceEngine:
                 )
 
             # Use transformers pipeline for simplicity
+            if pipeline is None:
+                raise RuntimeError("transformers pipeline not available")
             self.model = pipeline(
                 task="depth-estimation",
                 model=model_id,
@@ -393,9 +395,11 @@ class DA3InferenceEngine:
                     # Determine dtype for FP16 optimization
                     use_fp16 = getattr(self.config.device, "use_fp16", True)
                     torch_dtype = None
-                    if use_fp16 and self.device in ("mps", "cuda"):
+                    if use_fp16 and self.device in ("mps", "cuda") and torch is not None:
                         torch_dtype = torch.float16
 
+                    if pipeline is None:
+                        raise RuntimeError("transformers pipeline not available")
                     self.model = pipeline(
                         task="depth-estimation",
                         model=fallback_model,
@@ -856,7 +860,7 @@ class DA3InferenceEngine:
             depth_raw = prediction.depth[0]  # Remove batch dimension
 
             # Convert to numpy if needed
-            if isinstance(depth_raw, torch.Tensor):
+            if torch is not None and isinstance(depth_raw, torch.Tensor):
                 depth_raw = depth_raw.cpu().numpy()
         elif hasattr(self.model, "__call__"):
             # Transformers pipeline models
@@ -865,7 +869,7 @@ class DA3InferenceEngine:
             depth_raw = prediction["depth"]
 
             # Convert to numpy
-            if isinstance(depth_raw, torch.Tensor):
+            if torch is not None and isinstance(depth_raw, torch.Tensor):
                 depth_raw = depth_raw.cpu().numpy()
             elif isinstance(depth_raw, Image.Image):
                 depth_raw = np.array(depth_raw)
