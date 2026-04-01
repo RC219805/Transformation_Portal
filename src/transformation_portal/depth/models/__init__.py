@@ -32,6 +32,16 @@ _EXPORTS: Dict[str, Tuple[str, str]] = {
     "DepthAnythingV2Model": (".depth_anything_v2", "DepthAnythingV2Model"),
     "ModelBackend": (".depth_anything_v2", "ModelBackend"),
     "ModelVariant": (".depth_anything_v2", "ModelVariant"),
+<<<<<<< HEAD
+=======
+    # CoreML exports are implemented in the lux_depth_v3 CoreML backend.
+    # Keep these names as lazy aliases to preserve the public import surface
+    # without requiring a local coreml_exporter module.
+    "CoreMLExporter": (
+        "transformation_portal.lux_depth_v3.coreml_backend",
+        "CoreMLDepthEstimator",
+    ),
+>>>>>>> 60912a79 (fix: address PR review comments - scope ML health checks, fix CoreML exports, fix coremltools regex)
     "CoreMLDepthEstimator": (
         "transformation_portal.lux_depth_v3.coreml_backend",
         "CoreMLDepthEstimator",

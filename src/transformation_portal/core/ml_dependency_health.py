@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+<<<<<<< HEAD
 import importlib
+=======
+>>>>>>> 60912a79 (fix: address PR review comments - scope ML health checks, fix CoreML exports, fix coremltools regex)
 import platform
 import sys
 from importlib.metadata import PackageNotFoundError, version
@@ -14,6 +17,12 @@ OPTIONAL_IMPORT_EXCEPTIONS = (
     TypeError,
     OSError,
     AttributeError,
+)
+
+# Computed once at import time; platform does not change during a process lifetime.
+_IS_DARWIN_X86 = (
+    platform.system().lower() == "darwin"
+    and platform.machine().lower() in ("x86_64", "amd64")
 )
 
 
@@ -81,6 +90,7 @@ def detect_transformers_torch_version_issue(
     torch_version_tuple = _version_tuple(torch_version)
     transformers_version_tuple = _version_tuple(transformers_version)
     details = []
+<<<<<<< HEAD
     if (
         torch_version_tuple
         and transformers_version_tuple
@@ -96,6 +106,24 @@ def detect_transformers_torch_version_issue(
         and torch_version_tuple < (2, 4)
         and _version_tuple(numpy_version) >= (2, 0)
         and _is_darwin_x86_64_runtime()
+=======
+    torch_version_tuple = _version_tuple(torch_version)
+    transformers_version_tuple = _version_tuple(transformers_version)
+
+    # transformers >= 5.3 dropped support for torch < 2.4; guard only that specific pairing
+    if transformers_version_tuple >= (5, 3) and torch_version_tuple and torch_version_tuple < (2, 4):
+        details.append(
+            f"installed torch {torch_version} is below the minimum expected by transformers {transformers_version}"
+        )
+
+    numpy_version = _installed_version("numpy")
+    if (
+        _IS_DARWIN_X86
+        and numpy_version
+        and _version_tuple(numpy_version) >= (2, 0)
+        and torch_version_tuple
+        and torch_version_tuple < (2, 4)
+>>>>>>> 60912a79 (fix: address PR review comments - scope ML health checks, fix CoreML exports, fix coremltools regex)
     ):
         details.append(
             f"numpy {numpy_version} may be incompatible with torch {torch_version} wheels compiled against NumPy 1.x"
