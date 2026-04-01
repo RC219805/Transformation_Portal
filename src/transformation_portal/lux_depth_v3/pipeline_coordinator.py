@@ -519,7 +519,7 @@ class PipelineCoordinator:
 
             self._registry = DepthBackendRegistry()
 
-        backend_id = requested or self._config.depth_backend or "da3"
+        backend_id = requested or self._config.depth_backend
         selection = select_backend(
             backend_id,
             self._config,
