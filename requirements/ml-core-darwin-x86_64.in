@@ -1,15 +1,20 @@
-# ML Core layer for macOS (Darwin)
+# ML Core layer for macOS Intel (Darwin x86_64)
 # Platform-specific lockfile for deterministic pip-compile resolution.
 #
 # This file is macOS-specific because pip-compile cannot resolve
 # conditional dependencies across platforms in a single graph.
 #
-# Run `make compile` in this directory to generate pinned ml-core-darwin.txt
+# Run `make compile` in this directory to generate pinned ml-core-darwin-x86_64.txt
 #
-# PLATFORM TARGET: darwin-* (macOS Intel + Apple Silicon)
-#   - darwin-x86_64-cpu   (macOS Intel)
-#   - darwin-arm64-cpu    (macOS Apple Silicon, CPU fallback)
-#   - darwin-arm64-mps    (macOS Apple Silicon, Metal)
+# PLATFORM TARGET: darwin-x86_64-cpu (macOS Intel)
+#
+# IMPORTANT:
+# This lock input remains intentionally conservative because PyTorch 2.4+
+# wheels are not available for macOS Intel in the supported environment.
+# In practice that means:
+# - keep torch at 2.2.x for macOS Intel wheel availability
+# - keep numpy<2 to avoid ABI breaks against torch 2.2.x extensions
+# - keep transformers<5 so the torch backend remains usable with torch 2.2.x
 #
 # SECURITY NOTE (CVE-2025-32434):
 #   torch < 2.6.0 has a critical RCE vulnerability via torch.load()
@@ -24,9 +29,12 @@
 torch==2.2.2  # CAS determinism: cross-platform reproducibility
 torchvision==0.17.2  # CAS determinism: matches torch 2.2.2
 
+# NumPy guardrail for the conservative Darwin torch 2.2.x baseline.
+numpy<2
+
 # Diffusion / HuggingFace ecosystem
 diffusers>=0.36.0,<1
-transformers>=4.57.0,<6
+transformers>=4.57.0,<5
 huggingface-hub>=0.19.0,<2
 accelerate>=0.20.0,<2
 
@@ -36,11 +44,12 @@ efficientsam==1.0.0          # Deterministic builds: stable EfficientSAM weights
 open-clip-torch==3.3.0       # Deterministic builds: SAM2/CLIP stack compatibility
 
 # Vision / image processing
+opencv-python-headless<4.13  # Keep the Intel Darwin lane on NumPy 1.x-compatible wheels
 scikit-image>=0.21.0,<1
 
 # Configuration / diagnostics / color
 PyYAML>=6.0,<7               # Config parser: stable API
-colour-science>=0.4.2,<1     # Color math library: stable API
+colour-science>=0.4.2,<0.4.7 # Keep Darwin conservative stack compatible with numpy<2
 psutil>=5.9.0,<7             # System utilities: OS compatibility layer
 memory-profiler>=0.61.0,<1   # Dev/profiling tool
 

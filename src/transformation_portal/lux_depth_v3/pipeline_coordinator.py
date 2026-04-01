@@ -39,6 +39,7 @@ import os
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
+from ..core.platform_matrix import CURRENT_PLATFORM, PlatformMatrix
 from ..depth.backends.protocol import LicenseRestrictionError
 
 # Use absolute import to avoid circular dependencies
@@ -47,6 +48,41 @@ from .config import EnhanceConfig, ModelVariant
 from .manifest import BackendSelectionMetadata
 
 logger = logging.getLogger(__name__)
+
+
+def _apple_silicon_depth_pro_opt_in(config: EnhanceConfig) -> bool:
+    """Return True when Apple Silicon should consider the Depth Pro lane."""
+    if not getattr(config, "non_commercial_ok", False):
+        return False
+    if not getattr(config, "accept_apple_depth_pro_research_license", False):
+        return False
+
+    return bool(
+        getattr(config, "depth_pro_checkpoint_path", None)
+        or getattr(config, "depth_pro_python_executable", None)
+        or os.environ.get("TRANSFORMATION_PORTAL_DEPTH_PRO_CHECKPOINT")
+        or os.environ.get("TRANSFORMATION_PORTAL_DEPTH_PRO_PYTHON")
+    )
+
+
+def resolve_requested_backend(
+    requested: Optional[str],
+    config: EnhanceConfig,
+    platform: Optional[PlatformMatrix] = None,
+) -> str:
+    """Resolve the effective requested backend for the current platform."""
+    normalized_requested = normalize_backend_id(requested) or normalize_backend_id(config.depth_backend)
+    if normalized_requested:
+        return normalized_requested
+
+    effective_platform = platform or CURRENT_PLATFORM
+    if effective_platform is not None and effective_platform.is_apple_silicon:
+        if _apple_silicon_depth_pro_opt_in(config):
+            return "depth_pro"
+        if getattr(config, "use_coreml_backend", False):
+            return "da3"
+
+    return "da3"
 
 
 @dataclass
@@ -336,7 +372,7 @@ def select_backend(
     Returns:
         BackendSelection with result
     """
-    normalized_requested = normalize_backend_id(requested) or "da3"
+    normalized_requested = resolve_requested_backend(requested, config)
 
     allow_synthetic = bool(config.allow_synthetic_fallback) or os.getenv("TP_ALLOW_SYNTHETIC_FALLBACK") == "1"
 
@@ -483,7 +519,7 @@ class PipelineCoordinator:
 
             self._registry = DepthBackendRegistry()
 
-        backend_id = requested or self._config.depth_backend or "da3"
+        backend_id = requested or self._config.depth_backend
         selection = select_backend(
             backend_id,
             self._config,
@@ -539,7 +575,7 @@ class PipelineCoordinator:
         if backend_id is None and self._current_selection:
             backend_id = self._current_selection.resolved_backend
         if backend_id is None:
-            backend_id = self._config.depth_backend or "da3"
+            backend_id = resolve_requested_backend(None, self._config)
 
         return resolve_runtime_backend_chain(backend_id, self._config)
 

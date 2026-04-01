@@ -217,12 +217,25 @@ build_pip_cmd() {
 # Detect current platform and return platform-specific lockfile
 # This is critical for deterministic pip-compile resolution (Issue 1 fix)
 detect_platform_lockfile() {
-    local os_type
+    local os_type arch
     os_type="$(uname -s)"
+    arch="$(uname -m)"
+
+    case "${arch}" in
+        aarch64) arch="arm64" ;;
+        amd64) arch="x86_64" ;;
+    esac
 
     case "${os_type}" in
         Darwin)
-            echo "ml-core-darwin.txt"
+            case "${arch}" in
+                x86_64) echo "ml-core-darwin-x86_64.txt" ;;
+                arm64) echo "ml-core-darwin-arm64.txt" ;;
+                *)
+                    log_error "Unsupported Darwin architecture: ${arch}"
+                    exit 1
+                    ;;
+            esac
             ;;
         Linux)
             echo "ml-core-linux.txt"
@@ -321,15 +334,15 @@ install_profile() {
             fi
             platform_id="$(get_platform_id mps)"
 
-            check_lockfile "ml-core-darwin.txt"
+            check_lockfile "ml-core-darwin-arm64.txt"
             log_info "Installing ML core layer + MPS acceleration (${platform_id})..."
-            log_info "Using platform-specific lockfile: ml-core-darwin.txt"
+            log_info "Using platform-specific lockfile: ml-core-darwin-arm64.txt"
             log_verbose "Using PyTorch index: ${PYTORCH_INDEX}"
             if [[ "${DRY_RUN}" == "true" ]]; then
-                log_info "[DRY-RUN] Would install: requirements/ml-core-darwin.txt"
+                log_info "[DRY-RUN] Would install: requirements/ml-core-darwin-arm64.txt"
                 log_info "[DRY-RUN] With extra-index-url: ${PYTORCH_INDEX}"
             else
-                "${pip_cmd[@]}" --extra-index-url "${PYTORCH_INDEX}" -r "${REQUIREMENTS_DIR}/ml-core-darwin.txt"
+                "${pip_cmd[@]}" --extra-index-url "${PYTORCH_INDEX}" -r "${REQUIREMENTS_DIR}/ml-core-darwin-arm64.txt"
             fi
             ;;
         core-cuda)

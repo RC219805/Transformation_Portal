@@ -23,6 +23,10 @@ from typing import TYPE_CHECKING, Any, Dict, Optional, Union
 import numpy as np
 from PIL import Image
 
+from transformation_portal.core.ml_dependency_health import (
+    OPTIONAL_IMPORT_EXCEPTIONS,
+    detect_transformers_torch_runtime_issue,
+)
 from transformation_portal.core.security.model_lock import is_model_lock_strict_enabled, resolve_model_lock_revision
 
 # noqa: F401 - Used in docstring examples
@@ -32,34 +36,68 @@ from .raw_loader import is_raw_file
 if TYPE_CHECKING:
     from .input_manager import ImageInput
 
-try:
-    import torch
-
-    TORCH_AVAILABLE = True
-except ImportError:
-    TORCH_AVAILABLE = False
-    torch = None  # type: ignore
-
-try:
-    from transformers import pipeline
-    from transformers.pipelines.depth_estimation import DepthEstimationPipeline
-
-    TRANSFORMERS_AVAILABLE = True
-except ImportError:
-    TRANSFORMERS_AVAILABLE = False
-    pipeline = None  # type: ignore[assignment]
-    DepthEstimationPipeline = Any  # type: ignore
-
-try:
-    import coremltools as ct
-
-    COREML_AVAILABLE = True
-except ImportError:
-    COREML_AVAILABLE = False
-    ct = None  # type: ignore
+torch = None  # type: ignore[assignment]
+transformers_module = None  # type: ignore[assignment]
+pipeline = None  # type: ignore[assignment]
+DepthEstimationPipeline = Any  # type: ignore[assignment]
+ct = None  # type: ignore[assignment]
+TORCH_AVAILABLE = False
+TRANSFORMERS_AVAILABLE = False
+COREML_AVAILABLE = False
+TRANSFORMERS_TORCH_BACKEND_ISSUE = None
+_OPTIONAL_IMPORTS_READY = False
 
 
 logger = logging.getLogger(__name__)
+
+
+def _ensure_optional_runtime_imports() -> None:
+    """Resolve optional ML/runtime dependencies lazily."""
+    global _OPTIONAL_IMPORTS_READY
+    global torch, transformers_module, pipeline, DepthEstimationPipeline, ct
+    global TORCH_AVAILABLE, TRANSFORMERS_AVAILABLE, COREML_AVAILABLE, TRANSFORMERS_TORCH_BACKEND_ISSUE
+
+    if _OPTIONAL_IMPORTS_READY:
+        return
+    _OPTIONAL_IMPORTS_READY = True
+
+    try:
+        import torch as torch_module
+
+        torch = torch_module
+        TORCH_AVAILABLE = True
+    except OPTIONAL_IMPORT_EXCEPTIONS:
+        TORCH_AVAILABLE = False
+        torch = None  # type: ignore[assignment]
+
+    try:
+        import transformers as transformers_pkg
+        from transformers import pipeline as transformers_pipeline
+        from transformers.pipelines.depth_estimation import DepthEstimationPipeline as DepthEstimationPipelineClass
+
+        transformers_module = transformers_pkg
+        pipeline = transformers_pipeline
+        DepthEstimationPipeline = DepthEstimationPipelineClass
+        TRANSFORMERS_AVAILABLE = True
+    except OPTIONAL_IMPORT_EXCEPTIONS:
+        TRANSFORMERS_AVAILABLE = False
+        transformers_module = None  # type: ignore[assignment]
+        pipeline = None  # type: ignore[assignment]
+        DepthEstimationPipeline = Any  # type: ignore[assignment]
+
+    try:
+        import coremltools as coremltools_module
+
+        ct = coremltools_module
+        COREML_AVAILABLE = True
+    except ImportError:
+        COREML_AVAILABLE = False
+        ct = None  # type: ignore[assignment]
+
+    TRANSFORMERS_TORCH_BACKEND_ISSUE = detect_transformers_torch_runtime_issue(
+        torch if TORCH_AVAILABLE else None,
+        transformers_module if TRANSFORMERS_AVAILABLE else None,
+    )
 
 
 class ModelBackend(Enum):
@@ -199,6 +237,7 @@ class DA3InferenceEngine:
 
     def _should_use_coreml(self) -> bool:
         """Check if CoreML should be used."""
+        _ensure_optional_runtime_imports()
         import platform
 
         # Only on macOS with Apple Silicon
@@ -265,10 +304,7 @@ class DA3InferenceEngine:
         Falls back to V2 metric models if V3
         models are not found.
         """
-        if not TORCH_AVAILABLE:
-            raise ImportError("torch required for PyTorch backend. Install with: pip install torch")
-        if not TRANSFORMERS_AVAILABLE:
-            raise ImportError("transformers required for PyTorch backend. Install with: " "pip install transformers")
+        _ensure_optional_runtime_imports()
 
         # Get HuggingFace model ID from config
         model_id = self.config.model_variant.value.huggingface_id
@@ -285,8 +321,17 @@ class DA3InferenceEngine:
 
         # Check if this is a DA3 Nested model (requires custom library)
         if self._is_da3_model(model_id):
+            if not TORCH_AVAILABLE:
+                raise ImportError("torch required for PyTorch backend. Install with: pip install torch")
             self._load_da3_model(model_id)
             return
+
+        if not TORCH_AVAILABLE:
+            raise ImportError("torch required for PyTorch backend. Install with: pip install torch")
+        if not TRANSFORMERS_AVAILABLE:
+            raise ImportError("transformers required for PyTorch backend. Install with: " "pip install transformers")
+        if TRANSFORMERS_TORCH_BACKEND_ISSUE:
+            raise RuntimeError(TRANSFORMERS_TORCH_BACKEND_ISSUE)
 
         # Fallback mapping to V2 metric models (which exist on HuggingFace)
         v3_to_v2_fallback = {
@@ -515,6 +560,7 @@ class DA3InferenceEngine:
         Converts PyTorch DA3 models to CoreML format with ANE optimization.
         Provides 5x inference speedup on Apple Silicon (400ms → 80ms on M4).
         """
+        _ensure_optional_runtime_imports()
         if not COREML_AVAILABLE:
             raise ImportError("coremltools required for CoreML backend. Install with: " "pip install coremltools")
 
@@ -788,6 +834,7 @@ class DA3InferenceEngine:
         Returns:
             Dictionary with depth map and metadata
         """
+        _ensure_optional_runtime_imports()
         if not TORCH_AVAILABLE:
             raise ImportError("torch required for PyTorch inference")
 

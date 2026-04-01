@@ -13,10 +13,12 @@ requirements/
 ├── ml.in                   # ML umbrella (references ml-*.in layers)
 ├── ml.txt                  # Removed umbrella lock (not part of checked-in contract)
 ├── ml-core.in              # ML core layer - cross-platform (legacy)
-├── ml-core-darwin.in       # ML core layer - macOS (torch 2.2.2)
-├── ml-core-darwin.txt      # ML core layer - macOS (pinned)
-├── ml-core-linux.in        # ML core layer - Linux (torch 2.2.2)
-├── ml-core-linux.txt       # ML core layer - Linux (pinned)
+├── ml-core-darwin-x86_64.in  # ML core layer - macOS Intel conservative baseline
+├── ml-core-darwin-x86_64.txt # ML core layer - macOS Intel pinned lock
+├── ml-core-darwin-arm64.in   # ML core layer - macOS Apple Silicon baseline
+├── ml-core-darwin-arm64.txt  # ML core layer - macOS Apple Silicon pinned lock
+├── ml-core-linux.in          # ML core layer - Linux (torch 2.2.2)
+├── ml-core-linux.txt         # ML core layer - Linux (pinned)
 ├── ml-cpu.in               # ML CPU acceleration layer
 ├── ml-cpu.txt              # Deprecated optional ML lock (not checked in)
 ├── ml-mps.in               # ML MPS acceleration layer (Apple Silicon)
@@ -67,15 +69,17 @@ ML dependencies use an explicit platform matrix with three orthogonal axes:
 
 To ensure deterministic builds, the checked-in ML contract is limited to platform-specific core lockfiles:
 
-| Platform     | Lockfile              | Torch Version |
-|--------------|----------------------|---------------|
-| macOS (all)  | `ml-core-darwin.txt` | 2.2.2         |
-| Linux (all)  | `ml-core-linux.txt`  | 2.2.2         |
+| Platform | Lockfile | Torch Version |
+|----------|----------|---------------|
+| macOS Intel (`x86_64`) | `ml-core-darwin-x86_64.txt` | 2.2.2 + `numpy<2`, `transformers<5` |
+| macOS Apple Silicon (`arm64`) | `ml-core-darwin-arm64.txt` | 2.2.2 + Apple Silicon CoreML tooling |
+| Linux (all) | `ml-core-linux.txt` | 2.2.2 + `transformers<5` |
 
 **Torch Version Strategy:**
-- Both platforms use torch 2.2.2 for cross-platform reproducibility
-- Torch 2.2.2 is the latest stable version with CPU wheels on PyPI
-- Torch version is part of the CAS identity for artifact provenance
+- All platform core locks still anchor on torch 2.2.2 for deterministic CAS identity
+- The Intel Darwin lock keeps the extra `numpy<2` compatibility guard
+- The Apple Silicon Darwin lock carries `coremltools` so the CoreML lane is part of the arm64 contract
+- Linux may evolve independently; platform core locks must not collapse to identical dependency graphs
 
 **Important:** Acceleration is NEVER inferred from OS—it must be explicitly specified via profile.
 
@@ -180,7 +184,9 @@ To install the package with specific dependency sets:
 pip install -r requirements/base.txt
 
 # Install ML core layer (platform-specific baseline)
-pip install -r requirements/ml-core-darwin.txt   # macOS
+pip install -r requirements/ml-core-darwin-x86_64.txt  # macOS Intel
+# or
+pip install -r requirements/ml-core-darwin-arm64.txt   # macOS Apple Silicon
 # or
 pip install -r requirements/ml-core-linux.txt    # Linux
 
@@ -291,7 +297,8 @@ Targets:
   clean             Remove all compiled .txt files
 
 Checked-in ML layer targets (CPU-only PyTorch index):
-  ml-core-darwin.txt  macOS ML baseline
+  ml-core-darwin-x86_64.txt  macOS Intel ML baseline
+  ml-core-darwin-arm64.txt   macOS Apple Silicon ML baseline
   ml-core-linux.txt   Linux ML baseline
 
 Forbidden checked-in optional ML lock targets:

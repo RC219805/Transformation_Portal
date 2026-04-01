@@ -26,7 +26,8 @@ REQUIRED_AUDIT_TARGETS = (
     "requirements/all.txt",
     "requirements/security.txt",
     "requirements/tools-archive.txt",
-    "requirements/ml-core-darwin.txt",
+    "requirements/ml-core-darwin-x86_64.txt",
+    "requirements/ml-core-darwin-arm64.txt",
     "requirements/ml-core-linux.txt",
 )
 
@@ -37,7 +38,8 @@ REQUIRED_PR_BODY_REFERENCES = (
     "requirements/security.txt",
     "requirements/tools-archive.txt",
     "requirements/all.txt",
-    "requirements/ml-core-darwin.txt",
+    "requirements/ml-core-darwin-x86_64.txt",
+    "requirements/ml-core-darwin-arm64.txt",
     "requirements/ml-core-linux.txt",
 )
 

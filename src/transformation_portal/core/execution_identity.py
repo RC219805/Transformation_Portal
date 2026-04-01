@@ -30,7 +30,7 @@ Example:
     ...     stage_name="depth_estimation",
     ...     input_ids=["sha256:abc123..."],
     ...     config={"model": "DA3-Large"},
-    ...     lockfile_path="requirements/ml-core-darwin.txt",
+    ...     lockfile_path="requirements/ml-core-darwin-arm64.txt",
     ... )
     >>> print(cas_id)
     'sha256:def456...'
@@ -53,6 +53,7 @@ from transformation_portal.core.platform_matrix import (
     CURRENT_PLATFORM,
     PlatformMatrix,
     compute_lockfile_hash,
+    determine_ml_core_lockfile_name,
     get_env_fingerprint,
 )
 from transformation_portal.determinism.jcs import dumpb as jcs_dumpb
@@ -432,13 +433,15 @@ def resolve_platform_lockfile() -> Optional[Path]:
 
         # Determine platform-specific lockfile
         platform = sys.platform
-        if platform == "darwin":
-            lockfile = repo_root / "requirements" / "ml-core-darwin.txt"
-        elif platform.startswith("linux"):
-            lockfile = repo_root / "requirements" / "ml-core-linux.txt"
-        else:
-            # Fallback to generic lockfile
-            lockfile = repo_root / "requirements" / "ml-core.txt"
+        try:
+            matrix = PlatformMatrix.detect()
+            lockfile = repo_root / "requirements" / determine_ml_core_lockfile_name(matrix)
+        except ValueError:
+            # Fallback to generic lockfile on unsupported platforms.
+            if platform.startswith("linux"):
+                lockfile = repo_root / "requirements" / "ml-core-linux.txt"
+            else:
+                lockfile = repo_root / "requirements" / "ml-core.txt"
 
         if lockfile.exists():
             return lockfile.resolve()  # Canonical absolute path
@@ -548,7 +551,7 @@ def compute_cas_id(
         ...     stage_name="depth_estimation",
         ...     input_ids=["sha256:abc123"],
         ...     config={"model": "DA3-Large", "quantization": "none"},
-        ...     lockfile_path="requirements/ml-core-darwin.txt",
+        ...     lockfile_path="requirements/ml-core-darwin-arm64.txt",
         ... )
         >>> if artifact_store.exists(identity.cas_id):
         ...     return artifact_store.load(identity.cas_id)  # Cache hit

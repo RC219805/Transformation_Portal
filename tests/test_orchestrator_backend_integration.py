@@ -11,6 +11,7 @@ from unittest.mock import Mock, patch
 import numpy as np
 import pytest
 
+from transformation_portal.core.platform_matrix import PlatformAccel, PlatformISA, PlatformMatrix, PlatformOS
 from transformation_portal.depth.backends import protocol as depth_protocol_module
 from transformation_portal.depth.backends.protocol import LicenseRestrictionError
 from transformation_portal.lux_depth_v3.config import EnhanceConfig
@@ -53,6 +54,90 @@ def test_orchestrator_default_backend(tmp_path, mock_da3_available):
 
     assert orchestrator.depth_backend.name == "da3"
     assert orchestrator._backend_metadata.resolution_status == "success"
+
+
+def test_orchestrator_prefers_depth_pro_only_on_apple_silicon(tmp_path):
+    """Apple Silicon should auto-select Depth Pro only when explicitly opted in."""
+    backend_calls = []
+
+    class FakeBackend:
+        def __init__(self, name):
+            self.name = name
+
+        def ensure_available(self):
+            return None
+
+    def fake_get_backend(self, backend_name, config):
+        del self, config
+        backend_calls.append(backend_name)
+        return FakeBackend(backend_name)
+
+    with (
+        patch(
+            "transformation_portal.lux_depth_v3.pipeline_coordinator.CURRENT_PLATFORM",
+            PlatformMatrix(PlatformOS.DARWIN, PlatformISA.ARM64, PlatformAccel.MPS),
+        ),
+        patch(
+            "transformation_portal.depth.backends.registry.DepthBackendRegistry.get_backend",
+            new=fake_get_backend,
+        ),
+    ):
+        config = EnhanceConfig(
+            depth_device="cpu",
+            depth_pro_python_executable="/usr/bin/python3",
+            non_commercial_ok=True,
+            accept_apple_depth_pro_research_license=True,
+            enable_v2=False,
+        )
+
+        orchestrator = EnhanceOrchestrator(config, tmp_path)
+
+    assert backend_calls[0] == "depth_pro"
+    assert orchestrator.depth_backend.name == "depth_pro"
+    assert orchestrator._backend_metadata.requested_backend == "depth_pro"
+    assert orchestrator._backend_metadata.resolved_backend == "depth_pro"
+
+
+def test_orchestrator_keeps_da3_default_off_apple_silicon(tmp_path):
+    """Intel macOS should not inherit the Apple Silicon Depth Pro auto-promotion."""
+    backend_calls = []
+
+    class FakeBackend:
+        def __init__(self, name):
+            self.name = name
+
+        def ensure_available(self):
+            return None
+
+    def fake_get_backend(self, backend_name, config):
+        del self, config
+        backend_calls.append(backend_name)
+        return FakeBackend(backend_name)
+
+    with (
+        patch(
+            "transformation_portal.lux_depth_v3.pipeline_coordinator.CURRENT_PLATFORM",
+            PlatformMatrix(PlatformOS.DARWIN, PlatformISA.X86_64, PlatformAccel.CPU),
+        ),
+        patch(
+            "transformation_portal.depth.backends.registry.DepthBackendRegistry.get_backend",
+            new=fake_get_backend,
+        ),
+    ):
+        config = EnhanceConfig(
+            depth_device="cpu",
+            depth_pro_python_executable="/usr/bin/python3",
+            non_commercial_ok=True,
+            accept_apple_depth_pro_research_license=True,
+            enable_v2=False,
+            use_coreml_backend=True,
+        )
+
+        orchestrator = EnhanceOrchestrator(config, tmp_path)
+
+    assert backend_calls[0] == "da3"
+    assert orchestrator.depth_backend.name == "da3"
+    assert orchestrator._backend_metadata.requested_backend == "da3"
 
 
 def test_orchestrator_canonicalizes_legacy_backend_alias_in_metadata(tmp_path, mock_da3_available):
@@ -155,7 +240,7 @@ def test_orchestrator_depth_pro_non_commercial_enforcement(tmp_path):
     not Path("checkpoints/depth_pro.pt").exists(),
     reason="Depth Pro checkpoint not available",
 )
-def test_orchestrator_depth_pro_checkpoint_missing(tmp_path):
+def test_orchestrator_depth_pro_checkpoint_missing(tmp_path, mock_da3_available):
     """Orchestrator falls back to DA3 if Depth Pro checkpoint missing."""
     config = EnhanceConfig(
         depth_backend="depth_pro",

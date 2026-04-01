@@ -22,6 +22,7 @@ from __future__ import annotations
 import copy
 import datetime
 import hashlib
+import importlib.metadata
 import io
 import json
 import logging
@@ -37,6 +38,9 @@ from typing import Any, Callable, Dict, List, Optional, cast
 
 import numpy as np
 
+from ..core.ml_dependency_health import (
+    detect_transformers_torch_version_issue,
+)
 from ..depth.backends.protocol import DepthBackend, LicenseRestrictionError
 from ..depth.backends.registry import DepthBackendRegistry
 from ..ingest.canonical_json import dump_json, dumps_json
@@ -147,6 +151,7 @@ from .pipeline_coordinator import (
     derive_model_id_from_backend_instance,
     expected_output_depth_units_for_backend,
     resolve_backend_model_id,
+    resolve_requested_backend,
     resolve_runtime_backend_chain,
     select_backend,
 )
@@ -214,73 +219,70 @@ def _log_dependency_status() -> dict:
     Returns:
         Dictionary with dependency status for testing/debugging
     """
-    status = {}
+    status: Dict[str, Any] = {}
 
-    # Check torch
-    try:
-        import torch
+    def _distribution_version(distribution_name: str) -> Optional[str]:
+        try:
+            return importlib.metadata.version(distribution_name)
+        except importlib.metadata.PackageNotFoundError:
+            return None
 
-        status["torch"] = True
-        version = getattr(torch, "__version__", "unknown")
-        logger.debug(f"torch {version} available")
-    except ImportError:
-        status["torch"] = False
+    torch_version = _distribution_version("torch")
+    status["torch"] = torch_version is not None
+    if torch_version is not None:
+        status["torch_version"] = torch_version
+        logger.debug("torch %s installed", torch_version)
+    else:
         logger.info(
-            "torch not available - ML features" " disabled. Install:" " pip install torch",
+            "torch not available - ML features disabled. Install: pip install torch",
         )
 
-    # Check transformers
-    try:
-        import transformers
-
-        status["transformers"] = True
-        version = getattr(transformers, "__version__", "unknown")
-        logger.debug(f"transformers {version} available")
-    except ImportError:
-        status["transformers"] = False
+    transformers_version = _distribution_version("transformers")
+    status["transformers"] = transformers_version is not None
+    if transformers_version is not None:
+        status["transformers_version"] = transformers_version
+        logger.debug("transformers %s installed", transformers_version)
+    else:
         logger.info(
-            "transformers not available -" " depth models disabled." " Install:" " pip install transformers",
+            "transformers not available - depth models disabled. Install: pip install transformers",
         )
 
-    # Check coremltools (optional)
-    try:
-        import coremltools
+    runtime_issue = detect_transformers_torch_version_issue(torch_version, transformers_version)
+    status["torch_transformers_compatible"] = runtime_issue is None
+    if runtime_issue:
+        logger.warning(runtime_issue)
 
-        status["coremltools"] = True
-        version = getattr(coremltools, "__version__", "unknown")
-        logger.debug(f"coremltools {version} available")
-    except ImportError:
-        status["coremltools"] = False
+    coremltools_version = _distribution_version("coremltools")
+    status["coremltools"] = coremltools_version is not None
+    if coremltools_version is not None:
+        status["coremltools_version"] = coremltools_version
+        logger.debug("coremltools %s installed", coremltools_version)
+    else:
         logger.debug(
-            "coremltools not available" " (optional). Install:" " pip install coremltools",
+            "coremltools not available (optional). Install: pip install coremltools",
         )
 
-    # Check scikit-image (optional for some features)
-    try:
-        import skimage
-
-        status["scikit-image"] = True
-        version = getattr(skimage, "__version__", "unknown")
-        logger.debug(f"scikit-image {version} available")
-    except ImportError:
-        status["scikit-image"] = False
+    skimage_version = _distribution_version("scikit-image")
+    status["scikit-image"] = skimage_version is not None
+    if skimage_version is not None:
+        status["scikit-image_version"] = skimage_version
+        logger.debug("scikit-image %s installed", skimage_version)
+    else:
         logger.debug(
-            "scikit-image not available" " (optional for advanced" " filtering)",
+            "scikit-image not available (optional for advanced filtering)",
         )
 
-    # Check numba (optional performance enhancement)
-    try:
-        import numba
-
-        status["numba"] = True
+    numba_version = _distribution_version("numba")
+    status["numba"] = numba_version is not None
+    if numba_version is not None:
+        status["numba_version"] = numba_version
         logger.debug(
-            "numba %s available -" + " performance optimizations" + " enabled",
-            numba.__version__,
+            "numba %s available - performance optimizations enabled",
+            numba_version,
         )
-    except ImportError:
-        status["numba"] = False
+    else:
         logger.debug(
-            "numba not available - using" " NumPy fallback (30-50%% slower" " for some operations)",
+            "numba not available - using NumPy fallback (30-50%% slower for some operations)",
         )
 
     # Check HF_TOKEN for model downloads
@@ -549,13 +551,13 @@ class EnhanceOrchestrator:
         """Initialize depth backend using registry (ADR-019).
 
         Implements backend selection with fallback logic:
-        1. Try requested backend (from config.depth_backend, default "da3")
+        1. Try requested backend (from config.depth_backend, with Apple Silicon opt-ins)
         2. Check availability (checkpoint + dependencies)
         3. Fallback to configured operational chain (default: da3 -> da2)
         4. Optionally fallback to synthetic in explicit test/CI mode
         5. Record selection decision in metadata
         """
-        requested = normalize_backend_id(self.config.depth_backend) or "da3"
+        requested = resolve_requested_backend(self.config.depth_backend, self.config)
         self._depth_registry = DepthBackendRegistry()
         self._depth_backend_cache: Dict[str, Any] = {}
 

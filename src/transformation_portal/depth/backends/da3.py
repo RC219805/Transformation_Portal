@@ -15,6 +15,11 @@ from typing import TYPE_CHECKING, Optional, Union
 import numpy as np
 from PIL import Image
 
+from ...core.ml_dependency_health import (
+    _installed_version,
+    detect_transformers_torch_version_issue,
+)
+from ...core.platform_matrix import CURRENT_PLATFORM
 from .protocol import DepthResult, LicenseType
 
 if TYPE_CHECKING:
@@ -77,17 +82,9 @@ class DA3Backend:
             if device:
                 return device
 
-        # Auto-detect device
-        try:
-            import torch
-
-            if torch.backends.mps.is_available():
-                return "mps"
-            elif torch.cuda.is_available():
-                return "cuda"
-        except ImportError:
-            logger.debug("PyTorch not installed;" " falling back to CPU for DA3Backend.")
-
+        # Backend construction should not import torch just to probe accelerators.
+        # The orchestrator passes an explicit depth_device; CPU is the safe default
+        # for ad-hoc or test instantiation in partially provisioned environments.
         return "cpu"
 
     def _resolve_model_variant(self, config: Optional["EnhanceConfig"]) -> "ModelVariant":
@@ -111,27 +108,27 @@ class DA3Backend:
         Raises:
             ImportError: If required packages not installed.
         """
-        # Check transformers
-        try:
-            import transformers  # noqa: F401
-        except ImportError as exc:
+        transformers_version = _installed_version("transformers")
+        if transformers_version is None:
             raise ImportError(
                 "transformers package not installed.\n\n"
                 "Install with:\n"
                 "  pip install transformers\n\n"
                 "See: https://huggingface.co/docs/transformers"
-            ) from exc
+            )
 
-        # Check torch
-        try:
-            import torch  # noqa: F401
-        except ImportError as exc:
+        torch_version = _installed_version("torch")
+        if torch_version is None:
             raise ImportError(
                 "torch package not installed.\n\n"
                 "Install with:\n"
                 "  pip install torch\n\n"
                 "See: https://pytorch.org/get-started/locally/"
-            ) from exc
+            )
+
+        runtime_issue = detect_transformers_torch_version_issue(torch_version, transformers_version)
+        if runtime_issue:
+            raise ImportError(runtime_issue)
 
         logger.debug("DA3 backend dependencies available")
 
@@ -264,7 +261,13 @@ class DA3Backend:
         from ...lux_depth_v3.inference import DA3InferenceEngine
 
         # Build DA3Config
-        device_config = DeviceConfig(device=device)
+        use_coreml = bool(
+            self._config is not None
+            and getattr(self._config, "use_coreml_backend", False)
+            and CURRENT_PLATFORM is not None
+            and CURRENT_PLATFORM.is_apple_silicon
+        )
+        device_config = DeviceConfig(device=device, use_coreml=use_coreml)
         da3_config = DA3Config(
             model_variant=self._model_variant,
             device=device_config,

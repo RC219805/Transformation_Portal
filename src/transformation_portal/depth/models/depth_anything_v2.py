@@ -21,55 +21,111 @@ from typing import Any, Dict, Optional, Tuple, Union
 import numpy as np
 from PIL import Image
 
+from transformation_portal.core.ml_dependency_health import (
+    OPTIONAL_IMPORT_EXCEPTIONS,
+    detect_transformers_torch_runtime_issue,
+)
 from transformation_portal.core.security.model_lock import resolve_model_lock_revision
 
-try:
-    import torch
-
-    TORCH_AVAILABLE = True
-except ImportError:
-    TORCH_AVAILABLE = False
-    torch = None  # type: ignore
-    logging.warning("torch not available, install with: pip install torch")
-
-try:
-    from transformers import AutoImageProcessor, AutoModelForDepthEstimation, pipeline
-    from transformers.pipelines.depth_estimation import DepthEstimationPipeline
-
-    TRANSFORMERS_AVAILABLE = True
-except ImportError:
-    TRANSFORMERS_AVAILABLE = False
-    DepthEstimationPipeline = Any  # type: ignore
-    logging.warning("transformers not available, install with: pip install transformers")
-
-try:
-    import coremltools as ct
-
-    COREML_AVAILABLE = True
-except ImportError:
-    COREML_AVAILABLE = False
-    logging.warning("coremltools not available, install with: pip install coremltools")
-
-try:
-    from skimage.transform import resize
-
-    SKIMAGE_AVAILABLE = True
-except ImportError:
-    SKIMAGE_AVAILABLE = False
-    resize = None  # type: ignore
-    logging.warning("scikit-image not available, install with: pip install scikit-image")
-
-try:
-    import onnxruntime as ort
-
-    ONNX_AVAILABLE = True
-except ImportError:
-    ONNX_AVAILABLE = False
-    ort = None  # type: ignore
-    logging.warning("onnxruntime not available, install with: pip install onnxruntime")
+torch = None  # type: ignore[assignment]
+transformers_module = None  # type: ignore[assignment]
+AutoImageProcessor = None  # type: ignore[assignment]
+AutoModelForDepthEstimation = None  # type: ignore[assignment]
+pipeline = None  # type: ignore[assignment]
+DepthEstimationPipeline = Any  # type: ignore[assignment]
+ct = None  # type: ignore[assignment]
+resize = None  # type: ignore[assignment]
+ort = None  # type: ignore[assignment]
+TORCH_AVAILABLE = False
+TRANSFORMERS_AVAILABLE = False
+COREML_AVAILABLE = False
+SKIMAGE_AVAILABLE = False
+ONNX_AVAILABLE = False
+TRANSFORMERS_TORCH_BACKEND_ISSUE = None
+_OPTIONAL_IMPORTS_READY = False
 
 
 logger = logging.getLogger(__name__)
+
+
+def _ensure_optional_runtime_imports() -> None:
+    """Resolve optional ML/runtime dependencies lazily."""
+    global _OPTIONAL_IMPORTS_READY
+    global torch, transformers_module, AutoImageProcessor, AutoModelForDepthEstimation, pipeline, DepthEstimationPipeline
+    global ct, resize, ort
+    global TORCH_AVAILABLE, TRANSFORMERS_AVAILABLE, COREML_AVAILABLE, SKIMAGE_AVAILABLE, ONNX_AVAILABLE
+    global TRANSFORMERS_TORCH_BACKEND_ISSUE
+
+    if _OPTIONAL_IMPORTS_READY:
+        return
+    _OPTIONAL_IMPORTS_READY = True
+
+    try:
+        import torch as torch_module
+
+        torch = torch_module
+        TORCH_AVAILABLE = True
+    except OPTIONAL_IMPORT_EXCEPTIONS:
+        TORCH_AVAILABLE = False
+        torch = None  # type: ignore[assignment]
+        logging.warning("torch not available, install with: pip install torch")
+
+    try:
+        import transformers as transformers_pkg
+        from transformers import AutoImageProcessor as AutoImageProcessorClass
+        from transformers import AutoModelForDepthEstimation as AutoModelForDepthEstimationClass
+        from transformers import pipeline as transformers_pipeline
+        from transformers.pipelines.depth_estimation import DepthEstimationPipeline as DepthEstimationPipelineClass
+
+        transformers_module = transformers_pkg
+        AutoImageProcessor = AutoImageProcessorClass
+        AutoModelForDepthEstimation = AutoModelForDepthEstimationClass
+        pipeline = transformers_pipeline
+        DepthEstimationPipeline = DepthEstimationPipelineClass
+        TRANSFORMERS_AVAILABLE = True
+    except OPTIONAL_IMPORT_EXCEPTIONS:
+        TRANSFORMERS_AVAILABLE = False
+        transformers_module = None  # type: ignore[assignment]
+        AutoImageProcessor = None  # type: ignore[assignment]
+        AutoModelForDepthEstimation = None  # type: ignore[assignment]
+        pipeline = None  # type: ignore[assignment]
+        DepthEstimationPipeline = Any  # type: ignore[assignment]
+        logging.warning("transformers not available, install with: pip install transformers")
+
+    try:
+        import coremltools as coremltools_module
+
+        ct = coremltools_module
+        COREML_AVAILABLE = True
+    except ImportError:
+        COREML_AVAILABLE = False
+        ct = None  # type: ignore[assignment]
+        logging.warning("coremltools not available, install with: pip install coremltools")
+
+    try:
+        from skimage.transform import resize as resize_function
+
+        resize = resize_function
+        SKIMAGE_AVAILABLE = True
+    except ImportError:
+        SKIMAGE_AVAILABLE = False
+        resize = None  # type: ignore[assignment]
+        logging.warning("scikit-image not available, install with: pip install scikit-image")
+
+    try:
+        import onnxruntime as onnxruntime_module
+
+        ort = onnxruntime_module
+        ONNX_AVAILABLE = True
+    except ImportError:
+        ONNX_AVAILABLE = False
+        ort = None  # type: ignore[assignment]
+        logging.warning("onnxruntime not available, install with: pip install onnxruntime")
+
+    TRANSFORMERS_TORCH_BACKEND_ISSUE = detect_transformers_torch_runtime_issue(
+        torch if TORCH_AVAILABLE else None,
+        transformers_module if TRANSFORMERS_AVAILABLE else None,
+    )
 
 
 class ModelBackend(Enum):
@@ -156,6 +212,8 @@ class DepthAnythingV2Model:
             strict_model_lock: Enforce pinned revisions for remote model loads.
                 If None, uses ``TP_STRICT_MODEL_LOCK`` environment variable.
         """
+        _ensure_optional_runtime_imports()
+
         self.variant = variant
         self.precision = precision
         self.model_path = Path(model_path) if model_path else None
@@ -316,6 +374,8 @@ class DepthAnythingV2Model:
             raise ImportError("torch required for PyTorch backend. " "Install with: pip install torch")
         if not TRANSFORMERS_AVAILABLE:
             raise ImportError("transformers required for PyTorch backend. " "Install with: pip install transformers")
+        if TRANSFORMERS_TORCH_BACKEND_ISSUE:
+            raise RuntimeError(TRANSFORMERS_TORCH_BACKEND_ISSUE)
 
         try:
             # Use transformers pipeline for simplicity
@@ -338,7 +398,11 @@ class DepthAnythingV2Model:
             logger.error("Failed to load PyTorch model: %s", e)
             # Fallback: manual loading
             # Production deployments should pin specific model revisions
-            self.processor = AutoImageProcessor.from_pretrained(self.variant.value, revision=self.model_revision)  # nosec B615
+            self.processor = AutoImageProcessor.from_pretrained(  # nosec B615
+                self.variant.value,
+                revision=self.model_revision,
+                use_fast=False,
+            )
             self.model = AutoModelForDepthEstimation.from_pretrained(  # nosec B615
                 self.variant.value,
                 revision=self.model_revision,

@@ -13,6 +13,7 @@ from PIL import Image
 
 # Import availability helpers from conftest
 from tests.conftest import can_run_da3_compute
+from transformation_portal.core.platform_matrix import PlatformAccel, PlatformISA, PlatformMatrix, PlatformOS
 from transformation_portal.depth.backends.da3 import DA3Backend
 from transformation_portal.depth.backends.protocol import DepthResult, LicenseType
 from transformation_portal.depth.backends.registry import DepthBackendRegistry
@@ -265,3 +266,58 @@ def test_da3_backend_smoke_mps_no_hidden_cuda(monkeypatch):
 
     assert result.device == "mps"
     assert result.depth_map.shape == (64, 64)
+
+
+def test_da3_backend_passes_coreml_opt_in_on_apple_silicon(monkeypatch):
+    """Apple Silicon should forward the CoreML opt-in into the DA3 engine config."""
+    import transformation_portal.depth.backends.da3 as da3_module
+    import transformation_portal.lux_depth_v3.inference as inference_module
+    from transformation_portal.lux_depth_v3.config import EnhanceConfig
+
+    captured = {}
+
+    class FakeEngine:
+        def __init__(self, config, commercial_use, validate_license_strict):
+            captured["config"] = config
+            captured["commercial_use"] = commercial_use
+            captured["validate_license_strict"] = validate_license_strict
+
+    monkeypatch.setattr(
+        da3_module,
+        "CURRENT_PLATFORM",
+        PlatformMatrix(PlatformOS.DARWIN, PlatformISA.ARM64, PlatformAccel.MPS),
+    )
+    monkeypatch.setattr(inference_module, "DA3InferenceEngine", FakeEngine)
+
+    backend = DA3Backend(EnhanceConfig(depth_device="cpu", use_coreml_backend=True))
+    backend._load_engine("cpu")
+
+    assert captured["config"].device.use_coreml is True
+    assert captured["commercial_use"] is True
+    assert captured["validate_license_strict"] is False
+
+
+def test_da3_backend_ignores_coreml_opt_in_off_apple_silicon(monkeypatch):
+    """Intel/Linux lanes should not forward the Apple-only CoreML opt-in."""
+    import transformation_portal.depth.backends.da3 as da3_module
+    import transformation_portal.lux_depth_v3.inference as inference_module
+    from transformation_portal.lux_depth_v3.config import EnhanceConfig
+
+    captured = {}
+
+    class FakeEngine:
+        def __init__(self, config, commercial_use, validate_license_strict):
+            del commercial_use, validate_license_strict
+            captured["config"] = config
+
+    monkeypatch.setattr(
+        da3_module,
+        "CURRENT_PLATFORM",
+        PlatformMatrix(PlatformOS.DARWIN, PlatformISA.X86_64, PlatformAccel.CPU),
+    )
+    monkeypatch.setattr(inference_module, "DA3InferenceEngine", FakeEngine)
+
+    backend = DA3Backend(EnhanceConfig(depth_device="cpu", use_coreml_backend=True))
+    backend._load_engine("cpu")
+
+    assert captured["config"].device.use_coreml is False

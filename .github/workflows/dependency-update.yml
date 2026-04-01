@@ -86,7 +86,8 @@ jobs:
             requirements/all.txt
             requirements/security.txt
             requirements/tools-archive.txt
-            requirements/ml-core-darwin.txt
+            requirements/ml-core-darwin-x86_64.txt
+            requirements/ml-core-darwin-arm64.txt
             requirements/ml-core-linux.txt
           )
 
@@ -127,12 +128,14 @@ jobs:
             - `requirements/security.txt` - Governed security scanning toolchain
             - `requirements/tools-archive.txt` - Archive reporting toolchain
             - `requirements/all.txt` - Combined requirements
-            - `requirements/ml-core-darwin.txt` - macOS ML core contract
+            - `requirements/ml-core-darwin-x86_64.txt` - macOS Intel ML core contract
+            - `requirements/ml-core-darwin-arm64.txt` - macOS Apple Silicon ML core contract
             - `requirements/ml-core-linux.txt` - Linux ML core contract
 
             ### 🎯 ML Layer Strategy
             The checked-in ML contract is limited to platform-specific core lockfiles:
-            - **ml-core-darwin.txt**: macOS ML baseline
+            - **ml-core-darwin-x86_64.txt**: macOS Intel conservative ML baseline
+            - **ml-core-darwin-arm64.txt**: macOS Apple Silicon ML baseline
             - **ml-core-linux.txt**: Linux ML baseline
             - **ml-sam2.in** remains scripted-only and is not a standard checked-in lockfile
 

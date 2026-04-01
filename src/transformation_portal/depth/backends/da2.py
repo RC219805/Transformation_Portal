@@ -13,6 +13,11 @@ from typing import TYPE_CHECKING, Optional, Union
 import numpy as np
 from PIL import Image
 
+from ...core.ml_dependency_health import (
+    OPTIONAL_IMPORT_EXCEPTIONS,
+    _installed_version,
+    detect_transformers_torch_version_issue,
+)
 from .protocol import DepthResult, LicenseType
 
 if TYPE_CHECKING:
@@ -40,15 +45,19 @@ class DA2Backend:
             requested = getattr(config, "depth_device", None)
             if isinstance(requested, str):
                 requested = requested.lower()
+        if requested == "cpu":
+            return "cpu"
+        if requested == "cuda":
+            logger.warning(
+                "Requested DA2 device=cuda" " but DA2 adapter only supports" " cpu/mps; falling back to cpu.",
+            )
+            return "cpu"
+        if requested is None:
+            return "cpu"
 
         try:
             import torch
 
-            if requested == "cuda":
-                logger.warning(
-                    "Requested DA2 device=cuda" " but DA2 adapter only supports" " cpu/mps; falling back to cpu.",
-                )
-                return "cpu"
             if requested == "mps":
                 if torch.backends.mps.is_available():
                     return "mps"
@@ -61,10 +70,10 @@ class DA2Backend:
 
             if torch.backends.mps.is_available():
                 return "mps"
-        except ImportError:
+        except OPTIONAL_IMPORT_EXCEPTIONS:
             logger.debug("PyTorch not installed; DA2 defaults to CPU.")
 
-        if requested in {"cpu", "mps", "cuda"}:
+        if requested in {"mps", "cuda"}:
             return "cpu"
         return "cpu"
 
@@ -74,20 +83,22 @@ class DA2Backend:
         return ["transformers"]
 
     def ensure_available(self) -> None:
-        """Ensure DA2 dependencies are importable."""
-        try:
-            import transformers  # noqa: F401
-        except ImportError as exc:
+        """Ensure DA2 dependencies are present and version-compatible."""
+        transformers_version = _installed_version("transformers")
+        if transformers_version is None:
             raise ImportError(
                 "transformers package not installed" " for DA2 backend.",
-            ) from exc
+            )
 
-        try:
-            import torch  # noqa: F401
-        except ImportError as exc:
+        torch_version = _installed_version("torch")
+        if torch_version is None:
             raise ImportError(
                 "torch package not installed" " for DA2 backend.",
-            ) from exc
+            )
+
+        runtime_issue = detect_transformers_torch_version_issue(torch_version, transformers_version)
+        if runtime_issue:
+            raise ImportError(runtime_issue)
 
     def _load_model(self) -> None:
         if self._model is not None:
