@@ -1,8 +1,8 @@
 # PBR Material Generation - Stable Preset
 #
-# Status: STABLE v5.0.0
+# Status: STABLE v5.1.0
 # Phase: 5 (Material Classification & PBR Integration)
-# Last Updated: 2026-02-18
+# Last Updated: 2026-04-01
 #
 # Purpose:
 #   Production-ready PBR texture generation for luxury real estate rendering.
@@ -40,8 +40,9 @@
 #   - Value ranges validated (see contracts.py)
 
 name: "PBR Material Generation (Stable)"
-version: "5.0.0"
+version: "5.1.0"
 tier: "stable"  # Production-ready
+preset_family: "materials_pbr"  # Explicit schema marker for top-level materials preset forms
 
 # Backend Configuration
 backend:

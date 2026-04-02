@@ -20,10 +20,14 @@ from transformation_portal.attestation.materials_policy import (
     find_unknown_material_backend_schema_locations,
 )
 from transformation_portal.attestation.materials_policy import looks_like_material_preset as _looks_like_material_preset
+from transformation_portal.attestation.materials_policy import (
+    material_preset_family_error,
+)
 from transformation_portal.attestation.materials_policy import normalize_material_backend as _normalize_material_backend
 from transformation_portal.attestation.model_lock_manifest import load_model_lock_manifest as _shared_load_model_lock_manifest
 from transformation_portal.attestation.model_lock_manifest import model_lock_manifest_path as _shared_model_lock_manifest_path
 from transformation_portal.attestation.model_lock_manifest import repo_root as _shared_repo_root
+from transformation_portal.preset_governance import is_placeholder_string
 
 
 class LicenseRestrictionError(Exception):
@@ -43,7 +47,6 @@ RESEARCH_ONLY_MATERIAL_BACKENDS = frozenset({"nvdiffrec", "material_gan"})
 RESEARCH_ALLOWED_MATERIAL_TIERS = frozenset({"dev", "experimental", "research", "apex_research", "apex_research_ultra"})
 UNATTESTED_ALLOWED_MATERIAL_TIERS = frozenset({"dev", "experimental", "apex_research_ultra"})
 FLOATING_REVISIONS = frozenset({"main", "master", "latest", "head", "tip", "default"})
-PLACEHOLDER_MARKERS = ("NEEDS_VERIFICATION", "PLACEHOLDER", "PENDING", "TODO", "TBD", "UPDATE_WHEN")
 _HEX40_RE = re.compile(r"^[0-9a-f]{40}$")
 _HEX64_RE = re.compile(r"^[0-9a-f]{64}$")
 _VERIFY_RUNTIME_BYTES_ENV_VAR = "TP_VERIFY_MATERIAL_RUNTIME_BYTES"
@@ -155,15 +158,7 @@ def validate_non_commercial_preset(preset_dict: Dict[str, Any]) -> bool:
 
 def _looks_placeholder(value: Any) -> bool:
     """Return True when a preset field is clearly unresolved."""
-    if not isinstance(value, str):
-        return False
-
-    normalized = value.strip()
-    if not normalized:
-        return True
-
-    upper = normalized.upper()
-    return any(marker in upper for marker in PLACEHOLDER_MARKERS)
+    return is_placeholder_string(value, treat_empty_as_placeholder=True)
 
 
 def _has_pinned_repo_revision(model_dict: Dict[str, Any]) -> bool:
@@ -564,6 +559,10 @@ def validate_materials_preset(
     """Validate materials backend tier, licensing, and attestation policy."""
     if not isinstance(preset_dict, dict):
         raise ValueError(f"Preset must be a mapping (dict), got {type(preset_dict).__name__}.")
+
+    family_error = material_preset_family_error(preset_dict, preset_path)
+    if family_error is not None:
+        raise LicenseRestrictionError(family_error)
 
     unknown_paths = find_unknown_material_backend_schema_locations(preset_dict, preset_path)
     if unknown_paths:

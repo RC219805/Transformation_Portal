@@ -1,6 +1,6 @@
 # Phase 5 PBR Generation Performance Baselines
 
-**Version:** 5.0.0 (Stable)
+**Version:** 5.1.0 (Stable preset)
 **Date:** 2026-02-18
 **Hardware:** Apple M3 Max (16-core CPU, 40-core GPU, 128GB RAM)
 **Backend:** Heuristic v5.0.0
@@ -156,7 +156,7 @@ Value ranges: All correct
 
 ## Quality Firewall Compliance
 
-### Thresholds (Stable v5.0.0)
+### Thresholds (Stable v5.1.0)
 | Metric | Threshold | Actual | Status |
 |--------|-----------|--------|--------|
 | **Performance** | <5 s/MP | 4.28 s/MP | ✅ Pass |

@@ -227,7 +227,7 @@ lint-parity:
 	@echo "Running CI-aligned lint parity..."
 	@./scripts/setup/run_lint_tool.sh parity
 
-ci: lint check-json-serialization check-yaml-governance check-piptools-cache check-ci-sync test-fast test-orchestrator-contract
+ci: lint check-json-serialization check-yaml-governance check-piptools-cache check-requirements-lock-contract check-ci-sync test-fast test-orchestrator-contract
 	@echo "✅ Local CI checks completed successfully."
 
 # Comprehensive CI simulation
@@ -290,6 +290,10 @@ check-yaml-governance:
 check-piptools-cache:
 	@echo "Checking pip-tools cache guardrails..."
 	@"$(PY)" scripts/validation/check_piptools_cache_tracked.py
+
+check-requirements-lock-contract:
+	@echo "Checking requirements lock contract..."
+	@"$(PY)" scripts/validation/check_requirements_lock_contract.py
 
 check-test-markers:
 	@echo "Auditing test marker coverage (ADR-044)..."

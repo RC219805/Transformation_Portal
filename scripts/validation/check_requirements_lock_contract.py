@@ -96,6 +96,8 @@ DARWIN_X86_NUMPY_GUARD_PATTERN = re.compile(r"^numpy\s*<\s*2(?:\.0+)?(?:\s|$)", 
 DARWIN_X86_TRANSFORMERS_GUARD_PATTERN = re.compile(r"^transformers[^#\n]*<\s*5(?:\.0+)?(?:\s|$)", re.IGNORECASE)
 DARWIN_ARM64_COREML_PATTERN = re.compile(r"^coremltools\b[^\n]*$", re.IGNORECASE)
 LINUX_TRANSFORMERS_GUARD_PATTERN = re.compile(r"^transformers[^#\n]*<\s*5(?:\.0+)?(?:\s|$)", re.IGNORECASE)
+DARWIN_LOCKFILE_FORBIDDEN_PACKAGES = ("triton",)
+DARWIN_LOCKFILE_FORBIDDEN_PREFIXES = ("nvidia-",)
 # Note: [^\n]* (not [^#\n]*) intentionally matches lines that carry inline comments,
 # because ml-core-darwin-arm64.in declares coremltools with a trailing # comment.
 # The x86 guard patterns check stripped non-comment lines, so they use [^#\n]*.
@@ -242,6 +244,27 @@ def _read_pinned_packages(lock_path: Path) -> dict[str, str]:
         if match:
             packages[_normalize_package_name(match.group(1))] = match.group(2)
     return packages
+
+
+def validate_darwin_lock_purity() -> list[str]:
+    """Fail if Darwin lockfiles contain Linux/CUDA-only packages."""
+    errors: list[str] = []
+
+    for lock_name in ("ml-core-darwin-x86_64.txt", "ml-core-darwin-arm64.txt"):
+        lock_path = REQUIREMENTS_DIR / lock_name
+        if not lock_path.is_file():
+            continue
+
+        for package_name in sorted(_read_pinned_packages(lock_path)):
+            if package_name in DARWIN_LOCKFILE_FORBIDDEN_PACKAGES or any(
+                package_name.startswith(prefix) for prefix in DARWIN_LOCKFILE_FORBIDDEN_PREFIXES
+            ):
+                errors.append(
+                    f"{lock_path} contains forbidden Darwin package {package_name!r}. "
+                    "Darwin platform-core lockfiles must not contain Linux/CUDA-only packages."
+                )
+
+    return errors
 
 
 def _normalized_lock_body(lock_path: Path) -> tuple[str, ...]:
@@ -402,6 +425,7 @@ def main() -> int:
     errors.extend(validate_darwin_input_guards())
     errors.extend(validate_linux_input_guards())
     errors.extend(validate_platform_lock_divergence())
+    errors.extend(validate_darwin_lock_purity())
     errors.extend(validate_platform_lock_runtime_compatibility())
 
     if errors:

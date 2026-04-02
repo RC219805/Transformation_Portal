@@ -316,6 +316,11 @@ jobs:
             exit "$status"
           fi
 
+      - name: Validate requirements lock contract
+        run: |
+          set -euo pipefail
+          python scripts/validation/check_requirements_lock_contract.py
+
   lint:
     needs: [preflight]
     if: needs.preflight.outputs.run_full == 'true'

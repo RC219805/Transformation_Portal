@@ -79,6 +79,18 @@ def test_ready_keeps_non_enveloped_shape(client: TestClient) -> None:
     assert "schema" not in body
 
 
+def test_portal_bootstrap_reports_direct_debug_mode(client: TestClient) -> None:
+    response = client.get("/portal/bootstrap")
+    assert response.status_code == 200
+    assert response.headers["Cache-Control"] == "no-store"
+    body = response.json()
+    assert body["authMode"] == "direct_debug"
+    assert body["csrfToken"] is None
+    assert body["actor"] is None
+    assert body["features"]["apiKeyInput"] is True
+    assert body["features"]["directDebug"] is True
+
+
 def test_presets_contract_for_lux_depth_pipeline(client: TestClient) -> None:
     response = client.get("/v1/presets", params={"pipeline": "lux-depth-v3"})
     body = response.json()
