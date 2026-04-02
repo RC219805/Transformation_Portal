@@ -18,6 +18,7 @@ from PIL import Image
 from ...core.ml_dependency_health import (
     _installed_version,
     detect_transformers_torch_version_issue,
+    ensure_dependency_importable,
 )
 from ...core.platform_matrix import CURRENT_PLATFORM
 from .protocol import DepthResult, LicenseType
@@ -125,6 +126,9 @@ class DA3Backend:
                 "  pip install torch\n\n"
                 "See: https://pytorch.org/get-started/locally/"
             )
+
+        ensure_dependency_importable("transformers")
+        ensure_dependency_importable("torch")
 
         runtime_issue = detect_transformers_torch_version_issue(torch_version, transformers_version)
         if runtime_issue:

@@ -17,6 +17,7 @@ from ...core.ml_dependency_health import (
     OPTIONAL_IMPORT_EXCEPTIONS,
     _installed_version,
     detect_transformers_torch_version_issue,
+    ensure_dependency_importable,
 )
 from .protocol import DepthResult, LicenseType
 
@@ -95,6 +96,9 @@ class DA2Backend:
             raise ImportError(
                 "torch package not installed" " for DA2 backend.",
             )
+
+        ensure_dependency_importable("transformers")
+        ensure_dependency_importable("torch")
 
         runtime_issue = detect_transformers_torch_version_issue(torch_version, transformers_version)
         if runtime_issue:

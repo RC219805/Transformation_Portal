@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib
 import platform
 import sys
 from importlib.metadata import PackageNotFoundError, version
@@ -45,6 +46,23 @@ def _installed_version(distribution_name: str) -> Optional[str]:
         if module_version:
             return str(module_version)
         return None
+
+
+def ensure_dependency_importable(distribution_name: str) -> Any:
+    """Import a dependency module and normalize import failures to ImportError.
+
+    This is stricter than checking wheel metadata alone: backend availability
+    should reject environments where the distribution is present but the module
+    cannot be imported in the current interpreter.
+    """
+    module_name = distribution_name.strip().lower().replace("-", "_")
+    if module_name in sys.modules and sys.modules[module_name] is None:
+        raise ImportError(f"{distribution_name} package is installed but not importable in this Python process.")
+
+    try:
+        return importlib.import_module(module_name)
+    except OPTIONAL_IMPORT_EXCEPTIONS as exc:
+        raise ImportError(f"{distribution_name} package is installed but not importable in this Python process.") from exc
 
 
 def _is_darwin_x86_64_runtime() -> bool:
