@@ -2,7 +2,7 @@
 #
 # Status: CANARY v5.0.0-canary (Pre-production testing)
 # Phase: 5B (PBRFusion Integration)
-# Last Updated: 2026-02-18
+# Last Updated: 2026-04-01
 #
 # Purpose:
 #   Pre-production PBR texture generation with optional GPU-accelerated
@@ -40,11 +40,17 @@
 #   ✅ Optional ML dependency (graceful fallback)
 #   ✅ Canary tier (pre-production testing)
 #   ✅ Clear activation requirements
-#   ✅ No stable preset schema changes required
+#   ✅ Stable preset schema parity maintained via explicit preset family markers
 
 name: "PBR Material Generation (Canary + PBRFusion)"
 version: "5.0.0-canary"
 tier: "canary"  # Pre-production testing
+preset_family: "materials_pbr"  # Explicit schema marker for top-level materials preset forms
+
+governance:
+  materials:
+    runtime_attestation_phase: "execution"
+    execution_policy: "isolated_worker_required"
 
 # Backend Configuration
 backend:

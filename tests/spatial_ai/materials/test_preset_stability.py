@@ -15,12 +15,12 @@ pytestmark = pytest.mark.unit
 def test_stable_preset_immutable():
     """Verify stable preset hasn't changed without version bump.
 
-    This test enforces that config/presets/material_pbr.yaml (stable v5.0.0)
+    This test enforces that config/presets/material_pbr.yaml (stable v5.1.0)
     remains unchanged. If this test fails:
 
     1. If change is intentional:
-       - Bump version in preset (e.g., v5.0.0 → v5.1.0)
-       - Update EXPECTED_HASH_V5_0_0 below
+       - Bump version in preset (e.g., v5.1.0 → v5.2.0)
+       - Update EXPECTED_HASH_V5_1_0 below
        - Document change in CHANGELOG.md
        - Update migration guide
 
@@ -30,7 +30,7 @@ def test_stable_preset_immutable():
 
     Rationale: "Stable" must be enforceable, not semantic.
     """
-    EXPECTED_HASH_V5_0_0 = "149082a43e215c0c4040d079fe9c5bff909e8bdcb5f833ee0fec2153a56cabf2"
+    EXPECTED_HASH_V5_1_0 = "bbdf567a0113d776a612a53069b55ca994b8b9a70aa869b2d988b5274575b946"
 
     preset_path = Path("config/presets/material_pbr.yaml")
     assert preset_path.exists(), "Stable preset missing"
@@ -38,14 +38,14 @@ def test_stable_preset_immutable():
     content = preset_path.read_bytes()
     actual_hash = hashlib.sha256(content).hexdigest()
 
-    assert actual_hash == EXPECTED_HASH_V5_0_0, (
+    assert actual_hash == EXPECTED_HASH_V5_1_0, (
         f"Stable preset (material_pbr.yaml) has been modified!\n"
-        f"  Expected: {EXPECTED_HASH_V5_0_0}\n"
+        f"  Expected: {EXPECTED_HASH_V5_1_0}\n"
         f"  Actual:   {actual_hash}\n"
         f"\n"
         f"If this change is intentional:\n"
-        f"  1. Bump version in preset YAML (version: 5.1.0)\n"
-        f"  2. Update EXPECTED_HASH_V5_0_0 in this test\n"
+        f"  1. Bump version in preset YAML (version: 5.2.0)\n"
+        f"  2. Update EXPECTED_HASH_V5_1_0 in this test\n"
         f"  3. Document in CHANGELOG.md and mention this in PR description\n"
         f"  4. Update docs/guides/MATERIAL_PBR_MIGRATION.md\n"
         f"\n"
@@ -62,12 +62,13 @@ def test_stable_preset_version_declared():
         preset = yaml.safe_load(f)
 
     assert "version" in preset, "Stable preset must declare version"
-    assert preset["version"] == "5.0.0", (
-        f"Version mismatch: expected 5.0.0, got {preset['version']}\n" f"Update test after version bump"
+    assert preset["version"] == "5.1.0", (
+        f"Version mismatch: expected 5.1.0, got {preset['version']}\n" f"Update test after version bump"
     )
 
     assert "tier" in preset, "Stable preset must declare tier"
     assert preset["tier"] == "stable", f"Tier mismatch: expected 'stable', got {preset['tier']}"
+    assert preset["preset_family"] == "materials_pbr", "Stable preset must declare explicit materials preset family"
 
 
 def test_stable_preset_backend_locked():
@@ -103,6 +104,7 @@ def test_canary_preset_allows_optional_backends():
         preset = yaml.safe_load(f)
 
     assert preset["tier"] == "canary", "Canary preset must be marked as tier=canary"
+    assert preset["preset_family"] == "materials_pbr", "Canary preset must declare explicit materials preset family"
 
     # Canary can use any backend (pbr_fusion, heuristic, etc.)
     backend_type = preset["backend"].get("type")
@@ -124,7 +126,7 @@ def test_preset_hierarchy_documented():
 
     # Check for documentation keywords
     assert "stable" in content.lower(), "Preset should document tier"
-    assert "v5.0.0" in content or "5.0.0" in content, "Preset should document version"
+    assert "v5.1.0" in content or "5.1.0" in content, "Preset should document version"
 
     # Verify YAML structure loads correctly
     preset = yaml.safe_load(content)
@@ -162,5 +164,6 @@ def test_experimental_material_pbr_preset_declares_governance_opt_ins():
 
     assert preset["governance"]["materials"]["allow_research_materials"] is True
     assert preset["governance"]["materials"]["allow_unattested_materials"] is True
+    assert preset["preset_family"] == "materials_pbr"
     assert preset["model"]["repo_id"] is None
     assert preset["model"]["revision"] is None
