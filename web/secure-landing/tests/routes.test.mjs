@@ -28,9 +28,19 @@ const TEST_CF_ACCESS_KID = "tp-frontdoor-key";
 const TEST_CF_ACCESS_KEYS = generateKeyPairSync("rsa", {
   modulusLength: 2048
 });
+const TEST_CF_ACCESS_ROTATED_KEYS = generateKeyPairSync("rsa", {
+  modulusLength: 2048
+});
 const TEST_CF_ACCESS_PUBLIC_JWK = {
   ...TEST_CF_ACCESS_KEYS.publicKey.export({ format: "jwk" }),
   kid: TEST_CF_ACCESS_KID,
+  alg: "RS256",
+  use: "sig"
+};
+const TEST_CF_ACCESS_ROTATED_KID = "tp-frontdoor-key-rotated";
+const TEST_CF_ACCESS_ROTATED_PUBLIC_JWK = {
+  ...TEST_CF_ACCESS_ROTATED_KEYS.publicKey.export({ format: "jwk" }),
+  kid: TEST_CF_ACCESS_ROTATED_KID,
   alg: "RS256",
   use: "sig"
 };
@@ -111,9 +121,11 @@ function buildRequest(url, options = {}) {
 
 function createAccessJwt(overrides = {}) {
   const now = Math.floor(Date.now() / 1000);
+  const kid = overrides.kid ?? TEST_CF_ACCESS_KID;
+  const privateKey = overrides.privateKey ?? TEST_CF_ACCESS_KEYS.privateKey;
   const header = {
     alg: "RS256",
-    kid: TEST_CF_ACCESS_KID,
+    kid,
     typ: "JWT"
   };
   const payload = {
@@ -132,27 +144,38 @@ function createAccessJwt(overrides = {}) {
   const encodedSignature = createSign("RSA-SHA256")
     .update(signingInput)
     .end()
-    .sign(TEST_CF_ACCESS_KEYS.privateKey)
+    .sign(privateKey)
     .toString("base64url");
 
   return `${signingInput}.${encodedSignature}`;
 }
 
-function withMockedAccessCerts() {
+function withMockedAccessCerts(fallbackFetch = null) {
   const originalFetch = global.fetch;
-  global.fetch = async (url) => {
-    assert.equal(String(url), `${TEST_CF_ACCESS_TEAM_DOMAIN}/cdn-cgi/access/certs`);
-    return Response.json(
-      {
-        keys: [TEST_CF_ACCESS_PUBLIC_JWK]
-      },
-      {
-        status: 200,
-        headers: {
-          "content-type": "application/json"
+  global.fetch = async (url, init) => {
+    if (String(url) === `${TEST_CF_ACCESS_TEAM_DOMAIN}/cdn-cgi/access/certs`) {
+      return Response.json(
+        {
+          keys: [TEST_CF_ACCESS_PUBLIC_JWK]
+        },
+        {
+          status: 200,
+          headers: {
+            "content-type": "application/json"
+          }
         }
-      }
-    );
+      );
+    }
+
+    if (fallbackFetch) {
+      return fallbackFetch(url, init);
+    }
+
+    if (typeof originalFetch === "function") {
+      return originalFetch(url, init);
+    }
+
+    throw new Error(`Unexpected fetch to ${String(url)}`);
   };
 
   return () => {
@@ -604,6 +627,50 @@ test("managed bootstrap returns actor metadata and CSRF for authenticated sessio
   try {
     const sessions = await importFresh("../lib/sessions.js");
     const { GET } = await importFresh("../app/portal/bootstrap/route.js");
+    const restoreFetch = withMockedAccessCerts();
+
+    try {
+      const authenticatedSession = sessions.rotateAuthenticatedSession(
+        sessions.createAnonymousSession(),
+        {
+          username: "admin",
+          accessEmail: "admin@example.com",
+          role: "admin"
+        }
+      );
+
+      const request = buildRequest("https://portal.example.com/portal/bootstrap", {
+        method: "GET",
+        headers: new Headers({
+          cookie: `__Host-tp_session=${authenticatedSession.id}`,
+          "Cf-Access-Jwt-Assertion": createAccessJwt()
+        })
+      });
+
+      const response = await GET(request);
+      const body = await response.json();
+
+      assert.equal(response.status, 200);
+      assert.equal(body.authMode, "managed");
+      assert.equal(body.actor.username, "admin");
+      assert.equal(body.actor.accessEmail, "admin@example.com");
+      assert.equal(body.features.apiKeyInput, false);
+      assert.equal(body.features.directDebug, false);
+      assert.equal(body.csrfToken, authenticatedSession.csrfToken);
+    } finally {
+      restoreFetch();
+    }
+  } finally {
+    env.cleanup();
+  }
+});
+
+test("managed bootstrap rejects authenticated sessions without a current Access JWT", async () => {
+  const env = withTempEnvironment();
+
+  try {
+    const sessions = await importFresh("../lib/sessions.js");
+    const { GET } = await importFresh("../app/portal/bootstrap/route.js");
 
     const authenticatedSession = sessions.rotateAuthenticatedSession(
       sessions.createAnonymousSession(),
@@ -624,13 +691,10 @@ test("managed bootstrap returns actor metadata and CSRF for authenticated sessio
     const response = await GET(request);
     const body = await response.json();
 
-    assert.equal(response.status, 200);
-    assert.equal(body.authMode, "managed");
-    assert.equal(body.actor.username, "admin");
-    assert.equal(body.actor.accessEmail, "admin@example.com");
-    assert.equal(body.features.apiKeyInput, false);
-    assert.equal(body.features.directDebug, false);
-    assert.equal(body.csrfToken, authenticatedSession.csrfToken);
+    assert.equal(response.status, 401);
+    assert.equal(body.error, "authentication required");
+    assert.match(response.headers.get("set-cookie") || "", /__Host-tp_session=/);
+    assert.equal(sessions.getSessionById(authenticatedSession.id, { touch: false }), null);
   } finally {
     env.cleanup();
   }
@@ -651,16 +715,17 @@ test("portal returns 503 with no-store when the FastAPI UI origin is unavailable
       }
     );
 
-    const originalFetch = global.fetch;
-    global.fetch = async () => {
+    const restoreFetch = withMockedAccessCerts(async (url) => {
+      assert.equal(String(url), "http://127.0.0.1:8000/");
       throw new Error("connection refused");
-    };
+    });
 
     try {
       const request = buildRequest("https://portal.example.com/portal", {
         method: "GET",
         headers: new Headers({
-          cookie: `__Host-tp_session=${authenticatedSession.id}`
+          cookie: `__Host-tp_session=${authenticatedSession.id}`,
+          "Cf-Access-Jwt-Assertion": createAccessJwt()
         })
       });
 
@@ -670,8 +735,41 @@ test("portal returns 503 with no-store when the FastAPI UI origin is unavailable
       assert.equal(response.headers.get("cache-control"), "no-store");
       assert.equal(await response.text(), "Upstream service unavailable");
     } finally {
-      global.fetch = originalFetch;
+      restoreFetch();
     }
+  } finally {
+    env.cleanup();
+  }
+});
+
+test("portal redirects to login and clears the session when Access verification is missing", async () => {
+  const env = withTempEnvironment();
+
+  try {
+    const sessions = await importFresh("../lib/sessions.js");
+    const { GET } = await importFresh("../app/portal/route.js");
+    const authenticatedSession = sessions.rotateAuthenticatedSession(
+      sessions.createAnonymousSession(),
+      {
+        username: "admin",
+        accessEmail: "admin@example.com",
+        role: "admin"
+      }
+    );
+
+    const request = buildRequest("https://portal.example.com/portal", {
+      method: "GET",
+      headers: new Headers({
+        cookie: `__Host-tp_session=${authenticatedSession.id}`
+      })
+    });
+
+    const response = await GET(request);
+
+    assert.equal(response.status, 302);
+    assert.equal(response.headers.get("location"), "https://portal.example.com/login");
+    assert.match(response.headers.get("set-cookie") || "", /__Host-tp_session=/);
+    assert.equal(sessions.getSessionById(authenticatedSession.id, { touch: false }), null);
   } finally {
     env.cleanup();
   }
@@ -696,7 +794,8 @@ test("v1 POST rejects requests missing valid same-origin CSRF protections", asyn
     const request = buildRequest("https://portal.example.com/v1/jobs", {
       method: "POST",
       headers: new Headers({
-        cookie: `__Host-tp_session=${authenticatedSession.id}`
+        cookie: `__Host-tp_session=${authenticatedSession.id}`,
+        "Cf-Access-Jwt-Assertion": createAccessJwt()
       }),
       body: JSON.stringify({ pipeline: "lux-depth-v3" })
     });
@@ -708,6 +807,43 @@ test("v1 POST rejects requests missing valid same-origin CSRF protections", asyn
 
     assert.equal(response.status, 403);
     assert.equal(body.error.code, "INVALID_CSRF");
+  } finally {
+    env.cleanup();
+  }
+});
+
+test("v1 rejects authenticated sessions without a current Access JWT", async () => {
+  const env = withTempEnvironment();
+
+  try {
+    const sessions = await importFresh("../lib/sessions.js");
+    const route = await importFresh("../app/v1/[...path]/route.js");
+
+    const authenticatedSession = sessions.rotateAuthenticatedSession(
+      sessions.createAnonymousSession(),
+      {
+        username: "admin",
+        accessEmail: "admin@example.com",
+        role: "admin"
+      }
+    );
+
+    const request = buildRequest("https://portal.example.com/v1/jobs", {
+      method: "GET",
+      headers: new Headers({
+        cookie: `__Host-tp_session=${authenticatedSession.id}`
+      })
+    });
+
+    const response = await route.GET(request, {
+      params: { path: ["jobs"] }
+    });
+    const body = await response.json();
+
+    assert.equal(response.status, 401);
+    assert.equal(body.error.code, "UNAUTHORIZED");
+    assert.match(response.headers.get("set-cookie") || "", /__Host-tp_session=/);
+    assert.equal(sessions.getSessionById(authenticatedSession.id, { touch: false }), null);
   } finally {
     env.cleanup();
   }
@@ -737,8 +873,7 @@ test("v1 SSE proxy preserves event-stream framing while injecting backend auth s
       'event: done\ndata: {"ok":true}\n\n'
     ].join("");
 
-    const originalFetch = global.fetch;
-    global.fetch = async (url, init) => {
+    const restoreFetch = withMockedAccessCerts(async (url, init) => {
       assert.equal(String(url), "http://127.0.0.1:8000/v1/jobs/job-123/events");
       assert.equal(init.method, "GET");
       assert.equal(init.headers.get("Authorization"), "Bearer backend-secret");
@@ -759,7 +894,7 @@ test("v1 SSE proxy preserves event-stream framing while injecting backend auth s
           "cache-control": "private"
         }
       });
-    };
+    });
 
     try {
       const request = buildRequest("https://portal.example.com/v1/jobs/job-123/events", {
@@ -767,7 +902,8 @@ test("v1 SSE proxy preserves event-stream framing while injecting backend auth s
         headers: new Headers({
           "cf-connecting-ip": "203.0.113.10",
           cookie: `__Host-tp_session=${authenticatedSession.id}`,
-          accept: "text/event-stream"
+          accept: "text/event-stream",
+          "Cf-Access-Jwt-Assertion": createAccessJwt()
         })
       });
 
@@ -780,10 +916,46 @@ test("v1 SSE proxy preserves event-stream framing while injecting backend auth s
       assert.equal(response.headers.get("cache-control"), "no-store, no-transform");
       assert.equal(await response.text(), upstreamEvents);
     } finally {
-      global.fetch = originalFetch;
+      restoreFetch();
     }
   } finally {
     env.cleanup();
+  }
+});
+
+test("Access JWT verification refreshes certs on unknown kid after rotation", async () => {
+  const { verifyAccessJwt } = await importFresh("../lib/access-jwt.js");
+  const originalFetch = global.fetch;
+  let fetchCount = 0;
+
+  global.fetch = async (url) => {
+    assert.equal(String(url), `${TEST_CF_ACCESS_TEAM_DOMAIN}/cdn-cgi/access/certs`);
+    fetchCount += 1;
+    const keys = fetchCount === 1 ? [TEST_CF_ACCESS_PUBLIC_JWK] : [TEST_CF_ACCESS_ROTATED_PUBLIC_JWK];
+    return Response.json({ keys }, { status: 200 });
+  };
+
+  try {
+    const initial = await verifyAccessJwt(createAccessJwt(), {
+      teamDomain: TEST_CF_ACCESS_TEAM_DOMAIN,
+      audience: TEST_CF_ACCESS_AUD
+    });
+    const rotated = await verifyAccessJwt(
+      createAccessJwt({
+        kid: TEST_CF_ACCESS_ROTATED_KID,
+        privateKey: TEST_CF_ACCESS_ROTATED_KEYS.privateKey
+      }),
+      {
+        teamDomain: TEST_CF_ACCESS_TEAM_DOMAIN,
+        audience: TEST_CF_ACCESS_AUD
+      }
+    );
+
+    assert.equal(initial.accessEmail, "admin@example.com");
+    assert.equal(rotated.accessEmail, "admin@example.com");
+    assert.equal(fetchCount, 2);
+  } finally {
+    global.fetch = originalFetch;
   }
 });
 

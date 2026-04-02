@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server.js";
 
-import { resolveAccessContext } from "../../lib/access.js";
+import { resolveAccessContext, resolveAuthenticatedAccessSession, revokeSessionOnAccessFailure } from "../../lib/access.js";
 import { audit } from "../../lib/audit.js";
 import { applySecurityHeaders, LOGIN_CSP } from "../../lib/http.js";
 import {
@@ -97,11 +97,19 @@ function redirectToLogin(request, errorCode, session) {
 
 export async function GET(request) {
   const currentSession = getSessionFromRequest(request, { touch: false });
+  let session = currentSession;
   if (currentSession?.authenticated) {
-    return applySecurityHeaders(NextResponse.redirect(new URL("/portal", request.url), 302));
+    const authState = await resolveAuthenticatedAccessSession(request, { touch: false });
+    if (authState.ok) {
+      return applySecurityHeaders(NextResponse.redirect(new URL("/portal", request.url), 302));
+    }
+    if (authState.revokeSession) {
+      revokeSessionOnAccessFailure(currentSession, authState.errorCode);
+      session = null;
+    }
   }
 
-  const session = currentSession || createAnonymousSession();
+  session = session || createAnonymousSession();
   const accessContext = await resolveAccessContext(request);
   const html = renderLoginPage({
     csrfToken: session.csrfToken,

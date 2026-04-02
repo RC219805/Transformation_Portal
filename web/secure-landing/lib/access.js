@@ -1,5 +1,6 @@
 import { verifyAccessJwt } from "./access-jwt.js";
 import { getConfig, normalizeAccessEmail } from "./config.js";
+import { destroySession, getSessionFromRequest } from "./sessions.js";
 
 export async function resolveAccessContext(request) {
   const config = getConfig();
@@ -61,4 +62,88 @@ export async function resolveAccessContext(request) {
       errorCode: error?.code || "invalid_assertion"
     };
   }
+}
+
+function classifyAuthenticatedAccessFailure(errorCode) {
+  if (errorCode === "configuration" || errorCode === "jwks_unreachable" || errorCode === "jwks_invalid") {
+    return {
+      status: 503,
+      revokeSession: false
+    };
+  }
+
+  if (errorCode === "access_mismatch") {
+    return {
+      status: 403,
+      revokeSession: true
+    };
+  }
+
+  return {
+    status: 401,
+    revokeSession: true
+  };
+}
+
+export async function resolveAuthenticatedAccessSession(request, { touch = false } = {}) {
+  const session = getSessionFromRequest(request, { touch });
+  if (!session?.authenticated) {
+    return {
+      ok: false,
+      session: null,
+      accessContext: null,
+      errorCode: "authentication_required",
+      status: 401,
+      revokeSession: false
+    };
+  }
+
+  const accessContext = await resolveAccessContext(request);
+  if (accessContext.bypass) {
+    return {
+      ok: true,
+      session,
+      accessContext,
+      errorCode: null,
+      status: 200,
+      revokeSession: false
+    };
+  }
+
+  if (!accessContext.verified || !accessContext.accessEmail) {
+    const failure = classifyAuthenticatedAccessFailure(accessContext.errorCode);
+    return {
+      ok: false,
+      session,
+      accessContext,
+      errorCode: accessContext.errorCode || "invalid_assertion",
+      ...failure
+    };
+  }
+
+  const sessionAccessEmail = normalizeAccessEmail(session.accessEmail);
+  if (!sessionAccessEmail || sessionAccessEmail !== accessContext.accessEmail) {
+    const failure = classifyAuthenticatedAccessFailure("access_mismatch");
+    return {
+      ok: false,
+      session,
+      accessContext,
+      errorCode: "access_mismatch",
+      ...failure
+    };
+  }
+
+  return {
+    ok: true,
+    session,
+    accessContext,
+    errorCode: null,
+    status: 200,
+    revokeSession: false
+  };
+}
+
+export function revokeSessionOnAccessFailure(session, errorCode) {
+  if (!session?.id) return;
+  destroySession(session.id, errorCode || "access_validation_failure");
 }

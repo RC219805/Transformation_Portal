@@ -51,10 +51,10 @@ function buildAccessCertsUrl(teamDomain) {
   return `${normalizeAccessTeamDomain(teamDomain)}/cdn-cgi/access/certs`;
 }
 
-async function fetchAccessCerts(teamDomain) {
+async function fetchAccessCerts(teamDomain, { forceRefresh = false } = {}) {
   const certsUrl = buildAccessCertsUrl(teamDomain);
   const cached = ACCESS_CERT_CACHE.get(certsUrl);
-  if (cached && cached.expiresAt > Date.now()) {
+  if (!forceRefresh && cached && cached.expiresAt > Date.now()) {
     return cached.keys;
   }
 
@@ -137,10 +137,15 @@ export async function verifyAccessJwt(token, { teamDomain, audience }) {
   }
 
   const parsed = parseAccessJwt(token);
-  const candidateKeys = await fetchAccessCerts(expectedIssuer);
-  const matchingKeys = parsed.header?.kid
+  let candidateKeys = await fetchAccessCerts(expectedIssuer);
+  let matchingKeys = parsed.header?.kid
     ? candidateKeys.filter((candidate) => candidate?.kid === parsed.header.kid)
     : candidateKeys;
+
+  if (parsed.header?.kid && !matchingKeys.length) {
+    candidateKeys = await fetchAccessCerts(expectedIssuer, { forceRefresh: true });
+    matchingKeys = candidateKeys.filter((candidate) => candidate?.kid === parsed.header.kid);
+  }
 
   if (!matchingKeys.length) {
     throw new AccessJwtError("unknown_key", "Access JWT signing key did not match the published certs.");

@@ -1,18 +1,39 @@
 import { NextResponse } from "next/server.js";
 
+import { resolveAuthenticatedAccessSession, revokeSessionOnAccessFailure } from "../../lib/access.js";
 import { applySecurityHeaders } from "../../lib/http.js";
 import { copyUpstreamResponseHeaders } from "../../lib/proxy.js";
 import { getConfig } from "../../lib/config.js";
 import { audit } from "../../lib/audit.js";
-import { getSessionFromRequest } from "../../lib/sessions.js";
+import { clearSessionCookie } from "../../lib/sessions.js";
 
 export const runtime = "nodejs";
 
 export async function GET(request) {
-  const session = getSessionFromRequest(request, { touch: true });
-  if (!session?.authenticated) {
-    return applySecurityHeaders(NextResponse.redirect(new URL("/login", request.url), 302));
+  const authState = await resolveAuthenticatedAccessSession(request, { touch: true });
+  if (!authState.ok) {
+    if (authState.status === 503) {
+      const headers = new Headers();
+      headers.set("Cache-Control", "no-store");
+      return applySecurityHeaders(
+        new Response("Managed front door unavailable", {
+          status: 503,
+          headers
+        })
+      );
+    }
+
+    if (authState.revokeSession) {
+      revokeSessionOnAccessFailure(authState.session, authState.errorCode);
+    }
+
+    const response = applySecurityHeaders(NextResponse.redirect(new URL("/login", request.url), 302));
+    if (authState.revokeSession) {
+      clearSessionCookie(response);
+    }
+    return response;
   }
+  const { session } = authState;
 
   let upstream;
   try {
