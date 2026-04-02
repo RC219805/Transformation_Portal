@@ -8,7 +8,10 @@ import types
 
 import pytest
 
-from transformation_portal.core.ml_dependency_health import detect_transformers_torch_runtime_issue
+from transformation_portal.core.ml_dependency_health import (
+    detect_transformers_torch_runtime_issue,
+    detect_transformers_torch_version_issue,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -68,6 +71,63 @@ def test_detect_transformers_torch_runtime_issue_reports_disabled_backend(monkey
     assert "disabled its PyTorch backend" in message
     assert "torch 2.2.2" in message
     assert "transformers 5.3.0" in message
+
+
+def test_detect_transformers_torch_version_issue_allows_repo_baseline(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The repo's torch 2.2.x + transformers 4.57.x baseline must not be rejected."""
+    monkeypatch.setattr(
+        "transformation_portal.core.ml_dependency_health._installed_version",
+        lambda _distribution: "2.4.3",
+    )
+    monkeypatch.setattr(
+        "transformation_portal.core.ml_dependency_health._is_darwin_x86_64_runtime",
+        lambda: False,
+    )
+
+    message = detect_transformers_torch_version_issue("2.2.2", "4.57.6")
+
+    assert message is None
+
+
+def test_detect_transformers_torch_version_issue_rejects_transformers_53_with_old_torch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Transformers 5.3+ with torch<2.4 remains outside the supported runtime envelope."""
+    monkeypatch.setattr(
+        "transformation_portal.core.ml_dependency_health._installed_version",
+        lambda _distribution: "1.26.4",
+    )
+    monkeypatch.setattr(
+        "transformation_portal.core.ml_dependency_health._is_darwin_x86_64_runtime",
+        lambda: False,
+    )
+
+    message = detect_transformers_torch_version_issue("2.2.2", "5.3.0")
+
+    assert message is not None
+    assert "supported runtime envelope" in message
+    assert "torch 2.2.2" in message
+    assert "transformers 5.3.0" in message
+
+
+def test_detect_transformers_torch_version_issue_rejects_darwin_intel_numpy2_torch22(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Darwin x86_64 keeps the NumPy<2 guard even when transformers stays on 4.57.x."""
+    monkeypatch.setattr(
+        "transformation_portal.core.ml_dependency_health._installed_version",
+        lambda _distribution: "2.4.3",
+    )
+    monkeypatch.setattr(
+        "transformation_portal.core.ml_dependency_health._is_darwin_x86_64_runtime",
+        lambda: True,
+    )
+
+    message = detect_transformers_torch_version_issue("2.2.2", "4.57.6")
+
+    assert message is not None
+    assert "numpy 2.4.3" in message
+    assert "torch 2.2.2" in message
 
 
 def test_da2_backend_ensure_available_rejects_transformers_torch_incompatibility(

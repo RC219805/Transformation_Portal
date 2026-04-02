@@ -15,12 +15,6 @@ OPTIONAL_IMPORT_EXCEPTIONS = (
     AttributeError,
 )
 
-# Computed once at import time; platform does not change during a process lifetime.
-_IS_DARWIN_X86 = (
-    platform.system().lower() == "darwin"
-    and platform.machine().lower() in ("x86_64", "amd64")
-)
-
 
 def _version_tuple(raw_version: Any) -> Tuple[int, ...]:
     """Extract a best-effort numeric version tuple from a package version string."""
@@ -53,6 +47,11 @@ def _installed_version(distribution_name: str) -> Optional[str]:
         return None
 
 
+def _is_darwin_x86_64_runtime() -> bool:
+    """Return True when the current interpreter is running on Intel macOS."""
+    return sys.platform == "darwin" and platform.machine() == "x86_64"
+
+
 def detect_transformers_torch_version_issue(
     torch_version: Optional[str],
     transformers_version: Optional[str],
@@ -61,23 +60,26 @@ def detect_transformers_torch_version_issue(
     if not torch_version or not transformers_version:
         return None
 
-    details = []
     torch_version_tuple = _version_tuple(torch_version)
     transformers_version_tuple = _version_tuple(transformers_version)
-
-    # transformers >= 5.3 dropped support for torch < 2.4; guard only that specific pairing
-    if transformers_version_tuple >= (5, 3) and torch_version_tuple and torch_version_tuple < (2, 4):
+    details = []
+    if (
+        torch_version_tuple
+        and transformers_version_tuple
+        and torch_version_tuple < (2, 4)
+        and transformers_version_tuple >= (5, 3)
+    ):
         details.append(
             f"installed torch {torch_version} is below the minimum expected by transformers {transformers_version}"
         )
 
     numpy_version = _installed_version("numpy")
     if (
-        _IS_DARWIN_X86
-        and numpy_version
-        and _version_tuple(numpy_version) >= (2, 0)
+        numpy_version
         and torch_version_tuple
         and torch_version_tuple < (2, 4)
+        and _version_tuple(numpy_version) >= (2, 0)
+        and _is_darwin_x86_64_runtime()
     ):
         details.append(
             f"numpy {numpy_version} may be incompatible with torch {torch_version} wheels compiled against NumPy 1.x"
