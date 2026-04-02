@@ -11,7 +11,7 @@ pytestmark = pytest.mark.unit
 
 def test_coreml_depth_estimator_resolves_to_backend_estimator(monkeypatch: pytest.MonkeyPatch) -> None:
     """The estimator export should still resolve to the actual CoreML backend implementation."""
-    import transformation_portal.depth.models as models
+    from transformation_portal.depth import models
 
     fake_backend_estimator = type("FakeCoreMLDepthEstimator", (), {})
     fake_module = types.SimpleNamespace(CoreMLDepthEstimator=fake_backend_estimator)
@@ -24,7 +24,7 @@ def test_coreml_depth_estimator_resolves_to_backend_estimator(monkeypatch: pytes
 
 def test_coreml_exporter_is_explicit_compatibility_shim() -> None:
     """CoreMLExporter should not silently alias to the estimator class."""
-    import transformation_portal.depth.models as models
+    from transformation_portal.depth import models
 
     fake_backend_estimator = type("FakeCoreMLDepthEstimator", (), {})
     assert models.CoreMLExporter is not fake_backend_estimator

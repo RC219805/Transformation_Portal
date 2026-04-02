@@ -38,8 +38,8 @@ def write_lockfile(tmp_path: Path, name: str, python_version: str, body: str = "
     )
 
 
-@pytest.fixture()
-def isolated_repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+@pytest.fixture(name="isolated_repo")
+def fixture_isolated_repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setattr(contract, "REPO_ROOT", tmp_path)
     monkeypatch.setattr(contract, "REQUIREMENTS_DIR", tmp_path / "requirements")
     monkeypatch.setattr(contract, "MAKEFILE_PATH", tmp_path / "requirements" / "Makefile")
