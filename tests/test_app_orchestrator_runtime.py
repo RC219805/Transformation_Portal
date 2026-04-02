@@ -786,6 +786,14 @@ def test_portal_exposes_run_card_quick_actions() -> None:
     assert "Run card path is not eligible for direct browser open; path copied instead." in content
 
 
+def test_portal_selected_job_progress_bar_has_accessible_label() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+
+    assert 'id="selectedJobProgressLabel"' in content
+    assert 'aria-labelledby="selectedJobProgressLabel selectedJobProgressText"' in content
+
+
 def test_argv_archive_gate_a_defaults_to_fixity_scan_runner() -> None:
     payload: Dict[str, object] = {
         "pipeline": "archive-gate-a",
@@ -1401,6 +1409,16 @@ def test_env_path_roots_rejects_invalid_configured_allowlist(monkeypatch: pytest
     monkeypatch.setenv("TP_ALLOWED_INPUT_ROOTS", "~")
     with pytest.raises(RuntimeError, match="contains no valid roots"):
         orchestrator_app._env_path_roots("TP_ALLOWED_INPUT_ROOTS", [orchestrator_app.REPO_ROOT])
+
+
+def test_default_allowed_path_roots_accept_tmp_alias_on_posix() -> None:
+    if os.name == "nt":
+        pytest.skip("POSIX-only tmp alias behavior")
+
+    candidate = "/tmp/tp-default-allowlist-smoke"
+    roots = orchestrator_app._default_allowed_path_roots()
+
+    assert orchestrator_app._validate_path_against_roots(candidate, roots) == os.path.realpath(candidate)
 
 
 def test_argv_rejects_tilde_prefixed_paths() -> None:
