@@ -51,6 +51,38 @@ _OPTIONAL_IMPORTS_READY = False
 logger = logging.getLogger(__name__)
 
 
+def _ensure_backend_detection_imports(*, probe_coreml: bool = False) -> None:
+    """Resolve only the runtime deps needed for backend selection."""
+    global torch, ct, TORCH_AVAILABLE, COREML_AVAILABLE
+
+    if torch is not None:
+        TORCH_AVAILABLE = True
+    elif not TORCH_AVAILABLE:
+        try:
+            import torch as torch_module
+
+            torch = torch_module
+            TORCH_AVAILABLE = True
+        except OPTIONAL_IMPORT_EXCEPTIONS:
+            TORCH_AVAILABLE = False
+            torch = None  # type: ignore[assignment]
+
+    if not probe_coreml:
+        return
+
+    if ct is not None:
+        COREML_AVAILABLE = True
+    elif not COREML_AVAILABLE:
+        try:
+            import coremltools as coremltools_module
+
+            ct = coremltools_module
+            COREML_AVAILABLE = True
+        except ImportError:
+            COREML_AVAILABLE = False
+            ct = None  # type: ignore[assignment]
+
+
 def _ensure_optional_runtime_imports() -> None:
     """Resolve optional ML/runtime dependencies lazily."""
     global _OPTIONAL_IMPORTS_READY
@@ -207,6 +239,9 @@ class DA3InferenceEngine:
                 "CoreML backend enabled via config " "(5x speedup on Apple Silicon)",
             )
             return ModelBackend.COREML
+
+        if device_spec != "cpu":
+            _ensure_backend_detection_imports(probe_coreml=device_spec == "coreml")
 
         # Explicit device override
         if device_spec == "cuda" and TORCH_AVAILABLE and torch is not None and torch.cuda.is_available():
