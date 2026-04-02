@@ -22,6 +22,9 @@ export function normalizeAccessTeamDomain(value) {
 
   try {
     const url = new URL(normalized);
+    if (url.protocol !== "https:") {
+      return "";
+    }
     url.pathname = "";
     url.search = "";
     url.hash = "";

@@ -850,6 +850,50 @@ test("v1 rejects authenticated sessions without a current Access JWT", async () 
   }
 });
 
+test("v1 returns forbidden when the current Access identity does not match the authenticated session", async () => {
+  const env = withTempEnvironment();
+
+  try {
+    const sessions = await importFresh("../lib/sessions.js");
+    const route = await importFresh("../app/v1/[...path]/route.js");
+    const restoreFetch = withMockedAccessCerts();
+
+    try {
+      const authenticatedSession = sessions.rotateAuthenticatedSession(
+        sessions.createAnonymousSession(),
+        {
+          username: "admin",
+          accessEmail: "admin@example.com",
+          role: "admin"
+        }
+      );
+
+      const request = buildRequest("https://portal.example.com/v1/jobs", {
+        method: "GET",
+        headers: new Headers({
+          cookie: `__Host-tp_session=${authenticatedSession.id}`,
+          "Cf-Access-Jwt-Assertion": createAccessJwt({ email: "other@example.com" })
+        })
+      });
+
+      const response = await route.GET(request, {
+        params: { path: ["jobs"] }
+      });
+      const body = await response.json();
+
+      assert.equal(response.status, 403);
+      assert.equal(body.error.code, "FORBIDDEN");
+      assert.equal(body.error.message, "forbidden");
+      assert.match(response.headers.get("set-cookie") || "", /__Host-tp_session=/);
+      assert.equal(sessions.getSessionById(authenticatedSession.id, { touch: false }), null);
+    } finally {
+      restoreFetch();
+    }
+  } finally {
+    env.cleanup();
+  }
+});
+
 test("v1 SSE proxy preserves event-stream framing while injecting backend auth server-side", async () => {
   const env = withTempEnvironment({
     TP_BACKEND_API_KEY: "backend-secret"
@@ -955,6 +999,39 @@ test("Access JWT verification refreshes certs on unknown kid after rotation", as
     assert.equal(initial.accessEmail, "admin@example.com");
     assert.equal(rotated.accessEmail, "admin@example.com");
     assert.equal(fetchCount, 2);
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test("Access team domain normalization rejects insecure HTTP origins", async () => {
+  const { normalizeAccessTeamDomain } = await importFresh("../lib/config.js");
+
+  assert.equal(normalizeAccessTeamDomain(TEST_CF_ACCESS_TEAM_DOMAIN), TEST_CF_ACCESS_TEAM_DOMAIN);
+  assert.equal(normalizeAccessTeamDomain("tp-frontdoor-tests.cloudflareaccess.com"), TEST_CF_ACCESS_TEAM_DOMAIN);
+  assert.equal(normalizeAccessTeamDomain("http://tp-frontdoor-tests.cloudflareaccess.com"), "");
+});
+
+test("Access JWT verification returns only minimal verified identity fields", async () => {
+  const { verifyAccessJwt } = await importFresh("../lib/access-jwt.js");
+  const originalFetch = global.fetch;
+
+  global.fetch = async (url, init) => {
+    assert.equal(String(url), `${TEST_CF_ACCESS_TEAM_DOMAIN}/cdn-cgi/access/certs`);
+    assert.ok(init.signal);
+    return Response.json({ keys: [TEST_CF_ACCESS_PUBLIC_JWK] }, { status: 200 });
+  };
+
+  try {
+    const verified = await verifyAccessJwt(createAccessJwt(), {
+      teamDomain: TEST_CF_ACCESS_TEAM_DOMAIN,
+      audience: TEST_CF_ACCESS_AUD
+    });
+
+    assert.deepEqual(Object.keys(verified).sort(), ["accessEmail", "audience", "issuer"]);
+    assert.equal(verified.accessEmail, "admin@example.com");
+    assert.equal(verified.issuer, TEST_CF_ACCESS_TEAM_DOMAIN);
+    assert.equal(verified.audience, TEST_CF_ACCESS_AUD);
   } finally {
     global.fetch = originalFetch;
   }

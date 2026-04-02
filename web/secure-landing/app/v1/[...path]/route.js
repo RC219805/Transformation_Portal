@@ -111,8 +111,14 @@ async function handleProxy(request, { params }) {
       remoteAddr: getRemoteAddress(request),
       errorCode: authState.errorCode
     });
-    const code = authState.status === 503 ? "ACCESS_UNAVAILABLE" : authState.status === 403 ? "FORBIDDEN" : "UNAUTHORIZED";
-    const message = authState.status === 503 ? "managed access unavailable" : "authentication required";
+    const code =
+      authState.status === 503 ? "ACCESS_UNAVAILABLE" : authState.status === 403 ? "FORBIDDEN" : "UNAUTHORIZED";
+    const message =
+      authState.status === 503
+        ? "managed access unavailable"
+        : authState.status === 403
+          ? "forbidden"
+          : "authentication required";
     const response = errorEnvelope(authState.status, code, message, { path: pathname });
     if (authState.revokeSession) {
       clearSessionCookie(response);

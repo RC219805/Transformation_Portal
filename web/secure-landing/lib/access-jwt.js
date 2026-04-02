@@ -184,8 +184,6 @@ export async function verifyAccessJwt(token, { teamDomain, audience }) {
   return {
     accessEmail,
     issuer: expectedIssuer,
-    audience: expectedAudience,
-    header: parsed.header,
-    payload: parsed.payload
+    audience: expectedAudience
   };
 }
