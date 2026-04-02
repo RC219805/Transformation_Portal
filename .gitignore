@@ -30,6 +30,8 @@ share/python-wheels/
 MANIFEST
 !scripts/lib/
 !scripts/lib/*.py
+!web/secure-landing/lib/
+!web/secure-landing/lib/**
 
 # Caches
 .hypothesis/
@@ -107,6 +109,8 @@ test_output/
 test_artifacts/
 extracted_context/
 docs/api/_build/
+web/secure-landing/.next/
+web/secure-landing/node_modules/
 
 # Coverage artifacts
 .coverage

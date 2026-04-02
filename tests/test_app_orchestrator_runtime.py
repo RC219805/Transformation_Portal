@@ -367,6 +367,60 @@ def test_portal_resumes_blocked_streams_after_api_key_update() -> None:
     assert "resumeBlockedJobStreamsAfterAuthUpdate();" in bind_body
 
 
+def test_portal_bootstrap_loader_fetches_same_origin_bootstrap_contract() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+    body = _extract_js_function_body(content, "loadPortalBootstrap")
+
+    assert "fetch(`${API_BASE}/portal/bootstrap`" in body
+    assert "_applyPortalBootstrap(payload);" in body
+    assert "_applyPortalBootstrap(_defaultPortalBootstrap());" in body
+
+
+def test_portal_managed_mode_clears_api_keys_and_hides_secret_ui() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+    clear_body = _extract_js_function_body(content, "_clearStoredApiKeyState")
+    apply_body = _extract_js_function_body(content, "_applyPortalBootstrap")
+
+    assert "localStorage.removeItem(API_KEY_STORAGE_KEY);" in clear_body
+    assert "sessionStorage.removeItem(API_KEY_STORAGE_KEY);" in clear_body
+    assert "_clearStoredApiKeyState();" in apply_body
+    assert "els.apiKeySection.classList.toggle('hidden', !state.auth.features.apiKeyInput);" in apply_body
+
+
+def test_portal_managed_mode_uses_csrf_instead_of_browser_backend_secrets() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+    current_token_body = _extract_js_function_body(content, "_currentApiToken")
+
+    assert "if (_isManagedAuthMode()) return '';" in current_token_body
+    assert "function _buildAuthHeaders(base = {}, method = 'GET') {" in content
+    assert "if (_isManagedAuthMode()) {" in content
+    assert "headers['X-CSRF-Token'] = state.auth.csrfToken;" in content
+    assert "headers['Authorization'] = `Bearer ${token}`;" in content
+    assert "headers['x-api-key'] = token;" in content
+
+
+def test_portal_health_checks_route_to_front_door_in_managed_mode() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+    helper_body = _extract_js_function_body(content, "_healthEndpointPath")
+    check_body = _extract_js_function_body(content, "checkBackend")
+
+    assert "return _isManagedAuthMode() ? '/healthz' : '/ready';" in helper_body
+    assert "fetchWithTimeout(`${API_BASE}${_healthEndpointPath()}`" in check_body
+
+
+def test_portal_init_loads_bootstrap_before_restoring_api_key_state() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+    body = _extract_js_function_body(content, "init")
+
+    assert "await loadPortalBootstrap();" in body
+    assert "_loadApiKeyIntoInputs();" in body
+
+
 def test_portal_verbose_quiet_conflict_is_notified_and_blocked() -> None:
     portal_html = Path(__file__).resolve().parents[1] / "portal.html"
     content = portal_html.read_text(encoding="utf-8")
