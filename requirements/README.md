@@ -69,17 +69,18 @@ ML dependencies use an explicit platform matrix with three orthogonal axes:
 
 To ensure deterministic builds, the checked-in ML contract is limited to platform-specific core lockfiles:
 
-| Platform | Lockfile | Torch Version |
-|----------|----------|---------------|
-| macOS Intel (`x86_64`) | `ml-core-darwin-x86_64.txt` | 2.2.2 + `numpy<2`, `transformers<5` |
-| macOS Apple Silicon (`arm64`) | `ml-core-darwin-arm64.txt` | 2.2.2 + Apple Silicon CoreML tooling |
-| Linux (all) | `ml-core-linux.txt` | 2.2.2 + `transformers<5` |
+| Platform | Lockfile | Governed baseline |
+|----------|----------|-------------------|
+| macOS Intel (`x86_64`) | `ml-core-darwin-x86_64.txt` | `torch==2.2.2` + `numpy<2` + `transformers<5` |
+| macOS Apple Silicon (`arm64`) | `ml-core-darwin-arm64.txt` | `torch==2.2.2` + `transformers<5` + pinned `coremltools` |
+| Linux | `ml-core-linux.txt` | validated independently against the runtime and lock contract checks |
 
-**Torch Version Strategy:**
-- All platform core locks still anchor on torch 2.2.2 for deterministic CAS identity
-- The Intel Darwin lock keeps the extra `numpy<2` compatibility guard
-- The Apple Silicon Darwin lock carries `coremltools` so the CoreML lane is part of the arm64 contract
-- Linux may evolve independently; platform core locks must not collapse to identical dependency graphs
+**Contract notes:**
+- The Intel Darwin lock is the conservative compatibility lane and must keep `numpy<2` and `transformers<5`.
+- The Apple Silicon Darwin lock must keep pinned `coremltools` and must remain free of Linux/CUDA-only packages.
+- Darwin platform-core lockfiles must never contain `nvidia-*` or `triton`.
+- Linux lock state may evolve independently, but that drift must not be propagated into Darwin lockfiles.
+- Platform core locks must not collapse to identical dependency graphs.
 
 **Important:** Acceleration is NEVER inferred from OS—it must be explicitly specified via profile.
 
@@ -296,7 +297,7 @@ Targets:
   check             Verify that .txt files are up-to-date with .in files
   clean             Remove all compiled .txt files
 
-Checked-in ML layer targets (CPU-only PyTorch index):
+Checked-in ML layer targets (platform-core contract):
   ml-core-darwin-x86_64.txt  macOS Intel ML baseline
   ml-core-darwin-arm64.txt   macOS Apple Silicon ML baseline
   ml-core-linux.txt   Linux ML baseline
@@ -325,7 +326,7 @@ The system uses a two-phase compilation strategy:
 
 2. **Layer-Specific Outputs**: Then, each individual `.in` file is compiled using `all.txt` as a constraint file. This ensures that the subset of packages in each layer uses the same versions as in the global resolution.
 
-3. **CPU-Only PyTorch**: The checked-in ML platform-core lockfiles are compiled with `--extra-index-url https://download.pytorch.org/whl/cpu` to ensure CPU-only packages without GPU dependencies.
+3. **Target-correct compilation**: Platform-core lockfiles must be regenerated on their target lanes. In particular, Darwin lockfiles must remain free of Linux/CUDA-only packages such as `nvidia-*` and `triton`.
 
 This approach prevents conflicts between layers and ensures reproducible builds.
 
@@ -375,7 +376,7 @@ The CI/CD pipeline should:
 
 1. **Verify consistency**: Check that `.txt` files are up-to-date with `.in` files
 2. **Use pinned versions**: Install from `.txt` files for reproducible tests
-3. **Validate contracts**: Run `check_requirements_lock_contract.py` to verify CPU-only ML lockfiles
+3. **Validate contracts**: Run `check_requirements_lock_contract.py` to verify platform-core lockfile purity, compatibility guards, and lane-specific contract rules
 4. **Layer-specific validation**: Each layer can be validated independently
 
 Example CI workflow step:
@@ -395,7 +396,7 @@ Example CI workflow step:
 
 - **ML dependencies**: Due to disk space constraints, ML lockfiles may need to be regenerated in environments with more resources. The CI environment should have sufficient space for PyTorch and related packages.
 
-- **GPU vs CPU**: All ML lockfiles use CPU-only PyTorch for compatibility and determinism. For GPU environments, torch should be installed from the CUDA index before installing other ML dependencies.
+- **GPU vs CPU**: Darwin platform-core lockfiles are governed as non-CUDA baseline locks and must remain free of Linux/CUDA-only artifacts. Linux acceleration behavior is defined separately by the CUDA layer and runtime/bootstrap flow.
 
 - **Optional non-core ML layers**: raw/coreml/research/full are fail-closed until target-correct trusted lockfile contracts are defined.
 
