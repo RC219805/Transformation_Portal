@@ -1,27 +1,37 @@
 import { NextResponse } from "next/server.js";
 
+import { revokeSessionOnAccessFailure, resolveAuthenticatedAccessSession } from "../../../lib/access.js";
 import { applySecurityHeaders } from "../../../lib/http.js";
-import { getSessionFromRequest } from "../../../lib/sessions.js";
+import { clearSessionCookie } from "../../../lib/sessions.js";
 
 export const runtime = "nodejs";
 
 export async function GET(request) {
-  const session = getSessionFromRequest(request, { touch: true });
-  if (!session?.authenticated) {
-    return applySecurityHeaders(
+  const authState = await resolveAuthenticatedAccessSession(request, { touch: true });
+  if (!authState.ok) {
+    if (authState.revokeSession) {
+      revokeSessionOnAccessFailure(authState.session, authState.errorCode);
+    }
+
+    const response = applySecurityHeaders(
       NextResponse.json(
         {
-          error: "authentication required"
+          error: authState.status === 503 ? "managed access unavailable" : "authentication required"
         },
         {
-          status: 401,
+          status: authState.status,
           headers: {
             "Cache-Control": "no-store"
           }
         }
       )
     );
+    if (authState.revokeSession) {
+      clearSessionCookie(response);
+    }
+    return response;
   }
+  const { session } = authState;
 
   return applySecurityHeaders(
     NextResponse.json(

@@ -370,11 +370,17 @@ def test_portal_resumes_blocked_streams_after_api_key_update() -> None:
 def test_portal_bootstrap_loader_fetches_same_origin_bootstrap_contract() -> None:
     portal_html = Path(__file__).resolve().parents[1] / "portal.html"
     content = portal_html.read_text(encoding="utf-8")
+    default_body = _extract_js_function_body(content, "_defaultPortalBootstrap")
     body = _extract_js_function_body(content, "loadPortalBootstrap")
 
+    assert "authMode: 'managed_unavailable'" in default_body
+    assert "apiKeyInput: false" in default_body
+    assert "directDebug: false" in default_body
     assert "fetch(`${API_BASE}/portal/bootstrap`" in body
+    assert "if (res.status === 401 || res.status === 403)" in body
+    assert "window.location.assign('/login');" in body
     assert "_applyPortalBootstrap(payload);" in body
-    assert "_applyPortalBootstrap(_defaultPortalBootstrap());" in body
+    assert "_applyPortalBootstrap(fallback);" in body
 
 
 def test_portal_managed_mode_clears_api_keys_and_hides_secret_ui() -> None:
@@ -387,6 +393,8 @@ def test_portal_managed_mode_clears_api_keys_and_hides_secret_ui() -> None:
     assert "sessionStorage.removeItem(API_KEY_STORAGE_KEY);" in clear_body
     assert "_clearStoredApiKeyState();" in apply_body
     assert "els.apiKeySection.classList.toggle('hidden', !state.auth.features.apiKeyInput);" in apply_body
+    assert "els.apiKeyInput.disabled = !state.auth.features.apiKeyInput;" in apply_body
+    assert "els.rememberApiKey.disabled = !state.auth.features.apiKeyInput;" in apply_body
 
 
 def test_portal_managed_mode_uses_csrf_instead_of_browser_backend_secrets() -> None:
@@ -410,6 +418,22 @@ def test_portal_health_checks_route_to_front_door_in_managed_mode() -> None:
 
     assert "return _isManagedAuthMode() ? '/healthz' : '/ready';" in helper_body
     assert "fetchWithTimeout(`${API_BASE}${_healthEndpointPath()}`" in check_body
+
+
+def test_portal_managed_unavailable_mode_blocks_dispatch_and_api_key_recovery_prompts() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+    block_body = _extract_js_function_body(content, "_blockManagedUnavailableAction")
+    cancel_body = _extract_js_function_body(content, "cancelJob")
+    submit_body = _extract_js_function_body(content, "submitJob")
+    sse_body = _extract_js_function_body(content, "_startAuthorizedFetchSse")
+
+    assert "_isManagedUnavailableMode()" in block_body
+    assert "Managed front door unavailable." in block_body
+    assert "_blockManagedUnavailableAction('change job state')" in cancel_body
+    assert "_blockManagedUnavailableAction('dispatch jobs')" in submit_body
+    assert "Restore the managed session to resume live job events." in sse_body
+    assert "Restore the managed session to resume live logs." in sse_body
 
 
 def test_portal_init_loads_bootstrap_before_restoring_api_key_state() -> None:
