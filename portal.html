@@ -1004,16 +1004,16 @@
                             </div>
                         </div>
                     </div>
-                    <div id="apiKeySection" class="mt-4">
+                    <div id="apiKeySection" class="mt-4 hidden">
                         <div class="flex items-center justify-between gap-3 mb-1.5">
                             <label class="block text-xs font-medium text-slate-700 dark:text-slate-300" for="apiKeyInput">API Key</label>
-                            <span id="authModeBadge" class="rounded-full border border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 px-2.5 py-1 text-[10px] font-mono uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">direct_debug</span>
+                            <span id="authModeBadge" class="rounded-full border border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 px-2.5 py-1 text-[10px] font-mono uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">managed_unavailable</span>
                         </div>
-                        <p id="apiKeyManagedHint" class="hidden text-[12px] leading-relaxed text-slate-500 dark:text-slate-400">Managed mode is active. Backend credentials stay server-side and are never stored in the browser.</p>
+                        <p id="apiKeyManagedHint" class="text-[12px] leading-relaxed text-slate-500 dark:text-slate-400">Managed mode is active. Backend credentials stay server-side and are never stored in the browser.</p>
                         <div class="flex flex-col sm:flex-row gap-2 sm:items-center">
-                            <input type="password" id="apiKeyInput" class="flex-1 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors" placeholder="Bearer token for /v1/jobs endpoints" autocomplete="off" spellcheck="false" />
+                            <input type="password" id="apiKeyInput" class="flex-1 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors" placeholder="Bearer token for /v1/jobs endpoints" autocomplete="off" spellcheck="false" disabled />
                             <label class="flex items-center gap-2 text-[12px] text-slate-600 dark:text-slate-400">
-                                <input type="checkbox" id="rememberApiKey" class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 dark:bg-slate-900" />
+                                <input type="checkbox" id="rememberApiKey" class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 dark:bg-slate-900" disabled />
                                 Remember in local storage
                             </label>
                         </div>
@@ -1656,12 +1656,12 @@
             theme: 'light',
             presetsByPipeline: {},
             auth: {
-                mode: 'direct_debug',
+                mode: 'managed_unavailable',
                 csrfToken: '',
                 actor: null,
                 features: {
-                    apiKeyInput: true,
-                    directDebug: true
+                    apiKeyInput: false,
+                    directDebug: false
                 }
             },
             lastDiagnostics: {
@@ -2587,18 +2587,22 @@
 
         function _defaultPortalBootstrap() {
             return {
-                authMode: 'direct_debug',
+                authMode: 'managed_unavailable',
                 csrfToken: null,
                 actor: null,
                 features: {
-                    apiKeyInput: true,
-                    directDebug: true
+                    apiKeyInput: false,
+                    directDebug: false
                 }
             };
         }
 
         function _isManagedAuthMode() {
-            return state.auth && state.auth.mode === 'managed';
+            return state.auth && state.auth.mode !== 'direct_debug';
+        }
+
+        function _isManagedUnavailableMode() {
+            return state.auth && state.auth.mode === 'managed_unavailable';
         }
 
         function _clearStoredApiKeyState() {
@@ -2610,18 +2614,23 @@
 
         function _applyPortalBootstrap(rawBootstrap) {
             const bootstrap = rawBootstrap && typeof rawBootstrap === 'object' ? rawBootstrap : _defaultPortalBootstrap();
-            const mode = bootstrap.authMode === 'managed' ? 'managed' : 'direct_debug';
+            const mode = bootstrap.authMode === 'managed'
+                ? 'managed'
+                : bootstrap.authMode === 'direct_debug'
+                    ? 'direct_debug'
+                    : 'managed_unavailable';
+            const isManagedMode = mode !== 'direct_debug';
             state.auth = {
                 mode,
                 csrfToken: mode === 'managed' ? String(bootstrap.csrfToken || '') : '',
-                actor: bootstrap.actor && typeof bootstrap.actor === 'object' ? bootstrap.actor : null,
+                actor: mode === 'managed' && bootstrap.actor && typeof bootstrap.actor === 'object' ? bootstrap.actor : null,
                 features: {
-                    apiKeyInput: bootstrap.features?.apiKeyInput !== false || mode !== 'managed',
-                    directDebug: Boolean(bootstrap.features?.directDebug) || mode !== 'managed'
+                    apiKeyInput: mode === 'direct_debug' && bootstrap.features?.apiKeyInput !== false,
+                    directDebug: mode === 'direct_debug' && bootstrap.features?.directDebug !== false
                 }
             };
 
-            if (_isManagedAuthMode()) {
+            if (isManagedMode) {
                 _clearStoredApiKeyState();
             }
 
@@ -2632,25 +2641,45 @@
                 els.authModeBadge.textContent = mode;
             }
             if (els.apiKeyManagedHint) {
-                els.apiKeyManagedHint.classList.toggle('hidden', mode !== 'managed');
+                els.apiKeyManagedHint.classList.toggle('hidden', !isManagedMode);
+            }
+            if (els.apiKeyInput) {
+                els.apiKeyInput.disabled = !state.auth.features.apiKeyInput;
+            }
+            if (els.rememberApiKey) {
+                els.rememberApiKey.disabled = !state.auth.features.apiKeyInput;
             }
         }
 
         async function loadPortalBootstrap() {
+            const fallback = _defaultPortalBootstrap();
             try {
                 const res = await fetch(`${API_BASE}/portal/bootstrap`, {
                     headers: { 'Accept': 'application/json' },
                     cache: 'no-store'
                 });
+                if (res.status === 401 || res.status === 403) {
+                    _applyPortalBootstrap(fallback);
+                    window.location.assign('/login');
+                    return;
+                }
                 if (!res.ok) {
-                    _applyPortalBootstrap(_defaultPortalBootstrap());
+                    _applyPortalBootstrap(fallback);
+                    createToast('Managed front door unavailable. Privileged actions remain blocked until authentication is restored.', 'error');
                     return;
                 }
                 const payload = await res.json();
                 _applyPortalBootstrap(payload);
             } catch {
-                _applyPortalBootstrap(_defaultPortalBootstrap());
+                _applyPortalBootstrap(fallback);
+                createToast('Managed front door unavailable. Privileged actions remain blocked until authentication is restored.', 'error');
             }
+        }
+
+        function _blockManagedUnavailableAction(actionLabel) {
+            if (!_isManagedUnavailableMode()) return false;
+            createToast(`Managed front door unavailable. Restore managed authentication before attempting to ${actionLabel}.`, 'error');
+            return true;
         }
 
         function _healthEndpointPath() {
@@ -4294,10 +4323,17 @@
                         _clearSseRetry(job, true);
                     }
                     if (isAuthError) {
-                        const line = `[ERROR] Event stream authorization failed (${status}). Update API key to resume live job events.`;
+                        const line = _isManagedAuthMode()
+                            ? `[ERROR] Event stream authorization failed (${status}). Restore the managed session to resume live job events.`
+                            : `[ERROR] Event stream authorization failed (${status}). Update API key to resume live job events.`;
                         appendJobLog(job, line);
                         logToPane(job.id, line);
-                        createToast('Event stream authorization failed. Update API key to resume live logs.', 'error');
+                        createToast(
+                            _isManagedAuthMode()
+                                ? 'Event stream authorization failed. Restore the managed session to resume live logs.'
+                                : 'Event stream authorization failed. Update API key to resume live logs.',
+                            'error'
+                        );
                     } else {
                         const line = `[WARN] Event stream subscribe failed (${status}). ${parsedError.message}`;
                         appendJobLog(job, line);
@@ -4464,6 +4500,7 @@
         async function cancelJob(id) {
             const job = state.jobs.find((item) => item.id === id);
             if (!job || (job.state !== 'running' && job.state !== 'queued')) return;
+            if (_blockManagedUnavailableAction('change job state')) return;
 
             stopJobActivity(job);
             job.state = 'canceled';
@@ -4493,6 +4530,7 @@
         }
 
         async function submitJob() {
+            if (_blockManagedUnavailableAction('dispatch jobs')) return;
             const payload = generatePayload();
 
             if (payload.pipeline === 'lux-depth-v3') {

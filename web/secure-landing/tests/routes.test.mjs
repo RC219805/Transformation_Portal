@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { createSign, generateKeyPairSync } from "node:crypto";
 import os from "node:os";
 import path from "node:path";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -16,8 +17,23 @@ const ENV_KEYS = [
   "TP_FRONTDOOR_USERS_FILE",
   "TP_FRONTDOOR_USERS_JSON",
   "TP_FRONTDOOR_SESSION_DB",
+  "TP_CF_ACCESS_TEAM_DOMAIN",
+  "TP_CF_ACCESS_AUD",
   "TP_ALLOW_LOCAL_ACCESS_BYPASS"
 ];
+
+const TEST_CF_ACCESS_TEAM_DOMAIN = "https://tp-frontdoor-tests.cloudflareaccess.com";
+const TEST_CF_ACCESS_AUD = "tp-frontdoor-aud";
+const TEST_CF_ACCESS_KID = "tp-frontdoor-key";
+const TEST_CF_ACCESS_KEYS = generateKeyPairSync("rsa", {
+  modulusLength: 2048
+});
+const TEST_CF_ACCESS_PUBLIC_JWK = {
+  ...TEST_CF_ACCESS_KEYS.publicKey.export({ format: "jwk" }),
+  kid: TEST_CF_ACCESS_KID,
+  alg: "RS256",
+  use: "sig"
+};
 
 function snapshotEnv() {
   return new Map(ENV_KEYS.map((key) => [key, process.env[key]]));
@@ -44,6 +60,8 @@ function withTempEnvironment(overrides = {}) {
   process.env.TP_FASTAPI_ORIGIN = overrides.TP_FASTAPI_ORIGIN ?? "http://127.0.0.1:8000";
   process.env.TP_BACKEND_API_KEY = overrides.TP_BACKEND_API_KEY ?? "backend-secret";
   process.env.TP_FRONTDOOR_SESSION_DB = dbPath;
+  process.env.TP_CF_ACCESS_TEAM_DOMAIN = overrides.TP_CF_ACCESS_TEAM_DOMAIN ?? TEST_CF_ACCESS_TEAM_DOMAIN;
+  process.env.TP_CF_ACCESS_AUD = overrides.TP_CF_ACCESS_AUD ?? TEST_CF_ACCESS_AUD;
 
   if (typeof overrides.TP_FRONTDOOR_USERS_FILE === "string") {
     process.env.TP_FRONTDOOR_USERS_FILE = overrides.TP_FRONTDOOR_USERS_FILE;
@@ -91,6 +109,57 @@ function buildRequest(url, options = {}) {
   return new NextRequest(url, options);
 }
 
+function createAccessJwt(overrides = {}) {
+  const now = Math.floor(Date.now() / 1000);
+  const header = {
+    alg: "RS256",
+    kid: TEST_CF_ACCESS_KID,
+    typ: "JWT"
+  };
+  const payload = {
+    aud: [TEST_CF_ACCESS_AUD],
+    email: "admin@example.com",
+    exp: now + 300,
+    iat: now - 5,
+    iss: TEST_CF_ACCESS_TEAM_DOMAIN,
+    nbf: now - 5,
+    ...overrides
+  };
+
+  const encodedHeader = Buffer.from(JSON.stringify(header)).toString("base64url");
+  const encodedPayload = Buffer.from(JSON.stringify(payload)).toString("base64url");
+  const signingInput = `${encodedHeader}.${encodedPayload}`;
+  const encodedSignature = createSign("RSA-SHA256")
+    .update(signingInput)
+    .end()
+    .sign(TEST_CF_ACCESS_KEYS.privateKey)
+    .toString("base64url");
+
+  return `${signingInput}.${encodedSignature}`;
+}
+
+function withMockedAccessCerts() {
+  const originalFetch = global.fetch;
+  global.fetch = async (url) => {
+    assert.equal(String(url), `${TEST_CF_ACCESS_TEAM_DOMAIN}/cdn-cgi/access/certs`);
+    return Response.json(
+      {
+        keys: [TEST_CF_ACCESS_PUBLIC_JWK]
+      },
+      {
+        status: 200,
+        headers: {
+          "content-type": "application/json"
+        }
+      }
+    );
+  };
+
+  return () => {
+    global.fetch = originalFetch;
+  };
+}
+
 test("login POST rotates the session and redirects authenticated users to /portal", async () => {
   const passwordHash = await argon2.hash("correct horse battery staple");
   const env = withTempEnvironment({
@@ -107,40 +176,46 @@ test("login POST rotates the session and redirects authenticated users to /porta
   try {
     const sessions = await importFresh("../lib/sessions.js");
     const { POST } = await importFresh("../app/login/route.js");
+    const restoreFetch = withMockedAccessCerts();
 
-    const anonymousSession = sessions.createAnonymousSession();
-    const form = new URLSearchParams({
-      username: "admin",
-      password: "correct horse battery staple",
-      csrf_token: anonymousSession.csrfToken
-    });
+    try {
+      const anonymousSession = sessions.createAnonymousSession();
+      const form = new URLSearchParams({
+        username: "admin",
+        password: "correct horse battery staple",
+        csrf_token: anonymousSession.csrfToken
+      });
 
-    const request = buildRequest("https://portal.example.com/login", {
-      method: "POST",
-      headers: new Headers({
-        origin: "https://portal.example.com",
-        "content-type": "application/x-www-form-urlencoded",
-        cookie: `__Host-tp_session=${anonymousSession.id}`,
-        "cf-access-authenticated-user-email": "admin@example.com"
-      }),
-      body: form
-    });
+      const request = buildRequest("https://portal.example.com/login", {
+        method: "POST",
+        headers: new Headers({
+          origin: "https://portal.example.com",
+          "content-type": "application/x-www-form-urlencoded",
+          cookie: `__Host-tp_session=${anonymousSession.id}`,
+          "Cf-Access-Jwt-Assertion": createAccessJwt(),
+          "cf-access-authenticated-user-email": "admin@example.com"
+        }),
+        body: form
+      });
 
-    const response = await POST(request);
-    const rotatedCookie = extractSessionCookie(response);
+      const response = await POST(request);
+      const rotatedCookie = extractSessionCookie(response);
 
-    assert.equal(response.status, 303);
-    assert.equal(response.headers.get("location"), "https://portal.example.com/portal");
-    assert.ok(rotatedCookie.value);
-    assert.notEqual(rotatedCookie.value, anonymousSession.id);
-    assert.equal(sessions.getSessionById(anonymousSession.id, { touch: false }), null);
+      assert.equal(response.status, 303);
+      assert.equal(response.headers.get("location"), "https://portal.example.com/portal");
+      assert.ok(rotatedCookie.value);
+      assert.notEqual(rotatedCookie.value, anonymousSession.id);
+      assert.equal(sessions.getSessionById(anonymousSession.id, { touch: false }), null);
 
-    const authenticatedSession = sessions.getSessionById(rotatedCookie.value, { touch: false });
-    assert.equal(authenticatedSession?.authenticated, true);
-    assert.equal(authenticatedSession?.username, "admin");
-    assert.match(rotatedCookie.raw, /HttpOnly/);
-    assert.match(rotatedCookie.raw, /Secure/);
-    assert.match(rotatedCookie.raw, /SameSite=lax/i);
+      const authenticatedSession = sessions.getSessionById(rotatedCookie.value, { touch: false });
+      assert.equal(authenticatedSession?.authenticated, true);
+      assert.equal(authenticatedSession?.username, "admin");
+      assert.match(rotatedCookie.raw, /HttpOnly/);
+      assert.match(rotatedCookie.raw, /Secure/);
+      assert.match(rotatedCookie.raw, /SameSite=lax/i);
+    } finally {
+      restoreFetch();
+    }
   } finally {
     env.cleanup();
   }
@@ -162,34 +237,89 @@ test("login POST keeps failures generic when Access email does not match the con
   try {
     const sessions = await importFresh("../lib/sessions.js");
     const { POST } = await importFresh("../app/login/route.js");
+    const restoreFetch = withMockedAccessCerts();
 
-    const anonymousSession = sessions.createAnonymousSession();
-    const request = buildRequest("https://portal.example.com/login", {
-      method: "POST",
-      headers: new Headers({
-        origin: "https://portal.example.com",
-        "content-type": "application/x-www-form-urlencoded",
-        cookie: `__Host-tp_session=${anonymousSession.id}`,
-        "cf-access-authenticated-user-email": "other@example.com"
-      }),
-      body: new URLSearchParams({
-        username: "admin",
-        password: "correct horse battery staple",
-        csrf_token: anonymousSession.csrfToken
-      })
-    });
+    try {
+      const anonymousSession = sessions.createAnonymousSession();
+      const request = buildRequest("https://portal.example.com/login", {
+        method: "POST",
+        headers: new Headers({
+          origin: "https://portal.example.com",
+          "content-type": "application/x-www-form-urlencoded",
+          cookie: `__Host-tp_session=${anonymousSession.id}`,
+          "Cf-Access-Jwt-Assertion": createAccessJwt({ email: "other@example.com" }),
+          "cf-access-authenticated-user-email": "other@example.com"
+        }),
+        body: new URLSearchParams({
+          username: "admin",
+          password: "correct horse battery staple",
+          csrf_token: anonymousSession.csrfToken
+        })
+      });
 
-    const response = await POST(request);
+      const response = await POST(request);
 
-    assert.equal(response.status, 303);
-    assert.equal(response.headers.get("location"), "https://portal.example.com/login?error=invalid");
-    assert.equal(sessions.getSessionById(anonymousSession.id, { touch: false })?.authenticated, false);
+      assert.equal(response.status, 303);
+      assert.equal(response.headers.get("location"), "https://portal.example.com/login?error=invalid");
+      assert.equal(sessions.getSessionById(anonymousSession.id, { touch: false })?.authenticated, false);
+    } finally {
+      restoreFetch();
+    }
   } finally {
     env.cleanup();
   }
 });
 
 test("login POST rejects invalid CSRF before credential verification", async () => {
+  const passwordHash = await argon2.hash("correct horse battery staple");
+  const env = withTempEnvironment({
+    usersFileEntries: [
+      {
+        username: "admin",
+        password_hash: passwordHash,
+        access_email: "admin@example.com",
+        role: "admin"
+      }
+    ]
+  });
+
+  try {
+    const sessions = await importFresh("../lib/sessions.js");
+    const { POST } = await importFresh("../app/login/route.js");
+    const restoreFetch = withMockedAccessCerts();
+
+    try {
+      const anonymousSession = sessions.createAnonymousSession();
+      const request = buildRequest("https://portal.example.com/login", {
+        method: "POST",
+        headers: new Headers({
+          origin: "https://portal.example.com",
+          "content-type": "application/x-www-form-urlencoded",
+          cookie: `__Host-tp_session=${anonymousSession.id}`,
+          "Cf-Access-Jwt-Assertion": createAccessJwt(),
+          "cf-access-authenticated-user-email": "admin@example.com"
+        }),
+        body: new URLSearchParams({
+          username: "admin",
+          password: "correct horse battery staple",
+          csrf_token: "wrong-token"
+        })
+      });
+
+      const response = await POST(request);
+
+      assert.equal(response.status, 303);
+      assert.equal(response.headers.get("location"), "https://portal.example.com/login?error=csrf");
+      assert.equal(sessions.getSessionById(anonymousSession.id, { touch: false })?.authenticated, false);
+    } finally {
+      restoreFetch();
+    }
+  } finally {
+    env.cleanup();
+  }
+});
+
+test("login POST rejects convenience headers without a verified Access JWT in production", async () => {
   const passwordHash = await argon2.hash("correct horse battery staple");
   const env = withTempEnvironment({
     usersFileEntries: [
@@ -213,20 +343,200 @@ test("login POST rejects invalid CSRF before credential verification", async () 
         origin: "https://portal.example.com",
         "content-type": "application/x-www-form-urlencoded",
         cookie: `__Host-tp_session=${anonymousSession.id}`,
-        "cf-access-authenticated-user-email": "admin@example.com"
+        "cf-access-authenticated-user-email": "admin@example.com",
+        "x-access-email": "admin@example.com"
       }),
       body: new URLSearchParams({
         username: "admin",
         password: "correct horse battery staple",
-        csrf_token: "wrong-token"
+        csrf_token: anonymousSession.csrfToken
       })
     });
 
     const response = await POST(request);
 
     assert.equal(response.status, 303);
-    assert.equal(response.headers.get("location"), "https://portal.example.com/login?error=csrf");
+    assert.equal(response.headers.get("location"), "https://portal.example.com/login?error=access");
     assert.equal(sessions.getSessionById(anonymousSession.id, { touch: false })?.authenticated, false);
+  } finally {
+    env.cleanup();
+  }
+});
+
+test("login POST rejects Access JWTs with the wrong audience", async () => {
+  const passwordHash = await argon2.hash("correct horse battery staple");
+  const env = withTempEnvironment({
+    usersFileEntries: [
+      {
+        username: "admin",
+        password_hash: passwordHash,
+        access_email: "admin@example.com",
+        role: "admin"
+      }
+    ]
+  });
+
+  try {
+    const sessions = await importFresh("../lib/sessions.js");
+    const { POST } = await importFresh("../app/login/route.js");
+    const restoreFetch = withMockedAccessCerts();
+
+    try {
+      const anonymousSession = sessions.createAnonymousSession();
+      const request = buildRequest("https://portal.example.com/login", {
+        method: "POST",
+        headers: new Headers({
+          origin: "https://portal.example.com",
+          "content-type": "application/x-www-form-urlencoded",
+          cookie: `__Host-tp_session=${anonymousSession.id}`,
+          "Cf-Access-Jwt-Assertion": createAccessJwt({ aud: ["wrong-audience"] })
+        }),
+        body: new URLSearchParams({
+          username: "admin",
+          password: "correct horse battery staple",
+          csrf_token: anonymousSession.csrfToken
+        })
+      });
+
+      const response = await POST(request);
+
+      assert.equal(response.status, 303);
+      assert.equal(response.headers.get("location"), "https://portal.example.com/login?error=access");
+    } finally {
+      restoreFetch();
+    }
+  } finally {
+    env.cleanup();
+  }
+});
+
+test("login POST rejects Access JWTs with the wrong issuer", async () => {
+  const passwordHash = await argon2.hash("correct horse battery staple");
+  const env = withTempEnvironment({
+    usersFileEntries: [
+      {
+        username: "admin",
+        password_hash: passwordHash,
+        access_email: "admin@example.com",
+        role: "admin"
+      }
+    ]
+  });
+
+  try {
+    const sessions = await importFresh("../lib/sessions.js");
+    const { POST } = await importFresh("../app/login/route.js");
+    const restoreFetch = withMockedAccessCerts();
+
+    try {
+      const anonymousSession = sessions.createAnonymousSession();
+      const request = buildRequest("https://portal.example.com/login", {
+        method: "POST",
+        headers: new Headers({
+          origin: "https://portal.example.com",
+          "content-type": "application/x-www-form-urlencoded",
+          cookie: `__Host-tp_session=${anonymousSession.id}`,
+          "Cf-Access-Jwt-Assertion": createAccessJwt({ iss: "https://wrong-team.cloudflareaccess.com" })
+        }),
+        body: new URLSearchParams({
+          username: "admin",
+          password: "correct horse battery staple",
+          csrf_token: anonymousSession.csrfToken
+        })
+      });
+
+      const response = await POST(request);
+
+      assert.equal(response.status, 303);
+      assert.equal(response.headers.get("location"), "https://portal.example.com/login?error=access");
+    } finally {
+      restoreFetch();
+    }
+  } finally {
+    env.cleanup();
+  }
+});
+
+test("production ignores the local bypass flag without a verified Access JWT", async () => {
+  const passwordHash = await argon2.hash("correct horse battery staple");
+  const env = withTempEnvironment({
+    TP_ALLOW_LOCAL_ACCESS_BYPASS: "1",
+    usersFileEntries: [
+      {
+        username: "admin",
+        password_hash: passwordHash,
+        access_email: "admin@example.com",
+        role: "admin"
+      }
+    ]
+  });
+
+  try {
+    const sessions = await importFresh("../lib/sessions.js");
+    const { POST } = await importFresh("../app/login/route.js");
+
+    const anonymousSession = sessions.createAnonymousSession();
+    const request = buildRequest("https://portal.example.com/login", {
+      method: "POST",
+      headers: new Headers({
+        origin: "https://portal.example.com",
+        "content-type": "application/x-www-form-urlencoded",
+        cookie: `__Host-tp_session=${anonymousSession.id}`
+      }),
+      body: new URLSearchParams({
+        username: "admin",
+        password: "correct horse battery staple",
+        csrf_token: anonymousSession.csrfToken
+      })
+    });
+
+    const response = await POST(request);
+
+    assert.equal(response.status, 303);
+    assert.equal(response.headers.get("location"), "https://portal.example.com/login?error=access");
+  } finally {
+    env.cleanup();
+  }
+});
+
+test("development local bypass still allows login without Cloudflare Access", async () => {
+  const passwordHash = await argon2.hash("correct horse battery staple");
+  const env = withTempEnvironment({
+    NODE_ENV: "development",
+    TP_ALLOW_LOCAL_ACCESS_BYPASS: "1",
+    usersFileEntries: [
+      {
+        username: "admin",
+        password_hash: passwordHash,
+        access_email: "admin@example.com",
+        role: "admin"
+      }
+    ]
+  });
+
+  try {
+    const sessions = await importFresh("../lib/sessions.js");
+    const { POST } = await importFresh("../app/login/route.js");
+
+    const anonymousSession = sessions.createAnonymousSession();
+    const request = buildRequest("http://localhost:3000/login", {
+      method: "POST",
+      headers: new Headers({
+        origin: "http://localhost:3000",
+        "content-type": "application/x-www-form-urlencoded",
+        cookie: `tp_session=${anonymousSession.id}`
+      }),
+      body: new URLSearchParams({
+        username: "admin",
+        password: "correct horse battery staple",
+        csrf_token: anonymousSession.csrfToken
+      })
+    });
+
+    const response = await POST(request);
+
+    assert.equal(response.status, 303);
+    assert.equal(response.headers.get("location"), "http://localhost:3000/portal");
   } finally {
     env.cleanup();
   }

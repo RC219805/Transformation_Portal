@@ -77,7 +77,7 @@ function renderLoginPage({ csrfToken, accessEmail, errorCode, allowLocalBypass }
             </label>
             <button type="submit">Sign in</button>
           </form>
-          <p class="footnote">Required env vars: <code>TP_FASTAPI_ORIGIN</code>, <code>TP_BACKEND_API_KEY</code>, <code>TP_FRONTDOOR_USERS_FILE</code>, <code>TP_FRONTDOOR_SESSION_DB</code>.</p>
+          <p class="footnote">Required env vars: <code>TP_FASTAPI_ORIGIN</code>, <code>TP_BACKEND_API_KEY</code>, <code>TP_FRONTDOOR_USERS_FILE</code>, <code>TP_FRONTDOOR_SESSION_DB</code>, <code>TP_CF_ACCESS_TEAM_DOMAIN</code>, <code>TP_CF_ACCESS_AUD</code>.</p>
         </div>
       </section>
     </main>
@@ -102,7 +102,7 @@ export async function GET(request) {
   }
 
   const session = currentSession || createAnonymousSession();
-  const accessContext = resolveAccessContext(request);
+  const accessContext = await resolveAccessContext(request);
   const html = renderLoginPage({
     csrfToken: session.csrfToken,
     accessEmail: accessContext.accessEmail,
@@ -149,11 +149,16 @@ export async function POST(request) {
     return redirectToLogin(request, "configuration", session);
   }
 
-  const accessContext = resolveAccessContext(request);
+  const accessContext = await resolveAccessContext(request);
+  if (accessContext.errorCode === "configuration") {
+    return redirectToLogin(request, "configuration", session);
+  }
   if (!accessContext.accessEmail && !accessContext.bypass) {
     audit("access_validation_failure", {
       path: "/login",
-      remoteAddr: getRemoteAddress(request)
+      remoteAddr: getRemoteAddress(request),
+      assertedEmail: accessContext.assertedEmail,
+      errorCode: accessContext.errorCode
     });
     return redirectToLogin(request, "access", session);
   }

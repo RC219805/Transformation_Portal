@@ -14,6 +14,23 @@ export function normalizeAccessEmail(value) {
   return String(value || "").trim().toLowerCase();
 }
 
+export function normalizeAccessTeamDomain(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+
+  const normalized = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+
+  try {
+    const url = new URL(normalized);
+    url.pathname = "";
+    url.search = "";
+    url.hash = "";
+    return `${url.protocol}//${url.host}`;
+  } catch {
+    return "";
+  }
+}
+
 function parseUsersJson(raw) {
   if (!raw) return [];
 
@@ -62,6 +79,8 @@ export function getConfig() {
     isProduction,
     fastapiOrigin: String(process.env.TP_FASTAPI_ORIGIN || "http://127.0.0.1:8000").trim(),
     backendApiKey: String(process.env.TP_BACKEND_API_KEY || "").trim(),
+    cfAccessTeamDomain: normalizeAccessTeamDomain(process.env.TP_CF_ACCESS_TEAM_DOMAIN),
+    cfAccessAud: String(process.env.TP_CF_ACCESS_AUD || "").trim(),
     sessionDbPath: String(process.env.TP_FRONTDOOR_SESSION_DB || DEFAULT_SESSION_DB_PATH).trim(),
     users,
     usersFilePath,

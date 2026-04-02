@@ -20,14 +20,18 @@ export TP_FASTAPI_ORIGIN="http://127.0.0.1:8000"
 export TP_BACKEND_API_KEY="replace-with-strong-backend-token"
 export TP_FRONTDOOR_USERS_FILE="/absolute/path/to/frontdoor-users.json"
 export TP_FRONTDOOR_SESSION_DB="/tmp/transformation-portal-frontdoor-sessions.db"
-export TP_ALLOW_LOCAL_ACCESS_BYPASS=1
+export TP_CF_ACCESS_TEAM_DOMAIN="https://your-team.cloudflareaccess.com"
+export TP_CF_ACCESS_AUD="replace-with-access-application-aud"
+export TP_ALLOW_LOCAL_ACCESS_BYPASS=0
 ```
 
 Notes:
 - `TP_FRONTDOOR_USERS_FILE` is the v1 credential source and should point to a secret-managed JSON file containing an array of `{ username, password_hash, access_email, role }`.
 - `TP_FRONTDOOR_USERS_JSON` remains available only as a local-dev and test fallback when a file is not supplied.
+- `TP_CF_ACCESS_TEAM_DOMAIN` must point at the Cloudflare Access team domain used to mint `Cf-Access-Jwt-Assertion`.
+- `TP_CF_ACCESS_AUD` must match the Access application audience tag for this front door.
 - `TP_ALLOW_LOCAL_ACCESS_BYPASS=1` is for local development only and is honored only when `NODE_ENV=development`.
-- Production login expects both a valid Cloudflare Access identity and a matching username/password pair.
+- Production login expects a valid `Cf-Access-Jwt-Assertion`, a matching username/password pair, and issuer/audience validation against the configured Access team domain and audience tag.
 - Development uses an HTTP-safe `tp_session` cookie. Production uses `__Host-tp_session` with `Secure`.
 
 ## Runtime Requirements
@@ -87,6 +91,11 @@ The operator UI now supports two modes:
   - Clears stored browser API keys.
   - Sends CSRF headers on unsafe requests.
   - Uses same-origin `/v1/*` without browser-visible backend credentials.
+- `managed_unavailable`
+  - Fail-closed managed state used when `/portal/bootstrap` cannot establish a valid managed session.
+  - Keeps the API key input disabled and hidden.
+  - Clears stored browser API keys and blocks privileged dispatch actions until managed auth recovers.
+  - Treats `401/403` bootstrap failures as session/auth failures and redirects back to `/login`.
 - `direct_debug`
   - Served directly from the FastAPI origin for local troubleshooting.
   - Keeps the existing API-key workflow.
@@ -98,8 +107,23 @@ FastAPI now exposes `GET /portal/bootstrap` for standalone `direct_debug` startu
 
 - Put the front door behind Cloudflare Tunnel + Access.
 - Keep the FastAPI origin non-public or otherwise inaccessible to end-user browsers.
-- Ensure Cloudflare Access identity reaches the front door origin, and validate that identity at the origin unless Tunnel is already enforcing Access there.
+- Production authentication must be driven by `Cf-Access-Jwt-Assertion`, not by convenience headers such as `cf-access-authenticated-user-email` or `x-access-email`.
+- The front door verifies the Access JWT against `${TP_CF_ACCESS_TEAM_DOMAIN}/cdn-cgi/access/certs`, requires the normalized issuer derived from `TP_CF_ACCESS_TEAM_DOMAIN`, requires `TP_CF_ACCESS_AUD`, and treats the JWT `email` claim as the canonical Access identity.
+- Convenience headers may be logged or inspected after successful JWT validation, but they are not trusted as identity on their own and are never valid authentication fallbacks.
+- If Cloudflare Tunnel is used, require origin-side Access enforcement as well:
+
+```yaml
+originRequest:
+  access:
+    required: true
+    teamName: <your-team-name>
+    audTag:
+      - <Access-application-audience-tag>
+```
+
+- Keep app-side JWT verification enabled even when Tunnel origin enforcement is active.
 - Do not route normal browser traffic directly to FastAPI.
+- If the front door is hosted on Vercel, Cloudflare must still front the user-facing hostname, the app must continue to verify the Access JWT, and deployment or preview URLs must be protected with equivalent controls such as Vercel Deployment Protection.
 - The v1 session store is SQLite-backed. Production should assume a single-instance deployment or shared persistent storage for `TP_FRONTDOOR_SESSION_DB`; do not place the session database on ephemeral disk in a horizontally scaled setup.
 
 ## Validation
