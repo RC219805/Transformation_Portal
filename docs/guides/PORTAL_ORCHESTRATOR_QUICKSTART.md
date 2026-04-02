@@ -107,6 +107,7 @@ Front-door validation:
 
 ```bash
 cd web/secure-landing
+nvm use  # if using nvm; .nvmrc recommends Node 22.x LTS
 npm test
 npm run build
 ```

@@ -2,10 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import os from "node:os";
 import path from "node:path";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 
 import argon2 from "argon2";
-import { NextRequest } from "next/server.js";
+import { NextRequest, NextResponse } from "next/server.js";
 
 import { getDb, resetDbCache } from "../lib/db.js";
 
@@ -13,6 +13,7 @@ const ENV_KEYS = [
   "NODE_ENV",
   "TP_FASTAPI_ORIGIN",
   "TP_BACKEND_API_KEY",
+  "TP_FRONTDOOR_USERS_FILE",
   "TP_FRONTDOOR_USERS_JSON",
   "TP_FRONTDOOR_SESSION_DB",
   "TP_ALLOW_LOCAL_ACCESS_BYPASS"
@@ -37,12 +38,23 @@ function withTempEnvironment(overrides = {}) {
   const snapshot = snapshotEnv();
   const tempDir = mkdtempSync(path.join(os.tmpdir(), "tp-frontdoor-routes-"));
   const dbPath = path.join(tempDir, "sessions.sqlite");
+  const usersFilePath = path.join(tempDir, "frontdoor-users.json");
 
   process.env.NODE_ENV = overrides.NODE_ENV ?? "production";
   process.env.TP_FASTAPI_ORIGIN = overrides.TP_FASTAPI_ORIGIN ?? "http://127.0.0.1:8000";
   process.env.TP_BACKEND_API_KEY = overrides.TP_BACKEND_API_KEY ?? "backend-secret";
-  process.env.TP_FRONTDOOR_USERS_JSON = overrides.TP_FRONTDOOR_USERS_JSON ?? "[]";
   process.env.TP_FRONTDOOR_SESSION_DB = dbPath;
+
+  if (typeof overrides.TP_FRONTDOOR_USERS_FILE === "string") {
+    process.env.TP_FRONTDOOR_USERS_FILE = overrides.TP_FRONTDOOR_USERS_FILE;
+  } else if (Array.isArray(overrides.usersFileEntries)) {
+    writeFileSync(usersFilePath, JSON.stringify(overrides.usersFileEntries), "utf-8");
+    process.env.TP_FRONTDOOR_USERS_FILE = usersFilePath;
+  } else {
+    delete process.env.TP_FRONTDOOR_USERS_FILE;
+  }
+
+  process.env.TP_FRONTDOOR_USERS_JSON = overrides.TP_FRONTDOOR_USERS_JSON ?? "[]";
 
   if (typeof overrides.TP_ALLOW_LOCAL_ACCESS_BYPASS === "string") {
     process.env.TP_ALLOW_LOCAL_ACCESS_BYPASS = overrides.TP_ALLOW_LOCAL_ACCESS_BYPASS;
@@ -68,7 +80,7 @@ async function importFresh(relativePath) {
 
 function extractSessionCookie(response) {
   const cookieHeader = response.headers.get("set-cookie") || "";
-  const match = cookieHeader.match(/__Host-tp_session=([^;]+)/);
+  const match = cookieHeader.match(/(?:__Host-tp_session|tp_session)=([^;]+)/);
   return {
     raw: cookieHeader,
     value: match?.[1] || ""
@@ -82,14 +94,14 @@ function buildRequest(url, options = {}) {
 test("login POST rotates the session and redirects authenticated users to /portal", async () => {
   const passwordHash = await argon2.hash("correct horse battery staple");
   const env = withTempEnvironment({
-    TP_FRONTDOOR_USERS_JSON: JSON.stringify([
+    usersFileEntries: [
       {
         username: "admin",
         password_hash: passwordHash,
         access_email: "admin@example.com",
         role: "admin"
       }
-    ])
+    ]
   });
 
   try {
@@ -137,14 +149,14 @@ test("login POST rotates the session and redirects authenticated users to /porta
 test("login POST keeps failures generic when Access email does not match the configured account", async () => {
   const passwordHash = await argon2.hash("correct horse battery staple");
   const env = withTempEnvironment({
-    TP_FRONTDOOR_USERS_JSON: JSON.stringify([
+    usersFileEntries: [
       {
         username: "admin",
         password_hash: passwordHash,
         access_email: "admin@example.com",
         role: "admin"
       }
-    ])
+    ]
   });
 
   try {
@@ -180,14 +192,14 @@ test("login POST keeps failures generic when Access email does not match the con
 test("login POST rejects invalid CSRF before credential verification", async () => {
   const passwordHash = await argon2.hash("correct horse battery staple");
   const env = withTempEnvironment({
-    TP_FRONTDOOR_USERS_JSON: JSON.stringify([
+    usersFileEntries: [
       {
         username: "admin",
         password_hash: passwordHash,
         access_email: "admin@example.com",
         role: "admin"
       }
-    ])
+    ]
   });
 
   try {
@@ -314,6 +326,47 @@ test("managed bootstrap returns actor metadata and CSRF for authenticated sessio
   }
 });
 
+test("portal returns 503 with no-store when the FastAPI UI origin is unavailable", async () => {
+  const env = withTempEnvironment();
+
+  try {
+    const sessions = await importFresh("../lib/sessions.js");
+    const { GET } = await importFresh("../app/portal/route.js");
+    const authenticatedSession = sessions.rotateAuthenticatedSession(
+      sessions.createAnonymousSession(),
+      {
+        username: "admin",
+        accessEmail: "admin@example.com",
+        role: "admin"
+      }
+    );
+
+    const originalFetch = global.fetch;
+    global.fetch = async () => {
+      throw new Error("connection refused");
+    };
+
+    try {
+      const request = buildRequest("https://portal.example.com/portal", {
+        method: "GET",
+        headers: new Headers({
+          cookie: `__Host-tp_session=${authenticatedSession.id}`
+        })
+      });
+
+      const response = await GET(request);
+
+      assert.equal(response.status, 503);
+      assert.equal(response.headers.get("cache-control"), "no-store");
+      assert.equal(await response.text(), "Upstream service unavailable");
+    } finally {
+      global.fetch = originalFetch;
+    }
+  } finally {
+    env.cleanup();
+  }
+});
+
 test("v1 POST rejects requests missing valid same-origin CSRF protections", async () => {
   const env = withTempEnvironment();
 
@@ -379,10 +432,15 @@ test("v1 SSE proxy preserves event-stream framing while injecting backend auth s
       assert.equal(String(url), "http://127.0.0.1:8000/v1/jobs/job-123/events");
       assert.equal(init.method, "GET");
       assert.equal(init.headers.get("Authorization"), "Bearer backend-secret");
+      assert.equal(init.headers.get("Forwarded"), 'for="203.0.113.10";host="portal.example.com";proto="https"');
       assert.equal(init.headers.get("x-api-key"), "backend-secret");
       assert.equal(init.headers.get("Accept-Encoding"), "identity");
       assert.equal(init.headers.has("cookie"), false);
       assert.equal(init.headers.has("x-csrf-token"), false);
+      assert.equal(init.headers.get("x-forwarded-for"), "203.0.113.10");
+      assert.equal(init.headers.get("x-forwarded-host"), "portal.example.com");
+      assert.equal(init.headers.get("x-forwarded-proto"), "https");
+      assert.equal(init.headers.get("x-real-ip"), "203.0.113.10");
 
       return new Response(upstreamEvents, {
         status: 200,
@@ -397,6 +455,7 @@ test("v1 SSE proxy preserves event-stream framing while injecting backend auth s
       const request = buildRequest("https://portal.example.com/v1/jobs/job-123/events", {
         method: "GET",
         headers: new Headers({
+          "cf-connecting-ip": "203.0.113.10",
           cookie: `__Host-tp_session=${authenticatedSession.id}`,
           accept: "text/event-stream"
         })
@@ -413,6 +472,71 @@ test("v1 SSE proxy preserves event-stream framing while injecting backend auth s
     } finally {
       global.fetch = originalFetch;
     }
+  } finally {
+    env.cleanup();
+  }
+});
+
+test("healthz reports backend status without leaking the backend origin", async () => {
+  const env = withTempEnvironment();
+
+  try {
+    const { GET } = await importFresh("../app/healthz/route.js");
+    const originalFetch = global.fetch;
+    global.fetch = async () =>
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: {
+          "content-type": "application/json"
+        }
+      });
+
+    try {
+      const response = await GET();
+      const body = await response.json();
+
+      assert.equal(response.status, 200);
+      assert.equal(body.backend.ok, true);
+      assert.equal(body.backend.status, 200);
+      assert.equal("origin" in body.backend, false);
+    } finally {
+      global.fetch = originalFetch;
+    }
+  } finally {
+    env.cleanup();
+  }
+});
+
+test("proxy does not redirect /login based only on cookie presence", async () => {
+  const { proxy } = await importFresh("../proxy.js");
+  const response = proxy(
+    buildRequest("https://portal.example.com/login", {
+      headers: new Headers({
+        cookie: "__Host-tp_session=stale-cookie"
+      })
+    })
+  );
+
+  assert.equal(response.headers.get("location"), null);
+});
+
+test("development cookies relax __Host/Secure requirements for local HTTP", async () => {
+  const env = withTempEnvironment({
+    NODE_ENV: "development",
+    TP_ALLOW_LOCAL_ACCESS_BYPASS: "1"
+  });
+
+  try {
+    const sessions = await importFresh("../lib/sessions.js");
+    const response = NextResponse.json({ ok: true });
+    const anonymousSession = sessions.createAnonymousSession();
+
+    sessions.setSessionCookie(response, anonymousSession.id);
+
+    const cookieHeader = response.headers.get("set-cookie") || "";
+    assert.match(cookieHeader, /^tp_session=/);
+    assert.doesNotMatch(cookieHeader, /__Host-tp_session/);
+    assert.doesNotMatch(cookieHeader, /Secure/i);
   } finally {
     env.cleanup();
   }

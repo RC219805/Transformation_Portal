@@ -1,3 +1,6 @@
+import { mkdirSync } from "node:fs";
+import path from "node:path";
+
 import Database from "better-sqlite3";
 
 const dbCache = new Map();
@@ -38,7 +41,19 @@ function migrate(db) {
 export function getDb(dbPath) {
   const resolvedPath = String(dbPath);
   if (!dbCache.has(resolvedPath)) {
-    const db = new Database(resolvedPath);
+    const parentDir = path.dirname(resolvedPath);
+    if (parentDir && parentDir !== ".") {
+      mkdirSync(parentDir, { recursive: true });
+    }
+
+    let db;
+    try {
+      db = new Database(resolvedPath);
+    } catch (error) {
+      throw new Error(
+        `Unable to open TP_FRONTDOOR_SESSION_DB at ${resolvedPath}: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
     migrate(db);
     dbCache.set(resolvedPath, db);
   }

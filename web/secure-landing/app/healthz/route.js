@@ -31,8 +31,7 @@ export async function GET() {
         frontend: "ready",
         backend: {
           ok: backendOk,
-          status: backendStatus,
-          origin: getConfig().fastapiOrigin
+          status: backendStatus
         }
       },
       {

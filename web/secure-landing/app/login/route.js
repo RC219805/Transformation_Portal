@@ -77,7 +77,7 @@ function renderLoginPage({ csrfToken, accessEmail, errorCode, allowLocalBypass }
             </label>
             <button type="submit">Sign in</button>
           </form>
-          <p class="footnote">Required env vars: <code>TP_FASTAPI_ORIGIN</code>, <code>TP_BACKEND_API_KEY</code>, <code>TP_FRONTDOOR_USERS_JSON</code>, <code>TP_FRONTDOOR_SESSION_DB</code>.</p>
+          <p class="footnote">Required env vars: <code>TP_FASTAPI_ORIGIN</code>, <code>TP_BACKEND_API_KEY</code>, <code>TP_FRONTDOOR_USERS_FILE</code>, <code>TP_FRONTDOOR_SESSION_DB</code>.</p>
         </div>
       </section>
     </main>

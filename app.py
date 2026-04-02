@@ -2130,7 +2130,8 @@ async def portal_bootstrap() -> JSONResponse:
                 "apiKeyInput": True,
                 "directDebug": True,
             },
-        }
+        },
+        headers={"Cache-Control": "no-store"},
     )
 
 

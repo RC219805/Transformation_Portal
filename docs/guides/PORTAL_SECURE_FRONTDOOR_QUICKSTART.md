@@ -18,15 +18,32 @@ Create front-door env vars from `web/secure-landing/.env.example`.
 ```bash
 export TP_FASTAPI_ORIGIN="http://127.0.0.1:8000"
 export TP_BACKEND_API_KEY="replace-with-strong-backend-token"
-export TP_FRONTDOOR_USERS_JSON='[{"username":"admin","password_hash":"$argon2id$...","access_email":"admin@example.com","role":"admin"}]'
+export TP_FRONTDOOR_USERS_FILE="/absolute/path/to/frontdoor-users.json"
 export TP_FRONTDOOR_SESSION_DB="/tmp/transformation-portal-frontdoor-sessions.db"
 export TP_ALLOW_LOCAL_ACCESS_BYPASS=1
 ```
 
 Notes:
-- `TP_FRONTDOOR_USERS_JSON` is the v1 credential source and must contain Argon2id hashes.
+- `TP_FRONTDOOR_USERS_FILE` is the v1 credential source and should point to a secret-managed JSON file containing an array of `{ username, password_hash, access_email, role }`.
+- `TP_FRONTDOOR_USERS_JSON` remains available only as a local-dev and test fallback when a file is not supplied.
 - `TP_ALLOW_LOCAL_ACCESS_BYPASS=1` is for local development only and is honored only when `NODE_ENV=development`.
 - Production login expects both a valid Cloudflare Access identity and a matching username/password pair.
+- Development uses an HTTP-safe `tp_session` cookie. Production uses `__Host-tp_session` with `Secure`.
+
+## Runtime Requirements
+
+The front door is a Node app.
+
+- Recommended runtime: Node `22.x` LTS
+- Supported install/build range: `>=20.9.0 <21 || >=22 <26`
+- The package now enforces this during `npm install`
+
+If you use `nvm`, the app includes `.nvmrc`:
+
+```bash
+cd web/secure-landing
+nvm use
+```
 
 FastAPI still needs its own backend secret for machine and proxy authentication:
 
@@ -83,6 +100,7 @@ FastAPI now exposes `GET /portal/bootstrap` for standalone `direct_debug` startu
 - Keep the FastAPI origin non-public or otherwise inaccessible to end-user browsers.
 - Ensure Cloudflare Access identity reaches the front door origin, and validate that identity at the origin unless Tunnel is already enforcing Access there.
 - Do not route normal browser traffic directly to FastAPI.
+- The v1 session store is SQLite-backed. Production should assume a single-instance deployment or shared persistent storage for `TP_FRONTDOOR_SESSION_DB`; do not place the session database on ephemeral disk in a horizontally scaled setup.
 
 ## Validation
 

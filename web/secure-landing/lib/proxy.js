@@ -5,9 +5,14 @@ const STRIP_REQUEST_HEADERS = new Set([
   "connection",
   "content-length",
   "cookie",
+  "forwarded",
   "host",
+  "x-forwarded-for",
+  "x-forwarded-host",
+  "x-forwarded-proto",
   "x-api-key",
-  "x-csrf-token"
+  "x-csrf-token",
+  "x-real-ip"
 ]);
 
 const STRIP_RESPONSE_HEADERS = new Set([
@@ -27,7 +32,10 @@ export function buildUpstreamUrl(pathname, search = "") {
   return new URL(`${pathname}${search}`, getConfig().fastapiOrigin).toString();
 }
 
-export function buildUpstreamHeaders(sourceHeaders, { backendApiKey, actor, preferIdentityEncoding = false }) {
+export function buildUpstreamHeaders(
+  sourceHeaders,
+  { backendApiKey, actor, preferIdentityEncoding = false, forwarding = null }
+) {
   const headers = new Headers();
 
   for (const [key, value] of sourceHeaders.entries()) {
@@ -39,6 +47,17 @@ export function buildUpstreamHeaders(sourceHeaders, { backendApiKey, actor, pref
   if (preferIdentityEncoding) {
     headers.set("Accept-Encoding", "identity");
   }
+
+  if (forwarding?.proto) headers.set("x-forwarded-proto", forwarding.proto);
+  if (forwarding?.host) headers.set("x-forwarded-host", forwarding.host);
+  if (forwarding?.clientIp && forwarding.clientIp !== "unknown") {
+    headers.set("x-forwarded-for", forwarding.clientIp);
+    headers.set("x-real-ip", forwarding.clientIp);
+    if (forwarding.host && forwarding.proto) {
+      headers.set("Forwarded", `for="${forwarding.clientIp}";host="${forwarding.host}";proto="${forwarding.proto}"`);
+    }
+  }
+
   headers.set("Authorization", `Bearer ${backendApiKey}`);
   headers.set("x-api-key", backendApiKey);
 

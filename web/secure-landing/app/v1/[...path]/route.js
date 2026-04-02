@@ -139,7 +139,12 @@ async function handleProxy(request, { params }) {
   const upstreamHeaders = buildUpstreamHeaders(request.headers, {
     backendApiKey: config.backendApiKey,
     actor: session,
-    preferIdentityEncoding: sseRequest
+    preferIdentityEncoding: sseRequest,
+    forwarding: {
+      clientIp: String(request.headers.get("cf-connecting-ip") || "").trim() || null,
+      host: request.headers.get("host") || request.nextUrl.host,
+      proto: request.nextUrl.protocol.replace(":", "")
+    }
   });
 
   const fetchOptions = {

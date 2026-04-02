@@ -81,8 +81,9 @@ def test_ready_keeps_non_enveloped_shape(client: TestClient) -> None:
 
 def test_portal_bootstrap_reports_direct_debug_mode(client: TestClient) -> None:
     response = client.get("/portal/bootstrap")
-    body = response.json()
     assert response.status_code == 200
+    assert response.headers["Cache-Control"] == "no-store"
+    body = response.json()
     assert body["authMode"] == "direct_debug"
     assert body["csrfToken"] is None
     assert body["actor"] is None

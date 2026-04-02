@@ -54,6 +54,7 @@ Portal surfaces:
 - FastAPI on `127.0.0.1:8000` remains the system-of-record origin for the portal HTML, `/ready`, and `/v1/*`.
 - The secure front door in `web/secure-landing/` is the managed browser entry point and keeps the backend API key out of browser code.
 - Direct FastAPI portal access is now a `direct_debug` workflow for local troubleshooting, not the preferred production browser path.
+- The front door is a Node app. `web/secure-landing` now documents and enforces its supported Node runtime range, with `22.x` LTS recommended.
 
 ---
 

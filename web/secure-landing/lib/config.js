@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+
 const DEFAULT_SESSION_DB_PATH = "/tmp/transformation-portal-frontdoor-sessions.db";
 const SESSION_IDLE_TIMEOUT_MS = 8 * 60 * 60 * 1000;
 const SESSION_ABSOLUTE_TIMEOUT_MS = 24 * 60 * 60 * 1000;
@@ -34,19 +36,37 @@ function parseUsersJson(raw) {
     .filter((item) => item.username && item.passwordHash && item.accessEmail);
 }
 
+function parseUsersFile(filePath) {
+  if (!filePath) return [];
+
+  try {
+    const raw = readFileSync(String(filePath), "utf-8");
+    return parseUsersJson(raw);
+  } catch {
+    return [];
+  }
+}
+
 export function getConfig() {
   const nodeEnv = process.env.NODE_ENV || "development";
+  const isProduction = nodeEnv === "production";
   const allowLocalAccessBypass =
     nodeEnv === "development" && process.env.TP_ALLOW_LOCAL_ACCESS_BYPASS === "1";
+  const usersFilePath = String(process.env.TP_FRONTDOOR_USERS_FILE || "").trim();
+  const users = usersFilePath
+    ? parseUsersFile(usersFilePath)
+    : parseUsersJson(process.env.TP_FRONTDOOR_USERS_JSON || "[]");
 
   return {
     nodeEnv,
-    isProduction: nodeEnv === "production",
+    isProduction,
     fastapiOrigin: String(process.env.TP_FASTAPI_ORIGIN || "http://127.0.0.1:8000").trim(),
     backendApiKey: String(process.env.TP_BACKEND_API_KEY || "").trim(),
     sessionDbPath: String(process.env.TP_FRONTDOOR_SESSION_DB || DEFAULT_SESSION_DB_PATH).trim(),
-    users: parseUsersJson(process.env.TP_FRONTDOOR_USERS_JSON || "[]"),
-    sessionCookieName: "__Host-tp_session",
+    users,
+    usersFilePath,
+    sessionCookieName: isProduction ? "__Host-tp_session" : "tp_session",
+    sessionCookieSecure: isProduction,
     sessionIdleTimeoutMs: SESSION_IDLE_TIMEOUT_MS,
     sessionAbsoluteTimeoutMs: SESSION_ABSOLUTE_TIMEOUT_MS,
     loginWindowMs: LOGIN_WINDOW_MS,

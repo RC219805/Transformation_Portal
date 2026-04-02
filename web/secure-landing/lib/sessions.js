@@ -191,20 +191,22 @@ export function destroySession(sessionId, reason = "logout") {
 }
 
 export function setSessionCookie(response, sessionId) {
-  response.cookies.set(getConfig().sessionCookieName, sessionId, {
+  const config = getConfig();
+  response.cookies.set(config.sessionCookieName, sessionId, {
     httpOnly: true,
-    secure: true,
+    secure: config.sessionCookieSecure,
     sameSite: "lax",
     path: "/",
-    maxAge: Math.floor(getConfig().sessionAbsoluteTimeoutMs / 1000)
+    maxAge: Math.floor(config.sessionAbsoluteTimeoutMs / 1000)
   });
   return response;
 }
 
 export function clearSessionCookie(response) {
-  response.cookies.set(getConfig().sessionCookieName, "", {
+  const config = getConfig();
+  response.cookies.set(config.sessionCookieName, "", {
     httpOnly: true,
-    secure: true,
+    secure: config.sessionCookieSecure,
     sameSite: "lax",
     path: "/",
     expires: new Date(0)
