@@ -69,9 +69,7 @@ def detect_transformers_torch_version_issue(
         and torch_version_tuple < (2, 4)
         and transformers_version_tuple >= (5, 3)
     ):
-        details.append(
-            f"installed torch {torch_version} is below the minimum expected by transformers {transformers_version}"
-        )
+        details.append(f"installed torch {torch_version} is below the minimum expected by transformers {transformers_version}")
 
     numpy_version = _installed_version("numpy")
     if (
