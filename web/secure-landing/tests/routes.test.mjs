@@ -123,8 +123,9 @@ function createAccessJwt(overrides = {}) {
   const now = Math.floor(Date.now() / 1000);
   const kid = overrides.kid ?? TEST_CF_ACCESS_KID;
   const privateKey = overrides.privateKey ?? TEST_CF_ACCESS_KEYS.privateKey;
+  const alg = overrides.alg ?? "RS256";
   const header = {
-    alg: "RS256",
+    alg,
     kid,
     typ: "JWT"
   };
@@ -954,6 +955,54 @@ test("Access JWT verification refreshes certs on unknown kid after rotation", as
     assert.equal(initial.accessEmail, "admin@example.com");
     assert.equal(rotated.accessEmail, "admin@example.com");
     assert.equal(fetchCount, 2);
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test("Access JWT verification preserves unsupported algorithm failures", async () => {
+  const { verifyAccessJwt } = await importFresh("../lib/access-jwt.js");
+  const originalFetch = global.fetch;
+
+  global.fetch = async (url, init) => {
+    assert.equal(String(url), `${TEST_CF_ACCESS_TEAM_DOMAIN}/cdn-cgi/access/certs`);
+    assert.ok(init.signal);
+    return Response.json({ keys: [TEST_CF_ACCESS_PUBLIC_JWK] }, { status: 200 });
+  };
+
+  try {
+    await assert.rejects(
+      () =>
+        verifyAccessJwt(createAccessJwt({ alg: "HS256" }), {
+          teamDomain: TEST_CF_ACCESS_TEAM_DOMAIN,
+          audience: TEST_CF_ACCESS_AUD
+        }),
+      (error) => error?.code === "unsupported_algorithm"
+    );
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test("Access JWT verification fails closed when cert fetch times out", async () => {
+  const { verifyAccessJwt } = await importFresh("../lib/access-jwt.js");
+  const originalFetch = global.fetch;
+
+  global.fetch = async (url, init) => {
+    assert.equal(String(url), `${TEST_CF_ACCESS_TEAM_DOMAIN}/cdn-cgi/access/certs`);
+    assert.ok(init.signal);
+    throw Object.assign(new Error("timed out"), { name: "AbortError" });
+  };
+
+  try {
+    await assert.rejects(
+      () =>
+        verifyAccessJwt(createAccessJwt(), {
+          teamDomain: TEST_CF_ACCESS_TEAM_DOMAIN,
+          audience: TEST_CF_ACCESS_AUD
+        }),
+      (error) => error?.code === "jwks_unreachable"
+    );
   } finally {
     global.fetch = originalFetch;
   }

@@ -77,7 +77,7 @@ function renderLoginPage({ csrfToken, accessEmail, errorCode, allowLocalBypass }
             </label>
             <button type="submit">Sign in</button>
           </form>
-          <p class="footnote">Required env vars: <code>TP_FASTAPI_ORIGIN</code>, <code>TP_BACKEND_API_KEY</code>, <code>TP_FRONTDOOR_USERS_FILE</code>, <code>TP_FRONTDOOR_SESSION_DB</code>, <code>TP_CF_ACCESS_TEAM_DOMAIN</code>, <code>TP_CF_ACCESS_AUD</code>.</p>
+          <p class="footnote">Production / Cloudflare Access env vars: <code>TP_FASTAPI_ORIGIN</code>, <code>TP_BACKEND_API_KEY</code>, <code>TP_FRONTDOOR_USERS_FILE</code>, <code>TP_FRONTDOOR_SESSION_DB</code>, <code>TP_CF_ACCESS_TEAM_DOMAIN</code>, <code>TP_CF_ACCESS_AUD</code>.</p>
         </div>
       </section>
     </main>

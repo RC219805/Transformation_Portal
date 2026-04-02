@@ -3,6 +3,7 @@ import { createPublicKey, verify as verifySignature } from "node:crypto";
 import { normalizeAccessEmail, normalizeAccessTeamDomain } from "./config.js";
 
 const ACCESS_CERT_CACHE_TTL_MS = 5 * 60 * 1000;
+const ACCESS_CERT_FETCH_TIMEOUT_MS = 5 * 1000;
 const ACCESS_CERT_CACHE = new Map();
 
 class AccessJwtError extends Error {
@@ -58,13 +59,19 @@ async function fetchAccessCerts(teamDomain, { forceRefresh = false } = {}) {
     return cached.keys;
   }
 
+  const signal = AbortSignal.timeout(ACCESS_CERT_FETCH_TIMEOUT_MS);
   let response;
   try {
     response = await fetch(certsUrl, {
       headers: { Accept: "application/json" },
-      cache: "no-store"
+      cache: "no-store",
+      signal
     });
   } catch (error) {
+    const errorName = String(error?.name || "");
+    if (errorName === "AbortError" || errorName === "TimeoutError") {
+      throw new AccessJwtError("jwks_unreachable", "Access cert fetch timed out.");
+    }
     throw new AccessJwtError("jwks_unreachable", error instanceof Error ? error.message : "Access cert fetch failed.");
   }
 
@@ -92,9 +99,9 @@ async function fetchAccessCerts(teamDomain, { forceRefresh = false } = {}) {
   return keys;
 }
 
-function verifyWithJwk({ alg, signingInput, signature, jwk }) {
+function verifyWithJwk({ signatureAlgorithm, signingInput, signature, jwk }) {
   const key = createPublicKey({ key: jwk, format: "jwk" });
-  return verifySignature(resolveAccessSignatureAlgorithm(alg), signingInput, key, signature);
+  return verifySignature(signatureAlgorithm, signingInput, key, signature);
 }
 
 function normalizeAccessIssuer(value) {
@@ -137,6 +144,7 @@ export async function verifyAccessJwt(token, { teamDomain, audience }) {
   }
 
   const parsed = parseAccessJwt(token);
+  const signatureAlgorithm = resolveAccessSignatureAlgorithm(parsed.header?.alg);
   let candidateKeys = await fetchAccessCerts(expectedIssuer);
   let matchingKeys = parsed.header?.kid
     ? candidateKeys.filter((candidate) => candidate?.kid === parsed.header.kid)
@@ -154,7 +162,7 @@ export async function verifyAccessJwt(token, { teamDomain, audience }) {
   const signatureValid = matchingKeys.some((candidate) => {
     try {
       return verifyWithJwk({
-        alg: parsed.header?.alg,
+        signatureAlgorithm,
         signingInput: parsed.signingInput,
         signature: parsed.signature,
         jwk: candidate
