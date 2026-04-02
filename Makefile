@@ -46,8 +46,8 @@ help:
 	@echo "  test-structure     Run codebase structure validation tests"
 	@echo "  test-utils         Run tests for performance and error handling utilities"
 	@echo "  coverage-fast-scope  Run branch coverage for audited core/config and streaming paths"
-	@echo "  validate-orchestrator-http  Run live portal orchestrator HTTP smoke against a running backend"
-	@echo "  validate-portal-browser  Run browser-driven portal smoke against a running backend"
+	@echo "  validate-orchestrator-http  Run portal orchestrator HTTP contract tests"
+	@echo "  validate-portal-browser  Run portal/orchestrator runtime + HTTP contract tests"
 	@echo "  venv               Create local .venv if missing"
 	@echo "  clean              Remove Python cache files and build artifacts"
 	@echo ""
@@ -184,12 +184,12 @@ test-orchestrator-contract:
 	@"$(PY)" -m pytest -q tests/test_app_orchestrator_runtime.py tests/test_app_orchestrator_contract_http.py
 
 validate-orchestrator-http:
-	@echo "Running live portal orchestrator HTTP smoke against $${TP_ORCHESTRATOR_BASE_URL:-http://127.0.0.1:8000}..."
-	@"$(PY)" scripts/validation/validate_orchestrator_http_smoke.py
+	@echo "Running portal orchestrator HTTP contract tests..."
+	@"$(PY)" -m pytest -q tests/test_app_orchestrator_contract_http.py
 
 validate-portal-browser:
-	@echo "Running browser-driven portal smoke against $${TP_ORCHESTRATOR_BASE_URL:-http://127.0.0.1:8000}..."
-	@"$(PY)" scripts/validation/validate_portal_browser_smoke.py
+	@echo "Running portal/orchestrator runtime + HTTP contract tests..."
+	@"$(PY)" -m pytest -q tests/test_app_orchestrator_runtime.py tests/test_app_orchestrator_contract_http.py
 
 coverage-fast-scope:
 	@rm -f .coverage.fast-scope .coverage.fast-scope.*

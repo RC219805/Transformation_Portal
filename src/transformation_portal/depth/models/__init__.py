@@ -9,18 +9,29 @@ from __future__ import annotations
 from importlib import import_module
 from typing import Dict, Tuple
 
+
+class CoreMLExporter:
+    """Compatibility shim for the removed optional CoreML exporter surface.
+
+    The historical ``coreml_exporter`` module is not shipped in this repository.
+    Keep the symbol importable so existing imports fail with a clear message
+    instead of silently aliasing to an unrelated estimator class.
+    """
+
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        del args, kwargs
+        raise ModuleNotFoundError(
+            "CoreMLExporter is not bundled in transformation_portal.depth.models. "
+            "Use transformation_portal.lux_depth_v3.coreml_backend.CoreMLDepthEstimator "
+            "or an explicit coremltools export flow instead."
+        )
+
+
 _EXPORTS: Dict[str, Tuple[str, str]] = {
     "CoreMLDepthModel": (".coreml_wrapper", "CoreMLDepthModel"),
     "DepthAnythingV2Model": (".depth_anything_v2", "DepthAnythingV2Model"),
     "ModelBackend": (".depth_anything_v2", "ModelBackend"),
     "ModelVariant": (".depth_anything_v2", "ModelVariant"),
-    # CoreML exports are implemented in the lux_depth_v3 CoreML backend.
-    # Keep these names as lazy aliases to preserve the public import surface
-    # without requiring a local coreml_exporter module.
-    "CoreMLExporter": (
-        "transformation_portal.lux_depth_v3.coreml_backend",
-        "CoreMLDepthEstimator",
-    ),
     "CoreMLDepthEstimator": (
         "transformation_portal.lux_depth_v3.coreml_backend",
         "CoreMLDepthEstimator",
