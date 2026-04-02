@@ -1,14 +1,14 @@
 # Material PBR Migration Guide
 
-**Version:** 5.0.0
+**Version:** 5.1.0
 **Migration Path:** Experimental → Stable
-**Last Updated:** 2026-02-18
+**Last Updated:** 2026-04-01
 
 ---
 
 ## Overview
 
-This guide documents the migration path from experimental PBR implementations to the stable v5.0.0 Material PBR Integration. It covers API changes, preset upgrades, performance expectations, and rollback procedures.
+This guide documents the migration path from experimental PBR implementations to the stable v5.1.0 Material PBR Integration. It covers API changes, preset upgrades, performance expectations, and rollback procedures.
 
 ---
 
@@ -89,7 +89,7 @@ normal = result.normal
 
 ```yaml
 # config/presets/material_pbr.yaml
-version: "5.0.0"
+version: "5.1.0"
 tier: stable
 backend:
   type: heuristic
@@ -188,7 +188,7 @@ result = backend.generate_pbr_textures(rgb, material_hint="wood_floor")  # May n
 # Stable: PBR-accurate material taxonomy
 result = backend.generate_pbr_textures(rgb, material_hint="wood")  # Standardized
 
-# Supported materials (v5.0.0):
+# Supported materials (v5.1.0):
 # - wood, stone, metal, glass, fabric, concrete, plastic, ceramic
 ```
 
@@ -260,7 +260,7 @@ for mask, material in zip(masks, material_labels):
 
 ### Experimental vs Stable Baselines
 
-| Metric                  | Experimental (v4.x) | Stable (v5.0.0) | Change  |
+| Metric                  | Experimental (v4.x) | Stable (v5.1.0) | Change  |
 |-------------------------|---------------------|-----------------|---------|
 | Small TIFF (0.06 MP)    | ~0.4s               | 0.29s           | 🟢 -28% |
 | Large TIFF (12 MP)      | ~60s                | 51.39s          | 🟢 -14% |
@@ -279,7 +279,7 @@ for mask, material in zip(masks, material_labels):
 
 ## Feature Comparison Matrix
 
-| Feature                        | Experimental | Stable v5.0.0 | Canary v5.0.0-canary |
+| Feature                        | Experimental | Stable v5.1.0 | Canary v5.0.0-canary |
 |--------------------------------|--------------|---------------|----------------------|
 | **Backend**                    |              |               |                      |
 | Heuristic (CPU)                | ✅           | ✅            | ✅ (fallback)        |
@@ -495,7 +495,7 @@ AttributeError: 'PBRTextures' object has no attribute 'metadata'
 
 **Cause:** Using old experimental backend without metadata support
 
-**Solution:** Upgrade to stable v5.0.0 (metadata guaranteed)
+**Solution:** Upgrade to stable v5.1.0 (metadata guaranteed)
 
 ---
 
@@ -541,6 +541,7 @@ AttributeError: 'PBRTextures' object has no attribute 'metadata'
 
 | Version | Date       | Changes                                    |
 |---------|------------|--------------------------------------------|
+| 5.1.0   | 2026-04-01 | Added explicit `preset_family` governance marker to the stable preset |
 | 5.0.0   | 2026-02-18 | Initial stable release                     |
 | 4.x     | 2025-2026  | Experimental implementations (deprecated)  |
 

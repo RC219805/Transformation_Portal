@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - See: `docs/architecture/ADR-043-orchestrator-decomposition.md`
 
 ### Changed
+- **Materials Governance Boundary:** Top-level material presets now declare `preset_family: materials_pbr`, typoed family markers fail closed across schema/health/compliance validation, placeholder scanning is shared between preset health and compliance validation, and execution-phase materials runtime requirements now explicitly advertise artifact attestation + isolated worker expectations.
+- **Material PBR Stable Preset v5.1.0:** Promoted the stable `material_pbr.yaml` preset from `5.0.0` to `5.1.0` to record the explicit family-marker governance change without violating the preset immutability contract.
 - **Ingest Contract v1.0.2:** Bumped ingest schema version from `1.0.1` to `1.0.2` for schema-governance compliance on `schemas.py` updates.
 - **Ingest Contract Documentation:** Updated `docs/apex/ingest_contract.md` to reflect schema version `1.0.2`.
 - **Ingest Contract v1.0.1:** Bumped ingest schema version from `1.0.0` to `1.0.1` for metadata normalization semantics hardening.

@@ -54,6 +54,55 @@ def test_unknown_material_backend_schema_path_is_rejected(tmp_path: Path):
     assert "materials.runtime.backend" in issues[0]
 
 
+def test_top_level_materials_preset_requires_explicit_family_marker(tmp_path: Path):
+    module = _load_module()
+    preset_path = tmp_path / "material_pbr.yaml"
+    preset_path.write_text(
+        yaml.safe_dump(
+            {
+                "name": "PBR Material Generation (Stable)",
+                "tier": "stable",
+                "backend": {
+                    "type": "heuristic",
+                },
+            },
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+
+    issues = module.check_preset(preset_path)
+    assert len(issues) == 1
+    assert "preset_family='materials_pbr'" in issues[0]
+
+
+def test_incorrect_top_level_materials_preset_family_is_rejected(tmp_path: Path):
+    module = _load_module()
+    preset_path = tmp_path / "material_pbr.yaml"
+    preset_path.write_text(
+        yaml.safe_dump(
+            {
+                "name": "PBR Material Generation (Stable)",
+                "tier": "stable",
+                "preset_family": "material-pbr",
+                "backend": {
+                    "type": "heuristic",
+                },
+                "pbr": {
+                    "resolution": "match_input",
+                },
+            },
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+
+    issues = module.check_preset(preset_path)
+    assert len(issues) == 1
+    assert "preset_family='materials_pbr'" in issues[0]
+    assert "got 'material-pbr'" in issues[0]
+
+
 def test_non_materials_preset_is_ignored(tmp_path: Path):
     module = _load_module()
     preset_path = tmp_path / "reconstruction_only.yaml"

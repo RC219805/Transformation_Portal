@@ -2,7 +2,7 @@
 #
 # Status: EXPERIMENTAL - research backend source tuple remains unresolved pending attestation/runtime integration
 # Phase: 2.2 (MaterialGAN/NVDIFFREC Integration)
-# Last Updated: 2026-02-11
+# Last Updated: 2026-04-01
 #
 # Purpose:
 #   Physics-based PBR texture generation for architectural visualization
@@ -39,11 +39,14 @@ name: "PBR Material Generation (Experimental)"
 version: "2.2.0"
 tier: "dev"  # Experimental preset; neural research backends require separate runtime/contracts
 license_restriction: research_only  # Research-only backends require explicit governance opt-in
+preset_family: "materials_pbr"  # Explicit schema marker for top-level materials preset forms
 
 governance:
   materials:
     allow_research_materials: true
     allow_unattested_materials: true
+    runtime_attestation_phase: "execution"
+    execution_policy: "isolated_worker_required"
 
 # Model Configuration
 model:
