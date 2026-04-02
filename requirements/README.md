@@ -76,6 +76,7 @@ To ensure deterministic builds, the checked-in ML contract is limited to platfor
 | Linux | `ml-core-linux.txt` | validated independently against the runtime and lock contract checks |
 
 **Contract notes:**
+- All platform core locks still anchor on torch 2.2.2 for deterministic CAS identity.
 - The Intel Darwin lock is the conservative compatibility lane and must keep `numpy<2` and `transformers<5`.
 - The Apple Silicon Darwin lock must keep pinned `coremltools` and must remain free of Linux/CUDA-only packages.
 - Darwin platform-core lockfiles must never contain `nvidia-*` or `triton`.
@@ -297,7 +298,7 @@ Targets:
   check             Verify that .txt files are up-to-date with .in files
   clean             Remove all compiled .txt files
 
-Checked-in ML layer targets (platform-core contract):
+Checked-in ML layer targets (platform-core contract, CPU-only PyTorch index):
   ml-core-darwin-x86_64.txt  macOS Intel ML baseline
   ml-core-darwin-arm64.txt   macOS Apple Silicon ML baseline
   ml-core-linux.txt   Linux ML baseline
