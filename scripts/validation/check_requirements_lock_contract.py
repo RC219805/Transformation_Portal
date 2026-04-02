@@ -95,12 +95,9 @@ NUMERIC_VERSION_PATTERN = re.compile(r"\d+")
 DARWIN_X86_NUMPY_GUARD_PATTERN = re.compile(r"^numpy\s*<\s*2(?:\.0+)?(?:\s|$)", re.IGNORECASE)
 DARWIN_X86_TRANSFORMERS_GUARD_PATTERN = re.compile(r"^transformers[^#\n]*<\s*5(?:\.0+)?(?:\s|$)", re.IGNORECASE)
 DARWIN_ARM64_COREML_PATTERN = re.compile(r"^coremltools\b[^\n]*$", re.IGNORECASE)
-<<<<<<< HEAD
 LINUX_TRANSFORMERS_GUARD_PATTERN = re.compile(r"^transformers[^#\n]*<\s*5(?:\.0+)?(?:\s|$)", re.IGNORECASE)
 DARWIN_LOCKFILE_FORBIDDEN_PACKAGES = ("triton",)
 DARWIN_LOCKFILE_FORBIDDEN_PREFIXES = ("nvidia-",)
-=======
->>>>>>> 60912a79 (fix: address PR review comments - scope ML health checks, fix CoreML exports, fix coremltools regex)
 # Note: [^\n]* (not [^#\n]*) intentionally matches lines that carry inline comments,
 # because ml-core-darwin-arm64.in declares coremltools with a trailing # comment.
 # The x86 guard patterns check stripped non-comment lines, so they use [^#\n]*.
@@ -248,6 +245,7 @@ def _read_pinned_packages(lock_path: Path) -> dict[str, str]:
             packages[_normalize_package_name(match.group(1))] = match.group(2)
     return packages
 
+
 def validate_darwin_lock_purity() -> list[str]:
     """Fail if Darwin lockfiles contain Linux/CUDA-only packages."""
     errors: list[str] = []
@@ -267,6 +265,8 @@ def validate_darwin_lock_purity() -> list[str]:
                 )
 
     return errors
+
+
 def _normalized_lock_body(lock_path: Path) -> tuple[str, ...]:
     lines: list[str] = []
     for raw_line in lock_path.read_text(encoding="utf-8").splitlines():
@@ -319,6 +319,7 @@ def validate_darwin_input_guards() -> list[str]:
         )
     return errors
 
+
 def validate_linux_input_guards() -> list[str]:
     """Ensure the Linux ML input preserves the supported torch/transformers envelope."""
     linux_input = REQUIREMENTS_DIR / "ml-core-linux.in"
@@ -336,6 +337,8 @@ def validate_linux_input_guards() -> list[str]:
             "remains part of the checked-in ML contract."
         ]
     return []
+
+
 def validate_platform_lock_divergence() -> list[str]:
     """Ensure platform-specific ML core lockfiles do not collapse to the same graph."""
     darwin_lock = REQUIREMENTS_DIR / "ml-core-darwin-x86_64.txt"
