@@ -158,6 +158,28 @@ def test_da3_backend_cache_key():
     assert key1.startswith("da3_")
 
 
+def test_da3_backend_cache_key_distinguishes_apple_coreml_opt_in(monkeypatch):
+    """Apple Silicon CoreML opt-in should not collide with plain CPU cache keys."""
+    import transformation_portal.depth.backends.da3 as da3_module
+    from transformation_portal.lux_depth_v3.config import EnhanceConfig
+
+    monkeypatch.setattr(
+        da3_module,
+        "CURRENT_PLATFORM",
+        PlatformMatrix(PlatformOS.DARWIN, PlatformISA.ARM64, PlatformAccel.MPS),
+    )
+
+    image = Image.new("RGB", (64, 64))
+    cpu_backend = DA3Backend(EnhanceConfig(depth_device="cpu", use_coreml_backend=False))
+    coreml_backend = DA3Backend(EnhanceConfig(depth_device="cpu", use_coreml_backend=True))
+
+    cpu_key = cpu_backend.get_cache_key(image)
+    coreml_key = coreml_backend.get_cache_key(image)
+
+    assert cpu_key != coreml_key
+    assert "coremlopt" in coreml_key
+
+
 def test_da3_backend_registry_integration():
     """DA3Backend is registered in DepthBackendRegistry."""
     registry = DepthBackendRegistry()
@@ -226,6 +248,32 @@ def test_da3_backend_unit_contract_metadata(monkeypatch):
     assert result.metadata["output_depth_units"] == "relative"
     assert result.metadata["output_normalization"] == "minmax_0_1_per_image"
     assert any("normalized to relative" in warning for warning in result.warnings)
+
+
+def test_da3_backend_uses_engine_effective_device_metadata(monkeypatch):
+    """DA3 adapter should report the engine's effective runtime device."""
+    from transformation_portal.lux_depth_v3.config import EnhanceConfig
+
+    config = EnhanceConfig(depth_device="cpu", use_coreml_backend=True)
+    backend = DA3Backend(config)
+
+    monkeypatch.setattr(backend, "ensure_available", lambda: None)
+    backend._engine = SimpleNamespace(
+        predict=lambda _image: SimpleNamespace(
+            depth_map=np.ones((32, 32), dtype=np.float32),
+            metadata={
+                "backend": "coreml",
+                "device": "coreml",
+                "resolved_model_id": "depth-anything/DA3NESTED-GIANT-LARGE-1.1",
+            },
+        )
+    )
+
+    result = backend.compute(Image.new("RGB", (32, 32), color="white"))
+
+    assert result.device == "coreml"
+    assert result.metadata["backend"] == "coreml"
+    assert result.metadata["device"] == "coreml"
 
 
 def test_da3_backend_smoke_cpu_no_hidden_cuda(monkeypatch):

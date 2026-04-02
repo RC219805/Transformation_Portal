@@ -100,6 +100,21 @@ class DA3Backend:
 
         return ModelVariant.METRIC_LARGE
 
+    def _apple_coreml_opt_in_enabled(self) -> bool:
+        """Return whether this backend is configured to prefer Apple CoreML."""
+        return bool(
+            self._config is not None
+            and getattr(self._config, "use_coreml_backend", False)
+            and CURRENT_PLATFORM is not None
+            and CURRENT_PLATFORM.is_apple_silicon
+        )
+
+    def _cache_device_tag(self) -> str:
+        """Return the cache key device/runtime tag for this backend config."""
+        if self._apple_coreml_opt_in_enabled():
+            return f"{self._device}_coremlopt"
+        return self._device
+
     def ensure_available(self) -> None:
         """Ensure DA3 dependencies are available.
 
@@ -215,6 +230,10 @@ class DA3Backend:
         if source_depth_units == "meters":
             warnings.append("source metric depth normalized to" " relative [0,1] for unified" " pipeline output")
 
+        effective_device = normalized_metadata.get("device", use_device)
+        if effective_device is not None:
+            effective_device = str(effective_device)
+
         # Convert to unified DepthResult
         return DepthResult(
             depth_map=result.depth_map.astype(np.float32),
@@ -224,7 +243,7 @@ class DA3Backend:
             focal_length_px=None,  # DA3 doesn't estimate focal length
             field_of_view_deg=None,
             backend_id=self.name,
-            device=use_device,
+            device=effective_device,
             dtype="float32",
             input_size=(image_array.shape[0], image_array.shape[1]),
             warnings=warnings,
@@ -257,7 +276,7 @@ class DA3Backend:
         else:
             model_name = "metric_large"
 
-        return f"da3_{model_name}_{image_hash}_{self._device}_v1"
+        return f"da3_{model_name}_{image_hash}_{self._cache_device_tag()}_v1"
 
     def _load_engine(self, device: str) -> None:
         """Lazy-load DA3InferenceEngine."""
@@ -265,12 +284,7 @@ class DA3Backend:
         from ...lux_depth_v3.inference import DA3InferenceEngine
 
         # Build DA3Config
-        use_coreml = bool(
-            self._config is not None
-            and getattr(self._config, "use_coreml_backend", False)
-            and CURRENT_PLATFORM is not None
-            and CURRENT_PLATFORM.is_apple_silicon
-        )
+        use_coreml = self._apple_coreml_opt_in_enabled()
         device_config = DeviceConfig(device=device, use_coreml=use_coreml)
         da3_config = DA3Config(
             model_variant=self._model_variant,
