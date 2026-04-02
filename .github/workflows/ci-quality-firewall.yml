@@ -323,6 +323,11 @@ jobs:
             exit "$status"
           fi
 
+      - name: Validate requirements lock contract
+        run: |
+          set -euo pipefail
+          python scripts/validation/check_requirements_lock_contract.py
+
       - name: Upload validation report
         if: always()
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f  # v7

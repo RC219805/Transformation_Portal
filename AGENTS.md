@@ -22,7 +22,7 @@ Quick reference for common workflows and commands in this repo.
 - `make clean` remove Python caches and build/test artifacts.
 - `make lint` run flake8 + pylint (non-blocking).
 - `make lint-parity` run the GitHub lint job locally with the CI-pinned Python 3.12 lint environment.
-- `make ci` run local CI checks (lint + check-json-serialization + check-yaml-governance + check-piptools-cache + test-fast + test-orchestrator-contract).
+- `make ci` run local CI checks (lint + check-json-serialization + check-yaml-governance + check-piptools-cache + check-requirements-lock-contract + check-ci-sync + test-fast + test-orchestrator-contract).
 - `make ci-full` run comprehensive local CI (`./scripts/local_ci_check.sh`).
 - `make ci-quick` run quick local CI (`./scripts/local_ci_check.sh --quick`).
 - `make pre-commit` run pre-commit hooks with CI-aligned Black/isort versions.
@@ -46,7 +46,7 @@ Quick reference for common workflows and commands in this repo.
 - `cd requirements && make compile-ml-layers LOCK_PYTHON_VERSION=3.11` compile only ML layer lockfiles.
 - `cd requirements && make update LOCK_PYTHON_VERSION=3.11` update layered lockfiles (`all/base/ml-*/dev/ci/security/tools-archive`).
 - `cd requirements && make check LOCK_PYTHON_VERSION=3.11` verify layered lockfiles are current.
-- `python3 scripts/validation/check_requirements_lock_contract.py` validate layered lock contract (headers + CPU-only ML lockfiles + layer structure).
+- `python3 scripts/validation/check_requirements_lock_contract.py` validate layered lock contract (headers + platform-core purity/compatibility guards + lane-specific lock structure).
 - `make docs` build API docs with Sphinx.
 - `make docs-clean` remove generated docs output.
 
