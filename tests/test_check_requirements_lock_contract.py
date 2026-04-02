@@ -46,6 +46,12 @@ def isolated_repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     write_makefile(tmp_path)
     for name in contract.ALL_LOCK_FILES:
         write_lockfile(tmp_path, name, "3.11")
+    write_lockfile(
+        tmp_path,
+        "ml-core-darwin-arm64.txt",
+        "3.11",
+        body="torch==2.2.2\ntransformers==4.57.6\ncoremltools==9.0\n",
+    )
     return tmp_path
 
 
@@ -62,10 +68,10 @@ def test_header_mismatch_is_reported(isolated_repo: Path) -> None:
 
 
 def test_missing_platform_core_lockfile_is_reported(isolated_repo: Path) -> None:
-    (isolated_repo / "requirements" / "ml-core-linux.txt").unlink()
+    (isolated_repo / "requirements" / "ml-core-darwin-arm64.txt").unlink()
     expected = contract.read_expected_lock_python_version()
     errors = contract.validate_lockfile_headers(expected)
-    assert errors == [f"Missing required lockfile: {isolated_repo / 'requirements' / 'ml-core-linux.txt'}"]
+    assert errors == [f"Missing required lockfile: {isolated_repo / 'requirements' / 'ml-core-darwin-arm64.txt'}"]
 
 
 def test_noncore_optional_lockfile_is_reported(isolated_repo: Path) -> None:
@@ -89,4 +95,140 @@ def test_platform_lock_wrong_os_marker_is_reported(isolated_repo: Path) -> None:
     assert errors == [
         f"{isolated_repo / 'requirements' / 'ml-core-linux.txt'}:6 contains forbidden platform marker pattern "
         f"{pattern!r} for this target lockfile"
+    ]
+
+
+def test_darwin_input_requires_numpy_lt_2_guard(isolated_repo: Path) -> None:
+    (isolated_repo / "requirements" / "ml-core-darwin-x86_64.in").write_text(
+        "torch==2.2.2\ntransformers>=4.57.0,<5\n",
+        encoding="utf-8",
+    )
+
+    errors = contract.validate_darwin_input_guards()
+
+    assert errors == [
+        f"{isolated_repo / 'requirements' / 'ml-core-darwin-x86_64.in'} must pin numpy<2 so the macOS Intel torch 2.2.x baseline "
+        "does not resolve to NumPy 2 ABI-incompatible wheels."
+    ]
+
+
+def test_darwin_input_requires_transformers_cap(isolated_repo: Path) -> None:
+    (isolated_repo / "requirements" / "ml-core-darwin-x86_64.in").write_text(
+        "numpy<2\ntransformers>=4.57.0,<6\n",
+        encoding="utf-8",
+    )
+
+    errors = contract.validate_darwin_input_guards()
+
+    assert errors == [
+        f"{isolated_repo / 'requirements' / 'ml-core-darwin-x86_64.in'} must cap transformers below 5 to preserve compatibility "
+        "with the macOS Intel torch 2.2.x baseline."
+    ]
+
+
+def test_darwin_arm64_input_rejects_intel_numpy_guard(isolated_repo: Path) -> None:
+    (isolated_repo / "requirements" / "ml-core-darwin-arm64.in").write_text(
+        "numpy<2\ncoremltools>=7.0\n",
+        encoding="utf-8",
+    )
+
+    errors = contract.validate_darwin_input_guards()
+
+    assert errors == [
+        f"{isolated_repo / 'requirements' / 'ml-core-darwin-arm64.in'} must not inherit the Intel-only numpy<2 guard. "
+        "Keep conservative NumPy caps scoped to the x86_64 lock input."
+    ]
+
+
+def test_darwin_arm64_input_requires_coremltools(isolated_repo: Path) -> None:
+    (isolated_repo / "requirements" / "ml-core-darwin-arm64.in").write_text(
+        "torch==2.2.2\ntransformers>=4.57.0,<5\n",
+        encoding="utf-8",
+    )
+
+    errors = contract.validate_darwin_input_guards()
+
+    assert errors == [
+        f"{isolated_repo / 'requirements' / 'ml-core-darwin-arm64.in'} must declare coremltools so Apple Silicon CoreML support "
+        "is part of the arm64 ML baseline contract."
+    ]
+
+
+def test_platform_lock_divergence_rejects_identical_darwin_arch_graphs(isolated_repo: Path) -> None:
+    lock_body = "numpy==2.4.3\ntorch==2.2.2\ntransformers==5.3.0\n"
+    write_lockfile(isolated_repo, "ml-core-darwin-x86_64.txt", "3.11", body=lock_body)
+    write_lockfile(isolated_repo, "ml-core-darwin-arm64.txt", "3.11", body=lock_body)
+
+    errors = contract.validate_platform_lock_divergence()
+
+    assert errors == [
+        "requirements/ml-core-darwin-x86_64.txt and requirements/ml-core-darwin-arm64.txt resolve "
+        "to identical dependency graphs; regenerate them from target-correct Darwin arch inputs."
+    ]
+
+
+def test_platform_lock_divergence_rejects_identical_darwin_linux_graphs(isolated_repo: Path) -> None:
+    lock_body = "numpy==1.26.4\ntorch==2.2.2\ntransformers==4.57.6\n"
+    write_lockfile(isolated_repo, "ml-core-darwin-x86_64.txt", "3.11", body=lock_body)
+    write_lockfile(isolated_repo, "ml-core-linux.txt", "3.11", body=lock_body)
+
+    errors = contract.validate_platform_lock_divergence()
+
+    assert errors == [
+        "requirements/ml-core-darwin-x86_64.txt and requirements/ml-core-linux.txt resolve "
+        "to identical dependency graphs; regenerate them from target-correct platform inputs."
+    ]
+
+
+def test_platform_lock_runtime_compatibility_rejects_bad_torch_transformers_pair(isolated_repo: Path) -> None:
+    write_lockfile(
+        isolated_repo,
+        "ml-core-darwin-x86_64.txt",
+        "3.11",
+        body="torch==2.2.2\ntransformers==5.3.0\nnumpy==1.26.4\n",
+    )
+
+    errors = contract.validate_platform_lock_runtime_compatibility()
+
+    assert errors == [
+        f"{isolated_repo / 'requirements' / 'ml-core-darwin-x86_64.txt'} pins torch==2.2.2 with transformers==5.3.0. "
+        "That pairing disables the transformers torch backend in this repository's supported environments."
+    ]
+
+
+def test_platform_lock_runtime_compatibility_rejects_darwin_numpy_2(isolated_repo: Path) -> None:
+    write_lockfile(
+        isolated_repo,
+        "ml-core-darwin-x86_64.txt",
+        "3.11",
+        body="torch==2.2.2\ntransformers==4.57.6\nnumpy==2.4.3\n",
+    )
+    write_lockfile(
+        isolated_repo,
+        "ml-core-linux.txt",
+        "3.11",
+        body="torch==2.2.2\ntransformers==4.57.6\nnumpy==1.26.4\n",
+    )
+
+    errors = contract.validate_platform_lock_runtime_compatibility()
+
+    assert errors == [
+        f"{isolated_repo / 'requirements' / 'ml-core-darwin-x86_64.txt'} pins torch==2.2.2 with numpy==2.4.3. "
+        "The Darwin torch 2.2.x baseline must keep numpy<2 to avoid ABI breakage."
+    ]
+
+
+def test_platform_lock_runtime_compatibility_requires_arm64_coremltools(isolated_repo: Path) -> None:
+    write_lockfile(
+        isolated_repo,
+        "ml-core-darwin-arm64.txt",
+        "3.11",
+        body="torch==2.2.2\ntransformers==4.57.6\nnumpy==2.4.3\n",
+    )
+
+    errors = contract.validate_platform_lock_runtime_compatibility()
+
+    assert errors == [
+        f"{isolated_repo / 'requirements' / 'ml-core-darwin-arm64.txt'} must include a pinned coremltools dependency so Apple Silicon "
+        "CoreML support remains part of the checked-in arm64 contract."
     ]

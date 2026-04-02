@@ -787,6 +787,21 @@ class TestCommitMarker:
         assert new_artifact_mtime == original_artifact_mtime
         assert new_committed_mtime == original_committed_mtime
 
+    def test_store_preserves_committed_entry_when_stats_update_fails(self, store: ArtifactStore):
+        """Post-commit stats failures must not roll back a visible cache entry."""
+        cache_key = _make_cache_key("post_commit_stats_failure")
+        artifact = {"data": np.array([1, 2, 3], dtype=np.int32)}
+        prov = self._make_provenance(cache_key)
+
+        store._record_cache_miss = lambda: (_ for _ in ()).throw(RuntimeError("stats unavailable"))  # type: ignore[method-assign]
+
+        store.store(cache_key, artifact, prov)
+
+        assert store.exists(cache_key)
+        loaded = store.load(cache_key)
+        assert np.array_equal(loaded["data"], artifact["data"])
+        assert store.load_provenance(cache_key).cache_key == cache_key
+
     def test_reader_self_healing_corruption_detection(self, store: ArtifactStore, cache_dir: Path):
         """Readers detect and report corruption when marker exists but payload is missing."""
         cache_key = _make_cache_key("corrupted_entry")

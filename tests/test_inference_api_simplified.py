@@ -12,13 +12,14 @@ Coverage target: Issue #3 from PBR Implementation Audit
 
 import sys
 import types
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
 
 pytestmark = pytest.mark.unit
 
+import transformation_portal.lux_depth_v3.inference as inference_module
 from transformation_portal.lux_depth_v3.config import DA3Config, DeviceConfig, ModelVariant
 from transformation_portal.lux_depth_v3.inference import DA3InferenceEngine
 
@@ -258,12 +259,77 @@ class TestRealWorldUsage:
         assert engine.validate_license_strict is True
 
 
+class TestLazyRuntimeImports:
+    """Test lazy runtime import resolution during backend auto-detection."""
+
+    @staticmethod
+    def _reset_runtime_state(monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(inference_module, "_OPTIONAL_IMPORTS_READY", False)
+        monkeypatch.setattr(inference_module, "torch", None)
+        monkeypatch.setattr(inference_module, "transformers_module", None)
+        monkeypatch.setattr(inference_module, "pipeline", None)
+        monkeypatch.setattr(inference_module, "ct", None)
+        monkeypatch.setattr(inference_module, "TORCH_AVAILABLE", False)
+        monkeypatch.setattr(inference_module, "TRANSFORMERS_AVAILABLE", False)
+        monkeypatch.setattr(inference_module, "COREML_AVAILABLE", False)
+        monkeypatch.setattr(inference_module, "TRANSFORMERS_TORCH_BACKEND_ISSUE", None)
+
+    @pytest.mark.parametrize(
+        ("device_str", "cuda_available", "mps_available", "expected_device"),
+        [
+            ("mps", False, True, "mps"),
+            ("cuda", True, False, "cuda"),
+            ("auto", False, True, "mps"),
+            ("auto", False, False, "cpu"),
+        ],
+    )
+    def test_auto_detect_backend_resolves_lazy_runtime_imports(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        device_str: str,
+        cuda_available: bool,
+        mps_available: bool,
+        expected_device: str,
+    ) -> None:
+        """Cold-start backend selection should hydrate optional runtime imports first."""
+        self._reset_runtime_state(monkeypatch)
+
+        fake_torch = types.SimpleNamespace(
+            cuda=types.SimpleNamespace(is_available=lambda: cuda_available),
+            backends=types.SimpleNamespace(mps=types.SimpleNamespace(is_available=lambda: mps_available)),
+        )
+
+        def seed_runtime_imports(*, probe_coreml: bool = False) -> None:
+            assert probe_coreml is False
+            inference_module.torch = fake_torch
+            inference_module.TORCH_AVAILABLE = True
+            inference_module.COREML_AVAILABLE = False
+
+        monkeypatch.setattr(inference_module, "_ensure_backend_detection_imports", seed_runtime_imports)
+
+        engine = DA3InferenceEngine(device_str)
+
+        assert engine.device == expected_device
+
+    def test_cpu_backend_skips_lazy_runtime_probe(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """CPU construction should remain import-light."""
+        self._reset_runtime_state(monkeypatch)
+
+        def fail_runtime_probe(*, probe_coreml: bool = False) -> None:
+            raise AssertionError(f"unexpected backend probe for cpu path (probe_coreml={probe_coreml})")
+
+        monkeypatch.setattr(inference_module, "_ensure_backend_detection_imports", fail_runtime_probe)
+
+        engine = DA3InferenceEngine("cpu")
+
+        assert engine.device == "cpu"
+
+
 class TestDA3IntegrationLogging:
     """Test DA3 integration logging accuracy."""
 
     def test_da3_load_does_not_emit_stale_custom_integration_warning(self, monkeypatch):
         """Loading DA3 model should not log stale 'custom integration required' warning."""
-        import transformation_portal.lux_depth_v3.inference as inference_module
 
         class FakeDepthAnything3:
             @classmethod

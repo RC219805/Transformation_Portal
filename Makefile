@@ -24,7 +24,7 @@ PHASE6_SMOKE_TESTS := \
 	tests/test_lux_render_pipeline_smoke.py \
 	tests/lux_depth_v3/test_orchestrator_smoke.py
 
-.PHONY: help test-fast test-novideo test-full test-integration test-structure test-utils test-orchestrator-contract coverage-fast-scope venv setup clean \
+.PHONY: help test-fast test-novideo test-full test-integration test-structure test-utils test-orchestrator-contract validate-orchestrator-http validate-portal-browser coverage-fast-scope venv setup clean \
         lint lint-parity ci ci-full pre-commit install-hooks quality-check fix-quality validate-ci organize-docs check-json-serialization check-piptools-cache \
         check-yaml-governance check-stale-docs lock lock-prod lock-ci lock-dev install-core install-ml install-ml-core install-ml-raw install-ml-sam2 install-ml-coreml docs docs-clean \
         check-test-markers check-ci-sync
@@ -46,6 +46,8 @@ help:
 	@echo "  test-structure     Run codebase structure validation tests"
 	@echo "  test-utils         Run tests for performance and error handling utilities"
 	@echo "  coverage-fast-scope  Run branch coverage for audited core/config and streaming paths"
+	@echo "  validate-orchestrator-http  Run portal orchestrator HTTP contract tests"
+	@echo "  validate-portal-browser  Run portal/orchestrator runtime + HTTP contract tests"
 	@echo "  venv               Create local .venv if missing"
 	@echo "  clean              Remove Python cache files and build artifacts"
 	@echo ""
@@ -111,11 +113,23 @@ install-ml: venv
 
 install-ml-core: venv
 	@echo "Installing ML core layer (cross-platform baseline)..."
-	@if [ "$$(uname -s)" = "Darwin" ] && [ -f requirements/ml-core-darwin.txt ]; then \
-		"$(PY)" -m pip install -r requirements/ml-core-darwin.txt && \
-		"$(PY)" -m pip install -e .; \
-	elif [ "$$(uname -s)" = "Linux" ] && [ -f requirements/ml-core-linux.txt ]; then \
-		"$(PY)" -m pip install -r requirements/ml-core-linux.txt && \
+	@ml_lock=""; \
+	py_os="$$(\"$(PY)\" -c 'import platform; print(platform.system())')"; \
+	py_arch="$$(\"$(PY)\" -c 'import platform; print(platform.machine())')"; \
+	case "$$py_arch" in \
+		aarch64) py_arch="arm64" ;; \
+		amd64) py_arch="x86_64" ;; \
+	esac; \
+	if [ "$$py_os" = "Darwin" ] && [ "$$py_arch" = "x86_64" ] && [ -f requirements/ml-core-darwin-x86_64.txt ]; then \
+		ml_lock="requirements/ml-core-darwin-x86_64.txt"; \
+	elif [ "$$py_os" = "Darwin" ] && [ "$$py_arch" = "arm64" ] && [ -f requirements/ml-core-darwin-arm64.txt ]; then \
+		ml_lock="requirements/ml-core-darwin-arm64.txt"; \
+	elif [ "$$py_os" = "Linux" ] && [ -f requirements/ml-core-linux.txt ]; then \
+		ml_lock="requirements/ml-core-linux.txt"; \
+	fi; \
+	if [ -n "$$ml_lock" ]; then \
+		echo "Using $$ml_lock"; \
+		"$(PY)" -m pip install -r "$$ml_lock" && \
 		"$(PY)" -m pip install -e .; \
 	else \
 		echo "Error: platform-specific ML core lockfile not found. Run 'cd requirements && make compile' first."; \
@@ -173,6 +187,14 @@ test-utils:
 
 test-orchestrator-contract:
 	@echo "Running portal orchestrator contract suite..."
+	@"$(PY)" -m pytest -q tests/test_app_orchestrator_runtime.py tests/test_app_orchestrator_contract_http.py
+
+validate-orchestrator-http:
+	@echo "Running portal orchestrator HTTP contract tests..."
+	@"$(PY)" -m pytest -q tests/test_app_orchestrator_contract_http.py
+
+validate-portal-browser:
+	@echo "Running portal/orchestrator runtime + HTTP contract tests..."
 	@"$(PY)" -m pytest -q tests/test_app_orchestrator_runtime.py tests/test_app_orchestrator_contract_http.py
 
 coverage-fast-scope:

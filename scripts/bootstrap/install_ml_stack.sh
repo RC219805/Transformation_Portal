@@ -214,15 +214,42 @@ build_pip_cmd() {
     fi
 }
 
+normalize_arch() {
+    local arch="$1"
+    case "${arch}" in
+        aarch64) echo "arm64" ;;
+        amd64) echo "x86_64" ;;
+        *) echo "${arch}" ;;
+    esac
+}
+
+python_platform_os() {
+    python3 -c 'import platform; print(platform.system())'
+}
+
+python_platform_arch() {
+    local arch
+    arch="$(python3 -c 'import platform; print(platform.machine())')"
+    normalize_arch "${arch}"
+}
+
 # Detect current platform and return platform-specific lockfile
 # This is critical for deterministic pip-compile resolution (Issue 1 fix)
 detect_platform_lockfile() {
-    local os_type
-    os_type="$(uname -s)"
+    local os_type arch
+    os_type="$(python_platform_os)"
+    arch="$(python_platform_arch)"
 
     case "${os_type}" in
         Darwin)
-            echo "ml-core-darwin.txt"
+            case "${arch}" in
+                x86_64) echo "ml-core-darwin-x86_64.txt" ;;
+                arm64) echo "ml-core-darwin-arm64.txt" ;;
+                *)
+                    log_error "Unsupported Darwin architecture: ${arch}"
+                    exit 1
+                    ;;
+            esac
             ;;
         Linux)
             echo "ml-core-linux.txt"
@@ -237,15 +264,9 @@ detect_platform_lockfile() {
 # Get platform identity string for CAS fingerprinting
 get_platform_id() {
     local os_type arch accel
-    os_type="$(uname -s | tr '[:upper:]' '[:lower:]')"
-    arch="$(uname -m)"
+    os_type="$(python_platform_os | tr '[:upper:]' '[:lower:]')"
+    arch="$(python_platform_arch)"
     accel="${1:-cpu}"  # Default to CPU if not specified
-
-    # Normalize architecture names
-    case "${arch}" in
-        aarch64) arch="arm64" ;;
-        amd64) arch="x86_64" ;;
-    esac
 
     echo "${os_type}-${arch}-${accel}"
 }
@@ -263,7 +284,7 @@ install_profile() {
     # SECURITY BLOCK: macOS Intel (x86_64) is NOT SUPPORTED for ML workloads
     # CVE-2025-32434 cannot be fully mitigated on this platform due to
     # lack of secure PyTorch wheels. This is a HARD FAIL, not a warning.
-    if [[ "$(uname -s)" == "Darwin" ]] && [[ "$(uname -m)" == "x86_64" ]]; then
+    if [[ "$(python_platform_os)" == "Darwin" ]] && [[ "$(python_platform_arch)" == "x86_64" ]]; then
         log_error "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
         log_error "SECURITY BLOCK: macOS Intel (x86_64) ML Stack NOT SUPPORTED"
         log_error "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -311,25 +332,28 @@ install_profile() {
             ;;
         core-mps)
             # Apple Silicon MPS acceleration (darwin-arm64-mps)
-            if [[ "$(uname -s)" != "Darwin" ]]; then
-                log_error "core-mps profile requires macOS. Current platform: $(uname -s)"
+            local python_os python_arch
+            python_os="$(python_platform_os)"
+            python_arch="$(python_platform_arch)"
+            if [[ "${python_os}" != "Darwin" ]]; then
+                log_error "core-mps profile requires macOS. Current platform: ${python_os}"
                 exit 1
             fi
-            if [[ "$(uname -m)" != "arm64" ]]; then
-                log_error "core-mps profile requires Apple Silicon (arm64). Current arch: $(uname -m)"
+            if [[ "${python_arch}" != "arm64" ]]; then
+                log_error "core-mps profile requires an arm64 Python interpreter. Current interpreter arch: ${python_arch}"
                 exit 1
             fi
             platform_id="$(get_platform_id mps)"
 
-            check_lockfile "ml-core-darwin.txt"
+            check_lockfile "${platform_lockfile}"
             log_info "Installing ML core layer + MPS acceleration (${platform_id})..."
-            log_info "Using platform-specific lockfile: ml-core-darwin.txt"
+            log_info "Using platform-specific lockfile: ${platform_lockfile}"
             log_verbose "Using PyTorch index: ${PYTORCH_INDEX}"
             if [[ "${DRY_RUN}" == "true" ]]; then
-                log_info "[DRY-RUN] Would install: requirements/ml-core-darwin.txt"
+                log_info "[DRY-RUN] Would install: requirements/${platform_lockfile}"
                 log_info "[DRY-RUN] With extra-index-url: ${PYTORCH_INDEX}"
             else
-                "${pip_cmd[@]}" --extra-index-url "${PYTORCH_INDEX}" -r "${REQUIREMENTS_DIR}/ml-core-darwin.txt"
+                "${pip_cmd[@]}" --extra-index-url "${PYTORCH_INDEX}" -r "${REQUIREMENTS_DIR}/${platform_lockfile}"
             fi
             ;;
         core-cuda)

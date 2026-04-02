@@ -29,6 +29,7 @@ logger = logging.getLogger(__name__)
 
 RAW_PREVIEW_ESCAPE_ENV = "TP_ALLOW_RAW_PREVIEW"
 RAW_INGEST_PROFILE = "tp.raw_ingest.deterministic_v1"
+RAW_CAMERA_WB_NON_POSITIVE_TOKEN = "camera_whitebalance has zero or negative gain"
 
 
 class RawIngestError(RuntimeError):
@@ -132,6 +133,23 @@ def _decode_preview_rgb(path: Path) -> np.ndarray:
         ) from exc
 
 
+def _is_camera_wb_metadata_failure(exc: Exception) -> bool:
+    return RAW_CAMERA_WB_NON_POSITIVE_TOKEN in str(exc)
+
+
+def _decode_auto_wb_linear_rgb(path: Path) -> np.ndarray:
+    from .raw_loader import load_raw_as_rgb
+
+    linear_rgb_u16 = load_raw_as_rgb(
+        path,
+        use_camera_wb=False,
+        half_size=False,
+        output_bps=16,
+        output_linear=True,
+    )
+    return np.clip(linear_rgb_u16.astype(np.float32) / 65535.0, 0.0, 1.0).astype(np.float32)
+
+
 def decode_for_lux_depth(
     path: Path,
     config: "EnhanceConfig",
@@ -171,6 +189,18 @@ def decode_for_lux_depth(
     try:
         tensor = ingest_contracts.decode_contract(path, options)
     except Exception as exc:
+        if mode != "force_preview" and _is_camera_wb_metadata_failure(exc):
+            logger.warning(
+                "Canonical RAW decode rejected camera white balance for %s; retrying with rawpy auto white balance.",
+                path.name,
+            )
+            try:
+                return _decode_auto_wb_linear_rgb(path)
+            except Exception as fallback_exc:
+                raise RawIngestError(
+                    "Canonical RAW decode failed for {}: {}. "
+                    "Auto-WB retry also failed: {}".format(path.name, exc, fallback_exc)
+                ) from fallback_exc
         if preview_allowed and mode == "auto":
             preview_message = "{}{}".format(
                 "Canonical RAW decode failed for %s;",

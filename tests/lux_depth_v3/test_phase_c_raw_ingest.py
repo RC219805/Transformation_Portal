@@ -135,6 +135,64 @@ def test_auto_mode_preview_fallback_wraps_preview_decode_failures(
     assert "cannot identify image file" in str(exc_info.value)
 
 
+def test_auto_mode_retries_non_positive_camera_wb_with_rawpy_auto_wb(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    raw_path = tmp_path / "scene_06.dng"
+    raw_path.write_bytes(b"phase_c1_fake_raw_payload")
+
+    def fail_decode_contract(*_args, **_kwargs):
+        raise RuntimeError(
+            "RAW metadata: camera_whitebalance has zero or negative gain(s) at channel(s) [3]: [1.9, 1.0, 1.6, 0.0]."
+        )
+
+    captured: dict[str, object] = {}
+
+    def fake_load_raw_as_rgb(path, **kwargs):
+        captured["path"] = Path(path)
+        captured["kwargs"] = kwargs
+        return np.full((8, 8, 3), 32768, dtype=np.uint16)
+
+    monkeypatch.setattr("transformation_portal.spatial_ai.ingest.contracts.decode_contract", fail_decode_contract)
+    monkeypatch.setattr("transformation_portal.lux_depth_v3.raw_loader.load_raw_as_rgb", fake_load_raw_as_rgb)
+
+    result = decode_for_lux_depth(raw_path, _raw_cfg("auto"))
+
+    assert result.shape == (8, 8, 3)
+    assert result.dtype == np.float32
+    assert np.allclose(result.mean(), 32768 / 65535.0, atol=1e-6)
+    assert captured["path"] == raw_path
+    assert captured["kwargs"] == {
+        "use_camera_wb": False,
+        "half_size": False,
+        "output_bps": 16,
+        "output_linear": True,
+    }
+
+
+def test_auto_mode_surfaces_auto_wb_retry_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    raw_path = tmp_path / "scene_07.dng"
+    raw_path.write_bytes(b"phase_c1_fake_raw_payload")
+
+    def fail_decode_contract(*_args, **_kwargs):
+        raise RuntimeError(
+            "RAW metadata: camera_whitebalance has zero or negative gain(s) at channel(s) [3]: [1.9, 1.0, 1.6, 0.0]."
+        )
+
+    def fail_load_raw_as_rgb(*_args, **_kwargs):
+        raise ValueError("rawpy auto WB failed")
+
+    monkeypatch.setattr("transformation_portal.spatial_ai.ingest.contracts.decode_contract", fail_decode_contract)
+    monkeypatch.setattr("transformation_portal.lux_depth_v3.raw_loader.load_raw_as_rgb", fail_load_raw_as_rgb)
+
+    with pytest.raises(RawIngestError, match="Auto-WB retry also failed: rawpy auto WB failed"):
+        _ = decode_for_lux_depth(raw_path, _raw_cfg("auto"))
+
+
 def test_capture_provenance_records_ingest_digest_fields(tmp_path: Path) -> None:
     image_path = tmp_path / "frame.png"
     Image.new("RGB", (16, 16), color=(120, 80, 40)).save(image_path)

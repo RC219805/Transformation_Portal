@@ -15,6 +15,12 @@ from typing import TYPE_CHECKING, Optional, Union
 import numpy as np
 from PIL import Image
 
+from ...core.ml_dependency_health import (
+    _installed_version,
+    detect_transformers_torch_version_issue,
+    ensure_dependency_importable,
+)
+from ...core.platform_matrix import CURRENT_PLATFORM
 from .protocol import DepthResult, LicenseType
 
 if TYPE_CHECKING:
@@ -77,17 +83,9 @@ class DA3Backend:
             if device:
                 return device
 
-        # Auto-detect device
-        try:
-            import torch
-
-            if torch.backends.mps.is_available():
-                return "mps"
-            elif torch.cuda.is_available():
-                return "cuda"
-        except ImportError:
-            logger.debug("PyTorch not installed;" " falling back to CPU for DA3Backend.")
-
+        # Backend construction should not import torch just to probe accelerators.
+        # The orchestrator passes an explicit depth_device; CPU is the safe default
+        # for ad-hoc or test instantiation in partially provisioned environments.
         return "cpu"
 
     def _resolve_model_variant(self, config: Optional["EnhanceConfig"]) -> "ModelVariant":
@@ -102,6 +100,21 @@ class DA3Backend:
 
         return ModelVariant.METRIC_LARGE
 
+    def _apple_coreml_opt_in_enabled(self) -> bool:
+        """Return whether this backend is configured to prefer Apple CoreML."""
+        return bool(
+            self._config is not None
+            and getattr(self._config, "use_coreml_backend", False)
+            and CURRENT_PLATFORM is not None
+            and CURRENT_PLATFORM.is_apple_silicon
+        )
+
+    def _cache_device_tag(self) -> str:
+        """Return the cache key device/runtime tag for this backend config."""
+        if self._apple_coreml_opt_in_enabled():
+            return f"{self._device}_coremlopt"
+        return self._device
+
     def ensure_available(self) -> None:
         """Ensure DA3 dependencies are available.
 
@@ -111,27 +124,30 @@ class DA3Backend:
         Raises:
             ImportError: If required packages not installed.
         """
-        # Check transformers
-        try:
-            import transformers  # noqa: F401
-        except ImportError as exc:
+        transformers_version = _installed_version("transformers")
+        if transformers_version is None:
             raise ImportError(
                 "transformers package not installed.\n\n"
                 "Install with:\n"
                 "  pip install transformers\n\n"
                 "See: https://huggingface.co/docs/transformers"
-            ) from exc
+            )
 
-        # Check torch
-        try:
-            import torch  # noqa: F401
-        except ImportError as exc:
+        torch_version = _installed_version("torch")
+        if torch_version is None:
             raise ImportError(
                 "torch package not installed.\n\n"
                 "Install with:\n"
                 "  pip install torch\n\n"
                 "See: https://pytorch.org/get-started/locally/"
-            ) from exc
+            )
+
+        ensure_dependency_importable("transformers")
+        ensure_dependency_importable("torch")
+
+        runtime_issue = detect_transformers_torch_version_issue(torch_version, transformers_version)
+        if runtime_issue:
+            raise ImportError(runtime_issue)
 
         logger.debug("DA3 backend dependencies available")
 
@@ -214,6 +230,10 @@ class DA3Backend:
         if source_depth_units == "meters":
             warnings.append("source metric depth normalized to" " relative [0,1] for unified" " pipeline output")
 
+        effective_device = normalized_metadata.get("device", use_device)
+        if effective_device is not None:
+            effective_device = str(effective_device)
+
         # Convert to unified DepthResult
         return DepthResult(
             depth_map=result.depth_map.astype(np.float32),
@@ -223,7 +243,7 @@ class DA3Backend:
             focal_length_px=None,  # DA3 doesn't estimate focal length
             field_of_view_deg=None,
             backend_id=self.name,
-            device=use_device,
+            device=effective_device,
             dtype="float32",
             input_size=(image_array.shape[0], image_array.shape[1]),
             warnings=warnings,
@@ -256,7 +276,7 @@ class DA3Backend:
         else:
             model_name = "metric_large"
 
-        return f"da3_{model_name}_{image_hash}_{self._device}_v1"
+        return f"da3_{model_name}_{image_hash}_{self._cache_device_tag()}_v1"
 
     def _load_engine(self, device: str) -> None:
         """Lazy-load DA3InferenceEngine."""
@@ -264,7 +284,8 @@ class DA3Backend:
         from ...lux_depth_v3.inference import DA3InferenceEngine
 
         # Build DA3Config
-        device_config = DeviceConfig(device=device)
+        use_coreml = self._apple_coreml_opt_in_enabled()
+        device_config = DeviceConfig(device=device, use_coreml=use_coreml)
         da3_config = DA3Config(
             model_variant=self._model_variant,
             device=device_config,

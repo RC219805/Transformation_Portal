@@ -17,13 +17,15 @@
 #
 # PLATFORM-SPECIFIC LOCKFILES (pip-compile cannot resolve multi-platform .in)
 # ---------------------------------------------------------------------------
-# Platform          Lockfile                 Torch Version
-# darwin-*          ml-core-darwin.txt       2.2.2
-# linux-*           ml-core-linux.txt        2.2.2
+# Platform          Lockfile                 Baseline
+# darwin-x86_64     ml-core-darwin-x86_64.txt  torch 2.2.2 + numpy<2 + transformers<5
+# darwin-arm64      ml-core-darwin-arm64.txt   Apple Silicon baseline + CoreML tooling
+# linux-*           ml-core-linux.txt          torch 2.2.2 + transformers<5
 #
 # Checked-In ML Lockfiles (compiled via this Makefile):
-#   ml-core-darwin.txt  macOS ML baseline (torch 2.2.2)
-#   ml-core-linux.txt   Linux ML baseline (torch 2.2.2)
+#   ml-core-darwin-x86_64.txt  macOS Intel conservative ML baseline
+#   ml-core-darwin-arm64.txt   macOS Apple Silicon ML baseline
+#   ml-core-linux.txt          Linux ML baseline (torch 2.2.2 + transformers<5)
 #
 # Non-core optional ML layers are not part of the checked-in lockfile contract.
 # Host-generated outputs for ml-core.txt, ml-cpu.txt, ml-mps.txt, ml-cuda.txt,
@@ -64,12 +66,14 @@ help:
 	@echo "  base.txt             Compile base.txt (constrained by all.txt)"
 	@echo ""
 	@echo "Platform-specific ML Core targets:"
-	@echo "  ml-core-darwin.txt   macOS ML baseline (torch 2.2.2)"
-	@echo "  ml-core-linux.txt    Linux ML baseline (torch 2.2.2)"
+	@echo "  ml-core-darwin-x86_64.txt  macOS Intel conservative ML baseline"
+	@echo "  ml-core-darwin-arm64.txt   macOS Apple Silicon ML baseline"
+	@echo "  ml-core-linux.txt          Linux ML baseline (torch 2.2.2 + transformers<5)"
 	@echo ""
 	@echo "Checked-in ML lockfiles:"
-	@echo "  ml-core-darwin.txt   macOS ML baseline (torch 2.2.2)"
-	@echo "  ml-core-linux.txt    Linux ML baseline (torch 2.2.2)"
+	@echo "  ml-core-darwin-x86_64.txt  macOS Intel conservative ML baseline"
+	@echo "  ml-core-darwin-arm64.txt   macOS Apple Silicon ML baseline"
+	@echo "  ml-core-linux.txt          Linux ML baseline (torch 2.2.2 + transformers<5)"
 	@echo ""
 	@echo "Non-core optional ML layers are not part of the checked-in lock contract:"
 	@echo "  ml-core.txt, ml-cpu.txt, ml-mps.txt, ml-cuda.txt,"
@@ -86,18 +90,18 @@ help:
 
 # Compile all requirements in correct order
 # Note: SAM2 is scripted-only and NOT compiled here - use bootstrap script
-compile: all.txt base.txt ml-core-darwin.txt ml-core-linux.txt dev.txt ci.txt security.txt tools-archive.txt
+compile: all.txt base.txt ml-core-darwin-x86_64.txt ml-core-darwin-arm64.txt ml-core-linux.txt dev.txt ci.txt security.txt tools-archive.txt
 	@echo "✓ All requirements compiled successfully"
 
 compile-all: compile
 
 # Compile only ML layers (useful for ML-focused updates)
 # Note: SAM2 is scripted-only and NOT compiled here
-compile-ml-layers: all.txt base.txt ml-core-darwin.txt ml-core-linux.txt
+compile-ml-layers: all.txt base.txt ml-core-darwin-x86_64.txt ml-core-darwin-arm64.txt ml-core-linux.txt
 	@echo "✓ ML layer requirements compiled successfully"
 
 # Compile only acceleration layers (useful for profile updates)
-compile-accel: all.txt base.txt ml-core-darwin.txt ml-core-linux.txt
+compile-accel: all.txt base.txt ml-core-darwin-x86_64.txt ml-core-darwin-arm64.txt ml-core-linux.txt
 	@echo "✓ Acceleration layer requirements compiled successfully"
 
 # Compile all.txt first for global resolution
@@ -112,18 +116,24 @@ base.txt: base.in all.txt
 	@$(PIP_COMPILE) -c all.txt base.in -o base.txt
 
 # ML Layer lockfiles - checked-in contract is limited to platform-specific core.
-# Platform-specific core lockfiles are constrained by base.txt so host-resolved
-# ML pins in all.txt cannot leak into darwin/linux target outputs.
+# Platform-specific core lockfiles resolve against the base layer contract.
+# Linux keeps the exact base.txt constraint. Darwin uses base.in so the
+# conservative macOS ML lock can carry numpy<2 without inheriting the
+# host-resolved base.txt NumPy exact pin.
 # NOTE: Non-core optional ML layers are not compiled here.
 # NOTE: SAM2 is scripted-only and NOT compiled here - use bootstrap script
 
 # Platform-specific ml-core lockfiles (pip-compile cannot resolve multi-platform .in)
-ml-core-darwin.txt: ml-core-darwin.in base.txt
-	@echo "Compiling ml-core-darwin.txt (macOS, torch 2.2.2)..."
-	@$(PIP_COMPILE) $(PYTORCH_CPU_INDEX) -c base.txt ml-core-darwin.in -o ml-core-darwin.txt
+ml-core-darwin-x86_64.txt: ml-core-darwin-x86_64.in base.in
+	@echo "Compiling ml-core-darwin-x86_64.txt (macOS Intel conservative baseline)..."
+	@$(PIP_COMPILE) $(PYTORCH_CPU_INDEX) -c base.in ml-core-darwin-x86_64.in -o ml-core-darwin-x86_64.txt
+
+ml-core-darwin-arm64.txt: ml-core-darwin-arm64.in base.txt
+	@echo "Compiling ml-core-darwin-arm64.txt (macOS Apple Silicon baseline)..."
+	@$(PIP_COMPILE) $(PYTORCH_CPU_INDEX) -c base.txt ml-core-darwin-arm64.in -o ml-core-darwin-arm64.txt
 
 ml-core-linux.txt: ml-core-linux.in base.txt
-	@echo "Compiling ml-core-linux.txt (Linux, torch 2.2.2)..."
+	@echo "Compiling ml-core-linux.txt (Linux baseline, transformers<5)..."
 	@$(PIP_COMPILE) $(PYTORCH_CPU_INDEX) -c base.txt ml-core-linux.in -o ml-core-linux.txt
 
 ml-core.txt ml-cpu.txt ml-mps.txt ml-cuda.txt ml-raw.txt ml-coreml.txt ml-research.txt ml.txt:
@@ -155,7 +165,8 @@ update:
 	@echo "Updating all dependencies to latest versions..."
 	@$(PIP_COMPILE) --upgrade all.in -o all.txt
 	@$(PIP_COMPILE) --upgrade -c all.txt base.in -o base.txt
-	@$(PIP_COMPILE) --upgrade $(PYTORCH_CPU_INDEX) -c base.txt ml-core-darwin.in -o ml-core-darwin.txt
+	@$(PIP_COMPILE) --upgrade $(PYTORCH_CPU_INDEX) -c base.in ml-core-darwin-x86_64.in -o ml-core-darwin-x86_64.txt
+	@$(PIP_COMPILE) --upgrade $(PYTORCH_CPU_INDEX) -c base.txt ml-core-darwin-arm64.in -o ml-core-darwin-arm64.txt
 	@$(PIP_COMPILE) --upgrade $(PYTORCH_CPU_INDEX) -c base.txt ml-core-linux.in -o ml-core-linux.txt
 	@$(PIP_COMPILE) --upgrade -c all.txt dev.in -o dev.txt
 	@$(PIP_COMPILE) --upgrade -c all.txt ci.in -o ci.txt
@@ -171,7 +182,7 @@ check:
 	repo_dir="$$(pwd)"; \
 	tmp_dir="$$(mktemp -d)"; \
 	trap 'rm -rf "$$tmp_dir"' EXIT; \
-	cp all.in base.in ml.in ml-core.in ml-core-darwin.in ml-core-linux.in ml-cpu.in ml-mps.in ml-cuda.in ml-raw.in ml-coreml.in ml-research.in dev.in ci.in security.in tools-archive.in "$$tmp_dir"/; \
+	cp all.in base.in ml.in ml-core.in ml-core-darwin-x86_64.in ml-core-darwin-arm64.in ml-core-linux.in ml-cpu.in ml-mps.in ml-cuda.in ml-raw.in ml-coreml.in ml-research.in dev.in ci.in security.in tools-archive.in "$$tmp_dir"/; \
 	for f in all.txt base.txt dev.txt ci.txt security.txt tools-archive.txt; do \
 		if [ -f "$$repo_dir/$$f" ]; then \
 			cp "$$repo_dir/$$f" "$$tmp_dir"/; \
@@ -180,7 +191,7 @@ check:
 			exit 1; \
 		fi; \
 	done; \
-	for f in ml-core-darwin.txt ml-core-linux.txt; do \
+	for f in ml-core-darwin-x86_64.txt ml-core-darwin-arm64.txt ml-core-linux.txt; do \
 		if [ -f "$$repo_dir/$$f" ]; then \
 			cp "$$repo_dir/$$f" "$$tmp_dir"/; \
 		else \
@@ -191,7 +202,8 @@ check:
 	cd "$$tmp_dir"; \
 	$(PIP_COMPILE) all.in -o all.txt >/dev/null; \
 	$(PIP_COMPILE) -c all.txt base.in -o base.txt >/dev/null; \
-	$(PIP_COMPILE) $(PYTORCH_CPU_INDEX) -c base.txt ml-core-darwin.in -o ml-core-darwin.txt >/dev/null; \
+	$(PIP_COMPILE) $(PYTORCH_CPU_INDEX) -c base.in ml-core-darwin-x86_64.in -o ml-core-darwin-x86_64.txt >/dev/null; \
+	$(PIP_COMPILE) $(PYTORCH_CPU_INDEX) -c base.txt ml-core-darwin-arm64.in -o ml-core-darwin-arm64.txt >/dev/null; \
 	$(PIP_COMPILE) $(PYTORCH_CPU_INDEX) -c base.txt ml-core-linux.in -o ml-core-linux.txt >/dev/null; \
 	$(PIP_COMPILE) -c all.txt dev.in -o dev.txt >/dev/null; \
 	$(PIP_COMPILE) -c all.txt ci.in -o ci.txt >/dev/null; \
@@ -206,7 +218,7 @@ check:
 			exit 1; \
 		fi; \
 	done; \
-	for f in ml-core-darwin.txt ml-core-linux.txt; do \
+	for f in ml-core-darwin-x86_64.txt ml-core-darwin-arm64.txt ml-core-linux.txt; do \
 		if [ -f "$$repo_dir/$$f" ]; then \
 			if ! diff -u <(normalize_req "$$tmp_dir/$$f") <(normalize_req "$$repo_dir/$$f") >/dev/null; then \
 				echo "❌ $$f is out of date. Run 'make compile' to update."; \
@@ -220,5 +232,5 @@ check:
 # Note: ml-sam2.txt removed if present (historical artifact)
 clean:
 	@echo "Removing compiled .txt files..."
-	@rm -f all.txt base.txt ml-core-darwin.txt ml-core-linux.txt ml-sam2.txt dev.txt ci.txt security.txt tools-archive.txt
+	@rm -f all.txt base.txt ml-core-darwin-x86_64.txt ml-core-darwin-arm64.txt ml-core-linux.txt ml-sam2.txt dev.txt ci.txt security.txt tools-archive.txt
 	@echo "✓ Cleanup complete"

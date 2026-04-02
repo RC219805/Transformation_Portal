@@ -1,0 +1,58 @@
+# ML Core layer for macOS Apple Silicon (Darwin arm64)
+# Platform-specific lockfile for deterministic pip-compile resolution.
+#
+# This file is Apple Silicon-specific so the repo can keep Intel-only
+# compatibility caps isolated to the x86_64 lock while allowing the arm64
+# baseline to carry Core ML support.
+#
+# Run `make compile` in this directory to generate pinned ml-core-darwin-arm64.txt
+#
+# PLATFORM TARGETS:
+#   - darwin-arm64-cpu    (macOS Apple Silicon, CPU fallback)
+#   - darwin-arm64-mps    (macOS Apple Silicon, Metal)
+#
+# SECURITY NOTE (CVE-2025-32434):
+#   torch < 2.6.0 has a critical RCE vulnerability via torch.load()
+#   MITIGATION: All torch.load() calls use weights_only=True at runtime
+#   This preserves CAS determinism while mitigating the vulnerability.
+#
+# APPLE SILICON POLICY:
+# - DepthPro/Core ML integration is allowed only on Apple Silicon
+# - CoreML tooling belongs in this lock so the Apple depth stack is explicit
+# - Intel-only caps such as numpy<2 do not belong in this arm64 input
+#
+# See: requirements/README.md for layering rationale.
+
+# --- PyTorch (Apple Silicon baseline) ---
+# CAS DETERMINISM: still pinned while the repo baseline remains on torch 2.2.x
+torch==2.2.2  # CAS determinism: keep the Apple Silicon baseline aligned with the repo torch ABI
+torchvision==0.17.2  # Torch match: keep torchvision aligned with the pinned torch baseline
+
+# Diffusion / HuggingFace ecosystem
+diffusers>=0.36.0,<1
+transformers>=4.57.0,<5
+huggingface-hub>=0.19.0,<2
+accelerate>=0.20.0,<2
+
+# Apple CoreML tooling (Apple Silicon only)
+coremltools>=7.0,<10  # Apple tooling: bounded in platform lock inputs per dependency governance
+
+# Vision / segmentation helpers (cross-platform)
+controlnet-aux>=0.0.6,<1
+efficientsam==1.0.0  # Model contract: keep segmentation helper deterministic across runs
+open-clip-torch==3.3.0  # Model contract: keep CLIP helper deterministic across runs
+
+# Vision / image processing
+scikit-image>=0.21.0,<1
+
+# Configuration / diagnostics / color
+PyYAML>=6.0,<7
+colour-science>=0.4.2,<1
+psutil>=5.9.0,<7
+memory-profiler>=0.61.0,<1
+
+# RAG / embedding support
+sentence-transformers>=3.1.0,<6
+
+# 3D support (cross-platform, commercial-safe)
+plyfile>=1.0.0,<2

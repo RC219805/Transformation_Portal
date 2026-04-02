@@ -27,6 +27,7 @@ from typing import TYPE_CHECKING, Any, Optional, Union
 import numpy as np
 from PIL import Image
 
+from ...core.platform_matrix import CURRENT_PLATFORM
 from .protocol import DepthResult, LicenseRestrictionError, LicenseType
 
 if TYPE_CHECKING:
@@ -93,7 +94,12 @@ class DepthProBackend:
         """Resolve device from config or auto-detect."""
         if config is not None:
             device = getattr(config, "depth_device", None)
-            if device:
+            if device and not (
+                device == "cpu"
+                and getattr(config, "depth_backend", None) is None
+                and CURRENT_PLATFORM is not None
+                and CURRENT_PLATFORM.is_apple_silicon
+            ):
                 return device
 
         try:

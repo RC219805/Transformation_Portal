@@ -97,6 +97,14 @@ class PlatformAccel(str, Enum):
         return cls.CPU
 
 
+ML_CORE_LOCKFILE_BY_PLATFORM: dict[tuple[PlatformOS, PlatformISA], str] = {
+    (PlatformOS.DARWIN, PlatformISA.X86_64): "ml-core-darwin-x86_64.txt",
+    (PlatformOS.DARWIN, PlatformISA.ARM64): "ml-core-darwin-arm64.txt",
+    (PlatformOS.LINUX, PlatformISA.X86_64): "ml-core-linux.txt",
+    (PlatformOS.LINUX, PlatformISA.ARM64): "ml-core-linux.txt",
+}
+
+
 @dataclass(frozen=True)
 class PlatformMatrix:
     """Immutable platform identification for reproducibility.
@@ -392,7 +400,7 @@ def compute_lockfile_hash(lockfile_path: str) -> str:
     """Compute SHA256 hash of a lockfile.
 
     Args:
-        lockfile_path: Path to the lockfile (e.g., "ml-core-darwin.txt")
+        lockfile_path: Path to the lockfile (e.g., "ml-core-darwin-arm64.txt")
 
     Returns:
         Hash in format "sha256:..." or "sha256:unknown" if file not found.
@@ -408,6 +416,20 @@ def compute_lockfile_hash(lockfile_path: str) -> str:
         return "sha256:unknown-file-not-found"
     except (OSError, IOError):
         return "sha256:unknown-read-error"
+
+
+def determine_ml_core_lockfile_name(matrix: Optional[PlatformMatrix] = None) -> str:
+    """Return the canonical ML core lockfile name for a platform matrix."""
+    effective_matrix = matrix or CURRENT_PLATFORM
+    if effective_matrix is None:
+        raise ValueError("Cannot determine ML core lockfile for unsupported platform")
+
+    try:
+        return ML_CORE_LOCKFILE_BY_PLATFORM[(effective_matrix.os, effective_matrix.isa)]
+    except KeyError as exc:
+        raise ValueError(
+            f"No ML core lockfile contract for platform {effective_matrix.os.value}/{effective_matrix.isa.value}"
+        ) from exc
 
 
 def get_platform_fingerprint(

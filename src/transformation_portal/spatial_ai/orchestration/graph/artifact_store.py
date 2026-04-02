@@ -691,6 +691,10 @@ class ArtifactStore:
 
                 np_dict[key] = arr
 
+            tmp_artifact_path: Optional[Path] = None
+            tmp_prov_path: Optional[Path] = None
+            tmp_marker_path: Optional[Path] = None
+
             # Atomic write: temp file + rename
             try:
                 # Write artifact (NumPy archive)
@@ -746,26 +750,30 @@ class ArtifactStore:
                 # (elite tier - ensures rename persists across power loss)
                 self._fsync_directory(artifact_path.parent)
 
-                # Update stats
-                self._record_cache_miss()
-
-                logger.debug(f"Stored artifact: {cache_key}")
-
             except Exception as e:
                 # Clean up temp files AND uncommitted artifacts on failure
                 # Without marker, these are by definition uncommitted junk
-                if "tmp_artifact_path" in locals() and tmp_artifact_path.exists():
-                    tmp_artifact_path.unlink()
-                if "tmp_prov_path" in locals() and tmp_prov_path.exists():
-                    tmp_prov_path.unlink()
-                if "tmp_marker_path" in locals() and tmp_marker_path.exists():
-                    tmp_marker_path.unlink()
+                if tmp_artifact_path is not None:
+                    tmp_artifact_path.unlink(missing_ok=True)
+                if tmp_prov_path is not None:
+                    tmp_prov_path.unlink(missing_ok=True)
+                if tmp_marker_path is not None:
+                    tmp_marker_path.unlink(missing_ok=True)
 
                 # Best-effort cleanup of renamed-but-uncommitted files
                 artifact_path.unlink(missing_ok=True)
                 provenance_path.unlink(missing_ok=True)
 
                 raise ValueError(f"Failed to store artifact: {cache_key}") from e
+
+            # Marker is visible at this point; bookkeeping failures must not
+            # invalidate a successfully committed entry.
+            try:
+                self._record_cache_miss()
+            except Exception as e:
+                logger.warning(f"Failed to update cache miss stats for {cache_key}: {e}")
+
+            logger.debug(f"Stored artifact: {cache_key}")
 
             # Check cache size (warn if over limit)
             self._check_cache_size()
