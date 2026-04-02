@@ -60,6 +60,17 @@ def _default_output_dir() -> Path:
     return Path(tempfile.mkdtemp(**kwargs))
 
 
+def _resolve_output_dir(raw_output_dir: str) -> tuple[Path, bool]:
+    candidate = str(raw_output_dir).strip()
+    if candidate:
+        return Path(candidate).resolve(), False
+    return _default_output_dir(), True
+
+
+def _should_cleanup_output_dir(*, keep_output: bool, output_dir_is_temp: bool) -> bool:
+    return output_dir_is_temp and not keep_output
+
+
 def _base_url(value: str) -> str:
     trimmed = value.strip()
     if not trimmed:
@@ -96,6 +107,9 @@ def _request_json(
     except urllib.error.HTTPError as exc:
         status = exc.code
         raw_body = exc.read().decode("utf-8")
+    except (TimeoutError, urllib.error.URLError) as exc:
+        reason = getattr(exc, "reason", exc)
+        raise SmokeFailure(f"{method} {path} request failed: {reason}") from exc
 
     try:
         body = json.loads(raw_body)
@@ -153,7 +167,7 @@ def _poll_terminal_job(
     raise SmokeFailure(f"Job {job_id} did not reach a terminal state within {timeout_seconds:.1f}s")
 
 
-def _parse_args() -> argparse.Namespace:
+def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--base-url",
@@ -197,19 +211,23 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="Preserve the smoke job output directory instead of deleting it",
     )
-    return parser.parse_args()
+    return parser.parse_args(argv)
 
 
-def main() -> int:
-    args = _parse_args()
+def main(argv: list[str] | None = None) -> int:
+    args = _parse_args(argv)
     base_url = _base_url(args.base_url)
     archive_root = Path(args.archive_root).resolve()
     archive_index = Path(args.archive_index).resolve()
-    output_dir = Path(args.output_dir).resolve() if args.output_dir else _default_output_dir()
+    output_dir, output_dir_is_temp = _resolve_output_dir(args.output_dir)
 
     _expect(archive_root.is_dir(), f"Archive root fixture does not exist: {archive_root}")
     _expect(archive_index.is_file(), f"Archive index fixture does not exist: {archive_index}")
     output_dir.mkdir(parents=True, exist_ok=True)
+    cleanup_output_dir = _should_cleanup_output_dir(
+        keep_output=bool(args.keep_output),
+        output_dir_is_temp=output_dir_is_temp,
+    )
 
     try:
         ready_status, ready_body = _request_json(base_url, "/ready")
@@ -317,15 +335,15 @@ def main() -> int:
         print("orchestrator-http-smoke: ok")
         print(f"base_url: {base_url}")
         print(f"job_id: {job_id}")
-        if args.keep_output:
-            print(f"output_dir: {output_dir}")
-        else:
+        if cleanup_output_dir:
             print(f"output_dir_cleaned: {output_dir}")
+        else:
+            print(f"output_dir: {output_dir}")
         print(f"artifacts: {', '.join(sorted(artifact_names))}")
         print(f"auth_expected: {'yes' if auth_expected else 'no'}")
         return 0
     finally:
-        if not args.keep_output:
+        if cleanup_output_dir:
             shutil.rmtree(output_dir, ignore_errors=True)
 
 

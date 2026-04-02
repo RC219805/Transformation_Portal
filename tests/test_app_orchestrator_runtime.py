@@ -786,6 +786,14 @@ def test_portal_exposes_run_card_quick_actions() -> None:
     assert "Run card path is not eligible for direct browser open; path copied instead." in content
 
 
+def test_portal_selected_job_progress_bar_has_accessible_label() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+
+    assert 'id="selectedJobProgressLabel"' in content
+    assert 'aria-labelledby="selectedJobProgressLabel selectedJobProgressText"' in content
+
+
 def test_argv_archive_gate_a_defaults_to_fixity_scan_runner() -> None:
     payload: Dict[str, object] = {
         "pipeline": "archive-gate-a",

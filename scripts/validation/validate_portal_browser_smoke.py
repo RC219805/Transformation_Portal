@@ -81,6 +81,17 @@ def _default_profile_dir() -> Path:
     return Path(tempfile.mkdtemp(**kwargs))
 
 
+def _resolve_output_dir(raw_output_dir: str) -> tuple[Path, bool]:
+    candidate = str(raw_output_dir).strip()
+    if candidate:
+        return Path(candidate).resolve(), False
+    return _default_output_dir(), True
+
+
+def _should_cleanup_output_dir(*, keep_output: bool, output_dir_is_temp: bool) -> bool:
+    return output_dir_is_temp and not keep_output
+
+
 def _default_chrome_binary() -> str:
     candidates = [
         os.getenv("TP_PORTAL_BROWSER_BINARY", "").strip(),
@@ -92,6 +103,13 @@ def _default_chrome_binary() -> str:
         if candidate and Path(candidate).exists():
             return candidate
     raise SmokeFailure("Google Chrome binary not found. Set TP_PORTAL_BROWSER_BINARY to a valid Chrome executable.")
+
+
+def _resolve_chrome_binary(raw_chrome_binary: str) -> str:
+    candidate = str(raw_chrome_binary).strip()
+    if candidate:
+        return candidate
+    return _default_chrome_binary()
 
 
 def _http_get_json(url: str, timeout: float = 10.0) -> Any:
@@ -415,7 +433,7 @@ def _click_expression(selector: str) -> str:
 """
 
 
-def _parse_args() -> argparse.Namespace:
+def _parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--base-url",
@@ -429,8 +447,8 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--chrome-binary",
-        default=os.getenv("TP_PORTAL_BROWSER_BINARY", _default_chrome_binary()),
-        help="Chrome executable path",
+        default=os.getenv("TP_PORTAL_BROWSER_BINARY", "").strip(),
+        help="Chrome executable path (default: TP_PORTAL_BROWSER_BINARY or auto-detect)",
     )
     parser.add_argument(
         "--archive-root",
@@ -469,11 +487,11 @@ def _parse_args() -> argparse.Namespace:
         default=45.0,
         help="Overall wait budget for portal/job transitions (default: %(default)s)",
     )
-    return parser.parse_args()
+    return parser.parse_args(list(argv) if argv is not None else None)
 
 
-def main() -> int:
-    args = _parse_args()
+def main(argv: Optional[Iterable[str]] = None) -> int:
+    args = _parse_args(argv)
     base_url = str(args.base_url).strip().rstrip("/")
     if not base_url:
         raise SmokeFailure("Base URL cannot be empty")
@@ -483,12 +501,16 @@ def main() -> int:
     archive_index = Path(args.archive_index).resolve()
     _expect(archive_index.is_file(), f"Archive index fixture does not exist: {archive_index}")
 
-    output_dir = Path(args.output_dir).resolve() if args.output_dir else _default_output_dir()
+    output_dir, output_dir_is_temp = _resolve_output_dir(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     profile_dir = _default_profile_dir()
     port = int(args.debugging_port or _find_free_port())
-    chrome_binary = args.chrome_binary
+    chrome_binary = _resolve_chrome_binary(args.chrome_binary)
     _expect(Path(chrome_binary).exists(), f"Chrome binary does not exist: {chrome_binary}")
+    cleanup_output_dir = _should_cleanup_output_dir(
+        keep_output=bool(args.keep_output),
+        output_dir_is_temp=output_dir_is_temp,
+    )
 
     chrome_process: Optional[subprocess.Popen[str]] = None
     connection: Optional[DevToolsConnection] = None
@@ -620,10 +642,10 @@ def main() -> int:
         print("portal-browser-smoke: ok")
         print(f"base_url: {base_url}")
         print(f"job_id: {first_job_id}")
-        if args.keep_output:
-            print(f"output_dir: {output_dir}")
-        else:
+        if cleanup_output_dir:
             print(f"output_dir_cleaned: {output_dir}")
+        else:
+            print(f"output_dir: {output_dir}")
         print(f"state: {terminal_state.get('selectedJobState')}")
         print(f"artifacts: {terminal_state.get('selectedJobArtifactCount')}")
         print(f"health: {terminal_state.get('healthText')}")
@@ -642,7 +664,7 @@ def main() -> int:
                     pass
         if not args.keep_profile:
             shutil.rmtree(profile_dir, ignore_errors=True)
-        if not args.keep_output:
+        if cleanup_output_dir:
             shutil.rmtree(output_dir, ignore_errors=True)
 
 
