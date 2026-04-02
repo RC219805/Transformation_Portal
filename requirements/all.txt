@@ -81,7 +81,7 @@ httpcore==1.0.9
     # via httpx
 httpx==0.28.1
     # via -r requirements/dev.in
-hypothesis==6.151.9
+hypothesis==6.151.10
     # via -r requirements/dev.in
 id==1.6.1
     # via twine

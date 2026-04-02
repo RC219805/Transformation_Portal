@@ -20,7 +20,7 @@ flake8==7.3.0
 h11==0.16.0
 httpcore==1.0.9
 httpx==0.28.1
-hypothesis==6.151.9
+hypothesis==6.151.10
 idna==3.11
 iniconfig==2.3.0
 isort==7.0.0
