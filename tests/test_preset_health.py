@@ -96,6 +96,29 @@ class TestPlaceholderDetection:
         assert len(placeholder_issues) >= 1
         assert "PENDING_VERIFICATION" in placeholder_issues[0].message
 
+    def test_detects_empty_string_placeholder(self, tmp_path):
+        """Empty-string placeholders should align with compliance placeholder scanning."""
+        preset = tmp_path / "test.yaml"
+        preset.write_text(
+            yaml.dump(
+                {
+                    "name": "test-preset",
+                    "materials": {
+                        "backend": "heuristic",
+                        "model": {
+                            "license": "",
+                        },
+                    },
+                }
+            )
+        )
+
+        report = validate_preset(preset, available_depth_backend_ids=["da3"])
+
+        placeholder_issues = [i for i in report.issues if i.category == "placeholder"]
+        assert len(placeholder_issues) >= 1
+        assert "Placeholder value detected" in placeholder_issues[0].message
+
     def test_clean_preset_has_no_placeholder_errors(self, tmp_path):
         """A preset without placeholders should have no placeholder errors."""
         preset = tmp_path / "test.yaml"

@@ -147,7 +147,7 @@ def _resolve_yaml_path(data: Dict, dotted_path: str) -> Any:
 def _check_placeholders(data: Dict, prefix: str = "") -> List[HealthIssue]:
     """Recursively scan YAML values for placeholder strings."""
     issues: List[HealthIssue] = []
-    for path, value in iter_placeholder_string_paths(data, prefix, treat_empty_as_placeholder=False):
+    for path, value in iter_placeholder_string_paths(data, prefix, treat_empty_as_placeholder=True):
         issues.append(
             HealthIssue(
                 severity="error",
