@@ -95,6 +95,7 @@ NUMERIC_VERSION_PATTERN = re.compile(r"\d+")
 DARWIN_X86_NUMPY_GUARD_PATTERN = re.compile(r"^numpy\s*<\s*2(?:\.0+)?(?:\s|$)", re.IGNORECASE)
 DARWIN_X86_TRANSFORMERS_GUARD_PATTERN = re.compile(r"^transformers[^#\n]*<\s*5(?:\.0+)?(?:\s|$)", re.IGNORECASE)
 DARWIN_ARM64_COREML_PATTERN = re.compile(r"^coremltools\b[^\n]*$", re.IGNORECASE)
+LINUX_TRANSFORMERS_GUARD_PATTERN = re.compile(r"^transformers[^#\n]*<\s*5(?:\.0+)?(?:\s|$)", re.IGNORECASE)
 # Note: [^\n]* (not [^#\n]*) intentionally matches lines that carry inline comments,
 # because ml-core-darwin-arm64.in declares coremltools with a trailing # comment.
 # The x86 guard patterns check stripped non-comment lines, so they use [^#\n]*.
@@ -296,6 +297,25 @@ def validate_darwin_input_guards() -> list[str]:
     return errors
 
 
+def validate_linux_input_guards() -> list[str]:
+    """Ensure the Linux ML input preserves the supported torch/transformers envelope."""
+    linux_input = REQUIREMENTS_DIR / "ml-core-linux.in"
+    if not linux_input.is_file():
+        return []
+
+    non_comment_lines = [
+        line.strip()
+        for line in linux_input.read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    ]
+    if not any(LINUX_TRANSFORMERS_GUARD_PATTERN.search(line) for line in non_comment_lines):
+        return [
+            f"{linux_input} must cap transformers below 5 while the Linux torch 2.2.x baseline "
+            "remains part of the checked-in ML contract."
+        ]
+    return []
+
+
 def validate_platform_lock_divergence() -> list[str]:
     """Ensure platform-specific ML core lockfiles do not collapse to the same graph."""
     darwin_lock = REQUIREMENTS_DIR / "ml-core-darwin-x86_64.txt"
@@ -380,6 +400,7 @@ def main() -> int:
     errors.extend(validate_noncore_optional_lockfiles_absent())
     errors.extend(validate_platform_lock_markers())
     errors.extend(validate_darwin_input_guards())
+    errors.extend(validate_linux_input_guards())
     errors.extend(validate_platform_lock_divergence())
     errors.extend(validate_platform_lock_runtime_compatibility())
 
