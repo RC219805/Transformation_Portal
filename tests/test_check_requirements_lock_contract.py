@@ -256,11 +256,7 @@ def test_darwin_lock_purity_rejects_nvidia_package_on_arm64(isolated_repo: Path)
         "ml-core-darwin-arm64.txt",
         "3.11",
         body=(
-            "torch==2.2.2\n"
-            "transformers==4.57.6\n"
-            "numpy==2.4.3\n"
-            "coremltools==9.0\n"
-            "nvidia-cublas-cu12==12.1.3.1\n"
+            "torch==2.2.2\n" "transformers==4.57.6\n" "numpy==2.4.3\n" "coremltools==9.0\n" "nvidia-cublas-cu12==12.1.3.1\n"
         ),
     )
 
