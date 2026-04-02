@@ -232,3 +232,56 @@ def test_platform_lock_runtime_compatibility_requires_arm64_coremltools(isolated
         f"{isolated_repo / 'requirements' / 'ml-core-darwin-arm64.txt'} must include a pinned coremltools dependency so Apple Silicon "
         "CoreML support remains part of the checked-in arm64 contract."
     ]
+
+
+def test_darwin_lock_purity_rejects_triton_on_x86_64(isolated_repo: Path) -> None:
+    write_lockfile(
+        isolated_repo,
+        "ml-core-darwin-x86_64.txt",
+        "3.11",
+        body="torch==2.2.2\ntransformers==4.57.6\nnumpy==1.26.4\ntriton==2.2.0\n",
+    )
+
+    errors = contract.validate_darwin_lock_purity()
+
+    assert errors == [
+        f"{isolated_repo / 'requirements' / 'ml-core-darwin-x86_64.txt'} contains forbidden Darwin package 'triton'. "
+        "Darwin platform-core lockfiles must not contain Linux/CUDA-only packages."
+    ]
+
+
+def test_darwin_lock_purity_rejects_nvidia_package_on_arm64(isolated_repo: Path) -> None:
+    write_lockfile(
+        isolated_repo,
+        "ml-core-darwin-arm64.txt",
+        "3.11",
+        body=(
+            "torch==2.2.2\n" "transformers==4.57.6\n" "numpy==2.4.3\n" "coremltools==9.0\n" "nvidia-cublas-cu12==12.1.3.1\n"
+        ),
+    )
+
+    errors = contract.validate_darwin_lock_purity()
+
+    assert errors == [
+        f"{isolated_repo / 'requirements' / 'ml-core-darwin-arm64.txt'} contains forbidden Darwin package 'nvidia-cublas-cu12'. "
+        "Darwin platform-core lockfiles must not contain Linux/CUDA-only packages."
+    ]
+
+
+def test_darwin_lock_purity_accepts_clean_darwin_locks(isolated_repo: Path) -> None:
+    write_lockfile(
+        isolated_repo,
+        "ml-core-darwin-x86_64.txt",
+        "3.11",
+        body="torch==2.2.2\ntransformers==4.57.6\nnumpy==1.26.4\n",
+    )
+    write_lockfile(
+        isolated_repo,
+        "ml-core-darwin-arm64.txt",
+        "3.11",
+        body="torch==2.2.2\ntransformers==4.57.6\nnumpy==2.4.3\ncoremltools==9.0\n",
+    )
+
+    errors = contract.validate_darwin_lock_purity()
+
+    assert errors == []
