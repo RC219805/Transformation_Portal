@@ -114,11 +114,17 @@ install-ml: venv
 install-ml-core: venv
 	@echo "Installing ML core layer (cross-platform baseline)..."
 	@ml_lock=""; \
-	if [ "$$(uname -s)" = "Darwin" ] && [ "$$(uname -m)" = "x86_64" ] && [ -f requirements/ml-core-darwin-x86_64.txt ]; then \
+	py_os="$$(\"$(PY)\" -c 'import platform; print(platform.system())')"; \
+	py_arch="$$(\"$(PY)\" -c 'import platform; print(platform.machine())')"; \
+	case "$$py_arch" in \
+		aarch64) py_arch="arm64" ;; \
+		amd64) py_arch="x86_64" ;; \
+	esac; \
+	if [ "$$py_os" = "Darwin" ] && [ "$$py_arch" = "x86_64" ] && [ -f requirements/ml-core-darwin-x86_64.txt ]; then \
 		ml_lock="requirements/ml-core-darwin-x86_64.txt"; \
-	elif [ "$$(uname -s)" = "Darwin" ] && [ "$$(uname -m)" = "arm64" ] && [ -f requirements/ml-core-darwin-arm64.txt ]; then \
+	elif [ "$$py_os" = "Darwin" ] && [ "$$py_arch" = "arm64" ] && [ -f requirements/ml-core-darwin-arm64.txt ]; then \
 		ml_lock="requirements/ml-core-darwin-arm64.txt"; \
-	elif [ "$$(uname -s)" = "Linux" ] && [ -f requirements/ml-core-linux.txt ]; then \
+	elif [ "$$py_os" = "Linux" ] && [ -f requirements/ml-core-linux.txt ]; then \
 		ml_lock="requirements/ml-core-linux.txt"; \
 	fi; \
 	if [ -n "$$ml_lock" ]; then \
