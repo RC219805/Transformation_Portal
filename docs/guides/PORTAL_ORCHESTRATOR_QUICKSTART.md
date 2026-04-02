@@ -2,11 +2,14 @@
 
 ## Start the Service
 
+Standalone FastAPI origin:
+
 ```bash
 python -m uvicorn app:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-Open `http://127.0.0.1:8000/`.
+Open `http://127.0.0.1:8000/` for direct backend debugging, or use the secure front door quickstart for the managed browser path:
+- [Portal Secure Front Door Quickstart](PORTAL_SECURE_FRONTDOOR_QUICKSTART.md)
 
 ## Security Controls
 
@@ -61,6 +64,7 @@ export TP_READY_VERBOSE=1
 ## Endpoints
 
 - `GET /ready` returns `{ok,time,version}` by default; set `TP_READY_VERBOSE=1` for extended runtime/security fields.
+- `GET /portal/bootstrap` returns the standalone portal bootstrap contract for `direct_debug` mode.
 - `GET /v1/presets?pipeline=lux-depth-v3` dynamic UI preset catalog.
 - `POST /v1/jobs` submit allowlisted job request.
 - `GET /v1/jobs` bounded recent job snapshots (for refresh/recovery).
@@ -70,7 +74,19 @@ export TP_READY_VERBOSE=1
 
 ## SSE Authentication Note
 
-When `TP_API_KEY` is configured:
+There are now two supported browser paths:
+
+- Managed front door mode:
+  - the browser talks only to the front door on one origin
+  - `/portal/bootstrap` returns `authMode: "managed"`
+  - the browser does not hold the backend API key
+  - unsafe requests use CSRF plus same-origin checks
+- Standalone `direct_debug` mode:
+  - the browser is pointed directly at the FastAPI origin
+  - `/portal/bootstrap` returns `authMode: "direct_debug"`
+  - the existing API-key workflow remains available for local debugging
+
+When `TP_API_KEY` is configured for standalone `direct_debug` mode:
 - fetch-based endpoints use `Authorization: Bearer <token>` or `x-api-key`.
 - SSE stream auth should use headers (`Authorization` or `x-api-key`).
 - Query-string SSE auth (`?api_key=<token>`) is disabled by default and can be re-enabled only with `TP_ALLOW_SSE_QUERY_API_KEY=1`.
@@ -85,6 +101,14 @@ Direct pytest equivalent:
 
 ```bash
 pytest -q tests/test_app_orchestrator_runtime.py tests/test_app_orchestrator_contract_http.py
+```
+
+Front-door validation:
+
+```bash
+cd web/secure-landing
+npm test
+npm run build
 ```
 
 Expected contract gate outcomes:

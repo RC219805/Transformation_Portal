@@ -1004,8 +1004,12 @@
                             </div>
                         </div>
                     </div>
-                    <div class="mt-4">
-                        <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="apiKeyInput">API Key</label>
+                    <div id="apiKeySection" class="mt-4">
+                        <div class="flex items-center justify-between gap-3 mb-1.5">
+                            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300" for="apiKeyInput">API Key</label>
+                            <span id="authModeBadge" class="rounded-full border border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 px-2.5 py-1 text-[10px] font-mono uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">direct_debug</span>
+                        </div>
+                        <p id="apiKeyManagedHint" class="hidden text-[12px] leading-relaxed text-slate-500 dark:text-slate-400">Managed mode is active. Backend credentials stay server-side and are never stored in the browser.</p>
                         <div class="flex flex-col sm:flex-row gap-2 sm:items-center">
                             <input type="password" id="apiKeyInput" class="flex-1 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors" placeholder="Bearer token for /v1/jobs endpoints" autocomplete="off" spellcheck="false" />
                             <label class="flex items-center gap-2 text-[12px] text-slate-600 dark:text-slate-400">
@@ -1583,6 +1587,7 @@
         const SSE_STALL_CHECK_INTERVAL_MS = 10000;
         const SSE_STALL_THRESHOLD_MS = 45000;
         const SAFE_JOB_STATES = new Set(['queued', 'running', 'succeeded', 'failed', 'canceled', 'ready', 'offline']);
+        const SAFE_HTTP_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
         let queueRenderScheduled = false;
         let healthPollIntervalId = null;
@@ -1650,6 +1655,15 @@
             backendOk: false,
             theme: 'light',
             presetsByPipeline: {},
+            auth: {
+                mode: 'direct_debug',
+                csrfToken: '',
+                actor: null,
+                features: {
+                    apiKeyInput: true,
+                    directDebug: true
+                }
+            },
             lastDiagnostics: {
                 warnings: [],
                 expectedOutputs: [],
@@ -1683,8 +1697,11 @@
             presetSelect: document.getElementById('presetSelect'),
             profileSelect: document.getElementById('profileSelect'),
             saveProfileBtn: document.getElementById('saveProfileBtn'),
+            apiKeySection: document.getElementById('apiKeySection'),
             apiKeyInput: document.getElementById('apiKeyInput'),
             rememberApiKey: document.getElementById('rememberApiKey'),
+            authModeBadge: document.getElementById('authModeBadge'),
+            apiKeyManagedHint: document.getElementById('apiKeyManagedHint'),
 
             inputDir: document.getElementById('inputDir'),
             outputDir: document.getElementById('outputDir'),
@@ -2568,6 +2585,78 @@
             }, 4000);
         }
 
+        function _defaultPortalBootstrap() {
+            return {
+                authMode: 'direct_debug',
+                csrfToken: null,
+                actor: null,
+                features: {
+                    apiKeyInput: true,
+                    directDebug: true
+                }
+            };
+        }
+
+        function _isManagedAuthMode() {
+            return state.auth && state.auth.mode === 'managed';
+        }
+
+        function _clearStoredApiKeyState() {
+            localStorage.removeItem(API_KEY_STORAGE_KEY);
+            sessionStorage.removeItem(API_KEY_STORAGE_KEY);
+            if (els.apiKeyInput) els.apiKeyInput.value = '';
+            if (els.rememberApiKey) els.rememberApiKey.checked = false;
+        }
+
+        function _applyPortalBootstrap(rawBootstrap) {
+            const bootstrap = rawBootstrap && typeof rawBootstrap === 'object' ? rawBootstrap : _defaultPortalBootstrap();
+            const mode = bootstrap.authMode === 'managed' ? 'managed' : 'direct_debug';
+            state.auth = {
+                mode,
+                csrfToken: mode === 'managed' ? String(bootstrap.csrfToken || '') : '',
+                actor: bootstrap.actor && typeof bootstrap.actor === 'object' ? bootstrap.actor : null,
+                features: {
+                    apiKeyInput: bootstrap.features?.apiKeyInput !== false || mode !== 'managed',
+                    directDebug: Boolean(bootstrap.features?.directDebug) || mode !== 'managed'
+                }
+            };
+
+            if (_isManagedAuthMode()) {
+                _clearStoredApiKeyState();
+            }
+
+            if (els.apiKeySection) {
+                els.apiKeySection.classList.toggle('hidden', !state.auth.features.apiKeyInput);
+            }
+            if (els.authModeBadge) {
+                els.authModeBadge.textContent = mode;
+            }
+            if (els.apiKeyManagedHint) {
+                els.apiKeyManagedHint.classList.toggle('hidden', mode !== 'managed');
+            }
+        }
+
+        async function loadPortalBootstrap() {
+            try {
+                const res = await fetch(`${API_BASE}/portal/bootstrap`, {
+                    headers: { 'Accept': 'application/json' },
+                    cache: 'no-store'
+                });
+                if (!res.ok) {
+                    _applyPortalBootstrap(_defaultPortalBootstrap());
+                    return;
+                }
+                const payload = await res.json();
+                _applyPortalBootstrap(payload);
+            } catch {
+                _applyPortalBootstrap(_defaultPortalBootstrap());
+            }
+        }
+
+        function _healthEndpointPath() {
+            return _isManagedAuthMode() ? '/healthz' : '/ready';
+        }
+
         function _normalizeApiToken(raw) {
             const value = String(raw || '').trim();
             if (!value) return '';
@@ -2576,6 +2665,10 @@
         }
 
         function _persistApiKeyFromInputs() {
+            if (_isManagedAuthMode()) {
+                _clearStoredApiKeyState();
+                return;
+            }
             const remember = Boolean(els.rememberApiKey && els.rememberApiKey.checked);
             const token = _normalizeApiToken(els.apiKeyInput ? els.apiKeyInput.value : '');
             if (!token) {
@@ -2593,6 +2686,10 @@
         }
 
         function _loadApiKeyIntoInputs() {
+            if (_isManagedAuthMode()) {
+                _clearStoredApiKeyState();
+                return;
+            }
             const localValue = localStorage.getItem(API_KEY_STORAGE_KEY) || '';
             const sessionValue = sessionStorage.getItem(API_KEY_STORAGE_KEY) || '';
             const stored = localValue || sessionValue;
@@ -2601,6 +2698,7 @@
         }
 
         function _currentApiToken() {
+            if (_isManagedAuthMode()) return '';
             return _normalizeApiToken(
                 (els.apiKeyInput && els.apiKeyInput.value) ||
                 sessionStorage.getItem(API_KEY_STORAGE_KEY) ||
@@ -2609,8 +2707,15 @@
             );
         }
 
-        function _buildAuthHeaders(base = {}) {
+        function _buildAuthHeaders(base = {}, method = 'GET') {
             const headers = { ...base };
+            const normalizedMethod = String(method || 'GET').toUpperCase();
+            if (_isManagedAuthMode()) {
+                if (!SAFE_HTTP_METHODS.has(normalizedMethod) && state.auth.csrfToken) {
+                    headers['X-CSRF-Token'] = state.auth.csrfToken;
+                }
+                return headers;
+            }
             const token = _currentApiToken();
             if (token) {
                 headers['Authorization'] = `Bearer ${token}`;
@@ -2620,6 +2725,7 @@
         }
 
         function resumeBlockedJobStreamsAfterAuthUpdate() {
+            if (_isManagedAuthMode()) return;
             const token = _currentApiToken();
             if (!token) return;
             state.jobs.forEach((job) => {
@@ -4061,7 +4167,7 @@
             healthCheckInFlight = true;
             lastHealthCheckAt = now;
             try {
-                const res = await fetchWithTimeout(`${API_BASE}/ready`, {}, HEALTH_CHECK_TIMEOUT_MS);
+                const res = await fetchWithTimeout(`${API_BASE}${_healthEndpointPath()}`, {}, HEALTH_CHECK_TIMEOUT_MS);
                 if (res.ok) {
                     state.backendOk = true;
                     if (els.healthIndicator) els.healthIndicator.className = 'status-dot ready';
@@ -4364,7 +4470,7 @@
             appendJobLog(job, `[WARN] Cancelled by user.`);
             logToPane(id, `[WARN] Cancelled by user.`);
 
-            const headers = _buildAuthHeaders({});
+            const headers = _buildAuthHeaders({}, 'POST');
             fetch(`${API_BASE}/v1/jobs/${id}/cancel`, { method: 'POST', headers }).catch(() => {});
 
             scheduleRenderJobQueue();
@@ -4468,7 +4574,7 @@
 
             if (state.backendOk) {
                 try {
-                    const headers = _buildAuthHeaders({ 'Content-Type': 'application/json' });
+                    const headers = _buildAuthHeaders({ 'Content-Type': 'application/json' }, 'POST');
                     const res = await fetch(`${API_BASE}/v1/jobs`, {
                         method: 'POST',
                         headers,
@@ -4884,7 +4990,7 @@
         window.addEventListener('beforeunload', cleanupActiveJobHandles);
         window.addEventListener('pagehide', cleanupActiveJobHandles);
 
-        function init() {
+        async function init() {
             const savedTheme = localStorage.getItem('tp_theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
             setTheme(savedTheme);
             setupAmbientMotion();
@@ -4893,6 +4999,7 @@
                 if (!localStorage.getItem('tp_theme')) setTheme(e.matches ? 'dark' : 'light');
             });
 
+            await loadPortalBootstrap();
             _loadApiKeyIntoInputs();
             seedPresetFallbacks();
             refreshProfileDropdown();
@@ -4907,7 +5014,9 @@
             startHealthPolling();
         }
 
-        document.addEventListener('DOMContentLoaded', init);
+        document.addEventListener('DOMContentLoaded', () => {
+            void init();
+        });
     </script>
 </body>
 </html>

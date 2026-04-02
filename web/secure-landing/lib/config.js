@@ -1,0 +1,56 @@
+const DEFAULT_SESSION_DB_PATH = "/tmp/transformation-portal-frontdoor-sessions.db";
+const SESSION_IDLE_TIMEOUT_MS = 8 * 60 * 60 * 1000;
+const SESSION_ABSOLUTE_TIMEOUT_MS = 24 * 60 * 60 * 1000;
+const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+const LOGIN_ATTEMPT_LIMIT = 5;
+
+export function normalizeUsername(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+export function normalizeAccessEmail(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function parseUsersJson(raw) {
+  if (!raw) return [];
+
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return [];
+  }
+
+  if (!Array.isArray(parsed)) return [];
+
+  return parsed
+    .map((item) => ({
+      username: normalizeUsername(item?.username),
+      passwordHash: String(item?.password_hash || ""),
+      accessEmail: normalizeAccessEmail(item?.access_email),
+      role: String(item?.role || "admin").trim() || "admin"
+    }))
+    .filter((item) => item.username && item.passwordHash && item.accessEmail);
+}
+
+export function getConfig() {
+  const nodeEnv = process.env.NODE_ENV || "development";
+  const allowLocalAccessBypass =
+    nodeEnv === "development" && process.env.TP_ALLOW_LOCAL_ACCESS_BYPASS === "1";
+
+  return {
+    nodeEnv,
+    isProduction: nodeEnv === "production",
+    fastapiOrigin: String(process.env.TP_FASTAPI_ORIGIN || "http://127.0.0.1:8000").trim(),
+    backendApiKey: String(process.env.TP_BACKEND_API_KEY || "").trim(),
+    sessionDbPath: String(process.env.TP_FRONTDOOR_SESSION_DB || DEFAULT_SESSION_DB_PATH).trim(),
+    users: parseUsersJson(process.env.TP_FRONTDOOR_USERS_JSON || "[]"),
+    sessionCookieName: "__Host-tp_session",
+    sessionIdleTimeoutMs: SESSION_IDLE_TIMEOUT_MS,
+    sessionAbsoluteTimeoutMs: SESSION_ABSOLUTE_TIMEOUT_MS,
+    loginWindowMs: LOGIN_WINDOW_MS,
+    loginAttemptLimit: LOGIN_ATTEMPT_LIMIT,
+    allowLocalAccessBypass
+  };
+}

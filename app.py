@@ -2118,6 +2118,22 @@ async def serve_ui() -> Response:
     return FileResponse(str(PORTAL_HTML))
 
 
+@app.get("/portal/bootstrap")
+async def portal_bootstrap() -> JSONResponse:
+    """Expose standalone portal auth mode for direct backend debugging."""
+    return JSONResponse(
+        {
+            "authMode": "direct_debug",
+            "csrfToken": None,
+            "actor": None,
+            "features": {
+                "apiKeyInput": True,
+                "directDebug": True,
+            },
+        }
+    )
+
+
 @app.get("/ready")
 async def ready() -> Dict[str, Any]:
     response: Dict[str, Any] = {
