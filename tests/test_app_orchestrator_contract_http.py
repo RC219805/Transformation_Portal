@@ -7,10 +7,13 @@ from __future__ import annotations
 import asyncio
 import importlib
 import json
+import logging
 from typing import Any, Dict, List, Tuple
 
 import pytest
 from fastapi.testclient import TestClient
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.requests import Request as StarletteRequest
 
 pytestmark = pytest.mark.unit
 
@@ -99,7 +102,9 @@ def test_presets_contract_for_lux_depth_pipeline(client: TestClient) -> None:
     assert body["success"] is True
     assert body["error"] is None
     assert body["data"]["pipeline"] == "lux-depth-v3"
-    assert any(item["name"] == "premium" for item in body["data"]["presets"])
+    premium = next(item for item in body["data"]["presets"] if item["name"] == "premium")
+    assert premium["recommended_args"]["quality_tier"] == "premium"
+    assert premium["advanced_sections"] == []
 
 
 def test_jobs_list_and_detail_include_recovery_fields(client: TestClient) -> None:
@@ -137,6 +142,142 @@ def test_jobs_list_and_detail_include_recovery_fields(client: TestClient) -> Non
     assert detail_body["data"]["events_url"] == f"/v1/jobs/{job.id}/events"
     assert detail_body["data"]["artifacts"]["indexed_count"] == 1
     assert detail_body["data"]["error"]["code"] == "RUNNER_ERROR"
+
+
+def test_job_artifact_endpoint_serves_indexed_binary_without_exposing_absolute_path(
+    client: TestClient,
+    tmp_path,
+) -> None:
+    output_dir = tmp_path / "out"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    artifact_path = output_dir / "renders" / "hero.png"
+    artifact_path.parent.mkdir(parents=True, exist_ok=True)
+    artifact_path.write_bytes(b"\x89PNG\r\n\x1a\npreview")
+
+    job = orchestrator_app.Job(
+        id="job_artifact_read",
+        created_at=orchestrator_app._now(),
+        request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(output_dir)}},
+    )
+    orchestrator_app.JOBS[job.id] = job
+    orchestrator_app._index_job_artifacts(job)
+
+    response = client.get(f"/v1/jobs/{job.id}/artifacts/renders/hero.png")
+
+    assert response.status_code == 200
+    assert response.headers["Cache-Control"] == "no-store"
+    assert response.headers["content-type"].startswith("image/png")
+    assert "attachment" not in response.headers.get("content-disposition", "").lower()
+    assert response.content == b"\x89PNG\r\n\x1a\npreview"
+    assert str(output_dir) not in response.text
+
+
+def test_job_artifact_endpoint_uses_existing_index_without_full_rescan(
+    client: TestClient,
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    output_dir = tmp_path / "out"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    artifact_path = output_dir / "renders" / "hero.png"
+    artifact_path.parent.mkdir(parents=True, exist_ok=True)
+    artifact_path.write_bytes(b"\x89PNG\r\n\x1a\npreview")
+
+    job = orchestrator_app.Job(
+        id="job_artifact_cached",
+        created_at=orchestrator_app._now(),
+        request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(output_dir)}},
+        artifacts={
+            "output_dir": str(output_dir),
+            "items": [
+                orchestrator_app._serialize_indexed_artifact(
+                    job_id="job_artifact_cached",
+                    relative_path="renders/hero.png",
+                    path=artifact_path,
+                )
+            ],
+            "indexed_count": 1,
+            "truncated": False,
+        },
+    )
+    orchestrator_app.JOBS[job.id] = job
+
+    def _fail_reindex(_job) -> None:
+        raise AssertionError("artifact fetch should not rebuild the full artifact index")
+
+    monkeypatch.setattr(orchestrator_app, "_index_job_artifacts", _fail_reindex)
+
+    response = client.get(f"/v1/jobs/{job.id}/artifacts/renders/hero.png")
+
+    assert response.status_code == 200
+    assert response.content == b"\x89PNG\r\n\x1a\npreview"
+
+
+def test_job_artifact_endpoint_rejects_traversal_outside_job_output_dir(
+    client: TestClient,
+    tmp_path,
+) -> None:
+    output_dir = tmp_path / "out"
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    job = orchestrator_app.Job(
+        id="job_artifact_traversal",
+        created_at=orchestrator_app._now(),
+        request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(output_dir)}},
+    )
+    orchestrator_app.JOBS[job.id] = job
+
+    response = client.get(f"/v1/jobs/{job.id}/artifacts/%2E%2E/secret.txt")
+    body = response.json()
+
+    assert response.status_code == 400
+    assert body["error"]["code"] == "INVALID_ARGUMENT"
+    assert body["error"]["details"]["reason"] == "artifact_path_outside_job_output_dir"
+
+
+def test_job_artifact_endpoint_uses_bounded_reason_for_absolute_path(
+    client: TestClient,
+    tmp_path,
+) -> None:
+    output_dir = tmp_path / "out"
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    job = orchestrator_app.Job(
+        id="job_artifact_absolute",
+        created_at=orchestrator_app._now(),
+        request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(output_dir)}},
+    )
+    orchestrator_app.JOBS[job.id] = job
+
+    response = client.get(f"/v1/jobs/{job.id}/artifacts//tmp/secret.txt")
+    body = response.json()
+
+    assert response.status_code == 400
+    assert body["error"]["code"] == "INVALID_ARGUMENT"
+    assert body["error"]["details"]["reason"] == "absolute_artifact_path"
+    assert "/tmp/secret.txt" not in response.text
+
+
+def test_job_artifact_endpoint_returns_typed_not_found_for_missing_file(
+    client: TestClient,
+    tmp_path,
+) -> None:
+    output_dir = tmp_path / "out"
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    job = orchestrator_app.Job(
+        id="job_artifact_missing",
+        created_at=orchestrator_app._now(),
+        request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(output_dir)}},
+    )
+    orchestrator_app.JOBS[job.id] = job
+
+    response = client.get(f"/v1/jobs/{job.id}/artifacts/missing.png")
+    body = response.json()
+
+    assert response.status_code == 404
+    assert body["error"]["code"] == "NOT_FOUND"
+    assert body["error"]["details"]["path"] == "missing.png"
 
 
 def test_v1_routes_enforce_api_key_for_reads_and_events(client: TestClient) -> None:
@@ -300,7 +441,8 @@ def test_unknown_v1_route_returns_typed_not_found_envelope(client: TestClient) -
 def test_http_exception_handler_preserves_headers_for_v1_and_non_v1(client: TestClient) -> None:
     v1_method_not_allowed = client.get("/v1/jobs/job_method/cancel")
     assert v1_method_not_allowed.status_code == 405
-    assert v1_method_not_allowed.json()["error"]["code"] == "HTTP_ERROR"
+    assert v1_method_not_allowed.json()["error"]["code"] == "METHOD_NOT_ALLOWED"
+    assert v1_method_not_allowed.json()["error"]["message"] == "method not allowed"
     assert v1_method_not_allowed.headers.get("allow") == "POST"
 
     non_v1_method_not_allowed = client.post("/ready")
@@ -318,6 +460,40 @@ def test_request_validation_errors_return_typed_envelope_for_v1(client: TestClie
     assert body["error"]["code"] == "INVALID_ARGUMENT"
     assert body["error"]["details"]["path"] == "/v1/jobs"
     assert body["error"]["details"]["errors"]
+
+
+def test_http_exception_handler_sanitizes_v1_exception_detail_and_logs_it(caplog: pytest.LogCaptureFixture) -> None:
+    scope = {
+        "type": "http",
+        "method": "GET",
+        "path": "/v1/test",
+        "headers": [],
+        "query_string": b"",
+        "client": ("127.0.0.1", 12345),
+        "server": ("testserver", 80),
+        "scheme": "http",
+    }
+    request = StarletteRequest(scope)
+
+    with caplog.at_level(logging.WARNING):
+        response = asyncio.run(
+            orchestrator_app.http_exception_handler(
+                request,
+                StarletteHTTPException(status_code=500, detail="Traceback: /srv/app.py secret boom"),
+            )
+        )
+
+    body = json.loads(response.body.decode("utf-8"))
+    assert response.status_code == 500
+    assert body["error"]["code"] == "INTERNAL_ERROR"
+    assert body["error"]["message"] == "internal server error"
+    assert "Traceback" not in response.body.decode("utf-8")
+    assert any("Sanitized HTTPException detail" in record.message for record in caplog.records)
+
+
+def test_public_http_error_message_preserves_safe_request_size_detail() -> None:
+    message = orchestrator_app._public_http_error_message(413, "request body too large (max 123 bytes)")
+    assert message == "request body too large (max 123 bytes)"
 
 
 def test_job_events_stream_emits_state_log_progress_artifact_done(client: TestClient, monkeypatch) -> None:

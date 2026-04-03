@@ -436,6 +436,75 @@ def test_portal_managed_unavailable_mode_blocks_dispatch_and_api_key_recovery_pr
     assert "Restore the managed session to resume live logs." in sse_body
 
 
+def test_portal_artifact_gallery_renders_visual_review_controls() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+    body = _extract_js_function_body(content, "renderArtifactPanel")
+    reset_body = _extract_js_function_body(content, "_resetArtifactActionButtons")
+    sanitize_body = _extract_js_function_body(content, "sanitizeManagedAssetUrl")
+
+    assert 'id="artifactPreviewStage"' in content
+    assert 'id="artifactThumbnailRail"' in content
+    assert 'id="artifactSelectionMeta"' in content
+    assert 'id="openArtifactBtn"' in content
+    assert 'id="downloadArtifactBtn"' in content
+    assert 'id="copyArtifactPathBtn"' in content
+    assert "artifactHeroScore" in content
+    assert "findCompareArtifact" in content
+    assert "buildArtifactUrl(selected, selectedArtifact)" in body
+    assert "artifactIsPreviewable(selectedArtifact)" in body
+    assert "_resetArtifactActionButtons();" in body
+    assert "delete els.openArtifactBtn.dataset.url;" in reset_body
+    assert "delete els.downloadArtifactBtn.dataset.filename;" in reset_body
+    assert "delete els.copyArtifactPathBtn.dataset.path;" in reset_body
+    assert "parsed.origin !== window.location.origin" in sanitize_body
+    assert "parsed.pathname.startsWith('/v1/jobs/')" in sanitize_body
+    assert "sanitizeManagedAssetUrl(els.openArtifactBtn.dataset.url)" in content
+    assert "sanitizeManagedAssetUrl(els.downloadArtifactBtn.dataset.url)" in content
+
+
+def test_portal_selected_job_inspector_uses_timeline_tabs_and_log_secondary_view() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+    inspector_body = _extract_js_function_body(content, "renderSelectedJobInspector")
+    tab_body = _extract_js_function_body(content, "setInspectorTab")
+
+    assert 'id="inspectorOverviewTab"' in content
+    assert 'id="inspectorTimelineTab"' in content
+    assert 'id="inspectorLogsTab"' in content
+    assert 'id="selectedJobTimelineList"' in content
+    assert 'id="selectedJobLogPreview"' in content
+    assert "_reconcileJobTimeline(selected);" in inspector_body
+    assert "formatDuration" in inspector_body
+    assert "_noteTransportWarning" in content
+    assert "els.logsShell.classList.toggle('hidden', nextTab !== 'logs');" in tab_body
+
+
+def test_portal_timestamp_parsing_normalizes_second_precision_epochs() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+    body = _extract_js_function_body(content, "parseTimestamp")
+
+    assert "value > 0 && value < 1e12 ? value * 1000 : value" in body
+    assert "const numeric = Number(value);" in body
+
+
+def test_portal_preset_selection_applies_recommended_defaults_without_changing_contract_shape() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+    bind_body = _extract_js_function_body(content, "bindInputs")
+    preset_body = _extract_js_function_body(content, "applyPresetRecommendedArgs")
+    fetch_body = _extract_js_function_body(content, "fetchPresetsForPipeline")
+
+    assert "applyPresetRecommendedArgs(nextPreset);" in bind_body
+    assert "quality_tier" in preset_body
+    assert "depth_backend" in preset_body
+    assert "segmentation_backend" in preset_body
+    assert "emit_run_card" in preset_body
+    assert "advanced_sections" in fetch_body
+    assert "recommended_args" in fetch_body
+
+
 def test_portal_init_loads_bootstrap_before_restoring_api_key_state() -> None:
     portal_html = Path(__file__).resolve().parents[1] / "portal.html"
     content = portal_html.read_text(encoding="utf-8")
@@ -861,7 +930,9 @@ def test_portal_exposes_run_card_quick_actions() -> None:
     assert 'id="viewRunCardBtn"' in content
     assert 'id="copyRunCardPathBtn"' in content
     assert 'id="copyRunCardFingerprintBtn"' in content
-    assert "Run card path is not eligible for direct browser open; path copied instead." in content
+    assert "els.viewRunCardBtn.dataset.url = runCardUrl;" in content
+    assert "sanitizeManagedAssetUrl(els.viewRunCardBtn.dataset.url)" in content
+    assert "window.open(runCardUrl, '_blank', 'noopener,noreferrer');" in content
 
 
 def test_portal_selected_job_progress_bar_has_accessible_label() -> None:
@@ -1350,6 +1421,63 @@ def test_index_job_artifacts_populates_job_payload(tmp_path: Path) -> None:
     assert job.artifacts["output_dir"] == str(output_dir)
     assert {item["artifact_type"] for item in indexed} == {"metadata", "image"}
     assert {item["path"] for item in indexed} == {"manifest.json", "render.png"}
+    render_item = next(item for item in indexed if item["path"] == "render.png")
+    assert render_item["media_kind"] == "image"
+    assert render_item["previewable"] is True
+    assert render_item["content_type"] == "image/png"
+    assert render_item["url"] == f"/v1/jobs/{job.id}/artifacts/render.png"
+    manifest_item = next(item for item in indexed if item["path"] == "manifest.json")
+    assert manifest_item["media_kind"] == "metadata"
+    assert manifest_item["previewable"] is False
+
+
+def test_index_job_artifacts_skips_entries_resolving_outside_output_dir(tmp_path: Path) -> None:
+    output_dir = tmp_path / "out"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    escaped_target = tmp_path / "secret.png"
+    escaped_target.write_bytes(b"secret")
+    symlink_path = output_dir / "escape.png"
+    symlink_path.symlink_to(escaped_target)
+
+    job = orchestrator_app.Job(
+        id="job_artifacts_symlink_skip",
+        created_at=orchestrator_app._now(),
+        request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(output_dir)}},
+    )
+
+    indexed = orchestrator_app._index_job_artifacts(job)
+
+    assert indexed == []
+    assert job.artifacts["items"] == []
+    assert job.artifact_lookup == {}
+
+
+def test_hydrate_artifact_lookup_from_items_reuses_existing_index(tmp_path: Path) -> None:
+    output_dir = tmp_path / "out"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    artifact_path = output_dir / "renders" / "hero.png"
+    artifact_path.parent.mkdir(parents=True, exist_ok=True)
+    artifact_path.write_bytes(b"png")
+
+    job = orchestrator_app.Job(
+        id="job_artifacts_lookup",
+        created_at=orchestrator_app._now(),
+        request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(output_dir)}},
+        artifacts={
+            "output_dir": str(output_dir),
+            "items": [
+                {
+                    "path": "renders/hero.png",
+                    "relative_path": "renders/hero.png",
+                }
+            ],
+        },
+    )
+
+    lookup = orchestrator_app._hydrate_artifact_lookup_from_items(job)
+
+    assert lookup["renders/hero.png"] == artifact_path.resolve()
+    assert job.artifact_lookup["renders/hero.png"] == artifact_path.resolve()
 
 
 def test_index_job_artifacts_truncation_is_sorted_and_stable(tmp_path: Path) -> None:
@@ -1608,7 +1736,9 @@ def test_list_presets_filters_pipeline() -> None:
     assert response.status_code == 200
     assert body["success"] is True
     assert body["data"]["pipeline"] == "lux-depth-v3"
-    assert any(item["name"] == "premium" for item in body["data"]["presets"])
+    premium = next(item for item in body["data"]["presets"] if item["name"] == "premium")
+    assert premium["recommended_args"]["quality_tier"] == "premium"
+    assert premium["advanced_sections"] == []
 
 
 def test_list_jobs_includes_error_and_artifacts() -> None:

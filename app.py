@@ -4,6 +4,7 @@ import asyncio
 import hmac
 import json
 import logging
+import mimetypes
 import os
 import re
 import sys
@@ -13,8 +14,9 @@ import uuid
 from bisect import bisect_left
 from collections import deque
 from dataclasses import dataclass, field
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, AsyncGenerator, Callable, Deque, Dict, List, Mapping, Optional
+from urllib.parse import quote
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exception_handlers import request_validation_exception_handler as fastapi_request_validation_exception_handler
@@ -256,6 +258,23 @@ PRESET_CATALOG: Dict[str, List[Dict[str, Any]]] = {
             "stability": "stable",
             "description": "Balanced production quality preset",
             "is_research": False,
+            "recommended_args": {
+                "quality_tier": "premium",
+                "depth_backend": "da3",
+                "enable_segmentation": True,
+                "segmentation_backend": "efficientsam",
+                "strict_segmentation": True,
+                "materials_v3": True,
+                "pbr": True,
+                "emit_master16": True,
+                "emit_upscaled16": True,
+                "emit_report": True,
+                "emit_run_card": True,
+                "emit_marketing": False,
+                "enable_v2": False,
+                "enable_reconstruction": False,
+            },
+            "advanced_sections": [],
         },
         {
             "name": "default",
@@ -263,6 +282,23 @@ PRESET_CATALOG: Dict[str, List[Dict[str, Any]]] = {
             "stability": "canary",
             "description": "Canary preset for iterative validation",
             "is_research": False,
+            "recommended_args": {
+                "quality_tier": "standard",
+                "depth_backend": "da3",
+                "enable_segmentation": False,
+                "segmentation_backend": "stub",
+                "strict_segmentation": False,
+                "materials_v3": False,
+                "pbr": False,
+                "emit_master16": True,
+                "emit_upscaled16": False,
+                "emit_report": True,
+                "emit_run_card": True,
+                "emit_marketing": False,
+                "enable_v2": False,
+                "enable_reconstruction": False,
+            },
+            "advanced_sections": ["advanced"],
         },
         {
             "name": "depth-anything-v3.1-research-m4",
@@ -270,6 +306,24 @@ PRESET_CATALOG: Dict[str, List[Dict[str, Any]]] = {
             "stability": "experimental",
             "description": "Research-only preset" " requiring non-commercial" " acknowledgments",
             "is_research": True,
+            "recommended_args": {
+                "quality_tier": "apex",
+                "depth_backend": "depth_pro",
+                "enable_segmentation": True,
+                "segmentation_backend": "sam2",
+                "strict_segmentation": True,
+                "materials_v3": True,
+                "pbr": True,
+                "emit_master16": True,
+                "emit_upscaled16": True,
+                "emit_report": True,
+                "emit_run_card": True,
+                "emit_marketing": False,
+                "enable_v2": True,
+                "v2_preset": "default",
+                "enable_reconstruction": False,
+            },
+            "advanced_sections": ["governance", "advanced"],
         },
     ],
     "archive-gate-a": [
@@ -279,6 +333,8 @@ PRESET_CATALOG: Dict[str, List[Dict[str, Any]]] = {
             "stability": "stable",
             "description": "Manifest and provenance assembly",
             "is_research": False,
+            "recommended_args": {"dedup": True, "sign": True},
+            "advanced_sections": [],
         }
     ],
     "archive-gate-b": [
@@ -288,6 +344,8 @@ PRESET_CATALOG: Dict[str, List[Dict[str, Any]]] = {
             "stability": "stable",
             "description": "BagIt packaging and validation workflow",
             "is_research": False,
+            "recommended_args": {"dedup": True, "sign": True},
+            "advanced_sections": [],
         }
     ],
     "archive-gate-c": [
@@ -297,6 +355,8 @@ PRESET_CATALOG: Dict[str, List[Dict[str, Any]]] = {
             "stability": "stable",
             "description": "METS/PROV/STAC export workflow",
             "is_research": False,
+            "recommended_args": {"dedup": True, "sign": True},
+            "advanced_sections": [],
         }
     ],
 }
@@ -315,6 +375,7 @@ class Job:
     request: Dict[str, Any] = field(default_factory=dict)
     logs_tail: List[str] = field(default_factory=list)
     artifacts: Dict[str, Any] = field(default_factory=dict)
+    artifact_lookup: Dict[str, Path] = field(default_factory=dict)
     proc: Optional[asyncio.subprocess.Process] = None
     terminate_task: Optional[asyncio.Task[None]] = None
     cancel_requested: bool = False
@@ -444,9 +505,25 @@ def _error_response(
 HTTP_STATUS_ERROR_CODES = {
     400: "INVALID_ARGUMENT",
     401: "UNAUTHORIZED",
+    403: "FORBIDDEN",
     404: "NOT_FOUND",
+    405: "METHOD_NOT_ALLOWED",
     413: "REQUEST_TOO_LARGE",
     429: "RATE_LIMITED",
+    500: "INTERNAL_ERROR",
+    503: "SERVICE_UNAVAILABLE",
+}
+
+PUBLIC_HTTP_ERROR_MESSAGES = {
+    400: "invalid request",
+    401: "unauthorized",
+    403: "forbidden",
+    404: "not found",
+    405: "method not allowed",
+    413: "request body too large",
+    429: "rate limit exceeded",
+    500: "internal server error",
+    503: "service unavailable",
 }
 
 
@@ -456,6 +533,21 @@ def _is_api_v1_path(path: str) -> bool:
 
 def _http_status_error_code(status_code: int) -> str:
     return HTTP_STATUS_ERROR_CODES.get(status_code, "HTTP_ERROR")
+
+
+def _public_http_error_message(status_code: int, detail: Any) -> str:
+    fallback = PUBLIC_HTTP_ERROR_MESSAGES.get(status_code, "request failed")
+    if not isinstance(detail, str):
+        return fallback
+
+    text = detail.strip()
+    if not text:
+        return fallback
+
+    if status_code == 413 and re.fullmatch(r"request body too large(?: \(max \d+ bytes\))?", text):
+        return text
+
+    return fallback
 
 
 def _cleanup_expired_jobs(now: float) -> None:
@@ -818,9 +910,144 @@ def _infer_artifact_type(path: Path) -> str:
     return "file"
 
 
+def _artifact_content_type(path: Path) -> str:
+    guessed, _ = mimetypes.guess_type(str(path))
+    return guessed or "application/octet-stream"
+
+
+def _artifact_media_kind(path: Path) -> str:
+    artifact_type = _infer_artifact_type(path)
+    if artifact_type == "image":
+        return "image"
+    if artifact_type == "metadata":
+        return "metadata"
+    if artifact_type == "archive":
+        return "archive"
+    return "file"
+
+
+def _artifact_is_previewable(path: Path) -> bool:
+    return _artifact_media_kind(path) == "image" and _artifact_content_type(path).startswith("image/")
+
+
+def _artifact_url(job_id: str, relative_path: str) -> str:
+    return f"/v1/jobs/{quote(str(job_id), safe='')}" f"/artifacts/{quote(relative_path, safe='/')}"
+
+
+def _serialize_indexed_artifact(
+    *,
+    job_id: str,
+    relative_path: str,
+    path: Path,
+) -> Dict[str, Any]:
+    try:
+        size_bytes = path.stat().st_size
+    except OSError:
+        size_bytes = None
+
+    content_type = _artifact_content_type(path)
+    return {
+        "artifact_type": _infer_artifact_type(path),
+        "media_kind": _artifact_media_kind(path),
+        "previewable": _artifact_is_previewable(path),
+        "content_type": content_type,
+        "url": _artifact_url(job_id, relative_path),
+        # Do not expose absolute server paths in API/SSE payloads.
+        "path": relative_path,
+        "relative_path": relative_path,
+        "size_bytes": size_bytes,
+    }
+
+
+class ArtifactPathValidationError(ValueError):
+    """Base class for bounded artifact-path validation failures."""
+
+
+class InvalidArtifactPathError(ArtifactPathValidationError):
+    """Artifact path is empty or malformed."""
+
+
+class AbsoluteArtifactPathError(ArtifactPathValidationError):
+    """Artifact path attempted to use an absolute path."""
+
+
+class ArtifactPathOutsideJobOutputDirError(ArtifactPathValidationError):
+    """Artifact path attempted to escape the job output directory."""
+
+
+def _validate_resolved_job_artifact_path(
+    job: Job,
+    resolved_artifact: Path,
+) -> tuple[Path, Path, str]:
+    output_dir = _job_output_dir(job)
+    if output_dir is None:
+        raise FileNotFoundError("job_output_dir_missing")
+
+    output_dir = Path(os.path.realpath(output_dir.expanduser()))
+    if not output_dir.exists() or not output_dir.is_dir():
+        raise FileNotFoundError("job_output_dir_missing")
+
+    resolved = Path(os.path.realpath(resolved_artifact))
+    try:
+        relative_path = str(resolved.relative_to(output_dir))
+    except ValueError as exc:
+        raise ArtifactPathOutsideJobOutputDirError from exc
+
+    return output_dir, resolved, relative_path
+
+
+def _normalize_artifact_relative_path(artifact_path: str) -> str:
+    raw = str(artifact_path or "").strip()
+    if not raw or raw.startswith("~") or "\x00" in raw or "\\" in raw:
+        raise InvalidArtifactPathError
+
+    candidate = PurePosixPath(raw)
+    if candidate.is_absolute():
+        raise AbsoluteArtifactPathError
+
+    normalized = candidate.as_posix()
+    if normalized in {"", "."}:
+        raise InvalidArtifactPathError
+    if any(part == ".." for part in candidate.parts):
+        raise ArtifactPathOutsideJobOutputDirError
+
+    return normalized
+
+
+def _hydrate_artifact_lookup_from_items(job: Job) -> Dict[str, Path]:
+    items = job.artifacts.get("items") if isinstance(job.artifacts, dict) else None
+    if not isinstance(items, list) or not items:
+        return {}
+
+    output_dir = _job_output_dir(job)
+    if output_dir is None:
+        return {}
+
+    lookup: Dict[str, Path] = {}
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        candidate_path = item.get("relative_path") or item.get("path")
+        try:
+            normalized = _normalize_artifact_relative_path(str(candidate_path or ""))
+        except ValueError:
+            continue
+        resolved_candidate = Path(output_dir) / Path(*PurePosixPath(normalized).parts)
+        try:
+            _, resolved, canonical_relative_path = _validate_resolved_job_artifact_path(job, resolved_candidate)
+        except (ValueError, FileNotFoundError):
+            continue
+        if not resolved.exists() or not resolved.is_file():
+            continue
+        lookup[canonical_relative_path] = resolved
+    job.artifact_lookup = lookup
+    return lookup
+
+
 def _index_job_artifacts(job: Job) -> List[Dict[str, Any]]:
     output_dir = _job_output_dir(job)
     if output_dir is None:
+        job.artifact_lookup = {}
         job.artifacts = {
             "output_dir": None,
             "items": [],
@@ -829,6 +1056,7 @@ def _index_job_artifacts(job: Job) -> List[Dict[str, Any]]:
         }
         return []
     if not output_dir.exists() or not output_dir.is_dir():
+        job.artifact_lookup = {}
         job.artifacts = {
             "output_dir": str(output_dir),
             "items": [],
@@ -837,8 +1065,10 @@ def _index_job_artifacts(job: Job) -> List[Dict[str, Any]]:
         }
         return []
 
+    output_dir = Path(os.path.realpath(output_dir.expanduser()))
     selected: List[tuple[tuple[str, str], str, Path]] = []
     selected_keys: List[tuple[str, str]] = []
+    artifact_lookup: Dict[str, Path] = {}
     total_files = 0
     for path in output_dir.rglob("*"):
         if not path.is_file():
@@ -848,12 +1078,20 @@ def _index_job_artifacts(job: Job) -> List[Dict[str, Any]]:
             relative_path = str(path.relative_to(output_dir))
         except Exception:
             relative_path = path.name
+
+        resolved_path = Path(os.path.realpath(path))
+        try:
+            resolved_path.relative_to(output_dir)
+        except ValueError:
+            continue
+
+        artifact_lookup[relative_path] = resolved_path
         key = (relative_path.casefold(), relative_path)
 
         if len(selected) < MAX_INDEXED_ARTIFACTS:
             insert_at = bisect_left(selected_keys, key)
             selected_keys.insert(insert_at, key)
-            selected.insert(insert_at, (key, relative_path, path))
+            selected.insert(insert_at, (key, relative_path, resolved_path))
             continue
 
         if key >= selected_keys[-1]:
@@ -861,7 +1099,7 @@ def _index_job_artifacts(job: Job) -> List[Dict[str, Any]]:
 
         insert_at = bisect_left(selected_keys, key)
         selected_keys.insert(insert_at, key)
-        selected.insert(insert_at, (key, relative_path, path))
+        selected.insert(insert_at, (key, relative_path, resolved_path))
         selected_keys.pop()
         selected.pop()
 
@@ -869,18 +1107,12 @@ def _index_job_artifacts(job: Job) -> List[Dict[str, Any]]:
 
     items: List[Dict[str, Any]] = []
     for _, relative_path, path in selected:
-        try:
-            size_bytes = path.stat().st_size
-        except OSError:
-            size_bytes = None
         items.append(
-            {
-                "artifact_type": _infer_artifact_type(path),
-                # Do not expose absolute server paths in API/SSE payloads.
-                "path": relative_path,
-                "relative_path": relative_path,
-                "size_bytes": size_bytes,
-            }
+            _serialize_indexed_artifact(
+                job_id=job.id,
+                relative_path=relative_path,
+                path=path,
+            )
         )
 
     job.artifacts = {
@@ -889,6 +1121,7 @@ def _index_job_artifacts(job: Job) -> List[Dict[str, Any]]:
         "indexed_count": len(items),
         "truncated": truncated,
     }
+    job.artifact_lookup = artifact_lookup
     return items
 
 
@@ -2000,8 +2233,16 @@ async def http_exception_handler(
 ) -> JSONResponse:
     if _is_api_v1_path(request.url.path):
         detail = exc.detail
-        message = detail if isinstance(detail, str) and detail.strip() else "request failed"
+        message = _public_http_error_message(exc.status_code, detail)
         details = {"path": request.url.path}
+        if isinstance(detail, str) and detail.strip() and detail.strip() != message:
+            LOGGER.warning(
+                "Sanitized HTTPException detail for %s %s (%s): %s",
+                request.method,
+                request.url.path,
+                exc.status_code,
+                detail.strip(),
+            )
         return _error_response(
             exc.status_code,
             code=_http_status_error_code(exc.status_code),
@@ -2303,6 +2544,81 @@ async def get_job(job_id: str) -> JSONResponse:
             data=_serialize_job(job),
             error=None,
         )
+    )
+
+
+@app.get("/v1/jobs/{job_id}/artifacts/{artifact_path:path}")
+async def get_job_artifact(job_id: str, artifact_path: str) -> Response:
+    _cleanup_expired_jobs(_now())
+    job = JOBS.get(job_id)
+    if not job:
+        return _error_response(
+            404,
+            code="NOT_FOUND",
+            message="job not found",
+            details={"job_id": job_id},
+        )
+
+    try:
+        requested_relative_path = _normalize_artifact_relative_path(artifact_path)
+    except InvalidArtifactPathError:
+        reason_code = "invalid_artifact_path"
+    except AbsoluteArtifactPathError:
+        reason_code = "absolute_artifact_path"
+    except ArtifactPathOutsideJobOutputDirError:
+        reason_code = "artifact_path_outside_job_output_dir"
+    except ArtifactPathValidationError:
+        reason_code = "invalid_artifact_path"
+    else:
+        reason_code = None
+
+    if reason_code is not None:
+        LOGGER.warning(
+            "Rejected artifact path for job %s with reason %s",
+            job_id,
+            reason_code,
+        )
+        return _error_response(
+            400,
+            code="INVALID_ARGUMENT",
+            message="invalid artifact path",
+            details={"job_id": job_id, "reason": reason_code},
+        )
+
+    if not job.artifact_lookup:
+        if not _hydrate_artifact_lookup_from_items(job):
+            _index_job_artifacts(job)
+    resolved_artifact = job.artifact_lookup.get(requested_relative_path)
+    if resolved_artifact is None:
+        return _error_response(
+            404,
+            code="NOT_FOUND",
+            message="artifact not found",
+            details={"job_id": job_id, "path": requested_relative_path},
+        )
+
+    try:
+        _, resolved_artifact, relative_path = _validate_resolved_job_artifact_path(job, resolved_artifact)
+    except (ValueError, FileNotFoundError):
+        return _error_response(
+            404,
+            code="NOT_FOUND",
+            message="artifact not found",
+            details={"job_id": job_id, "path": requested_relative_path},
+        )
+
+    if not resolved_artifact.exists() or not resolved_artifact.is_file():
+        return _error_response(
+            404,
+            code="NOT_FOUND",
+            message="artifact not found",
+            details={"job_id": job_id, "path": relative_path},
+        )
+
+    return FileResponse(
+        resolved_artifact,
+        media_type=_artifact_content_type(resolved_artifact),
+        headers={"Cache-Control": "no-store"},
     )
 
 

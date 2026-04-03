@@ -97,7 +97,8 @@ async function streamSse(upstream, session) {
 }
 
 async function handleProxy(request, { params }) {
-  const pathSegments = Array.isArray(params?.path) ? params.path : [];
+  const resolvedParams = typeof params?.then === "function" ? await params : params;
+  const pathSegments = Array.isArray(resolvedParams?.path) ? resolvedParams.path : [];
   const pathname = `/v1/${pathSegments.join("/")}`;
   const sseRequest = isSsePath(pathname);
   const authState = await resolveAuthenticatedAccessSession(request, { touch: !sseRequest });
