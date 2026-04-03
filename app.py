@@ -14,7 +14,7 @@ import uuid
 from bisect import bisect_left
 from collections import deque
 from dataclasses import dataclass, field
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, AsyncGenerator, Callable, Deque, Dict, List, Mapping, Optional
 from urllib.parse import quote
 
@@ -375,6 +375,7 @@ class Job:
     request: Dict[str, Any] = field(default_factory=dict)
     logs_tail: List[str] = field(default_factory=list)
     artifacts: Dict[str, Any] = field(default_factory=dict)
+    artifact_lookup: Dict[str, Path] = field(default_factory=dict)
     proc: Optional[asyncio.subprocess.Process] = None
     terminate_task: Optional[asyncio.Task[None]] = None
     cancel_requested: bool = False
@@ -927,9 +928,9 @@ def _serialize_indexed_artifact(
     }
 
 
-def _resolve_job_artifact_path(
+def _validate_resolved_job_artifact_path(
     job: Job,
-    artifact_path: str,
+    resolved_artifact: Path,
 ) -> tuple[Path, Path, str]:
     output_dir = _job_output_dir(job)
     if output_dir is None:
@@ -939,15 +940,7 @@ def _resolve_job_artifact_path(
     if not output_dir.exists() or not output_dir.is_dir():
         raise FileNotFoundError("job_output_dir_missing")
 
-    raw = str(artifact_path or "").strip()
-    if not raw or raw.startswith("~") or "\x00" in raw:
-        raise ValueError("invalid_artifact_path")
-
-    candidate = Path(raw)
-    if candidate.is_absolute():
-        raise ValueError("absolute_artifact_path")
-
-    resolved = Path(os.path.realpath(output_dir / candidate))
+    resolved = Path(os.path.realpath(resolved_artifact))
     try:
         relative_path = str(resolved.relative_to(output_dir))
     except ValueError as exc:
@@ -956,9 +949,28 @@ def _resolve_job_artifact_path(
     return output_dir, resolved, relative_path
 
 
+def _normalize_artifact_relative_path(artifact_path: str) -> str:
+    raw = str(artifact_path or "").strip()
+    if not raw or raw.startswith("~") or "\x00" in raw or "\\" in raw:
+        raise ValueError("invalid_artifact_path")
+
+    candidate = PurePosixPath(raw)
+    if candidate.is_absolute():
+        raise ValueError("absolute_artifact_path")
+
+    normalized = candidate.as_posix()
+    if normalized in {"", "."}:
+        raise ValueError("invalid_artifact_path")
+    if any(part == ".." for part in candidate.parts):
+        raise ValueError("artifact_path_outside_job_output_dir")
+
+    return normalized
+
+
 def _index_job_artifacts(job: Job) -> List[Dict[str, Any]]:
     output_dir = _job_output_dir(job)
     if output_dir is None:
+        job.artifact_lookup = {}
         job.artifacts = {
             "output_dir": None,
             "items": [],
@@ -967,6 +979,7 @@ def _index_job_artifacts(job: Job) -> List[Dict[str, Any]]:
         }
         return []
     if not output_dir.exists() or not output_dir.is_dir():
+        job.artifact_lookup = {}
         job.artifacts = {
             "output_dir": str(output_dir),
             "items": [],
@@ -977,6 +990,7 @@ def _index_job_artifacts(job: Job) -> List[Dict[str, Any]]:
 
     selected: List[tuple[tuple[str, str], str, Path]] = []
     selected_keys: List[tuple[str, str]] = []
+    artifact_lookup: Dict[str, Path] = {}
     total_files = 0
     for path in output_dir.rglob("*"):
         if not path.is_file():
@@ -986,6 +1000,7 @@ def _index_job_artifacts(job: Job) -> List[Dict[str, Any]]:
             relative_path = str(path.relative_to(output_dir))
         except Exception:
             relative_path = path.name
+        artifact_lookup[relative_path] = path
         key = (relative_path.casefold(), relative_path)
 
         if len(selected) < MAX_INDEXED_ARTIFACTS:
@@ -1021,6 +1036,7 @@ def _index_job_artifacts(job: Job) -> List[Dict[str, Any]]:
         "indexed_count": len(items),
         "truncated": truncated,
     }
+    job.artifact_lookup = artifact_lookup
     return items
 
 
@@ -2451,7 +2467,7 @@ async def get_job_artifact(job_id: str, artifact_path: str) -> Response:
         )
 
     try:
-        _, resolved_artifact, relative_path = _resolve_job_artifact_path(job, artifact_path)
+        requested_relative_path = _normalize_artifact_relative_path(artifact_path)
     except ValueError as exc:
         reason = str(exc)
         return _error_response(
@@ -2460,12 +2476,25 @@ async def get_job_artifact(job_id: str, artifact_path: str) -> Response:
             message="invalid artifact path",
             details={"job_id": job_id, "reason": reason},
         )
-    except FileNotFoundError:
+
+    _index_job_artifacts(job)
+    resolved_artifact = job.artifact_lookup.get(requested_relative_path)
+    if resolved_artifact is None:
         return _error_response(
             404,
             code="NOT_FOUND",
             message="artifact not found",
-            details={"job_id": job_id, "path": str(artifact_path or "").strip()},
+            details={"job_id": job_id, "path": requested_relative_path},
+        )
+
+    try:
+        _, resolved_artifact, relative_path = _validate_resolved_job_artifact_path(job, resolved_artifact)
+    except (ValueError, FileNotFoundError):
+        return _error_response(
+            404,
+            code="NOT_FOUND",
+            message="artifact not found",
+            details={"job_id": job_id, "path": requested_relative_path},
         )
 
     if not resolved_artifact.exists() or not resolved_artifact.is_file():
