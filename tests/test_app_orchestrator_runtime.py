@@ -441,6 +441,7 @@ def test_portal_artifact_gallery_renders_visual_review_controls() -> None:
     content = portal_html.read_text(encoding="utf-8")
     body = _extract_js_function_body(content, "renderArtifactPanel")
     reset_body = _extract_js_function_body(content, "_resetArtifactActionButtons")
+    sanitize_body = _extract_js_function_body(content, "sanitizeManagedAssetUrl")
 
     assert 'id="artifactPreviewStage"' in content
     assert 'id="artifactThumbnailRail"' in content
@@ -456,6 +457,10 @@ def test_portal_artifact_gallery_renders_visual_review_controls() -> None:
     assert "delete els.openArtifactBtn.dataset.url;" in reset_body
     assert "delete els.downloadArtifactBtn.dataset.filename;" in reset_body
     assert "delete els.copyArtifactPathBtn.dataset.path;" in reset_body
+    assert "parsed.origin !== window.location.origin" in sanitize_body
+    assert "parsed.pathname.startsWith('/v1/jobs/')" in sanitize_body
+    assert "sanitizeManagedAssetUrl(els.openArtifactBtn.dataset.url)" in content
+    assert "sanitizeManagedAssetUrl(els.downloadArtifactBtn.dataset.url)" in content
 
 
 def test_portal_selected_job_inspector_uses_timeline_tabs_and_log_secondary_view() -> None:
@@ -926,6 +931,7 @@ def test_portal_exposes_run_card_quick_actions() -> None:
     assert 'id="copyRunCardPathBtn"' in content
     assert 'id="copyRunCardFingerprintBtn"' in content
     assert "els.viewRunCardBtn.dataset.url = runCardUrl;" in content
+    assert "sanitizeManagedAssetUrl(els.viewRunCardBtn.dataset.url)" in content
     assert "window.open(runCardUrl, '_blank', 'noopener,noreferrer');" in content
 
 
@@ -1444,6 +1450,34 @@ def test_index_job_artifacts_skips_entries_resolving_outside_output_dir(tmp_path
     assert indexed == []
     assert job.artifacts["items"] == []
     assert job.artifact_lookup == {}
+
+
+def test_hydrate_artifact_lookup_from_items_reuses_existing_index(tmp_path: Path) -> None:
+    output_dir = tmp_path / "out"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    artifact_path = output_dir / "renders" / "hero.png"
+    artifact_path.parent.mkdir(parents=True, exist_ok=True)
+    artifact_path.write_bytes(b"png")
+
+    job = orchestrator_app.Job(
+        id="job_artifacts_lookup",
+        created_at=orchestrator_app._now(),
+        request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(output_dir)}},
+        artifacts={
+            "output_dir": str(output_dir),
+            "items": [
+                {
+                    "path": "renders/hero.png",
+                    "relative_path": "renders/hero.png",
+                }
+            ],
+        },
+    )
+
+    lookup = orchestrator_app._hydrate_artifact_lookup_from_items(job)
+
+    assert lookup["renders/hero.png"] == artifact_path.resolve()
+    assert job.artifact_lookup["renders/hero.png"] == artifact_path.resolve()
 
 
 def test_index_job_artifacts_truncation_is_sorted_and_stable(tmp_path: Path) -> None:

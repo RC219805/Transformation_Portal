@@ -169,6 +169,47 @@ def test_job_artifact_endpoint_serves_indexed_binary_without_exposing_absolute_p
     assert str(output_dir) not in response.text
 
 
+def test_job_artifact_endpoint_uses_existing_index_without_full_rescan(
+    client: TestClient,
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    output_dir = tmp_path / "out"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    artifact_path = output_dir / "renders" / "hero.png"
+    artifact_path.parent.mkdir(parents=True, exist_ok=True)
+    artifact_path.write_bytes(b"\x89PNG\r\n\x1a\npreview")
+
+    job = orchestrator_app.Job(
+        id="job_artifact_cached",
+        created_at=orchestrator_app._now(),
+        request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(output_dir)}},
+        artifacts={
+            "output_dir": str(output_dir),
+            "items": [
+                orchestrator_app._serialize_indexed_artifact(
+                    job_id="job_artifact_cached",
+                    relative_path="renders/hero.png",
+                    path=artifact_path,
+                )
+            ],
+            "indexed_count": 1,
+            "truncated": False,
+        },
+    )
+    orchestrator_app.JOBS[job.id] = job
+
+    def _fail_reindex(_job) -> None:
+        raise AssertionError("artifact fetch should not rebuild the full artifact index")
+
+    monkeypatch.setattr(orchestrator_app, "_index_job_artifacts", _fail_reindex)
+
+    response = client.get(f"/v1/jobs/{job.id}/artifacts/renders/hero.png")
+
+    assert response.status_code == 200
+    assert response.content == b"\x89PNG\r\n\x1a\npreview"
+
+
 def test_job_artifact_endpoint_rejects_traversal_outside_job_output_dir(
     client: TestClient,
     tmp_path,

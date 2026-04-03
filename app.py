@@ -967,6 +967,36 @@ def _normalize_artifact_relative_path(artifact_path: str) -> str:
     return normalized
 
 
+def _hydrate_artifact_lookup_from_items(job: Job) -> Dict[str, Path]:
+    items = job.artifacts.get("items") if isinstance(job.artifacts, dict) else None
+    if not isinstance(items, list) or not items:
+        return {}
+
+    output_dir = _job_output_dir(job)
+    if output_dir is None:
+        return {}
+
+    lookup: Dict[str, Path] = {}
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        candidate_path = item.get("relative_path") or item.get("path")
+        try:
+            normalized = _normalize_artifact_relative_path(str(candidate_path or ""))
+        except ValueError:
+            continue
+        resolved_candidate = Path(output_dir) / Path(*PurePosixPath(normalized).parts)
+        try:
+            _, resolved, canonical_relative_path = _validate_resolved_job_artifact_path(job, resolved_candidate)
+        except (ValueError, FileNotFoundError):
+            continue
+        if not resolved.exists() or not resolved.is_file():
+            continue
+        lookup[canonical_relative_path] = resolved
+    job.artifact_lookup = lookup
+    return lookup
+
+
 def _index_job_artifacts(job: Job) -> List[Dict[str, Any]]:
     output_dir = _job_output_dir(job)
     if output_dir is None:
@@ -2485,7 +2515,9 @@ async def get_job_artifact(job_id: str, artifact_path: str) -> Response:
             details={"job_id": job_id, "reason": reason},
         )
 
-    _index_job_artifacts(job)
+    if not job.artifact_lookup:
+        if not _hydrate_artifact_lookup_from_items(job):
+            _index_job_artifacts(job)
     resolved_artifact = job.artifact_lookup.get(requested_relative_path)
     if resolved_artifact is None:
         return _error_response(

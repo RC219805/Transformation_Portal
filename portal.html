@@ -2442,14 +2442,28 @@
             };
         }
 
+        function sanitizeManagedAssetUrl(rawUrl) {
+            const text = String(rawUrl || '').trim();
+            if (!text) return '';
+            try {
+                const parsed = new URL(text, window.location.origin);
+                if (!['http:', 'https:'].includes(parsed.protocol)) return '';
+                if (parsed.origin !== window.location.origin) return '';
+                if (!parsed.pathname.startsWith('/v1/jobs/')) return '';
+                return `${parsed.pathname}${parsed.search}`;
+            } catch (_err) {
+                return '';
+            }
+        }
+
         function buildArtifactUrl(job, artifact) {
             const directUrl = String(artifact?.url || '').trim();
-            if (directUrl) return `${API_BASE}${directUrl}`;
+            if (directUrl) return sanitizeManagedAssetUrl(`${API_BASE}${directUrl}`);
             if (!job || !artifact) return '';
             const relativePath = artifactLabel(artifact);
             if (!relativePath) return '';
             const encodedSegments = relativePath.split('/').map((segment) => encodeURIComponent(segment)).join('/');
-            return `${API_BASE}/v1/jobs/${encodeURIComponent(String(job.id || ''))}/artifacts/${encodedSegments}`;
+            return sanitizeManagedAssetUrl(`${API_BASE}/v1/jobs/${encodeURIComponent(String(job.id || ''))}/artifacts/${encodedSegments}`);
         }
 
         function artifactHeroScore(artifact) {
@@ -5747,7 +5761,7 @@
 
         if (els.openArtifactBtn) {
             els.openArtifactBtn.addEventListener('click', () => {
-                const url = String(els.openArtifactBtn.dataset.url || '').trim();
+                const url = sanitizeManagedAssetUrl(els.openArtifactBtn.dataset.url);
                 if (!url) {
                     createToast('No artifact URL is available for this selection.', 'error');
                     return;
@@ -5758,7 +5772,7 @@
 
         if (els.downloadArtifactBtn) {
             els.downloadArtifactBtn.addEventListener('click', () => {
-                const url = String(els.downloadArtifactBtn.dataset.url || '').trim();
+                const url = sanitizeManagedAssetUrl(els.downloadArtifactBtn.dataset.url);
                 if (!url) {
                     createToast('No artifact is available to download.', 'error');
                     return;
@@ -5786,7 +5800,7 @@
         }
 
         if (els.viewRunCardBtn) els.viewRunCardBtn.addEventListener('click', async () => {
-            const runCardUrl = String(els.viewRunCardBtn.dataset.url || '').trim();
+            const runCardUrl = sanitizeManagedAssetUrl(els.viewRunCardBtn.dataset.url);
             if (!runCardUrl) {
                 createToast('Run card URL is not available for this job.', 'error');
                 return;
