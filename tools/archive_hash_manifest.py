@@ -63,7 +63,7 @@ OUTPUT_MERKLE_ROOTS = "merkle_roots.json"
 DETERMINISTIC_GZIP_COMPRESSION = {"compresslevel": 9, "mtime": 0}
 STRICT_NON_OK_EXIT_CODE = 2
 STRICT_IDENTITY_EXIT_CODE = 3
-EXIT_INPUT_ERROR = 1
+EXIT_INPUT_ERROR = 2
 
 
 @dataclass(frozen=True)

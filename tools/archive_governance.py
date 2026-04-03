@@ -26,6 +26,7 @@ from archive_governance_common import (  # pylint: disable=wrong-import-position
 from archive_prereqs import (  # pylint: disable=wrong-import-position
     KIND_DIR,
     KIND_FILE,
+    REASON_MISSING_VALUE,
     REASON_NOT_FOUND,
     REASON_WRONG_TYPE,
     ArchivePrereqError,
@@ -50,12 +51,16 @@ _PREREQ_SPEC: dict[str, tuple[tuple[str, str, str, bool], ...]] = {
     ),
 }
 _PREREQ_ERROR_TYPES = {
+    ("archive_index", REASON_MISSING_VALUE): "ArchiveIndexNotFoundError",
     ("archive_index", REASON_NOT_FOUND): "ArchiveIndexNotFoundError",
     ("archive_index", REASON_WRONG_TYPE): "ArchiveIndexTypeError",
+    ("hash_manifest", REASON_MISSING_VALUE): "HashManifestNotFoundError",
     ("hash_manifest", REASON_NOT_FOUND): "HashManifestNotFoundError",
     ("hash_manifest", REASON_WRONG_TYPE): "HashManifestTypeError",
+    ("archive_root", REASON_MISSING_VALUE): "ArchiveRootNotFoundError",
     ("archive_root", REASON_NOT_FOUND): "ArchiveRootNotFoundError",
     ("archive_root", REASON_WRONG_TYPE): "ArchiveRootTypeError",
+    ("rights_jsonl", REASON_MISSING_VALUE): "RightsJsonlNotFoundError",
     ("rights_jsonl", REASON_NOT_FOUND): "RightsJsonlNotFoundError",
     ("rights_jsonl", REASON_WRONG_TYPE): "RightsJsonlTypeError",
 }

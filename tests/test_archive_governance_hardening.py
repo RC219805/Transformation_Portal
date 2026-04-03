@@ -23,6 +23,7 @@ RIGHTS_TOOL_PATH = PROJECT_ROOT / "tools" / "apply_rights_policy.py"
 GOVERNANCE_TOOL_PATH = PROJECT_ROOT / "tools" / "archive_governance.py"
 COMMON_TOOL_PATH = PROJECT_ROOT / "tools" / "archive_governance_common.py"
 PREMIS_TOOL_PATH = PROJECT_ROOT / "tools" / "premis_events.py"
+FIXITY_CYCLE_SCRIPT_PATH = PROJECT_ROOT / "scripts" / "pipelines" / "run_fixity_cycle.sh"
 
 
 def _load_tool_module(module_path: Path, module_name: str):
@@ -46,6 +47,16 @@ PREMIS_TOOL = _load_tool_module(PREMIS_TOOL_PATH, "tests_premis_events_hardening
 def _run_manifest_tool_cli(*args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [sys.executable, str(MANIFEST_TOOL_PATH), *args],
+        cwd=str(PROJECT_ROOT),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def _run_fixity_cycle_script(*args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["bash", str(FIXITY_CYCLE_SCRIPT_PATH), *args],
         cwd=str(PROJECT_ROOT),
         capture_output=True,
         text=True,
@@ -286,6 +297,32 @@ def test_manifest_build_cli_invalid_archive_root_fails_before_creating_outputs(t
     assert not out_jsonl.exists()
     assert not out_summary.exists()
     assert not list(out_jsonl.parent.glob(f".{out_jsonl.name}.*.tmp"))
+
+
+def test_run_fixity_cycle_requires_value_for_out_root() -> None:
+    result = _run_fixity_cycle_script(
+        "--archive-index",
+        "archive_index.csv.gz",
+        "--archive-root",
+        "archive_root",
+        "--out-root",
+    )
+
+    assert result.returncode == 2
+    assert "Error: --out-root requires a value" in result.stderr
+
+
+def test_run_fixity_cycle_requires_value_for_workers() -> None:
+    result = _run_fixity_cycle_script(
+        "--archive-index",
+        "archive_index.csv.gz",
+        "--archive-root",
+        "archive_root",
+        "--workers",
+    )
+
+    assert result.returncode == 2
+    assert "Error: --workers requires a value" in result.stderr
 
 
 def test_manifest_build_cli_missing_optional_rights_jsonl_fails_before_creating_outputs(tmp_path: Path) -> None:

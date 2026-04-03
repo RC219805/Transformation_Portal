@@ -40,10 +40,12 @@ while [[ $# -gt 0 ]]; do
       shift 2
       ;;
     --out-root)
+      require_flag_value "$1" "${2:-}"
       OUT_ROOT="$2"
       shift 2
       ;;
     --workers)
+      require_flag_value "$1" "${2:-}"
       WORKERS="$2"
       shift 2
       ;;

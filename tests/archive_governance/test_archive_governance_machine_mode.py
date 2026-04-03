@@ -536,6 +536,29 @@ def test_prereq_failures_emit_typed_machine_errors(
 
 
 @pytest.mark.regression
+def test_blank_archive_index_emits_required_machine_error(tmp_path: Path) -> None:
+    archive_root = tmp_path / "archive_root"
+    archive_root.mkdir(parents=True, exist_ok=True)
+
+    result = _run_governance_cli(
+        "fixity-scan",
+        "--archive-index",
+        "   ",
+        "--archive-root",
+        str(archive_root),
+        "--out-dir",
+        str(tmp_path / "scan"),
+        "--no-validate-schemas",
+    )
+    payload = _load_payload(result)
+
+    assert result.returncode == 5
+    validate_archive_machine_payload(payload)
+    assert payload["error"]["type"] == "ArchiveIndexNotFoundError"
+    assert payload["error"]["message"] == "archive index is required"
+
+
+@pytest.mark.regression
 def test_sealed_eval_run_emits_audit_package_and_machine_payload(tmp_path: Path) -> None:
     out_root = tmp_path / "sealed_eval_runs"
     result = _run_governance_cli(
