@@ -61,7 +61,7 @@ function renderLoginPage({ csrfToken, accessEmail, errorCode, allowLocalBypass }
         muted
         loop
         playsinline
-        preload="auto"
+        preload="metadata"
         disablePictureInPicture
         disableRemotePlayback
         poster=""
