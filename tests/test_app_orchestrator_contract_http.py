@@ -7,10 +7,13 @@ from __future__ import annotations
 import asyncio
 import importlib
 import json
+import logging
 from typing import Any, Dict, List, Tuple
 
 import pytest
 from fastapi.testclient import TestClient
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.requests import Request as StarletteRequest
 
 pytestmark = pytest.mark.unit
 
@@ -415,7 +418,8 @@ def test_unknown_v1_route_returns_typed_not_found_envelope(client: TestClient) -
 def test_http_exception_handler_preserves_headers_for_v1_and_non_v1(client: TestClient) -> None:
     v1_method_not_allowed = client.get("/v1/jobs/job_method/cancel")
     assert v1_method_not_allowed.status_code == 405
-    assert v1_method_not_allowed.json()["error"]["code"] == "HTTP_ERROR"
+    assert v1_method_not_allowed.json()["error"]["code"] == "METHOD_NOT_ALLOWED"
+    assert v1_method_not_allowed.json()["error"]["message"] == "method not allowed"
     assert v1_method_not_allowed.headers.get("allow") == "POST"
 
     non_v1_method_not_allowed = client.post("/ready")
@@ -433,6 +437,40 @@ def test_request_validation_errors_return_typed_envelope_for_v1(client: TestClie
     assert body["error"]["code"] == "INVALID_ARGUMENT"
     assert body["error"]["details"]["path"] == "/v1/jobs"
     assert body["error"]["details"]["errors"]
+
+
+def test_http_exception_handler_sanitizes_v1_exception_detail_and_logs_it(caplog: pytest.LogCaptureFixture) -> None:
+    scope = {
+        "type": "http",
+        "method": "GET",
+        "path": "/v1/test",
+        "headers": [],
+        "query_string": b"",
+        "client": ("127.0.0.1", 12345),
+        "server": ("testserver", 80),
+        "scheme": "http",
+    }
+    request = StarletteRequest(scope)
+
+    with caplog.at_level(logging.WARNING):
+        response = asyncio.run(
+            orchestrator_app.http_exception_handler(
+                request,
+                StarletteHTTPException(status_code=500, detail="Traceback: /srv/app.py secret boom"),
+            )
+        )
+
+    body = json.loads(response.body.decode("utf-8"))
+    assert response.status_code == 500
+    assert body["error"]["code"] == "INTERNAL_ERROR"
+    assert body["error"]["message"] == "internal server error"
+    assert "Traceback" not in response.body.decode("utf-8")
+    assert any("Sanitized HTTPException detail" in record.message for record in caplog.records)
+
+
+def test_public_http_error_message_preserves_safe_request_size_detail() -> None:
+    message = orchestrator_app._public_http_error_message(413, "request body too large (max 123 bytes)")
+    assert message == "request body too large (max 123 bytes)"
 
 
 def test_job_events_stream_emits_state_log_progress_artifact_done(client: TestClient, monkeypatch) -> None:

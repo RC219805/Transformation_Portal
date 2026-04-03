@@ -505,9 +505,25 @@ def _error_response(
 HTTP_STATUS_ERROR_CODES = {
     400: "INVALID_ARGUMENT",
     401: "UNAUTHORIZED",
+    403: "FORBIDDEN",
     404: "NOT_FOUND",
+    405: "METHOD_NOT_ALLOWED",
     413: "REQUEST_TOO_LARGE",
     429: "RATE_LIMITED",
+    500: "INTERNAL_ERROR",
+    503: "SERVICE_UNAVAILABLE",
+}
+
+PUBLIC_HTTP_ERROR_MESSAGES = {
+    400: "invalid request",
+    401: "unauthorized",
+    403: "forbidden",
+    404: "not found",
+    405: "method not allowed",
+    413: "request body too large",
+    429: "rate limit exceeded",
+    500: "internal server error",
+    503: "service unavailable",
 }
 
 
@@ -517,6 +533,21 @@ def _is_api_v1_path(path: str) -> bool:
 
 def _http_status_error_code(status_code: int) -> str:
     return HTTP_STATUS_ERROR_CODES.get(status_code, "HTTP_ERROR")
+
+
+def _public_http_error_message(status_code: int, detail: Any) -> str:
+    fallback = PUBLIC_HTTP_ERROR_MESSAGES.get(status_code, "request failed")
+    if not isinstance(detail, str):
+        return fallback
+
+    text = detail.strip()
+    if not text:
+        return fallback
+
+    if status_code == 413 and re.fullmatch(r"request body too large(?: \(max \d+ bytes\))?", text):
+        return text
+
+    return fallback
 
 
 def _cleanup_expired_jobs(now: float) -> None:
@@ -2186,8 +2217,16 @@ async def http_exception_handler(
 ) -> JSONResponse:
     if _is_api_v1_path(request.url.path):
         detail = exc.detail
-        message = detail if isinstance(detail, str) and detail.strip() else "request failed"
+        message = _public_http_error_message(exc.status_code, detail)
         details = {"path": request.url.path}
+        if isinstance(detail, str) and detail.strip() and detail.strip() != message:
+            LOGGER.warning(
+                "Sanitized HTTPException detail for %s %s (%s): %s",
+                request.method,
+                request.url.path,
+                exc.status_code,
+                detail.strip(),
+            )
         return _error_response(
             exc.status_code,
             code=_http_status_error_code(exc.status_code),
