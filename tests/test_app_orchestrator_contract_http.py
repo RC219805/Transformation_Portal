@@ -235,6 +235,29 @@ def test_job_artifact_endpoint_rejects_traversal_outside_job_output_dir(
     assert body["error"]["details"]["reason"] == "artifact_path_outside_job_output_dir"
 
 
+def test_job_artifact_endpoint_uses_bounded_reason_for_absolute_path(
+    client: TestClient,
+    tmp_path,
+) -> None:
+    output_dir = tmp_path / "out"
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    job = orchestrator_app.Job(
+        id="job_artifact_absolute",
+        created_at=orchestrator_app._now(),
+        request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(output_dir)}},
+    )
+    orchestrator_app.JOBS[job.id] = job
+
+    response = client.get(f"/v1/jobs/{job.id}/artifacts//tmp/secret.txt")
+    body = response.json()
+
+    assert response.status_code == 400
+    assert body["error"]["code"] == "INVALID_ARGUMENT"
+    assert body["error"]["details"]["reason"] == "absolute_artifact_path"
+    assert "/tmp/secret.txt" not in response.text
+
+
 def test_job_artifact_endpoint_returns_typed_not_found_for_missing_file(
     client: TestClient,
     tmp_path,

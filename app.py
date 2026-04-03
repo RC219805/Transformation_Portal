@@ -959,6 +959,22 @@ def _serialize_indexed_artifact(
     }
 
 
+class ArtifactPathValidationError(ValueError):
+    """Base class for bounded artifact-path validation failures."""
+
+
+class InvalidArtifactPathError(ArtifactPathValidationError):
+    """Artifact path is empty or malformed."""
+
+
+class AbsoluteArtifactPathError(ArtifactPathValidationError):
+    """Artifact path attempted to use an absolute path."""
+
+
+class ArtifactPathOutsideJobOutputDirError(ArtifactPathValidationError):
+    """Artifact path attempted to escape the job output directory."""
+
+
 def _validate_resolved_job_artifact_path(
     job: Job,
     resolved_artifact: Path,
@@ -975,7 +991,7 @@ def _validate_resolved_job_artifact_path(
     try:
         relative_path = str(resolved.relative_to(output_dir))
     except ValueError as exc:
-        raise ValueError("artifact_path_outside_job_output_dir") from exc
+        raise ArtifactPathOutsideJobOutputDirError from exc
 
     return output_dir, resolved, relative_path
 
@@ -983,17 +999,17 @@ def _validate_resolved_job_artifact_path(
 def _normalize_artifact_relative_path(artifact_path: str) -> str:
     raw = str(artifact_path or "").strip()
     if not raw or raw.startswith("~") or "\x00" in raw or "\\" in raw:
-        raise ValueError("invalid_artifact_path")
+        raise InvalidArtifactPathError
 
     candidate = PurePosixPath(raw)
     if candidate.is_absolute():
-        raise ValueError("absolute_artifact_path")
+        raise AbsoluteArtifactPathError
 
     normalized = candidate.as_posix()
     if normalized in {"", "."}:
-        raise ValueError("invalid_artifact_path")
+        raise InvalidArtifactPathError
     if any(part == ".." for part in candidate.parts):
-        raise ValueError("artifact_path_outside_job_output_dir")
+        raise ArtifactPathOutsideJobOutputDirError
 
     return normalized
 
@@ -2545,13 +2561,28 @@ async def get_job_artifact(job_id: str, artifact_path: str) -> Response:
 
     try:
         requested_relative_path = _normalize_artifact_relative_path(artifact_path)
-    except ValueError as exc:
-        reason = str(exc)
+    except InvalidArtifactPathError:
+        reason_code = "invalid_artifact_path"
+    except AbsoluteArtifactPathError:
+        reason_code = "absolute_artifact_path"
+    except ArtifactPathOutsideJobOutputDirError:
+        reason_code = "artifact_path_outside_job_output_dir"
+    except ArtifactPathValidationError:
+        reason_code = "invalid_artifact_path"
+    else:
+        reason_code = None
+
+    if reason_code is not None:
+        LOGGER.warning(
+            "Rejected artifact path for job %s with reason %s",
+            job_id,
+            reason_code,
+        )
         return _error_response(
             400,
             code="INVALID_ARGUMENT",
             message="invalid artifact path",
-            details={"job_id": job_id, "reason": reason},
+            details={"job_id": job_id, "reason": reason_code},
         )
 
     if not job.artifact_lookup:
