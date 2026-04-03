@@ -988,6 +988,7 @@ def _index_job_artifacts(job: Job) -> List[Dict[str, Any]]:
         }
         return []
 
+    output_dir = Path(os.path.realpath(output_dir.expanduser()))
     selected: List[tuple[tuple[str, str], str, Path]] = []
     selected_keys: List[tuple[str, str]] = []
     artifact_lookup: Dict[str, Path] = {}
@@ -1000,13 +1001,20 @@ def _index_job_artifacts(job: Job) -> List[Dict[str, Any]]:
             relative_path = str(path.relative_to(output_dir))
         except Exception:
             relative_path = path.name
-        artifact_lookup[relative_path] = path
+
+        resolved_path = Path(os.path.realpath(path))
+        try:
+            resolved_path.relative_to(output_dir)
+        except ValueError:
+            continue
+
+        artifact_lookup[relative_path] = resolved_path
         key = (relative_path.casefold(), relative_path)
 
         if len(selected) < MAX_INDEXED_ARTIFACTS:
             insert_at = bisect_left(selected_keys, key)
             selected_keys.insert(insert_at, key)
-            selected.insert(insert_at, (key, relative_path, path))
+            selected.insert(insert_at, (key, relative_path, resolved_path))
             continue
 
         if key >= selected_keys[-1]:
@@ -1014,7 +1022,7 @@ def _index_job_artifacts(job: Job) -> List[Dict[str, Any]]:
 
         insert_at = bisect_left(selected_keys, key)
         selected_keys.insert(insert_at, key)
-        selected.insert(insert_at, (key, relative_path, path))
+        selected.insert(insert_at, (key, relative_path, resolved_path))
         selected_keys.pop()
         selected.pop()
 
@@ -2508,7 +2516,6 @@ async def get_job_artifact(job_id: str, artifact_path: str) -> Response:
     return FileResponse(
         resolved_artifact,
         media_type=_artifact_content_type(resolved_artifact),
-        filename=resolved_artifact.name,
         headers={"Cache-Control": "no-store"},
     )
 

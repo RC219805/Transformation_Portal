@@ -440,6 +440,7 @@ def test_portal_artifact_gallery_renders_visual_review_controls() -> None:
     portal_html = Path(__file__).resolve().parents[1] / "portal.html"
     content = portal_html.read_text(encoding="utf-8")
     body = _extract_js_function_body(content, "renderArtifactPanel")
+    reset_body = _extract_js_function_body(content, "_resetArtifactActionButtons")
 
     assert 'id="artifactPreviewStage"' in content
     assert 'id="artifactThumbnailRail"' in content
@@ -451,6 +452,10 @@ def test_portal_artifact_gallery_renders_visual_review_controls() -> None:
     assert "findCompareArtifact" in content
     assert "buildArtifactUrl(selected, selectedArtifact)" in body
     assert "artifactIsPreviewable(selectedArtifact)" in body
+    assert "_resetArtifactActionButtons();" in body
+    assert "delete els.openArtifactBtn.dataset.url;" in reset_body
+    assert "delete els.downloadArtifactBtn.dataset.filename;" in reset_body
+    assert "delete els.copyArtifactPathBtn.dataset.path;" in reset_body
 
 
 def test_portal_selected_job_inspector_uses_timeline_tabs_and_log_secondary_view() -> None:
@@ -468,6 +473,15 @@ def test_portal_selected_job_inspector_uses_timeline_tabs_and_log_secondary_view
     assert "formatDuration" in inspector_body
     assert "_noteTransportWarning" in content
     assert "els.logsShell.classList.toggle('hidden', nextTab !== 'logs');" in tab_body
+
+
+def test_portal_timestamp_parsing_normalizes_second_precision_epochs() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+    body = _extract_js_function_body(content, "parseTimestamp")
+
+    assert "value > 0 && value < 1e12 ? value * 1000 : value" in body
+    assert "const numeric = Number(value);" in body
 
 
 def test_portal_preset_selection_applies_recommended_defaults_without_changing_contract_shape() -> None:
@@ -1409,6 +1423,27 @@ def test_index_job_artifacts_populates_job_payload(tmp_path: Path) -> None:
     manifest_item = next(item for item in indexed if item["path"] == "manifest.json")
     assert manifest_item["media_kind"] == "metadata"
     assert manifest_item["previewable"] is False
+
+
+def test_index_job_artifacts_skips_entries_resolving_outside_output_dir(tmp_path: Path) -> None:
+    output_dir = tmp_path / "out"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    escaped_target = tmp_path / "secret.png"
+    escaped_target.write_bytes(b"secret")
+    symlink_path = output_dir / "escape.png"
+    symlink_path.symlink_to(escaped_target)
+
+    job = orchestrator_app.Job(
+        id="job_artifacts_symlink_skip",
+        created_at=orchestrator_app._now(),
+        request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(output_dir)}},
+    )
+
+    indexed = orchestrator_app._index_job_artifacts(job)
+
+    assert indexed == []
+    assert job.artifacts["items"] == []
+    assert job.artifact_lookup == {}
 
 
 def test_index_job_artifacts_truncation_is_sorted_and_stable(tmp_path: Path) -> None:

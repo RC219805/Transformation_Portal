@@ -2346,8 +2346,14 @@
         }
 
         function parseTimestamp(value, fallback = Date.now()) {
-            if (typeof value === 'number' && Number.isFinite(value)) return value;
+            if (typeof value === 'number' && Number.isFinite(value)) {
+                return value > 0 && value < 1e12 ? value * 1000 : value;
+            }
             if (typeof value === 'string' && value.trim()) {
+                const numeric = Number(value);
+                if (Number.isFinite(numeric)) {
+                    return numeric > 0 && numeric < 1e12 ? numeric * 1000 : numeric;
+                }
                 const parsed = Date.parse(value);
                 if (Number.isFinite(parsed)) return parsed;
             }
@@ -3404,12 +3410,29 @@
             els.artifactMetadataCard.appendChild(detail);
         }
 
+        function _resetArtifactActionButtons() {
+            if (els.openArtifactBtn) {
+                els.openArtifactBtn.disabled = true;
+                delete els.openArtifactBtn.dataset.url;
+            }
+            if (els.downloadArtifactBtn) {
+                els.downloadArtifactBtn.disabled = true;
+                delete els.downloadArtifactBtn.dataset.url;
+                delete els.downloadArtifactBtn.dataset.filename;
+            }
+            if (els.copyArtifactPathBtn) {
+                els.copyArtifactPathBtn.disabled = true;
+                delete els.copyArtifactPathBtn.dataset.path;
+            }
+        }
+
         function renderArtifactPanel() {
             if (!els.artifactMeta || !els.artifactThumbnailRail) return;
             const selected = state.jobs.find((item) => item.id === state.selectedJobId);
             const artifacts = Array.isArray(selected?.artifacts) ? rankArtifactsForDisplay(selected.artifacts) : [];
 
             if (!selected) {
+                _resetArtifactActionButtons();
                 els.artifactMeta.textContent = 'No job selected';
                 els.artifactThumbnailRail.innerHTML = '';
                 if (els.artifactSelectionTitle) els.artifactSelectionTitle.textContent = 'No artifact selected';
@@ -3439,6 +3462,7 @@
             els.artifactMeta.textContent = `${artifacts.length} artifacts${errorText ? ` • ${errorText}` : ''}`;
 
             if (artifacts.length === 0) {
+                _resetArtifactActionButtons();
                 els.artifactThumbnailRail.innerHTML = '';
                 if (els.artifactSelectionTitle) els.artifactSelectionTitle.textContent = 'No artifact selected';
                 if (els.artifactSelectionMeta) els.artifactSelectionMeta.textContent = 'Artifacts will appear here when the selected run indexes outputs.';

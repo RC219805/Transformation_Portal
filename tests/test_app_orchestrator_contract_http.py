@@ -164,6 +164,7 @@ def test_job_artifact_endpoint_serves_indexed_binary_without_exposing_absolute_p
     assert response.status_code == 200
     assert response.headers["Cache-Control"] == "no-store"
     assert response.headers["content-type"].startswith("image/png")
+    assert "attachment" not in response.headers.get("content-disposition", "").lower()
     assert response.content == b"\x89PNG\r\n\x1a\npreview"
     assert str(output_dir) not in response.text
 
