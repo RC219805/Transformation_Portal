@@ -99,7 +99,9 @@ def test_presets_contract_for_lux_depth_pipeline(client: TestClient) -> None:
     assert body["success"] is True
     assert body["error"] is None
     assert body["data"]["pipeline"] == "lux-depth-v3"
-    assert any(item["name"] == "premium" for item in body["data"]["presets"])
+    premium = next(item for item in body["data"]["presets"] if item["name"] == "premium")
+    assert premium["recommended_args"]["quality_tier"] == "premium"
+    assert premium["advanced_sections"] == []
 
 
 def test_jobs_list_and_detail_include_recovery_fields(client: TestClient) -> None:
@@ -137,6 +139,77 @@ def test_jobs_list_and_detail_include_recovery_fields(client: TestClient) -> Non
     assert detail_body["data"]["events_url"] == f"/v1/jobs/{job.id}/events"
     assert detail_body["data"]["artifacts"]["indexed_count"] == 1
     assert detail_body["data"]["error"]["code"] == "RUNNER_ERROR"
+
+
+def test_job_artifact_endpoint_serves_indexed_binary_without_exposing_absolute_path(
+    client: TestClient,
+    tmp_path,
+) -> None:
+    output_dir = tmp_path / "out"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    artifact_path = output_dir / "renders" / "hero.png"
+    artifact_path.parent.mkdir(parents=True, exist_ok=True)
+    artifact_path.write_bytes(b"\x89PNG\r\n\x1a\npreview")
+
+    job = orchestrator_app.Job(
+        id="job_artifact_read",
+        created_at=orchestrator_app._now(),
+        request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(output_dir)}},
+    )
+    orchestrator_app.JOBS[job.id] = job
+    orchestrator_app._index_job_artifacts(job)
+
+    response = client.get(f"/v1/jobs/{job.id}/artifacts/renders/hero.png")
+
+    assert response.status_code == 200
+    assert response.headers["Cache-Control"] == "no-store"
+    assert response.headers["content-type"].startswith("image/png")
+    assert response.content == b"\x89PNG\r\n\x1a\npreview"
+    assert str(output_dir) not in response.text
+
+
+def test_job_artifact_endpoint_rejects_traversal_outside_job_output_dir(
+    client: TestClient,
+    tmp_path,
+) -> None:
+    output_dir = tmp_path / "out"
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    job = orchestrator_app.Job(
+        id="job_artifact_traversal",
+        created_at=orchestrator_app._now(),
+        request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(output_dir)}},
+    )
+    orchestrator_app.JOBS[job.id] = job
+
+    response = client.get(f"/v1/jobs/{job.id}/artifacts/%2E%2E/secret.txt")
+    body = response.json()
+
+    assert response.status_code == 400
+    assert body["error"]["code"] == "INVALID_ARGUMENT"
+    assert body["error"]["details"]["reason"] == "artifact_path_outside_job_output_dir"
+
+
+def test_job_artifact_endpoint_returns_typed_not_found_for_missing_file(
+    client: TestClient,
+    tmp_path,
+) -> None:
+    output_dir = tmp_path / "out"
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    job = orchestrator_app.Job(
+        id="job_artifact_missing",
+        created_at=orchestrator_app._now(),
+        request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(output_dir)}},
+    )
+    orchestrator_app.JOBS[job.id] = job
+
+    response = client.get(f"/v1/jobs/{job.id}/artifacts/missing.png")
+    body = response.json()
+
+    assert response.status_code == 404
+    assert body["error"]["code"] == "NOT_FOUND"
+    assert body["error"]["details"]["path"] == "missing.png"
 
 
 def test_v1_routes_enforce_api_key_for_reads_and_events(client: TestClient) -> None:

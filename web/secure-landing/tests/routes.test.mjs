@@ -968,6 +968,66 @@ test("v1 SSE proxy preserves event-stream framing while injecting backend auth s
   }
 });
 
+test("v1 artifact proxy passes binary previews through the managed front door with async params", async () => {
+  const env = withTempEnvironment({
+    TP_BACKEND_API_KEY: "backend-secret"
+  });
+
+  try {
+    const sessions = await importFresh("../lib/sessions.js");
+    const route = await importFresh("../app/v1/[...path]/route.js");
+
+    const authenticatedSession = sessions.rotateAuthenticatedSession(
+      sessions.createAnonymousSession(),
+      {
+        username: "admin",
+        accessEmail: "admin@example.com",
+        role: "admin"
+      }
+    );
+
+    const previewBytes = Uint8Array.from([137, 80, 78, 71, 13, 10, 26, 10, 112, 114, 101, 118, 105, 101, 119]);
+    const restoreFetch = withMockedAccessCerts(async (url, init) => {
+      assert.equal(String(url), "http://127.0.0.1:8000/v1/jobs/job-123/artifacts/renders/hero.png");
+      assert.equal(init.method, "GET");
+      assert.equal(init.headers.get("Authorization"), "Bearer backend-secret");
+      assert.equal(init.headers.get("x-api-key"), "backend-secret");
+      assert.equal(init.headers.has("cookie"), false);
+      return new Response(previewBytes, {
+        status: 200,
+        headers: {
+          "content-type": "image/png",
+          "cache-control": "private"
+        }
+      });
+    });
+
+    try {
+      const request = buildRequest("https://portal.example.com/v1/jobs/job-123/artifacts/renders/hero.png", {
+        method: "GET",
+        headers: new Headers({
+          cookie: `__Host-tp_session=${authenticatedSession.id}`,
+          accept: "image/png",
+          "Cf-Access-Jwt-Assertion": createAccessJwt()
+        })
+      });
+
+      const response = await route.GET(request, {
+        params: Promise.resolve({ path: ["jobs", "job-123", "artifacts", "renders", "hero.png"] })
+      });
+
+      assert.equal(response.status, 200);
+      assert.equal(response.headers.get("content-type"), "image/png");
+      assert.equal(response.headers.get("cache-control"), "no-store");
+      assert.deepEqual(Buffer.from(await response.arrayBuffer()), Buffer.from(previewBytes));
+    } finally {
+      restoreFetch();
+    }
+  } finally {
+    env.cleanup();
+  }
+});
+
 test("Access JWT verification refreshes certs on unknown kid after rotation", async () => {
   const { verifyAccessJwt } = await importFresh("../lib/access-jwt.js");
   const originalFetch = global.fetch;

@@ -1036,24 +1036,26 @@
 
                 <!-- Parameters -->
                 <div id="parameters-shell" data-ambient-zone="parameters" data-ambient-focus-x="22" data-ambient-focus-y="46" data-ambient-shift-x="-20" data-ambient-shift-y="8" data-ambient-stage-scale="1.038" data-ambient-stage-rotate="-0.35" data-ambient-color-a="#0ea5e9" data-ambient-color-b="#22d3ee" data-ambient-color-c="#93c5fd" data-ambient-focus-color="#bae6fd" class="workspace-shell deferred-shell rounded-[1.75rem] shell-panel p-6 shadow-soft dark:shadow-soft-dark transition-colors duration-300" data-shell-size="tall">
-                    <h2 class="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-4">Pipeline Parameters</h2>
-
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+                    <div class="flex items-start justify-between gap-3 mb-4">
                         <div>
-                            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="inputDir">Input Directory</label>
-                            <input type="text" id="inputDir" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors" value="./input_images" autocomplete="off" spellcheck="false" />
+                            <h2 class="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Pipeline Parameters</h2>
+                            <p class="mt-2 text-[12px] leading-6 text-slate-500 dark:text-slate-400">Move quickly from intent to dispatch: choose the outcome, set the input/output paths, then open advanced controls only when the run contract needs them.</p>
                         </div>
-                        <div>
-                            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="outputDir">Output Directory</label>
-                            <input type="text" id="outputDir" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors" value="./output/lux_depth_v3_apex" autocomplete="off" spellcheck="false" />
-                        </div>
+                        <span class="signal-badge">Preset-first flow</span>
                     </div>
 
-                    <!-- Lux Depth Specific Fields -->
-                    <div id="fieldsLuxDepth" class="pipeline-fields block space-y-6">
-                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <section id="presetBuilderShell" class="rounded-[1.5rem] border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/50 p-5">
+                        <div class="flex items-start justify-between gap-3">
                             <div>
-                                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="presetSelect">Compute Preset</label>
+                                <p class="section-kicker">Step 1</p>
+                                <h3 class="mt-2 text-base font-extrabold tracking-tight text-slate-900 dark:text-white">Choose the outcome preset</h3>
+                                <p class="mt-2 text-[12px] leading-6 text-slate-500 dark:text-slate-400">Presets now drive the fastest valid path. Picking one hydrates recommended defaults, keeps governance visible, and only opens advanced sections when the run actually needs them.</p>
+                            </div>
+                            <span class="micro-status">Preset → intelligent defaults</span>
+                        </div>
+                        <div class="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            <div class="sm:col-span-3">
+                                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="presetSelect">Preset</label>
                                 <select id="presetSelect" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors cursor-pointer">
                                     <option value="premium">premium (Stable)</option>
                                     <option value="default">default (Canary)</option>
@@ -1076,6 +1078,43 @@
                                     <option value="mps">mps (macOS)</option>
                                 </select>
                             </div>
+                            <div class="panel-subtle rounded-2xl p-4">
+                                <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Preset effect</p>
+                                <p id="presetBuilderHint" class="mt-2 text-[12px] leading-6 text-slate-600 dark:text-slate-300">Recommended defaults and advanced sections will adapt when the preset changes.</p>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="mt-5 rounded-[1.5rem] border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/50 p-5">
+                        <div class="flex items-start justify-between gap-3">
+                            <div>
+                                <p class="section-kicker">Step 2</p>
+                                <h3 class="mt-2 text-base font-extrabold tracking-tight text-slate-900 dark:text-white">Set inputs and output destination</h3>
+                                <p class="mt-2 text-[12px] leading-6 text-slate-500 dark:text-slate-400">A standard Lux Depth run should be dispatchable from these paths alone. JSON import/export and full CLI parity stay available below for exact reproducibility.</p>
+                            </div>
+                            <span class="micro-status">Input → output → dispatch</span>
+                        </div>
+                        <div class="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="inputDir">Input Directory</label>
+                                <input type="text" id="inputDir" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors" value="./input_images" autocomplete="off" spellcheck="false" />
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="outputDir">Output Directory</label>
+                                <input type="text" id="outputDir" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors" value="./output/lux_depth_v3_apex" autocomplete="off" spellcheck="false" />
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Lux Depth Specific Fields -->
+                    <div id="fieldsLuxDepth" class="pipeline-fields block space-y-6 mt-5 pt-5 border-t border-slate-200 dark:border-slate-800">
+                        <div class="flex items-start justify-between gap-3">
+                            <div>
+                                <p class="section-kicker">Step 3</p>
+                                <h3 class="mt-2 text-base font-extrabold tracking-tight text-slate-900 dark:text-white">Advanced controls</h3>
+                                <p class="mt-2 text-[12px] leading-6 text-slate-500 dark:text-slate-400">Backend selection, segmentation, emits, governance acknowledgments, and research/runtime controls stay collapsed unless the current preset or configuration needs them.</p>
+                            </div>
+                            <span class="micro-status">Advanced sections stay contextual</span>
                         </div>
                         <div>
                             <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="depthBackend">Depth Backend</label>
@@ -1482,9 +1521,28 @@
                         ></progress>
                     </div>
 
-                    <p id="selectedJobSummary" class="mt-4 text-[12px] leading-6 text-slate-600 dark:text-slate-300">
-                        Choose a job from the queue or dispatch a new run to inspect progress, artifacts, and live stream state.
-                    </p>
+                    <div class="mt-5 flex flex-wrap items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-4">
+                        <button id="inspectorOverviewTab" type="button" class="rounded-full border border-cyan-200 dark:border-cyan-900/60 bg-cyan-50 dark:bg-cyan-900/20 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-cyan-700 dark:text-cyan-300 transition-colors">Overview</button>
+                        <button id="inspectorTimelineTab" type="button" class="rounded-full border border-slate-200 dark:border-slate-800 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400 transition-colors">Timeline</button>
+                        <button id="inspectorLogsTab" type="button" class="rounded-full border border-slate-200 dark:border-slate-800 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400 transition-colors">Logs</button>
+                    </div>
+
+                    <div id="selectedJobOverviewPanel" class="mt-4 space-y-3">
+                        <div id="selectedJobTransportAlert" class="hidden rounded-2xl border border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-900/10 px-4 py-3 text-[12px] leading-6 text-amber-800 dark:text-amber-300"></div>
+                        <p id="selectedJobSummary" class="text-[12px] leading-6 text-slate-600 dark:text-slate-300">
+                            Choose a job from the queue or dispatch a new run to inspect progress, artifacts, and live stream state.
+                        </p>
+                    </div>
+
+                    <div id="selectedJobTimelinePanel" class="mt-4 hidden">
+                        <ol id="selectedJobTimelineList" class="space-y-3"></ol>
+                        <p id="selectedJobTimelineEmpty" class="text-[12px] leading-6 text-slate-500 dark:text-slate-400">Select a job to see a structured run timeline.</p>
+                    </div>
+
+                    <div id="selectedJobLogsPanel" class="mt-4 hidden space-y-3">
+                        <p class="text-[12px] leading-6 text-slate-500 dark:text-slate-400">Raw logs stay available for deep debugging, but this view keeps them secondary to the structured timeline.</p>
+                        <pre id="selectedJobLogPreview" class="command-frame min-h-[120px] rounded-2xl border border-slate-200 dark:border-slate-800 p-4 text-[11px] font-mono leading-relaxed text-slate-300 overflow-y-auto custom-scrollbar whitespace-pre-wrap break-words"></pre>
+                    </div>
                 </div>
 
                 <!-- Job Queue -->
@@ -1509,7 +1567,37 @@
                 <div id="artifacts-shell" data-ambient-zone="artifacts" data-ambient-focus-x="76" data-ambient-focus-y="64" data-ambient-shift-x="14" data-ambient-shift-y="12" data-ambient-stage-scale="1.03" data-ambient-stage-rotate="-0.2" data-ambient-color-a="#0ea5e9" data-ambient-color-b="#f59e0b" data-ambient-color-c="#14b8a6" data-ambient-focus-color="#fde68a" class="workspace-shell deferred-shell rounded-[1.75rem] shell-panel p-6 shadow-soft dark:shadow-soft-dark transition-colors duration-300" data-shell-size="compact">
                     <div class="flex items-center justify-between mb-4 pb-3 border-b border-slate-200 dark:border-slate-800">
                         <h2 class="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Artifacts</h2>
-                        <span id="artifactMeta" class="text-[11px] text-slate-500 dark:text-slate-400 font-mono">No job selected</span>
+                        <div class="flex items-center gap-2">
+                            <button id="artifactCompareBtn" type="button" class="hidden rounded-lg border border-slate-300 dark:border-slate-700 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">Compare</button>
+                            <span id="artifactMeta" class="text-[11px] text-slate-500 dark:text-slate-400 font-mono">No job selected</span>
+                        </div>
+                    </div>
+                    <div id="artifactPreviewStage" class="rounded-[1.5rem] border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/50 p-4">
+                        <div id="artifactCompareStage" class="hidden grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <figure class="space-y-3">
+                                <img id="artifactPreviewImage" alt="Selected artifact preview" class="hidden w-full rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-900/60 object-contain max-h-[320px]" />
+                                <figcaption id="artifactPreviewPrimaryCaption" class="text-[11px] font-mono text-slate-500 dark:text-slate-400 break-all"></figcaption>
+                            </figure>
+                            <figure class="space-y-3">
+                                <img id="artifactCompareImage" alt="Comparison artifact preview" class="hidden w-full rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-900/60 object-contain max-h-[320px]" />
+                                <figcaption id="artifactCompareCaption" class="text-[11px] font-mono text-slate-500 dark:text-slate-400 break-all"></figcaption>
+                            </figure>
+                        </div>
+                        <img id="artifactPreviewSoloImage" alt="Artifact preview" class="hidden w-full rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-900/60 object-contain max-h-[320px]" />
+                        <div id="artifactMetadataCard" class="rounded-2xl border border-dashed border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/70 p-5 text-[12px] leading-6 text-slate-600 dark:text-slate-300">
+                            Select a completed job to review the highest-value output here.
+                        </div>
+                    </div>
+                    <div id="artifactMetadataBar" class="mt-4 flex flex-col gap-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/50 p-4">
+                        <div class="flex flex-col gap-1">
+                            <p id="artifactSelectionTitle" class="text-[12px] font-semibold text-slate-800 dark:text-slate-100">No artifact selected</p>
+                            <p id="artifactSelectionMeta" class="text-[11px] font-mono text-slate-500 dark:text-slate-400">Preview, metadata, and actions will appear here when outputs are indexed.</p>
+                        </div>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <button id="openArtifactBtn" type="button" class="rounded-lg border border-slate-300 dark:border-slate-700 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled>Open</button>
+                            <button id="downloadArtifactBtn" type="button" class="rounded-lg border border-slate-300 dark:border-slate-700 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled>Download</button>
+                            <button id="copyArtifactPathBtn" type="button" class="rounded-lg border border-slate-300 dark:border-slate-700 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled>Copy Relative Path</button>
+                        </div>
                     </div>
                     <div id="runCardActions" class="hidden mb-3 items-center gap-2">
                         <button id="viewRunCardBtn" type="button" class="rounded-lg border border-slate-300 dark:border-slate-700 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
@@ -1522,8 +1610,8 @@
                             Copy Fingerprint
                         </button>
                     </div>
-                    <div class="max-h-[220px] overflow-y-auto custom-scrollbar pr-1">
-                        <ul id="artifactList" class="space-y-2"></ul>
+                    <div class="mt-4 max-h-[220px] overflow-y-auto custom-scrollbar pr-1">
+                        <div id="artifactThumbnailRail" class="grid grid-cols-2 gap-3 lg:grid-cols-3"></div>
                         <div id="emptyArtifactState" class="py-4 text-center">
                             <p class="text-[12px] text-slate-500 dark:text-slate-400">No artifacts indexed.</p>
                         </div>
@@ -1531,7 +1619,7 @@
                 </div>
 
                 <!-- Live Logs -->
-                <div id="logs-shell" data-ambient-zone="logs" data-ambient-focus-x="70" data-ambient-focus-y="84" data-ambient-shift-x="10" data-ambient-shift-y="18" data-ambient-stage-scale="1.04" data-ambient-stage-rotate="0.18" data-ambient-color-a="#22d3ee" data-ambient-color-b="#60a5fa" data-ambient-color-c="#f97316" data-ambient-focus-color="#fed7aa" class="workspace-shell deferred-shell rounded-[1.75rem] shell-panel flex flex-col flex-1 min-h-[400px] overflow-hidden transition-colors duration-300 shadow-soft dark:shadow-soft-dark" data-shell-size="tall">
+                <div id="logs-shell" data-ambient-zone="logs" data-ambient-focus-x="70" data-ambient-focus-y="84" data-ambient-shift-x="10" data-ambient-shift-y="18" data-ambient-stage-scale="1.04" data-ambient-stage-rotate="0.18" data-ambient-color-a="#22d3ee" data-ambient-color-b="#60a5fa" data-ambient-color-c="#f97316" data-ambient-focus-color="#fed7aa" class="workspace-shell deferred-shell hidden rounded-[1.75rem] shell-panel flex-col flex-1 min-h-[400px] overflow-hidden transition-colors duration-300 shadow-soft dark:shadow-soft-dark" data-shell-size="tall">
                     <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-900">
                         <div>
                             <h2 class="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400 flex items-center gap-2">
@@ -1586,6 +1674,7 @@
         const SSE_RECONNECT_JITTER_MS = 250;
         const SSE_STALL_CHECK_INTERVAL_MS = 10000;
         const SSE_STALL_THRESHOLD_MS = 45000;
+        const TIMELINE_PROGRESS_CHECKPOINTS = [5, 25, 50, 75, 100];
         const SAFE_JOB_STATES = new Set(['queued', 'running', 'succeeded', 'failed', 'canceled', 'ready', 'offline']);
         const SAFE_HTTP_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
@@ -1652,6 +1741,11 @@
             },
             jobs: [],
             selectedJobId: null,
+            inspectorTab: 'overview',
+            artifactUi: {
+                selectedByJob: {},
+                compareByJob: {}
+            },
             backendOk: false,
             theme: 'light',
             presetsByPipeline: {},
@@ -1685,6 +1779,8 @@
             presetStabilityBadge: document.getElementById('presetStabilityBadge'),
             backendModeBadge: document.getElementById('backendModeBadge'),
             presetDescription: document.getElementById('presetDescription'),
+            presetBuilderHint: document.getElementById('presetBuilderHint'),
+            presetBuilderShell: document.getElementById('presetBuilderShell'),
             heroInputDir: document.getElementById('heroInputDir'),
             heroOutputDir: document.getElementById('heroOutputDir'),
             heroReadinessLabel: document.getElementById('heroReadinessLabel'),
@@ -1799,13 +1895,39 @@
             selectedJobMetaLine: document.getElementById('selectedJobMetaLine'),
             selectedJobFreshness: document.getElementById('selectedJobFreshness'),
             selectedJobSummary: document.getElementById('selectedJobSummary'),
-            artifactList: document.getElementById('artifactList'),
+            selectedJobTransportAlert: document.getElementById('selectedJobTransportAlert'),
+            inspectorOverviewTab: document.getElementById('inspectorOverviewTab'),
+            inspectorTimelineTab: document.getElementById('inspectorTimelineTab'),
+            inspectorLogsTab: document.getElementById('inspectorLogsTab'),
+            selectedJobOverviewPanel: document.getElementById('selectedJobOverviewPanel'),
+            selectedJobTimelinePanel: document.getElementById('selectedJobTimelinePanel'),
+            selectedJobLogsPanel: document.getElementById('selectedJobLogsPanel'),
+            selectedJobTimelineList: document.getElementById('selectedJobTimelineList'),
+            selectedJobTimelineEmpty: document.getElementById('selectedJobTimelineEmpty'),
+            selectedJobLogPreview: document.getElementById('selectedJobLogPreview'),
             artifactMeta: document.getElementById('artifactMeta'),
             emptyArtifactState: document.getElementById('emptyArtifactState'),
+            artifactCompareBtn: document.getElementById('artifactCompareBtn'),
+            artifactPreviewStage: document.getElementById('artifactPreviewStage'),
+            artifactCompareStage: document.getElementById('artifactCompareStage'),
+            artifactPreviewImage: document.getElementById('artifactPreviewImage'),
+            artifactPreviewSoloImage: document.getElementById('artifactPreviewSoloImage'),
+            artifactCompareImage: document.getElementById('artifactCompareImage'),
+            artifactPreviewPrimaryCaption: document.getElementById('artifactPreviewPrimaryCaption'),
+            artifactCompareCaption: document.getElementById('artifactCompareCaption'),
+            artifactMetadataCard: document.getElementById('artifactMetadataCard'),
+            artifactMetadataBar: document.getElementById('artifactMetadataBar'),
+            artifactSelectionTitle: document.getElementById('artifactSelectionTitle'),
+            artifactSelectionMeta: document.getElementById('artifactSelectionMeta'),
+            openArtifactBtn: document.getElementById('openArtifactBtn'),
+            downloadArtifactBtn: document.getElementById('downloadArtifactBtn'),
+            copyArtifactPathBtn: document.getElementById('copyArtifactPathBtn'),
+            artifactThumbnailRail: document.getElementById('artifactThumbnailRail'),
             runCardActions: document.getElementById('runCardActions'),
             viewRunCardBtn: document.getElementById('viewRunCardBtn'),
             copyRunCardPathBtn: document.getElementById('copyRunCardPathBtn'),
             copyRunCardFingerprintBtn: document.getElementById('copyRunCardFingerprintBtn'),
+            logsShell: document.getElementById('logs-shell'),
             logPane: document.getElementById('logPane'),
             logMetaLabel: document.getElementById('logMetaLabel'),
             logStatusIndicator: document.getElementById('logStatusIndicator'),
@@ -2254,13 +2376,282 @@
             return 'closed';
         }
 
+        function formatBytes(sizeBytes) {
+            if (!Number.isFinite(sizeBytes) || sizeBytes < 0) return 'unknown size';
+            if (sizeBytes < 1024) return `${sizeBytes} B`;
+            const units = ['KB', 'MB', 'GB', 'TB'];
+            let value = sizeBytes / 1024;
+            let unitIndex = 0;
+            while (value >= 1024 && unitIndex < units.length - 1) {
+                value /= 1024;
+                unitIndex += 1;
+            }
+            return `${value.toFixed(value >= 10 ? 0 : 1)} ${units[unitIndex]}`;
+        }
+
+        function formatDuration(startMs, endMs = Date.now()) {
+            if (!Number.isFinite(startMs) || startMs <= 0) return 'elapsed unknown';
+            const safeEnd = Number.isFinite(endMs) && endMs > startMs ? endMs : Date.now();
+            const totalSeconds = Math.max(0, Math.round((safeEnd - startMs) / 1000));
+            if (totalSeconds < 60) return `${totalSeconds}s elapsed`;
+            const minutes = Math.floor(totalSeconds / 60);
+            const seconds = totalSeconds % 60;
+            if (minutes < 60) return `${minutes}m ${seconds}s elapsed`;
+            const hours = Math.floor(minutes / 60);
+            const remMinutes = minutes % 60;
+            return `${hours}h ${remMinutes}m elapsed`;
+        }
+
+        function formatTimelineTimestamp(timestamp) {
+            if (!Number.isFinite(timestamp) || timestamp <= 0) return 'just now';
+            return new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        }
+
+        function artifactMediaKind(artifact) {
+            return String(artifact?.media_kind || artifact?.artifact_type || 'file').trim().toLowerCase();
+        }
+
+        function artifactContentType(artifact) {
+            return String(artifact?.content_type || '').trim();
+        }
+
+        function artifactIsPreviewable(artifact) {
+            return Boolean(artifact?.previewable) && artifactMediaKind(artifact) === 'image';
+        }
+
+        function artifactLabel(artifact) {
+            return String(artifact?.relative_path || artifact?.path || 'artifact').trim();
+        }
+
+        function artifactNameParts(artifact) {
+            const relativePath = artifactLabel(artifact);
+            const segments = relativePath.split('/');
+            const fileName = segments[segments.length - 1] || relativePath;
+            const stem = fileName.replace(/\.[^.]+$/, '').toLowerCase();
+            return {
+                relativePath,
+                fileName,
+                stem,
+                parent: segments.slice(0, -1).join('/').toLowerCase(),
+            };
+        }
+
+        function buildArtifactUrl(job, artifact) {
+            const directUrl = String(artifact?.url || '').trim();
+            if (directUrl) return `${API_BASE}${directUrl}`;
+            if (!job || !artifact) return '';
+            const relativePath = artifactLabel(artifact);
+            if (!relativePath) return '';
+            const encodedSegments = relativePath.split('/').map((segment) => encodeURIComponent(segment)).join('/');
+            return `${API_BASE}/v1/jobs/${encodeURIComponent(String(job.id || ''))}/artifacts/${encodedSegments}`;
+        }
+
+        function artifactHeroScore(artifact) {
+            if (!artifact || typeof artifact !== 'object') return -1;
+            const info = artifactNameParts(artifact);
+            const name = `${info.parent}/${info.fileName}`.toLowerCase();
+            let score = 0;
+
+            if (artifactIsPreviewable(artifact)) score += 500;
+            if (artifactMediaKind(artifact) === 'image') score += 180;
+            if (/(master16|upscaled16|final|result|render|beauty|marketing|depth)/.test(name)) score += 80;
+            if (/(mask|thumb|preview|debug)/.test(name)) score -= 15;
+            if (/(run[_-]?card|manifest|report|metadata|json|yaml|yml|txt|csv|log)/.test(name)) score -= 55;
+            if (Number.isFinite(artifact.size_bytes)) score += Math.min(40, Math.round(artifact.size_bytes / 500000));
+
+            return score;
+        }
+
+        function rankArtifactsForDisplay(artifacts) {
+            return [...artifacts].sort((left, right) => {
+                const scoreDelta = artifactHeroScore(right) - artifactHeroScore(left);
+                if (scoreDelta !== 0) return scoreDelta;
+                return artifactLabel(left).localeCompare(artifactLabel(right));
+            });
+        }
+
+        function findCompareArtifact(primaryArtifact, artifacts) {
+            if (!primaryArtifact || !artifactIsPreviewable(primaryArtifact)) return null;
+            const primary = artifactNameParts(primaryArtifact);
+            const primaryExt = primary.fileName.includes('.') ? primary.fileName.split('.').pop().toLowerCase() : '';
+            let best = null;
+            let bestScore = -1;
+
+            artifacts.forEach((candidate) => {
+                if (!candidate || candidate.path === primaryArtifact.path || !artifactIsPreviewable(candidate)) return;
+                const info = artifactNameParts(candidate);
+                const ext = info.fileName.includes('.') ? info.fileName.split('.').pop().toLowerCase() : '';
+                let score = 0;
+                if (info.parent && info.parent === primary.parent) score += 30;
+                if (ext && ext === primaryExt) score += 20;
+                if (info.stem && primary.stem && (info.stem.includes(primary.stem) || primary.stem.includes(info.stem))) score += 35;
+                if (/(master16|upscaled16|final|result|render|beauty|marketing|depth)/.test(info.fileName.toLowerCase())) score += 10;
+                if (score > bestScore) {
+                    bestScore = score;
+                    best = candidate;
+                }
+            });
+
+            return bestScore > 0 ? best : null;
+        }
+
+        function _timelineEntry(kind, label, detail, timestamp, tone = 'info', key = '') {
+            return {
+                kind,
+                label,
+                detail,
+                tone,
+                timestamp: Number.isFinite(timestamp) && timestamp > 0 ? timestamp : Date.now(),
+                key: key || `${kind}|${label}|${detail}`
+            };
+        }
+
+        function _ensureJobTimeline(job) {
+            if (!job) return;
+            if (!Array.isArray(job.timeline)) job.timeline = [];
+            if (!Array.isArray(job.transportWarnings)) job.transportWarnings = [];
+            if (!Array.isArray(job.progressMilestones)) job.progressMilestones = [];
+        }
+
+        function _pushTimelineEntry(job, entry) {
+            if (!job || !entry) return;
+            _ensureJobTimeline(job);
+            if (job.timeline.some((existing) => existing && existing.key === entry.key)) return;
+            job.timeline.push(entry);
+            job.timeline.sort((left, right) => (Number(left.timestamp) || 0) - (Number(right.timestamp) || 0));
+            if (job.timeline.length > 40) {
+                job.timeline.splice(0, job.timeline.length - 40);
+            }
+        }
+
+        function _noteTransportWarning(job, code, detail, tone = 'warn') {
+            if (!job || !code || !detail) return;
+            _ensureJobTimeline(job);
+            if (job.transportWarnings.some((warning) => warning && warning.code === code && warning.detail === detail)) return;
+            const warning = {
+                code,
+                detail,
+                tone,
+                timestamp: Date.now()
+            };
+            job.transportWarnings.push(warning);
+            _pushTimelineEntry(job, _timelineEntry('transport', 'Transport warning', detail, warning.timestamp, tone, `transport|${code}|${detail}`));
+        }
+
+        function _recordProgressTimeline(job, progress, timestamp = Date.now()) {
+            if (!job) return;
+            _ensureJobTimeline(job);
+            TIMELINE_PROGRESS_CHECKPOINTS.forEach((checkpoint) => {
+                if (progress < checkpoint || job.progressMilestones.includes(checkpoint)) return;
+                job.progressMilestones.push(checkpoint);
+                _pushTimelineEntry(
+                    job,
+                    _timelineEntry(
+                        'progress',
+                        `Progress reached ${checkpoint}%`,
+                        checkpoint === 100 ? 'Run reached the final progress checkpoint.' : `Checkpoint ${checkpoint}% crossed.`,
+                        timestamp,
+                        checkpoint >= 100 ? 'success' : 'info',
+                        `progress|${checkpoint}`
+                    )
+                );
+            });
+        }
+
+        function _reconcileJobTimeline(job) {
+            if (!job) return;
+            _ensureJobTimeline(job);
+            _pushTimelineEntry(job, _timelineEntry('dispatch', 'Dispatch created', 'Run request created in the cockpit.', job.createdAt, 'info', 'dispatch|created'));
+
+            if (job.startedAt > 0) {
+                _pushTimelineEntry(job, _timelineEntry('state', 'Run started', 'Worker admitted the run and execution began.', job.startedAt, 'info', 'state|started'));
+            } else if (job.state === 'queued') {
+                _pushTimelineEntry(job, _timelineEntry('state', 'Queued', 'Awaiting worker admission.', job.createdAt, 'info', 'state|queued'));
+            }
+
+            if (Number(job.progress) > 0) {
+                _recordProgressTimeline(job, Number(job.progress), Number(job.updatedAt || job.startedAt || job.createdAt || Date.now()));
+            }
+
+            const artifactCount = Array.isArray(job.artifacts) ? job.artifacts.length : 0;
+            if (artifactCount > 0) {
+                _pushTimelineEntry(
+                    job,
+                    _timelineEntry(
+                        'artifact',
+                        'Artifacts indexed',
+                        `${artifactCount} artifact${artifactCount === 1 ? '' : 's'} available for visual review.`,
+                        Number(job.finishedAt || job.updatedAt || Date.now()),
+                        'success',
+                        `artifacts|${artifactCount}`
+                    )
+                );
+            }
+
+            if (job.state === 'running') {
+                _pushTimelineEntry(
+                    job,
+                    _timelineEntry(
+                        'state',
+                        'Run active',
+                        'Streaming progress and output updates.',
+                        Number(job.updatedAt || job.startedAt || Date.now()),
+                        'info',
+                        'state|running'
+                    )
+                );
+            }
+
+            if (job.reconnectBlocked) {
+                _noteTransportWarning(job, 'auth_blocked', 'Transport is blocked until authentication is restored.', 'warn');
+            }
+
+            if (job.state === 'succeeded') {
+                _pushTimelineEntry(job, _timelineEntry('done', 'Run completed', 'Outputs are ready for review.', Number(job.finishedAt || job.updatedAt || Date.now()), 'success', 'done|succeeded'));
+            } else if (job.state === 'failed') {
+                _pushTimelineEntry(job, _timelineEntry('done', 'Run failed', getReadableError(job.error) || 'Runner reported a terminal failure.', Number(job.finishedAt || job.updatedAt || Date.now()), 'error', 'done|failed'));
+            } else if (job.state === 'canceled') {
+                _pushTimelineEntry(job, _timelineEntry('done', 'Run canceled', 'Execution was canceled before completion.', Number(job.finishedAt || job.updatedAt || Date.now()), 'warn', 'done|canceled'));
+            }
+        }
+
+        function setInspectorTab(tabName) {
+            const nextTab = ['overview', 'timeline', 'logs'].includes(tabName) ? tabName : 'overview';
+            state.inspectorTab = nextTab;
+
+            const tabConfig = [
+                { name: 'overview', button: els.inspectorOverviewTab, panel: els.selectedJobOverviewPanel },
+                { name: 'timeline', button: els.inspectorTimelineTab, panel: els.selectedJobTimelinePanel },
+                { name: 'logs', button: els.inspectorLogsTab, panel: els.selectedJobLogsPanel },
+            ];
+
+            tabConfig.forEach(({ name, button, panel }) => {
+                const active = name === nextTab;
+                if (button) {
+                    button.className = active
+                        ? 'rounded-full border border-cyan-200 dark:border-cyan-900/60 bg-cyan-50 dark:bg-cyan-900/20 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-cyan-700 dark:text-cyan-300 transition-colors'
+                        : 'rounded-full border border-slate-200 dark:border-slate-800 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400 transition-colors';
+                }
+                if (panel) {
+                    panel.classList.toggle('hidden', !active);
+                }
+            });
+
+            if (els.logsShell) {
+                els.logsShell.classList.toggle('hidden', nextTab !== 'logs');
+                els.logsShell.classList.toggle('flex', nextTab === 'logs');
+            }
+        }
+
         function currentPresetDescriptor() {
             if (state.pipeline !== 'lux-depth-v3') {
                 return {
                     name: 'default',
                     label: 'default',
                     stability: 'stable',
-                    description: 'Archive governance workflow preset.'
+                    description: 'Archive governance workflow preset.',
+                    recommended_args: {},
+                    advanced_sections: []
                 };
             }
             const presets = Array.isArray(state.presetsByPipeline[state.pipeline]) ? state.presetsByPipeline[state.pipeline] : [];
@@ -2272,7 +2663,9 @@
                 stability: 'custom',
                 description: state.pipeline === 'lux-depth-v3'
                     ? 'Custom or offline preset selection.'
-                    : 'Archive governance workflow preset.'
+                    : 'Archive governance workflow preset.',
+                recommended_args: {},
+                advanced_sections: []
             };
         }
 
@@ -2307,6 +2700,8 @@
 
         function syncDisclosurePanels(payload = null) {
             const args = payload?.args || generatePayload().args || {};
+            const preset = currentPresetDescriptor();
+            const advancedSections = Array.isArray(preset.advanced_sections) ? preset.advanced_sections : [];
             const advancedActive = parseBoolLike(args.save_float_depth, false)
                 || parseBoolLike(args.force_depth, false)
                 || parseBoolLike(args.strict_inputs, false)
@@ -2331,9 +2726,9 @@
                 || String(args.max_gpu_workers || '').trim() !== ''
                 || String(args.log_level || '').trim() !== '';
 
-            if (els.advancedFlagsDetails) els.advancedFlagsDetails.open = advancedActive;
-            if (els.governanceDetails) els.governanceDetails.open = governanceActive;
-            if (els.reconstructionDetails) els.reconstructionDetails.open = reconstructionActive;
+            if (els.advancedFlagsDetails) els.advancedFlagsDetails.open = advancedActive || advancedSections.includes('advanced');
+            if (els.governanceDetails) els.governanceDetails.open = governanceActive || advancedSections.includes('governance');
+            if (els.reconstructionDetails) els.reconstructionDetails.open = reconstructionActive || advancedSections.includes('reconstruction');
         }
 
         function renderGovernanceBanner(payload) {
@@ -2441,6 +2836,7 @@
             const preset = currentPresetDescriptor();
             const diagnostics = state.lastDiagnostics || {};
             const warnings = Array.isArray(diagnostics.warnings) ? diagnostics.warnings : [];
+            const advancedSections = Array.isArray(preset.advanced_sections) ? preset.advanced_sections : [];
 
             if (els.presetHeadline) els.presetHeadline.textContent = String(preset.label || preset.name || 'custom');
             if (els.presetDescription) {
@@ -2473,6 +2869,12 @@
             if (els.heroWarningCount) {
                 els.heroWarningCount.textContent = String(warnings.length);
             }
+            if (els.presetBuilderHint) {
+                const sectionLabel = advancedSections.length > 0
+                    ? `Advanced focus: ${advancedSections.join(', ')}.`
+                    : 'Preset keeps advanced sections collapsed until the run needs them.';
+                els.presetBuilderHint.textContent = `${String(preset.description || 'Preset metadata unavailable.')} ${sectionLabel}`;
+            }
         }
 
         function renderMissionControl(payload = null) {
@@ -2500,6 +2902,61 @@
             }
         }
 
+        function renderSelectedJobTimeline(job) {
+            if (!els.selectedJobTimelineList || !els.selectedJobTimelineEmpty) return;
+            if (!job) {
+                els.selectedJobTimelineList.innerHTML = '';
+                els.selectedJobTimelineEmpty.classList.remove('hidden');
+                return;
+            }
+
+            _reconcileJobTimeline(job);
+            const entries = Array.isArray(job.timeline) ? [...job.timeline] : [];
+            if (entries.length === 0) {
+                els.selectedJobTimelineList.innerHTML = '';
+                els.selectedJobTimelineEmpty.classList.remove('hidden');
+                return;
+            }
+
+            els.selectedJobTimelineEmpty.classList.add('hidden');
+            const fragment = document.createDocumentFragment();
+            entries.forEach((entry) => {
+                const toneClass = entry.tone === 'error'
+                    ? 'border-red-200 bg-red-50/90 dark:border-red-900/50 dark:bg-red-900/10'
+                    : entry.tone === 'warn'
+                        ? 'border-amber-200 bg-amber-50/90 dark:border-amber-900/50 dark:bg-amber-900/10'
+                        : entry.tone === 'success'
+                            ? 'border-emerald-200 bg-emerald-50/90 dark:border-emerald-900/50 dark:bg-emerald-900/10'
+                            : 'border-slate-200 bg-white/80 dark:border-slate-800 dark:bg-slate-900/60';
+                const item = document.createElement('li');
+                item.className = `rounded-2xl border px-4 py-3 ${toneClass}`;
+
+                const header = document.createElement('div');
+                header.className = 'flex items-start justify-between gap-3';
+
+                const label = document.createElement('p');
+                label.className = 'text-[11px] font-bold uppercase tracking-[0.18em] text-slate-600 dark:text-slate-300';
+                label.textContent = String(entry.label || 'Timeline entry');
+                header.appendChild(label);
+
+                const timestamp = document.createElement('span');
+                timestamp.className = 'text-[10px] font-mono text-slate-500 dark:text-slate-400';
+                timestamp.textContent = formatTimelineTimestamp(Number(entry.timestamp || 0));
+                header.appendChild(timestamp);
+                item.appendChild(header);
+
+                const detail = document.createElement('p');
+                detail.className = 'mt-2 text-[12px] leading-6 text-slate-600 dark:text-slate-300';
+                detail.textContent = String(entry.detail || '');
+                item.appendChild(detail);
+
+                fragment.appendChild(item);
+            });
+
+            els.selectedJobTimelineList.innerHTML = '';
+            els.selectedJobTimelineList.appendChild(fragment);
+        }
+
         function renderSelectedJobInspector() {
             const selected = state.jobs.find((job) => job.id === state.selectedJobId) || null;
             if (!selected) {
@@ -2513,12 +2970,20 @@
                 if (els.selectedJobMetaLine) els.selectedJobMetaLine.textContent = 'Queue idle. Select a run to inspect transport, recency, and output state.';
                 if (els.selectedJobFreshness) els.selectedJobFreshness.textContent = 'No live telemetry';
                 if (els.logMetaLabel) els.logMetaLabel.textContent = 'Select a job to stream or inspect its log output.';
-                if (els.selectedJobSummary) {
-                    els.selectedJobSummary.textContent = 'Choose a job from the queue or dispatch a new run to inspect progress, artifacts, and live stream state.';
+                if (els.selectedJobSummary) els.selectedJobSummary.textContent = 'Choose a job from the queue or dispatch a new run to inspect progress, artifacts, and live stream state.';
+                if (els.selectedJobTransportAlert) {
+                    els.selectedJobTransportAlert.classList.add('hidden');
+                    els.selectedJobTransportAlert.textContent = '';
                 }
+                if (els.selectedJobLogPreview) {
+                    els.selectedJobLogPreview.textContent = 'No live logs yet.';
+                }
+                renderSelectedJobTimeline(null);
+                setInspectorTab(state.inspectorTab);
                 return;
             }
 
+            _reconcileJobTimeline(selected);
             const artifactCount = Array.isArray(selected.artifacts) ? selected.artifacts.length : 0;
             const readableError = getReadableError(selected.error);
             const streamStatus = selected.reconnectBlocked
@@ -2529,6 +2994,11 @@
             const lastActivityAt = Number(selected.updatedAt || selected.createdAt || 0);
             const activityLabel = formatRelativeTime(lastActivityAt);
             const transportLabel = formatTransportLabel(selected);
+            const elapsedLabel = formatDuration(Number(selected.createdAt || 0), Number(selected.finishedAt || Date.now()));
+            const latestWarning = Array.isArray(selected.transportWarnings) && selected.transportWarnings.length > 0
+                ? selected.transportWarnings[selected.transportWarnings.length - 1]
+                : null;
+            const visibleAlert = latestWarning && latestWarning.tone !== 'info' ? latestWarning : null;
 
             if (els.selectedJobStateBadge) els.selectedJobStateBadge.textContent = titleCaseToken(selected.state, 'Unknown');
             if (els.selectedJobIdLabel) {
@@ -2537,14 +3007,14 @@
             }
             if (els.selectedJobPipelineLabel) els.selectedJobPipelineLabel.textContent = String(selected.pipeline || 'unknown');
             if (els.selectedJobArtifactCount) els.selectedJobArtifactCount.textContent = `${artifactCount} indexed`;
-            if (els.selectedJobStreamStatus) els.selectedJobStreamStatus.textContent = streamStatus;
+            if (els.selectedJobStreamStatus) els.selectedJobStreamStatus.textContent = `${streamStatus} • ${elapsedLabel}`;
             if (els.selectedJobProgressText) els.selectedJobProgressText.textContent = `${Math.max(0, Math.min(100, Number(selected.progress) || 0))}%`;
             if (els.selectedJobProgressBar) {
                 els.selectedJobProgressBar.max = 100;
                 els.selectedJobProgressBar.value = Math.max(0, Math.min(100, Number(selected.progress) || 0));
             }
             if (els.selectedJobMetaLine) {
-                els.selectedJobMetaLine.textContent = `${titleCaseToken(selected.pipeline, 'Unknown')} • ${transportLabel} • updated ${activityLabel}`;
+                els.selectedJobMetaLine.textContent = `${titleCaseToken(selected.pipeline, 'Unknown')} • ${transportLabel} • ${elapsedLabel}`;
             }
             if (els.selectedJobFreshness) {
                 els.selectedJobFreshness.textContent = `Updated ${activityLabel}`;
@@ -2555,8 +3025,24 @@
             if (els.selectedJobSummary) {
                 els.selectedJobSummary.textContent = readableError
                     ? readableError
-                    : `Tracking ${titleCaseToken(selected.state, 'job')} state for ${String(selected.pipeline || 'unknown')} with ${artifactCount} indexed artifact${artifactCount === 1 ? '' : 's'}.`;
+                    : `Operators can now read ${titleCaseToken(selected.state, 'job')} state at a glance: ${artifactCount} artifact${artifactCount === 1 ? '' : 's'} indexed, ${transportLabel} transport, ${elapsedLabel}.`;
             }
+            if (els.selectedJobTransportAlert) {
+                if (visibleAlert) {
+                    els.selectedJobTransportAlert.textContent = String(visibleAlert.detail || '');
+                    els.selectedJobTransportAlert.classList.remove('hidden');
+                } else {
+                    els.selectedJobTransportAlert.classList.add('hidden');
+                    els.selectedJobTransportAlert.textContent = '';
+                }
+            }
+            if (els.selectedJobLogPreview) {
+                const previewLines = Array.isArray(selected.logs) ? selected.logs.slice(-12) : [];
+                els.selectedJobLogPreview.textContent = previewLines.length > 0 ? previewLines.join('\n') : 'No live logs yet.';
+            }
+
+            renderSelectedJobTimeline(selected);
+            setInspectorTab(state.inspectorTab);
         }
 
         function createToast(message, type = 'info') {
@@ -2819,6 +3305,10 @@
                 .filter((item) => item && typeof item.path === 'string')
                 .map((item) => ({
                     artifact_type: String(item.artifact_type || 'file'),
+                    media_kind: String(item.media_kind || item.artifact_type || 'file'),
+                    previewable: Boolean(item.previewable),
+                    content_type: typeof item.content_type === 'string' ? item.content_type : '',
+                    url: typeof item.url === 'string' ? item.url : '',
                     path: String(item.path),
                     relative_path: String(item.relative_path || item.path),
                     size_bytes: typeof item.size_bytes === 'number' ? item.size_bytes : null,
@@ -2832,12 +3322,17 @@
             const existing = job.artifacts.find((entry) => entry.path === artifact.path);
             if (existing) {
                 existing.artifact_type = artifact.artifact_type || existing.artifact_type;
+                existing.media_kind = artifact.media_kind || existing.media_kind;
+                existing.previewable = typeof artifact.previewable === 'boolean' ? artifact.previewable : existing.previewable;
+                existing.content_type = artifact.content_type || existing.content_type;
+                existing.url = artifact.url || existing.url;
                 existing.relative_path = artifact.relative_path || existing.relative_path;
                 existing.size_bytes = artifact.size_bytes ?? existing.size_bytes;
                 existing.sha256 = artifact.sha256 || existing.sha256;
-                return;
+            } else {
+                job.artifacts.push(artifact);
             }
-            job.artifacts.push(artifact);
+            _reconcileJobTimeline(job);
         }
 
         function getRunCardArtifact(job) {
@@ -2858,8 +3353,11 @@
                 return;
             }
             const runCardPath = String(runCard.relative_path || runCard.path || '');
+            const runCardUrl = buildArtifactUrl(job, runCard);
             const runCardSha = String(runCard.sha256 || '');
-            if (els.viewRunCardBtn) els.viewRunCardBtn.dataset.path = runCardPath;
+            if (els.viewRunCardBtn) {
+                els.viewRunCardBtn.dataset.url = runCardUrl;
+            }
             if (els.copyRunCardPathBtn) els.copyRunCardPathBtn.dataset.path = runCardPath;
             if (els.copyRunCardFingerprintBtn) {
                 els.copyRunCardFingerprintBtn.dataset.fingerprint = runCardSha;
@@ -2871,14 +3369,66 @@
             els.runCardActions.classList.add('flex');
         }
 
+        function _selectedArtifactForJob(job) {
+            if (!job || !Array.isArray(job.artifacts) || job.artifacts.length === 0) return null;
+            const ranked = rankArtifactsForDisplay(job.artifacts);
+            const selectedPath = state.artifactUi.selectedByJob[String(job.id || '')];
+            const selected = ranked.find((artifact) => artifact.path === selectedPath);
+            const hero = selected || ranked[0] || null;
+            if (hero) {
+                state.artifactUi.selectedByJob[String(job.id || '')] = hero.path;
+            }
+            return hero;
+        }
+
+        function _renderArtifactMetadataCard(job, artifact) {
+            if (!els.artifactMetadataCard) return;
+            els.artifactMetadataCard.innerHTML = '';
+
+            const title = document.createElement('p');
+            title.className = 'text-[12px] font-semibold text-slate-800 dark:text-slate-100';
+            title.textContent = artifact
+                ? artifactLabel(artifact)
+                : 'Select a completed job to review the highest-value output here.';
+            els.artifactMetadataCard.appendChild(title);
+
+            const detail = document.createElement('p');
+            detail.className = 'mt-2 text-[12px] leading-6 text-slate-600 dark:text-slate-300';
+            if (!job) {
+                detail.textContent = 'No job selected.';
+            } else if (!artifact) {
+                detail.textContent = 'Artifacts will appear here when the selected run indexes outputs.';
+            } else {
+                detail.textContent = `${titleCaseToken(artifactMediaKind(artifact), 'File')} artifact • ${artifactContentType(artifact) || 'binary'} • ${formatBytes(artifact.size_bytes)}.`;
+            }
+            els.artifactMetadataCard.appendChild(detail);
+        }
+
         function renderArtifactPanel() {
-            if (!els.artifactList || !els.artifactMeta) return;
+            if (!els.artifactMeta || !els.artifactThumbnailRail) return;
             const selected = state.jobs.find((item) => item.id === state.selectedJobId);
-            const artifacts = Array.isArray(selected?.artifacts) ? selected.artifacts : [];
+            const artifacts = Array.isArray(selected?.artifacts) ? rankArtifactsForDisplay(selected.artifacts) : [];
 
             if (!selected) {
                 els.artifactMeta.textContent = 'No job selected';
-                els.artifactList.innerHTML = '';
+                els.artifactThumbnailRail.innerHTML = '';
+                if (els.artifactSelectionTitle) els.artifactSelectionTitle.textContent = 'No artifact selected';
+                if (els.artifactSelectionMeta) els.artifactSelectionMeta.textContent = 'Preview, metadata, and actions will appear here when outputs are indexed.';
+                if (els.artifactCompareBtn) els.artifactCompareBtn.classList.add('hidden');
+                if (els.artifactPreviewSoloImage) {
+                    els.artifactPreviewSoloImage.classList.add('hidden');
+                    els.artifactPreviewSoloImage.removeAttribute('src');
+                }
+                if (els.artifactPreviewImage) {
+                    els.artifactPreviewImage.classList.add('hidden');
+                    els.artifactPreviewImage.removeAttribute('src');
+                }
+                if (els.artifactCompareImage) {
+                    els.artifactCompareImage.classList.add('hidden');
+                    els.artifactCompareImage.removeAttribute('src');
+                }
+                if (els.artifactCompareStage) els.artifactCompareStage.classList.add('hidden');
+                _renderArtifactMetadataCard(null, null);
                 updateRunCardActions(null);
                 if (els.emptyArtifactState) els.emptyArtifactState.style.display = 'block';
                 renderSelectedJobInspector();
@@ -2889,7 +3439,11 @@
             els.artifactMeta.textContent = `${artifacts.length} artifacts${errorText ? ` • ${errorText}` : ''}`;
 
             if (artifacts.length === 0) {
-                els.artifactList.innerHTML = '';
+                els.artifactThumbnailRail.innerHTML = '';
+                if (els.artifactSelectionTitle) els.artifactSelectionTitle.textContent = 'No artifact selected';
+                if (els.artifactSelectionMeta) els.artifactSelectionMeta.textContent = 'Artifacts will appear here when the selected run indexes outputs.';
+                if (els.artifactCompareBtn) els.artifactCompareBtn.classList.add('hidden');
+                _renderArtifactMetadataCard(selected, null);
                 updateRunCardActions(selected);
                 if (els.emptyArtifactState) els.emptyArtifactState.style.display = 'block';
                 renderSelectedJobInspector();
@@ -2897,31 +3451,133 @@
             }
 
             if (els.emptyArtifactState) els.emptyArtifactState.style.display = 'none';
+            const selectedArtifact = _selectedArtifactForJob(selected);
+            const compareCandidate = findCompareArtifact(selectedArtifact, artifacts);
+            const compareEnabled = Boolean(compareCandidate) && Boolean(state.artifactUi.compareByJob[String(selected.id || '')]);
+
+            if (els.artifactCompareBtn) {
+                if (compareCandidate) {
+                    els.artifactCompareBtn.classList.remove('hidden');
+                    els.artifactCompareBtn.textContent = compareEnabled ? 'Single View' : 'Compare';
+                } else {
+                    els.artifactCompareBtn.classList.add('hidden');
+                }
+            }
+
+            if (els.artifactSelectionTitle) {
+                els.artifactSelectionTitle.textContent = selectedArtifact ? artifactLabel(selectedArtifact) : 'No artifact selected';
+            }
+            if (els.artifactSelectionMeta) {
+                els.artifactSelectionMeta.textContent = selectedArtifact
+                    ? `${titleCaseToken(artifactMediaKind(selectedArtifact), 'File')} • ${artifactContentType(selectedArtifact) || 'binary'} • ${formatBytes(selectedArtifact.size_bytes)}`
+                    : 'Preview, metadata, and actions will appear here when outputs are indexed.';
+            }
+
+            if (els.openArtifactBtn) {
+                const openUrl = selectedArtifact ? buildArtifactUrl(selected, selectedArtifact) : '';
+                els.openArtifactBtn.disabled = !openUrl;
+                els.openArtifactBtn.dataset.url = openUrl;
+            }
+            if (els.downloadArtifactBtn) {
+                const downloadUrl = selectedArtifact ? buildArtifactUrl(selected, selectedArtifact) : '';
+                els.downloadArtifactBtn.disabled = !downloadUrl;
+                els.downloadArtifactBtn.dataset.url = downloadUrl;
+                els.downloadArtifactBtn.dataset.filename = selectedArtifact ? artifactNameParts(selectedArtifact).fileName : '';
+            }
+            if (els.copyArtifactPathBtn) {
+                els.copyArtifactPathBtn.disabled = !selectedArtifact;
+                els.copyArtifactPathBtn.dataset.path = selectedArtifact ? artifactLabel(selectedArtifact) : '';
+            }
+
+            if (els.artifactCompareStage) els.artifactCompareStage.classList.toggle('hidden', !compareEnabled);
+            if (els.artifactPreviewSoloImage) els.artifactPreviewSoloImage.classList.toggle('hidden', compareEnabled || !artifactIsPreviewable(selectedArtifact));
+            if (els.artifactMetadataCard) els.artifactMetadataCard.classList.toggle('hidden', artifactIsPreviewable(selectedArtifact));
+            if (compareEnabled && selectedArtifact && compareCandidate) {
+                if (els.artifactPreviewImage) {
+                    els.artifactPreviewImage.src = buildArtifactUrl(selected, selectedArtifact);
+                    els.artifactPreviewImage.classList.remove('hidden');
+                }
+                if (els.artifactPreviewPrimaryCaption) els.artifactPreviewPrimaryCaption.textContent = artifactLabel(selectedArtifact);
+                if (els.artifactCompareImage) {
+                    els.artifactCompareImage.src = buildArtifactUrl(selected, compareCandidate);
+                    els.artifactCompareImage.classList.remove('hidden');
+                }
+                if (els.artifactCompareCaption) els.artifactCompareCaption.textContent = artifactLabel(compareCandidate);
+            } else if (artifactIsPreviewable(selectedArtifact)) {
+                if (els.artifactPreviewSoloImage) {
+                    els.artifactPreviewSoloImage.src = buildArtifactUrl(selected, selectedArtifact);
+                    els.artifactPreviewSoloImage.classList.remove('hidden');
+                }
+                if (els.artifactPreviewImage) {
+                    els.artifactPreviewImage.classList.add('hidden');
+                    els.artifactPreviewImage.removeAttribute('src');
+                }
+                if (els.artifactCompareImage) {
+                    els.artifactCompareImage.classList.add('hidden');
+                    els.artifactCompareImage.removeAttribute('src');
+                }
+            } else {
+                if (els.artifactPreviewSoloImage) {
+                    els.artifactPreviewSoloImage.classList.add('hidden');
+                    els.artifactPreviewSoloImage.removeAttribute('src');
+                }
+                if (els.artifactPreviewImage) {
+                    els.artifactPreviewImage.classList.add('hidden');
+                    els.artifactPreviewImage.removeAttribute('src');
+                }
+                if (els.artifactCompareImage) {
+                    els.artifactCompareImage.classList.add('hidden');
+                    els.artifactCompareImage.removeAttribute('src');
+                }
+                _renderArtifactMetadataCard(selected, selectedArtifact);
+            }
+
             const fragment = document.createDocumentFragment();
             artifacts.forEach((artifact) => {
-                const li = document.createElement('li');
-                li.className = 'rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2 bg-slate-50 dark:bg-slate-800/40';
+                const button = document.createElement('button');
+                const active = selectedArtifact && artifact.path === selectedArtifact.path;
+                button.type = 'button';
+                button.dataset.artifactPath = String(artifact.path || '');
+                button.className = active
+                    ? 'rounded-2xl border border-cyan-300 dark:border-cyan-900/60 bg-cyan-50/90 dark:bg-cyan-900/20 p-3 text-left shadow-sm transition-colors'
+                    : 'rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/50 p-3 text-left hover:bg-white/90 dark:hover:bg-slate-800/80 transition-colors';
 
-                const title = document.createElement('div');
-                title.className = 'text-[10px] uppercase tracking-widest text-slate-500 dark:text-slate-400 font-semibold';
-                title.textContent = String(artifact.artifact_type || 'file');
-                li.appendChild(title);
+                if (artifactIsPreviewable(artifact)) {
+                    const thumb = document.createElement('img');
+                    thumb.alt = artifactLabel(artifact);
+                    thumb.src = buildArtifactUrl(selected, artifact);
+                    thumb.className = 'h-24 w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-900/60 object-cover';
+                    button.appendChild(thumb);
+                } else {
+                    const placeholder = document.createElement('div');
+                    placeholder.className = 'flex h-24 items-center justify-center rounded-xl border border-dashed border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/70 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400';
+                    placeholder.textContent = titleCaseToken(artifactMediaKind(artifact), 'File');
+                    button.appendChild(placeholder);
+                }
 
-                const pathLine = document.createElement('div');
-                pathLine.className = 'mt-1 text-[11px] font-mono text-slate-700 dark:text-slate-200 break-all';
-                pathLine.textContent = String(artifact.relative_path || artifact.path || '');
-                li.appendChild(pathLine);
+                const title = document.createElement('p');
+                title.className = 'mt-3 text-[11px] font-semibold text-slate-800 dark:text-slate-100 truncate';
+                title.textContent = artifactNameParts(artifact).fileName;
+                button.appendChild(title);
 
-                fragment.appendChild(li);
+                const meta = document.createElement('p');
+                meta.className = 'mt-1 text-[10px] font-mono text-slate-500 dark:text-slate-400 truncate';
+                meta.textContent = `${titleCaseToken(artifactMediaKind(artifact), 'File')} • ${formatBytes(artifact.size_bytes)}`;
+                button.appendChild(meta);
+
+                fragment.appendChild(button);
             });
-            els.artifactList.innerHTML = '';
-            els.artifactList.appendChild(fragment);
+            els.artifactThumbnailRail.innerHTML = '';
+            els.artifactThumbnailRail.appendChild(fragment);
             updateRunCardActions(selected);
             renderSelectedJobInspector();
         }
 
         function selectJob(jobId) {
             state.selectedJobId = jobId;
+            if (!state.artifactUi.selectedByJob[String(jobId || '')]) {
+                delete state.artifactUi.compareByJob[String(jobId || '')];
+            }
             const job = state.jobs.find((item) => item.id === jobId);
             if (job && els.logPane) {
                 els.logPane.textContent = job.logs.join('\n') + (job.logs.length ? '\n' : '');
@@ -2937,8 +3593,10 @@
             if (!rawJob || !rawJob.id) return null;
             const id = String(rawJob.id);
             const createdAt = parseTimestamp(rawJob.created_at || rawJob.started_at || rawJob.updated_at, Date.now());
-            const updatedAt = parseTimestamp(rawJob.updated_at || rawJob.started_at || rawJob.created_at, createdAt);
-            return {
+            const startedAt = parseTimestamp(rawJob.started_at, 0);
+            const finishedAt = parseTimestamp(rawJob.finished_at, 0);
+            const updatedAt = parseTimestamp(rawJob.updated_at || rawJob.finished_at || rawJob.started_at || rawJob.created_at, createdAt);
+            const hydrated = {
                 id,
                 pipeline: String(rawJob.pipeline || 'unknown'),
                 state: String(rawJob.state || 'queued'),
@@ -2954,9 +3612,16 @@
                 reconnectBlocked: false,
                 lastEventAt: 0,
                 mockInterval: null,
+                startedAt,
+                finishedAt,
                 createdAt,
-                updatedAt
+                updatedAt,
+                timeline: [],
+                transportWarnings: [],
+                progressMilestones: []
             };
+            _reconcileJobTimeline(hydrated);
+            return hydrated;
         }
 
         function _isJobStreamRecoverable(job) {
@@ -3029,14 +3694,20 @@
             existing.logs = hydrated.logs;
             existing.error = hydrated.error;
             existing.artifacts = hydrated.artifacts;
+            existing.startedAt = hydrated.startedAt || existing.startedAt || 0;
+            existing.finishedAt = hydrated.finishedAt || existing.finishedAt || 0;
             existing.createdAt = hydrated.createdAt || existing.createdAt || Date.now();
             existing.updatedAt = hydrated.updatedAt || existing.updatedAt || existing.createdAt;
+            existing.timeline = Array.isArray(existing.timeline) && existing.timeline.length > 0 ? existing.timeline : hydrated.timeline;
+            existing.transportWarnings = Array.isArray(existing.transportWarnings) ? existing.transportWarnings : hydrated.transportWarnings;
+            existing.progressMilestones = Array.isArray(existing.progressMilestones) ? existing.progressMilestones : hydrated.progressMilestones;
             if (rawJob && typeof rawJob.events_url === 'string' && rawJob.events_url.trim()) {
                 existing.eventStreamUrl = rawJob.events_url.trim();
             } else if (!existing.eventStreamUrl) {
                 existing.eventStreamUrl = hydrated.eventStreamUrl;
             }
             _ensureJobStreamState(existing);
+            _reconcileJobTimeline(existing);
             if (!_isJobStreamRecoverable(existing)) {
                 existing.reconnectBlocked = false;
                 _clearSseRetry(existing, true);
@@ -3083,6 +3754,7 @@
             const delayMs = Math.min(SSE_RECONNECT_MAX_DELAY_MS, backoff) + Math.floor(Math.random() * SSE_RECONNECT_JITTER_MS);
 
             job.sseRetry.attempt = attempt;
+            _noteTransportWarning(job, 'reconnect_pending', `Event stream disconnected. Reconnecting in ${Math.ceil(delayMs / 1000)}s (attempt ${attempt}).`, 'warn');
             appendJobLog(job, `[WARN] Event stream disconnected. Reconnecting in ${Math.ceil(delayMs / 1000)}s (attempt ${attempt}).`);
             logToPane(job.id, `[WARN] Event stream disconnected. Reconnecting in ${Math.ceil(delayMs / 1000)}s (attempt ${attempt}).`);
             scheduleRenderJobQueue();
@@ -3436,12 +4108,71 @@
                 .map((opt) => ({
                     name: String(opt.value || '').trim(),
                     label: String(opt.textContent || opt.value || '').trim(),
-                    stability: 'unknown'
+                    stability: 'unknown',
+                    description: '',
+                    recommended_args: {},
+                    advanced_sections: []
                 }))
                 .filter((item) => item.name);
             if (fallback.length > 0) {
                 state.presetsByPipeline['lux-depth-v3'] = fallback;
             }
+        }
+
+        function applyPresetRecommendedArgs(presetName) {
+            const presets = Array.isArray(state.presetsByPipeline[state.pipeline]) ? state.presetsByPipeline[state.pipeline] : [];
+            const preset = presets.find((item) => String(item?.name || '') === String(presetName || ''));
+            const recommended = preset && preset.recommended_args && typeof preset.recommended_args === 'object'
+                ? preset.recommended_args
+                : null;
+            if (!recommended) return;
+
+            const c = state.config;
+            c.preset = String(preset.name || presetName || c.preset || 'premium');
+            if (Object.prototype.hasOwnProperty.call(recommended, 'quality_tier')) c.qualityTier = _resolveQualityTier(recommended.quality_tier);
+            if (Object.prototype.hasOwnProperty.call(recommended, 'depth_backend')) c.depthBackend = _resolveDepthBackend(recommended.depth_backend);
+            if (Object.prototype.hasOwnProperty.call(recommended, 'depth_device')) c.depthDevice = _textOrFallback(recommended.depth_device, c.depthDevice);
+
+            c.segmentation = c.segmentation || {};
+            if (Object.prototype.hasOwnProperty.call(recommended, 'enable_segmentation')) c.segmentation.enable = parseBoolLike(recommended.enable_segmentation, c.segmentation.enable);
+            if (Object.prototype.hasOwnProperty.call(recommended, 'segmentation_backend')) c.segmentation.backend = _resolveSegmentationBackend(recommended.segmentation_backend);
+            if (Object.prototype.hasOwnProperty.call(recommended, 'sam2_model_size')) c.segmentation.sam2ModelSize = _resolveSam2ModelSize(recommended.sam2_model_size);
+            if (Object.prototype.hasOwnProperty.call(recommended, 'sam2_checkpoint_path')) c.segmentation.sam2CheckpointPath = _textOrFallback(recommended.sam2_checkpoint_path, '');
+            if (Object.prototype.hasOwnProperty.call(recommended, 'strict_segmentation')) c.segmentation.strict = parseBoolLike(recommended.strict_segmentation, c.segmentation.strict);
+
+            c.flags = c.flags || {};
+            if (Object.prototype.hasOwnProperty.call(recommended, 'materials_v3')) c.flags.materials = parseBoolLike(recommended.materials_v3, c.flags.materials);
+            if (Object.prototype.hasOwnProperty.call(recommended, 'pbr')) c.flags.pbr = parseBoolLike(recommended.pbr, c.flags.pbr);
+            if (Object.prototype.hasOwnProperty.call(recommended, 'cache_depth')) c.flags.cache = parseBoolLike(recommended.cache_depth, c.flags.cache);
+            if (Object.prototype.hasOwnProperty.call(recommended, 'enable_v2')) c.flags.enableV2 = parseBoolLike(recommended.enable_v2, c.flags.enableV2);
+            if (Object.prototype.hasOwnProperty.call(recommended, 'save_float_depth')) c.flags.saveFloatDepth = parseBoolLike(recommended.save_float_depth, c.flags.saveFloatDepth);
+            if (Object.prototype.hasOwnProperty.call(recommended, 'force_depth')) c.flags.forceDepth = parseBoolLike(recommended.force_depth, c.flags.forceDepth);
+            if (Object.prototype.hasOwnProperty.call(recommended, 'strict_inputs')) c.flags.strictInputs = parseBoolLike(recommended.strict_inputs, c.flags.strictInputs);
+            if (Object.prototype.hasOwnProperty.call(recommended, 'verify_images')) c.flags.verifyImages = parseBoolLike(recommended.verify_images, c.flags.verifyImages);
+            if (Object.prototype.hasOwnProperty.call(recommended, 'allow_semantic_fallback')) c.flags.allowSemanticFallback = parseBoolLike(recommended.allow_semantic_fallback, c.flags.allowSemanticFallback);
+            if (Object.prototype.hasOwnProperty.call(recommended, 'verbose')) c.flags.verbose = parseBoolLike(recommended.verbose, c.flags.verbose);
+            if (Object.prototype.hasOwnProperty.call(recommended, 'quiet')) c.flags.quiet = parseBoolLike(recommended.quiet, c.flags.quiet);
+            _normalizeVerboseQuietFlags(c.flags, false);
+
+            if (Object.prototype.hasOwnProperty.call(recommended, 'v2_preset')) c.v2Preset = _textOrFallback(recommended.v2_preset, c.v2Preset || 'default');
+
+            c.emits = c.emits || {};
+            if (Object.prototype.hasOwnProperty.call(recommended, 'emit_master16')) c.emits.master16 = parseBoolLike(recommended.emit_master16, c.emits.master16);
+            if (Object.prototype.hasOwnProperty.call(recommended, 'emit_upscaled16')) c.emits.upscaled16 = parseBoolLike(recommended.emit_upscaled16, c.emits.upscaled16);
+            if (Object.prototype.hasOwnProperty.call(recommended, 'emit_marketing')) c.emits.marketing = parseBoolLike(recommended.emit_marketing, c.emits.marketing);
+            if (Object.prototype.hasOwnProperty.call(recommended, 'emit_report')) c.emits.report = parseBoolLike(recommended.emit_report, c.emits.report);
+            if (Object.prototype.hasOwnProperty.call(recommended, 'emit_run_card')) c.emits.runCard = parseBoolLike(recommended.emit_run_card, c.emits.runCard);
+
+            c.licenses = c.licenses || {};
+            if (Object.prototype.hasOwnProperty.call(recommended, 'non_commercial_ok')) c.licenses.nonCommercialOk = parseBoolLike(recommended.non_commercial_ok, c.licenses.nonCommercialOk);
+            if (Object.prototype.hasOwnProperty.call(recommended, 'accept_apple_depth_pro_research_license')) c.licenses.acceptApple = parseBoolLike(recommended.accept_apple_depth_pro_research_license, c.licenses.acceptApple);
+            if (Object.prototype.hasOwnProperty.call(recommended, 'accept_research_tools_license')) c.licenses.acceptResearchTools = parseBoolLike(recommended.accept_research_tools_license, c.licenses.acceptResearchTools);
+
+            c.reconstruction = c.reconstruction || {};
+            if (Object.prototype.hasOwnProperty.call(recommended, 'enable_reconstruction')) c.reconstruction.enable = parseBoolLike(recommended.enable_reconstruction, c.reconstruction.enable);
+            if (Object.prototype.hasOwnProperty.call(recommended, 'grouping_mode')) c.reconstruction.groupingMode = _resolveGroupingMode(recommended.grouping_mode);
+            if (Object.prototype.hasOwnProperty.call(recommended, 'reconstruction_tier')) c.reconstruction.tier = _textOrFallback(recommended.reconstruction_tier, c.reconstruction.tier);
+            if (Object.prototype.hasOwnProperty.call(recommended, 'emit_scene_debug_bundle')) c.reconstruction.emitSceneDebugBundle = parseBoolLike(recommended.emit_scene_debug_bundle, c.reconstruction.emitSceneDebugBundle);
         }
 
         function applyPipelinePresetOptions(pipelineName) {
@@ -3492,7 +4223,13 @@
                         name: String(preset.name),
                         label: String(preset.label || preset.name),
                         stability: String(preset.stability || 'unknown'),
-                        description: String(preset.description || '')
+                        description: String(preset.description || ''),
+                        recommended_args: preset.recommended_args && typeof preset.recommended_args === 'object'
+                            ? { ...preset.recommended_args }
+                            : {},
+                        advanced_sections: Array.isArray(preset.advanced_sections)
+                            ? preset.advanced_sections.map((item) => String(item))
+                            : []
                     }));
                 if (presets.length > 0) {
                     state.presetsByPipeline[pipelineName] = presets;
@@ -3524,9 +4261,11 @@
             if (state.pipeline === 'lux-depth-v3') {
                 els.fieldsLuxDepth.classList.remove('hidden');
                 els.fieldsArchiveGate.classList.add('hidden');
+                if (els.presetBuilderShell) els.presetBuilderShell.classList.remove('hidden');
             } else {
                 els.fieldsLuxDepth.classList.add('hidden');
                 els.fieldsArchiveGate.classList.remove('hidden');
+                if (els.presetBuilderShell) els.presetBuilderShell.classList.add('hidden');
             }
 
             const c = state.config;
@@ -3954,7 +4693,14 @@
             };
 
             safeBindText(els.pipelineSelect, null, 'pipeline');
-            safeBindText(els.presetSelect, null, 'preset');
+            if (els.presetSelect) {
+                els.presetSelect.addEventListener('change', (e) => {
+                    const nextPreset = String(e.target.value || '').trim();
+                    state.config.preset = nextPreset;
+                    applyPresetRecommendedArgs(nextPreset);
+                    updateUIFromState();
+                });
+            }
             safeBindInput(els.inputDir, null, 'inputDir');
             safeBindInput(els.outputDir, null, 'outputDir');
             safeBindInput(els.archiveIndexPath, 'gate', 'archiveIndex');
@@ -4202,6 +4948,11 @@
                     if (els.healthIndicator) els.healthIndicator.className = 'status-dot ready';
                     if (els.healthText) els.healthText.textContent = 'Backend Online';
                     if (!wasOnline) {
+                        state.jobs.forEach((job) => {
+                            if (_isJobStreamRecoverable(job)) {
+                                _noteTransportWarning(job, 'backend_recovered', 'Backend connectivity restored. Live telemetry can resume.', 'info');
+                            }
+                        });
                         void fetchPresetsForPipeline(state.pipeline, true);
                         void recoverJobs();
                     }
@@ -4210,6 +4961,11 @@
                 }
             } catch {
                 state.backendOk = false;
+                state.jobs.forEach((job) => {
+                    if (_isJobStreamRecoverable(job)) {
+                        _noteTransportWarning(job, 'backend_offline', 'Backend health check failed. Live telemetry may be stale until connectivity is restored.', 'warn');
+                    }
+                });
                 if (els.healthIndicator) els.healthIndicator.className = 'status-dot offline';
                 if (els.healthText) els.healthText.textContent = 'Offline / Mock Mode';
             } finally {
@@ -4248,28 +5004,53 @@
             }
             if (eventName === 'progress') {
                 job.progress = Math.max(0, Math.min(100, Number(parsed.progress) || 0));
+                 _recordProgressTimeline(job, job.progress, Date.now());
                 scheduleRenderJobQueue();
                 return;
             }
             if (eventName === 'state') {
-                job.state = String(parsed.state || job.state || 'running');
+                const nextState = String(parsed.state || job.state || 'running');
+                job.state = nextState;
+                if (nextState === 'running' && !Number.isFinite(job.startedAt)) {
+                    job.startedAt = Date.now();
+                } else if (nextState === 'running' && (!job.startedAt || job.startedAt <= 0)) {
+                    job.startedAt = Date.now();
+                }
+                _reconcileJobTimeline(job);
                 scheduleRenderJobQueue();
                 return;
             }
             if (eventName === 'artifact') {
                 upsertArtifact(job, {
                     artifact_type: String(parsed.artifact_type || 'file'),
+                    media_kind: String(parsed.media_kind || parsed.artifact_type || 'file'),
+                    previewable: Boolean(parsed.previewable),
+                    content_type: typeof parsed.content_type === 'string' ? parsed.content_type : '',
+                    url: typeof parsed.url === 'string' ? parsed.url : '',
                     path: String(parsed.path || ''),
                     relative_path: String(parsed.relative_path || parsed.path || ''),
                     size_bytes: typeof parsed.size_bytes === 'number' ? parsed.size_bytes : null,
                     sha256: typeof parsed.sha256 === 'string' ? parsed.sha256 : ''
                 });
+                _pushTimelineEntry(
+                    job,
+                    _timelineEntry(
+                        'artifact',
+                        'Artifact indexed',
+                        `${String(parsed.relative_path || parsed.path || 'artifact')} is ready for review.`,
+                        Date.now(),
+                        'success',
+                        `artifact|${String(parsed.path || '')}`
+                    )
+                );
                 renderArtifactPanel();
                 return;
             }
             if (eventName === 'done') {
                 job.state = String(parsed.state || job.state || 'failed');
                 job.progress = job.state === 'succeeded' ? 100 : job.progress;
+                job.finishedAt = Date.now();
+                _recordProgressTimeline(job, job.progress, job.finishedAt);
                 if (parsed.error) {
                     job.error = parsed.error;
                     const readable = getReadableError(parsed.error);
@@ -4282,6 +5063,7 @@
                 if (parsed.artifacts && parsed.artifacts.items) {
                     job.artifacts = normalizeArtifactItems(parsed.artifacts);
                 }
+                _reconcileJobTimeline(job);
                 const endLine = `[SYSTEM] Stream closed. Exit code: ${parsed.exit_code}`;
                 appendJobLog(job, endLine);
                 logToPane(job.id, endLine);
@@ -4323,6 +5105,14 @@
                         _clearSseRetry(job, true);
                     }
                     if (isAuthError) {
+                        _noteTransportWarning(
+                            job,
+                            'auth_blocked',
+                            _isManagedAuthMode()
+                                ? 'Managed authentication expired or was denied. Restore the managed session to resume transport.'
+                                : 'API-key backed transport is blocked. Update credentials to resume live events.',
+                            'warn'
+                        );
                         const line = _isManagedAuthMode()
                             ? `[ERROR] Event stream authorization failed (${status}). Restore the managed session to resume live job events.`
                             : `[ERROR] Event stream authorization failed (${status}). Update API key to resume live job events.`;
@@ -4335,6 +5125,7 @@
                             'error'
                         );
                     } else {
+                        _noteTransportWarning(job, `stream_status_${status}`, `Event stream subscribe failed with status ${status}. ${parsedError.message}`, isRetryableStatus ? 'warn' : 'error');
                         const line = `[WARN] Event stream subscribe failed (${status}). ${parsedError.message}`;
                         appendJobLog(job, line);
                         logToPane(job.id, line);
@@ -4398,6 +5189,7 @@
                 }
             } catch (err) {
                 if (!controller.signal.aborted) {
+                    _noteTransportWarning(job, 'stream_error', `Event stream error: ${err instanceof Error ? err.message : String(err)}`, 'warn');
                     const line = `[WARN] Event stream error: ${err instanceof Error ? err.message : String(err)}`;
                     appendJobLog(job, line);
                     logToPane(job.id, line);
@@ -4584,7 +5376,7 @@
             const job = {
                 id: localId,
                 pipeline: payload.pipeline,
-                state: 'running',
+                state: 'queued',
                 progress: 0,
                 logs: [],
                 artifacts: [],
@@ -4597,9 +5389,15 @@
                 reconnectBlocked: false,
                 lastEventAt: 0,
                 mockInterval: null,
+                startedAt: 0,
+                finishedAt: 0,
                 createdAt: Date.now(),
-                updatedAt: Date.now()
+                updatedAt: Date.now(),
+                timeline: [],
+                transportWarnings: [],
+                progressMilestones: []
             };
+            _reconcileJobTimeline(job);
             state.jobs.push(job);
             state.selectedJobId = job.id;
             if (els.logPane) els.logPane.textContent = '';
@@ -4634,7 +5432,9 @@
                 } catch (err) {
                     const errorMessage = err instanceof Error ? err.message : String(err);
                     job.state = 'failed';
+                    job.finishedAt = Date.now();
                     appendJobLog(job, `[ERROR] ${errorMessage}`);
+                    _reconcileJobTimeline(job);
                     scheduleRenderJobQueue();
                     renderArtifactPanel();
                     createToast("Backend submission failed.", "error");
@@ -4646,6 +5446,9 @@
                     }
                 }
             } else {
+                job.state = 'running';
+                job.startedAt = Date.now();
+                _reconcileJobTimeline(job);
                 const offlineLine = `[WARN] Backend unreachable. Running mock simulation.`;
                 appendJobLog(job, offlineLine);
                 logToPane(job.id, offlineLine);
@@ -4666,6 +5469,9 @@
                     logToPane(job.id, line);
                     if (job.progress >= 100) {
                         job.state = 'succeeded';
+                        job.finishedAt = Date.now();
+                        _recordProgressTimeline(job, 100, job.finishedAt);
+                        _reconcileJobTimeline(job);
                         stopJobActivity(job);
                         appendJobLog(job, `[SIM] Execution complete.`);
                         logToPane(job.id, `[SIM] Execution complete.`);
@@ -4701,6 +5507,7 @@
                     }
 
                     if (job.lastEventAt > 0 && (now - job.lastEventAt) <= SSE_STALL_THRESHOLD_MS) return;
+                    _noteTransportWarning(job, 'stream_stalled', 'Event stream stalled. Reconnecting to restore live telemetry.', 'warn');
                     appendJobLog(job, '[WARN] Event stream stalled. Reconnecting...');
                     logToPane(job.id, '[WARN] Event stream stalled. Reconnecting...');
                     _teardownJobEventStream(job);
@@ -4887,40 +5694,80 @@
             await copyToClipboard(els.cliPreview.textContent);
         });
 
-        if (els.viewRunCardBtn) els.viewRunCardBtn.addEventListener('click', async () => {
-            const runCardPath = String(els.viewRunCardBtn.dataset.path || '').trim();
-            if (!runCardPath) {
-                createToast('Run card path is not available for this job.', 'error');
-                return;
-            }
-            const safeRunCardPath = /run[_-]?card.*\.json$/i.test(runCardPath) && !runCardPath.includes('..');
-            if (runCardPath.startsWith('/')) {
-                if (safeRunCardPath) {
-                    window.open(runCardPath, '_blank', 'noopener,noreferrer');
+        if (els.inspectorOverviewTab) els.inspectorOverviewTab.addEventListener('click', () => setInspectorTab('overview'));
+        if (els.inspectorTimelineTab) els.inspectorTimelineTab.addEventListener('click', () => setInspectorTab('timeline'));
+        if (els.inspectorLogsTab) els.inspectorLogsTab.addEventListener('click', () => setInspectorTab('logs'));
+
+        if (els.artifactThumbnailRail) {
+            els.artifactThumbnailRail.addEventListener('click', (event) => {
+                const button = event.target.closest('button[data-artifact-path]');
+                if (!button) return;
+                const selectedJob = state.jobs.find((item) => item.id === state.selectedJobId);
+                if (!selectedJob) return;
+                const path = String(button.dataset.artifactPath || '').trim();
+                if (!path) return;
+                state.artifactUi.selectedByJob[String(selectedJob.id || '')] = path;
+                renderArtifactPanel();
+            });
+        }
+
+        if (els.artifactCompareBtn) {
+            els.artifactCompareBtn.addEventListener('click', () => {
+                const selectedJob = state.jobs.find((item) => item.id === state.selectedJobId);
+                if (!selectedJob) return;
+                const key = String(selectedJob.id || '');
+                state.artifactUi.compareByJob[key] = !Boolean(state.artifactUi.compareByJob[key]);
+                renderArtifactPanel();
+            });
+        }
+
+        if (els.openArtifactBtn) {
+            els.openArtifactBtn.addEventListener('click', () => {
+                const url = String(els.openArtifactBtn.dataset.url || '').trim();
+                if (!url) {
+                    createToast('No artifact URL is available for this selection.', 'error');
                     return;
                 }
-                await copyToClipboard(runCardPath);
-                createToast('Run card path is not eligible for direct browser open; path copied instead.', 'info');
-                return;
-            }
-            if (/^https?:\/\//i.test(runCardPath)) {
-                try {
-                    const runCardUrl = new URL(runCardPath);
-                    const sameOrigin = runCardUrl.origin === window.location.origin;
-                    const safeUrlPath = /run[_-]?card.*\.json$/i.test(runCardUrl.pathname) && !runCardUrl.pathname.includes('..');
-                    if (sameOrigin && safeUrlPath) {
-                        window.open(runCardUrl.toString(), '_blank', 'noopener,noreferrer');
-                        return;
-                    }
-                } catch {
-                    // Fall through to copy behavior below.
+                window.open(url, '_blank', 'noopener,noreferrer');
+            });
+        }
+
+        if (els.downloadArtifactBtn) {
+            els.downloadArtifactBtn.addEventListener('click', () => {
+                const url = String(els.downloadArtifactBtn.dataset.url || '').trim();
+                if (!url) {
+                    createToast('No artifact is available to download.', 'error');
+                    return;
                 }
-                await copyToClipboard(runCardPath);
-                createToast('Run card URL is not eligible for direct browser open; path copied instead.', 'info');
+                const filename = String(els.downloadArtifactBtn.dataset.filename || 'artifact');
+                const anchor = document.createElement('a');
+                anchor.href = url;
+                anchor.download = filename;
+                anchor.rel = 'noopener noreferrer';
+                document.body.appendChild(anchor);
+                anchor.click();
+                document.body.removeChild(anchor);
+            });
+        }
+
+        if (els.copyArtifactPathBtn) {
+            els.copyArtifactPathBtn.addEventListener('click', async () => {
+                const path = String(els.copyArtifactPathBtn.dataset.path || '').trim();
+                if (!path) {
+                    createToast('No artifact path is available for this selection.', 'error');
+                    return;
+                }
+                await copyToClipboard(path);
+            });
+        }
+
+        if (els.viewRunCardBtn) els.viewRunCardBtn.addEventListener('click', async () => {
+            const runCardUrl = String(els.viewRunCardBtn.dataset.url || '').trim();
+            if (!runCardUrl) {
+                createToast('Run card URL is not available for this job.', 'error');
                 return;
             }
-            await copyToClipboard(runCardPath);
-            createToast('Run card path copied. Open it from the workspace.', 'info');
+            window.open(runCardUrl, '_blank', 'noopener,noreferrer');
         });
 
         if (els.copyRunCardPathBtn) els.copyRunCardPathBtn.addEventListener('click', async () => {

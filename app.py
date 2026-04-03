@@ -4,6 +4,7 @@ import asyncio
 import hmac
 import json
 import logging
+import mimetypes
 import os
 import re
 import sys
@@ -15,6 +16,7 @@ from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, AsyncGenerator, Callable, Deque, Dict, List, Mapping, Optional
+from urllib.parse import quote
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exception_handlers import request_validation_exception_handler as fastapi_request_validation_exception_handler
@@ -256,6 +258,23 @@ PRESET_CATALOG: Dict[str, List[Dict[str, Any]]] = {
             "stability": "stable",
             "description": "Balanced production quality preset",
             "is_research": False,
+            "recommended_args": {
+                "quality_tier": "premium",
+                "depth_backend": "da3",
+                "enable_segmentation": True,
+                "segmentation_backend": "efficientsam",
+                "strict_segmentation": True,
+                "materials_v3": True,
+                "pbr": True,
+                "emit_master16": True,
+                "emit_upscaled16": True,
+                "emit_report": True,
+                "emit_run_card": True,
+                "emit_marketing": False,
+                "enable_v2": False,
+                "enable_reconstruction": False,
+            },
+            "advanced_sections": [],
         },
         {
             "name": "default",
@@ -263,6 +282,23 @@ PRESET_CATALOG: Dict[str, List[Dict[str, Any]]] = {
             "stability": "canary",
             "description": "Canary preset for iterative validation",
             "is_research": False,
+            "recommended_args": {
+                "quality_tier": "standard",
+                "depth_backend": "da3",
+                "enable_segmentation": False,
+                "segmentation_backend": "stub",
+                "strict_segmentation": False,
+                "materials_v3": False,
+                "pbr": False,
+                "emit_master16": True,
+                "emit_upscaled16": False,
+                "emit_report": True,
+                "emit_run_card": True,
+                "emit_marketing": False,
+                "enable_v2": False,
+                "enable_reconstruction": False,
+            },
+            "advanced_sections": ["advanced"],
         },
         {
             "name": "depth-anything-v3.1-research-m4",
@@ -270,6 +306,24 @@ PRESET_CATALOG: Dict[str, List[Dict[str, Any]]] = {
             "stability": "experimental",
             "description": "Research-only preset" " requiring non-commercial" " acknowledgments",
             "is_research": True,
+            "recommended_args": {
+                "quality_tier": "apex",
+                "depth_backend": "depth_pro",
+                "enable_segmentation": True,
+                "segmentation_backend": "sam2",
+                "strict_segmentation": True,
+                "materials_v3": True,
+                "pbr": True,
+                "emit_master16": True,
+                "emit_upscaled16": True,
+                "emit_report": True,
+                "emit_run_card": True,
+                "emit_marketing": False,
+                "enable_v2": True,
+                "v2_preset": "default",
+                "enable_reconstruction": False,
+            },
+            "advanced_sections": ["governance", "advanced"],
         },
     ],
     "archive-gate-a": [
@@ -279,6 +333,8 @@ PRESET_CATALOG: Dict[str, List[Dict[str, Any]]] = {
             "stability": "stable",
             "description": "Manifest and provenance assembly",
             "is_research": False,
+            "recommended_args": {"dedup": True, "sign": True},
+            "advanced_sections": [],
         }
     ],
     "archive-gate-b": [
@@ -288,6 +344,8 @@ PRESET_CATALOG: Dict[str, List[Dict[str, Any]]] = {
             "stability": "stable",
             "description": "BagIt packaging and validation workflow",
             "is_research": False,
+            "recommended_args": {"dedup": True, "sign": True},
+            "advanced_sections": [],
         }
     ],
     "archive-gate-c": [
@@ -297,6 +355,8 @@ PRESET_CATALOG: Dict[str, List[Dict[str, Any]]] = {
             "stability": "stable",
             "description": "METS/PROV/STAC export workflow",
             "is_research": False,
+            "recommended_args": {"dedup": True, "sign": True},
+            "advanced_sections": [],
         }
     ],
 }
@@ -818,6 +878,84 @@ def _infer_artifact_type(path: Path) -> str:
     return "file"
 
 
+def _artifact_content_type(path: Path) -> str:
+    guessed, _ = mimetypes.guess_type(str(path))
+    return guessed or "application/octet-stream"
+
+
+def _artifact_media_kind(path: Path) -> str:
+    artifact_type = _infer_artifact_type(path)
+    if artifact_type == "image":
+        return "image"
+    if artifact_type == "metadata":
+        return "metadata"
+    if artifact_type == "archive":
+        return "archive"
+    return "file"
+
+
+def _artifact_is_previewable(path: Path) -> bool:
+    return _artifact_media_kind(path) == "image" and _artifact_content_type(path).startswith("image/")
+
+
+def _artifact_url(job_id: str, relative_path: str) -> str:
+    return f"/v1/jobs/{quote(str(job_id), safe='')}" f"/artifacts/{quote(relative_path, safe='/')}"
+
+
+def _serialize_indexed_artifact(
+    *,
+    job_id: str,
+    relative_path: str,
+    path: Path,
+) -> Dict[str, Any]:
+    try:
+        size_bytes = path.stat().st_size
+    except OSError:
+        size_bytes = None
+
+    content_type = _artifact_content_type(path)
+    return {
+        "artifact_type": _infer_artifact_type(path),
+        "media_kind": _artifact_media_kind(path),
+        "previewable": _artifact_is_previewable(path),
+        "content_type": content_type,
+        "url": _artifact_url(job_id, relative_path),
+        # Do not expose absolute server paths in API/SSE payloads.
+        "path": relative_path,
+        "relative_path": relative_path,
+        "size_bytes": size_bytes,
+    }
+
+
+def _resolve_job_artifact_path(
+    job: Job,
+    artifact_path: str,
+) -> tuple[Path, Path, str]:
+    output_dir = _job_output_dir(job)
+    if output_dir is None:
+        raise FileNotFoundError("job_output_dir_missing")
+
+    output_dir = Path(os.path.realpath(output_dir.expanduser()))
+    if not output_dir.exists() or not output_dir.is_dir():
+        raise FileNotFoundError("job_output_dir_missing")
+
+    raw = str(artifact_path or "").strip()
+    if not raw or raw.startswith("~") or "\x00" in raw:
+        raise ValueError("invalid_artifact_path")
+
+    candidate = Path(raw)
+    if candidate.is_absolute():
+        raise ValueError("absolute_artifact_path")
+
+    resolved = Path(os.path.realpath(output_dir / candidate))
+    try:
+        relative_path = str(resolved.relative_to(output_dir))
+    except ValueError as exc:
+        raise ValueError("artifact_path_outside_job_output_dir") from exc
+
+    return output_dir, resolved, relative_path
+
+
 def _index_job_artifacts(job: Job) -> List[Dict[str, Any]]:
     output_dir = _job_output_dir(job)
     if output_dir is None:
@@ -869,18 +1007,12 @@ def _index_job_artifacts(job: Job) -> List[Dict[str, Any]]:
 
     items: List[Dict[str, Any]] = []
     for _, relative_path, path in selected:
-        try:
-            size_bytes = path.stat().st_size
-        except OSError:
-            size_bytes = None
         items.append(
-            {
-                "artifact_type": _infer_artifact_type(path),
-                # Do not expose absolute server paths in API/SSE payloads.
-                "path": relative_path,
-                "relative_path": relative_path,
-                "size_bytes": size_bytes,
-            }
+            _serialize_indexed_artifact(
+                job_id=job.id,
+                relative_path=relative_path,
+                path=path,
+            )
         )
 
     job.artifacts = {
@@ -2303,6 +2435,52 @@ async def get_job(job_id: str) -> JSONResponse:
             data=_serialize_job(job),
             error=None,
         )
+    )
+
+
+@app.get("/v1/jobs/{job_id}/artifacts/{artifact_path:path}")
+async def get_job_artifact(job_id: str, artifact_path: str) -> Response:
+    _cleanup_expired_jobs(_now())
+    job = JOBS.get(job_id)
+    if not job:
+        return _error_response(
+            404,
+            code="NOT_FOUND",
+            message="job not found",
+            details={"job_id": job_id},
+        )
+
+    try:
+        _, resolved_artifact, relative_path = _resolve_job_artifact_path(job, artifact_path)
+    except ValueError as exc:
+        reason = str(exc)
+        return _error_response(
+            400,
+            code="INVALID_ARGUMENT",
+            message="invalid artifact path",
+            details={"job_id": job_id, "reason": reason},
+        )
+    except FileNotFoundError:
+        return _error_response(
+            404,
+            code="NOT_FOUND",
+            message="artifact not found",
+            details={"job_id": job_id, "path": str(artifact_path or "").strip()},
+        )
+
+    if not resolved_artifact.exists() or not resolved_artifact.is_file():
+        return _error_response(
+            404,
+            code="NOT_FOUND",
+            message="artifact not found",
+            details={"job_id": job_id, "path": relative_path},
+        )
+
+    return FileResponse(
+        resolved_artifact,
+        media_type=_artifact_content_type(resolved_artifact),
+        filename=resolved_artifact.name,
+        headers={"Cache-Control": "no-store"},
     )
 
 
