@@ -112,9 +112,71 @@ def _resolve_chrome_binary(raw_chrome_binary: str) -> str:
     return _default_chrome_binary()
 
 
+def _base_url(value: str) -> str:
+    trimmed = value.strip()
+    if not trimmed:
+        raise SmokeFailure("Base URL cannot be empty")
+    return trimmed.rstrip("/")
+
+
 def _http_get_json(url: str, timeout: float = 10.0) -> Any:
     with urllib.request.urlopen(url, timeout=timeout) as response:
         return json.loads(response.read().decode("utf-8"))
+
+
+def _request_json(base_url: str, path: str, *, api_key: str = "") -> tuple[int, Dict[str, Any]]:
+    headers = {"Accept": "application/json"}
+    if api_key:
+        headers["x-api-key"] = api_key
+    request = urllib.request.Request(
+        _base_url(base_url) + path,
+        headers=headers,
+        method="GET",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            status = response.status
+            raw_body = response.read().decode("utf-8")
+    except urllib.error.HTTPError as exc:
+        status = exc.code
+        raw_body = exc.read().decode("utf-8")
+    except (TimeoutError, urllib.error.URLError) as exc:
+        reason = getattr(exc, "reason", exc)
+        raise SmokeFailure(f"GET {path} request failed: {reason}") from exc
+
+    try:
+        body = json.loads(raw_body)
+    except json.JSONDecodeError as exc:
+        raise SmokeFailure(f"GET {path} returned non-JSON response: {raw_body[:400]!r}") from exc
+    return status, body
+
+
+def _list_job_ids(base_url: str, api_key: str) -> list[str]:
+    status, body = _request_json(base_url, "/v1/jobs", api_key=api_key)
+    if status != 200:
+        raise SmokeFailure(f"GET /v1/jobs returned {status}: {body}")
+    jobs = body.get("data", {}).get("jobs", [])
+    if not isinstance(jobs, list):
+        raise SmokeFailure(f"GET /v1/jobs returned unexpected payload: {body}")
+    return [str(job.get("id") or "").strip() for job in jobs if str(job.get("id") or "").strip()]
+
+
+def _poll_for_new_backend_job_id(
+    base_url: str,
+    api_key: str,
+    *,
+    known_job_ids: set[str],
+    timeout_seconds: float,
+    interval_seconds: float = 0.25,
+) -> str:
+    deadline = time.monotonic() + timeout_seconds
+    while time.monotonic() < deadline:
+        current_job_ids = _list_job_ids(base_url, api_key)
+        for job_id in current_job_ids:
+            if job_id not in known_job_ids:
+                return job_id
+        time.sleep(interval_seconds)
+    raise SmokeFailure("Timed out waiting for submitted backend job to appear in GET /v1/jobs")
 
 
 def _wait_for_devtools(port: int, timeout_seconds: float = 20.0) -> Dict[str, Any]:
@@ -599,6 +661,12 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             f"CLI preview did not update for archive-gate-a: {configured_state}",
         )
 
+        known_job_ids = set(_list_job_ids(base_url, args.api_key))
+        pre_submit_state = connection.evaluate(_state_probe_expression())
+        _expect(isinstance(pre_submit_state, dict), f"Unexpected pre-submit portal state: {pre_submit_state!r}")
+        pre_submit_queue_rows = int(pre_submit_state.get("queueRows") or 0)
+        pre_submit_selected_job_id = str(pre_submit_state.get("selectedJobId") or "").strip()
+
         print("portal-browser-smoke: dispatching job", flush=True)
         connection.evaluate(_click_expression("#runJobBtn"))
 
@@ -607,14 +675,21 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             _state_probe_expression(),
             predicate=lambda value: (
                 isinstance(value, dict)
-                and int(value.get("queueRows") or 0) >= 1
-                and str(value.get("selectedJobId", "")).startswith("job_")
+                and (
+                    int(value.get("queueRows") or 0) > pre_submit_queue_rows
+                    or str(value.get("selectedJobId") or "").strip() != pre_submit_selected_job_id
+                )
             ),
             timeout_seconds=args.timeout_seconds,
-            description="queue and inspector to bind the submitted job",
+            description="queue and inspector to react to the submitted job",
         )
-        first_job_id = str(queued_state.get("selectedJobId") or queued_state.get("firstQueueJobId") or "").strip()
-        _expect(first_job_id.startswith("job_"), f"Portal queue did not expose a real backend job id: {queued_state}")
+        submitted_job_id = _poll_for_new_backend_job_id(
+            base_url,
+            args.api_key,
+            known_job_ids=known_job_ids,
+            timeout_seconds=args.timeout_seconds,
+        )
+        _expect(submitted_job_id.startswith("job_"), f"Portal API did not expose a real backend job id: {queued_state}")
 
         print("portal-browser-smoke: waiting for terminal ui state", flush=True)
         terminal_state = _poll(
@@ -632,8 +707,8 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         )
 
         _expect(
-            str(terminal_state.get("selectedJobId", "")).startswith("job_"),
-            f"Portal inspector did not remain bound to a submitted job: {terminal_state}",
+            str(terminal_state.get("selectedJobId") or "").strip() == submitted_job_id,
+            f"Portal inspector drifted from submitted job {submitted_job_id}: {terminal_state}",
         )
         _expect(
             "Closed" in str(terminal_state.get("selectedJobStreamStatus", ""))
@@ -643,7 +718,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
 
         print("portal-browser-smoke: ok")
         print(f"base_url: {base_url}")
-        print(f"job_id: {first_job_id}")
+        print(f"job_id: {submitted_job_id}")
         if cleanup_output_dir:
             print(f"output_dir_cleaned: {output_dir}")
         else:
