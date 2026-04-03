@@ -63,6 +63,17 @@ On failure, `error` is a typed object with:
 
 Failures should route by `exit_code` and `error.type`, not message text.
 
+Archive prerequisite validation failures are additive within v1. Current archive-gate commands may emit typed
+errors such as:
+- `ArchiveIndexNotFoundError`
+- `ArchiveIndexTypeError`
+- `HashManifestNotFoundError`
+- `HashManifestTypeError`
+- `ArchiveRootNotFoundError`
+- `ArchiveRootTypeError`
+- `RightsJsonlNotFoundError`
+- `RightsJsonlTypeError`
+
 ## Non-Deterministic Fields
 The contract allows runtime variance in non-semantic command text fields such as human-oriented tool `stdout/stderr` snapshots. Deterministic artifacts are surfaced via explicit output paths in `data`.
 

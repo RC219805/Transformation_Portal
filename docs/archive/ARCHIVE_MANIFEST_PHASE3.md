@@ -158,6 +158,9 @@ python tools/archive_hash_manifest.py \
   --validate-schemas
 ```
 
+When archive-gate orchestration derives this input implicitly, it resolves to
+`<output_dir>/archive_index_normalized.csv.gz`.
+
 Verify archive state against manifest:
 
 ```bash

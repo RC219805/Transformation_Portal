@@ -115,6 +115,76 @@ def _copy_fixture_archive(tmpdir: Path) -> Path:
     return target_root
 
 
+def test_hash_tool_missing_archive_index_fails_without_traceback_or_output_dir(tmp_path: Path) -> None:
+    archive_root = _copy_fixture_archive(tmp_path)
+    out_dir = tmp_path / "out"
+
+    result = _run_cli(
+        [
+            sys.executable,
+            str(HASH_TOOL),
+            "--archive-index",
+            str(tmp_path / "missing_archive_index.csv.gz"),
+            "--archive-root",
+            str(archive_root),
+            "--out-dir",
+            str(out_dir),
+        ]
+    )
+
+    assert result.returncode == ARCHIVE_HASH_MODULE.EXIT_INPUT_ERROR
+    assert "Error: archive index not found:" in result.stderr
+    assert "Traceback (most recent call last):" not in result.stderr
+    assert not out_dir.exists()
+
+
+def test_hash_tool_blank_archive_index_reports_required_message(tmp_path: Path) -> None:
+    archive_root = _copy_fixture_archive(tmp_path)
+    out_dir = tmp_path / "out"
+
+    result = _run_cli(
+        [
+            sys.executable,
+            str(HASH_TOOL),
+            "--archive-index",
+            "   ",
+            "--archive-root",
+            str(archive_root),
+            "--out-dir",
+            str(out_dir),
+        ]
+    )
+
+    assert result.returncode == ARCHIVE_HASH_MODULE.EXIT_INPUT_ERROR
+    assert "Error: archive index is required" in result.stderr
+    assert "Traceback (most recent call last):" not in result.stderr
+    assert not out_dir.exists()
+
+
+def test_hash_tool_invalid_archive_root_fails_without_traceback_or_outputs(tmp_path: Path) -> None:
+    out_dir = tmp_path / "out"
+    archive_root = tmp_path / "archive_root.txt"
+    archive_root.write_text("not-a-directory", encoding="utf-8")
+
+    result = _run_cli(
+        [
+            sys.executable,
+            str(HASH_TOOL),
+            "--archive-index",
+            str(FIXTURE_INDEX),
+            "--archive-root",
+            str(archive_root),
+            "--out-dir",
+            str(out_dir),
+        ]
+    )
+
+    assert result.returncode == ARCHIVE_HASH_MODULE.EXIT_INPUT_ERROR
+    assert "Error: archive root must be a directory:" in result.stderr
+    assert "Traceback (most recent call last):" not in result.stderr
+    assert not out_dir.exists()
+
+
 def test_phase3_fixture_outputs_match_golden_bytes() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         out_dir = Path(tmpdir) / "out"

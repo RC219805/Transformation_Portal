@@ -4,12 +4,16 @@
 from __future__ import annotations
 
 import argparse
+import os
 import subprocess
 import sys
 from pathlib import Path
 from typing import Any
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+TOOLS_DIR = Path(__file__).resolve().parent
+if str(TOOLS_DIR) not in sys.path:
+    sys.path.insert(0, str(TOOLS_DIR))
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
@@ -19,19 +23,65 @@ from archive_governance_common import (  # pylint: disable=wrong-import-position
     make_machine_envelope,
     make_typed_error,
 )
+from archive_prereqs import (  # pylint: disable=wrong-import-position
+    KIND_DIR,
+    KIND_FILE,
+    REASON_MISSING_VALUE,
+    REASON_NOT_FOUND,
+    REASON_WRONG_TYPE,
+    ArchivePrereqError,
+    ensure_directory,
+    ensure_regular_file,
+)
 from premis_events import append_event, build_premis_event  # pylint: disable=wrong-import-position
 
 EXIT_SUCCESS = 0
 EXIT_OTHER_FAILURE = 5
 
+_PREREQ_SPEC: dict[str, tuple[tuple[str, str, str, bool], ...]] = {
+    "fixity-scan": (
+        ("archive_index", "archive index", KIND_FILE, False),
+        ("archive_root", "archive root", KIND_DIR, False),
+    ),
+    "manifest-build": (
+        ("archive_index", "archive index", KIND_FILE, False),
+        ("hash_manifest", "hash manifest", KIND_FILE, False),
+        ("archive_root", "archive root", KIND_DIR, False),
+        ("rights_jsonl", "rights JSONL", KIND_FILE, True),
+    ),
+}
+_PREREQ_ERROR_TYPES = {
+    ("archive_index", REASON_MISSING_VALUE): "ArchiveIndexNotFoundError",
+    ("archive_index", REASON_NOT_FOUND): "ArchiveIndexNotFoundError",
+    ("archive_index", REASON_WRONG_TYPE): "ArchiveIndexTypeError",
+    ("hash_manifest", REASON_MISSING_VALUE): "HashManifestNotFoundError",
+    ("hash_manifest", REASON_NOT_FOUND): "HashManifestNotFoundError",
+    ("hash_manifest", REASON_WRONG_TYPE): "HashManifestTypeError",
+    ("archive_root", REASON_MISSING_VALUE): "ArchiveRootNotFoundError",
+    ("archive_root", REASON_NOT_FOUND): "ArchiveRootNotFoundError",
+    ("archive_root", REASON_WRONG_TYPE): "ArchiveRootTypeError",
+    ("rights_jsonl", REASON_MISSING_VALUE): "RightsJsonlNotFoundError",
+    ("rights_jsonl", REASON_NOT_FOUND): "RightsJsonlNotFoundError",
+    ("rights_jsonl", REASON_WRONG_TYPE): "RightsJsonlTypeError",
+}
 
-def _run_tool(command: list[str]) -> subprocess.CompletedProcess[str]:
+
+def _run_tool(
+    command: list[str],
+    *,
+    env_overrides: dict[str, str] | None = None,
+) -> subprocess.CompletedProcess[str]:
+    env = None
+    if env_overrides:
+        env = os.environ.copy()
+        env.update(env_overrides)
     return subprocess.run(
         command,
         cwd=str(PROJECT_ROOT),
         capture_output=True,
         text=True,
         check=False,
+        env=env,
     )
 
 
@@ -131,33 +181,74 @@ def _tool_unavailable_error(command_name: str, script_path: Path) -> dict[str, A
     )
 
 
+def _prereq_error(exc: ArchivePrereqError) -> dict[str, Any]:
+    return make_typed_error(
+        type_name=_PREREQ_ERROR_TYPES[(exc.arg_name, exc.reason)],
+        message=exc.message_text(),
+        exit_code=EXIT_OTHER_FAILURE,
+        exit_name="OTHER_FAILURE",
+        priority=20,
+    )
+
+
+def _validate_command_prereqs(command_name: str, path_values: dict[str, str | None]) -> dict[str, Any] | None:
+    for arg_name, label, expected_kind, optional in _PREREQ_SPEC.get(command_name, ()):
+        raw_value = str(path_values.get(arg_name) or "").strip()
+        if optional and not raw_value:
+            continue
+        try:
+            if expected_kind == KIND_FILE:
+                ensure_regular_file(raw_value, arg_name=arg_name, label=label)
+            else:
+                ensure_directory(raw_value, arg_name=arg_name, label=label)
+        except ArchivePrereqError as exc:
+            return _prereq_error(exc)
+    return None
+
+
 def _handle_fixity_scan(args: argparse.Namespace) -> int:
     script_path = PROJECT_ROOT / "tools" / "archive_hash_manifest.py"
     out_dir = Path(args.out_dir)
+    data = {
+        "tool": "archive_hash_manifest.py",
+        "archive_index": args.archive_index,
+        "archive_root": args.archive_root,
+        "out_dir": args.out_dir,
+        "workers": int(args.workers),
+        "strict": bool(args.strict),
+        "strict_identity": bool(args.strict_identity),
+        "validate_schemas": bool(args.validate_schemas),
+        "artifacts": {
+            "hash_manifest": str(out_dir / "hash_manifest.csv.gz"),
+            "hash_summary": str(out_dir / "hash_summary.json"),
+            "merkle_roots": str(out_dir / "merkle_roots.json"),
+        },
+        "stdout": "",
+        "stderr": "",
+    }
     if not script_path.is_file():
         return _emit_result(
             args=args,
             command_name="fixity-scan",
             exit_code=EXIT_OTHER_FAILURE,
-            data={
-                "tool": "archive_hash_manifest.py",
-                "archive_index": args.archive_index,
-                "archive_root": args.archive_root,
-                "out_dir": args.out_dir,
-                "workers": int(args.workers),
-                "strict": bool(args.strict),
-                "strict_identity": bool(args.strict_identity),
-                "validate_schemas": bool(args.validate_schemas),
-                "artifacts": {
-                    "hash_manifest": str(out_dir / "hash_manifest.csv.gz"),
-                    "hash_summary": str(out_dir / "hash_summary.json"),
-                    "merkle_roots": str(out_dir / "merkle_roots.json"),
-                },
-                "stdout": "",
-                "stderr": "",
-                "missing_tool": str(script_path),
-            },
+            data={**data, "missing_tool": str(script_path)},
             error=_tool_unavailable_error("fixity-scan", script_path),
+        )
+
+    prereq_error = _validate_command_prereqs(
+        "fixity-scan",
+        {
+            "archive_index": args.archive_index,
+            "archive_root": args.archive_root,
+        },
+    )
+    if prereq_error is not None:
+        return _emit_result(
+            args=args,
+            command_name="fixity-scan",
+            exit_code=EXIT_OTHER_FAILURE,
+            data=data,
+            error=prereq_error,
         )
 
     command = [
@@ -179,24 +270,9 @@ def _handle_fixity_scan(args: argparse.Namespace) -> int:
     if args.validate_schemas:
         command.append("--validate-schemas")
 
-    result = _run_tool(command)
-    data = {
-        "tool": "archive_hash_manifest.py",
-        "archive_index": args.archive_index,
-        "archive_root": args.archive_root,
-        "out_dir": args.out_dir,
-        "workers": int(args.workers),
-        "strict": bool(args.strict),
-        "strict_identity": bool(args.strict_identity),
-        "validate_schemas": bool(args.validate_schemas),
-        "artifacts": {
-            "hash_manifest": str(out_dir / "hash_manifest.csv.gz"),
-            "hash_summary": str(out_dir / "hash_summary.json"),
-            "merkle_roots": str(out_dir / "merkle_roots.json"),
-        },
-        "stdout": result.stdout.strip(),
-        "stderr": result.stderr.strip(),
-    }
+    result = _run_tool(command, env_overrides={"PYTHON_BIN": sys.executable})
+    data["stdout"] = result.stdout.strip()
+    data["stderr"] = result.stderr.strip()
 
     error = None
     if result.returncode != 0:
@@ -259,7 +335,7 @@ def _handle_fixity_verify(args: argparse.Namespace) -> int:
     else:
         command.append("--verify-all")
 
-    result = _run_tool(command)
+    result = _run_tool(command, env_overrides={"PYTHON_BIN": sys.executable})
     data = {
         "tool": "verify_hash_manifest.py",
         "hash_manifest": args.hash_manifest,
@@ -317,6 +393,29 @@ def _run_wrapped_tool(
                 "missing_tool": str(script_path),
             },
             error=_tool_unavailable_error(command_name, script_path),
+        )
+
+    prereq_error = _validate_command_prereqs(
+        command_name,
+        {
+            "archive_index": getattr(args, "archive_index", None),
+            "hash_manifest": getattr(args, "hash_manifest", None),
+            "archive_root": getattr(args, "archive_root", None),
+            "rights_jsonl": getattr(args, "rights_jsonl", None),
+        },
+    )
+    if prereq_error is not None:
+        return _emit_result(
+            args=args,
+            command_name=command_name,
+            exit_code=EXIT_OTHER_FAILURE,
+            data={
+                "tool": script_name,
+                "arguments": tool_args,
+                "stdout": "",
+                "stderr": "",
+            },
+            error=prereq_error,
         )
 
     command = [sys.executable, str(script_path), *tool_args]
@@ -629,7 +728,7 @@ def _handle_sealed_eval_run(args: argparse.Namespace) -> int:
     if args.allow_writable_subset:
         command.append("--allow-writable-subset")
 
-    result = _run_tool(command)
+    result = _run_tool(command, env_overrides={"PYTHON_BIN": sys.executable})
     data = {
         "tool": "run_sealed_eval_72h.sh",
         "archive_index": args.archive_index,

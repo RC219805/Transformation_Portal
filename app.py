@@ -1204,8 +1204,8 @@ def _archive_gate_argv(
             args,
             "archive_index",
             "archiveIndex",
-            default=str(Path(input_dir) / "archive_index_normalized.csv.gz"),
-            allowed_roots=ALLOWED_INPUT_ROOTS,
+            default=str(Path(output_dir) / "archive_index_normalized.csv.gz"),
+            allowed_roots=ALLOWED_PATH_ROOTS,
         )
         archive_root = _path_arg(
             args,
@@ -1298,8 +1298,8 @@ def _archive_gate_argv(
             args,
             "archive_index",
             "archiveIndex",
-            default=str(Path(input_dir) / "archive_index_normalized.csv.gz"),
-            allowed_roots=ALLOWED_INPUT_ROOTS,
+            default=str(Path(output_dir) / "archive_index_normalized.csv.gz"),
+            allowed_roots=ALLOWED_PATH_ROOTS,
         )
         hash_manifest = _path_arg(
             args,

@@ -16,6 +16,9 @@ from typing import Any, Iterable
 from uuid import uuid4
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+TOOLS_DIR = Path(__file__).resolve().parent
+if str(TOOLS_DIR) not in sys.path:
+    sys.path.insert(0, str(TOOLS_DIR))
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
@@ -23,6 +26,11 @@ from archive_governance_common import (  # pylint: disable=wrong-import-position
     atomic_write_text,
     deterministic_json_dumps,
     json_line,
+)
+from archive_prereqs import (  # pylint: disable=wrong-import-position
+    ArchivePrereqError,
+    ensure_directory,
+    ensure_regular_file,
 )
 
 EXIT_SUCCESS = 0
@@ -330,18 +338,46 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
 
-    archive_root = Path(args.archive_root)
+    try:
+        archive_index = ensure_regular_file(
+            args.archive_index,
+            arg_name="archive_index",
+            label="archive index",
+        )
+        hash_manifest = ensure_regular_file(
+            args.hash_manifest,
+            arg_name="hash_manifest",
+            label="hash manifest",
+        )
+        archive_root = ensure_directory(
+            args.archive_root,
+            arg_name="archive_root",
+            label="archive root",
+        )
+        rights_jsonl = (
+            ensure_regular_file(
+                args.rights_jsonl,
+                arg_name="rights_jsonl",
+                label="rights JSONL",
+            )
+            if args.rights_jsonl
+            else None
+        )
+    except ArchivePrereqError as exc:
+        print(exc.cli_message(), file=sys.stderr)
+        return EXIT_INPUT_ERROR
+
     out_jsonl = Path(args.out_jsonl)
     out_summary = Path(args.out_summary)
 
     try:
         # Parse both for sanity/lineage validation even though hash rows drive output.
         _consume_csv_rows(
-            Path(args.archive_index),
+            archive_index,
             required_columns={"origin_drive", "partition", "relpath"},
         )
-        hash_rows = _load_hash_rows(Path(args.hash_manifest))
-        rights_map = _load_rights(Path(args.rights_jsonl) if args.rights_jsonl else None)
+        hash_rows = _load_hash_rows(hash_manifest)
+        rights_map = _load_rights(rights_jsonl)
     except ValueError as exc:
         print(f"Input error: {exc}", file=sys.stderr)
         return EXIT_INPUT_ERROR

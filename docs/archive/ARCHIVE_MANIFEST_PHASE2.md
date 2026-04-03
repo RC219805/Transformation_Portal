@@ -14,6 +14,8 @@ Generated into an output directory:
 
 - `archive_index_normalized.csv.gz`
   Per-file normalized index: role/category tagging + path canonicalization + approx bytes.
+  Archive-gate consumers treat `<output_dir>/archive_index_normalized.csv.gz` as the canonical implicit location
+  when `archive_index` is omitted.
 
 - `asset_grouping_report.csv.gz`
   One row per **basekey** = `(directory + basename)`. Includes anomaly flags:
