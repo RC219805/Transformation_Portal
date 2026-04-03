@@ -1167,8 +1167,8 @@
                         <p class="text-[12px] text-slate-500 dark:text-slate-400">Archiving parameters for deterministic packaging and export. Align with repository governance.</p>
                         <div>
                             <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="archiveIndexPath">Archive Index Path</label>
-                            <input type="text" id="archiveIndexPath" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors" value="./archive_index_normalized.csv.gz" placeholder="./archive_index_normalized.csv.gz" autocomplete="off" spellcheck="false" />
-                            <p class="mt-1 text-[11px] leading-5 text-slate-500 dark:text-slate-400">Defaults to an index adjacent to the archive root. Override when the manifest lives elsewhere.</p>
+                            <input type="text" id="archiveIndexPath" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors" value="" placeholder="./output/archive_index_normalized.csv.gz" autocomplete="off" spellcheck="false" />
+                            <p class="mt-1 text-[11px] leading-5 text-slate-500 dark:text-slate-400">Defaults to the normalized archive index inside the selected output directory. Override when the manifest lives elsewhere.</p>
                         </div>
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <label class="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300"><input type="checkbox" id="gateDedup" checked class="rounded w-4 h-4 text-indigo-600 focus:ring-indigo-500 bg-white border-slate-300 dark:bg-slate-800 dark:border-slate-600"> Generate Dedup Ledger</label>
@@ -1718,7 +1718,7 @@
                 emits: {
                     master16: true, upscaled16: true, marketing: false, report: true, runCard: true
                 },
-                gate: { dedup: true, sign: true, archiveIndex: './archive_index_normalized.csv.gz' },
+                gate: { dedup: true, sign: true, archiveIndex: '' },
                 licenses: { nonCommercialOk: false, acceptApple: false, acceptResearchTools: false },
                 reconstruction: {
                     enable: false,
@@ -4280,16 +4280,12 @@
             }
         }
 
-        function deriveArchiveIndexPath(inputDir) {
-            const raw = String(inputDir || '').trim();
+        function deriveArchiveIndexPath(outputDir) {
+            const raw = String(outputDir || '').trim();
             if (!raw) return './archive_index_normalized.csv.gz';
             const normalized = raw.replace(/[\\/]+$/, '');
             if (!normalized) return './archive_index_normalized.csv.gz';
-            const segments = normalized.split(/[\\/]/);
-            if (segments.length <= 1) return './archive_index_normalized.csv.gz';
-            segments.pop();
-            const parent = segments.join('/');
-            return `${parent || '.'}/archive_index_normalized.csv.gz`;
+            return `${normalized}/archive_index_normalized.csv.gz`;
         }
 
         function updateUIFromState() {
@@ -4337,7 +4333,7 @@
             c.gate = c.gate || {};
             c.gate.dedup = parseBoolLike(c.gate.dedup, true);
             c.gate.sign = parseBoolLike(c.gate.sign, true);
-            c.gate.archiveIndex = _textOrFallback(c.gate.archiveIndex, deriveArchiveIndexPath(c.inputDir));
+            c.gate.archiveIndex = _textOrFallback(c.gate.archiveIndex, deriveArchiveIndexPath(c.outputDir));
             c.licenses = c.licenses || {};
             c.licenses.nonCommercialOk = parseBoolLike(c.licenses.nonCommercialOk, false);
             c.licenses.acceptApple = parseBoolLike(c.licenses.acceptApple, false);
@@ -4448,7 +4444,7 @@
                     ...buildCanonicalLuxDepthArgs(c)
                 };
             } else {
-                const derivedArchiveIndex = deriveArchiveIndexPath(inputDirValue);
+                const derivedArchiveIndex = deriveArchiveIndexPath(outputDirValue);
                 args = {
                     ...args,
                     archive_root: inputDirValue,
@@ -4689,10 +4685,10 @@
             const safeBindInput = (el, category, key) => {
                 if (!el) return;
                 el.addEventListener('input', (e) => {
-                    if (!category && key === 'inputDir') {
+                    if (!category && key === 'outputDir') {
                         const nextValue = e.target.value;
                         const currentArchiveIndex = els.archiveIndexPath ? String(els.archiveIndexPath.value || '').trim() : '';
-                        const previousDerivedArchiveIndex = deriveArchiveIndexPath(state.config.inputDir);
+                        const previousDerivedArchiveIndex = deriveArchiveIndexPath(state.config.outputDir);
                         if (els.archiveIndexPath && (!currentArchiveIndex || currentArchiveIndex === previousDerivedArchiveIndex)) {
                             const nextDerivedArchiveIndex = deriveArchiveIndexPath(nextValue);
                             els.archiveIndexPath.value = nextDerivedArchiveIndex;
@@ -5668,7 +5664,7 @@
                     c.gate = c.gate || {};
                     c.gate.archiveIndex = _textOrFallback(
                         data.args.archive_index,
-                        c.gate.archiveIndex || deriveArchiveIndexPath(c.inputDir)
+                        c.gate.archiveIndex || deriveArchiveIndexPath(c.outputDir)
                     );
                     c.gate.dedup = parseBoolLike(data.args.dedup, c.gate.dedup);
                     c.gate.sign = parseBoolLike(data.args.sign, c.gate.sign);

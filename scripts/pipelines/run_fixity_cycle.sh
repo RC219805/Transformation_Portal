@@ -13,15 +13,29 @@ WORKERS="1"
 STRICT="false"
 STRICT_IDENTITY="false"
 VALIDATE_SCHEMAS="true"
-PYTHON_BIN="${PYTHON_BIN:-python3}"
+DEFAULT_PYTHON_BIN="python3"
+if [[ -x "${REPO_ROOT}/.venv/bin/python" ]]; then
+  DEFAULT_PYTHON_BIN="${REPO_ROOT}/.venv/bin/python"
+fi
+PYTHON_BIN="${PYTHON_BIN:-$DEFAULT_PYTHON_BIN}"
+
+require_flag_value() {
+  local flag_name="$1"
+  if [[ $# -lt 2 || -z "${2:-}" || "${2:-}" == --* ]]; then
+    echo "Error: ${flag_name} requires a value" >&2
+    exit 2
+  fi
+}
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --archive-index)
+      require_flag_value "$1" "${2:-}"
       ARCHIVE_INDEX="$2"
       shift 2
       ;;
     --archive-root)
+      require_flag_value "$1" "${2:-}"
       ARCHIVE_ROOT="$2"
       shift 2
       ;;
@@ -65,9 +79,30 @@ EOF
   esac
 done
 
-if [[ -z "$ARCHIVE_INDEX" || -z "$ARCHIVE_ROOT" ]]; then
-  echo "--archive-index and --archive-root are required" >&2
+if [[ -z "$ARCHIVE_INDEX" ]]; then
+  echo "Error: --archive-index is required" >&2
   exit 2
+fi
+if [[ -z "$ARCHIVE_ROOT" ]]; then
+  echo "Error: --archive-root is required" >&2
+  exit 2
+fi
+
+if [[ ! -e "$ARCHIVE_INDEX" ]]; then
+  echo "Error: archive index not found: $ARCHIVE_INDEX" >&2
+  exit 1
+fi
+if [[ ! -f "$ARCHIVE_INDEX" ]]; then
+  echo "Error: archive index must be a regular file: $ARCHIVE_INDEX" >&2
+  exit 1
+fi
+if [[ ! -e "$ARCHIVE_ROOT" ]]; then
+  echo "Error: archive root not found: $ARCHIVE_ROOT" >&2
+  exit 1
+fi
+if [[ ! -d "$ARCHIVE_ROOT" ]]; then
+  echo "Error: archive root must be a directory: $ARCHIVE_ROOT" >&2
+  exit 1
 fi
 
 TODAY_UTC="$(date -u +%F)"

@@ -943,6 +943,31 @@ def test_portal_selected_job_progress_bar_has_accessible_label() -> None:
     assert 'aria-labelledby="selectedJobProgressLabel selectedJobProgressText"' in content
 
 
+def test_portal_archive_index_derives_from_output_dir() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+    derive_body = _extract_js_function_body(content, "deriveArchiveIndexPath")
+    update_body = _extract_js_function_body(content, "updateUIFromState")
+    payload_body = _extract_js_function_body(content, "generatePayload")
+
+    assert "function deriveArchiveIndexPath(outputDir)" in content
+    assert "const raw = String(outputDir || '').trim();" in derive_body
+    assert "return `${normalized}/archive_index_normalized.csv.gz`;" in derive_body
+    assert "deriveArchiveIndexPath(c.outputDir)" in update_body
+    assert "const derivedArchiveIndex = deriveArchiveIndexPath(outputDirValue);" in payload_body
+
+
+def test_portal_archive_index_manual_override_stays_sticky_on_output_dir_changes() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+    bind_body = _extract_js_function_body(content, "bindInputs")
+
+    assert "if (!category && key === 'outputDir')" in bind_body
+    assert "const previousDerivedArchiveIndex = deriveArchiveIndexPath(state.config.outputDir);" in bind_body
+    assert "const nextDerivedArchiveIndex = deriveArchiveIndexPath(nextValue);" in bind_body
+    assert "(!currentArchiveIndex || currentArchiveIndex === previousDerivedArchiveIndex)" in bind_body
+
+
 def test_argv_archive_gate_a_defaults_to_fixity_scan_runner() -> None:
     payload: Dict[str, object] = {
         "pipeline": "archive-gate-a",
@@ -958,8 +983,12 @@ def test_argv_archive_gate_a_defaults_to_fixity_scan_runner() -> None:
     assert argv[1].endswith("tools/archive_governance.py")
     assert argv[2] == "--json"
     assert argv[3] == "fixity-scan"
+    expected_archive_index = str(
+        (orchestrator_app.REPO_ROOT / "archive_reports" / "archive_index_normalized.csv.gz").resolve()
+    )
     expected_archive_root = str((orchestrator_app.REPO_ROOT / "archive_root").resolve())
     expected_out_dir = str((orchestrator_app.REPO_ROOT / "archive_reports").resolve())
+    assert _flag_value(argv, "--archive-index") == expected_archive_index
     assert _flag_value(argv, "--archive-root") == expected_archive_root
     assert _flag_value(argv, "--out-dir") == expected_out_dir
 
@@ -998,6 +1027,42 @@ def test_argv_archive_gate_fixity_verify_uses_canonical_default_report_filename(
     assert argv[3] == "fixity-verify"
     expected_report_path = str((orchestrator_app.REPO_ROOT / "archive_reports" / "verification_report.json").resolve())
     assert _flag_value(argv, "--report-path") == expected_report_path
+
+
+def test_argv_archive_gate_manifest_build_defaults_archive_index_under_output_dir() -> None:
+    payload: Dict[str, object] = {
+        "pipeline": "archive-gate-a",
+        "args": {
+            "input_dir": "./archive_root",
+            "output_dir": "./archive_reports",
+            "archive_command": "manifest-build",
+        },
+    }
+
+    argv = orchestrator_app._argv_from_request(payload)
+
+    assert argv[3] == "manifest-build"
+    expected_archive_index = str(
+        (orchestrator_app.REPO_ROOT / "archive_reports" / "archive_index_normalized.csv.gz").resolve()
+    )
+    assert _flag_value(argv, "--archive-index") == expected_archive_index
+
+
+def test_argv_archive_gate_preserves_explicit_archive_index_override() -> None:
+    payload: Dict[str, object] = {
+        "pipeline": "archive-gate-a",
+        "args": {
+            "input_dir": "./archive_root",
+            "output_dir": "./archive_reports",
+            "archive_command": "fixity-scan",
+            "archive_index": "./archive_root/custom_archive_index.csv.gz",
+        },
+    }
+
+    argv = orchestrator_app._argv_from_request(payload)
+
+    expected_archive_index = str((orchestrator_app.REPO_ROOT / "archive_root" / "custom_archive_index.csv.gz").resolve())
+    assert _flag_value(argv, "--archive-index") == expected_archive_index
 
 
 def test_argv_archive_gate_rejects_workers_below_minimum() -> None:
@@ -1605,6 +1670,79 @@ def test_argv_archive_gate_rejects_output_path_under_input_root(tmp_path: Path) 
         }
         with pytest.raises(ValueError, match="Path outside allowed roots"):
             orchestrator_app._argv_from_request(payload)
+    finally:
+        orchestrator_app.ALLOWED_INPUT_ROOTS = previous_input_roots
+        orchestrator_app.ALLOWED_OUTPUT_ROOTS = previous_output_roots
+        orchestrator_app.ALLOWED_PATH_ROOTS = previous_path_roots
+
+
+def test_argv_archive_gate_archive_index_default_accepts_output_root_via_allowed_path_roots(tmp_path: Path) -> None:
+    previous_input_roots = orchestrator_app.ALLOWED_INPUT_ROOTS
+    previous_output_roots = orchestrator_app.ALLOWED_OUTPUT_ROOTS
+    previous_path_roots = orchestrator_app.ALLOWED_PATH_ROOTS
+    try:
+        input_root = (tmp_path / "input_root").resolve()
+        output_root = (tmp_path / "output_root").resolve()
+        input_root.mkdir(parents=True, exist_ok=True)
+        output_root.mkdir(parents=True, exist_ok=True)
+        orchestrator_app.ALLOWED_INPUT_ROOTS = [input_root]
+        orchestrator_app.ALLOWED_OUTPUT_ROOTS = [output_root]
+        orchestrator_app.ALLOWED_PATH_ROOTS = [input_root, output_root]
+
+        payload: Dict[str, object] = {
+            "pipeline": "archive-gate-a",
+            "args": {
+                "input_dir": str(input_root),
+                "output_dir": str(output_root),
+                "archive_command": "fixity-scan",
+            },
+        }
+        argv = orchestrator_app._argv_from_request(payload)
+    finally:
+        orchestrator_app.ALLOWED_INPUT_ROOTS = previous_input_roots
+        orchestrator_app.ALLOWED_OUTPUT_ROOTS = previous_output_roots
+        orchestrator_app.ALLOWED_PATH_ROOTS = previous_path_roots
+
+    expected_archive_index = str((output_root / "archive_index_normalized.csv.gz").resolve())
+    assert _flag_value(argv, "--archive-index") == expected_archive_index
+
+
+def test_argv_archive_gate_manifest_build_keeps_hash_manifest_and_rights_scopes_narrow(tmp_path: Path) -> None:
+    previous_input_roots = orchestrator_app.ALLOWED_INPUT_ROOTS
+    previous_output_roots = orchestrator_app.ALLOWED_OUTPUT_ROOTS
+    previous_path_roots = orchestrator_app.ALLOWED_PATH_ROOTS
+    try:
+        input_root = (tmp_path / "input_root").resolve()
+        output_root = (tmp_path / "output_root").resolve()
+        input_root.mkdir(parents=True, exist_ok=True)
+        output_root.mkdir(parents=True, exist_ok=True)
+        orchestrator_app.ALLOWED_INPUT_ROOTS = [input_root]
+        orchestrator_app.ALLOWED_OUTPUT_ROOTS = [output_root]
+        orchestrator_app.ALLOWED_PATH_ROOTS = [input_root, output_root]
+
+        payload_bad_hash: Dict[str, object] = {
+            "pipeline": "archive-gate-a",
+            "args": {
+                "input_dir": str(input_root),
+                "output_dir": str(output_root),
+                "archive_command": "manifest-build",
+                "hash_manifest": str(input_root / "hash_manifest.csv.gz"),
+            },
+        }
+        payload_bad_rights: Dict[str, object] = {
+            "pipeline": "archive-gate-a",
+            "args": {
+                "input_dir": str(input_root),
+                "output_dir": str(output_root),
+                "archive_command": "manifest-build",
+                "rights_jsonl": str(output_root / "archive_manifest_v2.rights.jsonl"),
+            },
+        }
+
+        with pytest.raises(ValueError, match="Path outside allowed roots"):
+            orchestrator_app._argv_from_request(payload_bad_hash)
+        with pytest.raises(ValueError, match="Path outside allowed roots"):
+            orchestrator_app._argv_from_request(payload_bad_rights)
     finally:
         orchestrator_app.ALLOWED_INPUT_ROOTS = previous_input_roots
         orchestrator_app.ALLOWED_OUTPUT_ROOTS = previous_output_roots

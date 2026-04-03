@@ -364,6 +364,177 @@ def test_failure_path_emits_typed_machine_error(tmp_path: Path) -> None:
     assert payload["error"]["type"] == "ToolExecutionError"
 
 
+@pytest.mark.parametrize(
+    ("command_args", "expected_error_type"),
+    [
+        (
+            (
+                "fixity-scan",
+                "--archive-index",
+                "__MISSING_INDEX__",
+                "--archive-root",
+                "__ARCHIVE_ROOT__",
+                "--out-dir",
+                "__OUT_DIR__",
+                "--no-validate-schemas",
+            ),
+            "ArchiveIndexNotFoundError",
+        ),
+        (
+            (
+                "fixity-scan",
+                "--archive-index",
+                "__DIR_INDEX__",
+                "--archive-root",
+                "__ARCHIVE_ROOT__",
+                "--out-dir",
+                "__OUT_DIR__",
+                "--no-validate-schemas",
+            ),
+            "ArchiveIndexTypeError",
+        ),
+        (
+            (
+                "fixity-scan",
+                "--archive-index",
+                "__FIXTURE_INDEX__",
+                "--archive-root",
+                "__MISSING_ROOT__",
+                "--out-dir",
+                "__OUT_DIR__",
+                "--no-validate-schemas",
+            ),
+            "ArchiveRootNotFoundError",
+        ),
+        (
+            (
+                "fixity-scan",
+                "--archive-index",
+                "__FIXTURE_INDEX__",
+                "--archive-root",
+                "__FILE_ROOT__",
+                "--out-dir",
+                "__OUT_DIR__",
+                "--no-validate-schemas",
+            ),
+            "ArchiveRootTypeError",
+        ),
+        (
+            (
+                "manifest-build",
+                "--archive-index",
+                "__FIXTURE_INDEX__",
+                "--hash-manifest",
+                "__MISSING_HASH__",
+                "--archive-root",
+                "__ARCHIVE_ROOT__",
+                "--out-jsonl",
+                "__OUT_JSONL__",
+                "--out-summary",
+                "__OUT_SUMMARY__",
+            ),
+            "HashManifestNotFoundError",
+        ),
+        (
+            (
+                "manifest-build",
+                "--archive-index",
+                "__FIXTURE_INDEX__",
+                "--hash-manifest",
+                "__DIR_HASH__",
+                "--archive-root",
+                "__ARCHIVE_ROOT__",
+                "--out-jsonl",
+                "__OUT_JSONL__",
+                "--out-summary",
+                "__OUT_SUMMARY__",
+            ),
+            "HashManifestTypeError",
+        ),
+        (
+            (
+                "manifest-build",
+                "--archive-index",
+                "__FIXTURE_INDEX__",
+                "--hash-manifest",
+                "__FIXTURE_HASH__",
+                "--archive-root",
+                "__ARCHIVE_ROOT__",
+                "--out-jsonl",
+                "__OUT_JSONL__",
+                "--out-summary",
+                "__OUT_SUMMARY__",
+                "--rights-jsonl",
+                "__MISSING_RIGHTS__",
+            ),
+            "RightsJsonlNotFoundError",
+        ),
+        (
+            (
+                "manifest-build",
+                "--archive-index",
+                "__FIXTURE_INDEX__",
+                "--hash-manifest",
+                "__FIXTURE_HASH__",
+                "--archive-root",
+                "__ARCHIVE_ROOT__",
+                "--out-jsonl",
+                "__OUT_JSONL__",
+                "--out-summary",
+                "__OUT_SUMMARY__",
+                "--rights-jsonl",
+                "__DIR_RIGHTS__",
+            ),
+            "RightsJsonlTypeError",
+        ),
+    ],
+)
+def test_prereq_failures_emit_typed_machine_errors(
+    tmp_path: Path,
+    command_args: tuple[str, ...],
+    expected_error_type: str,
+) -> None:
+    archive_root = tmp_path / "archive_root"
+    archive_root.mkdir(parents=True, exist_ok=True)
+    dir_index = tmp_path / "archive_index_dir"
+    dir_index.mkdir(parents=True, exist_ok=True)
+    dir_hash = tmp_path / "hash_manifest_dir"
+    dir_hash.mkdir(parents=True, exist_ok=True)
+    dir_rights = tmp_path / "rights_dir"
+    dir_rights.mkdir(parents=True, exist_ok=True)
+    file_root = tmp_path / "archive_root.txt"
+    file_root.write_text("not-a-directory", encoding="utf-8")
+    out_dir = tmp_path / "scan"
+    out_jsonl = tmp_path / "archive_manifest_v2.jsonl"
+    out_summary = tmp_path / "archive_manifest_v2.summary.json"
+
+    replacements = {
+        "__MISSING_INDEX__": str(tmp_path / "missing_archive_index.csv.gz"),
+        "__ARCHIVE_ROOT__": str(archive_root),
+        "__OUT_DIR__": str(out_dir),
+        "__DIR_INDEX__": str(dir_index),
+        "__FIXTURE_INDEX__": str(FIXTURE_INDEX),
+        "__MISSING_ROOT__": str(tmp_path / "missing_archive_root"),
+        "__FILE_ROOT__": str(file_root),
+        "__MISSING_HASH__": str(tmp_path / "missing_hash_manifest.csv.gz"),
+        "__OUT_JSONL__": str(out_jsonl),
+        "__OUT_SUMMARY__": str(out_summary),
+        "__DIR_HASH__": str(dir_hash),
+        "__FIXTURE_HASH__": str(FIXTURE_HASH_MANIFEST),
+        "__MISSING_RIGHTS__": str(tmp_path / "missing_rights.jsonl"),
+        "__DIR_RIGHTS__": str(dir_rights),
+    }
+    resolved_args = tuple(replacements.get(arg, arg) for arg in command_args)
+
+    result = _run_governance_cli(*resolved_args)
+    payload = _load_payload(result)
+
+    assert result.returncode == 5
+    validate_archive_machine_payload(payload)
+    assert payload["success"] is False
+    assert payload["error"]["type"] == expected_error_type
+
+
 @pytest.mark.regression
 def test_sealed_eval_run_emits_audit_package_and_machine_payload(tmp_path: Path) -> None:
     out_root = tmp_path / "sealed_eval_runs"

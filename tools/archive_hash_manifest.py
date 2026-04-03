@@ -20,8 +20,17 @@ from typing import Any, Dict, Iterable, List, Sequence, Tuple
 from uuid import uuid4
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+TOOLS_DIR = Path(__file__).resolve().parent
+if str(TOOLS_DIR) not in sys.path:
+    sys.path.insert(0, str(TOOLS_DIR))
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
+
+from archive_prereqs import (  # pylint: disable=wrong-import-position
+    ArchivePrereqError,
+    ensure_directory,
+    ensure_regular_file,
+)
 
 from tp.crypto.merkle import merkle_root_sha256
 
@@ -54,6 +63,7 @@ OUTPUT_MERKLE_ROOTS = "merkle_roots.json"
 DETERMINISTIC_GZIP_COMPRESSION = {"compresslevel": 9, "mtime": 0}
 STRICT_NON_OK_EXIT_CODE = 2
 STRICT_IDENTITY_EXIT_CODE = 3
+EXIT_INPUT_ERROR = 1
 
 
 @dataclass(frozen=True)
@@ -667,10 +677,22 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.workers < 1:
         raise SystemExit("--workers must be >= 1")
 
-    archive_index_path = Path(args.archive_index)
-    archive_root = Path(args.archive_root)
+    try:
+        archive_index_path = ensure_regular_file(
+            args.archive_index,
+            arg_name="archive_index",
+            label="archive index",
+        )
+        archive_root = ensure_directory(
+            args.archive_root,
+            arg_name="archive_root",
+            label="archive root",
+        )
+    except ArchivePrereqError as exc:
+        print(exc.cli_message(), file=sys.stderr)
+        return EXIT_INPUT_ERROR
+
     out_dir = Path(args.out_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
 
     archive_rows = read_archive_index_rows(archive_index_path)
     duplicate_identity_keys = find_duplicate_identity_keys(archive_rows)
@@ -682,6 +704,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     manifest_rows = build_hash_manifest(archive_rows, archive_root=archive_root, workers=args.workers)
 
+    out_dir.mkdir(parents=True, exist_ok=True)
     out_hash_manifest = out_dir / OUTPUT_HASH_MANIFEST
     out_hash_summary = out_dir / OUTPUT_HASH_SUMMARY
     out_merkle_roots = out_dir / OUTPUT_MERKLE_ROOTS
