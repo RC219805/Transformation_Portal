@@ -245,6 +245,29 @@ test("login POST rotates the session and redirects authenticated users to /porta
   }
 });
 
+test("login GET renders the hero-video shell while preserving current front-door messaging", async () => {
+  const env = withTempEnvironment({
+    NODE_ENV: "development",
+    TP_ALLOW_LOCAL_ACCESS_BYPASS: "1"
+  });
+
+  try {
+    const { GET } = await importFresh("../app/login/route.js");
+    const request = buildRequest("http://localhost:3000/login");
+
+    const response = await GET(request);
+    const html = await response.text();
+
+    assert.equal(response.status, 200);
+    assert.match(html, /class="hero-video"/);
+    assert.match(html, /preload="metadata"/);
+    assert.match(html, /Local development bypass is enabled\./);
+    assert.match(html, /TP_CF_ACCESS_TEAM_DOMAIN/);
+  } finally {
+    env.cleanup();
+  }
+});
+
 test("login POST keeps failures generic when Access email does not match the configured account", async () => {
   const passwordHash = await argon2.hash("correct horse battery staple");
   const env = withTempEnvironment({
