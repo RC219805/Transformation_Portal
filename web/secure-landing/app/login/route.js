@@ -55,7 +55,18 @@ function renderLoginPage({ csrfToken, accessEmail, errorCode, allowLocalBypass }
   </head>
   <body>
     <main class="shell">
-      <video autoplay muted loop playsinline poster="" aria-hidden="true">
+      <video
+        class="hero-video"
+        autoplay
+        muted
+        loop
+        playsinline
+        preload="auto"
+        disablePictureInPicture
+        disableRemotePlayback
+        poster=""
+        aria-hidden="true"
+      >
         <source src="/video/login-loop.mp4" type="video/mp4" />
       </video>
       <section class="content">
