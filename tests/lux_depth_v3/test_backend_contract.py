@@ -70,3 +70,26 @@ def test_registry_accepts_legacy_backend_aliases(monkeypatch):
 
     assert registry.has_backend("depth_anything_v3") is True
     assert registry.get_backend_class("depth-anything-v3") is sentinel_backend
+
+
+def test_depth_pro_alias_normalizes_for_registry_and_provenance(monkeypatch):
+    registry = DepthBackendRegistry()
+    sentinel_backend = object()
+    monkeypatch.setitem(DepthBackendRegistry._backends, "depth_pro", sentinel_backend)
+
+    metadata = BackendSelectionMetadata(
+        requested_backend="depth-pro",
+        resolved_backend="depth-pro",
+        resolution_status="success",
+        resolution_reason="alias normalized",
+        model_id="apple/ml-depth-pro",
+        device="mps",
+        attempts=[{"backend": "depth-pro", "status": "success"}],
+    )
+
+    assert normalize_backend_id("depth-pro") == "depth_pro"
+    assert registry.has_backend("depth-pro") is True
+    assert registry.get_backend_class("depth-pro") is sentinel_backend
+    assert metadata.requested_backend == "depth_pro"
+    assert metadata.resolved_backend == "depth_pro"
+    assert metadata.attempts == [{"backend": "depth_pro", "status": "success"}]

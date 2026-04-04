@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server.js";
 
 import { resolveAccessContext, resolveAuthenticatedAccessSession, revokeSessionOnAccessFailure } from "../../lib/access.js";
-import { escapeHtml, renderLanternMark } from "../../lib/brand.js";
+import { escapeHtml, FRONTDOOR_ASSETS, renderBrandAsset } from "../../lib/brand.js";
 import { audit } from "../../lib/audit.js";
 import { applySecurityHeaders, FRONTDOOR_CSP } from "../../lib/http.js";
 import {
@@ -32,16 +32,14 @@ function resolveLoginMessage(code) {
 
 function renderLoginPage({ csrfToken, accessEmail, errorCode }) {
   const errorMessage = errorCode ? resolveLoginMessage(errorCode) : "";
-  const accessText = accessEmail
-    ? `Access identity verified for <strong>${escapeHtml(accessEmail)}</strong>.`
-    : "Authorized operators only.";
+  const accessText = accessEmail ? `Access identity verified for <strong>${escapeHtml(accessEmail)}</strong>.` : "";
 
   return `<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Transformation Portal Login</title>
+    <title>Dynamic Neural Access | Transformation Portal</title>
     <link rel="stylesheet" href="/login.css" />
   </head>
   <body>
@@ -58,40 +56,37 @@ function renderLoginPage({ csrfToken, accessEmail, errorCode }) {
         poster=""
         aria-hidden="true"
       >
-        <source src="/video/login-loop.mp4" type="video/mp4" />
+        <source src="${FRONTDOOR_ASSETS.loopVideo}" type="video/mp4" />
       </video>
       <div class="login-vignette" aria-hidden="true"></div>
       <section class="content">
         <div class="login-stage">
-          <a class="brand-lockup brand-lockup--centered" href="/" aria-label="Dynamic Neural Access home">
-            <span class="brand-mark-shell">${renderLanternMark("Transformation Portal brand mark")}</span>
-            <span class="brand-copy brand-copy--centered">
-              <span class="brand-kicker">Dynamic Neural Access</span>
-              <span class="brand-title">Transformation Portal</span>
+          <a class="brand-lockup brand-lockup--stacked" href="/" aria-label="Dynamic Neural Access home">
+            <span class="brand-asset-frame brand-asset-frame--login">
+              ${renderBrandAsset({
+                variant: "dark",
+                alt: "Dynamic Neural Access",
+                className: "brand-asset"
+              })}
             </span>
+            <span class="brand-subtitle">Transformation Portal operator console</span>
           </a>
           <div class="card card--login">
-          <p class="eyebrow">Transformation Portal</p>
-          <h1>Operator Login</h1>
-          <p class="lede">Secure operator access to governed orchestration.</p>
-          ${errorMessage ? `<div class="banner" role="alert">${escapeHtml(errorMessage)}</div>` : ""}
-          <p class="card-meta">${accessText}</p>
-          <form method="post" action="/login" autocomplete="on">
-            <input type="hidden" name="csrf_token" value="${escapeHtml(csrfToken)}" />
-            <label>
-              Username
-              <input type="text" name="username" autocomplete="username" required />
-            </label>
-            <label>
-              Password
-              <input type="password" name="password" autocomplete="current-password" required />
-            </label>
-            <button type="submit">Sign in</button>
-          </form>
-          <div class="login-footer">
-            <p class="footnote">Governed access, protected session, premium review flow.</p>
-            <a class="tertiary-link" href="/#final-cta">Need access?</a>
-          </div>
+            <h1 class="sr-only">Dynamic Neural Access operator sign in</h1>
+            ${errorMessage ? `<div class="banner" role="alert">${escapeHtml(errorMessage)}</div>` : ""}
+            ${accessText ? `<p class="card-meta">${accessText}</p>` : ""}
+            <form method="post" action="/login" autocomplete="on">
+              <input type="hidden" name="csrf_token" value="${escapeHtml(csrfToken)}" />
+              <label>
+                Username
+                <input type="text" name="username" autocomplete="username" required />
+              </label>
+              <label>
+                Password
+                <input type="password" name="password" autocomplete="current-password" required />
+              </label>
+              <button type="submit">Sign in</button>
+            </form>
           </div>
         </div>
       </section>
@@ -124,6 +119,8 @@ export async function GET(request) {
     }
   }
 
+  // Mint an anonymous session before credentials are posted so the hidden CSRF
+  // token on the login form is bound to a server-side session from the start.
   session = session || createAnonymousSession();
   const accessContext = await resolveAccessContext(request);
   const html = renderLoginPage({

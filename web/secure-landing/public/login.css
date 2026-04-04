@@ -84,8 +84,11 @@ body {
   color: inherit;
 }
 
-.brand-lockup--centered {
-  align-self: center;
+.brand-lockup--stacked {
+  flex-direction: column;
+  gap: 0.9rem;
+  align-items: center;
+  text-align: center;
 }
 
 .brand-copy {
@@ -113,35 +116,35 @@ body {
   color: var(--frontdoor-ink);
 }
 
-.brand-mark-shell {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 3.75rem;
-  height: 3.75rem;
-  border-radius: 1.3rem;
-  border: 1px solid rgba(86, 204, 242, 0.22);
-  background: linear-gradient(180deg, rgba(8, 15, 30, 0.82), rgba(7, 13, 24, 0.96));
-  box-shadow: 0 18px 42px rgba(2, 6, 23, 0.38);
+.brand-asset-frame {
+  display: block;
+  width: 10.75rem;
+  max-width: 100%;
+  line-height: 0;
+  filter: drop-shadow(0 22px 42px rgba(2, 6, 23, 0.34));
 }
 
-.brand-mark {
-  width: 2rem;
-  height: 2rem;
-  color: rgba(220, 242, 255, 0.94);
+.brand-asset-frame--login {
+  width: min(16rem, 76vw);
 }
 
-.brand-mark stop:first-child {
-  stop-color: var(--brand-azure);
+.brand-asset {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 1rem;
 }
 
-.brand-mark stop:last-child {
-  stop-color: var(--brand-cyan);
+.brand-subtitle {
+  font-size: 0.72rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: rgba(208, 226, 245, 0.84);
 }
 
 .login-stage {
   display: grid;
-  gap: 1.5rem;
+  gap: 1.15rem;
   justify-items: center;
 }
 
@@ -158,17 +161,29 @@ body {
 }
 
 .card {
-  width: min(100%, 28rem);
+  width: min(100%, 24.5rem);
   border: 1px solid var(--frontdoor-border);
   background: var(--frontdoor-panel);
   backdrop-filter: blur(22px);
   border-radius: 1.65rem;
-  padding: 1.85rem;
+  padding: 1.5rem;
   box-shadow: var(--frontdoor-shadow);
 }
 
 .card--login {
   background: linear-gradient(180deg, rgba(7, 12, 24, 0.72), rgba(10, 16, 31, 0.82));
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .eyebrow {
@@ -206,6 +221,7 @@ h1 {
   margin: 0 0 1rem;
   font-size: 0.92rem;
   color: var(--frontdoor-muted-soft);
+  text-align: center;
 }
 
 form {
@@ -474,8 +490,7 @@ code {
 }
 
 @media (max-width: 720px) {
-  .site-header,
-  .login-footer {
+  .site-header {
     flex-direction: column;
     align-items: flex-start;
   }
