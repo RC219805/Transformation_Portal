@@ -23,7 +23,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.exception_handlers import request_validation_exception_handler as fastapi_request_validation_exception_handler
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.responses import Response, StreamingResponse
@@ -267,6 +267,7 @@ DEFAULT_CSP = (
     "frame-ancestors 'none'; "
     "form-action 'self';"
 )
+PORTAL_VIDEO_CACHE_CONTROL = "public, max-age=86400"
 SECURITY_HEADERS = {
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "DENY",
@@ -2396,7 +2397,7 @@ async def serve_ui() -> Response:
     return FileResponse(str(PORTAL_HTML))
 
 
-@app.get("/v1/portal/video/{asset_name}")
+@app.get("/portal/video/{asset_name}")
 async def serve_portal_video(asset_name: str) -> Response:
     try:
         asset_path = _resolve_portal_video_path(asset_name)
@@ -2418,6 +2419,26 @@ async def serve_portal_video(asset_name: str) -> Response:
     return FileResponse(
         str(asset_path),
         media_type=_artifact_content_type(asset_path),
+        headers={"Cache-Control": PORTAL_VIDEO_CACHE_CONTROL},
+    )
+
+
+@app.get("/v1/portal/video/{asset_name}")
+async def redirect_legacy_portal_video(asset_name: str) -> Response:
+    try:
+        asset_path = _resolve_portal_video_path(asset_name)
+    except ValueError:
+        return _error_response(
+            400,
+            code="INVALID_ARGUMENT",
+            message="invalid portal video asset",
+            details={"field": "asset_name"},
+        )
+
+    return RedirectResponse(
+        url=f"/portal/video/{quote(asset_path.name)}",
+        status_code=307,
+        headers={"Cache-Control": "no-store"},
     )
 
 

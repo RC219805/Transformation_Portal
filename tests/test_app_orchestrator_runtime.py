@@ -315,7 +315,8 @@ def test_portal_html_uses_looping_background_video_layer() -> None:
 
     assert "portal-video-backdrop" in content
     assert 'class="portal-video-media"' in content
-    assert "/v1/portal/video/dna-portal-video-2.mp4" in content
+    assert "/portal/video/dna-portal-video-2.mp4" in content
+    assert "/v1/portal/video/dna-portal-video-2.mp4" not in content
     assert "autoplay" in content
     assert "muted" in content
     assert "loop" in content

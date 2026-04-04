@@ -78,6 +78,7 @@ Route ownership:
 - `GET /` serves the public Dynamic Neural Access homepage, even for authenticated operators.
 - `GET /login` serves the separate login page with the video background and boots the anonymous session cookie that binds the hidden CSRF token before credential submission.
 - `GET /portal` proxies the existing FastAPI portal UI.
+- `GET /portal/video/*` proxies the portal background video asset with cache-friendly headers.
 - `GET /portal/bootstrap` returns the managed-mode bootstrap contract for the browser UI.
 - `/v1/*` stays same-origin at the front door and is proxied to FastAPI with server-side secret injection.
 - `GET /healthz` reports front-door readiness plus backend reachability.
