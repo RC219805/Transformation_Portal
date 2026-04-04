@@ -695,6 +695,42 @@ class TestCLIConfiguration:
         assert captured_config is not None
         assert captured_config.depth_pro_python_executable == "./.venv-depth-pro/bin/python"
 
+    def test_da3_python_flag_sets_config(self, tmp_path):
+        """--da3-python should be forwarded into EnhanceConfig."""
+        from unittest.mock import MagicMock, patch
+
+        input_dir = tmp_path / "input"
+        input_dir.mkdir()
+        (input_dir / "test.jpg").touch()
+
+        captured_config = None
+
+        def mock_orch_init(config, output_root):
+            nonlocal captured_config
+            captured_config = config
+            mock_orch = MagicMock()
+            mock_orch.enhance_batch.return_value = {"total": 0, "succeeded": 0}
+            return mock_orch
+
+        with patch(
+            "transformation_portal.lux_depth_v3.__main__.EnhanceOrchestrator",
+            side_effect=mock_orch_init,
+        ):
+            _result = runner.invoke(
+                app,
+                [
+                    "--input-dir",
+                    str(input_dir),
+                    "--output-dir",
+                    str(tmp_path / "output"),
+                    "--da3-python",
+                    "./.venv-da3/bin/python",
+                ],
+            )
+
+        assert captured_config is not None
+        assert captured_config.da3_python_executable == "./.venv-da3/bin/python"
+
     def test_save_float_depth_defaults_false(self, tmp_path):
         """save_float_depth should default to False when flag is omitted."""
         from unittest.mock import MagicMock, patch

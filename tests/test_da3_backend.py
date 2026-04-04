@@ -4,7 +4,9 @@ Tests that DA3Backend implements the DepthBackend protocol correctly
 and integrates with the registry.
 """
 
+import json
 import sys
+from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
@@ -98,6 +100,367 @@ def test_da3_backend_availability_missing_transformers(monkeypatch):
     # This should raise ImportError when ensure_available tries to import transformers
     with pytest.raises(ImportError, match="transformers"):
         backend.ensure_available()
+
+
+def test_da3_backend_python_executable_resolution_from_config(tmp_path):
+    """Dedicated DA3 Python path should be resolved from config."""
+    from transformation_portal.lux_depth_v3.config import EnhanceConfig
+
+    python_executable = tmp_path / ".venv-da3" / "bin" / "python"
+    python_executable.parent.mkdir(parents=True)
+    python_executable.write_text("#!/bin/sh\n", encoding="utf-8")
+
+    backend = DA3Backend(
+        EnhanceConfig(
+            depth_device="cpu",
+            da3_python_executable=str(python_executable),
+        )
+    )
+
+    assert backend._python_executable == str(python_executable.resolve())
+
+
+def test_da3_backend_python_executable_preserves_venv_symlink(tmp_path):
+    """Configured DA3 Python should preserve the venv launcher symlink path."""
+    from transformation_portal.lux_depth_v3.config import EnhanceConfig
+
+    target_python = tmp_path / "python3.11"
+    target_python.write_text("#!/bin/sh\n", encoding="utf-8")
+    python_executable = tmp_path / ".venv-da3" / "bin" / "python"
+    python_executable.parent.mkdir(parents=True)
+    python_executable.symlink_to(target_python)
+
+    backend = DA3Backend(
+        EnhanceConfig(
+            depth_device="cpu",
+            da3_python_executable=str(python_executable),
+        )
+    )
+
+    assert backend._python_executable == str(python_executable.absolute())
+
+
+def test_da3_backend_relative_python_executable_anchors_to_repo_root(monkeypatch, tmp_path):
+    """Relative DA3 Python paths should anchor to the discovered repo root."""
+    from transformation_portal.lux_depth_v3.config import EnhanceConfig
+
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    python_executable = repo_root / ".venv-da3" / "bin" / "python"
+    python_executable.parent.mkdir(parents=True)
+    python_executable.write_text("#!/bin/sh\n", encoding="utf-8")
+
+    other_cwd = tmp_path / "other"
+    other_cwd.mkdir()
+    monkeypatch.chdir(other_cwd)
+    monkeypatch.setattr(DA3Backend, "_find_repo_root", lambda self: repo_root)
+
+    backend = DA3Backend(
+        EnhanceConfig(
+            depth_device="cpu",
+            da3_python_executable="./.venv-da3/bin/python",
+        )
+    )
+
+    assert backend._python_executable == str(python_executable.absolute())
+
+
+def test_da3_backend_required_packages_drop_transformers_when_env_points_to_subprocess(monkeypatch):
+    """Class-level dependency declaration should honor isolated DA3 subprocess mode."""
+    monkeypatch.setenv("TRANSFORMATION_PORTAL_DA3_PYTHON", "/tmp/fake-da3-python")
+
+    assert DA3Backend.required_packages() == []
+
+
+def test_da3_backend_subprocess_ensure_available_skips_local_dependency_checks(tmp_path):
+    """Dedicated subprocess mode should not require local DA3 package imports."""
+    from unittest.mock import MagicMock, patch
+
+    from transformation_portal.lux_depth_v3.config import EnhanceConfig
+
+    python_executable = tmp_path / ".venv-da3" / "bin" / "python"
+    python_executable.parent.mkdir(parents=True)
+    python_executable.write_text("#!/bin/sh\n", encoding="utf-8")
+
+    backend = DA3Backend(
+        EnhanceConfig(
+            depth_device="cpu",
+            da3_python_executable=str(python_executable),
+            da3_subprocess_timeout_seconds=321,
+        )
+    )
+
+    with patch.object(
+        backend,
+        "_ensure_local_package_available",
+        side_effect=AssertionError("local DA3 package import should not be used"),
+    ):
+        with patch(
+            "transformation_portal.depth.backends.da3.ensure_dependency_importable",
+            side_effect=AssertionError("local dependency import checks should not be used"),
+        ):
+            with patch("transformation_portal.depth.backends.da3.subprocess.run") as mock_run:
+                mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+                backend.ensure_available()
+
+    command = mock_run.call_args.args[0]
+    assert "--check" in command
+    assert "METRIC_LARGE" in command
+    assert mock_run.call_args.kwargs["timeout"] == 321
+
+
+def test_da3_backend_runtime_required_packages_drop_transformers_in_subprocess(tmp_path):
+    """Instance dependency declaration should match subprocess-backed execution."""
+    from transformation_portal.lux_depth_v3.config import EnhanceConfig
+
+    python_executable = tmp_path / ".venv-da3" / "bin" / "python"
+    python_executable.parent.mkdir(parents=True)
+    python_executable.write_text("#!/bin/sh\n", encoding="utf-8")
+
+    backend = DA3Backend(
+        EnhanceConfig(
+            depth_device="cpu",
+            da3_python_executable=str(python_executable),
+        )
+    )
+
+    assert backend.runtime_required_packages() == []
+
+
+def test_da3_backend_subprocess_worker_env_sets_runtime_guards(monkeypatch, tmp_path):
+    """Subprocess DA3 mode should add repo/runtime env needed on macOS."""
+    import transformation_portal.depth.backends.da3 as da3_module
+    from transformation_portal.lux_depth_v3.config import EnhanceConfig
+
+    python_executable = tmp_path / ".venv-da3" / "bin" / "python"
+    python_executable.parent.mkdir(parents=True)
+    python_executable.write_text("#!/bin/sh\n", encoding="utf-8")
+
+    monkeypatch.setattr(
+        da3_module,
+        "CURRENT_PLATFORM",
+        PlatformMatrix(PlatformOS.DARWIN, PlatformISA.ARM64, PlatformAccel.MPS),
+    )
+    monkeypatch.setenv("KMP_DUPLICATE_LIB_OK", "True")
+
+    backend = DA3Backend(
+        EnhanceConfig(
+            depth_device="cpu",
+            da3_python_executable=str(python_executable),
+        )
+    )
+
+    env = backend._build_worker_env()
+
+    assert env["PYTHONPATH"].split(":")[0] == str(backend._repo_src)
+    assert env["KMP_DUPLICATE_LIB_OK"] == "TRUE"
+    assert env["MPLCONFIGDIR"].endswith(".runtime/mplconfig")
+
+
+def test_da3_backend_subprocess_dependency_failure_reports_category(tmp_path):
+    """Dependency failures should report the normalized subprocess category."""
+    from unittest.mock import MagicMock, patch
+
+    from transformation_portal.lux_depth_v3.config import EnhanceConfig
+
+    python_executable = tmp_path / ".venv-da3" / "bin" / "python"
+    python_executable.parent.mkdir(parents=True)
+    python_executable.write_text("#!/bin/sh\n", encoding="utf-8")
+
+    backend = DA3Backend(
+        EnhanceConfig(
+            depth_device="cpu",
+            da3_python_executable=str(python_executable),
+        )
+    )
+
+    with patch("transformation_portal.depth.backends.da3.subprocess.run") as mock_run:
+        mock_run.return_value = MagicMock(
+            returncode=1,
+            stdout="",
+            stderr="ModuleNotFoundError: No module named 'transformers'",
+        )
+        with pytest.raises(ImportError, match="Failure category: dependency_missing"):
+            backend.ensure_available()
+
+
+def test_da3_backend_subprocess_launch_oserror_reports_category(tmp_path):
+    """Launch-time OS errors should still map to a stable failure category."""
+    from unittest.mock import patch
+
+    from transformation_portal.lux_depth_v3.config import EnhanceConfig
+
+    python_executable = tmp_path / ".venv-da3" / "bin" / "python"
+    python_executable.parent.mkdir(parents=True)
+    python_executable.write_text("#!/bin/sh\n", encoding="utf-8")
+
+    backend = DA3Backend(
+        EnhanceConfig(
+            depth_device="cpu",
+            da3_python_executable=str(python_executable),
+            da3_subprocess_timeout_seconds=45,
+        )
+    )
+
+    with patch(
+        "transformation_portal.depth.backends.da3.subprocess.run",
+        side_effect=PermissionError("Permission denied"),
+    ) as mock_run:
+        with pytest.raises(ImportError, match="Failure category: startup_failed"):
+            backend.ensure_available()
+
+    assert mock_run.call_args.kwargs["timeout"] == 45
+
+
+def test_da3_backend_subprocess_protocol_error_reports_category(tmp_path):
+    """Missing worker outputs should be normalized as protocol errors."""
+    from unittest.mock import MagicMock, patch
+
+    from transformation_portal.lux_depth_v3.config import EnhanceConfig
+
+    python_executable = tmp_path / ".venv-da3" / "bin" / "python"
+    python_executable.parent.mkdir(parents=True)
+    python_executable.write_text("#!/bin/sh\n", encoding="utf-8")
+
+    backend = DA3Backend(
+        EnhanceConfig(
+            depth_device="cpu",
+            da3_python_executable=str(python_executable),
+        )
+    )
+
+    def fake_run(command, **kwargs):
+        del kwargs
+        return MagicMock(returncode=0, stdout="", stderr="")
+
+    with patch("transformation_portal.depth.backends.da3.subprocess.run", side_effect=fake_run):
+        with pytest.raises(RuntimeError, match="Failure category: protocol_error"):
+            backend.compute(np.zeros((4, 5, 3), dtype=np.uint8))
+
+
+def test_da3_backend_subprocess_compute_returns_depth_result(tmp_path):
+    """Subprocess worker output should map back to the DepthResult contract."""
+    from unittest.mock import MagicMock, patch
+
+    from transformation_portal.lux_depth_v3.config import EnhanceConfig
+
+    python_executable = tmp_path / ".venv-da3" / "bin" / "python"
+    python_executable.parent.mkdir(parents=True)
+    python_executable.write_text("#!/bin/sh\n", encoding="utf-8")
+
+    backend = DA3Backend(
+        EnhanceConfig(
+            depth_device="cpu",
+            da3_python_executable=str(python_executable),
+            da3_subprocess_timeout_seconds=123,
+        )
+    )
+
+    seen_timeouts = []
+
+    def fake_run(command, **kwargs):
+        seen_timeouts.append(kwargs["timeout"])
+        if "--check" in command:
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        output_depth_path = Path(command[command.index("--output-depth") + 1])
+        output_json_path = Path(command[command.index("--output-json") + 1])
+        np.save(output_depth_path, np.full((4, 5), 0.5, dtype=np.float32), allow_pickle=False)
+        output_json_path.write_text(
+            json.dumps(
+                {
+                    "metadata": {
+                        "resolved_model_id": "depth-anything/DA3NESTED-GIANT-LARGE-1.1",
+                        "device": "cpu",
+                    },
+                    "device": "cpu",
+                    "dtype": "float32",
+                    "input_size": [4, 5],
+                }
+            ),
+            encoding="utf-8",
+        )
+        return MagicMock(returncode=0, stdout="", stderr="")
+
+    with patch("transformation_portal.depth.backends.da3.subprocess.run", side_effect=fake_run):
+        result = backend.compute(np.zeros((4, 5, 3), dtype=np.uint8))
+
+    assert isinstance(result, DepthResult)
+    assert result.depth_units == "relative"
+    assert result.depth_map.shape == (4, 5)
+    assert result.device == "cpu"
+    assert result.input_size == (4, 5)
+    assert result.metadata["runner"]["mode"] == "subprocess"
+    assert result.metadata["runner"]["python_executable"] == backend._python_executable
+    assert any("normalized to relative" in warning for warning in result.warnings)
+    assert seen_timeouts == [123, 123]
+
+
+def test_da3_backend_subprocess_compute_launch_oserror_reports_category(tmp_path):
+    """Inference launch OS errors should stay normalized for operators."""
+    from unittest.mock import patch
+
+    from transformation_portal.lux_depth_v3.config import EnhanceConfig
+
+    python_executable = tmp_path / ".venv-da3" / "bin" / "python"
+    python_executable.parent.mkdir(parents=True)
+    python_executable.write_text("#!/bin/sh\n", encoding="utf-8")
+
+    backend = DA3Backend(
+        EnhanceConfig(
+            depth_device="cpu",
+            da3_python_executable=str(python_executable),
+            da3_subprocess_timeout_seconds=17,
+        )
+    )
+    backend._subprocess_available_checked = True
+
+    with patch(
+        "transformation_portal.depth.backends.da3.subprocess.run",
+        side_effect=PermissionError("Permission denied"),
+    ) as mock_run:
+        with pytest.raises(RuntimeError, match="Failure category: startup_failed"):
+            backend.compute(np.zeros((4, 5, 3), dtype=np.uint8))
+
+    assert mock_run.call_args.kwargs["timeout"] == 17
+
+
+def test_da3_backend_prepare_image_preserves_dark_uint8_arrays():
+    """Dark uint8 images should not be reinterpreted as normalized floats."""
+    backend = DA3Backend()
+    image = np.array(
+        [
+            [[0, 1, 0], [1, 0, 1]],
+            [[1, 1, 0], [0, 0, 1]],
+        ],
+        dtype=np.uint8,
+    )
+
+    image_pil, image_array = backend._prepare_image(image)
+
+    assert image_pil.mode == "RGB"
+    assert np.array_equal(image_array, image)
+
+
+def test_da3_backend_prepare_image_scales_normalized_float_arrays():
+    """Normalized float images should still be scaled into uint8 pixel space."""
+    backend = DA3Backend()
+    image = np.array(
+        [
+            [[0.0, 0.5, 1.0], [0.25, 0.75, 0.1]],
+        ],
+        dtype=np.float32,
+    )
+
+    _, image_array = backend._prepare_image(image)
+
+    expected = np.array(
+        [
+            [[0, 127, 255], [63, 191, 25]],
+        ],
+        dtype=np.uint8,
+    )
+    assert np.array_equal(image_array, expected)
 
 
 @pytest.mark.skipif(
