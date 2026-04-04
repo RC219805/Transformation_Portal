@@ -35,11 +35,11 @@ function renderHomepage({ operatorHref, operatorLabel }) {
       <section class="homepage-content">
         <header class="site-header">
           <a class="brand-lockup" href="/" aria-label="Dynamic Neural Access home">
-            <span class="brand-asset-frame brand-asset-frame--header">
+            <span class="brand-asset-frame">
               ${renderBrandAsset({
                 variant: "dark",
                 alt: "Dynamic Neural Access",
-                className: "brand-asset brand-asset--header"
+                className: "brand-asset"
               })}
             </span>
             <span class="brand-copy">

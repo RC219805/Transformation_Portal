@@ -66,7 +66,7 @@ function renderLoginPage({ csrfToken, accessEmail, errorCode }) {
               ${renderBrandAsset({
                 variant: "dark",
                 alt: "Dynamic Neural Access",
-                className: "brand-asset brand-asset--login"
+                className: "brand-asset"
               })}
             </span>
             <span class="brand-subtitle">Transformation Portal operator console</span>

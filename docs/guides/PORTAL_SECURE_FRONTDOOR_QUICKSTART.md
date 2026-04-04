@@ -7,7 +7,7 @@ The secure front door is a separate Node app in `web/secure-landing/`.
 - Browser traffic goes to the front door on one origin.
 - The front door proxies `/portal` and `/v1/*` to FastAPI server-to-server.
 - The backend API key stays on the front door and is never exposed to the browser in managed mode.
-- The FastAPI origin remains the system of record for `GET /`, `GET /ready`, and `/v1/*`.
+- The front door serves `GET /` directly; FastAPI remains the backend system of record for `GET /ready` and `/v1/*`.
 - `GET /healthz` is the managed front-door health contract; FastAPI `GET /ready` remains the backend readiness contract and is not mirrored under `/api/*` by default.
 
 In production, place the front door behind Cloudflare Tunnel + Access and keep the FastAPI origin off the public browser path.
