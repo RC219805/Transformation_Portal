@@ -165,7 +165,6 @@ def check_ml_dependencies(backend_id: str) -> tuple[bool, list[str]]:
         )
 
     # torch always required + backend-specific packages
-    # Get requirements from backend class (no instantiation needed)
     backend_packages: list[str] = []
     if hasattr(backend_cls, "required_packages") and callable(backend_cls.required_packages):
         try:
@@ -178,6 +177,27 @@ def check_ml_dependencies(backend_id: str) -> tuple[bool, list[str]]:
             )
             raise RuntimeError(
                 f"Backend '{backend_id}' failed to declare dependencies: {e}\n"
+                f"This is a backend implementation bug; please report it."
+            ) from e
+
+    if hasattr(backend_cls, "runtime_required_packages"):
+        try:
+            backend_instance = backend_cls()
+            backend_packages = list(backend_instance.runtime_required_packages())
+        except FileNotFoundError as e:
+            raise ApexConfigError(
+                f"Backend '{backend_id}' has an invalid isolated runtime configuration: {e}\n"
+                "Fix the configured subprocess Python path before running the APEX matrix."
+            ) from e
+        except Exception as e:
+            logger.error(
+                "Failed to resolve runtime-specific requirements for backend '%s': %s. "
+                "This is a backend implementation error.",
+                backend_id,
+                e,
+            )
+            raise RuntimeError(
+                f"Backend '{backend_id}' failed to resolve runtime-specific dependencies: {e}\n"
                 f"This is a backend implementation bug; please report it."
             ) from e
 

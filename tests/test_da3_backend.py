@@ -140,6 +140,38 @@ def test_da3_backend_python_executable_preserves_venv_symlink(tmp_path):
     assert backend._python_executable == str(python_executable.absolute())
 
 
+def test_da3_backend_relative_python_executable_anchors_to_repo_root(monkeypatch, tmp_path):
+    """Relative DA3 Python paths should anchor to the discovered repo root."""
+    from transformation_portal.lux_depth_v3.config import EnhanceConfig
+
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    python_executable = repo_root / ".venv-da3" / "bin" / "python"
+    python_executable.parent.mkdir(parents=True)
+    python_executable.write_text("#!/bin/sh\n", encoding="utf-8")
+
+    other_cwd = tmp_path / "other"
+    other_cwd.mkdir()
+    monkeypatch.chdir(other_cwd)
+    monkeypatch.setattr(DA3Backend, "_find_repo_root", lambda self: repo_root)
+
+    backend = DA3Backend(
+        EnhanceConfig(
+            depth_device="cpu",
+            da3_python_executable="./.venv-da3/bin/python",
+        )
+    )
+
+    assert backend._python_executable == str(python_executable.absolute())
+
+
+def test_da3_backend_required_packages_drop_transformers_when_env_points_to_subprocess(monkeypatch):
+    """Class-level dependency declaration should honor isolated DA3 subprocess mode."""
+    monkeypatch.setenv("TRANSFORMATION_PORTAL_DA3_PYTHON", "/tmp/fake-da3-python")
+
+    assert DA3Backend.required_packages() == []
+
+
 def test_da3_backend_subprocess_ensure_available_skips_local_dependency_checks(tmp_path):
     """Dedicated subprocess mode should not require local DA3 package imports."""
     from unittest.mock import MagicMock, patch
@@ -175,6 +207,24 @@ def test_da3_backend_subprocess_ensure_available_skips_local_dependency_checks(t
     assert "--check" in command
     assert "METRIC_LARGE" in command
     assert mock_run.call_args.kwargs["timeout"] == 321
+
+
+def test_da3_backend_runtime_required_packages_drop_transformers_in_subprocess(tmp_path):
+    """Instance dependency declaration should match subprocess-backed execution."""
+    from transformation_portal.lux_depth_v3.config import EnhanceConfig
+
+    python_executable = tmp_path / ".venv-da3" / "bin" / "python"
+    python_executable.parent.mkdir(parents=True)
+    python_executable.write_text("#!/bin/sh\n", encoding="utf-8")
+
+    backend = DA3Backend(
+        EnhanceConfig(
+            depth_device="cpu",
+            da3_python_executable=str(python_executable),
+        )
+    )
+
+    assert backend.runtime_required_packages() == []
 
 
 def test_da3_backend_subprocess_worker_env_sets_runtime_guards(monkeypatch, tmp_path):

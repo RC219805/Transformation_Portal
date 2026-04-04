@@ -214,7 +214,8 @@ class DA3Backend:
         if candidate.startswith(".") or has_separator:
             path = Path(candidate).expanduser()
             if not path.is_absolute():
-                path = Path.cwd() / path
+                base_dir = self._repo_root or Path.cwd()
+                path = base_dir / path
             if not path.exists():
                 raise FileNotFoundError(f"DA3 Python executable not found: {path}")
             return str(path.absolute())
@@ -486,7 +487,16 @@ class DA3Backend:
 
     @classmethod
     def required_packages(cls) -> list[str]:
-        """Return required import module names for the local backend path."""
+        """Return required import module names for the active DA3 runtime mode."""
+        configured_python = os.environ.get("TRANSFORMATION_PORTAL_DA3_PYTHON")
+        if configured_python and configured_python.strip():
+            return []
+        return ["transformers"]
+
+    def runtime_required_packages(self) -> list[str]:
+        """Return required import module names for this backend instance."""
+        if self._uses_subprocess():
+            return []
         return ["transformers"]
 
     def _prepare_image(
