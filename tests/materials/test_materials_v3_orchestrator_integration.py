@@ -494,12 +494,12 @@ def test_apex_cached_depth_recomputes_materials_for_canonical_handoff(tmp_path, 
     assert run_stage.call_count == 1
 
 
-def test_apex_strict_stage_surfaces_materials_failure_before_canonical_divergence(
+def test_apex_strict_stage_wraps_materials_stage_exception_as_gate_error(
     tmp_path,
     mock_depth_backend,
     mock_da3_available,
 ):
-    """APEX strict mode should report the real Materials V3 failure, not a downstream handoff symptom."""
+    """APEX strict mode should wrap Materials V3 stage exceptions as `APEX_MATERIALS_STAGE_FAILED`."""
     config = EnhanceConfig(
         quality_tier="apex",
         enable_materials_v3=True,
@@ -531,12 +531,12 @@ def test_apex_strict_stage_surfaces_materials_failure_before_canonical_divergenc
     assert "SAM2 checkpoint missing" in str(exc_info.value)
 
 
-def test_apex_non_strict_backend_fails_on_gate_before_materials_stage_exception(
+def test_apex_non_strict_backend_requires_strict_segmentation_gate(
     tmp_path,
     mock_depth_backend,
     mock_da3_available,
 ):
-    """Non-strict APEX should trip the strict-segmentation gate before stage exceptions are wrapped."""
+    """Non-strict APEX should fail on `APEX_MATERIALS_STRICT_SEGMENTATION_REQUIRED` before segmentation runs."""
     config = EnhanceConfig(
         quality_tier="apex",
         enable_materials_v3=True,
