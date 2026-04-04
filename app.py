@@ -23,7 +23,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.exception_handlers import request_validation_exception_handler as fastapi_request_validation_exception_handler
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.responses import Response, StreamingResponse
@@ -72,8 +72,10 @@ def _env_float(name: str, default: float, minimum: float = 0.0) -> float:
     return max(minimum, parsed)
 
 
-PORTAL_HTML = Path(__file__).resolve().parent / "portal.html"
 REPO_ROOT = Path(__file__).resolve().parent
+PORTAL_HTML = REPO_ROOT / "portal.html"
+PORTAL_VIDEO_ASSET_NAME = "dna-portal-video-2.mp4"
+PORTAL_VIDEO_PATH = REPO_ROOT / "public" / "video" / PORTAL_VIDEO_ASSET_NAME
 ARCHIVE_GOVERNANCE_SCRIPT = REPO_ROOT / "tools" / "archive_governance.py"
 LUX_DEPTH_MODULE = "transformation_portal.lux_depth_v3"
 
@@ -251,12 +253,14 @@ DEFAULT_CSP = (
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
     "font-src 'self' https://fonts.gstatic.com data:; "
     "img-src 'self' data: blob:; "
+    "media-src 'self'; "
     "connect-src 'self'; "
     "object-src 'none'; "
     "base-uri 'self'; "
     "frame-ancestors 'none'; "
     "form-action 'self';"
 )
+PORTAL_VIDEO_CACHE_CONTROL = "public, max-age=86400"
 SECURITY_HEADERS = {
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "DENY",
@@ -2384,6 +2388,31 @@ async def serve_ui() -> Response:
             detail="portal.html is missing",
         )
     return FileResponse(str(PORTAL_HTML))
+
+
+@app.get(f"/portal/video/{PORTAL_VIDEO_ASSET_NAME}")
+async def serve_portal_video() -> Response:
+    if not PORTAL_VIDEO_PATH.is_file():
+        return _error_response(
+            404,
+            code="NOT_FOUND",
+            message="portal video asset not found",
+        )
+
+    return FileResponse(
+        str(PORTAL_VIDEO_PATH),
+        media_type=_artifact_content_type(PORTAL_VIDEO_PATH),
+        headers={"Cache-Control": PORTAL_VIDEO_CACHE_CONTROL},
+    )
+
+
+@app.get(f"/v1/portal/video/{PORTAL_VIDEO_ASSET_NAME}")
+async def redirect_legacy_portal_video() -> Response:
+    return RedirectResponse(
+        url=f"/portal/video/{PORTAL_VIDEO_ASSET_NAME}",
+        status_code=307,
+        headers={"Cache-Control": "no-store"},
+    )
 
 
 @app.get("/portal/bootstrap")

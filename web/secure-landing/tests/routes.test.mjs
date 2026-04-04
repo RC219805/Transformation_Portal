@@ -871,6 +871,98 @@ test("portal redirects to login and clears the session when Access verification 
   }
 });
 
+test("portal video proxy preserves cache-friendly binary delivery", async () => {
+  const env = withTempEnvironment({
+    TP_BACKEND_API_KEY: "backend-secret"
+  });
+
+  try {
+    const { GET } = await importFresh("../app/portal/video/[assetName]/route.js");
+    const videoBytes = Uint8Array.from([0, 0, 0, 32, 102, 116, 121, 112, 105, 115, 111, 109]);
+
+    const originalFetch = global.fetch;
+    global.fetch = async (url, init) => {
+      assert.equal(String(url), "http://127.0.0.1:8000/portal/video/dna-portal-video-2.mp4");
+      assert.equal(init.method, "GET");
+      assert.equal(init.headers.get("Authorization"), "Bearer backend-secret");
+      assert.equal(init.headers.get("x-api-key"), "backend-secret");
+      assert.equal(init.headers.get("range"), "bytes=0-31");
+      assert.equal(init.headers.has("cookie"), false);
+      return new Response(videoBytes, {
+        status: 200,
+        headers: {
+          "content-type": "video/mp4",
+          "cache-control": "public, max-age=86400",
+          "accept-ranges": "bytes",
+          "content-range": "bytes 0-31/128"
+        }
+      });
+    };
+
+    try {
+      const request = buildRequest("https://portal.example.com/portal/video/dna-portal-video-2.mp4", {
+        method: "GET",
+        headers: new Headers({
+          accept: "video/mp4",
+          range: "bytes=0-31"
+        })
+      });
+
+      const response = await GET(request, {
+        params: Promise.resolve({ assetName: "dna-portal-video-2.mp4" })
+      });
+
+      assert.equal(response.status, 200);
+      assert.equal(response.headers.get("content-type"), "video/mp4");
+      assert.equal(response.headers.get("cache-control"), "public, max-age=86400");
+      assert.equal(response.headers.get("accept-ranges"), "bytes");
+      assert.equal(response.headers.get("content-range"), "bytes 0-31/128");
+      assert.deepEqual(Buffer.from(await response.arrayBuffer()), Buffer.from(videoBytes));
+    } finally {
+      global.fetch = originalFetch;
+    }
+  } finally {
+    env.cleanup();
+  }
+});
+
+test("portal video proxy rejects unknown asset names with 404", async () => {
+  const env = withTempEnvironment({
+    TP_BACKEND_API_KEY: "backend-secret"
+  });
+
+  try {
+    const { GET } = await importFresh("../app/portal/video/[assetName]/route.js");
+
+    const rejectedCases = [
+      "evil.mp4",
+      "",
+      "   ",
+      " dna-portal-video-2.mp4",
+      "dna-portal-video-2.mp4 ",
+      "../dna-portal-video-2.mp4",
+      "../../etc/passwd",
+      "%2e%2e%2fdna-portal-video-2.mp4",
+      "dna-portal-video-2.mp4.exe"
+    ];
+
+    for (const assetName of rejectedCases) {
+      const request = buildRequest(`https://portal.example.com/portal/video/${encodeURIComponent(assetName)}`, {
+        method: "GET"
+      });
+
+      const response = await GET(request, {
+        params: Promise.resolve({ assetName })
+      });
+
+      assert.equal(response.status, 404, `Expected 404 for assetName: ${JSON.stringify(assetName)}`);
+      assert.equal(response.headers.get("Cache-Control"), "no-store", `Expected no-store for assetName: ${JSON.stringify(assetName)}`);
+    }
+  } finally {
+    env.cleanup();
+  }
+});
+
 test("v1 POST rejects requests missing valid same-origin CSRF protections", async () => {
   const env = withTempEnvironment();
 

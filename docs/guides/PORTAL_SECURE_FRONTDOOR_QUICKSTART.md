@@ -72,12 +72,13 @@ npm install
 npm run dev
 ```
 
-Open `http://127.0.0.1:3000/`.
+Open `http://localhost:3000/`.
 
 Route ownership:
 - `GET /` serves the public Dynamic Neural Access homepage, even for authenticated operators.
 - `GET /login` serves the separate login page with the video background and boots the anonymous session cookie that binds the hidden CSRF token before credential submission.
 - `GET /portal` proxies the existing FastAPI portal UI.
+- `GET /portal/video/*` proxies the portal background video asset with cache-friendly headers.
 - `GET /portal/bootstrap` returns the managed-mode bootstrap contract for the browser UI.
 - `/v1/*` stays same-origin at the front door and is proxied to FastAPI with server-side secret injection.
 - `GET /healthz` reports front-door readiness plus backend reachability.
@@ -145,14 +146,20 @@ npm run build
 Browser smoke against a running managed front door:
 
 ```bash
-TP_FRONTDOOR_BASE_URL="http://127.0.0.1:3000" \
+TP_FRONTDOOR_BASE_URL="http://localhost:3000" \
 TP_FRONTDOOR_USERNAME="<username>" \
 TP_FRONTDOOR_PASSWORD="<password>" \
 python scripts/validation/validate_frontdoor_browser_smoke.py
 ```
 
+For local managed smoke validation, use `http://localhost:3000` rather than
+`http://127.0.0.1:3000`; the development front door normalizes same-origin CSRF
+checks to `localhost`.
+
 For release validation, prefer running the browser smoke against `npm run start`
-after a successful `npm run build`, not only against `next dev`.
+after a successful `npm run build`, not only against `next dev`. Production-like
+`next start` sets secure `__Host-` cookies, so local HTTP login validation needs
+HTTPS (or equivalent) if you want to exercise the full auth flow outside `next dev`.
 
 FastAPI contract gate:
 

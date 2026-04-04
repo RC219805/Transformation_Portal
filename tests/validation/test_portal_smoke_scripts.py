@@ -88,7 +88,7 @@ def test_frontdoor_browser_parse_args_does_not_probe_chrome_for_explicit_overrid
             "--chrome-binary",
             "/custom/chrome",
             "--frontdoor-base-url",
-            "http://127.0.0.1:3000",
+            "http://localhost:3000",
             "--username",
             "admin",
             "--password",
@@ -97,7 +97,7 @@ def test_frontdoor_browser_parse_args_does_not_probe_chrome_for_explicit_overrid
     )
 
     assert args.chrome_binary == "/custom/chrome"
-    assert args.frontdoor_base_url == "http://127.0.0.1:3000"
+    assert args.frontdoor_base_url == "http://localhost:3000"
     assert args.username == "admin"
     assert args.password == "secret"
 
@@ -107,3 +107,5 @@ def test_frontdoor_browser_waits_for_managed_portal_bootstrap_before_passing():
 
     assert 'and str(value.get("readyState", "")) == "complete"' in content
     assert 'and str(value.get("authModeBadge", "")).lower() == "managed"' in content
+    assert "body: new FormData(form)," in content
+    assert "window.location.assign(response.url);" in content
