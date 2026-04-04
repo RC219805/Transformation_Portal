@@ -72,8 +72,9 @@ def _env_float(name: str, default: float, minimum: float = 0.0) -> float:
     return max(minimum, parsed)
 
 
-PORTAL_HTML = Path(__file__).resolve().parent / "portal.html"
 REPO_ROOT = Path(__file__).resolve().parent
+PORTAL_HTML = REPO_ROOT / "portal.html"
+PORTAL_VIDEO_ROOT = REPO_ROOT / "public" / "video"
 ARCHIVE_GOVERNANCE_SCRIPT = REPO_ROOT / "tools" / "archive_governance.py"
 LUX_DEPTH_MODULE = "transformation_portal.lux_depth_v3"
 
@@ -191,6 +192,14 @@ def _validate_path_against_roots(
     return str(resolved)
 
 
+def _resolve_portal_video_path(asset_name: str) -> Path:
+    raw_name = str(asset_name or "").strip()
+    normalized_name = PurePosixPath(raw_name).name
+    if not raw_name or normalized_name != raw_name or normalized_name in {"", ".", ".."}:
+        raise ValueError("Invalid portal video asset")
+    return PORTAL_VIDEO_ROOT / normalized_name
+
+
 LOG_TAIL_LIMIT = 2000
 STATUS_LOG_LIMIT = 250
 EVENT_QUEUE_MAXSIZE = 512
@@ -251,6 +260,7 @@ DEFAULT_CSP = (
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
     "font-src 'self' https://fonts.gstatic.com data:; "
     "img-src 'self' data: blob:; "
+    "media-src 'self'; "
     "connect-src 'self'; "
     "object-src 'none'; "
     "base-uri 'self'; "
@@ -2384,6 +2394,31 @@ async def serve_ui() -> Response:
             detail="portal.html is missing",
         )
     return FileResponse(str(PORTAL_HTML))
+
+
+@app.get("/v1/portal/video/{asset_name}")
+async def serve_portal_video(asset_name: str) -> Response:
+    try:
+        asset_path = _resolve_portal_video_path(asset_name)
+    except ValueError:
+        return _error_response(
+            400,
+            code="INVALID_ARGUMENT",
+            message="invalid portal video asset",
+            details={"field": "asset_name"},
+        )
+
+    if not asset_path.is_file():
+        return _error_response(
+            404,
+            code="NOT_FOUND",
+            message="portal video asset not found",
+        )
+
+    return FileResponse(
+        str(asset_path),
+        media_type=_artifact_content_type(asset_path),
+    )
 
 
 @app.get("/portal/bootstrap")

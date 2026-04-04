@@ -72,7 +72,7 @@ npm install
 npm run dev
 ```
 
-Open `http://127.0.0.1:3000/`.
+Open `http://localhost:3000/`.
 
 Route ownership:
 - `GET /` serves the public Dynamic Neural Access homepage, even for authenticated operators.
@@ -145,14 +145,20 @@ npm run build
 Browser smoke against a running managed front door:
 
 ```bash
-TP_FRONTDOOR_BASE_URL="http://127.0.0.1:3000" \
+TP_FRONTDOOR_BASE_URL="http://localhost:3000" \
 TP_FRONTDOOR_USERNAME="<username>" \
 TP_FRONTDOOR_PASSWORD="<password>" \
 python scripts/validation/validate_frontdoor_browser_smoke.py
 ```
 
+For local managed smoke validation, use `http://localhost:3000` rather than
+`http://127.0.0.1:3000`; the development front door normalizes same-origin CSRF
+checks to `localhost`.
+
 For release validation, prefer running the browser smoke against `npm run start`
-after a successful `npm run build`, not only against `next dev`.
+after a successful `npm run build`, not only against `next dev`. Production-like
+`next start` sets secure `__Host-` cookies, so local HTTP login validation needs
+HTTPS (or equivalent) if you want to exercise the full auth flow outside `next dev`.
 
 FastAPI contract gate:
 

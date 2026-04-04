@@ -309,6 +309,21 @@ def test_portal_cli_template_excludes_unsupported_lux_flags() -> None:
     assert "--strict-segmentation" in content
 
 
+def test_portal_html_uses_looping_background_video_layer() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+
+    assert "portal-video-backdrop" in content
+    assert 'class="portal-video-media"' in content
+    assert "/v1/portal/video/dna-portal-video-2.mp4" in content
+    assert "autoplay" in content
+    assert "muted" in content
+    assert "loop" in content
+    assert "playsinline" in content
+    assert "media-src 'self'" in content
+    assert ".performance-lite .portal-video-media" in content
+
+
 def test_portal_fetch_sse_reconnect_scheduler_has_terminal_guard_and_backoff() -> None:
     portal_html = Path(__file__).resolve().parents[1] / "portal.html"
     content = portal_html.read_text(encoding="utf-8")

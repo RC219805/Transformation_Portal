@@ -16,7 +16,7 @@ Run via:
     python scripts/validation/validate_frontdoor_browser_smoke.py
 
 Environment overrides:
-    TP_FRONTDOOR_BASE_URL    Front-door URL (default: http://127.0.0.1:3000)
+    TP_FRONTDOOR_BASE_URL    Front-door URL (default: http://localhost:3000)
     TP_FRONTDOOR_USERNAME    Front-door username
     TP_FRONTDOOR_PASSWORD    Front-door password
     TP_PORTAL_BROWSER_BINARY Chrome binary path override
@@ -55,7 +55,7 @@ def _parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
         "--frontdoor-base-url",
         dest="frontdoor_base_url",
         default=None,
-        help="Front-door base URL (default: TP_FRONTDOOR_BASE_URL or http://127.0.0.1:3000)",
+        help="Front-door base URL (default: TP_FRONTDOOR_BASE_URL or http://localhost:3000)",
     )
     parser.add_argument(
         "--username",
@@ -95,7 +95,7 @@ def _parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
 def _resolve_base_url(args: argparse.Namespace) -> str:
     import os
 
-    raw = args.frontdoor_base_url or os.getenv("TP_FRONTDOOR_BASE_URL", "http://127.0.0.1:3000")
+    raw = args.frontdoor_base_url or os.getenv("TP_FRONTDOOR_BASE_URL", "http://localhost:3000")
     return str(raw).strip().rstrip("/")
 
 
@@ -176,8 +176,20 @@ def _submit_login_expression(username: str, password: str) -> str:
   passwordInput.value = cfg.password;
   passwordInput.dispatchEvent(new Event('input', {{ bubbles: true }}));
   passwordInput.dispatchEvent(new Event('change', {{ bubbles: true }}));
-  form.requestSubmit();
-  return true;
+  const targetUrl = form.action || '/login';
+  return fetch(targetUrl, {{
+    method: 'POST',
+    body: new FormData(form),
+    credentials: 'same-origin',
+    redirect: 'follow',
+  }}).then((response) => {{
+    if (response.redirected && response.url) {{
+      window.location.assign(response.url);
+      return response.url;
+    }}
+    window.location.reload();
+    return window.location.href;
+  }});
 }})()
 """
 
