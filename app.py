@@ -14,6 +14,7 @@ import uuid
 from bisect import bisect_left
 from collections import deque
 from dataclasses import dataclass, field
+from importlib.util import find_spec
 from pathlib import Path, PurePosixPath
 from typing import Any, AsyncGenerator, Callable, Deque, Dict, List, Mapping, Optional
 from urllib.parse import quote
@@ -74,6 +75,7 @@ def _env_float(name: str, default: float, minimum: float = 0.0) -> float:
 PORTAL_HTML = Path(__file__).resolve().parent / "portal.html"
 REPO_ROOT = Path(__file__).resolve().parent
 ARCHIVE_GOVERNANCE_SCRIPT = REPO_ROOT / "tools" / "archive_governance.py"
+LUX_DEPTH_MODULE = "transformation_portal.lux_depth_v3"
 
 
 def _normalize_root_path(value: str | Path) -> Path:
@@ -131,6 +133,22 @@ def _env_path_roots(name: str, default: List[Path]) -> List[Path]:
     if not roots:
         raise RuntimeError(f"{name} resolved to an empty root allowlist")
     return roots
+
+
+def _lux_depth_runner_command() -> List[str]:
+    return [sys.executable, "-m", LUX_DEPTH_MODULE]
+
+
+def _lux_depth_runner_available() -> bool:
+    try:
+        module_spec = find_spec(LUX_DEPTH_MODULE)
+        if module_spec is None:
+            return False
+        if module_spec.submodule_search_locations is not None:
+            return find_spec(f"{LUX_DEPTH_MODULE}.__main__") is not None
+        return True
+    except (ImportError, ValueError):
+        return False
 
 
 def _resolve_untrusted_request_path(path_value: str) -> Path:
@@ -1740,13 +1758,22 @@ def _argv_from_request(payload: Dict[str, Any]) -> List[str]:
     def onoff(b: Any) -> str:
         return "on" if _as_bool(b) else "off"
 
-    argv = [
-        pipeline,
-        "--input-dir",
-        input_dir,
-        "--output-dir",
-        output_dir,
-    ]
+    if pipeline == "lux-depth-v3":
+        argv = [
+            *_lux_depth_runner_command(),
+            "--input-dir",
+            input_dir,
+            "--output-dir",
+            output_dir,
+        ]
+    else:
+        argv = [
+            pipeline,
+            "--input-dir",
+            input_dir,
+            "--output-dir",
+            output_dir,
+        ]
 
     if _as_bool(_pick(args, "overwrite", default=False)):
         argv.append("--overwrite")
@@ -2384,10 +2411,8 @@ async def ready() -> Dict[str, Any]:
         "version": "0.3.0",
     }
     if READY_VERBOSE:
-        from shutil import which
-
         response["cli"] = {
-            "lux-depth-v3": bool(which("lux-depth-v3")),
+            "lux-depth-v3": _lux_depth_runner_available(),
             "archive-governance": ARCHIVE_GOVERNANCE_SCRIPT.is_file(),
             "python": sys.version.split()[0],
         }
@@ -2807,10 +2832,11 @@ async def _run_job(job: Job, argv: List[str]) -> None:
     except FileNotFoundError:
         job.state = "failed"
         job.exit_code = 127
+        runner_repr = " ".join(argv[:3]) if len(argv) >= 3 else argv[0]
         job.error = _error_obj(
             "RUNNER_NOT_FOUND",
-            f"Command '{argv[0]}' not found in PATH.",
-            {"command": argv[0]},
+            f"Runner executable not found: '{argv[0]}'.",
+            {"command": argv[0], "runner": runner_repr},
         )
         msg = f"runner_error: {job.error['message']}"
         job.add_log(msg)
