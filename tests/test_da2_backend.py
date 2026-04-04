@@ -108,3 +108,47 @@ def test_da2_backend_cuda_request_is_normalized_to_cpu_model(monkeypatch):
     assert backend._device == "cpu"
     assert captured["backend"] == da2_model_module.ModelBackend.PYTORCH_CPU
     assert captured["device"] == "cpu"
+
+
+def test_da2_backend_mps_fallback_to_cpu_when_mps_unavailable(monkeypatch):
+    """DA2 should fall back to CPU at load time when MPS is requested but unavailable.
+
+    This tests the runtime fallback path in _load_model() where device validation
+    is deferred from __init__ to avoid early torch imports that cause OpenMP
+    collisions on macOS.
+    """
+    from transformation_portal.depth.models import depth_anything_v2 as da2_model_module
+
+    captured = {}
+
+    class _MpsUnavailable:
+        @staticmethod
+        def is_available():
+            return False
+
+    fake_torch = SimpleNamespace(
+        backends=SimpleNamespace(mps=_MpsUnavailable()),
+    )
+    monkeypatch.setitem(sys.modules, "torch", fake_torch)
+
+    class _FakeDepthAnythingV2Model:
+        def __init__(self, variant, backend, device):
+            captured["variant"] = variant
+            captured["backend"] = backend
+            captured["device"] = device
+
+    monkeypatch.setattr(da2_model_module, "DepthAnythingV2Model", _FakeDepthAnythingV2Model)
+
+    # Request MPS device via config
+    backend = DA2Backend(SimpleNamespace(depth_device="mps"))
+    # Backend should store "mps" initially (deferred validation)
+    assert backend._device == "mps"
+
+    monkeypatch.setattr(backend, "ensure_available", lambda: None)
+    backend._model = None
+    backend._load_model()
+
+    # After _load_model(), device should have been updated to CPU
+    assert backend._device == "cpu"
+    assert captured["backend"] == da2_model_module.ModelBackend.PYTORCH_CPU
+    assert captured["device"] == "cpu"
