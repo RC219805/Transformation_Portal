@@ -141,7 +141,12 @@ def _lux_depth_runner_command() -> List[str]:
 
 def _lux_depth_runner_available() -> bool:
     try:
-        return find_spec(LUX_DEPTH_MODULE) is not None
+        module_spec = find_spec(LUX_DEPTH_MODULE)
+        if module_spec is None:
+            return False
+        if module_spec.submodule_search_locations is not None:
+            return find_spec(f"{LUX_DEPTH_MODULE}.__main__") is not None
+        return True
     except (ImportError, ValueError):
         return False
 
@@ -2827,10 +2832,11 @@ async def _run_job(job: Job, argv: List[str]) -> None:
     except FileNotFoundError:
         job.state = "failed"
         job.exit_code = 127
+        runner_repr = " ".join(argv[:3]) if len(argv) >= 3 else argv[0]
         job.error = _error_obj(
             "RUNNER_NOT_FOUND",
-            f"Command '{argv[0]}' not found in PATH.",
-            {"command": argv[0]},
+            f"Runner executable not found: '{argv[0]}'.",
+            {"command": argv[0], "runner": runner_repr},
         )
         msg = f"runner_error: {job.error['message']}"
         job.add_log(msg)
