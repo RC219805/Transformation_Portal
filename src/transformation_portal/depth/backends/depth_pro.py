@@ -91,26 +91,21 @@ class DepthProBackend:
         return Path.cwd()
 
     def _resolve_device(self, config: Optional["EnhanceConfig"]) -> str:
-        """Resolve device from config or auto-detect."""
+        """Resolve device from config, defaulting to CPU.
+
+        This method does NOT auto-detect accelerators (MPS/CUDA) because
+        importing torch here would load libomp.dylib on macOS. If the
+        Depth Pro subprocess (running in .venv-depth-pro) later loads its
+        own libomp, the process aborts with "OMP: Error #15".
+
+        The orchestrator passes an explicit depth_device, so production
+        workflows always get the correct device. CPU is the safe default
+        for ad-hoc or test instantiation.
+        """
         if config is not None:
             device = getattr(config, "depth_device", None)
-            if device and not (
-                device == "cpu"
-                and getattr(config, "depth_backend", None) is None
-                and CURRENT_PLATFORM is not None
-                and CURRENT_PLATFORM.is_apple_silicon
-            ):
+            if device:
                 return device
-
-        try:
-            import torch
-
-            if torch.backends.mps.is_available():
-                return "mps"
-            if torch.cuda.is_available():
-                return "cuda"
-        except ImportError:
-            logger.debug("PyTorch is not installed; falling back to CPU for DepthProBackend.")
 
         return "cpu"
 

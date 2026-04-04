@@ -346,6 +346,46 @@ python3 -c "import torch; print('CUDA:', torch.cuda.is_available()); print('MPS:
 
 ---
 
+### Symptom: OpenMP Runtime Collision on macOS (OMP Error #15)
+
+**Error Message:**
+```
+OMP: Error #15: Initializing libomp.dylib, but found libomp.dylib already initialized.
+```
+
+**Cause:** On macOS, multiple copies of the OpenMP runtime (libomp.dylib) are being loaded into the same process. This commonly occurs when:
+- Using a separate Python environment for Depth Pro (`.venv-depth-pro`)
+- Different PyTorch builds between environments link different OpenMP libraries
+- Homebrew-installed libomp conflicts with wheel-bundled libomp
+
+**Solution:**
+
+The pipeline has been updated to defer torch imports during backend initialization,
+which prevents this collision in most cases. However, if you still encounter this error:
+
+1. **Ensure consistent libomp across environments:**
+   - Rebuild `.venv-depth-pro` using the same PyTorch version/build as your main environment
+   - Or use the subprocess isolation mode (configured via `--depth-pro-python`)
+
+2. **Temporary diagnostic workaround (not recommended for production):**
+   ```bash
+   export KMP_DUPLICATE_LIB_OK=TRUE
+   lux-depth-v3 ...
+   ```
+   This suppresses the error but masks the underlying library conflict.
+
+**When can this still occur?**
+- If custom code imports torch before invoking the pipeline
+- If a third-party library in your environment eagerly imports torch
+- If you're running outside the standard orchestrator flow
+
+**Technical Background:**
+The `DepthProBackend` no longer imports torch during construction—it defaults to
+CPU and defers device capability checks to compute() time. This prevents the
+collision when the Depth Pro subprocess loads its own libomp from `.venv-depth-pro`.
+
+---
+
 ## Input/Output Issues
 
 ### Symptom: "No images found in [directory]"
