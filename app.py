@@ -2390,7 +2390,7 @@ async def serve_ui() -> Response:
     return FileResponse(str(PORTAL_HTML))
 
 
-@app.get("/portal/video/dna-portal-video-2.mp4")
+@app.get(f"/portal/video/{PORTAL_VIDEO_ASSET_NAME}")
 async def serve_portal_video() -> Response:
     if not PORTAL_VIDEO_PATH.is_file():
         return _error_response(
@@ -2406,10 +2406,10 @@ async def serve_portal_video() -> Response:
     )
 
 
-@app.get("/v1/portal/video/dna-portal-video-2.mp4")
+@app.get(f"/v1/portal/video/{PORTAL_VIDEO_ASSET_NAME}")
 async def redirect_legacy_portal_video() -> Response:
     return RedirectResponse(
-        url="/portal/video/dna-portal-video-2.mp4",
+        url=f"/portal/video/{PORTAL_VIDEO_ASSET_NAME}",
         status_code=307,
         headers={"Cache-Control": "no-store"},
     )

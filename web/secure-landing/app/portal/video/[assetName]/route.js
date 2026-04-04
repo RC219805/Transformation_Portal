@@ -5,6 +5,7 @@ import { buildUpstreamHeaders, buildUpstreamUrl, copyUpstreamResponseHeaders } f
 export const runtime = "nodejs";
 
 const PORTAL_VIDEO_CACHE_CONTROL = "public, max-age=86400";
+const ALLOWED_PORTAL_VIDEO_ASSETS = new Set(["dna-portal-video-2.mp4"]);
 
 function errorResponse(status, message) {
   return applySecurityHeaders(
@@ -19,9 +20,9 @@ function errorResponse(status, message) {
 
 async function proxyPortalVideo(request, { params }) {
   const resolvedParams = typeof params?.then === "function" ? await params : params;
-  const assetName = String(resolvedParams?.assetName || "").trim();
-  if (!assetName) {
-    return errorResponse(400, "Invalid portal video asset");
+  const assetName = String(resolvedParams?.assetName ?? "");
+  if (!ALLOWED_PORTAL_VIDEO_ASSETS.has(assetName)) {
+    return errorResponse(404, "Portal video asset not found");
   }
 
   const config = getConfig();
