@@ -114,7 +114,6 @@ class DepthProBackend:
                 return device
 
         # Defer torch import to compute() time to avoid OpenMP runtime collision.
-        # See: https://github.com/pytorch/pytorch/issues/78490
         return "cpu"
 
     def _resolve_checkpoint_path(
