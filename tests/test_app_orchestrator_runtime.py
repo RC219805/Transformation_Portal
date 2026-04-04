@@ -477,7 +477,24 @@ def test_portal_selected_job_inspector_uses_timeline_tabs_and_log_secondary_view
     assert "_reconcileJobTimeline(selected);" in inspector_body
     assert "formatDuration" in inspector_body
     assert "_noteTransportWarning" in content
-    assert "els.logsShell.classList.toggle('hidden', nextTab !== 'logs');" in tab_body
+    assert "const showLogsShell = nextTab === 'logs' || state.currentView === 'run';" in tab_body
+    assert "els.logsShell.classList.toggle('hidden', !showLogsShell);" in tab_body
+
+
+def test_portal_console_views_use_query_param_navigation_without_backend_route_changes() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+    rail_body = _extract_js_function_body(content, "setupSectionRail")
+    apply_view_body = _extract_js_function_body(content, "applyConsoleViewLayout")
+
+    assert 'data-view-link="overview"' in content
+    assert 'data-view-link="build"' in content
+    assert 'data-view-link="operate"' in content
+    assert 'data-view-link="run"' in content
+    assert "url.searchParams.set('view', resolveConsoleView(viewName));" in content
+    assert "state.currentView = resolveConsoleView(url.searchParams.get('view'));" in content
+    assert "els.queueShell.classList.toggle('hidden', state.currentView === 'run');" in apply_view_body
+    assert "navigateConsoleView(nextView);" in rail_body
 
 
 def test_portal_timestamp_parsing_normalizes_second_precision_epochs() -> None:

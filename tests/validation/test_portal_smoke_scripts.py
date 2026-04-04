@@ -13,6 +13,7 @@ pytestmark = pytest.mark.unit
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 PORTAL_BROWSER_SCRIPT_PATH = PROJECT_ROOT / "scripts/validation/validate_portal_browser_smoke.py"
+FRONTDOOR_BROWSER_SCRIPT_PATH = PROJECT_ROOT / "scripts" / "validation" / "validate_frontdoor_browser_smoke.py"
 ORCHESTRATOR_HTTP_SCRIPT_PATH = PROJECT_ROOT / "scripts/validation/validate_orchestrator_http_smoke.py"
 
 
@@ -72,3 +73,30 @@ def test_orchestrator_http_explicit_output_dirs_are_not_auto_cleaned(tmp_path: P
     assert output_dir_is_temp is False
     assert module._should_cleanup_output_dir(keep_output=False, output_dir_is_temp=output_dir_is_temp) is False
     assert module._should_cleanup_output_dir(keep_output=False, output_dir_is_temp=True) is True
+
+
+def test_frontdoor_browser_parse_args_does_not_probe_chrome_for_explicit_override(monkeypatch: pytest.MonkeyPatch):
+    module = _load_module(FRONTDOOR_BROWSER_SCRIPT_PATH, "tests_validate_frontdoor_browser_smoke")
+
+    def _boom() -> str:
+        raise AssertionError("_resolve_chrome_binary should not be called while parsing args")
+
+    monkeypatch.setattr(module, "_resolve_chrome_binary", _boom)
+
+    args = module._parse_args(
+        [
+            "--chrome-binary",
+            "/custom/chrome",
+            "--frontdoor-base-url",
+            "http://127.0.0.1:3000",
+            "--username",
+            "admin",
+            "--password",
+            "secret",
+        ]
+    )
+
+    assert args.chrome_binary == "/custom/chrome"
+    assert args.frontdoor_base_url == "http://127.0.0.1:3000"
+    assert args.username == "admin"
+    assert args.password == "secret"

@@ -803,7 +803,7 @@
         }
     </style>
 </head>
-<body class="shell-bg text-slate-900 dark:text-slate-100 antialiased selection:bg-cyan-500/25 transition-colors duration-300">
+<body data-console-view="overview" class="shell-bg text-slate-900 dark:text-slate-100 antialiased selection:bg-cyan-500/25 transition-colors duration-300">
 
     <a href="#main-content" class="skip-link rounded-lg px-4 py-2 text-sm font-medium text-white bg-indigo-600 shadow-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
         Skip to main content
@@ -828,12 +828,23 @@
         <div class="mx-auto max-w-7xl px-6 py-4 flex items-center justify-between gap-4">
             <div class="flex items-center gap-4">
                 <div class="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/50 bg-white/70 text-sm font-black tracking-[0.24em] text-cyan-800 shadow-glow dark:border-slate-700 dark:bg-slate-900/80 dark:text-cyan-200">
-                    TP
+                    <svg class="h-6 w-6" viewBox="0 0 256 256" role="img" aria-label="Transformation Portal brand mark" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <defs>
+                            <linearGradient id="portal-brand-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" stop-color="#56CCF2" />
+                                <stop offset="100%" stop-color="#2AC7FF" />
+                            </linearGradient>
+                        </defs>
+                        <path d="M128 28c-24.3 0-44 19.7-44 44v8H92c-12.2 0-22 9.8-22 22v46c0 9.3 6 17.6 14.9 20.6l16.1 5.4V196c0 21.5 17.5 39 39 39h8c21.5 0 39-17.5 39-39v-22.9l16.1-5.4c8.9-3 14.9-11.3 14.9-20.6V102c0-12.2-9.8-22-22-22h-8v-8c0-24.3-19.7-44-44-44h-8Z" />
+                        <path d="M104 56h48M104 212h48" />
+                        <path d="M128 112c-18 0-32 14-32 32 0 12.2 7 24.1 18.1 29.6 3.1 1.5 6.7 1.4 9.6-0.5 1.8-1.2 3.2-2.8 4.2-4.7a36 36 0 0 1-6.9-20.4c0-11.3 5.7-21.3 14.2-26.9 2.7-1.7 6.2-1.7 8.9 0 8.5 5.6 14.2 15.6 14.2 26.9a36 36 0 0 1-6.9 20.4c1 1.9 2.4 3.5 4.2 4.7 2.9 1.9 6.5 2 9.6 0.5 11.1-5.5 18.1-17.4 18.1-29.6 0-18-14-32-32-32h-19.2Z" />
+                        <path d="M128 88s12-10.3 12-24c0-13-12-20-12-20s-12 7-12 20c0 13.7 12 24 12 24Z" />
+                    </svg>
                 </div>
                 <div class="flex flex-col">
                     <p class="section-kicker">Operator Console</p>
                     <h1 class="mt-0.5 text-lg font-extrabold tracking-tight">Transformation Portal</h1>
-                    <p class="text-[12px] text-slate-500 dark:text-slate-400">Governed orchestration for depth, materials, and archive workflows.</p>
+                    <p class="text-[12px] text-slate-500 dark:text-slate-400">Governed orchestration, run review, and certified output readiness.</p>
                 </div>
                 <div class="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-full shell-panel ml-4">
                     <span id="healthIndicator" class="status-dot"></span>
@@ -853,7 +864,7 @@
     </header>
 
     <main id="main-content" tabindex="-1" class="mx-auto max-w-7xl px-6 py-8 outline-none">
-        <section class="mb-8 grid grid-cols-1 xl:grid-cols-12 gap-6">
+        <section id="overview-shell" class="mb-8 grid grid-cols-1 xl:grid-cols-12 gap-6">
             <div id="mission-shell" data-ambient-zone="mission" data-ambient-focus-x="30" data-ambient-focus-y="18" data-ambient-shift-x="-18" data-ambient-shift-y="-12" data-ambient-stage-scale="1.035" data-ambient-stage-rotate="-0.6" data-ambient-color-a="#2dd4bf" data-ambient-color-b="#fbbf24" data-ambient-color-c="#38bdf8" data-ambient-focus-color="#67e8f9" class="workspace-shell xl:col-span-8 relative overflow-hidden rounded-[2rem] shell-panel-strong shadow-glow p-6 sm:p-8 mission-grid">
                 <div class="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-400/70 to-transparent"></div>
                 <div class="relative">
@@ -861,11 +872,10 @@
                         <div class="max-w-2xl">
                             <p class="section-kicker">Mission Control</p>
                             <h2 class="mt-3 text-3xl font-extrabold tracking-tight text-slate-950 dark:text-white sm:text-4xl">
-                                Launch governed runs with live operational context.
+                                Govern premium-ready runs with decisive operational context.
                             </h2>
                             <p class="mt-3 text-sm leading-7 text-slate-600 dark:text-slate-300">
-                                Configure the pipeline, inspect governance posture, and dispatch jobs from a single command surface
-                                with live health, capability, and queue awareness.
+                                Keep preset posture, live health, and next action in one glance, then move directly into build, operate, or governed output review.
                             </p>
                         </div>
                         <div class="flex flex-wrap gap-3">
@@ -945,39 +955,46 @@
 
         <nav aria-label="Workspace sections" class="workspace-rail mb-8 rounded-[1.75rem] px-4 py-4 lg:sticky lg:top-24 lg:z-30">
             <div class="workspace-rail-copy">
-                <p class="section-kicker">Workspace Rail</p>
+                <p class="section-kicker">Console Views</p>
                 <p class="workspace-rail-text">
-                    Move between configuration, dispatch, and live telemetry without losing the operational thread.
+                    Shift between product surfaces without losing the current operator thread.
                 </p>
             </div>
             <div class="workspace-rail-links">
-                <a class="workspace-link is-active" data-section-link="profile-shell" href="#profile-shell">
-                    <span class="workspace-link-label">Profile</span>
-                    <span class="workspace-link-meta">Pipeline, profiles, and auth posture.</span>
+                <a class="workspace-link is-active" data-view-link="overview" href="?view=overview">
+                    <span class="workspace-link-label">Overview</span>
+                    <span class="workspace-link-meta">Mission, active preset, system health, and next action.</span>
                 </a>
-                <a class="workspace-link" data-section-link="parameters-shell" href="#parameters-shell">
-                    <span class="workspace-link-label">Parameters</span>
-                    <span class="workspace-link-meta">I/O roots, preset selection, and compute controls.</span>
+                <a class="workspace-link" data-view-link="build" href="?view=build">
+                    <span class="workspace-link-label">Build</span>
+                    <span class="workspace-link-meta">Profile, governance, paths, advanced controls, and dispatch.</span>
                 </a>
-                <a class="workspace-link" data-section-link="flags-shell" href="#flags-shell">
-                    <span class="workspace-link-label">Flags</span>
-                    <span class="workspace-link-meta">Advanced toggles, governance, and runtime constraints.</span>
+                <a class="workspace-link" data-view-link="operate" href="?view=operate">
+                    <span class="workspace-link-label">Operate</span>
+                    <span class="workspace-link-meta">Inspector, queue, artifacts, and live diagnostics under load.</span>
                 </a>
-                <a class="workspace-link" data-section-link="cli-shell" href="#cli-shell">
-                    <span class="workspace-link-label">Dispatch</span>
-                    <span class="workspace-link-meta">Command preview, validation, and launch surface.</span>
-                </a>
-                <a class="workspace-link" data-section-link="jobs-shell" href="#jobs-shell">
-                    <span class="workspace-link-label">Live Jobs</span>
-                    <span class="workspace-link-meta">Inspector, queue, artifacts, and streaming logs.</span>
+                <a class="workspace-link" data-view-link="run" href="?view=run">
+                    <span class="workspace-link-label">Run Details</span>
+                    <span class="workspace-link-meta">Artifact review, provenance, downloadable outputs, and traceability.</span>
                 </a>
             </div>
         </nav>
 
-        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        <section id="console-context-shell" class="mb-8 rounded-[1.75rem] shell-panel px-6 py-5 shadow-soft dark:shadow-soft-dark">
+            <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+                <div>
+                    <p class="section-kicker">Current View</p>
+                    <h2 id="consoleViewTitle" class="mt-2 text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">Overview</h2>
+                    <p id="consoleViewSummary" class="mt-2 max-w-3xl text-[13px] leading-7 text-slate-600 dark:text-slate-300">Mission, preset posture, system health, and the clearest next operator action.</p>
+                </div>
+                <p id="consoleViewMeta" class="text-[11px] font-mono text-slate-500 dark:text-slate-400">View routing stays client-side to preserve the live orchestrator contract.</p>
+            </div>
+        </section>
+
+        <div id="console-grid" class="grid grid-cols-1 lg:grid-cols-12 gap-8 hidden">
 
             <!-- Left Column: Configuration -->
-            <section class="lg:col-span-7 flex flex-col gap-6">
+            <section id="build-shell" class="lg:col-span-7 flex flex-col gap-6">
 
                 <!-- Orchestration Profile -->
                 <div id="profile-shell" data-ambient-zone="profile" data-ambient-focus-x="18" data-ambient-focus-y="28" data-ambient-shift-x="-22" data-ambient-shift-y="-4" data-ambient-stage-scale="1.02" data-ambient-stage-rotate="-0.45" data-ambient-color-a="#34d399" data-ambient-color-b="#f59e0b" data-ambient-color-c="#67e8f9" data-ambient-focus-color="#99f6e4" class="workspace-shell deferred-shell rounded-[1.75rem] shell-panel p-6 shadow-soft dark:shadow-soft-dark transition-colors duration-300" data-shell-size="compact">
@@ -1485,6 +1502,9 @@
                         <div class="flex flex-col items-end gap-2">
                             <span id="selectedJobStateBadge" class="signal-badge">Idle</span>
                             <span id="selectedJobFreshness" class="micro-status">No live telemetry</span>
+                            <button id="openRunDetailsBtn" type="button" class="rounded-full border border-slate-200 dark:border-slate-700 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-300 transition-colors hover:border-cyan-300 hover:text-cyan-700 dark:hover:border-cyan-700 dark:hover:text-cyan-300 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                                Open Review
+                            </button>
                         </div>
                     </div>
 
@@ -1741,6 +1761,7 @@
             },
             jobs: [],
             selectedJobId: null,
+            currentView: 'overview',
             inspectorTab: 'overview',
             artifactUi: {
                 selectedByJob: {},
@@ -1767,6 +1788,11 @@
         };
 
         const els = {
+            overviewShell: document.getElementById('overview-shell'),
+            consoleGrid: document.getElementById('console-grid'),
+            consoleViewTitle: document.getElementById('consoleViewTitle'),
+            consoleViewSummary: document.getElementById('consoleViewSummary'),
+            consoleViewMeta: document.getElementById('consoleViewMeta'),
             heroRunBtn: document.getElementById('heroRunBtn'),
             heroExportBtn: document.getElementById('heroExportBtn'),
             refreshHealthBtn: document.getElementById('refreshHealthBtn'),
@@ -1882,6 +1908,9 @@
             datasetHealthIndicator: document.getElementById('datasetHealthIndicator'),
             datasetHealthText: document.getElementById('datasetHealthText'),
 
+            buildShell: document.getElementById('build-shell'),
+            jobsShell: document.getElementById('jobs-shell'),
+            queueShell: document.getElementById('queue-shell'),
             jobList: document.getElementById('jobList'),
             emptyQueueState: document.getElementById('emptyQueueState'),
             queueCount: document.getElementById('queueCount'),
@@ -1896,6 +1925,7 @@
             selectedJobFreshness: document.getElementById('selectedJobFreshness'),
             selectedJobSummary: document.getElementById('selectedJobSummary'),
             selectedJobTransportAlert: document.getElementById('selectedJobTransportAlert'),
+            openRunDetailsBtn: document.getElementById('openRunDetailsBtn'),
             inspectorOverviewTab: document.getElementById('inspectorOverviewTab'),
             inspectorTimelineTab: document.getElementById('inspectorTimelineTab'),
             inspectorLogsTab: document.getElementById('inspectorLogsTab'),
@@ -2260,9 +2290,37 @@
             _writeAmbientVariables();
         }
 
-        function setActiveWorkspaceLink(sectionId) {
-            document.querySelectorAll('[data-section-link]').forEach((link) => {
-                const active = String(link.dataset.sectionLink || '') === String(sectionId || '');
+        const CONSOLE_VIEW_META = {
+            overview: {
+                title: 'Overview',
+                summary: 'Mission, preset posture, system health, and the clearest next operator action.',
+                meta: 'Use this surface to understand active preset, runtime health, and next action in a single scan.'
+            },
+            build: {
+                title: 'Build & Configure',
+                summary: 'Choose posture, set roots, refine controls only when needed, then dispatch.',
+                meta: 'This view keeps profile, governance, paths, advanced controls, and launch in one guided flow.'
+            },
+            operate: {
+                title: 'Operate & Inspect',
+                summary: 'Timeline first, queue second, live diagnostics close at hand.',
+                meta: 'Operators should identify a failing run and the next corrective action in under five seconds.'
+            },
+            run: {
+                title: 'Run Details & Review',
+                summary: 'Review governed outputs, provenance, and downloadable artifacts from a dedicated audit surface.',
+                meta: 'Completed runs become reviewable products, not just finished jobs.'
+            }
+        };
+
+        function resolveConsoleView(value) {
+            const candidate = String(value || '').trim().toLowerCase();
+            return Object.prototype.hasOwnProperty.call(CONSOLE_VIEW_META, candidate) ? candidate : 'overview';
+        }
+
+        function setActiveWorkspaceLink(viewName) {
+            document.querySelectorAll('[data-view-link]').forEach((link) => {
+                const active = String(link.dataset.viewLink || '') === String(viewName || '');
                 link.classList.toggle('is-active', active);
                 if (active) {
                     link.setAttribute('aria-current', 'location');
@@ -2272,60 +2330,110 @@
             });
         }
 
+        function _routeUrlForView(viewName, jobId = '') {
+            const url = new URL(window.location.href);
+            url.searchParams.set('view', resolveConsoleView(viewName));
+            if (resolveConsoleView(viewName) === 'run' && String(jobId || '').trim()) {
+                url.searchParams.set('job', String(jobId || '').trim());
+            } else {
+                url.searchParams.delete('job');
+            }
+            return url;
+        }
+
+        function _syncConsoleRoute(replace = false) {
+            const url = _routeUrlForView(state.currentView, state.selectedJobId);
+            const nextHref = `${url.pathname}${url.search}${url.hash}`;
+            const currentHref = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+            if (nextHref === currentHref) return;
+            const method = replace ? 'replaceState' : 'pushState';
+            window.history[method]({ view: state.currentView, jobId: state.selectedJobId || '' }, '', nextHref);
+        }
+
+        function updateConsoleViewContext() {
+            const viewMeta = CONSOLE_VIEW_META[state.currentView] || CONSOLE_VIEW_META.overview;
+            if (els.consoleViewTitle) els.consoleViewTitle.textContent = viewMeta.title;
+            if (els.consoleViewSummary) els.consoleViewSummary.textContent = viewMeta.summary;
+            if (els.consoleViewMeta) {
+                if (state.currentView === 'run' && state.selectedJobId) {
+                    const selected = state.jobs.find((job) => job.id === state.selectedJobId) || null;
+                    const stateLabel = titleCaseToken(selected?.state, 'Pending');
+                    els.consoleViewMeta.textContent = `${state.selectedJobId} • ${stateLabel} review surface`;
+                } else {
+                    els.consoleViewMeta.textContent = viewMeta.meta;
+                }
+            }
+            document.title = state.currentView === 'overview'
+                ? 'Transformation Portal — Orchestrator'
+                : `Transformation Portal — ${viewMeta.title}`;
+        }
+
+        function applyConsoleViewLayout() {
+            state.currentView = resolveConsoleView(state.currentView);
+            if (els.overviewShell) els.overviewShell.classList.toggle('hidden', state.currentView !== 'overview');
+            if (els.consoleGrid) els.consoleGrid.classList.toggle('hidden', state.currentView === 'overview');
+            if (els.buildShell) {
+                const buildActive = state.currentView === 'build';
+                els.buildShell.classList.toggle('hidden', !buildActive);
+                els.buildShell.style.gridColumn = buildActive ? 'span 12 / span 12' : '';
+            }
+            if (els.jobsShell) {
+                const jobsActive = state.currentView === 'operate' || state.currentView === 'run';
+                els.jobsShell.classList.toggle('hidden', !jobsActive);
+                els.jobsShell.style.gridColumn = jobsActive ? 'span 12 / span 12' : '';
+            }
+            if (els.queueShell) {
+                els.queueShell.classList.toggle('hidden', state.currentView === 'run');
+            }
+            if (els.openRunDetailsBtn) {
+                els.openRunDetailsBtn.textContent = state.currentView === 'run' ? 'Review Open' : 'Open Review';
+            }
+            if (state.currentView === 'operate' && state.selectedJobId) {
+                setInspectorTab('timeline');
+            } else if (state.currentView === 'run') {
+                setInspectorTab('overview');
+            }
+            updateConsoleViewContext();
+            setActiveWorkspaceLink(state.currentView);
+        }
+
+        function navigateConsoleView(viewName, { replace = false, jobId = '' } = {}) {
+            state.currentView = resolveConsoleView(viewName);
+            if (String(jobId || '').trim()) {
+                state.selectedJobId = String(jobId || '').trim();
+            }
+            applyConsoleViewLayout();
+            _syncConsoleRoute(replace);
+            renderJobQueue();
+        }
+
+        function applyConsoleRouteFromLocation(replace = false) {
+            const url = new URL(window.location.href);
+            state.currentView = resolveConsoleView(url.searchParams.get('view'));
+            const routeJobId = String(url.searchParams.get('job') || '').trim();
+            if (routeJobId) {
+                state.selectedJobId = routeJobId;
+            }
+            applyConsoleViewLayout();
+            _syncConsoleRoute(replace);
+        }
+
         function setupSectionRail() {
-            const links = Array.from(document.querySelectorAll('[data-section-link]'));
+            const links = Array.from(document.querySelectorAll('[data-view-link]'));
             if (!links.length) return;
 
-            const sections = links
-                .map((link) => document.getElementById(String(link.dataset.sectionLink || '')))
-                .filter(Boolean);
-
-            const fallbackSectionId = sections[0]?.id || links[0]?.dataset.sectionLink;
-            if (fallbackSectionId) setActiveWorkspaceLink(fallbackSectionId);
-
             links.forEach((link) => {
-                link.addEventListener('click', () => {
-                    const targetId = String(link.dataset.sectionLink || '').trim();
-                    if (targetId) setActiveWorkspaceLink(targetId);
-                });
-            });
-
-            if (!('IntersectionObserver' in window) || !sections.length) return;
-
-            const visibleSections = new Map();
-            const resolveActiveSection = () => {
-                if (visibleSections.size > 0) {
-                    const nextId = [...visibleSections.entries()]
-                        .sort((left, right) => right[1] - left[1])[0][0];
-                    setActiveWorkspaceLink(nextId);
-                    return;
-                }
-
-                const nearest = sections
-                    .map((section) => ({
-                        id: section.id,
-                        distance: Math.abs(section.getBoundingClientRect().top - 140)
-                    }))
-                    .sort((left, right) => left.distance - right.distance)[0];
-                if (nearest) setActiveWorkspaceLink(nearest.id);
-            };
-
-            const observer = new IntersectionObserver((entries) => {
-                entries.forEach((entry) => {
-                    if (entry.isIntersecting) {
-                        visibleSections.set(entry.target.id, entry.intersectionRatio);
-                    } else {
-                        visibleSections.delete(entry.target.id);
+                link.addEventListener('click', (event) => {
+                    event.preventDefault();
+                    const nextView = resolveConsoleView(link.dataset.viewLink);
+                    if (nextView === 'run' && !state.selectedJobId) {
+                        createToast('Select a run first, then open its review surface.', 'info');
+                        return;
                     }
+                    navigateConsoleView(nextView);
                 });
-                resolveActiveSection();
-            }, {
-                rootMargin: '-18% 0px -58% 0px',
-                threshold: [0.12, 0.32, 0.6]
             });
-
-            sections.forEach((section) => observer.observe(section));
-            resolveActiveSection();
+            setActiveWorkspaceLink(state.currentView);
         }
 
         function truncateMiddle(value, maxLength = 44) {
@@ -2658,8 +2766,9 @@
             });
 
             if (els.logsShell) {
-                els.logsShell.classList.toggle('hidden', nextTab !== 'logs');
-                els.logsShell.classList.toggle('flex', nextTab === 'logs');
+                const showLogsShell = nextTab === 'logs' || state.currentView === 'run';
+                els.logsShell.classList.toggle('hidden', !showLogsShell);
+                els.logsShell.classList.toggle('flex', showLogsShell);
             }
         }
 
@@ -2900,8 +3009,6 @@
         function renderMissionControl(payload = null) {
             const currentPayload = payload || generatePayload();
             const activeJobs = state.jobs.filter((job) => job && (job.state === 'running' || job.state === 'queued')).length;
-            const selected = state.jobs.find((job) => job.id === state.selectedJobId) || null;
-
             if (els.heroPipelineValue) els.heroPipelineValue.textContent = String(state.pipeline || 'lux-depth-v3');
             if (els.heroPresetValue) els.heroPresetValue.textContent = String(currentPayload?.args?.preset || state.config.preset || 'custom');
             if (els.heroModeValue) {
@@ -2915,11 +3022,6 @@
             renderPresetIntelligence(currentPayload);
             renderGovernanceBanner(currentPayload);
             syncDisclosurePanels(currentPayload);
-
-            if (selected && els.heroQueueValue) {
-                const selectedState = titleCaseToken(selected.state, 'Unknown');
-                els.heroQueueValue.textContent = `${activeJobs} live job${activeJobs === 1 ? '' : 's'} • selected ${selectedState}`;
-            }
         }
 
         function renderSelectedJobTimeline(job) {
@@ -2995,6 +3097,7 @@
                     els.selectedJobTransportAlert.classList.add('hidden');
                     els.selectedJobTransportAlert.textContent = '';
                 }
+                if (els.openRunDetailsBtn) els.openRunDetailsBtn.disabled = true;
                 if (els.selectedJobLogPreview) {
                     els.selectedJobLogPreview.textContent = 'No live logs yet.';
                 }
@@ -3056,6 +3159,7 @@
                     els.selectedJobTransportAlert.textContent = '';
                 }
             }
+            if (els.openRunDetailsBtn) els.openRunDetailsBtn.disabled = false;
             if (els.selectedJobLogPreview) {
                 const previewLines = Array.isArray(selected.logs) ? selected.logs.slice(-12) : [];
                 els.selectedJobLogPreview.textContent = previewLines.length > 0 ? previewLines.join('\n') : 'No live logs yet.';
@@ -3624,6 +3728,15 @@
             renderArtifactPanel();
             renderSelectedJobInspector();
             renderMissionControl();
+            if (state.currentView === 'operate') {
+                setInspectorTab('timeline');
+            } else if (state.currentView === 'run') {
+                setInspectorTab('overview');
+            }
+            if (state.currentView === 'run') {
+                _syncConsoleRoute(true);
+                updateConsoleViewContext();
+            }
             scheduleRenderJobQueue();
         }
 
@@ -4950,7 +5063,7 @@
             if (els.queueStatusSummary) {
                 const selected = state.jobs.find((job) => job.id === state.selectedJobId) || null;
                 els.queueStatusSummary.textContent = selected
-                    ? `Selected ${String(selected.pipeline || 'job')} • updated ${formatRelativeTime(Number(selected.updatedAt || selected.createdAt || 0))}`
+                    ? `Inspector focus: ${String(selected.pipeline || 'job')} • updated ${formatRelativeTime(Number(selected.updatedAt || selected.createdAt || 0))}`
                     : 'Newest jobs stay pinned to the top.';
             }
             renderArtifactPanel();
@@ -5731,6 +5844,15 @@
         if (els.inspectorOverviewTab) els.inspectorOverviewTab.addEventListener('click', () => setInspectorTab('overview'));
         if (els.inspectorTimelineTab) els.inspectorTimelineTab.addEventListener('click', () => setInspectorTab('timeline'));
         if (els.inspectorLogsTab) els.inspectorLogsTab.addEventListener('click', () => setInspectorTab('logs'));
+        if (els.openRunDetailsBtn) {
+            els.openRunDetailsBtn.addEventListener('click', () => {
+                if (!state.selectedJobId) {
+                    createToast('Select a run first, then open its review surface.', 'info');
+                    return;
+                }
+                navigateConsoleView('run', { jobId: state.selectedJobId });
+            });
+        }
 
         if (els.artifactThumbnailRail) {
             els.artifactThumbnailRail.addEventListener('click', (event) => {
@@ -5908,6 +6030,10 @@
 
         window.addEventListener('beforeunload', cleanupActiveJobHandles);
         window.addEventListener('pagehide', cleanupActiveJobHandles);
+        window.addEventListener('popstate', () => {
+            applyConsoleRouteFromLocation(true);
+            renderJobQueue();
+        });
 
         async function init() {
             const savedTheme = localStorage.getItem('tp_theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
@@ -5922,6 +6048,7 @@
             _loadApiKeyIntoInputs();
             seedPresetFallbacks();
             refreshProfileDropdown();
+            applyConsoleRouteFromLocation(true);
             updateUIFromState();
             bindInputs();
             setupSectionRail();
