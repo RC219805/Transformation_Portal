@@ -301,6 +301,7 @@ def build_depth_cache_payload(
         "depth_backend": config.depth_backend,
         "depth_pro_checkpoint_path": config.depth_pro_checkpoint_path,
         "depth_pro_python_executable": config.depth_pro_python_executable,
+        "da3_python_executable": config.da3_python_executable,
     }
 
 
@@ -335,6 +336,7 @@ def compute_config_fingerprint(
         depth_backend=config.depth_backend,
         depth_pro_checkpoint_path=config.depth_pro_checkpoint_path,
         depth_pro_python_executable=config.depth_pro_python_executable,
+        da3_python_executable=config.da3_python_executable,
         quality_tier=str(config.quality_tier),
         materials_config=build_materials_fingerprint_payload(config),
         pbr_config=build_pbr_fingerprint_payload(config),
@@ -391,6 +393,7 @@ def build_run_card_config_fingerprint(
         "v2_device": base.v2_device,
         "v2_upscaler_backend": base.v2_upscaler_backend,
         "depth_pro_python_executable": base.depth_pro_python_executable,
+        "da3_python_executable": base.da3_python_executable,
         "preset_requested": preset_requested,
         "preset_resolved": preset_resolved,
         "backend_requested": requested_backend,

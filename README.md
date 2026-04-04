@@ -145,6 +145,20 @@ The orchestrator also contains an internal `synthetic` fallback path used for ex
 lux-depth-v3 --input-dir ./input --output-dir ./output
 ```
 
+**Default (DA3 via isolated Depth Anything 3 environment):**
+```bash
+./scripts/setup/install_da3_runtime.sh
+
+lux-depth-v3 \
+  --input-dir ./input \
+  --output-dir ./output \
+  --da3-python ./.venv-da3/bin/python
+```
+
+The repo-local DA3 setup script keeps the upstream checkout under `.runtime/Depth-Anything-3`,
+the interpreter contract at `./.venv-da3/bin/python`, and leaves the main repo `.venv`
+unchanged.
+
 **Depth Pro (requires license acceptance):**
 ```bash
 lux-depth-v3 \
@@ -175,6 +189,9 @@ config = EnhanceConfig(
 
 orchestrator = EnhanceOrchestrator(config, Path("./output"))
 ```
+
+**DA3 live model tests remain opt-in:** set `TP_RUN_HF_MODEL_TESTS=1` before running the
+real Hugging Face DA3 integration tests.
 
 ### Fallback Behavior
 

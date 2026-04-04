@@ -225,6 +225,9 @@ class EnhanceConfig:
     # Optional Python executable for a
     # dedicated Depth Pro environment
     depth_pro_python_executable: Optional[str] = None
+    # Optional Python executable for a
+    # dedicated DA3 / depth-anything-3 environment
+    da3_python_executable: Optional[str] = None
 
     # Fallback configuration
     depth_fallback: str = "fail"  # Options: "fail", "skip", "v2-auto"

@@ -312,6 +312,7 @@ class ConfigFingerprint:
     depth_backend: Optional[str] = None
     depth_pro_checkpoint_path: Optional[str] = None
     depth_pro_python_executable: Optional[str] = None
+    da3_python_executable: Optional[str] = None
     quality_tier: Optional[str] = None
     materials_config: Optional[Dict[str, Any]] = None
     pbr_config: Optional[Dict[str, Any]] = None
@@ -335,6 +336,7 @@ class ConfigFingerprint:
             depth_backend=self.depth_backend,
             depth_pro_checkpoint_path=self.depth_pro_checkpoint_path,
             depth_pro_python_executable=self.depth_pro_python_executable,
+            da3_python_executable=self.da3_python_executable,
             quality_tier=self.quality_tier,
             materials_config=self.materials_config,
             pbr_config=self.pbr_config,
@@ -360,6 +362,7 @@ class ConfigFingerprint:
             depth_backend=None,
             depth_pro_checkpoint_path=None,
             depth_pro_python_executable=None,
+            da3_python_executable=None,
             quality_tier=None,
             materials_config=None,
             pbr_config=None,

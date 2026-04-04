@@ -148,6 +148,12 @@
             "null"
           ]
         },
+        "da3_python_executable": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "hash_algorithm": {
           "type": "string",
           "const": "sha256"
