@@ -236,3 +236,38 @@ def test_minimal_backend_requires_only_torch(mock_backend_registry):
 
                 assert all_available is True
                 assert missing == []
+
+
+def test_da3_isolated_runtime_does_not_require_local_transformers(monkeypatch, tmp_path):
+    """DA3 subprocess mode should honor the isolated runtime during preflight checks."""
+    from scripts.apex_matrix_runner import check_ml_dependencies
+    from transformation_portal.depth.backends.da3 import DA3Backend
+
+    python_executable = tmp_path / ".venv-da3" / "bin" / "python"
+    python_executable.parent.mkdir(parents=True)
+    python_executable.write_text("#!/bin/sh\n", encoding="utf-8")
+    monkeypatch.setenv("TRANSFORMATION_PORTAL_DA3_PYTHON", str(python_executable))
+
+    def find_spec_side_effect(name):
+        if name == "torch":
+            return MagicMock()
+        if name == "transformers":
+            return None
+        return MagicMock()
+
+    def import_module_side_effect(name):
+        if name == "torch":
+            return MagicMock()
+        raise ModuleNotFoundError(f"No module named '{name}'")
+
+    registry = MagicMock()
+    registry.get_backend_class = lambda backend_id: DA3Backend if backend_id == "da3" else None
+    registry.available_backend_ids = lambda: ["da3"]
+
+    with patch("transformation_portal.depth.backends.get_registry", return_value=registry):
+        with patch("importlib.util.find_spec", side_effect=find_spec_side_effect):
+            with patch("scripts.apex_matrix_runner.importlib.import_module", side_effect=import_module_side_effect):
+                all_available, missing = check_ml_dependencies("da3")
+
+    assert all_available is True
+    assert missing == []
