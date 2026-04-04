@@ -145,7 +145,7 @@ The orchestrator also contains an internal `synthetic` fallback path used for ex
 lux-depth-v3 --input-dir ./input --output-dir ./output
 ```
 
-**Default (DA3 via isolated Depth Anything 3 environment):**
+**Recommended (DA3 via isolated Depth Anything 3 environment):**
 ```bash
 ./scripts/setup/install_da3_runtime.sh
 

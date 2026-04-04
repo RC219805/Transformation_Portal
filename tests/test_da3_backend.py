@@ -425,6 +425,44 @@ def test_da3_backend_subprocess_compute_launch_oserror_reports_category(tmp_path
     assert mock_run.call_args.kwargs["timeout"] == 17
 
 
+def test_da3_backend_prepare_image_preserves_dark_uint8_arrays():
+    """Dark uint8 images should not be reinterpreted as normalized floats."""
+    backend = DA3Backend()
+    image = np.array(
+        [
+            [[0, 1, 0], [1, 0, 1]],
+            [[1, 1, 0], [0, 0, 1]],
+        ],
+        dtype=np.uint8,
+    )
+
+    image_pil, image_array = backend._prepare_image(image)
+
+    assert image_pil.mode == "RGB"
+    assert np.array_equal(image_array, image)
+
+
+def test_da3_backend_prepare_image_scales_normalized_float_arrays():
+    """Normalized float images should still be scaled into uint8 pixel space."""
+    backend = DA3Backend()
+    image = np.array(
+        [
+            [[0.0, 0.5, 1.0], [0.25, 0.75, 0.1]],
+        ],
+        dtype=np.float32,
+    )
+
+    _, image_array = backend._prepare_image(image)
+
+    expected = np.array(
+        [
+            [[0, 127, 255], [63, 191, 25]],
+        ],
+        dtype=np.uint8,
+    )
+    assert np.array_equal(image_array, expected)
+
+
 @pytest.mark.skipif(
     not can_run_da3_compute(),
     reason="DA3 compute requires depth_anything_3 + transformers + online mode",

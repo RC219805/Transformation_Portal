@@ -505,7 +505,8 @@ class DA3Backend:
     ) -> tuple[Image.Image, np.ndarray]:
         """Normalize input image for both local and subprocess execution."""
         if isinstance(image, np.ndarray):
-            if image.max() <= 1.0:
+            is_normalized_float = np.issubdtype(image.dtype, np.floating) and image.min() >= 0.0 and image.max() <= 1.0
+            if is_normalized_float:
                 arr = (image * 255).astype(np.uint8)
             else:
                 arr = image.astype(np.uint8)
