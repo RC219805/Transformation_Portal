@@ -51,8 +51,12 @@ Key docs:
 - [Context-Aware Rendering Guide](docs/guides/CONTEXT_AWARE_RENDERING.md)
 
 Portal surfaces:
-- FastAPI on `127.0.0.1:8000` remains the system-of-record origin for the portal HTML, `/ready`, and `/v1/*`.
+- FastAPI on `127.0.0.1:8000` remains the system-of-record origin for the direct-debug portal HTML, `/ready`, and `/v1/*`.
 - The secure front door in `web/secure-landing/` is the managed browser entry point and keeps the backend API key out of browser code.
+- The managed front door now splits the browser experience into three surfaces:
+  - `/` public Dynamic Neural Access homepage
+  - `/login` operator login
+  - `/portal` governed operator console
 - Direct FastAPI portal access is now a `direct_debug` workflow for local troubleshooting, not the preferred production browser path.
 - The front door is a Node app. `web/secure-landing` now documents and enforces its supported Node runtime range, with `22.x` LTS recommended.
 

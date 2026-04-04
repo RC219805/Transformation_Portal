@@ -74,7 +74,7 @@ npm run dev
 Open `http://127.0.0.1:3000/`.
 
 Route ownership:
-- `GET /` redirects to `/portal` when authenticated or `/login` otherwise.
+- `GET /` serves the public Dynamic Neural Access homepage, even for authenticated operators.
 - `GET /login` serves the separate login page with the video background.
 - `GET /portal` proxies the existing FastAPI portal UI.
 - `GET /portal/bootstrap` returns the managed-mode bootstrap contract for the browser UI.
@@ -136,8 +136,23 @@ npm test
 npm run build
 ```
 
+Browser smoke against a running managed front door:
+
+```bash
+TP_FRONTDOOR_BASE_URL="http://127.0.0.1:3000" \
+TP_FRONTDOOR_USERNAME="<username>" \
+TP_FRONTDOOR_PASSWORD="<password>" \
+python scripts/validation/validate_frontdoor_browser_smoke.py
+```
+
 FastAPI contract gate:
 
 ```bash
 make test-orchestrator-contract
+```
+
+Direct-debug portal browser smoke:
+
+```bash
+python scripts/validation/validate_portal_browser_smoke.py
 ```

@@ -261,8 +261,65 @@ test("login GET renders the hero-video shell while preserving current front-door
     assert.equal(response.status, 200);
     assert.match(html, /class="hero-video"/);
     assert.match(html, /preload="metadata"/);
-    assert.match(html, /Local development bypass is enabled\./);
-    assert.match(html, /TP_CF_ACCESS_TEAM_DOMAIN/);
+    assert.match(html, /Operator Login/);
+    assert.match(html, /Secure operator access to governed orchestration\./);
+    assert.match(html, /Need access\?/);
+    assert.doesNotMatch(html, /Local development bypass is enabled\./);
+    assert.doesNotMatch(html, /TP_CF_ACCESS_TEAM_DOMAIN/);
+  } finally {
+    env.cleanup();
+  }
+});
+
+test("homepage GET serves the public DNA landing page instead of redirecting", async () => {
+  const env = withTempEnvironment();
+
+  try {
+    const { GET } = await importFresh("../app/route.js");
+    const request = buildRequest("https://portal.example.com/");
+
+    const response = await GET(request);
+    const html = await response.text();
+
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("cache-control"), "no-store");
+    assert.match(response.headers.get("content-security-policy") || "", /default-src 'self'/);
+    assert.match(html, /Certified Premium Media for the AI Era/);
+    assert.match(html, /Certify Your Media/);
+    assert.match(html, /How it works/);
+    assert.match(html, /Operator Login/);
+  } finally {
+    env.cleanup();
+  }
+});
+
+test("homepage GET keeps authenticated operators on the public landing page while surfacing console entry", async () => {
+  const env = withTempEnvironment();
+
+  try {
+    const sessions = await importFresh("../lib/sessions.js");
+    const { GET } = await importFresh("../app/route.js");
+    const authenticatedSession = sessions.rotateAuthenticatedSession(
+      sessions.createAnonymousSession(),
+      {
+        username: "admin",
+        accessEmail: "admin@example.com",
+        role: "admin"
+      }
+    );
+
+    const request = buildRequest("https://portal.example.com/", {
+      headers: new Headers({
+        cookie: `__Host-tp_session=${authenticatedSession.id}`
+      })
+    });
+
+    const response = await GET(request);
+    const html = await response.text();
+
+    assert.equal(response.status, 200);
+    assert.match(html, />Open Console</);
+    assert.doesNotMatch(html, /307|302/);
   } finally {
     env.cleanup();
   }

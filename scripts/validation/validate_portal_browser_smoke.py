@@ -405,6 +405,7 @@ def _state_probe_expression() -> str:
   return {
     title: document.title,
     readyState: document.readyState,
+    currentView: document.body ? String(document.body.dataset.consoleView || '') : '',
     pipeline: value('pipelineSelect'),
     healthText: text('healthText'),
     queueCount: text('queueCount'),
@@ -422,9 +423,28 @@ def _state_probe_expression() -> str:
       return !!(el && (el.textContent || '').includes('Wrote 3 rows'));
     })(),
     queueRows: document.querySelectorAll('#jobList li[data-job-id]').length,
+    queueJobIds: Array.from(document.querySelectorAll('#jobList li[data-job-id]')).map((row) =>
+      String(row.getAttribute('data-job-id') || '')
+    ),
     firstQueueJobId: (() => {
       const row = document.querySelector('#jobList li[data-job-id]');
       return row ? String(row.getAttribute('data-job-id') || '') : '';
+    })(),
+    buildViewVisible: (() => {
+      const el = document.getElementById('build-shell');
+      return !!(el && !el.classList.contains('hidden'));
+    })(),
+    operateViewVisible: (() => {
+      const el = document.getElementById('jobs-shell');
+      return !!(el && !el.classList.contains('hidden'));
+    })(),
+    overviewViewVisible: (() => {
+      const el = document.getElementById('overview-shell');
+      return !!(el && !el.classList.contains('hidden'));
+    })(),
+    queueShellHidden: (() => {
+      const el = document.getElementById('queue-shell');
+      return !!(el && el.classList.contains('hidden'));
     })(),
     archiveFieldsVisible: (() => {
       const el = document.getElementById('fieldsArchiveGate');
@@ -436,6 +456,25 @@ def _state_probe_expression() -> str:
     })()
   };
 })()
+"""
+
+
+def _navigate_to_console_view_expression(view: str, job_id: str = "") -> str:
+    payload = json.dumps({"view": view, "job_id": job_id})
+    return f"""
+(() => {{
+  const cfg = {payload};
+  const url = new URL(window.location.href);
+  url.searchParams.set('view', cfg.view);
+  if (cfg.view === 'run' && cfg.job_id) {{
+    url.searchParams.set('job', cfg.job_id);
+  }} else {{
+    url.searchParams.delete('job');
+  }}
+  window.history.pushState({{}}, '', url.toString());
+  window.dispatchEvent(new PopStateEvent('popstate'));
+  return url.toString();
+}})()
 """
 
 
@@ -620,6 +659,10 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             description="portal document ready",
         )
         _expect("Transformation Portal" in str(initial_state.get("title", "")), f"Unexpected title: {initial_state}")
+        _expect(
+            str(initial_state.get("currentView", "")) == "overview",
+            f"Portal did not default to overview view: {initial_state}",
+        )
 
         print("portal-browser-smoke: waiting for backend health", flush=True)
         online_state = _poll(
@@ -632,6 +675,25 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         _expect(
             str(online_state.get("pipeline", "")) == "lux-depth-v3",
             f"Portal did not default to lux-depth-v3: {online_state}",
+        )
+        _expect(bool(online_state.get("overviewViewVisible")), f"Overview shell did not remain visible: {online_state}")
+
+        print("portal-browser-smoke: opening build view", flush=True)
+        connection.evaluate(_navigate_to_console_view_expression("build"))
+        build_state = _poll(
+            connection,
+            _state_probe_expression(),
+            predicate=lambda value: (
+                isinstance(value, dict)
+                and str(value.get("currentView", "")) == "build"
+                and bool(value.get("buildViewVisible"))
+            ),
+            timeout_seconds=args.timeout_seconds,
+            description="build view to become active",
+        )
+        _expect(
+            not bool(build_state.get("operateViewVisible")),
+            f"Build view should suppress operate shell: {build_state}",
         )
 
         print("portal-browser-smoke: configuring archive-gate form", flush=True)
@@ -691,6 +753,26 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         )
         _expect(submitted_job_id.startswith("job_"), f"Portal API did not expose a real backend job id: {queued_state}")
 
+        print("portal-browser-smoke: opening operate view", flush=True)
+        connection.evaluate(_navigate_to_console_view_expression("operate"))
+        operate_state = _poll(
+            connection,
+            _state_probe_expression(),
+            predicate=lambda value: (
+                isinstance(value, dict)
+                and str(value.get("currentView", "")) == "operate"
+                and bool(value.get("operateViewVisible"))
+                and submitted_job_id in [str(job_id).strip() for job_id in (value.get("queueJobIds") or [])]
+            ),
+            timeout_seconds=args.timeout_seconds,
+            description="operate view to become active",
+        )
+        _expect(
+            not bool(operate_state.get("buildViewVisible")),
+            f"Operate view should suppress build shell: {operate_state}",
+        )
+        connection.evaluate(_click_expression(f'#jobList li[data-job-id="{submitted_job_id}"]'))
+
         print("portal-browser-smoke: waiting for terminal ui state", flush=True)
         terminal_state = _poll(
             connection,
@@ -714,6 +796,25 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             "Closed" in str(terminal_state.get("selectedJobStreamStatus", ""))
             or "Inactive" not in str(terminal_state.get("selectedJobStreamStatus", "")),
             f"Unexpected stream status after completion: {terminal_state}",
+        )
+
+        print("portal-browser-smoke: opening run details view", flush=True)
+        connection.evaluate(_navigate_to_console_view_expression("run", submitted_job_id))
+        run_state = _poll(
+            connection,
+            _state_probe_expression(),
+            predicate=lambda value: (
+                isinstance(value, dict)
+                and str(value.get("currentView", "")) == "run"
+                and str(value.get("selectedJobId", "")) == submitted_job_id
+                and bool(value.get("queueShellHidden"))
+            ),
+            timeout_seconds=args.timeout_seconds,
+            description="run details view to become active",
+        )
+        _expect(
+            "3 indexed" in str(run_state.get("selectedJobArtifactCount", "")),
+            f"Run details view lost artifact context: {run_state}",
         )
 
         print("portal-browser-smoke: ok")

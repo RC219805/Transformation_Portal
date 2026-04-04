@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server.js";
 
 import { resolveAccessContext, resolveAuthenticatedAccessSession, revokeSessionOnAccessFailure } from "../../lib/access.js";
+import { escapeHtml, renderLanternMark } from "../../lib/brand.js";
 import { audit } from "../../lib/audit.js";
-import { applySecurityHeaders, LOGIN_CSP } from "../../lib/http.js";
+import { applySecurityHeaders, FRONTDOOR_CSP } from "../../lib/http.js";
 import {
   clearSessionCookie,
   createAnonymousSession,
@@ -21,29 +22,19 @@ import { verifyUserCredentials } from "../../lib/users.js";
 
 export const runtime = "nodejs";
 
-function escapeHtml(value) {
-  return String(value || "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
-}
-
 function resolveLoginMessage(code) {
-  if (code === "access") return "Cloudflare Access identity is required before login can succeed.";
+  if (code === "access") return "Access verification is required before sign-in can continue.";
   if (code === "csrf") return "Your session could not be verified. Refresh and try again.";
   if (code === "throttled") return "Too many login attempts. Wait a few minutes and try again.";
-  if (code === "configuration") return "The front door is not fully configured yet.";
+  if (code === "configuration") return "Operator access is temporarily unavailable.";
   return "Invalid username or password.";
 }
 
-function renderLoginPage({ csrfToken, accessEmail, errorCode, allowLocalBypass }) {
+function renderLoginPage({ csrfToken, accessEmail, errorCode }) {
   const errorMessage = errorCode ? resolveLoginMessage(errorCode) : "";
   const accessText = accessEmail
-    ? `Cloudflare Access identity detected for <strong>${escapeHtml(accessEmail)}</strong>.`
-    : allowLocalBypass
-      ? "Local development bypass is enabled. Username and password are still required."
-      : "Cloudflare Access identity is required before credentials can be accepted.";
+    ? `Access identity verified for <strong>${escapeHtml(accessEmail)}</strong>.`
+    : "Authorized operators only.";
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -69,13 +60,22 @@ function renderLoginPage({ csrfToken, accessEmail, errorCode, allowLocalBypass }
       >
         <source src="/video/login-loop.mp4" type="video/mp4" />
       </video>
+      <div class="login-vignette" aria-hidden="true"></div>
       <section class="content">
-        <div class="card">
+        <div class="login-stage">
+          <a class="brand-lockup brand-lockup--centered" href="/" aria-label="Dynamic Neural Access home">
+            <span class="brand-mark-shell">${renderLanternMark("Transformation Portal brand mark")}</span>
+            <span class="brand-copy brand-copy--centered">
+              <span class="brand-kicker">Dynamic Neural Access</span>
+              <span class="brand-title">Transformation Portal</span>
+            </span>
+          </a>
+          <div class="card card--login">
           <p class="eyebrow">Transformation Portal</p>
           <h1>Operator Login</h1>
-          <p class="lede">Authenticate to the front door. The browser never receives the backend orchestration API key.</p>
+          <p class="lede">Secure operator access to governed orchestration.</p>
           ${errorMessage ? `<div class="banner" role="alert">${escapeHtml(errorMessage)}</div>` : ""}
-          <div class="meta">${accessText}</div>
+          <p class="card-meta">${accessText}</p>
           <form method="post" action="/login" autocomplete="on">
             <input type="hidden" name="csrf_token" value="${escapeHtml(csrfToken)}" />
             <label>
@@ -88,7 +88,11 @@ function renderLoginPage({ csrfToken, accessEmail, errorCode, allowLocalBypass }
             </label>
             <button type="submit">Sign in</button>
           </form>
-          <p class="footnote">Production / Cloudflare Access env vars: <code>TP_FASTAPI_ORIGIN</code>, <code>TP_BACKEND_API_KEY</code>, <code>TP_FRONTDOOR_USERS_FILE</code>, <code>TP_FRONTDOOR_SESSION_DB</code>, <code>TP_CF_ACCESS_TEAM_DOMAIN</code>, <code>TP_CF_ACCESS_AUD</code>.</p>
+          <div class="login-footer">
+            <p class="footnote">Governed access, protected session, premium review flow.</p>
+            <a class="tertiary-link" href="/#final-cta">Need access?</a>
+          </div>
+          </div>
         </div>
       </section>
     </main>
@@ -125,8 +129,7 @@ export async function GET(request) {
   const html = renderLoginPage({
     csrfToken: session.csrfToken,
     accessEmail: accessContext.accessEmail,
-    errorCode: request.nextUrl.searchParams.get("error"),
-    allowLocalBypass: accessContext.bypass
+    errorCode: request.nextUrl.searchParams.get("error")
   });
   const response = new NextResponse(html, {
     status: 200,
@@ -136,7 +139,7 @@ export async function GET(request) {
     }
   });
   setSessionCookie(response, session.id);
-  return applySecurityHeaders(response, { csp: LOGIN_CSP });
+  return applySecurityHeaders(response, { csp: FRONTDOOR_CSP });
 }
 
 export async function POST(request) {
