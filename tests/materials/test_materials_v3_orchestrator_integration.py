@@ -15,7 +15,7 @@ import pytest
 
 from transformation_portal.lux_depth_v3.config import EnhanceConfig
 from transformation_portal.lux_depth_v3.input_manager import ImageInput
-from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
+from transformation_portal.lux_depth_v3.orchestrator import ApexStrictGateError, EnhanceOrchestrator
 
 pytestmark = pytest.mark.unit
 
@@ -492,6 +492,75 @@ def test_apex_cached_depth_recomputes_materials_for_canonical_handoff(tmp_path, 
     assert runtime_s == pytest.approx(0.321, rel=1e-6, abs=1e-6)
     assert enhanced_path == expected_path
     assert run_stage.call_count == 1
+
+
+def test_apex_strict_stage_surfaces_materials_failure_before_canonical_divergence(
+    tmp_path,
+    mock_depth_backend,
+    mock_da3_available,
+):
+    """APEX strict mode should report the real Materials V3 failure, not a downstream handoff symptom."""
+    config = EnhanceConfig(
+        quality_tier="apex",
+        enable_materials_v3=True,
+        enable_material_segmentation=True,
+        material_segmentation_backend="sam2",
+        strict_backend=True,
+        depth_device="cpu",
+        enable_v2=False,
+    )
+    orchestrator = EnhanceOrchestrator(config, tmp_path)
+
+    preprocessed_array = np.zeros((8, 8, 3), dtype=np.float32)
+    depth_map = np.ones((8, 8), dtype=np.float32)
+
+    with patch(
+        "transformation_portal.lux_depth_v3.segmentation_backend.segment_materials",
+        side_effect=RuntimeError("Material segmentation failed: SAM2 checkpoint missing"),
+    ):
+        with pytest.raises(ApexStrictGateError) as exc_info:
+            orchestrator._run_materials_v3_stage(
+                preprocessed_array=preprocessed_array,
+                depth_map=depth_map,
+                output_key=Path("image_01"),
+            )
+
+    assert exc_info.value.code == "APEX_MATERIALS_STAGE_FAILED"
+    assert exc_info.value.details["exception_type"] == "RuntimeError"
+    assert "SAM2 checkpoint missing" in exc_info.value.details["exception_message"]
+    assert "SAM2 checkpoint missing" in str(exc_info.value)
+
+
+def test_apex_non_strict_backend_fails_on_gate_before_materials_stage_exception(
+    tmp_path,
+    mock_depth_backend,
+    mock_da3_available,
+):
+    """Non-strict APEX should trip the strict-segmentation gate before stage exceptions are wrapped."""
+    config = EnhanceConfig(
+        quality_tier="apex",
+        enable_materials_v3=True,
+        enable_material_segmentation=True,
+        material_segmentation_backend="sam2",
+        strict_backend=False,
+        depth_device="cpu",
+        enable_v2=False,
+    )
+    orchestrator = EnhanceOrchestrator(config, tmp_path)
+
+    preprocessed_array = np.zeros((8, 8, 3), dtype=np.float32)
+    depth_map = np.ones((8, 8), dtype=np.float32)
+
+    with patch("transformation_portal.lux_depth_v3.segmentation_backend.segment_materials") as segment_materials:
+        with pytest.raises(ApexStrictGateError) as exc_info:
+            orchestrator._run_materials_v3_stage(
+                preprocessed_array=preprocessed_array,
+                depth_map=depth_map,
+                output_key=Path("image_01"),
+            )
+
+    assert exc_info.value.code == "APEX_MATERIALS_STRICT_SEGMENTATION_REQUIRED"
+    segment_materials.assert_not_called()
 
 
 def test_apex_depth_validity_gate_rejects_upper_quartile_plateau(tmp_path, mock_depth_backend, mock_da3_available):
