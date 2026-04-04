@@ -241,6 +241,7 @@ def test_da3_backend_subprocess_worker_env_sets_runtime_guards(monkeypatch, tmp_
         "CURRENT_PLATFORM",
         PlatformMatrix(PlatformOS.DARWIN, PlatformISA.ARM64, PlatformAccel.MPS),
     )
+    monkeypatch.setenv("KMP_DUPLICATE_LIB_OK", "True")
 
     backend = DA3Backend(
         EnhanceConfig(

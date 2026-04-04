@@ -269,7 +269,7 @@ class DA3Backend:
             mpl_config_dir.mkdir(parents=True, exist_ok=True)
             env["MPLCONFIGDIR"] = str(mpl_config_dir)
         if CURRENT_PLATFORM is not None and CURRENT_PLATFORM.is_macos:
-            env.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
+            env["KMP_DUPLICATE_LIB_OK"] = "TRUE"
         return env
 
     def _build_worker_command(self, *args: str) -> list[str]:
