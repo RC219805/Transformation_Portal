@@ -74,7 +74,8 @@ def _env_float(name: str, default: float, minimum: float = 0.0) -> float:
 
 REPO_ROOT = Path(__file__).resolve().parent
 PORTAL_HTML = REPO_ROOT / "portal.html"
-PORTAL_VIDEO_ROOT = REPO_ROOT / "public" / "video"
+PORTAL_VIDEO_ASSET_NAME = "dna-portal-video-2.mp4"
+PORTAL_VIDEO_PATH = REPO_ROOT / "public" / "video" / PORTAL_VIDEO_ASSET_NAME
 ARCHIVE_GOVERNANCE_SCRIPT = REPO_ROOT / "tools" / "archive_governance.py"
 LUX_DEPTH_MODULE = "transformation_portal.lux_depth_v3"
 
@@ -190,14 +191,6 @@ def _validate_path_against_roots(
     if not _is_within_allowed_roots(resolved, allowed_roots):
         raise ValueError("Path outside allowed roots")
     return str(resolved)
-
-
-def _resolve_portal_video_path(asset_name: str) -> Path:
-    raw_name = str(asset_name or "").strip()
-    normalized_name = PurePosixPath(raw_name).name
-    if not raw_name or normalized_name != raw_name or normalized_name in {"", ".", ".."}:
-        raise ValueError("Invalid portal video asset")
-    return PORTAL_VIDEO_ROOT / normalized_name
 
 
 LOG_TAIL_LIMIT = 2000
@@ -2397,19 +2390,9 @@ async def serve_ui() -> Response:
     return FileResponse(str(PORTAL_HTML))
 
 
-@app.get("/portal/video/{asset_name}")
-async def serve_portal_video(asset_name: str) -> Response:
-    try:
-        asset_path = _resolve_portal_video_path(asset_name)
-    except ValueError:
-        return _error_response(
-            400,
-            code="INVALID_ARGUMENT",
-            message="invalid portal video asset",
-            details={"field": "asset_name"},
-        )
-
-    if not asset_path.is_file():
+@app.get("/portal/video/dna-portal-video-2.mp4")
+async def serve_portal_video() -> Response:
+    if not PORTAL_VIDEO_PATH.is_file():
         return _error_response(
             404,
             code="NOT_FOUND",
@@ -2417,26 +2400,16 @@ async def serve_portal_video(asset_name: str) -> Response:
         )
 
     return FileResponse(
-        str(asset_path),
-        media_type=_artifact_content_type(asset_path),
+        str(PORTAL_VIDEO_PATH),
+        media_type=_artifact_content_type(PORTAL_VIDEO_PATH),
         headers={"Cache-Control": PORTAL_VIDEO_CACHE_CONTROL},
     )
 
 
-@app.get("/v1/portal/video/{asset_name}")
-async def redirect_legacy_portal_video(asset_name: str) -> Response:
-    try:
-        asset_path = _resolve_portal_video_path(asset_name)
-    except ValueError:
-        return _error_response(
-            400,
-            code="INVALID_ARGUMENT",
-            message="invalid portal video asset",
-            details={"field": "asset_name"},
-        )
-
+@app.get("/v1/portal/video/dna-portal-video-2.mp4")
+async def redirect_legacy_portal_video() -> Response:
     return RedirectResponse(
-        url=f"/portal/video/{quote(asset_path.name)}",
+        url="/portal/video/dna-portal-video-2.mp4",
         status_code=307,
         headers={"Cache-Control": "no-store"},
     )

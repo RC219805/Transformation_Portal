@@ -99,12 +99,10 @@ def test_portal_video_endpoint_serves_background_asset(
     tmp_path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    video_root = tmp_path / "video"
-    video_root.mkdir(parents=True, exist_ok=True)
-    asset_path = video_root / "dna-portal-video-2.mp4"
+    asset_path = tmp_path / "dna-portal-video-2.mp4"
     asset_bytes = b"\x00\x00\x00\x20ftypisomportal-video"
     asset_path.write_bytes(asset_bytes)
-    monkeypatch.setattr(orchestrator_app, "PORTAL_VIDEO_ROOT", video_root)
+    monkeypatch.setattr(orchestrator_app, "PORTAL_VIDEO_PATH", asset_path)
 
     response = client.get("/portal/video/dna-portal-video-2.mp4")
 
@@ -114,22 +112,18 @@ def test_portal_video_endpoint_serves_background_asset(
     assert response.content == asset_bytes
 
 
-def test_legacy_portal_video_endpoint_redirects_to_cacheable_asset_route(
-    client: TestClient,
-    tmp_path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    video_root = tmp_path / "video"
-    video_root.mkdir(parents=True, exist_ok=True)
-    asset_path = video_root / "dna-portal-video-2.mp4"
-    asset_path.write_bytes(b"\x00\x00\x00\x20ftypisomportal-video")
-    monkeypatch.setattr(orchestrator_app, "PORTAL_VIDEO_ROOT", video_root)
-
+def test_legacy_portal_video_endpoint_redirects_to_cacheable_asset_route(client: TestClient) -> None:
     response = client.get("/v1/portal/video/dna-portal-video-2.mp4", follow_redirects=False)
 
     assert response.status_code == 307
     assert response.headers["Cache-Control"] == "no-store"
     assert response.headers["location"] == "/portal/video/dna-portal-video-2.mp4"
+
+
+def test_portal_video_endpoint_returns_not_found_for_unknown_assets(client: TestClient) -> None:
+    response = client.get("/portal/video/not-allowed.mp4")
+
+    assert response.status_code == 404
 
 
 def test_presets_contract_for_lux_depth_pipeline(client: TestClient) -> None:
