@@ -384,34 +384,53 @@ def test_portal_resumes_blocked_streams_after_api_key_update() -> None:
     assert "resumeBlockedJobStreamsAfterAuthUpdate();" in bind_body
 
 
-def test_portal_bootstrap_loader_fetches_same_origin_bootstrap_contract() -> None:
+def test_portal_bootstrap_loader_uses_abortable_timeout_and_state_contract() -> None:
     portal_html = Path(__file__).resolve().parents[1] / "portal.html"
     content = portal_html.read_text(encoding="utf-8")
     default_body = _extract_js_function_body(content, "_defaultPortalBootstrap")
     body = _extract_js_function_body(content, "loadPortalBootstrap")
+    normalize_body = _extract_js_function_body(content, "_normalizeFetchFailureReason")
 
     assert "authMode: 'managed_unavailable'" in default_body
     assert "apiKeyInput: false" in default_body
     assert "directDebug: false" in default_body
-    assert "fetch(`${API_BASE}/portal/bootstrap`" in body
+    assert "const BOOTSTRAP_TIMEOUT_MS = 3500;" in content
+    assert "fetchWithTimeout(" in body
+    assert "`${API_BASE}/portal/bootstrap`" in body
+    assert "BOOTSTRAP_TIMEOUT_MS" in body
+    assert "status: 'pending'" in body
+    assert "onStart: _trackBootstrapRequest" in body
+    assert "onFinally: _clearTrackedBootstrapRequest" in body
     assert "if (res.status === 401 || res.status === 403)" in body
     assert "window.location.assign('/login');" in body
-    assert "_applyPortalBootstrap(payload);" in body
-    assert "_applyPortalBootstrap(fallback);" in body
+    assert "_applyPortalBootstrap(payload, { status: 'ready' });" in body
+    assert "_normalizeFetchFailureReason(error, 'bootstrap_timeout')" in body
+    assert "normalizedReason === 'timeout' || normalizedReason === 'network' ? 'degraded' : 'unavailable'" in body
+    assert (
+        "async function fetchWithTimeout(url, options = {}, timeoutMs = HEALTH_CHECK_TIMEOUT_MS, timeoutReason = 'request_timeout', lifecycle = null)"
+        in content
+    )
+    assert "timeoutError.name = 'AppTimeoutError';" in content
+    assert "timeoutError.reason = timeoutReason;" in content
+    assert "reason === String(timeoutReason || '').trim().toLowerCase()" in normalize_body
+    assert "name === 'timeouterror'" in normalize_body
+    assert "name === 'aborterror'" in normalize_body
 
 
 def test_portal_managed_mode_clears_api_keys_and_hides_secret_ui() -> None:
     portal_html = Path(__file__).resolve().parents[1] / "portal.html"
     content = portal_html.read_text(encoding="utf-8")
     clear_body = _extract_js_function_body(content, "_clearStoredApiKeyState")
-    apply_body = _extract_js_function_body(content, "_applyPortalBootstrap")
+    sync_body = _extract_js_function_body(content, "_syncBootstrapUi")
 
     assert "localStorage.removeItem(API_KEY_STORAGE_KEY);" in clear_body
     assert "sessionStorage.removeItem(API_KEY_STORAGE_KEY);" in clear_body
-    assert "_clearStoredApiKeyState();" in apply_body
-    assert "els.apiKeySection.classList.toggle('hidden', !state.auth.features.apiKeyInput);" in apply_body
-    assert "els.apiKeyInput.disabled = !state.auth.features.apiKeyInput;" in apply_body
-    assert "els.rememberApiKey.disabled = !state.auth.features.apiKeyInput;" in apply_body
+    assert "_clearStoredApiKeyState(true);" in content
+    assert "_loadApiKeyIntoInputs();" in content
+    assert "const showApiKeyInput = bootstrapReady && state.auth.features.apiKeyInput;" in sync_body
+    assert "els.apiKeySection.classList.toggle('hidden', !showApiKeyInput);" in sync_body
+    assert "els.apiKeyInput.disabled = !showApiKeyInput;" in sync_body
+    assert "els.rememberApiKey.disabled = !showApiKeyInput;" in sync_body
 
 
 def test_portal_managed_mode_uses_csrf_instead_of_browser_backend_secrets() -> None:
@@ -425,6 +444,24 @@ def test_portal_managed_mode_uses_csrf_instead_of_browser_backend_secrets() -> N
     assert "headers['X-CSRF-Token'] = state.auth.csrfToken;" in content
     assert "headers['Authorization'] = `Bearer ${token}`;" in content
     assert "headers['x-api-key'] = token;" in content
+
+
+def test_portal_auth_helpers_fail_closed_until_bootstrap_ready() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+    persist_body = _extract_js_function_body(content, "_persistApiKeyFromInputs")
+    load_body = _extract_js_function_body(content, "_loadApiKeyIntoInputs")
+    current_token_body = _extract_js_function_body(content, "_currentApiToken")
+
+    assert 'data-bootstrap-status="pending"' in content
+    assert "if (!_isBootstrapReady()) {" in persist_body
+    assert "_clearStoredApiKeyState(false);" in persist_body
+    assert "if (!_isBootstrapReady()) {" in load_body
+    assert "_clearStoredApiKeyState(false);" in load_body
+    assert "if (!_isBootstrapReady()) return '';" in current_token_body
+    assert "function _buildAuthHeaders(base = {}, method = 'GET') {" in content
+    assert "if (!_isBootstrapReady()) {" in content
+    assert "return headers;" in content
 
 
 def test_portal_health_checks_route_to_front_door_in_managed_mode() -> None:
@@ -542,13 +579,17 @@ def test_portal_preset_selection_applies_recommended_defaults_without_changing_c
     assert "recommended_args" in fetch_body
 
 
-def test_portal_init_loads_bootstrap_before_restoring_api_key_state() -> None:
+def test_portal_init_establishes_interactive_shell_before_bootstrap_settles() -> None:
     portal_html = Path(__file__).resolve().parents[1] / "portal.html"
     content = portal_html.read_text(encoding="utf-8")
     body = _extract_js_function_body(content, "init")
 
-    assert "await loadPortalBootstrap();" in body
-    assert "_loadApiKeyIntoInputs();" in body
+    assert "const bootstrapPromise = loadPortalBootstrap();" in body
+    assert "_syncBootstrapUi();" in body
+    assert "renderJobQueue();" in body
+    assert "startHealthPolling();" in body
+    assert "await bootstrapPromise;" in body
+    assert "await loadPortalBootstrap();" not in body
 
 
 def test_portal_verbose_quiet_conflict_is_notified_and_blocked() -> None:

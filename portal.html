@@ -851,7 +851,7 @@
         }
     </style>
 </head>
-<body data-console-view="overview" class="shell-bg text-slate-900 dark:text-slate-100 antialiased selection:bg-cyan-500/25 transition-colors duration-300">
+<body data-console-view="overview" data-bootstrap-status="pending" class="shell-bg text-slate-900 dark:text-slate-100 antialiased selection:bg-cyan-500/25 transition-colors duration-300">
 
     <div aria-hidden="true" class="portal-video-backdrop">
         <video
@@ -943,7 +943,7 @@
                             </p>
                         </div>
                         <div class="flex flex-wrap gap-3">
-                            <button id="heroRunBtn" type="button" class="hero-action hero-action-primary focus:outline-none focus:ring-2 focus:ring-cyan-500">
+                            <button id="heroRunBtn" type="button" class="hero-action hero-action-primary focus:outline-none focus:ring-2 focus:ring-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
                                 Dispatch Current Job
                             </button>
                             <button id="heroExportBtn" type="button" class="hero-action hero-action-secondary focus:outline-none focus:ring-2 focus:ring-cyan-500">
@@ -1542,7 +1542,7 @@
                     </div>
 
                     <div class="mt-6 border-t border-slate-200 dark:border-slate-800 pt-6">
-                        <button id="runJobBtn" type="button" class="w-full rounded-2xl px-6 py-4 text-[14px] font-extrabold uppercase tracking-[0.14em] text-white shadow-glow transition-all focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed bg-gradient-to-r from-teal-700 via-cyan-600 to-sky-600 hover:from-teal-600 hover:via-cyan-500 hover:to-sky-500 dark:focus:ring-offset-slate-900">
+                        <button id="runJobBtn" type="button" class="w-full rounded-2xl px-6 py-4 text-[14px] font-extrabold uppercase tracking-[0.14em] text-white shadow-glow transition-all focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed bg-gradient-to-r from-teal-700 via-cyan-600 to-sky-600 hover:from-teal-600 hover:via-cyan-500 hover:to-sky-500 dark:focus:ring-offset-slate-900" disabled>
                             Execute Job
                         </button>
                     </div>
@@ -1749,6 +1749,7 @@
         const STORAGE_KEY = 'tp_orchestrator_profiles_final';
         const API_KEY_STORAGE_KEY = 'tp_api_key';
         const MAX_JOB_LOG_LINES = 1200;
+        const BOOTSTRAP_TIMEOUT_MS = 3500;
         const HEALTH_CHECK_INTERVAL_MS = 15000;
         const HEALTH_CHECK_TIMEOUT_MS = 2000;
         const HEALTH_CHECK_MIN_GAP_MS = 10000;
@@ -1842,6 +1843,14 @@
                     apiKeyInput: false,
                     directDebug: false
                 }
+            },
+            bootstrap: {
+                status: 'pending',
+                lastErrorReason: '',
+                lastHttpStatus: 0,
+                activeController: null,
+                activeTimeoutId: null,
+                lastTransitionAt: Date.now()
             },
             lastDiagnostics: {
                 warnings: [],
@@ -3283,6 +3292,63 @@
             };
         }
 
+        function _isBootstrapReady() {
+            return state.bootstrap && state.bootstrap.status === 'ready';
+        }
+
+        function _setBootstrapStatus(status, reason = '', httpStatus = 0) {
+            const allowedStatuses = new Set(['pending', 'ready', 'degraded', 'unavailable']);
+            const nextStatus = allowedStatuses.has(status) ? status : 'pending';
+            state.bootstrap.status = nextStatus;
+            state.bootstrap.lastErrorReason = String(reason || '').trim();
+            state.bootstrap.lastHttpStatus = Number.isFinite(Number(httpStatus)) ? Number(httpStatus) : 0;
+            state.bootstrap.lastTransitionAt = Date.now();
+            if (document.body) {
+                document.body.dataset.bootstrapStatus = nextStatus;
+            }
+        }
+
+        function _trackBootstrapRequest(controller, timeoutId) {
+            state.bootstrap.activeController = controller;
+            state.bootstrap.activeTimeoutId = timeoutId;
+        }
+
+        function _clearTrackedBootstrapRequest(controller, timeoutId) {
+            if (state.bootstrap.activeController === controller) {
+                state.bootstrap.activeController = null;
+            }
+            if (state.bootstrap.activeTimeoutId === timeoutId) {
+                state.bootstrap.activeTimeoutId = null;
+            }
+        }
+
+        function _cancelPendingBootstrapRequest(reason = 'request_aborted') {
+            const controller = state.bootstrap.activeController;
+            const timeoutId = state.bootstrap.activeTimeoutId;
+            state.bootstrap.activeController = null;
+            state.bootstrap.activeTimeoutId = null;
+            if (timeoutId !== null) {
+                clearTimeout(timeoutId);
+            }
+            if (controller && !controller.signal.aborted) {
+                controller.abort(reason);
+            }
+        }
+
+        function _portalPrivilegesReady() {
+            return _isBootstrapReady() && !_isManagedUnavailableMode();
+        }
+
+        function _syncBootstrapGuardedControls() {
+            const canRunJobs = _portalPrivilegesReady();
+            if (els.runJobBtn && els.runJobBtn.textContent !== 'Dispatching...') {
+                els.runJobBtn.disabled = !canRunJobs;
+            }
+            if (els.heroRunBtn) {
+                els.heroRunBtn.disabled = !canRunJobs;
+            }
+        }
+
         function _isManagedAuthMode() {
             return state.auth && state.auth.mode !== 'direct_debug';
         }
@@ -3291,15 +3357,49 @@
             return state.auth && state.auth.mode === 'managed_unavailable';
         }
 
-        function _clearStoredApiKeyState() {
-            localStorage.removeItem(API_KEY_STORAGE_KEY);
-            sessionStorage.removeItem(API_KEY_STORAGE_KEY);
+        function _clearStoredApiKeyState(clearPersisted = true) {
+            if (clearPersisted) {
+                localStorage.removeItem(API_KEY_STORAGE_KEY);
+                sessionStorage.removeItem(API_KEY_STORAGE_KEY);
+            }
             if (els.apiKeyInput) els.apiKeyInput.value = '';
             if (els.rememberApiKey) els.rememberApiKey.checked = false;
         }
 
-        function _applyPortalBootstrap(rawBootstrap) {
+        function _syncBootstrapUi() {
+            const bootstrapReady = _isBootstrapReady();
+            const showApiKeyInput = bootstrapReady && state.auth.features.apiKeyInput;
+            const badgeLabel = bootstrapReady ? state.auth.mode : 'unknown';
+            if (els.apiKeySection) {
+                els.apiKeySection.classList.toggle('hidden', !showApiKeyInput);
+            }
+            if (els.authModeBadge) {
+                els.authModeBadge.textContent = badgeLabel;
+            }
+            if (els.apiKeyManagedHint) {
+                if (bootstrapReady && !_isManagedAuthMode()) {
+                    els.apiKeyManagedHint.classList.add('hidden');
+                } else {
+                    els.apiKeyManagedHint.classList.remove('hidden');
+                    els.apiKeyManagedHint.textContent = bootstrapReady
+                        ? 'Managed mode is active. Backend credentials stay server-side and are never stored in the browser.'
+                        : 'Bootstrap is still being confirmed. Privileged actions remain disabled until portal authentication is resolved.';
+                }
+            }
+            if (els.apiKeyInput) {
+                els.apiKeyInput.disabled = !showApiKeyInput;
+            }
+            if (els.rememberApiKey) {
+                els.rememberApiKey.disabled = !showApiKeyInput;
+            }
+            _syncBootstrapGuardedControls();
+        }
+
+        function _applyPortalBootstrap(rawBootstrap, options = {}) {
             const bootstrap = rawBootstrap && typeof rawBootstrap === 'object' ? rawBootstrap : _defaultPortalBootstrap();
+            const nextStatus = ['pending', 'ready', 'degraded', 'unavailable'].includes(String(options.status || ''))
+                ? String(options.status)
+                : 'ready';
             const mode = bootstrap.authMode === 'managed'
                 ? 'managed'
                 : bootstrap.authMode === 'direct_debug'
@@ -3315,49 +3415,82 @@
                     directDebug: mode === 'direct_debug' && bootstrap.features?.directDebug !== false
                 }
             };
+            _setBootstrapStatus(nextStatus, options.reason || '', options.httpStatus || 0);
+            if (_isBootstrapReady() && isManagedMode) {
+                _clearStoredApiKeyState(true);
+            }
+            _loadApiKeyIntoInputs();
+            _syncBootstrapUi();
+        }
 
-            if (isManagedMode) {
-                _clearStoredApiKeyState();
+        function _normalizeFetchFailureReason(error, timeoutReason = 'request_timeout') {
+            const reason = String(error && typeof error === 'object' && 'reason' in error ? error.reason : '').trim().toLowerCase();
+            const name = String(error && typeof error === 'object' && 'name' in error ? error.name : '').trim().toLowerCase();
+            const message = String(error instanceof Error ? error.message : error || '').trim().toLowerCase();
+            const combined = `${reason} ${name} ${message}`.trim();
+            if (
+                reason === String(timeoutReason || '').trim().toLowerCase()
+                || name === 'timeouterror'
+                || combined.includes('timed out')
+                || combined.includes('timeout')
+            ) {
+                return 'timeout';
             }
-
-            if (els.apiKeySection) {
-                els.apiKeySection.classList.toggle('hidden', !state.auth.features.apiKeyInput);
+            if (reason === 'request_aborted' || reason === 'navigation_abort' || name === 'aborterror') {
+                return 'aborted';
             }
-            if (els.authModeBadge) {
-                els.authModeBadge.textContent = mode;
+            if (combined.includes('failed to fetch') || combined.includes('networkerror') || combined.includes('load failed')) {
+                return 'network';
             }
-            if (els.apiKeyManagedHint) {
-                els.apiKeyManagedHint.classList.toggle('hidden', !isManagedMode);
-            }
-            if (els.apiKeyInput) {
-                els.apiKeyInput.disabled = !state.auth.features.apiKeyInput;
-            }
-            if (els.rememberApiKey) {
-                els.rememberApiKey.disabled = !state.auth.features.apiKeyInput;
-            }
+            return 'error';
         }
 
         async function loadPortalBootstrap() {
             const fallback = _defaultPortalBootstrap();
+            _cancelPendingBootstrapRequest('bootstrap_replaced');
+            _applyPortalBootstrap(fallback, { status: 'pending' });
             try {
-                const res = await fetch(`${API_BASE}/portal/bootstrap`, {
-                    headers: { 'Accept': 'application/json' },
-                    cache: 'no-store'
-                });
+                const res = await fetchWithTimeout(
+                    `${API_BASE}/portal/bootstrap`,
+                    {
+                        headers: { 'Accept': 'application/json' },
+                        cache: 'no-store'
+                    },
+                    BOOTSTRAP_TIMEOUT_MS,
+                    'bootstrap_timeout',
+                    {
+                        onStart: _trackBootstrapRequest,
+                        onFinally: _clearTrackedBootstrapRequest
+                    }
+                );
                 if (res.status === 401 || res.status === 403) {
-                    _applyPortalBootstrap(fallback);
+                    _applyPortalBootstrap(fallback, { status: 'unavailable', reason: 'auth', httpStatus: res.status });
                     window.location.assign('/login');
                     return;
                 }
                 if (!res.ok) {
-                    _applyPortalBootstrap(fallback);
+                    const status = res.status >= 500 ? 'degraded' : 'unavailable';
+                    _applyPortalBootstrap(fallback, { status, reason: `http_${res.status}`, httpStatus: res.status });
                     createToast('Managed front door unavailable. Privileged actions remain blocked until authentication is restored.', 'error');
                     return;
                 }
-                const payload = await res.json();
-                _applyPortalBootstrap(payload);
-            } catch {
-                _applyPortalBootstrap(fallback);
+                let payload = null;
+                try {
+                    payload = await res.json();
+                } catch {
+                    _applyPortalBootstrap(fallback, { status: 'unavailable', reason: 'invalid_json' });
+                    createToast('Portal bootstrap returned an invalid response. Privileged actions remain blocked.', 'error');
+                    return;
+                }
+                _applyPortalBootstrap(payload, { status: 'ready' });
+                void checkBackend(true);
+            } catch (error) {
+                const normalizedReason = _normalizeFetchFailureReason(error, 'bootstrap_timeout');
+                if (normalizedReason === 'aborted') {
+                    return;
+                }
+                const status = normalizedReason === 'timeout' || normalizedReason === 'network' ? 'degraded' : 'unavailable';
+                _applyPortalBootstrap(fallback, { status, reason: normalizedReason });
                 createToast('Managed front door unavailable. Privileged actions remain blocked until authentication is restored.', 'error');
             }
         }
@@ -3369,6 +3502,7 @@
         }
 
         function _healthEndpointPath() {
+            if (!_isBootstrapReady()) return '/healthz';
             return _isManagedAuthMode() ? '/healthz' : '/ready';
         }
 
@@ -3380,8 +3514,12 @@
         }
 
         function _persistApiKeyFromInputs() {
+            if (!_isBootstrapReady()) {
+                _clearStoredApiKeyState(false);
+                return;
+            }
             if (_isManagedAuthMode()) {
-                _clearStoredApiKeyState();
+                _clearStoredApiKeyState(true);
                 return;
             }
             const remember = Boolean(els.rememberApiKey && els.rememberApiKey.checked);
@@ -3401,8 +3539,12 @@
         }
 
         function _loadApiKeyIntoInputs() {
+            if (!_isBootstrapReady()) {
+                _clearStoredApiKeyState(false);
+                return;
+            }
             if (_isManagedAuthMode()) {
-                _clearStoredApiKeyState();
+                _clearStoredApiKeyState(true);
                 return;
             }
             const localValue = localStorage.getItem(API_KEY_STORAGE_KEY) || '';
@@ -3413,6 +3555,7 @@
         }
 
         function _currentApiToken() {
+            if (!_isBootstrapReady()) return '';
             if (_isManagedAuthMode()) return '';
             return _normalizeApiToken(
                 (els.apiKeyInput && els.apiKeyInput.value) ||
@@ -3425,6 +3568,9 @@
         function _buildAuthHeaders(base = {}, method = 'GET') {
             const headers = { ...base };
             const normalizedMethod = String(method || 'GET').toUpperCase();
+            if (!_isBootstrapReady()) {
+                return headers;
+            }
             if (_isManagedAuthMode()) {
                 if (!SAFE_HTTP_METHODS.has(normalizedMethod) && state.auth.csrfToken) {
                     headers['X-CSRF-Token'] = state.auth.csrfToken;
@@ -4022,6 +4168,7 @@
             state.jobs.forEach(stopJobActivity);
             if (healthPollIntervalId !== null) stopHealthPolling();
             if (sseWatchdogIntervalId !== null) stopSseWatchdog();
+            _cancelPendingBootstrapRequest('navigation_abort');
         }
 
         function scheduleRenderJobQueue() {
@@ -4033,17 +4180,43 @@
             });
         }
 
-        async function fetchWithTimeout(url, options = {}, timeoutMs = HEALTH_CHECK_TIMEOUT_MS) {
-            if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function') {
-                return fetch(url, { ...options, signal: AbortSignal.timeout(timeoutMs) });
-            }
-
+        async function fetchWithTimeout(url, options = {}, timeoutMs = HEALTH_CHECK_TIMEOUT_MS, timeoutReason = 'request_timeout', lifecycle = null) {
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+            let didTimeout = false;
+            const timeoutId = setTimeout(() => {
+                didTimeout = true;
+                controller.abort(timeoutReason);
+            }, timeoutMs);
+            let abortListener = null;
+            if (options && options.signal && options.signal !== controller.signal) {
+                if (options.signal.aborted) {
+                    controller.abort(options.signal.reason || 'request_aborted');
+                } else {
+                    abortListener = () => controller.abort(options.signal.reason || 'request_aborted');
+                    options.signal.addEventListener('abort', abortListener, { once: true });
+                }
+            }
+            if (lifecycle && typeof lifecycle.onStart === 'function') {
+                lifecycle.onStart(controller, timeoutId);
+            }
             try {
                 return await fetch(url, { ...options, signal: controller.signal });
+            } catch (error) {
+                if (didTimeout) {
+                    const timeoutError = new Error(timeoutReason);
+                    timeoutError.name = 'AppTimeoutError';
+                    timeoutError.reason = timeoutReason;
+                    throw timeoutError;
+                }
+                throw error;
             } finally {
                 clearTimeout(timeoutId);
+                if (abortListener && options && options.signal) {
+                    options.signal.removeEventListener('abort', abortListener);
+                }
+                if (lifecycle && typeof lifecycle.onFinally === 'function') {
+                    lifecycle.onFinally(controller, timeoutId);
+                }
             }
         }
 
@@ -5040,7 +5213,7 @@
                 const safePipeline = String(job.pipeline || 'unknown');
                 const safeId = String(job.id || 'job_unknown');
                 const safeProgress = Math.max(0, Math.min(100, Number(job.progress) || 0));
-                const canCancel = job.state === 'running' || job.state === 'queued';
+                const canCancel = _portalPrivilegesReady() && (job.state === 'running' || job.state === 'queued');
                 const artifactCount = Array.isArray(job.artifacts) ? job.artifacts.length : 0;
                 const errorLine = getReadableError(job.error);
                 const transportLabel = formatTransportLabel(job);
@@ -5592,6 +5765,9 @@
                 els.runJobBtn.disabled = true;
                 els.runJobBtn.textContent = "Dispatching...";
             }
+            if (els.heroRunBtn) {
+                els.heroRunBtn.disabled = true;
+            }
 
             const randomId = window.crypto?.randomUUID ? window.crypto.randomUUID().replace(/-/g, '').slice(0, 8) : Math.random().toString(36).slice(2, 8);
             const localId = `job_${randomId}`;
@@ -5664,9 +5840,9 @@
                     if (state.selectedJobId === job.id && els.logStatusIndicator) els.logStatusIndicator.classList.add('hidden');
                 } finally {
                     if (els.runJobBtn) {
-                        els.runJobBtn.disabled = false;
                         els.runJobBtn.textContent = "Execute Job";
                     }
+                    _syncBootstrapGuardedControls();
                 }
             } else {
                 job.state = 'running';
@@ -5676,9 +5852,9 @@
                 appendJobLog(job, offlineLine);
                 logToPane(job.id, offlineLine);
                 if (els.runJobBtn) {
-                    els.runJobBtn.disabled = false;
                     els.runJobBtn.textContent = "Execute Job";
                 }
+                _syncBootstrapGuardedControls();
                 let progress = 0;
                 job.mockInterval = setInterval(() => {
                     if (job.state !== 'running') {
@@ -6120,20 +6296,21 @@
                 if (!localStorage.getItem('tp_theme')) setTheme(e.matches ? 'dark' : 'light');
             });
 
-            await loadPortalBootstrap();
-            _loadApiKeyIntoInputs();
+            const bootstrapPromise = loadPortalBootstrap();
             seedPresetFallbacks();
             refreshProfileDropdown();
             applyConsoleRouteFromLocation(true);
             updateUIFromState();
             bindInputs();
             setupSectionRail();
+            _syncBootstrapUi();
             renderJobQueue();
             renderArtifactPanel();
             renderSelectedJobInspector();
             renderMissionControl();
             void checkBackend(true);
             startHealthPolling();
+            await bootstrapPromise;
         }
 
         document.addEventListener('DOMContentLoaded', () => {
