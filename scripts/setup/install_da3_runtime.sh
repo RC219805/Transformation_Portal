@@ -111,6 +111,8 @@ fi
 log "Synchronizing Depth Anything 3 checkout to ${REF}"
 run git -C "${CHECKOUT_DIR}" fetch --tags origin
 run git -C "${CHECKOUT_DIR}" checkout "${REF}"
+run git -C "${CHECKOUT_DIR}" reset --hard "${REF}"
+run git -C "${CHECKOUT_DIR}" clean -fd
 
 if [[ ! -d "${VENV_DIR}" ]]; then
     log "Creating isolated DA3 venv at ${VENV_DIR}"
