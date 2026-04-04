@@ -132,7 +132,10 @@ def _frontdoor_state_probe_expression() -> str:
     pathname: window.location.pathname,
     homepageHeading: text('main h1'),
     loginHeading: text('.card h1'),
+    brandAssetPresent: !!document.querySelector('.brand-asset'),
     hasHeroVideo: !!document.querySelector('.hero-video'),
+    loginFormPresent: !!document.querySelector('form[action="/login"]'),
+    usernamePresent: !!document.querySelector('input[name="username"]'),
     usernameValue: value('input[name="username"]'),
     passwordPresent: !!document.querySelector('input[name="password"]'),
     authModeBadge: text('#authModeBadge'),
@@ -251,7 +254,9 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             predicate=lambda value: (
                 isinstance(value, dict)
                 and str(value.get("pathname", "")) == "/login"
-                and "Operator Login" in str(value.get("loginHeading", ""))
+                and bool(value.get("brandAssetPresent"))
+                and bool(value.get("loginFormPresent"))
+                and bool(value.get("usernamePresent"))
                 and bool(value.get("passwordPresent"))
             ),
             timeout_seconds=args.timeout_seconds,

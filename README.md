@@ -57,6 +57,8 @@ Portal surfaces:
   - `/` public Dynamic Neural Access homepage
   - `/login` operator login
   - `/portal` governed operator console
+- `GET /healthz` is the managed front-door health contract; FastAPI `GET /ready` remains the backend readiness contract.
+- Shared public branding assets now live at `web/secure-landing/public/brand/dna-mark-dark.svg`, `web/secure-landing/public/brand/dna-mark-light.svg`, and `web/secure-landing/public/video/dna-loop.mp4`.
 - Direct FastAPI portal access is now a `direct_debug` workflow for local troubleshooting, not the preferred production browser path.
 - The front door is a Node app. `web/secure-landing` now documents and enforces its supported Node runtime range, with `22.x` LTS recommended.
 

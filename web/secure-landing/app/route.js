@@ -2,7 +2,7 @@ import { NextResponse } from "next/server.js";
 
 import { getSessionFromRequest } from "../lib/sessions.js";
 import { applySecurityHeaders, FRONTDOOR_CSP } from "../lib/http.js";
-import { escapeHtml, renderLanternMark } from "../lib/brand.js";
+import { escapeHtml, FRONTDOOR_ASSETS, renderBrandAsset } from "../lib/brand.js";
 
 export const runtime = "nodejs";
 
@@ -29,13 +29,19 @@ function renderHomepage({ operatorHref, operatorLabel }) {
         poster=""
         aria-hidden="true"
       >
-        <source src="/video/login-loop.mp4" type="video/mp4" />
+        <source src="${FRONTDOOR_ASSETS.loopVideo}" type="video/mp4" />
       </video>
       <div class="homepage-noise" aria-hidden="true"></div>
       <section class="homepage-content">
         <header class="site-header">
           <a class="brand-lockup" href="/" aria-label="Dynamic Neural Access home">
-            <span class="brand-mark-shell">${renderLanternMark("Dynamic Neural Access brand mark")}</span>
+            <span class="brand-asset-frame brand-asset-frame--header">
+              ${renderBrandAsset({
+                variant: "dark",
+                alt: "Dynamic Neural Access",
+                className: "brand-asset brand-asset--header"
+              })}
+            </span>
             <span class="brand-copy">
               <span class="brand-kicker">Dynamic Neural Access</span>
               <span class="brand-title">Certified premium media, governed from first proof to final distribution.</span>

@@ -245,27 +245,40 @@ test("login POST rotates the session and redirects authenticated users to /porta
   }
 });
 
-test("login GET renders the hero-video shell while preserving current front-door messaging", async () => {
+test("login GET serves a minimal branded sign-in shell and boots an anonymous session", async () => {
   const env = withTempEnvironment({
     NODE_ENV: "development",
     TP_ALLOW_LOCAL_ACCESS_BYPASS: "1"
   });
 
   try {
+    const sessions = await importFresh("../lib/sessions.js");
     const { GET } = await importFresh("../app/login/route.js");
     const request = buildRequest("http://localhost:3000/login");
 
     const response = await GET(request);
     const html = await response.text();
+    const sessionCookie = extractSessionCookie(response);
 
     assert.equal(response.status, 200);
+    assert.equal(response.headers.get("cache-control"), "no-store");
+    assert.match(response.headers.get("content-security-policy") || "", /default-src 'self'/);
     assert.match(html, /class="hero-video"/);
     assert.match(html, /preload="metadata"/);
-    assert.match(html, /Operator Login/);
-    assert.match(html, /Secure operator access to governed orchestration\./);
-    assert.match(html, /Need access\?/);
+    assert.match(html, /\/video\/dna-loop\.mp4/);
+    assert.match(html, /\/brand\/dna-mark-dark\.svg/);
+    assert.match(html, /Transformation Portal operator console/);
+    assert.match(html, /form method="post" action="\/login"/);
+    assert.match(html, /name="username"/);
+    assert.match(html, /name="password"/);
+    assert.match(html, />Sign in</);
+    assert.doesNotMatch(html, /Authorized operators only\./);
+    assert.doesNotMatch(html, /Need access\?/);
+    assert.doesNotMatch(html, /Secure operator access to governed orchestration\./);
     assert.doesNotMatch(html, /Local development bypass is enabled\./);
     assert.doesNotMatch(html, /TP_CF_ACCESS_TEAM_DOMAIN/);
+    assert.ok(sessionCookie.value);
+    assert.equal(sessions.getSessionById(sessionCookie.value, { touch: false })?.authenticated, false);
   } finally {
     env.cleanup();
   }
@@ -284,6 +297,8 @@ test("homepage GET serves the public DNA landing page instead of redirecting", a
     assert.equal(response.status, 200);
     assert.equal(response.headers.get("cache-control"), "no-store");
     assert.match(response.headers.get("content-security-policy") || "", /default-src 'self'/);
+    assert.match(html, /\/video\/dna-loop\.mp4/);
+    assert.match(html, /\/brand\/dna-mark-dark\.svg/);
     assert.match(html, /Certified Premium Media for the AI Era/);
     assert.match(html, /Certify Your Media/);
     assert.match(html, /How it works/);

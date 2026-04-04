@@ -8,6 +8,7 @@ The secure front door is a separate Node app in `web/secure-landing/`.
 - The front door proxies `/portal` and `/v1/*` to FastAPI server-to-server.
 - The backend API key stays on the front door and is never exposed to the browser in managed mode.
 - The FastAPI origin remains the system of record for `GET /`, `GET /ready`, and `/v1/*`.
+- `GET /healthz` is the managed front-door health contract; FastAPI `GET /ready` remains the backend readiness contract and is not mirrored under `/api/*` by default.
 
 In production, place the front door behind Cloudflare Tunnel + Access and keep the FastAPI origin off the public browser path.
 
@@ -75,11 +76,16 @@ Open `http://127.0.0.1:3000/`.
 
 Route ownership:
 - `GET /` serves the public Dynamic Neural Access homepage, even for authenticated operators.
-- `GET /login` serves the separate login page with the video background.
+- `GET /login` serves the separate login page with the video background and boots the anonymous session cookie that binds the hidden CSRF token before credential submission.
 - `GET /portal` proxies the existing FastAPI portal UI.
 - `GET /portal/bootstrap` returns the managed-mode bootstrap contract for the browser UI.
 - `/v1/*` stays same-origin at the front door and is proxied to FastAPI with server-side secret injection.
 - `GET /healthz` reports front-door readiness plus backend reachability.
+
+Static front-door assets:
+- `/brand/dna-mark-dark.svg` for dark/video-backed front-door surfaces
+- `/brand/dna-mark-light.svg` for light surfaces
+- `/video/dna-loop.mp4` as the canonical branded loop for homepage and login
 
 ## Portal Modes
 
@@ -144,6 +150,9 @@ TP_FRONTDOOR_USERNAME="<username>" \
 TP_FRONTDOOR_PASSWORD="<password>" \
 python scripts/validation/validate_frontdoor_browser_smoke.py
 ```
+
+For release validation, prefer running the browser smoke against `npm run start`
+after a successful `npm run build`, not only against `next dev`.
 
 FastAPI contract gate:
 
