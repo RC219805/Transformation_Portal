@@ -228,6 +228,9 @@ class EnhanceConfig:
     # Optional Python executable for a
     # dedicated DA3 / depth-anything-3 environment
     da3_python_executable: Optional[str] = None
+    # Timeout for DA3 subprocess calls
+    # (readiness + inference)
+    da3_subprocess_timeout_seconds: int = 900
 
     # Fallback configuration
     depth_fallback: str = "fail"  # Options: "fail", "skip", "v2-auto"

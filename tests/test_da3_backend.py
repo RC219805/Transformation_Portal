@@ -154,6 +154,7 @@ def test_da3_backend_subprocess_ensure_available_skips_local_dependency_checks(t
         EnhanceConfig(
             depth_device="cpu",
             da3_python_executable=str(python_executable),
+            da3_subprocess_timeout_seconds=321,
         )
     )
 
@@ -173,6 +174,7 @@ def test_da3_backend_subprocess_ensure_available_skips_local_dependency_checks(t
     command = mock_run.call_args.args[0]
     assert "--check" in command
     assert "METRIC_LARGE" in command
+    assert mock_run.call_args.kwargs["timeout"] == 321
 
 
 def test_da3_backend_subprocess_worker_env_sets_runtime_guards(monkeypatch, tmp_path):
@@ -231,6 +233,34 @@ def test_da3_backend_subprocess_dependency_failure_reports_category(tmp_path):
             backend.ensure_available()
 
 
+def test_da3_backend_subprocess_launch_oserror_reports_category(tmp_path):
+    """Launch-time OS errors should still map to a stable failure category."""
+    from unittest.mock import patch
+
+    from transformation_portal.lux_depth_v3.config import EnhanceConfig
+
+    python_executable = tmp_path / ".venv-da3" / "bin" / "python"
+    python_executable.parent.mkdir(parents=True)
+    python_executable.write_text("#!/bin/sh\n", encoding="utf-8")
+
+    backend = DA3Backend(
+        EnhanceConfig(
+            depth_device="cpu",
+            da3_python_executable=str(python_executable),
+            da3_subprocess_timeout_seconds=45,
+        )
+    )
+
+    with patch(
+        "transformation_portal.depth.backends.da3.subprocess.run",
+        side_effect=PermissionError("Permission denied"),
+    ) as mock_run:
+        with pytest.raises(ImportError, match="Failure category: startup_failed"):
+            backend.ensure_available()
+
+    assert mock_run.call_args.kwargs["timeout"] == 45
+
+
 def test_da3_backend_subprocess_protocol_error_reports_category(tmp_path):
     """Missing worker outputs should be normalized as protocol errors."""
     from unittest.mock import MagicMock, patch
@@ -271,11 +301,14 @@ def test_da3_backend_subprocess_compute_returns_depth_result(tmp_path):
         EnhanceConfig(
             depth_device="cpu",
             da3_python_executable=str(python_executable),
+            da3_subprocess_timeout_seconds=123,
         )
     )
 
+    seen_timeouts = []
+
     def fake_run(command, **kwargs):
-        del kwargs
+        seen_timeouts.append(kwargs["timeout"])
         if "--check" in command:
             return MagicMock(returncode=0, stdout="", stderr="")
 
@@ -309,6 +342,36 @@ def test_da3_backend_subprocess_compute_returns_depth_result(tmp_path):
     assert result.metadata["runner"]["mode"] == "subprocess"
     assert result.metadata["runner"]["python_executable"] == backend._python_executable
     assert any("normalized to relative" in warning for warning in result.warnings)
+    assert seen_timeouts == [123, 123]
+
+
+def test_da3_backend_subprocess_compute_launch_oserror_reports_category(tmp_path):
+    """Inference launch OS errors should stay normalized for operators."""
+    from unittest.mock import patch
+
+    from transformation_portal.lux_depth_v3.config import EnhanceConfig
+
+    python_executable = tmp_path / ".venv-da3" / "bin" / "python"
+    python_executable.parent.mkdir(parents=True)
+    python_executable.write_text("#!/bin/sh\n", encoding="utf-8")
+
+    backend = DA3Backend(
+        EnhanceConfig(
+            depth_device="cpu",
+            da3_python_executable=str(python_executable),
+            da3_subprocess_timeout_seconds=17,
+        )
+    )
+    backend._subprocess_available_checked = True
+
+    with patch(
+        "transformation_portal.depth.backends.da3.subprocess.run",
+        side_effect=PermissionError("Permission denied"),
+    ) as mock_run:
+        with pytest.raises(RuntimeError, match="Failure category: startup_failed"):
+            backend.compute(np.zeros((4, 5, 3), dtype=np.uint8))
+
+    assert mock_run.call_args.kwargs["timeout"] == 17
 
 
 @pytest.mark.skipif(

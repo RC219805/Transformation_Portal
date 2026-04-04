@@ -155,9 +155,10 @@ lux-depth-v3 \
   --da3-python ./.venv-da3/bin/python
 ```
 
-The repo-local DA3 setup script keeps the upstream checkout under `.runtime/Depth-Anything-3`,
-the interpreter contract at `./.venv-da3/bin/python`, and leaves the main repo `.venv`
-unchanged.
+The repo-local DA3 setup script pins the upstream checkout to a validated ref under
+`.runtime/Depth-Anything-3`, keeps the interpreter contract at `./.venv-da3/bin/python`,
+captures a `.runtime/da3-pip-freeze.txt` snapshot for debugging/provenance, and leaves
+the main repo `.venv` unchanged.
 
 **Depth Pro (requires license acceptance):**
 ```bash

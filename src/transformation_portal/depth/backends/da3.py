@@ -43,6 +43,7 @@ logger = logging.getLogger(__name__)
 
 DA3_RECOMMENDED_VENV = "./.venv-da3/bin/python"
 DA3_SETUP_SCRIPT = "./scripts/setup/install_da3_runtime.sh"
+DEFAULT_DA3_SUBPROCESS_TIMEOUT_SECONDS = 900
 
 _DEPENDENCY_FAILURE_MARKERS = (
     "modulenotfounderror",
@@ -149,6 +150,7 @@ class DA3Backend:
         self._repo_root = self._find_repo_root()
         self._repo_src = self._repo_root / "src" if self._repo_root is not None else None
         self._python_executable = self._resolve_python_executable(config)
+        self._subprocess_timeout_seconds = self._resolve_subprocess_timeout_seconds(config)
         self._subprocess_available_checked = False
 
     def _find_repo_root(self) -> Optional[Path]:
@@ -225,6 +227,32 @@ class DA3Backend:
     def _uses_subprocess(self) -> bool:
         """Return whether DA3 should execute in a dedicated subprocess."""
         return self._python_executable is not None
+
+    def _resolve_subprocess_timeout_seconds(
+        self,
+        config: Optional["EnhanceConfig"],
+    ) -> int:
+        """Resolve subprocess timeout for DA3 worker execution."""
+        candidate: Any = None
+        if config is not None:
+            candidate = getattr(config, "da3_subprocess_timeout_seconds", None)
+
+        if candidate in (None, ""):
+            env_candidate = os.environ.get("TRANSFORMATION_PORTAL_DA3_TIMEOUT_SECONDS")
+            if env_candidate and env_candidate.strip():
+                candidate = env_candidate.strip()
+
+        if candidate in (None, ""):
+            return DEFAULT_DA3_SUBPROCESS_TIMEOUT_SECONDS
+
+        try:
+            timeout_seconds = int(candidate)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("DA3 subprocess timeout must be a positive integer number of seconds") from exc
+
+        if timeout_seconds <= 0:
+            raise ValueError("DA3 subprocess timeout must be greater than zero")
+        return timeout_seconds
 
     def _build_worker_env(self) -> dict[str, str]:
         """Build environment for the subprocess worker."""
@@ -313,12 +341,25 @@ class DA3Backend:
                 cwd=self._worker_cwd(),
                 env=self._build_worker_env(),
                 check=False,
+                timeout=self._subprocess_timeout_seconds,
             )
         except FileNotFoundError as exc:
             raise ImportError(
                 self._build_subprocess_failure_message(
                     title="DA3 subprocess environment is not ready.",
                     category="executable_not_found",
+                    summary="configured DA3 Python executable could not be launched",
+                    python_executable=self._python_executable or "(unset)",
+                    command=command,
+                    stdout="",
+                    stderr=str(exc),
+                )
+            ) from exc
+        except OSError as exc:
+            raise ImportError(
+                self._build_subprocess_failure_message(
+                    title="DA3 subprocess environment is not ready.",
+                    category="startup_failed",
                     summary="configured DA3 Python executable could not be launched",
                     python_executable=self._python_executable or "(unset)",
                     command=command,
@@ -541,12 +582,25 @@ class DA3Backend:
                     cwd=self._worker_cwd(),
                     env=self._build_worker_env(),
                     check=True,
+                    timeout=self._subprocess_timeout_seconds,
                 )
             except FileNotFoundError as exc:
                 raise RuntimeError(
                     self._build_subprocess_failure_message(
                         title="DA3 subprocess failed.",
                         category="executable_not_found",
+                        summary="configured DA3 Python executable could not be launched",
+                        python_executable=self._python_executable or "(unset)",
+                        command=command,
+                        stdout="",
+                        stderr=str(exc),
+                    )
+                ) from exc
+            except OSError as exc:
+                raise RuntimeError(
+                    self._build_subprocess_failure_message(
+                        title="DA3 subprocess failed.",
+                        category="startup_failed",
                         summary="configured DA3 Python executable could not be launched",
                         python_executable=self._python_executable or "(unset)",
                         command=command,

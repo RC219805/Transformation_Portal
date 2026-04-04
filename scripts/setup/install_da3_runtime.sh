@@ -11,9 +11,12 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 CHECKOUT_DIR="${REPO_ROOT}/.runtime/Depth-Anything-3"
 VENV_DIR="${REPO_ROOT}/.venv-da3"
 REPO_URL="https://github.com/ByteDance-Seed/Depth-Anything-3"
-REF=""
+DEFAULT_REF="41736238f5bced4debf3f2a12375d2466874866d"
+REF="${DA3_RUNTIME_REF:-${DEFAULT_REF}}"
 DRY_RUN=false
 SKIP_VERIFY=false
+RUNTIME_METADATA_DIR="${REPO_ROOT}/.runtime"
+RUNTIME_FREEZE_FILE="${RUNTIME_METADATA_DIR}/da3-pip-freeze.txt"
 
 usage() {
     cat <<EOF
@@ -29,7 +32,7 @@ Default paths:
 OPTIONS:
   --checkout-dir PATH   Override the Depth Anything 3 checkout path
   --venv-dir PATH       Override the isolated DA3 venv path
-  --ref REF             Optional git ref to checkout after clone/update
+  --ref REF             Git ref to checkout after clone/update (default: ${DEFAULT_REF})
   --dry-run             Print commands without executing them
   --skip-verify         Skip the DA3 worker readiness check
   --help                Show this help text
@@ -105,11 +108,9 @@ else
     log "Using existing Depth Anything 3 checkout at ${CHECKOUT_DIR}"
 fi
 
-if [[ -n "${REF}" ]]; then
-    log "Checking out ${REF}"
-    run git -C "${CHECKOUT_DIR}" fetch --tags origin
-    run git -C "${CHECKOUT_DIR}" checkout "${REF}"
-fi
+log "Synchronizing Depth Anything 3 checkout to ${REF}"
+run git -C "${CHECKOUT_DIR}" fetch --tags origin
+run git -C "${CHECKOUT_DIR}" checkout "${REF}"
 
 if [[ ! -d "${VENV_DIR}" ]]; then
     log "Creating isolated DA3 venv at ${VENV_DIR}"
@@ -121,40 +122,48 @@ PYTHON_BIN="${VENV_DIR}/bin/python"
 log "Upgrading pip in ${VENV_DIR}"
 run "${PYTHON_BIN}" -m pip install --upgrade pip
 
-log "Installing DA3-compatible dependencies (without xformers)"
+log "Installing pinned DA3-compatible dependencies (without xformers)"
 run "${PYTHON_BIN}" -m pip install \
-    "torch>=2" \
-    torchvision \
-    transformers \
-    cryptography \
+    "torch==2.11.0" \
+    "torchvision==0.26.0" \
+    "transformers==5.5.0" \
+    "cryptography==46.0.6" \
     "moviepy==1.0.3" \
-    einops \
-    huggingface_hub \
-    imageio \
-    "numpy<2" \
-    opencv-python \
-    open3d \
-    fastapi \
-    uvicorn \
-    requests \
-    typer \
-    pillow \
-    omegaconf \
-    evo \
-    e3nn \
-    plyfile \
-    pillow_heif \
-    safetensors \
-    pycolmap \
-    trimesh \
-    addict \
-    pre-commit
+    "einops==0.8.2" \
+    "huggingface_hub==1.9.0" \
+    "imageio==2.37.3" \
+    "numpy==1.26.4" \
+    "opencv-python==4.11.0.86" \
+    "open3d==0.19.0" \
+    "fastapi==0.135.3" \
+    "uvicorn==0.43.0" \
+    "requests==2.33.1" \
+    "typer==0.24.1" \
+    "pillow==12.2.0" \
+    "omegaconf==2.3.0" \
+    "evo==1.34.3" \
+    "e3nn==0.6.0" \
+    "plyfile==1.1.3" \
+    "pillow_heif==1.3.0" \
+    "safetensors==0.7.0" \
+    "pycolmap==4.0.2" \
+    "trimesh==4.11.5" \
+    "addict==2.4.0" \
+    "pre-commit==4.5.1"
 
 log "Installing Depth Anything 3 in editable mode without upstream xformers dependency"
 run "${PYTHON_BIN}" -m pip install -e "${CHECKOUT_DIR}" --no-deps
 
+run mkdir -p "${RUNTIME_METADATA_DIR}"
+if [[ "${DRY_RUN}" == "true" ]]; then
+    log "Would capture DA3 runtime package snapshot at ${RUNTIME_FREEZE_FILE}"
+else
+    log "Capturing DA3 runtime package snapshot at ${RUNTIME_FREEZE_FILE}"
+    "${PYTHON_BIN}" -m pip freeze > "${RUNTIME_FREEZE_FILE}"
+fi
+
 if [[ "${SKIP_VERIFY}" != "true" ]]; then
-    MPLCONFIGDIR="${REPO_ROOT}/.runtime/mplconfig"
+    MPLCONFIGDIR="${RUNTIME_METADATA_DIR}/mplconfig"
     log "Running DA3 worker readiness check"
     run mkdir -p "${MPLCONFIGDIR}"
     run env \

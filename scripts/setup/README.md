@@ -30,8 +30,10 @@ Bootstraps the repo-local Depth Anything 3 subprocess runtime used by
 
 **What it does:**
 - Clones Depth Anything 3 into `.runtime/Depth-Anything-3` if it is missing
+- Synchronizes that checkout to the validated default ref unless `--ref` overrides it
 - Creates the isolated DA3 venv at `./.venv-da3`
-- Installs a DA3-compatible dependency set without upstream `xformers`
+- Installs a pinned DA3-compatible dependency set without upstream `xformers`
+- Captures a runtime package snapshot at `.runtime/da3-pip-freeze.txt`
 - Runs the DA3 worker readiness check used by the subprocess adapter
 
 **Stable contract:**
