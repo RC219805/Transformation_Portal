@@ -195,6 +195,7 @@ def test_argv_normalization_accepts_canonical_keys() -> None:
 
     argv = orchestrator_app._argv_from_request(payload)
 
+    assert argv[:3] == [sys.executable, "-m", orchestrator_app.LUX_DEPTH_MODULE]
     assert _flag_value(argv, "--materials-v3") == "on"
     assert _flag_value(argv, "--cache-depth") == "on"
     assert _flag_value(argv, "--depth-backend") == "da3"
@@ -743,9 +744,9 @@ def test_lux_ui_backend_and_direct_cli_paths_share_config_fingerprint(tmp_path: 
         },
     }
     portal_argv = orchestrator_app._argv_from_request(portal_payload)
-    assert portal_argv[0] == "lux-depth-v3"
+    assert portal_argv[:3] == [sys.executable, "-m", orchestrator_app.LUX_DEPTH_MODULE]
 
-    portal_path_config = _capture_lux_cli_config_from_args(portal_argv[1:])
+    portal_path_config = _capture_lux_cli_config_from_args(portal_argv[3:])
     portal_path_fingerprint = _run_card_fingerprint_from_config(portal_path_config)
 
     direct_cli_args = [
@@ -1444,6 +1445,19 @@ def test_rate_limiting_returns_true_after_threshold() -> None:
 def test_client_ip_prefers_peer_by_default() -> None:
     request = _build_request("GET", "/ready", headers={"x-forwarded-for": "203.0.113.9, 127.0.0.1"}, client_host="10.0.0.1")
     assert orchestrator_app._extract_client_ip(request) == "10.0.0.1"
+
+
+def test_ready_verbose_reports_lux_runner_from_module_resolution(monkeypatch: pytest.MonkeyPatch) -> None:
+    previous_verbose = orchestrator_app.READY_VERBOSE
+    try:
+        orchestrator_app.READY_VERBOSE = True
+        monkeypatch.setattr(orchestrator_app, "_lux_depth_runner_available", lambda: True)
+        payload = asyncio.run(orchestrator_app.ready())
+    finally:
+        orchestrator_app.READY_VERBOSE = previous_verbose
+
+    assert payload["ok"] is True
+    assert payload["cli"]["lux-depth-v3"] is True
 
 
 def test_api_key_validation_rejects_query_param_by_default() -> None:
