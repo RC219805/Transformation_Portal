@@ -493,7 +493,10 @@ def test_portal_console_views_use_query_param_navigation_without_backend_route_c
     assert 'data-view-link="run"' in content
     assert "url.searchParams.set('view', resolveConsoleView(viewName));" in content
     assert "state.currentView = resolveConsoleView(url.searchParams.get('view'));" in content
+    assert "document.body.dataset.consoleView = state.currentView;" in apply_view_body
     assert "els.queueShell.classList.toggle('hidden', state.currentView === 'run');" in apply_view_body
+    assert "const isPlainPrimaryClick = event.button === 0" in rail_body
+    assert "if (event.defaultPrevented || !isPlainPrimaryClick)" in rail_body
     assert "navigateConsoleView(nextView);" in rail_body
 
 

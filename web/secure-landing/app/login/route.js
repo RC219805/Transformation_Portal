@@ -3,7 +3,7 @@ import { NextResponse } from "next/server.js";
 import { resolveAccessContext, resolveAuthenticatedAccessSession, revokeSessionOnAccessFailure } from "../../lib/access.js";
 import { escapeHtml, renderLanternMark } from "../../lib/brand.js";
 import { audit } from "../../lib/audit.js";
-import { applySecurityHeaders, LOGIN_CSP } from "../../lib/http.js";
+import { applySecurityHeaders, FRONTDOOR_CSP } from "../../lib/http.js";
 import {
   clearSessionCookie,
   createAnonymousSession,
@@ -139,7 +139,7 @@ export async function GET(request) {
     }
   });
   setSessionCookie(response, session.id);
-  return applySecurityHeaders(response, { csp: LOGIN_CSP });
+  return applySecurityHeaders(response, { csp: FRONTDOOR_CSP });
 }
 
 export async function POST(request) {

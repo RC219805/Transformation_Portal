@@ -2370,6 +2370,9 @@
 
         function applyConsoleViewLayout() {
             state.currentView = resolveConsoleView(state.currentView);
+            if (document.body) {
+                document.body.dataset.consoleView = state.currentView;
+            }
             if (els.overviewShell) els.overviewShell.classList.toggle('hidden', state.currentView !== 'overview');
             if (els.consoleGrid) els.consoleGrid.classList.toggle('hidden', state.currentView === 'overview');
             if (els.buildShell) {
@@ -2424,6 +2427,15 @@
 
             links.forEach((link) => {
                 link.addEventListener('click', (event) => {
+                    const isPlainPrimaryClick = event.button === 0
+                        && !event.metaKey
+                        && !event.ctrlKey
+                        && !event.shiftKey
+                        && !event.altKey;
+
+                    if (event.defaultPrevented || !isPlainPrimaryClick) {
+                        return;
+                    }
                     event.preventDefault();
                     const nextView = resolveConsoleView(link.dataset.viewLink);
                     if (nextView === 'run' && !state.selectedJobId) {

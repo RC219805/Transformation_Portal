@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server.js";
 
 import { getSessionFromRequest } from "../lib/sessions.js";
-import { applySecurityHeaders } from "../lib/http.js";
+import { applySecurityHeaders, FRONTDOOR_CSP } from "../lib/http.js";
 import { escapeHtml, renderLanternMark } from "../lib/brand.js";
 
 export const runtime = "nodejs";
@@ -192,5 +192,5 @@ export async function GET(request) {
       "Cache-Control": "no-store"
     }
   });
-  return applySecurityHeaders(response);
+  return applySecurityHeaders(response, { csp: FRONTDOOR_CSP });
 }

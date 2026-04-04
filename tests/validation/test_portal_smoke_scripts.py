@@ -100,3 +100,10 @@ def test_frontdoor_browser_parse_args_does_not_probe_chrome_for_explicit_overrid
     assert args.frontdoor_base_url == "http://127.0.0.1:3000"
     assert args.username == "admin"
     assert args.password == "secret"
+
+
+def test_frontdoor_browser_waits_for_managed_portal_bootstrap_before_passing():
+    content = FRONTDOOR_BROWSER_SCRIPT_PATH.read_text(encoding="utf-8")
+
+    assert 'and str(value.get("readyState", "")) == "complete"' in content
+    assert 'and str(value.get("authModeBadge", "")).lower() == "managed"' in content

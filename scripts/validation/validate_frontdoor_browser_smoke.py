@@ -266,15 +266,17 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             _frontdoor_state_probe_expression(),
             predicate=lambda value: (
                 isinstance(value, dict)
+                and str(value.get("readyState", "")) == "complete"
                 and str(value.get("pathname", "")) == "/portal"
                 and str(value.get("currentView", "")) == "overview"
                 and bool(value.get("apiKeySectionHidden"))
+                and str(value.get("authModeBadge", "")).lower() == "managed"
             ),
             timeout_seconds=args.timeout_seconds,
             description="managed portal entry after login",
         )
         _expect(
-            str(portal_state.get("authModeBadge", "")).lower() in {"managed", ""},
+            str(portal_state.get("authModeBadge", "")).lower() == "managed",
             f"Managed portal did not hide browser API key workflow cleanly: {portal_state}",
         )
 

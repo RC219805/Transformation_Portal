@@ -283,6 +283,7 @@ test("homepage GET serves the public DNA landing page instead of redirecting", a
 
     assert.equal(response.status, 200);
     assert.equal(response.headers.get("cache-control"), "no-store");
+    assert.match(response.headers.get("content-security-policy") || "", /default-src 'self'/);
     assert.match(html, /Certified Premium Media for the AI Era/);
     assert.match(html, /Certify Your Media/);
     assert.match(html, /How it works/);
