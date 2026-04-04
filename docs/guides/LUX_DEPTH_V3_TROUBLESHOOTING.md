@@ -360,30 +360,29 @@ OMP: Error #15: Initializing libomp.dylib, but found libomp.dylib already initia
 
 **Solution:**
 
-1. **Always specify `--depth-device` explicitly:**
-   ```bash
-   lux-depth-v3 \
-     --depth-backend "depth_pro" \
-     --depth-device "mps" \
-     --depth-pro-python "./.venv-depth-pro/bin/python" \
-     ...
-   ```
-   This prevents device auto-detection from importing torch early.
+The pipeline has been updated to defer torch imports during backend initialization,
+which prevents this collision in most cases. However, if you still encounter this error:
 
-2. **Ensure consistent libomp across environments:**
+1. **Ensure consistent libomp across environments:**
    - Rebuild `.venv-depth-pro` using the same PyTorch version/build as your main environment
    - Or use the subprocess isolation mode (configured via `--depth-pro-python`)
 
-3. **Temporary diagnostic workaround (not recommended for production):**
+2. **Temporary diagnostic workaround (not recommended for production):**
    ```bash
    export KMP_DUPLICATE_LIB_OK=TRUE
    lux-depth-v3 ...
    ```
    This suppresses the error but masks the underlying library conflict.
 
+**When can this still occur?**
+- If custom code imports torch before invoking the pipeline
+- If a third-party library in your environment eagerly imports torch
+- If you're running outside the standard orchestrator flow
+
 **Technical Background:**
-The pipeline defers torch imports to avoid loading libomp during orchestrator initialization.
-This prevents the collision when the Depth Pro subprocess (which has its own Python environment) loads its own libomp.
+The `DepthProBackend` no longer imports torch during construction—it defaults to
+CPU and defers device capability checks to compute() time. This prevents the
+collision when the Depth Pro subprocess loads its own libomp from `.venv-depth-pro`.
 
 ---
 

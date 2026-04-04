@@ -91,29 +91,22 @@ class DepthProBackend:
         return Path.cwd()
 
     def _resolve_device(self, config: Optional["EnhanceConfig"]) -> str:
-        """Resolve device from config or auto-detect.
+        """Resolve device from config, defaulting to CPU.
 
-        Backend construction should not import torch just to probe accelerators.
-        On macOS, importing torch loads libomp.dylib; if a separate Python
-        environment (e.g., .venv-depth-pro) later loads its own libomp, the
-        process aborts with "OMP: Error #15: Initializing libomp.dylib, but
-        found libomp.dylib already initialized."
+        This method does NOT auto-detect accelerators (MPS/CUDA) because
+        importing torch here would load libomp.dylib on macOS. If the
+        Depth Pro subprocess (running in .venv-depth-pro) later loads its
+        own libomp, the process aborts with "OMP: Error #15".
 
-        The orchestrator passes an explicit depth_device; CPU is the safe
-        default for ad-hoc or test instantiation in partially provisioned
-        environments.  Actual device capability is verified at compute() time.
+        The orchestrator passes an explicit depth_device, so production
+        workflows always get the correct device. CPU is the safe default
+        for ad-hoc or test instantiation.
         """
         if config is not None:
             device = getattr(config, "depth_device", None)
-            if device and not (
-                device == "cpu"
-                and getattr(config, "depth_backend", None) is None
-                and CURRENT_PLATFORM is not None
-                and CURRENT_PLATFORM.is_apple_silicon
-            ):
+            if device:
                 return device
 
-        # Defer torch import to compute() time to avoid OpenMP runtime collision.
         return "cpu"
 
     def _resolve_checkpoint_path(
