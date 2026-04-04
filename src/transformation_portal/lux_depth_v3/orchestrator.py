@@ -2674,7 +2674,8 @@ class EnhanceOrchestrator:
             if self._is_apex_materials_gate_enabled():
                 raise ApexStrictGateError(
                     "APEX_MATERIALS_STAGE_FAILED",
-                    "APEX strict mode requires successful" " Materials V3 execution before" f" V2 handoff: {e}",
+                    "APEX strict mode requires successful"
+                    f" Materials V3 execution: {e}",
                     details={
                         "exception_type": type(e).__name__,
                         "exception_message": str(e),
