@@ -570,7 +570,7 @@ def test_portal_health_checks_route_to_front_door_in_managed_mode() -> None:
     assert "state.bootstrap.lastHealthEndpointPath = healthEndpointPath;" in check_body
     assert "fetchWithTimeout(`${API_BASE}${healthEndpointPath}`" in check_body
     assert "_queueBootstrapOnlineFollowup();" in check_body
-    assert "_flushBootstrapOnlineFollowup();" in check_body
+    assert "_flushBootstrapOnlineFollowup(force);" in check_body
 
 
 def test_portal_managed_unavailable_mode_blocks_dispatch_and_api_key_recovery_prompts() -> None:
@@ -1255,29 +1255,58 @@ def test_portal_selected_job_progress_bar_has_accessible_label() -> None:
     assert 'aria-labelledby="selectedJobProgressLabel selectedJobProgressText"' in content
 
 
-def test_portal_archive_index_derives_from_output_dir() -> None:
+def test_portal_archive_controls_expose_canonical_stage_labels() -> None:
     portal_html = Path(__file__).resolve().parents[1] / "portal.html"
     content = portal_html.read_text(encoding="utf-8")
-    derive_body = _extract_js_function_body(content, "deriveArchiveIndexPath")
-    update_body = _extract_js_function_body(content, "updateUIFromState")
-    payload_body = _extract_js_function_body(content, "generatePayload")
 
-    assert "function deriveArchiveIndexPath(outputDir)" in content
-    assert "const raw = String(outputDir || '').trim();" in derive_body
-    assert "return `${normalized}/archive_index_normalized.csv.gz`;" in derive_body
-    assert "deriveArchiveIndexPath(c.outputDir)" in update_body
-    assert "const derivedArchiveIndex = deriveArchiveIndexPath(outputDirValue);" in payload_body
+    assert "archive-gate-a (Fixity / Manifest Prep)" in content
+    assert "archive-gate-b (BagIt Build)" in content
+    assert "archive-gate-c (METS Export)" in content
+    assert "Rights Manifest JSONL" in content
+    assert "Canonical Command" in content
 
 
-def test_portal_archive_index_manual_override_stays_sticky_on_output_dir_changes() -> None:
+def test_portal_archive_build_surface_uses_manifest_input_and_never_derives_archive_index() -> None:
     portal_html = Path(__file__).resolve().parents[1] / "portal.html"
     content = portal_html.read_text(encoding="utf-8")
     bind_body = _extract_js_function_body(content, "bindInputs")
 
-    assert "if (!category && key === 'outputDir')" in bind_body
-    assert "const previousDerivedArchiveIndex = deriveArchiveIndexPath(state.config.outputDir);" in bind_body
-    assert "const nextDerivedArchiveIndex = deriveArchiveIndexPath(nextValue);" in bind_body
-    assert "(!currentArchiveIndex || currentArchiveIndex === previousDerivedArchiveIndex)" in bind_body
+    assert "safeBindInput(els.rightsManifestPath, 'gate', 'manifestJsonl');" in bind_body
+    assert "deriveArchiveIndexPath" not in bind_body
+    assert "gateDedup" not in bind_body
+    assert "gateSign" not in bind_body
+
+
+def test_portal_archive_payload_and_cli_preview_use_canonical_archive_contract() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+    payload_body = _extract_js_function_body(content, "generatePayload")
+    cli_body = _extract_js_function_body(content, "renderCLI")
+
+    assert "archive_command: archiveCommand" in payload_body
+    assert "args.manifest_jsonl" in payload_body
+    assert "args.archive_index" in payload_body
+    assert "dedup" not in payload_body
+    assert "sign" not in payload_body
+    assert "--archive-command" in cli_body
+    assert "--manifest-jsonl" in cli_body
+    assert "--dedup" not in cli_body
+    assert "--sign" not in cli_body
+
+
+def test_portal_dispatch_controls_require_backend_readiness_and_live_backend() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+    guard_body = _extract_js_function_body(content, "_syncBootstrapGuardedControls")
+    submit_body = _extract_js_function_body(content, "submitJob")
+
+    assert "state.backendOk" in guard_body
+    assert "currentPipelineDispatchStatus()" in guard_body
+    assert "readinessStatus === 'ready'" in guard_body
+    assert "Execution readiness is still loading." in submit_body
+    assert "Backend is offline. Dispatch is disabled until connectivity is restored." in submit_body
+    assert "Pipeline is blocked by missing prerequisites." in submit_body
+    assert "mock simulation" not in submit_body
 
 
 def test_argv_archive_gate_a_defaults_to_fixity_scan_runner() -> None:
@@ -1419,6 +1448,81 @@ def test_argv_archive_gate_invalid_command_is_rejected() -> None:
 
     with pytest.raises(ValueError, match="Invalid archive_command"):
         orchestrator_app._argv_from_request(payload)
+
+
+def test_archive_gate_a_readiness_is_degraded_until_archive_index_is_supplied() -> None:
+    readiness = orchestrator_app._archive_gate_readiness("archive-gate-a", require_dispatch_inputs=False)
+
+    assert readiness["status"] == "degraded"
+    assert readiness["canonical_command"] == "fixity-scan"
+    assert readiness["missing_prerequisites"][0]["reason"] == "archive_index_required"
+
+
+def test_archive_gate_b_readiness_fails_closed_without_manifest_jsonl() -> None:
+    readiness = orchestrator_app._archive_gate_readiness(
+        "archive-gate-b",
+        args={"input_dir": "./archive_root", "output_dir": "./archive_reports"},
+        require_dispatch_inputs=True,
+    )
+
+    assert readiness["status"] == "blocked"
+    assert readiness["canonical_command"] == "bag-build"
+    assert readiness["missing_prerequisites"][0]["reason"] == "rights_manifest_required"
+    assert readiness["missing_prerequisites"][0]["field"] == "manifest_jsonl"
+
+
+def test_archive_gate_b_readiness_is_ready_when_manifest_jsonl_exists(tmp_path: Path) -> None:
+    manifest_jsonl = tmp_path / "archive_manifest_v2.rights.jsonl"
+    manifest_jsonl.write_text('{"id":"asset-1"}\n', encoding="utf-8")
+
+    readiness = orchestrator_app._archive_gate_readiness(
+        "archive-gate-b",
+        args={
+            "input_dir": str(tmp_path / "archive_root"),
+            "output_dir": str(tmp_path / "archive_reports"),
+            "archive_command": "bag-build",
+            "manifest_jsonl": str(manifest_jsonl),
+        },
+        require_dispatch_inputs=True,
+    )
+
+    assert readiness["status"] == "ready"
+    assert readiness["canonical_command"] == "bag-build"
+    assert readiness["missing_prerequisites"] == []
+
+
+def test_archive_gate_readiness_blocks_unsafe_input_dir() -> None:
+    readiness = orchestrator_app._archive_gate_readiness(
+        "archive-gate-b",
+        args={
+            "input_dir": "~/.ssh",
+            "output_dir": "./archive_reports",
+            "archive_command": "bag-build",
+        },
+        require_dispatch_inputs=True,
+    )
+
+    assert readiness["status"] == "blocked"
+    assert readiness["missing_prerequisites"][0]["reason"] == "unsafe_path"
+    assert readiness["missing_prerequisites"][0]["field"] == "input_dir"
+
+
+def test_lux_depth_readiness_separates_base_ready_from_canary_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        orchestrator_app,
+        "_module_available",
+        lambda module_name: module_name == orchestrator_app.LUX_DEPTH_MODULE,
+    )
+    monkeypatch.setattr(orchestrator_app, "_resolve_lux_depth_canary_runtime", lambda: None)
+
+    readiness = orchestrator_app._lux_depth_readiness()
+
+    assert readiness["status"] == "ready"
+    assert readiness["canonical_command"] == "lux-depth-v3"
+    assert readiness["canary_status"] == "unavailable"
+    assert readiness["missing_prerequisites"] == []
 
 
 def test_run_job_is_async_and_does_not_block_event_loop() -> None:
@@ -1921,15 +2025,18 @@ def test_create_job_archive_gate_invalid_command_uses_typed_error_envelope() -> 
     assert orchestrator_app.JOBS == {}
 
 
-def test_create_job_archive_gate_invalid_integer_option_uses_typed_error_envelope() -> None:
+def test_create_job_archive_gate_invalid_integer_option_uses_typed_error_envelope(tmp_path: Path) -> None:
+    archive_index = tmp_path / "archive_index_normalized.csv.gz"
+    archive_index.write_bytes(b"fixture-index")
     response = asyncio.run(
         orchestrator_app.create_job(
             {
                 "pipeline": "archive-gate-a",
                 "args": {
-                    "input_dir": "./input_images",
-                    "output_dir": "./output",
+                    "input_dir": str(tmp_path / "archive_root"),
+                    "output_dir": str(tmp_path / "output"),
                     "archive_command": "fixity-scan",
+                    "archive_index": str(archive_index),
                     "workers": 0,
                 },
             }
@@ -1941,6 +2048,29 @@ def test_create_job_archive_gate_invalid_integer_option_uses_typed_error_envelop
     assert body["success"] is False
     assert body["error"]["code"] == "INVALID_ARGUMENT"
     assert body["error"]["details"]["reason"] == "invalid_archive_integer_option"
+    assert orchestrator_app.JOBS == {}
+
+
+def test_create_job_archive_gate_b_requires_manifest_jsonl_with_typed_error() -> None:
+    response = asyncio.run(
+        orchestrator_app.create_job(
+            {
+                "pipeline": "archive-gate-b",
+                "args": {
+                    "input_dir": "./input_images",
+                    "output_dir": "./output",
+                    "archive_command": "bag-build",
+                },
+            }
+        )
+    )
+    body = json.loads(response.body.decode("utf-8"))
+
+    assert response.status_code == 400
+    assert body["success"] is False
+    assert body["error"]["code"] == "INVALID_ARGUMENT"
+    assert body["error"]["details"]["field"] == "manifest_jsonl"
+    assert body["error"]["details"]["reason"] == "rights_manifest_required"
     assert orchestrator_app.JOBS == {}
 
 
@@ -2129,7 +2259,7 @@ def test_create_job_rejects_paths_outside_allowed_roots_with_typed_error(tmp_pat
 
     assert response.status_code == 400
     assert body["error"]["code"] == "INVALID_ARGUMENT"
-    assert body["error"]["details"]["reason"] == "path_outside_allowed_roots"
+    assert body["error"]["details"]["reason"] == "unsafe_path"
     assert orchestrator_app.JOBS == {}
 
 
@@ -2146,7 +2276,29 @@ def test_create_job_rejects_tilde_prefixed_paths_with_typed_error() -> None:
 
     assert response.status_code == 400
     assert body["error"]["code"] == "INVALID_ARGUMENT"
-    assert body["error"]["details"]["reason"] == "invalid_path_value"
+    assert body["error"]["details"]["reason"] == "unsafe_path"
+    assert orchestrator_app.JOBS == {}
+
+
+def test_create_job_archive_gate_rejects_unsafe_input_dir_before_argv() -> None:
+    response = asyncio.run(
+        orchestrator_app.create_job(
+            {
+                "pipeline": "archive-gate-b",
+                "args": {
+                    "input_dir": "~/.ssh",
+                    "output_dir": "./output",
+                    "archive_command": "bag-build",
+                },
+            }
+        )
+    )
+    body = json.loads(response.body.decode("utf-8"))
+
+    assert response.status_code == 400
+    assert body["error"]["code"] == "INVALID_ARGUMENT"
+    assert body["error"]["details"]["reason"] == "unsafe_path"
+    assert body["error"]["details"]["field"] == "input_dir"
     assert orchestrator_app.JOBS == {}
 
 

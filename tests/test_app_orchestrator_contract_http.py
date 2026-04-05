@@ -8,6 +8,7 @@ import asyncio
 import importlib
 import json
 import logging
+from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
 import pytest
@@ -154,6 +155,78 @@ def test_presets_contract_for_lux_depth_pipeline(client: TestClient) -> None:
     premium = next(item for item in body["data"]["presets"] if item["name"] == "premium")
     assert premium["recommended_args"]["quality_tier"] == "premium"
     assert premium["advanced_sections"] == []
+
+
+def test_readiness_contract_reports_pipeline_status_matrix(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    readiness_map = {
+        "lux-depth-v3": {
+            "status": "ready",
+            "canonical_command": "lux-depth-v3",
+            "missing_prerequisites": [],
+            "runner_details": {"type": "python_module", "available": True},
+            "notes": ["safe lane ready"],
+            "canary_status": "degraded",
+        },
+        "archive-gate-a": {
+            "status": "degraded",
+            "canonical_command": "fixity-scan",
+            "missing_prerequisites": [
+                {
+                    "reason": "archive_index_required",
+                    "severity": "degraded",
+                    "message": "archive_index is required for archive-gate-a dispatch.",
+                    "field": "archive_index",
+                }
+            ],
+            "runner_details": {"type": "python_script", "available": True},
+            "notes": ["existing archive index required"],
+        },
+        "archive-gate-b": {
+            "status": "blocked",
+            "canonical_command": "bag-build",
+            "missing_prerequisites": [
+                {
+                    "reason": "rights_manifest_required",
+                    "severity": "blocked",
+                    "message": "manifest_jsonl is required for archive-gate-b dispatch.",
+                    "field": "manifest_jsonl",
+                }
+            ],
+            "runner_details": {"type": "python_script", "available": True},
+            "notes": ["rights manifest missing"],
+        },
+        "archive-gate-c": {
+            "status": "ready",
+            "canonical_command": "mets-export",
+            "missing_prerequisites": [],
+            "runner_details": {"type": "python_script", "available": True},
+            "notes": ["fixture-backed prereqs satisfied"],
+        },
+    }
+
+    def _fake_evaluate(pipeline: str, args=None, require_dispatch_inputs: bool = False):  # noqa: ANN001
+        del args, require_dispatch_inputs
+        return readiness_map[pipeline]
+
+    monkeypatch.setattr(orchestrator_app, "_evaluate_pipeline_readiness", _fake_evaluate)
+
+    response = client.get("/v1/readiness")
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["schema"] == "tp.orchestrator.readiness.v1"
+    assert body["success"] is True
+    assert body["error"] is None
+    assert body["data"]["server"]["backend_live"] is True
+    assert body["data"]["server"]["version"] == orchestrator_app.APP_VERSION
+    assert body["data"]["server"]["auth_mode"] == "direct_debug"
+    assert body["data"]["pipelines"]["lux-depth-v3"]["canary_status"] == "degraded"
+    assert body["data"]["pipelines"]["archive-gate-a"]["status"] == "degraded"
+    assert body["data"]["pipelines"]["archive-gate-b"]["status"] == "blocked"
+    assert body["data"]["pipelines"]["archive-gate-c"]["canonical_command"] == "mets-export"
 
 
 def test_jobs_list_and_detail_include_recovery_fields(client: TestClient) -> None:
@@ -382,7 +455,11 @@ def test_invalid_job_payload_returns_typed_invalid_argument(client: TestClient) 
     assert body["error"]["code"] == "INVALID_ARGUMENT"
 
 
-def test_archive_gate_pipeline_submission_returns_job_envelope(client: TestClient, monkeypatch) -> None:
+def test_archive_gate_pipeline_submission_returns_job_envelope(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
     async def fake_run_job(job, _argv):  # noqa: ANN001
         job.state = "succeeded"
         job.exit_code = 0
@@ -391,10 +468,23 @@ def test_archive_gate_pipeline_submission_returns_job_envelope(client: TestClien
         job.finished_at = now
 
     monkeypatch.setattr(orchestrator_app, "_run_job", fake_run_job)
+    archive_root = tmp_path / "archive_root"
+    archive_root.mkdir(parents=True, exist_ok=True)
+    archive_index = tmp_path / "archive_index_normalized.csv.gz"
+    archive_index.write_bytes(b"fixture-index")
 
     response = client.post(
         "/v1/jobs",
-        json={"pipeline": "archive-gate-a", "args": {"input_dir": "./in", "output_dir": "./out"}},
+        json={
+            "pipeline": "archive-gate-a",
+            "args": {
+                "input_dir": str(archive_root),
+                "output_dir": str(tmp_path / "out"),
+                "archive_command": "fixity-scan",
+                "archive_index": str(archive_index),
+                "archive_root": str(archive_root),
+            },
+        },
     )
     body = response.json()
     assert response.status_code == 200
@@ -402,6 +492,27 @@ def test_archive_gate_pipeline_submission_returns_job_envelope(client: TestClien
     assert body["success"] is True
     assert body["error"] is None
     assert body["data"]["id"].startswith("job_")
+
+
+def test_archive_gate_b_submission_fails_closed_without_rights_manifest(client: TestClient) -> None:
+    response = client.post(
+        "/v1/jobs",
+        json={
+            "pipeline": "archive-gate-b",
+            "args": {
+                "input_dir": "./in",
+                "output_dir": "./out",
+                "archive_command": "bag-build",
+            },
+        },
+    )
+    body = response.json()
+
+    assert response.status_code == 400
+    assert body["schema"] == "tp.orchestrator.error.v1"
+    assert body["error"]["code"] == "INVALID_ARGUMENT"
+    assert body["error"]["details"]["field"] == "manifest_jsonl"
+    assert body["error"]["details"]["reason"] == "rights_manifest_required"
 
 
 def test_oversized_v1_request_returns_typed_413_envelope(client: TestClient) -> None:
@@ -446,7 +557,27 @@ def test_v1_jobs_rejects_requests_outside_allowed_roots(client: TestClient, tmp_
 
     assert response.status_code == 400
     assert body["error"]["code"] == "INVALID_ARGUMENT"
-    assert body["error"]["details"]["reason"] == "path_outside_allowed_roots"
+    assert body["error"]["details"]["reason"] == "unsafe_path"
+
+
+def test_v1_jobs_archive_gate_rejects_unsafe_input_dir_with_typed_error(client: TestClient) -> None:
+    response = client.post(
+        "/v1/jobs",
+        json={
+            "pipeline": "archive-gate-b",
+            "args": {
+                "input_dir": "~/.ssh",
+                "output_dir": "./output",
+                "archive_command": "bag-build",
+            },
+        },
+    )
+    body = response.json()
+
+    assert response.status_code == 400
+    assert body["error"]["code"] == "INVALID_ARGUMENT"
+    assert body["error"]["details"]["reason"] == "unsafe_path"
+    assert body["error"]["details"]["field"] == "input_dir"
 
 
 def test_v1_jobs_rejects_when_max_concurrent_jobs_reached(client: TestClient) -> None:

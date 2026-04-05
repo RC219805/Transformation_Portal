@@ -22,7 +22,7 @@ For reproducible installs, pin a specific release tag from [GitHub Releases](htt
 
 Core entry points:
 - `lux-depth-v3` for orchestrated depth, PBR, materials, and enhancement workflows
-- Portal/orchestrator HTTP surfaces with `/ready` and contract-tested job endpoints
+- Portal/orchestrator HTTP surfaces with liveness (`/ready`, `/healthz`) plus operator-truth readiness at `/v1/readiness`
 - Determinism, manifest, run-card, and provenance layers for governed execution
 
 Quick discovery:
@@ -57,7 +57,7 @@ Portal surfaces:
   - `/` public Dynamic Neural Access homepage
   - `/login` operator login
   - `/portal` governed operator console
-- `GET /healthz` is the managed front-door health contract; FastAPI `GET /ready` remains the backend readiness contract.
+- `GET /healthz` is the managed front-door liveness contract, `GET /ready` is backend liveness, and `GET /v1/readiness` is the execution-readiness matrix for the four governed pipelines.
 - Shared public branding assets now live at `web/secure-landing/public/brand/dna-mark-dark.svg`, `web/secure-landing/public/brand/dna-mark-light.svg`, and `web/secure-landing/public/video/dna-loop.mp4`.
 - Direct FastAPI portal access is now a `direct_debug` workflow for local troubleshooting, not the preferred production browser path.
 - The front door is a Node app. `web/secure-landing` now documents and enforces its supported Node runtime range, with `22.x` LTS recommended.
@@ -378,7 +378,16 @@ make test-fast
 make test-full
 make ci
 make test-orchestrator-contract
+make validate-orchestrator-http
+make validate-portal-browser
+make audit-pipeline-readiness
 ```
+
+Readiness and validation tiers:
+- `make test-orchestrator-contract` keeps the portal/orchestrator contract suite local and deterministic.
+- `make validate-orchestrator-http` runs the live backend smoke against a running FastAPI origin.
+- `make validate-portal-browser` runs the live browser smoke against the real portal UI.
+- `make audit-pipeline-readiness` runs the safe local four-pipeline readiness audit and reports `ready` / `degraded` / `blocked` outcomes, including separate `lux-depth-v3` base vs canary status.
 
 Direct pytest examples:
 ```bash

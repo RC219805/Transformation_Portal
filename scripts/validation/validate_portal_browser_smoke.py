@@ -3,16 +3,17 @@
 Browser smoke validation for the portal UI against a live backend.
 
 This script launches a disposable Chrome instance with the DevTools protocol
-enabled, drives the real portal UI in a browser context, and verifies a safe
-archive-gate submission end-to-end.
+enabled, drives the real portal UI in a browser context, and verifies the build
+surface across all four pipelines plus one safe archive dispatch.
 
 Coverage:
 1. Portal loads in a real browser and renders expected controls.
 2. Health check reports the backend as online.
-3. Pipeline switch updates the UI from lux-depth-v3 to archive-gate-a.
-4. API key and path fields can be populated through the browser.
-5. A safe archive-gate job can be dispatched from the UI.
-6. Queue, inspector, artifacts, and live log surfaces reflect completion.
+3. Build view cycles through `lux-depth-v3`, `archive-gate-a`, `archive-gate-b`, and `archive-gate-c`.
+4. Archive gating fields and canonical command badges match the selected stage.
+5. `archive-gate-b` and `archive-gate-c` stay blocked without a rights manifest.
+6. A safe `archive-gate-a` dispatch succeeds from the real UI.
+7. Queue, inspector, artifacts, and live log surfaces reflect completion.
 
 Run via:
     python scripts/validation/validate_portal_browser_smoke.py
@@ -421,6 +422,7 @@ def _state_probe_expression() -> str:
     currentView: document.body ? String(document.body.dataset.consoleView || '') : '',
     pipeline: value('pipelineSelect'),
     healthText: text('healthText'),
+    heroReadinessLabel: text('heroReadinessLabel'),
     queueCount: text('queueCount'),
     selectedJobState: text('selectedJobStateBadge'),
     selectedJobId: text('selectedJobIdLabel'),
@@ -430,6 +432,18 @@ def _state_probe_expression() -> str:
     cliFirstLine: (() => {
       const preview = text('cliPreview');
       return preview ? preview.split('\n')[0].trim() : '';
+    })(),
+    cliText: text('cliPreview'),
+    archiveCanonicalCommand: text('archiveCanonicalCommand'),
+    archiveIndexPath: value('archiveIndexPath'),
+    rightsManifestPath: value('rightsManifestPath'),
+    archiveIndexFieldVisible: (() => {
+      const el = document.getElementById('archiveIndexField');
+      return !!(el && !el.classList.contains('hidden'));
+    })(),
+    rightsManifestFieldVisible: (() => {
+      const el = document.getElementById('rightsManifestField');
+      return !!(el && !el.classList.contains('hidden'));
     })(),
     logHasFixityWrite: (() => {
       const el = document.getElementById('logPane');
@@ -499,13 +513,23 @@ def _navigate_to_console_view_expression(view: str, job_id: str = "") -> str:
 """
 
 
-def _set_archive_gate_form_expression(api_key: str, archive_root: str, archive_index: str, output_dir: str) -> str:
+def _set_pipeline_form_expression(
+    *,
+    api_key: str,
+    pipeline: str,
+    input_dir: str,
+    output_dir: str,
+    archive_index: str = "",
+    manifest_jsonl: str = "",
+) -> str:
     payload = json.dumps(
         {
             "api_key": api_key,
-            "archive_root": archive_root,
-            "archive_index": archive_index,
+            "pipeline": pipeline,
+            "input_dir": input_dir,
             "output_dir": output_dir,
+            "archive_index": archive_index,
+            "manifest_jsonl": manifest_jsonl,
         }
     )
     return f"""
@@ -519,25 +543,30 @@ def _set_archive_gate_form_expression(api_key: str, archive_root: str, archive_i
     dispatch(el, 'input');
     dispatch(el, 'change');
   }};
-  const setChecked = (id, checked) => {{
-    const el = document.getElementById(id);
-    if (!el) throw new Error(`missing #${{id}}`);
-    el.checked = !!checked;
-    dispatch(el, 'input');
-    dispatch(el, 'change');
-  }};
-  setChecked('rememberApiKey', false);
+  const rememberApiKey = document.getElementById('rememberApiKey');
+  if (rememberApiKey) {{
+    rememberApiKey.checked = false;
+    dispatch(rememberApiKey, 'change');
+  }}
   setValue('apiKeyInput', cfg.api_key);
-  setValue('pipelineSelect', 'archive-gate-a');
-  setValue('inputDir', cfg.archive_root);
-  setValue('archiveIndexPath', cfg.archive_index);
+  setValue('pipelineSelect', cfg.pipeline);
+  setValue('inputDir', cfg.input_dir);
   setValue('outputDir', cfg.output_dir);
+  setValue('archiveIndexPath', cfg.archive_index);
+  setValue('rightsManifestPath', cfg.manifest_jsonl);
   return {{
     pipeline: document.getElementById('pipelineSelect').value,
     archiveFieldsVisible: !document.getElementById('fieldsArchiveGate').classList.contains('hidden'),
     luxFieldsVisible: !document.getElementById('fieldsLuxDepth').classList.contains('hidden'),
+    archiveCanonicalCommand: (document.getElementById('archiveCanonicalCommand').textContent || '').trim(),
+    archiveIndexFieldVisible: !document.getElementById('archiveIndexField').classList.contains('hidden'),
+    rightsManifestFieldVisible: !document.getElementById('rightsManifestField').classList.contains('hidden'),
     archiveIndexPath: document.getElementById('archiveIndexPath').value,
-    cliFirstLine: ((document.getElementById('cliPreview').textContent || '').trim().split('\\n')[0] || '').trim()
+    rightsManifestPath: document.getElementById('rightsManifestPath').value,
+    runJobDisabled: !!document.getElementById('runJobBtn').disabled,
+    heroReadinessLabel: (document.getElementById('heroReadinessLabel').textContent || '').trim(),
+    cliFirstLine: ((document.getElementById('cliPreview').textContent || '').trim().split('\\n')[0] || '').trim(),
+    cliText: (document.getElementById('cliPreview').textContent || '').trim()
   }};
 }})()
 """
@@ -716,16 +745,120 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             f"Build view should suppress operate shell: {build_state}",
         )
 
-        print("portal-browser-smoke: configuring archive-gate form", flush=True)
-        configured_state = connection.evaluate(
-            _set_archive_gate_form_expression(
-                args.api_key,
-                str(archive_root),
-                str(archive_index),
-                str(output_dir),
+        print("portal-browser-smoke: confirming lux-depth-v3 build defaults", flush=True)
+        lux_state = connection.evaluate(
+            _set_pipeline_form_expression(
+                api_key=args.api_key,
+                pipeline="lux-depth-v3",
+                input_dir=str(archive_root),
+                output_dir=str(output_dir),
             )
         )
-        _expect(isinstance(configured_state, dict), f"Unexpected configured portal state: {configured_state!r}")
+        _expect(isinstance(lux_state, dict), f"Unexpected lux portal state: {lux_state!r}")
+        _expect(lux_state.get("pipeline") == "lux-depth-v3", f"Lux pipeline did not remain selected: {lux_state}")
+        _expect(not bool(lux_state.get("archiveFieldsVisible")), f"Lux build view should hide archive controls: {lux_state}")
+        _expect(
+            bool(str(lux_state.get("heroReadinessLabel", "")).strip()),
+            f"Lux build view did not expose any readiness label: {lux_state}",
+        )
+        _expect(
+            not bool(lux_state.get("runJobDisabled")),
+            f"Lux pipeline should remain dispatchable in the build view: {lux_state}",
+        )
+
+        print("portal-browser-smoke: verifying archive-gate-b blocked state", flush=True)
+        gate_b_state = _poll(
+            connection,
+            _set_pipeline_form_expression(
+                api_key=args.api_key,
+                pipeline="archive-gate-b",
+                input_dir=str(archive_root),
+                output_dir=str(output_dir),
+            ),
+            predicate=lambda value: (
+                isinstance(value, dict)
+                and str(value.get("pipeline", "")) == "archive-gate-b"
+                and bool(value.get("archiveFieldsVisible"))
+                and str(value.get("archiveCanonicalCommand", "")) == "bag-build"
+                and bool(value.get("runJobDisabled"))
+                and str(value.get("heroReadinessLabel", "")).strip() == "Dispatch blocked"
+            ),
+            timeout_seconds=args.timeout_seconds,
+            description="archive-gate-b build state",
+        )
+        _expect(
+            bool(gate_b_state.get("rightsManifestFieldVisible")),
+            f"archive-gate-b must expose the manifest field: {gate_b_state}",
+        )
+        _expect(
+            not bool(gate_b_state.get("archiveIndexFieldVisible")),
+            f"archive-gate-b should hide archive index input: {gate_b_state}",
+        )
+        _expect(
+            bool(gate_b_state.get("runJobDisabled")), f"archive-gate-b should stay blocked without manifest: {gate_b_state}"
+        )
+        _expect(
+            str(gate_b_state.get("heroReadinessLabel", "")).strip() == "Dispatch blocked",
+            f"archive-gate-b should advertise blocked readiness before manifest input: {gate_b_state}",
+        )
+        _expect(
+            '--archive-command "bag-build"' in str(gate_b_state.get("cliText", "")),
+            f"archive-gate-b CLI preview drifted from canonical command mapping: {gate_b_state}",
+        )
+
+        print("portal-browser-smoke: verifying archive-gate-c blocked state", flush=True)
+        gate_c_state = _poll(
+            connection,
+            _set_pipeline_form_expression(
+                api_key=args.api_key,
+                pipeline="archive-gate-c",
+                input_dir=str(archive_root),
+                output_dir=str(output_dir),
+            ),
+            predicate=lambda value: (
+                isinstance(value, dict)
+                and str(value.get("pipeline", "")) == "archive-gate-c"
+                and str(value.get("archiveCanonicalCommand", "")) == "mets-export"
+                and bool(value.get("runJobDisabled"))
+            ),
+            timeout_seconds=args.timeout_seconds,
+            description="archive-gate-c build state",
+        )
+        _expect(
+            bool(gate_c_state.get("rightsManifestFieldVisible")),
+            f"archive-gate-c must expose the manifest field: {gate_c_state}",
+        )
+        _expect(
+            not bool(gate_c_state.get("archiveIndexFieldVisible")),
+            f"archive-gate-c should hide archive index input: {gate_c_state}",
+        )
+        _expect(
+            bool(gate_c_state.get("runJobDisabled")), f"archive-gate-c should stay blocked without manifest: {gate_c_state}"
+        )
+        _expect(
+            '--archive-command "mets-export"' in str(gate_c_state.get("cliText", "")),
+            f"archive-gate-c CLI preview drifted from canonical command mapping: {gate_c_state}",
+        )
+
+        print("portal-browser-smoke: configuring archive-gate-a form", flush=True)
+        configured_state = _poll(
+            connection,
+            _set_pipeline_form_expression(
+                api_key=args.api_key,
+                pipeline="archive-gate-a",
+                input_dir=str(archive_root),
+                output_dir=str(output_dir),
+                archive_index=str(archive_index),
+            ),
+            predicate=lambda value: (
+                isinstance(value, dict)
+                and str(value.get("pipeline", "")) == "archive-gate-a"
+                and str(value.get("archiveCanonicalCommand", "")) == "fixity-scan"
+                and not bool(value.get("runJobDisabled"))
+            ),
+            timeout_seconds=args.timeout_seconds,
+            description="archive-gate-a build state",
+        )
         _expect(
             configured_state.get("pipeline") == "archive-gate-a",
             f"Pipeline switch to archive-gate-a failed: {configured_state}",
@@ -735,12 +868,25 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             f"Archive-specific UI did not toggle correctly: {configured_state}",
         )
         _expect(
+            bool(configured_state.get("archiveIndexFieldVisible"))
+            and not bool(configured_state.get("rightsManifestFieldVisible")),
+            f"archive-gate-a should expose only the archive index input: {configured_state}",
+        )
+        _expect(
             str(configured_state.get("archiveIndexPath", "")) == str(archive_index),
             f"Archive index field did not update for archive-gate-a: {configured_state}",
         )
         _expect(
             str(configured_state.get("cliFirstLine", "")).startswith("archive-gate-a"),
             f"CLI preview did not update for archive-gate-a: {configured_state}",
+        )
+        _expect(
+            '--archive-command "fixity-scan"' in str(configured_state.get("cliText", "")),
+            f"archive-gate-a CLI preview drifted from canonical command mapping: {configured_state}",
+        )
+        _expect(
+            '--archive-index "' in str(configured_state.get("cliText", "")),
+            f"archive-gate-a CLI preview should include archive index path: {configured_state}",
         )
 
         known_job_ids = set(_list_job_ids(base_url, args.api_key))
