@@ -1778,6 +1778,7 @@
         const SAFE_HTTP_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
         let queueRenderScheduled = false;
+        let queuedReviewSurfaceRefresh = false;
         let healthPollIntervalId = null;
         let sseWatchdogIntervalId = null;
         let healthCheckInFlight = false;
@@ -4001,6 +4002,12 @@
             }
         }
 
+        function renderReviewSurfaces(payload = null) {
+            renderArtifactPanel();
+            renderSelectedJobInspector();
+            renderMissionControl(payload);
+        }
+
         function renderArtifactPanel() {
             if (!els.artifactMeta || !els.artifactThumbnailRail) return;
             const selected = state.jobs.find((item) => item.id === state.selectedJobId);
@@ -4029,7 +4036,6 @@
                 _renderArtifactMetadataCard(null, null);
                 updateRunCardActions(null);
                 if (els.emptyArtifactState) els.emptyArtifactState.style.display = 'block';
-                renderSelectedJobInspector();
                 return;
             }
 
@@ -4045,7 +4051,6 @@
                 _renderArtifactMetadataCard(selected, null);
                 updateRunCardActions(selected);
                 if (els.emptyArtifactState) els.emptyArtifactState.style.display = 'block';
-                renderSelectedJobInspector();
                 return;
             }
 
@@ -4169,7 +4174,6 @@
             els.artifactThumbnailRail.innerHTML = '';
             els.artifactThumbnailRail.appendChild(fragment);
             updateRunCardActions(selected);
-            renderSelectedJobInspector();
         }
 
         function selectJob(jobId) {
@@ -4182,9 +4186,7 @@
                 els.logPane.textContent = job.logs.join('\n') + (job.logs.length ? '\n' : '');
                 els.logPane.scrollTop = els.logPane.scrollHeight;
             }
-            renderArtifactPanel();
-            renderSelectedJobInspector();
-            renderMissionControl();
+            renderReviewSurfaces();
             if (state.currentView === 'operate') {
                 setInspectorTab('timeline');
             } else if (state.currentView === 'run') {
@@ -4194,7 +4196,7 @@
                 _syncConsoleRoute(true);
                 updateConsoleViewContext();
             }
-            scheduleRenderJobQueue();
+            scheduleRenderJobQueue(false);
         }
 
         function hydrateJobFromServer(rawJob) {
@@ -4358,7 +4360,6 @@
                     }
                 }
                 scheduleRenderJobQueue();
-                renderArtifactPanel();
             } catch {
                 // best-effort refresh for reconnect convergence
             }
@@ -4423,12 +4424,15 @@
             _cancelPendingBootstrapRequest('navigation_abort');
         }
 
-        function scheduleRenderJobQueue() {
+        function scheduleRenderJobQueue(includeReviewSurfaces = true) {
+            queuedReviewSurfaceRefresh = queuedReviewSurfaceRefresh || includeReviewSurfaces;
             if (queueRenderScheduled) return;
             queueRenderScheduled = true;
             requestAnimationFrame(() => {
                 queueRenderScheduled = false;
-                renderJobQueue();
+                const shouldRenderReviewSurfaces = queuedReviewSurfaceRefresh;
+                queuedReviewSurfaceRefresh = false;
+                renderJobQueue(shouldRenderReviewSurfaces);
             });
         }
 
@@ -4887,7 +4891,7 @@
                     state.presetsByPipeline[pipelineName] = presets;
                     applyPipelinePresetOptions(pipelineName);
                     renderCLI();
-                    renderMissionControl();
+                    renderReviewSurfaces();
                 }
             } catch (err) {
                 if (!silent) createToast('Failed to refresh presets from backend.', 'error');
@@ -5182,7 +5186,7 @@
                 healthState,
                 healthLabel
             };
-            renderMissionControl(payload);
+            renderReviewSurfaces(payload);
         }
 
         function renderCLI() {
@@ -5435,16 +5439,14 @@
             });
         }
 
-        function renderJobQueue() {
+        function renderJobQueue(includeReviewSurfaces = true) {
             if (!els.jobList) return;
             if (els.queueCount) els.queueCount.textContent = `${state.jobs.length} jobs`;
             if (state.jobs.length === 0) {
                 if (els.emptyQueueState) els.emptyQueueState.style.display = 'flex';
                 if (els.queueStatusSummary) els.queueStatusSummary.textContent = 'Newest jobs stay pinned to the top.';
                 els.jobList.innerHTML = '';
-                renderArtifactPanel();
-                renderSelectedJobInspector();
-                renderMissionControl();
+                if (includeReviewSurfaces) renderReviewSurfaces();
                 return;
             }
             if (els.emptyQueueState) els.emptyQueueState.style.display = 'none';
@@ -5567,9 +5569,7 @@
                     ? `Inspector focus: ${String(selected.pipeline || 'job')} • updated ${formatRelativeTime(Number(selected.updatedAt || selected.createdAt || 0))}`
                     : 'Newest jobs stay pinned to the top.';
             }
-            renderArtifactPanel();
-            renderSelectedJobInspector();
-            renderMissionControl();
+            if (includeReviewSurfaces) renderReviewSurfaces();
         }
 
         function logToPane(jobId, line) {
@@ -5621,7 +5621,7 @@
                 if (els.healthIndicator) els.healthIndicator.className = 'status-dot offline';
                 if (els.healthText) els.healthText.textContent = 'Offline / Mock Mode';
             } finally {
-                renderMissionControl();
+                renderReviewSurfaces();
                 healthCheckInFlight = false;
             }
         }
@@ -5695,7 +5695,7 @@
                         `artifact|${String(parsed.path || '')}`
                     )
                 );
-                renderArtifactPanel();
+                scheduleRenderJobQueue();
                 return;
             }
             if (eventName === 'done') {
@@ -5721,7 +5721,6 @@
                 logToPane(job.id, endLine);
                 stopJobActivity(job);
                 scheduleRenderJobQueue();
-                renderArtifactPanel();
                 createToast(`Job ${job.state}.`, job.state === 'succeeded' ? 'success' : 'error');
                 if (state.selectedJobId === job.id && els.logStatusIndicator) els.logStatusIndicator.classList.add('hidden');
             }
@@ -5783,7 +5782,6 @@
                         logToPane(job.id, line);
                     }
                     scheduleRenderJobQueue();
-                    renderArtifactPanel();
                     return;
                 }
                 if (!res.body) return;
@@ -5846,7 +5844,6 @@
                     appendJobLog(job, line);
                     logToPane(job.id, line);
                     scheduleRenderJobQueue();
-                    renderArtifactPanel();
                 }
             } finally {
                 if (job.eventSource === handle) {
@@ -5893,7 +5890,6 @@
                 job.reconnectBlocked = false;
                 _markJobEventActivity(job);
                 scheduleRenderJobQueue();
-                renderArtifactPanel();
             };
             const safeParseSseEvent = (eventName, e) => {
                 try {
@@ -5914,7 +5910,6 @@
                 if (readyState === EVENT_SOURCE_READY_STATE_CONNECTING) {
                     _noteTransportWarning(job, 'eventsource_reconnecting', 'Native SSE connection dropped. Browser is retrying in the background.', 'warn');
                     scheduleRenderJobQueue();
-                    renderArtifactPanel();
                     return;
                 }
                 const warningCode = readyState === EVENT_SOURCE_READY_STATE_CLOSED ? 'eventsource_closed' : 'eventsource_error';
@@ -5929,7 +5924,6 @@
                 logToPane(job.id, logLine);
                 _teardownJobEventStream(job);
                 scheduleRenderJobQueue();
-                renderArtifactPanel();
                 scheduleSseReconnect(job);
             };
         }
@@ -5972,7 +5966,6 @@
                 if (state.selectedJobId) selectJob(state.selectedJobId);
                 else {
                     scheduleRenderJobQueue();
-                    renderArtifactPanel();
                 }
             } catch (err) {
                 // best-effort only
@@ -5993,7 +5986,6 @@
             fetch(`${API_BASE}/v1/jobs/${id}/cancel`, { method: 'POST', headers }).catch(() => {});
 
             scheduleRenderJobQueue();
-            renderArtifactPanel();
             if (state.selectedJobId === id && els.logStatusIndicator) els.logStatusIndicator.classList.add('hidden');
             createToast("Job canceled.", "error");
         }
@@ -6096,7 +6088,6 @@
             if (els.logPane) els.logPane.textContent = '';
             if (els.logStatusIndicator) els.logStatusIndicator.classList.remove('hidden');
             scheduleRenderJobQueue();
-            renderArtifactPanel();
             const initLine = `[INFO] Initializing ${payload.pipeline}...`;
             appendJobLog(job, initLine);
             logToPane(job.id, initLine);
@@ -6129,7 +6120,6 @@
                     appendJobLog(job, `[ERROR] ${errorMessage}`);
                     _reconcileJobTimeline(job);
                     scheduleRenderJobQueue();
-                    renderArtifactPanel();
                     createToast("Backend submission failed.", "error");
                     if (state.selectedJobId === job.id && els.logStatusIndicator) els.logStatusIndicator.classList.add('hidden');
                 } finally {
@@ -6172,7 +6162,6 @@
                         if (state.selectedJobId === job.id && els.logStatusIndicator) els.logStatusIndicator.classList.add('hidden');
                     }
                     scheduleRenderJobQueue();
-                    renderArtifactPanel();
                 }, 800);
             }
         }
@@ -6420,7 +6409,7 @@
                 const path = String(button.dataset.artifactPath || '').trim();
                 if (!path) return;
                 state.artifactUi.selectedByJob[String(selectedJob.id || '')] = path;
-                renderArtifactPanel();
+                renderReviewSurfaces();
             });
         }
 
@@ -6430,7 +6419,7 @@
                 if (!selectedJob) return;
                 const key = String(selectedJob.id || '');
                 state.artifactUi.compareByJob[key] = !Boolean(state.artifactUi.compareByJob[key]);
-                renderArtifactPanel();
+                renderReviewSurfaces();
             });
         }
 
@@ -6671,9 +6660,6 @@
             setupSectionRail();
             _syncBootstrapUi();
             renderJobQueue();
-            renderArtifactPanel();
-            renderSelectedJobInspector();
-            renderMissionControl();
             void checkBackend(true);
             startHealthPolling();
             await bootstrapPromise;
