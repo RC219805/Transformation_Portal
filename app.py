@@ -2433,7 +2433,7 @@ async def portal_bootstrap() -> JSONResponse:
 
 
 @app.get("/healthz")
-async def healthz() -> Dict[str, Any]:
+async def healthz() -> JSONResponse:
     """Lightweight health check endpoint for managed front door and load balancers.
 
     Returns a minimal status response without verbose details, suitable for
@@ -2441,10 +2441,10 @@ async def healthz() -> Dict[str, Any]:
     This endpoint is referenced by the portal UI when in managed auth mode or
     before bootstrap is ready.
     """
-    return {
-        "ok": True,
-        "time": _now(),
-    }
+    return JSONResponse(
+        {"ok": True, "time": _now()},
+        headers={"Cache-Control": "no-store", "Pragma": "no-cache"},
+    )
 
 
 @app.get("/ready")

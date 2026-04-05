@@ -94,6 +94,9 @@ def test_healthz_returns_minimal_health_response(client: TestClient) -> None:
     assert "jobs" not in body
     assert "security" not in body
     assert "version" not in body
+    # Health checks must not be cached to ensure outages are detected immediately
+    assert response.headers["Cache-Control"] == "no-store"
+    assert response.headers["Pragma"] == "no-cache"
 
 
 def test_portal_bootstrap_reports_direct_debug_mode(client: TestClient) -> None:
