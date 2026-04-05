@@ -45,6 +45,7 @@ from ..depth.backends.protocol import LicenseRestrictionError
 # Use absolute import to avoid circular dependencies
 from ._backend_contract import normalize_backend_id, normalize_backend_sequence
 from .config import EnhanceConfig, ModelVariant
+from .config_resolver import apply_effective_da3_runtime_config
 from .manifest import BackendSelectionMetadata
 
 logger = logging.getLogger(__name__)
@@ -350,7 +351,7 @@ def resolve_backend_model_id(
 
 
 def select_backend(
-    requested: str,
+    requested: Optional[str],
     config: EnhanceConfig,
     registry: Any,
     model_variant: Optional[ModelVariant] = None,
@@ -372,7 +373,12 @@ def select_backend(
     Returns:
         BackendSelection with result
     """
+    apply_effective_da3_runtime_config(config)
+    explicit_backend_request = (
+        normalize_backend_id(requested) is not None or normalize_backend_id(config.depth_backend) is not None
+    )
     normalized_requested = resolve_requested_backend(requested, config)
+    strict_explicit_da3_request = explicit_backend_request and normalized_requested == "da3"
 
     allow_synthetic = bool(config.allow_synthetic_fallback) or os.getenv("TP_ALLOW_SYNTHETIC_FALLBACK") == "1"
 
@@ -426,9 +432,13 @@ def select_backend(
             init_errors[backend_id] = "unknown_backend"
 
         except (ImportError, FileNotFoundError, RuntimeError) as backend_error:
+            if strict_explicit_da3_request and index == 0 and backend_id == normalized_requested:
+                raise
             init_errors[backend_id] = str(backend_error)
 
         except Exception as backend_error:  # pragma: no cover
+            if strict_explicit_da3_request and index == 0 and backend_id == normalized_requested:
+                raise
             init_errors[backend_id] = str(backend_error)
 
     # Resolve model ID for successful selection
@@ -519,9 +529,8 @@ class PipelineCoordinator:
 
             self._registry = DepthBackendRegistry()
 
-        backend_id = requested or self._config.depth_backend or "da3"
         selection = select_backend(
-            backend_id,
+            requested,
             self._config,
             self._registry,
             self._model_variant,

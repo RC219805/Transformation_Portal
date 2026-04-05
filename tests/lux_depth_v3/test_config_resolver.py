@@ -143,6 +143,61 @@ class TestResolvePreset:
         assert da3_config.postprocessing.edge_threshold == 0.03
 
 
+class TestEffectiveDa3RuntimeResolution:
+    """Test effective DA3 runtime resolution."""
+
+    def test_prefers_explicit_config(self, monkeypatch, tmp_path):
+        """Explicit config should win over env and repo-local discovery."""
+        from transformation_portal.lux_depth_v3.config import EnhanceConfig
+        from transformation_portal.lux_depth_v3.config_resolver import resolve_effective_da3_python_executable
+
+        discovered_python = tmp_path / "bin" / "python"
+        discovered_python.parent.mkdir(parents=True)
+        discovered_python.write_text("#!/bin/sh\n", encoding="utf-8")
+        monkeypatch.setenv("TRANSFORMATION_PORTAL_DA3_PYTHON", "/env/python")
+        monkeypatch.setattr(
+            "transformation_portal.lux_depth_v3.config_resolver._repo_local_da3_python_path",
+            lambda: discovered_python,
+        )
+
+        config = EnhanceConfig(da3_python_executable="/config/python")
+
+        assert resolve_effective_da3_python_executable(config) == "/config/python"
+
+    def test_uses_env_when_config_unset(self, monkeypatch, tmp_path):
+        """Environment override should win when config is unset."""
+        from transformation_portal.lux_depth_v3.config import EnhanceConfig
+        from transformation_portal.lux_depth_v3.config_resolver import resolve_effective_da3_python_executable
+
+        missing_python = tmp_path / "missing" / "python"
+        monkeypatch.setenv("TRANSFORMATION_PORTAL_DA3_PYTHON", "/env/python")
+        monkeypatch.setattr(
+            "transformation_portal.lux_depth_v3.config_resolver._repo_local_da3_python_path",
+            lambda: missing_python,
+        )
+
+        assert resolve_effective_da3_python_executable(EnhanceConfig()) == "/env/python"
+
+    def test_auto_discovers_repo_local_contract(self, monkeypatch, tmp_path):
+        """Repo-local DA3 runtime should resolve to the stable contract path."""
+        from transformation_portal.lux_depth_v3.config import EnhanceConfig
+        from transformation_portal.lux_depth_v3.config_resolver import (
+            REPO_LOCAL_DA3_PYTHON,
+            resolve_effective_da3_python_executable,
+        )
+
+        discovered_python = tmp_path / "bin" / "python"
+        discovered_python.parent.mkdir(parents=True)
+        discovered_python.write_text("#!/bin/sh\n", encoding="utf-8")
+        monkeypatch.delenv("TRANSFORMATION_PORTAL_DA3_PYTHON", raising=False)
+        monkeypatch.setattr(
+            "transformation_portal.lux_depth_v3.config_resolver._repo_local_da3_python_path",
+            lambda: discovered_python,
+        )
+
+        assert resolve_effective_da3_python_executable(EnhanceConfig()) == REPO_LOCAL_DA3_PYTHON
+
+
 class TestComputeConfigFingerprint:
     """Test configuration fingerprint computation."""
 
@@ -213,6 +268,27 @@ class TestComputeConfigFingerprint:
         fp2 = compute_config_fingerprint(config2)
 
         assert fp1.to_sha256() != fp2.to_sha256()
+
+    def test_fingerprint_records_auto_discovered_da3_runtime(self, monkeypatch, tmp_path):
+        """Fingerprint should capture the effective repo-local DA3 runtime."""
+        from transformation_portal.lux_depth_v3.config import EnhanceConfig
+        from transformation_portal.lux_depth_v3.config_resolver import (
+            REPO_LOCAL_DA3_PYTHON,
+            compute_config_fingerprint,
+        )
+
+        discovered_python = tmp_path / "bin" / "python"
+        discovered_python.parent.mkdir(parents=True)
+        discovered_python.write_text("#!/bin/sh\n", encoding="utf-8")
+        monkeypatch.delenv("TRANSFORMATION_PORTAL_DA3_PYTHON", raising=False)
+        monkeypatch.setattr(
+            "transformation_portal.lux_depth_v3.config_resolver._repo_local_da3_python_path",
+            lambda: discovered_python,
+        )
+
+        fingerprint = compute_config_fingerprint(EnhanceConfig())
+
+        assert fingerprint.da3_python_executable == REPO_LOCAL_DA3_PYTHON
 
 
 class TestBuildFingerprintPayloads:
@@ -314,6 +390,27 @@ class TestBuildRunCardConfigFingerprint:
         assert "backend_requested" in fingerprint
         assert "quality_tier" in fingerprint
 
+    def test_run_card_fingerprint_records_auto_discovered_da3_runtime(self, monkeypatch, tmp_path):
+        """Run-card fingerprint should record the effective repo-local DA3 runtime."""
+        from transformation_portal.lux_depth_v3.config import EnhanceConfig
+        from transformation_portal.lux_depth_v3.config_resolver import (
+            REPO_LOCAL_DA3_PYTHON,
+            build_run_card_config_fingerprint,
+        )
+
+        discovered_python = tmp_path / "bin" / "python"
+        discovered_python.parent.mkdir(parents=True)
+        discovered_python.write_text("#!/bin/sh\n", encoding="utf-8")
+        monkeypatch.delenv("TRANSFORMATION_PORTAL_DA3_PYTHON", raising=False)
+        monkeypatch.setattr(
+            "transformation_portal.lux_depth_v3.config_resolver._repo_local_da3_python_path",
+            lambda: discovered_python,
+        )
+
+        fingerprint = build_run_card_config_fingerprint(EnhanceConfig())
+
+        assert fingerprint["da3_python_executable"] == REPO_LOCAL_DA3_PYTHON
+
 
 class TestConfigResolverClass:
     """Test the ConfigResolver class interface."""
@@ -338,6 +435,25 @@ class TestConfigResolverClass:
         resolved = resolver.resolve(config)
 
         assert isinstance(resolved, ResolvedConfig)
+
+    def test_resolver_persists_auto_discovered_da3_runtime(self, monkeypatch, tmp_path):
+        """Resolver should persist the effective DA3 runtime on config."""
+        from transformation_portal.lux_depth_v3.config import EnhanceConfig
+        from transformation_portal.lux_depth_v3.config_resolver import REPO_LOCAL_DA3_PYTHON, ConfigResolver
+
+        discovered_python = tmp_path / "bin" / "python"
+        discovered_python.parent.mkdir(parents=True)
+        discovered_python.write_text("#!/bin/sh\n", encoding="utf-8")
+        monkeypatch.delenv("TRANSFORMATION_PORTAL_DA3_PYTHON", raising=False)
+        monkeypatch.setattr(
+            "transformation_portal.lux_depth_v3.config_resolver._repo_local_da3_python_path",
+            lambda: discovered_python,
+        )
+
+        config = EnhanceConfig()
+        resolved = ConfigResolver().resolve(config)
+
+        assert resolved.enhance_config.da3_python_executable == REPO_LOCAL_DA3_PYTHON
         assert resolved.enhance_config is config
         assert resolved.da3_config is not None
         assert resolved.fingerprint is not None
@@ -426,7 +542,7 @@ class TestResolvedConfig:
 
     def test_resolved_config_from_resolver(self):
         """Test ResolvedConfig from resolver."""
-        from transformation_portal.lux_depth_v3.config import EnhanceConfig, ModelVariant
+        from transformation_portal.lux_depth_v3.config import EnhanceConfig
         from transformation_portal.lux_depth_v3.config_resolver import ConfigResolver
 
         resolver = ConfigResolver()

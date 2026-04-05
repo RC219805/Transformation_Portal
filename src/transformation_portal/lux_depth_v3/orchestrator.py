@@ -47,7 +47,7 @@ from ..ingest.canonical_json import dump_json, dumps_json
 from ..spatial_ai.reconstruction.contracts import (  # noqa: E501
     LicenseRestrictionError as ReconstructionLicenseRestrictionError,
 )
-from ._backend_contract import normalize_backend_id, normalize_backend_provenance, normalize_backend_sequence
+from ._backend_contract import normalize_backend_id, normalize_backend_provenance
 
 # ADR-043: Artifact management extracted to artifact_manager.py
 # NOTE: xxHash support is now handled in artifact_manager.py (ADR-043)
@@ -70,6 +70,7 @@ from .config_resolver import (
     ConfigResolver,
     PresetInfo,
     ResolvedConfig,
+    apply_effective_da3_runtime_config,
     build_apex_depth_gate_fingerprint_payload,
     build_depth_cache_payload,
     build_materials_fingerprint_payload,
@@ -371,7 +372,7 @@ class EnhanceOrchestrator:
         # Log dependency status on first initialization
         _log_dependency_status()
 
-        self.config = config
+        self.config = apply_effective_da3_runtime_config(config)
         self.output_root = Path(output_root)
         self.verify_outputs = verify_outputs
 
@@ -557,83 +558,31 @@ class EnhanceOrchestrator:
         4. Optionally fallback to synthetic in explicit test/CI mode
         5. Record selection decision in metadata
         """
-        requested = resolve_requested_backend(self.config.depth_backend, self.config)
         self._depth_registry = DepthBackendRegistry()
         self._depth_backend_cache: Dict[str, Any] = {}
-
-        allow_synthetic = (
-            bool(self.config.allow_synthetic_fallback)
-            or os.getenv(
-                "TP_ALLOW_SYNTHETIC_FALLBACK",
-            )
-            == "1"
-        )
-        candidate_chain = list(
-            normalize_backend_sequence(
-                (requested, "da3", "da2", "synthetic" if allow_synthetic else None),
-            )
-        )
+        allow_synthetic = bool(self.config.allow_synthetic_fallback) or os.getenv("TP_ALLOW_SYNTHETIC_FALLBACK") == "1"
 
         try:
-            backend = None
-            resolved = None
-            status = "error"
-            reason = None
-            init_errors: Dict[str, str] = {}
-
-            for index, backend_id in enumerate(candidate_chain):
-                try:
-                    candidate_backend = self._depth_registry.get_backend(
-                        backend_id,
-                        self.config,
-                    )
-                    candidate_backend.ensure_available()
-                    backend = candidate_backend
-                    resolved = backend_id
-                    if index == 0:
-                        status = "success"
-                        reason = f"{candidate_backend.name}" " backend ready"
-                    elif backend_id == "synthetic":
-                        status = "synthetic_fallback"
-                        reason = "Test environment" " synthetic fallback" f" after: {init_errors}"
-                    else:
-                        status = "fallback"
-                        requested_error = init_errors.get(
-                            requested,
-                            "unknown error",
-                        )
-                        reason = (
-                            f"Requested '{requested}'" " unavailable:" f" {requested_error}." " Selected" f" '{backend_id}'"
-                        )
-                    break
-                except LicenseRestrictionError:
-                    # Never bypass explicit license
-                    # restrictions on requested backend.
-                    if index == 0:
-                        raise
-                    init_errors[backend_id] = "license_restriction"
-                except ValueError:
-                    # Unknown requested backend should remain a hard error.
-                    if index == 0:
-                        raise
-                    init_errors[backend_id] = "unknown_backend"
-                except (
-                    ImportError,
-                    FileNotFoundError,
-                    RuntimeError,
-                ) as backend_error:
-                    init_errors[backend_id] = str(backend_error)
-                except Exception as backend_error:  # pragma: no cover
-                    init_errors[backend_id] = str(backend_error)
-
-            if backend is None or resolved is None:
+            selection = select_backend(
+                self.config.depth_backend,
+                self.config,
+                self._depth_registry,
+                self._model_variant,
+            )
+            if not selection.is_success or selection.backend is None or selection.resolved_backend is None:
+                requested = resolve_requested_backend(self.config.depth_backend, self.config)
+                candidate_chain = resolve_runtime_backend_chain(requested, self.config)
+                if "synthetic" not in candidate_chain and (
+                    bool(self.config.allow_synthetic_fallback) or os.getenv("TP_ALLOW_SYNTHETIC_FALLBACK") == "1"
+                ):
+                    candidate_chain.append("synthetic")
                 if not allow_synthetic:
                     raise RuntimeError(
                         "No depth backend"
                         " available from"
                         " candidates"
                         f" {candidate_chain}."
-                        f" Errors: {init_errors}."
+                        f" Errors: {selection.init_errors}."
                         " Install ML deps"
                         " (torch, transformers)"
                         " or explicitly enable"
@@ -644,19 +593,23 @@ class EnhanceOrchestrator:
                         "SYNTHETIC_FALLBACK=1)."
                     )
                 raise RuntimeError(
-                    "No depth backend" " available from" " candidates" f" {candidate_chain}." f" Errors: {init_errors}"
+                    "No depth backend"
+                    " available from"
+                    " candidates"
+                    f" {candidate_chain}."
+                    f" Errors: {selection.init_errors}"
                 )
 
-            self.depth_backend = backend
-            self._depth_backend_cache[resolved] = backend
+            self.depth_backend = selection.backend
+            self._depth_backend_cache[selection.resolved_backend] = selection.backend
             self._backend_metadata = BackendSelectionMetadata(
-                requested_backend=requested,
-                resolved_backend=resolved,
-                resolution_status=status,
-                resolution_reason=reason,
+                requested_backend=selection.requested_backend,
+                resolved_backend=selection.resolved_backend,
+                resolution_status=selection.status,
+                resolution_reason=selection.reason,
                 model_id=self._resolve_backend_model_id(
-                    resolved,
-                    backend=backend,
+                    selection.resolved_backend,
+                    backend=selection.backend,
                 ),
                 device=self.config.depth_device,
                 attempts=[],
@@ -667,8 +620,8 @@ class EnhanceOrchestrator:
 
             logger.info(
                 "Depth backend:" " requested=%s" " resolved=%s device=%s",
-                requested,
-                resolved,
+                selection.requested_backend,
+                selection.resolved_backend,
                 self.config.depth_device,
             )
 

@@ -21,7 +21,8 @@ Installs the automated repository organization system, including the standard re
 ### `install_da3_runtime.sh`
 
 Bootstraps the repo-local Depth Anything 3 subprocess runtime used by
-`--da3-python`.
+the auto-discovered `./.venv-da3/bin/python` contract and by explicit
+`--da3-python` overrides.
 
 **Usage:**
 ```bash
@@ -37,6 +38,11 @@ Bootstraps the repo-local Depth Anything 3 subprocess runtime used by
 - Runs the DA3 worker readiness check used by the subprocess adapter
 
 **Stable contract:**
+```bash
+lux-depth-v3 --input-dir ./input --output-dir ./output
+```
+
+If you need a non-default interpreter, override it explicitly:
 ```bash
 lux-depth-v3 --input-dir ./input --output-dir ./output --da3-python ./.venv-da3/bin/python
 ```
