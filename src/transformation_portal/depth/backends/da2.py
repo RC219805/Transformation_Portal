@@ -16,6 +16,7 @@ from PIL import Image
 from ...core.ml_dependency_health import (
     OPTIONAL_IMPORT_EXCEPTIONS,
     _installed_version,
+    detect_transformers_torch_runtime_issue,
     detect_transformers_torch_version_issue,
     ensure_dependency_importable,
 )
@@ -86,8 +87,12 @@ class DA2Backend:
                 "torch package not installed" " for DA2 backend.",
             )
 
-        ensure_dependency_importable("transformers")
-        ensure_dependency_importable("torch")
+        transformers_module = ensure_dependency_importable("transformers")
+        torch_module = ensure_dependency_importable("torch")
+
+        runtime_issue = detect_transformers_torch_runtime_issue(torch_module, transformers_module)
+        if runtime_issue:
+            raise ImportError(runtime_issue)
 
         runtime_issue = detect_transformers_torch_version_issue(torch_version, transformers_version)
         if runtime_issue:

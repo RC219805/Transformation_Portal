@@ -236,6 +236,10 @@ class SecurityError(RuntimeError):
     pass
 
 
+# Backward-compatible public name used by older callers and tests.
+SecurityPolicyViolation = SecurityError
+
+
 def install_global_enforcement() -> bool:
     """Install global enforcement of safe torch.load behavior.
 

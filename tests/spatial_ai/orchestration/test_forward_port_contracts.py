@@ -436,3 +436,13 @@ def test_pipeline_result_identity_survives_reload(monkeypatch: pytest.MonkeyPatc
     reloaded = _import_pipeline_module(monkeypatch)
 
     assert reloaded.PipelineResult is PipelineResult
+
+
+def test_multiview_result_identity_survives_reload(monkeypatch: pytest.MonkeyPatch) -> None:
+    _install_material_classifier_stub(monkeypatch)
+    pipeline_module = importlib.import_module("transformation_portal.spatial_ai.orchestration.pipeline")
+    MultiViewReconstructionResult = pipeline_module.MultiViewReconstructionResult
+
+    reloaded = _import_pipeline_module(monkeypatch)
+
+    assert reloaded.MultiViewReconstructionResult is MultiViewReconstructionResult
