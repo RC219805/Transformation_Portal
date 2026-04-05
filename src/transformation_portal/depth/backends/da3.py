@@ -27,6 +27,7 @@ from typing import TYPE_CHECKING, Any, Optional, Union
 import numpy as np
 from PIL import Image
 
+from ...core.da3_runtime import REPO_LOCAL_DA3_PYTHON, find_repo_root
 from ...core.ml_dependency_health import (
     _installed_version,
     detect_transformers_torch_version_issue,
@@ -41,7 +42,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-DA3_RECOMMENDED_VENV = "./.venv-da3/bin/python"
+DA3_RECOMMENDED_VENV = REPO_LOCAL_DA3_PYTHON
 DA3_SETUP_SCRIPT = "./scripts/setup/install_da3_runtime.sh"
 DEFAULT_DA3_SUBPROCESS_TIMEOUT_SECONDS = 900
 
@@ -155,11 +156,7 @@ class DA3Backend:
 
     def _find_repo_root(self) -> Optional[Path]:
         """Find repository root by walking parent directories when in a checkout."""
-        current = Path(__file__).resolve()
-        for parent in [current] + list(current.parents):
-            if (parent / "pyproject.toml").exists() and (parent / "src").exists():
-                return parent
-        return None
+        return find_repo_root(Path(__file__))
 
     def _worker_cwd(self) -> Path:
         """Choose a stable subprocess working directory."""

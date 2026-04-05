@@ -34,14 +34,66 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import os
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+from ..core.da3_runtime import REPO_LOCAL_DA3_PYTHON, repo_local_da3_python_path
 from ..ingest.canonical_json import canonicalize_json
 from .config import DA3Config, EnhanceConfig, ModelVariant, Preset
 from .manifest import ConfigFingerprint
 
 logger = logging.getLogger(__name__)
+
+
+def _repo_local_da3_python_path() -> Optional[Path]:
+    """Return the canonical repo-local DA3 interpreter path."""
+    return repo_local_da3_python_path(Path(__file__))
+
+
+def _normalize_python_executable(value: Any) -> Optional[str]:
+    """Normalize Python executable configuration values."""
+    if value is None:
+        return None
+    try:
+        normalized = os.fspath(value).strip()
+    except TypeError:
+        normalized = str(value).strip()
+    return normalized or None
+
+
+def resolve_effective_da3_python_executable(
+    config: EnhanceConfig,
+) -> Optional[str]:
+    """Resolve the effective DA3 runtime executable for this config.
+
+    Resolution precedence:
+    1. Explicit config.da3_python_executable
+    2. TRANSFORMATION_PORTAL_DA3_PYTHON environment override
+    3. Repo-local stable contract path when present
+    """
+    configured = _normalize_python_executable(getattr(config, "da3_python_executable", None))
+    if configured:
+        return configured
+
+    env_candidate = _normalize_python_executable(os.environ.get("TRANSFORMATION_PORTAL_DA3_PYTHON"))
+    if env_candidate:
+        return env_candidate
+
+    repo_local_python = _repo_local_da3_python_path()
+    if repo_local_python is not None and repo_local_python.exists():
+        return REPO_LOCAL_DA3_PYTHON
+
+    return None
+
+
+def apply_effective_da3_runtime_config(
+    config: EnhanceConfig,
+) -> EnhanceConfig:
+    """Persist the effective DA3 runtime choice onto the config object."""
+    config.da3_python_executable = resolve_effective_da3_python_executable(config)
+    return config
 
 
 @dataclass
@@ -293,6 +345,7 @@ def build_depth_cache_payload(
     mv = model_variant or config.model_variant
     if mv is None:
         mv = ModelVariant.METRIC_LARGE
+    effective_da3_python = resolve_effective_da3_python_executable(config)
 
     return {
         "model_variant": mv.value.name,
@@ -301,7 +354,7 @@ def build_depth_cache_payload(
         "depth_backend": config.depth_backend,
         "depth_pro_checkpoint_path": config.depth_pro_checkpoint_path,
         "depth_pro_python_executable": config.depth_pro_python_executable,
-        "da3_python_executable": config.da3_python_executable,
+        "da3_python_executable": effective_da3_python,
     }
 
 
@@ -324,6 +377,7 @@ def compute_config_fingerprint(
     mv = model_variant or config.model_variant
     if mv is None:
         mv = ModelVariant.METRIC_LARGE
+    effective_da3_python = resolve_effective_da3_python_executable(config)
 
     return ConfigFingerprint(
         model_variant=mv.value.name,
@@ -336,7 +390,7 @@ def compute_config_fingerprint(
         depth_backend=config.depth_backend,
         depth_pro_checkpoint_path=config.depth_pro_checkpoint_path,
         depth_pro_python_executable=config.depth_pro_python_executable,
-        da3_python_executable=config.da3_python_executable,
+        da3_python_executable=effective_da3_python,
         quality_tier=str(config.quality_tier),
         materials_config=build_materials_fingerprint_payload(config),
         pbr_config=build_pbr_fingerprint_payload(config),
@@ -468,6 +522,7 @@ class ConfigResolver:
             ResolvedConfig with fully resolved settings
         """
         # Resolve preset and model variant
+        apply_effective_da3_runtime_config(config)
         da3_config, resolved_model = resolve_preset(
             config.preset,
             config.model_variant,

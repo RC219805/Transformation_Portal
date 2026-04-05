@@ -56,6 +56,129 @@ def test_orchestrator_default_backend(tmp_path, mock_da3_available):
     assert orchestrator._backend_metadata.resolution_status == "success"
 
 
+def test_orchestrator_explicit_da3_auto_discovers_repo_runtime(tmp_path, monkeypatch):
+    """Explicit DA3 should persist the repo-local subprocess contract when available."""
+    from transformation_portal.lux_depth_v3.config_resolver import REPO_LOCAL_DA3_PYTHON
+
+    discovered_python = tmp_path / ".venv-da3" / "bin" / "python"
+    discovered_python.parent.mkdir(parents=True)
+    discovered_python.write_text("#!/bin/sh\n", encoding="utf-8")
+    monkeypatch.delenv("TRANSFORMATION_PORTAL_DA3_PYTHON", raising=False)
+    monkeypatch.setattr(
+        "transformation_portal.lux_depth_v3.config_resolver._repo_local_da3_python_path",
+        lambda: discovered_python,
+    )
+
+    backend_calls = []
+
+    class FakeBackend:
+        def __init__(self, name):
+            self.name = name
+
+        def ensure_available(self):
+            return None
+
+    def fake_get_backend(self, backend_name, config):
+        del self
+        backend_calls.append((backend_name, config.da3_python_executable))
+        return FakeBackend(backend_name)
+
+    with patch(
+        "transformation_portal.depth.backends.registry.DepthBackendRegistry.get_backend",
+        new=fake_get_backend,
+    ):
+        config = EnhanceConfig(
+            depth_backend="da3",
+            depth_device="cpu",
+            enable_v2=False,
+        )
+
+        orchestrator = EnhanceOrchestrator(config, tmp_path)
+
+    assert orchestrator.depth_backend.name == "da3"
+    assert orchestrator.config.da3_python_executable == REPO_LOCAL_DA3_PYTHON
+    assert backend_calls == [("da3", REPO_LOCAL_DA3_PYTHON)]
+
+
+def test_orchestrator_explicit_da3_unavailable_fails_without_fallback(tmp_path):
+    """Explicit DA3 should fail fast instead of silently selecting DA2."""
+    backend_calls = []
+
+    class FakeBackend:
+        def __init__(self, name, error=None):
+            self.name = name
+            self._error = error
+
+        def ensure_available(self):
+            if self._error is not None:
+                raise self._error
+            return None
+
+    def fake_get_backend(self, backend_name, config):
+        del self, config
+        backend_calls.append(backend_name)
+        if backend_name == "da3":
+            return FakeBackend(
+                "da3",
+                ImportError("DA3 subprocess environment is not ready."),
+            )
+        return FakeBackend(backend_name)
+
+    with patch(
+        "transformation_portal.depth.backends.registry.DepthBackendRegistry.get_backend",
+        new=fake_get_backend,
+    ):
+        config = EnhanceConfig(
+            depth_backend="da3",
+            depth_device="cpu",
+            enable_v2=False,
+        )
+
+        with pytest.raises(ImportError, match="DA3 subprocess environment is not ready"):
+            EnhanceOrchestrator(config, tmp_path)
+
+    assert backend_calls == ["da3"]
+
+
+def test_orchestrator_default_backend_falls_back_to_da2_when_da3_unavailable(tmp_path):
+    """Auto/default backend selection should still fall back to DA2."""
+    backend_calls = []
+
+    class FakeBackend:
+        def __init__(self, name, error=None):
+            self.name = name
+            self._error = error
+
+        def ensure_available(self):
+            if self._error is not None:
+                raise self._error
+            return None
+
+    def fake_get_backend(self, backend_name, config):
+        del self, config
+        backend_calls.append(backend_name)
+        if backend_name == "da3":
+            return FakeBackend("da3", ImportError("depth_anything_3 package not installed"))
+        return FakeBackend("da2")
+
+    with patch(
+        "transformation_portal.depth.backends.registry.DepthBackendRegistry.get_backend",
+        new=fake_get_backend,
+    ):
+        config = EnhanceConfig(
+            depth_device="cpu",
+            enable_v2=False,
+        )
+
+        orchestrator = EnhanceOrchestrator(config, tmp_path)
+
+    assert backend_calls == ["da3", "da2"]
+    assert orchestrator.depth_backend.name == "da2"
+    assert orchestrator._backend_metadata.requested_backend == "da3"
+    assert orchestrator._backend_metadata.resolved_backend == "da2"
+    assert orchestrator._backend_metadata.resolution_status == "fallback"
+
+
 def test_orchestrator_prefers_depth_pro_only_on_apple_silicon(tmp_path):
     """Apple Silicon should auto-select Depth Pro only when explicitly opted in."""
     backend_calls = []

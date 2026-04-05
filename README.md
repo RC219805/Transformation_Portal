@@ -145,20 +145,23 @@ The orchestrator also contains an internal `synthetic` fallback path used for ex
 lux-depth-v3 --input-dir ./input --output-dir ./output
 ```
 
+If `./.venv-da3/bin/python` exists, Lux Depth V3 auto-discovers that repo-local
+DA3 runtime before falling back to the main repo environment.
+
 **Recommended (DA3 via isolated Depth Anything 3 environment):**
 ```bash
 ./scripts/setup/install_da3_runtime.sh
 
-lux-depth-v3 \
-  --input-dir ./input \
-  --output-dir ./output \
-  --da3-python ./.venv-da3/bin/python
+lux-depth-v3 --input-dir ./input --output-dir ./output
 ```
 
 The repo-local DA3 setup script pins the upstream checkout to a validated ref under
 `.runtime/Depth-Anything-3`, keeps the interpreter contract at `./.venv-da3/bin/python`,
 captures a `.runtime/da3-pip-freeze.txt` snapshot for debugging/provenance, and leaves
-the main repo `.venv` unchanged.
+the main repo `.venv` unchanged. Use `--da3-python` only when you want to override
+that repo-local runtime. Explicit `--depth-backend da3` requests are now strict:
+if DA3 cannot be initialized, the command raises an actionable error instead of
+silently downgrading to DA2.
 
 **Depth Pro (requires license acceptance):**
 ```bash
