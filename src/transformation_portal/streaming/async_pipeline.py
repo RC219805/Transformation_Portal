@@ -249,21 +249,18 @@ class BackpressureQueue(Generic[T]):
             raise RuntimeError(f"Queue '{self._name}' is closed")
 
         start = self._clock()
-        try:
-            if timeout is not None:
-                await asyncio.wait_for(self._queue.put(item), timeout=timeout)
-            else:
-                await self._queue.put(item)
-        except asyncio.TimeoutError:
-            raise
+        if timeout is not None:
+            await asyncio.wait_for(self._queue.put(item), timeout=timeout)
         else:
-            wait_s = self._clock() - start
-            self._items_put += 1
-            self._total_wait_time += wait_s
+            await self._queue.put(item)
 
-            # Update backpressure state
-            if self._maxsize > 0 and self.size >= self._high_water:
-                self._backpressured = True
+        wait_s = self._clock() - start
+        self._items_put += 1
+        self._total_wait_time += wait_s
+
+        # Update backpressure state
+        if self._maxsize > 0 and self.size >= self._high_water:
+            self._backpressured = True
 
     async def get(self, timeout: Optional[float] = None) -> T:
         """Get item from queue with optional timeout.
@@ -278,23 +275,20 @@ class BackpressureQueue(Generic[T]):
             asyncio.TimeoutError: If timeout exceeded
         """
         start = self._clock()
-        try:
-            if timeout is not None:
-                item = await asyncio.wait_for(self._queue.get(), timeout=timeout)
-            else:
-                item = await self._queue.get()
-        except asyncio.TimeoutError:
-            raise
+        if timeout is not None:
+            item = await asyncio.wait_for(self._queue.get(), timeout=timeout)
         else:
-            wait_s = self._clock() - start
-            self._items_got += 1
-            self._total_wait_time += wait_s
+            item = await self._queue.get()
 
-            # Update backpressure state
-            if self._backpressured and self.size <= self._low_water:
-                self._backpressured = False
+        wait_s = self._clock() - start
+        self._items_got += 1
+        self._total_wait_time += wait_s
 
-            return item
+        # Update backpressure state
+        if self._backpressured and self.size <= self._low_water:
+            self._backpressured = False
+
+        return item
 
     def task_done(self) -> None:
         """Mark a task as done."""

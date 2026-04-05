@@ -17,11 +17,6 @@ import transformation_portal.streaming.async_pipeline as async_pipeline_module
 from transformation_portal.streaming.async_pipeline import AsyncPipeline, AsyncStage, BackpressureQueue
 
 
-def _patch_time(monkeypatch: pytest.MonkeyPatch, *values: float) -> None:
-    iterator = iter(values)
-    monkeypatch.setattr(async_pipeline_module.time, "time", lambda: next(iterator))
-
-
 def _make_clock(*values: float) -> Callable[[], float]:
     """Create a fake clock that returns values in sequence."""
     iterator = iter(values)
