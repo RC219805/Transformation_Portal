@@ -5667,11 +5667,19 @@
             job.usesFetchSse = false;
             const es = new EventSource(streamUrl);
             job.eventSource = es;
-            es.addEventListener('log', (e) => _applyJobStreamEvent(job, 'log', JSON.parse(e.data)));
-            es.addEventListener('progress', (e) => _applyJobStreamEvent(job, 'progress', JSON.parse(e.data)));
-            es.addEventListener('state', (e) => _applyJobStreamEvent(job, 'state', JSON.parse(e.data)));
-            es.addEventListener('artifact', (e) => _applyJobStreamEvent(job, 'artifact', JSON.parse(e.data)));
-            es.addEventListener('done', (e) => _applyJobStreamEvent(job, 'done', JSON.parse(e.data)));
+            const safeParseSseEvent = (eventName, e) => {
+                try {
+                    const parsed = JSON.parse(e.data);
+                    _applyJobStreamEvent(job, eventName, parsed);
+                } catch {
+                    // Ignore malformed SSE data payloads; continue streaming.
+                }
+            };
+            es.addEventListener('log', (e) => safeParseSseEvent('log', e));
+            es.addEventListener('progress', (e) => safeParseSseEvent('progress', e));
+            es.addEventListener('state', (e) => safeParseSseEvent('state', e));
+            es.addEventListener('artifact', (e) => safeParseSseEvent('artifact', e));
+            es.addEventListener('done', (e) => safeParseSseEvent('done', e));
             es.onerror = () => {};
         }
 

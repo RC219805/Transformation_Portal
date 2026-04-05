@@ -373,6 +373,25 @@ def test_portal_start_job_stream_avoids_duplicate_readers() -> None:
     assert "if (_jobHasActiveStream(job)) return;" in body
 
 
+def test_portal_eventsource_wraps_json_parse_in_try_catch() -> None:
+    """Verify EventSource handlers guard against malformed JSON data."""
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+    body = _extract_js_function_body(content, "startJobEventStream")
+
+    # The EventSource handlers must use a safe parsing wrapper
+    assert "safeParseSseEvent" in body
+    assert "try {" in body
+    assert "JSON.parse(e.data)" in body
+    assert "catch {" in body
+    # Verify all event types use the safe wrapper
+    assert "es.addEventListener('log', (e) => safeParseSseEvent('log', e));" in body
+    assert "es.addEventListener('progress', (e) => safeParseSseEvent('progress', e));" in body
+    assert "es.addEventListener('state', (e) => safeParseSseEvent('state', e));" in body
+    assert "es.addEventListener('artifact', (e) => safeParseSseEvent('artifact', e));" in body
+    assert "es.addEventListener('done', (e) => safeParseSseEvent('done', e));" in body
+
+
 def test_portal_resumes_blocked_streams_after_api_key_update() -> None:
     portal_html = Path(__file__).resolve().parents[1] / "portal.html"
     content = portal_html.read_text(encoding="utf-8")
