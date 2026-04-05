@@ -39,18 +39,17 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+from ..core.da3_runtime import REPO_LOCAL_DA3_PYTHON, repo_local_da3_python_path
 from ..ingest.canonical_json import canonicalize_json
 from .config import DA3Config, EnhanceConfig, ModelVariant, Preset
 from .manifest import ConfigFingerprint
 
 logger = logging.getLogger(__name__)
 
-REPO_LOCAL_DA3_PYTHON = "./.venv-da3/bin/python"
 
-
-def _repo_local_da3_python_path() -> Path:
+def _repo_local_da3_python_path() -> Optional[Path]:
     """Return the canonical repo-local DA3 interpreter path."""
-    return Path(__file__).resolve().parents[3] / ".venv-da3" / "bin" / "python"
+    return repo_local_da3_python_path(Path(__file__))
 
 
 def _normalize_python_executable(value: Any) -> Optional[str]:
@@ -82,7 +81,8 @@ def resolve_effective_da3_python_executable(
     if env_candidate:
         return env_candidate
 
-    if _repo_local_da3_python_path().exists():
+    repo_local_python = _repo_local_da3_python_path()
+    if repo_local_python is not None and repo_local_python.exists():
         return REPO_LOCAL_DA3_PYTHON
 
     return None

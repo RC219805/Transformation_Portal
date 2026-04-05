@@ -146,6 +146,20 @@ class TestResolvePreset:
 class TestEffectiveDa3RuntimeResolution:
     """Test effective DA3 runtime resolution."""
 
+    def test_repo_local_runtime_path_discovers_repo_root_via_markers(self, monkeypatch, tmp_path):
+        """Repo-local path discovery should use repo markers instead of fixed depth."""
+        import transformation_portal.lux_depth_v3.config_resolver as config_resolver
+
+        module_path = tmp_path / "packages" / "src" / "transformation_portal" / "lux_depth_v3" / "config_resolver.py"
+        module_path.parent.mkdir(parents=True)
+        module_path.write_text("# test helper\n", encoding="utf-8")
+        (tmp_path / "pyproject.toml").write_text("[build-system]\nrequires=[]\n", encoding="utf-8")
+        (tmp_path / "src").mkdir(exist_ok=True)
+
+        monkeypatch.setattr(config_resolver, "__file__", str(module_path))
+
+        assert config_resolver._repo_local_da3_python_path() == (tmp_path / ".venv-da3" / "bin" / "python")
+
     def test_prefers_explicit_config(self, monkeypatch, tmp_path):
         """Explicit config should win over env and repo-local discovery."""
         from transformation_portal.lux_depth_v3.config import EnhanceConfig

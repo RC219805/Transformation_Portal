@@ -44,7 +44,7 @@ lux-depth-v3 --input-dir ./input --output-dir ./output
 
 If you need a non-default interpreter, override it explicitly:
 ```bash
-lux-depth-v3 --input-dir ./input --output-dir ./output --da3-python ./.venv-da3/bin/python
+lux-depth-v3 --input-dir ./input --output-dir ./output --da3-python ~/venvs/da3/bin/python
 ```
 
 **Requirements:**
