@@ -352,14 +352,17 @@ def test_portal_fetch_sse_reconnect_schedules_on_unexpected_disconnect_only() ->
     assert "scheduleSseReconnect(job);" in body
 
 
-def test_portal_fetch_sse_watchdog_reconnects_stalled_streams() -> None:
+def test_portal_sse_watchdog_reconnects_stalled_streams_for_fetch_and_native_transports() -> None:
     portal_html = Path(__file__).resolve().parents[1] / "portal.html"
     content = portal_html.read_text(encoding="utf-8")
     body = _extract_js_function_body(content, "startSseWatchdog")
 
-    assert "if (!job.usesFetchSse) return;" in body
     assert "if (job.reconnectBlocked) return;" in body
     assert "SSE_STALL_THRESHOLD_MS" in body
+    assert "Fetch event stream is not active. Reconnecting to restore live telemetry." in body
+    assert "Native SSE stream is not active. Reconnecting to restore live telemetry." in body
+    assert "Fetch event stream stalled. Reconnecting to restore live telemetry." in body
+    assert "Native SSE stream stalled. Reconnecting to restore live telemetry." in body
     assert "_teardownJobEventStream(job);" in body
     assert "scheduleSseReconnect(job);" in body
 
@@ -390,6 +393,39 @@ def test_portal_eventsource_wraps_json_parse_in_try_catch() -> None:
     assert "es.addEventListener('state', (e) => safeParseSseEvent('state', e));" in body
     assert "es.addEventListener('artifact', (e) => safeParseSseEvent('artifact', e));" in body
     assert "es.addEventListener('done', (e) => safeParseSseEvent('done', e));" in body
+
+
+def test_portal_native_eventsource_surfaces_state_and_terminal_errors() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+    body = _extract_js_function_body(content, "startJobEventStream")
+    active_body = _extract_js_function_body(content, "_jobHasActiveStream")
+    transport_body = _extract_js_function_body(content, "formatTransportLabel")
+
+    assert "const EVENT_SOURCE_READY_STATE_CONNECTING = 0;" in content
+    assert "const EVENT_SOURCE_READY_STATE_OPEN = 1;" in content
+    assert "const EVENT_SOURCE_READY_STATE_CLOSED = 2;" in content
+    assert "function _isNativeEventSourceHandle(handle) {" in content
+    assert "function _nativeEventSourceReadyState(handle) {" in content
+    assert "const nativeReadyState = _nativeEventSourceReadyState(job.eventSource);" in active_body
+    assert "if (nativeReadyState === EVENT_SOURCE_READY_STATE_CLOSED) return false;" in active_body
+    assert "if (nativeReadyState === EVENT_SOURCE_READY_STATE_CONNECTING) return 'event reconnecting';" in transport_body
+    assert "if (nativeReadyState === EVENT_SOURCE_READY_STATE_OPEN) return 'event stream';" in transport_body
+    assert "if (nativeReadyState === EVENT_SOURCE_READY_STATE_CLOSED) return 'event closed';" in transport_body
+    assert "es.onopen = () => {" in body
+    assert "const readyState = _nativeEventSourceReadyState(es);" in body
+    assert "if (readyState === EVENT_SOURCE_READY_STATE_CONNECTING) {" in body
+    assert (
+        "_noteTransportWarning(job, 'eventsource_reconnecting', 'Native SSE connection dropped. Browser is retrying in the background.', 'warn');"
+        in body
+    )
+    assert (
+        "const warningCode = readyState === EVENT_SOURCE_READY_STATE_CLOSED ? 'eventsource_closed' : 'eventsource_error';"
+        in body
+    )
+    assert "appendJobLog(job, logLine);" in body
+    assert "_teardownJobEventStream(job);" in body
+    assert "scheduleSseReconnect(job);" in body
 
 
 def test_portal_resumes_blocked_streams_after_api_key_update() -> None:

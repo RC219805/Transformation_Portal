@@ -1770,6 +1770,9 @@
         const SSE_RECONNECT_JITTER_MS = 250;
         const SSE_STALL_CHECK_INTERVAL_MS = 10000;
         const SSE_STALL_THRESHOLD_MS = 45000;
+        const EVENT_SOURCE_READY_STATE_CONNECTING = 0;
+        const EVENT_SOURCE_READY_STATE_OPEN = 1;
+        const EVENT_SOURCE_READY_STATE_CLOSED = 2;
         const TIMELINE_PROGRESS_CHECKPOINTS = [5, 25, 50, 75, 100];
         const SAFE_JOB_STATES = new Set(['queued', 'running', 'succeeded', 'failed', 'canceled', 'ready', 'offline']);
         const SAFE_HTTP_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
@@ -2596,7 +2599,12 @@
         function formatTransportLabel(job) {
             if (!job) return 'idle';
             if (job.reconnectBlocked) return 'auth blocked';
-            if (_jobHasActiveStream(job)) return job.usesFetchSse ? 'fetch stream' : 'event stream';
+            const nativeReadyState = _nativeEventSourceReadyState(job.eventSource);
+            if (job.usesFetchSse && _jobHasActiveStream(job)) return 'fetch stream';
+            if (nativeReadyState === EVENT_SOURCE_READY_STATE_CONNECTING) return 'event reconnecting';
+            if (nativeReadyState === EVENT_SOURCE_READY_STATE_OPEN) return 'event stream';
+            if (nativeReadyState === EVENT_SOURCE_READY_STATE_CLOSED) return 'event closed';
+            if (_jobHasActiveStream(job)) return 'event stream';
             if (job.state === 'running' || job.state === 'queued') return 'awaiting stream';
             return 'closed';
         }
@@ -3220,11 +3228,20 @@
             _reconcileJobTimeline(selected);
             const artifactCount = Array.isArray(selected.artifacts) ? selected.artifacts.length : 0;
             const readableError = getReadableError(selected.error);
+            const nativeReadyState = _nativeEventSourceReadyState(selected.eventSource);
             const streamStatus = selected.reconnectBlocked
                 ? 'Blocked by auth'
-                : _jobHasActiveStream(selected)
-                    ? (selected.usesFetchSse ? 'Fetch stream active' : 'SSE stream active')
-                    : (selected.state === 'running' || selected.state === 'queued' ? 'Waiting for stream' : 'Closed');
+                : selected.usesFetchSse && _jobHasActiveStream(selected)
+                    ? 'Fetch stream active'
+                    : nativeReadyState === EVENT_SOURCE_READY_STATE_CONNECTING
+                        ? 'SSE stream reconnecting'
+                        : nativeReadyState === EVENT_SOURCE_READY_STATE_OPEN
+                            ? 'SSE stream active'
+                            : nativeReadyState === EVENT_SOURCE_READY_STATE_CLOSED
+                                ? 'SSE stream closed'
+                                : _jobHasActiveStream(selected)
+                                    ? 'SSE stream active'
+                                    : (selected.state === 'running' || selected.state === 'queued' ? 'Waiting for stream' : 'Closed');
             const lastActivityAt = Number(selected.updatedAt || selected.createdAt || 0);
             const activityLabel = formatRelativeTime(lastActivityAt);
             const transportLabel = formatTransportLabel(selected);
@@ -4241,9 +4258,23 @@
             }
         }
 
+        function _isNativeEventSourceHandle(handle) {
+            return Boolean(handle && typeof handle.readyState === 'number' && typeof handle.addEventListener === 'function');
+        }
+
+        function _nativeEventSourceReadyState(handle) {
+            if (!_isNativeEventSourceHandle(handle)) return null;
+            const readyState = Number(handle.readyState);
+            return Number.isInteger(readyState) ? readyState : null;
+        }
+
         function _jobHasActiveStream(job) {
             if (!job) return false;
-            return Boolean(job.eventSource || job.fetchAbortController);
+            if (job.fetchAbortController) return true;
+            if (!job.eventSource) return false;
+            const nativeReadyState = _nativeEventSourceReadyState(job.eventSource);
+            if (nativeReadyState === EVENT_SOURCE_READY_STATE_CLOSED) return false;
+            return true;
         }
 
         function _clearSseRetry(job, resetAttempt = true) {
@@ -5857,6 +5888,13 @@
             job.usesFetchSse = false;
             const es = new EventSource(streamUrl);
             job.eventSource = es;
+            es.onopen = () => {
+                if (job.eventSource !== es) return;
+                job.reconnectBlocked = false;
+                _markJobEventActivity(job);
+                scheduleRenderJobQueue();
+                renderArtifactPanel();
+            };
             const safeParseSseEvent = (eventName, e) => {
                 try {
                     const parsed = JSON.parse(e.data);
@@ -5870,7 +5908,30 @@
             es.addEventListener('state', (e) => safeParseSseEvent('state', e));
             es.addEventListener('artifact', (e) => safeParseSseEvent('artifact', e));
             es.addEventListener('done', (e) => safeParseSseEvent('done', e));
-            es.onerror = () => {};
+            es.onerror = () => {
+                if (job.eventSource !== es) return;
+                const readyState = _nativeEventSourceReadyState(es);
+                if (readyState === EVENT_SOURCE_READY_STATE_CONNECTING) {
+                    _noteTransportWarning(job, 'eventsource_reconnecting', 'Native SSE connection dropped. Browser is retrying in the background.', 'warn');
+                    scheduleRenderJobQueue();
+                    renderArtifactPanel();
+                    return;
+                }
+                const warningCode = readyState === EVENT_SOURCE_READY_STATE_CLOSED ? 'eventsource_closed' : 'eventsource_error';
+                const warningDetail = readyState === EVENT_SOURCE_READY_STATE_CLOSED
+                    ? 'Native SSE connection closed. Reconnecting to restore live telemetry.'
+                    : 'Native SSE transport failed. Reconnecting to restore live telemetry.';
+                const logLine = readyState === EVENT_SOURCE_READY_STATE_CLOSED
+                    ? '[WARN] Native SSE connection closed. Reconnecting...'
+                    : '[WARN] Native SSE transport failed. Reconnecting...';
+                _noteTransportWarning(job, warningCode, warningDetail, 'warn');
+                appendJobLog(job, logLine);
+                logToPane(job.id, logLine);
+                _teardownJobEventStream(job);
+                scheduleRenderJobQueue();
+                renderArtifactPanel();
+                scheduleSseReconnect(job);
+            };
         }
 
         async function recoverJobs() {
@@ -6124,7 +6185,6 @@
                 state.jobs.forEach((job) => {
                     if (!job) return;
                     _ensureJobStreamState(job);
-                    if (!job.usesFetchSse) return;
                     if (job.reconnectBlocked) return;
 
                     if (!_isJobStreamRecoverable(job)) {
@@ -6134,14 +6194,26 @@
                     if (job.sseRetry.timer) return;
 
                     if (!_jobHasActiveStream(job)) {
+                        const reconnectDetail = job.usesFetchSse
+                            ? 'Fetch event stream is not active. Reconnecting to restore live telemetry.'
+                            : 'Native SSE stream is not active. Reconnecting to restore live telemetry.';
+                        const reconnectCode = job.usesFetchSse ? 'fetch_stream_inactive' : 'eventsource_inactive';
+                        _noteTransportWarning(job, reconnectCode, reconnectDetail, 'warn');
+                        _teardownJobEventStream(job);
                         scheduleSseReconnect(job);
                         return;
                     }
 
                     if (job.lastEventAt > 0 && (now - job.lastEventAt) <= SSE_STALL_THRESHOLD_MS) return;
-                    _noteTransportWarning(job, 'stream_stalled', 'Event stream stalled. Reconnecting to restore live telemetry.', 'warn');
-                    appendJobLog(job, '[WARN] Event stream stalled. Reconnecting...');
-                    logToPane(job.id, '[WARN] Event stream stalled. Reconnecting...');
+                    const stalledDetail = job.usesFetchSse
+                        ? 'Fetch event stream stalled. Reconnecting to restore live telemetry.'
+                        : 'Native SSE stream stalled. Reconnecting to restore live telemetry.';
+                    const stalledLine = job.usesFetchSse
+                        ? '[WARN] Fetch event stream stalled. Reconnecting...'
+                        : '[WARN] Native SSE stream stalled. Reconnecting...';
+                    _noteTransportWarning(job, 'stream_stalled', stalledDetail, 'warn');
+                    appendJobLog(job, stalledLine);
+                    logToPane(job.id, stalledLine);
                     _teardownJobEventStream(job);
                     scheduleSseReconnect(job);
                 });
