@@ -598,6 +598,52 @@ def test_portal_selected_job_inspector_uses_timeline_tabs_and_log_secondary_view
     assert "els.logsShell.classList.toggle('hidden', !showLogsShell);" in tab_body
 
 
+def test_portal_theme_preference_defaults_to_system_without_persisting_boot_value() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+    apply_body = _extract_js_function_body(content, "applyThemePreference")
+    init_body = _extract_js_function_body(content, "init")
+
+    assert "const THEME_STORAGE_KEY = 'tp_theme';" in content
+    assert "const THEME_PREFERENCES = Object.freeze(['system', 'dark', 'light']);" in content
+    assert "themePreference: 'system'," in content
+    assert "localStorage.setItem('tp_theme', mode);" not in content
+    assert "if (normalizedPreference === 'system') localStorage.removeItem(THEME_STORAGE_KEY);" in apply_body
+    assert "else localStorage.setItem(THEME_STORAGE_KEY, normalizedPreference);" in apply_body
+    assert (
+        "const savedThemePreference = _normalizeThemePreference(localStorage.getItem(THEME_STORAGE_KEY)) || 'system';"
+        in init_body
+    )
+    assert "applyThemePreference(savedThemePreference, { persist: false, themeQuery });" in init_body
+
+
+def test_portal_theme_control_cycles_system_dark_light_preferences() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+    next_body = _extract_js_function_body(content, "_nextThemePreference")
+    sync_body = _extract_js_function_body(content, "_syncThemeButton")
+
+    assert "Theme: System" in content
+    assert "Theme preference: system. Click to switch to dark." in content
+    assert "Cycle Theme" in content
+    assert "const nextIndex = (currentIndex + 1) % THEME_PREFERENCES.length;" in next_body
+    assert "return THEME_PREFERENCES[nextIndex];" in next_body
+    assert "applyThemePreference(_nextThemePreference(state.themePreference));" in content
+    assert "Theme: System (${effectiveLabel})" in sync_body
+    assert "Theme preference: ${preference}. Click to switch to ${nextPreference}." in sync_body
+
+
+def test_portal_theme_system_listener_only_reacts_while_following_system() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+    init_body = _extract_js_function_body(content, "init")
+
+    assert "const themeQuery = window.matchMedia('(prefers-color-scheme: dark)');" in init_body
+    assert "themeQuery.addEventListener('change', () => {" in init_body
+    assert "if (state.themePreference === 'system') {" in init_body
+    assert "applyThemePreference('system', { persist: false, themeQuery });" in init_body
+
+
 def test_portal_console_views_use_query_param_navigation_without_backend_route_changes() -> None:
     portal_html = Path(__file__).resolve().parents[1] / "portal.html"
     content = portal_html.read_text(encoding="utf-8")
