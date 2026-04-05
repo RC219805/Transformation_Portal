@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 import pytest
 
@@ -20,6 +20,12 @@ from transformation_portal.streaming.async_pipeline import AsyncPipeline, AsyncS
 def _patch_time(monkeypatch: pytest.MonkeyPatch, *values: float) -> None:
     iterator = iter(values)
     monkeypatch.setattr(async_pipeline_module.time, "time", lambda: next(iterator))
+
+
+def _make_clock(*values: float) -> Callable[[], float]:
+    """Create a fake clock that returns values in sequence."""
+    iterator = iter(values)
+    return lambda: next(iterator)
 
 
 def test_backpressure_queue_get_timeout_does_not_increment_items_got() -> None:
@@ -47,10 +53,9 @@ def test_backpressure_queue_put_timeout_does_not_increment_items_put() -> None:
     assert stats["avg_wait_time"] == 0.0
 
 
-def test_backpressure_queue_successful_get_updates_stats(monkeypatch: pytest.MonkeyPatch) -> None:
-    queue: BackpressureQueue[str] = BackpressureQueue(maxsize=1, name="success_get")
+def test_backpressure_queue_successful_get_updates_stats() -> None:
+    queue: BackpressureQueue[str] = BackpressureQueue(maxsize=1, name="success_get", clock=_make_clock(10.0, 10.25))
     queue._queue.put_nowait("payload")
-    _patch_time(monkeypatch, 10.0, 10.25)
 
     result = asyncio.run(queue.get())
 
@@ -62,9 +67,8 @@ def test_backpressure_queue_successful_get_updates_stats(monkeypatch: pytest.Mon
     assert stats["avg_wait_time"] == pytest.approx(0.25)
 
 
-def test_backpressure_queue_successful_put_updates_stats(monkeypatch: pytest.MonkeyPatch) -> None:
-    queue: BackpressureQueue[str] = BackpressureQueue(maxsize=1, name="success_put")
-    _patch_time(monkeypatch, 1.0, 1.5)
+def test_backpressure_queue_successful_put_updates_stats() -> None:
+    queue: BackpressureQueue[str] = BackpressureQueue(maxsize=1, name="success_put", clock=_make_clock(1.0, 1.5))
 
     asyncio.run(queue.put("payload"))
 
@@ -75,9 +79,8 @@ def test_backpressure_queue_successful_put_updates_stats(monkeypatch: pytest.Mon
     assert stats["avg_wait_time"] == pytest.approx(0.5)
 
 
-def test_backpressure_queue_timeout_does_not_distort_avg_wait_time(monkeypatch: pytest.MonkeyPatch) -> None:
-    queue: BackpressureQueue[str] = BackpressureQueue(maxsize=1, name="avg_wait_time")
-    _patch_time(monkeypatch, 5.0, 5.4, 6.0)
+def test_backpressure_queue_timeout_does_not_distort_avg_wait_time() -> None:
+    queue: BackpressureQueue[str] = BackpressureQueue(maxsize=1, name="avg_wait_time", clock=_make_clock(5.0, 5.4, 6.0))
     asyncio.run(queue.put("payload"))
 
     baseline = queue.stats["avg_wait_time"]
