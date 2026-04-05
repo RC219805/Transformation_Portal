@@ -3623,8 +3623,16 @@
         async function loadPortalBootstrap(options = null) {
             const fallback = _defaultPortalBootstrap();
             const bootstrapOptions = options && typeof options === 'object' ? options : null;
-            const isRetryAttempt = Boolean(bootstrapOptions && bootstrapOptions.isRetryAttempt);
-            _cancelPendingBootstrapRequest('bootstrap_replaced');
+            const retryAttempt = Number.isInteger(bootstrapOptions && bootstrapOptions.attempt)
+                && bootstrapOptions.attempt > 0
+                ? bootstrapOptions.attempt
+                : 0;
+            const retryReason = String(bootstrapOptions && bootstrapOptions.retryReason ? bootstrapOptions.retryReason : '').trim().toLowerCase();
+            const isRetryAttempt = Boolean((bootstrapOptions && bootstrapOptions.isRetryAttempt) || retryAttempt > 0);
+            const bootstrapCancelReason = isRetryAttempt
+                ? (retryReason ? `bootstrap_retry_replaced:${retryReason}` : 'bootstrap_retry_replaced')
+                : 'bootstrap_replaced';
+            _cancelPendingBootstrapRequest(bootstrapCancelReason);
             if (!isRetryAttempt) {
                 _applyPortalBootstrap(fallback, { status: 'pending' });
             }

@@ -408,7 +408,11 @@ def test_portal_bootstrap_loader_uses_abortable_timeout_and_state_contract() -> 
     assert "`${API_BASE}/portal/bootstrap`" in body
     assert "BOOTSTRAP_TIMEOUT_MS" in body
     assert "const bootstrapOptions = options && typeof options === 'object' ? options : null;" in body
-    assert "const isRetryAttempt = Boolean(bootstrapOptions && bootstrapOptions.isRetryAttempt);" in body
+    assert "const retryAttempt = Number.isInteger(bootstrapOptions && bootstrapOptions.attempt)" in body
+    assert "const retryReason = String(bootstrapOptions && bootstrapOptions.retryReason" in body
+    assert "const isRetryAttempt = Boolean((bootstrapOptions && bootstrapOptions.isRetryAttempt) || retryAttempt > 0);" in body
+    assert "const bootstrapCancelReason = isRetryAttempt" in body
+    assert "_cancelPendingBootstrapRequest(bootstrapCancelReason);" in body
     assert "_applyPortalBootstrap(fallback, { status: 'pending' });" in body
     assert "onStart: _trackBootstrapRequest" in body
     assert "onFinally: _clearTrackedBootstrapRequest" in body
