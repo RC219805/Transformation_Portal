@@ -374,38 +374,39 @@ class TestArtifactStoreMultiProcess:
         )
         lock_holder.start()
 
-        # Wait until the child process confirms it actually holds the lock.
         try:
-            lock_status = result_queue.get(timeout=5.0)
-        except queue.Empty:
-            pytest.fail("Lock holder did not report lock acquisition in time")
+            # Wait until the child process confirms it actually holds the lock.
+            try:
+                lock_status = result_queue.get(timeout=5.0)
+            except queue.Empty:
+                pytest.fail("Lock holder did not report lock acquisition in time")
 
-        assert lock_status["success"], lock_status.get("error")
-        assert lock_status["state"] == "locked"
+            assert lock_status["success"], lock_status.get("error")
+            assert lock_status["state"] == "locked"
 
-        # Try to store with short timeout (should timeout)
-        artifact = {"value": 42}
-        provenance = ProvenanceMetadata(
-            cache_key=cache_key,
-            stage_id="timeout_test",
-            stage_version="1.0.0",
-            input_fingerprints={},
-            config_snapshot={},
-            timestamp="2026-02-12T10:00:00Z",
-            hostname="testhost",
-            python_version="3.11",
-            numpy_version="1.26.0",
-            device="cpu",
-        )
+            # Try to store with short timeout (should timeout)
+            artifact = {"value": 42}
+            provenance = ProvenanceMetadata(
+                cache_key=cache_key,
+                stage_id="timeout_test",
+                stage_version="1.0.0",
+                input_fingerprints={},
+                config_snapshot={},
+                timestamp="2026-02-12T10:00:00Z",
+                hostname="testhost",
+                python_version="3.11",
+                numpy_version="1.26.0",
+                device="cpu",
+            )
 
-        # This should timeout
-        with pytest.raises(CacheLockTimeout, match="Could not acquire exclusive lock"):
-            store_short_timeout.store(cache_key, artifact, provenance)
-
-        # Clean up lock holder
-        lock_holder.join(timeout=10.0)
-        if lock_holder.is_alive():
-            lock_holder.terminate()
+            # This should timeout
+            with pytest.raises(CacheLockTimeout, match="Could not acquire exclusive lock"):
+                store_short_timeout.store(cache_key, artifact, provenance)
+        finally:
+            lock_holder.join(timeout=10.0)
+            if lock_holder.is_alive():
+                lock_holder.terminate()
+                lock_holder.join(timeout=10.0)
 
     def test_concurrent_reads_same_key(self, cache_dir: Path):
         """Test multiple processes reading same cache key concurrently.
