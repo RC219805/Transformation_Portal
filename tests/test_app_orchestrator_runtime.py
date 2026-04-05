@@ -602,14 +602,24 @@ def test_portal_theme_preference_defaults_to_system_without_persisting_boot_valu
     portal_html = Path(__file__).resolve().parents[1] / "portal.html"
     content = portal_html.read_text(encoding="utf-8")
     apply_body = _extract_js_function_body(content, "applyThemePreference")
+    migrate_body = _extract_js_function_body(content, "_migrateThemePreferenceStorage")
     init_body = _extract_js_function_body(content, "init")
 
     assert "const THEME_STORAGE_KEY = 'tp_theme';" in content
+    assert "const THEME_STORAGE_VERSION_KEY = 'tp_theme_version';" in content
+    assert "const THEME_STORAGE_VERSION = '2';" in content
     assert "const THEME_PREFERENCES = Object.freeze(['system', 'dark', 'light']);" in content
     assert "themePreference: 'system'," in content
     assert "localStorage.setItem('tp_theme', mode);" not in content
+    assert "const storageVersion = localStorage.getItem(THEME_STORAGE_VERSION_KEY);" in migrate_body
+    assert "if (storageVersion === THEME_STORAGE_VERSION) return;" in migrate_body
+    assert "if (localStorage.getItem(THEME_STORAGE_KEY) !== null) {" in migrate_body
+    assert "localStorage.removeItem(THEME_STORAGE_KEY);" in migrate_body
+    assert "localStorage.setItem(THEME_STORAGE_VERSION_KEY, THEME_STORAGE_VERSION);" in migrate_body
+    assert "localStorage.setItem(THEME_STORAGE_VERSION_KEY, THEME_STORAGE_VERSION);" in apply_body
     assert "if (normalizedPreference === 'system') localStorage.removeItem(THEME_STORAGE_KEY);" in apply_body
     assert "else localStorage.setItem(THEME_STORAGE_KEY, normalizedPreference);" in apply_body
+    assert "_migrateThemePreferenceStorage();" in init_body
     assert (
         "const savedThemePreference = _normalizeThemePreference(localStorage.getItem(THEME_STORAGE_KEY)) || 'system';"
         in init_body

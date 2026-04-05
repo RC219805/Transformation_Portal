@@ -1749,6 +1749,8 @@
         const STORAGE_KEY = 'tp_orchestrator_profiles_final';
         const API_KEY_STORAGE_KEY = 'tp_api_key';
         const THEME_STORAGE_KEY = 'tp_theme';
+        const THEME_STORAGE_VERSION_KEY = 'tp_theme_version';
+        const THEME_STORAGE_VERSION = '2';
         const THEME_PREFERENCES = Object.freeze(['system', 'dark', 'light']);
         const MAX_JOB_LOG_LINES = 1200;
         const BOOTSTRAP_TIMEOUT_MS = 3500;
@@ -6456,6 +6458,17 @@
             return preference === 'system' ? _systemThemeMode(themeQuery) : preference;
         }
 
+        function _migrateThemePreferenceStorage() {
+            const storageVersion = localStorage.getItem(THEME_STORAGE_VERSION_KEY);
+            if (storageVersion === THEME_STORAGE_VERSION) return;
+
+            if (localStorage.getItem(THEME_STORAGE_KEY) !== null) {
+                localStorage.removeItem(THEME_STORAGE_KEY);
+            }
+
+            localStorage.setItem(THEME_STORAGE_VERSION_KEY, THEME_STORAGE_VERSION);
+        }
+
         function _nextThemePreference(preference) {
             const normalizedPreference = _normalizeThemePreference(preference) || 'system';
             const currentIndex = THEME_PREFERENCES.indexOf(normalizedPreference);
@@ -6487,6 +6500,7 @@
             document.documentElement.classList.toggle('dark', mode === 'dark');
 
             if (persist) {
+                localStorage.setItem(THEME_STORAGE_VERSION_KEY, THEME_STORAGE_VERSION);
                 if (normalizedPreference === 'system') localStorage.removeItem(THEME_STORAGE_KEY);
                 else localStorage.setItem(THEME_STORAGE_KEY, normalizedPreference);
             }
@@ -6565,6 +6579,7 @@
 
         async function init() {
             const themeQuery = window.matchMedia('(prefers-color-scheme: dark)');
+            _migrateThemePreferenceStorage();
             const savedThemePreference = _normalizeThemePreference(localStorage.getItem(THEME_STORAGE_KEY)) || 'system';
             applyThemePreference(savedThemePreference, { persist: false, themeQuery });
             setupAmbientMotion();
