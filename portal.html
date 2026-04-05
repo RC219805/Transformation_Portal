@@ -1778,7 +1778,7 @@
         const SAFE_HTTP_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
         let queueRenderScheduled = false;
-        let queuedReviewSurfaceRefresh = true;
+        let queuedReviewSurfaceRefresh = false;
         let healthPollIntervalId = null;
         let sseWatchdogIntervalId = null;
         let healthCheckInFlight = false;
@@ -4002,10 +4002,10 @@
             }
         }
 
-        function renderReviewSurfaces() {
+        function renderReviewSurfaces(payload = null) {
             renderArtifactPanel();
             renderSelectedJobInspector();
-            renderMissionControl();
+            renderMissionControl(payload);
         }
 
         function renderArtifactPanel() {
@@ -4431,7 +4431,7 @@
             requestAnimationFrame(() => {
                 queueRenderScheduled = false;
                 const shouldRenderReviewSurfaces = queuedReviewSurfaceRefresh;
-                queuedReviewSurfaceRefresh = true;
+                queuedReviewSurfaceRefresh = false;
                 renderJobQueue(shouldRenderReviewSurfaces);
             });
         }
@@ -4891,7 +4891,7 @@
                     state.presetsByPipeline[pipelineName] = presets;
                     applyPipelinePresetOptions(pipelineName);
                     renderCLI();
-                    renderMissionControl();
+                    renderReviewSurfaces();
                 }
             } catch (err) {
                 if (!silent) createToast('Failed to refresh presets from backend.', 'error');
@@ -5186,7 +5186,7 @@
                 healthState,
                 healthLabel
             };
-            renderMissionControl(payload);
+            renderReviewSurfaces(payload);
         }
 
         function renderCLI() {
@@ -5621,7 +5621,7 @@
                 if (els.healthIndicator) els.healthIndicator.className = 'status-dot offline';
                 if (els.healthText) els.healthText.textContent = 'Offline / Mock Mode';
             } finally {
-                renderMissionControl();
+                renderReviewSurfaces();
                 healthCheckInFlight = false;
             }
         }
