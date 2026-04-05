@@ -1750,6 +1750,13 @@
         const API_KEY_STORAGE_KEY = 'tp_api_key';
         const MAX_JOB_LOG_LINES = 1200;
         const BOOTSTRAP_TIMEOUT_MS = 3500;
+        const BOOTSTRAP_RETRY_BASE_DELAY_MS = 1000;
+        const BOOTSTRAP_RETRY_MAX_DELAY_MS = 12000;
+        const BOOTSTRAP_RETRY_MAX_EXPONENT = 4;
+        const BOOTSTRAP_RETRY_JITTER_MS = 400;
+        const BOOTSTRAP_RETRY_MAX_ATTEMPTS = 4;
+        const BOOTSTRAP_RETRY_MAX_WINDOW_MS = 60000;
+        const BOOTSTRAP_RETRIABLE_HTTP_STATUSES = new Set([500, 502, 503, 504]);
         const HEALTH_CHECK_INTERVAL_MS = 15000;
         const HEALTH_CHECK_TIMEOUT_MS = 2000;
         const HEALTH_CHECK_MIN_GAP_MS = 10000;
@@ -1853,7 +1860,18 @@
                 lastTransitionAt: Date.now(),
                 lastHealthEndpointPath: '',
                 pendingOnlineFollowup: false,
-                onlineFollowupComplete: false
+                onlineFollowupComplete: false,
+                retry: {
+                    timer: null,
+                    attempt: 0,
+                    deadlineAt: 0,
+                    lastDelayMs: 0,
+                    lastReason: '',
+                    lastHttpStatus: 0,
+                    lastAttemptAt: 0,
+                    lastOutcome: '',
+                    lastEventAt: 0
+                }
             },
             lastDiagnostics: {
                 warnings: [],
@@ -3299,6 +3317,139 @@
             return state.bootstrap && state.bootstrap.status === 'ready';
         }
 
+        function _clearBootstrapRetryTimer() {
+            if (state.bootstrap.retry.timer !== null) {
+                clearTimeout(state.bootstrap.retry.timer);
+                state.bootstrap.retry.timer = null;
+                return true;
+            }
+            return false;
+        }
+
+        function _recordBootstrapRetryEvent(outcome, details = null) {
+            const eventDetails = details && typeof details === 'object' ? details : {};
+            const retry = state.bootstrap.retry;
+            const parsedAttempt = Number(eventDetails.attempt);
+            const parsedHttpStatus = Number(eventDetails.httpStatus);
+            const parsedDelayMs = Number(eventDetails.delayMs);
+
+            if (Number.isFinite(parsedAttempt)) {
+                retry.attempt = Math.max(0, Math.trunc(parsedAttempt));
+            }
+            if (eventDetails.reason !== undefined) {
+                retry.lastReason = String(eventDetails.reason || '').trim();
+            }
+            if (Number.isFinite(parsedHttpStatus)) {
+                retry.lastHttpStatus = Math.max(0, Math.trunc(parsedHttpStatus));
+            }
+            if (Number.isFinite(parsedDelayMs)) {
+                retry.lastDelayMs = Math.max(0, Math.trunc(parsedDelayMs));
+            }
+            retry.lastOutcome = String(outcome || '').trim();
+            retry.lastEventAt = Date.now();
+
+            const payload = {
+                outcome: retry.lastOutcome,
+                attempt: retry.attempt,
+                reason: retry.lastReason,
+                httpStatus: retry.lastHttpStatus,
+                delayMs: retry.lastDelayMs
+            };
+            if (retry.lastOutcome.startsWith('terminal')) {
+                console.warn('[portal bootstrap retry]', payload);
+            } else {
+                console.info('[portal bootstrap retry]', payload);
+            }
+        }
+
+        function _hasActiveBootstrapRetryState() {
+            return Boolean(
+                state.bootstrap.retry.timer !== null
+                || state.bootstrap.retry.deadlineAt > 0
+            );
+        }
+
+        function _hasBootstrapRetryHistory() {
+            return Boolean(
+                state.bootstrap.retry.attempt > 0
+                || state.bootstrap.retry.lastOutcome
+            );
+        }
+
+        function _finalizeBootstrapRetry(outcome, details = null) {
+            _clearBootstrapRetryTimer();
+            state.bootstrap.retry.deadlineAt = 0;
+            _recordBootstrapRetryEvent(outcome, details);
+        }
+
+        function _isBootstrapRetryableFailure(reason = '', httpStatus = 0) {
+            const normalizedReason = String(reason || '').trim().toLowerCase();
+            const normalizedStatus = Number.isFinite(Number(httpStatus)) ? Number(httpStatus) : 0;
+            if (normalizedReason === 'timeout' || normalizedReason === 'network') {
+                return true;
+            }
+            return BOOTSTRAP_RETRIABLE_HTTP_STATUSES.has(normalizedStatus);
+        }
+
+        function _nextBootstrapRetryDelayMs(attempt) {
+            const retryAttempt = Math.max(1, Number.isFinite(Number(attempt)) ? Number(attempt) : 1);
+            const exponent = Math.min(retryAttempt - 1, BOOTSTRAP_RETRY_MAX_EXPONENT);
+            const backoff = BOOTSTRAP_RETRY_BASE_DELAY_MS * (2 ** exponent);
+            const jitter = Math.floor(Math.random() * (BOOTSTRAP_RETRY_JITTER_MS + 1));
+            return Math.min(BOOTSTRAP_RETRY_MAX_DELAY_MS, backoff + jitter);
+        }
+
+        function _scheduleBootstrapRetry(reason = '', httpStatus = 0) {
+            if (!_isBootstrapRetryableFailure(reason, httpStatus)) {
+                _finalizeBootstrapRetry('terminal_not_retryable', { reason, httpStatus });
+                return false;
+            }
+            if (_isBootstrapReady() || state.bootstrap.status !== 'degraded') {
+                _finalizeBootstrapRetry('terminal_bootstrap_resolved', { reason, httpStatus });
+                return false;
+            }
+            if (state.bootstrap.retry.timer !== null) {
+                _recordBootstrapRetryEvent('skipped_already_scheduled', { reason, httpStatus });
+                return false;
+            }
+
+            const now = Date.now();
+            if (!state.bootstrap.retry.deadlineAt || state.bootstrap.retry.deadlineAt <= now) {
+                state.bootstrap.retry.deadlineAt = now + BOOTSTRAP_RETRY_MAX_WINDOW_MS;
+            }
+
+            const attempt = state.bootstrap.retry.attempt + 1;
+            if (attempt > BOOTSTRAP_RETRY_MAX_ATTEMPTS) {
+                _finalizeBootstrapRetry('terminal_retry_limit', {
+                    attempt: state.bootstrap.retry.attempt,
+                    reason,
+                    httpStatus
+                });
+                return false;
+            }
+
+            const delayMs = _nextBootstrapRetryDelayMs(attempt);
+            if ((now + delayMs) > state.bootstrap.retry.deadlineAt) {
+                _finalizeBootstrapRetry('terminal_retry_window_elapsed', {
+                    attempt: state.bootstrap.retry.attempt,
+                    reason,
+                    httpStatus
+                });
+                return false;
+            }
+
+            state.bootstrap.retry.timer = window.setTimeout(() => {
+                state.bootstrap.retry.timer = null;
+                state.bootstrap.retry.attempt = attempt;
+                state.bootstrap.retry.lastAttemptAt = Date.now();
+                _recordBootstrapRetryEvent('attempt_started', { attempt, reason, httpStatus, delayMs: 0 });
+                void loadPortalBootstrap({ isRetryAttempt: true, attempt, retryReason: reason });
+            }, delayMs);
+
+            _recordBootstrapRetryEvent('scheduled', { attempt, reason, httpStatus, delayMs });
+            return true;
+        }
+
         function _setBootstrapStatus(status, reason = '', httpStatus = 0) {
             const allowedStatuses = new Set(['pending', 'ready', 'degraded', 'unavailable']);
             const nextStatus = allowedStatuses.has(status) ? status : 'pending';
@@ -3469,10 +3620,22 @@
             return 'error';
         }
 
-        async function loadPortalBootstrap() {
+        async function loadPortalBootstrap(options = null) {
             const fallback = _defaultPortalBootstrap();
-            _cancelPendingBootstrapRequest('bootstrap_replaced');
-            _applyPortalBootstrap(fallback, { status: 'pending' });
+            const bootstrapOptions = options && typeof options === 'object' ? options : null;
+            const retryAttempt = Number.isInteger(bootstrapOptions && bootstrapOptions.attempt)
+                && bootstrapOptions.attempt > 0
+                ? bootstrapOptions.attempt
+                : 0;
+            const retryReason = String(bootstrapOptions && bootstrapOptions.retryReason || '').trim().toLowerCase();
+            const isRetryAttempt = Boolean((bootstrapOptions && bootstrapOptions.isRetryAttempt) || retryAttempt > 0);
+            const bootstrapCancelReason = isRetryAttempt
+                ? (retryReason ? `bootstrap_retry_replaced:${retryReason}` : 'bootstrap_retry_replaced')
+                : 'bootstrap_replaced';
+            _cancelPendingBootstrapRequest(bootstrapCancelReason);
+            if (!isRetryAttempt) {
+                _applyPortalBootstrap(fallback, { status: 'pending' });
+            }
             try {
                 const res = await fetchWithTimeout(
                     `${API_BASE}/portal/bootstrap`,
@@ -3488,23 +3651,38 @@
                     }
                 );
                 if (res.status === 401 || res.status === 403) {
+                    _finalizeBootstrapRetry('terminal_auth_redirect', { reason: 'auth', httpStatus: res.status });
                     _applyPortalBootstrap(fallback, { status: 'unavailable', reason: 'auth', httpStatus: res.status });
                     window.location.assign('/login');
                     return;
                 }
                 if (!res.ok) {
-                    const status = res.status >= 500 ? 'degraded' : 'unavailable';
-                    _applyPortalBootstrap(fallback, { status, reason: `http_${res.status}`, httpStatus: res.status });
-                    createToast('Managed front door unavailable. Privileged actions remain blocked until authentication is restored.', 'error');
+                    const failureReason = `http_${res.status}`;
+                    const shouldRetry = _isBootstrapRetryableFailure(failureReason, res.status);
+                    const status = shouldRetry ? 'degraded' : 'unavailable';
+                    _applyPortalBootstrap(fallback, { status, reason: failureReason, httpStatus: res.status });
+                    const retryScheduled = shouldRetry && _scheduleBootstrapRetry(failureReason, res.status);
+                    if (!isRetryAttempt || !retryScheduled) {
+                        createToast('Managed front door unavailable. Privileged actions remain blocked until authentication is restored.', 'error');
+                    }
                     return;
                 }
                 let payload = null;
                 try {
                     payload = await res.json();
                 } catch {
+                    _finalizeBootstrapRetry('terminal_invalid_json', { reason: 'invalid_json' });
                     _applyPortalBootstrap(fallback, { status: 'unavailable', reason: 'invalid_json' });
                     createToast('Portal bootstrap returned an invalid response. Privileged actions remain blocked.', 'error');
                     return;
+                }
+                if (_hasBootstrapRetryHistory()) {
+                    _finalizeBootstrapRetry('succeeded', {
+                        attempt: state.bootstrap.retry.attempt,
+                        reason: 'bootstrap_ready',
+                        httpStatus: res.status,
+                        delayMs: 0
+                    });
                 }
                 const previousHealthEndpointPath = String(state.bootstrap.lastHealthEndpointPath || '');
                 _applyPortalBootstrap(payload, { status: 'ready' });
@@ -3520,9 +3698,13 @@
                 if (normalizedReason === 'aborted') {
                     return;
                 }
-                const status = normalizedReason === 'timeout' || normalizedReason === 'network' ? 'degraded' : 'unavailable';
+                const shouldRetry = _isBootstrapRetryableFailure(normalizedReason, 0);
+                const status = shouldRetry ? 'degraded' : 'unavailable';
                 _applyPortalBootstrap(fallback, { status, reason: normalizedReason });
-                createToast('Managed front door unavailable. Privileged actions remain blocked until authentication is restored.', 'error');
+                const retryScheduled = shouldRetry && _scheduleBootstrapRetry(normalizedReason, 0);
+                if (!isRetryAttempt || !retryScheduled) {
+                    createToast('Managed front door unavailable. Privileged actions remain blocked until authentication is restored.', 'error');
+                }
             }
         }
 
@@ -4199,6 +4381,9 @@
             state.jobs.forEach(stopJobActivity);
             if (healthPollIntervalId !== null) stopHealthPolling();
             if (sseWatchdogIntervalId !== null) stopSseWatchdog();
+            if (_hasActiveBootstrapRetryState()) {
+                _finalizeBootstrapRetry('terminal_navigation_abort', { reason: 'navigation_abort' });
+            }
             _cancelPendingBootstrapRequest('navigation_abort');
         }
 

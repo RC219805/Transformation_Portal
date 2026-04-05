@@ -391,25 +391,46 @@ def test_portal_bootstrap_loader_uses_abortable_timeout_and_state_contract() -> 
     body = _extract_js_function_body(content, "loadPortalBootstrap")
     followup_body = _extract_js_function_body(content, "_flushBootstrapOnlineFollowup")
     normalize_body = _extract_js_function_body(content, "_normalizeFetchFailureReason")
+    retryable_body = _extract_js_function_body(content, "_isBootstrapRetryableFailure")
+    retry_body = _extract_js_function_body(content, "_scheduleBootstrapRetry")
+    delay_body = _extract_js_function_body(content, "_nextBootstrapRetryDelayMs")
 
     assert "authMode: 'managed_unavailable'" in default_body
     assert "apiKeyInput: false" in default_body
     assert "directDebug: false" in default_body
     assert "const BOOTSTRAP_TIMEOUT_MS = 3500;" in content
+    assert "const BOOTSTRAP_RETRY_BASE_DELAY_MS = 1000;" in content
+    assert "const BOOTSTRAP_RETRY_MAX_DELAY_MS = 12000;" in content
+    assert "const BOOTSTRAP_RETRY_MAX_ATTEMPTS = 4;" in content
+    assert "const BOOTSTRAP_RETRY_MAX_WINDOW_MS = 60000;" in content
+    assert "const BOOTSTRAP_RETRIABLE_HTTP_STATUSES = new Set([500, 502, 503, 504]);" in content
     assert "fetchWithTimeout(" in body
     assert "`${API_BASE}/portal/bootstrap`" in body
     assert "BOOTSTRAP_TIMEOUT_MS" in body
-    assert "status: 'pending'" in body
+    assert "const bootstrapOptions = options && typeof options === 'object' ? options : null;" in body
+    assert "const retryAttempt = Number.isInteger(bootstrapOptions && bootstrapOptions.attempt)" in body
+    assert "const retryReason = String(bootstrapOptions && bootstrapOptions.retryReason" in body
+    assert "const isRetryAttempt = Boolean((bootstrapOptions && bootstrapOptions.isRetryAttempt) || retryAttempt > 0);" in body
+    assert "const bootstrapCancelReason = isRetryAttempt" in body
+    assert "_cancelPendingBootstrapRequest(bootstrapCancelReason);" in body
+    assert "_applyPortalBootstrap(fallback, { status: 'pending' });" in body
     assert "onStart: _trackBootstrapRequest" in body
     assert "onFinally: _clearTrackedBootstrapRequest" in body
     assert "if (res.status === 401 || res.status === 403)" in body
+    assert "_finalizeBootstrapRetry('terminal_auth_redirect', { reason: 'auth', httpStatus: res.status });" in body
     assert "window.location.assign('/login');" in body
+    assert "const shouldRetry = _isBootstrapRetryableFailure(failureReason, res.status);" in body
+    assert "const retryScheduled = shouldRetry && _scheduleBootstrapRetry(failureReason, res.status);" in body
+    assert "const shouldRetry = _isBootstrapRetryableFailure(normalizedReason, 0);" in body
+    assert "const retryScheduled = shouldRetry && _scheduleBootstrapRetry(normalizedReason, 0);" in body
+    assert "const status = shouldRetry ? 'degraded' : 'unavailable';" in body
+    assert "_finalizeBootstrapRetry('terminal_invalid_json', { reason: 'invalid_json' });" in body
+    assert "_finalizeBootstrapRetry('succeeded', {" in body
     assert "_applyPortalBootstrap(payload, { status: 'ready' });" in body
     assert "previousHealthEndpointPath !== nextHealthEndpointPath" in body
     assert "_queueBootstrapOnlineFollowup();" in body
     assert "_flushBootstrapOnlineFollowup();" in body
     assert "_normalizeFetchFailureReason(error, 'bootstrap_timeout')" in body
-    assert "normalizedReason === 'timeout' || normalizedReason === 'network' ? 'degraded' : 'unavailable'" in body
     assert (
         "async function fetchWithTimeout(url, options = {}, timeoutMs = HEALTH_CHECK_TIMEOUT_MS, timeoutReason = 'request_timeout', lifecycle = null)"
         in content
@@ -423,6 +444,17 @@ def test_portal_bootstrap_loader_uses_abortable_timeout_and_state_contract() -> 
     assert "reason === String(timeoutReason || '').trim().toLowerCase()" in normalize_body
     assert "name === 'timeouterror'" in normalize_body
     assert "name === 'aborterror'" in normalize_body
+    assert "normalizedReason === 'timeout' || normalizedReason === 'network'" in retryable_body
+    assert "return BOOTSTRAP_RETRIABLE_HTTP_STATUSES.has(normalizedStatus);" in retryable_body
+    assert "Math.random()" in delay_body
+    assert "BOOTSTRAP_RETRY_MAX_EXPONENT" in delay_body
+    assert "BOOTSTRAP_RETRY_MAX_DELAY_MS" in delay_body
+    assert "if (state.bootstrap.retry.timer !== null) {" in retry_body
+    assert "skipped_already_scheduled" in retry_body
+    assert "attempt > BOOTSTRAP_RETRY_MAX_ATTEMPTS" in retry_body
+    assert "(now + delayMs) > state.bootstrap.retry.deadlineAt" in retry_body
+    assert "window.setTimeout(() => {" in retry_body
+    assert "void loadPortalBootstrap({ isRetryAttempt: true, attempt, retryReason: reason });" in retry_body
 
 
 def test_portal_managed_mode_clears_api_keys_and_hides_secret_ui() -> None:
@@ -611,6 +643,39 @@ def test_portal_bootstrap_online_followup_state_is_tracked_until_auth_ready() ->
     assert "lastHealthEndpointPath: ''" in content
     assert "pendingOnlineFollowup: false" in content
     assert "onlineFollowupComplete: false" in content
+    assert "deadlineAt: 0" in content
+    assert "lastOutcome: ''" in content
+
+
+def test_portal_bootstrap_retry_lifecycle_tracks_active_state_and_teardown() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+    active_body = _extract_js_function_body(content, "_hasActiveBootstrapRetryState")
+    history_body = _extract_js_function_body(content, "_hasBootstrapRetryHistory")
+    record_body = _extract_js_function_body(content, "_recordBootstrapRetryEvent")
+    cleanup_body = _extract_js_function_body(content, "cleanupActiveJobHandles")
+
+    assert "state.bootstrap.retry.timer !== null" in active_body
+    assert "state.bootstrap.retry.deadlineAt > 0" in active_body
+    assert "state.bootstrap.retry.attempt > 0" in history_body
+    assert "state.bootstrap.retry.lastOutcome" in history_body
+    assert "console.warn('[portal bootstrap retry]', payload);" in record_body
+    assert "console.info('[portal bootstrap retry]', payload);" in record_body
+    assert "_finalizeBootstrapRetry('terminal_navigation_abort', { reason: 'navigation_abort' });" in cleanup_body
+    assert "_cancelPendingBootstrapRequest('navigation_abort');" in cleanup_body
+
+
+def test_portal_bootstrap_retry_scheduler_rejects_tight_loops_under_persistent_failure() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+    retry_body = _extract_js_function_body(content, "_scheduleBootstrapRetry")
+
+    assert "if (state.bootstrap.retry.timer !== null) {" in retry_body
+    assert "skipped_already_scheduled" in retry_body
+    assert "state.bootstrap.retry.deadlineAt = now + BOOTSTRAP_RETRY_MAX_WINDOW_MS;" in retry_body
+    assert "attempt > BOOTSTRAP_RETRY_MAX_ATTEMPTS" in retry_body
+    assert "(now + delayMs) > state.bootstrap.retry.deadlineAt" in retry_body
+    assert "window.setTimeout(() => {" in retry_body
 
 
 def test_portal_verbose_quiet_conflict_is_notified_and_blocked() -> None:
