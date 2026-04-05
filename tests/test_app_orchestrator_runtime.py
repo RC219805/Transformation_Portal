@@ -616,6 +616,33 @@ def test_portal_artifact_gallery_renders_visual_review_controls() -> None:
     assert "sanitizeManagedAssetUrl(els.downloadArtifactBtn.dataset.url)" in content
 
 
+def test_portal_selection_review_surfaces_have_single_render_owner() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+    review_body = _extract_js_function_body(content, "renderReviewSurfaces")
+    artifact_body = _extract_js_function_body(content, "renderArtifactPanel")
+    queue_body = _extract_js_function_body(content, "renderJobQueue")
+    select_body = _extract_js_function_body(content, "selectJob")
+    schedule_body = _extract_js_function_body(content, "scheduleRenderJobQueue")
+    init_body = _extract_js_function_body(content, "init")
+
+    assert "let queuedReviewSurfaceRefresh = true;" in content
+    assert "renderArtifactPanel();" in review_body
+    assert "renderSelectedJobInspector();" in review_body
+    assert "renderMissionControl();" in review_body
+    assert "renderSelectedJobInspector();" not in artifact_body
+    assert "queuedReviewSurfaceRefresh = queuedReviewSurfaceRefresh || includeReviewSurfaces;" in schedule_body
+    assert "const shouldRenderReviewSurfaces = queuedReviewSurfaceRefresh;" in schedule_body
+    assert "renderJobQueue(shouldRenderReviewSurfaces);" in schedule_body
+    assert "if (includeReviewSurfaces) renderReviewSurfaces();" in queue_body
+    assert "renderReviewSurfaces();" in select_body
+    assert "scheduleRenderJobQueue(false);" in select_body
+    assert "renderJobQueue();" in init_body
+    assert "renderArtifactPanel();" not in init_body
+    assert "renderSelectedJobInspector();" not in init_body
+    assert "renderMissionControl();" not in init_body
+
+
 def test_portal_selected_job_inspector_uses_timeline_tabs_and_log_secondary_view() -> None:
     portal_html = Path(__file__).resolve().parents[1] / "portal.html"
     content = portal_html.read_text(encoding="utf-8")
