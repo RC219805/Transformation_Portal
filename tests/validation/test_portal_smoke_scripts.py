@@ -51,6 +51,29 @@ def test_portal_browser_explicit_output_dirs_are_not_auto_cleaned(tmp_path: Path
     assert module._should_cleanup_output_dir(keep_output=False, output_dir_is_temp=True) is True
 
 
+def test_portal_browser_ready_probe_accepts_degraded_shell_after_stalled_bootstrap():
+    module = _load_module(PORTAL_BROWSER_SCRIPT_PATH, "tests_validate_portal_browser_smoke_ready")
+
+    assert module._portal_shell_ready(
+        {
+            "readyState": "complete",
+            "title": "Transformation Portal",
+            "bootstrapStatus": "degraded",
+            "overviewViewVisible": True,
+            "runJobDisabled": True,
+        }
+    )
+    assert not module._portal_shell_ready(
+        {
+            "readyState": "complete",
+            "title": "Transformation Portal",
+            "bootstrapStatus": "pending",
+            "overviewViewVisible": True,
+            "runJobDisabled": True,
+        }
+    )
+
+
 def test_orchestrator_http_request_json_wraps_transport_failures(monkeypatch: pytest.MonkeyPatch):
     module = _load_module(ORCHESTRATOR_HTTP_SCRIPT_PATH, "tests_validate_orchestrator_http_smoke")
 
