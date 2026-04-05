@@ -3627,7 +3627,7 @@
                 && bootstrapOptions.attempt > 0
                 ? bootstrapOptions.attempt
                 : 0;
-            const retryReason = String(bootstrapOptions && bootstrapOptions.retryReason ? bootstrapOptions.retryReason : '').trim().toLowerCase();
+            const retryReason = String(bootstrapOptions && bootstrapOptions.retryReason || '').trim().toLowerCase();
             const isRetryAttempt = Boolean((bootstrapOptions && bootstrapOptions.isRetryAttempt) || retryAttempt > 0);
             const bootstrapCancelReason = isRetryAttempt
                 ? (retryReason ? `bootstrap_retry_replaced:${retryReason}` : 'bootstrap_retry_replaced')
