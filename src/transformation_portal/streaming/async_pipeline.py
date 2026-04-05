@@ -175,6 +175,8 @@ class BackpressureQueue(Generic[T]):
         high_water_mark: float = 0.8,
         low_water_mark: float = 0.3,
         name: str = "queue",
+        *,
+        clock: Callable[[], float] = time.monotonic,
     ):
         """Initialize backpressure queue.
 
@@ -183,6 +185,7 @@ class BackpressureQueue(Generic[T]):
             high_water_mark: Fraction of maxsize to trigger backpressure (0.0-1.0)
             low_water_mark: Fraction to release backpressure (0.0-1.0)
             name: Queue name for logging/metrics
+            clock: Callable returning current time (for testing)
         """
         self._queue: asyncio.Queue[T] = asyncio.Queue(maxsize=maxsize)
         self._maxsize = maxsize
@@ -195,6 +198,7 @@ class BackpressureQueue(Generic[T]):
         self._total_wait_time = 0.0
         self._closed = False
         self._close_event = asyncio.Event()
+        self._clock = clock
 
     @property
     def is_backpressured(self) -> bool:
@@ -244,15 +248,15 @@ class BackpressureQueue(Generic[T]):
         if self._closed:
             raise RuntimeError(f"Queue '{self._name}' is closed")
 
-        start = time.time()
-
+        start = self._clock()
         if timeout is not None:
             await asyncio.wait_for(self._queue.put(item), timeout=timeout)
         else:
             await self._queue.put(item)
 
+        wait_s = self._clock() - start
         self._items_put += 1
-        self._total_wait_time += time.time() - start
+        self._total_wait_time += wait_s
 
         # Update backpressure state
         if self._maxsize > 0 and self.size >= self._high_water:
@@ -270,15 +274,15 @@ class BackpressureQueue(Generic[T]):
         Raises:
             asyncio.TimeoutError: If timeout exceeded
         """
-        start = time.time()
-
+        start = self._clock()
         if timeout is not None:
             item = await asyncio.wait_for(self._queue.get(), timeout=timeout)
         else:
             item = await self._queue.get()
 
+        wait_s = self._clock() - start
         self._items_got += 1
-        self._total_wait_time += time.time() - start
+        self._total_wait_time += wait_s
 
         # Update backpressure state
         if self._backpressured and self.size <= self._low_water:
