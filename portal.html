@@ -1850,7 +1850,10 @@
                 lastHttpStatus: 0,
                 activeController: null,
                 activeTimeoutId: null,
-                lastTransitionAt: Date.now()
+                lastTransitionAt: Date.now(),
+                lastHealthEndpointPath: '',
+                pendingOnlineFollowup: false,
+                onlineFollowupComplete: false
             },
             lastDiagnostics: {
                 warnings: [],
@@ -3339,6 +3342,27 @@
             return _isBootstrapReady() && !_isManagedUnavailableMode();
         }
 
+        function _queueBootstrapOnlineFollowup() {
+            state.bootstrap.pendingOnlineFollowup = true;
+            state.bootstrap.onlineFollowupComplete = false;
+        }
+
+        function _flushBootstrapOnlineFollowup(force = false) {
+            if (!state.backendOk) return false;
+            if (!_isBootstrapReady()) {
+                _queueBootstrapOnlineFollowup();
+                return false;
+            }
+            if (state.bootstrap.onlineFollowupComplete && !force) {
+                return false;
+            }
+            state.bootstrap.pendingOnlineFollowup = false;
+            state.bootstrap.onlineFollowupComplete = true;
+            void fetchPresetsForPipeline(state.pipeline, true);
+            void recoverJobs();
+            return true;
+        }
+
         function _syncBootstrapGuardedControls() {
             const canRunJobs = _portalPrivilegesReady();
             if (els.runJobBtn && els.runJobBtn.textContent !== 'Dispatching...') {
@@ -3482,8 +3506,15 @@
                     createToast('Portal bootstrap returned an invalid response. Privileged actions remain blocked.', 'error');
                     return;
                 }
+                const previousHealthEndpointPath = String(state.bootstrap.lastHealthEndpointPath || '');
                 _applyPortalBootstrap(payload, { status: 'ready' });
-                void checkBackend(true);
+                const nextHealthEndpointPath = _healthEndpointPath();
+                if (state.backendOk && previousHealthEndpointPath && previousHealthEndpointPath !== nextHealthEndpointPath) {
+                    _queueBootstrapOnlineFollowup();
+                    void checkBackend(true);
+                    return;
+                }
+                _flushBootstrapOnlineFollowup();
             } catch (error) {
                 const normalizedReason = _normalizeFetchFailureReason(error, 'bootstrap_timeout');
                 if (normalizedReason === 'aborted') {
@@ -5338,7 +5369,9 @@
             healthCheckInFlight = true;
             lastHealthCheckAt = now;
             try {
-                const res = await fetchWithTimeout(`${API_BASE}${_healthEndpointPath()}`, {}, HEALTH_CHECK_TIMEOUT_MS);
+                const healthEndpointPath = _healthEndpointPath();
+                state.bootstrap.lastHealthEndpointPath = healthEndpointPath;
+                const res = await fetchWithTimeout(`${API_BASE}${healthEndpointPath}`, {}, HEALTH_CHECK_TIMEOUT_MS);
                 if (res.ok) {
                     state.backendOk = true;
                     if (els.healthIndicator) els.healthIndicator.className = 'status-dot ready';
@@ -5349,14 +5382,16 @@
                                 _noteTransportWarning(job, 'backend_recovered', 'Backend connectivity restored. Live telemetry can resume.', 'info');
                             }
                         });
-                        void fetchPresetsForPipeline(state.pipeline, true);
-                        void recoverJobs();
+                        _queueBootstrapOnlineFollowup();
                     }
+                    _flushBootstrapOnlineFollowup();
                 } else {
                     throw new Error('backend not ready');
                 }
             } catch {
                 state.backendOk = false;
+                state.bootstrap.pendingOnlineFollowup = false;
+                state.bootstrap.onlineFollowupComplete = false;
                 state.jobs.forEach((job) => {
                     if (_isJobStreamRecoverable(job)) {
                         _noteTransportWarning(job, 'backend_offline', 'Backend health check failed. Live telemetry may be stale until connectivity is restored.', 'warn');

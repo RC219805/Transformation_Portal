@@ -389,6 +389,7 @@ def test_portal_bootstrap_loader_uses_abortable_timeout_and_state_contract() -> 
     content = portal_html.read_text(encoding="utf-8")
     default_body = _extract_js_function_body(content, "_defaultPortalBootstrap")
     body = _extract_js_function_body(content, "loadPortalBootstrap")
+    followup_body = _extract_js_function_body(content, "_flushBootstrapOnlineFollowup")
     normalize_body = _extract_js_function_body(content, "_normalizeFetchFailureReason")
 
     assert "authMode: 'managed_unavailable'" in default_body
@@ -404,6 +405,9 @@ def test_portal_bootstrap_loader_uses_abortable_timeout_and_state_contract() -> 
     assert "if (res.status === 401 || res.status === 403)" in body
     assert "window.location.assign('/login');" in body
     assert "_applyPortalBootstrap(payload, { status: 'ready' });" in body
+    assert "previousHealthEndpointPath !== nextHealthEndpointPath" in body
+    assert "_queueBootstrapOnlineFollowup();" in body
+    assert "_flushBootstrapOnlineFollowup();" in body
     assert "_normalizeFetchFailureReason(error, 'bootstrap_timeout')" in body
     assert "normalizedReason === 'timeout' || normalizedReason === 'network' ? 'degraded' : 'unavailable'" in body
     assert (
@@ -412,6 +416,10 @@ def test_portal_bootstrap_loader_uses_abortable_timeout_and_state_contract() -> 
     )
     assert "timeoutError.name = 'AppTimeoutError';" in content
     assert "timeoutError.reason = timeoutReason;" in content
+    assert "if (!_isBootstrapReady()) {" in followup_body
+    assert "_queueBootstrapOnlineFollowup();" in followup_body
+    assert "void fetchPresetsForPipeline(state.pipeline, true);" in followup_body
+    assert "void recoverJobs();" in followup_body
     assert "reason === String(timeoutReason || '').trim().toLowerCase()" in normalize_body
     assert "name === 'timeouterror'" in normalize_body
     assert "name === 'aborterror'" in normalize_body
@@ -471,7 +479,11 @@ def test_portal_health_checks_route_to_front_door_in_managed_mode() -> None:
     check_body = _extract_js_function_body(content, "checkBackend")
 
     assert "return _isManagedAuthMode() ? '/healthz' : '/ready';" in helper_body
-    assert "fetchWithTimeout(`${API_BASE}${_healthEndpointPath()}`" in check_body
+    assert "const healthEndpointPath = _healthEndpointPath();" in check_body
+    assert "state.bootstrap.lastHealthEndpointPath = healthEndpointPath;" in check_body
+    assert "fetchWithTimeout(`${API_BASE}${healthEndpointPath}`" in check_body
+    assert "_queueBootstrapOnlineFollowup();" in check_body
+    assert "_flushBootstrapOnlineFollowup();" in check_body
 
 
 def test_portal_managed_unavailable_mode_blocks_dispatch_and_api_key_recovery_prompts() -> None:
@@ -590,6 +602,15 @@ def test_portal_init_establishes_interactive_shell_before_bootstrap_settles() ->
     assert "startHealthPolling();" in body
     assert "await bootstrapPromise;" in body
     assert "await loadPortalBootstrap();" not in body
+
+
+def test_portal_bootstrap_online_followup_state_is_tracked_until_auth_ready() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+
+    assert "lastHealthEndpointPath: ''" in content
+    assert "pendingOnlineFollowup: false" in content
+    assert "onlineFollowupComplete: false" in content
 
 
 def test_portal_verbose_quiet_conflict_is_notified_and_blocked() -> None:
