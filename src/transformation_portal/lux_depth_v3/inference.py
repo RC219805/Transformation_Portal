@@ -78,7 +78,7 @@ def _ensure_backend_detection_imports(*, probe_coreml: bool = False) -> None:
 
             ct = coremltools_module
             COREML_AVAILABLE = True
-        except ImportError:
+        except OPTIONAL_IMPORT_EXCEPTIONS:
             COREML_AVAILABLE = False
             ct = None  # type: ignore[assignment]
 
@@ -93,38 +93,47 @@ def _ensure_optional_runtime_imports() -> None:
         return
     _OPTIONAL_IMPORTS_READY = True
 
-    try:
-        import torch as torch_module
-
-        torch = torch_module
+    if torch is not None:
         TORCH_AVAILABLE = True
-    except OPTIONAL_IMPORT_EXCEPTIONS:
-        TORCH_AVAILABLE = False
-        torch = None  # type: ignore[assignment]
+    elif not TORCH_AVAILABLE:
+        try:
+            import torch as torch_module
 
-    try:
-        import transformers as transformers_pkg
-        from transformers import pipeline as transformers_pipeline
-        from transformers.pipelines.depth_estimation import DepthEstimationPipeline as DepthEstimationPipelineClass
+            torch = torch_module
+            TORCH_AVAILABLE = True
+        except OPTIONAL_IMPORT_EXCEPTIONS:
+            TORCH_AVAILABLE = False
+            torch = None  # type: ignore[assignment]
 
-        transformers_module = transformers_pkg
-        pipeline = transformers_pipeline
-        DepthEstimationPipeline = DepthEstimationPipelineClass
+    if transformers_module is not None or pipeline is not None:
         TRANSFORMERS_AVAILABLE = True
-    except OPTIONAL_IMPORT_EXCEPTIONS:
-        TRANSFORMERS_AVAILABLE = False
-        transformers_module = None  # type: ignore[assignment]
-        pipeline = None  # type: ignore[assignment]
-        DepthEstimationPipeline = Any  # type: ignore[assignment]
+    elif not TRANSFORMERS_AVAILABLE:
+        try:
+            import transformers as transformers_pkg
+            from transformers import pipeline as transformers_pipeline
+            from transformers.pipelines.depth_estimation import DepthEstimationPipeline as DepthEstimationPipelineClass
 
-    try:
-        import coremltools as coremltools_module
+            transformers_module = transformers_pkg
+            pipeline = transformers_pipeline
+            DepthEstimationPipeline = DepthEstimationPipelineClass
+            TRANSFORMERS_AVAILABLE = True
+        except OPTIONAL_IMPORT_EXCEPTIONS:
+            TRANSFORMERS_AVAILABLE = False
+            transformers_module = None  # type: ignore[assignment]
+            pipeline = None  # type: ignore[assignment]
+            DepthEstimationPipeline = Any  # type: ignore[assignment]
 
-        ct = coremltools_module
+    if ct is not None:
         COREML_AVAILABLE = True
-    except ImportError:
-        COREML_AVAILABLE = False
-        ct = None  # type: ignore[assignment]
+    elif not COREML_AVAILABLE:
+        try:
+            import coremltools as coremltools_module
+
+            ct = coremltools_module
+            COREML_AVAILABLE = True
+        except OPTIONAL_IMPORT_EXCEPTIONS:
+            COREML_AVAILABLE = False
+            ct = None  # type: ignore[assignment]
 
     TRANSFORMERS_TORCH_BACKEND_ISSUE = detect_transformers_torch_runtime_issue(
         torch if TORCH_AVAILABLE else None,
