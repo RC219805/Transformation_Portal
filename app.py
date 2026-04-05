@@ -2432,6 +2432,21 @@ async def portal_bootstrap() -> JSONResponse:
     )
 
 
+@app.get("/healthz")
+async def healthz() -> JSONResponse:
+    """Lightweight health check endpoint for managed front door and load balancers.
+
+    Returns a minimal status response without verbose details, suitable for
+    Kubernetes probes, external health monitors, and managed authentication flows.
+    This endpoint is referenced by the portal UI when in managed auth mode or
+    before bootstrap is ready.
+    """
+    return JSONResponse(
+        {"ok": True, "time": _now()},
+        headers={"Cache-Control": "no-store", "Pragma": "no-cache"},
+    )
+
+
 @app.get("/ready")
 async def ready() -> Dict[str, Any]:
     response: Dict[str, Any] = {
