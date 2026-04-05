@@ -338,63 +338,65 @@ if "PipelineResult" not in globals():
             logger.info(f"Saved pipeline summary: {path}")
 
 
-@dataclass
-class MultiViewReconstructionResult:
-    """Result from multi-view reconstruction pipeline.
+if "MultiViewReconstructionResult" not in globals():
 
-    Attributes:
-        scene: Reconstructed 3D scene (Scene3D).
-        ply_path: Path to exported PLY file.
-        sidecar_path: Path to provenance JSON sidecar.
-        output_dir: Output directory.
-        execution_time: Total execution time in seconds.
-        peak_memory_mb: Peak GPU memory usage in MB.
-        stages_completed: List of completed stages.
-        request_metadata: Original request metadata for traceability.
-        errors: List of error messages (if any).
-        warnings: List of warning messages (if any).
-    """
+    @dataclass
+    class MultiViewReconstructionResult:
+        """Result from multi-view reconstruction pipeline.
 
-    scene: Scene3D
-    ply_path: Path
-    sidecar_path: Path
-    output_dir: Path
-    execution_time: float = 0.0
-    peak_memory_mb: float = 0.0
-    stages_completed: List[str] = field(default_factory=list)
-    request_metadata: Dict[str, Any] = field(default_factory=dict)
-    errors: List[str] = field(default_factory=list)
-    warnings: List[str] = field(default_factory=list)
-
-    def save_summary(self, path: Path) -> None:
-        """Save reconstruction summary as JSON.
-
-        Args:
-            path: Output path for summary JSON.
+        Attributes:
+            scene: Reconstructed 3D scene (Scene3D).
+            ply_path: Path to exported PLY file.
+            sidecar_path: Path to provenance JSON sidecar.
+            output_dir: Output directory.
+            execution_time: Total execution time in seconds.
+            peak_memory_mb: Peak GPU memory usage in MB.
+            stages_completed: List of completed stages.
+            request_metadata: Original request metadata for traceability.
+            errors: List of error messages (if any).
+            warnings: List of warning messages (if any).
         """
-        summary = {
-            "output_dir": str(self.output_dir),
-            "ply_path": str(self.ply_path),
-            "sidecar_path": str(self.sidecar_path),
-            "stages_completed": self.stages_completed,
-            "execution_time": self.execution_time,
-            "peak_memory_mb": self.peak_memory_mb,
-            "errors": self.errors,
-            "warnings": self.warnings,
-            "scene": {
-                "num_gaussians": self.scene.splats.num_gaussians,
-                "rmse": self.scene.rmse,
-                "convergence": self.scene.convergence,
-                "quality_score": self.scene.quality_score,
-                "iteration": self.scene.iteration,
-            },
-            "request_metadata": self.request_metadata,
-        }
 
-        with open(path, "w") as f:
-            json.dump(summary, f, indent=2)
+        scene: Scene3D
+        ply_path: Path
+        sidecar_path: Path
+        output_dir: Path
+        execution_time: float = 0.0
+        peak_memory_mb: float = 0.0
+        stages_completed: List[str] = field(default_factory=list)
+        request_metadata: Dict[str, Any] = field(default_factory=dict)
+        errors: List[str] = field(default_factory=list)
+        warnings: List[str] = field(default_factory=list)
 
-        logger.info(f"Saved reconstruction summary: {path}")
+        def save_summary(self, path: Path) -> None:
+            """Save reconstruction summary as JSON.
+
+            Args:
+                path: Output path for summary JSON.
+            """
+            summary = {
+                "output_dir": str(self.output_dir),
+                "ply_path": str(self.ply_path),
+                "sidecar_path": str(self.sidecar_path),
+                "stages_completed": self.stages_completed,
+                "execution_time": self.execution_time,
+                "peak_memory_mb": self.peak_memory_mb,
+                "errors": self.errors,
+                "warnings": self.warnings,
+                "scene": {
+                    "num_gaussians": self.scene.splats.num_gaussians,
+                    "rmse": self.scene.rmse,
+                    "convergence": self.scene.convergence,
+                    "quality_score": self.scene.quality_score,
+                    "iteration": self.scene.iteration,
+                },
+                "request_metadata": self.request_metadata,
+            }
+
+            with open(path, "w") as f:
+                json.dump(summary, f, indent=2)
+
+            logger.info(f"Saved reconstruction summary: {path}")
 
 
 class SpatialAIPipeline:

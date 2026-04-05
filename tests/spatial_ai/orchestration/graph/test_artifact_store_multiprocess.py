@@ -171,9 +171,10 @@ def _hold_lock_worker(
 
         # Acquire and hold lock
         with store._acquire_lock(cache_key, exclusive=True):
+            result_queue.put({"success": True, "state": "locked"})
             time.sleep(hold_seconds)
 
-        result_queue.put({"success": True})
+        result_queue.put({"success": True, "state": "released"})
     except Exception as e:
         result_queue.put({"success": False, "error": str(e)})
 
@@ -373,8 +374,14 @@ class TestArtifactStoreMultiProcess:
         )
         lock_holder.start()
 
-        # Give lock holder time to acquire lock
-        time.sleep(0.5)
+        # Wait until the child process confirms it actually holds the lock.
+        try:
+            lock_status = result_queue.get(timeout=5.0)
+        except queue.Empty:
+            pytest.fail("Lock holder did not report lock acquisition in time")
+
+        assert lock_status["success"], lock_status.get("error")
+        assert lock_status["state"] == "locked"
 
         # Try to store with short timeout (should timeout)
         artifact = {"value": 42}
