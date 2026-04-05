@@ -391,6 +391,18 @@ def _poll(
     raise SmokeFailure(f"Timed out waiting for {description}: last value={last_value!r}")
 
 
+def _portal_shell_ready(value: Any) -> bool:
+    if not isinstance(value, dict):
+        return False
+    if str(value.get("readyState", "")) != "complete":
+        return False
+    if "Transformation Portal" not in str(value.get("title", "")):
+        return False
+    if str(value.get("bootstrapStatus", "")).lower() not in {"ready", "degraded"}:
+        return False
+    return bool(value.get("overviewViewVisible"))
+
+
 def _state_probe_expression() -> str:
     return r"""
 (() => {
@@ -405,6 +417,7 @@ def _state_probe_expression() -> str:
   return {
     title: document.title,
     readyState: document.readyState,
+    bootstrapStatus: document.body ? String(document.body.dataset.bootstrapStatus || '') : '',
     currentView: document.body ? String(document.body.dataset.consoleView || '') : '',
     pipeline: value('pipelineSelect'),
     healthText: text('healthText'),
@@ -441,6 +454,14 @@ def _state_probe_expression() -> str:
     overviewViewVisible: (() => {
       const el = document.getElementById('overview-shell');
       return !!(el && !el.classList.contains('hidden'));
+    })(),
+    runJobDisabled: (() => {
+      const el = document.getElementById('runJobBtn');
+      return !!(el && el.disabled);
+    })(),
+    heroRunDisabled: (() => {
+      const el = document.getElementById('heroRunBtn');
+      return !!(el && el.disabled);
     })(),
     queueShellHidden: (() => {
       const el = document.getElementById('queue-shell');
@@ -654,11 +675,10 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         initial_state = _poll(
             connection,
             _state_probe_expression(),
-            predicate=lambda value: isinstance(value, dict) and value.get("readyState") == "complete" and value.get("title"),
+            predicate=_portal_shell_ready,
             timeout_seconds=args.timeout_seconds,
             description="portal document ready",
         )
-        _expect("Transformation Portal" in str(initial_state.get("title", "")), f"Unexpected title: {initial_state}")
         _expect(
             str(initial_state.get("currentView", "")) == "overview",
             f"Portal did not default to overview view: {initial_state}",
