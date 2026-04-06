@@ -1429,11 +1429,8 @@ def _normalize_portal_path_arg(
     must_be_file: bool = False,
 ) -> str:
     def _trusted_allowed_entry(
-        absolute_path: str,
-    ) -> Tuple[Optional[Path], Optional[Path]]:
-        if not absolute_path or not os.path.isabs(absolute_path):
-            return None, None
-        resolved_path = Path(absolute_path)
+        resolved_path: Path,
+    ) -> Optional[Path]:
         for root in allowed_roots:
             try:
                 root_real = Path(os.path.realpath(root))
@@ -1442,19 +1439,19 @@ def _normalize_portal_path_arg(
                 continue
             current = root_real
             if not relative_parts:
-                return current, root_real
+                return current
             for part in relative_parts:
                 if part in {"", ".", ".."}:
-                    return None, root_real
+                    return None
                 try:
                     next_path = next((child for child in current.iterdir() if child.name == part), None)
                 except (NotADirectoryError, FileNotFoundError, OSError, RuntimeError, ValueError):
-                    return None, root_real
+                    return None
                 if next_path is None:
-                    return None, root_real
+                    return None
                 current = next_path
-            return current, root_real
-        return None, None
+            return current
+        return None
 
     text = str(value or "").strip()
     if not text:
@@ -1481,63 +1478,57 @@ def _normalize_portal_path_arg(
             )
         )
         return ""
-    candidate = text if os.path.isabs(text) else str(REPO_ROOT / text)
     try:
-        resolved_text = os.path.realpath(candidate)
-    except (OSError, RuntimeError, ValueError):
+        resolved_path = _resolve_allowed_request_path(text, allowed_roots)
+    except ValueError as exc:
+        reason = VALIDATION_REASON_CODES.get(str(exc), "invalid_path_value")
+        del exc
+        if reason == "path_outside_allowed_roots":
+            errors.append(
+                _portal_issue(
+                    field,
+                    "path_outside_allowed_roots",
+                    f"{field} must stay within the allowed workspace roots.",
+                    suggestion=f"Choose a {field} path under the configured repository or temp roots.",
+                )
+            )
+        else:
+            errors.append(
+                _portal_issue(
+                    field,
+                    "invalid_path_value",
+                    f"{field} contains an invalid path value.",
+                    suggestion=(
+                        f"Choose a valid {field} path under the configured repository or temp roots "
+                        f"without invalid characters or path expansion syntax."
+                    ),
+                )
+            )
+        return ""
+    trusted_entry: Optional[Path] = None
+    if must_exist or must_be_file:
+        trusted_entry = _trusted_allowed_entry(resolved_path)
+    if must_exist and trusted_entry is None:
         errors.append(
             _portal_issue(
                 field,
-                "invalid_path_value",
-                f"{field} contains an invalid path value.",
-                suggestion=(
-                    f"Choose a valid {field} path under the configured repository or temp roots "
-                    f"without invalid characters or path expansion syntax."
-                ),
+                "missing",
+                f"{field} does not exist.",
+                suggestion=f"Choose an existing {field} under the configured repository or temp roots.",
             )
         )
         return ""
-    for root in allowed_roots:
-        try:
-            root_text = os.path.realpath(root)
-        except (OSError, RuntimeError, ValueError):
-            continue
-        root_prefix = root_text if root_text.endswith(os.sep) else root_text + os.sep
-        if resolved_text != root_text and not resolved_text.startswith(root_prefix):
-            continue
-        trusted_entry: Optional[Path] = None
-        if must_exist or must_be_file:
-            trusted_entry, _ = _trusted_allowed_entry(resolved_text)
-        if must_exist and trusted_entry is None:
-            errors.append(
-                _portal_issue(
-                    field,
-                    "missing",
-                    f"{field} does not exist.",
-                    suggestion=f"Choose an existing {field} under the configured repository or temp roots.",
-                )
+    if must_be_file and trusted_entry is not None and not trusted_entry.is_file():
+        errors.append(
+            _portal_issue(
+                field,
+                "not_a_file",
+                f"{field} must be a file.",
+                suggestion=f"Choose a file path for {field} under the configured repository or temp roots.",
             )
-            return ""
-        if must_be_file and trusted_entry is not None and not trusted_entry.is_file():
-            errors.append(
-                _portal_issue(
-                    field,
-                    "not_a_file",
-                    f"{field} must be a file.",
-                    suggestion=f"Choose a file path for {field} under the configured repository or temp roots.",
-                )
-            )
-            return ""
-        return str(trusted_entry) if trusted_entry is not None else resolved_text
-    errors.append(
-        _portal_issue(
-            field,
-            "path_outside_allowed_roots",
-            f"{field} must stay within the allowed workspace roots.",
-            suggestion=f"Choose a {field} path under the configured repository or temp roots.",
         )
-    )
-    return ""
+        return ""
+    return str(trusted_entry) if trusted_entry is not None else str(resolved_path)
 
 
 def _lux_config_metadata() -> Dict[str, Any]:
