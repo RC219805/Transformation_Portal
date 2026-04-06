@@ -112,6 +112,15 @@ def test_portal_bootstrap_reports_direct_debug_mode(client: TestClient) -> None:
     assert body["features"]["directDebug"] is True
 
 
+def test_root_ui_response_is_not_cached(client: TestClient) -> None:
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert response.headers["Cache-Control"] == "no-store"
+    assert response.headers["Pragma"] == "no-cache"
+    assert "Transformation Portal" in response.text
+
+
 def test_portal_video_endpoint_serves_background_asset(
     client: TestClient,
     tmp_path,
@@ -197,6 +206,45 @@ def test_config_preview_rejects_unsupported_pipeline_with_sanitized_reason(clien
     assert response.status_code == 400
     assert body["error"]["message"] == "invalid config preview request"
     assert body["error"]["details"] == {"field": "payload", "reason": "unsupported_pipeline"}
+
+
+def test_archive_gate_a_config_preview_returns_authoritative_readiness_and_argv(
+    client: TestClient,
+    tmp_path: Path,
+) -> None:
+    archive_root = (tmp_path / "archive_root").resolve()
+    archive_root.mkdir(parents=True, exist_ok=True)
+    archive_index = (tmp_path / "archive_index_normalized.csv.gz").resolve()
+    archive_index.write_bytes(b"fixture-index")
+    output_dir = (tmp_path / "preview-output").resolve()
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    response = client.post(
+        "/v1/config-preview",
+        json={
+            "pipeline": "archive-gate-a",
+            "args": {
+                "input_dir": str(archive_root),
+                "output_dir": str(output_dir),
+                "archive_command": "fixity-scan",
+                "archive_root": str(archive_root),
+                "archive_index": str(archive_index),
+            },
+        },
+    )
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["schema"] == "tp.orchestrator.config_preview.v1"
+    assert body["success"] is True
+    preview = body["data"]
+    assert preview["pipeline"] == "archive-gate-a"
+    assert preview["field_errors"] == []
+    assert preview["field_warnings"] == []
+    assert preview["readiness"]["status"] == "ready"
+    assert preview["readiness"]["missing_prerequisites"] == []
+    assert "fixity-scan" in preview["argv_preview"]
+    assert "--archive-index" in preview["argv_preview"]
 
 
 def test_config_preview_contract_normalizes_inactive_reconstruction_fields(

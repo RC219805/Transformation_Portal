@@ -69,9 +69,9 @@ def _find_free_port() -> int:
 
 
 def _default_output_dir() -> Path:
-    kwargs: Dict[str, Any] = {"prefix": "tp-portal-browser-smoke-"}
     if os.name != "nt" and Path("/tmp").exists():
-        kwargs["dir"] = "/tmp"
+        return Path("/tmp/gate-a-smoke-portal")
+    kwargs: Dict[str, Any] = {"prefix": "tp-portal-browser-smoke-"}
     return Path(tempfile.mkdtemp(**kwargs))
 
 
@@ -421,6 +421,8 @@ def _state_probe_expression() -> str:
     bootstrapStatus: document.body ? String(document.body.dataset.bootstrapStatus || '') : '',
     currentView: document.body ? String(document.body.dataset.consoleView || '') : '',
     pipeline: value('pipelineSelect'),
+    inputDir: value('inputDir'),
+    outputDir: value('outputDir'),
     healthText: text('healthText'),
     heroReadinessLabel: text('heroReadinessLabel'),
     queueCount: text('queueCount'),
@@ -440,6 +442,17 @@ def _state_probe_expression() -> str:
     archiveCanonicalCommand: text('archiveCanonicalCommand'),
     archiveIndexPath: value('archiveIndexPath'),
     rightsManifestPath: value('rightsManifestPath'),
+    preRunWarnings: Array.from(document.querySelectorAll('#preRunWarnings li')).map((item) =>
+      String(item.textContent || '').trim()
+    ),
+    preRunWarningsEmptyVisible: (() => {
+      const el = document.getElementById('preRunWarningsEmpty');
+      if (!el) return false;
+      return window.getComputedStyle(el).display !== 'none';
+    })(),
+    missingArchiveIndexWarningVisible: Array.from(document.querySelectorAll('#preRunWarnings li')).some((item) =>
+      String(item.textContent || '').toLowerCase().includes('archive index')
+    ),
     archiveIndexFieldVisible: (() => {
       const el = document.getElementById('archiveIndexField');
       return !!(el && !el.classList.contains('hidden'));
@@ -642,6 +655,41 @@ def _set_pipeline_form_expression(
 """
 
 
+def _restore_archive_gate_form_without_events_expression(
+    *,
+    input_dir: str,
+    output_dir: str,
+    archive_index: str,
+) -> str:
+    payload = json.dumps(
+        {
+            "input_dir": input_dir,
+            "output_dir": output_dir,
+            "archive_index": archive_index,
+        }
+    )
+    return f"""
+(() => {{
+  const cfg = {payload};
+  const setValue = (id, value) => {{
+    const el = document.getElementById(id);
+    if (!el) throw new Error(`missing #${{id}}`);
+    el.value = value;
+  }};
+  setValue('inputDir', cfg.input_dir);
+  setValue('outputDir', cfg.output_dir);
+  setValue('archiveIndexPath', cfg.archive_index);
+  window.dispatchEvent(new Event('pageshow'));
+  window.dispatchEvent(new Event('focus'));
+  return {{
+    inputDir: document.getElementById('inputDir').value,
+    outputDir: document.getElementById('outputDir').value,
+    archiveIndexPath: document.getElementById('archiveIndexPath').value
+  }};
+}})()
+"""
+
+
 def _set_lux_optional_controls_expression(
     *,
     depth_backend: str,
@@ -731,7 +779,7 @@ def _parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
     parser.add_argument(
         "--output-dir",
         default="",
-        help="Optional output directory for the browser-submitted job (defaults to a temp dir)",
+        help="Optional output directory for the browser-submitted job (defaults to the canonical smoke path)",
     )
     parser.add_argument(
         "--keep-output",
@@ -770,6 +818,8 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
     _expect(archive_index.is_file(), f"Archive index fixture does not exist: {archive_index}")
 
     output_dir, output_dir_is_temp = _resolve_output_dir(args.output_dir)
+    if output_dir_is_temp and not args.keep_output and output_dir.exists():
+        shutil.rmtree(output_dir, ignore_errors=True)
     output_dir.mkdir(parents=True, exist_ok=True)
     profile_dir = _default_profile_dir()
     port = int(args.debugging_port or _find_free_port())
@@ -1077,45 +1127,81 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             f"archive-gate-c CLI preview drifted from canonical command mapping: {gate_c_state}",
         )
 
-        print("portal-browser-smoke: configuring archive-gate-a form", flush=True)
-        configured_state = _poll(
+        print("portal-browser-smoke: configuring archive-gate-a without an archive index", flush=True)
+        missing_index_state = _poll(
             connection,
             _set_pipeline_form_expression(
                 api_key=args.api_key,
                 pipeline="archive-gate-a",
                 input_dir=str(archive_root),
                 output_dir=str(output_dir),
-                archive_index=str(archive_index),
+                archive_index="",
             ),
             predicate=lambda value: (
                 isinstance(value, dict)
                 and str(value.get("pipeline", "")) == "archive-gate-a"
                 and str(value.get("archiveCanonicalCommand", "")) == "fixity-scan"
+            ),
+            timeout_seconds=args.timeout_seconds,
+            description="archive-gate-a missing-index build state",
+        )
+        _expect(
+            missing_index_state.get("pipeline") == "archive-gate-a",
+            f"Pipeline switch to archive-gate-a failed: {missing_index_state}",
+        )
+        _expect(
+            bool(missing_index_state.get("archiveFieldsVisible")) and not bool(missing_index_state.get("luxFieldsVisible")),
+            f"Archive-specific UI did not toggle correctly: {missing_index_state}",
+        )
+        _expect(
+            not bool(missing_index_state.get("flagsShellVisible")),
+            f"archive-gate-a should hide Lux-only core flags: {missing_index_state}",
+        )
+        _expect(
+            bool(missing_index_state.get("archiveIndexFieldVisible"))
+            and not bool(missing_index_state.get("rightsManifestFieldVisible")),
+            f"archive-gate-a should expose only the archive index input: {missing_index_state}",
+        )
+        _expect(
+            str(missing_index_state.get("archiveIndexPath", "")) == "",
+            f"archive-gate-a should begin with a missing archive index for the restore-path regression: {missing_index_state}",
+        )
+        _expect(
+            bool(missing_index_state.get("runJobDisabled")),
+            f"archive-gate-a should stay blocked until the archive index is supplied: {missing_index_state}",
+        )
+
+        print("portal-browser-smoke: simulating browser-restored archive index", flush=True)
+        restored_dom_state = connection.evaluate(
+            _restore_archive_gate_form_without_events_expression(
+                input_dir=str(archive_root),
+                output_dir=str(output_dir),
+                archive_index=str(archive_index),
+            )
+        )
+        _expect(isinstance(restored_dom_state, dict), f"Unexpected restored DOM state: {restored_dom_state!r}")
+
+        configured_state = _poll(
+            connection,
+            _state_probe_expression(),
+            predicate=lambda value: (
+                isinstance(value, dict)
+                and str(value.get("pipeline", "")) == "archive-gate-a"
+                and str(value.get("archiveIndexPath", "")) == str(archive_index)
+                and '--archive-index "' in str(value.get("cliText", ""))
+                and not bool(value.get("missingArchiveIndexWarningVisible"))
                 and not bool(value.get("runJobDisabled"))
             ),
             timeout_seconds=args.timeout_seconds,
-            description="archive-gate-a build state",
+            description="archive-gate-a restored build state",
         )
         _expect(
-            configured_state.get("pipeline") == "archive-gate-a",
-            f"Pipeline switch to archive-gate-a failed: {configured_state}",
+            str(configured_state.get("inputDir", "")) == str(archive_root),
+            f"Restored input directory did not survive reconciliation: {configured_state}",
         )
         _expect(
-            bool(configured_state.get("archiveFieldsVisible")) and not bool(configured_state.get("luxFieldsVisible")),
-            f"Archive-specific UI did not toggle correctly: {configured_state}",
-        )
-        _expect(
-            not bool(configured_state.get("flagsShellVisible")),
-            f"archive-gate-a should hide Lux-only core flags: {configured_state}",
-        )
-        _expect(
-            bool(configured_state.get("archiveIndexFieldVisible"))
-            and not bool(configured_state.get("rightsManifestFieldVisible")),
-            f"archive-gate-a should expose only the archive index input: {configured_state}",
-        )
-        _expect(
-            str(configured_state.get("archiveIndexPath", "")) == str(archive_index),
-            f"Archive index field did not update for archive-gate-a: {configured_state}",
+            str(configured_state.get("outputDir", "")) == str(output_dir),
+            f"Restored output directory did not survive reconciliation: {configured_state}",
         )
         _expect(
             str(configured_state.get("cliFirstLine", "")).startswith("archive-gate-a"),
@@ -1128,6 +1214,11 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         _expect(
             '--archive-index "' in str(configured_state.get("cliText", "")),
             f"archive-gate-a CLI preview should include archive index path: {configured_state}",
+        )
+        _expect(
+            not bool(configured_state.get("preRunWarnings"))
+            or not bool(configured_state.get("missingArchiveIndexWarningVisible")),
+            f"archive-gate-a pre-run warnings should clear once the archive index is restored: {configured_state}",
         )
 
         known_job_ids = set(_list_job_ids(base_url, args.api_key))
