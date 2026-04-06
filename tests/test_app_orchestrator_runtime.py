@@ -1364,6 +1364,29 @@ def test_portal_archive_payload_and_cli_preview_use_canonical_archive_contract()
     assert "--sign" not in cli_body
 
 
+def test_portal_archive_preview_and_readiness_flow_share_preview_state() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+    readiness_body = _extract_js_function_body(content, "currentPipelineReadiness")
+    issues_body = _extract_js_function_body(content, "currentPipelineReadinessIssues")
+    cli_body = _extract_js_function_body(content, "renderCLI")
+    preview_enabled_body = _extract_js_function_body(content, "_configPreviewEnabledForPipeline")
+    preview_schedule_body = _extract_js_function_body(content, "scheduleConfigPreview")
+    diagnostics_body = _extract_js_function_body(content, "renderPreRunDiagnostics")
+
+    assert "_currentPreviewReadiness(payload)" in readiness_body
+    assert "if (previewReadiness) return previewReadiness;" in readiness_body
+    assert "if (previewReadiness) return issues;" in issues_body
+    assert "CONFIG_PREVIEW_SUPPORTED_PIPELINES" in content
+    assert "CONFIG_PREVIEW_SUPPORTED_PIPELINES.has" in preview_enabled_body
+    assert "payload.pipeline !== 'lux-depth-v3'" not in preview_schedule_body
+    assert "preview && preview.status === 'ready'" in cli_body
+    assert "payload.pipeline === 'lux-depth-v3' && preview" not in cli_body
+    assert "const readinessIssues = currentPipelineReadinessIssues(payload);" in diagnostics_body
+    assert "Archive index path is missing;" not in diagnostics_body
+    assert "Rights Manifest JSONL is missing;" not in diagnostics_body
+
+
 def test_portal_archive_pipelines_hide_lux_flag_shell() -> None:
     portal_html = Path(__file__).resolve().parents[1] / "portal.html"
     content = portal_html.read_text(encoding="utf-8")
@@ -1419,6 +1442,21 @@ def test_portal_dispatch_controls_require_backend_readiness_and_live_backend() -
     assert "Backend is offline. Dispatch is disabled until connectivity is restored." in submit_body
     assert "Pipeline is blocked by missing prerequisites." in submit_body
     assert "mock simulation" not in submit_body
+
+
+def test_portal_reconciles_restored_build_surface_values_without_field_events() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+    reconcile_body = _extract_js_function_body(content, "reconcileBuildSurfaceFromDom")
+    init_body = _extract_js_function_body(content, "init")
+
+    assert "els.archiveIndexPath ? els.archiveIndexPath.value" in reconcile_body
+    assert "els.rightsManifestPath ? els.rightsManifestPath.value" in reconcile_body
+    assert "renderCLI();" in reconcile_body
+    assert "scheduleConfigPreview(true);" in reconcile_body
+    assert "window.addEventListener('pageshow'" in content
+    assert "window.addEventListener('focus'" in content
+    assert "reconcileBuildSurfaceFromDom();" in init_body
 
 
 def test_argv_archive_gate_a_defaults_to_fixity_scan_runner() -> None:

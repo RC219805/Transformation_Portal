@@ -1931,6 +1931,12 @@
         const SSE_STALL_CHECK_INTERVAL_MS = 10000;
         const SSE_STALL_THRESHOLD_MS = 45000;
         const CONFIG_PREVIEW_DEBOUNCE_MS = 250;
+        const CONFIG_PREVIEW_SUPPORTED_PIPELINES = new Set([
+            'lux-depth-v3',
+            'archive-gate-a',
+            'archive-gate-b',
+            'archive-gate-c'
+        ]);
         const EVENT_SOURCE_READY_STATE_CONNECTING = 0;
         const EVENT_SOURCE_READY_STATE_OPEN = 1;
         const EVENT_SOURCE_READY_STATE_CLOSED = 2;
@@ -3201,7 +3207,16 @@
             return _derivePresetResearchFlag(preset, args.preset);
         }
 
-        function currentPipelineReadiness() {
+        function _currentPreviewReadiness(payload = null) {
+            const preview = _currentPreviewForPayload(payload);
+            return preview && preview.readiness && typeof preview.readiness === 'object'
+                ? preview.readiness
+                : null;
+        }
+
+        function currentPipelineReadiness(payload = null) {
+            const previewReadiness = _currentPreviewReadiness(payload);
+            if (previewReadiness) return previewReadiness;
             return state.readiness && state.readiness.pipelines
                 ? state.readiness.pipelines[state.pipeline] || null
                 : null;
@@ -3231,17 +3246,19 @@
             return false;
         }
 
-        function currentPipelineReadinessIssues() {
-            const readiness = currentPipelineReadiness();
+        function currentPipelineReadinessIssues(payload = null) {
+            const previewReadiness = _currentPreviewReadiness(payload);
+            const readiness = previewReadiness || currentPipelineReadiness(payload);
             const issues = Array.isArray(readiness?.missing_prerequisites) ? readiness.missing_prerequisites : [];
+            if (previewReadiness) return issues;
             return issues.filter((issue) => !_readinessIssueSatisfiedLocally(issue));
         }
 
-        function currentPipelineDispatchStatus() {
-            const readiness = currentPipelineReadiness();
+        function currentPipelineDispatchStatus(payload = null) {
+            const readiness = currentPipelineReadiness(payload);
             const rawStatus = String(readiness?.status || '').trim().toLowerCase();
             if (!rawStatus) return '';
-            const issues = currentPipelineReadinessIssues();
+            const issues = currentPipelineReadinessIssues(payload);
             if (issues.some((issue) => String(issue?.severity || '').trim().toLowerCase() === 'blocked')) {
                 return 'blocked';
             }
@@ -5253,7 +5270,7 @@
         }
 
         function _configPreviewEnabledForPipeline(pipelineName = state.pipeline) {
-            return String(pipelineName || '').trim() === 'lux-depth-v3' && state.backendOk && _isBootstrapReady();
+            return CONFIG_PREVIEW_SUPPORTED_PIPELINES.has(String(pipelineName || '').trim()) && state.backendOk && _isBootstrapReady();
         }
 
         function _setSelectOptions(selectEl, options, selectedValue) {
@@ -5529,7 +5546,7 @@
                 configPreviewTimerId = null;
             }
             const payload = generatePayload();
-            if (payload.pipeline !== 'lux-depth-v3') {
+            if (!CONFIG_PREVIEW_SUPPORTED_PIPELINES.has(String(payload.pipeline || '').trim())) {
                 _setPreviewState(_emptyPreviewState('idle', payload.pipeline));
                 renderCLI();
                 return;
@@ -6212,7 +6229,7 @@
             if (els.archiveCanonicalCommand) els.archiveCanonicalCommand.textContent = canonicalCommand || 'archive';
             if (els.archiveCanonicalCommandHint) {
                 els.archiveCanonicalCommandHint.textContent = pipelineName === 'archive-gate-a'
-                    ? 'The portal build flow uses fixity-scan for archive-gate-a. Provide an existing archive index before dispatch. For a safe local smoke run, pair ./tests/fixtures/archive_small/archive_root with ./tests/fixtures/archive_small/archive_index_normalized.csv.gz.'
+                    ? 'The portal build flow uses fixity-scan for archive-gate-a. For a safe local smoke run, pair ./tests/fixtures/archive_small/archive_root with /tmp/gate-a-smoke-portal and ./tests/fixtures/archive_small/archive_index_normalized.csv.gz.'
                     : 'The portal build flow uses a prior rights-manifest artifact for downstream archive stages.';
             }
             if (els.archiveIndexField) {
@@ -6372,6 +6389,62 @@
             scheduleConfigPreview(true);
         }
 
+        function reconcileBuildSurfaceFromDom() {
+            const nextPipeline = _textOrFallback(els.pipelineSelect ? els.pipelineSelect.value : state.pipeline, state.pipeline);
+            const nextInputDir = _textOrFallback(els.inputDir ? els.inputDir.value : state.config.inputDir, state.config.inputDir);
+            const nextOutputDir = _textOrFallback(els.outputDir ? els.outputDir.value : state.config.outputDir, state.config.outputDir);
+            const nextArchiveIndex = _textOrFallback(
+                els.archiveIndexPath ? els.archiveIndexPath.value : state.config?.gate?.archiveIndex,
+                state.config?.gate?.archiveIndex || ''
+            );
+            const nextManifestJsonl = _textOrFallback(
+                els.rightsManifestPath ? els.rightsManifestPath.value : state.config?.gate?.manifestJsonl,
+                state.config?.gate?.manifestJsonl || ''
+            );
+
+            let changed = false;
+            let pipelineChanged = false;
+
+            if (nextPipeline && nextPipeline !== state.pipeline) {
+                state.pipeline = nextPipeline;
+                changed = true;
+                pipelineChanged = true;
+            }
+            if (nextInputDir !== state.config.inputDir) {
+                state.config.inputDir = nextInputDir;
+                changed = true;
+            }
+            if (nextOutputDir !== state.config.outputDir) {
+                state.config.outputDir = nextOutputDir;
+                changed = true;
+            }
+            state.config.gate = state.config.gate || {};
+            if (nextArchiveIndex !== state.config.gate.archiveIndex) {
+                state.config.gate.archiveIndex = nextArchiveIndex;
+                changed = true;
+            }
+            if (nextManifestJsonl !== state.config.gate.manifestJsonl) {
+                state.config.gate.manifestJsonl = nextManifestJsonl;
+                changed = true;
+            }
+
+            if (!changed) return false;
+
+            if (pipelineChanged) {
+                updateUIFromState();
+                void fetchPresetsForPipeline(state.pipeline, true);
+                void fetchReadiness(true);
+                void fetchConfigMetadata(state.pipeline, true);
+                return true;
+            }
+
+            renderCLI();
+            renderReviewSurfaces();
+            _syncBootstrapGuardedControls();
+            scheduleConfigPreview(true);
+            return true;
+        }
+
         function generatePayload() {
             const p = state.pipeline;
             const c = state.config;
@@ -6505,24 +6578,66 @@
                 }
             } else {
                 const args = payload.args || {};
+                const preview = _currentPreviewForPayload(payload);
+                const readinessIssues = currentPipelineReadinessIssues(payload);
+                const dispatchStatus = currentPipelineDispatchStatus(payload);
                 const archiveCommand = String(args.archive_command || canonicalArchiveCommand(payload.pipeline) || 'archive').trim();
-                const archiveIndex = String(args.archive_index || '').trim();
-                const manifestJsonl = String(args.manifest_jsonl || '').trim();
                 expectedOutputs.push(`${archiveCommand} outputs`);
                 expectedOutputs.push('Pipeline execution logs');
-                if (payload.pipeline === 'archive-gate-a') {
-                    if (!archiveIndex) {
-                        warnings.push('Archive index path is missing; fixity-scan will fail before artifact generation. For a safe local smoke run, set Input Dir (and archive root) to ./tests/fixtures/archive_small/archive_root and Archive Index Path to ./tests/fixtures/archive_small/archive_index_normalized.csv.gz.');
+
+                if (preview && preview.status === 'ready') {
+                    const previewErrors = Array.isArray(preview.field_errors) ? preview.field_errors : [];
+                    const previewWarnings = Array.isArray(preview.field_warnings) ? preview.field_warnings : [];
+                    previewErrors.forEach((issue) => warnings.push(`BLOCKED: ${String(issue?.message || 'Preview validation error.')}`));
+                    previewWarnings.forEach((issue) => warnings.push(`WARNING: ${String(issue?.message || 'Preview warning.')}`));
+                    if (previewErrors.length > 0) {
                         healthState = 'risk';
-                        healthLabel = 'missing archive index';
-                    } else {
-                        healthLabel = 'archive pipeline ready';
+                        healthLabel = 'preview blocked';
+                    } else if (previewWarnings.length > 0 && healthState === 'good') {
+                        healthState = 'warn';
+                        healthLabel = 'preview cautions';
                     }
-                } else {
-                    if (!manifestJsonl) {
-                        warnings.push('Rights Manifest JSONL is missing; downstream archive stages will fail closed before dispatch.');
+                } else if (state.backendOk && preview && preview.status === 'error') {
+                    warnings.push('WARNING: Preview-backed validation is unavailable. Local rendering is shown until validation recovers.');
+                    if (healthState === 'good') {
+                        healthState = 'warn';
+                        healthLabel = 'preview unavailable';
+                    }
+                } else if (!state.backendOk) {
+                    warnings.push('WARNING: Backend preview is offline. Local fallback rendering is available, but dispatch remains blocked until connectivity is restored.');
+                    if (healthState === 'good') {
+                        healthState = 'warn';
+                        healthLabel = 'backend offline';
+                    }
+                } else if (state.backendOk && (!preview || preview.status === 'loading')) {
+                    warnings.push('WARNING: Preview-backed validation is refreshing.');
+                    if (healthState === 'good') {
+                        healthState = 'warn';
+                        healthLabel = 'preview refreshing';
+                    }
+                }
+
+                readinessIssues.forEach((issue) => {
+                    const severity = String(issue?.severity || '').trim().toLowerCase();
+                    warnings.push(
+                        `${severity === 'blocked' ? 'BLOCKED' : 'WARNING'}: ${String(issue?.message || 'Pipeline readiness reported an operator-facing prerequisite.')}`
+                    );
+                    if (severity === 'blocked') {
                         healthState = 'risk';
-                        healthLabel = 'missing rights manifest';
+                        healthLabel = 'dispatch blocked';
+                    } else if (healthState === 'good') {
+                        healthState = 'warn';
+                        healthLabel = 'prerequisites still required';
+                    }
+                });
+
+                if (healthState === 'good') {
+                    if (dispatchStatus === 'blocked') {
+                        healthState = 'risk';
+                        healthLabel = 'dispatch blocked';
+                    } else if (dispatchStatus === 'degraded') {
+                        healthState = 'warn';
+                        healthLabel = 'prerequisites still required';
                     } else {
                         healthLabel = 'archive pipeline ready';
                     }
@@ -6669,16 +6784,14 @@
                 idx === cliLines.length - 1 ? line : `${line} \\`
             );
 
-            if (payload.pipeline === 'lux-depth-v3' && preview && preview.status === 'ready' && String(preview.argv_preview || '').trim()) {
+            const previewErrors = preview && preview.status === 'ready' && Array.isArray(preview.field_errors)
+                ? preview.field_errors
+                : [];
+
+            if (preview && preview.status === 'ready' && previewErrors.length === 0 && String(preview.argv_preview || '').trim()) {
                 els.cliPreview.textContent = String(preview.argv_preview || '');
-            } else if (
-                payload.pipeline === 'lux-depth-v3'
-                && preview
-                && preview.status === 'ready'
-                && Array.isArray(preview.field_errors)
-                && preview.field_errors.length > 0
-            ) {
-                const firstError = preview.field_errors[0];
+            } else if (preview && preview.status === 'ready' && previewErrors.length > 0) {
+                const firstError = previewErrors[0];
                 els.cliPreview.textContent = `# Preview blocked\n# ${String(firstError?.message || 'Resolve preview validation issues to view the effective argv.')}`;
             } else {
                 els.cliPreview.textContent = cli.join('\n');
@@ -8183,12 +8296,19 @@
                 stopHealthPolling();
                 return;
             }
+            reconcileBuildSurfaceFromDom();
             void checkBackend(true);
             startHealthPolling();
         });
 
         window.addEventListener('beforeunload', cleanupActiveJobHandles);
         window.addEventListener('pagehide', cleanupActiveJobHandles);
+        window.addEventListener('pageshow', () => {
+            reconcileBuildSurfaceFromDom();
+        });
+        window.addEventListener('focus', () => {
+            reconcileBuildSurfaceFromDom();
+        });
         window.addEventListener('popstate', () => {
             applyConsoleRouteFromLocation(true);
             renderJobQueue();
@@ -8213,6 +8333,15 @@
             applyConsoleRouteFromLocation(true);
             updateUIFromState();
             bindInputs();
+            if (window.requestAnimationFrame) {
+                window.requestAnimationFrame(() => {
+                    reconcileBuildSurfaceFromDom();
+                });
+            } else {
+                window.setTimeout(() => {
+                    reconcileBuildSurfaceFromDom();
+                }, 0);
+            }
             setupSectionRail();
             _syncBootstrapUi();
             renderJobQueue();
