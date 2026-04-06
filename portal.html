@@ -5165,7 +5165,8 @@
             return {
                 enabled: parseBoolLike(args.emit_scene_debug_bundle, false),
                 requires_acknowledgement: parseBoolLike(args.emit_scene_debug_bundle, false),
-                destination: outputDir ? `${outputDir.replace(/[\\/]$/, '')}/reconstruction/<scene-fingerprint>/debug` : '',
+                output_root: outputDir,
+                destination: 'reconstruction/<scene-fingerprint>/debug',
                 includes: ['scene_manifest', 'camera_payload', 'input_image_copies', 'segmentation_overlays', 'reprojection_preview'],
                 sensitivity: 'camera_metadata_and_source_images',
                 notes: [
@@ -5671,6 +5672,11 @@
             const currentPreview = preview || _effectivePreviewSnapshot(currentPayload);
             const summary = debugSummary || currentPreview.debug_bundle_summary || _buildLocalDebugBundleSummary(currentPayload.args || {});
             const enabled = parseBoolLike(currentPayload.args.emit_scene_debug_bundle, false);
+            const outputRoot = String(summary.output_root || '').trim();
+            const destinationSuffix = String(summary.destination || '').trim();
+            const destinationText = outputRoot && destinationSuffix
+                ? `${outputRoot.replace(/[\\/]$/, '')}/${destinationSuffix.replace(/^[\\/]+/, '')}`
+                : destinationSuffix || 'pending preview';
 
             if (els.debugBundleGuardrail) {
                 els.debugBundleGuardrail.classList.toggle('hidden', !enabled);
@@ -5685,7 +5691,7 @@
             }
 
             if (els.debugBundleDestination) {
-                els.debugBundleDestination.textContent = `Destination: ${String(summary.destination || 'pending preview')}`;
+                els.debugBundleDestination.textContent = `Destination: ${destinationText}`;
             }
             if (els.debugBundleSensitivity) {
                 els.debugBundleSensitivity.textContent = 'May include source images, camera metadata, segmentation overlays, and reprojection previews.';

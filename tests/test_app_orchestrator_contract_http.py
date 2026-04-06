@@ -215,9 +215,45 @@ def test_config_preview_contract_normalizes_inactive_reconstruction_fields(
     assert inactive_fields["emit_scene_debug_bundle"]["value"] is True
     assert preview["estimate_summary"]["summary_label"]
     assert preview["debug_bundle_summary"]["enabled"] is True
-    assert preview["debug_bundle_summary"]["destination"].endswith("/reconstruction/<scene-fingerprint>/debug")
+    assert preview["debug_bundle_summary"]["output_root"] == str(output_dir)
+    assert preview["debug_bundle_summary"]["destination"] == "reconstruction/<scene-fingerprint>/debug"
     warning_reasons = {item["code"] for item in preview["field_warnings"]}
     assert "debug_bundle_sensitive_output" in warning_reasons
+
+
+def test_config_preview_contract_sanitizes_archive_validation_errors(
+    client: TestClient,
+    tmp_path: Path,
+) -> None:
+    input_dir = (tmp_path / "archive-input").resolve()
+    output_dir = (tmp_path / "archive-output").resolve()
+    input_dir.mkdir(parents=True, exist_ok=True)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    response = client.post(
+        "/v1/config-preview",
+        json={
+            "pipeline": "archive-gate-a",
+            "args": {
+                "input_dir": str(input_dir),
+                "output_dir": str(output_dir),
+                "archive_command": "not-a-real-command",
+            },
+        },
+    )
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["schema"] == "tp.orchestrator.config_preview.v1"
+    assert body["success"] is True
+    preview = body["data"]
+    assert preview["field_errors"] == [
+        {
+            "field": "payload",
+            "code": "invalid_archive_command",
+            "message": "The selected archive command is not supported.",
+        }
+    ]
 
 
 def test_portal_events_contract_sanitizes_metadata_and_writes_optional_log(
@@ -258,6 +294,21 @@ def test_portal_events_contract_sanitizes_metadata_and_writes_optional_log(
     lines = event_log_path.read_text(encoding="utf-8").strip().splitlines()
     assert len(lines) == 1
     assert json.loads(lines[0])["event_type"] == "config_exported"
+
+
+def test_portal_events_invalid_payload_returns_sanitized_reason(client: TestClient) -> None:
+    response = client.post(
+        "/v1/portal/events",
+        json={
+            "event_type": "not-a-real-event",
+            "pipeline": "lux-depth-v3",
+        },
+    )
+    body = response.json()
+
+    assert response.status_code == 400
+    assert body["error"]["message"] == "invalid portal telemetry payload"
+    assert body["error"]["details"] == {"field": "payload", "reason": "invalid_event_type"}
 
 
 def test_readiness_contract_reports_pipeline_status_matrix(

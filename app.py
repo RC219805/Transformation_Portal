@@ -184,15 +184,16 @@ def _resolve_allowed_request_path(
     except (OSError, RuntimeError, ValueError) as exc:
         raise ValueError("Invalid path value") from exc
 
-    resolved_text = str(resolved)
     for root in allowed_roots:
         try:
             root_real = Path(os.path.realpath(root))
         except (OSError, RuntimeError, ValueError):
             continue
-        root_text = str(root_real)
-        root_prefix = root_text if root_text.endswith(os.sep) else root_text + os.sep
-        if resolved_text == root_text or resolved_text.startswith(root_prefix):
+        try:
+            resolved.relative_to(root_real)
+        except ValueError:
+            continue
+        else:
             return resolved
 
     raise ValueError("Path outside allowed roots")
@@ -474,6 +475,30 @@ VALIDATION_REASON_CODES = {
     "Invalid archive_command": "invalid_archive_command",
     "Invalid archive integer option": "invalid_archive_integer_option",
 }
+PORTAL_SAFE_ERROR_MESSAGES = {
+    "archive_runner_unavailable": "The selected archive command is unavailable in this environment.",
+    "conflicting_log_verbosity_flags": "Verbose and quiet mode cannot both be enabled.",
+    "invalid_archive_command": "The selected archive command is not supported.",
+    "invalid_archive_integer_option": "One or more archive numeric options are invalid.",
+    "invalid_depth_backend": "The selected depth backend is not supported.",
+    "invalid_event_type": "The telemetry event type is not supported.",
+    "invalid_field": "The telemetry field is not supported.",
+    "invalid_log_level": "The selected log level is not supported.",
+    "invalid_path_value": "One or more configured paths are invalid.",
+    "invalid_pipeline": "The selected pipeline is not supported.",
+    "invalid_quality_tier": "The selected quality tier is not supported.",
+    "invalid_raw_demosaic": "The selected RAW demosaic mode is not supported.",
+    "invalid_raw_ingest_mode": "The selected RAW ingest mode is not supported.",
+    "invalid_raw_wb_mode": "The selected RAW white-balance mode is not supported.",
+    "invalid_reconstruction_tier": "The selected reconstruction tier is not supported.",
+    "invalid_request": "The request contains invalid values.",
+    "invalid_sam2_model_size": "The selected SAM2 model size is not supported.",
+    "invalid_segmentation_backend": "The selected segmentation backend is not supported.",
+    "invalid_surface": "The telemetry surface is not supported.",
+    "missing_required_paths": "Input and output paths are required.",
+    "path_outside_allowed_roots": "Configured paths must stay within the allowed workspace roots.",
+    "unsupported_pipeline": "The selected pipeline is not supported.",
+}
 PORTAL_EVENT_TOKEN_RE = re.compile(r"^[a-z0-9][a-z0-9_.:-]{0,63}$")
 PORTAL_ALLOWED_EVENT_TYPES = {
     "field_commit",
@@ -557,6 +582,7 @@ LUX_RECONSTRUCTION_INACTIVE_FIELDS = (
     "reconstruction_tier",
     "emit_scene_debug_bundle",
 )
+LUX_DEBUG_BUNDLE_DESTINATION_TEMPLATE = "reconstruction/<scene-fingerprint>/debug"
 
 _portal_event_log_path_raw = os.getenv("TP_PORTAL_EVENT_LOG_PATH", "").strip()
 try:
@@ -1292,6 +1318,20 @@ def _portal_estimate_band(score: int) -> str:
     return "high"
 
 
+def _portal_reason_code(value: Any) -> str:
+    raw = str(value or "").strip()
+    if raw in VALIDATION_REASON_CODES:
+        return VALIDATION_REASON_CODES[raw]
+    token = raw.lower()
+    if _portal_is_token(token):
+        return token
+    return "invalid_request"
+
+
+def _portal_safe_error_message(reason: str, *, field: str = "payload") -> str:
+    return PORTAL_SAFE_ERROR_MESSAGES.get(reason, f"{field} contains invalid values.")
+
+
 def _format_argv_preview(argv: List[str]) -> str:
     return " ".join(shlex.quote(str(token)) for token in argv)
 
@@ -1367,7 +1407,7 @@ def _normalize_portal_path_arg(
     try:
         resolved = _resolve_allowed_request_path(text, allowed_roots)
     except ValueError as exc:
-        reason = VALIDATION_REASON_CODES.get(str(exc), "invalid_request")
+        reason = _portal_reason_code(exc)
         errors.append(
             _portal_issue(
                 field,
@@ -1377,24 +1417,6 @@ def _normalize_portal_path_arg(
             )
         )
         return ""
-    if must_exist and not resolved.exists():
-        errors.append(
-            _portal_issue(
-                field,
-                "path_missing",
-                f"{field} does not exist.",
-                suggestion="Choose an existing file before dispatch.",
-            )
-        )
-    elif must_be_file and resolved.exists() and not resolved.is_file():
-        errors.append(
-            _portal_issue(
-                field,
-                "path_not_file",
-                f"{field} must point to a file.",
-                suggestion="Choose a single JSON sidecar file, not a directory.",
-            )
-        )
     return str(resolved)
 
 
@@ -1411,7 +1433,7 @@ def _lux_config_metadata() -> Dict[str, Any]:
         },
         "debug_bundle_policy": {
             "acknowledgement_required": True,
-            "destination_template": "reconstruction/<scene-fingerprint>/debug",
+            "destination_template": LUX_DEBUG_BUNDLE_DESTINATION_TEMPLATE,
             "includes": [
                 "scene_manifest",
                 "camera_payload",
@@ -1613,14 +1635,12 @@ def _lux_estimate_summary(normalized_args: Dict[str, Any]) -> Dict[str, Any]:
 
 def _lux_debug_bundle_summary(normalized_args: Dict[str, Any]) -> Dict[str, Any]:
     output_dir = str(normalized_args.get("output_dir") or "").strip()
-    destination = ""
-    if output_dir:
-        destination = str(Path(output_dir) / "reconstruction" / "<scene-fingerprint>" / "debug")
     enabled = _as_bool(normalized_args.get("emit_scene_debug_bundle"), False)
     return {
         "enabled": enabled,
         "requires_acknowledgement": enabled,
-        "destination": destination,
+        "output_root": output_dir,
+        "destination": LUX_DEBUG_BUNDLE_DESTINATION_TEMPLATE,
         "includes": [
             "scene_manifest",
             "camera_payload",
@@ -2145,11 +2165,12 @@ def _build_archive_config_preview(
     try:
         argv_preview = _format_argv_preview(_argv_from_request({"pipeline": pipeline, "args": args}))
     except ValueError as exc:
+        reason = _portal_reason_code(exc)
         errors.append(
             _portal_issue(
                 "payload",
-                VALIDATION_REASON_CODES.get(str(exc), "invalid_request"),
-                str(exc),
+                reason,
+                _portal_safe_error_message(reason),
             )
         )
 
@@ -4168,7 +4189,7 @@ async def config_preview(payload: Dict[str, Any]) -> JSONResponse:
     try:
         preview = _build_config_preview(payload)
     except ValueError as exc:
-        reason = VALIDATION_REASON_CODES.get(str(exc), "invalid_request")
+        reason = _portal_reason_code(exc)
         return _error_response(
             400,
             code="INVALID_ARGUMENT",
@@ -4191,11 +4212,12 @@ async def portal_events(payload: Dict[str, Any]) -> JSONResponse:
     try:
         record = _record_portal_event(payload)
     except ValueError as exc:
+        reason = _portal_reason_code(exc)
         return _error_response(
             400,
             code="INVALID_ARGUMENT",
             message="invalid portal telemetry payload",
-            details={"field": "payload", "reason": str(exc)},
+            details={"field": "payload", "reason": reason},
         )
 
     return JSONResponse(
