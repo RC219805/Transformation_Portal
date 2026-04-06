@@ -1338,6 +1338,25 @@ def _portal_safe_error_message(reason: str, *, field: str = "payload") -> str:
     return PORTAL_SAFE_ERROR_MESSAGES.get(reason, f"{field} contains invalid values.")
 
 
+def _portal_issue_public_message(issue: Any, *, field: str = "payload") -> str:
+    issue_dict = issue if isinstance(issue, dict) else {}
+    reason = _portal_reason_code(issue_dict.get("code"))
+    message = _portal_safe_error_message(reason, field=field)
+    generic_message = f"{field} contains invalid values."
+    if message != generic_message:
+        return message
+
+    issue_message = issue_dict.get("message")
+    if not isinstance(issue_message, str):
+        return message
+    text = issue_message.strip()
+    if not text or len(text) > 300:
+        return message
+    if "\n" in text or "\r" in text or "\x00" in text:
+        return message
+    return text
+
+
 def _portal_payload_has_any_key(payload: Any, keys: Tuple[str, ...]) -> bool:
     if not isinstance(payload, dict):
         return False
@@ -1766,7 +1785,11 @@ def _lux_debug_bundle_summary(normalized_args: Dict[str, Any]) -> Dict[str, Any]
     }
 
 
-def _build_lux_config_preview(args: Dict[str, Any]) -> Dict[str, Any]:
+def _build_lux_config_preview(
+    args: Dict[str, Any],
+    *,
+    readiness_snapshot: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
     defaults = _lux_portal_defaults(args)
     errors: List[Dict[str, Any]] = []
     warnings: List[Dict[str, Any]] = []
@@ -2228,12 +2251,13 @@ def _build_lux_config_preview(args: Dict[str, Any]) -> Dict[str, Any]:
         for field_name in LUX_RECONSTRUCTION_INACTIVE_FIELDS:
             effective_args.pop(field_name, None)
 
-    readiness_args = dict(normalized_args)
-    readiness_snapshot = _evaluate_pipeline_readiness(
-        "lux-depth-v3",
-        readiness_args,
-        require_dispatch_inputs=True,
-    )
+    if readiness_snapshot is None:
+        readiness_args = dict(normalized_args)
+        readiness_snapshot = _evaluate_pipeline_readiness(
+            "lux-depth-v3",
+            readiness_args,
+            require_dispatch_inputs=True,
+        )
 
     argv_preview = ""
     if not errors:
@@ -2262,13 +2286,16 @@ def _build_lux_config_preview(args: Dict[str, Any]) -> Dict[str, Any]:
 def _build_archive_config_preview(
     pipeline: str,
     args: Dict[str, Any],
+    *,
+    readiness_snapshot: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     errors: List[Dict[str, Any]] = []
-    readiness_snapshot = _evaluate_pipeline_readiness(
-        pipeline,
-        args,
-        require_dispatch_inputs=True,
-    )
+    if readiness_snapshot is None:
+        readiness_snapshot = _evaluate_pipeline_readiness(
+            pipeline,
+            args,
+            require_dispatch_inputs=True,
+        )
     argv_preview = ""
     normalized_args = dict(args)
     archive_command = str(args.get("archive_command") or "").strip()
@@ -2333,15 +2360,23 @@ def _build_archive_config_preview(
     }
 
 
-def _build_config_preview(payload: Dict[str, Any]) -> Dict[str, Any]:
+def _build_config_preview(
+    payload: Dict[str, Any],
+    *,
+    readiness_snapshot: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
     pipeline = str(payload.get("pipeline") or "").strip()
     args = payload.get("args")
     if not isinstance(args, dict):
         args = {}
     if pipeline == "lux-depth-v3":
-        return _build_lux_config_preview(args)
+        return _build_lux_config_preview(args, readiness_snapshot=readiness_snapshot)
     if pipeline in ARCHIVE_GATE_PIPELINES:
-        return _build_archive_config_preview(pipeline, args)
+        return _build_archive_config_preview(
+            pipeline,
+            args,
+            readiness_snapshot=readiness_snapshot,
+        )
     raise ValueError("Unsupported pipeline")
 
 
@@ -4395,7 +4430,8 @@ async def portal_events(payload: Dict[str, Any]) -> JSONResponse:
             details={"field": "payload", "reason": reason},
         )
     assert record is not None
-    await asyncio.to_thread(_persist_portal_event_record, record, PORTAL_EVENT_LOG_PATH)
+    if PORTAL_EVENT_LOG_PATH is not None:
+        await asyncio.to_thread(_persist_portal_event_record, record, PORTAL_EVENT_LOG_PATH)
 
     return JSONResponse(
         _api_envelope(
@@ -4433,7 +4469,10 @@ async def create_job(payload: Dict[str, Any]) -> JSONResponse:
         )
 
     try:
-        preview = _build_config_preview(payload)
+        preview = _build_config_preview(
+            payload,
+            readiness_snapshot=readiness_snapshot,
+        )
     except ValueError:
         return _error_response(
             400,
@@ -4450,7 +4489,7 @@ async def create_job(payload: Dict[str, Any]) -> JSONResponse:
         return _error_response(
             400,
             code="INVALID_ARGUMENT",
-            message=_portal_safe_error_message(reason, field=field),
+            message=_portal_issue_public_message(first_error, field=field),
             details={"field": field, "reason": reason},
         )
 

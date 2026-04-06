@@ -4008,7 +4008,7 @@
                     || (preview.status === 'ready' && Array.isArray(preview.field_errors) && preview.field_errors.length > 0)
                 );
             const debugBundleBlocked = state.pipeline === 'lux-depth-v3'
-                && parseBoolLike(generatePayload().args.emit_scene_debug_bundle, false)
+                && _effectiveDebugBundleEnabled(preview)
                 && !state.portalUi.debugBundleAcknowledged;
             const canRunJobs = _portalPrivilegesReady()
                 && state.backendOk
@@ -5242,6 +5242,16 @@
             };
         }
 
+        function _effectiveDebugBundleEnabled(preview = null, payload = null) {
+            const currentPayload = payload || generatePayload();
+            const matchedPreview = preview || _currentPreviewForPayload(currentPayload);
+            if (matchedPreview && matchedPreview.status === 'ready') {
+                return parseBoolLike(matchedPreview.normalized_args?.emit_scene_debug_bundle, false);
+            }
+            return parseBoolLike(currentPayload.args?.enable_reconstruction, false)
+                && parseBoolLike(currentPayload.args?.emit_scene_debug_bundle, false);
+        }
+
         function _configPreviewEnabledForPipeline(pipelineName = state.pipeline) {
             return String(pipelineName || '').trim() === 'lux-depth-v3' && state.backendOk && _isBootstrapReady();
         }
@@ -5575,7 +5585,7 @@
             const estimate = preview.estimate_summary || _buildLocalEstimateSummary(currentPayload.args || {});
             const debugSummary = preview.debug_bundle_summary || _buildLocalDebugBundleSummary(currentPayload.args || {});
             const reconstructionEnabled = parseBoolLike(currentPayload.args.enable_reconstruction, false);
-            const debugEnabled = parseBoolLike(currentPayload.args.emit_scene_debug_bundle, false);
+            const debugEnabled = _effectiveDebugBundleEnabled(matchedPreview, currentPayload);
 
             if (els.summaryReconstructionState) {
                 els.summaryReconstructionState.textContent = reconstructionEnabled ? 'On' : 'Off';
@@ -5672,7 +5682,7 @@
             const currentPayload = payload || generatePayload();
             const currentPreview = preview || _effectivePreviewSnapshot(currentPayload);
             const summary = debugSummary || currentPreview.debug_bundle_summary || _buildLocalDebugBundleSummary(currentPayload.args || {});
-            const enabled = parseBoolLike(currentPayload.args.emit_scene_debug_bundle, false);
+            const enabled = _effectiveDebugBundleEnabled(currentPreview, currentPayload);
             const outputRoot = String(summary.output_root || '').trim();
             const destinationSuffix = String(summary.destination || '').trim();
             const destinationText = outputRoot && destinationSuffix
@@ -7541,7 +7551,7 @@
                     });
                     return;
                 }
-                if (parseBoolLike(payload.args.emit_scene_debug_bundle, false) && !state.portalUi.debugBundleAcknowledged) {
+                if (_effectiveDebugBundleEnabled(preview, payload) && !state.portalUi.debugBundleAcknowledged) {
                     createToast('Acknowledge the reconstruction debug-bundle guardrail before dispatch.', 'error');
                     void emitPortalEvent('dispatch_blocked', {
                         surface: 'dispatch',

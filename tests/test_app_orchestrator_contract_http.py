@@ -541,6 +541,30 @@ def test_portal_events_contract_offloads_log_persistence_to_thread(
     assert event_log_path.read_text(encoding="utf-8").strip()
 
 
+def test_portal_events_contract_skips_thread_offload_when_log_sink_is_unset(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fail_to_thread(*_args, **_kwargs):
+        raise AssertionError("portal telemetry should not offload when no log sink is configured")
+
+    monkeypatch.setattr(orchestrator_app, "PORTAL_EVENT_LOG_PATH", None)
+    monkeypatch.setattr(orchestrator_app.asyncio, "to_thread", fail_to_thread)
+
+    response = client.post(
+        "/v1/portal/events",
+        json={
+            "event_type": "config_exported",
+            "pipeline": "lux-depth-v3",
+            "surface": "effective_config",
+        },
+    )
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["success"] is True
+
+
 def test_readiness_contract_reports_pipeline_status_matrix(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
