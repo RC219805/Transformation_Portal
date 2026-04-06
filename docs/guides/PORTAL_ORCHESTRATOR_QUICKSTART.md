@@ -85,7 +85,7 @@ export TP_READY_VERBOSE=1
 ## Run Gate A End-to-End
 
 `archive-gate-a` maps to the canonical archive command `fixity-scan`.
-In the portal build flow, `Input Dir` is also used as `--archive-root`, so the only extra Gate A input you must supply is an existing `Archive Index Path`.
+In the portal build flow, `Input Dir` is forwarded as `--archive-root` automatically and `Output Dir` becomes the orchestration output root. Beyond those standard paths, the extra Gate A field you need to provide is an existing `Archive Index Path`.
 
 Safe local fixture inputs already checked into this repo:
 
@@ -136,10 +136,7 @@ curl -sS \
       "input_dir": "./tests/fixtures/archive_small/archive_root",
       "output_dir": "/tmp/gate-a-smoke-http",
       "archive_command": "fixity-scan",
-      "archive_index": "./tests/fixtures/archive_small/archive_index_normalized.csv.gz",
-      "archive_root": "./tests/fixtures/archive_small/archive_root",
-      "out_dir": "/tmp/gate-a-smoke-http",
-      "workers": 1
+      "archive_index": "./tests/fixtures/archive_small/archive_index_normalized.csv.gz"
     }
   }'
 ```
@@ -170,7 +167,7 @@ What the portal should show once configured:
 - the job runs to `Succeeded`
 - run details list three indexed artifacts
 
-If you see the same state as the screenshot:
+If the form still shows the missing-index warning:
 
 - that warning is expected when `Archive Index Path` is blank
 - Gate A is not ready yet

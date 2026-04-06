@@ -5038,11 +5038,11 @@
             const pipelineName = state.pipeline;
             const canonicalCommand = canonicalArchiveCommand(pipelineName);
             if (els.archiveCanonicalCommand) els.archiveCanonicalCommand.textContent = canonicalCommand || 'archive';
-                if (els.archiveCanonicalCommandHint) {
-                    els.archiveCanonicalCommandHint.textContent = pipelineName === 'archive-gate-a'
+            if (els.archiveCanonicalCommandHint) {
+                els.archiveCanonicalCommandHint.textContent = pipelineName === 'archive-gate-a'
                     ? 'The portal build flow uses fixity-scan for archive-gate-a. Provide an existing archive index before dispatch. For a safe local smoke run, pair ./tests/fixtures/archive_small/archive_root with ./tests/fixtures/archive_small/archive_index_normalized.csv.gz.'
                     : 'The portal build flow uses a prior rights-manifest artifact for downstream archive stages.';
-                }
+            }
             if (els.archiveIndexField) {
                 els.archiveIndexField.classList.toggle('hidden', pipelineName !== 'archive-gate-a');
             }
@@ -5195,15 +5195,15 @@
 
             let args = {
                 input_dir: inputDirValue,
-                output_dir: outputDirValue,
-                overwrite: els.flags.overwrite
-                    ? Boolean(els.flags.overwrite.checked)
-                    : parseBoolLike(c.flags.overwrite, false)
+                output_dir: outputDirValue
             };
 
             if (p === 'lux-depth-v3') {
                 args = {
                     ...args,
+                    overwrite: els.flags.overwrite
+                        ? Boolean(els.flags.overwrite.checked)
+                        : parseBoolLike(c.flags.overwrite, false),
                     ...buildCanonicalLuxDepthArgs(c)
                 };
             } else {
@@ -5425,6 +5425,7 @@
                 if (parseBoolLike(payload.args.verbose, false)) cliLines.push(`  --verbose`);
                 if (parseBoolLike(payload.args.quiet, false)) cliLines.push(`  --quiet`);
                 if (payload.args.log_level) cliLines.push(`  --log-level ${q(payload.args.log_level)}`);
+                if (parseBoolLike(payload.args.overwrite, false)) cliLines.push(`  --overwrite`);
             } else {
                 if (payload.args.archive_command) {
                     cliLines.push(`  --archive-command ${q(payload.args.archive_command)}`);
@@ -5439,7 +5440,6 @@
                     cliLines.push(`  --manifest-jsonl ${q(payload.args.manifest_jsonl)}`);
                 }
             }
-            if (parseBoolLike(payload.args.overwrite, false)) cliLines.push(`  --overwrite`);
 
             const cli = cliLines.map((line, idx) =>
                 idx === cliLines.length - 1 ? line : `${line} \\`
