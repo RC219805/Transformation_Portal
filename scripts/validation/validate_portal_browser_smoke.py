@@ -818,7 +818,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
     _expect(archive_index.is_file(), f"Archive index fixture does not exist: {archive_index}")
 
     output_dir, output_dir_is_temp = _resolve_output_dir(args.output_dir)
-    if output_dir_is_temp and output_dir.exists():
+    if output_dir_is_temp and not args.keep_output and output_dir.exists():
         shutil.rmtree(output_dir, ignore_errors=True)
     output_dir.mkdir(parents=True, exist_ok=True)
     profile_dir = _default_profile_dir()

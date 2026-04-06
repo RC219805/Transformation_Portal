@@ -49,6 +49,7 @@ def test_portal_browser_explicit_output_dirs_are_not_auto_cleaned(tmp_path: Path
 
     assert resolved_output_dir == explicit_output_dir.resolve()
     assert output_dir_is_temp is False
+    assert module._should_cleanup_output_dir(keep_output=True, output_dir_is_temp=True) is False
     assert module._should_cleanup_output_dir(keep_output=False, output_dir_is_temp=output_dir_is_temp) is False
     assert module._should_cleanup_output_dir(keep_output=False, output_dir_is_temp=True) is True
 
