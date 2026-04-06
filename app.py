@@ -2413,9 +2413,10 @@ def _is_protected_job_endpoint(path: str) -> bool:
 
 
 def _is_protected_api_key_endpoint(path: str) -> bool:
-    if _is_protected_job_endpoint(path):
+    normalized_path = path.rstrip("/") or "/"
+    if _is_protected_job_endpoint(normalized_path):
         return True
-    return path in {
+    return normalized_path in {
         "/v1/config-metadata",
         "/v1/config-preview",
         "/v1/portal/events",

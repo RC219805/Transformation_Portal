@@ -861,6 +861,54 @@ def test_config_preview_and_portal_event_routes_enforce_api_key(client: TestClie
     assert telemetry_unauthorized.json()["error"]["code"] == "UNAUTHORIZED"
 
 
+def test_slash_redirect_variants_of_protected_preview_routes_enforce_api_key_before_redirect(
+    client: TestClient,
+    tmp_path: Path,
+) -> None:
+    fixture_input_dir = (
+        Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "archive_small" / "archive_root"
+    ).resolve()
+    output_dir = (tmp_path / "protected-preview-out-slash").resolve()
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    metadata_unauthorized = client.get(
+        "/v1/config-metadata/",
+        params={"pipeline": "lux-depth-v3"},
+        headers={"x-api-key": "wrong"},
+        follow_redirects=False,
+    )
+    assert metadata_unauthorized.status_code == 401
+    assert metadata_unauthorized.json()["error"]["code"] == "UNAUTHORIZED"
+
+    preview_unauthorized = client.post(
+        "/v1/config-preview/",
+        headers={"x-api-key": "wrong"},
+        follow_redirects=False,
+        json={
+            "pipeline": "lux-depth-v3",
+            "args": {
+                "input_dir": str(fixture_input_dir),
+                "output_dir": str(output_dir),
+            },
+        },
+    )
+    assert preview_unauthorized.status_code == 401
+    assert preview_unauthorized.json()["error"]["code"] == "UNAUTHORIZED"
+
+    telemetry_unauthorized = client.post(
+        "/v1/portal/events/",
+        headers={"x-api-key": "wrong"},
+        follow_redirects=False,
+        json={
+            "event_type": "config_exported",
+            "pipeline": "lux-depth-v3",
+            "surface": "effective_config",
+        },
+    )
+    assert telemetry_unauthorized.status_code == 401
+    assert telemetry_unauthorized.json()["error"]["code"] == "UNAUTHORIZED"
+
+
 def test_v1_routes_fail_closed_when_auth_enforced_without_secret(client: TestClient) -> None:
     orchestrator_app.ENFORCE_JOB_API_KEY = True
     orchestrator_app.API_KEY_SECRET = ""
