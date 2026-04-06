@@ -4213,7 +4213,13 @@ async def serve_ui() -> Response:
             status_code=500,
             detail="portal.html is missing",
         )
-    return FileResponse(str(PORTAL_HTML))
+    return FileResponse(
+        str(PORTAL_HTML),
+        headers={
+            "Cache-Control": "no-store",
+            "Pragma": "no-cache",
+        },
+    )
 
 
 @app.get(f"/portal/video/{PORTAL_VIDEO_ASSET_NAME}")

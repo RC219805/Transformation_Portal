@@ -154,13 +154,17 @@ def test_portal_browser_smoke_tracks_archive_readiness_fields_and_canonical_comm
 
     assert "archiveCanonicalCommand" in content
     assert "archiveIndexFieldVisible" in content
+    assert "preRunWarnings" in content
+    assert "missingArchiveIndexWarningVisible" in content
     assert "rightsManifestFieldVisible" in content
     assert "segmentationBackendVisible" in content
     assert "governanceDetailsVisible" in content
     assert "reconstructionConfigVisible" in content
     assert "v2PresetVisible" in content
     assert "_set_lux_optional_controls_expression" in content
+    assert "_restore_archive_gate_form_without_events_expression" in content
     assert "heroReadinessLabel" in content
+    assert "/tmp/gate-a-smoke-portal" in content
     assert "archive-gate-b" in content
     assert "archive-gate-c" in content
     assert '--archive-command "bag-build"' in content
