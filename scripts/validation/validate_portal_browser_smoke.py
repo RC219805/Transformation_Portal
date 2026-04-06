@@ -492,6 +492,42 @@ def _state_probe_expression() -> str:
     flagsShellVisible: (() => {
       const el = document.getElementById('flags-shell');
       return !!(el && !el.classList.contains('hidden'));
+    })(),
+    segmentationBackendVisible: (() => {
+      const el = document.getElementById('segmentationBackendField');
+      return !!(el && !el.classList.contains('hidden'));
+    })(),
+    strictSegmentationVisible: (() => {
+      const el = document.getElementById('strictSegmentationField');
+      return !!(el && !el.classList.contains('hidden'));
+    })(),
+    sam2ModelSizeVisible: (() => {
+      const el = document.getElementById('sam2ModelSizeField');
+      return !!(el && !el.classList.contains('hidden'));
+    })(),
+    sam2CheckpointVisible: (() => {
+      const el = document.getElementById('sam2CheckpointField');
+      return !!(el && !el.classList.contains('hidden'));
+    })(),
+    governanceDetailsVisible: (() => {
+      const el = document.getElementById('governanceDetails');
+      return !!(el && !el.classList.contains('hidden'));
+    })(),
+    licenseAppleVisible: (() => {
+      const el = document.getElementById('licenseAppleField');
+      return !!(el && !el.classList.contains('hidden'));
+    })(),
+    licenseResearchToolsVisible: (() => {
+      const el = document.getElementById('licenseResearchToolsField');
+      return !!(el && !el.classList.contains('hidden'));
+    })(),
+    reconstructionConfigVisible: (() => {
+      const el = document.getElementById('reconstructionConfigFields');
+      return !!(el && !el.classList.contains('hidden'));
+    })(),
+    v2PresetVisible: (() => {
+      const el = document.getElementById('v2PresetField');
+      return !!(el && !el.classList.contains('hidden'));
     })()
   };
 })()
@@ -571,8 +607,61 @@ def _set_pipeline_form_expression(
     runJobDisabled: !!document.getElementById('runJobBtn').disabled,
     heroReadinessLabel: (document.getElementById('heroReadinessLabel').textContent || '').trim(),
     cliFirstLine: ((document.getElementById('cliPreview').textContent || '').trim().split('\\n')[0] || '').trim(),
-    cliText: (document.getElementById('cliPreview').textContent || '').trim()
+    cliText: (document.getElementById('cliPreview').textContent || '').trim(),
+    segmentationBackendVisible: !document.getElementById('segmentationBackendField').classList.contains('hidden'),
+    strictSegmentationVisible: !document.getElementById('strictSegmentationField').classList.contains('hidden'),
+    sam2ModelSizeVisible: !document.getElementById('sam2ModelSizeField').classList.contains('hidden'),
+    sam2CheckpointVisible: !document.getElementById('sam2CheckpointField').classList.contains('hidden'),
+    governanceDetailsVisible: !document.getElementById('governanceDetails').classList.contains('hidden'),
+    licenseAppleVisible: !document.getElementById('licenseAppleField').classList.contains('hidden'),
+    licenseResearchToolsVisible: !document.getElementById('licenseResearchToolsField').classList.contains('hidden'),
+    reconstructionConfigVisible: !document.getElementById('reconstructionConfigFields').classList.contains('hidden'),
+    v2PresetVisible: !document.getElementById('v2PresetField').classList.contains('hidden')
   }};
+}})()
+"""
+
+
+def _set_lux_optional_controls_expression(
+    *,
+    depth_backend: str,
+    enable_segmentation: bool,
+    segmentation_backend: str,
+    enable_reconstruction: bool,
+    enable_v2: bool,
+) -> str:
+    payload = json.dumps(
+        {
+            "depth_backend": depth_backend,
+            "enable_segmentation": enable_segmentation,
+            "segmentation_backend": segmentation_backend,
+            "enable_reconstruction": enable_reconstruction,
+            "enable_v2": enable_v2,
+        }
+    )
+    return f"""
+(() => {{
+  const cfg = {payload};
+  const dispatch = (el, type) => el.dispatchEvent(new Event(type, {{ bubbles: true }}));
+  const setValue = (id, value) => {{
+    const el = document.getElementById(id);
+    if (!el) throw new Error(`missing #${{id}}`);
+    el.value = value;
+    dispatch(el, 'input');
+    dispatch(el, 'change');
+  }};
+  const setChecked = (id, checked) => {{
+    const el = document.getElementById(id);
+    if (!el) throw new Error(`missing #${{id}}`);
+    el.checked = !!checked;
+    dispatch(el, 'change');
+  }};
+  setValue('depthBackend', cfg.depth_backend);
+  setChecked('enableSegmentation', cfg.enable_segmentation);
+  setValue('segmentationBackend', cfg.segmentation_backend);
+  setChecked('enableReconstruction', cfg.enable_reconstruction);
+  setChecked('flagEnableV2', cfg.enable_v2);
+  return ({_state_probe_expression()});
 }})()
 """
 
@@ -770,6 +859,67 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         _expect(
             not bool(lux_state.get("runJobDisabled")),
             f"Lux pipeline should remain dispatchable in the build view: {lux_state}",
+        )
+        _expect(
+            not bool(lux_state.get("segmentationBackendVisible")),
+            f"Segmentation backend should stay hidden until segmentation is enabled: {lux_state}",
+        )
+        _expect(
+            not bool(lux_state.get("strictSegmentationVisible")),
+            f"Strict segmentation should stay hidden until segmentation is enabled: {lux_state}",
+        )
+        _expect(
+            not bool(lux_state.get("sam2ModelSizeVisible")) and not bool(lux_state.get("sam2CheckpointVisible")),
+            f"SAM2-only controls should stay hidden until SAM2 segmentation is selected: {lux_state}",
+        )
+        _expect(
+            not bool(lux_state.get("governanceDetailsVisible")),
+            f"Compliance acknowledgments should stay hidden on the default Lux configuration: {lux_state}",
+        )
+        _expect(
+            not bool(lux_state.get("reconstructionConfigVisible")),
+            f"Reconstruction-specific controls should stay hidden until reconstruction is enabled: {lux_state}",
+        )
+        _expect(
+            not bool(lux_state.get("v2PresetVisible")),
+            f"V2 preset input should stay hidden until V2 compatibility is enabled: {lux_state}",
+        )
+
+        lux_context_state = _poll(
+            connection,
+            _set_lux_optional_controls_expression(
+                depth_backend="depth_pro",
+                enable_segmentation=True,
+                segmentation_backend="sam2",
+                enable_reconstruction=True,
+                enable_v2=True,
+            ),
+            predicate=lambda value: (
+                isinstance(value, dict)
+                and bool(value.get("segmentationBackendVisible"))
+                and bool(value.get("strictSegmentationVisible"))
+                and bool(value.get("sam2ModelSizeVisible"))
+                and bool(value.get("sam2CheckpointVisible"))
+                and bool(value.get("governanceDetailsVisible"))
+                and bool(value.get("licenseAppleVisible"))
+                and bool(value.get("licenseResearchToolsVisible"))
+                and bool(value.get("reconstructionConfigVisible"))
+                and bool(value.get("v2PresetVisible"))
+            ),
+            timeout_seconds=args.timeout_seconds,
+            description="lux contextual control visibility",
+        )
+        _expect(
+            bool(lux_context_state.get("governanceDetailsVisible")),
+            f"Depth Pro and reconstruction should reveal governance acknowledgments: {lux_context_state}",
+        )
+        _expect(
+            bool(lux_context_state.get("reconstructionConfigVisible")),
+            f"Enabling reconstruction should reveal reconstruction controls: {lux_context_state}",
+        )
+        _expect(
+            bool(lux_context_state.get("v2PresetVisible")),
+            f"Enabling V2 should reveal the V2 preset input: {lux_context_state}",
         )
 
         print("portal-browser-smoke: verifying archive-gate-b blocked state", flush=True)
