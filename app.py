@@ -1441,13 +1441,35 @@ def _normalize_portal_path_arg(
             )
         return ""
     try:
-        resolved = _resolve_allowed_request_path(text, allowed_roots)
+        resolved = _resolve_untrusted_request_path(text)
     except ValueError as exc:
         reason = _portal_reason_code(exc)
         errors.append(
             _portal_issue(
                 field,
                 reason,
+                f"{field} must stay within the allowed workspace roots.",
+                suggestion=f"Choose a {field} path under the configured repository or temp roots.",
+            )
+        )
+        return ""
+    resolved_text = str(resolved)
+    within_allowed_roots = False
+    for root in allowed_roots:
+        try:
+            root_real = Path(os.path.realpath(root))
+        except (OSError, RuntimeError, ValueError):
+            continue
+        root_text = str(root_real)
+        root_prefix = root_text if root_text.endswith(os.sep) else root_text + os.sep
+        if resolved_text == root_text or resolved_text.startswith(root_prefix):
+            within_allowed_roots = True
+            break
+    if not within_allowed_roots:
+        errors.append(
+            _portal_issue(
+                field,
+                "path_outside_allowed_roots",
                 f"{field} must stay within the allowed workspace roots.",
                 suggestion=f"Choose a {field} path under the configured repository or temp roots.",
             )
