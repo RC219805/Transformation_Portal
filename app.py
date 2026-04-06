@@ -1339,6 +1339,29 @@ def _portal_safe_error_message(reason: str, *, field: str = "payload") -> str:
     return PORTAL_SAFE_ERROR_MESSAGES.get(reason, f"{field} contains invalid values.")
 
 
+def _request_validation_error_details(exc: RequestValidationError) -> Dict[str, Any]:
+    issues = exc.errors()
+    details: Dict[str, Any] = {"issue_count": len(issues)}
+    fields: List[str] = []
+    for issue in issues:
+        if not isinstance(issue, dict):
+            continue
+        loc = issue.get("loc")
+        if not isinstance(loc, (list, tuple)):
+            continue
+        parts = [
+            str(part).strip() for part in loc if str(part).strip() and str(part) not in {"body", "query", "path", "header"}
+        ]
+        field_name = ".".join(parts)
+        if field_name and field_name not in fields:
+            fields.append(field_name)
+        if len(fields) >= 8:
+            break
+    if fields:
+        details["fields"] = fields
+    return details
+
+
 def _portal_payload_has_any_key(payload: Any, keys: Tuple[str, ...]) -> bool:
     if not isinstance(payload, dict):
         return False
@@ -1444,27 +1467,33 @@ def _normalize_portal_path_arg(
         resolved = _resolve_untrusted_request_path(text)
     except ValueError as exc:
         reason = _portal_reason_code(exc)
+        if reason == "invalid_path_value":
+            message = f"{field} contains an invalid path value."
+            suggestion = (
+                f"Choose a valid {field} path under the configured repository or temp roots "
+                f"without invalid characters or path expansion syntax."
+            )
+        else:
+            message = f"{field} must stay within the allowed workspace roots."
+            suggestion = f"Choose a {field} path under the configured repository or temp roots."
         errors.append(
             _portal_issue(
                 field,
                 reason,
-                f"{field} must stay within the allowed workspace roots.",
-                suggestion=f"Choose a {field} path under the configured repository or temp roots.",
+                message,
+                suggestion=suggestion,
             )
         )
         return ""
-    resolved_text = str(resolved)
     within_allowed_roots = False
     for root in allowed_roots:
         try:
             root_real = Path(os.path.realpath(root))
+            resolved.relative_to(root_real)
         except (OSError, RuntimeError, ValueError):
             continue
-        root_text = str(root_real)
-        root_prefix = root_text if root_text.endswith(os.sep) else root_text + os.sep
-        if resolved_text == root_text or resolved_text.startswith(root_prefix):
-            within_allowed_roots = True
-            break
+        within_allowed_roots = True
+        break
     if not within_allowed_roots:
         errors.append(
             _portal_issue(
@@ -2093,6 +2122,7 @@ def _build_lux_config_preview(args: Dict[str, Any]) -> Dict[str, Any]:
             )
 
     if normalized_args["enable_reconstruction"]:
+        cameras_sidecar_has_error = any(str(item.get("field") or "").strip() == "cameras_sidecar_path" for item in errors)
         if not normalized_args["non_commercial_ok"]:
             errors.append(
                 _portal_issue(
@@ -2111,7 +2141,7 @@ def _build_lux_config_preview(args: Dict[str, Any]) -> Dict[str, Any]:
                     suggestion="Acknowledge the research-tools license before dispatch.",
                 )
             )
-        if "cameras_sidecar_path" not in normalized_args:
+        if "cameras_sidecar_path" not in normalized_args and not cameras_sidecar_has_error:
             warnings.append(
                 _portal_issue(
                     "cameras_sidecar_path",
@@ -2367,6 +2397,16 @@ def _is_job_events_endpoint(path: str) -> bool:
 
 def _is_protected_job_endpoint(path: str) -> bool:
     return path == "/v1/jobs" or path.startswith("/v1/jobs/")
+
+
+def _is_protected_api_key_endpoint(path: str) -> bool:
+    if _is_protected_job_endpoint(path):
+        return True
+    return path in {
+        "/v1/config-metadata",
+        "/v1/config-preview",
+        "/v1/portal/events",
+    }
 
 
 def _job_api_key_enforced() -> bool:
@@ -4001,14 +4041,13 @@ async def request_validation_handler(
     exc: RequestValidationError,
 ) -> JSONResponse:
     if _is_api_v1_path(request.url.path):
+        details = {"path": request.url.path}
+        details.update(_request_validation_error_details(exc))
         return _error_response(
             400,
             code="INVALID_ARGUMENT",
             message="request validation failed",
-            details={
-                "path": request.url.path,
-                "errors": exc.errors(),
-            },
+            details=details,
         )
     return await fastapi_request_validation_exception_handler(
         request,
@@ -4021,7 +4060,7 @@ async def startup() -> None:
     if _job_api_key_enforced() and not API_KEY_SECRET:
         LOGGER.warning(
             "TP_ENFORCE_JOB_API_KEY is enabled but"
-            " TP_API_KEY is unset; /v1/jobs endpoints"
+            " TP_API_KEY is unset; protected /v1 endpoints"
             " will return AUTH_CONFIGURATION_ERROR."
         )
     cleanup_task = getattr(app.state, "cleanup_task", None)
@@ -4052,12 +4091,12 @@ async def security_layer(
 
     _install_stream_body_limit(request)
 
-    if _is_protected_job_endpoint(request.url.path) and _job_api_key_enforced():
+    if _is_protected_api_key_endpoint(request.url.path) and _job_api_key_enforced():
         if not API_KEY_SECRET:
             return _error_response(
                 503,
                 code="AUTH_CONFIGURATION_ERROR",
-                message=("job endpoint authentication is" " enforced but TP_API_KEY is not" " configured"),
+                message=("protected endpoint authentication is" " enforced but TP_API_KEY is not" " configured"),
                 details={"path": request.url.path, "env": "TP_API_KEY"},
             )
         if not _has_valid_api_key(request):

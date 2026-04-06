@@ -2003,6 +2003,14 @@ def test_protected_job_route_detection() -> None:
     assert orchestrator_app._is_protected_job_endpoint("/ready") is False
 
 
+def test_protected_api_key_route_detection() -> None:
+    assert orchestrator_app._is_protected_api_key_endpoint("/v1/jobs") is True
+    assert orchestrator_app._is_protected_api_key_endpoint("/v1/config-metadata") is True
+    assert orchestrator_app._is_protected_api_key_endpoint("/v1/config-preview") is True
+    assert orchestrator_app._is_protected_api_key_endpoint("/v1/portal/events") is True
+    assert orchestrator_app._is_protected_api_key_endpoint("/ready") is False
+
+
 def test_index_job_artifacts_populates_job_payload(tmp_path: Path) -> None:
     output_dir = tmp_path / "out"
     output_dir.mkdir(parents=True, exist_ok=True)

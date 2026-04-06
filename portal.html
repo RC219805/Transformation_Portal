@@ -5480,11 +5480,12 @@
                 if (_configPreviewRequestKey(generatePayload()) !== requestKey) {
                     return;
                 }
+                const previewFieldErrors = Array.isArray(data.field_errors) ? data.field_errors : [];
                 _setPreviewState({
                     pipeline: String(data.pipeline || currentPayload.pipeline),
                     requestKey,
                     status: 'ready',
-                    field_errors: Array.isArray(data.field_errors) ? data.field_errors : [],
+                    field_errors: previewFieldErrors,
                     field_warnings: Array.isArray(data.field_warnings) ? data.field_warnings : [],
                     inactive_fields: Array.isArray(data.inactive_fields) ? data.inactive_fields : [],
                     normalized_args: data.normalized_args && typeof data.normalized_args === 'object' ? data.normalized_args : {},
@@ -5494,11 +5495,11 @@
                     argv_preview: String(data.argv_preview || ''),
                     error: ''
                 });
-                if (state.preview.field_errors.length > 0) {
+                if (previewFieldErrors.length > 0) {
                     void emitPortalEvent('preview_error_seen', {
                         surface: 'reconstruction_runtime',
-                        reasons: state.preview.field_errors.map((item) => String(item?.reason || '')).filter(Boolean).slice(0, 8),
-                        metadata: { count: state.preview.field_errors.length }
+                        reasons: previewFieldErrors.map((item) => String(item?.code || '')).filter(Boolean).slice(0, 8),
+                        metadata: { count: previewFieldErrors.length }
                     });
                 }
             } catch {
@@ -7525,7 +7526,7 @@
                 if (Array.isArray(preview.field_errors) && preview.field_errors.length > 0) {
                     const firstError = preview.field_errors[0];
                     const conflictError = preview.field_errors.find(
-                        (item) => String(item?.reason || '').trim() === 'conflicting_log_verbosity_flags'
+                        (item) => String(item?.code || '').trim() === 'conflicting_log_verbosity_flags'
                     );
                     createToast(
                         conflictError
@@ -7536,7 +7537,7 @@
                     void emitPortalEvent('dispatch_blocked', {
                         surface: 'dispatch',
                         field: String(firstError?.field || '').trim(),
-                        reasons: preview.field_errors.map((item) => String(item?.reason || '')).filter(Boolean).slice(0, 8)
+                        reasons: preview.field_errors.map((item) => String(item?.code || '')).filter(Boolean).slice(0, 8)
                     });
                     return;
                 }

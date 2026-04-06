@@ -172,6 +172,18 @@ def test_config_metadata_contract_for_lux_depth_pipeline(client: TestClient) -> 
     assert body["data"]["debug_bundle_policy"]["acknowledgement_required"] is True
 
 
+def test_config_metadata_request_validation_errors_are_sanitized(client: TestClient) -> None:
+    response = client.get("/v1/config-metadata")
+    body = response.json()
+
+    assert response.status_code == 400
+    assert body["error"]["message"] == "request validation failed"
+    assert body["error"]["details"]["path"] == "/v1/config-metadata"
+    assert body["error"]["details"]["issue_count"] >= 1
+    assert body["error"]["details"]["fields"] == ["pipeline"]
+    assert "errors" not in body["error"]["details"]
+
+
 def test_config_preview_contract_normalizes_inactive_reconstruction_fields(
     client: TestClient,
     tmp_path: Path,
@@ -286,6 +298,8 @@ def test_config_preview_contract_rejects_missing_cameras_sidecar_when_reconstruc
     errors = {item["field"]: item for item in body["data"]["field_errors"]}
     assert errors["cameras_sidecar_path"]["code"] == "missing"
     assert errors["cameras_sidecar_path"]["message"] == "cameras_sidecar_path does not exist."
+    warning_codes = {item["code"] for item in body["data"]["field_warnings"]}
+    assert "camera_sidecar_missing" not in warning_codes
     assert "cameras_sidecar_path" not in body["data"]["normalized_args"]
 
 
@@ -321,6 +335,43 @@ def test_config_preview_contract_rejects_directory_cameras_sidecar_when_reconstr
     errors = {item["field"]: item for item in body["data"]["field_errors"]}
     assert errors["cameras_sidecar_path"]["code"] == "not_a_file"
     assert errors["cameras_sidecar_path"]["message"] == "cameras_sidecar_path must be a file."
+    warning_codes = {item["code"] for item in body["data"]["field_warnings"]}
+    assert "camera_sidecar_missing" not in warning_codes
+    assert "cameras_sidecar_path" not in body["data"]["normalized_args"]
+
+
+def test_config_preview_contract_rejects_invalid_cameras_sidecar_path_values(
+    client: TestClient,
+    tmp_path: Path,
+) -> None:
+    fixture_input_dir = (
+        Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "archive_small" / "archive_root"
+    ).resolve()
+    output_dir = (tmp_path / "preview-output-sidecar-invalid").resolve()
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    response = client.post(
+        "/v1/config-preview",
+        json={
+            "pipeline": "lux-depth-v3",
+            "args": {
+                "input_dir": str(fixture_input_dir),
+                "output_dir": str(output_dir),
+                "enable_reconstruction": True,
+                "non_commercial_ok": True,
+                "accept_research_tools_license": True,
+                "cameras_sidecar_path": "~/scene_cameras.json",
+            },
+        },
+    )
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["schema"] == "tp.orchestrator.config_preview.v1"
+    assert body["success"] is True
+    errors = {item["field"]: item for item in body["data"]["field_errors"]}
+    assert errors["cameras_sidecar_path"]["code"] == "invalid_path_value"
+    assert errors["cameras_sidecar_path"]["message"] == "cameras_sidecar_path contains an invalid path value."
     assert "cameras_sidecar_path" not in body["data"]["normalized_args"]
 
 
@@ -753,6 +804,48 @@ def test_v1_routes_enforce_api_key_for_reads_and_events(client: TestClient) -> N
     assert "event: done" in events_authorized.text
 
 
+def test_config_preview_and_portal_event_routes_enforce_api_key(client: TestClient, tmp_path: Path) -> None:
+    fixture_input_dir = (
+        Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "archive_small" / "archive_root"
+    ).resolve()
+    output_dir = (tmp_path / "protected-preview-out").resolve()
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    metadata_unauthorized = client.get(
+        "/v1/config-metadata",
+        params={"pipeline": "lux-depth-v3"},
+        headers={"x-api-key": "wrong"},
+    )
+    assert metadata_unauthorized.status_code == 401
+    assert metadata_unauthorized.json()["error"]["code"] == "UNAUTHORIZED"
+
+    preview_unauthorized = client.post(
+        "/v1/config-preview",
+        headers={"x-api-key": "wrong"},
+        json={
+            "pipeline": "lux-depth-v3",
+            "args": {
+                "input_dir": str(fixture_input_dir),
+                "output_dir": str(output_dir),
+            },
+        },
+    )
+    assert preview_unauthorized.status_code == 401
+    assert preview_unauthorized.json()["error"]["code"] == "UNAUTHORIZED"
+
+    telemetry_unauthorized = client.post(
+        "/v1/portal/events",
+        headers={"x-api-key": "wrong"},
+        json={
+            "event_type": "config_exported",
+            "pipeline": "lux-depth-v3",
+            "surface": "effective_config",
+        },
+    )
+    assert telemetry_unauthorized.status_code == 401
+    assert telemetry_unauthorized.json()["error"]["code"] == "UNAUTHORIZED"
+
+
 def test_v1_routes_fail_closed_when_auth_enforced_without_secret(client: TestClient) -> None:
     orchestrator_app.ENFORCE_JOB_API_KEY = True
     orchestrator_app.API_KEY_SECRET = ""
@@ -762,6 +855,12 @@ def test_v1_routes_fail_closed_when_auth_enforced_without_secret(client: TestCli
     body = response.json()
     assert body["error"]["code"] == "AUTH_CONFIGURATION_ERROR"
     assert body["error"]["details"]["env"] == "TP_API_KEY"
+
+    config_response = client.get("/v1/config-metadata", params={"pipeline": "lux-depth-v3"})
+    assert config_response.status_code == 503
+    config_body = config_response.json()
+    assert config_body["error"]["code"] == "AUTH_CONFIGURATION_ERROR"
+    assert config_body["error"]["details"]["env"] == "TP_API_KEY"
 
 
 def test_invalid_job_payload_returns_typed_invalid_argument(client: TestClient) -> None:
@@ -957,7 +1056,9 @@ def test_request_validation_errors_return_typed_envelope_for_v1(client: TestClie
     assert body["success"] is False
     assert body["error"]["code"] == "INVALID_ARGUMENT"
     assert body["error"]["details"]["path"] == "/v1/jobs"
-    assert body["error"]["details"]["errors"]
+    assert body["error"]["details"]["issue_count"] >= 1
+    assert body["error"]["details"]["fields"] == ["limit"]
+    assert "errors" not in body["error"]["details"]
 
 
 def test_http_exception_handler_sanitizes_v1_exception_detail_and_logs_it(caplog: pytest.LogCaptureFixture) -> None:
