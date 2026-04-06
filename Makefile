@@ -24,7 +24,7 @@ PHASE6_SMOKE_TESTS := \
 	tests/test_lux_render_pipeline_smoke.py \
 	tests/lux_depth_v3/test_orchestrator_smoke.py
 
-.PHONY: help test-fast test-novideo test-full test-integration test-structure test-utils test-orchestrator-contract validate-orchestrator-http validate-portal-browser coverage-fast-scope venv setup clean \
+.PHONY: help test-fast test-novideo test-full test-integration test-structure test-utils test-orchestrator-contract test-orchestrator-http-contract test-portal-contract validate-orchestrator-http validate-portal-browser audit-pipeline-readiness coverage-fast-scope venv setup clean \
         lint lint-parity ci ci-full pre-commit install-hooks quality-check fix-quality validate-ci organize-docs check-json-serialization check-piptools-cache \
         check-yaml-governance check-stale-docs lock lock-prod lock-ci lock-dev install-core install-ml install-ml-core install-ml-raw install-ml-sam2 install-ml-coreml docs docs-clean \
         check-test-markers check-ci-sync
@@ -42,12 +42,15 @@ help:
 	@echo "  test-novideo       Run all tests excluding video suite via -k filter"
 	@echo "  test-full          Run entire test suite (parallel if xdist present)"
 	@echo "  test-orchestrator-contract  Run route-level portal orchestrator contract suite"
+	@echo "  test-orchestrator-http-contract  Run HTTP-only orchestrator contract tests"
+	@echo "  test-portal-contract  Run portal runtime/browser contract tests"
 	@echo "  test-integration   Run integration tests (requires HF_TOKEN)"
 	@echo "  test-structure     Run codebase structure validation tests"
 	@echo "  test-utils         Run tests for performance and error handling utilities"
 	@echo "  coverage-fast-scope  Run branch coverage for audited core/config and streaming paths"
-	@echo "  validate-orchestrator-http  Run portal orchestrator HTTP contract tests"
-	@echo "  validate-portal-browser  Run portal/orchestrator runtime + HTTP contract tests"
+	@echo "  validate-orchestrator-http  Run the live orchestrator HTTP smoke audit"
+	@echo "  validate-portal-browser  Run the live browser smoke audit against a running portal"
+	@echo "  audit-pipeline-readiness  Run the local four-pipeline readiness audit"
 	@echo "  venv               Create local .venv if missing"
 	@echo "  clean              Remove Python cache files and build artifacts"
 	@echo ""
@@ -187,15 +190,27 @@ test-utils:
 
 test-orchestrator-contract:
 	@echo "Running portal orchestrator contract suite..."
-	@"$(PY)" -m pytest -q tests/test_app_orchestrator_runtime.py tests/test_app_orchestrator_contract_http.py
+	@"$(PY)" -m pytest -q tests/test_app_orchestrator_runtime.py tests/test_app_orchestrator_contract_http.py tests/validation/test_portal_smoke_scripts.py
 
-validate-orchestrator-http:
-	@echo "Running portal orchestrator HTTP contract tests..."
+test-orchestrator-http-contract:
+	@echo "Running HTTP-only orchestrator contract tests..."
 	@"$(PY)" -m pytest -q tests/test_app_orchestrator_contract_http.py
 
+test-portal-contract:
+	@echo "Running portal runtime/browser contract tests..."
+	@"$(PY)" -m pytest -q tests/test_app_orchestrator_runtime.py tests/validation/test_portal_smoke_scripts.py
+
+validate-orchestrator-http:
+	@echo "Running live orchestrator HTTP smoke validation..."
+	@"$(PY)" scripts/validation/validate_orchestrator_http_smoke.py
+
 validate-portal-browser:
-	@echo "Running portal/orchestrator runtime + HTTP contract tests..."
-	@"$(PY)" -m pytest -q tests/test_app_orchestrator_runtime.py tests/test_app_orchestrator_contract_http.py
+	@echo "Running live portal browser smoke validation..."
+	@"$(PY)" scripts/validation/validate_portal_browser_smoke.py
+
+audit-pipeline-readiness:
+	@echo "Running safe local four-pipeline readiness audit..."
+	@"$(PY)" scripts/validation/audit_pipeline_readiness.py
 
 coverage-fast-scope:
 	@rm -f .coverage.fast-scope .coverage.fast-scope.*

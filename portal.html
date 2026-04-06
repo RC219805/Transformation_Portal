@@ -1068,9 +1068,9 @@
                             <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="pipelineSelect">Pipeline Execution</label>
                             <select id="pipelineSelect" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors cursor-pointer">
                                 <option value="lux-depth-v3">lux-depth-v3</option>
-                                <option value="archive-gate-a">archive-gate-a (Manifest)</option>
-                                <option value="archive-gate-b">archive-gate-b (BagIt)</option>
-                                <option value="archive-gate-c">archive-gate-c (METS/PROV)</option>
+                                <option value="archive-gate-a">archive-gate-a (Fixity / Manifest Prep)</option>
+                                <option value="archive-gate-b">archive-gate-b (BagIt Build)</option>
+                                <option value="archive-gate-c">archive-gate-c (METS Export)</option>
                             </select>
                         </div>
                         <div>
@@ -1246,14 +1246,20 @@
                     <!-- Archive Gate Fields -->
                     <div id="fieldsArchiveGate" class="pipeline-fields hidden space-y-4 pt-4 border-t border-slate-200 dark:border-slate-800">
                         <p class="text-[12px] text-slate-500 dark:text-slate-400">Archiving parameters for deterministic packaging and export. Align with repository governance.</p>
-                        <div>
-                            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="archiveIndexPath">Archive Index Path</label>
-                            <input type="text" id="archiveIndexPath" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors" value="" placeholder="./output/archive_index_normalized.csv.gz" autocomplete="off" spellcheck="false" />
-                            <p class="mt-1 text-[11px] leading-5 text-slate-500 dark:text-slate-400">Defaults to the normalized archive index inside the selected output directory. Override when the manifest lives elsewhere.</p>
+                        <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/50 p-4">
+                            <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Canonical Command</p>
+                            <p id="archiveCanonicalCommand" class="mt-2 text-[13px] font-mono font-semibold text-slate-800 dark:text-slate-100">fixity-scan</p>
+                            <p id="archiveCanonicalCommandHint" class="mt-2 text-[11px] leading-5 text-slate-500 dark:text-slate-400">The portal build flow uses one canonical archive command per stage and keeps alternate subcommands API-only.</p>
                         </div>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <label class="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300"><input type="checkbox" id="gateDedup" checked class="rounded w-4 h-4 text-indigo-600 focus:ring-indigo-500 bg-white border-slate-300 dark:bg-slate-800 dark:border-slate-600"> Generate Dedup Ledger</label>
-                            <label class="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300"><input type="checkbox" id="gateSign" checked class="rounded w-4 h-4 text-indigo-600 focus:ring-indigo-500 bg-white border-slate-300 dark:bg-slate-800 dark:border-slate-600"> Sign Artifact Payload</label>
+                        <div id="archiveIndexField">
+                            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="archiveIndexPath">Archive Index Path</label>
+                            <input type="text" id="archiveIndexPath" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors" value="" placeholder="./tests/fixtures/archive_small/archive_index_normalized.csv.gz" autocomplete="off" spellcheck="false" />
+                            <p class="mt-1 text-[11px] leading-5 text-slate-500 dark:text-slate-400">Required for `fixity-scan`. Supply an existing normalized archive index that is safe to read from the local allowlist.</p>
+                        </div>
+                        <div id="rightsManifestField" class="hidden">
+                            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="rightsManifestPath">Rights Manifest JSONL</label>
+                            <input type="text" id="rightsManifestPath" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors" value="" placeholder="./output/archive_manifest_v2.rights.jsonl" autocomplete="off" spellcheck="false" />
+                            <p class="mt-1 text-[11px] leading-5 text-slate-500 dark:text-slate-400">Required for `bag-build` and `mets-export`. This must point to an existing rights-manifest artifact generated by an earlier archive stage.</p>
                         </div>
                     </div>
                 </div>
@@ -1818,7 +1824,7 @@
                 emits: {
                     master16: true, upscaled16: true, marketing: false, report: true, runCard: true
                 },
-                gate: { dedup: true, sign: true, archiveIndex: '' },
+                gate: { archiveIndex: '', manifestJsonl: '' },
                 licenses: { nonCommercialOk: false, acceptApple: false, acceptResearchTools: false },
                 reconstruction: {
                     enable: false,
@@ -1848,6 +1854,10 @@
                 compareByJob: {}
             },
             backendOk: false,
+            readiness: {
+                server: {},
+                pipelines: {}
+            },
             themePreference: 'system',
             theme: 'light',
             presetsByPipeline: {},
@@ -1930,7 +1940,12 @@
 
             inputDir: document.getElementById('inputDir'),
             outputDir: document.getElementById('outputDir'),
+            archiveCanonicalCommand: document.getElementById('archiveCanonicalCommand'),
+            archiveCanonicalCommandHint: document.getElementById('archiveCanonicalCommandHint'),
+            archiveIndexField: document.getElementById('archiveIndexField'),
             archiveIndexPath: document.getElementById('archiveIndexPath'),
+            rightsManifestField: document.getElementById('rightsManifestField'),
+            rightsManifestPath: document.getElementById('rightsManifestPath'),
             qualityTier: document.getElementById('qualityTier'),
             depthBackend: document.getElementById('depthBackend'),
             depthDevice: document.getElementById('depthDevice'),
@@ -1989,9 +2004,6 @@
                 maxGpuWorkers: document.getElementById('maxGpuWorkers'),
                 logLevel: document.getElementById('logLevel')
             },
-
-            gateDedup: document.getElementById('gateDedup'),
-            gateSign: document.getElementById('gateSign'),
 
             fieldsLuxDepth: document.getElementById('fieldsLuxDepth'),
             fieldsArchiveGate: document.getElementById('fieldsArchiveGate'),
@@ -2918,16 +2930,81 @@
             };
         }
 
+        function canonicalArchiveCommand(pipelineName) {
+            if (pipelineName === 'archive-gate-a') return 'fixity-scan';
+            if (pipelineName === 'archive-gate-b') return 'bag-build';
+            if (pipelineName === 'archive-gate-c') return 'mets-export';
+            return '';
+        }
+
+        function currentPipelineReadiness() {
+            return state.readiness && state.readiness.pipelines
+                ? state.readiness.pipelines[state.pipeline] || null
+                : null;
+        }
+
+        function _currentPipelineLocalPrereqs() {
+            return {
+                archiveIndex: _textOrFallback(
+                    els.archiveIndexPath ? els.archiveIndexPath.value : state.config?.gate?.archiveIndex,
+                    state.config?.gate?.archiveIndex || ''
+                ),
+                manifestJsonl: _textOrFallback(
+                    els.rightsManifestPath ? els.rightsManifestPath.value : state.config?.gate?.manifestJsonl,
+                    state.config?.gate?.manifestJsonl || ''
+                )
+            };
+        }
+
+        function _readinessIssueSatisfiedLocally(issue) {
+            if (!issue || typeof issue !== 'object') return false;
+            const reason = String(issue.reason || '').trim().toLowerCase();
+            const prereqs = _currentPipelineLocalPrereqs();
+            if (reason === 'archive_index_required') return Boolean(prereqs.archiveIndex);
+            if (reason === 'rights_manifest_required' || reason === 'manifest_jsonl_required') {
+                return Boolean(prereqs.manifestJsonl);
+            }
+            return false;
+        }
+
+        function currentPipelineReadinessIssues() {
+            const readiness = currentPipelineReadiness();
+            const issues = Array.isArray(readiness?.missing_prerequisites) ? readiness.missing_prerequisites : [];
+            return issues.filter((issue) => !_readinessIssueSatisfiedLocally(issue));
+        }
+
+        function currentPipelineDispatchStatus() {
+            const readiness = currentPipelineReadiness();
+            const rawStatus = String(readiness?.status || '').trim().toLowerCase();
+            if (!rawStatus) return '';
+            const issues = currentPipelineReadinessIssues();
+            if (issues.some((issue) => String(issue?.severity || '').trim().toLowerCase() === 'blocked')) {
+                return 'blocked';
+            }
+            if (issues.some((issue) => String(issue?.reason || '').trim().toLowerCase() === 'archive_index_required')) {
+                return 'degraded';
+            }
+            if (issues.some((issue) => String(issue?.severity || '').trim().toLowerCase() === 'degraded')) {
+                return 'degraded';
+            }
+            if (rawStatus === 'blocked' || rawStatus === 'degraded') return 'ready';
+            return rawStatus;
+        }
+
         function renderCapabilityChips(payload) {
             if (!els.capabilityChips) return;
             const args = payload?.args || {};
             const chips = [];
+            const readiness = currentPipelineReadiness();
+            const dispatchStatus = currentPipelineDispatchStatus();
             if (state.pipeline === 'lux-depth-v3') {
                 chips.push(`Preset ${String(args.preset || state.config.preset || 'custom')}`);
+                if (readiness?.canary_status) chips.push(`Canary ${titleCaseToken(readiness.canary_status, 'Unknown')}`);
             } else {
-                chips.push('Archive governance preset');
+                chips.push(`Command ${canonicalArchiveCommand(state.pipeline)}`);
             }
-            chips.push(state.backendOk ? 'Live backend connected' : 'Mock-safe dispatch mode');
+            chips.push(state.backendOk ? 'Live backend connected' : 'Backend offline');
+            if (dispatchStatus || readiness?.status) chips.push(`Readiness ${titleCaseToken(dispatchStatus || readiness.status, 'Unknown')}`);
             if (parseBoolLike(args.enable_segmentation, false)) {
                 chips.push(`Segmentation ${String(args.segmentation_backend || 'enabled')}`);
             }
@@ -2935,8 +3012,6 @@
             if (parseBoolLike(args.pbr, false)) chips.push('PBR generation');
             if (parseBoolLike(args.enable_reconstruction, false)) chips.push('Scene reconstruction');
             if (parseBoolLike(args.emit_run_card, false)) chips.push('Run card emission');
-            if (parseBoolLike(args.dedup, false)) chips.push('Dedup ledger');
-            if (parseBoolLike(args.sign, false)) chips.push('Signed artifacts');
 
             els.capabilityChips.innerHTML = '';
             chips.forEach((chip) => {
@@ -2983,6 +3058,8 @@
         function renderGovernanceBanner(payload) {
             if (!els.governanceChecklist) return;
             const args = payload?.args || {};
+            const dispatchStatus = currentPipelineDispatchStatus();
+            const readinessIssues = currentPipelineReadinessIssues();
             const items = [];
             let title = 'Run posture is clear.';
             let body = 'The current configuration is valid for dispatch. Any license acknowledgments or runtime caveats will surface here before execution.';
@@ -3031,9 +3108,13 @@
                 }
             } else {
                 items.push({
-                    tone: 'ok',
+                    tone: dispatchStatus === 'blocked' ? 'warn' : dispatchStatus === 'degraded' ? 'info' : 'ok',
                     label: 'Archive governance',
-                    detail: 'This workflow stays within deterministic archive and provenance outputs.'
+                    detail: dispatchStatus === 'blocked'
+                        ? 'Dispatch is blocked until the canonical archive prerequisites are supplied.'
+                        : dispatchStatus === 'degraded'
+                            ? 'Archive stage is available, but it still requires operator-supplied prerequisites at dispatch time.'
+                            : 'This workflow stays within deterministic archive and provenance outputs.'
                 });
             }
 
@@ -3042,16 +3123,24 @@
                 label: state.backendOk ? 'Backend live' : 'Backend offline',
                 detail: state.backendOk
                     ? 'Jobs will be submitted to the live orchestrator API.'
-                    : 'The UI remains usable in mock mode while the backend is unreachable.'
+                    : 'Execution dispatch stays disabled until the live orchestrator API is reachable.'
+            });
+
+            readinessIssues.forEach((issue) => {
+                items.push({
+                    tone: issue.severity === 'blocked' ? 'warn' : 'info',
+                    label: titleCaseToken(issue.reason || 'readiness issue', 'Readiness issue'),
+                    detail: String(issue.message || 'Pipeline readiness reported an operator-facing prerequisite.')
+                });
             });
 
             const hasWarnings = items.some((item) => item.tone === 'warn');
             if (hasWarnings) {
-                title = 'Operator checks are still outstanding.';
-                body = 'Before dispatch, complete the required acknowledgments or prerequisite toggles listed below.';
+                title = 'Execution is blocked.';
+                body = 'Before dispatch, satisfy the blocked readiness prerequisites listed below.';
             } else if (items.some((item) => item.tone === 'info')) {
-                title = 'Configuration is valid with runtime caveats.';
-                body = 'The run contract is coherent, but the runtime environment is not fully live yet.';
+                title = 'Configuration is valid with readiness caveats.';
+                body = 'The run contract is coherent, but at least one prerequisite still needs operator attention before dispatch can be treated as fully ready.';
             }
 
             if (els.governanceBannerTitle) els.governanceBannerTitle.textContent = title;
@@ -3085,6 +3174,9 @@
             const preset = currentPresetDescriptor();
             const diagnostics = state.lastDiagnostics || {};
             const warnings = Array.isArray(diagnostics.warnings) ? diagnostics.warnings : [];
+            const readiness = currentPipelineReadiness();
+            const dispatchStatus = currentPipelineDispatchStatus();
+            const readinessIssues = currentPipelineReadinessIssues();
             const advancedSections = Array.isArray(preset.advanced_sections) ? preset.advanced_sections : [];
 
             if (els.presetHeadline) els.presetHeadline.textContent = String(preset.label || preset.name || 'custom');
@@ -3100,7 +3192,8 @@
                 els.presetStabilityBadge.textContent = titleCaseToken(preset.stability, 'Custom');
             }
             if (els.backendModeBadge) {
-                els.backendModeBadge.textContent = state.backendOk ? 'Backend Live' : 'Mock Mode';
+                const readinessLabel = dispatchStatus || readiness?.status ? titleCaseToken(dispatchStatus || readiness?.status, 'Unknown') : 'Unknown';
+                els.backendModeBadge.textContent = state.backendOk ? `Backend Live • ${readinessLabel}` : 'Backend Offline';
             }
             if (els.heroInputDir) {
                 els.heroInputDir.textContent = truncateMiddle(payload?.args?.input_dir || state.config.inputDir || './input_images', 52);
@@ -3111,12 +3204,20 @@
                 els.heroOutputDir.title = String(payload?.args?.output_dir || state.config.outputDir || './output');
             }
             if (els.heroReadinessLabel) {
-                els.heroReadinessLabel.textContent = warnings.length === 0
-                    ? 'No pre-run warnings'
-                    : titleCaseToken(diagnostics.healthLabel || 'warnings detected', 'Warnings detected');
+                if (!state.backendOk) {
+                    els.heroReadinessLabel.textContent = 'Backend offline';
+                } else if (dispatchStatus === 'blocked') {
+                    els.heroReadinessLabel.textContent = 'Dispatch blocked';
+                } else if (dispatchStatus === 'degraded') {
+                    els.heroReadinessLabel.textContent = 'Prerequisites still required';
+                } else if (warnings.length === 0) {
+                    els.heroReadinessLabel.textContent = 'Ready for dispatch';
+                } else {
+                    els.heroReadinessLabel.textContent = titleCaseToken(diagnostics.healthLabel || 'warnings detected', 'Warnings detected');
+                }
             }
             if (els.heroWarningCount) {
-                els.heroWarningCount.textContent = String(warnings.length);
+                els.heroWarningCount.textContent = String(warnings.length + readinessIssues.length);
             }
             if (els.presetBuilderHint) {
                 const sectionLabel = advancedSections.length > 0
@@ -3130,9 +3231,17 @@
             const currentPayload = payload || generatePayload();
             const activeJobs = state.jobs.filter((job) => job && (job.state === 'running' || job.state === 'queued')).length;
             if (els.heroPipelineValue) els.heroPipelineValue.textContent = String(state.pipeline || 'lux-depth-v3');
-            if (els.heroPresetValue) els.heroPresetValue.textContent = String(currentPayload?.args?.preset || state.config.preset || 'custom');
+            if (els.heroPresetValue) {
+                els.heroPresetValue.textContent = state.pipeline === 'lux-depth-v3'
+                    ? String(currentPayload?.args?.preset || state.config.preset || 'custom')
+                    : canonicalArchiveCommand(state.pipeline) || 'archive';
+            }
             if (els.heroModeValue) {
-                els.heroModeValue.textContent = state.backendOk ? 'Live backend' : 'Offline / mock mode';
+                const readiness = currentPipelineReadiness();
+                const dispatchStatus = currentPipelineDispatchStatus();
+                els.heroModeValue.textContent = state.backendOk
+                    ? `Live backend • ${titleCaseToken(dispatchStatus || readiness?.status || 'unknown', 'Unknown')}`
+                    : 'Backend offline';
             }
             if (els.heroQueueValue) {
                 els.heroQueueValue.textContent = activeJobs > 0 ? `${activeJobs} live job${activeJobs === 1 ? '' : 's'}` : '0 live jobs';
@@ -3532,13 +3641,17 @@
             }
             state.bootstrap.pendingOnlineFollowup = false;
             state.bootstrap.onlineFollowupComplete = true;
+            void fetchReadiness(true);
             void fetchPresetsForPipeline(state.pipeline, true);
             void recoverJobs();
             return true;
         }
 
         function _syncBootstrapGuardedControls() {
-            const canRunJobs = _portalPrivilegesReady();
+            const readinessStatus = currentPipelineDispatchStatus();
+            const canRunJobs = _portalPrivilegesReady()
+                && state.backendOk
+                && readinessStatus === 'ready';
             if (els.runJobBtn && els.runJobBtn.textContent !== 'Dispatching...') {
                 els.runJobBtn.disabled = !canRunJobs;
             }
@@ -4898,12 +5011,43 @@
             }
         }
 
-        function deriveArchiveIndexPath(outputDir) {
-            const raw = String(outputDir || '').trim();
-            if (!raw) return './archive_index_normalized.csv.gz';
-            const normalized = raw.replace(/[\\/]+$/, '');
-            if (!normalized) return './archive_index_normalized.csv.gz';
-            return `${normalized}/archive_index_normalized.csv.gz`;
+        async function fetchReadiness(silent = false) {
+            if (!state.backendOk || !_isBootstrapReady()) return;
+            try {
+                const headers = _buildAuthHeaders({ 'Accept': 'application/json' });
+                const res = await fetch(`${API_BASE}/v1/readiness`, { headers });
+                if (!res.ok) throw new Error(`readiness fetch failed (${res.status})`);
+                const payload = await res.json();
+                if (!payload || payload.success !== true || !payload.data) throw new Error('invalid readiness payload');
+                state.readiness = {
+                    server: payload.data.server || {},
+                    pipelines: payload.data.pipelines || {}
+                };
+                renderReviewSurfaces();
+                _syncBootstrapGuardedControls();
+            } catch (err) {
+                state.readiness = { server: {}, pipelines: {} };
+                renderReviewSurfaces();
+                _syncBootstrapGuardedControls();
+                if (!silent) createToast('Failed to refresh execution readiness from backend.', 'error');
+            }
+        }
+
+        function refreshArchiveFieldVisibility() {
+            const pipelineName = state.pipeline;
+            const canonicalCommand = canonicalArchiveCommand(pipelineName);
+            if (els.archiveCanonicalCommand) els.archiveCanonicalCommand.textContent = canonicalCommand || 'archive';
+            if (els.archiveCanonicalCommandHint) {
+                els.archiveCanonicalCommandHint.textContent = pipelineName === 'archive-gate-a'
+                    ? 'The portal build flow uses fixity-scan for archive-gate-a. Provide an existing archive index before dispatch.'
+                    : 'The portal build flow uses a prior rights-manifest artifact for downstream archive stages.';
+            }
+            if (els.archiveIndexField) {
+                els.archiveIndexField.classList.toggle('hidden', pipelineName !== 'archive-gate-a');
+            }
+            if (els.rightsManifestField) {
+                els.rightsManifestField.classList.toggle('hidden', !(pipelineName === 'archive-gate-b' || pipelineName === 'archive-gate-c'));
+            }
         }
 
         function updateUIFromState() {
@@ -4919,6 +5063,7 @@
                 els.fieldsArchiveGate.classList.remove('hidden');
                 if (els.presetBuilderShell) els.presetBuilderShell.classList.add('hidden');
             }
+            refreshArchiveFieldVisibility();
 
             const c = state.config;
             c.depthBackend = _resolveDepthBackend(c.depthBackend);
@@ -4949,9 +5094,8 @@
             c.emits.report = parseBoolLike(c.emits.report, true);
             c.emits.runCard = parseBoolLike(c.emits.runCard, true);
             c.gate = c.gate || {};
-            c.gate.dedup = parseBoolLike(c.gate.dedup, true);
-            c.gate.sign = parseBoolLike(c.gate.sign, true);
-            c.gate.archiveIndex = _textOrFallback(c.gate.archiveIndex, deriveArchiveIndexPath(c.outputDir));
+            c.gate.archiveIndex = _textOrFallback(c.gate.archiveIndex, '');
+            c.gate.manifestJsonl = _textOrFallback(c.gate.manifestJsonl, '');
             c.licenses = c.licenses || {};
             c.licenses.nonCommercialOk = parseBoolLike(c.licenses.nonCommercialOk, false);
             c.licenses.acceptApple = parseBoolLike(c.licenses.acceptApple, false);
@@ -4976,6 +5120,7 @@
             if (els.inputDir) els.inputDir.value = c.inputDir;
             if (els.outputDir) els.outputDir.value = c.outputDir;
             if (els.archiveIndexPath) els.archiveIndexPath.value = c.gate.archiveIndex;
+            if (els.rightsManifestPath) els.rightsManifestPath.value = c.gate.manifestJsonl;
             if (els.qualityTier) els.qualityTier.value = c.qualityTier;
             if (els.depthBackend) els.depthBackend.value = c.depthBackend;
             if (els.depthDevice) els.depthDevice.value = c.depthDevice;
@@ -5029,9 +5174,6 @@
             safeSyncCheck(els.emits.report, c.emits.report);
             safeSyncCheck(els.emits.runCard, c.emits.runCard);
 
-            safeSyncCheck(els.gateDedup, c.gate.dedup);
-            safeSyncCheck(els.gateSign, c.gate.sign);
-
             safeSyncCheck(els.licenses.nonCommercialOk, c.licenses.nonCommercialOk);
             safeSyncCheck(els.licenses.acceptApple, c.licenses.acceptApple);
             safeSyncCheck(els.licenses.acceptResearchTools, c.licenses.acceptResearchTools);
@@ -5062,21 +5204,23 @@
                     ...buildCanonicalLuxDepthArgs(c)
                 };
             } else {
-                const derivedArchiveIndex = deriveArchiveIndexPath(outputDirValue);
+                const archiveCommand = canonicalArchiveCommand(p);
                 args = {
                     ...args,
-                    archive_root: inputDirValue,
-                    archive_index: _textOrFallback(
-                        els.archiveIndexPath ? els.archiveIndexPath.value : c.gate.archiveIndex,
-                        c.gate.archiveIndex || derivedArchiveIndex
-                    ),
-                    dedup: els.gateDedup
-                        ? Boolean(els.gateDedup.checked)
-                        : parseBoolLike(c.gate.dedup, true),
-                    sign: els.gateSign
-                        ? Boolean(els.gateSign.checked)
-                        : parseBoolLike(c.gate.sign, true)
+                    archive_command: archiveCommand
                 };
+                if (p === 'archive-gate-a') {
+                    args.archive_root = inputDirValue;
+                    args.archive_index = _textOrFallback(
+                        els.archiveIndexPath ? els.archiveIndexPath.value : c.gate.archiveIndex,
+                        c.gate.archiveIndex
+                    );
+                } else {
+                    args.manifest_jsonl = _textOrFallback(
+                        els.rightsManifestPath ? els.rightsManifestPath.value : c.gate.manifestJsonl,
+                        c.gate.manifestJsonl
+                    );
+                }
             }
 
             return { pipeline: p, args };
@@ -5137,15 +5281,27 @@
                 }
             } else {
                 const args = payload.args || {};
+                const archiveCommand = String(args.archive_command || canonicalArchiveCommand(payload.pipeline) || 'archive').trim();
                 const archiveIndex = String(args.archive_index || '').trim();
-                expectedOutputs.push('Archive governance outputs');
+                const manifestJsonl = String(args.manifest_jsonl || '').trim();
+                expectedOutputs.push(`${archiveCommand} outputs`);
                 expectedOutputs.push('Pipeline execution logs');
-                if (!archiveIndex) {
-                    warnings.push('Archive index path is missing; fixity-scan will fail before artifact generation.');
-                    healthState = 'risk';
-                    healthLabel = 'missing archive index';
+                if (payload.pipeline === 'archive-gate-a') {
+                    if (!archiveIndex) {
+                        warnings.push('Archive index path is missing; fixity-scan will fail before artifact generation.');
+                        healthState = 'risk';
+                        healthLabel = 'missing archive index';
+                    } else {
+                        healthLabel = 'archive pipeline ready';
+                    }
                 } else {
-                    healthLabel = 'archive pipeline ready';
+                    if (!manifestJsonl) {
+                        warnings.push('Rights Manifest JSONL is missing; downstream archive stages will fail closed before dispatch.');
+                        healthState = 'risk';
+                        healthLabel = 'missing rights manifest';
+                    } else {
+                        healthLabel = 'archive pipeline ready';
+                    }
                 }
             }
 
@@ -5267,14 +5423,18 @@
                 if (parseBoolLike(payload.args.quiet, false)) cliLines.push(`  --quiet`);
                 if (payload.args.log_level) cliLines.push(`  --log-level ${q(payload.args.log_level)}`);
             } else {
+                if (payload.args.archive_command) {
+                    cliLines.push(`  --archive-command ${q(payload.args.archive_command)}`);
+                }
                 if (payload.args.archive_root) {
                     cliLines.push(`  --archive-root ${q(payload.args.archive_root)}`);
                 }
                 if (payload.args.archive_index) {
                     cliLines.push(`  --archive-index ${q(payload.args.archive_index)}`);
                 }
-                if (parseBoolLike(payload.args.dedup, false)) cliLines.push(`  --dedup "on"`);
-                if (parseBoolLike(payload.args.sign, false)) cliLines.push(`  --sign "true"`);
+                if (payload.args.manifest_jsonl) {
+                    cliLines.push(`  --manifest-jsonl ${q(payload.args.manifest_jsonl)}`);
+                }
             }
             if (parseBoolLike(payload.args.overwrite, false)) cliLines.push(`  --overwrite`);
 
@@ -5296,6 +5456,7 @@
                     if (key === 'pipeline') {
                         updateUIFromState();
                         void fetchPresetsForPipeline(state.pipeline, true);
+                        void fetchReadiness(true);
                     }
                     else renderCLI();
                 });
@@ -5303,16 +5464,6 @@
             const safeBindInput = (el, category, key) => {
                 if (!el) return;
                 el.addEventListener('input', (e) => {
-                    if (!category && key === 'outputDir') {
-                        const nextValue = e.target.value;
-                        const currentArchiveIndex = els.archiveIndexPath ? String(els.archiveIndexPath.value || '').trim() : '';
-                        const previousDerivedArchiveIndex = deriveArchiveIndexPath(state.config.outputDir);
-                        if (els.archiveIndexPath && (!currentArchiveIndex || currentArchiveIndex === previousDerivedArchiveIndex)) {
-                            const nextDerivedArchiveIndex = deriveArchiveIndexPath(nextValue);
-                            els.archiveIndexPath.value = nextDerivedArchiveIndex;
-                            state.config.gate.archiveIndex = nextDerivedArchiveIndex;
-                        }
-                    }
                     if (category) state.config[category][key] = e.target.value;
                     else state.config[key] = e.target.value;
                     renderCLI();
@@ -5356,6 +5507,7 @@
             safeBindInput(els.inputDir, null, 'inputDir');
             safeBindInput(els.outputDir, null, 'outputDir');
             safeBindInput(els.archiveIndexPath, 'gate', 'archiveIndex');
+            safeBindInput(els.rightsManifestPath, 'gate', 'manifestJsonl');
             safeBindText(els.qualityTier, null, 'qualityTier');
             safeBindText(els.depthBackend, null, 'depthBackend');
             safeBindText(els.depthDevice, null, 'depthDevice');
@@ -5396,9 +5548,6 @@
             safeBindCheck(els.emits.marketing, 'emits', 'marketing');
             safeBindCheck(els.emits.report, 'emits', 'report');
             safeBindCheck(els.emits.runCard, 'emits', 'runCard');
-
-            safeBindCheck(els.gateDedup, 'gate', 'dedup');
-            safeBindCheck(els.gateSign, 'gate', 'sign');
 
             safeBindCheck(els.licenses.nonCommercialOk, 'licenses', 'nonCommercialOk');
             safeBindCheck(els.licenses.acceptApple, 'licenses', 'acceptApple');
@@ -5605,12 +5754,13 @@
                         });
                         _queueBootstrapOnlineFollowup();
                     }
-                    _flushBootstrapOnlineFollowup();
+                    _flushBootstrapOnlineFollowup(force);
                 } else {
                     throw new Error('backend not ready');
                 }
             } catch {
                 state.backendOk = false;
+                state.readiness = { server: {}, pipelines: {} };
                 state.bootstrap.pendingOnlineFollowup = false;
                 state.bootstrap.onlineFollowupComplete = false;
                 state.jobs.forEach((job) => {
@@ -5619,9 +5769,10 @@
                     }
                 });
                 if (els.healthIndicator) els.healthIndicator.className = 'status-dot offline';
-                if (els.healthText) els.healthText.textContent = 'Offline / Mock Mode';
+                if (els.healthText) els.healthText.textContent = 'Backend Offline';
             } finally {
                 renderReviewSurfaces();
+                _syncBootstrapGuardedControls();
                 healthCheckInFlight = false;
             }
         }
@@ -6006,6 +6157,7 @@
         async function submitJob() {
             if (_blockManagedUnavailableAction('dispatch jobs')) return;
             const payload = generatePayload();
+            const readinessStatus = currentPipelineDispatchStatus();
 
             if (payload.pipeline === 'lux-depth-v3') {
                 const args = payload.args;
@@ -6045,6 +6197,20 @@
                         return;
                     }
                 }
+            }
+
+            if (!state.backendOk) {
+                createToast('Backend is offline. Dispatch is disabled until connectivity is restored.', 'error');
+                return;
+            }
+            if (!readinessStatus) {
+                createToast('Execution readiness is still loading. Try again in a moment.', 'info');
+                return;
+            }
+            if (readinessStatus !== 'ready') {
+                const firstIssue = currentPipelineReadinessIssues()[0];
+                createToast(firstIssue?.message || 'Pipeline is blocked by missing prerequisites.', 'error');
+                return;
             }
 
             if (els.runJobBtn) {
@@ -6092,77 +6258,40 @@
             appendJobLog(job, initLine);
             logToPane(job.id, initLine);
 
-            if (state.backendOk) {
-                try {
-                    const headers = _buildAuthHeaders({ 'Content-Type': 'application/json' }, 'POST');
-                    const res = await fetch(`${API_BASE}/v1/jobs`, {
-                        method: 'POST',
-                        headers,
-                        body: JSON.stringify(payload)
-                    });
-                    if (!res.ok) {
-                        const parsedError = await extractApiError(res);
-                        if (parsedError.error) job.error = parsedError.error;
-                        throw new Error(parsedError.message);
-                    }
-                    const data = await res.json();
-
-                    job.id = data.data.id;
-                    state.selectedJobId = job.id;
-                    scheduleRenderJobQueue();
-                    createToast(`Job dispatched: ${job.id}`, 'success');
-
-                    startJobEventStream(job, data.data.events_url);
-                } catch (err) {
-                    const errorMessage = err instanceof Error ? err.message : String(err);
-                    job.state = 'failed';
-                    job.finishedAt = Date.now();
-                    appendJobLog(job, `[ERROR] ${errorMessage}`);
-                    _reconcileJobTimeline(job);
-                    scheduleRenderJobQueue();
-                    createToast("Backend submission failed.", "error");
-                    if (state.selectedJobId === job.id && els.logStatusIndicator) els.logStatusIndicator.classList.add('hidden');
-                } finally {
-                    if (els.runJobBtn) {
-                        els.runJobBtn.textContent = "Execute Job";
-                    }
-                    _syncBootstrapGuardedControls();
+            try {
+                const headers = _buildAuthHeaders({ 'Content-Type': 'application/json' }, 'POST');
+                const res = await fetch(`${API_BASE}/v1/jobs`, {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify(payload)
+                });
+                if (!res.ok) {
+                    const parsedError = await extractApiError(res);
+                    if (parsedError.error) job.error = parsedError.error;
+                    throw new Error(parsedError.message);
                 }
-            } else {
-                job.state = 'running';
-                job.startedAt = Date.now();
+                const data = await res.json();
+
+                job.id = data.data.id;
+                state.selectedJobId = job.id;
+                scheduleRenderJobQueue();
+                createToast(`Job dispatched: ${job.id}`, 'success');
+
+                startJobEventStream(job, data.data.events_url);
+            } catch (err) {
+                const errorMessage = err instanceof Error ? err.message : String(err);
+                job.state = 'failed';
+                job.finishedAt = Date.now();
+                appendJobLog(job, `[ERROR] ${errorMessage}`);
                 _reconcileJobTimeline(job);
-                const offlineLine = `[WARN] Backend unreachable. Running mock simulation.`;
-                appendJobLog(job, offlineLine);
-                logToPane(job.id, offlineLine);
+                scheduleRenderJobQueue();
+                createToast("Backend submission failed.", "error");
+                if (state.selectedJobId === job.id && els.logStatusIndicator) els.logStatusIndicator.classList.add('hidden');
+            } finally {
                 if (els.runJobBtn) {
                     els.runJobBtn.textContent = "Execute Job";
                 }
                 _syncBootstrapGuardedControls();
-                let progress = 0;
-                job.mockInterval = setInterval(() => {
-                    if (job.state !== 'running') {
-                        stopJobActivity(job);
-                        return;
-                    }
-                    progress += 15;
-                    job.progress = Math.min(100, progress);
-                    const line = `[SIM] Processing step... ${job.progress}%`;
-                    appendJobLog(job, line);
-                    logToPane(job.id, line);
-                    if (job.progress >= 100) {
-                        job.state = 'succeeded';
-                        job.finishedAt = Date.now();
-                        _recordProgressTimeline(job, 100, job.finishedAt);
-                        _reconcileJobTimeline(job);
-                        stopJobActivity(job);
-                        appendJobLog(job, `[SIM] Execution complete.`);
-                        logToPane(job.id, `[SIM] Execution complete.`);
-                        createToast("Mock job complete.", "success");
-                        if (state.selectedJobId === job.id && els.logStatusIndicator) els.logStatusIndicator.classList.add('hidden');
-                    }
-                    scheduleRenderJobQueue();
-                }, 800);
             }
         }
 
@@ -6323,10 +6452,12 @@
                     c.gate = c.gate || {};
                     c.gate.archiveIndex = _textOrFallback(
                         data.args.archive_index,
-                        c.gate.archiveIndex || deriveArchiveIndexPath(c.outputDir)
+                        c.gate.archiveIndex
                     );
-                    c.gate.dedup = parseBoolLike(data.args.dedup, c.gate.dedup);
-                    c.gate.sign = parseBoolLike(data.args.sign, c.gate.sign);
+                    c.gate.manifestJsonl = _textOrFallback(
+                        data.args.manifest_jsonl,
+                        c.gate.manifestJsonl
+                    );
                     c.licenses.nonCommercialOk = parseBoolLike(
                         data.args.non_commercial_ok,
                         c.licenses.nonCommercialOk
@@ -6500,7 +6631,7 @@
         if (els.refreshHealthBtn) {
             els.refreshHealthBtn.addEventListener('click', async () => {
                 await checkBackend(true);
-                createToast(state.backendOk ? 'Backend status refreshed.' : 'Backend still offline; mock mode remains active.', state.backendOk ? 'success' : 'info');
+                createToast(state.backendOk ? 'Backend status refreshed.' : 'Backend still offline; dispatch remains blocked.', state.backendOk ? 'success' : 'info');
             });
         }
         if (els.jobList) els.jobList.addEventListener('click', handleJobListClick);

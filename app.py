@@ -78,6 +78,7 @@ PORTAL_VIDEO_ASSET_NAME = "dna-portal-video-2.mp4"
 PORTAL_VIDEO_PATH = REPO_ROOT / "public" / "video" / PORTAL_VIDEO_ASSET_NAME
 ARCHIVE_GOVERNANCE_SCRIPT = REPO_ROOT / "tools" / "archive_governance.py"
 LUX_DEPTH_MODULE = "transformation_portal.lux_depth_v3"
+APP_VERSION = "0.3.0"
 
 
 def _normalize_root_path(value: str | Path) -> Path:
@@ -163,34 +164,37 @@ def _resolve_untrusted_request_path(path_value: str) -> Path:
     return Path(os.path.realpath(candidate))
 
 
-def _is_within_allowed_roots(
-    candidate: Path,
-    allowed_roots: List[Path],
-) -> bool:
-    candidate_real = os.path.realpath(candidate)
-    for root in allowed_roots:
-        root_real = os.path.realpath(root)
-        try:
-            if os.path.commonpath([candidate_real, root_real]) == root_real:
-                return True
-        except ValueError:
-            # Mixed absolute/relative or drive mismatch on non-POSIX platforms.
-            continue
-    return False
-
-
 def _validate_path_against_roots(
     path_value: str,
     allowed_roots: List[Path],
 ) -> str:
+    return str(_resolve_allowed_request_path(path_value, allowed_roots))
+
+
+def _resolve_allowed_request_path(
+    path_value: str,
+    allowed_roots: List[Path],
+) -> Path:
+    if not allowed_roots:
+        raise ValueError("No allowed roots configured")
+
     try:
         resolved = _resolve_untrusted_request_path(path_value)
     except (OSError, RuntimeError, ValueError) as exc:
         raise ValueError("Invalid path value") from exc
 
-    if not _is_within_allowed_roots(resolved, allowed_roots):
-        raise ValueError("Path outside allowed roots")
-    return str(resolved)
+    resolved_text = str(resolved)
+    for root in allowed_roots:
+        try:
+            root_real = Path(os.path.realpath(root))
+        except (OSError, RuntimeError, ValueError):
+            continue
+        root_text = str(root_real)
+        root_prefix = root_text if root_text.endswith(os.sep) else root_text + os.sep
+        if resolved_text == root_text or resolved_text.startswith(root_prefix):
+            return resolved
+
+    raise ValueError("Path outside allowed roots")
 
 
 LOG_TAIL_LIMIT = 2000
@@ -471,6 +475,34 @@ VALIDATION_REASON_CODES = {
 }
 
 
+class JobPreflightError(RuntimeError):
+    """Raised when a job fails readiness preflight before argv construction."""
+
+    def __init__(
+        self,
+        reason: str,
+        *,
+        field: Optional[str] = None,
+        message: str = "job blocked by readiness preflight",
+        status_code: int = 400,
+        extra: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        super().__init__(message)
+        self.reason = reason
+        self.field = field
+        self.message = message
+        self.status_code = status_code
+        self.extra = extra or {}
+
+    @property
+    def details(self) -> Dict[str, Any]:
+        details: Dict[str, Any] = {"reason": self.reason}
+        if self.field:
+            details["field"] = self.field
+        details.update(self.extra)
+        return details
+
+
 def _now() -> float:
     return time.time()
 
@@ -521,6 +553,483 @@ def _error_response(
             error=_error_obj(code, message, details),
         ),
         headers=headers,
+    )
+
+
+def _auth_mode() -> str:
+    return "direct_debug"
+
+
+def _readiness_issue(
+    reason: str,
+    *,
+    severity: str,
+    message: str,
+    field: Optional[str] = None,
+    path: Optional[str] = None,
+) -> Dict[str, Any]:
+    issue: Dict[str, Any] = {
+        "reason": reason,
+        "severity": severity,
+        "message": message,
+    }
+    if field:
+        issue["field"] = field
+    if path:
+        issue["path"] = path
+    return issue
+
+
+def _module_available(module_name: str) -> bool:
+    try:
+        return find_spec(module_name) is not None
+    except (ImportError, ValueError):
+        return False
+
+
+def _resolve_lux_depth_canary_runtime() -> Optional[Path]:
+    configured = os.getenv("TRANSFORMATION_PORTAL_DA3_PYTHON", "").strip()
+    if configured:
+        candidate = Path(configured).expanduser()
+        if not candidate.is_absolute():
+            candidate = REPO_ROOT / candidate
+        if candidate.exists():
+            return candidate.resolve()
+
+    repo_local = REPO_ROOT / ".venv-da3" / "bin" / "python"
+    if repo_local.exists():
+        return repo_local.resolve()
+    return None
+
+
+def _validate_existing_path(
+    raw_value: Any,
+    *,
+    field: str,
+    allowed_roots: List[Path],
+    missing_reason: str,
+    missing_message: str,
+    expected_type: str,
+    required: bool,
+) -> tuple[Optional[str], Optional[Dict[str, Any]]]:
+    text = str(raw_value or "").strip()
+    if not text:
+        if required:
+            return None, _readiness_issue(
+                missing_reason,
+                severity="blocked",
+                message=missing_message,
+                field=field,
+            )
+        return None, None
+
+    try:
+        if text.startswith("~") or "\x00" in text:
+            raise ValueError("Invalid path value")
+        candidate = Path(text)
+        if not candidate.is_absolute():
+            candidate = REPO_ROOT / candidate
+        candidate_real = os.path.realpath(candidate)
+        candidate_real = str(candidate_real)
+    except (OSError, RuntimeError, ValueError):
+        return None, _readiness_issue(
+            "unsafe_path",
+            severity="blocked",
+            message=f"{field} must stay within allowed roots.",
+            field=field,
+            path=text,
+        )
+
+    for root in allowed_roots:
+        try:
+            root_real = os.path.realpath(root)
+            root_real = str(root_real)
+        except (OSError, RuntimeError, ValueError):
+            # Ignore invalid allowlist entries and continue checking the others.
+            continue
+
+        root_prefix = root_real if root_real.endswith(os.sep) else root_real + os.sep
+        if candidate_real != root_real and not candidate_real.startswith(root_prefix):
+            continue
+
+        resolved = candidate_real
+        # Keep the normalized-path and root-prefix proof adjacent to the
+        # filesystem probe so the allowlist guard stays obvious to reviewers.
+        if expected_type == "file" and not os.path.isfile(resolved):
+            return resolved, _readiness_issue(
+                missing_reason,
+                severity="blocked",
+                message=missing_message,
+                field=field,
+                path=resolved,
+            )
+        if expected_type == "dir" and not os.path.isdir(resolved):
+            return resolved, _readiness_issue(
+                missing_reason,
+                severity="blocked",
+                message=missing_message,
+                field=field,
+                path=resolved,
+            )
+        return resolved, None
+
+    return None, _readiness_issue(
+        "unsafe_path",
+        severity="blocked",
+        message=f"{field} must stay within allowed roots.",
+        field=field,
+        path=text,
+    )
+
+
+def _lux_depth_readiness(args: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    runner_available = _lux_depth_runner_available()
+    canary_runtime = _resolve_lux_depth_canary_runtime()
+    canary_status = (
+        "ready"
+        if canary_runtime is not None
+        else "degraded" if (_module_available("torch") and _module_available("transformers")) else "unavailable"
+    )
+
+    issues: List[Dict[str, Any]] = []
+    notes = [
+        "Base readiness covers runner invocation, path safety, and orchestrator preflight.",
+        "Canary readiness is reported separately and does not block base dispatch.",
+    ]
+    if not runner_available:
+        issues.append(
+            _readiness_issue(
+                "runner_unavailable",
+                severity="blocked",
+                message="Lux Depth runner module is not importable in the active environment.",
+            )
+        )
+    if canary_status == "ready":
+        notes.append(f"Repo-local DA3 canary runtime resolved at {canary_runtime}.")
+    elif canary_status == "degraded":
+        notes.append("ML libraries are present in the active environment, but no isolated DA3 runtime contract was found.")
+    else:
+        notes.append("No DA3 canary runtime contract was found; model execution remains optional and unverified.")
+
+    if args is not None:
+        for field, keys, roots in (
+            ("input_dir", ("input_dir", "inputDir"), ALLOWED_INPUT_ROOTS),
+            ("output_dir", ("output_dir", "outputDir"), ALLOWED_OUTPUT_ROOTS),
+        ):
+            raw_value = _pick(args, *keys, default="")
+            text = str(raw_value or "").strip()
+            if not text:
+                continue
+            try:
+                _validate_path_against_roots(text, roots)
+            except ValueError:
+                issues.append(
+                    _readiness_issue(
+                        "unsafe_path",
+                        severity="blocked",
+                        message=f"{field} must stay within allowed roots.",
+                        field=field,
+                        path=text,
+                    )
+                )
+
+    status = "blocked" if any(item["severity"] == "blocked" for item in issues) else "ready"
+    return {
+        "status": status,
+        "canonical_command": "lux-depth-v3",
+        "missing_prerequisites": issues,
+        "runner_details": {
+            "type": "python_module",
+            "available": runner_available,
+            "module": LUX_DEPTH_MODULE,
+            "command": _lux_depth_runner_command(),
+            "python_executable": sys.executable,
+        },
+        "notes": notes,
+        "canary_status": canary_status,
+    }
+
+
+def _archive_gate_readiness(
+    pipeline: str,
+    args: Optional[Dict[str, Any]] = None,
+    *,
+    require_dispatch_inputs: bool,
+) -> Dict[str, Any]:
+    command = ARCHIVE_GATE_DEFAULT_COMMANDS[pipeline]
+    if args:
+        candidate = str(_pick(args, "archive_command", "archiveCommand", default=command) or "").strip()
+        if candidate:
+            command = candidate
+
+    issues: List[Dict[str, Any]] = []
+    notes: List[str] = []
+    runner_available = ARCHIVE_GOVERNANCE_SCRIPT.is_file()
+    if not runner_available:
+        issues.append(
+            _readiness_issue(
+                "runner_unavailable",
+                severity="blocked",
+                message="Archive governance runner script is missing.",
+            )
+        )
+
+    if command not in ARCHIVE_GATE_ALLOWED_COMMANDS[pipeline]:
+        issues.append(
+            _readiness_issue(
+                "invalid_archive_command",
+                severity="blocked",
+                message=f"{command!r} is not allowed for {pipeline}.",
+                field="archive_command",
+            )
+        )
+
+    def _append_issue(issue: Optional[Dict[str, Any]]) -> None:
+        if issue is not None:
+            issues.append(issue)
+
+    if args is not None:
+        for field, keys, roots in (
+            ("input_dir", ("input_dir", "inputDir"), ALLOWED_INPUT_ROOTS),
+            ("output_dir", ("output_dir", "outputDir"), ALLOWED_OUTPUT_ROOTS),
+        ):
+            raw_value = _pick(args, *keys, default="")
+            text = str(raw_value or "").strip()
+            if not text:
+                continue
+            try:
+                _validate_path_against_roots(text, roots)
+            except ValueError:
+                issues.append(
+                    _readiness_issue(
+                        "unsafe_path",
+                        severity="blocked",
+                        message=f"{field} must stay within allowed roots.",
+                        field=field,
+                        path=text,
+                    )
+                )
+
+    if pipeline == "archive-gate-a":
+        notes.append("Canonical archive-gate-a dispatch expects fixity-scan with an existing archive index.")
+        if command == "fixity-scan":
+            archive_index_value = _pick(args or {}, "archive_index", "archiveIndex", default="")
+            if require_dispatch_inputs:
+                _, issue = _validate_existing_path(
+                    archive_index_value,
+                    field="archive_index",
+                    allowed_roots=ALLOWED_PATH_ROOTS,
+                    missing_reason="archive_index_required",
+                    missing_message="Provide an existing archive index before dispatch.",
+                    expected_type="file",
+                    required=True,
+                )
+                _append_issue(issue)
+            else:
+                issues.append(
+                    _readiness_issue(
+                        "archive_index_required",
+                        severity="degraded",
+                        message="An existing archive index is required at dispatch time.",
+                        field="archive_index",
+                    )
+                )
+        elif require_dispatch_inputs and command == "fixity-verify":
+            _, issue = _validate_existing_path(
+                _pick(args or {}, "hash_manifest", "hashManifest", default=""),
+                field="hash_manifest",
+                allowed_roots=ALLOWED_OUTPUT_ROOTS,
+                missing_reason="hash_manifest_required",
+                missing_message="Provide an existing hash manifest before dispatch.",
+                expected_type="file",
+                required=True,
+            )
+            _append_issue(issue)
+        elif require_dispatch_inputs and command == "manifest-build":
+            _, issue = _validate_existing_path(
+                _pick(args or {}, "archive_index", "archiveIndex", default=""),
+                field="archive_index",
+                allowed_roots=ALLOWED_PATH_ROOTS,
+                missing_reason="archive_index_required",
+                missing_message="Provide an existing archive index before dispatch.",
+                expected_type="file",
+                required=True,
+            )
+            _append_issue(issue)
+            _, issue = _validate_existing_path(
+                _pick(args or {}, "hash_manifest", "hashManifest", default=""),
+                field="hash_manifest",
+                allowed_roots=ALLOWED_OUTPUT_ROOTS,
+                missing_reason="hash_manifest_required",
+                missing_message="Provide an existing hash manifest before dispatch.",
+                expected_type="file",
+                required=True,
+            )
+            _append_issue(issue)
+        elif require_dispatch_inputs and command == "rights-apply":
+            _, issue = _validate_existing_path(
+                _pick(args or {}, "manifest_jsonl", "manifestJsonl", default=""),
+                field="manifest_jsonl",
+                allowed_roots=ALLOWED_OUTPUT_ROOTS,
+                missing_reason="manifest_jsonl_required",
+                missing_message="Provide an existing manifest JSONL before dispatch.",
+                expected_type="file",
+                required=True,
+            )
+            _append_issue(issue)
+            _, issue = _validate_existing_path(
+                _pick(args or {}, "policy_yaml", "policyYaml", default=""),
+                field="policy_yaml",
+                allowed_roots=ALLOWED_INPUT_ROOTS,
+                missing_reason="policy_yaml_required",
+                missing_message="Provide an existing rights policy YAML before dispatch.",
+                expected_type="file",
+                required=True,
+            )
+            _append_issue(issue)
+    elif pipeline == "archive-gate-b":
+        notes.append("Canonical dispatch for this archive stage requires a prior rights-manifest artifact.")
+        if command == "bag-build":
+            if require_dispatch_inputs:
+                _, issue = _validate_existing_path(
+                    _pick(args or {}, "manifest_jsonl", "manifestJsonl", default=""),
+                    field="manifest_jsonl",
+                    allowed_roots=ALLOWED_OUTPUT_ROOTS,
+                    missing_reason="rights_manifest_required",
+                    missing_message="Provide an existing rights-manifest JSONL artifact before dispatch.",
+                    expected_type="file",
+                    required=True,
+                )
+                _append_issue(issue)
+            else:
+                issues.append(
+                    _readiness_issue(
+                        "rights_manifest_required",
+                        severity="blocked",
+                        message="A rights-manifest JSONL artifact from a prior archive stage is required.",
+                        field="manifest_jsonl",
+                    )
+                )
+        elif require_dispatch_inputs and command == "bag-validate":
+            _, issue = _validate_existing_path(
+                _pick(args or {}, "bag_dir", "bagDir", default=""),
+                field="bag_dir",
+                allowed_roots=ALLOWED_OUTPUT_ROOTS,
+                missing_reason="bag_dir_required",
+                missing_message="Provide an existing bag directory before dispatch.",
+                expected_type="dir",
+                required=True,
+            )
+            _append_issue(issue)
+        elif require_dispatch_inputs and command == "dedup-plan":
+            _, issue = _validate_existing_path(
+                _pick(args or {}, "manifest_jsonl", "manifestJsonl", default=""),
+                field="manifest_jsonl",
+                allowed_roots=ALLOWED_OUTPUT_ROOTS,
+                missing_reason="rights_manifest_required",
+                missing_message="Provide an existing rights-manifest JSONL artifact before dispatch.",
+                expected_type="file",
+                required=True,
+            )
+            _append_issue(issue)
+    else:
+        notes.append("Canonical dispatch for this archive stage requires a prior rights-manifest artifact.")
+        if command == "mets-export":
+            if require_dispatch_inputs:
+                _, issue = _validate_existing_path(
+                    _pick(args or {}, "manifest_jsonl", "manifestJsonl", default=""),
+                    field="manifest_jsonl",
+                    allowed_roots=ALLOWED_OUTPUT_ROOTS,
+                    missing_reason="rights_manifest_required",
+                    missing_message="Provide an existing rights-manifest JSONL artifact before dispatch.",
+                    expected_type="file",
+                    required=True,
+                )
+                _append_issue(issue)
+            else:
+                issues.append(
+                    _readiness_issue(
+                        "rights_manifest_required",
+                        severity="blocked",
+                        message="A rights-manifest JSONL artifact from a prior archive stage is required.",
+                        field="manifest_jsonl",
+                    )
+                )
+        elif require_dispatch_inputs and command in {"prov-export", "stac-export"}:
+            _, issue = _validate_existing_path(
+                _pick(args or {}, "manifest_jsonl", "manifestJsonl", default=""),
+                field="manifest_jsonl",
+                allowed_roots=ALLOWED_OUTPUT_ROOTS,
+                missing_reason="rights_manifest_required",
+                missing_message="Provide an existing rights-manifest JSONL artifact before dispatch.",
+                expected_type="file",
+                required=True,
+            )
+            _append_issue(issue)
+
+    blocked = any(item["severity"] == "blocked" for item in issues)
+    degraded = any(item["severity"] == "degraded" for item in issues)
+    status = "blocked" if blocked else "degraded" if degraded else "ready"
+    return {
+        "status": status,
+        "canonical_command": ARCHIVE_GATE_DEFAULT_COMMANDS[pipeline],
+        "missing_prerequisites": issues,
+        "runner_details": {
+            "type": "python_script",
+            "available": runner_available,
+            "script_path": str(ARCHIVE_GOVERNANCE_SCRIPT),
+            "python_executable": sys.executable,
+            "command": [sys.executable, str(ARCHIVE_GOVERNANCE_SCRIPT), "--json", command],
+        },
+        "notes": notes,
+    }
+
+
+def _evaluate_pipeline_readiness(
+    pipeline: str,
+    args: Optional[Dict[str, Any]] = None,
+    *,
+    require_dispatch_inputs: bool = False,
+) -> Dict[str, Any]:
+    if pipeline == "lux-depth-v3":
+        return _lux_depth_readiness(args)
+    if pipeline in ARCHIVE_GATE_PIPELINES:
+        return _archive_gate_readiness(
+            pipeline,
+            args,
+            require_dispatch_inputs=require_dispatch_inputs,
+        )
+    return {
+        "status": "blocked",
+        "canonical_command": "",
+        "missing_prerequisites": [
+            _readiness_issue(
+                "unsupported_pipeline",
+                severity="blocked",
+                message=f"Unsupported pipeline {pipeline!r}.",
+                field="pipeline",
+            )
+        ],
+        "runner_details": {},
+        "notes": [],
+    }
+
+
+def _enforce_job_readiness_preflight(
+    pipeline: str,
+    readiness_snapshot: Dict[str, Any],
+) -> None:
+    if readiness_snapshot.get("status") != "blocked":
+        return
+
+    issues = readiness_snapshot.get("missing_prerequisites") or []
+    first_issue = issues[0] if issues else {}
+    raise JobPreflightError(
+        str(first_issue.get("reason") or "invalid_request"),
+        field=str(first_issue.get("field") or "payload"),
+        message=str(first_issue.get("message") or "job blocked by readiness preflight"),
+        status_code=400,
+        extra={"pipeline": pipeline},
     )
 
 
@@ -2420,7 +2929,7 @@ async def portal_bootstrap() -> JSONResponse:
     """Expose standalone portal auth mode for direct backend debugging."""
     return JSONResponse(
         {
-            "authMode": "direct_debug",
+            "authMode": _auth_mode(),
             "csrfToken": None,
             "actor": None,
             "features": {
@@ -2452,7 +2961,7 @@ async def ready() -> Dict[str, Any]:
     response: Dict[str, Any] = {
         "ok": True,
         "time": _now(),
-        "version": "0.3.0",
+        "version": APP_VERSION,
     }
     if READY_VERBOSE:
         response["cli"] = {
@@ -2478,6 +2987,30 @@ async def ready() -> Dict[str, Any]:
             "docs_enabled": ENABLE_API_DOCS,
         }
     return response
+
+
+@app.get("/v1/readiness")
+async def readiness() -> JSONResponse:
+    pipeline_data: Dict[str, Any] = {}
+    for pipeline_name in ("lux-depth-v3", "archive-gate-a", "archive-gate-b", "archive-gate-c"):
+        pipeline_data[pipeline_name] = _evaluate_pipeline_readiness(pipeline_name)
+
+    return JSONResponse(
+        _api_envelope(
+            "tp.orchestrator.readiness.v1",
+            success=True,
+            data={
+                "server": {
+                    "time": _now(),
+                    "version": APP_VERSION,
+                    "auth_mode": _auth_mode(),
+                    "backend_live": True,
+                },
+                "pipelines": pipeline_data,
+            },
+            error=None,
+        )
+    )
 
 
 @app.get("/v1/presets")
@@ -2522,6 +3055,25 @@ async def list_presets(pipeline: Optional[str] = None) -> JSONResponse:
 
 @app.post("/v1/jobs")
 async def create_job(payload: Dict[str, Any]) -> JSONResponse:
+    pipeline = str(payload.get("pipeline") or "").strip()
+    args = payload.get("args")
+    if not isinstance(args, dict):
+        args = {}
+    try:
+        readiness_snapshot = _evaluate_pipeline_readiness(
+            pipeline,
+            args,
+            require_dispatch_inputs=True,
+        )
+        _enforce_job_readiness_preflight(pipeline, readiness_snapshot)
+    except JobPreflightError as exc:
+        return _error_response(
+            exc.status_code,
+            code="INVALID_ARGUMENT",
+            message=exc.message,
+            details=exc.details,
+        )
+
     try:
         argv = _argv_from_request(payload)
     except ValueError as exc:

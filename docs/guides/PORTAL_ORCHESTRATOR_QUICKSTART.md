@@ -63,7 +63,9 @@ export TP_READY_VERBOSE=1
 
 ## Endpoints
 
-- `GET /ready` returns `{ok,time,version}` by default; set `TP_READY_VERBOSE=1` for extended runtime/security fields.
+- `GET /ready` returns a shallow backend liveness signal.
+- `GET /healthz` returns the managed front-door liveness signal.
+- `GET /v1/readiness` returns the operator-truth execution readiness matrix for `lux-depth-v3`, `archive-gate-a`, `archive-gate-b`, and `archive-gate-c`.
 - `GET /portal/bootstrap` returns the standalone portal bootstrap contract for `direct_debug` mode.
 - `GET /v1/presets?pipeline=lux-depth-v3` dynamic UI preset catalog.
 - `POST /v1/jobs` submit allowlisted job request.
@@ -71,6 +73,14 @@ export TP_READY_VERBOSE=1
 - `GET /v1/jobs/{id}` detailed job status (`logs_tail`, `error`, `artifacts`).
 - `POST /v1/jobs/{id}/cancel` request cancellation.
 - `GET /v1/jobs/{id}/events` SSE events: `state`, `log`, `progress`, `artifact`, `done`.
+
+## Readiness Semantics
+
+- `GET /ready` and `GET /healthz` are liveness probes. They tell you the service answered, not that a given pipeline is dispatchable.
+- `GET /v1/readiness` is the execution-readiness contract. It reports per-pipeline `ready`, `degraded`, or `blocked` state plus `missing_prerequisites`, canonical command mapping, runner details, and safe operator notes.
+- `lux-depth-v3` reports `base` readiness and a separate `canary_status`; canary unavailability does not block the safe local execution lane.
+- `archive-gate-a` is normally `degraded` until an archive index is supplied.
+- `archive-gate-b` and `archive-gate-c` are blocked by default until a rights-manifest JSONL is available.
 
 ## SSE Authentication Note
 
@@ -95,12 +105,17 @@ When `TP_API_KEY` is configured for standalone `direct_debug` mode:
 
 ```bash
 make test-orchestrator-contract
+make test-orchestrator-http-contract
+make test-portal-contract
+make validate-orchestrator-http
+make validate-portal-browser
+make audit-pipeline-readiness
 ```
 
 Direct pytest equivalent:
 
 ```bash
-pytest -q tests/test_app_orchestrator_runtime.py tests/test_app_orchestrator_contract_http.py
+pytest -q tests/test_app_orchestrator_runtime.py tests/test_app_orchestrator_contract_http.py tests/validation/test_portal_smoke_scripts.py
 ```
 
 Front-door validation:
@@ -114,7 +129,9 @@ npm run build
 
 Expected contract gate outcomes:
 - `/v1/*` success and failure responses use typed envelope (`schema`, `success`, `data`, `error`).
+- `/v1/readiness` keeps transport success (`200`) separate from per-pipeline `ready` / `degraded` / `blocked` execution truth.
 - Validation failures return `400` with `error.code=INVALID_ARGUMENT`.
 - Oversized request paths return `413` with typed error envelope.
 - With `TP_API_KEY` set, `/v1/jobs*` and `/v1/jobs/{id}/events` enforce auth.
 - SSE lifecycle includes `state`, `log`, `progress`, `artifact`, and terminal `done` events.
+- Live smokes (`validate-*`) exercise the running service and browser path; `test-*contract` targets stay fixture/contract-only.
