@@ -1316,6 +1316,8 @@ def test_portal_lux_build_surface_hides_inapplicable_optional_controls_until_nee
     applicability_body = _extract_js_function_body(content, "syncBuildSurfaceApplicability")
     mission_control_body = _extract_js_function_body(content, "renderMissionControl")
     preset_body = _extract_js_function_body(content, "currentPresetDescriptor")
+    preset_research_body = _extract_js_function_body(content, "_derivePresetResearchFlag")
+    fallback_body = _extract_js_function_body(content, "seedPresetFallbacks")
     fetch_body = _extract_js_function_body(content, "fetchPresetsForPipeline")
 
     assert "segmentationBackendField: document.getElementById('segmentationBackendField')" in content
@@ -1326,8 +1328,11 @@ def test_portal_lux_build_surface_hides_inapplicable_optional_controls_until_nee
     assert "governanceDetailsHint: document.getElementById('governanceDetailsHint')" in content
     assert "licenseAppleField: document.getElementById('licenseAppleField')" in content
     assert "reconstructionConfigFields: document.getElementById('reconstructionConfigFields')" in content
-    assert "is_research: false" in preset_body
-    assert "is_research: Boolean(preset.is_research)" in fetch_body
+    assert "function _derivePresetResearchFlag" in content
+    assert ".includes('research')" in preset_research_body
+    assert "is_research: _derivePresetResearchFlag({" in preset_body
+    assert "is_research: _derivePresetResearchFlag({" in fallback_body
+    assert "is_research: _derivePresetResearchFlag(preset)" in fetch_body
     assert "_setContextVisibility(els.segmentationBackendField, isLuxPipeline && segmentationEnabled);" in applicability_body
     assert "_setContextVisibility(els.sam2ModelSizeField, isLuxPipeline && showSam2Controls);" in applicability_body
     assert "_setContextVisibility(els.v2PresetField, isLuxPipeline && enableV2);" in applicability_body

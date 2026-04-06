@@ -2925,6 +2925,16 @@
             }
         }
 
+        function _derivePresetResearchFlag(preset, fallbackName = '') {
+            if (preset && Object.prototype.hasOwnProperty.call(preset, 'is_research')) {
+                return Boolean(preset.is_research);
+            }
+            return String(preset?.name || preset?.label || fallbackName || '')
+                .trim()
+                .toLowerCase()
+                .includes('research');
+        }
+
         function currentPresetDescriptor() {
             if (state.pipeline !== 'lux-depth-v3') {
                 return {
@@ -2947,7 +2957,10 @@
                 description: state.pipeline === 'lux-depth-v3'
                     ? 'Custom or offline preset selection.'
                     : 'Archive governance workflow preset.',
-                is_research: false,
+                is_research: _derivePresetResearchFlag({
+                    name: state.config.preset || 'custom',
+                    label: state.config.preset || 'custom'
+                }),
                 recommended_args: {},
                 advanced_sections: []
             };
@@ -2966,10 +2979,7 @@
         }
 
         function _presetRequiresResearchAcknowledgments(preset, args = {}) {
-            if (preset && Object.prototype.hasOwnProperty.call(preset, 'is_research')) {
-                return Boolean(preset.is_research);
-            }
-            return String(args.preset || preset?.name || '').trim().toLowerCase().includes('research');
+            return _derivePresetResearchFlag(preset, args.preset);
         }
 
         function currentPipelineReadiness() {
@@ -4999,7 +5009,10 @@
                     label: String(opt.textContent || opt.value || '').trim(),
                     stability: 'unknown',
                     description: '',
-                    is_research: false,
+                    is_research: _derivePresetResearchFlag({
+                        name: String(opt.value || '').trim(),
+                        label: String(opt.textContent || opt.value || '').trim()
+                    }),
                     recommended_args: {},
                     advanced_sections: []
                 }))
@@ -5114,7 +5127,7 @@
                         label: String(preset.label || preset.name),
                         stability: String(preset.stability || 'unknown'),
                         description: String(preset.description || ''),
-                        is_research: Boolean(preset.is_research),
+                        is_research: _derivePresetResearchFlag(preset),
                         recommended_args: preset.recommended_args && typeof preset.recommended_args === 'object'
                             ? { ...preset.recommended_args }
                             : {},
