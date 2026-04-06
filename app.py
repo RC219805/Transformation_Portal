@@ -181,8 +181,8 @@ def _resolve_allowed_request_path(
 
     try:
         resolved = _resolve_untrusted_request_path(path_value)
-    except (OSError, RuntimeError, ValueError) as exc:
-        raise ValueError("Invalid path value") from exc
+    except (OSError, RuntimeError, ValueError):
+        raise ValueError("Invalid path value") from None
 
     for root in allowed_roots:
         try:
@@ -1428,6 +1428,34 @@ def _normalize_portal_path_arg(
     must_exist: bool = False,
     must_be_file: bool = False,
 ) -> str:
+    def _trusted_allowed_entry(
+        absolute_path: str,
+    ) -> Tuple[Optional[Path], Optional[Path]]:
+        if not absolute_path or not os.path.isabs(absolute_path):
+            return None, None
+        resolved_path = Path(absolute_path)
+        for root in allowed_roots:
+            try:
+                root_real = Path(os.path.realpath(root))
+                relative_parts = resolved_path.relative_to(root_real).parts
+            except (OSError, RuntimeError, ValueError):
+                continue
+            current = root_real
+            if not relative_parts:
+                return current, root_real
+            for part in relative_parts:
+                if part in {"", ".", ".."}:
+                    return None, root_real
+                try:
+                    next_path = next((child for child in current.iterdir() if child.name == part), None)
+                except (NotADirectoryError, FileNotFoundError, OSError, RuntimeError, ValueError):
+                    return None, root_real
+                if next_path is None:
+                    return None, root_real
+                current = next_path
+            return current, root_real
+        return None, None
+
     text = str(value or "").strip()
     if not text:
         if required:
@@ -1477,7 +1505,10 @@ def _normalize_portal_path_arg(
         root_prefix = root_text if root_text.endswith(os.sep) else root_text + os.sep
         if resolved_text != root_text and not resolved_text.startswith(root_prefix):
             continue
-        if must_exist and not os.path.exists(resolved_text):
+        trusted_entry: Optional[Path] = None
+        if must_exist or must_be_file:
+            trusted_entry, _ = _trusted_allowed_entry(resolved_text)
+        if must_exist and trusted_entry is None:
             errors.append(
                 _portal_issue(
                     field,
@@ -1487,7 +1518,7 @@ def _normalize_portal_path_arg(
                 )
             )
             return ""
-        if must_be_file and os.path.exists(resolved_text) and not os.path.isfile(resolved_text):
+        if must_be_file and trusted_entry is not None and not trusted_entry.is_file():
             errors.append(
                 _portal_issue(
                     field,
@@ -1497,7 +1528,7 @@ def _normalize_portal_path_arg(
                 )
             )
             return ""
-        return resolved_text
+        return str(trusted_entry) if trusted_entry is not None else resolved_text
     errors.append(
         _portal_issue(
             field,
@@ -2925,8 +2956,8 @@ def _int_arg(
         return default
     try:
         parsed = int(value)
-    except (TypeError, ValueError) as exc:
-        raise ValueError("Invalid archive integer option") from exc
+    except (TypeError, ValueError):
+        raise ValueError("Invalid archive integer option") from None
     if parsed < minimum:
         raise ValueError("Invalid archive integer option")
     return parsed
@@ -3690,8 +3721,8 @@ def _argv_from_request(payload: Dict[str, Any]) -> List[str]:
                 return None
             try:
                 parsed = int(value)
-            except (TypeError, ValueError) as exc:
-                raise ValueError(f"Invalid {field_name}") from exc
+            except (TypeError, ValueError):
+                raise ValueError(f"Invalid {field_name}") from None
             if parsed < 1:
                 raise ValueError(f"Invalid {field_name}")
             return parsed
@@ -3999,30 +4030,33 @@ async def http_exception_handler(
     request: Request,
     exc: StarletteHTTPException,
 ) -> JSONResponse:
-    if _is_api_v1_path(request.url.path):
-        detail = exc.detail
-        message = PUBLIC_HTTP_ERROR_MESSAGES.get(exc.status_code, "request failed")
-        details = {"path": request.url.path}
-        if isinstance(detail, str) and detail.strip() and detail.strip() != message:
-            LOGGER.warning(
-                "Sanitized HTTPException detail for %s %s (%s): %s",
-                request.method,
-                request.url.path,
-                exc.status_code,
-                detail.strip(),
-            )
-        return _error_response(
-            exc.status_code,
-            code=_http_status_error_code(exc.status_code),
-            message=message,
-            details=details,
+    if not _is_api_v1_path(request.url.path):
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"detail": exc.detail},
             headers=exc.headers,
         )
 
-    return JSONResponse(
-        status_code=exc.status_code,
-        content={"detail": exc.detail},
-        headers=exc.headers,
+    path = request.url.path
+    status_code = exc.status_code
+    headers = exc.headers
+    detail = exc.detail
+    message = PUBLIC_HTTP_ERROR_MESSAGES.get(status_code, "request failed")
+    if isinstance(detail, str) and detail.strip() and detail.strip() != message:
+        LOGGER.warning(
+            "Sanitized HTTPException detail for %s %s (%s): %s",
+            request.method,
+            path,
+            status_code,
+            detail.strip(),
+        )
+    del exc
+    return _error_response(
+        status_code,
+        code=_http_status_error_code(status_code),
+        message=message,
+        details={"path": path},
+        headers=headers,
     )
 
 
@@ -4031,19 +4065,21 @@ async def request_validation_handler(
     request: Request,
     exc: RequestValidationError,
 ) -> JSONResponse:
-    if _is_api_v1_path(request.url.path):
-        return _error_response(
-            400,
-            code="INVALID_ARGUMENT",
-            message="request validation failed",
-            details={
-                "path": request.url.path,
-                "reason": "request_validation_failed",
-            },
+    if not _is_api_v1_path(request.url.path):
+        return await fastapi_request_validation_exception_handler(
+            request,
+            exc,
         )
-    return await fastapi_request_validation_exception_handler(
-        request,
-        exc,
+    path = request.url.path
+    del exc
+    return _error_response(
+        400,
+        code="INVALID_ARGUMENT",
+        message="request validation failed",
+        details={
+            "path": path,
+            "reason": "request_validation_failed",
+        },
     )
 
 
@@ -4336,6 +4372,7 @@ async def portal_events(payload: Dict[str, Any]) -> JSONResponse:
         record = _record_portal_event(payload)
     except ValueError as exc:
         reason = _portal_reason_code(exc)
+        del exc
         return _error_response(
             400,
             code="INVALID_ARGUMENT",
@@ -4378,8 +4415,10 @@ async def create_job(payload: Dict[str, Any]) -> JSONResponse:
     try:
         argv = _argv_from_request(payload)
     except ValueError as exc:
+        raw_reason = str(exc)
+        del exc
         reason_code = VALIDATION_REASON_CODES.get(
-            str(exc),
+            raw_reason,
             "invalid_request",
         )
         return _error_response(
