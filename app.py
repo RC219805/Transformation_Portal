@@ -1339,29 +1339,6 @@ def _portal_safe_error_message(reason: str, *, field: str = "payload") -> str:
     return PORTAL_SAFE_ERROR_MESSAGES.get(reason, f"{field} contains invalid values.")
 
 
-def _request_validation_error_details(exc: RequestValidationError) -> Dict[str, Any]:
-    issues = exc.errors()
-    details: Dict[str, Any] = {"issue_count": len(issues)}
-    fields: List[str] = []
-    for issue in issues:
-        if not isinstance(issue, dict):
-            continue
-        loc = issue.get("loc")
-        if not isinstance(loc, (list, tuple)):
-            continue
-        parts = [
-            str(part).strip() for part in loc if str(part).strip() and str(part) not in {"body", "query", "path", "header"}
-        ]
-        field_name = ".".join(parts)
-        if field_name and field_name not in fields:
-            fields.append(field_name)
-        if len(fields) >= 8:
-            break
-    if fields:
-        details["fields"] = fields
-    return details
-
-
 def _portal_payload_has_any_key(payload: Any, keys: Tuple[str, ...]) -> bool:
     if not isinstance(payload, dict):
         return False
@@ -1492,47 +1469,44 @@ def _normalize_portal_path_arg(
             )
         )
         return ""
-    within_allowed_roots = False
     for root in allowed_roots:
         try:
             root_text = os.path.realpath(root)
         except (OSError, RuntimeError, ValueError):
             continue
         root_prefix = root_text if root_text.endswith(os.sep) else root_text + os.sep
-        if resolved_text == root_text or resolved_text.startswith(root_prefix):
-            within_allowed_roots = True
-            break
-    if not within_allowed_roots:
-        errors.append(
-            _portal_issue(
-                field,
-                "path_outside_allowed_roots",
-                f"{field} must stay within the allowed workspace roots.",
-                suggestion=f"Choose a {field} path under the configured repository or temp roots.",
+        if resolved_text != root_text and not resolved_text.startswith(root_prefix):
+            continue
+        if must_exist and not os.path.exists(resolved_text):
+            errors.append(
+                _portal_issue(
+                    field,
+                    "missing",
+                    f"{field} does not exist.",
+                    suggestion=f"Choose an existing {field} under the configured repository or temp roots.",
+                )
             )
-        )
-        return ""
-    if must_exist and not os.path.exists(resolved_text):
-        errors.append(
-            _portal_issue(
-                field,
-                "missing",
-                f"{field} does not exist.",
-                suggestion=f"Choose an existing {field} under the configured repository or temp roots.",
+            return ""
+        if must_be_file and os.path.exists(resolved_text) and not os.path.isfile(resolved_text):
+            errors.append(
+                _portal_issue(
+                    field,
+                    "not_a_file",
+                    f"{field} must be a file.",
+                    suggestion=f"Choose a file path for {field} under the configured repository or temp roots.",
+                )
             )
+            return ""
+        return resolved_text
+    errors.append(
+        _portal_issue(
+            field,
+            "path_outside_allowed_roots",
+            f"{field} must stay within the allowed workspace roots.",
+            suggestion=f"Choose a {field} path under the configured repository or temp roots.",
         )
-        return ""
-    if must_be_file and os.path.exists(resolved_text) and not os.path.isfile(resolved_text):
-        errors.append(
-            _portal_issue(
-                field,
-                "not_a_file",
-                f"{field} must be a file.",
-                suggestion=f"Choose a file path for {field} under the configured repository or temp roots.",
-            )
-        )
-        return ""
-    return resolved_text
+    )
+    return ""
 
 
 def _lux_config_metadata() -> Dict[str, Any]:
@@ -4027,7 +4001,7 @@ async def http_exception_handler(
 ) -> JSONResponse:
     if _is_api_v1_path(request.url.path):
         detail = exc.detail
-        message = _public_http_error_message(exc.status_code, detail)
+        message = PUBLIC_HTTP_ERROR_MESSAGES.get(exc.status_code, "request failed")
         details = {"path": request.url.path}
         if isinstance(detail, str) and detail.strip() and detail.strip() != message:
             LOGGER.warning(
@@ -4058,13 +4032,14 @@ async def request_validation_handler(
     exc: RequestValidationError,
 ) -> JSONResponse:
     if _is_api_v1_path(request.url.path):
-        details = {"path": request.url.path}
-        details.update(_request_validation_error_details(exc))
         return _error_response(
             400,
             code="INVALID_ARGUMENT",
             message="request validation failed",
-            details=details,
+            details={
+                "path": request.url.path,
+                "reason": "request_validation_failed",
+            },
         )
     return await fastapi_request_validation_exception_handler(
         request,

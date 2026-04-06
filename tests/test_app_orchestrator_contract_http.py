@@ -178,10 +178,10 @@ def test_config_metadata_request_validation_errors_are_sanitized(client: TestCli
 
     assert response.status_code == 400
     assert body["error"]["message"] == "request validation failed"
-    assert body["error"]["details"]["path"] == "/v1/config-metadata"
-    assert body["error"]["details"]["issue_count"] >= 1
-    assert body["error"]["details"]["fields"] == ["pipeline"]
-    assert "errors" not in body["error"]["details"]
+    assert body["error"]["details"] == {
+        "path": "/v1/config-metadata",
+        "reason": "request_validation_failed",
+    }
 
 
 def test_config_preview_rejects_unsupported_pipeline_with_sanitized_reason(client: TestClient) -> None:
@@ -1070,10 +1070,10 @@ def test_request_validation_errors_return_typed_envelope_for_v1(client: TestClie
     assert body["schema"] == "tp.orchestrator.error.v1"
     assert body["success"] is False
     assert body["error"]["code"] == "INVALID_ARGUMENT"
-    assert body["error"]["details"]["path"] == "/v1/jobs"
-    assert body["error"]["details"]["issue_count"] >= 1
-    assert body["error"]["details"]["fields"] == ["limit"]
-    assert "errors" not in body["error"]["details"]
+    assert body["error"]["details"] == {
+        "path": "/v1/jobs",
+        "reason": "request_validation_failed",
+    }
 
 
 def test_http_exception_handler_sanitizes_v1_exception_detail_and_logs_it(caplog: pytest.LogCaptureFixture) -> None:
