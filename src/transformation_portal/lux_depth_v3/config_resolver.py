@@ -39,17 +39,27 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from ..core.da3_runtime import REPO_LOCAL_DA3_PYTHON, repo_local_da3_python_path
+from ..core.da3_runtime import REPO_LOCAL_DA3_PYTHON, find_repo_root, repo_local_da3_python_path
 from ..ingest.canonical_json import canonicalize_json
 from .config import DA3Config, EnhanceConfig, ModelVariant, Preset
 from .manifest import ConfigFingerprint
 
 logger = logging.getLogger(__name__)
+_REPO_LOCAL_DEPTH_PRO_PYTHON_PARTS = (".venv-depth-pro", "bin", "python")
+REPO_LOCAL_DEPTH_PRO_PYTHON = f"./{'/'.join(_REPO_LOCAL_DEPTH_PRO_PYTHON_PARTS)}"
 
 
 def _repo_local_da3_python_path() -> Optional[Path]:
     """Return the canonical repo-local DA3 interpreter path."""
     return repo_local_da3_python_path(Path(__file__))
+
+
+def _repo_local_depth_pro_python_path() -> Optional[Path]:
+    """Return the canonical repo-local Depth Pro interpreter path."""
+    repo_root = find_repo_root(Path(__file__))
+    if repo_root is None:
+        return None
+    return repo_root.joinpath(*_REPO_LOCAL_DEPTH_PRO_PYTHON_PARTS)
 
 
 def _normalize_python_executable(value: Any) -> Optional[str]:
@@ -93,6 +103,39 @@ def apply_effective_da3_runtime_config(
 ) -> EnhanceConfig:
     """Persist the effective DA3 runtime choice onto the config object."""
     config.da3_python_executable = resolve_effective_da3_python_executable(config)
+    return config
+
+
+def resolve_effective_depth_pro_python_executable(
+    config: EnhanceConfig,
+) -> Optional[str]:
+    """Resolve the effective Depth Pro runtime executable for this config.
+
+    Resolution precedence:
+    1. Explicit config.depth_pro_python_executable
+    2. TRANSFORMATION_PORTAL_DEPTH_PRO_PYTHON environment override
+    3. Repo-local stable contract path when present
+    """
+    configured = _normalize_python_executable(getattr(config, "depth_pro_python_executable", None))
+    if configured:
+        return configured
+
+    env_candidate = _normalize_python_executable(os.environ.get("TRANSFORMATION_PORTAL_DEPTH_PRO_PYTHON"))
+    if env_candidate:
+        return env_candidate
+
+    repo_local_python = _repo_local_depth_pro_python_path()
+    if repo_local_python is not None and repo_local_python.exists():
+        return REPO_LOCAL_DEPTH_PRO_PYTHON
+
+    return None
+
+
+def apply_effective_depth_pro_runtime_config(
+    config: EnhanceConfig,
+) -> EnhanceConfig:
+    """Persist the effective Depth Pro runtime choice onto the config object."""
+    config.depth_pro_python_executable = resolve_effective_depth_pro_python_executable(config)
     return config
 
 

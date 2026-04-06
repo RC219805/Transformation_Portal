@@ -560,6 +560,7 @@ class EnhanceOrchestrator:
         """
         self._depth_registry = DepthBackendRegistry()
         self._depth_backend_cache: Dict[str, Any] = {}
+        self._backend_init_errors: Dict[str, str] = {}
         allow_synthetic = bool(self.config.allow_synthetic_fallback) or os.getenv("TP_ALLOW_SYNTHETIC_FALLBACK") == "1"
 
         try:
@@ -601,6 +602,7 @@ class EnhanceOrchestrator:
                 )
 
             self.depth_backend = selection.backend
+            self._backend_init_errors = dict(selection.init_errors or {})
             self._depth_backend_cache[selection.resolved_backend] = selection.backend
             self._backend_metadata = BackendSelectionMetadata(
                 requested_backend=selection.requested_backend,
@@ -856,6 +858,53 @@ class EnhanceOrchestrator:
             "model_artifact_sha256": None,
         }
 
+    def _seed_depth_attempts_from_selection_fallback(self) -> List[Dict[str, Any]]:
+        """Materialize backend-selection fallback into per-image attempt history."""
+        backend_metadata = getattr(self, "_backend_metadata", None)
+        init_errors = getattr(self, "_backend_init_errors", None) or {}
+        requested_backend = normalize_backend_id(getattr(backend_metadata, "requested_backend", None))
+        resolved_backend = normalize_backend_id(getattr(backend_metadata, "resolved_backend", None))
+
+        if (
+            not requested_backend
+            or not resolved_backend
+            or requested_backend == resolved_backend
+            or not isinstance(init_errors, dict)
+        ):
+            return []
+
+        requested_error = init_errors.get(requested_backend)
+        if not isinstance(requested_error, str) or not requested_error.strip():
+            return []
+
+        attempt: Dict[str, Any] = {
+            "attempt": 0,
+            "backend": requested_backend,
+            "model_id": self._default_model_id_for_backend(requested_backend),
+            "device": self.config.depth_device,
+            "status": "failed",
+            "failure_kind": "operational",
+            "error_code": self._infer_operational_error_code(
+                RuntimeError(requested_error),
+            ),
+            "error_message": requested_error,
+            "apex_gate_passed": False,
+            "cached": False,
+            "duration_s": 0.0,
+            "model_artifact_filename": None,
+            "model_artifact_sha256": None,
+        }
+
+        if requested_backend == "depth_pro":
+            checkpoint_path = Path(
+                getattr(self.config, "depth_pro_checkpoint_path", None)
+                or os.environ.get("TRANSFORMATION_PORTAL_DEPTH_PRO_CHECKPOINT")
+                or "checkpoints/depth_pro.pt"
+            )
+            attempt["model_artifact_filename"] = checkpoint_path.name
+
+        return [attempt]
+
     def _get_or_create_depth_backend(
         self,
         backend_id: str,
@@ -924,26 +973,36 @@ class EnhanceOrchestrator:
         resolution_status = "success" if normalized_selected_backend == requested else "fallback"
         resolution_reason: Optional[str] = None
         if resolution_status == "fallback":
-            failed = [attempt for attempt in attempts if attempt.get("status") == "failed"]
-            if failed:
-                first_failure = failed[0]
-                failure_kind = first_failure.get(
-                    "failure_kind",
-                    "operational",
-                )
-                failure_code = first_failure.get(
-                    "error_code",
-                    "UNKNOWN",
-                )
-                resolution_reason = (
-                    f"Fallback from"
-                    f" '{requested}' to"
-                    f" '{normalized_selected_backend}'"
-                    f" after {failure_kind}"
-                    f" failure ({failure_code})"
-                )
+            startup_reason = getattr(self._backend_metadata, "resolution_reason", None)
+            if (
+                isinstance(startup_reason, str)
+                and startup_reason.strip()
+                and normalize_backend_provenance(self._backend_metadata.requested_backend) == requested
+                and normalize_backend_provenance(self._backend_metadata.resolved_backend) == normalized_selected_backend
+                and self._backend_metadata.resolution_status != "success"
+            ):
+                resolution_reason = startup_reason
             else:
-                resolution_reason = f"Fallback from" f" '{requested}'" f" to '{normalized_selected_backend}'"
+                failed = [attempt for attempt in attempts if attempt.get("status") == "failed"]
+                if failed:
+                    first_failure = failed[0]
+                    failure_kind = first_failure.get(
+                        "failure_kind",
+                        "operational",
+                    )
+                    failure_code = first_failure.get(
+                        "error_code",
+                        "UNKNOWN",
+                    )
+                    resolution_reason = (
+                        f"Fallback from"
+                        f" '{requested}' to"
+                        f" '{normalized_selected_backend}'"
+                        f" after {failure_kind}"
+                        f" failure ({failure_code})"
+                    )
+                else:
+                    resolution_reason = f"Fallback from" f" '{requested}'" f" to '{normalized_selected_backend}'"
 
         model_id = self._extract_model_id_from_attempts(
             normalized_selected_backend,
@@ -1581,7 +1640,7 @@ class EnhanceOrchestrator:
         materials_v3_runtime_s = 0.0
         # Will be set if Materials V3 produces enhanced_image
         enhanced_image_path = None
-        depth_attempts: List[Dict[str, Any]] = []
+        depth_attempts: List[Dict[str, Any]] = self._seed_depth_attempts_from_selection_fallback()
         active_backend_metadata = self._backend_metadata
         self._active_selected_attempt_index = None
 
@@ -1679,15 +1738,17 @@ class EnhanceOrchestrator:
                 selected_backend_id = _primary_backend_name
                 selected_attempt_index: Optional[int] = None
                 last_error: Optional[Exception] = None
+                attempt_offset = len(depth_attempts)
 
-                for attempt_index, backend_id in enumerate(attempt_chain):
+                for chain_index, backend_id in enumerate(attempt_chain):
                     attempt_start = time.time()
+                    attempt_slot = attempt_offset + chain_index
                     attempt_artifact = self._resolve_backend_model_artifact(
                         backend_id,
                         backend=self._depth_backend_cache.get(backend_id),
                     )
                     attempt_record: Dict[str, Any] = {
-                        "attempt": attempt_index,
+                        "attempt": attempt_slot,
                         "backend": backend_id,
                         "model_id": self._resolve_backend_model_id(
                             backend_id,
@@ -1940,7 +2001,7 @@ class EnhanceOrchestrator:
                         depth_map = depth_candidate
                         depth_validity_metrics = gate_result
                         selected_backend_id = backend_id
-                        selected_attempt_index = attempt_index
+                        selected_attempt_index = attempt_slot
                         break
 
                     except LicenseRestrictionError as license_error:
@@ -1973,7 +2034,7 @@ class EnhanceOrchestrator:
                         depth_attempts.append(attempt_record)
                         last_error = semantic_error
 
-                        has_next = attempt_index + 1 < len(attempt_chain)
+                        has_next = chain_index + 1 < len(attempt_chain)
                         if self.config.allow_semantic_fallback and has_next:
                             logger.warning(
                                 "Semantic gate" " failed on" " backend=%s" " code=%s;" " attempting" " fallback.",
@@ -2000,7 +2061,7 @@ class EnhanceOrchestrator:
                         depth_attempts.append(attempt_record)
                         last_error = operational_error
 
-                        has_next = attempt_index + 1 < len(attempt_chain)
+                        has_next = chain_index + 1 < len(attempt_chain)
                         if has_next:
                             logger.warning(
                                 "Operational depth" " failure on" " backend=%s" " code=%s;" " attempting" " fallback.",
@@ -5361,6 +5422,54 @@ class EnhanceOrchestrator:
             "operational_fallback_images": operational_fallback_images,
         }
 
+    def _requested_backend_fulfillment_defect(
+        self,
+        results: List[Dict[str, Any]],
+        backend_summary: Dict[str, Any],
+    ) -> Optional[str]:
+        """Return a defect summary when requested Depth Pro fully falls back."""
+        requested_backend = normalize_backend_id(backend_summary.get("requested_backend"))
+        primary_backend = normalize_backend_id(backend_summary.get("primary_backend"))
+        success_count = sum(1 for result in results if result.get("status") == "ok")
+        fallback_images = backend_summary.get("fallback_images")
+
+        if (
+            requested_backend != "depth_pro"
+            or success_count <= 0
+            or primary_backend == requested_backend
+            or not isinstance(fallback_images, int)
+            or fallback_images != success_count
+        ):
+            return None
+
+        detail: Optional[str] = None
+        for result in results:
+            if result.get("status") != "ok":
+                continue
+            attempts = result.get("attempts")
+            if not isinstance(attempts, list):
+                continue
+            for attempt in attempts:
+                if attempt.get("status") == "failed" and normalize_backend_id(attempt.get("backend")) == requested_backend:
+                    detail = attempt.get("error_message") or attempt.get("error_code")
+                    break
+            if detail:
+                break
+
+        if detail is None:
+            startup_reason = getattr(self._backend_metadata, "resolution_reason", None)
+            if isinstance(startup_reason, str) and startup_reason.strip():
+                detail = startup_reason.strip()
+
+        message = (
+            f"Requested backend '{requested_backend}' was not honored: "
+            f"all successful images ({success_count}/{success_count}) used "
+            f"fallback backend '{primary_backend}'."
+        )
+        if isinstance(detail, str) and detail.strip():
+            message = f"{message} First fallback reason: {detail.strip()}"
+        return message
+
     def _resolve_run_card_backend_model_id(
         self,
         results: List[Dict[str, Any]],
@@ -5477,6 +5586,12 @@ class EnhanceOrchestrator:
         )
         artifact_merkle_root = _compute_artifact_merkle_root(artifact_index)
         backend_summary = self._compute_backend_summary(results)
+        requested_backend_defect = self._requested_backend_fulfillment_defect(
+            results,
+            backend_summary,
+        )
+        if requested_backend_defect is not None:
+            logger.error(requested_backend_defect)
         requested_backend = self._backend_metadata.requested_backend or "auto"
         backend_selection_resolved = (
             backend_summary["final_backends_used"][0]

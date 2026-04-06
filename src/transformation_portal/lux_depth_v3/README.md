@@ -274,6 +274,9 @@ The CLI **enforces license compliance** at startup to prevent accidental violati
 For safe installation, keep `depth-pro` in a dedicated NumPy 1.x environment
 and point the main pipeline at it with `--depth-pro-python` or
 `TRANSFORMATION_PORTAL_DEPTH_PRO_PYTHON`.
+When explicit `depth_pro` runs are launched from a repo checkout, the pipeline
+also auto-discovers the repo-local contract path `./.venv-depth-pro/bin/python`
+when that interpreter exists.
 Legacy aliases such as `depth_anything_v3` remain accepted as inputs, but emitted manifests, run cards, and logs normalize to `da3`.
 
 ## Performance Optimization

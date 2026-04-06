@@ -100,6 +100,52 @@ def test_orchestrator_explicit_da3_auto_discovers_repo_runtime(tmp_path, monkeyp
     assert backend_calls == [("da3", REPO_LOCAL_DA3_PYTHON)]
 
 
+def test_orchestrator_explicit_depth_pro_auto_discovers_repo_runtime(tmp_path, monkeypatch):
+    """Explicit Depth Pro should persist the repo-local subprocess contract when available."""
+    from transformation_portal.lux_depth_v3.config_resolver import REPO_LOCAL_DEPTH_PRO_PYTHON
+
+    discovered_python = tmp_path / ".venv-depth-pro" / "bin" / "python"
+    discovered_python.parent.mkdir(parents=True)
+    discovered_python.write_text("#!/bin/sh\n", encoding="utf-8")
+    monkeypatch.delenv("TRANSFORMATION_PORTAL_DEPTH_PRO_PYTHON", raising=False)
+    monkeypatch.setattr(
+        "transformation_portal.lux_depth_v3.config_resolver._repo_local_depth_pro_python_path",
+        lambda: discovered_python,
+    )
+
+    backend_calls = []
+
+    class FakeBackend:
+        def __init__(self, name):
+            self.name = name
+
+        def ensure_available(self):
+            return None
+
+    def fake_get_backend(self, backend_name, config):
+        del self
+        backend_calls.append((backend_name, config.depth_pro_python_executable))
+        return FakeBackend(backend_name)
+
+    with patch(
+        "transformation_portal.depth.backends.registry.DepthBackendRegistry.get_backend",
+        new=fake_get_backend,
+    ):
+        config = EnhanceConfig(
+            depth_backend="depth_pro",
+            depth_device="cpu",
+            non_commercial_ok=True,
+            accept_apple_depth_pro_research_license=True,
+            enable_v2=False,
+        )
+
+        orchestrator = EnhanceOrchestrator(config, tmp_path)
+
+    assert orchestrator.depth_backend.name == "depth_pro"
+    assert orchestrator.config.depth_pro_python_executable == REPO_LOCAL_DEPTH_PRO_PYTHON
+    assert backend_calls == [("depth_pro", REPO_LOCAL_DEPTH_PRO_PYTHON)]
+
+
 def test_orchestrator_explicit_da3_unavailable_fails_without_fallback(tmp_path):
     """Explicit DA3 should fail fast instead of silently selecting DA2."""
     backend_calls = []
@@ -381,6 +427,65 @@ def test_orchestrator_depth_pro_checkpoint_missing(tmp_path, mock_da3_available)
     assert orchestrator._backend_metadata.resolution_status == "fallback"
     reason = (orchestrator._backend_metadata.resolution_reason or "").lower()
     assert ("not found" in reason) or ("not installed" in reason)
+
+
+def test_startup_selection_fallback_is_persisted_in_attempt_history(tmp_path):
+    """Selection-time fallback should be visible in manifest attempt history."""
+    import json
+
+    from PIL import Image
+
+    from transformation_portal.lux_depth_v3.input_manager import ImageInput
+
+    test_image = tmp_path / "startup_fallback.png"
+    Image.new("RGB", (64, 64), color="white").save(test_image)
+
+    config = EnhanceConfig(
+        depth_backend="depth_pro",
+        depth_device="cpu",
+        enable_v2=False,
+        non_commercial_ok=True,
+        accept_apple_depth_pro_research_license=True,
+    )
+
+    depth_pro_backend = Mock()
+    depth_pro_backend.name = "depth_pro"
+    depth_pro_backend.license_type = Mock(value="research_only")
+    depth_pro_backend.ensure_available.side_effect = ImportError("depth_pro package not installed in the active environment.")
+
+    da3_backend = Mock()
+    da3_backend.name = "da3"
+    da3_backend.license_type = Mock(value="commercial")
+    da3_backend.ensure_available.return_value = None
+    da3_backend.compute.return_value = _make_depth_result()
+
+    registry = Mock()
+    registry.get_backend.side_effect = lambda backend_id, _config: {
+        "depth_pro": depth_pro_backend,
+        "da3": da3_backend,
+    }[backend_id]
+
+    with patch("transformation_portal.lux_depth_v3.orchestrator.DepthBackendRegistry", return_value=registry):
+        orchestrator = EnhanceOrchestrator(config, tmp_path)
+        orchestrator.postprocessor = Mock(process=lambda result: result)
+        result = orchestrator.enhance_image(ImageInput(path=test_image))
+
+    assert result["status"] == "ok"
+    assert result["backend"] == "da3"
+    assert [attempt["backend"] for attempt in result["attempts"]] == ["depth_pro", "da3"]
+    assert result["attempts"][0]["status"] == "failed"
+    assert result["attempts"][0]["failure_kind"] == "operational"
+    assert "depth_pro package not installed" in result["attempts"][0]["error_message"]
+    assert result["attempts"][1]["status"] == "success"
+    assert result["selected_attempt_index"] == 1
+
+    manifest = json.loads(Path(result["manifest"]).read_text())
+    backend_selection = manifest["backend_selection"]
+    assert backend_selection["resolved_backend"] == "da3"
+    assert backend_selection["resolution_status"] == "fallback"
+    assert "Requested 'depth_pro' unavailable" in backend_selection["resolution_reason"]
+    assert [attempt["backend"] for attempt in backend_selection["attempts"]] == ["depth_pro", "da3"]
+    assert backend_selection["attempts"][0]["status"] == "failed"
 
 
 def test_depth_metadata_uses_resolved_backend_not_config_default(tmp_path, mock_da3_available):

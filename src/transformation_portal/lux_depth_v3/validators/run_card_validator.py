@@ -233,6 +233,21 @@ def validate_run_card_backend_semantics(payload: Dict[str, Any]) -> None:
             "backend_summary.final_backends_used[0]."
         )
 
+    requested_backend = backend_selection.get("requested") or backend_summary.get("requested_backend")
+    fallback_images = backend_summary.get("fallback_images")
+    if (
+        requested_backend == "depth_pro"
+        and isinstance(fallback_images, int)
+        and success_count > 0
+        and fallback_images == success_count
+        and primary_backend != requested_backend
+    ):
+        raise RuntimeError(
+            "Run card backend request fulfillment validation failed: "
+            "requested backend 'depth_pro' was not honored; "
+            f"all successful images used fallback backend '{primary_backend}'."
+        )
+
     # Wrapper semantics validation
     logical_backend = backend_selection.get("logical_backend")
     resolved_engine = backend_selection.get("resolved_engine")
@@ -265,7 +280,6 @@ def validate_run_card_backend_semantics(payload: Dict[str, Any]) -> None:
             "backend_summary.final_backends_used[0]."
         )
 
-    fallback_images = backend_summary.get("fallback_images")
     if isinstance(fallback_images, int) and fallback_images != 0:
         raise RuntimeError(
             "Run card backend semantics validation failed: "
