@@ -206,23 +206,27 @@ class TestDepthProBackendUnit:
         backend = DepthProBackend(config)
         assert backend._python_executable == str(python_executable.resolve())
 
-    def test_python_executable_resolution_uses_cwd_for_relative_paths(self, tmp_path, monkeypatch):
-        """Relative dedicated env paths should resolve from the caller's cwd."""
+    def test_python_executable_resolution_uses_repo_root_for_relative_paths(self, tmp_path, monkeypatch):
+        """Relative dedicated env paths should resolve from repo root in a checkout."""
         from transformation_portal.depth.backends.depth_pro import DepthProBackend
 
         python_executable = tmp_path / ".venv-depth-pro" / "bin" / "python"
         python_executable.parent.mkdir(parents=True)
         python_executable.write_text("#!/bin/sh\n", encoding="utf-8")
-        monkeypatch.chdir(tmp_path)
+        outside_cwd = tmp_path / "outside"
+        outside_cwd.mkdir()
+        monkeypatch.chdir(outside_cwd)
 
-        config = MockEnhanceConfig(
-            non_commercial_ok=True,
-            accept_apple_depth_pro_research_license=True,
-            depth_pro_python_executable="./.venv-depth-pro/bin/python",
-        )
+        with patch.object(DepthProBackend, "_find_repo_root", return_value=tmp_path):
+            config = MockEnhanceConfig(
+                non_commercial_ok=True,
+                accept_apple_depth_pro_research_license=True,
+                depth_pro_python_executable="./.venv-depth-pro/bin/python",
+            )
 
-        backend = DepthProBackend(config)
-        assert backend._python_executable == str(python_executable.resolve())
+            backend = DepthProBackend(config)
+
+        assert backend._python_executable == str(python_executable.absolute())
 
     def test_python_executable_resolution_preserves_virtualenv_symlink(self, tmp_path):
         """Virtualenv interpreter symlinks should keep the venv path."""
@@ -334,6 +338,7 @@ class TestDepthProBackendUnit:
                 depth_pro_python_executable="./.venv-depth-pro/bin/python",
             )
             backend = DepthProBackend(config)
+        assert backend._python_executable == str(python_executable.absolute())
 
         with patch.dict("os.environ", {"PYTHONPATH": "existing-path"}, clear=True):
             worker_env = backend._build_worker_env()

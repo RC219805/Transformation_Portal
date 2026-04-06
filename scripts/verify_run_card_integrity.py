@@ -56,6 +56,26 @@ def _format_error_path(error_path: Any) -> str:
     return ".".join(parts) if parts else "<root>"
 
 
+def _resolve_artifact_path(
+    *,
+    run_card_root: Path,
+    relative_path: str,
+    context: str,
+) -> tuple[Path | None, str | None]:
+    """Resolve an artifact path while keeping reads confined to the run-card root."""
+    candidate = Path(relative_path)
+    if candidate.is_absolute():
+        return None, f"{context} relative_path must not be absolute: {relative_path}"
+
+    root_resolved = run_card_root.resolve()
+    artifact_path = (root_resolved / candidate).resolve()
+    try:
+        artifact_path.relative_to(root_resolved)
+    except ValueError:
+        return None, f"{context} relative_path escapes run card root: {relative_path}"
+    return artifact_path, None
+
+
 def compute_artifact_merkle_root(artifact_index: list[dict[str, Any]]) -> str:
     """Compute deterministic Merkle root from artifact SHA256 digests."""
     sorted_artifacts = sorted(artifact_index, key=lambda item: item["relative_path"])
@@ -124,6 +144,7 @@ def _first_combined_manifest_fallback_reason(
     run_card_payload: dict[str, Any],
     *,
     run_card_root: Path,
+    errors: list[str] | None = None,
 ) -> str | None:
     """Return the first detailed fallback reason recorded in combined manifests."""
     manifest_artifacts = [
@@ -135,7 +156,16 @@ def _first_combined_manifest_fallback_reason(
         relative_path = artifact.get("relative_path")
         if not isinstance(relative_path, str) or not relative_path:
             continue
-        manifest_path = run_card_root / relative_path
+        manifest_path, path_error = _resolve_artifact_path(
+            run_card_root=run_card_root,
+            relative_path=relative_path,
+            context="combined_manifest artifact",
+        )
+        if path_error:
+            if errors is not None:
+                errors.append(path_error)
+            continue
+        assert manifest_path is not None
         payload, load_error = _load_json(manifest_path)
         if load_error or not isinstance(payload, dict):
             continue
@@ -193,6 +223,7 @@ def _verify_requested_depth_pro_fulfillment(
     fallback_reason = _first_combined_manifest_fallback_reason(
         run_card_payload,
         run_card_root=run_card_root,
+        errors=errors,
     )
     if fallback_reason:
         error = f"{error}. First fallback reason: {fallback_reason}"
@@ -283,7 +314,15 @@ def _verify_reconstruction_scene_manifests(
         if not isinstance(relative_path, str) or not relative_path:
             errors.append("reconstruction_scene_manifest artifact is missing relative_path")
             continue
-        manifest_path = run_card_root / relative_path
+        manifest_path, path_error = _resolve_artifact_path(
+            run_card_root=run_card_root,
+            relative_path=relative_path,
+            context="reconstruction_scene_manifest artifact",
+        )
+        if path_error:
+            errors.append(path_error)
+            continue
+        assert manifest_path is not None
         payload, load_error = _load_json(manifest_path)
         if load_error:
             errors.append(load_error)
@@ -320,7 +359,15 @@ def _verify_reconstruction_diagnostics(
         if not isinstance(relative_path, str) or not relative_path:
             errors.append("reconstruction_diagnostics artifact is missing relative_path")
             continue
-        diagnostics_path = run_card_root / relative_path
+        diagnostics_path, path_error = _resolve_artifact_path(
+            run_card_root=run_card_root,
+            relative_path=relative_path,
+            context="reconstruction_diagnostics artifact",
+        )
+        if path_error:
+            errors.append(path_error)
+            continue
+        assert diagnostics_path is not None
         payload, load_error = _load_json(diagnostics_path)
         if load_error:
             errors.append(load_error)

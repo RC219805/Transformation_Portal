@@ -153,7 +153,7 @@ class DepthProBackend:
         if candidate.startswith(".") or has_separator:
             path = Path(candidate).expanduser()
             if not path.is_absolute():
-                path = Path.cwd() / path
+                path = self._worker_cwd() / path
             if not path.exists():
                 raise FileNotFoundError(f"Depth Pro Python executable not found: {path}")
             # Preserve virtualenv interpreter symlink paths such as
