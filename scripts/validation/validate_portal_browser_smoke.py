@@ -429,6 +429,9 @@ def _state_probe_expression() -> str:
     selectedJobArtifactCount: text('selectedJobArtifactCount'),
     selectedJobStreamStatus: text('selectedJobStreamStatus'),
     selectedJobSummary: text('selectedJobSummary'),
+    summaryReconstructionState: text('summaryReconstructionState'),
+    summaryRuntimeWorkers: text('summaryRuntimeWorkers'),
+    summaryPreviewState: text('summaryPreviewState'),
     cliFirstLine: (() => {
       const preview = text('cliPreview');
       return preview ? preview.split('\n')[0].trim() : '';
@@ -525,6 +528,18 @@ def _state_probe_expression() -> str:
       const el = document.getElementById('reconstructionConfigFields');
       return !!(el && !el.classList.contains('hidden'));
     })(),
+    debugBundleGuardrailVisible: (() => {
+      const el = document.getElementById('debugBundleGuardrail');
+      return !!(el && !el.classList.contains('hidden'));
+    })(),
+    debugBundleAcknowledgeChecked: (() => {
+      const el = document.getElementById('debugBundleAcknowledge');
+      return !!(el && el.checked);
+    })(),
+    effectiveConfigDrawerVisible: (() => {
+      const el = document.getElementById('effectiveConfigDrawer');
+      return !!(el && !el.classList.contains('hidden'));
+    })(),
     v2PresetVisible: (() => {
       const el = document.getElementById('v2PresetField');
       return !!(el && !el.classList.contains('hidden'));
@@ -608,6 +623,9 @@ def _set_pipeline_form_expression(
     heroReadinessLabel: (document.getElementById('heroReadinessLabel').textContent || '').trim(),
     cliFirstLine: ((document.getElementById('cliPreview').textContent || '').trim().split('\\n')[0] || '').trim(),
     cliText: (document.getElementById('cliPreview').textContent || '').trim(),
+    summaryReconstructionState: (document.getElementById('summaryReconstructionState').textContent || '').trim(),
+    summaryRuntimeWorkers: (document.getElementById('summaryRuntimeWorkers').textContent || '').trim(),
+    summaryPreviewState: (document.getElementById('summaryPreviewState').textContent || '').trim(),
     segmentationBackendVisible: !document.getElementById('segmentationBackendField').classList.contains('hidden'),
     strictSegmentationVisible: !document.getElementById('strictSegmentationField').classList.contains('hidden'),
     sam2ModelSizeVisible: !document.getElementById('sam2ModelSizeField').classList.contains('hidden'),
@@ -616,6 +634,8 @@ def _set_pipeline_form_expression(
     licenseAppleVisible: !document.getElementById('licenseAppleField').classList.contains('hidden'),
     licenseResearchToolsVisible: !document.getElementById('licenseResearchToolsField').classList.contains('hidden'),
     reconstructionConfigVisible: !document.getElementById('reconstructionConfigFields').classList.contains('hidden'),
+    debugBundleGuardrailVisible: !document.getElementById('debugBundleGuardrail').classList.contains('hidden'),
+    effectiveConfigDrawerVisible: !document.getElementById('effectiveConfigDrawer').classList.contains('hidden'),
     v2PresetVisible: !document.getElementById('v2PresetField').classList.contains('hidden')
   }};
 }})()
@@ -629,6 +649,7 @@ def _set_lux_optional_controls_expression(
     segmentation_backend: str,
     enable_reconstruction: bool,
     enable_v2: bool,
+    emit_scene_debug_bundle: bool = False,
 ) -> str:
     payload = json.dumps(
         {
@@ -637,6 +658,7 @@ def _set_lux_optional_controls_expression(
             "segmentation_backend": segmentation_backend,
             "enable_reconstruction": enable_reconstruction,
             "enable_v2": enable_v2,
+            "emit_scene_debug_bundle": emit_scene_debug_bundle,
         }
     )
     return f"""
@@ -661,6 +683,7 @@ def _set_lux_optional_controls_expression(
   setValue('segmentationBackend', cfg.segmentation_backend);
   setChecked('enableReconstruction', cfg.enable_reconstruction);
   setChecked('flagEnableV2', cfg.enable_v2);
+  setChecked('emitSceneDebugBundle', cfg.emit_scene_debug_bundle);
   return ({_state_probe_expression()});
 }})()
 """
@@ -857,10 +880,6 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             f"Lux build view did not expose any readiness label: {lux_state}",
         )
         _expect(
-            not bool(lux_state.get("runJobDisabled")),
-            f"Lux pipeline should remain dispatchable in the build view: {lux_state}",
-        )
-        _expect(
             not bool(lux_state.get("segmentationBackendVisible")),
             f"Segmentation backend should stay hidden until segmentation is enabled: {lux_state}",
         )
@@ -881,8 +900,37 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             f"Reconstruction-specific controls should stay hidden until reconstruction is enabled: {lux_state}",
         )
         _expect(
+            str(lux_state.get("summaryReconstructionState", "")).strip() == "Off",
+            f"Default reconstruction summary should report Off: {lux_state}",
+        )
+        _expect(
+            "Auto" in str(lux_state.get("summaryRuntimeWorkers", "")),
+            f"Runtime worker summary should default to Auto: {lux_state}",
+        )
+        _expect(
+            bool(str(lux_state.get("summaryPreviewState", "")).strip()),
+            f"Preview status summary should be populated: {lux_state}",
+        )
+        _expect(
             not bool(lux_state.get("v2PresetVisible")),
             f"V2 preset input should stay hidden until V2 compatibility is enabled: {lux_state}",
+        )
+
+        lux_ready_state = _poll(
+            connection,
+            _state_probe_expression(),
+            predicate=lambda value: (
+                isinstance(value, dict)
+                and str(value.get("pipeline", "")) == "lux-depth-v3"
+                and not bool(value.get("runJobDisabled"))
+                and str(value.get("summaryPreviewState", "")).strip() != "Refreshing"
+            ),
+            timeout_seconds=args.timeout_seconds,
+            description="lux preview-backed dispatch readiness",
+        )
+        _expect(
+            not bool(lux_ready_state.get("runJobDisabled")),
+            f"Lux pipeline should become dispatchable once preview-backed validation settles: {lux_ready_state}",
         )
 
         lux_context_state = _poll(
@@ -893,6 +941,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
                 segmentation_backend="sam2",
                 enable_reconstruction=True,
                 enable_v2=True,
+                emit_scene_debug_bundle=True,
             ),
             predicate=lambda value: (
                 isinstance(value, dict)
@@ -904,6 +953,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
                 and bool(value.get("licenseAppleVisible"))
                 and bool(value.get("licenseResearchToolsVisible"))
                 and bool(value.get("reconstructionConfigVisible"))
+                and bool(value.get("debugBundleGuardrailVisible"))
                 and bool(value.get("v2PresetVisible"))
             ),
             timeout_seconds=args.timeout_seconds,
@@ -918,9 +968,32 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             f"Enabling reconstruction should reveal reconstruction controls: {lux_context_state}",
         )
         _expect(
+            str(lux_context_state.get("summaryReconstructionState", "")).strip() == "On",
+            f"Reconstruction summary should flip to On once the toggle is enabled: {lux_context_state}",
+        )
+        _expect(
+            bool(lux_context_state.get("debugBundleGuardrailVisible")),
+            f"Enabling debug bundle emission should reveal the guardrail warning: {lux_context_state}",
+        )
+        _expect(
             bool(lux_context_state.get("v2PresetVisible")),
             f"Enabling V2 should reveal the V2 preset input: {lux_context_state}",
         )
+
+        print("portal-browser-smoke: opening effective config drawer", flush=True)
+        connection.evaluate(_click_expression("#openEffectiveConfigBtn"))
+        effective_config_state = _poll(
+            connection,
+            _state_probe_expression(),
+            predicate=lambda value: isinstance(value, dict) and bool(value.get("effectiveConfigDrawerVisible")),
+            timeout_seconds=args.timeout_seconds,
+            description="effective config drawer to open",
+        )
+        _expect(
+            bool(effective_config_state.get("effectiveConfigDrawerVisible")),
+            f"Effective config drawer should open from the reconstruction summary strip: {effective_config_state}",
+        )
+        connection.evaluate(_click_expression("#closeEffectiveConfigBtn"))
 
         print("portal-browser-smoke: verifying archive-gate-b blocked state", flush=True)
         gate_b_state = _poll(

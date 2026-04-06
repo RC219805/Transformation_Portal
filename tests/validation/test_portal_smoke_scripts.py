@@ -167,6 +167,19 @@ def test_portal_browser_smoke_tracks_archive_readiness_fields_and_canonical_comm
     assert '--archive-command "mets-export"' in content
 
 
+def test_portal_browser_smoke_tracks_reconstruction_runtime_summary_and_guardrails():
+    content = PORTAL_BROWSER_SCRIPT_PATH.read_text(encoding="utf-8")
+
+    assert "summaryReconstructionState" in content
+    assert "summaryRuntimeWorkers" in content
+    assert "summaryPreviewState" in content
+    assert "debugBundleGuardrailVisible" in content
+    assert "effectiveConfigDrawerVisible" in content
+    assert "emit_scene_debug_bundle" in content
+    assert "#openEffectiveConfigBtn" in content
+    assert "#closeEffectiveConfigBtn" in content
+
+
 def test_audit_pipeline_readiness_generates_fixture_backed_matrix(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

@@ -1435,6 +1435,57 @@
                                 </div>
                             </label>
                         </div>
+                        <div id="reconstructionRuntimeSummary" class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/60 px-4 py-4">
+                            <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                <div>
+                                    <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Effective Reconstruction & Runtime</p>
+                                    <p id="reconstructionSummaryHint" class="mt-2 text-[12px] leading-6 text-slate-600 dark:text-slate-300">Applies to the next run. Reconstruction-specific values are preserved when the feature is off.</p>
+                                </div>
+                                <button id="openEffectiveConfigBtn" type="button" class="rounded-full border border-slate-300 dark:border-slate-700 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-600 dark:text-slate-300 transition-colors hover:border-cyan-300 hover:text-cyan-700 dark:hover:border-cyan-700 dark:hover:text-cyan-300">
+                                    View Effective Config
+                                </button>
+                            </div>
+                            <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-5">
+                                <div class="panel-subtle rounded-2xl p-3">
+                                    <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Reconstruction</p>
+                                    <p id="summaryReconstructionState" class="mt-2 text-[12px] font-semibold text-slate-900 dark:text-white">Off</p>
+                                </div>
+                                <div class="panel-subtle rounded-2xl p-3">
+                                    <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Runtime Workers</p>
+                                    <p id="summaryRuntimeWorkers" class="mt-2 text-[12px] font-semibold text-slate-900 dark:text-white">Auto</p>
+                                </div>
+                                <div class="panel-subtle rounded-2xl p-3">
+                                    <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">RAW Ingest</p>
+                                    <p id="summaryRawIngest" class="mt-2 text-[12px] font-semibold text-slate-900 dark:text-white">Auto</p>
+                                </div>
+                                <div class="panel-subtle rounded-2xl p-3">
+                                    <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Debug Bundle</p>
+                                    <p id="summaryDebugBundle" class="mt-2 text-[12px] font-semibold text-slate-900 dark:text-white">Off</p>
+                                </div>
+                                <div class="panel-subtle rounded-2xl p-3">
+                                    <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Preview Status</p>
+                                    <p id="summaryPreviewState" class="mt-2 text-[12px] font-semibold text-slate-900 dark:text-white">Local fallback</p>
+                                </div>
+                            </div>
+                            <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-4">
+                                <div class="panel-subtle rounded-2xl p-3">
+                                    <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Runtime Posture</p>
+                                    <p id="estimateRuntimeBand" class="mt-2 text-[12px] font-semibold text-slate-900 dark:text-white">Low</p>
+                                </div>
+                                <div class="panel-subtle rounded-2xl p-3">
+                                    <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">GPU Pressure</p>
+                                    <p id="estimateGpuBand" class="mt-2 text-[12px] font-semibold text-slate-900 dark:text-white">Low</p>
+                                </div>
+                                <div class="panel-subtle rounded-2xl p-3">
+                                    <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Research Risk</p>
+                                    <p id="estimateResearchRisk" class="mt-2 text-[12px] font-semibold text-slate-900 dark:text-white">None</p>
+                                </div>
+                                <div class="panel-subtle rounded-2xl p-3">
+                                    <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Estimate Summary</p>
+                                    <p id="estimateSummaryLabel" class="mt-2 text-[12px] font-semibold leading-6 text-slate-900 dark:text-white">Low runtime · Low GPU pressure · None posture</p>
+                                </div>
+                            </div>
+                        </div>
                         <div id="reconstructionConfigFields" class="space-y-4">
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <label class="flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 px-4 py-3.5 cursor-pointer group transition-colors">
@@ -1446,6 +1497,18 @@
                                 </div>
                             </label>
                         </div>
+                        <div id="debugBundleGuardrail" class="hidden rounded-2xl border border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-900/10 px-4 py-4 space-y-3">
+                            <div>
+                                <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-amber-700 dark:text-amber-400">Debug Bundle Guardrail</p>
+                                <p id="debugBundleDestination" class="mt-2 text-[12px] leading-6 text-slate-700 dark:text-slate-200">Destination: pending preview</p>
+                                <p id="debugBundleSensitivity" class="mt-2 text-[12px] leading-6 text-slate-600 dark:text-slate-300">May include source images, camera metadata, segmentation overlays, and reprojection previews.</p>
+                            </div>
+                            <label class="flex items-start gap-3 cursor-pointer group">
+                                <input type="checkbox" id="debugBundleAcknowledge" class="w-4 h-4 mt-0.5 rounded text-amber-600 focus:ring-amber-500 border-amber-300 dark:border-amber-700 dark:bg-slate-900" />
+                                <span class="text-[12px] leading-tight select-none text-slate-700 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-white transition-colors">I understand this debug bundle can copy source imagery and camera metadata into the output directory for offline triage.</span>
+                            </label>
+                            <p id="debugBundleAcknowledgeHint" class="text-[11px] leading-5 text-amber-700 dark:text-amber-300">Required before dispatch when debug bundle emission is enabled.</p>
+                        </div>
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
                                 <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="groupingMode">Grouping Mode</label>
@@ -1453,20 +1516,28 @@
                                     <option value="single" selected>single</option>
                                     <option value="parent_dir">parent_dir</option>
                                 </select>
+                                <p id="groupingModeStatus" class="mt-1 text-[11px] leading-5 text-slate-500 dark:text-slate-400">Preserved even when reconstruction is toggled off.</p>
                             </div>
                             <div>
                                 <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="reconstructionIterations">Reconstruction Iterations</label>
                                 <input type="number" id="reconstructionIterations" min="1" step="1" value="1000" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors" />
+                                <p id="reconstructionIterationsStatus" class="mt-1 text-[11px] leading-5 text-slate-500 dark:text-slate-400">Balanced default: 1000 iterations.</p>
                             </div>
                         </div>
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
                                 <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="camerasSidecarPath">Cameras Sidecar Path (Optional)</label>
                                 <input type="text" id="camerasSidecarPath" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors" placeholder="./manifests/scene_cameras.json" autocomplete="off" spellcheck="false" />
+                                <p id="camerasSidecarStatus" class="mt-1 text-[11px] leading-5 text-slate-500 dark:text-slate-400">Recommended for multi-view reconstruction runs.</p>
                             </div>
                             <div>
                                 <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="reconstructionTier">Reconstruction Tier</label>
-                                <input type="text" id="reconstructionTier" value="apex_research" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors" autocomplete="off" spellcheck="false" />
+                                <select id="reconstructionTier" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors cursor-pointer">
+                                    <option value="apex_research" selected>apex_research</option>
+                                    <option value="apex_research_ultra">apex_research_ultra</option>
+                                    <option value="experimental">experimental</option>
+                                </select>
+                                <p id="reconstructionTierStatus" class="mt-1 text-[11px] leading-5 text-slate-500 dark:text-slate-400">Metadata-backed tier options update when the backend is online.</p>
                             </div>
                         </div>
                         </div>
@@ -1482,28 +1553,58 @@
                                     <option value="force_rawpy">force_rawpy</option>
                                     <option value="force_preview">force_preview</option>
                                 </select>
+                                <p id="rawIngestModeStatus" class="mt-1 text-[11px] leading-5 text-slate-500 dark:text-slate-400">Auto balances safety and runtime for the current ingest contract.</p>
                             </div>
-                            <div>
-                                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="rawWbMode">RAW WB Mode</label>
-                                <select id="rawWbMode" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors cursor-pointer">
-                                    <option value="camera" selected>camera</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="rawDemosaic">RAW Demosaic</label>
-                                <select id="rawDemosaic" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors cursor-pointer">
-                                    <option value="AHD" selected>AHD</option>
-                                </select>
+                            <div class="sm:col-span-2 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/60 px-4 py-4">
+                                <div class="flex items-start justify-between gap-3">
+                                    <div>
+                                        <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">RAW Policy Locks</p>
+                                        <p class="mt-2 text-[12px] leading-6 text-slate-600 dark:text-slate-300">These advanced photometric settings are currently locked by the backend contract.</p>
+                                    </div>
+                                    <span class="shrink-0 rounded border border-indigo-300 dark:border-indigo-700 bg-indigo-50 dark:bg-indigo-900/20 px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-indigo-700 dark:text-indigo-400">Advanced</span>
+                                </div>
+                                <div class="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <div class="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-3">
+                                        <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">RAW WB Mode</p>
+                                        <p id="rawWbModeBadge" class="mt-2 text-[12px] font-semibold text-slate-900 dark:text-white">camera</p>
+                                        <p id="rawWbModeHint" class="mt-2 text-[11px] leading-5 text-slate-500 dark:text-slate-400">Only camera white balance is currently supported.</p>
+                                        <select id="rawWbMode" class="hidden">
+                                            <option value="camera" selected>camera</option>
+                                        </select>
+                                    </div>
+                                    <div class="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-3">
+                                        <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">RAW Demosaic</p>
+                                        <p id="rawDemosaicBadge" class="mt-2 text-[12px] font-semibold text-slate-900 dark:text-white">AHD</p>
+                                        <p id="rawDemosaicHint" class="mt-2 text-[11px] leading-5 text-slate-500 dark:text-slate-400">Only AHD demosaic is currently supported.</p>
+                                        <select id="rawDemosaic" class="hidden">
+                                            <option value="AHD" selected>AHD</option>
+                                        </select>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                             <div>
-                                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="maxWorkers">Max Workers (Optional)</label>
-                                <input type="number" id="maxWorkers" min="1" step="1" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors" placeholder="auto" />
+                                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="maxWorkersMode">Max Workers</label>
+                                <select id="maxWorkersMode" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors cursor-pointer">
+                                    <option value="auto" selected>auto</option>
+                                    <option value="fixed">fixed</option>
+                                </select>
+                                <div id="maxWorkersValueField" class="hidden mt-3">
+                                    <input type="number" id="maxWorkers" min="1" step="1" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors" placeholder="enter worker cap" />
+                                </div>
+                                <p id="maxWorkersStatus" class="mt-1 text-[11px] leading-5 text-slate-500 dark:text-slate-400">Auto lets the backend choose a safe CPU worker cap.</p>
                             </div>
                             <div>
-                                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="maxGpuWorkers">Max GPU Workers (Optional)</label>
-                                <input type="number" id="maxGpuWorkers" min="1" step="1" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors" placeholder="auto" />
+                                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="maxGpuWorkersMode">Max GPU Workers</label>
+                                <select id="maxGpuWorkersMode" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors cursor-pointer">
+                                    <option value="auto" selected>auto</option>
+                                    <option value="fixed">fixed</option>
+                                </select>
+                                <div id="maxGpuWorkersValueField" class="hidden mt-3">
+                                    <input type="number" id="maxGpuWorkers" min="1" step="1" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors" placeholder="enter GPU worker cap" />
+                                </div>
+                                <p id="maxGpuWorkersStatus" class="mt-1 text-[11px] leading-5 text-slate-500 dark:text-slate-400">Auto keeps GPU parallelism conservative to reduce VRAM contention.</p>
                             </div>
                             <div>
                                 <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="logLevel">Log Level (Optional)</label>
@@ -1514,6 +1615,7 @@
                                     <option value="WARNING">WARNING</option>
                                     <option value="ERROR">ERROR</option>
                                 </select>
+                                <p id="logLevelStatus" class="mt-1 text-[11px] leading-5 text-slate-500 dark:text-slate-400">Use the default log level unless you need deeper runtime detail.</p>
                             </div>
                         </div>
                         </div>
@@ -1526,6 +1628,8 @@
                     <div class="flex items-center justify-between mb-4">
                         <h3 class="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Equivalent Command</h3>
                         <div class="flex gap-2 items-center">
+                            <button id="effectiveConfigBtn" type="button" class="text-[11px] font-semibold uppercase tracking-widest text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors focus:outline-none">View Effective Config</button>
+                            <span class="text-slate-300 dark:text-slate-700">|</span>
                             <button id="importBtn" type="button" class="text-[11px] font-semibold uppercase tracking-widest text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors focus:outline-none">Import JSON</button>
                             <span class="text-slate-300 dark:text-slate-700">|</span>
                             <button id="exportBtn" type="button" class="text-[11px] font-semibold uppercase tracking-widest text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors focus:outline-none">Export JSON</button>
@@ -1753,6 +1857,49 @@
         </div>
     </div>
 
+    <div id="effectiveConfigDrawer" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/55 backdrop-blur-sm p-4 dark:bg-black/70 transition-opacity" aria-hidden="true">
+        <div class="w-full max-w-5xl rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900" role="dialog" aria-modal="true" aria-labelledby="effectiveConfigTitle">
+            <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                    <p class="section-kicker">Effective Config</p>
+                    <h2 id="effectiveConfigTitle" class="mt-2 text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">Requested vs effective Lux configuration</h2>
+                    <p id="effectiveConfigMeta" class="mt-2 text-[12px] leading-6 text-slate-500 dark:text-slate-400">Preview-backed normalization, inactive preserved values, and runtime posture for the next run.</p>
+                </div>
+                <button id="closeEffectiveConfigBtn" type="button" class="rounded-full border border-slate-300 dark:border-slate-700 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-600 dark:text-slate-300 transition-colors hover:border-cyan-300 hover:text-cyan-700 dark:hover:border-cyan-700 dark:hover:text-cyan-300">
+                    Close
+                </button>
+            </div>
+            <div class="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-3">
+                <div class="panel-subtle rounded-2xl p-4">
+                    <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Requested Args</p>
+                    <pre id="requestedConfigJson" class="mt-3 command-frame min-h-[220px] rounded-2xl border border-slate-200 dark:border-slate-800 p-4 text-[11px] font-mono leading-relaxed text-slate-300 overflow-y-auto custom-scrollbar whitespace-pre-wrap break-words"></pre>
+                </div>
+                <div class="panel-subtle rounded-2xl p-4">
+                    <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Effective Args</p>
+                    <pre id="effectiveConfigJson" class="mt-3 command-frame min-h-[220px] rounded-2xl border border-slate-200 dark:border-slate-800 p-4 text-[11px] font-mono leading-relaxed text-slate-300 overflow-y-auto custom-scrollbar whitespace-pre-wrap break-words"></pre>
+                </div>
+                <div class="panel-subtle rounded-2xl p-4">
+                    <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Inactive Preserved Fields</p>
+                    <pre id="inactiveConfigJson" class="mt-3 command-frame min-h-[220px] rounded-2xl border border-slate-200 dark:border-slate-800 p-4 text-[11px] font-mono leading-relaxed text-slate-300 overflow-y-auto custom-scrollbar whitespace-pre-wrap break-words"></pre>
+                </div>
+            </div>
+            <div class="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-3">
+                <div class="panel-subtle rounded-2xl p-4">
+                    <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Estimate</p>
+                    <p id="effectiveEstimateLabel" class="mt-3 text-[12px] leading-6 text-slate-700 dark:text-slate-200">No preview estimate yet.</p>
+                </div>
+                <div class="panel-subtle rounded-2xl p-4">
+                    <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Readiness</p>
+                    <p id="effectiveReadinessSummary" class="mt-3 text-[12px] leading-6 text-slate-700 dark:text-slate-200">Readiness details load with the backend preview.</p>
+                </div>
+                <div class="panel-subtle rounded-2xl p-4">
+                    <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Backend Argv Preview</p>
+                    <pre id="effectiveArgvPreview" class="mt-3 command-frame min-h-[120px] rounded-2xl border border-slate-200 dark:border-slate-800 p-4 text-[11px] font-mono leading-relaxed text-slate-300 overflow-y-auto custom-scrollbar whitespace-pre-wrap break-words"></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Toast Container -->
     <div id="toastContainer" class="fixed bottom-6 right-6 z-50 flex flex-col gap-3 w-full max-w-sm pointer-events-none" aria-live="polite"></div>
 
@@ -1783,6 +1930,7 @@
         const SSE_RECONNECT_JITTER_MS = 250;
         const SSE_STALL_CHECK_INTERVAL_MS = 10000;
         const SSE_STALL_THRESHOLD_MS = 45000;
+        const CONFIG_PREVIEW_DEBOUNCE_MS = 250;
         const EVENT_SOURCE_READY_STATE_CONNECTING = 0;
         const EVENT_SOURCE_READY_STATE_OPEN = 1;
         const EVENT_SOURCE_READY_STATE_CLOSED = 2;
@@ -1796,6 +1944,7 @@
         let sseWatchdogIntervalId = null;
         let healthCheckInFlight = false;
         let lastHealthCheckAt = 0;
+        let configPreviewTimerId = null;
 
         const state = {
             pipeline: 'lux-depth-v3',
@@ -1803,7 +1952,7 @@
                 preset: 'premium',
                 inputDir: './input_images',
                 outputDir: './output/lux_depth_v3_apex',
-                qualityTier: 'apex',
+                qualityTier: 'premium',
                 depthBackend: 'da3',
                 depthDevice: 'cpu',
                 segmentation: {
@@ -1847,7 +1996,9 @@
                     demosaic: 'AHD'
                 },
                 runtime: {
+                    maxWorkersMode: 'auto',
                     maxWorkers: '',
+                    maxGpuWorkersMode: 'auto',
                     maxGpuWorkers: '',
                     logLevel: ''
                 }
@@ -1861,6 +2012,32 @@
                 compareByJob: {}
             },
             backendOk: false,
+            metadata: {
+                pipeline: '',
+                fields: {},
+                estimate_bands: {},
+                debug_bundle_policy: {},
+                advanced_sections: []
+            },
+            preview: {
+                pipeline: '',
+                requestKey: '',
+                status: 'idle',
+                field_errors: [],
+                field_warnings: [],
+                inactive_fields: [],
+                normalized_args: {},
+                readiness: null,
+                estimate_summary: null,
+                debug_bundle_summary: null,
+                argv_preview: '',
+                error: ''
+            },
+            portalUi: {
+                debugBundleAcknowledged: false,
+                effectiveConfigOpen: false,
+                debugBundleGuardrailSeen: false
+            },
             readiness: {
                 server: {},
                 pipelines: {}
@@ -2010,20 +2187,53 @@
                 camerasSidecarPath: document.getElementById('camerasSidecarPath'),
                 iterations: document.getElementById('reconstructionIterations'),
                 tier: document.getElementById('reconstructionTier'),
-                emitSceneDebugBundle: document.getElementById('emitSceneDebugBundle')
+                emitSceneDebugBundle: document.getElementById('emitSceneDebugBundle'),
+                groupingModeStatus: document.getElementById('groupingModeStatus'),
+                iterationsStatus: document.getElementById('reconstructionIterationsStatus'),
+                camerasSidecarStatus: document.getElementById('camerasSidecarStatus'),
+                tierStatus: document.getElementById('reconstructionTierStatus')
             },
             reconstructionConfigFields: document.getElementById('reconstructionConfigFields'),
             runtimeTuningFields: document.getElementById('runtimeTuningFields'),
             reconstructionDetailsHint: document.getElementById('reconstructionDetailsHint'),
+            reconstructionSummaryHint: document.getElementById('reconstructionSummaryHint'),
+            openEffectiveConfigBtn: document.getElementById('openEffectiveConfigBtn'),
+            effectiveConfigBtn: document.getElementById('effectiveConfigBtn'),
+            summaryReconstructionState: document.getElementById('summaryReconstructionState'),
+            summaryRuntimeWorkers: document.getElementById('summaryRuntimeWorkers'),
+            summaryRawIngest: document.getElementById('summaryRawIngest'),
+            summaryDebugBundle: document.getElementById('summaryDebugBundle'),
+            summaryPreviewState: document.getElementById('summaryPreviewState'),
+            estimateRuntimeBand: document.getElementById('estimateRuntimeBand'),
+            estimateGpuBand: document.getElementById('estimateGpuBand'),
+            estimateResearchRisk: document.getElementById('estimateResearchRisk'),
+            estimateSummaryLabel: document.getElementById('estimateSummaryLabel'),
+            debugBundleGuardrail: document.getElementById('debugBundleGuardrail'),
+            debugBundleDestination: document.getElementById('debugBundleDestination'),
+            debugBundleSensitivity: document.getElementById('debugBundleSensitivity'),
+            debugBundleAcknowledge: document.getElementById('debugBundleAcknowledge'),
+            debugBundleAcknowledgeHint: document.getElementById('debugBundleAcknowledgeHint'),
             raw: {
                 ingestMode: document.getElementById('rawIngestMode'),
                 wbMode: document.getElementById('rawWbMode'),
-                demosaic: document.getElementById('rawDemosaic')
+                demosaic: document.getElementById('rawDemosaic'),
+                wbModeBadge: document.getElementById('rawWbModeBadge'),
+                wbModeHint: document.getElementById('rawWbModeHint'),
+                demosaicBadge: document.getElementById('rawDemosaicBadge'),
+                demosaicHint: document.getElementById('rawDemosaicHint'),
+                ingestModeStatus: document.getElementById('rawIngestModeStatus')
             },
             runtime: {
+                maxWorkersMode: document.getElementById('maxWorkersMode'),
                 maxWorkers: document.getElementById('maxWorkers'),
+                maxWorkersValueField: document.getElementById('maxWorkersValueField'),
+                maxWorkersStatus: document.getElementById('maxWorkersStatus'),
+                maxGpuWorkersMode: document.getElementById('maxGpuWorkersMode'),
                 maxGpuWorkers: document.getElementById('maxGpuWorkers'),
-                logLevel: document.getElementById('logLevel')
+                maxGpuWorkersValueField: document.getElementById('maxGpuWorkersValueField'),
+                maxGpuWorkersStatus: document.getElementById('maxGpuWorkersStatus'),
+                logLevel: document.getElementById('logLevel'),
+                logLevelStatus: document.getElementById('logLevelStatus')
             },
 
             fieldsLuxDepth: document.getElementById('fieldsLuxDepth'),
@@ -2105,6 +2315,15 @@
             shortcutsModal: document.getElementById('shortcutsModal'),
             shortcutsPanel: document.getElementById('shortcutsPanel'),
             closeShortcutsBtn: document.getElementById('closeShortcutsBtn'),
+            effectiveConfigDrawer: document.getElementById('effectiveConfigDrawer'),
+            closeEffectiveConfigBtn: document.getElementById('closeEffectiveConfigBtn'),
+            effectiveConfigMeta: document.getElementById('effectiveConfigMeta'),
+            requestedConfigJson: document.getElementById('requestedConfigJson'),
+            effectiveConfigJson: document.getElementById('effectiveConfigJson'),
+            inactiveConfigJson: document.getElementById('inactiveConfigJson'),
+            effectiveEstimateLabel: document.getElementById('effectiveEstimateLabel'),
+            effectiveReadinessSummary: document.getElementById('effectiveReadinessSummary'),
+            effectiveArgvPreview: document.getElementById('effectiveArgvPreview'),
 
             healthIndicator: document.getElementById('healthIndicator'),
             healthText: document.getElementById('healthText'),
@@ -3144,7 +3363,7 @@
             if (els.reconstructionDetailsHint) {
                 els.reconstructionDetailsHint.textContent = reconstructionEnabled
                     ? 'Scene reconstruction is active. Grouping, sidecar, tier, and debug controls are now available.'
-                    : 'Runtime tuning stays available here. Reconstruction-only settings appear after you enable the feature.';
+                    : 'Runtime tuning stays available here. Reconstruction-only settings stay preserved and inactive until you enable the feature.';
             }
         }
 
@@ -3770,15 +3989,32 @@
             state.bootstrap.onlineFollowupComplete = true;
             void fetchReadiness(true);
             void fetchPresetsForPipeline(state.pipeline, true);
+            void fetchConfigMetadata(state.pipeline, true);
+            scheduleConfigPreview(true);
             void recoverJobs();
             return true;
         }
 
         function _syncBootstrapGuardedControls() {
             const readinessStatus = currentPipelineDispatchStatus();
+            const preview = _currentPreviewForPayload();
+            const luxPreviewBlocked = state.pipeline === 'lux-depth-v3'
+                && state.backendOk
+                && _isBootstrapReady()
+                && (
+                    !preview
+                    || preview.status === 'loading'
+                    || preview.status === 'error'
+                    || (preview.status === 'ready' && Array.isArray(preview.field_errors) && preview.field_errors.length > 0)
+                );
+            const debugBundleBlocked = state.pipeline === 'lux-depth-v3'
+                && parseBoolLike(generatePayload().args.emit_scene_debug_bundle, false)
+                && !state.portalUi.debugBundleAcknowledged;
             const canRunJobs = _portalPrivilegesReady()
                 && state.backendOk
-                && readinessStatus === 'ready';
+                && readinessStatus === 'ready'
+                && !luxPreviewBlocked
+                && !debugBundleBlocked;
             if (els.runJobBtn && els.runJobBtn.textContent !== 'Dispatching...') {
                 els.runJobBtn.disabled = !canRunJobs;
             }
@@ -4243,8 +4479,10 @@
         }
 
         function renderReviewSurfaces(payload = null) {
+            const currentPayload = payload || generatePayload();
             renderArtifactPanel();
             renderSelectedJobInspector();
+            renderReconstructionRuntimeSummary(currentPayload);
             renderMissionControl(payload);
         }
 
@@ -4808,6 +5046,765 @@
             }
         }
 
+        const RECON_RUNTIME_DEFAULT_STATUS = Object.freeze({
+            grouping_mode: 'Preserved even when reconstruction is toggled off.',
+            reconstruction_iterations: 'Balanced default: 1000 iterations.',
+            cameras_sidecar_path: 'Recommended for multi-view reconstruction runs.',
+            reconstruction_tier: 'Metadata-backed tier options update when the backend is online.',
+            raw_ingest_mode: 'Auto balances safety and runtime for the current ingest contract.',
+            max_workers: 'Auto lets the backend choose a safe CPU worker cap.',
+            max_gpu_workers: 'Auto keeps GPU parallelism conservative to reduce VRAM contention.',
+            log_level: 'Use the default log level unless you need deeper runtime detail.'
+        });
+
+        function _normalizeWorkerMode(value) {
+            return String(value || '').trim().toLowerCase() === 'fixed' ? 'fixed' : 'auto';
+        }
+
+        function _portalEstimateBand(score) {
+            if (score <= 1) return 'low';
+            if (score === 2) return 'medium';
+            return 'high';
+        }
+
+        function _titleizeEstimateToken(value, fallback = 'Unknown') {
+            const token = String(value || '').trim();
+            if (!token) return fallback;
+            return token
+                .split(/[_\s-]+/)
+                .filter(Boolean)
+                .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+                .join(' ');
+        }
+
+        function _buildLocalEstimateSummary(args = {}) {
+            const normalizedArgs = args && typeof args === 'object' ? args : {};
+            let runtimeScore = 0;
+            let gpuScore = 0;
+            let researchRisk = 'none';
+            const reasons = [];
+
+            if (String(normalizedArgs.quality_tier || '').trim().toLowerCase() === 'apex') {
+                runtimeScore += 1;
+            }
+            if (String(normalizedArgs.depth_backend || '').trim().toLowerCase() === 'depth_pro') {
+                runtimeScore += 1;
+                gpuScore += 1;
+                researchRisk = 'research_only';
+                reasons.push('depth_pro_research_backend');
+            }
+            if (
+                parseBoolLike(normalizedArgs.enable_segmentation, false)
+                && String(normalizedArgs.segmentation_backend || '').trim().toLowerCase() === 'sam2'
+            ) {
+                runtimeScore += 1;
+                gpuScore += 1;
+                reasons.push('sam2_segmentation');
+            }
+            if (parseBoolLike(normalizedArgs.enable_reconstruction, false)) {
+                runtimeScore += 1;
+                gpuScore += 1;
+                researchRisk = 'research_only';
+                reasons.push('scene_reconstruction');
+                const iterations = Number.parseInt(String(normalizedArgs.reconstruction_iterations || '1000'), 10) || 1000;
+                if (iterations >= 2000) {
+                    runtimeScore += 1;
+                    reasons.push('high_iteration_count');
+                }
+                if (iterations >= 3000) {
+                    gpuScore += 1;
+                }
+                const tier = String(normalizedArgs.reconstruction_tier || 'apex_research').trim().toLowerCase();
+                if (tier === 'apex_research_ultra') {
+                    runtimeScore += 1;
+                    gpuScore += 1;
+                    reasons.push('ultra_reconstruction_tier');
+                } else if (tier === 'experimental') {
+                    runtimeScore += 1;
+                    gpuScore += 1;
+                    researchRisk = 'experimental';
+                    reasons.push('experimental_reconstruction_tier');
+                }
+            }
+            if (String(normalizedArgs.raw_ingest_mode || '').trim().toLowerCase() === 'force_rawpy') {
+                runtimeScore += 1;
+                reasons.push('forced_rawpy_ingest');
+            }
+            if (parseBoolLike(normalizedArgs.emit_scene_debug_bundle, false)) {
+                runtimeScore += 1;
+                reasons.push('debug_bundle_emission');
+            }
+
+            const maxWorkers = Number.parseInt(String(normalizedArgs.max_workers || ''), 10);
+            if (Number.isFinite(maxWorkers) && maxWorkers > 4) {
+                runtimeScore += 1;
+                reasons.push('cpu_worker_override');
+            }
+            const maxGpuWorkers = Number.parseInt(String(normalizedArgs.max_gpu_workers || ''), 10);
+            if (Number.isFinite(maxGpuWorkers) && maxGpuWorkers >= 2) {
+                gpuScore += 1;
+                reasons.push('gpu_worker_override');
+            }
+            if (researchRisk === 'none' && String(normalizedArgs.preset || '').toLowerCase().includes('research')) {
+                researchRisk = 'research_only';
+            }
+
+            const runtimeBand = _portalEstimateBand(runtimeScore);
+            const gpuBand = _portalEstimateBand(gpuScore);
+            return {
+                runtime_band: runtimeBand,
+                gpu_pressure: gpuBand,
+                research_risk: researchRisk,
+                reasons,
+                summary_label: `${_titleizeEstimateToken(runtimeBand)} runtime · ${_titleizeEstimateToken(gpuBand)} GPU pressure · ${_titleizeEstimateToken(researchRisk)} posture`
+            };
+        }
+
+        function _buildLocalDebugBundleSummary(args = {}) {
+            const outputDir = String(args.output_dir || '').trim();
+            return {
+                enabled: parseBoolLike(args.emit_scene_debug_bundle, false),
+                requires_acknowledgement: parseBoolLike(args.emit_scene_debug_bundle, false),
+                destination: outputDir ? `${outputDir.replace(/[\\/]$/, '')}/reconstruction/<scene-fingerprint>/debug` : '',
+                includes: ['scene_manifest', 'camera_payload', 'input_image_copies', 'segmentation_overlays', 'reprojection_preview'],
+                sensitivity: 'camera_metadata_and_source_images',
+                notes: [
+                    'Debug bundles may copy source imagery and camera metadata into the output tree.',
+                    'Portal dispatch requires an explicit acknowledgement before enabling debug bundle emission.'
+                ]
+            };
+        }
+
+        function _emptyPreviewState(status = 'idle', pipeline = '') {
+            return {
+                pipeline,
+                requestKey: '',
+                status,
+                field_errors: [],
+                field_warnings: [],
+                inactive_fields: [],
+                normalized_args: {},
+                readiness: null,
+                estimate_summary: null,
+                debug_bundle_summary: null,
+                argv_preview: '',
+                error: ''
+            };
+        }
+
+        function _setPreviewState(nextState) {
+            state.preview = {
+                ..._emptyPreviewState(state.preview?.status || 'idle', state.pipeline),
+                ...(nextState && typeof nextState === 'object' ? nextState : {})
+            };
+        }
+
+        function _configPreviewRequestKey(payload) {
+            if (!payload || typeof payload !== 'object') return '';
+            try {
+                return JSON.stringify({ pipeline: payload.pipeline || '', args: payload.args || {} });
+            } catch {
+                return `${String(payload.pipeline || '')}:${Date.now()}`;
+            }
+        }
+
+        function _currentPreviewForPayload(payload = null) {
+            const currentPayload = payload || generatePayload();
+            const requestKey = _configPreviewRequestKey(currentPayload);
+            if (
+                state.preview
+                && state.preview.pipeline === currentPayload.pipeline
+                && state.preview.requestKey === requestKey
+            ) {
+                return state.preview;
+            }
+            return null;
+        }
+
+        function _effectivePreviewSnapshot(payload = null) {
+            const currentPayload = payload || generatePayload();
+            const preview = _currentPreviewForPayload(currentPayload);
+            if (preview && preview.status === 'ready') return preview;
+            return {
+                pipeline: currentPayload.pipeline,
+                requestKey: _configPreviewRequestKey(currentPayload),
+                status: state.backendOk ? 'local_fallback' : 'offline',
+                field_errors: [],
+                field_warnings: [],
+                inactive_fields: [],
+                normalized_args: { ...(currentPayload.args || {}) },
+                readiness: null,
+                estimate_summary: _buildLocalEstimateSummary(currentPayload.args || {}),
+                debug_bundle_summary: _buildLocalDebugBundleSummary(currentPayload.args || {}),
+                argv_preview: '',
+                error: ''
+            };
+        }
+
+        function _configPreviewEnabledForPipeline(pipelineName = state.pipeline) {
+            return String(pipelineName || '').trim() === 'lux-depth-v3' && state.backendOk && _isBootstrapReady();
+        }
+
+        function _setSelectOptions(selectEl, options, selectedValue) {
+            if (!selectEl || !Array.isArray(options) || options.length === 0) return;
+            const normalizedOptions = options
+                .map((option) => ({
+                    value: String(option?.value ?? '').trim(),
+                    label: String(option?.label ?? option?.value ?? '').trim()
+                }))
+                .filter((option) => option.value);
+            if (normalizedOptions.length === 0) return;
+            const preferred = String(selectedValue ?? selectEl.value ?? '').trim();
+            selectEl.innerHTML = '';
+            normalizedOptions.forEach((option) => {
+                const el = document.createElement('option');
+                el.value = option.value;
+                el.textContent = option.label || option.value;
+                selectEl.appendChild(el);
+            });
+            const hasPreferred = normalizedOptions.some((option) => option.value === preferred);
+            selectEl.value = hasPreferred ? preferred : normalizedOptions[0].value;
+        }
+
+        function _metadataField(name) {
+            const fields = state.metadata && state.metadata.fields && typeof state.metadata.fields === 'object'
+                ? state.metadata.fields
+                : {};
+            const value = fields[name];
+            return value && typeof value === 'object' ? value : null;
+        }
+
+        function applyLuxMetadataToControls() {
+            if (state.pipeline !== 'lux-depth-v3') return;
+
+            const groupingField = _metadataField('grouping_mode');
+            const tierField = _metadataField('reconstruction_tier');
+            const rawIngestField = _metadataField('raw_ingest_mode');
+            const rawWbField = _metadataField('raw_wb_mode');
+            const rawDemosaicField = _metadataField('raw_demosaic');
+            const maxWorkersField = _metadataField('max_workers');
+            const maxGpuWorkersField = _metadataField('max_gpu_workers');
+            const iterationsField = _metadataField('reconstruction_iterations');
+            const logLevelField = _metadataField('log_level');
+
+            if (els.reconstruction.groupingMode && groupingField?.options) {
+                _setSelectOptions(els.reconstruction.groupingMode, groupingField.options, state.config.reconstruction?.groupingMode);
+                state.config.reconstruction.groupingMode = String(els.reconstruction.groupingMode.value || state.config.reconstruction?.groupingMode || 'single');
+            }
+            if (els.reconstruction.tier && tierField?.options) {
+                _setSelectOptions(els.reconstruction.tier, tierField.options, state.config.reconstruction?.tier);
+                state.config.reconstruction.tier = String(els.reconstruction.tier.value || state.config.reconstruction?.tier || 'apex_research');
+            }
+            if (els.raw.ingestMode && rawIngestField?.options) {
+                _setSelectOptions(els.raw.ingestMode, rawIngestField.options, state.config.raw?.ingestMode);
+                state.config.raw.ingestMode = String(els.raw.ingestMode.value || state.config.raw?.ingestMode || 'auto');
+            }
+            if (els.runtime.logLevel && logLevelField?.options) {
+                _setSelectOptions(els.runtime.logLevel, logLevelField.options, state.config.runtime?.logLevel);
+                state.config.runtime.logLevel = String(els.runtime.logLevel.value || state.config.runtime?.logLevel || '');
+            }
+            if (els.raw.wbModeBadge && rawWbField) {
+                els.raw.wbModeBadge.textContent = String(rawWbField.display_value || rawWbField.default || 'camera');
+            }
+            if (els.raw.wbModeHint && rawWbField?.helper_text) {
+                els.raw.wbModeHint.textContent = String(rawWbField.helper_text);
+            }
+            if (els.raw.wbMode) {
+                els.raw.wbMode.value = String(rawWbField?.display_value || rawWbField?.default || state.config.raw?.wbMode || 'camera');
+            }
+            if (els.raw.demosaicBadge && rawDemosaicField) {
+                els.raw.demosaicBadge.textContent = String(rawDemosaicField.display_value || rawDemosaicField.default || 'AHD');
+            }
+            if (els.raw.demosaicHint && rawDemosaicField?.helper_text) {
+                els.raw.demosaicHint.textContent = String(rawDemosaicField.helper_text);
+            }
+            if (els.raw.demosaic) {
+                els.raw.demosaic.value = String(rawDemosaicField?.display_value || rawDemosaicField?.default || state.config.raw?.demosaic || 'AHD');
+            }
+            if (els.reconstruction.iterations && iterationsField?.min) {
+                els.reconstruction.iterations.min = String(iterationsField.min);
+            }
+            if (els.runtime.maxWorkers && maxWorkersField?.min) {
+                els.runtime.maxWorkers.min = String(maxWorkersField.min);
+            }
+            if (els.runtime.maxGpuWorkers && maxGpuWorkersField?.min) {
+                els.runtime.maxGpuWorkers.min = String(maxGpuWorkersField.min);
+            }
+        }
+
+        function _previewIssueForField(fieldName, payload = null) {
+            const preview = _currentPreviewForPayload(payload);
+            if (!preview || preview.status !== 'ready') return null;
+            const errors = Array.isArray(preview.field_errors) ? preview.field_errors : [];
+            const warnings = Array.isArray(preview.field_warnings) ? preview.field_warnings : [];
+            const error = errors.find((item) => String(item?.field || '') === fieldName);
+            if (error) return { tone: 'error', detail: error };
+            const warning = warnings.find((item) => String(item?.field || '') === fieldName);
+            if (warning) return { tone: 'warning', detail: warning };
+            return null;
+        }
+
+        function _renderIssueStatus(el, helperText, issue) {
+            if (!el) return;
+            el.textContent = issue?.detail?.message || helperText;
+            el.classList.remove('text-slate-500', 'dark:text-slate-400', 'text-amber-700', 'dark:text-amber-300', 'text-red-600', 'dark:text-red-300');
+            if (issue?.tone === 'error') {
+                el.classList.add('text-red-600', 'dark:text-red-300');
+            } else if (issue?.tone === 'warning') {
+                el.classList.add('text-amber-700', 'dark:text-amber-300');
+            } else {
+                el.classList.add('text-slate-500', 'dark:text-slate-400');
+            }
+        }
+
+        function syncRuntimeWorkerModeControls() {
+            const runtime = state.config.runtime || {};
+            runtime.maxWorkersMode = _normalizeWorkerMode(runtime.maxWorkersMode || (runtime.maxWorkers ? 'fixed' : 'auto'));
+            runtime.maxGpuWorkersMode = _normalizeWorkerMode(runtime.maxGpuWorkersMode || (runtime.maxGpuWorkers ? 'fixed' : 'auto'));
+            state.config.runtime = runtime;
+
+            if (els.runtime.maxWorkersMode) {
+                els.runtime.maxWorkersMode.value = runtime.maxWorkersMode;
+            }
+            if (els.runtime.maxWorkersValueField) {
+                els.runtime.maxWorkersValueField.classList.toggle('hidden', runtime.maxWorkersMode !== 'fixed');
+            }
+            if (els.runtime.maxWorkers) {
+                els.runtime.maxWorkers.disabled = runtime.maxWorkersMode !== 'fixed';
+            }
+            if (els.runtime.maxGpuWorkersMode) {
+                els.runtime.maxGpuWorkersMode.value = runtime.maxGpuWorkersMode;
+            }
+            if (els.runtime.maxGpuWorkersValueField) {
+                els.runtime.maxGpuWorkersValueField.classList.toggle('hidden', runtime.maxGpuWorkersMode !== 'fixed');
+            }
+            if (els.runtime.maxGpuWorkers) {
+                els.runtime.maxGpuWorkers.disabled = runtime.maxGpuWorkersMode !== 'fixed';
+            }
+        }
+
+        async function emitPortalEvent(eventType, options = {}) {
+            if (!state.backendOk || !_isBootstrapReady()) return;
+            const eventOptions = options && typeof options === 'object' ? options : {};
+            const payload = {
+                event_type: String(eventType || '').trim().toLowerCase(),
+                pipeline: state.pipeline,
+                surface: String(eventOptions.surface || '').trim().toLowerCase(),
+                field: String(eventOptions.field || '').trim(),
+                metadata: eventOptions.metadata && typeof eventOptions.metadata === 'object' ? eventOptions.metadata : {},
+                reasons: Array.isArray(eventOptions.reasons) ? eventOptions.reasons : []
+            };
+            try {
+                const headers = _buildAuthHeaders({ 'Content-Type': 'application/json' }, 'POST');
+                await fetch(`${API_BASE}/v1/portal/events`, {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify(payload)
+                });
+            } catch {
+                // best-effort telemetry only
+            }
+        }
+
+        async function fetchConfigMetadata(pipelineName = state.pipeline, silent = false) {
+            if (String(pipelineName || '').trim() !== 'lux-depth-v3' || !state.backendOk || !_isBootstrapReady()) {
+                state.metadata = {
+                    pipeline: '',
+                    fields: {},
+                    estimate_bands: {},
+                    debug_bundle_policy: {},
+                    advanced_sections: []
+                };
+                renderReviewSurfaces();
+                return;
+            }
+            try {
+                const headers = _buildAuthHeaders({ 'Accept': 'application/json' });
+                const res = await fetch(`${API_BASE}/v1/config-metadata?pipeline=${encodeURIComponent(pipelineName)}`, {
+                    headers,
+                    cache: 'no-store'
+                });
+                if (!res.ok) throw new Error(`config metadata fetch failed (${res.status})`);
+                const payload = await res.json();
+                const data = payload?.success === true && payload?.data && typeof payload.data === 'object'
+                    ? payload.data
+                    : null;
+                if (!data) throw new Error('invalid config metadata payload');
+                state.metadata = {
+                    pipeline: String(data.pipeline || pipelineName),
+                    fields: data.fields && typeof data.fields === 'object' ? data.fields : {},
+                    estimate_bands: data.estimate_bands && typeof data.estimate_bands === 'object' ? data.estimate_bands : {},
+                    debug_bundle_policy: data.debug_bundle_policy && typeof data.debug_bundle_policy === 'object' ? data.debug_bundle_policy : {},
+                    advanced_sections: Array.isArray(data.advanced_sections) ? data.advanced_sections.map((item) => String(item || '')) : []
+                };
+                applyLuxMetadataToControls();
+                renderReviewSurfaces();
+            } catch {
+                if (!silent) createToast('Failed to refresh config metadata from backend.', 'error');
+            }
+        }
+
+        async function fetchConfigPreview(payload) {
+            const currentPayload = payload && typeof payload === 'object' ? payload : generatePayload();
+            const requestKey = _configPreviewRequestKey(currentPayload);
+
+            if (!_configPreviewEnabledForPipeline(currentPayload.pipeline)) {
+                _setPreviewState({
+                    ..._emptyPreviewState(state.backendOk ? 'local_fallback' : 'offline', currentPayload.pipeline),
+                    requestKey
+                });
+                renderCLI();
+                return;
+            }
+
+            _setPreviewState({
+                ..._emptyPreviewState('loading', currentPayload.pipeline),
+                requestKey
+            });
+            renderCLI();
+
+            try {
+                const headers = _buildAuthHeaders({ 'Content-Type': 'application/json', 'Accept': 'application/json' }, 'POST');
+                const res = await fetch(`${API_BASE}/v1/config-preview`, {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify(currentPayload)
+                });
+                if (!res.ok) throw new Error(`config preview fetch failed (${res.status})`);
+                const response = await res.json();
+                const data = response?.success === true && response?.data && typeof response.data === 'object'
+                    ? response.data
+                    : null;
+                if (!data) throw new Error('invalid config preview payload');
+                if (_configPreviewRequestKey(generatePayload()) !== requestKey) {
+                    return;
+                }
+                _setPreviewState({
+                    pipeline: String(data.pipeline || currentPayload.pipeline),
+                    requestKey,
+                    status: 'ready',
+                    field_errors: Array.isArray(data.field_errors) ? data.field_errors : [],
+                    field_warnings: Array.isArray(data.field_warnings) ? data.field_warnings : [],
+                    inactive_fields: Array.isArray(data.inactive_fields) ? data.inactive_fields : [],
+                    normalized_args: data.normalized_args && typeof data.normalized_args === 'object' ? data.normalized_args : {},
+                    readiness: data.readiness && typeof data.readiness === 'object' ? data.readiness : null,
+                    estimate_summary: data.estimate_summary && typeof data.estimate_summary === 'object' ? data.estimate_summary : null,
+                    debug_bundle_summary: data.debug_bundle_summary && typeof data.debug_bundle_summary === 'object' ? data.debug_bundle_summary : null,
+                    argv_preview: String(data.argv_preview || ''),
+                    error: ''
+                });
+                if (state.preview.field_errors.length > 0) {
+                    void emitPortalEvent('preview_error_seen', {
+                        surface: 'reconstruction_runtime',
+                        reasons: state.preview.field_errors.map((item) => String(item?.reason || '')).filter(Boolean).slice(0, 8),
+                        metadata: { count: state.preview.field_errors.length }
+                    });
+                }
+            } catch {
+                _setPreviewState({
+                    ..._emptyPreviewState('error', currentPayload.pipeline),
+                    requestKey,
+                    error: 'preview_unavailable'
+                });
+            } finally {
+                renderCLI();
+            }
+        }
+
+        function scheduleConfigPreview(immediate = false) {
+            if (configPreviewTimerId !== null) {
+                clearTimeout(configPreviewTimerId);
+                configPreviewTimerId = null;
+            }
+            const payload = generatePayload();
+            if (payload.pipeline !== 'lux-depth-v3') {
+                _setPreviewState(_emptyPreviewState('idle', payload.pipeline));
+                renderCLI();
+                return;
+            }
+            if (immediate) {
+                void fetchConfigPreview(payload);
+                return;
+            }
+            configPreviewTimerId = window.setTimeout(() => {
+                configPreviewTimerId = null;
+                void fetchConfigPreview(generatePayload());
+            }, CONFIG_PREVIEW_DEBOUNCE_MS);
+        }
+
+        function _formatWorkerSummary(mode, value, label) {
+            if (_normalizeWorkerMode(mode) !== 'fixed') return `${label} Auto`;
+            const parsed = Number.parseInt(String(value || ''), 10);
+            return Number.isFinite(parsed) && parsed > 0 ? `${label} ${parsed}` : `${label} Fixed`;
+        }
+
+        function _formatPreviewStateLabel(payload = null) {
+            const preview = _currentPreviewForPayload(payload);
+            if (!preview) {
+                return state.backendOk ? 'Refreshing' : 'Local fallback';
+            }
+            if (preview.status === 'ready') return 'Preview ready';
+            if (preview.status === 'loading') return 'Refreshing';
+            if (preview.status === 'error') return 'Preview unavailable';
+            if (preview.status === 'offline') return 'Local fallback';
+            if (preview.status === 'local_fallback') return 'Local fallback';
+            return 'Local fallback';
+        }
+
+        function _effectiveReadinessSummary(readiness) {
+            if (!readiness || typeof readiness !== 'object') {
+                const status = currentPipelineDispatchStatus();
+                return status ? `Current readiness: ${_titleizeEstimateToken(status)}` : 'Readiness details load with the backend preview.';
+            }
+            const status = _titleizeEstimateToken(String(readiness.status || '').trim() || 'unknown');
+            const issues = Array.isArray(readiness.missing_prerequisites) ? readiness.missing_prerequisites : [];
+            if (issues.length === 0) return `Readiness: ${status}`;
+            const firstIssue = issues[0];
+            return `Readiness: ${status} · ${String(firstIssue?.message || 'Additional prerequisites reported.')}`;
+        }
+
+        function renderReconstructionRuntimeSummary(payload = null) {
+            if (state.pipeline !== 'lux-depth-v3') return;
+            const currentPayload = payload || generatePayload();
+            const matchedPreview = _currentPreviewForPayload(currentPayload);
+            const preview = matchedPreview || _effectivePreviewSnapshot(currentPayload);
+            const previewStatus = matchedPreview ? matchedPreview.status : preview.status;
+            const runtime = state.config.runtime || {};
+            const estimate = preview.estimate_summary || _buildLocalEstimateSummary(currentPayload.args || {});
+            const debugSummary = preview.debug_bundle_summary || _buildLocalDebugBundleSummary(currentPayload.args || {});
+            const reconstructionEnabled = parseBoolLike(currentPayload.args.enable_reconstruction, false);
+            const debugEnabled = parseBoolLike(currentPayload.args.emit_scene_debug_bundle, false);
+
+            if (els.summaryReconstructionState) {
+                els.summaryReconstructionState.textContent = reconstructionEnabled ? 'On' : 'Off';
+            }
+            if (els.summaryRuntimeWorkers) {
+                els.summaryRuntimeWorkers.textContent = [
+                    _formatWorkerSummary(runtime.maxWorkersMode, currentPayload.args.max_workers, 'CPU'),
+                    _formatWorkerSummary(runtime.maxGpuWorkersMode, currentPayload.args.max_gpu_workers, 'GPU')
+                ].join(' · ');
+            }
+            if (els.summaryRawIngest) {
+                els.summaryRawIngest.textContent = _titleizeEstimateToken(currentPayload.args.raw_ingest_mode || 'auto', 'Auto');
+            }
+            if (els.summaryDebugBundle) {
+                els.summaryDebugBundle.textContent = debugEnabled
+                    ? state.portalUi.debugBundleAcknowledged
+                        ? 'On · acknowledged'
+                        : 'On · acknowledgement needed'
+                    : 'Off';
+            }
+            if (els.summaryPreviewState) {
+                els.summaryPreviewState.textContent = _formatPreviewStateLabel(currentPayload);
+            }
+            if (els.estimateRuntimeBand) {
+                els.estimateRuntimeBand.textContent = _titleizeEstimateToken(estimate.runtime_band || 'low', 'Low');
+            }
+            if (els.estimateGpuBand) {
+                els.estimateGpuBand.textContent = _titleizeEstimateToken(estimate.gpu_pressure || 'low', 'Low');
+            }
+            if (els.estimateResearchRisk) {
+                els.estimateResearchRisk.textContent = _titleizeEstimateToken(estimate.research_risk || 'none', 'None');
+            }
+            if (els.estimateSummaryLabel) {
+                els.estimateSummaryLabel.textContent = String(estimate.summary_label || 'No estimate available.');
+            }
+            if (els.reconstructionSummaryHint) {
+                if (previewStatus === 'ready') {
+                    els.reconstructionSummaryHint.textContent = 'Applies to the next run. Preview-backed validation and normalization are live.';
+                } else if (previewStatus === 'error') {
+                    els.reconstructionSummaryHint.textContent = 'Preview-backed validation is unavailable right now, so dispatch stays paused until it recovers.';
+                } else if (!state.backendOk) {
+                    els.reconstructionSummaryHint.textContent = 'Applies to the next run. Backend preview is unavailable while the orchestrator is offline.';
+                } else {
+                    els.reconstructionSummaryHint.textContent = 'Applies to the next run. Reconstruction-specific values are preserved when the feature is off.';
+                }
+            }
+
+            _renderIssueStatus(
+                els.reconstruction.groupingModeStatus,
+                groupingFieldStatusText(),
+                _previewIssueForField('grouping_mode', currentPayload)
+            );
+            _renderIssueStatus(
+                els.reconstruction.iterationsStatus,
+                iterationFieldStatusText(),
+                _previewIssueForField('reconstruction_iterations', currentPayload)
+            );
+            _renderIssueStatus(
+                els.reconstruction.camerasSidecarStatus,
+                RECON_RUNTIME_DEFAULT_STATUS.cameras_sidecar_path,
+                _previewIssueForField('cameras_sidecar_path', currentPayload)
+            );
+            _renderIssueStatus(
+                els.reconstruction.tierStatus,
+                reconstructionTierStatusText(),
+                _previewIssueForField('reconstruction_tier', currentPayload)
+            );
+            _renderIssueStatus(
+                els.raw.ingestModeStatus,
+                rawIngestModeStatusText(),
+                _previewIssueForField('raw_ingest_mode', currentPayload)
+            );
+            _renderIssueStatus(
+                els.runtime.maxWorkersStatus,
+                maxWorkersStatusText(),
+                _previewIssueForField('max_workers', currentPayload)
+            );
+            _renderIssueStatus(
+                els.runtime.maxGpuWorkersStatus,
+                maxGpuWorkersStatusText(),
+                _previewIssueForField('max_gpu_workers', currentPayload)
+            );
+            _renderIssueStatus(
+                els.runtime.logLevelStatus,
+                logLevelStatusText(),
+                _previewIssueForField('log_level', currentPayload)
+            );
+
+            renderDebugBundleGuardrail(currentPayload, debugSummary, preview);
+            renderEffectiveConfigDrawer(currentPayload, preview);
+        }
+
+        function renderDebugBundleGuardrail(payload = null, debugSummary = null, preview = null) {
+            const currentPayload = payload || generatePayload();
+            const currentPreview = preview || _effectivePreviewSnapshot(currentPayload);
+            const summary = debugSummary || currentPreview.debug_bundle_summary || _buildLocalDebugBundleSummary(currentPayload.args || {});
+            const enabled = parseBoolLike(currentPayload.args.emit_scene_debug_bundle, false);
+
+            if (els.debugBundleGuardrail) {
+                els.debugBundleGuardrail.classList.toggle('hidden', !enabled);
+            }
+            if (!enabled) {
+                state.portalUi.debugBundleAcknowledged = false;
+                state.portalUi.debugBundleGuardrailSeen = false;
+                if (els.debugBundleAcknowledge) {
+                    els.debugBundleAcknowledge.checked = false;
+                }
+                return;
+            }
+
+            if (els.debugBundleDestination) {
+                els.debugBundleDestination.textContent = `Destination: ${String(summary.destination || 'pending preview')}`;
+            }
+            if (els.debugBundleSensitivity) {
+                els.debugBundleSensitivity.textContent = 'May include source images, camera metadata, segmentation overlays, and reprojection previews.';
+            }
+            if (els.debugBundleAcknowledge) {
+                els.debugBundleAcknowledge.checked = Boolean(state.portalUi.debugBundleAcknowledged);
+            }
+            if (els.debugBundleAcknowledgeHint) {
+                const previewIssue = _previewIssueForField('emit_scene_debug_bundle', currentPayload);
+                if (previewIssue?.detail?.message) {
+                    els.debugBundleAcknowledgeHint.textContent = previewIssue.detail.message;
+                    els.debugBundleAcknowledgeHint.classList.remove('text-amber-700', 'dark:text-amber-300', 'text-red-600', 'dark:text-red-300');
+                    els.debugBundleAcknowledgeHint.classList.add(previewIssue.tone === 'error' ? 'text-red-600' : 'text-amber-700');
+                    if (previewIssue.tone === 'error') {
+                        els.debugBundleAcknowledgeHint.classList.add('dark:text-red-300');
+                    } else {
+                        els.debugBundleAcknowledgeHint.classList.add('dark:text-amber-300');
+                    }
+                } else {
+                    els.debugBundleAcknowledgeHint.textContent = state.portalUi.debugBundleAcknowledged
+                        ? 'Acknowledged for the next dispatch.'
+                        : 'Required before dispatch when debug bundle emission is enabled.';
+                    els.debugBundleAcknowledgeHint.classList.remove('text-red-600', 'dark:text-red-300');
+                    els.debugBundleAcknowledgeHint.classList.add('text-amber-700', 'dark:text-amber-300');
+                }
+            }
+            if (!state.portalUi.debugBundleGuardrailSeen) {
+                state.portalUi.debugBundleGuardrailSeen = true;
+                void emitPortalEvent('debug_bundle_guardrail_seen', {
+                    surface: 'reconstruction_runtime',
+                    field: 'emit_scene_debug_bundle',
+                    metadata: { enabled: true },
+                    reasons: Array.isArray(summary.includes) ? summary.includes.slice(0, 3) : []
+                });
+            }
+        }
+
+        function renderEffectiveConfigDrawer(payload = null, preview = null) {
+            const currentPayload = payload || generatePayload();
+            const effectivePreview = preview || _effectivePreviewSnapshot(currentPayload);
+            if (els.requestedConfigJson) {
+                els.requestedConfigJson.textContent = JSON.stringify(currentPayload.args || {}, null, 2);
+            }
+            if (els.effectiveConfigJson) {
+                els.effectiveConfigJson.textContent = JSON.stringify(effectivePreview.normalized_args || currentPayload.args || {}, null, 2);
+            }
+            if (els.inactiveConfigJson) {
+                els.inactiveConfigJson.textContent = JSON.stringify(effectivePreview.inactive_fields || [], null, 2);
+            }
+            if (els.effectiveEstimateLabel) {
+                els.effectiveEstimateLabel.textContent = String(
+                    effectivePreview.estimate_summary?.summary_label
+                    || _buildLocalEstimateSummary(currentPayload.args || {}).summary_label
+                    || 'No preview estimate yet.'
+                );
+            }
+            if (els.effectiveReadinessSummary) {
+                els.effectiveReadinessSummary.textContent = _effectiveReadinessSummary(effectivePreview.readiness);
+            }
+            if (els.effectiveArgvPreview) {
+                els.effectiveArgvPreview.textContent = String(effectivePreview.argv_preview || els.cliPreview?.textContent || '');
+            }
+            if (els.effectiveConfigMeta) {
+                const inactiveCount = Array.isArray(effectivePreview.inactive_fields) ? effectivePreview.inactive_fields.length : 0;
+                els.effectiveConfigMeta.textContent = effectivePreview.status === 'ready'
+                    ? `Preview-backed normalization is live. ${inactiveCount} inactive preserved field${inactiveCount === 1 ? '' : 's'} are tracked for the next run.`
+                    : 'Preview-backed normalization is unavailable, so this drawer is showing the local requested configuration and fallback posture.';
+            }
+        }
+
+        function groupingFieldStatusText() {
+            const field = _metadataField('grouping_mode');
+            return String(field?.helper_text || RECON_RUNTIME_DEFAULT_STATUS.grouping_mode);
+        }
+
+        function iterationFieldStatusText() {
+            const field = _metadataField('reconstruction_iterations');
+            const recommended = field?.recommended && typeof field.recommended === 'object'
+                ? field.recommended
+                : null;
+            if (recommended) {
+                return `Recommended: fast ${recommended.fast}, balanced ${recommended.balanced}, high quality ${recommended.high_quality}.`;
+            }
+            return RECON_RUNTIME_DEFAULT_STATUS.reconstruction_iterations;
+        }
+
+        function reconstructionTierStatusText() {
+            const field = _metadataField('reconstruction_tier');
+            return String(field?.helper_text || RECON_RUNTIME_DEFAULT_STATUS.reconstruction_tier);
+        }
+
+        function rawIngestModeStatusText() {
+            const field = _metadataField('raw_ingest_mode');
+            return String(field?.helper_text || RECON_RUNTIME_DEFAULT_STATUS.raw_ingest_mode);
+        }
+
+        function maxWorkersStatusText() {
+            const field = _metadataField('max_workers');
+            const softMax = Number.parseInt(String(field?.soft_max || ''), 10);
+            if (Number.isFinite(softMax) && softMax > 0) {
+                return `Auto lets the backend choose a safe CPU worker cap. Recommended manual ceiling: ${softMax}.`;
+            }
+            return RECON_RUNTIME_DEFAULT_STATUS.max_workers;
+        }
+
+        function maxGpuWorkersStatusText() {
+            const field = _metadataField('max_gpu_workers');
+            const softMax = Number.parseInt(String(field?.soft_max || ''), 10);
+            if (Number.isFinite(softMax) && softMax > 0) {
+                return `Auto keeps GPU parallelism conservative. Recommended manual ceiling: ${softMax}.`;
+            }
+            return RECON_RUNTIME_DEFAULT_STATUS.max_gpu_workers;
+        }
+
+        function logLevelStatusText() {
+            const field = _metadataField('log_level');
+            return String(field?.helper_text || RECON_RUNTIME_DEFAULT_STATUS.log_level);
+        }
+
         function buildCanonicalLuxDepthArgs(config) {
             const preset = _textOrFallback(
                 els.presetSelect ? els.presetSelect.value : config.preset,
@@ -4944,12 +5941,22 @@
                 config.raw?.demosaic || 'AHD'
             );
 
-            const maxWorkers = _parsePositiveIntOrNull(
-                els.runtime.maxWorkers ? els.runtime.maxWorkers.value : config.runtime?.maxWorkers
+            const maxWorkersMode = _normalizeWorkerMode(
+                els.runtime.maxWorkersMode ? els.runtime.maxWorkersMode.value : config.runtime?.maxWorkersMode
             );
-            const maxGpuWorkers = _parsePositiveIntOrNull(
-                els.runtime.maxGpuWorkers ? els.runtime.maxGpuWorkers.value : config.runtime?.maxGpuWorkers
+            const maxWorkers = maxWorkersMode === 'fixed'
+                ? _parsePositiveIntOrNull(
+                    els.runtime.maxWorkers ? els.runtime.maxWorkers.value : config.runtime?.maxWorkers
+                )
+                : null;
+            const maxGpuWorkersMode = _normalizeWorkerMode(
+                els.runtime.maxGpuWorkersMode ? els.runtime.maxGpuWorkersMode.value : config.runtime?.maxGpuWorkersMode
             );
+            const maxGpuWorkers = maxGpuWorkersMode === 'fixed'
+                ? _parsePositiveIntOrNull(
+                    els.runtime.maxGpuWorkers ? els.runtime.maxGpuWorkers.value : config.runtime?.maxGpuWorkers
+                )
+                : null;
             const logLevel = _textOrFallback(
                 els.runtime.logLevel ? els.runtime.logLevel.value : config.runtime?.logLevel,
                 config.runtime?.logLevel || ''
@@ -5076,6 +6083,19 @@
             if (Object.prototype.hasOwnProperty.call(recommended, 'grouping_mode')) c.reconstruction.groupingMode = _resolveGroupingMode(recommended.grouping_mode);
             if (Object.prototype.hasOwnProperty.call(recommended, 'reconstruction_tier')) c.reconstruction.tier = _textOrFallback(recommended.reconstruction_tier, c.reconstruction.tier);
             if (Object.prototype.hasOwnProperty.call(recommended, 'emit_scene_debug_bundle')) c.reconstruction.emitSceneDebugBundle = parseBoolLike(recommended.emit_scene_debug_bundle, c.reconstruction.emitSceneDebugBundle);
+
+            c.runtime = c.runtime || {};
+            if (Object.prototype.hasOwnProperty.call(recommended, 'max_workers')) {
+                c.runtime.maxWorkers = _parsePositiveIntOrNull(recommended.max_workers) || '';
+                c.runtime.maxWorkersMode = c.runtime.maxWorkers === '' ? 'auto' : 'fixed';
+            }
+            if (Object.prototype.hasOwnProperty.call(recommended, 'max_gpu_workers')) {
+                c.runtime.maxGpuWorkers = _parsePositiveIntOrNull(recommended.max_gpu_workers) || '';
+                c.runtime.maxGpuWorkersMode = c.runtime.maxGpuWorkers === '' ? 'auto' : 'fixed';
+            }
+            if (Object.prototype.hasOwnProperty.call(recommended, 'log_level')) {
+                c.runtime.logLevel = _textOrFallback(recommended.log_level, c.runtime.logLevel || '');
+            }
         }
 
         function applyPipelinePresetOptions(pipelineName) {
@@ -5140,6 +6160,7 @@
                     applyPipelinePresetOptions(pipelineName);
                     renderCLI();
                     renderReviewSurfaces();
+                    scheduleConfigPreview(true);
                 }
             } catch (err) {
                 if (!silent) createToast('Failed to refresh presets from backend.', 'error');
@@ -5249,9 +6270,12 @@
             c.raw.wbMode = _textOrFallback(c.raw.wbMode, 'camera');
             c.raw.demosaic = _textOrFallback(c.raw.demosaic, 'AHD');
             c.runtime = c.runtime || {};
+            c.runtime.maxWorkersMode = _normalizeWorkerMode(c.runtime.maxWorkersMode || (c.runtime.maxWorkers ? 'fixed' : 'auto'));
             c.runtime.maxWorkers = _parsePositiveIntOrNull(c.runtime.maxWorkers) || '';
+            c.runtime.maxGpuWorkersMode = _normalizeWorkerMode(c.runtime.maxGpuWorkersMode || (c.runtime.maxGpuWorkers ? 'fixed' : 'auto'));
             c.runtime.maxGpuWorkers = _parsePositiveIntOrNull(c.runtime.maxGpuWorkers) || '';
             c.runtime.logLevel = _textOrFallback(c.runtime.logLevel, '');
+            applyLuxMetadataToControls();
             applyPipelinePresetOptions(state.pipeline);
             if (els.presetSelect) els.presetSelect.value = c.preset;
             if (els.inputDir) els.inputDir.value = c.inputDir;
@@ -5275,7 +6299,9 @@
             if (els.raw.ingestMode) els.raw.ingestMode.value = c.raw.ingestMode;
             if (els.raw.wbMode) els.raw.wbMode.value = c.raw.wbMode;
             if (els.raw.demosaic) els.raw.demosaic.value = c.raw.demosaic;
+            if (els.runtime.maxWorkersMode) els.runtime.maxWorkersMode.value = c.runtime.maxWorkersMode;
             if (els.runtime.maxWorkers) els.runtime.maxWorkers.value = c.runtime.maxWorkers === '' ? '' : String(c.runtime.maxWorkers);
+            if (els.runtime.maxGpuWorkersMode) els.runtime.maxGpuWorkersMode.value = c.runtime.maxGpuWorkersMode;
             if (els.runtime.maxGpuWorkers) {
                 els.runtime.maxGpuWorkers.value = c.runtime.maxGpuWorkers === '' ? '' : String(c.runtime.maxGpuWorkers);
             }
@@ -5316,9 +6342,17 @@
             safeSyncCheck(els.licenses.acceptResearchTools, c.licenses.acceptResearchTools);
             safeSyncCheck(els.reconstruction.enable, c.reconstruction.enable);
             safeSyncCheck(els.reconstruction.emitSceneDebugBundle, c.reconstruction.emitSceneDebugBundle);
+            state.portalUi.debugBundleAcknowledged = c.reconstruction.emitSceneDebugBundle
+                ? Boolean(state.portalUi.debugBundleAcknowledged)
+                : false;
+            if (els.debugBundleAcknowledge) {
+                els.debugBundleAcknowledge.checked = Boolean(state.portalUi.debugBundleAcknowledged);
+            }
             syncSegmentationControlState(c);
+            syncRuntimeWorkerModeControls();
 
             renderCLI();
+            scheduleConfigPreview(true);
         }
 
         function generatePayload() {
@@ -5373,6 +6407,7 @@
 
             if (payload.pipeline === 'lux-depth-v3') {
                 const args = payload.args || {};
+                const preview = _currentPreviewForPayload(payload);
                 const reconstructionEnabled = parseBoolLike(args.enable_reconstruction, false);
                 const sidecarPath = String(args.cameras_sidecar_path || '').trim();
                 const groupingMode = String(args.grouping_mode || 'single').trim().toLowerCase();
@@ -5386,35 +6421,70 @@
                 if (parseBoolLike(args.enable_v2, false)) expectedOutputs.push('V2 enhanced outputs');
                 if (reconstructionEnabled) expectedOutputs.push('Reconstruction report bundle');
                 if (parseBoolLike(args.emit_run_card, false)) expectedOutputs.push('Run card JSON');
+                if (parseBoolLike(args.emit_scene_debug_bundle, false)) expectedOutputs.push('Reconstruction debug bundle');
 
-                if (reconstructionEnabled && !sidecarPath) {
-                    warnings.push('Camera sidecar path is missing; reconstruction may fail.');
+                if (preview && preview.status === 'ready') {
+                    const previewErrors = Array.isArray(preview.field_errors) ? preview.field_errors : [];
+                    const previewWarnings = Array.isArray(preview.field_warnings) ? preview.field_warnings : [];
+                    previewErrors.forEach((issue) => warnings.push(`BLOCKED: ${String(issue?.message || 'Preview validation error.')}`));
+                    previewWarnings.forEach((issue) => warnings.push(`WARNING: ${String(issue?.message || 'Preview warning.')}`));
+                    if (previewErrors.length > 0) {
+                        healthState = 'risk';
+                        healthLabel = 'preview blocked';
+                    } else if (previewWarnings.length > 0 && healthState === 'good') {
+                        healthState = 'warn';
+                        healthLabel = 'preview cautions';
+                    }
+                } else if (state.backendOk && preview && preview.status === 'error') {
+                    warnings.push('BLOCKED: Preview-backed validation is unavailable. Wait for validation to recover before dispatch.');
                     healthState = 'risk';
-                    healthLabel = 'reconstruction risk';
-                }
-                if (reconstructionEnabled && groupingMode === 'single') {
-                    warnings.push('Reconstruction enabled with grouping mode "single"; overlap may be weak.');
-                    if (healthState !== 'risk') {
-                        healthState = 'warn';
-                        healthLabel = 'weak overlap';
-                    }
-                }
-                if (rawIngestMode === 'force_rawpy') {
-                    warnings.push('RAW ingest mode force_rawpy is experimental and may increase runtime.');
+                    healthLabel = 'preview unavailable';
+                } else if (!state.backendOk) {
+                    warnings.push('WARNING: Backend preview is offline. Local fallback rendering is available, but dispatch remains blocked until connectivity is restored.');
                     if (healthState === 'good') {
                         healthState = 'warn';
-                        healthLabel = 'raw ingest stress';
+                        healthLabel = 'backend offline';
                     }
-                }
-                if (strictInputs) {
-                    warnings.push('strict_inputs is enabled; malformed inputs will fail fast.');
-                }
-                if (parseBoolLike(args.materials_v3, false) && !segmentationEnabled) {
-                    warnings.push('Materials V3 is enabled while segmentation is off.');
+                } else if (state.backendOk && (!preview || preview.status === 'loading')) {
+                    warnings.push('WARNING: Preview-backed validation is refreshing.');
                     if (healthState === 'good') {
                         healthState = 'warn';
-                        healthLabel = 'config mismatch';
+                        healthLabel = 'preview refreshing';
                     }
+                }
+
+                if (!preview || preview.status !== 'ready') {
+                    if (reconstructionEnabled && !sidecarPath) {
+                        warnings.push('WARNING: Camera sidecar path is missing; reconstruction may fail.');
+                        healthState = 'risk';
+                        healthLabel = 'reconstruction risk';
+                    }
+                    if (reconstructionEnabled && groupingMode === 'single') {
+                        warnings.push('WARNING: Reconstruction enabled with grouping mode "single"; overlap may be weak.');
+                        if (healthState !== 'risk') {
+                            healthState = 'warn';
+                            healthLabel = 'weak overlap';
+                        }
+                    }
+                    if (rawIngestMode === 'force_rawpy') {
+                        warnings.push('WARNING: RAW ingest mode force_rawpy is experimental and may increase runtime.');
+                        if (healthState === 'good') {
+                            healthState = 'warn';
+                            healthLabel = 'raw ingest stress';
+                        }
+                    }
+                    if (strictInputs) {
+                        warnings.push('WARNING: strict_inputs is enabled; malformed inputs will fail fast.');
+                    }
+                    if (parseBoolLike(args.materials_v3, false) && !segmentationEnabled) {
+                        warnings.push('WARNING: Materials V3 is enabled while segmentation is off.');
+                        if (healthState === 'good') {
+                            healthState = 'warn';
+                            healthLabel = 'config mismatch';
+                        }
+                    }
+                } else if (strictInputs) {
+                    warnings.push('WARNING: strict_inputs is enabled; malformed inputs will fail fast.');
                 }
             } else {
                 const args = payload.args || {};
@@ -5447,7 +6517,9 @@
                 warnings.forEach((warning) => {
                     const li = document.createElement('li');
                     li.className = 'leading-relaxed';
-                    li.textContent = `WARNING: ${warning}`;
+                    li.textContent = warning.startsWith('WARNING:') || warning.startsWith('BLOCKED:')
+                        ? warning
+                        : `WARNING: ${warning}`;
                     els.preRunWarnings.appendChild(li);
                 });
             }
@@ -5485,6 +6557,7 @@
         function renderCLI() {
             if (!els.cliPreview) return;
             const payload = generatePayload();
+            const preview = _currentPreviewForPayload(payload);
             const q = (v) => `"${String(v).replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
             const onoff = (v) => (parseBoolLike(v, false) ? '"on"' : '"off"');
 
@@ -5579,11 +6652,58 @@
                 idx === cliLines.length - 1 ? line : `${line} \\`
             );
 
-            els.cliPreview.textContent = cli.join('\n');
+            if (payload.pipeline === 'lux-depth-v3' && preview && preview.status === 'ready' && String(preview.argv_preview || '').trim()) {
+                els.cliPreview.textContent = String(preview.argv_preview || '');
+            } else if (
+                payload.pipeline === 'lux-depth-v3'
+                && preview
+                && preview.status === 'ready'
+                && Array.isArray(preview.field_errors)
+                && preview.field_errors.length > 0
+            ) {
+                const firstError = preview.field_errors[0];
+                els.cliPreview.textContent = `# Preview blocked\n# ${String(firstError?.message || 'Resolve preview validation issues to view the effective argv.')}`;
+            } else {
+                els.cliPreview.textContent = cli.join('\n');
+            }
             renderPreRunDiagnostics(payload);
+            _syncBootstrapGuardedControls();
         }
 
         function bindInputs() {
+            const trackedTelemetryField = (category, key) => {
+                const normalizedCategory = String(category || '').trim();
+                const normalizedKey = String(key || '').trim();
+                const lookup = {
+                    ':qualityTier': 'quality_tier',
+                    ':depthBackend': 'depth_backend',
+                    'segmentation:backend': 'segmentation_backend',
+                    'segmentation:strict': 'strict_segmentation',
+                    'licenses:nonCommercialOk': 'non_commercial_ok',
+                    'licenses:acceptApple': 'accept_apple_depth_pro_research_license',
+                    'licenses:acceptResearchTools': 'accept_research_tools_license',
+                    'reconstruction:enable': 'enable_reconstruction',
+                    'reconstruction:groupingMode': 'grouping_mode',
+                    'reconstruction:iterations': 'reconstruction_iterations',
+                    'reconstruction:tier': 'reconstruction_tier',
+                    'reconstruction:emitSceneDebugBundle': 'emit_scene_debug_bundle',
+                    'raw:ingestMode': 'raw_ingest_mode',
+                    'runtime:maxWorkersMode': 'max_workers_mode',
+                    'runtime:maxWorkers': 'max_workers',
+                    'runtime:maxGpuWorkersMode': 'max_gpu_workers_mode',
+                    'runtime:maxGpuWorkers': 'max_gpu_workers',
+                    'runtime:logLevel': 'log_level'
+                };
+                return lookup[`${normalizedCategory}:${normalizedKey}`] || null;
+            };
+
+            const telemetrySurfaceFor = (category) => {
+                if (category === 'reconstruction' || category === 'raw' || category === 'runtime') {
+                    return 'reconstruction_runtime';
+                }
+                return 'dispatch';
+            };
+
             const safeBindText = (el, category, key) => {
                 if (!el) return;
                 el.addEventListener('change', (e) => {
@@ -5594,8 +6714,20 @@
                         updateUIFromState();
                         void fetchPresetsForPipeline(state.pipeline, true);
                         void fetchReadiness(true);
+                        void fetchConfigMetadata(state.pipeline, true);
                     }
-                    else renderCLI();
+                    else {
+                        const field = trackedTelemetryField(category, key);
+                        if (field) {
+                            void emitPortalEvent('field_commit', {
+                                surface: telemetrySurfaceFor(category),
+                                field,
+                                metadata: { value_set: Boolean(String(e.target.value || '').trim()) }
+                            });
+                        }
+                        renderCLI();
+                        scheduleConfigPreview();
+                    }
                 });
             };
             const safeBindInput = (el, category, key) => {
@@ -5604,6 +6736,20 @@
                     if (category) state.config[category][key] = e.target.value;
                     else state.config[key] = e.target.value;
                     renderCLI();
+                    if (trackedTelemetryField(category, key)) {
+                        scheduleConfigPreview();
+                    }
+                });
+                el.addEventListener('change', (e) => {
+                    const field = trackedTelemetryField(category, key);
+                    if (field) {
+                        void emitPortalEvent('field_commit', {
+                            surface: telemetrySurfaceFor(category),
+                            field,
+                            metadata: { value_set: Boolean(String(e.target.value || '').trim()) }
+                        });
+                    }
+                    scheduleConfigPreview();
                 });
             };
             const safeBindCheck = (el, category, key) => {
@@ -5628,7 +6774,21 @@
                             createToast(`verbose and quiet are mutually exclusive; disabled ${otherKey}.`, 'info');
                         }
                     }
+                    const field = trackedTelemetryField(category, key);
+                    if (field) {
+                        void emitPortalEvent('toggle_change', {
+                            surface: telemetrySurfaceFor(category),
+                            field,
+                            metadata: { enabled: Boolean(e.target.checked) }
+                        });
+                    }
+                    if (category === 'reconstruction' && key === 'emitSceneDebugBundle' && !e.target.checked) {
+                        state.portalUi.debugBundleAcknowledged = false;
+                        state.portalUi.debugBundleGuardrailSeen = false;
+                        if (els.debugBundleAcknowledge) els.debugBundleAcknowledge.checked = false;
+                    }
                     renderCLI();
+                    scheduleConfigPreview();
                 });
             };
 
@@ -5694,6 +6854,48 @@
                 els.segmentation.backend.addEventListener('change', () => {
                     syncSegmentationControlState(state.config);
                     renderCLI();
+                    scheduleConfigPreview();
+                });
+            }
+
+            if (els.runtime.maxWorkersMode) {
+                els.runtime.maxWorkersMode.addEventListener('change', (e) => {
+                    state.config.runtime.maxWorkersMode = _normalizeWorkerMode(e.target.value);
+                    syncRuntimeWorkerModeControls();
+                    void emitPortalEvent('field_commit', {
+                        surface: 'reconstruction_runtime',
+                        field: 'max_workers_mode',
+                        metadata: { mode: state.config.runtime.maxWorkersMode }
+                    });
+                    renderCLI();
+                    scheduleConfigPreview();
+                });
+            }
+
+            if (els.runtime.maxGpuWorkersMode) {
+                els.runtime.maxGpuWorkersMode.addEventListener('change', (e) => {
+                    state.config.runtime.maxGpuWorkersMode = _normalizeWorkerMode(e.target.value);
+                    syncRuntimeWorkerModeControls();
+                    void emitPortalEvent('field_commit', {
+                        surface: 'reconstruction_runtime',
+                        field: 'max_gpu_workers_mode',
+                        metadata: { mode: state.config.runtime.maxGpuWorkersMode }
+                    });
+                    renderCLI();
+                    scheduleConfigPreview();
+                });
+            }
+
+            if (els.debugBundleAcknowledge) {
+                els.debugBundleAcknowledge.addEventListener('change', (e) => {
+                    state.portalUi.debugBundleAcknowledged = Boolean(e.target.checked);
+                    renderCLI();
+                    _syncBootstrapGuardedControls();
+                    void emitPortalEvent('field_commit', {
+                        surface: 'reconstruction_runtime',
+                        field: 'debug_bundle_acknowledged',
+                        metadata: { enabled: Boolean(e.target.checked) }
+                    });
                 });
             }
 
@@ -6297,42 +7499,49 @@
             const readinessStatus = currentPipelineDispatchStatus();
 
             if (payload.pipeline === 'lux-depth-v3') {
-                const args = payload.args;
-                if (parseBoolLike(args.verbose, false) && parseBoolLike(args.quiet, false)) {
-                    createToast('verbose and quiet are mutually exclusive; disable one flag.', 'error');
+                const preview = _currentPreviewForPayload(payload);
+                if (!preview || preview.status === 'loading') {
+                    createToast('Configuration preview is still refreshing. Try dispatch again in a moment.', 'info');
+                    void emitPortalEvent('dispatch_blocked', {
+                        surface: 'dispatch',
+                        reasons: ['preview_loading']
+                    });
                     return;
                 }
-                if (args.depth_backend === 'depth_pro' && (!parseBoolLike(args.non_commercial_ok, false) || !parseBoolLike(args.accept_apple_depth_pro_research_license, false))) {
-                    createToast('Depth Pro requires acknowledgment of research/non-commercial licenses.', 'error');
+                if (preview.status === 'error') {
+                    createToast('Preview-backed validation is unavailable. Dispatch stays paused until validation recovers.', 'error');
+                    void emitPortalEvent('dispatch_blocked', {
+                        surface: 'dispatch',
+                        reasons: ['preview_unavailable']
+                    });
                     return;
                 }
-                if (String(args.preset || '').toLowerCase().includes('v3.1') && !parseBoolLike(args.non_commercial_ok, false)) {
-                    createToast('v3.1 research preset requires non-commercial acknowledgment.', 'error');
+                if (Array.isArray(preview.field_errors) && preview.field_errors.length > 0) {
+                    const firstError = preview.field_errors[0];
+                    const conflictError = preview.field_errors.find(
+                        (item) => String(item?.reason || '').trim() === 'conflicting_log_verbosity_flags'
+                    );
+                    createToast(
+                        conflictError
+                            ? 'verbose and quiet are mutually exclusive; disable one flag.'
+                            : String(firstError?.message || 'Preview validation blocked dispatch.'),
+                        'error'
+                    );
+                    void emitPortalEvent('dispatch_blocked', {
+                        surface: 'dispatch',
+                        field: String(firstError?.field || '').trim(),
+                        reasons: preview.field_errors.map((item) => String(item?.reason || '')).filter(Boolean).slice(0, 8)
+                    });
                     return;
                 }
-                if (args.quality_tier === 'apex' && parseBoolLike(args.materials_v3, false)) {
-                    if (!parseBoolLike(args.enable_segmentation, false)) {
-                        createToast('APEX + Materials V3 requires segmentation to be enabled.', 'error');
-                        return;
-                    }
-                    if (args.segmentation_backend === 'stub') {
-                        createToast('APEX + Materials V3 cannot use stub segmentation backend.', 'error');
-                        return;
-                    }
-                    if (!parseBoolLike(args.strict_segmentation, false)) {
-                        createToast('APEX + Materials V3 requires strict segmentation.', 'error');
-                        return;
-                    }
-                }
-                if (parseBoolLike(args.enable_reconstruction, false)) {
-                    if (!parseBoolLike(args.non_commercial_ok, false)) {
-                        createToast('Scene reconstruction requires non-commercial acknowledgment.', 'error');
-                        return;
-                    }
-                    if (!parseBoolLike(args.accept_research_tools_license, false)) {
-                        createToast('Scene reconstruction requires research-tools license acknowledgment.', 'error');
-                        return;
-                    }
+                if (parseBoolLike(payload.args.emit_scene_debug_bundle, false) && !state.portalUi.debugBundleAcknowledged) {
+                    createToast('Acknowledge the reconstruction debug-bundle guardrail before dispatch.', 'error');
+                    void emitPortalEvent('dispatch_blocked', {
+                        surface: 'dispatch',
+                        field: 'debug_bundle_acknowledged',
+                        reasons: ['debug_bundle_acknowledgement_required']
+                    });
+                    return;
                 }
             }
 
@@ -6347,6 +7556,10 @@
             if (readinessStatus !== 'ready') {
                 const firstIssue = currentPipelineReadinessIssues()[0];
                 createToast(firstIssue?.message || 'Pipeline is blocked by missing prerequisites.', 'error');
+                void emitPortalEvent('dispatch_blocked', {
+                    surface: 'dispatch',
+                    reasons: [String(firstIssue?.reason || 'readiness_blocked').trim().toLowerCase() || 'readiness_blocked']
+                });
                 return;
             }
 
@@ -6522,13 +7735,27 @@
 
         if (els.exportBtn) els.exportBtn.addEventListener('click', () => {
             const payload = generatePayload();
-            const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+            const effectivePreview = _effectivePreviewSnapshot(payload);
+            const exportPayload = {
+                schema: 'tp.portal.export.v1',
+                pipeline: payload.pipeline,
+                args: payload.args,
+                effective_args: effectivePreview.normalized_args || payload.args,
+                inactive_fields: effectivePreview.inactive_fields || [],
+                estimate_summary: effectivePreview.estimate_summary || _buildLocalEstimateSummary(payload.args || {}),
+                argv_preview: String(effectivePreview.argv_preview || els.cliPreview?.textContent || '')
+            };
+            const blob = new Blob([JSON.stringify(exportPayload, null, 2)], { type: "application/json" });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
             a.download = `job_${state.pipeline}_config.json`;
             a.click();
             URL.revokeObjectURL(url);
+            void emitPortalEvent('config_exported', {
+                surface: 'effective_config',
+                metadata: { has_preview: effectivePreview.status === 'ready' }
+            });
         });
 
         if (els.heroExportBtn) {
@@ -6638,12 +7865,17 @@
                     c.raw.demosaic = _textOrFallback(data.args.raw_demosaic, c.raw.demosaic);
 
                     c.runtime = c.runtime || {};
-                    c.runtime.maxWorkers = _parsePositiveIntOrNull(data.args.max_workers) || c.runtime.maxWorkers;
-                    c.runtime.maxGpuWorkers = _parsePositiveIntOrNull(data.args.max_gpu_workers) || c.runtime.maxGpuWorkers;
+                    c.runtime.maxWorkers = _parsePositiveIntOrNull(data.args.max_workers) || '';
+                    c.runtime.maxWorkersMode = c.runtime.maxWorkers === '' ? 'auto' : 'fixed';
+                    c.runtime.maxGpuWorkers = _parsePositiveIntOrNull(data.args.max_gpu_workers) || '';
+                    c.runtime.maxGpuWorkersMode = c.runtime.maxGpuWorkers === '' ? 'auto' : 'fixed';
                     c.runtime.logLevel = _textOrFallback(data.args.log_level, c.runtime.logLevel);
                 }
+                state.portalUi.debugBundleAcknowledged = false;
+                state.portalUi.debugBundleGuardrailSeen = false;
                 updateUIFromState();
                 void fetchPresetsForPipeline(state.pipeline, true);
+                void fetchConfigMetadata(state.pipeline, true);
                 createToast("Configuration imported.", "success");
             } catch (err) {
                 createToast("Invalid JSON file.", "error");
@@ -6863,13 +8095,52 @@
             }
         };
 
+        const toggleEffectiveConfigDrawer = (show) => {
+            if (!els.effectiveConfigDrawer) return;
+            state.portalUi.effectiveConfigOpen = Boolean(show);
+            if (show) {
+                renderEffectiveConfigDrawer(generatePayload());
+                els.effectiveConfigDrawer.classList.remove('hidden');
+                els.effectiveConfigDrawer.classList.add('flex');
+                els.effectiveConfigDrawer.setAttribute('aria-hidden', 'false');
+                if (els.closeEffectiveConfigBtn) els.closeEffectiveConfigBtn.focus();
+                void emitPortalEvent('effective_config_opened', {
+                    surface: 'effective_config',
+                    metadata: { preview_ready: _currentPreviewForPayload(generatePayload())?.status === 'ready' }
+                });
+                return;
+            }
+            els.effectiveConfigDrawer.classList.add('hidden');
+            els.effectiveConfigDrawer.classList.remove('flex');
+            els.effectiveConfigDrawer.setAttribute('aria-hidden', 'true');
+        };
+
         if (els.shortcutsBtn) els.shortcutsBtn.addEventListener('click', () => toggleModal(true));
         if (els.closeShortcutsBtn) els.closeShortcutsBtn.addEventListener('click', () => toggleModal(false));
         if (els.shortcutsModal) els.shortcutsModal.addEventListener('click', (e) => {
             if (e.target === els.shortcutsModal) toggleModal(false);
         });
+        if (els.openEffectiveConfigBtn) {
+            els.openEffectiveConfigBtn.addEventListener('click', () => toggleEffectiveConfigDrawer(true));
+        }
+        if (els.effectiveConfigBtn) {
+            els.effectiveConfigBtn.addEventListener('click', () => toggleEffectiveConfigDrawer(true));
+        }
+        if (els.closeEffectiveConfigBtn) {
+            els.closeEffectiveConfigBtn.addEventListener('click', () => toggleEffectiveConfigDrawer(false));
+        }
+        if (els.effectiveConfigDrawer) {
+            els.effectiveConfigDrawer.addEventListener('click', (e) => {
+                if (e.target === els.effectiveConfigDrawer) toggleEffectiveConfigDrawer(false);
+            });
+        }
 
         document.addEventListener('keydown', (e) => {
+            if (e.key === "Escape" && els.effectiveConfigDrawer && !els.effectiveConfigDrawer.classList.contains("hidden")) {
+                e.preventDefault();
+                toggleEffectiveConfigDrawer(false);
+                return;
+            }
             if (e.key === "Escape" && els.shortcutsModal && !els.shortcutsModal.classList.contains("hidden")) {
                 e.preventDefault();
                 toggleModal(false);
@@ -6929,6 +8200,7 @@
             _syncBootstrapUi();
             renderJobQueue();
             void checkBackend(true);
+            void fetchConfigMetadata(state.pipeline, true);
             startHealthPolling();
             await bootstrapPromise;
         }

@@ -836,6 +836,63 @@ def test_portal_verbose_quiet_conflict_is_notified_and_blocked() -> None:
     assert "verbose and quiet are mutually exclusive; disable one flag." in submit_body
 
 
+def test_portal_reconstruction_runtime_summary_and_effective_config_surfaces_are_present() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+    summary_body = _extract_js_function_body(content, "renderReconstructionRuntimeSummary")
+    drawer_body = _extract_js_function_body(content, "renderEffectiveConfigDrawer")
+
+    assert 'id="summaryReconstructionState"' in content
+    assert 'id="summaryRuntimeWorkers"' in content
+    assert 'id="summaryRawIngest"' in content
+    assert 'id="summaryDebugBundle"' in content
+    assert 'id="summaryPreviewState"' in content
+    assert 'id="estimateRuntimeBand"' in content
+    assert 'id="debugBundleGuardrail"' in content
+    assert 'id="effectiveConfigDrawer"' in content
+    assert 'id="requestedConfigJson"' in content
+    assert 'id="effectiveConfigJson"' in content
+    assert 'id="inactiveConfigJson"' in content
+    assert "renderDebugBundleGuardrail(currentPayload" in summary_body
+    assert "renderEffectiveConfigDrawer(currentPayload" in summary_body
+    assert "effectivePreview.normalized_args" in drawer_body
+    assert "effectivePreview.inactive_fields" in drawer_body
+
+
+def test_portal_preview_metadata_worker_modes_and_export_contract_are_wired() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+    update_body = _extract_js_function_body(content, "updateUIFromState")
+    bind_body = _extract_js_function_body(content, "bindInputs")
+
+    assert "maxWorkersMode: 'auto'," in content
+    assert "maxGpuWorkersMode: 'auto'," in content
+    assert 'id="maxWorkersMode"' in content
+    assert 'id="maxGpuWorkersMode"' in content
+    assert "function fetchConfigMetadata" in content
+    assert "function fetchConfigPreview" in content
+    assert "function scheduleConfigPreview" in content
+    assert "syncRuntimeWorkerModeControls();" in update_body
+    assert "state.config.runtime.maxWorkersMode = _normalizeWorkerMode(e.target.value);" in bind_body
+    assert "state.config.runtime.maxGpuWorkersMode = _normalizeWorkerMode(e.target.value);" in bind_body
+    assert "schema: 'tp.portal.export.v1'" in content
+    assert "effective_args:" in content
+    assert "inactive_fields:" in content
+    assert "estimate_summary:" in content
+    assert "argv_preview:" in content
+
+
+def test_portal_submit_blocks_preview_unavailable_and_debug_bundle_without_acknowledgement() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+    submit_body = _extract_js_function_body(content, "submitJob")
+
+    assert "Configuration preview is still refreshing." in submit_body
+    assert "Preview-backed validation is unavailable." in submit_body
+    assert "Acknowledge the reconstruction debug-bundle guardrail before dispatch." in submit_body
+    assert "debug_bundle_acknowledgement_required" in submit_body
+
+
 def test_lux_cli_parity_links_portal_canonical_args_and_backend_argv() -> None:
     portal_html = Path(__file__).resolve().parents[1] / "portal.html"
     content = portal_html.read_text(encoding="utf-8")

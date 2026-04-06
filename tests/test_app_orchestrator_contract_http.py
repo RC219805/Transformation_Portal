@@ -157,6 +157,109 @@ def test_presets_contract_for_lux_depth_pipeline(client: TestClient) -> None:
     assert premium["advanced_sections"] == []
 
 
+def test_config_metadata_contract_for_lux_depth_pipeline(client: TestClient) -> None:
+    response = client.get("/v1/config-metadata", params={"pipeline": "lux-depth-v3"})
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["schema"] == "tp.orchestrator.config_metadata.v1"
+    assert body["success"] is True
+    assert body["error"] is None
+    assert body["data"]["pipeline"] == "lux-depth-v3"
+    assert body["data"]["fields"]["reconstruction_tier"]["default"] == "apex_research"
+    assert body["data"]["fields"]["reconstruction_iterations"]["recommended"]["balanced"] == 1000
+    assert body["data"]["fields"]["raw_wb_mode"]["kind"] == "locked"
+    assert body["data"]["debug_bundle_policy"]["acknowledgement_required"] is True
+
+
+def test_config_preview_contract_normalizes_inactive_reconstruction_fields(
+    client: TestClient,
+    tmp_path: Path,
+) -> None:
+    fixture_input_dir = (
+        Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "archive_small" / "archive_root"
+    ).resolve()
+    output_dir = (tmp_path / "preview-output").resolve()
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    response = client.post(
+        "/v1/config-preview",
+        json={
+            "pipeline": "lux-depth-v3",
+            "args": {
+                "input_dir": str(fixture_input_dir),
+                "output_dir": str(output_dir),
+                "enable_reconstruction": False,
+                "grouping_mode": "parent_dir",
+                "reconstruction_iterations": 2000,
+                "reconstruction_tier": "apex_research_ultra",
+                "emit_scene_debug_bundle": True,
+                "max_workers": 2,
+            },
+        },
+    )
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["schema"] == "tp.orchestrator.config_preview.v1"
+    assert body["success"] is True
+    assert body["error"] is None
+    preview = body["data"]
+    assert preview["pipeline"] == "lux-depth-v3"
+    assert "grouping_mode" not in preview["normalized_args"]
+    assert "reconstruction_tier" not in preview["normalized_args"]
+    assert "emit_scene_debug_bundle" not in preview["normalized_args"]
+    inactive_fields = {item["field"]: item for item in preview["inactive_fields"]}
+    assert inactive_fields["grouping_mode"]["reason"] == "enable_reconstruction_disabled"
+    assert inactive_fields["reconstruction_tier"]["value"] == "apex_research_ultra"
+    assert inactive_fields["emit_scene_debug_bundle"]["value"] is True
+    assert preview["estimate_summary"]["summary_label"]
+    assert preview["debug_bundle_summary"]["enabled"] is True
+    assert preview["debug_bundle_summary"]["destination"].endswith("/reconstruction/<scene-fingerprint>/debug")
+    warning_reasons = {item["code"] for item in preview["field_warnings"]}
+    assert "debug_bundle_sensitive_output" in warning_reasons
+
+
+def test_portal_events_contract_sanitizes_metadata_and_writes_optional_log(
+    client: TestClient,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    event_log_path = tmp_path / "portal-events.jsonl"
+    monkeypatch.setattr(orchestrator_app, "PORTAL_EVENT_LOG_PATH", event_log_path)
+
+    response = client.post(
+        "/v1/portal/events",
+        json={
+            "event_type": "config_exported",
+            "pipeline": "lux-depth-v3",
+            "surface": "effective_config",
+            "field": "reconstruction_tier",
+            "metadata": {
+                "mode": "auto",
+                "count": 2,
+                "raw_path": "/private/tmp/should-not-pass",
+            },
+            "reasons": ["preview_ready", "Not A Token", "EXPORT"],
+        },
+    )
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["schema"] == "tp.orchestrator.portal_event.v1"
+    assert body["success"] is True
+    assert body["error"] is None
+    event = body["data"]["event"]
+    assert event["event_type"] == "config_exported"
+    assert event["surface"] == "effective_config"
+    assert event["field"] == "reconstruction_tier"
+    assert event["metadata"] == {"mode": "auto", "count": 2}
+    assert event["reasons"] == ["preview_ready", "export"]
+    lines = event_log_path.read_text(encoding="utf-8").strip().splitlines()
+    assert len(lines) == 1
+    assert json.loads(lines[0])["event_type"] == "config_exported"
+
+
 def test_readiness_contract_reports_pipeline_status_matrix(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,

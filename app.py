@@ -7,6 +7,7 @@ import logging
 import mimetypes
 import os
 import re
+import shlex
 import sys
 import tempfile
 import time
@@ -473,6 +474,96 @@ VALIDATION_REASON_CODES = {
     "Invalid archive_command": "invalid_archive_command",
     "Invalid archive integer option": "invalid_archive_integer_option",
 }
+PORTAL_EVENT_TOKEN_RE = re.compile(r"^[a-z0-9][a-z0-9_.:-]{0,63}$")
+PORTAL_ALLOWED_EVENT_TYPES = {
+    "field_commit",
+    "toggle_change",
+    "preview_error_seen",
+    "effective_config_opened",
+    "config_exported",
+    "dispatch_blocked",
+    "debug_bundle_guardrail_seen",
+}
+PORTAL_ALLOWED_EVENT_SURFACES = {
+    "mission_control",
+    "reconstruction_runtime",
+    "effective_config",
+    "dispatch",
+}
+PORTAL_ALLOWED_EVENT_FIELDS = {
+    "accept_apple_depth_pro_research_license",
+    "accept_research_tools_license",
+    "debug_bundle_acknowledged",
+    "depth_backend",
+    "enable_reconstruction",
+    "emit_scene_debug_bundle",
+    "grouping_mode",
+    "log_level",
+    "max_gpu_workers",
+    "max_workers",
+    "max_gpu_workers_mode",
+    "max_workers_mode",
+    "non_commercial_ok",
+    "quality_tier",
+    "raw_ingest_mode",
+    "reconstruction_iterations",
+    "reconstruction_tier",
+    "segmentation_backend",
+    "strict_segmentation",
+}
+LUX_PORTAL_DEFAULT_ARGS: Dict[str, Any] = {
+    "preset": "premium",
+    "quality_tier": "apex",
+    "depth_backend": "da3",
+    "depth_device": "cpu",
+    "enable_segmentation": False,
+    "segmentation_backend": "stub",
+    "sam2_model_size": "base",
+    "strict_segmentation": False,
+    "materials_v3": True,
+    "pbr": True,
+    "save_float_depth": False,
+    "cache_depth": True,
+    "enable_v2": False,
+    "v2_preset": "default",
+    "emit_master16": True,
+    "emit_upscaled16": True,
+    "emit_marketing": False,
+    "emit_report": True,
+    "emit_run_card": True,
+    "non_commercial_ok": False,
+    "accept_apple_depth_pro_research_license": False,
+    "accept_research_tools_license": False,
+    "enable_reconstruction": False,
+    "grouping_mode": "single",
+    "reconstruction_iterations": 1000,
+    "reconstruction_tier": "apex_research",
+    "emit_scene_debug_bundle": False,
+    "force_depth": False,
+    "strict_inputs": False,
+    "verify_images": False,
+    "allow_semantic_fallback": False,
+    "raw_ingest_mode": "auto",
+    "raw_wb_mode": "camera",
+    "raw_demosaic": "AHD",
+    "verbose": False,
+    "quiet": False,
+    "overwrite": False,
+}
+LUX_RECONSTRUCTION_INACTIVE_FIELDS = (
+    "grouping_mode",
+    "cameras_sidecar_path",
+    "reconstruction_iterations",
+    "reconstruction_tier",
+    "emit_scene_debug_bundle",
+)
+
+_portal_event_log_path_raw = os.getenv("TP_PORTAL_EVENT_LOG_PATH", "").strip()
+try:
+    PORTAL_EVENT_LOG_PATH = _normalize_root_path(_portal_event_log_path_raw) if _portal_event_log_path_raw else None
+except (OSError, RuntimeError, ValueError):
+    LOGGER.warning("TP_PORTAL_EVENT_LOG_PATH ignored invalid path: %s", _portal_event_log_path_raw)
+    PORTAL_EVENT_LOG_PATH = None
 
 
 class JobPreflightError(RuntimeError):
@@ -1154,6 +1245,1004 @@ def _canonical_depth_backend(value: Any) -> str:
     if not backend:
         return ""
     return DEPTH_BACKEND_ALIASES.get(backend, backend)
+
+
+def _preset_descriptor(pipeline: str, preset_name: str) -> Optional[Dict[str, Any]]:
+    presets = PRESET_CATALOG.get(pipeline) or []
+    for preset in presets:
+        if str(preset.get("name") or "") == str(preset_name or ""):
+            return preset
+    return None
+
+
+def _portal_issue(
+    field: str,
+    code: str,
+    message: str,
+    *,
+    suggestion: str = "",
+) -> Dict[str, Any]:
+    issue = {
+        "field": field,
+        "code": code,
+        "message": message,
+    }
+    if suggestion:
+        issue["suggestion"] = suggestion
+    return issue
+
+
+def _portal_soft_cpu_worker_cap() -> int:
+    return max(2, min(32, os.cpu_count() or 8))
+
+
+def _portal_soft_gpu_worker_cap() -> int:
+    return 4
+
+
+def _portal_is_token(value: str) -> bool:
+    return bool(PORTAL_EVENT_TOKEN_RE.fullmatch(str(value or "").strip().lower()))
+
+
+def _portal_estimate_band(score: int) -> str:
+    if score <= 1:
+        return "low"
+    if score == 2:
+        return "medium"
+    return "high"
+
+
+def _format_argv_preview(argv: List[str]) -> str:
+    return " ".join(shlex.quote(str(token)) for token in argv)
+
+
+def _lux_portal_defaults(args: Dict[str, Any]) -> Dict[str, Any]:
+    preset_name = str(
+        _pick(args, "preset", default=LUX_PORTAL_DEFAULT_ARGS["preset"]) or LUX_PORTAL_DEFAULT_ARGS["preset"]
+    ).strip()
+    defaults = dict(LUX_PORTAL_DEFAULT_ARGS)
+    descriptor = _preset_descriptor("lux-depth-v3", preset_name)
+    if descriptor is not None:
+        recommended = descriptor.get("recommended_args")
+        if isinstance(recommended, dict):
+            defaults.update(recommended)
+    defaults["preset"] = preset_name or str(defaults["preset"])
+    return defaults
+
+
+def _normalize_optional_positive_int(
+    value: Any,
+    field: str,
+    errors: List[Dict[str, Any]],
+) -> Optional[int]:
+    if value is None or (isinstance(value, str) and not value.strip()):
+        return None
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        errors.append(
+            _portal_issue(
+                field,
+                f"invalid_{field}",
+                f"{field} must be an integer greater than or equal to 1.",
+                suggestion="Use Auto or enter an integer greater than or equal to 1.",
+            )
+        )
+        return None
+    if parsed < 1:
+        errors.append(
+            _portal_issue(
+                field,
+                f"invalid_{field}",
+                f"{field} must be greater than or equal to 1.",
+                suggestion="Use Auto or enter an integer greater than or equal to 1.",
+            )
+        )
+        return None
+    return parsed
+
+
+def _normalize_portal_path_arg(
+    value: Any,
+    field: str,
+    allowed_roots: List[Path],
+    errors: List[Dict[str, Any]],
+    *,
+    required: bool = False,
+    must_exist: bool = False,
+    must_be_file: bool = False,
+) -> str:
+    text = str(value or "").strip()
+    if not text:
+        if required:
+            errors.append(
+                _portal_issue(
+                    field,
+                    "required",
+                    f"{field} is required.",
+                    suggestion=f"Provide a valid {field} within the allowed workspace roots.",
+                )
+            )
+        return ""
+    try:
+        resolved = _resolve_allowed_request_path(text, allowed_roots)
+    except ValueError as exc:
+        reason = VALIDATION_REASON_CODES.get(str(exc), "invalid_request")
+        errors.append(
+            _portal_issue(
+                field,
+                reason,
+                f"{field} must stay within the allowed workspace roots.",
+                suggestion=f"Choose a {field} path under the configured repository or temp roots.",
+            )
+        )
+        return ""
+    if must_exist and not resolved.exists():
+        errors.append(
+            _portal_issue(
+                field,
+                "path_missing",
+                f"{field} does not exist.",
+                suggestion="Choose an existing file before dispatch.",
+            )
+        )
+    elif must_be_file and resolved.exists() and not resolved.is_file():
+        errors.append(
+            _portal_issue(
+                field,
+                "path_not_file",
+                f"{field} must point to a file.",
+                suggestion="Choose a single JSON sidecar file, not a directory.",
+            )
+        )
+    return str(resolved)
+
+
+def _lux_config_metadata() -> Dict[str, Any]:
+    cpu_cap = _portal_soft_cpu_worker_cap()
+    gpu_cap = _portal_soft_gpu_worker_cap()
+    return {
+        "pipeline": "lux-depth-v3",
+        "advanced_sections": ["advanced", "governance", "reconstruction"],
+        "estimate_bands": {
+            "runtime": ["low", "medium", "high"],
+            "gpu_pressure": ["low", "medium", "high"],
+            "research_risk": ["none", "research_only", "experimental"],
+        },
+        "debug_bundle_policy": {
+            "acknowledgement_required": True,
+            "destination_template": "reconstruction/<scene-fingerprint>/debug",
+            "includes": [
+                "scene_manifest",
+                "camera_payload",
+                "input_image_copies",
+                "segmentation_overlays",
+                "reprojection_preview",
+            ],
+            "sensitivity": "camera_metadata_and_source_images",
+        },
+        "fields": {
+            "reconstruction_tier": {
+                "label": "Reconstruction Tier",
+                "kind": "enum",
+                "default": "apex_research",
+                "helper_text": "Selects the research reconstruction posture for the next run.",
+                "options": [
+                    {
+                        "value": "apex_research",
+                        "label": "APEX Research",
+                        "description": "Balanced research reconstruction with moderate runtime.",
+                        "runtime_band": "medium",
+                        "research_risk": "research_only",
+                    },
+                    {
+                        "value": "apex_research_ultra",
+                        "label": "APEX Research Ultra",
+                        "description": "Higher-cost research tier with heavier runtime pressure.",
+                        "runtime_band": "high",
+                        "research_risk": "research_only",
+                    },
+                    {
+                        "value": "experimental",
+                        "label": "Experimental",
+                        "description": "Highest-risk research tier reserved for experimentation.",
+                        "runtime_band": "high",
+                        "research_risk": "experimental",
+                    },
+                ],
+            },
+            "reconstruction_iterations": {
+                "label": "Reconstruction Iterations",
+                "kind": "integer",
+                "default": 1000,
+                "min": 1,
+                "recommended": {"fast": 250, "balanced": 1000, "high_quality": 2000},
+                "warning_threshold": 2000,
+                "helper_text": "Higher iterations improve optimization quality but increase runtime.",
+            },
+            "grouping_mode": {
+                "label": "Grouping Mode",
+                "kind": "enum",
+                "default": "single",
+                "options": [
+                    {
+                        "value": "single",
+                        "label": "Single",
+                        "description": "Treat the full input set as one scene.",
+                    },
+                    {
+                        "value": "parent_dir",
+                        "label": "Parent Directory",
+                        "description": "Group images by parent directory for multi-view scenes.",
+                    },
+                ],
+            },
+            "raw_ingest_mode": {
+                "label": "RAW Ingest Mode",
+                "kind": "enum",
+                "default": "auto",
+                "options": [
+                    {"value": "auto", "label": "Auto"},
+                    {"value": "force_rawpy", "label": "Force rawpy"},
+                    {"value": "force_preview", "label": "Force preview"},
+                ],
+                "helper_text": "Controls how RAW files are decoded before downstream stages.",
+            },
+            "raw_wb_mode": {
+                "label": "RAW WB Mode",
+                "kind": "locked",
+                "default": "camera",
+                "display_value": "camera",
+                "helper_text": "The backend currently supports only camera white balance.",
+            },
+            "raw_demosaic": {
+                "label": "RAW Demosaic",
+                "kind": "locked",
+                "default": "AHD",
+                "display_value": "AHD",
+                "helper_text": "The backend currently supports only AHD demosaic.",
+            },
+            "max_workers": {
+                "label": "Max Workers",
+                "kind": "optional_integer",
+                "min": 1,
+                "soft_max": cpu_cap,
+                "default_mode": "auto",
+                "helper_text": "Auto lets the runtime choose a safe CPU worker cap for the current environment.",
+            },
+            "max_gpu_workers": {
+                "label": "Max GPU Workers",
+                "kind": "optional_integer",
+                "min": 1,
+                "soft_max": gpu_cap,
+                "default_mode": "auto",
+                "helper_text": "Auto keeps GPU parallelism conservative to reduce VRAM contention.",
+            },
+            "log_level": {
+                "label": "Log Level",
+                "kind": "enum",
+                "default": "",
+                "options": [
+                    {"value": "", "label": "Default"},
+                    {"value": "DEBUG", "label": "DEBUG"},
+                    {"value": "INFO", "label": "INFO"},
+                    {"value": "WARNING", "label": "WARNING"},
+                    {"value": "ERROR", "label": "ERROR"},
+                ],
+            },
+        },
+    }
+
+
+def _lux_estimate_summary(normalized_args: Dict[str, Any]) -> Dict[str, Any]:
+    runtime_score = 0
+    gpu_score = 0
+    research_risk = "none"
+    reasons: List[str] = []
+
+    if str(normalized_args.get("quality_tier") or "") == "apex":
+        runtime_score += 1
+    if str(normalized_args.get("depth_backend") or "") == "depth_pro":
+        runtime_score += 1
+        gpu_score += 1
+        research_risk = "research_only"
+        reasons.append("depth_pro_research_backend")
+    if str(normalized_args.get("segmentation_backend") or "") == "sam2" and _as_bool(
+        normalized_args.get("enable_segmentation"),
+        False,
+    ):
+        runtime_score += 1
+        gpu_score += 1
+        reasons.append("sam2_segmentation")
+
+    if _as_bool(normalized_args.get("enable_reconstruction"), False):
+        runtime_score += 1
+        gpu_score += 1
+        research_risk = "research_only"
+        reasons.append("scene_reconstruction")
+        iterations = int(normalized_args.get("reconstruction_iterations") or 1000)
+        if iterations >= 2000:
+            runtime_score += 1
+            reasons.append("high_iteration_count")
+        if iterations >= 3000:
+            gpu_score += 1
+        tier = str(normalized_args.get("reconstruction_tier") or "apex_research")
+        if tier == "apex_research_ultra":
+            runtime_score += 1
+            gpu_score += 1
+            reasons.append("ultra_reconstruction_tier")
+        elif tier == "experimental":
+            runtime_score += 1
+            gpu_score += 1
+            research_risk = "experimental"
+            reasons.append("experimental_reconstruction_tier")
+
+    if str(normalized_args.get("raw_ingest_mode") or "") == "force_rawpy":
+        runtime_score += 1
+        reasons.append("forced_rawpy_ingest")
+    if _as_bool(normalized_args.get("emit_scene_debug_bundle"), False):
+        runtime_score += 1
+        reasons.append("debug_bundle_emission")
+
+    max_gpu_workers = normalized_args.get("max_gpu_workers")
+    if isinstance(max_gpu_workers, int) and max_gpu_workers >= 2:
+        gpu_score += 1
+        reasons.append("gpu_worker_override")
+    max_workers = normalized_args.get("max_workers")
+    if isinstance(max_workers, int) and max_workers > _portal_soft_cpu_worker_cap():
+        runtime_score += 1
+        reasons.append("cpu_worker_override")
+
+    runtime_band = _portal_estimate_band(runtime_score)
+    gpu_band = _portal_estimate_band(gpu_score)
+    if research_risk == "none" and str(normalized_args.get("preset") or "").lower().find("research") >= 0:
+        research_risk = "research_only"
+
+    return {
+        "runtime_band": runtime_band,
+        "gpu_pressure": gpu_band,
+        "research_risk": research_risk,
+        "reasons": reasons,
+        "summary_label": (
+            f"{runtime_band.title()} runtime"
+            f" · {gpu_band.title()} GPU pressure"
+            f" · {research_risk.replace('_', ' ').title()} posture"
+        ),
+    }
+
+
+def _lux_debug_bundle_summary(normalized_args: Dict[str, Any]) -> Dict[str, Any]:
+    output_dir = str(normalized_args.get("output_dir") or "").strip()
+    destination = ""
+    if output_dir:
+        destination = str(Path(output_dir) / "reconstruction" / "<scene-fingerprint>" / "debug")
+    enabled = _as_bool(normalized_args.get("emit_scene_debug_bundle"), False)
+    return {
+        "enabled": enabled,
+        "requires_acknowledgement": enabled,
+        "destination": destination,
+        "includes": [
+            "scene_manifest",
+            "camera_payload",
+            "input_image_copies",
+            "segmentation_overlays",
+            "reprojection_preview",
+        ],
+        "sensitivity": "camera_metadata_and_source_images",
+        "notes": [
+            "Debug bundles may copy source imagery and camera metadata into the output tree.",
+            "Portal dispatch requires an explicit acknowledgement before enabling debug bundle emission.",
+        ],
+    }
+
+
+def _build_lux_config_preview(args: Dict[str, Any]) -> Dict[str, Any]:
+    defaults = _lux_portal_defaults(args)
+    errors: List[Dict[str, Any]] = []
+    warnings: List[Dict[str, Any]] = []
+    inactive_fields: List[Dict[str, Any]] = []
+
+    normalized_args: Dict[str, Any] = {}
+    normalized_args["preset"] = defaults["preset"]
+    quality = (
+        str(_pick(args, "quality_tier", "qualityTier", default=defaults["quality_tier"]) or defaults["quality_tier"])
+        .strip()
+        .lower()
+    )
+    if quality not in ALLOWED_QUALITY:
+        errors.append(
+            _portal_issue(
+                "quality_tier",
+                "invalid_quality_tier",
+                "Quality tier is not supported.",
+                suggestion="Choose standard, premium, or apex.",
+            )
+        )
+        quality = str(defaults["quality_tier"])
+    normalized_args["quality_tier"] = quality
+
+    depth_backend = _canonical_depth_backend(_pick(args, "depth_backend", "depthBackend", default=defaults["depth_backend"]))
+    if depth_backend not in ALLOWED_BACKENDS:
+        errors.append(
+            _portal_issue(
+                "depth_backend",
+                "invalid_depth_backend",
+                "Depth backend is not supported.",
+                suggestion="Choose da3 or depth_pro.",
+            )
+        )
+        depth_backend = str(defaults["depth_backend"])
+    normalized_args["depth_backend"] = depth_backend
+
+    depth_device = str(
+        _pick(args, "depth_device", "depthDevice", default=defaults["depth_device"]) or defaults["depth_device"]
+    ).strip()
+    if depth_device:
+        normalized_args["depth_device"] = depth_device
+
+    normalized_args["input_dir"] = _normalize_portal_path_arg(
+        _pick(args, "input_dir", "inputDir", default=""),
+        "input_dir",
+        ALLOWED_INPUT_ROOTS,
+        errors,
+        required=True,
+    )
+    normalized_args["output_dir"] = _normalize_portal_path_arg(
+        _pick(args, "output_dir", "outputDir", default=""),
+        "output_dir",
+        ALLOWED_OUTPUT_ROOTS,
+        errors,
+        required=True,
+    )
+
+    segmentation_enabled = _as_bool(
+        _pick(args, "enable_segmentation", "enableSegmentation", default=defaults["enable_segmentation"]),
+        default=bool(defaults["enable_segmentation"]),
+    )
+    normalized_args["enable_segmentation"] = segmentation_enabled
+
+    segmentation_backend = (
+        str(
+            _pick(args, "segmentation_backend", "segmentationBackend", default=defaults["segmentation_backend"])
+            or defaults["segmentation_backend"]
+        )
+        .strip()
+        .lower()
+    )
+    if segmentation_backend not in ALLOWED_SEGMENTATION_BACKENDS:
+        errors.append(
+            _portal_issue(
+                "segmentation_backend",
+                "invalid_segmentation_backend",
+                "Segmentation backend is not supported.",
+                suggestion="Choose stub, efficientsam, or sam2.",
+            )
+        )
+        segmentation_backend = str(defaults["segmentation_backend"])
+    normalized_args["segmentation_backend"] = segmentation_backend
+
+    sam2_model_size = (
+        str(
+            _pick(args, "sam2_model_size", "sam2ModelSize", default=defaults["sam2_model_size"]) or defaults["sam2_model_size"]
+        )
+        .strip()
+        .lower()
+    )
+    if sam2_model_size not in ALLOWED_SAM2_MODEL_SIZES:
+        errors.append(
+            _portal_issue(
+                "sam2_model_size",
+                "invalid_sam2_model_size",
+                "SAM2 model size is not supported.",
+                suggestion="Choose base or large.",
+            )
+        )
+        sam2_model_size = str(defaults["sam2_model_size"])
+    normalized_args["sam2_model_size"] = sam2_model_size
+    sam2_checkpoint_path = _normalize_portal_path_arg(
+        _pick(args, "sam2_checkpoint_path", "sam2CheckpointPath"),
+        "sam2_checkpoint_path",
+        ALLOWED_INPUT_ROOTS,
+        errors,
+        required=False,
+        must_exist=False,
+    )
+    if sam2_checkpoint_path:
+        normalized_args["sam2_checkpoint_path"] = sam2_checkpoint_path
+    normalized_args["strict_segmentation"] = _as_bool(
+        _pick(args, "strict_segmentation", "strictSegmentation", default=defaults["strict_segmentation"]),
+        default=bool(defaults["strict_segmentation"]),
+    )
+
+    for field_name in (
+        "materials_v3",
+        "pbr",
+        "save_float_depth",
+        "cache_depth",
+        "enable_v2",
+        "emit_master16",
+        "emit_upscaled16",
+        "emit_marketing",
+        "emit_report",
+        "emit_run_card",
+        "non_commercial_ok",
+        "accept_apple_depth_pro_research_license",
+        "accept_research_tools_license",
+        "force_depth",
+        "strict_inputs",
+        "verify_images",
+        "allow_semantic_fallback",
+        "verbose",
+        "quiet",
+        "overwrite",
+    ):
+        normalized_args[field_name] = _as_bool(
+            _pick(args, field_name, default=defaults[field_name]), default=bool(defaults[field_name])
+        )
+
+    normalized_args["v2_preset"] = str(
+        _pick(args, "v2_preset", "v2Preset", default=defaults["v2_preset"]) or defaults["v2_preset"]
+    ).strip() or str(defaults["v2_preset"])
+    normalized_args["enable_reconstruction"] = _as_bool(
+        _pick(args, "enable_reconstruction", "enableReconstruction", default=defaults["enable_reconstruction"]),
+        default=bool(defaults["enable_reconstruction"]),
+    )
+    grouping_mode = (
+        str(_pick(args, "grouping_mode", "groupingMode", default=defaults["grouping_mode"]) or defaults["grouping_mode"])
+        .strip()
+        .lower()
+    )
+    if grouping_mode not in ALLOWED_GROUPING_MODES:
+        errors.append(
+            _portal_issue(
+                "grouping_mode",
+                "invalid_grouping_mode",
+                "Grouping mode is not supported.",
+                suggestion="Choose single or parent_dir.",
+            )
+        )
+        grouping_mode = str(defaults["grouping_mode"])
+    normalized_args["grouping_mode"] = grouping_mode
+
+    cameras_sidecar_path = _normalize_portal_path_arg(
+        _pick(args, "cameras_sidecar_path", "camerasSidecarPath"),
+        "cameras_sidecar_path",
+        ALLOWED_INPUT_ROOTS,
+        errors,
+        required=False,
+        must_exist=bool(normalized_args["enable_reconstruction"]),
+        must_be_file=True,
+    )
+    if cameras_sidecar_path:
+        normalized_args["cameras_sidecar_path"] = cameras_sidecar_path
+
+    reconstruction_iterations = _normalize_optional_positive_int(
+        _pick(args, "reconstruction_iterations", "reconstructionIterations", default=defaults["reconstruction_iterations"]),
+        "reconstruction_iterations",
+        errors,
+    )
+    if reconstruction_iterations is None:
+        reconstruction_iterations = int(defaults["reconstruction_iterations"])
+    normalized_args["reconstruction_iterations"] = reconstruction_iterations
+
+    reconstruction_tier = (
+        str(
+            _pick(args, "reconstruction_tier", "reconstructionTier", default=defaults["reconstruction_tier"])
+            or defaults["reconstruction_tier"]
+        )
+        .strip()
+        .lower()
+    )
+    if reconstruction_tier not in ALLOWED_RECONSTRUCTION_TIERS:
+        errors.append(
+            _portal_issue(
+                "reconstruction_tier",
+                "invalid_reconstruction_tier",
+                "Reconstruction tier is not supported.",
+                suggestion="Choose apex_research, apex_research_ultra, or experimental.",
+            )
+        )
+        reconstruction_tier = str(defaults["reconstruction_tier"])
+    normalized_args["reconstruction_tier"] = reconstruction_tier
+    normalized_args["emit_scene_debug_bundle"] = _as_bool(
+        _pick(args, "emit_scene_debug_bundle", "emitSceneDebugBundle", default=defaults["emit_scene_debug_bundle"]),
+        default=bool(defaults["emit_scene_debug_bundle"]),
+    )
+
+    raw_ingest_mode = (
+        str(
+            _pick(args, "raw_ingest_mode", "rawIngestMode", default=defaults["raw_ingest_mode"]) or defaults["raw_ingest_mode"]
+        )
+        .strip()
+        .lower()
+    )
+    if raw_ingest_mode not in ALLOWED_RAW_INGEST_MODES:
+        errors.append(
+            _portal_issue(
+                "raw_ingest_mode",
+                "invalid_raw_ingest_mode",
+                "RAW ingest mode is not supported.",
+                suggestion="Choose auto, force_rawpy, or force_preview.",
+            )
+        )
+        raw_ingest_mode = str(defaults["raw_ingest_mode"])
+    normalized_args["raw_ingest_mode"] = raw_ingest_mode
+
+    raw_wb_mode = (
+        str(_pick(args, "raw_wb_mode", "rawWbMode", default=defaults["raw_wb_mode"]) or defaults["raw_wb_mode"])
+        .strip()
+        .lower()
+    )
+    if raw_wb_mode not in ALLOWED_RAW_WB_MODES:
+        errors.append(
+            _portal_issue(
+                "raw_wb_mode",
+                "invalid_raw_wb_mode",
+                "RAW white-balance mode is not supported.",
+                suggestion="The current backend supports only camera.",
+            )
+        )
+        raw_wb_mode = str(defaults["raw_wb_mode"])
+    normalized_args["raw_wb_mode"] = raw_wb_mode
+
+    raw_demosaic = (
+        str(_pick(args, "raw_demosaic", "rawDemosaic", default=defaults["raw_demosaic"]) or defaults["raw_demosaic"])
+        .strip()
+        .upper()
+    )
+    if raw_demosaic not in ALLOWED_RAW_DEMOSAIC:
+        errors.append(
+            _portal_issue(
+                "raw_demosaic",
+                "invalid_raw_demosaic",
+                "RAW demosaic mode is not supported.",
+                suggestion="The current backend supports only AHD.",
+            )
+        )
+        raw_demosaic = str(defaults["raw_demosaic"])
+    normalized_args["raw_demosaic"] = raw_demosaic
+
+    max_workers = _normalize_optional_positive_int(_pick(args, "max_workers", "maxWorkers"), "max_workers", errors)
+    max_gpu_workers = _normalize_optional_positive_int(
+        _pick(args, "max_gpu_workers", "maxGpuWorkers"), "max_gpu_workers", errors
+    )
+    if max_workers is not None:
+        normalized_args["max_workers"] = max_workers
+    if max_gpu_workers is not None:
+        normalized_args["max_gpu_workers"] = max_gpu_workers
+
+    log_level = str(_pick(args, "log_level", "logLevel", default="") or "").strip().upper()
+    if log_level and log_level not in ALLOWED_LOG_LEVELS:
+        errors.append(
+            _portal_issue(
+                "log_level",
+                "invalid_log_level",
+                "Log level is not supported.",
+                suggestion="Choose DEBUG, INFO, WARNING, or ERROR.",
+            )
+        )
+        log_level = ""
+    if log_level:
+        normalized_args["log_level"] = log_level
+
+    if normalized_args["verbose"] and normalized_args["quiet"]:
+        errors.append(
+            _portal_issue(
+                "verbose",
+                "conflicting_log_verbosity_flags",
+                "verbose and quiet cannot both be enabled.",
+                suggestion="Disable either verbose or quiet before dispatch.",
+            )
+        )
+
+    if depth_backend == "depth_pro":
+        if not normalized_args["non_commercial_ok"]:
+            errors.append(
+                _portal_issue(
+                    "non_commercial_ok",
+                    "depth_pro_non_commercial_required",
+                    "Depth Pro requires a non-commercial acknowledgment before dispatch.",
+                    suggestion="Acknowledge non-commercial use to continue with Depth Pro.",
+                )
+            )
+        if not normalized_args["accept_apple_depth_pro_research_license"]:
+            errors.append(
+                _portal_issue(
+                    "accept_apple_depth_pro_research_license",
+                    "depth_pro_license_required",
+                    "Depth Pro requires the Apple research license acknowledgment before dispatch.",
+                    suggestion="Acknowledge the Apple Depth Pro research license to continue.",
+                )
+            )
+
+    if "v3.1" in str(normalized_args["preset"]).lower() and not normalized_args["non_commercial_ok"]:
+        errors.append(
+            _portal_issue(
+                "non_commercial_ok",
+                "research_preset_non_commercial_required",
+                "The selected research preset requires a non-commercial acknowledgment.",
+                suggestion="Acknowledge non-commercial use or switch to a non-research preset.",
+            )
+        )
+
+    if quality == "apex" and normalized_args["materials_v3"]:
+        if not segmentation_enabled:
+            errors.append(
+                _portal_issue(
+                    "enable_segmentation",
+                    "apex_materials_requires_segmentation",
+                    "APEX with Materials V3 requires segmentation to be enabled.",
+                    suggestion="Enable segmentation or disable Materials V3.",
+                )
+            )
+        if segmentation_backend == "stub":
+            errors.append(
+                _portal_issue(
+                    "segmentation_backend",
+                    "apex_materials_requires_real_segmentation",
+                    "APEX with Materials V3 cannot use the stub segmentation backend.",
+                    suggestion="Choose efficientsam or sam2.",
+                )
+            )
+        if not normalized_args["strict_segmentation"]:
+            errors.append(
+                _portal_issue(
+                    "strict_segmentation",
+                    "apex_materials_requires_strict_segmentation",
+                    "APEX with Materials V3 requires strict segmentation.",
+                    suggestion="Enable strict segmentation or disable Materials V3.",
+                )
+            )
+
+    if normalized_args["enable_reconstruction"]:
+        if not normalized_args["non_commercial_ok"]:
+            errors.append(
+                _portal_issue(
+                    "non_commercial_ok",
+                    "reconstruction_non_commercial_required",
+                    "Scene reconstruction requires a non-commercial acknowledgment.",
+                    suggestion="Acknowledge non-commercial use before dispatch.",
+                )
+            )
+        if not normalized_args["accept_research_tools_license"]:
+            errors.append(
+                _portal_issue(
+                    "accept_research_tools_license",
+                    "reconstruction_license_required",
+                    "Scene reconstruction requires the research-tools license acknowledgment.",
+                    suggestion="Acknowledge the research-tools license before dispatch.",
+                )
+            )
+        if "cameras_sidecar_path" not in normalized_args:
+            warnings.append(
+                _portal_issue(
+                    "cameras_sidecar_path",
+                    "camera_sidecar_missing",
+                    "Camera sidecar path is missing; reconstruction may fail for multi-view scenes.",
+                    suggestion="Provide a camera sidecar file when available.",
+                )
+            )
+        if grouping_mode == "single":
+            warnings.append(
+                _portal_issue(
+                    "grouping_mode",
+                    "reconstruction_single_grouping",
+                    'Reconstruction is enabled with grouping mode "single"; overlap may be weak.',
+                    suggestion="Use parent_dir for typical multi-view scene folders.",
+                )
+            )
+    else:
+        for field_name in LUX_RECONSTRUCTION_INACTIVE_FIELDS:
+            value = normalized_args.get(field_name)
+            if value in (None, "", False):
+                continue
+            inactive_fields.append(
+                {
+                    "field": field_name,
+                    "value": value,
+                    "reason": "enable_reconstruction_disabled",
+                    "message": "Preserved for later, but ignored while reconstruction is off.",
+                }
+            )
+
+    if raw_ingest_mode == "force_rawpy":
+        warnings.append(
+            _portal_issue(
+                "raw_ingest_mode",
+                "force_rawpy_runtime_warning",
+                "force_rawpy may increase runtime and memory pressure.",
+                suggestion="Use auto unless a RAW decode mismatch requires force_rawpy.",
+            )
+        )
+
+    if isinstance(max_workers, int) and max_workers > _portal_soft_cpu_worker_cap():
+        warnings.append(
+            _portal_issue(
+                "max_workers",
+                "cpu_workers_above_recommended_cap",
+                "Max workers is above the recommended Portal cap for typical local runs.",
+                suggestion=f"Consider { _portal_soft_cpu_worker_cap() } or Auto unless profiling shows a benefit.",
+            )
+        )
+    if isinstance(max_gpu_workers, int):
+        if depth_device not in {"cuda", "mps"}:
+            warnings.append(
+                _portal_issue(
+                    "max_gpu_workers",
+                    "gpu_workers_without_gpu_device",
+                    "Max GPU workers is set while the selected depth device is not GPU-backed.",
+                    suggestion="Use Auto or switch to a GPU-backed depth device.",
+                )
+            )
+        elif max_gpu_workers > _portal_soft_gpu_worker_cap():
+            warnings.append(
+                _portal_issue(
+                    "max_gpu_workers",
+                    "gpu_workers_above_recommended_cap",
+                    "Max GPU workers is above the recommended Portal cap.",
+                    suggestion=f"Consider {_portal_soft_gpu_worker_cap()} or Auto to reduce VRAM contention.",
+                )
+            )
+
+    if normalized_args["emit_scene_debug_bundle"]:
+        warnings.append(
+            _portal_issue(
+                "emit_scene_debug_bundle",
+                "debug_bundle_sensitive_output",
+                "Debug bundle emission copies source images and camera metadata into the output tree.",
+                suggestion="Review the debug bundle acknowledgment before dispatch.",
+            )
+        )
+
+    effective_args = dict(normalized_args)
+    if not normalized_args["enable_reconstruction"]:
+        for field_name in LUX_RECONSTRUCTION_INACTIVE_FIELDS:
+            effective_args.pop(field_name, None)
+
+    readiness_args = dict(normalized_args)
+    readiness_snapshot = _evaluate_pipeline_readiness(
+        "lux-depth-v3",
+        readiness_args,
+        require_dispatch_inputs=True,
+    )
+
+    argv_preview = ""
+    if not errors:
+        argv_preview = _format_argv_preview(
+            _argv_from_request(
+                {
+                    "pipeline": "lux-depth-v3",
+                    "args": normalized_args,
+                }
+            )
+        )
+
+    return {
+        "pipeline": "lux-depth-v3",
+        "normalized_args": effective_args,
+        "argv_preview": argv_preview,
+        "field_errors": errors,
+        "field_warnings": warnings,
+        "inactive_fields": inactive_fields,
+        "readiness": readiness_snapshot,
+        "estimate_summary": _lux_estimate_summary(normalized_args),
+        "debug_bundle_summary": _lux_debug_bundle_summary(normalized_args),
+    }
+
+
+def _build_archive_config_preview(
+    pipeline: str,
+    args: Dict[str, Any],
+) -> Dict[str, Any]:
+    errors: List[Dict[str, Any]] = []
+    readiness_snapshot = _evaluate_pipeline_readiness(
+        pipeline,
+        args,
+        require_dispatch_inputs=True,
+    )
+    argv_preview = ""
+    normalized_args = dict(args)
+    try:
+        argv_preview = _format_argv_preview(_argv_from_request({"pipeline": pipeline, "args": args}))
+    except ValueError as exc:
+        errors.append(
+            _portal_issue(
+                "payload",
+                VALIDATION_REASON_CODES.get(str(exc), "invalid_request"),
+                str(exc),
+            )
+        )
+
+    return {
+        "pipeline": pipeline,
+        "normalized_args": normalized_args,
+        "argv_preview": argv_preview,
+        "field_errors": errors,
+        "field_warnings": [],
+        "inactive_fields": [],
+        "readiness": readiness_snapshot,
+        "estimate_summary": {},
+        "debug_bundle_summary": {},
+    }
+
+
+def _build_config_preview(payload: Dict[str, Any]) -> Dict[str, Any]:
+    pipeline = str(payload.get("pipeline") or "").strip()
+    args = payload.get("args")
+    if not isinstance(args, dict):
+        args = {}
+    if pipeline == "lux-depth-v3":
+        return _build_lux_config_preview(args)
+    if pipeline in ARCHIVE_GATE_PIPELINES:
+        return _build_archive_config_preview(pipeline, args)
+    raise ValueError("Unsupported pipeline")
+
+
+def _portal_sanitize_metadata(metadata: Any) -> Dict[str, Any]:
+    if not isinstance(metadata, dict):
+        return {}
+    sanitized: Dict[str, Any] = {}
+    for key, value in metadata.items():
+        key_text = str(key or "").strip().lower()
+        if not _portal_is_token(key_text):
+            continue
+        if isinstance(value, bool):
+            sanitized[key_text] = value
+            continue
+        if isinstance(value, int) and not isinstance(value, bool):
+            sanitized[key_text] = value
+            continue
+        if isinstance(value, float):
+            sanitized[key_text] = round(value, 4)
+            continue
+        if isinstance(value, str):
+            text = value.strip().lower()
+            if _portal_is_token(text):
+                sanitized[key_text] = text
+    return sanitized
+
+
+def _record_portal_event(payload: Dict[str, Any]) -> Dict[str, Any]:
+    event_type = str(payload.get("event_type") or "").strip().lower()
+    if event_type not in PORTAL_ALLOWED_EVENT_TYPES:
+        raise ValueError("invalid_event_type")
+
+    pipeline = str(payload.get("pipeline") or "").strip()
+    if pipeline and pipeline not in ALLOWED_PIPELINES:
+        raise ValueError("invalid_pipeline")
+
+    surface = str(payload.get("surface") or "").strip().lower()
+    if surface and surface not in PORTAL_ALLOWED_EVENT_SURFACES:
+        raise ValueError("invalid_surface")
+
+    field = str(payload.get("field") or "").strip()
+    if field and field not in PORTAL_ALLOWED_EVENT_FIELDS:
+        raise ValueError("invalid_field")
+
+    reasons_raw = payload.get("reasons") or []
+    reasons: List[str] = []
+    if isinstance(reasons_raw, list):
+        for item in reasons_raw[:8]:
+            token = str(item or "").strip().lower()
+            if _portal_is_token(token):
+                reasons.append(token)
+
+    record = {
+        "schema": "tp.orchestrator.portal_event.v1",
+        "timestamp": int(time.time()),
+        "event_type": event_type,
+        "pipeline": pipeline or "",
+        "surface": surface or "",
+        "field": field or "",
+        "metadata": _portal_sanitize_metadata(payload.get("metadata")),
+        "reasons": reasons,
+    }
+    LOGGER.info("portal_event %s", json.dumps(record, sort_keys=True))
+    if PORTAL_EVENT_LOG_PATH is not None:
+        PORTAL_EVENT_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with PORTAL_EVENT_LOG_PATH.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(record, sort_keys=True) + "\n")
+    return record
 
 
 def _is_mutating_job_endpoint(method: str, path: str) -> bool:
@@ -3048,6 +4137,72 @@ async def list_presets(pipeline: Optional[str] = None) -> JSONResponse:
             "tp.orchestrator.presets.v1",
             success=True,
             data=data,
+            error=None,
+        )
+    )
+
+
+@app.get("/v1/config-metadata")
+async def config_metadata(pipeline: str) -> JSONResponse:
+    pipeline_name = str(pipeline or "").strip()
+    if pipeline_name != "lux-depth-v3":
+        return _error_response(
+            400,
+            code="INVALID_ARGUMENT",
+            message="unsupported config metadata pipeline",
+            details={"field": "pipeline", "allowed": ["lux-depth-v3"]},
+        )
+
+    return JSONResponse(
+        _api_envelope(
+            "tp.orchestrator.config_metadata.v1",
+            success=True,
+            data=_lux_config_metadata(),
+            error=None,
+        )
+    )
+
+
+@app.post("/v1/config-preview")
+async def config_preview(payload: Dict[str, Any]) -> JSONResponse:
+    try:
+        preview = _build_config_preview(payload)
+    except ValueError as exc:
+        reason = VALIDATION_REASON_CODES.get(str(exc), "invalid_request")
+        return _error_response(
+            400,
+            code="INVALID_ARGUMENT",
+            message="invalid config preview request",
+            details={"field": "payload", "reason": reason},
+        )
+
+    return JSONResponse(
+        _api_envelope(
+            "tp.orchestrator.config_preview.v1",
+            success=True,
+            data=preview,
+            error=None,
+        )
+    )
+
+
+@app.post("/v1/portal/events")
+async def portal_events(payload: Dict[str, Any]) -> JSONResponse:
+    try:
+        record = _record_portal_event(payload)
+    except ValueError as exc:
+        return _error_response(
+            400,
+            code="INVALID_ARGUMENT",
+            message="invalid portal telemetry payload",
+            details={"field": "payload", "reason": str(exc)},
+        )
+
+    return JSONResponse(
+        _api_envelope(
+            "tp.orchestrator.portal_event.v1",
+            success=True,
+            data={"accepted": True, "event": record},
             error=None,
         )
     )
