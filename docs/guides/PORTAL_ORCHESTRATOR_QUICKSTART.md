@@ -82,6 +82,99 @@ export TP_READY_VERBOSE=1
 - `archive-gate-a` is normally `degraded` until an archive index is supplied.
 - `archive-gate-b` and `archive-gate-c` are blocked by default until a rights-manifest JSONL is available.
 
+## Run Gate A End-to-End
+
+`archive-gate-a` maps to the canonical archive command `fixity-scan`.
+In the portal build flow, `Input Dir` is forwarded as `--archive-root` automatically and `Output Dir` becomes the orchestration output root. Beyond those standard paths, the extra Gate A field you need to provide is an existing `Archive Index Path`.
+
+Safe local fixture inputs already checked into this repo:
+
+```bash
+ARCHIVE_ROOT=./tests/fixtures/archive_small/archive_root
+ARCHIVE_INDEX=./tests/fixtures/archive_small/archive_index_normalized.csv.gz
+OUTPUT_DIR=/tmp/gate-a-smoke
+```
+
+### Direct CLI
+
+This is the fastest no-UI smoke and is safe to run repeatedly:
+
+```bash
+.venv/bin/python tools/archive_governance.py --json fixity-scan \
+  --archive-index "$ARCHIVE_INDEX" \
+  --archive-root "$ARCHIVE_ROOT" \
+  --out-dir "$OUTPUT_DIR" \
+  --workers 1 \
+  --no-validate-schemas
+```
+
+Expected Gate A artifacts:
+
+- `$OUTPUT_DIR/hash_manifest.csv.gz`
+- `$OUTPUT_DIR/hash_summary.json`
+- `$OUTPUT_DIR/merkle_roots.json`
+
+### HTTP Orchestrator
+
+Start a clean backend first. If `127.0.0.1:8000` is already occupied, use another local port such as `8001`.
+
+```bash
+export TP_API_KEY="contract-secret"
+.venv/bin/python -m uvicorn app:app --host 127.0.0.1 --port 8001
+```
+
+Submit Gate A directly through the orchestrator:
+
+```bash
+curl -sS \
+  -H "Authorization: Bearer $TP_API_KEY" \
+  -H "Content-Type: application/json" \
+  -X POST http://127.0.0.1:8001/v1/jobs \
+  -d '{
+    "pipeline": "archive-gate-a",
+    "args": {
+      "input_dir": "./tests/fixtures/archive_small/archive_root",
+      "output_dir": "/tmp/gate-a-smoke-http",
+      "archive_command": "fixity-scan",
+      "archive_index": "./tests/fixtures/archive_small/archive_index_normalized.csv.gz"
+    }
+  }'
+```
+
+Poll the returned job id with `GET /v1/jobs/{id}` until `state` becomes `succeeded`.
+
+### Portal UI
+
+Open the build view:
+
+```text
+http://127.0.0.1:8001/portal?view=build
+```
+
+Then configure the form exactly like this:
+
+1. Pipeline: `archive-gate-a`
+2. Input Dir: `./tests/fixtures/archive_small/archive_root`
+3. Output Dir: `/tmp/gate-a-smoke-portal`
+4. Archive Index Path: `./tests/fixtures/archive_small/archive_index_normalized.csv.gz`
+5. Leave the canonical command as `fixity-scan`
+
+What the portal should show once configured:
+
+- the `Archive Index Path` field is visible
+- the CLI preview includes `--archive-command "fixity-scan"` and `--archive-index "...archive_index_normalized.csv.gz"`
+- the missing-index warning clears
+- the job runs to `Succeeded`
+- run details list three indexed artifacts
+
+If the form still shows the missing-index warning:
+
+- that warning is expected when `Archive Index Path` is blank
+- Gate A is not ready yet
+- fill `Archive Index Path` with `./tests/fixtures/archive_small/archive_index_normalized.csv.gz`
+- keep `Input Dir` pointed at `./tests/fixtures/archive_small/archive_root`
+- the equivalent command will then include `--archive-index`
+
 ## SSE Authentication Note
 
 There are now two supported browser paths:

@@ -1282,16 +1282,32 @@ def test_portal_archive_payload_and_cli_preview_use_canonical_archive_contract()
     content = portal_html.read_text(encoding="utf-8")
     payload_body = _extract_js_function_body(content, "generatePayload")
     cli_body = _extract_js_function_body(content, "renderCLI")
+    payload_init_segment = payload_body.split("if (p === 'lux-depth-v3') {", maxsplit=1)[0]
+    cli_archive_segment = cli_body.split("} else {", maxsplit=1)[1].split("const cli =", maxsplit=1)[0]
 
     assert "archive_command: archiveCommand" in payload_body
     assert "args.manifest_jsonl" in payload_body
     assert "args.archive_index" in payload_body
+    assert "overwrite:" not in payload_init_segment
+    assert payload_body.count("overwrite:") == 1
     assert "dedup" not in payload_body
     assert "sign" not in payload_body
     assert "--archive-command" in cli_body
     assert "--manifest-jsonl" in cli_body
+    assert "--overwrite" in _extract_portal_lux_cli_flags(content)
+    assert "--overwrite" not in cli_archive_segment
     assert "--dedup" not in cli_body
     assert "--sign" not in cli_body
+
+
+def test_portal_archive_pipelines_hide_lux_flag_shell() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+    update_body = _extract_js_function_body(content, "updateUIFromState")
+
+    assert "flagsShell: document.getElementById('flags-shell')" in content
+    assert "if (els.flagsShell) els.flagsShell.classList.remove('hidden');" in update_body
+    assert "if (els.flagsShell) els.flagsShell.classList.add('hidden');" in update_body
 
 
 def test_portal_dispatch_controls_require_backend_readiness_and_live_backend() -> None:
