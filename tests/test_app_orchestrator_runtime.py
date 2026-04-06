@@ -1310,6 +1310,38 @@ def test_portal_archive_pipelines_hide_lux_flag_shell() -> None:
     assert "if (els.flagsShell) els.flagsShell.classList.add('hidden');" in update_body
 
 
+def test_portal_lux_build_surface_hides_inapplicable_optional_controls_until_needed() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+    applicability_body = _extract_js_function_body(content, "syncBuildSurfaceApplicability")
+    mission_control_body = _extract_js_function_body(content, "renderMissionControl")
+    preset_body = _extract_js_function_body(content, "currentPresetDescriptor")
+    preset_research_body = _extract_js_function_body(content, "_derivePresetResearchFlag")
+    fallback_body = _extract_js_function_body(content, "seedPresetFallbacks")
+    fetch_body = _extract_js_function_body(content, "fetchPresetsForPipeline")
+
+    assert "segmentationBackendField: document.getElementById('segmentationBackendField')" in content
+    assert "sam2ModelSizeField: document.getElementById('sam2ModelSizeField')" in content
+    assert "strictSegmentationField: document.getElementById('strictSegmentationField')" in content
+    assert "sam2CheckpointField: document.getElementById('sam2CheckpointField')" in content
+    assert "v2PresetField: document.getElementById('v2PresetField')" in content
+    assert "governanceDetailsHint: document.getElementById('governanceDetailsHint')" in content
+    assert "licenseAppleField: document.getElementById('licenseAppleField')" in content
+    assert "reconstructionConfigFields: document.getElementById('reconstructionConfigFields')" in content
+    assert "function _derivePresetResearchFlag" in content
+    assert ".includes('research')" in preset_research_body
+    assert "is_research: _derivePresetResearchFlag({" in preset_body
+    assert "is_research: _derivePresetResearchFlag({" in fallback_body
+    assert "is_research: _derivePresetResearchFlag(preset)" in fetch_body
+    assert "_setContextVisibility(els.segmentationBackendField, isLuxPipeline && segmentationEnabled);" in applicability_body
+    assert "_setContextVisibility(els.sam2ModelSizeField, isLuxPipeline && showSam2Controls);" in applicability_body
+    assert "_setContextVisibility(els.v2PresetField, isLuxPipeline && enableV2);" in applicability_body
+    assert "_setContextVisibility(els.governanceDetails, governanceVisible);" in applicability_body
+    assert "els.licenseAppleField" in applicability_body
+    assert "_setContextVisibility(els.reconstructionConfigFields, reconstructionEnabled);" in applicability_body
+    assert "syncBuildSurfaceApplicability(currentPayload);" in mission_control_body
+
+
 def test_portal_dispatch_controls_require_backend_readiness_and_live_backend() -> None:
     portal_html = Path(__file__).resolve().parents[1] / "portal.html"
     content = portal_html.read_text(encoding="utf-8")

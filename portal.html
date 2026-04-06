@@ -1213,7 +1213,7 @@
                                     <div class="absolute left-[2px] top-[2px] bg-white w-4 h-4 rounded-full transition-transform duration-200 ease-in-out peer-checked:translate-x-4 shadow-sm"></div>
                                 </div>
                             </label>
-                            <div>
+                            <div id="segmentationBackendField">
                                 <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="segmentationBackend">Segmentation Backend</label>
                                 <select id="segmentationBackend" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors cursor-pointer">
                                     <option value="sam2">sam2</option>
@@ -1221,14 +1221,14 @@
                                     <option value="stub" selected>stub</option>
                                 </select>
                             </div>
-                            <div>
+                            <div id="sam2ModelSizeField">
                                 <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="sam2ModelSize">SAM2 Model Size</label>
                                 <select id="sam2ModelSize" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors cursor-pointer">
                                     <option value="base" selected>base</option>
                                     <option value="large">large</option>
                                 </select>
                             </div>
-                            <label class="flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 px-4 py-3.5 cursor-pointer group transition-colors">
+                            <label id="strictSegmentationField" class="flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 px-4 py-3.5 cursor-pointer group transition-colors">
                                 <span class="text-[12px] font-medium select-none text-slate-700 dark:text-slate-300">Strict Segmentation</span>
                                 <div class="relative inline-flex items-center">
                                     <input type="checkbox" id="strictSegmentation" role="switch" class="sr-only peer" />
@@ -1237,7 +1237,8 @@
                                 </div>
                             </label>
                         </div>
-                        <div>
+                        <p id="segmentationApplicabilityHint" class="text-[11px] leading-5 text-slate-500 dark:text-slate-400">Turn segmentation on to choose a backend and strictness policy. SAM2-only controls appear when that backend is selected.</p>
+                        <div id="sam2CheckpointField">
                             <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="sam2CheckpointPath">SAM2 Checkpoint Path (Optional)</label>
                             <input type="text" id="sam2CheckpointPath" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors" placeholder="./models/sam2/sam2.1_hiera_large.pt" autocomplete="off" spellcheck="false" />
                         </div>
@@ -1315,7 +1316,7 @@
                             </div>
                         </label>
 
-                        <div class="sm:col-span-2">
+                        <div id="v2PresetField" class="sm:col-span-2">
                              <input type="text" id="v2Preset" placeholder="V2 Preset (e.g. default)" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors disabled:opacity-50" value="default" disabled autocomplete="off" spellcheck="false" />
                         </div>
                     </div>
@@ -1392,20 +1393,20 @@
                         <summary class="disclosure-summary">
                             <div>
                                 <p class="text-[11px] font-bold uppercase tracking-widest text-amber-600 dark:text-amber-500">Compliance & Research Acknowledgments</p>
-                                <p class="mt-1 text-[12px] text-slate-500 dark:text-slate-400">Only expand this when the current preset or backend requires explicit acknowledgments.</p>
+                                <p id="governanceDetailsHint" class="mt-1 text-[12px] text-slate-500 dark:text-slate-400">Only shown when the current preset or backend requires explicit acknowledgments.</p>
                             </div>
                             <span class="disclosure-chevron text-slate-400">▾</span>
                         </summary>
                         <div class="mt-4 p-4 rounded-xl border border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-900/10 transition-colors space-y-3">
-                            <label class="flex items-start gap-3 cursor-pointer group">
+                            <label id="licenseNonCommercialField" class="flex items-start gap-3 cursor-pointer group">
                                 <input type="checkbox" id="licenseNonCommercial" class="w-4 h-4 mt-0.5 rounded text-amber-600 focus:ring-amber-500 border-amber-300 dark:border-amber-700 dark:bg-slate-900" />
                                 <span class="text-[12px] leading-tight select-none text-slate-700 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-white transition-colors">I acknowledge this run is strictly for <strong>Non-Commercial</strong> purposes.</span>
                             </label>
-                            <label class="flex items-start gap-3 cursor-pointer group">
+                            <label id="licenseAppleField" class="flex items-start gap-3 cursor-pointer group">
                                 <input type="checkbox" id="licenseApple" class="w-4 h-4 mt-0.5 rounded text-amber-600 focus:ring-amber-500 border-amber-300 dark:border-amber-700 dark:bg-slate-900" />
                                 <span class="text-[12px] leading-tight select-none text-slate-700 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-white transition-colors">I accept the <strong>Apple Depth Pro Research License</strong> terms.</span>
                             </label>
-                            <label class="flex items-start gap-3 cursor-pointer group">
+                            <label id="licenseResearchToolsField" class="flex items-start gap-3 cursor-pointer group">
                                 <input type="checkbox" id="licenseResearchTools" class="w-4 h-4 mt-0.5 rounded text-amber-600 focus:ring-amber-500 border-amber-300 dark:border-amber-700 dark:bg-slate-900" />
                                 <span class="text-[12px] leading-tight select-none text-slate-700 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-white transition-colors">I accept the <strong>Research Tools License</strong> terms required for scene reconstruction.</span>
                             </label>
@@ -1416,12 +1417,12 @@
                         <summary class="disclosure-summary">
                             <div>
                                 <p class="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Reconstruction & Runtime</p>
-                                <p class="mt-1 text-[12px] text-slate-500 dark:text-slate-400">Scene reconstruction, RAW ingest, worker limits, and operator runtime controls.</p>
+                                <p id="reconstructionDetailsHint" class="mt-1 text-[12px] text-slate-500 dark:text-slate-400">Runtime tuning stays available here. Reconstruction-only settings appear after you enable the feature.</p>
                             </div>
                             <span class="disclosure-chevron text-slate-400">▾</span>
                         </summary>
                         <div class="mt-4 space-y-4">
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div class="grid grid-cols-1 gap-4">
                             <label class="flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 px-4 py-3.5 cursor-pointer group transition-colors">
                                 <span class="flex items-center gap-2 text-[12px] font-medium select-none text-slate-700 dark:text-slate-300">
                                     <span>Enable Reconstruction</span>
@@ -1433,6 +1434,9 @@
                                     <div class="absolute left-[2px] top-[2px] bg-white w-4 h-4 rounded-full transition-transform duration-200 ease-in-out peer-checked:translate-x-4 shadow-sm"></div>
                                 </div>
                             </label>
+                        </div>
+                        <div id="reconstructionConfigFields" class="space-y-4">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <label class="flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 px-4 py-3.5 cursor-pointer group transition-colors">
                                 <span class="text-[12px] font-medium select-none text-slate-700 dark:text-slate-300">Emit Scene Debug Bundle</span>
                                 <div class="relative inline-flex items-center">
@@ -1465,6 +1469,8 @@
                                 <input type="text" id="reconstructionTier" value="apex_research" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors" autocomplete="off" spellcheck="false" />
                             </div>
                         </div>
+                        </div>
+                        <div id="runtimeTuningFields" class="space-y-4">
                         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                             <div>
                                 <label class="flex items-center gap-2 text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="rawIngestMode">
@@ -1509,6 +1515,7 @@
                                     <option value="ERROR">ERROR</option>
                                 </select>
                             </div>
+                        </div>
                         </div>
                         </div>
                     </details>
@@ -1950,6 +1957,11 @@
             qualityTier: document.getElementById('qualityTier'),
             depthBackend: document.getElementById('depthBackend'),
             depthDevice: document.getElementById('depthDevice'),
+            segmentationBackendField: document.getElementById('segmentationBackendField'),
+            sam2ModelSizeField: document.getElementById('sam2ModelSizeField'),
+            strictSegmentationField: document.getElementById('strictSegmentationField'),
+            sam2CheckpointField: document.getElementById('sam2CheckpointField'),
+            segmentationApplicabilityHint: document.getElementById('segmentationApplicabilityHint'),
             segmentation: {
                 enable: document.getElementById('enableSegmentation'),
                 backend: document.getElementById('segmentationBackend'),
@@ -1973,6 +1985,7 @@
                 quiet: document.getElementById('quietFlag')
             },
             v2Preset: document.getElementById('v2Preset'),
+            v2PresetField: document.getElementById('v2PresetField'),
 
             emits: {
                 master16: document.getElementById('emitMaster16'),
@@ -1987,6 +2000,10 @@
                 acceptApple: document.getElementById('licenseApple'),
                 acceptResearchTools: document.getElementById('licenseResearchTools')
             },
+            licenseNonCommercialField: document.getElementById('licenseNonCommercialField'),
+            licenseAppleField: document.getElementById('licenseAppleField'),
+            licenseResearchToolsField: document.getElementById('licenseResearchToolsField'),
+            governanceDetailsHint: document.getElementById('governanceDetailsHint'),
             reconstruction: {
                 enable: document.getElementById('enableReconstruction'),
                 groupingMode: document.getElementById('groupingMode'),
@@ -1995,6 +2012,9 @@
                 tier: document.getElementById('reconstructionTier'),
                 emitSceneDebugBundle: document.getElementById('emitSceneDebugBundle')
             },
+            reconstructionConfigFields: document.getElementById('reconstructionConfigFields'),
+            runtimeTuningFields: document.getElementById('runtimeTuningFields'),
+            reconstructionDetailsHint: document.getElementById('reconstructionDetailsHint'),
             raw: {
                 ingestMode: document.getElementById('rawIngestMode'),
                 wbMode: document.getElementById('rawWbMode'),
@@ -2905,6 +2925,16 @@
             }
         }
 
+        function _derivePresetResearchFlag(preset, fallbackName = '') {
+            if (preset && Object.prototype.hasOwnProperty.call(preset, 'is_research')) {
+                return Boolean(preset.is_research);
+            }
+            return String(preset?.name || preset?.label || fallbackName || '')
+                .trim()
+                .toLowerCase()
+                .includes('research');
+        }
+
         function currentPresetDescriptor() {
             if (state.pipeline !== 'lux-depth-v3') {
                 return {
@@ -2912,6 +2942,7 @@
                     label: 'default',
                     stability: 'stable',
                     description: 'Archive governance workflow preset.',
+                    is_research: false,
                     recommended_args: {},
                     advanced_sections: []
                 };
@@ -2926,6 +2957,10 @@
                 description: state.pipeline === 'lux-depth-v3'
                     ? 'Custom or offline preset selection.'
                     : 'Archive governance workflow preset.',
+                is_research: _derivePresetResearchFlag({
+                    name: state.config.preset || 'custom',
+                    label: state.config.preset || 'custom'
+                }),
                 recommended_args: {},
                 advanced_sections: []
             };
@@ -2936,6 +2971,15 @@
             if (pipelineName === 'archive-gate-b') return 'bag-build';
             if (pipelineName === 'archive-gate-c') return 'mets-export';
             return '';
+        }
+
+        function _setContextVisibility(el, visible) {
+            if (!el) return;
+            el.classList.toggle('hidden', !visible);
+        }
+
+        function _presetRequiresResearchAcknowledgments(preset, args = {}) {
+            return _derivePresetResearchFlag(preset, args.preset);
         }
 
         function currentPipelineReadiness() {
@@ -3021,6 +3065,87 @@
                 tag.textContent = chip;
                 els.capabilityChips.appendChild(tag);
             });
+        }
+
+        function syncBuildSurfaceApplicability(payload = null) {
+            const args = payload?.args || generatePayload().args || {};
+            const preset = currentPresetDescriptor();
+            const isLuxPipeline = state.pipeline === 'lux-depth-v3';
+            const segmentationEnabled = parseBoolLike(args.enable_segmentation, false);
+            const segmentationBackend = _resolveSegmentationBackend(args.segmentation_backend || state.config.segmentation?.backend);
+            const showSam2Controls = segmentationEnabled && segmentationBackend === 'sam2';
+            const enableV2 = parseBoolLike(args.enable_v2, false);
+            const reconstructionEnabled = parseBoolLike(args.enable_reconstruction, false);
+            const researchPreset = _presetRequiresResearchAcknowledgments(preset, args);
+            const depthBackend = String(args.depth_backend || '').trim().toLowerCase();
+            const nonCommercialChecked = parseBoolLike(args.non_commercial_ok, false);
+            const appleChecked = parseBoolLike(args.accept_apple_depth_pro_research_license, false);
+            const researchToolsChecked = parseBoolLike(args.accept_research_tools_license, false);
+            const nonCommercialRequired = researchPreset || depthBackend === 'depth_pro' || reconstructionEnabled;
+            const appleRequired = depthBackend === 'depth_pro';
+            const researchToolsRequired = reconstructionEnabled;
+            const governanceVisible = isLuxPipeline && (
+                nonCommercialRequired
+                || appleRequired
+                || researchToolsRequired
+                || nonCommercialChecked
+                || appleChecked
+                || researchToolsChecked
+            );
+
+            _setContextVisibility(els.segmentationBackendField, isLuxPipeline && segmentationEnabled);
+            _setContextVisibility(els.strictSegmentationField, isLuxPipeline && segmentationEnabled);
+            _setContextVisibility(els.sam2ModelSizeField, isLuxPipeline && showSam2Controls);
+            _setContextVisibility(els.sam2CheckpointField, isLuxPipeline && showSam2Controls);
+            if (els.segmentationApplicabilityHint) {
+                els.segmentationApplicabilityHint.textContent = !isLuxPipeline
+                    ? ''
+                    : !segmentationEnabled
+                        ? 'Turn segmentation on to choose a backend and strictness policy. SAM2-only controls appear when that backend is selected.'
+                        : showSam2Controls
+                            ? 'SAM2 is active, so model size and checkpoint controls are now available.'
+                            : `Segmentation is active via ${segmentationBackend}. SAM2-only controls stay hidden until you switch back to sam2.`;
+            }
+
+            _setContextVisibility(els.v2PresetField, isLuxPipeline && enableV2);
+            if (els.v2Preset) {
+                els.v2Preset.disabled = !enableV2;
+            }
+
+            _setContextVisibility(els.governanceDetails, governanceVisible);
+            _setContextVisibility(
+                els.licenseNonCommercialField,
+                governanceVisible && (nonCommercialRequired || nonCommercialChecked)
+            );
+            _setContextVisibility(
+                els.licenseAppleField,
+                governanceVisible && (appleRequired || appleChecked)
+            );
+            _setContextVisibility(
+                els.licenseResearchToolsField,
+                governanceVisible && (researchToolsRequired || researchToolsChecked)
+            );
+            if (els.governanceDetailsHint) {
+                if (!governanceVisible) {
+                    els.governanceDetailsHint.textContent = 'Only shown when the current preset or backend requires explicit acknowledgments.';
+                } else if (appleRequired && researchToolsRequired) {
+                    els.governanceDetailsHint.textContent = 'This run needs both Depth Pro and reconstruction acknowledgments before dispatch.';
+                } else if (appleRequired) {
+                    els.governanceDetailsHint.textContent = 'This run needs Depth Pro research acknowledgments before dispatch.';
+                } else if (researchToolsRequired) {
+                    els.governanceDetailsHint.textContent = 'This run needs reconstruction acknowledgments before dispatch.';
+                } else {
+                    els.governanceDetailsHint.textContent = 'This research preset needs a non-commercial acknowledgment before dispatch.';
+                }
+            }
+
+            _setContextVisibility(els.reconstructionConfigFields, reconstructionEnabled);
+            _setContextVisibility(els.runtimeTuningFields, isLuxPipeline);
+            if (els.reconstructionDetailsHint) {
+                els.reconstructionDetailsHint.textContent = reconstructionEnabled
+                    ? 'Scene reconstruction is active. Grouping, sidecar, tier, and debug controls are now available.'
+                    : 'Runtime tuning stays available here. Reconstruction-only settings appear after you enable the feature.';
+            }
         }
 
         function syncDisclosurePanels(payload = null) {
@@ -3231,6 +3356,7 @@
         function renderMissionControl(payload = null) {
             const currentPayload = payload || generatePayload();
             const activeJobs = state.jobs.filter((job) => job && (job.state === 'running' || job.state === 'queued')).length;
+            syncBuildSurfaceApplicability(currentPayload);
             if (els.heroPipelineValue) els.heroPipelineValue.textContent = String(state.pipeline || 'lux-depth-v3');
             if (els.heroPresetValue) {
                 els.heroPresetValue.textContent = state.pipeline === 'lux-depth-v3'
@@ -4677,6 +4803,9 @@
             if (!els.segmentation.sam2ModelSize || !els.segmentation.backend) return;
             const backend = _resolveSegmentationBackend(config.segmentation?.backend);
             els.segmentation.sam2ModelSize.disabled = backend !== 'sam2';
+            if (els.segmentation.sam2CheckpointPath) {
+                els.segmentation.sam2CheckpointPath.disabled = backend !== 'sam2';
+            }
         }
 
         function buildCanonicalLuxDepthArgs(config) {
@@ -4880,6 +5009,10 @@
                     label: String(opt.textContent || opt.value || '').trim(),
                     stability: 'unknown',
                     description: '',
+                    is_research: _derivePresetResearchFlag({
+                        name: String(opt.value || '').trim(),
+                        label: String(opt.textContent || opt.value || '').trim()
+                    }),
                     recommended_args: {},
                     advanced_sections: []
                 }))
@@ -4994,6 +5127,7 @@
                         label: String(preset.label || preset.name),
                         stability: String(preset.stability || 'unknown'),
                         description: String(preset.description || ''),
+                        is_research: _derivePresetResearchFlag(preset),
                         recommended_args: preset.recommended_args && typeof preset.recommended_args === 'object'
                             ? { ...preset.recommended_args }
                             : {},
