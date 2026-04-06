@@ -184,6 +184,21 @@ def test_config_metadata_request_validation_errors_are_sanitized(client: TestCli
     assert "errors" not in body["error"]["details"]
 
 
+def test_config_preview_rejects_unsupported_pipeline_with_sanitized_reason(client: TestClient) -> None:
+    response = client.post(
+        "/v1/config-preview",
+        json={
+            "pipeline": "not-a-real-pipeline",
+            "args": {},
+        },
+    )
+    body = response.json()
+
+    assert response.status_code == 400
+    assert body["error"]["message"] == "invalid config preview request"
+    assert body["error"]["details"] == {"field": "payload", "reason": "unsupported_pipeline"}
+
+
 def test_config_preview_contract_normalizes_inactive_reconstruction_fields(
     client: TestClient,
     tmp_path: Path,

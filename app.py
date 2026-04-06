@@ -1463,37 +1463,45 @@ def _normalize_portal_path_arg(
                 )
             )
         return ""
-    try:
-        resolved = _resolve_untrusted_request_path(text)
-    except ValueError as exc:
-        reason = _portal_reason_code(exc)
-        if reason == "invalid_path_value":
-            message = f"{field} contains an invalid path value."
-            suggestion = (
-                f"Choose a valid {field} path under the configured repository or temp roots "
-                f"without invalid characters or path expansion syntax."
-            )
-        else:
-            message = f"{field} must stay within the allowed workspace roots."
-            suggestion = f"Choose a {field} path under the configured repository or temp roots."
+    if text.startswith("~") or "\x00" in text:
         errors.append(
             _portal_issue(
                 field,
-                reason,
-                message,
-                suggestion=suggestion,
+                "invalid_path_value",
+                f"{field} contains an invalid path value.",
+                suggestion=(
+                    f"Choose a valid {field} path under the configured repository or temp roots "
+                    f"without invalid characters or path expansion syntax."
+                ),
+            )
+        )
+        return ""
+    candidate = text if os.path.isabs(text) else str(REPO_ROOT / text)
+    try:
+        resolved_text = os.path.realpath(candidate)
+    except (OSError, RuntimeError, ValueError):
+        errors.append(
+            _portal_issue(
+                field,
+                "invalid_path_value",
+                f"{field} contains an invalid path value.",
+                suggestion=(
+                    f"Choose a valid {field} path under the configured repository or temp roots "
+                    f"without invalid characters or path expansion syntax."
+                ),
             )
         )
         return ""
     within_allowed_roots = False
     for root in allowed_roots:
         try:
-            root_real = Path(os.path.realpath(root))
-            resolved.relative_to(root_real)
+            root_text = os.path.realpath(root)
         except (OSError, RuntimeError, ValueError):
             continue
-        within_allowed_roots = True
-        break
+        root_prefix = root_text if root_text.endswith(os.sep) else root_text + os.sep
+        if resolved_text == root_text or resolved_text.startswith(root_prefix):
+            within_allowed_roots = True
+            break
     if not within_allowed_roots:
         errors.append(
             _portal_issue(
@@ -1504,7 +1512,7 @@ def _normalize_portal_path_arg(
             )
         )
         return ""
-    if must_exist and not resolved.exists():
+    if must_exist and not os.path.exists(resolved_text):
         errors.append(
             _portal_issue(
                 field,
@@ -1514,7 +1522,7 @@ def _normalize_portal_path_arg(
             )
         )
         return ""
-    if must_be_file and resolved.exists() and not resolved.is_file():
+    if must_be_file and os.path.exists(resolved_text) and not os.path.isfile(resolved_text):
         errors.append(
             _portal_issue(
                 field,
@@ -1524,7 +1532,7 @@ def _normalize_portal_path_arg(
             )
         )
         return ""
-    return str(resolved)
+    return resolved_text
 
 
 def _lux_config_metadata() -> Dict[str, Any]:
@@ -2268,17 +2276,26 @@ def _build_archive_config_preview(
     )
     argv_preview = ""
     normalized_args = dict(args)
-    try:
-        argv_preview = _format_argv_preview(_argv_from_request({"pipeline": pipeline, "args": args}))
-    except ValueError as exc:
-        reason = _portal_reason_code(exc)
+    archive_command = str(args.get("archive_command") or "").strip()
+    if archive_command and archive_command not in ARCHIVE_GATE_ALLOWED_COMMANDS[pipeline]:
         errors.append(
             _portal_issue(
                 "payload",
-                reason,
-                _portal_safe_error_message(reason),
+                "invalid_archive_command",
+                _portal_safe_error_message("invalid_archive_command"),
             )
         )
+    else:
+        try:
+            argv_preview = _format_argv_preview(_argv_from_request({"pipeline": pipeline, "args": args}))
+        except ValueError:
+            errors.append(
+                _portal_issue(
+                    "payload",
+                    "invalid_request",
+                    _portal_safe_error_message("invalid_request"),
+                )
+            )
 
     return {
         "pipeline": pipeline,
@@ -4312,15 +4329,20 @@ async def config_metadata(pipeline: str) -> JSONResponse:
 
 @app.post("/v1/config-preview")
 async def config_preview(payload: Dict[str, Any]) -> JSONResponse:
-    try:
-        preview = _build_config_preview(payload)
-    except ValueError as exc:
-        reason = _portal_reason_code(exc)
+    pipeline = str(payload.get("pipeline") or "").strip()
+    args = payload.get("args")
+    if not isinstance(args, dict):
+        args = {}
+    if pipeline == "lux-depth-v3":
+        preview = _build_lux_config_preview(args)
+    elif pipeline in ARCHIVE_GATE_PIPELINES:
+        preview = _build_archive_config_preview(pipeline, args)
+    else:
         return _error_response(
             400,
             code="INVALID_ARGUMENT",
             message="invalid config preview request",
-            details={"field": "payload", "reason": reason},
+            details={"field": "payload", "reason": "unsupported_pipeline"},
         )
 
     return JSONResponse(
