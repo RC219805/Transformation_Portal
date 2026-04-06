@@ -2393,6 +2393,46 @@ def test_create_job_rejects_tilde_prefixed_paths_with_typed_error() -> None:
     assert orchestrator_app.JOBS == {}
 
 
+def test_create_job_preflight_sanitizes_exception_derived_messages(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_readiness(_pipeline, _args, require_dispatch_inputs=False):  # noqa: ANN001
+        assert require_dispatch_inputs is True
+        return {
+            "status": "blocked",
+            "canonical_command": "lux-depth-v3",
+            "missing_prerequisites": [
+                {
+                    "reason": "unsafe_path",
+                    "severity": "blocked",
+                    "message": "Traceback: leaked preflight internals",
+                    "field": "input_dir",
+                }
+            ],
+            "runner_details": {},
+            "notes": [],
+        }
+
+    monkeypatch.setattr(orchestrator_app, "_evaluate_pipeline_readiness", fake_readiness)
+
+    response = asyncio.run(
+        orchestrator_app.create_job(
+            {
+                "pipeline": "lux-depth-v3",
+                "args": {"input_dir": "./input_images", "output_dir": "./output"},
+            }
+        )
+    )
+    body = json.loads(response.body.decode("utf-8"))
+
+    assert response.status_code == 400
+    assert body["error"]["code"] == "INVALID_ARGUMENT"
+    assert body["error"]["message"] == "Configured paths must stay within the allowed workspace roots."
+    assert body["error"]["details"] == {"field": "input_dir", "reason": "unsafe_path"}
+    assert "Traceback" not in response.body.decode("utf-8")
+    assert orchestrator_app.JOBS == {}
+
+
 def test_create_job_archive_gate_rejects_unsafe_input_dir_before_argv() -> None:
     response = asyncio.run(
         orchestrator_app.create_job(

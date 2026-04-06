@@ -476,8 +476,11 @@ VALIDATION_REASON_CODES = {
     "Invalid archive integer option": "invalid_archive_integer_option",
 }
 PORTAL_SAFE_ERROR_MESSAGES = {
+    "archive_index_required": "An archive index artifact is required before dispatch.",
     "archive_runner_unavailable": "The selected archive command is unavailable in this environment.",
+    "bag_dir_required": "A bag directory is required before dispatch.",
     "conflicting_log_verbosity_flags": "Verbose and quiet mode cannot both be enabled.",
+    "hash_manifest_required": "A hash manifest artifact is required before dispatch.",
     "invalid_archive_command": "The selected archive command is not supported.",
     "invalid_archive_integer_option": "One or more archive numeric options are invalid.",
     "invalid_depth_backend": "The selected depth backend is not supported.",
@@ -495,8 +498,13 @@ PORTAL_SAFE_ERROR_MESSAGES = {
     "invalid_sam2_model_size": "The selected SAM2 model size is not supported.",
     "invalid_segmentation_backend": "The selected segmentation backend is not supported.",
     "invalid_surface": "The telemetry surface is not supported.",
+    "manifest_jsonl_required": "A manifest JSONL artifact is required before dispatch.",
     "missing_required_paths": "Input and output paths are required.",
     "path_outside_allowed_roots": "Configured paths must stay within the allowed workspace roots.",
+    "policy_yaml_required": "A rights policy YAML file is required before dispatch.",
+    "rights_manifest_required": "A rights-manifest JSONL artifact is required before dispatch.",
+    "runner_unavailable": "The selected pipeline runner is unavailable in this environment.",
+    "unsafe_path": "Configured paths must stay within the allowed workspace roots.",
     "unsupported_pipeline": "The selected pipeline is not supported.",
 }
 PORTAL_EVENT_TOKEN_RE = re.compile(r"^[a-z0-9][a-z0-9_.:-]{0,63}$")
@@ -4397,11 +4405,15 @@ async def create_job(payload: Dict[str, Any]) -> JSONResponse:
         )
         _enforce_job_readiness_preflight(pipeline, readiness_snapshot)
     except JobPreflightError as exc:
+        status_code = int(exc.status_code)
+        field = str(exc.field or "payload")
+        reason = _portal_reason_code(exc.reason)
+        del exc
         return _error_response(
-            exc.status_code,
+            status_code,
             code="INVALID_ARGUMENT",
-            message=exc.message,
-            details=exc.details,
+            message=_portal_safe_error_message(reason, field=field),
+            details={"field": field, "reason": reason},
         )
 
     try:
