@@ -17,7 +17,7 @@ from collections import deque
 from dataclasses import dataclass, field
 from importlib.util import find_spec
 from pathlib import Path, PurePosixPath
-from typing import Any, AsyncGenerator, Callable, Deque, Dict, List, Mapping, Optional
+from typing import Any, AsyncGenerator, Callable, Deque, Dict, List, Mapping, Optional, Tuple
 from urllib.parse import quote
 
 from fastapi import FastAPI, HTTPException, Request
