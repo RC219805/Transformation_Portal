@@ -488,6 +488,10 @@ def _state_probe_expression() -> str:
     luxFieldsVisible: (() => {
       const el = document.getElementById('fieldsLuxDepth');
       return !!(el && !el.classList.contains('hidden'));
+    })(),
+    flagsShellVisible: (() => {
+      const el = document.getElementById('flags-shell');
+      return !!(el && !el.classList.contains('hidden'));
     })()
   };
 })()
@@ -558,6 +562,7 @@ def _set_pipeline_form_expression(
     pipeline: document.getElementById('pipelineSelect').value,
     archiveFieldsVisible: !document.getElementById('fieldsArchiveGate').classList.contains('hidden'),
     luxFieldsVisible: !document.getElementById('fieldsLuxDepth').classList.contains('hidden'),
+    flagsShellVisible: !document.getElementById('flags-shell').classList.contains('hidden'),
     archiveCanonicalCommand: (document.getElementById('archiveCanonicalCommand').textContent || '').trim(),
     archiveIndexFieldVisible: !document.getElementById('archiveIndexField').classList.contains('hidden'),
     rightsManifestFieldVisible: !document.getElementById('rightsManifestField').classList.contains('hidden'),
@@ -757,6 +762,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         _expect(isinstance(lux_state, dict), f"Unexpected lux portal state: {lux_state!r}")
         _expect(lux_state.get("pipeline") == "lux-depth-v3", f"Lux pipeline did not remain selected: {lux_state}")
         _expect(not bool(lux_state.get("archiveFieldsVisible")), f"Lux build view should hide archive controls: {lux_state}")
+        _expect(bool(lux_state.get("flagsShellVisible")), f"Lux build view should keep core flags visible: {lux_state}")
         _expect(
             bool(str(lux_state.get("heroReadinessLabel", "")).strip()),
             f"Lux build view did not expose any readiness label: {lux_state}",
@@ -793,6 +799,10 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         _expect(
             not bool(gate_b_state.get("archiveIndexFieldVisible")),
             f"archive-gate-b should hide archive index input: {gate_b_state}",
+        )
+        _expect(
+            not bool(gate_b_state.get("flagsShellVisible")),
+            f"archive-gate-b should hide Lux-only core flags: {gate_b_state}",
         )
         _expect(
             bool(gate_b_state.get("runJobDisabled")), f"archive-gate-b should stay blocked without manifest: {gate_b_state}"
@@ -833,6 +843,10 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             f"archive-gate-c should hide archive index input: {gate_c_state}",
         )
         _expect(
+            not bool(gate_c_state.get("flagsShellVisible")),
+            f"archive-gate-c should hide Lux-only core flags: {gate_c_state}",
+        )
+        _expect(
             bool(gate_c_state.get("runJobDisabled")), f"archive-gate-c should stay blocked without manifest: {gate_c_state}"
         )
         _expect(
@@ -866,6 +880,10 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         _expect(
             bool(configured_state.get("archiveFieldsVisible")) and not bool(configured_state.get("luxFieldsVisible")),
             f"Archive-specific UI did not toggle correctly: {configured_state}",
+        )
+        _expect(
+            not bool(configured_state.get("flagsShellVisible")),
+            f"archive-gate-a should hide Lux-only core flags: {configured_state}",
         )
         _expect(
             bool(configured_state.get("archiveIndexFieldVisible"))

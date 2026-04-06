@@ -1294,6 +1294,16 @@ def test_portal_archive_payload_and_cli_preview_use_canonical_archive_contract()
     assert "--sign" not in cli_body
 
 
+def test_portal_archive_pipelines_hide_lux_flag_shell() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+    update_body = _extract_js_function_body(content, "updateUIFromState")
+
+    assert "flagsShell: document.getElementById('flags-shell')" in content
+    assert "if (els.flagsShell) els.flagsShell.classList.remove('hidden');" in update_body
+    assert "if (els.flagsShell) els.flagsShell.classList.add('hidden');" in update_body
+
+
 def test_portal_dispatch_controls_require_backend_readiness_and_live_backend() -> None:
     portal_html = Path(__file__).resolve().parents[1] / "portal.html"
     content = portal_html.read_text(encoding="utf-8")
