@@ -1110,6 +1110,33 @@ def test_public_http_error_message_preserves_safe_request_size_detail() -> None:
     assert message == "request body too large (max 123 bytes)"
 
 
+def test_http_exception_handler_preserves_safe_413_detail_for_v1_requests() -> None:
+    scope = {
+        "type": "http",
+        "method": "POST",
+        "path": "/v1/jobs",
+        "headers": [],
+        "query_string": b"",
+        "client": ("127.0.0.1", 12345),
+        "server": ("testserver", 80),
+        "scheme": "http",
+    }
+    request = StarletteRequest(scope)
+
+    response = asyncio.run(
+        orchestrator_app.http_exception_handler(
+            request,
+            StarletteHTTPException(status_code=413, detail="request body too large (max 123 bytes)"),
+        )
+    )
+
+    body = json.loads(response.body.decode("utf-8"))
+    assert response.status_code == 413
+    assert body["error"]["code"] == "REQUEST_TOO_LARGE"
+    assert body["error"]["message"] == "request body too large (max 123 bytes)"
+    assert body["error"]["details"] == {"path": "/v1/jobs"}
+
+
 def test_job_events_stream_emits_state_log_progress_artifact_done(client: TestClient, monkeypatch) -> None:
     async def fake_run_job(job, _argv):  # noqa: ANN001
         job.state = "running"

@@ -4032,7 +4032,7 @@ async def http_exception_handler(
     status_code = exc.status_code
     headers = exc.headers
     detail = exc.detail
-    message = PUBLIC_HTTP_ERROR_MESSAGES.get(status_code, "request failed")
+    message = _public_http_error_message(status_code, detail)
     if isinstance(detail, str) and detail.strip() and detail.strip() != message:
         LOGGER.warning(
             "Sanitized HTTPException detail for %s %s (%s): %s",
