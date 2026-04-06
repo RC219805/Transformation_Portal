@@ -250,6 +250,16 @@ def main(
             "Use this to keep depth_pro out of the main Transformation Portal venv."
         ),
     ),
+    da3_python: Optional[str] = typer.Option(
+        None,
+        "--da3-python",
+        help=(
+            "Optional Python executable for an isolated Depth Anything 3 environment. "
+            "Use this to keep DA3 out of the main Transformation Portal venv or to override "
+            "the auto-discovered repo-local runtime at ./.venv-da3/bin/python "
+            "(bootstrap with ./scripts/setup/install_da3_runtime.sh)."
+        ),
+    ),
     depth_device: str = typer.Option(
         "cpu",
         "--depth-device",
@@ -740,6 +750,7 @@ def main(
         accept_apple_depth_pro_research_license=enable_apple_license,
         accept_research_tools_license=enable_research_tools_license,
         depth_pro_python_executable=depth_pro_python,
+        da3_python_executable=da3_python,
         force_depth=force_depth or overwrite,
         enable_depth_cache=enable_cache_depth,
         enable_v2=enable_v2_bool,

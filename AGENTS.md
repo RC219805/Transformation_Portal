@@ -17,7 +17,12 @@ Quick reference for common workflows and commands in this repo.
 - `make test-integration` run DA3/HuggingFace model-loading integration (`tests/test_da3_inference_integration.py`) with `TP_RUN_HF_MODEL_TESTS=1` (downloads models from HF Hub unless offline; typically requires `HF_TOKEN`).
 - `make test-structure` run codebase structure validation.
 - `make test-utils` run performance/error utility tests.
-- `make test-orchestrator-contract` run portal orchestrator contract tests (`tests/test_app_orchestrator_runtime.py` and `tests/test_app_orchestrator_contract_http.py`).
+- `make test-orchestrator-contract` run the full portal/orchestrator contract suite (`tests/test_app_orchestrator_runtime.py`, `tests/test_app_orchestrator_contract_http.py`, `tests/validation/test_portal_smoke_scripts.py`).
+- `make test-orchestrator-http-contract` run HTTP-only orchestrator contract tests (`tests/test_app_orchestrator_contract_http.py`).
+- `make test-portal-contract` run portal runtime/browser contract tests (`tests/test_app_orchestrator_runtime.py`, `tests/validation/test_portal_smoke_scripts.py`).
+- `make validate-orchestrator-http` run the live orchestrator HTTP smoke against a running backend.
+- `make validate-portal-browser` run the live browser smoke against a running portal + backend.
+- `make audit-pipeline-readiness` run the safe local four-pipeline readiness audit using checked-in archive fixtures.
 - `make coverage-fast-scope` run branch coverage for the audited `core/config` and `streaming` paths with `term-missing` output.
 - `make clean` remove Python caches and build/test artifacts.
 - `make lint` run flake8 + pylint (non-blocking).
@@ -71,6 +76,7 @@ Quick reference for common workflows and commands in this repo.
 - `./scripts/pipelines/run_montecito_apex_lean.sh` run Montecito Shores APEX batch (lean outputs, faster).
 - `./scripts/pipelines/process_source_tiffs_apex.sh` batch APEX V2 enhancement for `input_images/source_tiffs` with optional depth generation.
 - `./scripts/pipelines/process_source_tiffs_individual.sh` per-image APEX V2 enhancement commands (manual execution).
+- `./scripts/setup/install_da3_runtime.sh` install the repo-local DA3 subprocess runtime (validated `.runtime/Depth-Anything-3` ref + auto-discovered `./.venv-da3/bin/python` contract + `.runtime/da3-pip-freeze.txt` snapshot).
 - `./scripts/test_v2_integration.sh` validate end-to-end lux-depth-v3 + V2 stage integration (`--verbose`, `--clean` available).
 - `./scripts/validate_dependency_constraints.sh` enforce dependency pinning rules used by repo policy (`--verbose` available).
 - `./scripts/pipelines/run_fixity_cycle.sh` run archive hash-manifest scan + verification cycle for fixity evidence (`--archive-index` and `--archive-root` required).

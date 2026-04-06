@@ -5,7 +5,7 @@ const BASE_SECURITY_HEADERS = {
   "Permissions-Policy": "camera=(), microphone=(), geolocation=()"
 };
 
-export const LOGIN_CSP = [
+export const FRONTDOOR_CSP = [
   "default-src 'self'",
   "style-src 'self'",
   "img-src 'self' data:",
@@ -18,6 +18,8 @@ export const LOGIN_CSP = [
   "base-uri 'self'",
   "object-src 'none'"
 ].join("; ");
+
+export const LOGIN_CSP = FRONTDOOR_CSP;
 
 export function applySecurityHeaders(response, { csp = null } = {}) {
   for (const [name, value] of Object.entries(BASE_SECURITY_HEADERS)) {

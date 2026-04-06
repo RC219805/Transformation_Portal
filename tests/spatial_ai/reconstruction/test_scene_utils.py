@@ -44,7 +44,9 @@ def images():
 
 @pytest.fixture(scope="module")
 def builder():
-    return SceneBuilder(tier="apex_research")
+    # Avoid MPS worker aborts under xdist on Apple Silicon; these tests exercise
+    # reconstruction behavior, not accelerator selection.
+    return SceneBuilder(tier="apex_research", device="cpu")
 
 
 @pytest.fixture(scope="module")

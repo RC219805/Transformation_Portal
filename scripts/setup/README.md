@@ -18,6 +18,35 @@ Installs the automated repository organization system, including the standard re
 - Makes the `.auto-organize.sh` script executable
 - Validates the repository structure
 
+### `install_da3_runtime.sh`
+
+Bootstraps the repo-local Depth Anything 3 subprocess runtime used by
+the auto-discovered `./.venv-da3/bin/python` contract and by explicit
+`--da3-python` overrides.
+
+**Usage:**
+```bash
+./scripts/setup/install_da3_runtime.sh
+```
+
+**What it does:**
+- Clones Depth Anything 3 into `.runtime/Depth-Anything-3` if it is missing
+- Synchronizes that checkout to the validated default ref unless `--ref` overrides it
+- Creates the isolated DA3 venv at `./.venv-da3`
+- Installs a pinned DA3-compatible dependency set without upstream `xformers`
+- Captures a runtime package snapshot at `.runtime/da3-pip-freeze.txt`
+- Runs the DA3 worker readiness check used by the subprocess adapter
+
+**Stable contract:**
+```bash
+lux-depth-v3 --input-dir ./input --output-dir ./output
+```
+
+If you need a non-default interpreter, override it explicitly:
+```bash
+lux-depth-v3 --input-dir ./input --output-dir ./output --da3-python ~/venvs/da3/bin/python
+```
+
 **Requirements:**
 - Git repository
 - Bash shell (Linux, macOS, or Windows with WSL/Git Bash)

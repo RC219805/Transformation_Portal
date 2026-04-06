@@ -23,6 +23,7 @@ RIGHTS_TOOL_PATH = PROJECT_ROOT / "tools" / "apply_rights_policy.py"
 GOVERNANCE_TOOL_PATH = PROJECT_ROOT / "tools" / "archive_governance.py"
 COMMON_TOOL_PATH = PROJECT_ROOT / "tools" / "archive_governance_common.py"
 PREMIS_TOOL_PATH = PROJECT_ROOT / "tools" / "premis_events.py"
+FIXITY_CYCLE_SCRIPT_PATH = PROJECT_ROOT / "scripts" / "pipelines" / "run_fixity_cycle.sh"
 
 
 def _load_tool_module(module_path: Path, module_name: str):
@@ -41,6 +42,26 @@ RIGHTS_TOOL = _load_tool_module(RIGHTS_TOOL_PATH, "tests_apply_rights_policy_har
 GOVERNANCE_TOOL = _load_tool_module(GOVERNANCE_TOOL_PATH, "tests_archive_governance_hardening")
 COMMON_TOOL = _load_tool_module(COMMON_TOOL_PATH, "tests_archive_governance_common_hardening")
 PREMIS_TOOL = _load_tool_module(PREMIS_TOOL_PATH, "tests_premis_events_hardening")
+
+
+def _run_manifest_tool_cli(*args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, str(MANIFEST_TOOL_PATH), *args],
+        cwd=str(PROJECT_ROOT),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def _run_fixity_cycle_script(*args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["bash", str(FIXITY_CYCLE_SCRIPT_PATH), *args],
+        cwd=str(PROJECT_ROOT),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
 
 
 def test_build_entry_normalizes_relpath_for_rights_and_provenance(tmp_path: Path) -> None:
@@ -177,6 +198,172 @@ def test_manifest_build_streaming_does_not_publish_partial_output_on_build_error
     assert not out_summary.exists()
 
 
+def test_manifest_build_cli_missing_archive_index_fails_before_creating_outputs(tmp_path: Path) -> None:
+    hash_manifest = tmp_path / "hash_manifest.csv"
+    hash_manifest.write_text(
+        "origin_drive,partition,relpath,filesize_bytes,sha256,hash_status,error\n",
+        encoding="utf-8",
+    )
+    archive_root = tmp_path / "archive_root"
+    archive_root.mkdir(parents=True, exist_ok=True)
+    out_jsonl = tmp_path / "out" / "archive_manifest_v2.jsonl"
+    out_summary = tmp_path / "out" / "archive_manifest_v2.summary.json"
+
+    result = _run_manifest_tool_cli(
+        "--archive-index",
+        str(tmp_path / "missing_archive_index.csv.gz"),
+        "--hash-manifest",
+        str(hash_manifest),
+        "--archive-root",
+        str(archive_root),
+        "--out-jsonl",
+        str(out_jsonl),
+        "--out-summary",
+        str(out_summary),
+    )
+
+    assert result.returncode != 0
+    assert "Error: archive index not found:" in result.stderr
+    assert "Traceback (most recent call last):" not in result.stderr
+    assert not out_jsonl.exists()
+    assert not out_summary.exists()
+    assert not list(out_jsonl.parent.glob(f".{out_jsonl.name}.*.tmp"))
+
+
+def test_manifest_build_cli_missing_hash_manifest_fails_before_creating_outputs(tmp_path: Path) -> None:
+    archive_index = tmp_path / "archive_index_normalized.csv"
+    archive_index.write_text(
+        "origin_drive,partition,relpath\nDriveA,Part1,DriveA/Part1/alpha.txt\n",
+        encoding="utf-8",
+    )
+    archive_root = tmp_path / "archive_root"
+    archive_root.mkdir(parents=True, exist_ok=True)
+    out_jsonl = tmp_path / "out" / "archive_manifest_v2.jsonl"
+    out_summary = tmp_path / "out" / "archive_manifest_v2.summary.json"
+
+    result = _run_manifest_tool_cli(
+        "--archive-index",
+        str(archive_index),
+        "--hash-manifest",
+        str(tmp_path / "missing_hash_manifest.csv.gz"),
+        "--archive-root",
+        str(archive_root),
+        "--out-jsonl",
+        str(out_jsonl),
+        "--out-summary",
+        str(out_summary),
+    )
+
+    assert result.returncode != 0
+    assert "Error: hash manifest not found:" in result.stderr
+    assert "Traceback (most recent call last):" not in result.stderr
+    assert not out_jsonl.exists()
+    assert not out_summary.exists()
+    assert not list(out_jsonl.parent.glob(f".{out_jsonl.name}.*.tmp"))
+
+
+def test_manifest_build_cli_invalid_archive_root_fails_before_creating_outputs(tmp_path: Path) -> None:
+    archive_index = tmp_path / "archive_index_normalized.csv"
+    archive_index.write_text(
+        "origin_drive,partition,relpath\nDriveA,Part1,DriveA/Part1/alpha.txt\n",
+        encoding="utf-8",
+    )
+    hash_manifest = tmp_path / "hash_manifest.csv"
+    hash_manifest.write_text(
+        "origin_drive,partition,relpath,filesize_bytes,sha256,hash_status,error\n",
+        encoding="utf-8",
+    )
+    archive_root = tmp_path / "archive_root.txt"
+    archive_root.write_text("not-a-directory", encoding="utf-8")
+    out_jsonl = tmp_path / "out" / "archive_manifest_v2.jsonl"
+    out_summary = tmp_path / "out" / "archive_manifest_v2.summary.json"
+
+    result = _run_manifest_tool_cli(
+        "--archive-index",
+        str(archive_index),
+        "--hash-manifest",
+        str(hash_manifest),
+        "--archive-root",
+        str(archive_root),
+        "--out-jsonl",
+        str(out_jsonl),
+        "--out-summary",
+        str(out_summary),
+    )
+
+    assert result.returncode != 0
+    assert "Error: archive root must be a directory:" in result.stderr
+    assert "Traceback (most recent call last):" not in result.stderr
+    assert not out_jsonl.exists()
+    assert not out_summary.exists()
+    assert not list(out_jsonl.parent.glob(f".{out_jsonl.name}.*.tmp"))
+
+
+def test_run_fixity_cycle_requires_value_for_out_root() -> None:
+    result = _run_fixity_cycle_script(
+        "--archive-index",
+        "archive_index.csv.gz",
+        "--archive-root",
+        "archive_root",
+        "--out-root",
+    )
+
+    assert result.returncode == 2
+    assert "Error: --out-root requires a value" in result.stderr
+
+
+def test_run_fixity_cycle_requires_value_for_workers() -> None:
+    result = _run_fixity_cycle_script(
+        "--archive-index",
+        "archive_index.csv.gz",
+        "--archive-root",
+        "archive_root",
+        "--workers",
+    )
+
+    assert result.returncode == 2
+    assert "Error: --workers requires a value" in result.stderr
+
+
+def test_manifest_build_cli_missing_optional_rights_jsonl_fails_before_creating_outputs(tmp_path: Path) -> None:
+    archive_index = tmp_path / "archive_index_normalized.csv"
+    archive_index.write_text(
+        "origin_drive,partition,relpath\nDriveA,Part1,DriveA/Part1/alpha.txt\n",
+        encoding="utf-8",
+    )
+    hash_manifest = tmp_path / "hash_manifest.csv"
+    hash_manifest.write_text(
+        "origin_drive,partition,relpath,filesize_bytes,sha256,hash_status,error\n",
+        encoding="utf-8",
+    )
+    archive_root = tmp_path / "archive_root"
+    archive_root.mkdir(parents=True, exist_ok=True)
+    out_jsonl = tmp_path / "out" / "archive_manifest_v2.jsonl"
+    out_summary = tmp_path / "out" / "archive_manifest_v2.summary.json"
+
+    result = _run_manifest_tool_cli(
+        "--archive-index",
+        str(archive_index),
+        "--hash-manifest",
+        str(hash_manifest),
+        "--archive-root",
+        str(archive_root),
+        "--out-jsonl",
+        str(out_jsonl),
+        "--out-summary",
+        str(out_summary),
+        "--rights-jsonl",
+        str(tmp_path / "missing_rights.jsonl"),
+    )
+
+    assert result.returncode != 0
+    assert "Error: rights JSONL not found:" in result.stderr
+    assert "Traceback (most recent call last):" not in result.stderr
+    assert not out_jsonl.exists()
+    assert not out_summary.exists()
+    assert not list(out_jsonl.parent.glob(f".{out_jsonl.name}.*.tmp"))
+
+
 def test_rule_matches_normalizes_slashes_for_path_glob() -> None:
     entry = {"relpath": "DriveA\\Part1\\alpha.txt", "extension": ".txt"}
     rule = {"id": "r1", "flags": ["restricted"], "path_glob": "DriveA/Part1/*.txt"}
@@ -229,7 +416,7 @@ def test_load_policy_precomputes_extension_match_set(tmp_path: Path) -> None:
     assert RIGHTS_TOOL._rule_matches({"relpath": "DriveA/Part1/alpha.jpg", "extension": ".jpg"}, rule) is False
 
 
-def test_run_wrapped_tool_normalizes_negative_returncode(monkeypatch) -> None:
+def test_run_wrapped_tool_normalizes_negative_returncode(monkeypatch, tmp_path: Path) -> None:
     def _fake_run_tool(command: list[str]) -> subprocess.CompletedProcess[str]:
         return subprocess.CompletedProcess(args=command, returncode=-9, stdout="", stderr="killed")
 
@@ -245,6 +432,13 @@ def test_run_wrapped_tool_normalizes_negative_returncode(monkeypatch) -> None:
     monkeypatch.setattr(GOVERNANCE_TOOL, "_emit_result", _fake_emit_result)
     monkeypatch.setattr(GOVERNANCE_TOOL, "_record_premis", lambda **_: None)
 
+    archive_index = tmp_path / "archive_index_normalized.csv.gz"
+    archive_index.write_text("placeholder", encoding="utf-8")
+    hash_manifest = tmp_path / "hash_manifest.csv.gz"
+    hash_manifest.write_text("placeholder", encoding="utf-8")
+    archive_root = tmp_path / "archive_root"
+    archive_root.mkdir(parents=True, exist_ok=True)
+
     args = SimpleNamespace(
         json=True,
         json_pretty=False,
@@ -252,6 +446,10 @@ def test_run_wrapped_tool_normalizes_negative_returncode(monkeypatch) -> None:
         json_canonical_profile="canonical_v1",
         premis_log=None,
         premis_agent_id="tp.archive.governance.v1",
+        archive_index=str(archive_index),
+        hash_manifest=str(hash_manifest),
+        archive_root=str(archive_root),
+        rights_jsonl=None,
     )
     exit_code = GOVERNANCE_TOOL._run_wrapped_tool(
         args=args,

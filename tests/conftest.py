@@ -370,6 +370,7 @@ def can_run_da3_compute() -> bool:
     """Check if DA3 compute tests can run (all dependencies available).
 
     DA3 compute tests require:
+    - explicit opt-in via TP_RUN_HF_MODEL_TESTS=1
     - depth_anything_3 package installed
     - torch library available
     - transformers library available
@@ -378,4 +379,10 @@ def can_run_da3_compute() -> bool:
     Returns:
         True if all DA3 compute requirements are met, False otherwise.
     """
-    return has_depth_anything_v3() and has_torch() and has_transformers() and not is_offline_mode()
+    return (
+        os.getenv("TP_RUN_HF_MODEL_TESTS") == "1"
+        and has_depth_anything_v3()
+        and has_torch()
+        and has_transformers()
+        and not is_offline_mode()
+    )

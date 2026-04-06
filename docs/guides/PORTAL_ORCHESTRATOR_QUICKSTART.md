@@ -63,7 +63,9 @@ export TP_READY_VERBOSE=1
 
 ## Endpoints
 
-- `GET /ready` returns `{ok,time,version}` by default; set `TP_READY_VERBOSE=1` for extended runtime/security fields.
+- `GET /ready` returns a shallow backend liveness signal.
+- `GET /healthz` returns the managed front-door liveness signal.
+- `GET /v1/readiness` returns the operator-truth execution readiness matrix for `lux-depth-v3`, `archive-gate-a`, `archive-gate-b`, and `archive-gate-c`.
 - `GET /portal/bootstrap` returns the standalone portal bootstrap contract for `direct_debug` mode.
 - `GET /v1/presets?pipeline=lux-depth-v3` dynamic UI preset catalog.
 - `POST /v1/jobs` submit allowlisted job request.
@@ -71,6 +73,107 @@ export TP_READY_VERBOSE=1
 - `GET /v1/jobs/{id}` detailed job status (`logs_tail`, `error`, `artifacts`).
 - `POST /v1/jobs/{id}/cancel` request cancellation.
 - `GET /v1/jobs/{id}/events` SSE events: `state`, `log`, `progress`, `artifact`, `done`.
+
+## Readiness Semantics
+
+- `GET /ready` and `GET /healthz` are liveness probes. They tell you the service answered, not that a given pipeline is dispatchable.
+- `GET /v1/readiness` is the execution-readiness contract. It reports per-pipeline `ready`, `degraded`, or `blocked` state plus `missing_prerequisites`, canonical command mapping, runner details, and safe operator notes.
+- `lux-depth-v3` reports `base` readiness and a separate `canary_status`; canary unavailability does not block the safe local execution lane.
+- `archive-gate-a` is normally `degraded` until an archive index is supplied.
+- `archive-gate-b` and `archive-gate-c` are blocked by default until a rights-manifest JSONL is available.
+
+## Run Gate A End-to-End
+
+`archive-gate-a` maps to the canonical archive command `fixity-scan`.
+In the portal build flow, `Input Dir` is forwarded as `--archive-root` automatically and `Output Dir` becomes the orchestration output root. Beyond those standard paths, the extra Gate A field you need to provide is an existing `Archive Index Path`.
+
+Safe local fixture inputs already checked into this repo:
+
+```bash
+ARCHIVE_ROOT=./tests/fixtures/archive_small/archive_root
+ARCHIVE_INDEX=./tests/fixtures/archive_small/archive_index_normalized.csv.gz
+OUTPUT_DIR=/tmp/gate-a-smoke
+```
+
+### Direct CLI
+
+This is the fastest no-UI smoke and is safe to run repeatedly:
+
+```bash
+.venv/bin/python tools/archive_governance.py --json fixity-scan \
+  --archive-index "$ARCHIVE_INDEX" \
+  --archive-root "$ARCHIVE_ROOT" \
+  --out-dir "$OUTPUT_DIR" \
+  --workers 1 \
+  --no-validate-schemas
+```
+
+Expected Gate A artifacts:
+
+- `$OUTPUT_DIR/hash_manifest.csv.gz`
+- `$OUTPUT_DIR/hash_summary.json`
+- `$OUTPUT_DIR/merkle_roots.json`
+
+### HTTP Orchestrator
+
+Start a clean backend first. If `127.0.0.1:8000` is already occupied, use another local port such as `8001`.
+
+```bash
+export TP_API_KEY="contract-secret"
+.venv/bin/python -m uvicorn app:app --host 127.0.0.1 --port 8001
+```
+
+Submit Gate A directly through the orchestrator:
+
+```bash
+curl -sS \
+  -H "Authorization: Bearer $TP_API_KEY" \
+  -H "Content-Type: application/json" \
+  -X POST http://127.0.0.1:8001/v1/jobs \
+  -d '{
+    "pipeline": "archive-gate-a",
+    "args": {
+      "input_dir": "./tests/fixtures/archive_small/archive_root",
+      "output_dir": "/tmp/gate-a-smoke-http",
+      "archive_command": "fixity-scan",
+      "archive_index": "./tests/fixtures/archive_small/archive_index_normalized.csv.gz"
+    }
+  }'
+```
+
+Poll the returned job id with `GET /v1/jobs/{id}` until `state` becomes `succeeded`.
+
+### Portal UI
+
+Open the build view:
+
+```text
+http://127.0.0.1:8001/portal?view=build
+```
+
+Then configure the form exactly like this:
+
+1. Pipeline: `archive-gate-a`
+2. Input Dir: `./tests/fixtures/archive_small/archive_root`
+3. Output Dir: `/tmp/gate-a-smoke-portal`
+4. Archive Index Path: `./tests/fixtures/archive_small/archive_index_normalized.csv.gz`
+5. Leave the canonical command as `fixity-scan`
+
+What the portal should show once configured:
+
+- the `Archive Index Path` field is visible
+- the CLI preview includes `--archive-command "fixity-scan"` and `--archive-index "...archive_index_normalized.csv.gz"`
+- the missing-index warning clears
+- the job runs to `Succeeded`
+- run details list three indexed artifacts
+
+If the form still shows the missing-index warning:
+
+- that warning is expected when `Archive Index Path` is blank
+- Gate A is not ready yet
+- fill `Archive Index Path` with `./tests/fixtures/archive_small/archive_index_normalized.csv.gz`
+- keep `Input Dir` pointed at `./tests/fixtures/archive_small/archive_root`
+- the equivalent command will then include `--archive-index`
 
 ## SSE Authentication Note
 
@@ -95,12 +198,17 @@ When `TP_API_KEY` is configured for standalone `direct_debug` mode:
 
 ```bash
 make test-orchestrator-contract
+make test-orchestrator-http-contract
+make test-portal-contract
+make validate-orchestrator-http
+make validate-portal-browser
+make audit-pipeline-readiness
 ```
 
 Direct pytest equivalent:
 
 ```bash
-pytest -q tests/test_app_orchestrator_runtime.py tests/test_app_orchestrator_contract_http.py
+pytest -q tests/test_app_orchestrator_runtime.py tests/test_app_orchestrator_contract_http.py tests/validation/test_portal_smoke_scripts.py
 ```
 
 Front-door validation:
@@ -114,7 +222,9 @@ npm run build
 
 Expected contract gate outcomes:
 - `/v1/*` success and failure responses use typed envelope (`schema`, `success`, `data`, `error`).
+- `/v1/readiness` keeps transport success (`200`) separate from per-pipeline `ready` / `degraded` / `blocked` execution truth.
 - Validation failures return `400` with `error.code=INVALID_ARGUMENT`.
 - Oversized request paths return `413` with typed error envelope.
 - With `TP_API_KEY` set, `/v1/jobs*` and `/v1/jobs/{id}/events` enforce auth.
 - SSE lifecycle includes `state`, `log`, `progress`, `artifact`, and terminal `done` events.
+- Live smokes (`validate-*`) exercise the running service and browser path; `test-*contract` targets stay fixture/contract-only.

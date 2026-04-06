@@ -195,6 +195,7 @@ def test_argv_normalization_accepts_canonical_keys() -> None:
 
     argv = orchestrator_app._argv_from_request(payload)
 
+    assert argv[:3] == [sys.executable, "-m", orchestrator_app.LUX_DEPTH_MODULE]
     assert _flag_value(argv, "--materials-v3") == "on"
     assert _flag_value(argv, "--cache-depth") == "on"
     assert _flag_value(argv, "--depth-backend") == "da3"
@@ -308,6 +309,22 @@ def test_portal_cli_template_excludes_unsupported_lux_flags() -> None:
     assert "--strict-segmentation" in content
 
 
+def test_portal_html_uses_looping_background_video_layer() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+
+    assert "portal-video-backdrop" in content
+    assert 'class="portal-video-media"' in content
+    assert "/portal/video/dna-portal-video-2.mp4" in content
+    assert "/v1/portal/video/dna-portal-video-2.mp4" not in content
+    assert "autoplay" in content
+    assert "muted" in content
+    assert "loop" in content
+    assert "playsinline" in content
+    assert "media-src 'self'" in content
+    assert ".performance-lite .portal-video-media" in content
+
+
 def test_portal_fetch_sse_reconnect_scheduler_has_terminal_guard_and_backoff() -> None:
     portal_html = Path(__file__).resolve().parents[1] / "portal.html"
     content = portal_html.read_text(encoding="utf-8")
@@ -335,14 +352,17 @@ def test_portal_fetch_sse_reconnect_schedules_on_unexpected_disconnect_only() ->
     assert "scheduleSseReconnect(job);" in body
 
 
-def test_portal_fetch_sse_watchdog_reconnects_stalled_streams() -> None:
+def test_portal_sse_watchdog_reconnects_stalled_streams_for_fetch_and_native_transports() -> None:
     portal_html = Path(__file__).resolve().parents[1] / "portal.html"
     content = portal_html.read_text(encoding="utf-8")
     body = _extract_js_function_body(content, "startSseWatchdog")
 
-    assert "if (!job.usesFetchSse) return;" in body
     assert "if (job.reconnectBlocked) return;" in body
     assert "SSE_STALL_THRESHOLD_MS" in body
+    assert "Fetch event stream is not active. Reconnecting to restore live telemetry." in body
+    assert "Native SSE stream is not active. Reconnecting to restore live telemetry." in body
+    assert "Fetch event stream stalled. Reconnecting to restore live telemetry." in body
+    assert "Native SSE stream stalled. Reconnecting to restore live telemetry." in body
     assert "_teardownJobEventStream(job);" in body
     assert "scheduleSseReconnect(job);" in body
 
@@ -356,6 +376,58 @@ def test_portal_start_job_stream_avoids_duplicate_readers() -> None:
     assert "if (_jobHasActiveStream(job)) return;" in body
 
 
+def test_portal_eventsource_wraps_json_parse_in_try_catch() -> None:
+    """Verify EventSource handlers guard against malformed JSON data."""
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+    body = _extract_js_function_body(content, "startJobEventStream")
+
+    # The EventSource handlers must use a safe parsing wrapper
+    assert "safeParseSseEvent" in body
+    assert "try {" in body
+    assert "JSON.parse(e.data)" in body
+    assert "catch {" in body
+    # Verify all event types use the safe wrapper
+    assert "es.addEventListener('log', (e) => safeParseSseEvent('log', e));" in body
+    assert "es.addEventListener('progress', (e) => safeParseSseEvent('progress', e));" in body
+    assert "es.addEventListener('state', (e) => safeParseSseEvent('state', e));" in body
+    assert "es.addEventListener('artifact', (e) => safeParseSseEvent('artifact', e));" in body
+    assert "es.addEventListener('done', (e) => safeParseSseEvent('done', e));" in body
+
+
+def test_portal_native_eventsource_surfaces_state_and_terminal_errors() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+    body = _extract_js_function_body(content, "startJobEventStream")
+    active_body = _extract_js_function_body(content, "_jobHasActiveStream")
+    transport_body = _extract_js_function_body(content, "formatTransportLabel")
+
+    assert "const EVENT_SOURCE_READY_STATE_CONNECTING = 0;" in content
+    assert "const EVENT_SOURCE_READY_STATE_OPEN = 1;" in content
+    assert "const EVENT_SOURCE_READY_STATE_CLOSED = 2;" in content
+    assert "function _isNativeEventSourceHandle(handle) {" in content
+    assert "function _nativeEventSourceReadyState(handle) {" in content
+    assert "const nativeReadyState = _nativeEventSourceReadyState(job.eventSource);" in active_body
+    assert "if (nativeReadyState === EVENT_SOURCE_READY_STATE_CLOSED) return false;" in active_body
+    assert "if (nativeReadyState === EVENT_SOURCE_READY_STATE_CONNECTING) return 'event reconnecting';" in transport_body
+    assert "if (nativeReadyState === EVENT_SOURCE_READY_STATE_OPEN) return 'event stream';" in transport_body
+    assert "if (nativeReadyState === EVENT_SOURCE_READY_STATE_CLOSED) return 'event closed';" in transport_body
+    assert "es.onopen = () => {" in body
+    assert "const readyState = _nativeEventSourceReadyState(es);" in body
+    assert "if (readyState === EVENT_SOURCE_READY_STATE_CONNECTING) {" in body
+    assert (
+        "_noteTransportWarning(job, 'eventsource_reconnecting', 'Native SSE connection dropped. Browser is retrying in the background.', 'warn');"
+        in body
+    )
+    assert (
+        "const warningCode = readyState === EVENT_SOURCE_READY_STATE_CLOSED ? 'eventsource_closed' : 'eventsource_error';"
+        in body
+    )
+    assert "appendJobLog(job, logLine);" in body
+    assert "_teardownJobEventStream(job);" in body
+    assert "scheduleSseReconnect(job);" in body
+
+
 def test_portal_resumes_blocked_streams_after_api_key_update() -> None:
     portal_html = Path(__file__).resolve().parents[1] / "portal.html"
     content = portal_html.read_text(encoding="utf-8")
@@ -367,26 +439,93 @@ def test_portal_resumes_blocked_streams_after_api_key_update() -> None:
     assert "resumeBlockedJobStreamsAfterAuthUpdate();" in bind_body
 
 
-def test_portal_bootstrap_loader_fetches_same_origin_bootstrap_contract() -> None:
+def test_portal_bootstrap_loader_uses_abortable_timeout_and_state_contract() -> None:
     portal_html = Path(__file__).resolve().parents[1] / "portal.html"
     content = portal_html.read_text(encoding="utf-8")
+    default_body = _extract_js_function_body(content, "_defaultPortalBootstrap")
     body = _extract_js_function_body(content, "loadPortalBootstrap")
+    followup_body = _extract_js_function_body(content, "_flushBootstrapOnlineFollowup")
+    normalize_body = _extract_js_function_body(content, "_normalizeFetchFailureReason")
+    retryable_body = _extract_js_function_body(content, "_isBootstrapRetryableFailure")
+    retry_body = _extract_js_function_body(content, "_scheduleBootstrapRetry")
+    delay_body = _extract_js_function_body(content, "_nextBootstrapRetryDelayMs")
 
-    assert "fetch(`${API_BASE}/portal/bootstrap`" in body
-    assert "_applyPortalBootstrap(payload);" in body
-    assert "_applyPortalBootstrap(_defaultPortalBootstrap());" in body
+    assert "authMode: 'managed_unavailable'" in default_body
+    assert "apiKeyInput: false" in default_body
+    assert "directDebug: false" in default_body
+    assert "const BOOTSTRAP_TIMEOUT_MS = 3500;" in content
+    assert "const BOOTSTRAP_RETRY_BASE_DELAY_MS = 1000;" in content
+    assert "const BOOTSTRAP_RETRY_MAX_DELAY_MS = 12000;" in content
+    assert "const BOOTSTRAP_RETRY_MAX_ATTEMPTS = 4;" in content
+    assert "const BOOTSTRAP_RETRY_MAX_WINDOW_MS = 60000;" in content
+    assert "const BOOTSTRAP_RETRIABLE_HTTP_STATUSES = new Set([500, 502, 503, 504]);" in content
+    assert "fetchWithTimeout(" in body
+    assert "`${API_BASE}/portal/bootstrap`" in body
+    assert "BOOTSTRAP_TIMEOUT_MS" in body
+    assert "const bootstrapOptions = options && typeof options === 'object' ? options : null;" in body
+    assert "const retryAttempt = Number.isInteger(bootstrapOptions && bootstrapOptions.attempt)" in body
+    assert "const retryReason = String(bootstrapOptions && bootstrapOptions.retryReason" in body
+    assert "const isRetryAttempt = Boolean((bootstrapOptions && bootstrapOptions.isRetryAttempt) || retryAttempt > 0);" in body
+    assert "const bootstrapCancelReason = isRetryAttempt" in body
+    assert "_cancelPendingBootstrapRequest(bootstrapCancelReason);" in body
+    assert "_applyPortalBootstrap(fallback, { status: 'pending' });" in body
+    assert "onStart: _trackBootstrapRequest" in body
+    assert "onFinally: _clearTrackedBootstrapRequest" in body
+    assert "if (res.status === 401 || res.status === 403)" in body
+    assert "_finalizeBootstrapRetry('terminal_auth_redirect', { reason: 'auth', httpStatus: res.status });" in body
+    assert "window.location.assign('/login');" in body
+    assert "const shouldRetry = _isBootstrapRetryableFailure(failureReason, res.status);" in body
+    assert "const retryScheduled = shouldRetry && _scheduleBootstrapRetry(failureReason, res.status);" in body
+    assert "const shouldRetry = _isBootstrapRetryableFailure(normalizedReason, 0);" in body
+    assert "const retryScheduled = shouldRetry && _scheduleBootstrapRetry(normalizedReason, 0);" in body
+    assert "const status = shouldRetry ? 'degraded' : 'unavailable';" in body
+    assert "_finalizeBootstrapRetry('terminal_invalid_json', { reason: 'invalid_json' });" in body
+    assert "_finalizeBootstrapRetry('succeeded', {" in body
+    assert "_applyPortalBootstrap(payload, { status: 'ready' });" in body
+    assert "previousHealthEndpointPath !== nextHealthEndpointPath" in body
+    assert "_queueBootstrapOnlineFollowup();" in body
+    assert "_flushBootstrapOnlineFollowup();" in body
+    assert "_normalizeFetchFailureReason(error, 'bootstrap_timeout')" in body
+    assert (
+        "async function fetchWithTimeout(url, options = {}, timeoutMs = HEALTH_CHECK_TIMEOUT_MS, timeoutReason = 'request_timeout', lifecycle = null)"
+        in content
+    )
+    assert "timeoutError.name = 'AppTimeoutError';" in content
+    assert "timeoutError.reason = timeoutReason;" in content
+    assert "if (!_isBootstrapReady()) {" in followup_body
+    assert "_queueBootstrapOnlineFollowup();" in followup_body
+    assert "void fetchPresetsForPipeline(state.pipeline, true);" in followup_body
+    assert "void recoverJobs();" in followup_body
+    assert "reason === String(timeoutReason || '').trim().toLowerCase()" in normalize_body
+    assert "name === 'timeouterror'" in normalize_body
+    assert "name === 'aborterror'" in normalize_body
+    assert "normalizedReason === 'timeout' || normalizedReason === 'network'" in retryable_body
+    assert "return BOOTSTRAP_RETRIABLE_HTTP_STATUSES.has(normalizedStatus);" in retryable_body
+    assert "Math.random()" in delay_body
+    assert "BOOTSTRAP_RETRY_MAX_EXPONENT" in delay_body
+    assert "BOOTSTRAP_RETRY_MAX_DELAY_MS" in delay_body
+    assert "if (state.bootstrap.retry.timer !== null) {" in retry_body
+    assert "skipped_already_scheduled" in retry_body
+    assert "attempt > BOOTSTRAP_RETRY_MAX_ATTEMPTS" in retry_body
+    assert "(now + delayMs) > state.bootstrap.retry.deadlineAt" in retry_body
+    assert "window.setTimeout(() => {" in retry_body
+    assert "void loadPortalBootstrap({ isRetryAttempt: true, attempt, retryReason: reason });" in retry_body
 
 
 def test_portal_managed_mode_clears_api_keys_and_hides_secret_ui() -> None:
     portal_html = Path(__file__).resolve().parents[1] / "portal.html"
     content = portal_html.read_text(encoding="utf-8")
     clear_body = _extract_js_function_body(content, "_clearStoredApiKeyState")
-    apply_body = _extract_js_function_body(content, "_applyPortalBootstrap")
+    sync_body = _extract_js_function_body(content, "_syncBootstrapUi")
 
     assert "localStorage.removeItem(API_KEY_STORAGE_KEY);" in clear_body
     assert "sessionStorage.removeItem(API_KEY_STORAGE_KEY);" in clear_body
-    assert "_clearStoredApiKeyState();" in apply_body
-    assert "els.apiKeySection.classList.toggle('hidden', !state.auth.features.apiKeyInput);" in apply_body
+    assert "_clearStoredApiKeyState(true);" in content
+    assert "_loadApiKeyIntoInputs();" in content
+    assert "const showApiKeyInput = bootstrapReady && state.auth.features.apiKeyInput;" in sync_body
+    assert "els.apiKeySection.classList.toggle('hidden', !showApiKeyInput);" in sync_body
+    assert "els.apiKeyInput.disabled = !showApiKeyInput;" in sync_body
+    assert "els.rememberApiKey.disabled = !showApiKeyInput;" in sync_body
 
 
 def test_portal_managed_mode_uses_csrf_instead_of_browser_backend_secrets() -> None:
@@ -402,6 +541,24 @@ def test_portal_managed_mode_uses_csrf_instead_of_browser_backend_secrets() -> N
     assert "headers['x-api-key'] = token;" in content
 
 
+def test_portal_auth_helpers_fail_closed_until_bootstrap_ready() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+    persist_body = _extract_js_function_body(content, "_persistApiKeyFromInputs")
+    load_body = _extract_js_function_body(content, "_loadApiKeyIntoInputs")
+    current_token_body = _extract_js_function_body(content, "_currentApiToken")
+
+    assert 'data-bootstrap-status="pending"' in content
+    assert "if (!_isBootstrapReady()) {" in persist_body
+    assert "_clearStoredApiKeyState(false);" in persist_body
+    assert "if (!_isBootstrapReady()) {" in load_body
+    assert "_clearStoredApiKeyState(false);" in load_body
+    assert "if (!_isBootstrapReady()) return '';" in current_token_body
+    assert "function _buildAuthHeaders(base = {}, method = 'GET') {" in content
+    assert "if (!_isBootstrapReady()) {" in content
+    assert "return headers;" in content
+
+
 def test_portal_health_checks_route_to_front_door_in_managed_mode() -> None:
     portal_html = Path(__file__).resolve().parents[1] / "portal.html"
     content = portal_html.read_text(encoding="utf-8")
@@ -409,16 +566,264 @@ def test_portal_health_checks_route_to_front_door_in_managed_mode() -> None:
     check_body = _extract_js_function_body(content, "checkBackend")
 
     assert "return _isManagedAuthMode() ? '/healthz' : '/ready';" in helper_body
-    assert "fetchWithTimeout(`${API_BASE}${_healthEndpointPath()}`" in check_body
+    assert "const healthEndpointPath = _healthEndpointPath();" in check_body
+    assert "state.bootstrap.lastHealthEndpointPath = healthEndpointPath;" in check_body
+    assert "fetchWithTimeout(`${API_BASE}${healthEndpointPath}`" in check_body
+    assert "_queueBootstrapOnlineFollowup();" in check_body
+    assert "_flushBootstrapOnlineFollowup(force);" in check_body
 
 
-def test_portal_init_loads_bootstrap_before_restoring_api_key_state() -> None:
+def test_portal_managed_unavailable_mode_blocks_dispatch_and_api_key_recovery_prompts() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+    block_body = _extract_js_function_body(content, "_blockManagedUnavailableAction")
+    cancel_body = _extract_js_function_body(content, "cancelJob")
+    submit_body = _extract_js_function_body(content, "submitJob")
+    sse_body = _extract_js_function_body(content, "_startAuthorizedFetchSse")
+
+    assert "_isManagedUnavailableMode()" in block_body
+    assert "Managed front door unavailable." in block_body
+    assert "_blockManagedUnavailableAction('change job state')" in cancel_body
+    assert "_blockManagedUnavailableAction('dispatch jobs')" in submit_body
+    assert "Restore the managed session to resume live job events." in sse_body
+    assert "Restore the managed session to resume live logs." in sse_body
+
+
+def test_portal_artifact_gallery_renders_visual_review_controls() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+    body = _extract_js_function_body(content, "renderArtifactPanel")
+    reset_body = _extract_js_function_body(content, "_resetArtifactActionButtons")
+    sanitize_body = _extract_js_function_body(content, "sanitizeManagedAssetUrl")
+
+    assert 'id="artifactPreviewStage"' in content
+    assert 'id="artifactThumbnailRail"' in content
+    assert 'id="artifactSelectionMeta"' in content
+    assert 'id="openArtifactBtn"' in content
+    assert 'id="downloadArtifactBtn"' in content
+    assert 'id="copyArtifactPathBtn"' in content
+    assert "artifactHeroScore" in content
+    assert "findCompareArtifact" in content
+    assert "buildArtifactUrl(selected, selectedArtifact)" in body
+    assert "artifactIsPreviewable(selectedArtifact)" in body
+    assert "_resetArtifactActionButtons();" in body
+    assert "delete els.openArtifactBtn.dataset.url;" in reset_body
+    assert "delete els.downloadArtifactBtn.dataset.filename;" in reset_body
+    assert "delete els.copyArtifactPathBtn.dataset.path;" in reset_body
+    assert "parsed.origin !== window.location.origin" in sanitize_body
+    assert "parsed.pathname.startsWith('/v1/jobs/')" in sanitize_body
+    assert "sanitizeManagedAssetUrl(els.openArtifactBtn.dataset.url)" in content
+    assert "sanitizeManagedAssetUrl(els.downloadArtifactBtn.dataset.url)" in content
+
+
+def test_portal_selection_review_surfaces_have_single_render_owner() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+    review_body = _extract_js_function_body(content, "renderReviewSurfaces")
+    artifact_body = _extract_js_function_body(content, "renderArtifactPanel")
+    queue_body = _extract_js_function_body(content, "renderJobQueue")
+    select_body = _extract_js_function_body(content, "selectJob")
+    schedule_body = _extract_js_function_body(content, "scheduleRenderJobQueue")
+    presets_body = _extract_js_function_body(content, "fetchPresetsForPipeline")
+    diagnostics_body = _extract_js_function_body(content, "renderPreRunDiagnostics")
+    backend_body = _extract_js_function_body(content, "checkBackend")
+    init_body = _extract_js_function_body(content, "init")
+
+    assert "let queuedReviewSurfaceRefresh = false;" in content
+    assert "renderArtifactPanel();" in review_body
+    assert "renderSelectedJobInspector();" in review_body
+    assert "renderMissionControl(payload);" in review_body
+    assert "renderSelectedJobInspector();" not in artifact_body
+    assert "queuedReviewSurfaceRefresh = queuedReviewSurfaceRefresh || includeReviewSurfaces;" in schedule_body
+    assert "const shouldRenderReviewSurfaces = queuedReviewSurfaceRefresh;" in schedule_body
+    assert "queuedReviewSurfaceRefresh = false;" in schedule_body
+    assert "renderJobQueue(shouldRenderReviewSurfaces);" in schedule_body
+    assert "if (includeReviewSurfaces) renderReviewSurfaces();" in queue_body
+    assert "renderReviewSurfaces();" in select_body
+    assert "scheduleRenderJobQueue(false);" in select_body
+    assert "renderReviewSurfaces();" in presets_body
+    assert "renderMissionControl();" not in presets_body
+    assert "renderReviewSurfaces(payload);" in diagnostics_body
+    assert "renderMissionControl(payload);" not in diagnostics_body
+    assert "renderReviewSurfaces();" in backend_body
+    assert "renderMissionControl();" not in backend_body
+    assert "renderJobQueue();" in init_body
+    assert "renderArtifactPanel();" not in init_body
+    assert "renderSelectedJobInspector();" not in init_body
+    assert "renderMissionControl();" not in init_body
+
+
+def test_portal_selected_job_inspector_uses_timeline_tabs_and_log_secondary_view() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+    inspector_body = _extract_js_function_body(content, "renderSelectedJobInspector")
+    tab_body = _extract_js_function_body(content, "setInspectorTab")
+
+    assert 'id="inspectorOverviewTab"' in content
+    assert 'id="inspectorTimelineTab"' in content
+    assert 'id="inspectorLogsTab"' in content
+    assert 'id="selectedJobTimelineList"' in content
+    assert 'id="selectedJobLogPreview"' in content
+    assert "_reconcileJobTimeline(selected);" in inspector_body
+    assert "formatDuration" in inspector_body
+    assert "_noteTransportWarning" in content
+    assert "const showLogsShell = nextTab === 'logs' || state.currentView === 'run';" in tab_body
+    assert "els.logsShell.classList.toggle('hidden', !showLogsShell);" in tab_body
+
+
+def test_portal_theme_preference_defaults_to_system_without_persisting_boot_value() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+    apply_body = _extract_js_function_body(content, "applyThemePreference")
+    migrate_body = _extract_js_function_body(content, "_migrateThemePreferenceStorage")
+    init_body = _extract_js_function_body(content, "init")
+
+    assert "const THEME_STORAGE_KEY = 'tp_theme';" in content
+    assert "const THEME_STORAGE_VERSION_KEY = 'tp_theme_version';" in content
+    assert "const THEME_STORAGE_VERSION = '2';" in content
+    assert "const THEME_PREFERENCES = Object.freeze(['system', 'dark', 'light']);" in content
+    assert "themePreference: 'system'," in content
+    assert "localStorage.setItem('tp_theme', mode);" not in content
+    assert "const storageVersion = localStorage.getItem(THEME_STORAGE_VERSION_KEY);" in migrate_body
+    assert "if (storageVersion === THEME_STORAGE_VERSION) return;" in migrate_body
+    assert "if (localStorage.getItem(THEME_STORAGE_KEY) !== null) {" in migrate_body
+    assert "localStorage.removeItem(THEME_STORAGE_KEY);" in migrate_body
+    assert "localStorage.setItem(THEME_STORAGE_VERSION_KEY, THEME_STORAGE_VERSION);" in migrate_body
+    assert "localStorage.setItem(THEME_STORAGE_VERSION_KEY, THEME_STORAGE_VERSION);" in apply_body
+    assert "if (normalizedPreference === 'system') localStorage.removeItem(THEME_STORAGE_KEY);" in apply_body
+    assert "else localStorage.setItem(THEME_STORAGE_KEY, normalizedPreference);" in apply_body
+    assert "_migrateThemePreferenceStorage();" in init_body
+    assert (
+        "const savedThemePreference = _normalizeThemePreference(localStorage.getItem(THEME_STORAGE_KEY)) || 'system';"
+        in init_body
+    )
+    assert "applyThemePreference(savedThemePreference, { persist: false, themeQuery });" in init_body
+
+
+def test_portal_theme_control_cycles_system_dark_light_preferences() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+    next_body = _extract_js_function_body(content, "_nextThemePreference")
+    sync_body = _extract_js_function_body(content, "_syncThemeButton")
+
+    assert "Theme: System" in content
+    assert "Theme preference: system. Click to switch to dark." in content
+    assert "Cycle Theme" in content
+    assert "const nextIndex = (currentIndex + 1) % THEME_PREFERENCES.length;" in next_body
+    assert "return THEME_PREFERENCES[nextIndex];" in next_body
+    assert "applyThemePreference(_nextThemePreference(state.themePreference));" in content
+    assert "Theme: System (${effectiveLabel})" in sync_body
+    assert "Theme preference: ${preference}. Click to switch to ${nextPreference}." in sync_body
+
+
+def test_portal_theme_system_listener_only_reacts_while_following_system() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+    init_body = _extract_js_function_body(content, "init")
+
+    assert "const themeQuery = window.matchMedia('(prefers-color-scheme: dark)');" in init_body
+    assert "themeQuery.addEventListener('change', () => {" in init_body
+    assert "if (state.themePreference === 'system') {" in init_body
+    assert "applyThemePreference('system', { persist: false, themeQuery });" in init_body
+
+
+def test_portal_console_views_use_query_param_navigation_without_backend_route_changes() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+    rail_body = _extract_js_function_body(content, "setupSectionRail")
+    apply_view_body = _extract_js_function_body(content, "applyConsoleViewLayout")
+
+    assert 'data-view-link="overview"' in content
+    assert 'data-view-link="build"' in content
+    assert 'data-view-link="operate"' in content
+    assert 'data-view-link="run"' in content
+    assert "url.searchParams.set('view', resolveConsoleView(viewName));" in content
+    assert "state.currentView = resolveConsoleView(url.searchParams.get('view'));" in content
+    assert "document.body.dataset.consoleView = state.currentView;" in apply_view_body
+    assert "els.queueShell.classList.toggle('hidden', state.currentView === 'run');" in apply_view_body
+    assert "const isPlainPrimaryClick = event.button === 0" in rail_body
+    assert "if (event.defaultPrevented || !isPlainPrimaryClick)" in rail_body
+    assert "navigateConsoleView(nextView);" in rail_body
+
+
+def test_portal_timestamp_parsing_normalizes_second_precision_epochs() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+    body = _extract_js_function_body(content, "parseTimestamp")
+
+    assert "value > 0 && value < 1e12 ? value * 1000 : value" in body
+    assert "const numeric = Number(value);" in body
+
+
+def test_portal_preset_selection_applies_recommended_defaults_without_changing_contract_shape() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+    bind_body = _extract_js_function_body(content, "bindInputs")
+    preset_body = _extract_js_function_body(content, "applyPresetRecommendedArgs")
+    fetch_body = _extract_js_function_body(content, "fetchPresetsForPipeline")
+
+    assert "applyPresetRecommendedArgs(nextPreset);" in bind_body
+    assert "quality_tier" in preset_body
+    assert "depth_backend" in preset_body
+    assert "segmentation_backend" in preset_body
+    assert "emit_run_card" in preset_body
+    assert "advanced_sections" in fetch_body
+    assert "recommended_args" in fetch_body
+
+
+def test_portal_init_establishes_interactive_shell_before_bootstrap_settles() -> None:
     portal_html = Path(__file__).resolve().parents[1] / "portal.html"
     content = portal_html.read_text(encoding="utf-8")
     body = _extract_js_function_body(content, "init")
 
-    assert "await loadPortalBootstrap();" in body
-    assert "_loadApiKeyIntoInputs();" in body
+    assert "const bootstrapPromise = loadPortalBootstrap();" in body
+    assert "_syncBootstrapUi();" in body
+    assert "renderJobQueue();" in body
+    assert "startHealthPolling();" in body
+    assert "await bootstrapPromise;" in body
+    assert "await loadPortalBootstrap();" not in body
+
+
+def test_portal_bootstrap_online_followup_state_is_tracked_until_auth_ready() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+
+    assert "lastHealthEndpointPath: ''" in content
+    assert "pendingOnlineFollowup: false" in content
+    assert "onlineFollowupComplete: false" in content
+    assert "deadlineAt: 0" in content
+    assert "lastOutcome: ''" in content
+
+
+def test_portal_bootstrap_retry_lifecycle_tracks_active_state_and_teardown() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+    active_body = _extract_js_function_body(content, "_hasActiveBootstrapRetryState")
+    history_body = _extract_js_function_body(content, "_hasBootstrapRetryHistory")
+    record_body = _extract_js_function_body(content, "_recordBootstrapRetryEvent")
+    cleanup_body = _extract_js_function_body(content, "cleanupActiveJobHandles")
+
+    assert "state.bootstrap.retry.timer !== null" in active_body
+    assert "state.bootstrap.retry.deadlineAt > 0" in active_body
+    assert "state.bootstrap.retry.attempt > 0" in history_body
+    assert "state.bootstrap.retry.lastOutcome" in history_body
+    assert "console.warn('[portal bootstrap retry]', payload);" in record_body
+    assert "console.info('[portal bootstrap retry]', payload);" in record_body
+    assert "_finalizeBootstrapRetry('terminal_navigation_abort', { reason: 'navigation_abort' });" in cleanup_body
+    assert "_cancelPendingBootstrapRequest('navigation_abort');" in cleanup_body
+
+
+def test_portal_bootstrap_retry_scheduler_rejects_tight_loops_under_persistent_failure() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+    retry_body = _extract_js_function_body(content, "_scheduleBootstrapRetry")
+
+    assert "if (state.bootstrap.retry.timer !== null) {" in retry_body
+    assert "skipped_already_scheduled" in retry_body
+    assert "state.bootstrap.retry.deadlineAt = now + BOOTSTRAP_RETRY_MAX_WINDOW_MS;" in retry_body
+    assert "attempt > BOOTSTRAP_RETRY_MAX_ATTEMPTS" in retry_body
+    assert "(now + delayMs) > state.bootstrap.retry.deadlineAt" in retry_body
+    assert "window.setTimeout(() => {" in retry_body
 
 
 def test_portal_verbose_quiet_conflict_is_notified_and_blocked() -> None:
@@ -429,6 +834,70 @@ def test_portal_verbose_quiet_conflict_is_notified_and_blocked() -> None:
 
     assert "verbose and quiet are mutually exclusive; disabled" in bind_body
     assert "verbose and quiet are mutually exclusive; disable one flag." in submit_body
+
+
+def test_portal_reconstruction_runtime_summary_and_effective_config_surfaces_are_present() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+    summary_body = _extract_js_function_body(content, "renderReconstructionRuntimeSummary")
+    drawer_body = _extract_js_function_body(content, "renderEffectiveConfigDrawer")
+
+    assert 'id="summaryReconstructionState"' in content
+    assert 'id="summaryRuntimeWorkers"' in content
+    assert 'id="summaryRawIngest"' in content
+    assert 'id="summaryDebugBundle"' in content
+    assert 'id="summaryPreviewState"' in content
+    assert 'id="estimateRuntimeBand"' in content
+    assert 'id="debugBundleGuardrail"' in content
+    assert 'id="effectiveConfigDrawer"' in content
+    assert 'id="requestedConfigJson"' in content
+    assert 'id="effectiveConfigJson"' in content
+    assert 'id="inactiveConfigJson"' in content
+    assert "renderDebugBundleGuardrail(currentPayload" in summary_body
+    assert "renderEffectiveConfigDrawer(currentPayload" in summary_body
+    assert "effectivePreview.normalized_args" in drawer_body
+    assert "effectivePreview.inactive_fields" in drawer_body
+
+
+def test_portal_preview_metadata_worker_modes_and_export_contract_are_wired() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+    update_body = _extract_js_function_body(content, "updateUIFromState")
+    bind_body = _extract_js_function_body(content, "bindInputs")
+
+    assert "maxWorkersMode: 'auto'," in content
+    assert "maxGpuWorkersMode: 'auto'," in content
+    assert 'id="maxWorkersMode"' in content
+    assert 'id="maxGpuWorkersMode"' in content
+    assert "function fetchConfigMetadata" in content
+    assert "function fetchConfigPreview" in content
+    assert "function scheduleConfigPreview" in content
+    assert "syncRuntimeWorkerModeControls();" in update_body
+    assert "state.config.runtime.maxWorkersMode = _normalizeWorkerMode(e.target.value);" in bind_body
+    assert "state.config.runtime.maxGpuWorkersMode = _normalizeWorkerMode(e.target.value);" in bind_body
+    assert "schema: 'tp.portal.export.v1'" in content
+    assert "effective_args:" in content
+    assert "inactive_fields:" in content
+    assert "estimate_summary:" in content
+    assert "argv_preview:" in content
+
+
+def test_portal_submit_blocks_preview_unavailable_and_debug_bundle_without_acknowledgement() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+    guard_body = _extract_js_function_body(content, "_syncBootstrapGuardedControls")
+    submit_body = _extract_js_function_body(content, "submitJob")
+    summary_body = _extract_js_function_body(content, "renderReconstructionRuntimeSummary")
+    guardrail_body = _extract_js_function_body(content, "renderDebugBundleGuardrail")
+
+    assert "Configuration preview is still refreshing." in submit_body
+    assert "Preview-backed validation is unavailable." in submit_body
+    assert "Acknowledge the reconstruction debug-bundle guardrail before dispatch." in submit_body
+    assert "debug_bundle_acknowledgement_required" in submit_body
+    assert "_effectiveDebugBundleEnabled(preview)" in guard_body
+    assert "_effectiveDebugBundleEnabled(preview, payload)" in submit_body
+    assert "_effectiveDebugBundleEnabled(matchedPreview, currentPayload)" in summary_body
+    assert "_effectiveDebugBundleEnabled(currentPreview, currentPayload)" in guardrail_body
 
 
 def test_lux_cli_parity_links_portal_canonical_args_and_backend_argv() -> None:
@@ -630,9 +1099,9 @@ def test_lux_ui_backend_and_direct_cli_paths_share_config_fingerprint(tmp_path: 
         },
     }
     portal_argv = orchestrator_app._argv_from_request(portal_payload)
-    assert portal_argv[0] == "lux-depth-v3"
+    assert portal_argv[:3] == [sys.executable, "-m", orchestrator_app.LUX_DEPTH_MODULE]
 
-    portal_path_config = _capture_lux_cli_config_from_args(portal_argv[1:])
+    portal_path_config = _capture_lux_cli_config_from_args(portal_argv[3:])
     portal_path_fingerprint = _run_card_fingerprint_from_config(portal_path_config)
 
     direct_cli_args = [
@@ -837,7 +1306,9 @@ def test_portal_exposes_run_card_quick_actions() -> None:
     assert 'id="viewRunCardBtn"' in content
     assert 'id="copyRunCardPathBtn"' in content
     assert 'id="copyRunCardFingerprintBtn"' in content
-    assert "Run card path is not eligible for direct browser open; path copied instead." in content
+    assert "els.viewRunCardBtn.dataset.url = runCardUrl;" in content
+    assert "sanitizeManagedAssetUrl(els.viewRunCardBtn.dataset.url)" in content
+    assert "window.open(runCardUrl, '_blank', 'noopener,noreferrer');" in content
 
 
 def test_portal_selected_job_progress_bar_has_accessible_label() -> None:
@@ -846,6 +1317,146 @@ def test_portal_selected_job_progress_bar_has_accessible_label() -> None:
 
     assert 'id="selectedJobProgressLabel"' in content
     assert 'aria-labelledby="selectedJobProgressLabel selectedJobProgressText"' in content
+
+
+def test_portal_archive_controls_expose_canonical_stage_labels() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+
+    assert "archive-gate-a (Fixity / Manifest Prep)" in content
+    assert "archive-gate-b (BagIt Build)" in content
+    assert "archive-gate-c (METS Export)" in content
+    assert "Rights Manifest JSONL" in content
+    assert "Canonical Command" in content
+
+
+def test_portal_archive_build_surface_uses_manifest_input_and_never_derives_archive_index() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+    bind_body = _extract_js_function_body(content, "bindInputs")
+
+    assert "safeBindInput(els.rightsManifestPath, 'gate', 'manifestJsonl');" in bind_body
+    assert "deriveArchiveIndexPath" not in bind_body
+    assert "gateDedup" not in bind_body
+    assert "gateSign" not in bind_body
+
+
+def test_portal_archive_payload_and_cli_preview_use_canonical_archive_contract() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+    payload_body = _extract_js_function_body(content, "generatePayload")
+    cli_body = _extract_js_function_body(content, "renderCLI")
+    payload_init_segment = payload_body.split("if (p === 'lux-depth-v3') {", maxsplit=1)[0]
+    cli_archive_segment = cli_body.split("} else {", maxsplit=1)[1].split("const cli =", maxsplit=1)[0]
+
+    assert "archive_command: archiveCommand" in payload_body
+    assert "args.manifest_jsonl" in payload_body
+    assert "args.archive_index" in payload_body
+    assert "overwrite:" not in payload_init_segment
+    assert payload_body.count("overwrite:") == 1
+    assert "dedup" not in payload_body
+    assert "sign" not in payload_body
+    assert "--archive-command" in cli_body
+    assert "--manifest-jsonl" in cli_body
+    assert "--overwrite" in _extract_portal_lux_cli_flags(content)
+    assert "--overwrite" not in cli_archive_segment
+    assert "--dedup" not in cli_body
+    assert "--sign" not in cli_body
+
+
+def test_portal_archive_preview_and_readiness_flow_share_preview_state() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+    readiness_body = _extract_js_function_body(content, "currentPipelineReadiness")
+    issues_body = _extract_js_function_body(content, "currentPipelineReadinessIssues")
+    cli_body = _extract_js_function_body(content, "renderCLI")
+    preview_enabled_body = _extract_js_function_body(content, "_configPreviewEnabledForPipeline")
+    preview_schedule_body = _extract_js_function_body(content, "scheduleConfigPreview")
+    diagnostics_body = _extract_js_function_body(content, "renderPreRunDiagnostics")
+
+    assert "_currentPreviewReadiness(payload)" in readiness_body
+    assert "if (previewReadiness) return previewReadiness;" in readiness_body
+    assert "if (previewReadiness) return issues;" in issues_body
+    assert "CONFIG_PREVIEW_SUPPORTED_PIPELINES" in content
+    assert "CONFIG_PREVIEW_SUPPORTED_PIPELINES.has" in preview_enabled_body
+    assert "payload.pipeline !== 'lux-depth-v3'" not in preview_schedule_body
+    assert "preview && preview.status === 'ready'" in cli_body
+    assert "payload.pipeline === 'lux-depth-v3' && preview" not in cli_body
+    assert "const readinessIssues = currentPipelineReadinessIssues(payload);" in diagnostics_body
+    assert "Archive index path is missing;" not in diagnostics_body
+    assert "Rights Manifest JSONL is missing;" not in diagnostics_body
+
+
+def test_portal_archive_pipelines_hide_lux_flag_shell() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+    update_body = _extract_js_function_body(content, "updateUIFromState")
+
+    assert "flagsShell: document.getElementById('flags-shell')" in content
+    assert "if (els.flagsShell) els.flagsShell.classList.remove('hidden');" in update_body
+    assert "if (els.flagsShell) els.flagsShell.classList.add('hidden');" in update_body
+
+
+def test_portal_lux_build_surface_hides_inapplicable_optional_controls_until_needed() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+    applicability_body = _extract_js_function_body(content, "syncBuildSurfaceApplicability")
+    mission_control_body = _extract_js_function_body(content, "renderMissionControl")
+    preset_body = _extract_js_function_body(content, "currentPresetDescriptor")
+    preset_research_body = _extract_js_function_body(content, "_derivePresetResearchFlag")
+    fallback_body = _extract_js_function_body(content, "seedPresetFallbacks")
+    fetch_body = _extract_js_function_body(content, "fetchPresetsForPipeline")
+
+    assert "segmentationBackendField: document.getElementById('segmentationBackendField')" in content
+    assert "sam2ModelSizeField: document.getElementById('sam2ModelSizeField')" in content
+    assert "strictSegmentationField: document.getElementById('strictSegmentationField')" in content
+    assert "sam2CheckpointField: document.getElementById('sam2CheckpointField')" in content
+    assert "v2PresetField: document.getElementById('v2PresetField')" in content
+    assert "governanceDetailsHint: document.getElementById('governanceDetailsHint')" in content
+    assert "licenseAppleField: document.getElementById('licenseAppleField')" in content
+    assert "reconstructionConfigFields: document.getElementById('reconstructionConfigFields')" in content
+    assert "function _derivePresetResearchFlag" in content
+    assert ".includes('research')" in preset_research_body
+    assert "is_research: _derivePresetResearchFlag({" in preset_body
+    assert "is_research: _derivePresetResearchFlag({" in fallback_body
+    assert "is_research: _derivePresetResearchFlag(preset)" in fetch_body
+    assert "_setContextVisibility(els.segmentationBackendField, isLuxPipeline && segmentationEnabled);" in applicability_body
+    assert "_setContextVisibility(els.sam2ModelSizeField, isLuxPipeline && showSam2Controls);" in applicability_body
+    assert "_setContextVisibility(els.v2PresetField, isLuxPipeline && enableV2);" in applicability_body
+    assert "_setContextVisibility(els.governanceDetails, governanceVisible);" in applicability_body
+    assert "els.licenseAppleField" in applicability_body
+    assert "_setContextVisibility(els.reconstructionConfigFields, reconstructionEnabled);" in applicability_body
+    assert "syncBuildSurfaceApplicability(currentPayload);" in mission_control_body
+
+
+def test_portal_dispatch_controls_require_backend_readiness_and_live_backend() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+    guard_body = _extract_js_function_body(content, "_syncBootstrapGuardedControls")
+    submit_body = _extract_js_function_body(content, "submitJob")
+
+    assert "state.backendOk" in guard_body
+    assert "currentPipelineDispatchStatus()" in guard_body
+    assert "readinessStatus === 'ready'" in guard_body
+    assert "Execution readiness is still loading." in submit_body
+    assert "Backend is offline. Dispatch is disabled until connectivity is restored." in submit_body
+    assert "Pipeline is blocked by missing prerequisites." in submit_body
+    assert "mock simulation" not in submit_body
+
+
+def test_portal_reconciles_restored_build_surface_values_without_field_events() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+    reconcile_body = _extract_js_function_body(content, "reconcileBuildSurfaceFromDom")
+    init_body = _extract_js_function_body(content, "init")
+
+    assert "els.archiveIndexPath ? els.archiveIndexPath.value" in reconcile_body
+    assert "els.rightsManifestPath ? els.rightsManifestPath.value" in reconcile_body
+    assert "renderCLI();" in reconcile_body
+    assert "scheduleConfigPreview(true);" in reconcile_body
+    assert "window.addEventListener('pageshow'" in content
+    assert "window.addEventListener('focus'" in content
+    assert "reconcileBuildSurfaceFromDom();" in init_body
 
 
 def test_argv_archive_gate_a_defaults_to_fixity_scan_runner() -> None:
@@ -863,8 +1474,12 @@ def test_argv_archive_gate_a_defaults_to_fixity_scan_runner() -> None:
     assert argv[1].endswith("tools/archive_governance.py")
     assert argv[2] == "--json"
     assert argv[3] == "fixity-scan"
+    expected_archive_index = str(
+        (orchestrator_app.REPO_ROOT / "archive_reports" / "archive_index_normalized.csv.gz").resolve()
+    )
     expected_archive_root = str((orchestrator_app.REPO_ROOT / "archive_root").resolve())
     expected_out_dir = str((orchestrator_app.REPO_ROOT / "archive_reports").resolve())
+    assert _flag_value(argv, "--archive-index") == expected_archive_index
     assert _flag_value(argv, "--archive-root") == expected_archive_root
     assert _flag_value(argv, "--out-dir") == expected_out_dir
 
@@ -903,6 +1518,42 @@ def test_argv_archive_gate_fixity_verify_uses_canonical_default_report_filename(
     assert argv[3] == "fixity-verify"
     expected_report_path = str((orchestrator_app.REPO_ROOT / "archive_reports" / "verification_report.json").resolve())
     assert _flag_value(argv, "--report-path") == expected_report_path
+
+
+def test_argv_archive_gate_manifest_build_defaults_archive_index_under_output_dir() -> None:
+    payload: Dict[str, object] = {
+        "pipeline": "archive-gate-a",
+        "args": {
+            "input_dir": "./archive_root",
+            "output_dir": "./archive_reports",
+            "archive_command": "manifest-build",
+        },
+    }
+
+    argv = orchestrator_app._argv_from_request(payload)
+
+    assert argv[3] == "manifest-build"
+    expected_archive_index = str(
+        (orchestrator_app.REPO_ROOT / "archive_reports" / "archive_index_normalized.csv.gz").resolve()
+    )
+    assert _flag_value(argv, "--archive-index") == expected_archive_index
+
+
+def test_argv_archive_gate_preserves_explicit_archive_index_override() -> None:
+    payload: Dict[str, object] = {
+        "pipeline": "archive-gate-a",
+        "args": {
+            "input_dir": "./archive_root",
+            "output_dir": "./archive_reports",
+            "archive_command": "fixity-scan",
+            "archive_index": "./archive_root/custom_archive_index.csv.gz",
+        },
+    }
+
+    argv = orchestrator_app._argv_from_request(payload)
+
+    expected_archive_index = str((orchestrator_app.REPO_ROOT / "archive_root" / "custom_archive_index.csv.gz").resolve())
+    assert _flag_value(argv, "--archive-index") == expected_archive_index
 
 
 def test_argv_archive_gate_rejects_workers_below_minimum() -> None:
@@ -947,6 +1598,81 @@ def test_argv_archive_gate_invalid_command_is_rejected() -> None:
 
     with pytest.raises(ValueError, match="Invalid archive_command"):
         orchestrator_app._argv_from_request(payload)
+
+
+def test_archive_gate_a_readiness_is_degraded_until_archive_index_is_supplied() -> None:
+    readiness = orchestrator_app._archive_gate_readiness("archive-gate-a", require_dispatch_inputs=False)
+
+    assert readiness["status"] == "degraded"
+    assert readiness["canonical_command"] == "fixity-scan"
+    assert readiness["missing_prerequisites"][0]["reason"] == "archive_index_required"
+
+
+def test_archive_gate_b_readiness_fails_closed_without_manifest_jsonl() -> None:
+    readiness = orchestrator_app._archive_gate_readiness(
+        "archive-gate-b",
+        args={"input_dir": "./archive_root", "output_dir": "./archive_reports"},
+        require_dispatch_inputs=True,
+    )
+
+    assert readiness["status"] == "blocked"
+    assert readiness["canonical_command"] == "bag-build"
+    assert readiness["missing_prerequisites"][0]["reason"] == "rights_manifest_required"
+    assert readiness["missing_prerequisites"][0]["field"] == "manifest_jsonl"
+
+
+def test_archive_gate_b_readiness_is_ready_when_manifest_jsonl_exists(tmp_path: Path) -> None:
+    manifest_jsonl = tmp_path / "archive_manifest_v2.rights.jsonl"
+    manifest_jsonl.write_text('{"id":"asset-1"}\n', encoding="utf-8")
+
+    readiness = orchestrator_app._archive_gate_readiness(
+        "archive-gate-b",
+        args={
+            "input_dir": str(tmp_path / "archive_root"),
+            "output_dir": str(tmp_path / "archive_reports"),
+            "archive_command": "bag-build",
+            "manifest_jsonl": str(manifest_jsonl),
+        },
+        require_dispatch_inputs=True,
+    )
+
+    assert readiness["status"] == "ready"
+    assert readiness["canonical_command"] == "bag-build"
+    assert readiness["missing_prerequisites"] == []
+
+
+def test_archive_gate_readiness_blocks_unsafe_input_dir() -> None:
+    readiness = orchestrator_app._archive_gate_readiness(
+        "archive-gate-b",
+        args={
+            "input_dir": "~/.ssh",
+            "output_dir": "./archive_reports",
+            "archive_command": "bag-build",
+        },
+        require_dispatch_inputs=True,
+    )
+
+    assert readiness["status"] == "blocked"
+    assert readiness["missing_prerequisites"][0]["reason"] == "unsafe_path"
+    assert readiness["missing_prerequisites"][0]["field"] == "input_dir"
+
+
+def test_lux_depth_readiness_separates_base_ready_from_canary_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        orchestrator_app,
+        "_module_available",
+        lambda module_name: module_name == orchestrator_app.LUX_DEPTH_MODULE,
+    )
+    monkeypatch.setattr(orchestrator_app, "_resolve_lux_depth_canary_runtime", lambda: None)
+
+    readiness = orchestrator_app._lux_depth_readiness()
+
+    assert readiness["status"] == "ready"
+    assert readiness["canonical_command"] == "lux-depth-v3"
+    assert readiness["canary_status"] == "unavailable"
+    assert readiness["missing_prerequisites"] == []
 
 
 def test_run_job_is_async_and_does_not_block_event_loop() -> None:
@@ -1266,6 +1992,19 @@ def test_client_ip_prefers_peer_by_default() -> None:
     assert orchestrator_app._extract_client_ip(request) == "10.0.0.1"
 
 
+def test_ready_verbose_reports_lux_runner_from_module_resolution(monkeypatch: pytest.MonkeyPatch) -> None:
+    previous_verbose = orchestrator_app.READY_VERBOSE
+    try:
+        orchestrator_app.READY_VERBOSE = True
+        monkeypatch.setattr(orchestrator_app, "_lux_depth_runner_available", lambda: True)
+        payload = asyncio.run(orchestrator_app.ready())
+    finally:
+        orchestrator_app.READY_VERBOSE = previous_verbose
+
+    assert payload["ok"] is True
+    assert payload["cli"]["lux-depth-v3"] is True
+
+
 def test_api_key_validation_rejects_query_param_by_default() -> None:
     previous_key = orchestrator_app.API_KEY_SECRET
     previous_flag = orchestrator_app.ALLOW_SSE_QUERY_API_KEY
@@ -1309,6 +2048,14 @@ def test_protected_job_route_detection() -> None:
     assert orchestrator_app._is_protected_job_endpoint("/ready") is False
 
 
+def test_protected_api_key_route_detection() -> None:
+    assert orchestrator_app._is_protected_api_key_endpoint("/v1/jobs") is True
+    assert orchestrator_app._is_protected_api_key_endpoint("/v1/config-metadata") is True
+    assert orchestrator_app._is_protected_api_key_endpoint("/v1/config-preview") is True
+    assert orchestrator_app._is_protected_api_key_endpoint("/v1/portal/events") is True
+    assert orchestrator_app._is_protected_api_key_endpoint("/ready") is False
+
+
 def test_index_job_artifacts_populates_job_payload(tmp_path: Path) -> None:
     output_dir = tmp_path / "out"
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -1326,6 +2073,63 @@ def test_index_job_artifacts_populates_job_payload(tmp_path: Path) -> None:
     assert job.artifacts["output_dir"] == str(output_dir)
     assert {item["artifact_type"] for item in indexed} == {"metadata", "image"}
     assert {item["path"] for item in indexed} == {"manifest.json", "render.png"}
+    render_item = next(item for item in indexed if item["path"] == "render.png")
+    assert render_item["media_kind"] == "image"
+    assert render_item["previewable"] is True
+    assert render_item["content_type"] == "image/png"
+    assert render_item["url"] == f"/v1/jobs/{job.id}/artifacts/render.png"
+    manifest_item = next(item for item in indexed if item["path"] == "manifest.json")
+    assert manifest_item["media_kind"] == "metadata"
+    assert manifest_item["previewable"] is False
+
+
+def test_index_job_artifacts_skips_entries_resolving_outside_output_dir(tmp_path: Path) -> None:
+    output_dir = tmp_path / "out"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    escaped_target = tmp_path / "secret.png"
+    escaped_target.write_bytes(b"secret")
+    symlink_path = output_dir / "escape.png"
+    symlink_path.symlink_to(escaped_target)
+
+    job = orchestrator_app.Job(
+        id="job_artifacts_symlink_skip",
+        created_at=orchestrator_app._now(),
+        request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(output_dir)}},
+    )
+
+    indexed = orchestrator_app._index_job_artifacts(job)
+
+    assert indexed == []
+    assert job.artifacts["items"] == []
+    assert job.artifact_lookup == {}
+
+
+def test_hydrate_artifact_lookup_from_items_reuses_existing_index(tmp_path: Path) -> None:
+    output_dir = tmp_path / "out"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    artifact_path = output_dir / "renders" / "hero.png"
+    artifact_path.parent.mkdir(parents=True, exist_ok=True)
+    artifact_path.write_bytes(b"png")
+
+    job = orchestrator_app.Job(
+        id="job_artifacts_lookup",
+        created_at=orchestrator_app._now(),
+        request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(output_dir)}},
+        artifacts={
+            "output_dir": str(output_dir),
+            "items": [
+                {
+                    "path": "renders/hero.png",
+                    "relative_path": "renders/hero.png",
+                }
+            ],
+        },
+    )
+
+    lookup = orchestrator_app._hydrate_artifact_lookup_from_items(job)
+
+    assert lookup["renders/hero.png"] == artifact_path.resolve()
+    assert job.artifact_lookup["renders/hero.png"] == artifact_path.resolve()
 
 
 def test_index_job_artifacts_truncation_is_sorted_and_stable(tmp_path: Path) -> None:
@@ -1379,15 +2183,18 @@ def test_create_job_archive_gate_invalid_command_uses_typed_error_envelope() -> 
     assert orchestrator_app.JOBS == {}
 
 
-def test_create_job_archive_gate_invalid_integer_option_uses_typed_error_envelope() -> None:
+def test_create_job_archive_gate_invalid_integer_option_uses_typed_error_envelope(tmp_path: Path) -> None:
+    archive_index = tmp_path / "archive_index_normalized.csv.gz"
+    archive_index.write_bytes(b"fixture-index")
     response = asyncio.run(
         orchestrator_app.create_job(
             {
                 "pipeline": "archive-gate-a",
                 "args": {
-                    "input_dir": "./input_images",
-                    "output_dir": "./output",
+                    "input_dir": str(tmp_path / "archive_root"),
+                    "output_dir": str(tmp_path / "output"),
                     "archive_command": "fixity-scan",
+                    "archive_index": str(archive_index),
                     "workers": 0,
                 },
             }
@@ -1399,6 +2206,29 @@ def test_create_job_archive_gate_invalid_integer_option_uses_typed_error_envelop
     assert body["success"] is False
     assert body["error"]["code"] == "INVALID_ARGUMENT"
     assert body["error"]["details"]["reason"] == "invalid_archive_integer_option"
+    assert orchestrator_app.JOBS == {}
+
+
+def test_create_job_archive_gate_b_requires_manifest_jsonl_with_typed_error() -> None:
+    response = asyncio.run(
+        orchestrator_app.create_job(
+            {
+                "pipeline": "archive-gate-b",
+                "args": {
+                    "input_dir": "./input_images",
+                    "output_dir": "./output",
+                    "archive_command": "bag-build",
+                },
+            }
+        )
+    )
+    body = json.loads(response.body.decode("utf-8"))
+
+    assert response.status_code == 400
+    assert body["success"] is False
+    assert body["error"]["code"] == "INVALID_ARGUMENT"
+    assert body["error"]["details"]["field"] == "manifest_jsonl"
+    assert body["error"]["details"]["reason"] == "rights_manifest_required"
     assert orchestrator_app.JOBS == {}
 
 
@@ -1453,6 +2283,79 @@ def test_argv_archive_gate_rejects_output_path_under_input_root(tmp_path: Path) 
         }
         with pytest.raises(ValueError, match="Path outside allowed roots"):
             orchestrator_app._argv_from_request(payload)
+    finally:
+        orchestrator_app.ALLOWED_INPUT_ROOTS = previous_input_roots
+        orchestrator_app.ALLOWED_OUTPUT_ROOTS = previous_output_roots
+        orchestrator_app.ALLOWED_PATH_ROOTS = previous_path_roots
+
+
+def test_argv_archive_gate_archive_index_default_accepts_output_root_via_allowed_path_roots(tmp_path: Path) -> None:
+    previous_input_roots = orchestrator_app.ALLOWED_INPUT_ROOTS
+    previous_output_roots = orchestrator_app.ALLOWED_OUTPUT_ROOTS
+    previous_path_roots = orchestrator_app.ALLOWED_PATH_ROOTS
+    try:
+        input_root = (tmp_path / "input_root").resolve()
+        output_root = (tmp_path / "output_root").resolve()
+        input_root.mkdir(parents=True, exist_ok=True)
+        output_root.mkdir(parents=True, exist_ok=True)
+        orchestrator_app.ALLOWED_INPUT_ROOTS = [input_root]
+        orchestrator_app.ALLOWED_OUTPUT_ROOTS = [output_root]
+        orchestrator_app.ALLOWED_PATH_ROOTS = [input_root, output_root]
+
+        payload: Dict[str, object] = {
+            "pipeline": "archive-gate-a",
+            "args": {
+                "input_dir": str(input_root),
+                "output_dir": str(output_root),
+                "archive_command": "fixity-scan",
+            },
+        }
+        argv = orchestrator_app._argv_from_request(payload)
+    finally:
+        orchestrator_app.ALLOWED_INPUT_ROOTS = previous_input_roots
+        orchestrator_app.ALLOWED_OUTPUT_ROOTS = previous_output_roots
+        orchestrator_app.ALLOWED_PATH_ROOTS = previous_path_roots
+
+    expected_archive_index = str((output_root / "archive_index_normalized.csv.gz").resolve())
+    assert _flag_value(argv, "--archive-index") == expected_archive_index
+
+
+def test_argv_archive_gate_manifest_build_keeps_hash_manifest_and_rights_scopes_narrow(tmp_path: Path) -> None:
+    previous_input_roots = orchestrator_app.ALLOWED_INPUT_ROOTS
+    previous_output_roots = orchestrator_app.ALLOWED_OUTPUT_ROOTS
+    previous_path_roots = orchestrator_app.ALLOWED_PATH_ROOTS
+    try:
+        input_root = (tmp_path / "input_root").resolve()
+        output_root = (tmp_path / "output_root").resolve()
+        input_root.mkdir(parents=True, exist_ok=True)
+        output_root.mkdir(parents=True, exist_ok=True)
+        orchestrator_app.ALLOWED_INPUT_ROOTS = [input_root]
+        orchestrator_app.ALLOWED_OUTPUT_ROOTS = [output_root]
+        orchestrator_app.ALLOWED_PATH_ROOTS = [input_root, output_root]
+
+        payload_bad_hash: Dict[str, object] = {
+            "pipeline": "archive-gate-a",
+            "args": {
+                "input_dir": str(input_root),
+                "output_dir": str(output_root),
+                "archive_command": "manifest-build",
+                "hash_manifest": str(input_root / "hash_manifest.csv.gz"),
+            },
+        }
+        payload_bad_rights: Dict[str, object] = {
+            "pipeline": "archive-gate-a",
+            "args": {
+                "input_dir": str(input_root),
+                "output_dir": str(output_root),
+                "archive_command": "manifest-build",
+                "rights_jsonl": str(output_root / "archive_manifest_v2.rights.jsonl"),
+            },
+        }
+
+        with pytest.raises(ValueError, match="Path outside allowed roots"):
+            orchestrator_app._argv_from_request(payload_bad_hash)
+        with pytest.raises(ValueError, match="Path outside allowed roots"):
+            orchestrator_app._argv_from_request(payload_bad_rights)
     finally:
         orchestrator_app.ALLOWED_INPUT_ROOTS = previous_input_roots
         orchestrator_app.ALLOWED_OUTPUT_ROOTS = previous_output_roots
@@ -1514,7 +2417,7 @@ def test_create_job_rejects_paths_outside_allowed_roots_with_typed_error(tmp_pat
 
     assert response.status_code == 400
     assert body["error"]["code"] == "INVALID_ARGUMENT"
-    assert body["error"]["details"]["reason"] == "path_outside_allowed_roots"
+    assert body["error"]["details"]["reason"] == "unsafe_path"
     assert orchestrator_app.JOBS == {}
 
 
@@ -1531,7 +2434,124 @@ def test_create_job_rejects_tilde_prefixed_paths_with_typed_error() -> None:
 
     assert response.status_code == 400
     assert body["error"]["code"] == "INVALID_ARGUMENT"
-    assert body["error"]["details"]["reason"] == "invalid_path_value"
+    assert body["error"]["details"]["reason"] == "unsafe_path"
+    assert orchestrator_app.JOBS == {}
+
+
+def test_create_job_preflight_sanitizes_exception_derived_messages(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_readiness(_pipeline, _args, require_dispatch_inputs=False):  # noqa: ANN001
+        assert require_dispatch_inputs is True
+        return {
+            "status": "blocked",
+            "canonical_command": "lux-depth-v3",
+            "missing_prerequisites": [
+                {
+                    "reason": "unsafe_path",
+                    "severity": "blocked",
+                    "message": "Traceback: leaked preflight internals",
+                    "field": "input_dir",
+                }
+            ],
+            "runner_details": {},
+            "notes": [],
+        }
+
+    monkeypatch.setattr(orchestrator_app, "_evaluate_pipeline_readiness", fake_readiness)
+
+    response = asyncio.run(
+        orchestrator_app.create_job(
+            {
+                "pipeline": "lux-depth-v3",
+                "args": {"input_dir": "./input_images", "output_dir": "./output"},
+            }
+        )
+    )
+    body = json.loads(response.body.decode("utf-8"))
+
+    assert response.status_code == 400
+    assert body["error"]["code"] == "INVALID_ARGUMENT"
+    assert body["error"]["message"] == "Configured paths must stay within the allowed workspace roots."
+    assert body["error"]["details"] == {"field": "input_dir", "reason": "unsafe_path"}
+    assert "Traceback" not in response.body.decode("utf-8")
+    assert orchestrator_app.JOBS == {}
+
+
+def test_create_job_passes_preflight_snapshot_into_preview_builder(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    readiness_snapshot = {
+        "status": "ready",
+        "canonical_command": "lux-depth-v3",
+        "missing_prerequisites": [],
+        "runner_details": {},
+        "notes": [],
+    }
+    seen_snapshots = []
+
+    def fake_readiness(_pipeline, _args, require_dispatch_inputs=False):  # noqa: ANN001
+        assert require_dispatch_inputs is True
+        return readiness_snapshot
+
+    def fake_preview(_payload, *, readiness_snapshot=None):  # noqa: ANN001
+        seen_snapshots.append(readiness_snapshot)
+        return {
+            "field_errors": [
+                {
+                    "field": "accept_research_tools_license",
+                    "code": "reconstruction_license_required",
+                    "message": "Scene reconstruction requires the research-tools license acknowledgment.",
+                }
+            ]
+        }
+
+    monkeypatch.setattr(orchestrator_app, "_evaluate_pipeline_readiness", fake_readiness)
+    monkeypatch.setattr(orchestrator_app, "_build_config_preview", fake_preview)
+
+    response = asyncio.run(
+        orchestrator_app.create_job(
+            {
+                "pipeline": "lux-depth-v3",
+                "args": {
+                    "input_dir": "./input_images",
+                    "output_dir": "./output",
+                    "enable_reconstruction": True,
+                },
+            }
+        )
+    )
+    body = json.loads(response.body.decode("utf-8"))
+
+    assert response.status_code == 400
+    assert body["error"]["message"] == "Scene reconstruction requires the research-tools license acknowledgment."
+    assert body["error"]["details"] == {
+        "field": "accept_research_tools_license",
+        "reason": "reconstruction_license_required",
+    }
+    assert seen_snapshots == [readiness_snapshot]
+    assert orchestrator_app.JOBS == {}
+
+
+def test_create_job_archive_gate_rejects_unsafe_input_dir_before_argv() -> None:
+    response = asyncio.run(
+        orchestrator_app.create_job(
+            {
+                "pipeline": "archive-gate-b",
+                "args": {
+                    "input_dir": "~/.ssh",
+                    "output_dir": "./output",
+                    "archive_command": "bag-build",
+                },
+            }
+        )
+    )
+    body = json.loads(response.body.decode("utf-8"))
+
+    assert response.status_code == 400
+    assert body["error"]["code"] == "INVALID_ARGUMENT"
+    assert body["error"]["details"]["reason"] == "unsafe_path"
+    assert body["error"]["details"]["field"] == "input_dir"
     assert orchestrator_app.JOBS == {}
 
 
@@ -1584,7 +2604,9 @@ def test_list_presets_filters_pipeline() -> None:
     assert response.status_code == 200
     assert body["success"] is True
     assert body["data"]["pipeline"] == "lux-depth-v3"
-    assert any(item["name"] == "premium" for item in body["data"]["presets"])
+    premium = next(item for item in body["data"]["presets"] if item["name"] == "premium")
+    assert premium["recommended_args"]["quality_tier"] == "premium"
+    assert premium["advanced_sections"] == []
 
 
 def test_list_jobs_includes_error_and_artifacts() -> None:

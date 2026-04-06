@@ -16,6 +16,7 @@ from PIL import Image
 from ...core.ml_dependency_health import (
     OPTIONAL_IMPORT_EXCEPTIONS,
     _installed_version,
+    detect_transformers_torch_runtime_issue,
     detect_transformers_torch_version_issue,
     ensure_dependency_importable,
 )
@@ -41,41 +42,30 @@ class DA2Backend:
         self._model: Optional[DepthAnythingV2Model] = None
 
     def _resolve_device(self, config: Optional["EnhanceConfig"]) -> str:
-        requested: Optional[str] = None
+        """Resolve device from config, defaulting to CPU.
+
+        This method does NOT auto-detect accelerators (MPS/CUDA) because
+        importing torch here would load libomp.dylib on macOS. If a depth
+        backend subprocess (running in a separate venv) later loads its
+        own libomp, the process aborts with "OMP: Error #15".
+
+        The orchestrator passes an explicit depth_device, so production
+        workflows always get the correct device. CPU is the safe default
+        for ad-hoc or test instantiation. Device validation happens at
+        compute() time when torch is actually needed.
+        """
         if config is not None:
             requested = getattr(config, "depth_device", None)
             if isinstance(requested, str):
                 requested = requested.lower()
-        if requested == "cpu":
-            return "cpu"
-        if requested == "cuda":
-            logger.warning(
-                "Requested DA2 device=cuda" " but DA2 adapter only supports" " cpu/mps; falling back to cpu.",
-            )
-            return "cpu"
-        if requested is None:
-            return "cpu"
+                if requested == "cuda":
+                    logger.warning(
+                        "Requested DA2 device=cuda" " but DA2 adapter only supports" " cpu/mps; using cpu.",
+                    )
+                    return "cpu"
+                if requested in {"cpu", "mps"}:
+                    return requested
 
-        try:
-            import torch
-
-            if requested == "mps":
-                if torch.backends.mps.is_available():
-                    return "mps"
-                logger.warning(
-                    "Requested DA2 device=mps" " but MPS is unavailable;" " falling back to cpu.",
-                )
-                return "cpu"
-            if requested == "cpu":
-                return "cpu"
-
-            if torch.backends.mps.is_available():
-                return "mps"
-        except OPTIONAL_IMPORT_EXCEPTIONS:
-            logger.debug("PyTorch not installed; DA2 defaults to CPU.")
-
-        if requested in {"mps", "cuda"}:
-            return "cpu"
         return "cpu"
 
     @classmethod
@@ -97,8 +87,12 @@ class DA2Backend:
                 "torch package not installed" " for DA2 backend.",
             )
 
-        ensure_dependency_importable("transformers")
-        ensure_dependency_importable("torch")
+        transformers_module = ensure_dependency_importable("transformers")
+        torch_module = ensure_dependency_importable("torch")
+
+        runtime_issue = detect_transformers_torch_runtime_issue(torch_module, transformers_module)
+        if runtime_issue:
+            raise ImportError(runtime_issue)
 
         runtime_issue = detect_transformers_torch_version_issue(torch_version, transformers_version)
         if runtime_issue:
@@ -110,6 +104,20 @@ class DA2Backend:
 
         from ...depth.models.depth_anything_v2 import DepthAnythingV2Model as DepthAnythingV2Model  # noqa: F811
         from ...depth.models.depth_anything_v2 import ModelBackend, ModelVariant
+
+        # Validate MPS availability at compute time (torch is now safe to import)
+        if self._device == "mps":
+            try:
+                import torch
+
+                if not torch.backends.mps.is_available():
+                    logger.warning(
+                        "Requested DA2 device=mps" " but MPS is unavailable;" " falling back to cpu.",
+                    )
+                    self._device = "cpu"
+            except OPTIONAL_IMPORT_EXCEPTIONS:
+                logger.warning("PyTorch not available; DA2 falling back to CPU.")
+                self._device = "cpu"
 
         if self._device == "mps":
             backend = ModelBackend.PYTORCH_MPS

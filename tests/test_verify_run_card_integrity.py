@@ -59,6 +59,7 @@ def _valid_run_card_payload(module) -> dict:
         "v2_device": "cpu",
         "v2_upscaler_backend": "realesrgan",
         "depth_pro_python_executable": None,
+        "da3_python_executable": None,
     }
     canonical_json = json.dumps(
         {
@@ -82,6 +83,7 @@ def _valid_run_card_payload(module) -> dict:
                 "strict_segmentation",
                 "apex_strict_mode",
                 "depth_pro_python_executable",
+                "da3_python_executable",
             )
         },
         sort_keys=True,
@@ -247,6 +249,53 @@ def test_verify_run_card_integrity_accepts_wrapper_semantics(tmp_path: Path):
     assert errors == []
 
 
+def test_verify_run_card_integrity_rejects_requested_depth_pro_full_fallback(tmp_path: Path):
+    module = _load_script_module("verify_run_card_integrity_script_depth_pro_fallback", "scripts/verify_run_card_integrity.py")
+    run_card_path = tmp_path / "run_card_depth_pro_fallback.json"
+    payload = _valid_run_card_payload(module)
+    payload["backend_selection"]["requested"] = "depth_pro"
+    payload["backend_selection"]["resolved"] = "da3"
+    payload["backend_summary"]["requested_backend"] = "depth_pro"
+    payload["backend_summary"]["primary_backend"] = "da3"
+    payload["backend_summary"]["final_backends_used"] = ["da3"]
+    payload["backend_summary"]["fallback_images"] = 2
+    payload["success_count"] = 2
+    _write_json(run_card_path, payload)
+
+    errors = module.verify_run_card_integrity(run_card_path)
+    assert any("requested backend 'depth_pro' was not honored" in error for error in errors)
+
+
+def test_verify_run_card_integrity_rejects_combined_manifest_path_escape(tmp_path: Path):
+    module = _load_script_module("verify_run_card_integrity_script_combined_escape", "scripts/verify_run_card_integrity.py")
+    output_root = tmp_path / "output"
+    run_card_path = output_root / "run_card_depth_pro_fallback.json"
+    outside_manifest = tmp_path / "outside_manifest.json"
+    outside_manifest.write_text(
+        json.dumps({"backend_selection": {"resolution_reason": "secret outside reason"}}),
+        encoding="utf-8",
+    )
+
+    payload = _valid_run_card_payload(module)
+    payload["backend_selection"]["requested"] = "depth_pro"
+    payload["backend_selection"]["resolved"] = "da3"
+    payload["backend_summary"]["requested_backend"] = "depth_pro"
+    payload["backend_summary"]["primary_backend"] = "da3"
+    payload["backend_summary"]["final_backends_used"] = ["da3"]
+    payload["backend_summary"]["fallback_images"] = 2
+    payload["success_count"] = 2
+    payload["artifact_index"][1]["path"] = "../outside_manifest.json"
+    payload["artifact_index"][1]["relative_path"] = "../outside_manifest.json"
+    payload["artifact_merkle_root"] = module.compute_artifact_merkle_root(payload["artifact_index"])
+    _write_json(run_card_path, payload)
+
+    errors = module.verify_run_card_integrity(run_card_path)
+    assert any(
+        "combined_manifest artifact relative_path escapes run card root: ../outside_manifest.json" in error for error in errors
+    )
+    assert not any("secret outside reason" in error for error in errors)
+
+
 def test_verify_run_card_integrity_rejects_config_fingerprint_hash_mismatch(tmp_path: Path):
     module = _load_script_module("verify_run_card_integrity_script_fingerprint", "scripts/verify_run_card_integrity.py")
     run_card_path = tmp_path / "run_card_fingerprint_mismatch.json"
@@ -275,6 +324,7 @@ def test_verify_run_card_integrity_accepts_config_fingerprint_with_raw_ingest_fi
         "v2_device",
         "v2_upscaler_backend",
         "depth_pro_python_executable",
+        "da3_python_executable",
         "preset_requested",
         "preset_resolved",
         "backend_requested",
@@ -375,6 +425,42 @@ def test_verify_run_card_integrity_validates_reconstruction_scene_manifest(tmp_p
 
     errors = module.verify_run_card_integrity(run_card_path)
     assert errors == []
+
+
+def test_verify_run_card_integrity_rejects_reconstruction_diagnostics_path_escape(tmp_path: Path):
+    module = _load_script_module("verify_run_card_integrity_script_diagnostics_escape", "scripts/verify_run_card_integrity.py")
+    output_root = tmp_path / "output"
+    run_card_path = output_root / "run_card_diagnostics_escape.json"
+    outside_diagnostics = tmp_path / "outside_diagnostics.json"
+    outside_diagnostics.write_text(
+        json.dumps(
+            {
+                "schema": "tp.reconstruction_diagnostics.v1",
+                "camera_count": 0,
+                "cameras": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    payload = _valid_run_card_payload(module)
+    payload["artifact_index"].append(
+        {
+            "artifact_type": "reconstruction_diagnostics",
+            "path": "../outside_diagnostics.json",
+            "relative_path": "../outside_diagnostics.json",
+            "size_bytes": len(outside_diagnostics.read_bytes()),
+            "sha256": hashlib.sha256(outside_diagnostics.read_bytes()).hexdigest(),
+        }
+    )
+    payload["artifact_merkle_root"] = module.compute_artifact_merkle_root(payload["artifact_index"])
+    _write_json(run_card_path, payload)
+
+    errors = module.verify_run_card_integrity(run_card_path)
+    assert any(
+        "reconstruction_diagnostics artifact relative_path escapes run card root: ../outside_diagnostics.json" in error
+        for error in errors
+    )
 
 
 def test_verify_run_card_integrity_rejects_reconstruction_scene_manifest_hash_drift(tmp_path: Path):

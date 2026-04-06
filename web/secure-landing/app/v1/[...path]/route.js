@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server.js";
 
+import { resolveAuthenticatedAccessSession, revokeSessionOnAccessFailure } from "../../../lib/access.js";
 import { audit } from "../../../lib/audit.js";
 import { getConfig } from "../../../lib/config.js";
 import { applySecurityHeaders } from "../../../lib/http.js";
 import { buildUpstreamHeaders, buildUpstreamUrl, copyUpstreamResponseHeaders, isSsePath } from "../../../lib/proxy.js";
 import { isUnsafeMethod, validateOriginAndReferrer } from "../../../lib/request-security.js";
-import { getRemoteAddress, getSessionFromRequest, validateCsrfToken } from "../../../lib/sessions.js";
+import { clearSessionCookie, getRemoteAddress, validateCsrfToken } from "../../../lib/sessions.js";
 
 export const runtime = "nodejs";
 
@@ -96,18 +97,36 @@ async function streamSse(upstream, session) {
 }
 
 async function handleProxy(request, { params }) {
-  const pathSegments = Array.isArray(params?.path) ? params.path : [];
+  const resolvedParams = typeof params?.then === "function" ? await params : params;
+  const pathSegments = Array.isArray(resolvedParams?.path) ? resolvedParams.path : [];
   const pathname = `/v1/${pathSegments.join("/")}`;
   const sseRequest = isSsePath(pathname);
-  const session = getSessionFromRequest(request, { touch: !sseRequest });
+  const authState = await resolveAuthenticatedAccessSession(request, { touch: !sseRequest });
 
-  if (!session?.authenticated) {
+  if (!authState.ok) {
+    if (authState.revokeSession) {
+      revokeSessionOnAccessFailure(authState.session, authState.errorCode);
+    }
     audit("authorization_denied", {
       path: pathname,
-      remoteAddr: getRemoteAddress(request)
+      remoteAddr: getRemoteAddress(request),
+      errorCode: authState.errorCode
     });
-    return errorEnvelope(401, "UNAUTHORIZED", "authentication required", { path: pathname });
+    const code =
+      authState.status === 503 ? "ACCESS_UNAVAILABLE" : authState.status === 403 ? "FORBIDDEN" : "UNAUTHORIZED";
+    const message =
+      authState.status === 503
+        ? "managed access unavailable"
+        : authState.status === 403
+          ? "forbidden"
+          : "authentication required";
+    const response = errorEnvelope(authState.status, code, message, { path: pathname });
+    if (authState.revokeSession) {
+      clearSessionCookie(response);
+    }
+    return response;
   }
+  const { session } = authState;
 
   if (isUnsafeMethod(request.method)) {
     if (!validateOriginAndReferrer(request)) {

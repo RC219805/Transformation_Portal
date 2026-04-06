@@ -1,12 +1,21 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+
+cd "$REPO_ROOT"
+
 ARCHIVE_INDEX=""
 ARCHIVE_ROOT=""
 OUT_ROOT="archive_reports/sealed_eval"
 EVAL_COMMAND=""
 WORKERS="1"
-PYTHON_BIN="${PYTHON_BIN:-python3}"
+DEFAULT_PYTHON_BIN="python3"
+if [[ -x "${REPO_ROOT}/.venv/bin/python" ]]; then
+  DEFAULT_PYTHON_BIN="${REPO_ROOT}/.venv/bin/python"
+fi
+PYTHON_BIN="${PYTHON_BIN:-$DEFAULT_PYTHON_BIN}"
 SUBSET_ROOT=""
 ALLOW_WRITABLE_SUBSET="false"
 VALIDATE_SCHEMAS="true"

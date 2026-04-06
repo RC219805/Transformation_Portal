@@ -7,7 +7,8 @@ The secure front door is a separate Node app in `web/secure-landing/`.
 - Browser traffic goes to the front door on one origin.
 - The front door proxies `/portal` and `/v1/*` to FastAPI server-to-server.
 - The backend API key stays on the front door and is never exposed to the browser in managed mode.
-- The FastAPI origin remains the system of record for `GET /`, `GET /ready`, and `/v1/*`.
+- The front door serves `GET /` directly; FastAPI remains the backend system of record for `GET /ready` and `/v1/*`.
+- `GET /healthz` is the managed front-door health contract; FastAPI `GET /ready` remains the backend readiness contract and is not mirrored under `/api/*` by default.
 
 In production, place the front door behind Cloudflare Tunnel + Access and keep the FastAPI origin off the public browser path.
 
@@ -20,14 +21,18 @@ export TP_FASTAPI_ORIGIN="http://127.0.0.1:8000"
 export TP_BACKEND_API_KEY="replace-with-strong-backend-token"
 export TP_FRONTDOOR_USERS_FILE="/absolute/path/to/frontdoor-users.json"
 export TP_FRONTDOOR_SESSION_DB="/tmp/transformation-portal-frontdoor-sessions.db"
-export TP_ALLOW_LOCAL_ACCESS_BYPASS=1
+export TP_CF_ACCESS_TEAM_DOMAIN="https://your-team.cloudflareaccess.com"
+export TP_CF_ACCESS_AUD="replace-with-access-application-aud"
+export TP_ALLOW_LOCAL_ACCESS_BYPASS=0
 ```
 
 Notes:
 - `TP_FRONTDOOR_USERS_FILE` is the v1 credential source and should point to a secret-managed JSON file containing an array of `{ username, password_hash, access_email, role }`.
 - `TP_FRONTDOOR_USERS_JSON` remains available only as a local-dev and test fallback when a file is not supplied.
+- `TP_CF_ACCESS_TEAM_DOMAIN` must point at the Cloudflare Access team domain used to mint `Cf-Access-Jwt-Assertion`.
+- `TP_CF_ACCESS_AUD` must match the Access application audience tag for this front door.
 - `TP_ALLOW_LOCAL_ACCESS_BYPASS=1` is for local development only and is honored only when `NODE_ENV=development`.
-- Production login expects both a valid Cloudflare Access identity and a matching username/password pair.
+- Production login expects a valid `Cf-Access-Jwt-Assertion`, a matching username/password pair, and issuer/audience validation against the configured Access team domain and audience tag.
 - Development uses an HTTP-safe `tp_session` cookie. Production uses `__Host-tp_session` with `Secure`.
 
 ## Runtime Requirements
@@ -67,15 +72,21 @@ npm install
 npm run dev
 ```
 
-Open `http://127.0.0.1:3000/`.
+Open `http://localhost:3000/`.
 
 Route ownership:
-- `GET /` redirects to `/portal` when authenticated or `/login` otherwise.
-- `GET /login` serves the separate login page with the video background.
+- `GET /` serves the public Dynamic Neural Access homepage, even for authenticated operators.
+- `GET /login` serves the separate login page with the video background and boots the anonymous session cookie that binds the hidden CSRF token before credential submission.
 - `GET /portal` proxies the existing FastAPI portal UI.
+- `GET /portal/video/*` proxies the portal background video asset with cache-friendly headers.
 - `GET /portal/bootstrap` returns the managed-mode bootstrap contract for the browser UI.
 - `/v1/*` stays same-origin at the front door and is proxied to FastAPI with server-side secret injection.
 - `GET /healthz` reports front-door readiness plus backend reachability.
+
+Static front-door assets:
+- `/brand/dna-mark-dark.svg` for dark/video-backed front-door surfaces
+- `/brand/dna-mark-light.svg` for light surfaces
+- `/video/dna-loop.mp4` as the canonical branded loop for homepage and login
 
 ## Portal Modes
 
@@ -87,6 +98,11 @@ The operator UI now supports two modes:
   - Clears stored browser API keys.
   - Sends CSRF headers on unsafe requests.
   - Uses same-origin `/v1/*` without browser-visible backend credentials.
+- `managed_unavailable`
+  - Fail-closed managed state used when `/portal/bootstrap` cannot establish a valid managed session.
+  - Keeps the API key input disabled and hidden.
+  - Clears stored browser API keys and blocks privileged dispatch actions until managed auth recovers.
+  - Treats `401/403` bootstrap failures as session/auth failures and redirects back to `/login`.
 - `direct_debug`
   - Served directly from the FastAPI origin for local troubleshooting.
   - Keeps the existing API-key workflow.
@@ -98,8 +114,23 @@ FastAPI now exposes `GET /portal/bootstrap` for standalone `direct_debug` startu
 
 - Put the front door behind Cloudflare Tunnel + Access.
 - Keep the FastAPI origin non-public or otherwise inaccessible to end-user browsers.
-- Ensure Cloudflare Access identity reaches the front door origin, and validate that identity at the origin unless Tunnel is already enforcing Access there.
+- Production authentication must be driven by `Cf-Access-Jwt-Assertion`, not by convenience headers such as `cf-access-authenticated-user-email` or `x-access-email`.
+- The front door verifies the Access JWT against `${TP_CF_ACCESS_TEAM_DOMAIN}/cdn-cgi/access/certs`, requires the normalized issuer derived from `TP_CF_ACCESS_TEAM_DOMAIN`, requires `TP_CF_ACCESS_AUD`, and treats the JWT `email` claim as the canonical Access identity.
+- Convenience headers may be logged or inspected after successful JWT validation, but they are not trusted as identity on their own and are never valid authentication fallbacks.
+- If Cloudflare Tunnel is used, require origin-side Access enforcement as well:
+
+```yaml
+originRequest:
+  access:
+    required: true
+    teamName: <your-team-name>
+    audTag:
+      - <Access-application-audience-tag>
+```
+
+- Keep app-side JWT verification enabled even when Tunnel origin enforcement is active.
 - Do not route normal browser traffic directly to FastAPI.
+- If the front door is hosted on Vercel, Cloudflare must still front the user-facing hostname, the app must continue to verify the Access JWT, and deployment or preview URLs must be protected with equivalent controls such as Vercel Deployment Protection.
 - The v1 session store is SQLite-backed. Production should assume a single-instance deployment or shared persistent storage for `TP_FRONTDOOR_SESSION_DB`; do not place the session database on ephemeral disk in a horizontally scaled setup.
 
 ## Validation
@@ -112,8 +143,32 @@ npm test
 npm run build
 ```
 
+Browser smoke against a running managed front door:
+
+```bash
+TP_FRONTDOOR_BASE_URL="http://localhost:3000" \
+TP_FRONTDOOR_USERNAME="<username>" \
+TP_FRONTDOOR_PASSWORD="<password>" \
+python scripts/validation/validate_frontdoor_browser_smoke.py
+```
+
+For local managed smoke validation, use `http://localhost:3000` rather than
+`http://127.0.0.1:3000`; the development front door normalizes same-origin CSRF
+checks to `localhost`.
+
+For release validation, prefer running the browser smoke against `npm run start`
+after a successful `npm run build`, not only against `next dev`. Production-like
+`next start` sets secure `__Host-` cookies, so local HTTP login validation needs
+HTTPS (or equivalent) if you want to exercise the full auth flow outside `next dev`.
+
 FastAPI contract gate:
 
 ```bash
 make test-orchestrator-contract
+```
+
+Direct-debug portal browser smoke:
+
+```bash
+python scripts/validation/validate_portal_browser_smoke.py
 ```

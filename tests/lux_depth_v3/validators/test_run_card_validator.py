@@ -112,6 +112,7 @@ def _minimal_valid_payload() -> Dict[str, Any]:
         "v2_device": "cpu",
         "v2_upscaler_backend": "realesrgan",
         "depth_pro_python_executable": None,
+        "da3_python_executable": None,
     }
     canonical_json = json.dumps(
         {
@@ -135,6 +136,7 @@ def _minimal_valid_payload() -> Dict[str, Any]:
                 "strict_segmentation",
                 "apex_strict_mode",
                 "depth_pro_python_executable",
+                "da3_python_executable",
             )
         },
         sort_keys=True,
@@ -270,6 +272,32 @@ class TestBackendSemanticsValidation:
         with pytest.raises(
             RuntimeError,
             match="resolved must match.*final_backends_used",
+        ):
+            validate_run_card_backend_semantics(payload)
+
+    def test_requested_depth_pro_full_fallback_raises(self):
+        """Requested Depth Pro must not silently pass when every image fell back."""
+        from transformation_portal.lux_depth_v3.validators import (
+            validate_run_card_backend_semantics,
+        )
+
+        payload = {
+            "backend_selection": {
+                "requested": "depth_pro",
+                "resolved": "da3",
+            },
+            "backend_summary": {
+                "requested_backend": "depth_pro",
+                "final_backends_used": ["da3"],
+                "primary_backend": "da3",
+                "fallback_images": 2,
+            },
+            "success_count": 2,
+        }
+
+        with pytest.raises(
+            RuntimeError,
+            match="requested backend 'depth_pro' was not honored",
         ):
             validate_run_card_backend_semantics(payload)
 

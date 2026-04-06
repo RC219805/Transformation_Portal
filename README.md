@@ -22,7 +22,7 @@ For reproducible installs, pin a specific release tag from [GitHub Releases](htt
 
 Core entry points:
 - `lux-depth-v3` for orchestrated depth, PBR, materials, and enhancement workflows
-- Portal/orchestrator HTTP surfaces with `/ready` and contract-tested job endpoints
+- Portal/orchestrator HTTP surfaces with liveness (`/ready`, `/healthz`) plus operator-truth readiness at `/v1/readiness`
 - Determinism, manifest, run-card, and provenance layers for governed execution
 
 Quick discovery:
@@ -51,8 +51,14 @@ Key docs:
 - [Context-Aware Rendering Guide](docs/guides/CONTEXT_AWARE_RENDERING.md)
 
 Portal surfaces:
-- FastAPI on `127.0.0.1:8000` remains the system-of-record origin for the portal HTML, `/ready`, and `/v1/*`.
+- FastAPI on `127.0.0.1:8000` remains the system-of-record origin for the direct-debug portal HTML, `/ready`, and `/v1/*`.
 - The secure front door in `web/secure-landing/` is the managed browser entry point and keeps the backend API key out of browser code.
+- The managed front door now splits the browser experience into three surfaces:
+  - `/` public Dynamic Neural Access homepage
+  - `/login` operator login
+  - `/portal` governed operator console
+- `GET /healthz` is the managed front-door liveness contract, `GET /ready` is backend liveness, and `GET /v1/readiness` is the execution-readiness matrix for the four governed pipelines.
+- Shared public branding assets now live at `web/secure-landing/public/brand/dna-mark-dark.svg`, `web/secure-landing/public/brand/dna-mark-light.svg`, and `web/secure-landing/public/video/dna-loop.mp4`.
 - Direct FastAPI portal access is now a `direct_debug` workflow for local troubleshooting, not the preferred production browser path.
 - The front door is a Node app. `web/secure-landing` now documents and enforces its supported Node runtime range, with `22.x` LTS recommended.
 
@@ -139,6 +145,24 @@ The orchestrator also contains an internal `synthetic` fallback path used for ex
 lux-depth-v3 --input-dir ./input --output-dir ./output
 ```
 
+If `./.venv-da3/bin/python` exists, Lux Depth V3 auto-discovers that repo-local
+DA3 runtime before falling back to the main repo environment.
+
+**Recommended (DA3 via isolated Depth Anything 3 environment):**
+```bash
+./scripts/setup/install_da3_runtime.sh
+
+lux-depth-v3 --input-dir ./input --output-dir ./output
+```
+
+The repo-local DA3 setup script pins the upstream checkout to a validated ref under
+`.runtime/Depth-Anything-3`, keeps the interpreter contract at `./.venv-da3/bin/python`,
+captures a `.runtime/da3-pip-freeze.txt` snapshot for debugging/provenance, and leaves
+the main repo `.venv` unchanged. Use `--da3-python` only when you want to override
+that repo-local runtime. Explicit `--depth-backend da3` requests are now strict:
+if DA3 cannot be initialized, the command raises an actionable error instead of
+silently downgrading to DA2.
+
 **Depth Pro (requires license acceptance):**
 ```bash
 lux-depth-v3 \
@@ -169,6 +193,9 @@ config = EnhanceConfig(
 
 orchestrator = EnhanceOrchestrator(config, Path("./output"))
 ```
+
+**DA3 live model tests remain opt-in:** set `TP_RUN_HF_MODEL_TESTS=1` before running the
+real Hugging Face DA3 integration tests.
 
 ### Fallback Behavior
 
@@ -351,7 +378,16 @@ make test-fast
 make test-full
 make ci
 make test-orchestrator-contract
+make validate-orchestrator-http
+make validate-portal-browser
+make audit-pipeline-readiness
 ```
+
+Readiness and validation tiers:
+- `make test-orchestrator-contract` keeps the portal/orchestrator contract suite local and deterministic.
+- `make validate-orchestrator-http` runs the live backend smoke against a running FastAPI origin.
+- `make validate-portal-browser` runs the live browser smoke against the real portal UI.
+- `make audit-pipeline-readiness` runs the safe local four-pipeline readiness audit and reports `ready` / `degraded` / `blocked` outcomes, including separate `lux-depth-v3` base vs canary status.
 
 Direct pytest examples:
 ```bash
