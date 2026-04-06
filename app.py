@@ -1453,6 +1453,26 @@ def _normalize_portal_path_arg(
             )
         )
         return ""
+    if must_exist and not resolved.exists():
+        errors.append(
+            _portal_issue(
+                field,
+                "missing",
+                f"{field} does not exist.",
+                suggestion=f"Choose an existing {field} under the configured repository or temp roots.",
+            )
+        )
+        return ""
+    if must_be_file and resolved.exists() and not resolved.is_file():
+        errors.append(
+            _portal_issue(
+                field,
+                "not_a_file",
+                f"{field} must be a file.",
+                suggestion=f"Choose a file path for {field} under the configured repository or temp roots.",
+            )
+        )
+        return ""
     return str(resolved)
 
 
@@ -2293,18 +2313,22 @@ def _record_portal_event(payload: Dict[str, Any]) -> Dict[str, Any]:
         "reasons": reasons,
     }
     LOGGER.info("portal_event %s", json.dumps(record, sort_keys=True))
-    if PORTAL_EVENT_LOG_PATH is not None:
-        try:
-            PORTAL_EVENT_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
-            with PORTAL_EVENT_LOG_PATH.open("a", encoding="utf-8") as handle:
-                handle.write(json.dumps(record, sort_keys=True) + "\n")
-        except OSError:
-            LOGGER.warning(
-                "failed to persist portal event telemetry to %s",
-                PORTAL_EVENT_LOG_PATH,
-                exc_info=True,
-            )
     return record
+
+
+def _persist_portal_event_record(record: Dict[str, Any], log_path: Optional[Path]) -> None:
+    if log_path is None:
+        return
+    try:
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        with log_path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(record, sort_keys=True) + "\n")
+    except OSError:
+        LOGGER.warning(
+            "failed to persist portal event telemetry to %s",
+            log_path,
+            exc_info=True,
+        )
 
 
 def _is_mutating_job_endpoint(method: str, path: str) -> bool:
@@ -4260,6 +4284,7 @@ async def portal_events(payload: Dict[str, Any]) -> JSONResponse:
             message="invalid portal telemetry payload",
             details={"field": "payload", "reason": reason},
         )
+    await asyncio.to_thread(_persist_portal_event_record, record, PORTAL_EVENT_LOG_PATH)
 
     return JSONResponse(
         _api_envelope(

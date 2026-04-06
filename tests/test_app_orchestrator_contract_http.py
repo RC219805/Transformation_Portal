@@ -253,6 +253,77 @@ def test_config_preview_contract_omits_default_reconstruction_inactive_fields_wh
     assert body["data"]["inactive_fields"] == []
 
 
+def test_config_preview_contract_rejects_missing_cameras_sidecar_when_reconstruction_enabled(
+    client: TestClient,
+    tmp_path: Path,
+) -> None:
+    fixture_input_dir = (
+        Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "archive_small" / "archive_root"
+    ).resolve()
+    output_dir = (tmp_path / "preview-output-sidecar").resolve()
+    output_dir.mkdir(parents=True, exist_ok=True)
+    missing_sidecar = fixture_input_dir / "missing_scene_cameras.json"
+
+    response = client.post(
+        "/v1/config-preview",
+        json={
+            "pipeline": "lux-depth-v3",
+            "args": {
+                "input_dir": str(fixture_input_dir),
+                "output_dir": str(output_dir),
+                "enable_reconstruction": True,
+                "non_commercial_ok": True,
+                "accept_research_tools_license": True,
+                "cameras_sidecar_path": str(missing_sidecar),
+            },
+        },
+    )
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["schema"] == "tp.orchestrator.config_preview.v1"
+    assert body["success"] is True
+    errors = {item["field"]: item for item in body["data"]["field_errors"]}
+    assert errors["cameras_sidecar_path"]["code"] == "missing"
+    assert errors["cameras_sidecar_path"]["message"] == "cameras_sidecar_path does not exist."
+    assert "cameras_sidecar_path" not in body["data"]["normalized_args"]
+
+
+def test_config_preview_contract_rejects_directory_cameras_sidecar_when_reconstruction_enabled(
+    client: TestClient,
+    tmp_path: Path,
+) -> None:
+    fixture_input_dir = (
+        Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "archive_small" / "archive_root"
+    ).resolve()
+    output_dir = (tmp_path / "preview-output-sidecar-dir").resolve()
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    response = client.post(
+        "/v1/config-preview",
+        json={
+            "pipeline": "lux-depth-v3",
+            "args": {
+                "input_dir": str(fixture_input_dir),
+                "output_dir": str(output_dir),
+                "enable_reconstruction": True,
+                "non_commercial_ok": True,
+                "accept_research_tools_license": True,
+                "cameras_sidecar_path": str(fixture_input_dir),
+            },
+        },
+    )
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["schema"] == "tp.orchestrator.config_preview.v1"
+    assert body["success"] is True
+    errors = {item["field"]: item for item in body["data"]["field_errors"]}
+    assert errors["cameras_sidecar_path"]["code"] == "not_a_file"
+    assert errors["cameras_sidecar_path"]["message"] == "cameras_sidecar_path must be a file."
+    assert "cameras_sidecar_path" not in body["data"]["normalized_args"]
+
+
 def test_config_preview_contract_sanitizes_archive_validation_errors(
     client: TestClient,
     tmp_path: Path,
@@ -367,6 +438,41 @@ def test_portal_events_contract_ignores_log_sink_write_failures(
     assert response.status_code == 200
     assert body["success"] is True
     assert "failed to persist portal event telemetry" in caplog.text
+
+
+def test_portal_events_contract_offloads_log_persistence_to_thread(
+    client: TestClient,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = []
+    event_log_path = tmp_path / "portal-events-threaded.jsonl"
+
+    async def fake_to_thread(func, *args, **kwargs):
+        calls.append((func, args, kwargs))
+        return func(*args, **kwargs)
+
+    monkeypatch.setattr(orchestrator_app, "PORTAL_EVENT_LOG_PATH", event_log_path)
+    monkeypatch.setattr(orchestrator_app.asyncio, "to_thread", fake_to_thread)
+
+    response = client.post(
+        "/v1/portal/events",
+        json={
+            "event_type": "config_exported",
+            "pipeline": "lux-depth-v3",
+            "surface": "effective_config",
+        },
+    )
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["success"] is True
+    assert len(calls) == 1
+    func, args, kwargs = calls[0]
+    assert func is orchestrator_app._persist_portal_event_record
+    assert args[1] == event_log_path
+    assert kwargs == {}
+    assert event_log_path.read_text(encoding="utf-8").strip()
 
 
 def test_readiness_contract_reports_pipeline_status_matrix(
