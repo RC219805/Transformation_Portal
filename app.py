@@ -1198,19 +1198,10 @@ def _http_status_error_code(status_code: int) -> str:
     return HTTP_STATUS_ERROR_CODES.get(status_code, "HTTP_ERROR")
 
 
-def _public_http_error_message(status_code: int, detail: Any) -> str:
-    fallback = PUBLIC_HTTP_ERROR_MESSAGES.get(status_code, "request failed")
-    if not isinstance(detail, str):
-        return fallback
-
-    text = detail.strip()
-    if not text:
-        return fallback
-
-    if status_code == 413 and re.fullmatch(r"request body too large(?: \(max \d+ bytes\))?", text):
-        return text
-
-    return fallback
+def _public_http_error_message(status_code: int) -> str:
+    if status_code == 413:
+        return f"request body too large (max {MAX_REQUEST_BYTES} bytes)"
+    return PUBLIC_HTTP_ERROR_MESSAGES.get(status_code, "request failed")
 
 
 def _cleanup_expired_jobs(now: float) -> None:
@@ -2290,16 +2281,44 @@ def _build_archive_config_preview(
             )
         )
     else:
-        try:
-            argv_preview = _format_argv_preview(_argv_from_request({"pipeline": pipeline, "args": args}))
-        except ValueError:
+        command = archive_command or ARCHIVE_GATE_DEFAULT_COMMANDS[pipeline]
+        archive_integer_specs: List[Tuple[Tuple[str, ...], int]] = []
+        if command in {"fixity-scan", "fixity-verify"}:
+            archive_integer_specs.append((("workers",), 1))
+        if command == "fixity-verify":
+            archive_integer_specs.append((("verify_sample", "verifySample"), 0))
+        invalid_archive_integer = False
+        for keys, minimum in archive_integer_specs:
+            value = _pick(args, *keys, default=None)
+            if value is None or (isinstance(value, str) and not value.strip()):
+                continue
+            try:
+                parsed = int(value)
+            except (TypeError, ValueError):
+                invalid_archive_integer = True
+                break
+            if parsed < minimum:
+                invalid_archive_integer = True
+                break
+        if invalid_archive_integer:
             errors.append(
                 _portal_issue(
                     "payload",
-                    "invalid_request",
-                    _portal_safe_error_message("invalid_request"),
+                    "invalid_archive_integer_option",
+                    _portal_safe_error_message("invalid_archive_integer_option"),
                 )
             )
+        else:
+            try:
+                argv_preview = _format_argv_preview(_argv_from_request({"pipeline": pipeline, "args": args}))
+            except ValueError:
+                errors.append(
+                    _portal_issue(
+                        "payload",
+                        "invalid_request",
+                        _portal_safe_error_message("invalid_request"),
+                    )
+                )
 
     return {
         "pipeline": pipeline,
@@ -2350,22 +2369,22 @@ def _portal_sanitize_metadata(metadata: Any) -> Dict[str, Any]:
     return sanitized
 
 
-def _record_portal_event(payload: Dict[str, Any]) -> Dict[str, Any]:
+def _record_portal_event(payload: Dict[str, Any]) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
     event_type = str(payload.get("event_type") or "").strip().lower()
     if event_type not in PORTAL_ALLOWED_EVENT_TYPES:
-        raise ValueError("invalid_event_type")
+        return None, "invalid_event_type"
 
     pipeline = str(payload.get("pipeline") or "").strip()
     if pipeline and pipeline not in ALLOWED_PIPELINES:
-        raise ValueError("invalid_pipeline")
+        return None, "invalid_pipeline"
 
     surface = str(payload.get("surface") or "").strip().lower()
     if surface and surface not in PORTAL_ALLOWED_EVENT_SURFACES:
-        raise ValueError("invalid_surface")
+        return None, "invalid_surface"
 
     field = str(payload.get("field") or "").strip()
     if field and field not in PORTAL_ALLOWED_EVENT_FIELDS:
-        raise ValueError("invalid_field")
+        return None, "invalid_field"
 
     reasons_raw = payload.get("reasons") or []
     reasons: List[str] = []
@@ -2386,7 +2405,7 @@ def _record_portal_event(payload: Dict[str, Any]) -> Dict[str, Any]:
         "reasons": reasons,
     }
     LOGGER.info("portal_event %s", json.dumps(record, sort_keys=True))
-    return record
+    return record, None
 
 
 def _persist_portal_event_record(record: Dict[str, Any], log_path: Optional[Path]) -> None:
@@ -4040,15 +4059,14 @@ async def http_exception_handler(
     path = request.url.path
     status_code = exc.status_code
     headers = exc.headers
-    detail = exc.detail
-    message = _public_http_error_message(status_code, detail)
-    if isinstance(detail, str) and detail.strip() and detail.strip() != message:
+    raw_detail = exc.detail
+    message = _public_http_error_message(status_code)
+    if isinstance(raw_detail, str) and raw_detail.strip():
         LOGGER.warning(
-            "Sanitized HTTPException detail for %s %s (%s): %s",
+            "Sanitized HTTPException detail for %s %s (%s)",
             request.method,
             path,
             status_code,
-            detail.strip(),
         )
     del exc
     return _error_response(
@@ -4368,17 +4386,15 @@ async def config_preview(payload: Dict[str, Any]) -> JSONResponse:
 
 @app.post("/v1/portal/events")
 async def portal_events(payload: Dict[str, Any]) -> JSONResponse:
-    try:
-        record = _record_portal_event(payload)
-    except ValueError as exc:
-        reason = _portal_reason_code(exc)
-        del exc
+    record, reason = _record_portal_event(payload)
+    if reason is not None:
         return _error_response(
             400,
             code="INVALID_ARGUMENT",
             message="invalid portal telemetry payload",
             details={"field": "payload", "reason": reason},
         )
+    assert record is not None
     await asyncio.to_thread(_persist_portal_event_record, record, PORTAL_EVENT_LOG_PATH)
 
     return JSONResponse(
@@ -4417,19 +4433,35 @@ async def create_job(payload: Dict[str, Any]) -> JSONResponse:
         )
 
     try:
-        argv = _argv_from_request(payload)
-    except ValueError as exc:
-        raw_reason = str(exc)
-        del exc
-        reason_code = VALIDATION_REASON_CODES.get(
-            raw_reason,
-            "invalid_request",
+        preview = _build_config_preview(payload)
+    except ValueError:
+        return _error_response(
+            400,
+            code="INVALID_ARGUMENT",
+            message=_portal_safe_error_message("unsupported_pipeline"),
+            details={"field": "payload", "reason": "unsupported_pipeline"},
         )
+
+    preview_errors = preview.get("field_errors") or []
+    if preview_errors:
+        first_error = preview_errors[0] if isinstance(preview_errors[0], dict) else {}
+        field = str(first_error.get("field") or "payload")
+        reason = _portal_reason_code(first_error.get("code"))
+        return _error_response(
+            400,
+            code="INVALID_ARGUMENT",
+            message=_portal_safe_error_message(reason, field=field),
+            details={"field": field, "reason": reason},
+        )
+
+    try:
+        argv = _argv_from_request(payload)
+    except ValueError:
         return _error_response(
             400,
             code="INVALID_ARGUMENT",
             message="invalid job request",
-            details={"field": "payload", "reason": reason_code},
+            details={"field": "payload", "reason": "invalid_request"},
         )
 
     async with JOB_ADMISSION_LOCK:

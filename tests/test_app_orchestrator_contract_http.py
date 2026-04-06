@@ -1154,7 +1154,13 @@ def test_http_exception_handler_sanitizes_v1_exception_detail_and_logs_it(caplog
 
 
 def test_public_http_error_message_preserves_safe_request_size_detail() -> None:
-    message = orchestrator_app._public_http_error_message(413, "request body too large (max 123 bytes)")
+    previous_max_request_bytes = orchestrator_app.MAX_REQUEST_BYTES
+    try:
+        orchestrator_app.MAX_REQUEST_BYTES = 123
+        message = orchestrator_app._public_http_error_message(413)
+    finally:
+        orchestrator_app.MAX_REQUEST_BYTES = previous_max_request_bytes
+
     assert message == "request body too large (max 123 bytes)"
 
 
@@ -1171,12 +1177,17 @@ def test_http_exception_handler_preserves_safe_413_detail_for_v1_requests() -> N
     }
     request = StarletteRequest(scope)
 
-    response = asyncio.run(
-        orchestrator_app.http_exception_handler(
-            request,
-            StarletteHTTPException(status_code=413, detail="request body too large (max 123 bytes)"),
+    previous_max_request_bytes = orchestrator_app.MAX_REQUEST_BYTES
+    try:
+        orchestrator_app.MAX_REQUEST_BYTES = 123
+        response = asyncio.run(
+            orchestrator_app.http_exception_handler(
+                request,
+                StarletteHTTPException(status_code=413, detail="internal body parsing detail"),
+            )
         )
-    )
+    finally:
+        orchestrator_app.MAX_REQUEST_BYTES = previous_max_request_bytes
 
     body = json.loads(response.body.decode("utf-8"))
     assert response.status_code == 413
