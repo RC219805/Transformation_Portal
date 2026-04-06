@@ -275,6 +275,32 @@ class TestBackendSemanticsValidation:
         ):
             validate_run_card_backend_semantics(payload)
 
+    def test_requested_depth_pro_full_fallback_raises(self):
+        """Requested Depth Pro must not silently pass when every image fell back."""
+        from transformation_portal.lux_depth_v3.validators import (
+            validate_run_card_backend_semantics,
+        )
+
+        payload = {
+            "backend_selection": {
+                "requested": "depth_pro",
+                "resolved": "da3",
+            },
+            "backend_summary": {
+                "requested_backend": "depth_pro",
+                "final_backends_used": ["da3"],
+                "primary_backend": "da3",
+                "fallback_images": 2,
+            },
+            "success_count": 2,
+        }
+
+        with pytest.raises(
+            RuntimeError,
+            match="requested backend 'depth_pro' was not honored",
+        ):
+            validate_run_card_backend_semantics(payload)
+
 
 class TestWrapperSemanticsValidation:
     """Test wrapper backend semantics validation."""

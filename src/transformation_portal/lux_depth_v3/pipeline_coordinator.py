@@ -45,7 +45,11 @@ from ..depth.backends.protocol import LicenseRestrictionError
 # Use absolute import to avoid circular dependencies
 from ._backend_contract import normalize_backend_id, normalize_backend_sequence
 from .config import EnhanceConfig, ModelVariant
-from .config_resolver import apply_effective_da3_runtime_config
+from .config_resolver import (
+    apply_effective_da3_runtime_config,
+    apply_effective_depth_pro_runtime_config,
+    resolve_effective_depth_pro_python_executable,
+)
 from .manifest import BackendSelectionMetadata
 
 logger = logging.getLogger(__name__)
@@ -63,6 +67,7 @@ def _apple_silicon_depth_pro_opt_in(config: EnhanceConfig) -> bool:
         or getattr(config, "depth_pro_python_executable", None)
         or os.environ.get("TRANSFORMATION_PORTAL_DEPTH_PRO_CHECKPOINT")
         or os.environ.get("TRANSFORMATION_PORTAL_DEPTH_PRO_PYTHON")
+        or resolve_effective_depth_pro_python_executable(config)
     )
 
 
@@ -378,6 +383,8 @@ def select_backend(
         normalize_backend_id(requested) is not None or normalize_backend_id(config.depth_backend) is not None
     )
     normalized_requested = resolve_requested_backend(requested, config)
+    if normalized_requested == "depth_pro":
+        apply_effective_depth_pro_runtime_config(config)
     strict_explicit_da3_request = explicit_backend_request and normalized_requested == "da3"
 
     allow_synthetic = bool(config.allow_synthetic_fallback) or os.getenv("TP_ALLOW_SYNTHETIC_FALLBACK") == "1"

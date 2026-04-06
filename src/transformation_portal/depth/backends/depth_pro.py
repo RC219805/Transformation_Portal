@@ -156,7 +156,11 @@ class DepthProBackend:
                 path = Path.cwd() / path
             if not path.exists():
                 raise FileNotFoundError(f"Depth Pro Python executable not found: {path}")
-            return str(path.resolve())
+            # Preserve virtualenv interpreter symlink paths such as
+            # ``.venv-depth-pro/bin/python`` so subprocess execution keeps the
+            # venv context instead of collapsing to the underlying system
+            # interpreter.
+            return os.path.abspath(os.fspath(path))
 
         resolved = shutil.which(candidate)
         if resolved is None:

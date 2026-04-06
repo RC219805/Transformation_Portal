@@ -120,6 +120,85 @@ def _verify_backend_semantics(run_card_payload: dict[str, Any], errors: list[str
         errors.append("wrapper semantics are only valid when backend_summary.fallback_images == 0")
 
 
+def _first_combined_manifest_fallback_reason(
+    run_card_payload: dict[str, Any],
+    *,
+    run_card_root: Path,
+) -> str | None:
+    """Return the first detailed fallback reason recorded in combined manifests."""
+    manifest_artifacts = [
+        artifact
+        for artifact in run_card_payload.get("artifact_index", [])
+        if isinstance(artifact, dict) and artifact.get("artifact_type") == "combined_manifest"
+    ]
+    for artifact in manifest_artifacts:
+        relative_path = artifact.get("relative_path")
+        if not isinstance(relative_path, str) or not relative_path:
+            continue
+        manifest_path = run_card_root / relative_path
+        payload, load_error = _load_json(manifest_path)
+        if load_error or not isinstance(payload, dict):
+            continue
+        backend_selection = payload.get("backend_selection")
+        if not isinstance(backend_selection, dict):
+            continue
+        resolution_reason = backend_selection.get("resolution_reason")
+        if isinstance(resolution_reason, str) and resolution_reason.strip():
+            return f"{relative_path}: {resolution_reason.strip()}"
+        attempts = backend_selection.get("attempts")
+        if not isinstance(attempts, list):
+            continue
+        for attempt in attempts:
+            if not isinstance(attempt, dict) or attempt.get("status") != "failed":
+                continue
+            error_message = attempt.get("error_message") or attempt.get("error_code")
+            if isinstance(error_message, str) and error_message.strip():
+                return f"{relative_path}: {error_message.strip()}"
+    return None
+
+
+def _verify_requested_depth_pro_fulfillment(
+    run_card_payload: dict[str, Any],
+    *,
+    run_card_root: Path,
+    errors: list[str],
+) -> None:
+    """Flag full requested-depth_pro fallbacks as integrity defects."""
+    backend_selection = run_card_payload.get("backend_selection")
+    backend_summary = run_card_payload.get("backend_summary")
+    if not isinstance(backend_selection, dict) or not isinstance(backend_summary, dict):
+        return
+
+    requested_backend = backend_selection.get("requested") or backend_summary.get("requested_backend")
+    if requested_backend != "depth_pro":
+        return
+
+    success_count = run_card_payload.get("success_count")
+    fallback_images = backend_summary.get("fallback_images")
+    primary_backend = backend_summary.get("primary_backend")
+    if (
+        not isinstance(success_count, int)
+        or success_count <= 0
+        or not isinstance(fallback_images, int)
+        or fallback_images != success_count
+        or not isinstance(primary_backend, str)
+        or primary_backend == requested_backend
+    ):
+        return
+
+    error = (
+        "requested backend 'depth_pro' was not honored: "
+        f"all successful images ({success_count}/{success_count}) used fallback backend '{primary_backend}'"
+    )
+    fallback_reason = _first_combined_manifest_fallback_reason(
+        run_card_payload,
+        run_card_root=run_card_root,
+    )
+    if fallback_reason:
+        error = f"{error}. First fallback reason: {fallback_reason}"
+    errors.append(error)
+
+
 def _verify_config_fingerprint(run_card_payload: dict[str, Any], errors: list[str]) -> None:
     config_fingerprint = run_card_payload.get("config_fingerprint")
     if not isinstance(config_fingerprint, dict):
@@ -354,6 +433,11 @@ def verify_run_card_integrity(
     )
 
     _verify_backend_semantics(run_card_payload, errors)
+    _verify_requested_depth_pro_fulfillment(
+        run_card_payload,
+        run_card_root=run_card_path.parent,
+        errors=errors,
+    )
     _verify_config_fingerprint(run_card_payload, errors)
 
     if check_canonical_json:

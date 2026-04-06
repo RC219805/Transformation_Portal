@@ -212,6 +212,29 @@ class TestEffectiveDa3RuntimeResolution:
         assert resolve_effective_da3_python_executable(EnhanceConfig()) == REPO_LOCAL_DA3_PYTHON
 
 
+class TestEffectiveDepthProRuntimeResolution:
+    """Test effective Depth Pro runtime resolution."""
+
+    def test_auto_discovers_repo_local_contract(self, monkeypatch, tmp_path):
+        """Repo-local Depth Pro runtime should resolve to the stable contract path."""
+        from transformation_portal.lux_depth_v3.config import EnhanceConfig
+        from transformation_portal.lux_depth_v3.config_resolver import (
+            REPO_LOCAL_DEPTH_PRO_PYTHON,
+            resolve_effective_depth_pro_python_executable,
+        )
+
+        discovered_python = tmp_path / "bin" / "python"
+        discovered_python.parent.mkdir(parents=True)
+        discovered_python.write_text("#!/bin/sh\n", encoding="utf-8")
+        monkeypatch.delenv("TRANSFORMATION_PORTAL_DEPTH_PRO_PYTHON", raising=False)
+        monkeypatch.setattr(
+            "transformation_portal.lux_depth_v3.config_resolver._repo_local_depth_pro_python_path",
+            lambda: discovered_python,
+        )
+
+        assert resolve_effective_depth_pro_python_executable(EnhanceConfig()) == REPO_LOCAL_DEPTH_PRO_PYTHON
+
+
 class TestComputeConfigFingerprint:
     """Test configuration fingerprint computation."""
 
