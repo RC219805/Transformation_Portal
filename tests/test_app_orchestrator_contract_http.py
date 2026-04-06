@@ -221,6 +221,38 @@ def test_config_preview_contract_normalizes_inactive_reconstruction_fields(
     assert "debug_bundle_sensitive_output" in warning_reasons
 
 
+def test_config_preview_contract_omits_default_reconstruction_inactive_fields_when_toggle_is_off(
+    client: TestClient,
+    tmp_path: Path,
+) -> None:
+    fixture_input_dir = (
+        Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "archive_small" / "archive_root"
+    ).resolve()
+    output_dir = (tmp_path / "preview-output-defaults").resolve()
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    response = client.post(
+        "/v1/config-preview",
+        json={
+            "pipeline": "lux-depth-v3",
+            "args": {
+                "input_dir": str(fixture_input_dir),
+                "output_dir": str(output_dir),
+                "enable_reconstruction": False,
+                "grouping_mode": "single",
+                "reconstruction_iterations": 1000,
+                "reconstruction_tier": "apex_research",
+            },
+        },
+    )
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["schema"] == "tp.orchestrator.config_preview.v1"
+    assert body["success"] is True
+    assert body["data"]["inactive_fields"] == []
+
+
 def test_config_preview_contract_sanitizes_archive_validation_errors(
     client: TestClient,
     tmp_path: Path,
@@ -309,6 +341,32 @@ def test_portal_events_invalid_payload_returns_sanitized_reason(client: TestClie
     assert response.status_code == 400
     assert body["error"]["message"] == "invalid portal telemetry payload"
     assert body["error"]["details"] == {"field": "payload", "reason": "invalid_event_type"}
+
+
+def test_portal_events_contract_ignores_log_sink_write_failures(
+    client: TestClient,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    blocked_parent = tmp_path / "portal-events-blocked"
+    blocked_parent.write_text("not-a-directory", encoding="utf-8")
+    monkeypatch.setattr(orchestrator_app, "PORTAL_EVENT_LOG_PATH", blocked_parent / "events.jsonl")
+
+    with caplog.at_level("WARNING"):
+        response = client.post(
+            "/v1/portal/events",
+            json={
+                "event_type": "config_exported",
+                "pipeline": "lux-depth-v3",
+                "surface": "effective_config",
+            },
+        )
+
+    body = response.json()
+    assert response.status_code == 200
+    assert body["success"] is True
+    assert "failed to persist portal event telemetry" in caplog.text
 
 
 def test_readiness_contract_reports_pipeline_status_matrix(

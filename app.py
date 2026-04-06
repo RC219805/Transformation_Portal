@@ -582,6 +582,13 @@ LUX_RECONSTRUCTION_INACTIVE_FIELDS = (
     "reconstruction_tier",
     "emit_scene_debug_bundle",
 )
+LUX_RECONSTRUCTION_FIELD_ALIASES: Dict[str, Tuple[str, ...]] = {
+    "grouping_mode": ("grouping_mode", "groupingMode"),
+    "cameras_sidecar_path": ("cameras_sidecar_path", "camerasSidecarPath"),
+    "reconstruction_iterations": ("reconstruction_iterations", "reconstructionIterations"),
+    "reconstruction_tier": ("reconstruction_tier", "reconstructionTier"),
+    "emit_scene_debug_bundle": ("emit_scene_debug_bundle", "emitSceneDebugBundle"),
+}
 LUX_DEBUG_BUNDLE_DESTINATION_TEMPLATE = "reconstruction/<scene-fingerprint>/debug"
 
 _portal_event_log_path_raw = os.getenv("TP_PORTAL_EVENT_LOG_PATH", "").strip()
@@ -1332,6 +1339,35 @@ def _portal_safe_error_message(reason: str, *, field: str = "payload") -> str:
     return PORTAL_SAFE_ERROR_MESSAGES.get(reason, f"{field} contains invalid values.")
 
 
+def _portal_payload_has_any_key(payload: Any, keys: Tuple[str, ...]) -> bool:
+    if not isinstance(payload, dict):
+        return False
+    return any(key in payload for key in keys)
+
+
+def _portal_inactive_reconstruction_field_value(
+    request_args: Dict[str, Any],
+    defaults: Dict[str, Any],
+    field_name: str,
+    value: Any,
+) -> Optional[Dict[str, Any]]:
+    if value in (None, "", False):
+        return None
+    aliases = LUX_RECONSTRUCTION_FIELD_ALIASES.get(field_name, (field_name,))
+    explicit = _portal_payload_has_any_key(request_args, aliases)
+    default_value = defaults.get(field_name)
+    if not explicit and value == default_value:
+        return None
+    if explicit and value == default_value:
+        return None
+    return {
+        "field": field_name,
+        "value": value,
+        "reason": "enable_reconstruction_disabled",
+        "message": "Preserved for later, but ignored while reconstruction is off.",
+    }
+
+
 def _format_argv_preview(argv: List[str]) -> str:
     return " ".join(shlex.quote(str(token)) for token in argv)
 
@@ -2054,16 +2090,14 @@ def _build_lux_config_preview(args: Dict[str, Any]) -> Dict[str, Any]:
     else:
         for field_name in LUX_RECONSTRUCTION_INACTIVE_FIELDS:
             value = normalized_args.get(field_name)
-            if value in (None, "", False):
-                continue
-            inactive_fields.append(
-                {
-                    "field": field_name,
-                    "value": value,
-                    "reason": "enable_reconstruction_disabled",
-                    "message": "Preserved for later, but ignored while reconstruction is off.",
-                }
+            inactive_field = _portal_inactive_reconstruction_field_value(
+                args,
+                defaults,
+                field_name,
+                value,
             )
+            if inactive_field is not None:
+                inactive_fields.append(inactive_field)
 
     if raw_ingest_mode == "force_rawpy":
         warnings.append(
@@ -2260,9 +2294,16 @@ def _record_portal_event(payload: Dict[str, Any]) -> Dict[str, Any]:
     }
     LOGGER.info("portal_event %s", json.dumps(record, sort_keys=True))
     if PORTAL_EVENT_LOG_PATH is not None:
-        PORTAL_EVENT_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
-        with PORTAL_EVENT_LOG_PATH.open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps(record, sort_keys=True) + "\n")
+        try:
+            PORTAL_EVENT_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+            with PORTAL_EVENT_LOG_PATH.open("a", encoding="utf-8") as handle:
+                handle.write(json.dumps(record, sort_keys=True) + "\n")
+        except OSError:
+            LOGGER.warning(
+                "failed to persist portal event telemetry to %s",
+                PORTAL_EVENT_LOG_PATH,
+                exc_info=True,
+            )
     return record
 
 
