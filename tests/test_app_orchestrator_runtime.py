@@ -836,6 +836,70 @@ def test_portal_verbose_quiet_conflict_is_notified_and_blocked() -> None:
     assert "verbose and quiet are mutually exclusive; disable one flag." in submit_body
 
 
+def test_portal_reconstruction_runtime_summary_and_effective_config_surfaces_are_present() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+    summary_body = _extract_js_function_body(content, "renderReconstructionRuntimeSummary")
+    drawer_body = _extract_js_function_body(content, "renderEffectiveConfigDrawer")
+
+    assert 'id="summaryReconstructionState"' in content
+    assert 'id="summaryRuntimeWorkers"' in content
+    assert 'id="summaryRawIngest"' in content
+    assert 'id="summaryDebugBundle"' in content
+    assert 'id="summaryPreviewState"' in content
+    assert 'id="estimateRuntimeBand"' in content
+    assert 'id="debugBundleGuardrail"' in content
+    assert 'id="effectiveConfigDrawer"' in content
+    assert 'id="requestedConfigJson"' in content
+    assert 'id="effectiveConfigJson"' in content
+    assert 'id="inactiveConfigJson"' in content
+    assert "renderDebugBundleGuardrail(currentPayload" in summary_body
+    assert "renderEffectiveConfigDrawer(currentPayload" in summary_body
+    assert "effectivePreview.normalized_args" in drawer_body
+    assert "effectivePreview.inactive_fields" in drawer_body
+
+
+def test_portal_preview_metadata_worker_modes_and_export_contract_are_wired() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+    update_body = _extract_js_function_body(content, "updateUIFromState")
+    bind_body = _extract_js_function_body(content, "bindInputs")
+
+    assert "maxWorkersMode: 'auto'," in content
+    assert "maxGpuWorkersMode: 'auto'," in content
+    assert 'id="maxWorkersMode"' in content
+    assert 'id="maxGpuWorkersMode"' in content
+    assert "function fetchConfigMetadata" in content
+    assert "function fetchConfigPreview" in content
+    assert "function scheduleConfigPreview" in content
+    assert "syncRuntimeWorkerModeControls();" in update_body
+    assert "state.config.runtime.maxWorkersMode = _normalizeWorkerMode(e.target.value);" in bind_body
+    assert "state.config.runtime.maxGpuWorkersMode = _normalizeWorkerMode(e.target.value);" in bind_body
+    assert "schema: 'tp.portal.export.v1'" in content
+    assert "effective_args:" in content
+    assert "inactive_fields:" in content
+    assert "estimate_summary:" in content
+    assert "argv_preview:" in content
+
+
+def test_portal_submit_blocks_preview_unavailable_and_debug_bundle_without_acknowledgement() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+    guard_body = _extract_js_function_body(content, "_syncBootstrapGuardedControls")
+    submit_body = _extract_js_function_body(content, "submitJob")
+    summary_body = _extract_js_function_body(content, "renderReconstructionRuntimeSummary")
+    guardrail_body = _extract_js_function_body(content, "renderDebugBundleGuardrail")
+
+    assert "Configuration preview is still refreshing." in submit_body
+    assert "Preview-backed validation is unavailable." in submit_body
+    assert "Acknowledge the reconstruction debug-bundle guardrail before dispatch." in submit_body
+    assert "debug_bundle_acknowledgement_required" in submit_body
+    assert "_effectiveDebugBundleEnabled(preview)" in guard_body
+    assert "_effectiveDebugBundleEnabled(preview, payload)" in submit_body
+    assert "_effectiveDebugBundleEnabled(matchedPreview, currentPayload)" in summary_body
+    assert "_effectiveDebugBundleEnabled(currentPreview, currentPayload)" in guardrail_body
+
+
 def test_lux_cli_parity_links_portal_canonical_args_and_backend_argv() -> None:
     portal_html = Path(__file__).resolve().parents[1] / "portal.html"
     content = portal_html.read_text(encoding="utf-8")
@@ -1946,6 +2010,14 @@ def test_protected_job_route_detection() -> None:
     assert orchestrator_app._is_protected_job_endpoint("/ready") is False
 
 
+def test_protected_api_key_route_detection() -> None:
+    assert orchestrator_app._is_protected_api_key_endpoint("/v1/jobs") is True
+    assert orchestrator_app._is_protected_api_key_endpoint("/v1/config-metadata") is True
+    assert orchestrator_app._is_protected_api_key_endpoint("/v1/config-preview") is True
+    assert orchestrator_app._is_protected_api_key_endpoint("/v1/portal/events") is True
+    assert orchestrator_app._is_protected_api_key_endpoint("/ready") is False
+
+
 def test_index_job_artifacts_populates_job_payload(tmp_path: Path) -> None:
     output_dir = tmp_path / "out"
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -2325,6 +2397,101 @@ def test_create_job_rejects_tilde_prefixed_paths_with_typed_error() -> None:
     assert response.status_code == 400
     assert body["error"]["code"] == "INVALID_ARGUMENT"
     assert body["error"]["details"]["reason"] == "unsafe_path"
+    assert orchestrator_app.JOBS == {}
+
+
+def test_create_job_preflight_sanitizes_exception_derived_messages(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_readiness(_pipeline, _args, require_dispatch_inputs=False):  # noqa: ANN001
+        assert require_dispatch_inputs is True
+        return {
+            "status": "blocked",
+            "canonical_command": "lux-depth-v3",
+            "missing_prerequisites": [
+                {
+                    "reason": "unsafe_path",
+                    "severity": "blocked",
+                    "message": "Traceback: leaked preflight internals",
+                    "field": "input_dir",
+                }
+            ],
+            "runner_details": {},
+            "notes": [],
+        }
+
+    monkeypatch.setattr(orchestrator_app, "_evaluate_pipeline_readiness", fake_readiness)
+
+    response = asyncio.run(
+        orchestrator_app.create_job(
+            {
+                "pipeline": "lux-depth-v3",
+                "args": {"input_dir": "./input_images", "output_dir": "./output"},
+            }
+        )
+    )
+    body = json.loads(response.body.decode("utf-8"))
+
+    assert response.status_code == 400
+    assert body["error"]["code"] == "INVALID_ARGUMENT"
+    assert body["error"]["message"] == "Configured paths must stay within the allowed workspace roots."
+    assert body["error"]["details"] == {"field": "input_dir", "reason": "unsafe_path"}
+    assert "Traceback" not in response.body.decode("utf-8")
+    assert orchestrator_app.JOBS == {}
+
+
+def test_create_job_passes_preflight_snapshot_into_preview_builder(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    readiness_snapshot = {
+        "status": "ready",
+        "canonical_command": "lux-depth-v3",
+        "missing_prerequisites": [],
+        "runner_details": {},
+        "notes": [],
+    }
+    seen_snapshots = []
+
+    def fake_readiness(_pipeline, _args, require_dispatch_inputs=False):  # noqa: ANN001
+        assert require_dispatch_inputs is True
+        return readiness_snapshot
+
+    def fake_preview(_payload, *, readiness_snapshot=None):  # noqa: ANN001
+        seen_snapshots.append(readiness_snapshot)
+        return {
+            "field_errors": [
+                {
+                    "field": "accept_research_tools_license",
+                    "code": "reconstruction_license_required",
+                    "message": "Scene reconstruction requires the research-tools license acknowledgment.",
+                }
+            ]
+        }
+
+    monkeypatch.setattr(orchestrator_app, "_evaluate_pipeline_readiness", fake_readiness)
+    monkeypatch.setattr(orchestrator_app, "_build_config_preview", fake_preview)
+
+    response = asyncio.run(
+        orchestrator_app.create_job(
+            {
+                "pipeline": "lux-depth-v3",
+                "args": {
+                    "input_dir": "./input_images",
+                    "output_dir": "./output",
+                    "enable_reconstruction": True,
+                },
+            }
+        )
+    )
+    body = json.loads(response.body.decode("utf-8"))
+
+    assert response.status_code == 400
+    assert body["error"]["message"] == "Scene reconstruction requires the research-tools license acknowledgment."
+    assert body["error"]["details"] == {
+        "field": "accept_research_tools_license",
+        "reason": "reconstruction_license_required",
+    }
+    assert seen_snapshots == [readiness_snapshot]
     assert orchestrator_app.JOBS == {}
 
 
