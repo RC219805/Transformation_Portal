@@ -209,7 +209,6 @@ This avoids a known compatibility issue between `pip 26` and
 workflow in `.github/workflows/secure-install-pilot.yml` applies this
 toolchain automatically, so local runs should use the same versions to avoid
 unexpected failures.
-
 ```bash
 cd requirements
 make compile-hash-pilot LOCK_PYTHON_VERSION=3.11

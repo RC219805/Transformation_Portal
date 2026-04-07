@@ -114,12 +114,28 @@ def test_portal_bootstrap_reports_direct_debug_mode(client: TestClient) -> None:
 
 def test_root_ui_response_is_not_cached(client: TestClient) -> None:
     response = client.get("/")
-
     assert response.status_code == 200
+    csp = response.headers.get("Content-Security-Policy")
+
+    assert csp is not None
     assert response.headers["Cache-Control"] == "no-store"
     assert response.headers["Pragma"] == "no-cache"
-    assert "https://cdn.tailwindcss.com" not in response.headers["Content-Security-Policy"]
+    assert "default-src 'self'" in csp
+    assert "script-src 'self' 'unsafe-inline'" in csp
+    assert "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com" in csp
+    assert "font-src 'self' https://fonts.gstatic.com data:" in csp
+    assert "img-src 'self' data: blob:" in csp
+    assert "media-src 'self'" in csp
+    assert "connect-src 'self'" in csp
+    assert "object-src 'none'" in csp
+    assert "base-uri 'self'" in csp
+    assert "frame-ancestors 'none'" in csp
+    assert "form-action 'self'" in csp
+    assert "https://cdn.tailwindcss.com" not in csp
     assert "https://cdn.tailwindcss.com" not in response.text
+    assert "script-src 'self' 'unsafe-inline'" in response.text
+    assert "media-src 'self'" in response.text
+    assert "frame-ancestors 'none'" in response.text
     assert "Remember in local storage" not in response.text
     assert "Transformation Portal" in response.text
 
