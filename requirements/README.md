@@ -190,6 +190,19 @@ layered install surface first.
 
 ### Running the pilot locally
 
+> **Toolchain requirement:** the pilot is validated against `pip<26` and
+> `pip-tools==7.5.2`. A known compatibility issue exists between pip 26 and
+> pip-tools 7.5.2 that causes `--generate-hashes` compilation to fail. Pin
+> your environment before running:
+>
+> ```bash
+> pip install --upgrade "pip<26" "pip-tools==7.5.2"
+> ```
+>
+> The CI workflow (`secure-install-pilot.yml`) enforces this automatically. If
+> you run the targets with a newer pip or a different pip-tools version you may
+> see unexpected failures.
+
 ```bash
 cd requirements
 make compile-hash-pilot LOCK_PYTHON_VERSION=3.11
