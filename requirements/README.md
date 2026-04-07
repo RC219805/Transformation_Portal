@@ -190,18 +190,26 @@ layered install surface first.
 
 ### Running the pilot locally
 
-> **Toolchain requirement:** the pilot is validated against `pip<26` and
-> `pip-tools==7.5.2`. A known compatibility issue exists between pip 26 and
-> pip-tools 7.5.2 that causes `--generate-hashes` compilation to fail. Pin
-> your environment before running:
->
-> ```bash
-> pip install --upgrade "pip<26" "pip-tools==7.5.2"
-> ```
->
-> The CI workflow (`secure-install-pilot.yml`) enforces this automatically. If
-> you run the targets with a newer pip or a different pip-tools version you may
-> see unexpected failures.
+The local pilot currently expects the same toolchain as the advisory CI
+workflow:
+
+- `pip<26`
+- `pip-tools==7.5.2`
+
+That pairing avoids a known compatibility problem between `pip 26` and
+`pip-tools 7.5.2` during hash generation. To match the workflow locally:
+
+```bash
+python -m pip install --upgrade "pip<26"
+python -m pip install "pip-tools==7.5.2"
+```
+
+This avoids a known compatibility issue between `pip 26` and
+`pip-tools 7.5.2` that causes `--generate-hashes` compilation to fail. The
+workflow in `.github/workflows/secure-install-pilot.yml` applies this
+toolchain automatically, so local runs should use the same versions to avoid
+unexpected failures.
+>>>>>>> 247e3113 (docs(deps): clarify secure-install pilot toolchain)
 
 ```bash
 cd requirements
