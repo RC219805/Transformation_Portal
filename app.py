@@ -177,12 +177,12 @@ def _resolve_allowed_request_path(
     allowed_roots: List[Path],
 ) -> Path:
     if not allowed_roots:
-        raise ValueError("No allowed roots configured")
+        raise _PortalValidationReasonError("No allowed roots configured", reason="invalid_path_value")
 
     try:
         resolved = _resolve_untrusted_request_path(path_value)
     except (OSError, RuntimeError, ValueError):
-        raise ValueError("Invalid path value") from None
+        raise _PortalValidationReasonError("Invalid path value", reason="invalid_path_value") from None
 
     for root in allowed_roots:
         try:
@@ -196,7 +196,7 @@ def _resolve_allowed_request_path(
         else:
             return resolved
 
-    raise ValueError("Path outside allowed roots")
+    raise _PortalValidationReasonError("Path outside allowed roots", reason="path_outside_allowed_roots")
 
 
 LOG_TAIL_LIMIT = 2000
@@ -1543,6 +1543,19 @@ def _portal_issue_public_message(issue: Any, *, field: str = "payload") -> str:
     return text
 
 
+class _PortalValidationReasonError(ValueError):
+    def __init__(self, message: str, *, reason: Optional[str] = None) -> None:
+        cleaned_message = str(message or "").strip() or "invalid request"
+        self.reason = _portal_reason_code(reason or cleaned_message)
+        super().__init__(cleaned_message)
+
+
+def _portal_reason_from_exception(exc: BaseException, *, default: str = "invalid_request") -> str:
+    if isinstance(exc, _PortalValidationReasonError):
+        return exc.reason
+    return default
+
+
 def _portal_payload_has_any_key(payload: Any, keys: Tuple[str, ...]) -> bool:
     if not isinstance(payload, dict):
         return False
@@ -1686,7 +1699,7 @@ def _normalize_portal_path_arg(
     try:
         resolved_path = _resolve_allowed_request_path(text, allowed_roots)
     except ValueError as exc:
-        reason = VALIDATION_REASON_CODES.get(str(exc), "invalid_path_value")
+        reason = _portal_reason_from_exception(exc, default="invalid_path_value")
         del exc
         if reason == "path_outside_allowed_roots":
             errors.append(
@@ -2693,7 +2706,7 @@ def _build_archive_config_preview(
                 )
             )
         except ValueError as exc:
-            reason = _portal_reason_code(str(exc))
+            reason = _portal_reason_from_exception(exc)
             errors.append(
                 _portal_issue(
                     "payload",
@@ -3922,9 +3935,9 @@ def _argv_from_request(
     Build argv securely (no shell).
     Input validation: allowlist pipeline/backend/quality, require paths.
     """
-    pipeline = payload.get("pipeline")
+    pipeline = str(payload.get("pipeline") or "").strip()
     if pipeline not in ALLOWED_PIPELINES:
-        raise ValueError("Unsupported pipeline")
+        raise _PortalValidationReasonError("Unsupported pipeline", reason="unsupported_pipeline")
 
     args = execution_args if isinstance(execution_args, dict) else payload.get("args")
     if not isinstance(args, dict):
@@ -3932,7 +3945,10 @@ def _argv_from_request(
     if execution_args is None:
         args, _, path_errors = _normalize_operator_payload_paths(str(pipeline), args)
         if path_errors:
-            raise ValueError("Path shorthand traversal disallowed")
+            raise _PortalValidationReasonError(
+                "Path shorthand traversal disallowed",
+                reason="path_shorthand_traversal_disallowed",
+            )
 
     input_dir_raw = str(
         _pick(args, "input_dir", "inputDir", default=""),
@@ -3941,7 +3957,10 @@ def _argv_from_request(
         _pick(args, "output_dir", "outputDir", default=""),
     ).strip()
     if not input_dir_raw or not output_dir_raw:
-        raise ValueError("input_dir and output_dir are required")
+        raise _PortalValidationReasonError(
+            "input_dir and output_dir are required",
+            reason="missing_required_paths",
+        )
     input_dir = _validate_path_against_roots(
         input_dir_raw,
         ALLOWED_INPUT_ROOTS,
@@ -4097,45 +4116,51 @@ def _argv_from_request(
         log_level_raw = _pick(args, "log_level", "logLevel")
 
         if quality not in ALLOWED_QUALITY:
-            raise ValueError("Invalid quality_tier")
+            raise _PortalValidationReasonError("Invalid quality_tier", reason="invalid_quality_tier")
         if backend not in ALLOWED_BACKENDS:
-            raise ValueError("Invalid depth_backend")
+            raise _PortalValidationReasonError("Invalid depth_backend", reason="invalid_depth_backend")
         if segmentation_backend not in ALLOWED_SEGMENTATION_BACKENDS:
-            raise ValueError("Invalid segmentation_backend")
+            raise _PortalValidationReasonError(
+                "Invalid segmentation_backend",
+                reason="invalid_segmentation_backend",
+            )
         if segmentation_backend == "sam2" and sam2_model_size not in ALLOWED_SAM2_MODEL_SIZES:
-            raise ValueError("Invalid sam2_model_size")
+            raise _PortalValidationReasonError("Invalid sam2_model_size", reason="invalid_sam2_model_size")
         if grouping_mode not in ALLOWED_GROUPING_MODES:
-            raise ValueError("Invalid grouping_mode")
+            raise _PortalValidationReasonError("Invalid grouping_mode")
 
         reconstruction_tier_value = ""
         if reconstruction_tier is not None and str(reconstruction_tier).strip():
             reconstruction_tier_value = str(reconstruction_tier).strip().lower()
             if reconstruction_tier_value not in ALLOWED_RECONSTRUCTION_TIERS:
-                raise ValueError("Invalid reconstruction_tier")
+                raise _PortalValidationReasonError(
+                    "Invalid reconstruction_tier",
+                    reason="invalid_reconstruction_tier",
+                )
 
         raw_ingest_mode_value = ""
         if raw_ingest_mode is not None and str(raw_ingest_mode).strip():
             raw_ingest_mode_value = str(raw_ingest_mode).strip().lower()
             if raw_ingest_mode_value not in ALLOWED_RAW_INGEST_MODES:
-                raise ValueError("Invalid raw_ingest_mode")
+                raise _PortalValidationReasonError("Invalid raw_ingest_mode", reason="invalid_raw_ingest_mode")
 
         raw_wb_mode_value = ""
         if raw_wb_mode is not None and str(raw_wb_mode).strip():
             raw_wb_mode_value = str(raw_wb_mode).strip().lower()
             if raw_wb_mode_value not in ALLOWED_RAW_WB_MODES:
-                raise ValueError("Invalid raw_wb_mode")
+                raise _PortalValidationReasonError("Invalid raw_wb_mode", reason="invalid_raw_wb_mode")
 
         raw_demosaic_value = ""
         if raw_demosaic is not None and str(raw_demosaic).strip():
             raw_demosaic_value = str(raw_demosaic).strip().upper()
             if raw_demosaic_value not in ALLOWED_RAW_DEMOSAIC:
-                raise ValueError("Invalid raw_demosaic")
+                raise _PortalValidationReasonError("Invalid raw_demosaic", reason="invalid_raw_demosaic")
 
         log_level_value = ""
         if log_level_raw is not None and str(log_level_raw).strip():
             log_level_value = str(log_level_raw).strip().upper()
             if log_level_value not in ALLOWED_LOG_LEVELS:
-                raise ValueError("Invalid log_level")
+                raise _PortalValidationReasonError("Invalid log_level", reason="invalid_log_level")
 
         def _parse_optional_positive_int(
             value: Any,
@@ -4146,9 +4171,9 @@ def _argv_from_request(
             try:
                 parsed = int(value)
             except (TypeError, ValueError):
-                raise ValueError(f"Invalid {field_name}") from None
+                raise _PortalValidationReasonError(f"Invalid {field_name}") from None
             if parsed < 1:
-                raise ValueError(f"Invalid {field_name}")
+                raise _PortalValidationReasonError(f"Invalid {field_name}")
             return parsed
 
         reconstruction_iterations = _parse_optional_positive_int(
@@ -4405,7 +4430,10 @@ def _argv_from_request(
                 " or --quiet for minimal output.",
                 file=sys.stderr,
             )
-            raise ValueError("verbose and quiet are mutually exclusive")
+            raise _PortalValidationReasonError(
+                "verbose and quiet are mutually exclusive",
+                reason="conflicting_log_verbosity_flags",
+            )
         if verbose_enabled:
             argv.append("--verbose")
         if quiet_enabled:
@@ -4872,7 +4900,7 @@ async def create_job(payload: Dict[str, Any]) -> JSONResponse:
             execution_args=execution_args,
         )
     except ValueError as exc:
-        reason = _portal_reason_code(str(exc))
+        reason = _portal_reason_from_exception(exc)
         return _error_response(
             400,
             code="INVALID_ARGUMENT",

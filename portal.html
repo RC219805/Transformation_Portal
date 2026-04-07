@@ -5254,6 +5254,7 @@
 
         function _setBuildSurfacePathFieldValue(fieldName, nextValue) {
             const value = _textOrFallback(nextValue, '');
+            state.config = state.config || {};
             switch (String(fieldName || '').trim()) {
                 case 'input_dir':
                     state.config.inputDir = value;
@@ -5264,18 +5265,22 @@
                     if (els.outputDir) els.outputDir.value = value;
                     return true;
                 case 'archive_index':
+                    state.config.gate = state.config.gate || {};
                     state.config.gate.archiveIndex = value;
                     if (els.archiveIndexPath) els.archiveIndexPath.value = value;
                     return true;
                 case 'manifest_jsonl':
+                    state.config.gate = state.config.gate || {};
                     state.config.gate.manifestJsonl = value;
                     if (els.rightsManifestPath) els.rightsManifestPath.value = value;
                     return true;
                 case 'sam2_checkpoint_path':
+                    state.config.segmentation = state.config.segmentation || {};
                     state.config.segmentation.sam2CheckpointPath = value;
                     if (els.segmentation.sam2CheckpointPath) els.segmentation.sam2CheckpointPath.value = value;
                     return true;
                 case 'cameras_sidecar_path':
+                    state.config.reconstruction = state.config.reconstruction || {};
                     state.config.reconstruction.camerasSidecarPath = value;
                     if (els.reconstruction.camerasSidecarPath) els.reconstruction.camerasSidecarPath.value = value;
                     return true;

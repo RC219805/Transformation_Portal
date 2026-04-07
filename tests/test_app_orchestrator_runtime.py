@@ -298,6 +298,22 @@ def test_argv_normalization_trims_and_normalizes_string_values() -> None:
     assert _flag_value(argv, "--emit-run-card") == "off"
 
 
+def test_argv_normalization_trims_pipeline_name() -> None:
+    payload: Dict[str, object] = {
+        "pipeline": " lux-depth-v3 ",
+        "args": {
+            "input_dir": "./input_images",
+            "output_dir": "./output",
+        },
+    }
+
+    argv = orchestrator_app._argv_from_request(payload)
+
+    assert argv[:3] == [sys.executable, "-m", orchestrator_app.LUX_DEPTH_MODULE]
+    assert _flag_value(argv, "--input-dir") == str((orchestrator_app.REPO_ROOT / "input_images").resolve())
+    assert _flag_value(argv, "--output-dir") == str((orchestrator_app.REPO_ROOT / "output").resolve())
+
+
 def test_portal_cli_template_excludes_unsupported_lux_flags() -> None:
     portal_html = Path(__file__).resolve().parents[1] / "portal.html"
     content = portal_html.read_text(encoding="utf-8")
@@ -866,6 +882,7 @@ def test_portal_preview_metadata_worker_modes_and_export_contract_are_wired() ->
     bind_body = _extract_js_function_body(content, "bindInputs")
     preview_body = _extract_js_function_body(content, "fetchConfigPreview")
     reconcile_body = _extract_js_function_body(content, "_reconcilePreviewRepairedPaths")
+    setter_body = _extract_js_function_body(content, "_setBuildSurfacePathFieldValue")
 
     assert "maxWorkersMode: 'auto'," in content
     assert "maxGpuWorkersMode: 'auto'," in content
@@ -887,6 +904,10 @@ def test_portal_preview_metadata_worker_modes_and_export_contract_are_wired() ->
     assert "execution_args:" in preview_body
     assert "repo_local_path_repaired" in reconcile_body
     assert "_setBuildSurfacePathFieldValue(fieldName, normalizedValue)" in reconcile_body
+    assert "state.config = state.config || {};" in setter_body
+    assert "state.config.gate = state.config.gate || {};" in setter_body
+    assert "state.config.segmentation = state.config.segmentation || {};" in setter_body
+    assert "state.config.reconstruction = state.config.reconstruction || {};" in setter_body
 
 
 def test_portal_submit_blocks_preview_unavailable_and_debug_bundle_without_acknowledgement() -> None:
@@ -2265,6 +2286,29 @@ def test_create_job_archive_gate_invalid_integer_option_uses_typed_error_envelop
     assert body["success"] is False
     assert body["error"]["code"] == "INVALID_ARGUMENT"
     assert body["error"]["details"]["reason"] == "invalid_archive_integer_option"
+    assert orchestrator_app.JOBS == {}
+
+
+def test_create_job_invalid_log_level_uses_typed_error_envelope() -> None:
+    response = asyncio.run(
+        orchestrator_app.create_job(
+            {
+                "pipeline": "lux-depth-v3",
+                "args": {
+                    "input_dir": "./input_images",
+                    "output_dir": "./output",
+                    "log_level": "TRACE",
+                },
+            }
+        )
+    )
+    body = json.loads(response.body.decode("utf-8"))
+
+    assert response.status_code == 400
+    assert body["success"] is False
+    assert body["error"]["code"] == "INVALID_ARGUMENT"
+    assert body["error"]["details"]["reason"] == "invalid_log_level"
+    assert "Traceback" not in response.body.decode("utf-8")
     assert orchestrator_app.JOBS == {}
 
 
