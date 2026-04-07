@@ -288,21 +288,43 @@ test("homepage GET serves the public DNA landing page instead of redirecting", a
   const env = withTempEnvironment();
 
   try {
+    const db = getDb(env.dbPath);
     const { GET } = await importFresh("../app/route.js");
     const request = buildRequest("https://portal.example.com/");
 
+    const sessionCountBefore = db.prepare("SELECT COUNT(*) AS count FROM sessions").get().count;
     const response = await GET(request);
     const html = await response.text();
+    const sessionCountAfter = db.prepare("SELECT COUNT(*) AS count FROM sessions").get().count;
 
     assert.equal(response.status, 200);
     assert.equal(response.headers.get("cache-control"), "no-store");
     assert.match(response.headers.get("content-security-policy") || "", /default-src 'self'/);
+    assert.match(response.headers.get("content-security-policy") || "", /script-src 'none'/);
+    assert.equal(response.headers.get("set-cookie"), null);
+    assert.equal(sessionCountBefore, 0);
+    assert.equal(sessionCountAfter, 0);
     assert.match(html, /\/video\/dna-loop\.mp4/);
     assert.match(html, /\/brand\/dna-mark-dark\.svg/);
-    assert.match(html, /Certified Premium Media for the AI Era/);
-    assert.match(html, /Certify Your Media/);
-    assert.match(html, /How it works/);
+    assert.match(html, /Make premium media verifiable before it ships\./);
+    assert.match(html, /Start Certification/);
+    assert.match(html, /View Verification Report/);
+    assert.match(html, /Verify\. Enhance\. Enforce\. Distribute\./);
     assert.match(html, /Operator Login/);
+    assert.match(html, />Secure Access</);
+    assert.match(html, /tp\.meta\.verification_report\.v1/);
+    assert.match(html, /when enabled/i);
+    assert.match(html, /strip metadata/i);
+    assert.doesNotMatch(html, /href="\/start"/);
+    assert.doesNotMatch(html, /href="\/console"/);
+    assert.doesNotMatch(html, /href="\/privacy"/);
+    assert.doesNotMatch(html, /href="\/security"/);
+    assert.doesNotMatch(html, /href="\/docs"/);
+    assert.doesNotMatch(html, /href="\/contact"/);
+    assert.doesNotMatch(html, /\bCompliant\b/);
+    assert.doesNotMatch(html, /\bSigned\b/);
+    assert.doesNotMatch(html, /\bimmutable\b/i);
+    assert.doesNotMatch(html, /\bunfakeable\b/i);
   } finally {
     env.cleanup();
   }
@@ -313,6 +335,7 @@ test("homepage GET keeps authenticated operators on the public landing page whil
 
   try {
     const sessions = await importFresh("../lib/sessions.js");
+    const db = getDb(env.dbPath);
     const { GET } = await importFresh("../app/route.js");
     const authenticatedSession = sessions.rotateAuthenticatedSession(
       sessions.createAnonymousSession(),
@@ -329,12 +352,77 @@ test("homepage GET keeps authenticated operators on the public landing page whil
       })
     });
 
+    const before = db
+      .prepare("SELECT last_seen_at, idle_expires_at FROM sessions WHERE id = ?")
+      .get(authenticatedSession.id);
+    const response = await GET(request);
+    const html = await response.text();
+    const after = db
+      .prepare("SELECT last_seen_at, idle_expires_at FROM sessions WHERE id = ?")
+      .get(authenticatedSession.id);
+
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("set-cookie"), null);
+    assert.match(html, />Open Console</);
+    assert.match(html, /href="\/login"[^>]*>Start Certification</);
+    assert.equal(after.last_seen_at, before.last_seen_at);
+    assert.equal(after.idle_expires_at, before.idle_expires_at);
+    assert.doesNotMatch(html, /307|302/);
+  } finally {
+    env.cleanup();
+  }
+});
+
+test("homepage GET succeeds without backend coupling or fetch side effects", async () => {
+  const env = withTempEnvironment();
+  const originalFetch = global.fetch;
+  global.fetch = async () => {
+    throw new Error("homepage should not fetch");
+  };
+
+  try {
+    const { GET } = await importFresh("../app/route.js");
+    const request = buildRequest("https://portal.example.com/");
+
     const response = await GET(request);
     const html = await response.text();
 
     assert.equal(response.status, 200);
-    assert.match(html, />Open Console</);
-    assert.doesNotMatch(html, /307|302/);
+    assert.match(html, /Dynamic Neural Access/);
+  } finally {
+    global.fetch = originalFetch;
+    env.cleanup();
+  }
+});
+
+test("homepage GET may prune expired sessions without setting cookies", async () => {
+  const env = withTempEnvironment();
+
+  try {
+    const sessions = await importFresh("../lib/sessions.js");
+    const { GET } = await importFresh("../app/route.js");
+    const expiredSession = sessions.createAnonymousSession();
+    const db = getDb(env.dbPath);
+    const now = Date.now();
+    db.prepare("UPDATE sessions SET idle_expires_at = ?, absolute_expires_at = ? WHERE id = ?").run(
+      now - 1_000,
+      now - 1_000,
+      expiredSession.id
+    );
+
+    const request = buildRequest("https://portal.example.com/", {
+      headers: new Headers({
+        cookie: `__Host-tp_session=${expiredSession.id}`
+      })
+    });
+
+    const response = await GET(request);
+    const html = await response.text();
+
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("set-cookie"), null);
+    assert.equal(sessions.getSessionById(expiredSession.id, { touch: false }), null);
+    assert.match(html, />Secure Access</);
   } finally {
     env.cleanup();
   }
