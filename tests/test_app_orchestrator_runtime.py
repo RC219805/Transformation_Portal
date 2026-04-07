@@ -1568,7 +1568,7 @@ def test_argv_repairs_repo_local_leading_slash_paths() -> None:
         "pipeline": "lux-depth-v3",
         "args": {
             "input_dir": "/tests/fixtures/archive_small/archive_root",
-            "output_dir": "/output/lux_depth_repo_local_repair",
+            "output_dir": "/tests/fixtures/portal_runtime_output/lux_depth_repo_local_repair",
         },
     }
 
@@ -1578,7 +1578,7 @@ def test_argv_repairs_repo_local_leading_slash_paths() -> None:
         (orchestrator_app.REPO_ROOT / "tests" / "fixtures" / "archive_small" / "archive_root").resolve()
     )
     assert _flag_value(argv, "--output-dir") == str(
-        (orchestrator_app.REPO_ROOT / "output" / "lux_depth_repo_local_repair").resolve()
+        (orchestrator_app.REPO_ROOT / "tests" / "fixtures" / "portal_runtime_output" / "lux_depth_repo_local_repair").resolve()
     )
 
 

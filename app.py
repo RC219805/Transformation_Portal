@@ -1631,6 +1631,7 @@ def _normalize_portal_path_arg(
     required: bool = False,
     must_exist: bool = False,
     must_be_file: bool = False,
+    must_be_dir: bool = False,
 ) -> str:
     def _trusted_allowed_entry(
         resolved_path: Path,
@@ -1710,7 +1711,7 @@ def _normalize_portal_path_arg(
             )
         return ""
     trusted_entry: Optional[Path] = None
-    if must_exist or must_be_file:
+    if must_exist or must_be_file or must_be_dir:
         trusted_entry = _trusted_allowed_entry(resolved_path)
     if must_exist and trusted_entry is None:
         errors.append(
@@ -1729,6 +1730,16 @@ def _normalize_portal_path_arg(
                 "not_a_file",
                 f"{field} must be a file.",
                 suggestion=f"Choose a file path for {field} under the configured repository or temp roots.",
+            )
+        )
+        return ""
+    if must_be_dir and trusted_entry is not None and not trusted_entry.is_dir():
+        errors.append(
+            _portal_issue(
+                field,
+                "not_a_directory",
+                f"{field} must be a directory.",
+                suggestion=f"Choose a directory path for {field} under the configured repository or temp roots.",
             )
         )
         return ""
@@ -1759,6 +1770,7 @@ def _normalize_preview_path_field(
     required: bool = False,
     must_exist: bool = False,
     must_be_file: bool = False,
+    must_be_dir: bool = False,
 ) -> str:
     existing_errors = path_errors_by_field.get(field) or []
     if existing_errors:
@@ -1772,6 +1784,7 @@ def _normalize_preview_path_field(
         required=required,
         must_exist=must_exist,
         must_be_file=must_be_file,
+        must_be_dir=must_be_dir,
     )
 
 
@@ -2555,24 +2568,10 @@ def _build_archive_config_preview(
             required=required,
             must_exist=must_exist or must_be_dir,
             must_be_file=must_be_file,
+            must_be_dir=must_be_dir,
         )
         for key in keys:
             normalized_args.pop(key, None)
-        if must_be_dir and value:
-            try:
-                resolved = _resolve_allowed_request_path(value, allowed_roots)
-            except ValueError:
-                resolved = None
-            if resolved is not None and not resolved.is_dir():
-                errors.append(
-                    _portal_issue(
-                        field,
-                        "not_a_directory",
-                        f"{field} must be a directory.",
-                        suggestion=f"Choose a directory path for {field} under the configured repository or temp roots.",
-                    )
-                )
-                value = ""
         if value or required:
             normalized_args[field] = value
         else:

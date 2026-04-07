@@ -217,7 +217,7 @@ def test_lux_config_preview_returns_execution_args_and_repair_warning_for_repo_l
             "pipeline": "lux-depth-v3",
             "args": {
                 "input_dir": "/tests/fixtures/archive_small/archive_root",
-                "output_dir": "/output/lux_depth_preview_contract",
+                "output_dir": "/tests/fixtures/portal_contract_output/lux_depth_preview_contract",
             },
         },
     )
@@ -230,9 +230,9 @@ def test_lux_config_preview_returns_execution_args_and_repair_warning_for_repo_l
     warning_codes = {item["code"] for item in preview["field_warnings"]}
     assert "repo_local_path_repaired" in warning_codes
     assert preview["normalized_args"]["input_dir"] == "./tests/fixtures/archive_small/archive_root"
-    assert preview["normalized_args"]["output_dir"] == "./output/lux_depth_preview_contract"
+    assert preview["normalized_args"]["output_dir"] == "./tests/fixtures/portal_contract_output/lux_depth_preview_contract"
     assert preview["execution_args"]["input_dir"] == "./tests/fixtures/archive_small/archive_root"
-    assert preview["execution_args"]["output_dir"] == "./output/lux_depth_preview_contract"
+    assert preview["execution_args"]["output_dir"] == "./tests/fixtures/portal_contract_output/lux_depth_preview_contract"
 
 
 def test_config_preview_contract_rejects_repo_local_shorthand_traversal(
@@ -279,6 +279,31 @@ def test_archive_config_preview_returns_field_specific_path_errors(client: TestC
     errors = {item["field"]: item for item in preview["field_errors"]}
     assert errors["archive_index"]["code"] == "path_shorthand_traversal_disallowed"
     assert all(item["code"] != "invalid_request" for item in preview["field_errors"])
+
+
+def test_archive_config_preview_rejects_non_directory_bag_dir(client: TestClient, tmp_path: Path) -> None:
+    bag_file = tmp_path / "not_a_bag.txt"
+    bag_file.write_text("not a directory", encoding="utf-8")
+
+    response = client.post(
+        "/v1/config-preview",
+        json={
+            "pipeline": "archive-gate-b",
+            "args": {
+                "archive_command": "bag-validate",
+                "input_dir": "./tests/fixtures/archive_small/archive_root",
+                "output_dir": str(tmp_path),
+                "bag_dir": str(bag_file),
+            },
+        },
+    )
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["schema"] == "tp.orchestrator.config_preview.v1"
+    assert body["success"] is True
+    errors = {item["field"]: item for item in body["data"]["field_errors"]}
+    assert errors["bag_dir"]["code"] == "not_a_directory"
 
 
 def test_archive_gate_a_config_preview_returns_authoritative_readiness_and_argv(
@@ -1142,7 +1167,7 @@ def test_create_job_preserves_raw_request_and_internal_execution_args(
             "pipeline": "lux-depth-v3",
             "args": {
                 "input_dir": "/tests/fixtures/archive_small/archive_root",
-                "output_dir": "/output/http_effective_request_contract",
+                "output_dir": "/tests/fixtures/portal_contract_output/http_effective_request_contract",
             },
         },
     )
@@ -1153,9 +1178,12 @@ def test_create_job_preserves_raw_request_and_internal_execution_args(
     job_id = body["data"]["id"]
     job = orchestrator_app.JOBS[job_id]
     assert job.request["args"]["input_dir"] == "/tests/fixtures/archive_small/archive_root"
-    assert job.request["args"]["output_dir"] == "/output/http_effective_request_contract"
+    assert job.request["args"]["output_dir"] == "/tests/fixtures/portal_contract_output/http_effective_request_contract"
     assert job.effective_request["args"]["input_dir"] == "./tests/fixtures/archive_small/archive_root"
-    assert job.effective_request["args"]["output_dir"] == "./output/http_effective_request_contract"
+    assert (
+        job.effective_request["args"]["output_dir"]
+        == "./tests/fixtures/portal_contract_output/http_effective_request_contract"
+    )
 
 
 def test_archive_gate_b_submission_fails_closed_without_rights_manifest(client: TestClient) -> None:
