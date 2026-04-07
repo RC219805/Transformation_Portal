@@ -98,12 +98,16 @@ def test_hf_opt_in_rejects_unpinned_revision(segmentation_surface: tuple[Any, An
         )
 
 
-def test_repo_id_metadata_alone_does_not_disable_checkpoint_enforcement(segmentation_surface: tuple[Any, Any]) -> None:
+def test_repo_id_metadata_alone_does_not_disable_checkpoint_enforcement(
+    segmentation_surface: tuple[Any, Any], tmp_path: Any
+) -> None:
     SAM2Backend, _ = segmentation_surface
+    missing_checkpoint = tmp_path / "missing_sam2_hiera_large.pt"
     with pytest.raises(FileNotFoundError, match="SAM2 checkpoint not found"):
         SAM2Backend(
             model_size="large",
             device="cpu",
+            checkpoint_path=str(missing_checkpoint),
             repo_id=SAM2_REPO_ID,
             revision=PINNED_REVISION,
             prefer_hf_pipeline=False,
