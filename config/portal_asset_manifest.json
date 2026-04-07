@@ -1,0 +1,20 @@
+{
+  "assets": {
+    "portal.css": {
+      "repo_path": "public/portal-assets/portal.css",
+      "media_type": "text/css; charset=utf-8"
+    },
+    "portal.js": {
+      "repo_path": "public/portal-assets/portal.js",
+      "media_type": "text/javascript; charset=utf-8"
+    },
+    "fonts/portal-sans.woff2": {
+      "repo_path": "public/portal-assets/fonts/portal-sans.woff2",
+      "media_type": "font/woff2"
+    },
+    "fonts/portal-mono.woff2": {
+      "repo_path": "public/portal-assets/fonts/portal-mono.woff2",
+      "media_type": "font/woff2"
+    }
+  }
+}

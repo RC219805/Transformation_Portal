@@ -24,7 +24,7 @@ PHASE6_SMOKE_TESTS := \
 	tests/test_lux_render_pipeline_smoke.py \
 	tests/lux_depth_v3/test_orchestrator_smoke.py
 
-.PHONY: help test-fast test-novideo test-full test-integration test-structure test-utils test-orchestrator-contract test-orchestrator-http-contract test-portal-contract validate-orchestrator-http validate-portal-browser audit-pipeline-readiness coverage-fast-scope venv setup clean \
+.PHONY: help test-fast test-novideo test-full test-integration test-structure test-utils test-orchestrator-contract test-orchestrator-http-contract test-portal-contract test-frontdoor-contract validate-orchestrator-http validate-portal-browser validate-frontdoor-browser audit-pipeline-readiness coverage-fast-scope venv setup clean \
         lint lint-parity ci ci-full pre-commit install-hooks quality-check fix-quality validate-ci organize-docs check-json-serialization check-piptools-cache \
         check-yaml-governance check-stale-docs lock lock-prod lock-ci lock-dev install-core install-ml install-ml-core install-ml-raw install-ml-sam2 install-ml-coreml docs docs-clean \
         check-test-markers check-ci-sync
@@ -44,12 +44,14 @@ help:
 	@echo "  test-orchestrator-contract  Run route-level portal orchestrator contract suite"
 	@echo "  test-orchestrator-http-contract  Run HTTP-only orchestrator contract tests"
 	@echo "  test-portal-contract  Run portal runtime/browser contract tests"
+	@echo "  test-frontdoor-contract  Run managed frontdoor Node contract/build checks"
 	@echo "  test-integration   Run integration tests (requires HF_TOKEN)"
 	@echo "  test-structure     Run codebase structure validation tests"
 	@echo "  test-utils         Run tests for performance and error handling utilities"
 	@echo "  coverage-fast-scope  Run branch coverage for audited core/config and streaming paths"
 	@echo "  validate-orchestrator-http  Run the live orchestrator HTTP smoke audit"
 	@echo "  validate-portal-browser  Run the live browser smoke audit against a running portal"
+	@echo "  validate-frontdoor-browser  Run the live browser smoke audit against a running managed frontdoor"
 	@echo "  audit-pipeline-readiness  Run the local four-pipeline readiness audit"
 	@echo "  venv               Create local .venv if missing"
 	@echo "  clean              Remove Python cache files and build artifacts"
@@ -200,6 +202,11 @@ test-portal-contract:
 	@echo "Running portal runtime/browser contract tests..."
 	@"$(PY)" -m pytest -q tests/test_app_orchestrator_runtime.py tests/validation/test_portal_smoke_scripts.py
 
+test-frontdoor-contract:
+	@echo "Running managed frontdoor contract checks..."
+	@cd web/secure-landing && npm test
+	@cd web/secure-landing && npm run build
+
 validate-orchestrator-http:
 	@echo "Running live orchestrator HTTP smoke validation..."
 	@"$(PY)" scripts/validation/validate_orchestrator_http_smoke.py
@@ -207,6 +214,10 @@ validate-orchestrator-http:
 validate-portal-browser:
 	@echo "Running live portal browser smoke validation..."
 	@"$(PY)" scripts/validation/validate_portal_browser_smoke.py
+
+validate-frontdoor-browser:
+	@echo "Running live managed frontdoor browser smoke validation..."
+	@"$(PY)" scripts/validation/validate_frontdoor_browser_smoke.py
 
 audit-pipeline-readiness:
 	@echo "Running safe local four-pipeline readiness audit..."
@@ -242,7 +253,7 @@ lint-parity:
 	@echo "Running CI-aligned lint parity..."
 	@./scripts/setup/run_lint_tool.sh parity
 
-ci: lint check-json-serialization check-yaml-governance check-piptools-cache check-requirements-lock-contract check-ci-sync test-fast test-orchestrator-contract
+ci: lint check-json-serialization check-yaml-governance check-piptools-cache check-requirements-lock-contract check-ci-sync test-fast test-orchestrator-contract test-frontdoor-contract
 	@echo "✅ Local CI checks completed successfully."
 
 # Comprehensive CI simulation

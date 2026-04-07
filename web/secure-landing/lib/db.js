@@ -43,7 +43,15 @@ export function getDb(dbPath) {
   if (!dbCache.has(resolvedPath)) {
     const parentDir = path.dirname(resolvedPath);
     if (parentDir && parentDir !== ".") {
-      mkdirSync(parentDir, { recursive: true });
+      try {
+        mkdirSync(parentDir, { recursive: true });
+      } catch (error) {
+        throw new Error(
+          `Unable to prepare TP_FRONTDOOR_SESSION_DB parent at ${parentDir}: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
+      }
     }
 
     let db;

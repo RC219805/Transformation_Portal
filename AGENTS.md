@@ -20,14 +20,16 @@ Quick reference for common workflows and commands in this repo.
 - `make test-orchestrator-contract` run the full portal/orchestrator contract suite (`tests/test_app_orchestrator_runtime.py`, `tests/test_app_orchestrator_contract_http.py`, `tests/validation/test_portal_smoke_scripts.py`).
 - `make test-orchestrator-http-contract` run HTTP-only orchestrator contract tests (`tests/test_app_orchestrator_contract_http.py`).
 - `make test-portal-contract` run portal runtime/browser contract tests (`tests/test_app_orchestrator_runtime.py`, `tests/validation/test_portal_smoke_scripts.py`).
+- `make test-frontdoor-contract` run managed frontdoor Node contract/build checks (`cd web/secure-landing && npm test && npm run build`).
 - `make validate-orchestrator-http` run the live orchestrator HTTP smoke against a running backend.
 - `make validate-portal-browser` run the live browser smoke against a running portal + backend.
+- `make validate-frontdoor-browser` run the live managed frontdoor browser smoke against a running frontdoor.
 - `make audit-pipeline-readiness` run the safe local four-pipeline readiness audit using checked-in archive fixtures.
 - `make coverage-fast-scope` run branch coverage for the audited `core/config` and `streaming` paths with `term-missing` output.
 - `make clean` remove Python caches and build/test artifacts.
 - `make lint` run flake8 + pylint (non-blocking).
 - `make lint-parity` run the GitHub lint job locally with the CI-pinned Python 3.12 lint environment.
-- `make ci` run local CI checks (lint + check-json-serialization + check-yaml-governance + check-piptools-cache + check-requirements-lock-contract + check-ci-sync + test-fast + test-orchestrator-contract).
+- `make ci` run local CI checks (lint + check-json-serialization + check-yaml-governance + check-piptools-cache + check-requirements-lock-contract + check-ci-sync + test-fast + test-orchestrator-contract + test-frontdoor-contract).
 - `make ci-full` run comprehensive local CI (`./scripts/local_ci_check.sh`).
 - `make ci-quick` run quick local CI (`./scripts/local_ci_check.sh --quick`).
 - `make pre-commit` run pre-commit hooks with CI-aligned Black/isort versions.

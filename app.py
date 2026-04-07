@@ -82,27 +82,43 @@ def _env_float(name: str, default: float, minimum: float = 0.0) -> float:
 REPO_ROOT = Path(__file__).resolve().parent
 PORTAL_HTML = REPO_ROOT / "portal.html"
 PORTAL_ASSETS_DIR = REPO_ROOT / "public" / "portal-assets"
+PORTAL_ASSET_MANIFEST_PATH = REPO_ROOT / "config" / "portal_asset_manifest.json"
 PORTAL_VIDEO_ASSET_NAME = "dna-portal-video-2.mp4"
 PORTAL_VIDEO_PATH = REPO_ROOT / "public" / "video" / PORTAL_VIDEO_ASSET_NAME
 PORTAL_ASSET_CACHE_CONTROL = "no-store"
-PORTAL_ASSET_MANIFEST: Dict[str, PortalAssetSpec] = {
-    "portal.css": PortalAssetSpec(
-        path=PORTAL_ASSETS_DIR / "portal.css",
-        media_type="text/css; charset=utf-8",
-    ),
-    "portal.js": PortalAssetSpec(
-        path=PORTAL_ASSETS_DIR / "portal.js",
-        media_type="text/javascript; charset=utf-8",
-    ),
-    "fonts/portal-sans.woff2": PortalAssetSpec(
-        path=PORTAL_ASSETS_DIR / "fonts" / "portal-sans.woff2",
-        media_type="font/woff2",
-    ),
-    "fonts/portal-mono.woff2": PortalAssetSpec(
-        path=PORTAL_ASSETS_DIR / "fonts" / "portal-mono.woff2",
-        media_type="font/woff2",
-    ),
-}
+
+
+def _load_portal_asset_manifest() -> Dict[str, PortalAssetSpec]:
+    try:
+        raw_manifest = json.loads(PORTAL_ASSET_MANIFEST_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise RuntimeError(f"Unable to load portal asset manifest: {exc}") from exc
+
+    assets = raw_manifest.get("assets")
+    if not isinstance(assets, dict) or not assets:
+        raise RuntimeError("Portal asset manifest must define a non-empty 'assets' object")
+
+    manifest: Dict[str, PortalAssetSpec] = {}
+    for asset_name, entry in assets.items():
+        if not isinstance(asset_name, str) or not asset_name.strip():
+            raise RuntimeError("Portal asset manifest contains an invalid asset key")
+        if not isinstance(entry, dict):
+            raise RuntimeError(f"Portal asset manifest entry for {asset_name!r} must be an object")
+
+        repo_path = str(entry.get("repo_path", "")).strip()
+        media_type = str(entry.get("media_type", "")).strip()
+        if not repo_path or not media_type:
+            raise RuntimeError(f"Portal asset manifest entry for {asset_name!r} is incomplete")
+
+        manifest[asset_name] = PortalAssetSpec(
+            path=REPO_ROOT / repo_path,
+            media_type=media_type,
+        )
+
+    return manifest
+
+
+PORTAL_ASSET_MANIFEST = _load_portal_asset_manifest()
 PORTAL_ASSET_PATHS = {name: asset.path for name, asset in PORTAL_ASSET_MANIFEST.items()}
 PORTAL_ASSET_MEDIA_TYPES = {name: asset.media_type for name, asset in PORTAL_ASSET_MANIFEST.items()}
 ARCHIVE_GOVERNANCE_SCRIPT = REPO_ROOT / "tools" / "archive_governance.py"

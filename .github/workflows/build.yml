@@ -41,6 +41,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       run_full: ${{ steps.classify.outputs.run_full }}
+      run_frontdoor: ${{ steps.classify.outputs.run_frontdoor }}
       reason: ${{ steps.classify.outputs.reason }}
     steps:
       - name: Classify change set
@@ -51,6 +52,7 @@ jobs:
             // Default: full suite for non-PR events (push to main, workflow_dispatch)
             if (context.eventName !== 'pull_request') {
               core.setOutput('run_full', 'true');
+              core.setOutput('run_frontdoor', 'true');
               core.setOutput('reason', 'non-PR event (main push or manual trigger)');
               return;
             }
@@ -87,14 +89,30 @@ jobs:
               /^\.github\/copilot-instructions\.md$/,
             ];
 
-            const runFull = names.some(name => fullSuiteMatchers.some(re => re.test(name)));
+            const frontdoorMatchers = [
+              /^web\/secure-landing\//,
+              /^scripts\/validation\/validate_frontdoor_browser_smoke\.py$/,
+              /^docs\/guides\/PORTAL_SECURE_FRONTDOOR_QUICKSTART\.md$/,
+            ];
+
+            const runFrontdoor = names.some(name => frontdoorMatchers.some(re => re.test(name)));
+            const runFull = runFrontdoor || names.some(name => fullSuiteMatchers.some(re => re.test(name)));
+
+            const reasons = [];
+            if (runFrontdoor) reasons.push('frontdoor/runtime boundary changed');
+            if (names.some(name => fullSuiteMatchers.some(re => re.test(name)))) {
+              reasons.push('code/tests/deps/workflows changed');
+            }
+            const reason = reasons.length > 0 ? reasons.join('; ') : 'docs-only or non-runtime changes';
 
             core.setOutput('run_full', runFull ? 'true' : 'false');
-            core.setOutput('reason', runFull ? 'code/tests/deps/workflows changed' : 'docs-only or non-runtime changes');
+            core.setOutput('run_frontdoor', runFrontdoor ? 'true' : 'false');
+            core.setOutput('reason', reason);
 
             core.info('');
             core.info(`Decision: run_full = ${runFull}`);
-            core.info(`Reason: ${runFull ? 'code/tests/deps/workflows changed' : 'docs-only or non-runtime changes'}`);
+            core.info(`Decision: run_frontdoor = ${runFrontdoor}`);
+            core.info(`Reason: ${reason}`);
 
   # Lightweight checks (always run, fast)
   lightweight:
@@ -320,6 +338,42 @@ jobs:
         run: |
           set -euo pipefail
           python scripts/validation/check_requirements_lock_contract.py
+
+  frontdoor-contract:
+    name: Frontdoor contract
+    needs: [preflight]
+    if: needs.preflight.outputs.run_frontdoor == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: web/secure-landing/.nvmrc
+          cache: npm
+          cache-dependency-path: web/secure-landing/package-lock.json
+
+      - name: Install frontdoor dependencies
+        run: |
+          set -euo pipefail
+          cd web/secure-landing
+          npm ci
+
+      - name: Run frontdoor Node tests
+        run: |
+          set -euo pipefail
+          cd web/secure-landing
+          npm test
+
+      - name: Build frontdoor production bundle
+        run: |
+          set -euo pipefail
+          cd web/secure-landing
+          npm run build
 
   lint:
     needs: [preflight]
@@ -807,7 +861,7 @@ jobs:
   ci_gate:
     name: CI Gate
     runs-on: ubuntu-24.04
-    needs: [preflight, lightweight, dependency-constraints, lint, typecheck, test, generate-manifest]
+    needs: [preflight, lightweight, dependency-constraints, frontdoor-contract, lint, typecheck, test, generate-manifest]
     if: ${{ always() }}
     timeout-minutes: 5
     permissions:
@@ -819,11 +873,13 @@ jobs:
           set -euo pipefail
           echo "Preflight decision:"
           echo "  run_full: ${{ needs.preflight.outputs.run_full }}"
+          echo "  run_frontdoor: ${{ needs.preflight.outputs.run_frontdoor }}"
           echo "  reason:   ${{ needs.preflight.outputs.reason }}"
           echo ""
           echo "Job results:"
           echo "  lightweight:       ${{ needs.lightweight.result }}"
           echo "  dependency-constraints: ${{ needs['dependency-constraints'].result }}"
+          echo "  frontdoor-contract:${{ needs['frontdoor-contract'].result }}"
           echo "  lint:              ${{ needs.lint.result }}"
           echo "  typecheck:         ${{ needs.typecheck.result }}"
           echo "  test:              ${{ needs.test.result }}"
@@ -847,6 +903,7 @@ jobs:
           typecheck_result="skipped"
           test_result="skipped"
           manifest_result="skipped"
+          frontdoor_result="skipped"
 
           # Lightweight must always succeed
           if [ "${{ needs.lightweight.result }}" != "success" ]; then
@@ -867,10 +924,16 @@ jobs:
           # If full suite was required, enforce all jobs
           if [ "${{ needs.preflight.outputs.run_full }}" = "true" ]; then
             ok="true"
+            frontdoor_result="${{ needs['frontdoor-contract'].result }}"
             lint_result="${{ needs.lint.result }}"
             typecheck_result="${{ needs.typecheck.result }}"
             test_result="${{ needs.test.result }}"
             manifest_result="${{ needs['generate-manifest'].result }}"
+
+            if [ "${{ needs.preflight.outputs.run_frontdoor }}" = "true" ] && [ "${frontdoor_result}" != "success" ]; then
+              echo "❌ frontdoor-contract did not succeed (result=${frontdoor_result})"
+              ok="false"
+            fi
 
             if [ "${lint_result}" != "success" ]; then
               echo "❌ lint did not succeed (result=${lint_result})"
