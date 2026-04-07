@@ -50,7 +50,7 @@ PIP_COMPILE_HASHED := mkdir -p "$(PIP_TOOLS_CACHE_DIR)" && PIP_TOOLS_CACHE_DIR="
 PYTORCH_CPU_INDEX := --extra-index-url https://download.pytorch.org/whl/cpu
 
 # Default target: compile all requirements
-.PHONY: all compile compile-all compile-ml-layers compile-hash-pilot check-hash-pilot update help clean check \
+.PHONY: all compile compile-all compile-ml-layers compile-accel compile-hash-pilot check-hash-pilot update help clean check \
 	ml-core.txt ml-cpu.txt ml-mps.txt ml-cuda.txt ml-raw.txt ml-coreml.txt ml-research.txt ml.txt
 
 help:

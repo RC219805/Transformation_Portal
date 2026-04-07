@@ -24,11 +24,12 @@ def _target_body(name: str) -> str:
 
 def test_makefile_declares_hash_pilot_targets_and_default_output_dir() -> None:
     text = _read_makefile()
+    phony_line = next(line for line in text.splitlines() if line.startswith(".PHONY:"))
 
     assert "HASH_PILOT_OUT_DIR ?= $(CURDIR)/.hash-pilot" in text
-    assert (
-        ".PHONY: all compile compile-all compile-ml-layers compile-hash-pilot check-hash-pilot update help clean check" in text
-    )
+    assert "compile-accel" in phony_line
+    assert "compile-hash-pilot" in phony_line
+    assert "check-hash-pilot" in phony_line
     assert "compile-hash-pilot:" in text
     assert "check-hash-pilot:" in text
 

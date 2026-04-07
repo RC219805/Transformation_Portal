@@ -9,6 +9,7 @@ pytestmark = pytest.mark.unit
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "secure-install-pilot.yml"
+REQUIREMENTS_README_PATH = REPO_ROOT / "requirements" / "README.md"
 CHECKOUT_SHA = "de0fac2e4500dabe0009e67214ff5f5447ce83dd"
 SETUP_PYTHON_SHA = "a309ff8b426b58ec0e2a45f0f869d46889d02405"
 UPLOAD_ARTIFACT_SHA = "bbbca2ddaa5d8feaa63e36b76fdaad77386f024f"
@@ -74,3 +75,11 @@ def test_secure_install_pilot_workflow_runs_makefile_targets_and_uploads_artifac
     assert upload_step["if"] == "always()"
     assert upload_step["with"]["name"] == "secure-install-pilot-locks"
     assert upload_step["with"]["path"] == "requirements/.hash-pilot/"
+
+
+def test_secure_install_pilot_readme_mentions_local_toolchain_requirement() -> None:
+    readme = REQUIREMENTS_README_PATH.read_text(encoding="utf-8")
+
+    assert 'python -m pip install --upgrade "pip<26"' in readme
+    assert 'python -m pip install "pip-tools==7.5.2"' in readme
+    assert ".github/workflows/secure-install-pilot.yml" in readme
