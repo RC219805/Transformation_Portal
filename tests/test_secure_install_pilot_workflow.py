@@ -93,7 +93,7 @@ def test_secure_install_pilot_readme_records_explicit_hash_policy() -> None:
     assert "advisory control for the non-ML checked-in layered locks" in readme
     assert "standard local install flows remain" in readme
     assert "pinned-without-hashes" in readme
-    assert "requirements.txt`, `requirements-ci.txt`, and" in readme
+    assert "`requirements.txt`, `requirements-ci.txt`, and" in readme
     assert "`requirements-dev.txt` remain outside this hash-enforced policy decision" in readme
     assert "Promotion to mandatory `--require-hashes` enforcement requires a separate" in readme
     assert "policy decision." in readme
