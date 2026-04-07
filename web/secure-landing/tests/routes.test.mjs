@@ -1024,6 +1024,7 @@ test("portal asset proxy supports nested asset paths and HEAD fallback", async (
   try {
     const { HEAD } = await importFresh("../app/portal/assets/[...path]/route.js");
     const fetchCalls = [];
+    let canceledFallbackBody = false;
 
     const originalFetch = global.fetch;
     global.fetch = async (url, init) => {
@@ -1039,7 +1040,15 @@ test("portal asset proxy supports nested asset paths and HEAD fallback", async (
           }
         });
       }
-      return new Response(Uint8Array.from([119, 79, 70, 50]), {
+      const fallbackBody = new ReadableStream({
+        start(controller) {
+          controller.enqueue(Uint8Array.from([119, 79, 70, 50]));
+        },
+        cancel() {
+          canceledFallbackBody = true;
+        }
+      });
+      return new Response(fallbackBody, {
         status: 200,
         headers: {
           "content-type": "font/woff2",
@@ -1070,6 +1079,52 @@ test("portal asset proxy supports nested asset paths and HEAD fallback", async (
           method: "GET"
         }
       ]);
+      assert.equal(canceledFallbackBody, true);
+    } finally {
+      global.fetch = originalFetch;
+    }
+  } finally {
+    env.cleanup();
+  }
+});
+
+test("portal asset proxy preserves upstream cache headers for 304 responses", async () => {
+  const env = withTempEnvironment({
+    TP_BACKEND_API_KEY: "backend-secret"
+  });
+
+  try {
+    const { GET } = await importFresh("../app/portal/assets/[...path]/route.js");
+
+    const originalFetch = global.fetch;
+    global.fetch = async (url, init) => {
+      assert.equal(String(url), "http://127.0.0.1:8000/portal/assets/portal.js");
+      assert.equal(init.method, "GET");
+      assert.equal(init.headers.get("if-none-match"), '"portal-js-v1"');
+      return new Response(null, {
+        status: 304,
+        headers: {
+          "cache-control": "public, max-age=3600",
+          etag: '"portal-js-v1"'
+        }
+      });
+    };
+
+    try {
+      const request = buildRequest("https://portal.example.com/portal/assets/portal.js", {
+        method: "GET",
+        headers: new Headers({
+          "if-none-match": '"portal-js-v1"'
+        })
+      });
+
+      const response = await GET(request, {
+        params: Promise.resolve({ path: ["portal.js"] })
+      });
+
+      assert.equal(response.status, 304);
+      assert.equal(response.headers.get("cache-control"), "public, max-age=3600");
+      assert.equal(response.headers.get("etag"), '"portal-js-v1"');
     } finally {
       global.fetch = originalFetch;
     }

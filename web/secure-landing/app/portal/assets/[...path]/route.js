@@ -59,6 +59,7 @@ async function fetchUpstreamAsset(request, upstreamUrl, upstreamHeaders) {
     cache: "no-store",
     redirect: "manual"
   });
+  let usedGetFallback = false;
 
   if (request.method === "HEAD" && upstream.status === 405) {
     upstream = await fetch(upstreamUrl, {
@@ -67,9 +68,13 @@ async function fetchUpstreamAsset(request, upstreamUrl, upstreamHeaders) {
       cache: "no-store",
       redirect: "manual"
     });
+    usedGetFallback = true;
   }
 
-  return upstream;
+  return {
+    upstream,
+    usedGetFallback
+  };
 }
 
 async function proxyPortalAsset(request, { params }) {
@@ -95,18 +100,27 @@ async function proxyPortalAsset(request, { params }) {
   });
 
   let upstream;
+  let usedGetFallback = false;
   try {
-    upstream = await fetchUpstreamAsset(
+    ({ upstream, usedGetFallback } = await fetchUpstreamAsset(
       request,
       buildUpstreamUrl(`/portal/assets/${assetPath.split("/").map(encodeURIComponent).join("/")}`),
       upstreamHeaders
-    );
+    ));
   } catch {
     return errorResponse(503, "Upstream service unavailable");
   }
 
+  if (request.method === "HEAD" && usedGetFallback && upstream.body) {
+    try {
+      await upstream.body.cancel();
+    } catch {
+      // Ignore cancel failures and continue returning the HEAD response.
+    }
+  }
+
   const responseHeaders = copyUpstreamResponseHeaders(upstream.headers);
-  responseHeaders.set("Cache-Control", upstream.ok ? upstream.headers.get("cache-control") || "no-store" : "no-store");
+  responseHeaders.set("Cache-Control", upstream.status < 400 ? upstream.headers.get("cache-control") || "no-store" : "no-store");
 
   return applySecurityHeaders(
     new Response(request.method === "HEAD" ? null : upstream.body, {
