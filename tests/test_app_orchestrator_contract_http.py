@@ -208,6 +208,79 @@ def test_config_preview_rejects_unsupported_pipeline_with_sanitized_reason(clien
     assert body["error"]["details"] == {"field": "payload", "reason": "unsupported_pipeline"}
 
 
+def test_lux_config_preview_returns_execution_args_and_repair_warning_for_repo_local_shorthand(
+    client: TestClient,
+) -> None:
+    response = client.post(
+        "/v1/config-preview",
+        json={
+            "pipeline": "lux-depth-v3",
+            "args": {
+                "input_dir": "/tests/fixtures/archive_small/archive_root",
+                "output_dir": "/output/lux_depth_preview_contract",
+            },
+        },
+    )
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["schema"] == "tp.orchestrator.config_preview.v1"
+    assert body["success"] is True
+    preview = body["data"]
+    warning_codes = {item["code"] for item in preview["field_warnings"]}
+    assert "repo_local_path_repaired" in warning_codes
+    assert preview["normalized_args"]["input_dir"] == "./tests/fixtures/archive_small/archive_root"
+    assert preview["normalized_args"]["output_dir"] == "./output/lux_depth_preview_contract"
+    assert preview["execution_args"]["input_dir"] == "./tests/fixtures/archive_small/archive_root"
+    assert preview["execution_args"]["output_dir"] == "./output/lux_depth_preview_contract"
+
+
+def test_config_preview_contract_rejects_repo_local_shorthand_traversal(
+    client: TestClient,
+) -> None:
+    response = client.post(
+        "/v1/config-preview",
+        json={
+            "pipeline": "lux-depth-v3",
+            "args": {
+                "input_dir": "/tests/../output",
+                "output_dir": "./output",
+            },
+        },
+    )
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["schema"] == "tp.orchestrator.config_preview.v1"
+    assert body["success"] is True
+    errors = {item["field"]: item for item in body["data"]["field_errors"]}
+    assert errors["input_dir"]["code"] == "path_shorthand_traversal_disallowed"
+
+
+def test_archive_config_preview_returns_field_specific_path_errors(client: TestClient) -> None:
+    response = client.post(
+        "/v1/config-preview",
+        json={
+            "pipeline": "archive-gate-a",
+            "args": {
+                "input_dir": "./tests/fixtures/archive_small/archive_root",
+                "output_dir": "./output/archive_contract",
+                "archive_command": "fixity-scan",
+                "archive_index": "/tests/../fixtures/archive_small/archive_index_normalized.csv.gz",
+            },
+        },
+    )
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["schema"] == "tp.orchestrator.config_preview.v1"
+    assert body["success"] is True
+    preview = body["data"]
+    errors = {item["field"]: item for item in preview["field_errors"]}
+    assert errors["archive_index"]["code"] == "path_shorthand_traversal_disallowed"
+    assert all(item["code"] != "invalid_request" for item in preview["field_errors"])
+
+
 def test_archive_gate_a_config_preview_returns_authoritative_readiness_and_argv(
     client: TestClient,
     tmp_path: Path,
@@ -245,6 +318,7 @@ def test_archive_gate_a_config_preview_returns_authoritative_readiness_and_argv(
     assert preview["readiness"]["missing_prerequisites"] == []
     assert "fixity-scan" in preview["argv_preview"]
     assert "--archive-index" in preview["argv_preview"]
+    assert preview["execution_args"] == preview["normalized_args"]
 
 
 def test_config_preview_contract_normalizes_inactive_reconstruction_fields(
@@ -284,6 +358,9 @@ def test_config_preview_contract_normalizes_inactive_reconstruction_fields(
     assert "grouping_mode" not in preview["normalized_args"]
     assert "reconstruction_tier" not in preview["normalized_args"]
     assert "emit_scene_debug_bundle" not in preview["normalized_args"]
+    assert preview["execution_args"]["grouping_mode"] == "parent_dir"
+    assert preview["execution_args"]["reconstruction_tier"] == "apex_research_ultra"
+    assert preview["execution_args"]["emit_scene_debug_bundle"] is True
     inactive_fields = {item["field"]: item for item in preview["inactive_fields"]}
     assert inactive_fields["grouping_mode"]["reason"] == "enable_reconstruction_disabled"
     assert inactive_fields["reconstruction_tier"]["value"] == "apex_research_ultra"
@@ -1046,6 +1123,41 @@ def test_archive_gate_pipeline_submission_returns_job_envelope(
     assert body["data"]["id"].startswith("job_")
 
 
+def test_create_job_preserves_raw_request_and_internal_execution_args(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake_run_job(job, _argv):  # noqa: ANN001
+        job.state = "succeeded"
+        job.exit_code = 0
+        now = orchestrator_app._now()
+        job.done_published_at = now
+        job.finished_at = now
+
+    monkeypatch.setattr(orchestrator_app, "_run_job", fake_run_job)
+
+    response = client.post(
+        "/v1/jobs",
+        json={
+            "pipeline": "lux-depth-v3",
+            "args": {
+                "input_dir": "/tests/fixtures/archive_small/archive_root",
+                "output_dir": "/output/http_effective_request_contract",
+            },
+        },
+    )
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["schema"] == "tp.orchestrator.job.v1"
+    job_id = body["data"]["id"]
+    job = orchestrator_app.JOBS[job_id]
+    assert job.request["args"]["input_dir"] == "/tests/fixtures/archive_small/archive_root"
+    assert job.request["args"]["output_dir"] == "/output/http_effective_request_contract"
+    assert job.effective_request["args"]["input_dir"] == "./tests/fixtures/archive_small/archive_root"
+    assert job.effective_request["args"]["output_dir"] == "./output/http_effective_request_contract"
+
+
 def test_archive_gate_b_submission_fails_closed_without_rights_manifest(client: TestClient) -> None:
     response = client.post(
         "/v1/jobs",
@@ -1064,7 +1176,7 @@ def test_archive_gate_b_submission_fails_closed_without_rights_manifest(client: 
     assert body["schema"] == "tp.orchestrator.error.v1"
     assert body["error"]["code"] == "INVALID_ARGUMENT"
     assert body["error"]["details"]["field"] == "manifest_jsonl"
-    assert body["error"]["details"]["reason"] == "rights_manifest_required"
+    assert body["error"]["details"]["reason"] == "required"
 
 
 def test_oversized_v1_request_returns_typed_413_envelope(client: TestClient) -> None:
@@ -1109,7 +1221,7 @@ def test_v1_jobs_rejects_requests_outside_allowed_roots(client: TestClient, tmp_
 
     assert response.status_code == 400
     assert body["error"]["code"] == "INVALID_ARGUMENT"
-    assert body["error"]["details"]["reason"] == "unsafe_path"
+    assert body["error"]["details"]["reason"] == "path_outside_allowed_roots"
 
 
 def test_v1_jobs_archive_gate_rejects_unsafe_input_dir_with_typed_error(client: TestClient) -> None:
@@ -1128,7 +1240,7 @@ def test_v1_jobs_archive_gate_rejects_unsafe_input_dir_with_typed_error(client: 
 
     assert response.status_code == 400
     assert body["error"]["code"] == "INVALID_ARGUMENT"
-    assert body["error"]["details"]["reason"] == "unsafe_path"
+    assert body["error"]["details"]["reason"] == "invalid_path_value"
     assert body["error"]["details"]["field"] == "input_dir"
 
 

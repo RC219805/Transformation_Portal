@@ -864,6 +864,8 @@ def test_portal_preview_metadata_worker_modes_and_export_contract_are_wired() ->
     content = portal_html.read_text(encoding="utf-8")
     update_body = _extract_js_function_body(content, "updateUIFromState")
     bind_body = _extract_js_function_body(content, "bindInputs")
+    preview_body = _extract_js_function_body(content, "fetchConfigPreview")
+    reconcile_body = _extract_js_function_body(content, "_reconcilePreviewRepairedPaths")
 
     assert "maxWorkersMode: 'auto'," in content
     assert "maxGpuWorkersMode: 'auto'," in content
@@ -877,9 +879,14 @@ def test_portal_preview_metadata_worker_modes_and_export_contract_are_wired() ->
     assert "state.config.runtime.maxGpuWorkersMode = _normalizeWorkerMode(e.target.value);" in bind_body
     assert "schema: 'tp.portal.export.v1'" in content
     assert "effective_args:" in content
+    assert "execution_args:" in content
     assert "inactive_fields:" in content
     assert "estimate_summary:" in content
     assert "argv_preview:" in content
+    assert "submitted_args:" in preview_body
+    assert "execution_args:" in preview_body
+    assert "repo_local_path_repaired" in reconcile_body
+    assert "_setBuildSurfacePathFieldValue(fieldName, normalizedValue)" in reconcile_body
 
 
 def test_portal_submit_blocks_preview_unavailable_and_debug_bundle_without_acknowledgement() -> None:
@@ -1556,6 +1563,58 @@ def test_argv_archive_gate_preserves_explicit_archive_index_override() -> None:
     assert _flag_value(argv, "--archive-index") == expected_archive_index
 
 
+def test_argv_repairs_repo_local_leading_slash_paths() -> None:
+    payload: Dict[str, object] = {
+        "pipeline": "lux-depth-v3",
+        "args": {
+            "input_dir": "/tests/fixtures/archive_small/archive_root",
+            "output_dir": "/output/lux_depth_repo_local_repair",
+        },
+    }
+
+    argv = orchestrator_app._argv_from_request(payload)
+
+    assert _flag_value(argv, "--input-dir") == str(
+        (orchestrator_app.REPO_ROOT / "tests" / "fixtures" / "archive_small" / "archive_root").resolve()
+    )
+    assert _flag_value(argv, "--output-dir") == str(
+        (orchestrator_app.REPO_ROOT / "output" / "lux_depth_repo_local_repair").resolve()
+    )
+
+
+def test_argv_preserves_valid_absolute_allow_root_paths(tmp_path: Path) -> None:
+    input_dir = (tmp_path / "input_abs").resolve()
+    output_dir = (tmp_path / "output_abs").resolve()
+    input_dir.mkdir(parents=True, exist_ok=True)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    payload: Dict[str, object] = {
+        "pipeline": "lux-depth-v3",
+        "args": {
+            "input_dir": str(input_dir),
+            "output_dir": str(output_dir),
+        },
+    }
+
+    argv = orchestrator_app._argv_from_request(payload)
+
+    assert _flag_value(argv, "--input-dir") == str(input_dir)
+    assert _flag_value(argv, "--output-dir") == str(output_dir)
+
+
+def test_argv_rejects_repo_local_shorthand_with_traversal_segments() -> None:
+    payload: Dict[str, object] = {
+        "pipeline": "lux-depth-v3",
+        "args": {
+            "input_dir": "/tests/../output",
+            "output_dir": "./output",
+        },
+    }
+
+    with pytest.raises(ValueError, match="Path shorthand traversal disallowed"):
+        orchestrator_app._argv_from_request(payload)
+
+
 def test_argv_archive_gate_rejects_workers_below_minimum() -> None:
     payload: Dict[str, object] = {
         "pipeline": "archive-gate-a",
@@ -2228,7 +2287,7 @@ def test_create_job_archive_gate_b_requires_manifest_jsonl_with_typed_error() ->
     assert body["success"] is False
     assert body["error"]["code"] == "INVALID_ARGUMENT"
     assert body["error"]["details"]["field"] == "manifest_jsonl"
-    assert body["error"]["details"]["reason"] == "rights_manifest_required"
+    assert body["error"]["details"]["reason"] == "required"
     assert orchestrator_app.JOBS == {}
 
 
@@ -2417,7 +2476,7 @@ def test_create_job_rejects_paths_outside_allowed_roots_with_typed_error(tmp_pat
 
     assert response.status_code == 400
     assert body["error"]["code"] == "INVALID_ARGUMENT"
-    assert body["error"]["details"]["reason"] == "unsafe_path"
+    assert body["error"]["details"]["reason"] == "path_outside_allowed_roots"
     assert orchestrator_app.JOBS == {}
 
 
@@ -2434,7 +2493,7 @@ def test_create_job_rejects_tilde_prefixed_paths_with_typed_error() -> None:
 
     assert response.status_code == 400
     assert body["error"]["code"] == "INVALID_ARGUMENT"
-    assert body["error"]["details"]["reason"] == "unsafe_path"
+    assert body["error"]["details"]["reason"] == "invalid_path_value"
     assert orchestrator_app.JOBS == {}
 
 
@@ -2478,35 +2537,33 @@ def test_create_job_preflight_sanitizes_exception_derived_messages(
     assert orchestrator_app.JOBS == {}
 
 
-def test_create_job_passes_preflight_snapshot_into_preview_builder(
+def test_create_job_uses_preview_errors_before_readiness_preflight(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    readiness_snapshot = {
-        "status": "ready",
-        "canonical_command": "lux-depth-v3",
-        "missing_prerequisites": [],
-        "runner_details": {},
-        "notes": [],
-    }
-    seen_snapshots = []
-
-    def fake_readiness(_pipeline, _args, require_dispatch_inputs=False):  # noqa: ANN001
-        assert require_dispatch_inputs is True
-        return readiness_snapshot
-
     def fake_preview(_payload, *, readiness_snapshot=None):  # noqa: ANN001
-        seen_snapshots.append(readiness_snapshot)
+        del readiness_snapshot
         return {
+            "pipeline": "lux-depth-v3",
+            "execution_args": {
+                "input_dir": "./input_images",
+                "output_dir": "./output",
+            },
+            "readiness": {
+                "status": "ready",
+                "canonical_command": "lux-depth-v3",
+                "missing_prerequisites": [],
+                "runner_details": {},
+                "notes": [],
+            },
             "field_errors": [
                 {
                     "field": "accept_research_tools_license",
                     "code": "reconstruction_license_required",
                     "message": "Scene reconstruction requires the research-tools license acknowledgment.",
                 }
-            ]
+            ],
         }
 
-    monkeypatch.setattr(orchestrator_app, "_evaluate_pipeline_readiness", fake_readiness)
     monkeypatch.setattr(orchestrator_app, "_build_config_preview", fake_preview)
 
     response = asyncio.run(
@@ -2529,8 +2586,57 @@ def test_create_job_passes_preflight_snapshot_into_preview_builder(
         "field": "accept_research_tools_license",
         "reason": "reconstruction_license_required",
     }
-    assert seen_snapshots == [readiness_snapshot]
     assert orchestrator_app.JOBS == {}
+
+
+def test_create_job_preserves_raw_request_and_stores_effective_request(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake_run_job(job, _argv):  # noqa: ANN001
+        job.state = "succeeded"
+        job.exit_code = 0
+        now = orchestrator_app._now()
+        job.done_published_at = now
+        job.finished_at = now
+
+    monkeypatch.setattr(orchestrator_app, "_run_job", fake_run_job)
+
+    try:
+        response = asyncio.run(
+            orchestrator_app.create_job(
+                {
+                    "pipeline": "lux-depth-v3",
+                    "args": {
+                        "input_dir": "/tests/fixtures/archive_small/archive_root",
+                        "output_dir": "/output/lux_depth_effective_request",
+                    },
+                }
+            )
+        )
+        body = json.loads(response.body.decode("utf-8"))
+
+        assert response.status_code == 200
+        assert body["success"] is True
+        job_id = body["data"]["id"]
+        job = orchestrator_app.JOBS[job_id]
+        assert job.request["args"]["input_dir"] == "/tests/fixtures/archive_small/archive_root"
+        assert job.request["args"]["output_dir"] == "/output/lux_depth_effective_request"
+        assert job.effective_request["args"]["input_dir"] == "./tests/fixtures/archive_small/archive_root"
+        assert job.effective_request["args"]["output_dir"] == "./output/lux_depth_effective_request"
+    finally:
+        orchestrator_app.JOBS.clear()
+        orchestrator_app.EVENT_SUBSCRIBERS.clear()
+
+
+def test_job_output_dir_prefers_effective_request_repo_relative_path() -> None:
+    job = orchestrator_app.Job(
+        id="job_effective_output_dir",
+        created_at=orchestrator_app._now(),
+        request={"pipeline": "lux-depth-v3", "args": {"output_dir": "/tmp/ignored"}},
+        effective_request={"pipeline": "lux-depth-v3", "args": {"output_dir": "./output"}},
+    )
+
+    assert orchestrator_app._job_output_dir(job) == (orchestrator_app.REPO_ROOT / "output").resolve()
 
 
 def test_create_job_archive_gate_rejects_unsafe_input_dir_before_argv() -> None:
@@ -2550,7 +2656,7 @@ def test_create_job_archive_gate_rejects_unsafe_input_dir_before_argv() -> None:
 
     assert response.status_code == 400
     assert body["error"]["code"] == "INVALID_ARGUMENT"
-    assert body["error"]["details"]["reason"] == "unsafe_path"
+    assert body["error"]["details"]["reason"] == "invalid_path_value"
     assert body["error"]["details"]["field"] == "input_dir"
     assert orchestrator_app.JOBS == {}
 
