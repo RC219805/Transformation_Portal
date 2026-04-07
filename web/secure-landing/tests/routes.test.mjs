@@ -963,6 +963,171 @@ test("portal video proxy rejects unknown asset names with 404", async () => {
   }
 });
 
+test("portal asset proxy preserves content type and strips browser cookies", async () => {
+  const env = withTempEnvironment({
+    TP_BACKEND_API_KEY: "backend-secret"
+  });
+
+  try {
+    const { GET } = await importFresh("../app/portal/assets/[...path]/route.js");
+    const cssBody = "body { color: #fff; }";
+
+    const originalFetch = global.fetch;
+    global.fetch = async (url, init) => {
+      assert.equal(String(url), "http://127.0.0.1:8000/portal/assets/portal.css");
+      assert.equal(init.method, "GET");
+      assert.equal(init.headers.get("Authorization"), "Bearer backend-secret");
+      assert.equal(init.headers.get("x-api-key"), "backend-secret");
+      assert.equal(init.headers.get("accept"), "text/css");
+      assert.equal(init.headers.has("cookie"), false);
+      assert.equal(init.headers.get("x-forwarded-host"), "portal.example.com");
+      assert.equal(init.headers.get("x-forwarded-proto"), "https");
+      return new Response(cssBody, {
+        status: 200,
+        headers: {
+          "content-type": "text/css; charset=utf-8",
+          "cache-control": "no-store"
+        }
+      });
+    };
+
+    try {
+      const request = buildRequest("https://portal.example.com/portal/assets/portal.css", {
+        method: "GET",
+        headers: new Headers({
+          accept: "text/css",
+          cookie: "__Host-tp_session=secret-session"
+        })
+      });
+
+      const response = await GET(request, {
+        params: Promise.resolve({ path: ["portal.css"] })
+      });
+
+      assert.equal(response.status, 200);
+      assert.equal(response.headers.get("content-type"), "text/css; charset=utf-8");
+      assert.equal(response.headers.get("cache-control"), "no-store");
+      assert.equal(await response.text(), cssBody);
+    } finally {
+      global.fetch = originalFetch;
+    }
+  } finally {
+    env.cleanup();
+  }
+});
+
+test("portal asset proxy supports nested asset paths and HEAD fallback", async () => {
+  const env = withTempEnvironment({
+    TP_BACKEND_API_KEY: "backend-secret"
+  });
+
+  try {
+    const { HEAD } = await importFresh("../app/portal/assets/[...path]/route.js");
+    const fetchCalls = [];
+
+    const originalFetch = global.fetch;
+    global.fetch = async (url, init) => {
+      fetchCalls.push({ url: String(url), method: init.method });
+      assert.equal(String(url), "http://127.0.0.1:8000/portal/assets/fonts/portal-sans.woff2");
+      assert.equal(init.headers.get("Authorization"), "Bearer backend-secret");
+      assert.equal(init.headers.get("x-api-key"), "backend-secret");
+      if (init.method === "HEAD") {
+        return new Response(null, {
+          status: 405,
+          headers: {
+            "cache-control": "no-store"
+          }
+        });
+      }
+      return new Response(Uint8Array.from([119, 79, 70, 50]), {
+        status: 200,
+        headers: {
+          "content-type": "font/woff2",
+          "cache-control": "public, max-age=3600"
+        }
+      });
+    };
+
+    try {
+      const request = buildRequest("https://portal.example.com/portal/assets/fonts/portal-sans.woff2", {
+        method: "HEAD"
+      });
+
+      const response = await HEAD(request, {
+        params: Promise.resolve({ path: ["fonts", "portal-sans.woff2"] })
+      });
+
+      assert.equal(response.status, 200);
+      assert.equal(response.headers.get("content-type"), "font/woff2");
+      assert.equal(response.headers.get("cache-control"), "public, max-age=3600");
+      assert.deepEqual(fetchCalls, [
+        {
+          url: "http://127.0.0.1:8000/portal/assets/fonts/portal-sans.woff2",
+          method: "HEAD"
+        },
+        {
+          url: "http://127.0.0.1:8000/portal/assets/fonts/portal-sans.woff2",
+          method: "GET"
+        }
+      ]);
+    } finally {
+      global.fetch = originalFetch;
+    }
+  } finally {
+    env.cleanup();
+  }
+});
+
+test("portal asset proxy rejects unknown and traversal-shaped asset paths with 404", async () => {
+  const env = withTempEnvironment({
+    TP_BACKEND_API_KEY: "backend-secret"
+  });
+
+  try {
+    const { GET } = await importFresh("../app/portal/assets/[...path]/route.js");
+
+    const rejectedCases = [
+      [],
+      ["evil.css"],
+      [""],
+      [" portal.css"],
+      ["portal.css "],
+      ["..", "portal.css"],
+      ["fonts/portal-sans.woff2"],
+      ["fonts", "..", "portal.css"],
+      ["fonts", "portal-sans.woff2", ".."],
+      ["fonts", "portal-sans.woff2.exe"]
+    ];
+
+    const originalFetch = global.fetch;
+    let fetchCalled = false;
+    global.fetch = async () => {
+      fetchCalled = true;
+      throw new Error("should not reach upstream");
+    };
+
+    try {
+      for (const pathParts of rejectedCases) {
+        const request = buildRequest("https://portal.example.com/portal/assets/rejected", {
+          method: "GET"
+        });
+
+        const response = await GET(request, {
+          params: Promise.resolve({ path: pathParts })
+        });
+
+        assert.equal(response.status, 404, `Expected 404 for path parts: ${JSON.stringify(pathParts)}`);
+        assert.equal(response.headers.get("Cache-Control"), "no-store");
+      }
+      assert.equal(fetchCalled, false);
+    } finally {
+      global.fetch = originalFetch;
+    }
+  } finally {
+    env.cleanup();
+  }
+});
+
 test("v1 POST rejects requests missing valid same-origin CSRF protections", async () => {
   const env = withTempEnvironment();
 
