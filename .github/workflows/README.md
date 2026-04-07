@@ -56,6 +56,16 @@ The repository includes multiple CI/CD and automation workflows to ensure code q
 - Automated analysis for security vulnerabilities.
 - Runs on pushes to main and pull requests.
 
+### 4.1 `secure-install-pilot.yml`
+**Purpose:** Advisory validation of a hash-enforced install pilot for the
+checked-in layered dependency contract.
+**Triggers:** Pull requests affecting dependency-management surfaces.
+**Features:**
+- Generates hash-enriched pilot lockfiles into an isolated artifact directory.
+- Validates those artifacts with `pip install --dry-run --require-hashes`.
+- Covers the non-ML checked-in layered locks only.
+- Stays non-blocking while the team evaluates maintenance cost and CI noise.
+
 ### 5. AI Advisory Workflows
 
 The repository includes three AI-powered advisory workflows that provide intelligent suggestions without blocking PR merges. All workflows follow a hardened pattern with timeout bounds and failure visibility.

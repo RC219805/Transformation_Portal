@@ -1,0 +1,62 @@
+name: Secure Install Pilot
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "requirements/**"
+      - "requirements.txt"
+      - "requirements-ci.txt"
+      - "requirements-dev.txt"
+      - "pyproject.toml"
+      - "scripts/validation/**"
+      - ".github/workflows/secure-install-pilot.yml"
+      - ".github/workflows/build.yml"
+      - ".github/workflows/dependency-update.yml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  secure-install-pilot:
+    name: Secure Install Pilot (advisory)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
+        with:
+          python-version: "3.11"
+
+      - name: Install lock generation tools
+        run: |
+          python -m pip install --upgrade "pip<26"
+          python -m pip install "pip-tools==7.5.2"
+
+      - name: Compile secure-install pilot lockfiles
+        working-directory: requirements
+        run: |
+          make compile-hash-pilot LOCK_PYTHON_VERSION=3.11 HASH_PILOT_OUT_DIR="${GITHUB_WORKSPACE}/requirements/.hash-pilot"
+
+      - name: Validate secure-install pilot lockfiles
+        working-directory: requirements
+        run: |
+          make check-hash-pilot LOCK_PYTHON_VERSION=3.11 HASH_PILOT_OUT_DIR="${GITHUB_WORKSPACE}/requirements/.hash-pilot"
+
+      - name: Upload secure-install pilot artifacts
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
+        with:
+          name: secure-install-pilot-locks
+          path: requirements/.hash-pilot/
+          if-no-files-found: warn
+          retention-days: 7

@@ -40,15 +40,17 @@
 SHELL := /bin/bash
 LOCK_PYTHON_VERSION ?= 3.11
 PIP_TOOLS_CACHE_DIR ?= $(CURDIR)/.pip-tools-cache
+HASH_PILOT_OUT_DIR ?= $(CURDIR)/.hash-pilot
 PIP_COMPILE_BASE := pip-compile -q --resolver=backtracking
 PIP_COMPILE_PY_FLAG := $(shell pip-compile --help 2>/dev/null | grep -q -- '--python-version' && echo "--python-version=$(LOCK_PYTHON_VERSION)" || true)
 PIP_COMPILE := mkdir -p "$(PIP_TOOLS_CACHE_DIR)" && PIP_TOOLS_CACHE_DIR="$(PIP_TOOLS_CACHE_DIR)" $(PIP_COMPILE_BASE) $(PIP_COMPILE_PY_FLAG)
+PIP_COMPILE_HASHED := mkdir -p "$(PIP_TOOLS_CACHE_DIR)" && PIP_TOOLS_CACHE_DIR="$(PIP_TOOLS_CACHE_DIR)" $(PIP_COMPILE_BASE) $(PIP_COMPILE_PY_FLAG) --generate-hashes
 
 # PyTorch CPU index for CI/cross-platform lockfiles
 PYTORCH_CPU_INDEX := --extra-index-url https://download.pytorch.org/whl/cpu
 
 # Default target: compile all requirements
-.PHONY: all compile compile-all compile-ml-layers update help clean check \
+.PHONY: all compile compile-all compile-ml-layers compile-hash-pilot check-hash-pilot update help clean check \
 	ml-core.txt ml-cpu.txt ml-mps.txt ml-cuda.txt ml-raw.txt ml-coreml.txt ml-research.txt ml.txt
 
 help:
@@ -57,8 +59,10 @@ help:
 	@echo "  compile-all       Same as compile (for compatibility)"
 	@echo "  compile-ml-layers Compile only ML layer lockfiles"
 	@echo "  compile-accel     Compile acceleration layer lockfiles (ml-cpu, ml-mps, ml-cuda)"
+	@echo "  compile-hash-pilot Generate hash-enforced pilot lockfiles into HASH_PILOT_OUT_DIR"
 	@echo "  update            Update all dependencies to latest versions"
 	@echo "  check             Verify that .txt files are up-to-date with .in files"
+	@echo "  check-hash-pilot  Validate the generated pilot lockfiles with --require-hashes"
 	@echo "  clean             Remove all compiled .txt files"
 	@echo ""
 	@echo "Individual compilation targets:"
@@ -103,6 +107,35 @@ compile-ml-layers: all.txt base.txt ml-core-darwin-x86_64.txt ml-core-darwin-arm
 # Compile only acceleration layers (useful for profile updates)
 compile-accel: all.txt base.txt ml-core-darwin-x86_64.txt ml-core-darwin-arm64.txt ml-core-linux.txt
 	@echo "✓ Acceleration layer requirements compiled successfully"
+
+# Hash pilot lane for secure-install evaluation.
+# This intentionally covers only the non-ML checked-in contract so we can
+# evaluate hash enforcement without pulling platform-specific ML lockfiles or
+# changing the canonical repository install surface.
+compile-hash-pilot:
+	@echo "Compiling secure-install hash pilot into $(HASH_PILOT_OUT_DIR)..."
+	@mkdir -p "$(HASH_PILOT_OUT_DIR)"
+	@$(PIP_COMPILE_HASHED) all.in -o "$(HASH_PILOT_OUT_DIR)/all.txt"
+	@$(PIP_COMPILE_HASHED) -c "$(HASH_PILOT_OUT_DIR)/all.txt" base.in -o "$(HASH_PILOT_OUT_DIR)/base.txt"
+	@$(PIP_COMPILE_HASHED) -c "$(HASH_PILOT_OUT_DIR)/all.txt" dev.in -o "$(HASH_PILOT_OUT_DIR)/dev.txt"
+	@$(PIP_COMPILE_HASHED) -c "$(HASH_PILOT_OUT_DIR)/all.txt" ci.in -o "$(HASH_PILOT_OUT_DIR)/ci.txt"
+	@$(PIP_COMPILE_HASHED) security.in -o "$(HASH_PILOT_OUT_DIR)/security.txt"
+	@$(PIP_COMPILE_HASHED) -c "$(HASH_PILOT_OUT_DIR)/all.txt" tools-archive.in -o "$(HASH_PILOT_OUT_DIR)/tools-archive.txt"
+	@echo "✓ Secure-install hash pilot compiled successfully"
+
+check-hash-pilot:
+	@echo "Checking secure-install hash pilot in $(HASH_PILOT_OUT_DIR)..."
+	@set -euo pipefail; \
+	for lock in all.txt base.txt dev.txt ci.txt security.txt tools-archive.txt; do \
+		lock_path="$(HASH_PILOT_OUT_DIR)/$$lock"; \
+		if [[ ! -f "$$lock_path" ]]; then \
+			echo "ERROR: Missing pilot lockfile $$lock_path"; \
+			echo "ERROR: Run 'make compile-hash-pilot' first."; \
+			exit 1; \
+		fi; \
+		python -m pip install --dry-run --require-hashes -r "$$lock_path" >/dev/null; \
+	done; \
+	echo "✓ Secure-install hash pilot passed"
 
 # Compile all.txt first for global resolution
 # Note: all.txt intentionally excludes optional ML layers from the checked-in contract.
