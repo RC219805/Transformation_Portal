@@ -341,6 +341,15 @@ def test_portal_html_uses_looping_background_video_layer() -> None:
     assert ".performance-lite .portal-video-media" in content
 
 
+def test_portal_html_embeds_local_utility_snapshot_without_tailwind_cdn() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+
+    assert "https://cdn.tailwindcss.com" not in content
+    assert "tailwind.config" not in content
+    assert "Phase 1 local utility snapshot replacing Tailwind CDN for portal.html" in content
+
+
 def test_portal_fetch_sse_reconnect_scheduler_has_terminal_guard_and_backoff() -> None:
     portal_html = Path(__file__).resolve().parents[1] / "portal.html"
     content = portal_html.read_text(encoding="utf-8")
@@ -541,7 +550,24 @@ def test_portal_managed_mode_clears_api_keys_and_hides_secret_ui() -> None:
     assert "const showApiKeyInput = bootstrapReady && state.auth.features.apiKeyInput;" in sync_body
     assert "els.apiKeySection.classList.toggle('hidden', !showApiKeyInput);" in sync_body
     assert "els.apiKeyInput.disabled = !showApiKeyInput;" in sync_body
-    assert "els.rememberApiKey.disabled = !showApiKeyInput;" in sync_body
+    assert "rememberApiKey" not in content
+
+
+def test_portal_direct_debug_api_key_storage_is_session_only() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+    persist_body = _extract_js_function_body(content, "_persistApiKeyFromInputs")
+    load_body = _extract_js_function_body(content, "_loadApiKeyIntoInputs")
+    current_token_body = _extract_js_function_body(content, "_currentApiToken")
+
+    assert "localStorage.setItem(API_KEY_STORAGE_KEY, token);" not in persist_body
+    assert "sessionStorage.setItem(API_KEY_STORAGE_KEY, token);" in persist_body
+    assert "localStorage.removeItem(API_KEY_STORAGE_KEY);" in persist_body
+    assert "const stored = sessionValue || localValue;" in load_body
+    assert "sessionStorage.setItem(API_KEY_STORAGE_KEY, localValue);" in load_body
+    assert "localStorage.removeItem(API_KEY_STORAGE_KEY);" in load_body
+    assert "localStorage.getItem(API_KEY_STORAGE_KEY)" not in current_token_body
+    assert "sessionStorage.getItem(API_KEY_STORAGE_KEY)" in current_token_body
 
 
 def test_portal_managed_mode_uses_csrf_instead_of_browser_backend_secrets() -> None:

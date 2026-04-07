@@ -15,16 +15,37 @@ Key Components:
 
 from __future__ import annotations
 
-from importlib.metadata import PackageNotFoundError
-from importlib.metadata import version as _pkg_version
+import tomllib
+from importlib import metadata
+from pathlib import Path
 
-# Runtime version - synchronized with pyproject.toml
-# Contract surfaces (schemas) are versioned at 2.0.0; package follows contract major
-try:
-    __version__ = _pkg_version("transformation-portal")
-except PackageNotFoundError:
-    # Source-tree execution without installed metadata
-    __version__ = "2.0.0"
+_PACKAGE_NAME = "transformation-portal"
+_FALLBACK_VERSION = "0.1.0"
+
+
+def _read_pyproject_version() -> str:
+    """Resolve the package version directly from the repo source of truth."""
+
+    pyproject_path = Path(__file__).resolve().parents[2] / "pyproject.toml"
+    payload = tomllib.loads(pyproject_path.read_text(encoding="utf-8"))
+    return str(payload["project"]["version"])
+
+
+def _resolve_runtime_version() -> str:
+    """Prefer installed package metadata and fall back to pyproject in source trees."""
+
+    try:
+        return metadata.version(_PACKAGE_NAME)
+    except metadata.PackageNotFoundError:
+        try:
+            return _read_pyproject_version()
+        except (FileNotFoundError, KeyError, OSError, tomllib.TOMLDecodeError):
+            # Last-resort fallback for source-tree execution when pyproject cannot be read.
+            return _FALLBACK_VERSION
+
+
+# Runtime version - pyproject.toml is the source of truth for source-tree execution.
+__version__ = _resolve_runtime_version()
 
 __author__ = "RC219805"
 
