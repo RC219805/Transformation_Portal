@@ -531,7 +531,7 @@ class Job:
     started_at: Optional[float] = None
     finished_at: Optional[float] = None
     done_published_at: Optional[float] = None  # Set after 'done' event is published
-    state: str = "queued"  # queued|running|succeeded|failed|canceled
+    state: str = "queued"  # queued|running|succeeded|partial|failed|canceled
     progress: int = 0
     exit_code: Optional[int] = None
     request: Dict[str, Any] = field(default_factory=dict)
@@ -539,6 +539,7 @@ class Job:
     logs_tail: List[str] = field(default_factory=list)
     artifacts: Dict[str, Any] = field(default_factory=dict)
     artifact_lookup: Dict[str, Path] = field(default_factory=dict)
+    run_summary: Dict[str, Any] = field(default_factory=dict)
     proc: Optional[asyncio.subprocess.Process] = None
     terminate_task: Optional[asyncio.Task[None]] = None
     cancel_requested: bool = False
@@ -554,6 +555,8 @@ JOBS: Dict[str, Job] = {}
 EVENT_SUBSCRIBERS: Dict[str, Dict[str, "asyncio.Queue[Dict[str, Any]]"]] = {}
 RATE_LIMIT_BUCKETS: Dict[str, Deque[float]] = {}
 JOB_ADMISSION_LOCK = asyncio.Lock()
+ACTIVE_JOB_STATES = {"queued", "running"}
+JOB_RUN_SUMMARY_MAX_BYTES = 1024 * 1024
 
 # Gate pipelines integrated directly
 ARCHIVE_GATE_PIPELINES = {"archive-gate-a", "archive-gate-b", "archive-gate-c"}
@@ -1402,7 +1405,7 @@ def _cleanup_expired_jobs(now: float) -> None:
 
 
 def _active_job_count() -> int:
-    return sum(1 for job in JOBS.values() if job.state in {"queued", "running"})
+    return sum(1 for job in JOBS.values() if job.state in ACTIVE_JOB_STATES)
 
 
 def _cleanup_rate_limit_buckets(now: float) -> None:
@@ -3178,6 +3181,169 @@ def _serialize_indexed_artifact(
     }
 
 
+def _coerce_nonnegative_int(value: Any) -> Optional[int]:
+    if isinstance(value, bool):
+        return None
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return None
+    if parsed < 0:
+        return None
+    return parsed
+
+
+def _load_bounded_json_object(path: Path, *, max_bytes: int = JOB_RUN_SUMMARY_MAX_BYTES) -> Optional[Dict[str, Any]]:
+    try:
+        size_bytes = path.stat().st_size
+    except OSError:
+        return None
+    if size_bytes <= 0 or size_bytes > max_bytes:
+        return None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def _summarize_run_card_payload(payload: Mapping[str, Any]) -> Dict[str, Any]:
+    summary: Dict[str, Any] = {"source": "run_card"}
+
+    batch_id = str(payload.get("batch_id") or "").strip()
+    if batch_id:
+        summary["batch_id"] = batch_id
+
+    total_images = _coerce_nonnegative_int(payload.get("total_images"))
+    success_count = _coerce_nonnegative_int(payload.get("success_count"))
+    error_count = _coerce_nonnegative_int(payload.get("error_count"))
+    artifact_index = payload.get("artifact_index")
+    artifact_index_count = len(artifact_index) if isinstance(artifact_index, list) else None
+
+    if total_images is None and success_count is not None and error_count is not None:
+        total_images = success_count + error_count
+
+    if total_images is not None:
+        summary["total_images"] = total_images
+    if success_count is not None:
+        summary["success_count"] = success_count
+    if error_count is not None:
+        summary["error_count"] = error_count
+    if artifact_index_count is not None:
+        summary["artifact_index_count"] = artifact_index_count
+
+    reviewable_outputs = bool((success_count or 0) > 0)
+    partial = reviewable_outputs and bool((error_count or 0) > 0)
+    summary["reviewable_outputs"] = reviewable_outputs
+    summary["partial"] = partial
+
+    return summary
+
+
+def _summarize_batch_manifest_payload(payload: Mapping[str, Any]) -> Dict[str, Any]:
+    summary: Dict[str, Any] = {"source": "batch_manifest"}
+
+    batch_id = str(payload.get("batch_id") or "").strip()
+    if batch_id:
+        summary["batch_id"] = batch_id
+
+    results = payload.get("results")
+    if isinstance(results, list):
+        success_count = sum(1 for item in results if isinstance(item, dict) and item.get("status") == "ok")
+        error_count = sum(1 for item in results if isinstance(item, dict) and item.get("status") == "error")
+    else:
+        success_count = 0
+        error_count = 0
+
+    stats = payload.get("stats")
+    total_images = None
+    if isinstance(stats, Mapping):
+        total_images = _coerce_nonnegative_int(stats.get("total_images"))
+    if total_images is None and isinstance(results, list):
+        total_images = len(results)
+
+    if total_images is not None:
+        summary["total_images"] = total_images
+    summary["success_count"] = success_count
+    summary["error_count"] = error_count
+    summary["reviewable_outputs"] = success_count > 0
+    summary["partial"] = success_count > 0 and error_count > 0
+
+    return summary
+
+
+def _find_job_artifact_path(job: Job, predicate: Callable[[str], bool]) -> Optional[Path]:
+    lookup = job.artifact_lookup or _hydrate_artifact_lookup_from_items(job)
+    for relative_path in sorted(lookup):
+        if predicate(relative_path):
+            return lookup[relative_path]
+    return None
+
+
+def _refresh_job_run_summary(job: Job) -> Dict[str, Any]:
+    if not job:
+        return {}
+
+    existing_summary = dict(job.run_summary) if isinstance(job.run_summary, dict) and job.run_summary else {}
+    run_card_path = _find_job_artifact_path(
+        job,
+        lambda relative_path: PurePosixPath(relative_path).name.startswith("run_card")
+        and relative_path.lower().endswith(".json"),
+    )
+    summary: Dict[str, Any] = {}
+    if run_card_path is not None:
+        payload = _load_bounded_json_object(run_card_path)
+        if payload is not None:
+            summary = _summarize_run_card_payload(payload)
+
+    if not summary:
+        batch_manifest_path = _find_job_artifact_path(
+            job,
+            lambda relative_path: PurePosixPath(relative_path).parent.as_posix() == "manifests"
+            and PurePosixPath(relative_path).name.startswith("batch_")
+            and relative_path.lower().endswith(".json"),
+        )
+        if batch_manifest_path is not None:
+            payload = _load_bounded_json_object(batch_manifest_path)
+            if payload is not None:
+                summary = _summarize_batch_manifest_payload(payload)
+
+    if not summary and existing_summary:
+        summary = existing_summary
+
+    job.run_summary = summary
+
+    if job.state != "canceled" and summary.get("partial"):
+        job.state = "partial"
+        existing_code = ""
+        if isinstance(job.error, dict):
+            existing_code = str(job.error.get("code") or "").strip().upper()
+        if existing_code in {"", "RUNNER_EXIT_NONZERO"}:
+            total_images = summary.get("total_images")
+            success_count = summary.get("success_count")
+            error_count = summary.get("error_count")
+            detail_text = "outputs remain reviewable"
+            if (
+                isinstance(total_images, int)
+                and isinstance(success_count, int)
+                and isinstance(error_count, int)
+                and total_images > 0
+            ):
+                detail_text = f"{error_count}/{total_images} images failed; " f"{success_count} outputs remain reviewable"
+            job.error = _error_obj(
+                "RUNNER_PARTIAL_FAILURE",
+                detail_text,
+                {
+                    "exit_code": job.exit_code,
+                    "total_images": total_images,
+                    "success_count": success_count,
+                    "error_count": error_count,
+                },
+            )
+
+    return summary
+
+
 class ArtifactPathValidationError(ValueError):
     """Base class for bounded artifact-path validation failures."""
 
@@ -3345,6 +3511,8 @@ def _index_job_artifacts(job: Job) -> List[Dict[str, Any]]:
 
 
 def _serialize_job(job: Job, *, include_logs: bool = True) -> Dict[str, Any]:
+    if job.state not in ACTIVE_JOB_STATES and job.state != "canceled":
+        _refresh_job_run_summary(job)
     data = {
         "id": job.id,
         "pipeline": str(job.request.get("pipeline") or ""),
@@ -3357,6 +3525,7 @@ def _serialize_job(job: Job, *, include_logs: bool = True) -> Dict[str, Any]:
         "events_url": f"/v1/jobs/{job.id}/events",
         "artifacts": job.artifacts,
         "error": job.error,
+        "run_summary": job.run_summary or None,
     }
     if include_logs:
         data["logs_tail"] = job.logs_tail[-STATUS_LOG_LIMIT:]
@@ -5098,6 +5267,8 @@ async def job_events(
             message="job not found",
             details={"job_id": job_id},
         )
+    if job.state not in ACTIVE_JOB_STATES and job.state != "canceled":
+        _refresh_job_run_summary(job)
 
     subscribers = EVENT_SUBSCRIBERS.setdefault(job_id, {})
     subscriber_id = uuid.uuid4().hex
@@ -5137,6 +5308,7 @@ async def job_events(
                         "exit_code": job.exit_code,
                         "error": job.error,
                         "artifacts": job.artifacts,
+                        "run_summary": job.run_summary or None,
                     },
                 )
                 return
@@ -5293,6 +5465,7 @@ async def _run_job(job: Job, argv: List[str]) -> None:
         # done_published_at to know if they need to wait for real events or can
         # safely synthesize a 'done' from job state.
         indexed_artifacts = _index_job_artifacts(job)
+        _refresh_job_run_summary(job)
         for artifact in indexed_artifacts:
             await _publish_event(
                 job.id,
@@ -5309,6 +5482,7 @@ async def _run_job(job: Job, argv: List[str]) -> None:
                 "exit_code": job.exit_code,
                 "error": job.error,
                 "artifacts": job.artifacts,
+                "run_summary": job.run_summary or None,
             },
         )
         # Mark timestamps AFTER all events are published, so SSE endpoint knows

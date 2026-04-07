@@ -1339,6 +1339,19 @@ def test_portal_exposes_run_card_quick_actions() -> None:
     assert "window.open(runCardUrl, '_blank', 'noopener,noreferrer');" in content
 
 
+def test_portal_supports_partial_review_state() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+
+    assert "'partial'" in content
+    assert (
+        "SAFE_JOB_STATES = new Set(['queued', 'running', 'succeeded', 'partial', 'failed', 'canceled', 'ready', 'offline']);"
+        in content
+    )
+    assert "Run partially completed" in content
+    assert "outputs remain reviewable" in content
+
+
 def test_portal_selected_job_progress_bar_has_accessible_label() -> None:
     portal_html = Path(__file__).resolve().parents[1] / "portal.html"
     content = portal_html.read_text(encoding="utf-8")

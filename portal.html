@@ -107,6 +107,7 @@
 
         .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background-color: #94a3b8; flex-shrink: 0; }
         .status-dot.running { background-color: #f59e0b; box-shadow: 0 0 8px #f59e0b; animation: pulse 2s infinite; }
+        .status-dot.partial { background-color: #f59e0b; box-shadow: 0 0 8px rgba(245, 158, 11, 0.45); }
         .status-dot.succeeded, .status-dot.ready { background-color: #10b981; }
         .status-dot.failed, .status-dot.canceled, .status-dot.offline { background-color: #ef4444; }
 
@@ -1941,7 +1942,7 @@
         const EVENT_SOURCE_READY_STATE_OPEN = 1;
         const EVENT_SOURCE_READY_STATE_CLOSED = 2;
         const TIMELINE_PROGRESS_CHECKPOINTS = [5, 25, 50, 75, 100];
-        const SAFE_JOB_STATES = new Set(['queued', 'running', 'succeeded', 'failed', 'canceled', 'ready', 'offline']);
+        const SAFE_JOB_STATES = new Set(['queued', 'running', 'succeeded', 'partial', 'failed', 'canceled', 'ready', 'offline']);
         const SAFE_HTTP_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
         let queueRenderScheduled = false;
@@ -3114,7 +3115,19 @@
                 _noteTransportWarning(job, 'auth_blocked', 'Transport is blocked until authentication is restored.', 'warn');
             }
 
-            if (job.state === 'succeeded') {
+            if (job.state === 'partial') {
+                _pushTimelineEntry(
+                    job,
+                    _timelineEntry(
+                        'done',
+                        'Run partially completed',
+                        jobOutcomeSummary(job) || 'Some inputs failed, but outputs remain reviewable.',
+                        Number(job.finishedAt || job.updatedAt || Date.now()),
+                        'warn',
+                        'done|partial'
+                    )
+                );
+            } else if (job.state === 'succeeded') {
                 _pushTimelineEntry(job, _timelineEntry('done', 'Run completed', 'Outputs are ready for review.', Number(job.finishedAt || job.updatedAt || Date.now()), 'success', 'done|succeeded'));
             } else if (job.state === 'failed') {
                 _pushTimelineEntry(job, _timelineEntry('done', 'Run failed', getReadableError(job.error) || 'Runner reported a terminal failure.', Number(job.finishedAt || job.updatedAt || Date.now()), 'error', 'done|failed'));
@@ -3703,6 +3716,7 @@
             _reconcileJobTimeline(selected);
             const artifactCount = Array.isArray(selected.artifacts) ? selected.artifacts.length : 0;
             const readableError = getReadableError(selected.error);
+            const outcomeSummary = jobOutcomeSummary(selected);
             const nativeReadyState = _nativeEventSourceReadyState(selected.eventSource);
             const streamStatus = selected.reconnectBlocked
                 ? 'Blocked by auth'
@@ -3749,9 +3763,13 @@
                 els.logMetaLabel.textContent = `${String(selected.pipeline || 'unknown')} • ${transportLabel} • ${artifactCount} artifact${artifactCount === 1 ? '' : 's'}`;
             }
             if (els.selectedJobSummary) {
-                els.selectedJobSummary.textContent = readableError
-                    ? readableError
-                    : `Operators can now read ${titleCaseToken(selected.state, 'job')} state at a glance: ${artifactCount} artifact${artifactCount === 1 ? '' : 's'} indexed, ${transportLabel} transport, ${elapsedLabel}.`;
+                els.selectedJobSummary.textContent = selected.state === 'partial' && outcomeSummary
+                    ? `${outcomeSummary}.`
+                    : readableError
+                        ? readableError
+                        : outcomeSummary
+                            ? `${outcomeSummary}.`
+                            : `Operators can now read ${titleCaseToken(selected.state, 'job')} state at a glance: ${artifactCount} artifact${artifactCount === 1 ? '' : 's'} indexed, ${transportLabel} transport, ${elapsedLabel}.`;
             }
             if (els.selectedJobTransportAlert) {
                 if (visibleAlert) {
@@ -4375,6 +4393,74 @@
             return message || code || '';
         }
 
+        function normalizeRunSummary(rawSummary) {
+            if (!rawSummary || typeof rawSummary !== 'object') return null;
+
+            const toNonNegativeInt = (value) => {
+                if (typeof value === 'boolean') return null;
+                const parsed = Number(value);
+                if (!Number.isFinite(parsed) || parsed < 0) return null;
+                return Math.round(parsed);
+            };
+
+            const normalized = {
+                source: String(rawSummary.source || '').trim(),
+                batch_id: String(rawSummary.batch_id || '').trim(),
+                total_images: toNonNegativeInt(rawSummary.total_images),
+                success_count: toNonNegativeInt(rawSummary.success_count),
+                error_count: toNonNegativeInt(rawSummary.error_count),
+                artifact_index_count: toNonNegativeInt(rawSummary.artifact_index_count),
+                reviewable_outputs: Boolean(rawSummary.reviewable_outputs),
+                partial: Boolean(rawSummary.partial)
+            };
+
+            if (
+                normalized.total_images === null
+                && normalized.success_count !== null
+                && normalized.error_count !== null
+            ) {
+                normalized.total_images = normalized.success_count + normalized.error_count;
+            }
+
+            const hasMeaningfulContent = normalized.batch_id
+                || normalized.total_images !== null
+                || normalized.success_count !== null
+                || normalized.error_count !== null
+                || normalized.artifact_index_count !== null
+                || normalized.reviewable_outputs
+                || normalized.partial;
+
+            return hasMeaningfulContent ? normalized : null;
+        }
+
+        function describeRunSummary(summary) {
+            if (!summary) return '';
+            const segments = [];
+            const total = Number.isFinite(summary.total_images) ? summary.total_images : null;
+            const successCount = Number.isFinite(summary.success_count) ? summary.success_count : null;
+            const errorCount = Number.isFinite(summary.error_count) ? summary.error_count : null;
+
+            if (successCount !== null && total !== null && total > 0) {
+                segments.push(`${successCount}/${total} images succeeded`);
+            } else if (successCount !== null) {
+                segments.push(`${successCount} image${successCount === 1 ? '' : 's'} succeeded`);
+            }
+
+            if (errorCount !== null && errorCount > 0) {
+                segments.push(`${errorCount} failed`);
+            }
+
+            if (summary.partial) {
+                segments.push('outputs remain reviewable');
+            }
+
+            return segments.join(' • ');
+        }
+
+        function jobOutcomeSummary(job) {
+            return describeRunSummary(normalizeRunSummary(job?.run_summary));
+        }
+
         function normalizeArtifactItems(artifactsContainer) {
             if (!artifactsContainer || typeof artifactsContainer !== 'object') return [];
             const items = Array.isArray(artifactsContainer.items) ? artifactsContainer.items : [];
@@ -4710,6 +4796,7 @@
                 progress: Math.max(0, Math.min(100, Number(rawJob.progress) || 0)),
                 logs: Array.isArray(rawJob.logs_tail) ? rawJob.logs_tail.slice(-MAX_JOB_LOG_LINES) : [],
                 artifacts: normalizeArtifactItems(rawJob.artifacts),
+                run_summary: normalizeRunSummary(rawJob.run_summary),
                 error: rawJob.error || null,
                 eventSource: null,
                 fetchAbortController: null,
@@ -4815,6 +4902,7 @@
             existing.logs = hydrated.logs;
             existing.error = hydrated.error;
             existing.artifacts = hydrated.artifacts;
+            existing.run_summary = hydrated.run_summary;
             existing.startedAt = hydrated.startedAt || existing.startedAt || 0;
             existing.finishedAt = hydrated.finishedAt || existing.finishedAt || 0;
             existing.createdAt = hydrated.createdAt || existing.createdAt || Date.now();
@@ -7182,7 +7270,7 @@
                 li.className = `rounded-2xl border p-4 cursor-pointer transition-all ${isSelected ? 'border-cyan-500 bg-cyan-50/80 dark:bg-cyan-900/20 shadow-md ring-1 ring-cyan-500/15' : 'border-slate-200 dark:border-slate-800 bg-slate-50/75 dark:bg-slate-900/45 hover:bg-white/90 dark:hover:bg-slate-800/80'}`;
 
                 let badgeColor = 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700';
-                if (job.state === 'running') badgeColor = 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800';
+                if (job.state === 'running' || job.state === 'partial') badgeColor = 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800';
                 if (job.state === 'succeeded') badgeColor = 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-800';
                 if (job.state === 'failed' || job.state === 'canceled') badgeColor = 'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800';
 
@@ -7193,6 +7281,7 @@
                 const canCancel = _portalPrivilegesReady() && (job.state === 'running' || job.state === 'queued');
                 const artifactCount = Array.isArray(job.artifacts) ? job.artifacts.length : 0;
                 const errorLine = getReadableError(job.error);
+                const outcomeSummary = jobOutcomeSummary(job);
                 const transportLabel = formatTransportLabel(job);
                 const freshnessLabel = formatRelativeTime(Number(job.updatedAt || job.createdAt || 0));
 
@@ -7276,9 +7365,11 @@
 
                 const summary = document.createElement('p');
                 summary.className = 'mt-3 text-[11px] leading-5 text-slate-500 dark:text-slate-400';
-                summary.textContent = errorLine
-                    ? errorLine
-                    : `${artifactCount} artifact${artifactCount === 1 ? '' : 's'} indexed`;
+                summary.textContent = job.state === 'partial' && outcomeSummary
+                    ? outcomeSummary
+                    : errorLine
+                        ? errorLine
+                        : outcomeSummary || `${artifactCount} artifact${artifactCount === 1 ? '' : 's'} indexed`;
                 li.appendChild(summary);
 
                 fragment.appendChild(li);
@@ -7425,7 +7516,7 @@
             }
             if (eventName === 'done') {
                 job.state = String(parsed.state || job.state || 'failed');
-                job.progress = job.state === 'succeeded' ? 100 : job.progress;
+                job.progress = (job.state === 'succeeded' || job.state === 'partial') ? 100 : job.progress;
                 job.finishedAt = Date.now();
                 _recordProgressTimeline(job, job.progress, job.finishedAt);
                 if (parsed.error) {
@@ -7440,13 +7531,19 @@
                 if (parsed.artifacts && parsed.artifacts.items) {
                     job.artifacts = normalizeArtifactItems(parsed.artifacts);
                 }
+                if (parsed.run_summary) {
+                    job.run_summary = normalizeRunSummary(parsed.run_summary);
+                }
                 _reconcileJobTimeline(job);
                 const endLine = `[SYSTEM] Stream closed. Exit code: ${parsed.exit_code}`;
                 appendJobLog(job, endLine);
                 logToPane(job.id, endLine);
                 stopJobActivity(job);
                 scheduleRenderJobQueue();
-                createToast(`Job ${job.state}.`, job.state === 'succeeded' ? 'success' : 'error');
+                createToast(
+                    job.state === 'partial' ? 'Job partially completed. Reviewable outputs are available.' : `Job ${job.state}.`,
+                    job.state === 'succeeded' ? 'success' : job.state === 'partial' ? 'info' : 'error'
+                );
                 if (state.selectedJobId === job.id && els.logStatusIndicator) els.logStatusIndicator.classList.add('hidden');
             }
         }
