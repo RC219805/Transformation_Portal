@@ -209,7 +209,6 @@ This avoids a known compatibility issue between `pip 26` and
 workflow in `.github/workflows/secure-install-pilot.yml` applies this
 toolchain automatically, so local runs should use the same versions to avoid
 unexpected failures.
->>>>>>> 247e3113 (docs(deps): clarify secure-install pilot toolchain)
 
 ```bash
 cd requirements
