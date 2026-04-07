@@ -118,6 +118,9 @@ def test_root_ui_response_is_not_cached(client: TestClient) -> None:
     assert response.status_code == 200
     assert response.headers["Cache-Control"] == "no-store"
     assert response.headers["Pragma"] == "no-cache"
+    assert "https://cdn.tailwindcss.com" not in response.headers["Content-Security-Policy"]
+    assert "https://cdn.tailwindcss.com" not in response.text
+    assert "Remember in local storage" not in response.text
     assert "Transformation Portal" in response.text
 
 
