@@ -120,10 +120,19 @@ def test_root_ui_response_is_not_cached(client: TestClient) -> None:
     assert csp is not None
     assert response.headers["Cache-Control"] == "no-store"
     assert response.headers["Pragma"] == "no-cache"
+    assert response.headers["X-Content-Type-Options"] == "nosniff"
+    assert response.headers["X-Frame-Options"] == "DENY"
+    assert response.headers["Referrer-Policy"] == "no-referrer"
+    assert response.headers["Permissions-Policy"] == "camera=(), microphone=(), geolocation=()"
+    assert response.headers["Cross-Origin-Opener-Policy"] == "same-origin"
+    assert response.headers["Cross-Origin-Resource-Policy"] == "same-origin"
+    assert response.headers["X-Permitted-Cross-Domain-Policies"] == "none"
     assert "default-src 'self'" in csp
-    assert "script-src 'self' 'unsafe-inline'" in csp
-    assert "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com" in csp
-    assert "font-src 'self' https://fonts.gstatic.com data:" in csp
+    assert "script-src 'self'" in csp
+    assert "script-src 'self' 'unsafe-inline'" not in csp
+    assert "style-src 'self'" in csp
+    assert "style-src 'self' 'unsafe-inline'" not in csp
+    assert "font-src 'self'" in csp
     assert "img-src 'self' data: blob:" in csp
     assert "media-src 'self'" in csp
     assert "connect-src 'self'" in csp
@@ -132,12 +141,50 @@ def test_root_ui_response_is_not_cached(client: TestClient) -> None:
     assert "frame-ancestors 'none'" in csp
     assert "form-action 'self'" in csp
     assert "https://cdn.tailwindcss.com" not in csp
+    assert "https://fonts.googleapis.com" not in csp
+    assert "https://fonts.gstatic.com" not in csp
     assert "https://cdn.tailwindcss.com" not in response.text
-    assert "script-src 'self' 'unsafe-inline'" in response.text
-    assert "media-src 'self'" in response.text
-    assert "frame-ancestors 'none'" in response.text
+    assert "https://fonts.googleapis.com" not in response.text
+    assert "https://fonts.gstatic.com" not in response.text
+    assert '<link rel="stylesheet" href="/portal/assets/portal.css"' in response.text
+    assert '<script src="/portal/assets/portal.js" defer></script>' in response.text
+    assert "<style>" not in response.text
+    assert "<script>" not in response.text
+    assert "Content-Security-Policy" not in response.text
     assert "Remember in local storage" not in response.text
     assert "Transformation Portal" in response.text
+
+
+def test_portal_asset_endpoint_serves_css_and_js(client: TestClient) -> None:
+    css_response = client.get("/portal/assets/portal.css")
+    js_response = client.get("/portal/assets/portal.js")
+
+    assert css_response.status_code == 200
+    assert css_response.headers["Cache-Control"] == orchestrator_app.PORTAL_ASSET_CACHE_CONTROL
+    assert css_response.headers["content-type"].startswith("text/css")
+    assert "@font-face" in css_response.text
+    assert "Portal Sans" in css_response.text
+    assert "https://fonts.googleapis.com" not in css_response.text
+
+    assert js_response.status_code == 200
+    assert js_response.headers["Cache-Control"] == orchestrator_app.PORTAL_ASSET_CACHE_CONTROL
+    assert js_response.headers["content-type"].startswith("text/javascript")
+    assert "const BOOTSTRAP_TIMEOUT_MS = 3500;" in js_response.text
+
+
+def test_portal_asset_endpoint_serves_repo_local_fonts(client: TestClient) -> None:
+    response = client.get("/portal/assets/fonts/portal-sans.woff2")
+
+    assert response.status_code == 200
+    assert response.headers["Cache-Control"] == orchestrator_app.PORTAL_ASSET_CACHE_CONTROL
+    assert response.headers["content-type"].startswith("font/woff2")
+    assert response.content
+
+
+def test_portal_asset_endpoint_rejects_path_traversal(client: TestClient) -> None:
+    response = client.get("/portal/assets/../portal.html")
+
+    assert response.status_code == 404
 
 
 def test_portal_video_endpoint_serves_background_asset(

@@ -21,6 +21,8 @@ from starlette.requests import Request as StarletteRequest
 pytestmark = pytest.mark.unit
 
 orchestrator_app = importlib.import_module("app")
+PORTAL_HTML_PATH = Path(__file__).resolve().parents[1] / "portal.html"
+PORTAL_ASSET_ROOT = PORTAL_HTML_PATH.parent / "public" / "portal-assets"
 
 
 class _FakeRequest:
@@ -36,6 +38,39 @@ class _FakeRequest:
 def _flag_value(argv: list[str], flag: str) -> str:
     idx = argv.index(flag)
     return argv[idx + 1]
+
+
+def _portal_html_content() -> str:
+    return PORTAL_HTML_PATH.read_text(encoding="utf-8")
+
+
+def _portal_asset_path(asset_url: str) -> Path:
+    if not asset_url.startswith("/portal/assets/"):
+        raise AssertionError(f"unexpected portal asset url: {asset_url}")
+    candidate = PORTAL_ASSET_ROOT / asset_url.removeprefix("/portal/assets/")
+    if not candidate.is_file():
+        raise AssertionError(f"portal asset missing: {candidate}")
+    return candidate
+
+
+def _portal_css_content() -> str:
+    html = _portal_html_content()
+    match = re.search(r'<link rel="stylesheet" href="(/portal/assets/[^"]+)"\s*/?>', html)
+    if match is None:
+        raise AssertionError("portal stylesheet link not found")
+    return _portal_asset_path(match.group(1)).read_text(encoding="utf-8")
+
+
+def _portal_js_content() -> str:
+    html = _portal_html_content()
+    match = re.search(r'<script src="(/portal/assets/[^"]+)"[^>]*></script>', html)
+    if match is None:
+        raise AssertionError("portal script asset not found")
+    return _portal_asset_path(match.group(1)).read_text(encoding="utf-8")
+
+
+def _portal_bundle_content() -> str:
+    return "\n".join((_portal_html_content(), _portal_css_content(), _portal_js_content()))
 
 
 def _extract_js_function_body(content: str, function_name: str) -> str:
@@ -64,7 +99,13 @@ def _extract_js_function_block(content: str, function_name: str) -> str:
     start = content.find(marker)
     if start < 0:
         raise AssertionError(f"{function_name} not found")
-    next_marker = content.find("\n        function ", start + len(marker))
+    next_candidates = [
+        content.find("\nfunction ", start + len(marker)),
+        content.find("\nasync function ", start + len(marker)),
+        content.find("\n        function ", start + len(marker)),
+        content.find("\n        async function ", start + len(marker)),
+    ]
+    next_marker = min((candidate for candidate in next_candidates if candidate >= 0), default=-1)
     if next_marker < 0:
         return content[start:]
     return content[start:next_marker]
@@ -326,8 +367,7 @@ def test_argv_normalization_trims_pipeline_name() -> None:
 
 
 def test_portal_cli_template_excludes_unsupported_lux_flags() -> None:
-    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
-    content = portal_html.read_text(encoding="utf-8")
+    content = _portal_bundle_content()
     assert "--emit-manifest" not in content
     assert "--emit-provenance" not in content
     assert "--enable-segmentation" in content
@@ -337,33 +377,37 @@ def test_portal_cli_template_excludes_unsupported_lux_flags() -> None:
 
 
 def test_portal_html_uses_looping_background_video_layer() -> None:
-    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
-    content = portal_html.read_text(encoding="utf-8")
+    html_content = _portal_html_content()
+    css_content = _portal_css_content()
 
-    assert "portal-video-backdrop" in content
-    assert 'class="portal-video-media"' in content
-    assert "/portal/video/dna-portal-video-2.mp4" in content
-    assert "/v1/portal/video/dna-portal-video-2.mp4" not in content
-    assert "autoplay" in content
-    assert "muted" in content
-    assert "loop" in content
-    assert "playsinline" in content
-    assert "media-src 'self'" in content
-    assert ".performance-lite .portal-video-media" in content
+    assert "portal-video-backdrop" in html_content
+    assert 'class="portal-video-media"' in html_content
+    assert "/portal/video/dna-portal-video-2.mp4" in html_content
+    assert "/v1/portal/video/dna-portal-video-2.mp4" not in html_content
+    assert "autoplay" in html_content
+    assert "muted" in html_content
+    assert "loop" in html_content
+    assert "playsinline" in html_content
+    assert ".performance-lite .portal-video-media" in css_content
 
 
-def test_portal_html_embeds_local_utility_snapshot_without_tailwind_cdn() -> None:
-    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
-    content = portal_html.read_text(encoding="utf-8")
+def test_portal_html_externalizes_direct_debug_assets_without_third_party_hosts() -> None:
+    html_content = _portal_html_content()
+    css_content = _portal_css_content()
 
-    assert "https://cdn.tailwindcss.com" not in content
-    assert "tailwind.config" not in content
-    assert "Phase 1 local utility snapshot replacing Tailwind CDN for portal.html" in content
+    assert 'href="/portal/assets/portal.css"' in html_content
+    assert 'src="/portal/assets/portal.js"' in html_content
+    assert "<style>" not in html_content
+    assert "<script>" not in html_content
+    assert "https://cdn.tailwindcss.com" not in html_content
+    assert "https://fonts.googleapis.com" not in html_content
+    assert "https://fonts.gstatic.com" not in html_content
+    assert "tailwind.config" not in css_content
+    assert "Phase 1 local utility snapshot replacing Tailwind CDN for portal.html" in css_content
 
 
 def test_portal_fetch_sse_reconnect_scheduler_has_terminal_guard_and_backoff() -> None:
-    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
-    content = portal_html.read_text(encoding="utf-8")
+    content = _portal_bundle_content()
     body = _extract_js_function_body(content, "scheduleSseReconnect")
 
     assert "_isJobStreamRecoverable(job)" in body
@@ -375,8 +419,7 @@ def test_portal_fetch_sse_reconnect_scheduler_has_terminal_guard_and_backoff() -
 
 
 def test_portal_fetch_sse_reconnect_schedules_on_unexpected_disconnect_only() -> None:
-    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
-    content = portal_html.read_text(encoding="utf-8")
+    content = _portal_bundle_content()
     body = _extract_js_function_body(content, "_startAuthorizedFetchSse")
 
     assert "let sawDoneEvent = false;" in body
@@ -389,8 +432,7 @@ def test_portal_fetch_sse_reconnect_schedules_on_unexpected_disconnect_only() ->
 
 
 def test_portal_sse_watchdog_reconnects_stalled_streams_for_fetch_and_native_transports() -> None:
-    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
-    content = portal_html.read_text(encoding="utf-8")
+    content = _portal_bundle_content()
     body = _extract_js_function_body(content, "startSseWatchdog")
 
     assert "if (job.reconnectBlocked) return;" in body
@@ -404,8 +446,7 @@ def test_portal_sse_watchdog_reconnects_stalled_streams_for_fetch_and_native_tra
 
 
 def test_portal_start_job_stream_avoids_duplicate_readers() -> None:
-    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
-    content = portal_html.read_text(encoding="utf-8")
+    content = _portal_bundle_content()
     body = _extract_js_function_body(content, "startJobEventStream")
 
     assert "_clearSseRetry(job, false);" in body
@@ -414,8 +455,7 @@ def test_portal_start_job_stream_avoids_duplicate_readers() -> None:
 
 def test_portal_eventsource_wraps_json_parse_in_try_catch() -> None:
     """Verify EventSource handlers guard against malformed JSON data."""
-    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
-    content = portal_html.read_text(encoding="utf-8")
+    content = _portal_bundle_content()
     body = _extract_js_function_body(content, "startJobEventStream")
 
     # The EventSource handlers must use a safe parsing wrapper
@@ -432,8 +472,7 @@ def test_portal_eventsource_wraps_json_parse_in_try_catch() -> None:
 
 
 def test_portal_native_eventsource_surfaces_state_and_terminal_errors() -> None:
-    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
-    content = portal_html.read_text(encoding="utf-8")
+    content = _portal_bundle_content()
     body = _extract_js_function_body(content, "startJobEventStream")
     active_body = _extract_js_function_body(content, "_jobHasActiveStream")
     transport_body = _extract_js_function_body(content, "formatTransportLabel")
@@ -465,8 +504,7 @@ def test_portal_native_eventsource_surfaces_state_and_terminal_errors() -> None:
 
 
 def test_portal_resumes_blocked_streams_after_api_key_update() -> None:
-    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
-    content = portal_html.read_text(encoding="utf-8")
+    content = _portal_bundle_content()
     helper_body = _extract_js_function_body(content, "resumeBlockedJobStreamsAfterAuthUpdate")
     bind_body = _extract_js_function_body(content, "bindInputs")
 
@@ -476,8 +514,7 @@ def test_portal_resumes_blocked_streams_after_api_key_update() -> None:
 
 
 def test_portal_bootstrap_loader_uses_abortable_timeout_and_state_contract() -> None:
-    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
-    content = portal_html.read_text(encoding="utf-8")
+    content = _portal_bundle_content()
     default_body = _extract_js_function_body(content, "_defaultPortalBootstrap")
     body = _extract_js_function_body(content, "loadPortalBootstrap")
     followup_body = _extract_js_function_body(content, "_flushBootstrapOnlineFollowup")
@@ -549,8 +586,7 @@ def test_portal_bootstrap_loader_uses_abortable_timeout_and_state_contract() -> 
 
 
 def test_portal_managed_mode_clears_api_keys_and_hides_secret_ui() -> None:
-    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
-    content = portal_html.read_text(encoding="utf-8")
+    content = _portal_bundle_content()
     clear_body = _extract_js_function_body(content, "_clearStoredApiKeyState")
     sync_body = _extract_js_function_body(content, "_syncBootstrapUi")
 
@@ -565,8 +601,7 @@ def test_portal_managed_mode_clears_api_keys_and_hides_secret_ui() -> None:
 
 
 def test_portal_direct_debug_api_key_storage_is_session_only() -> None:
-    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
-    content = portal_html.read_text(encoding="utf-8")
+    content = _portal_bundle_content()
     persist_body = _extract_js_function_body(content, "_persistApiKeyFromInputs")
     load_body = _extract_js_function_body(content, "_loadApiKeyIntoInputs")
     current_token_body = _extract_js_function_body(content, "_currentApiToken")
@@ -585,8 +620,7 @@ def test_portal_direct_debug_api_key_storage_is_session_only() -> None:
 
 
 def test_portal_managed_mode_uses_csrf_instead_of_browser_backend_secrets() -> None:
-    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
-    content = portal_html.read_text(encoding="utf-8")
+    content = _portal_bundle_content()
     current_token_body = _extract_js_function_body(content, "_currentApiToken")
     auth_headers_block = _extract_js_function_block(content, "_buildAuthHeaders")
 
@@ -608,8 +642,7 @@ def test_portal_managed_mode_uses_csrf_instead_of_browser_backend_secrets() -> N
 
 
 def test_portal_auth_helpers_fail_closed_until_bootstrap_ready() -> None:
-    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
-    content = portal_html.read_text(encoding="utf-8")
+    content = _portal_bundle_content()
     persist_body = _extract_js_function_body(content, "_persistApiKeyFromInputs")
     load_body = _extract_js_function_body(content, "_loadApiKeyIntoInputs")
     current_token_body = _extract_js_function_body(content, "_currentApiToken")
@@ -626,8 +659,7 @@ def test_portal_auth_helpers_fail_closed_until_bootstrap_ready() -> None:
 
 
 def test_portal_health_checks_route_to_front_door_in_managed_mode() -> None:
-    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
-    content = portal_html.read_text(encoding="utf-8")
+    content = _portal_bundle_content()
     helper_body = _extract_js_function_body(content, "_healthEndpointPath")
     check_body = _extract_js_function_body(content, "checkBackend")
 
@@ -640,8 +672,7 @@ def test_portal_health_checks_route_to_front_door_in_managed_mode() -> None:
 
 
 def test_portal_managed_unavailable_mode_blocks_dispatch_and_api_key_recovery_prompts() -> None:
-    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
-    content = portal_html.read_text(encoding="utf-8")
+    content = _portal_bundle_content()
     block_body = _extract_js_function_body(content, "_blockManagedUnavailableAction")
     cancel_body = _extract_js_function_body(content, "cancelJob")
     submit_body = _extract_js_function_body(content, "submitJob")
@@ -656,8 +687,7 @@ def test_portal_managed_unavailable_mode_blocks_dispatch_and_api_key_recovery_pr
 
 
 def test_portal_artifact_gallery_renders_visual_review_controls() -> None:
-    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
-    content = portal_html.read_text(encoding="utf-8")
+    content = _portal_bundle_content()
     body = _extract_js_function_body(content, "renderArtifactPanel")
     reset_body = _extract_js_function_body(content, "_resetArtifactActionButtons")
     sanitize_body = _extract_js_function_body(content, "sanitizeManagedAssetUrl")
@@ -683,8 +713,7 @@ def test_portal_artifact_gallery_renders_visual_review_controls() -> None:
 
 
 def test_portal_selection_review_surfaces_have_single_render_owner() -> None:
-    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
-    content = portal_html.read_text(encoding="utf-8")
+    content = _portal_bundle_content()
     review_body = _extract_js_function_body(content, "renderReviewSurfaces")
     artifact_body = _extract_js_function_body(content, "renderArtifactPanel")
     queue_body = _extract_js_function_body(content, "renderJobQueue")
@@ -720,8 +749,7 @@ def test_portal_selection_review_surfaces_have_single_render_owner() -> None:
 
 
 def test_portal_selected_job_inspector_uses_timeline_tabs_and_log_secondary_view() -> None:
-    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
-    content = portal_html.read_text(encoding="utf-8")
+    content = _portal_bundle_content()
     inspector_body = _extract_js_function_body(content, "renderSelectedJobInspector")
     tab_body = _extract_js_function_body(content, "setInspectorTab")
 
@@ -738,8 +766,7 @@ def test_portal_selected_job_inspector_uses_timeline_tabs_and_log_secondary_view
 
 
 def test_portal_theme_preference_defaults_to_system_without_persisting_boot_value() -> None:
-    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
-    content = portal_html.read_text(encoding="utf-8")
+    content = _portal_bundle_content()
     apply_body = _extract_js_function_body(content, "applyThemePreference")
     migrate_body = _extract_js_function_body(content, "_migrateThemePreferenceStorage")
     init_body = _extract_js_function_body(content, "init")
@@ -767,8 +794,7 @@ def test_portal_theme_preference_defaults_to_system_without_persisting_boot_valu
 
 
 def test_portal_theme_control_cycles_system_dark_light_preferences() -> None:
-    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
-    content = portal_html.read_text(encoding="utf-8")
+    content = _portal_bundle_content()
     next_body = _extract_js_function_body(content, "_nextThemePreference")
     sync_body = _extract_js_function_body(content, "_syncThemeButton")
 
@@ -783,8 +809,7 @@ def test_portal_theme_control_cycles_system_dark_light_preferences() -> None:
 
 
 def test_portal_theme_system_listener_only_reacts_while_following_system() -> None:
-    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
-    content = portal_html.read_text(encoding="utf-8")
+    content = _portal_bundle_content()
     init_body = _extract_js_function_body(content, "init")
 
     assert "const themeQuery = window.matchMedia('(prefers-color-scheme: dark)');" in init_body
@@ -794,8 +819,7 @@ def test_portal_theme_system_listener_only_reacts_while_following_system() -> No
 
 
 def test_portal_console_views_use_query_param_navigation_without_backend_route_changes() -> None:
-    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
-    content = portal_html.read_text(encoding="utf-8")
+    content = _portal_bundle_content()
     rail_body = _extract_js_function_body(content, "setupSectionRail")
     apply_view_body = _extract_js_function_body(content, "applyConsoleViewLayout")
 
@@ -813,8 +837,7 @@ def test_portal_console_views_use_query_param_navigation_without_backend_route_c
 
 
 def test_portal_timestamp_parsing_normalizes_second_precision_epochs() -> None:
-    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
-    content = portal_html.read_text(encoding="utf-8")
+    content = _portal_bundle_content()
     body = _extract_js_function_body(content, "parseTimestamp")
 
     assert "value > 0 && value < 1e12 ? value * 1000 : value" in body
@@ -822,8 +845,7 @@ def test_portal_timestamp_parsing_normalizes_second_precision_epochs() -> None:
 
 
 def test_portal_preset_selection_applies_recommended_defaults_without_changing_contract_shape() -> None:
-    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
-    content = portal_html.read_text(encoding="utf-8")
+    content = _portal_bundle_content()
     bind_body = _extract_js_function_body(content, "bindInputs")
     preset_body = _extract_js_function_body(content, "applyPresetRecommendedArgs")
     fetch_body = _extract_js_function_body(content, "fetchPresetsForPipeline")
@@ -838,8 +860,7 @@ def test_portal_preset_selection_applies_recommended_defaults_without_changing_c
 
 
 def test_portal_init_establishes_interactive_shell_before_bootstrap_settles() -> None:
-    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
-    content = portal_html.read_text(encoding="utf-8")
+    content = _portal_bundle_content()
     body = _extract_js_function_body(content, "init")
 
     assert "const bootstrapPromise = loadPortalBootstrap();" in body
@@ -851,8 +872,7 @@ def test_portal_init_establishes_interactive_shell_before_bootstrap_settles() ->
 
 
 def test_portal_bootstrap_online_followup_state_is_tracked_until_auth_ready() -> None:
-    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
-    content = portal_html.read_text(encoding="utf-8")
+    content = _portal_bundle_content()
 
     assert "lastHealthEndpointPath: ''" in content
     assert "pendingOnlineFollowup: false" in content
@@ -862,8 +882,7 @@ def test_portal_bootstrap_online_followup_state_is_tracked_until_auth_ready() ->
 
 
 def test_portal_bootstrap_retry_lifecycle_tracks_active_state_and_teardown() -> None:
-    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
-    content = portal_html.read_text(encoding="utf-8")
+    content = _portal_bundle_content()
     active_body = _extract_js_function_body(content, "_hasActiveBootstrapRetryState")
     history_body = _extract_js_function_body(content, "_hasBootstrapRetryHistory")
     record_body = _extract_js_function_body(content, "_recordBootstrapRetryEvent")
@@ -880,8 +899,7 @@ def test_portal_bootstrap_retry_lifecycle_tracks_active_state_and_teardown() -> 
 
 
 def test_portal_bootstrap_retry_scheduler_rejects_tight_loops_under_persistent_failure() -> None:
-    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
-    content = portal_html.read_text(encoding="utf-8")
+    content = _portal_bundle_content()
     retry_body = _extract_js_function_body(content, "_scheduleBootstrapRetry")
 
     assert "if (state.bootstrap.retry.timer !== null) {" in retry_body
@@ -893,8 +911,7 @@ def test_portal_bootstrap_retry_scheduler_rejects_tight_loops_under_persistent_f
 
 
 def test_portal_verbose_quiet_conflict_is_notified_and_blocked() -> None:
-    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
-    content = portal_html.read_text(encoding="utf-8")
+    content = _portal_bundle_content()
     bind_body = _extract_js_function_body(content, "bindInputs")
     submit_body = _extract_js_function_body(content, "submitJob")
 
@@ -903,8 +920,7 @@ def test_portal_verbose_quiet_conflict_is_notified_and_blocked() -> None:
 
 
 def test_portal_reconstruction_runtime_summary_and_effective_config_surfaces_are_present() -> None:
-    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
-    content = portal_html.read_text(encoding="utf-8")
+    content = _portal_bundle_content()
     summary_body = _extract_js_function_body(content, "renderReconstructionRuntimeSummary")
     drawer_body = _extract_js_function_body(content, "renderEffectiveConfigDrawer")
 
@@ -926,8 +942,7 @@ def test_portal_reconstruction_runtime_summary_and_effective_config_surfaces_are
 
 
 def test_portal_preview_metadata_worker_modes_and_export_contract_are_wired() -> None:
-    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
-    content = portal_html.read_text(encoding="utf-8")
+    content = _portal_bundle_content()
     update_body = _extract_js_function_body(content, "updateUIFromState")
     bind_body = _extract_js_function_body(content, "bindInputs")
     preview_body = _extract_js_function_body(content, "fetchConfigPreview")
@@ -961,8 +976,7 @@ def test_portal_preview_metadata_worker_modes_and_export_contract_are_wired() ->
 
 
 def test_portal_submit_blocks_preview_unavailable_and_debug_bundle_without_acknowledgement() -> None:
-    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
-    content = portal_html.read_text(encoding="utf-8")
+    content = _portal_bundle_content()
     guard_body = _extract_js_function_body(content, "_syncBootstrapGuardedControls")
     submit_body = _extract_js_function_body(content, "submitJob")
     summary_body = _extract_js_function_body(content, "renderReconstructionRuntimeSummary")
@@ -979,8 +993,7 @@ def test_portal_submit_blocks_preview_unavailable_and_debug_bundle_without_ackno
 
 
 def test_lux_cli_parity_links_portal_canonical_args_and_backend_argv() -> None:
-    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
-    content = portal_html.read_text(encoding="utf-8")
+    content = _portal_bundle_content()
     canonical_keys = _extract_portal_canonical_lux_arg_keys(content)
     portal_cli_flags = _extract_portal_lux_cli_flags(content)
 
@@ -1357,8 +1370,7 @@ def test_argv_rejects_invalid_log_level() -> None:
 
 
 def test_portal_segmentation_defaults_align_with_cli_defaults() -> None:
-    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
-    content = portal_html.read_text(encoding="utf-8")
+    content = _portal_bundle_content()
     assert "enable: false," in content
     assert "backend: 'stub'," in content
     assert "sam2ModelSize: 'base'," in content
@@ -1366,8 +1378,7 @@ def test_portal_segmentation_defaults_align_with_cli_defaults() -> None:
 
 
 def test_portal_surfaces_pre_run_diagnostics_and_expected_outputs() -> None:
-    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
-    content = portal_html.read_text(encoding="utf-8")
+    content = _portal_bundle_content()
     render_cli_body = _extract_js_function_body(content, "renderCLI")
 
     assert 'id="preRunWarnings"' in content
@@ -1377,8 +1388,7 @@ def test_portal_surfaces_pre_run_diagnostics_and_expected_outputs() -> None:
 
 
 def test_portal_exposes_run_card_quick_actions() -> None:
-    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
-    content = portal_html.read_text(encoding="utf-8")
+    content = _portal_bundle_content()
 
     assert 'id="runCardActions"' in content
     assert 'id="viewRunCardBtn"' in content
@@ -1390,8 +1400,7 @@ def test_portal_exposes_run_card_quick_actions() -> None:
 
 
 def test_portal_supports_partial_review_state() -> None:
-    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
-    content = portal_html.read_text(encoding="utf-8")
+    content = _portal_bundle_content()
 
     assert "'partial'" in content
     assert (
@@ -1403,16 +1412,14 @@ def test_portal_supports_partial_review_state() -> None:
 
 
 def test_portal_selected_job_progress_bar_has_accessible_label() -> None:
-    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
-    content = portal_html.read_text(encoding="utf-8")
+    content = _portal_bundle_content()
 
     assert 'id="selectedJobProgressLabel"' in content
     assert 'aria-labelledby="selectedJobProgressLabel selectedJobProgressText"' in content
 
 
 def test_portal_archive_controls_expose_canonical_stage_labels() -> None:
-    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
-    content = portal_html.read_text(encoding="utf-8")
+    content = _portal_bundle_content()
 
     assert "archive-gate-a (Fixity / Manifest Prep)" in content
     assert "archive-gate-b (BagIt Build)" in content
@@ -1422,8 +1429,7 @@ def test_portal_archive_controls_expose_canonical_stage_labels() -> None:
 
 
 def test_portal_archive_build_surface_uses_manifest_input_and_never_derives_archive_index() -> None:
-    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
-    content = portal_html.read_text(encoding="utf-8")
+    content = _portal_bundle_content()
     bind_body = _extract_js_function_body(content, "bindInputs")
 
     assert "safeBindInput(els.rightsManifestPath, 'gate', 'manifestJsonl');" in bind_body
@@ -1433,8 +1439,7 @@ def test_portal_archive_build_surface_uses_manifest_input_and_never_derives_arch
 
 
 def test_portal_archive_payload_and_cli_preview_use_canonical_archive_contract() -> None:
-    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
-    content = portal_html.read_text(encoding="utf-8")
+    content = _portal_bundle_content()
     payload_body = _extract_js_function_body(content, "generatePayload")
     cli_body = _extract_js_function_body(content, "renderCLI")
     payload_init_segment = payload_body.split("if (p === 'lux-depth-v3') {", maxsplit=1)[0]
@@ -1456,8 +1461,7 @@ def test_portal_archive_payload_and_cli_preview_use_canonical_archive_contract()
 
 
 def test_portal_archive_preview_and_readiness_flow_share_preview_state() -> None:
-    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
-    content = portal_html.read_text(encoding="utf-8")
+    content = _portal_bundle_content()
     readiness_body = _extract_js_function_body(content, "currentPipelineReadiness")
     issues_body = _extract_js_function_body(content, "currentPipelineReadinessIssues")
     cli_body = _extract_js_function_body(content, "renderCLI")
@@ -1479,8 +1483,7 @@ def test_portal_archive_preview_and_readiness_flow_share_preview_state() -> None
 
 
 def test_portal_archive_pipelines_hide_lux_flag_shell() -> None:
-    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
-    content = portal_html.read_text(encoding="utf-8")
+    content = _portal_bundle_content()
     update_body = _extract_js_function_body(content, "updateUIFromState")
 
     assert "flagsShell: document.getElementById('flags-shell')" in content
@@ -1489,8 +1492,7 @@ def test_portal_archive_pipelines_hide_lux_flag_shell() -> None:
 
 
 def test_portal_lux_build_surface_hides_inapplicable_optional_controls_until_needed() -> None:
-    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
-    content = portal_html.read_text(encoding="utf-8")
+    content = _portal_bundle_content()
     applicability_body = _extract_js_function_body(content, "syncBuildSurfaceApplicability")
     mission_control_body = _extract_js_function_body(content, "renderMissionControl")
     preset_body = _extract_js_function_body(content, "currentPresetDescriptor")
@@ -1521,8 +1523,7 @@ def test_portal_lux_build_surface_hides_inapplicable_optional_controls_until_nee
 
 
 def test_portal_dispatch_controls_require_backend_readiness_and_live_backend() -> None:
-    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
-    content = portal_html.read_text(encoding="utf-8")
+    content = _portal_bundle_content()
     guard_body = _extract_js_function_body(content, "_syncBootstrapGuardedControls")
     submit_body = _extract_js_function_body(content, "submitJob")
 
@@ -1536,8 +1537,7 @@ def test_portal_dispatch_controls_require_backend_readiness_and_live_backend() -
 
 
 def test_portal_reconciles_restored_build_surface_values_without_field_events() -> None:
-    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
-    content = portal_html.read_text(encoding="utf-8")
+    content = _portal_bundle_content()
     reconcile_body = _extract_js_function_body(content, "reconcileBuildSurfaceFromDom")
     init_body = _extract_js_function_body(content, "init")
 

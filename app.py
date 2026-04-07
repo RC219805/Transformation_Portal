@@ -75,8 +75,11 @@ def _env_float(name: str, default: float, minimum: float = 0.0) -> float:
 
 REPO_ROOT = Path(__file__).resolve().parent
 PORTAL_HTML = REPO_ROOT / "portal.html"
+PORTAL_ASSETS_DIR = REPO_ROOT / "public" / "portal-assets"
 PORTAL_VIDEO_ASSET_NAME = "dna-portal-video-2.mp4"
 PORTAL_VIDEO_PATH = REPO_ROOT / "public" / "video" / PORTAL_VIDEO_ASSET_NAME
+PORTAL_ASSET_CACHE_CONTROL = "no-store"
+PORTAL_ALLOWED_ASSET_SUFFIXES = frozenset({".css", ".js", ".woff2", ".woff", ".ttf", ".otf"})
 ARCHIVE_GOVERNANCE_SCRIPT = REPO_ROOT / "tools" / "archive_governance.py"
 LUX_DEPTH_MODULE = "transformation_portal.lux_depth_v3"
 APP_VERSION = "0.3.0"
@@ -389,9 +392,9 @@ ENABLE_API_DOCS = _env_bool("TP_ENABLE_API_DOCS", False)
 READY_VERBOSE = _env_bool("TP_READY_VERBOSE", False)
 DEFAULT_CSP = (
     "default-src 'self'; "
-    "script-src 'self' 'unsafe-inline'; "
-    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
-    "font-src 'self' https://fonts.gstatic.com data:; "
+    "script-src 'self'; "
+    "style-src 'self'; "
+    "font-src 'self'; "
     "img-src 'self' data: blob:; "
     "media-src 'self'; "
     "connect-src 'self'; "
@@ -3137,6 +3140,28 @@ def _artifact_content_type(path: Path) -> str:
     return guessed or "application/octet-stream"
 
 
+def _resolve_portal_asset_path(asset_path: str) -> Path:
+    raw = str(asset_path or "").strip().lstrip("/")
+    if not raw:
+        raise FileNotFoundError("missing portal asset path")
+
+    relative_path = PurePosixPath(raw)
+    if relative_path.is_absolute() or any(part in {"", ".", ".."} for part in relative_path.parts):
+        raise FileNotFoundError("invalid portal asset path")
+
+    candidate = (PORTAL_ASSETS_DIR / relative_path).resolve()
+    try:
+        candidate.relative_to(PORTAL_ASSETS_DIR.resolve())
+    except ValueError as exc:
+        raise FileNotFoundError("portal asset path escaped root") from exc
+
+    if candidate.suffix.lower() not in PORTAL_ALLOWED_ASSET_SUFFIXES:
+        raise FileNotFoundError("unsupported portal asset type")
+    if not candidate.is_file():
+        raise FileNotFoundError("portal asset not found")
+    return candidate
+
+
 def _artifact_media_kind(path: Path) -> str:
     artifact_type = _infer_artifact_type(path)
     if artifact_type == "image":
@@ -4801,6 +4826,20 @@ async def serve_ui() -> Response:
             "Cache-Control": "no-store",
             "Pragma": "no-cache",
         },
+    )
+
+
+@app.get("/portal/assets/{asset_path:path}")
+async def serve_portal_asset(asset_path: str) -> Response:
+    try:
+        resolved_path = _resolve_portal_asset_path(asset_path)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="portal asset not found") from exc
+
+    return FileResponse(
+        str(resolved_path),
+        media_type=_artifact_content_type(resolved_path),
+        headers={"Cache-Control": PORTAL_ASSET_CACHE_CONTROL},
     )
 
 
