@@ -2033,6 +2033,8 @@
                 field_warnings: [],
                 inactive_fields: [],
                 normalized_args: {},
+                execution_args: {},
+                submitted_args: {},
                 readiness: null,
                 estimate_summary: null,
                 debug_bundle_summary: null,
@@ -5202,6 +5204,8 @@
                 field_warnings: [],
                 inactive_fields: [],
                 normalized_args: {},
+                execution_args: {},
+                submitted_args: {},
                 readiness: null,
                 estimate_summary: null,
                 debug_bundle_summary: null,
@@ -5214,6 +5218,101 @@
             state.preview = {
                 ..._emptyPreviewState(state.preview?.status || 'idle', state.pipeline),
                 ...(nextState && typeof nextState === 'object' ? nextState : {})
+            };
+        }
+
+        function _currentBuildSurfacePathFieldValue(fieldName) {
+            switch (String(fieldName || '').trim()) {
+                case 'input_dir':
+                    return _textOrFallback(els.inputDir ? els.inputDir.value : state.config?.inputDir, state.config?.inputDir || '');
+                case 'output_dir':
+                    return _textOrFallback(els.outputDir ? els.outputDir.value : state.config?.outputDir, state.config?.outputDir || '');
+                case 'archive_index':
+                    return _textOrFallback(
+                        els.archiveIndexPath ? els.archiveIndexPath.value : state.config?.gate?.archiveIndex,
+                        state.config?.gate?.archiveIndex || ''
+                    );
+                case 'manifest_jsonl':
+                    return _textOrFallback(
+                        els.rightsManifestPath ? els.rightsManifestPath.value : state.config?.gate?.manifestJsonl,
+                        state.config?.gate?.manifestJsonl || ''
+                    );
+                case 'sam2_checkpoint_path':
+                    return _textOrFallback(
+                        els.segmentation.sam2CheckpointPath ? els.segmentation.sam2CheckpointPath.value : state.config?.segmentation?.sam2CheckpointPath,
+                        state.config?.segmentation?.sam2CheckpointPath || ''
+                    );
+                case 'cameras_sidecar_path':
+                    return _textOrFallback(
+                        els.reconstruction.camerasSidecarPath ? els.reconstruction.camerasSidecarPath.value : state.config?.reconstruction?.camerasSidecarPath,
+                        state.config?.reconstruction?.camerasSidecarPath || ''
+                    );
+                default:
+                    return '';
+            }
+        }
+
+        function _setBuildSurfacePathFieldValue(fieldName, nextValue) {
+            const value = _textOrFallback(nextValue, '');
+            state.config = state.config || {};
+            switch (String(fieldName || '').trim()) {
+                case 'input_dir':
+                    state.config.inputDir = value;
+                    if (els.inputDir) els.inputDir.value = value;
+                    return true;
+                case 'output_dir':
+                    state.config.outputDir = value;
+                    if (els.outputDir) els.outputDir.value = value;
+                    return true;
+                case 'archive_index':
+                    state.config.gate = state.config.gate || {};
+                    state.config.gate.archiveIndex = value;
+                    if (els.archiveIndexPath) els.archiveIndexPath.value = value;
+                    return true;
+                case 'manifest_jsonl':
+                    state.config.gate = state.config.gate || {};
+                    state.config.gate.manifestJsonl = value;
+                    if (els.rightsManifestPath) els.rightsManifestPath.value = value;
+                    return true;
+                case 'sam2_checkpoint_path':
+                    state.config.segmentation = state.config.segmentation || {};
+                    state.config.segmentation.sam2CheckpointPath = value;
+                    if (els.segmentation.sam2CheckpointPath) els.segmentation.sam2CheckpointPath.value = value;
+                    return true;
+                case 'cameras_sidecar_path':
+                    state.config.reconstruction = state.config.reconstruction || {};
+                    state.config.reconstruction.camerasSidecarPath = value;
+                    if (els.reconstruction.camerasSidecarPath) els.reconstruction.camerasSidecarPath.value = value;
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        function _reconcilePreviewRepairedPaths(previewState) {
+            const preview = previewState && typeof previewState === 'object' ? previewState : _emptyPreviewState();
+            const warnings = Array.isArray(preview.field_warnings) ? preview.field_warnings : [];
+            const normalizedArgs = preview.normalized_args && typeof preview.normalized_args === 'object' ? preview.normalized_args : {};
+            const submittedArgs = preview.submitted_args && typeof preview.submitted_args === 'object' ? preview.submitted_args : {};
+            let changed = false;
+
+            warnings.forEach((issue) => {
+                if (String(issue?.code || '') !== 'repo_local_path_repaired') return;
+                const fieldName = String(issue?.field || '').trim();
+                if (!fieldName) return;
+                const submittedValue = _textOrFallback(submittedArgs[fieldName], '');
+                const normalizedValue = _textOrFallback(normalizedArgs[fieldName], '');
+                if (!submittedValue || !normalizedValue || submittedValue === normalizedValue) return;
+                if (_currentBuildSurfacePathFieldValue(fieldName) !== submittedValue) return;
+                changed = _setBuildSurfacePathFieldValue(fieldName, normalizedValue) || changed;
+            });
+
+            if (!changed) return preview;
+            const currentPayload = generatePayload();
+            return {
+                ...preview,
+                requestKey: _configPreviewRequestKey(currentPayload),
+                submitted_args: currentPayload.args && typeof currentPayload.args === 'object' ? { ...currentPayload.args } : {}
             };
         }
 
@@ -5251,6 +5350,8 @@
                 field_warnings: [],
                 inactive_fields: [],
                 normalized_args: { ...(currentPayload.args || {}) },
+                execution_args: { ...(currentPayload.args || {}) },
+                submitted_args: { ...(currentPayload.args || {}) },
                 readiness: null,
                 estimate_summary: _buildLocalEstimateSummary(currentPayload.args || {}),
                 debug_bundle_summary: _buildLocalDebugBundleSummary(currentPayload.args || {}),
@@ -5487,7 +5588,8 @@
 
             _setPreviewState({
                 ..._emptyPreviewState('loading', currentPayload.pipeline),
-                requestKey
+                requestKey,
+                submitted_args: currentPayload.args && typeof currentPayload.args === 'object' ? { ...currentPayload.args } : {}
             });
             renderCLI();
 
@@ -5508,7 +5610,7 @@
                     return;
                 }
                 const previewFieldErrors = Array.isArray(data.field_errors) ? data.field_errors : [];
-                _setPreviewState({
+                const nextPreviewState = {
                     pipeline: String(data.pipeline || currentPayload.pipeline),
                     requestKey,
                     status: 'ready',
@@ -5516,12 +5618,15 @@
                     field_warnings: Array.isArray(data.field_warnings) ? data.field_warnings : [],
                     inactive_fields: Array.isArray(data.inactive_fields) ? data.inactive_fields : [],
                     normalized_args: data.normalized_args && typeof data.normalized_args === 'object' ? data.normalized_args : {},
+                    execution_args: data.execution_args && typeof data.execution_args === 'object' ? data.execution_args : {},
+                    submitted_args: currentPayload.args && typeof currentPayload.args === 'object' ? { ...currentPayload.args } : {},
                     readiness: data.readiness && typeof data.readiness === 'object' ? data.readiness : null,
                     estimate_summary: data.estimate_summary && typeof data.estimate_summary === 'object' ? data.estimate_summary : null,
                     debug_bundle_summary: data.debug_bundle_summary && typeof data.debug_bundle_summary === 'object' ? data.debug_bundle_summary : null,
                     argv_preview: String(data.argv_preview || ''),
                     error: ''
-                });
+                };
+                _setPreviewState(_reconcilePreviewRepairedPaths(nextPreviewState));
                 if (previewFieldErrors.length > 0) {
                     void emitPortalEvent('preview_error_seen', {
                         surface: 'reconstruction_runtime',
@@ -7871,6 +7976,7 @@
                 pipeline: payload.pipeline,
                 args: payload.args,
                 effective_args: effectivePreview.normalized_args || payload.args,
+                execution_args: effectivePreview.execution_args || payload.args,
                 inactive_fields: effectivePreview.inactive_fields || [],
                 estimate_summary: effectivePreview.estimate_summary || _buildLocalEstimateSummary(payload.args || {}),
                 argv_preview: String(effectivePreview.argv_preview || els.cliPreview?.textContent || '')

@@ -177,12 +177,12 @@ def _resolve_allowed_request_path(
     allowed_roots: List[Path],
 ) -> Path:
     if not allowed_roots:
-        raise ValueError("No allowed roots configured")
+        raise _PortalValidationReasonError("No allowed roots configured", reason="invalid_path_value")
 
     try:
         resolved = _resolve_untrusted_request_path(path_value)
     except (OSError, RuntimeError, ValueError):
-        raise ValueError("Invalid path value") from None
+        raise _PortalValidationReasonError("Invalid path value", reason="invalid_path_value") from None
 
     for root in allowed_roots:
         try:
@@ -196,7 +196,7 @@ def _resolve_allowed_request_path(
         else:
             return resolved
 
-    raise ValueError("Path outside allowed roots")
+    raise _PortalValidationReasonError("Path outside allowed roots", reason="path_outside_allowed_roots")
 
 
 LOG_TAIL_LIMIT = 2000
@@ -251,6 +251,140 @@ ALLOWED_OUTPUT_ROOTS = _env_path_roots(
     DEFAULT_ALLOWED_PATH_ROOTS,
 )
 ALLOWED_PATH_ROOTS = list(dict.fromkeys([*ALLOWED_INPUT_ROOTS, *ALLOWED_OUTPUT_ROOTS]))
+
+
+def _allowed_roots_for_scope(scope: str) -> List[Path]:
+    if scope == PATH_SCOPE_INPUT:
+        return ALLOWED_INPUT_ROOTS
+    if scope == PATH_SCOPE_OUTPUT:
+        return ALLOWED_OUTPUT_ROOTS
+    return ALLOWED_PATH_ROOTS
+
+
+def _repo_top_level_entries() -> set[str]:
+    try:
+        return {entry.name for entry in REPO_ROOT.iterdir()}
+    except OSError:
+        return set()
+
+
+def _is_single_leading_slash_path(raw_value: str) -> bool:
+    return raw_value.startswith("/") and not raw_value.startswith("//")
+
+
+def _is_valid_allowed_absolute_path(path_value: str, allowed_roots: List[Path]) -> bool:
+    raw = str(path_value or "").strip()
+    if not raw:
+        return False
+    try:
+        if not Path(raw).is_absolute():
+            return False
+    except (OSError, RuntimeError, ValueError):
+        return False
+    try:
+        _resolve_allowed_request_path(raw, allowed_roots)
+    except ValueError:
+        return False
+    return True
+
+
+def _normalize_repo_relative_display_path(raw_value: str, resolved_path: Path) -> str:
+    raw = str(raw_value or "").strip()
+    try:
+        if Path(raw).is_absolute():
+            return str(resolved_path)
+    except (OSError, RuntimeError, ValueError):
+        return str(resolved_path)
+
+    repo_real = Path(os.path.realpath(REPO_ROOT))
+    try:
+        relative = resolved_path.relative_to(repo_real).as_posix()
+    except ValueError:
+        return str(resolved_path)
+    return "." if not relative else f"./{relative}"
+
+
+def _attempt_repo_local_path_repair(
+    path_value: str,
+    *,
+    allowed_roots: List[Path],
+    repo_entries: set[str],
+) -> tuple[Optional[str], Optional[str]]:
+    raw = str(path_value or "").strip()
+    if not _is_single_leading_slash_path(raw):
+        return None, None
+    if _is_valid_allowed_absolute_path(raw, allowed_roots):
+        return None, None
+
+    candidate = raw[1:]
+    if not candidate:
+        return None, None
+
+    segments = candidate.split("/")
+    if segments and segments[-1] == "":
+        segments = segments[:-1]
+    if not segments:
+        return None, None
+    if any(segment in {".", ".."} for segment in segments):
+        return None, PATH_SHORTHAND_TRAVERSAL_DISALLOWED_CODE
+    if any(not segment for segment in segments):
+        return None, None
+    if segments[0] not in repo_entries:
+        return None, None
+    return "./" + "/".join(segments), None
+
+
+def _normalize_operator_payload_paths(
+    pipeline: str,
+    args: Dict[str, Any],
+) -> tuple[Dict[str, Any], List[Dict[str, Any]], List[Dict[str, Any]]]:
+    if pipeline not in ALLOWED_PIPELINES:
+        return dict(args or {}), [], []
+
+    normalized_args = dict(args or {})
+    warnings: List[Dict[str, Any]] = []
+    errors: List[Dict[str, Any]] = []
+    repo_entries = _repo_top_level_entries()
+
+    for canonical_field, aliases, scope in PATH_FIELD_SPECS:
+        raw_value = _pick(normalized_args, *aliases, default=None)
+        text = str(raw_value or "").strip()
+        if not text or text.startswith("~") or "\x00" in text:
+            continue
+
+        repaired, error_code = _attempt_repo_local_path_repair(
+            text,
+            allowed_roots=_allowed_roots_for_scope(scope),
+            repo_entries=repo_entries,
+        )
+        if error_code == PATH_SHORTHAND_TRAVERSAL_DISALLOWED_CODE:
+            errors.append(
+                _portal_issue(
+                    canonical_field,
+                    PATH_SHORTHAND_TRAVERSAL_DISALLOWED_CODE,
+                    f"{canonical_field} cannot use repo-local shorthand with '.' or '..' segments.",
+                    suggestion="Use a direct workspace-relative path without traversal segments.",
+                )
+            )
+            continue
+        if not repaired:
+            continue
+
+        for alias in aliases:
+            if alias in normalized_args:
+                normalized_args[alias] = repaired
+        warnings.append(
+            _portal_issue(
+                canonical_field,
+                REPO_LOCAL_PATH_REPAIRED_CODE,
+                f"{canonical_field} was normalized to a workspace-relative path.",
+                suggestion="The portal repaired repo-local leading-slash shorthand to canonical ./... form.",
+            )
+        )
+
+    return normalized_args, warnings, errors
+
+
 ENABLE_API_DOCS = _env_bool("TP_ENABLE_API_DOCS", False)
 READY_VERBOSE = _env_bool("TP_READY_VERBOSE", False)
 DEFAULT_CSP = (
@@ -401,6 +535,7 @@ class Job:
     progress: int = 0
     exit_code: Optional[int] = None
     request: Dict[str, Any] = field(default_factory=dict)
+    effective_request: Dict[str, Any] = field(default_factory=dict)
     logs_tail: List[str] = field(default_factory=list)
     artifacts: Dict[str, Any] = field(default_factory=dict)
     artifact_lookup: Dict[str, Path] = field(default_factory=dict)
@@ -460,6 +595,7 @@ VALIDATION_REASON_CODES = {
     "Unsupported pipeline": "unsupported_pipeline",
     "input_dir and output_dir are required": "missing_required_paths",
     "Invalid path value": "invalid_path_value",
+    "Path shorthand traversal disallowed": "path_shorthand_traversal_disallowed",
     "Path outside allowed roots": "path_outside_allowed_roots",
     "Invalid quality_tier": "invalid_quality_tier",
     "Invalid depth_backend": "invalid_depth_backend",
@@ -501,6 +637,7 @@ PORTAL_SAFE_ERROR_MESSAGES = {
     "manifest_jsonl_required": "A manifest JSONL artifact is required before dispatch.",
     "missing_required_paths": "Input and output paths are required.",
     "path_outside_allowed_roots": "Configured paths must stay within the allowed workspace roots.",
+    "path_shorthand_traversal_disallowed": "Repo-local shorthand paths cannot include traversal segments.",
     "policy_yaml_required": "A rights policy YAML file is required before dispatch.",
     "rights_manifest_required": "A rights-manifest JSONL artifact is required before dispatch.",
     "runner_unavailable": "The selected pipeline runner is unavailable in this environment.",
@@ -544,6 +681,34 @@ PORTAL_ALLOWED_EVENT_FIELDS = {
     "segmentation_backend",
     "strict_segmentation",
 }
+PATH_SCOPE_INPUT = "input"
+PATH_SCOPE_OUTPUT = "output"
+PATH_SCOPE_ANY = "path"
+REPO_LOCAL_PATH_REPAIRED_CODE = "repo_local_path_repaired"
+PATH_SHORTHAND_TRAVERSAL_DISALLOWED_CODE = "path_shorthand_traversal_disallowed"
+PATH_FIELD_SPECS: Tuple[Tuple[str, Tuple[str, ...], str], ...] = (
+    ("input_dir", ("input_dir", "inputDir"), PATH_SCOPE_INPUT),
+    ("output_dir", ("output_dir", "outputDir"), PATH_SCOPE_OUTPUT),
+    ("sam2_checkpoint_path", ("sam2_checkpoint_path", "sam2CheckpointPath"), PATH_SCOPE_INPUT),
+    ("cameras_sidecar_path", ("cameras_sidecar_path", "camerasSidecarPath"), PATH_SCOPE_INPUT),
+    ("archive_index", ("archive_index", "archiveIndex"), PATH_SCOPE_ANY),
+    ("manifest_jsonl", ("manifest_jsonl", "manifestJsonl"), PATH_SCOPE_OUTPUT),
+    ("archive_root", ("archive_root", "archiveRoot"), PATH_SCOPE_INPUT),
+    ("out_dir", ("out_dir", "outDir"), PATH_SCOPE_OUTPUT),
+    ("hash_manifest", ("hash_manifest", "hashManifest"), PATH_SCOPE_OUTPUT),
+    ("report_path", ("report_path", "reportPath"), PATH_SCOPE_OUTPUT),
+    ("out_jsonl", ("out_jsonl", "outJsonl"), PATH_SCOPE_OUTPUT),
+    ("out_summary", ("out_summary", "outSummary"), PATH_SCOPE_OUTPUT),
+    ("policy_yaml", ("policy_yaml", "policyYaml"), PATH_SCOPE_INPUT),
+    ("bag_dir", ("bag_dir", "bagDir"), PATH_SCOPE_OUTPUT),
+    ("report_json", ("report_json", "reportJson"), PATH_SCOPE_OUTPUT),
+    ("out_ledger", ("out_ledger", "outLedger"), PATH_SCOPE_OUTPUT),
+    ("out_xml", ("out_xml", "outXml"), PATH_SCOPE_OUTPUT),
+    ("out_prov_jsonld", ("out_prov_jsonld", "outProvJsonld"), PATH_SCOPE_OUTPUT),
+    ("out_stac_catalog", ("out_stac_catalog", "outStacCatalog"), PATH_SCOPE_OUTPUT),
+    ("out_stac_items_dir", ("out_stac_items_dir", "outStacItemsDir"), PATH_SCOPE_OUTPUT),
+    ("rights_jsonl", ("rights_jsonl", "rightsJsonl"), PATH_SCOPE_INPUT),
+)
 LUX_PORTAL_DEFAULT_ARGS: Dict[str, Any] = {
     "preset": "premium",
     "quality_tier": "apex",
@@ -1123,28 +1288,49 @@ def _evaluate_pipeline_readiness(
     *,
     require_dispatch_inputs: bool = False,
 ) -> Dict[str, Any]:
+    if pipeline not in ALLOWED_PIPELINES:
+        return {
+            "status": "blocked",
+            "canonical_command": "",
+            "missing_prerequisites": [
+                _readiness_issue(
+                    "unsupported_pipeline",
+                    severity="blocked",
+                    message=f"Unsupported pipeline {pipeline!r}.",
+                    field="pipeline",
+                )
+            ],
+            "runner_details": {},
+            "notes": [],
+        }
+
+    normalized_args = args
+    normalization_errors: List[Dict[str, Any]] = []
+    if isinstance(args, dict):
+        normalized_args, _, normalization_errors = _normalize_operator_payload_paths(pipeline, args)
+
     if pipeline == "lux-depth-v3":
-        return _lux_depth_readiness(args)
-    if pipeline in ARCHIVE_GATE_PIPELINES:
-        return _archive_gate_readiness(
+        readiness = _lux_depth_readiness(normalized_args)
+    else:
+        readiness = _archive_gate_readiness(
             pipeline,
-            args,
+            normalized_args,
             require_dispatch_inputs=require_dispatch_inputs,
         )
-    return {
-        "status": "blocked",
-        "canonical_command": "",
-        "missing_prerequisites": [
+
+    if normalization_errors:
+        synthesized = [
             _readiness_issue(
-                "unsupported_pipeline",
+                _portal_reason_code(issue.get("code")),
                 severity="blocked",
-                message=f"Unsupported pipeline {pipeline!r}.",
-                field="pipeline",
+                message=str(issue.get("message") or "Configured path shorthand is invalid."),
+                field=str(issue.get("field") or "payload"),
             )
-        ],
-        "runner_details": {},
-        "notes": [],
-    }
+            for issue in normalization_errors
+        ]
+        readiness["missing_prerequisites"] = synthesized + list(readiness.get("missing_prerequisites") or [])
+        readiness["status"] = "blocked"
+    return readiness
 
 
 def _enforce_job_readiness_preflight(
@@ -1357,6 +1543,19 @@ def _portal_issue_public_message(issue: Any, *, field: str = "payload") -> str:
     return text
 
 
+class _PortalValidationReasonError(ValueError):
+    def __init__(self, message: str, *, reason: Optional[str] = None) -> None:
+        cleaned_message = str(message or "").strip() or "invalid request"
+        self.reason = _portal_reason_code(reason or cleaned_message)
+        super().__init__(cleaned_message)
+
+
+def _portal_reason_from_exception(exc: BaseException, *, default: str = "invalid_request") -> str:
+    if isinstance(exc, _PortalValidationReasonError):
+        return exc.reason
+    return default
+
+
 def _portal_payload_has_any_key(payload: Any, keys: Tuple[str, ...]) -> bool:
     if not isinstance(payload, dict):
         return False
@@ -1445,6 +1644,7 @@ def _normalize_portal_path_arg(
     required: bool = False,
     must_exist: bool = False,
     must_be_file: bool = False,
+    must_be_dir: bool = False,
 ) -> str:
     def _trusted_allowed_entry(
         resolved_path: Path,
@@ -1499,7 +1699,7 @@ def _normalize_portal_path_arg(
     try:
         resolved_path = _resolve_allowed_request_path(text, allowed_roots)
     except ValueError as exc:
-        reason = VALIDATION_REASON_CODES.get(str(exc), "invalid_path_value")
+        reason = _portal_reason_from_exception(exc, default="invalid_path_value")
         del exc
         if reason == "path_outside_allowed_roots":
             errors.append(
@@ -1524,7 +1724,7 @@ def _normalize_portal_path_arg(
             )
         return ""
     trusted_entry: Optional[Path] = None
-    if must_exist or must_be_file:
+    if must_exist or must_be_file or must_be_dir:
         trusted_entry = _trusted_allowed_entry(resolved_path)
     if must_exist and trusted_entry is None:
         errors.append(
@@ -1546,7 +1746,59 @@ def _normalize_portal_path_arg(
             )
         )
         return ""
-    return str(trusted_entry) if trusted_entry is not None else str(resolved_path)
+    if must_be_dir and trusted_entry is not None and not trusted_entry.is_dir():
+        errors.append(
+            _portal_issue(
+                field,
+                "not_a_directory",
+                f"{field} must be a directory.",
+                suggestion=f"Choose a directory path for {field} under the configured repository or temp roots.",
+            )
+        )
+        return ""
+    display_path = trusted_entry if trusted_entry is not None else resolved_path
+    return _normalize_repo_relative_display_path(text, display_path)
+
+
+def _preview_path_errors_by_field(issues: Optional[List[Dict[str, Any]]]) -> Dict[str, List[Dict[str, Any]]]:
+    grouped: Dict[str, List[Dict[str, Any]]] = {}
+    for issue in issues or []:
+        if not isinstance(issue, dict):
+            continue
+        field_name = str(issue.get("field") or "").strip()
+        if not field_name:
+            continue
+        grouped.setdefault(field_name, []).append(issue)
+    return grouped
+
+
+def _normalize_preview_path_field(
+    args: Dict[str, Any],
+    field: str,
+    keys: Tuple[str, ...],
+    allowed_roots: List[Path],
+    errors: List[Dict[str, Any]],
+    path_errors_by_field: Dict[str, List[Dict[str, Any]]],
+    *,
+    required: bool = False,
+    must_exist: bool = False,
+    must_be_file: bool = False,
+    must_be_dir: bool = False,
+) -> str:
+    existing_errors = path_errors_by_field.get(field) or []
+    if existing_errors:
+        errors.extend(existing_errors)
+        return ""
+    return _normalize_portal_path_arg(
+        _pick(args, *keys, default=""),
+        field,
+        allowed_roots,
+        errors,
+        required=required,
+        must_exist=must_exist,
+        must_be_file=must_be_file,
+        must_be_dir=must_be_dir,
+    )
 
 
 def _lux_config_metadata() -> Dict[str, Any]:
@@ -1790,10 +2042,12 @@ def _build_lux_config_preview(
     *,
     readiness_snapshot: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
+    args, path_warnings, path_errors = _normalize_operator_payload_paths("lux-depth-v3", args)
     defaults = _lux_portal_defaults(args)
     errors: List[Dict[str, Any]] = []
-    warnings: List[Dict[str, Any]] = []
+    warnings: List[Dict[str, Any]] = list(path_warnings)
     inactive_fields: List[Dict[str, Any]] = []
+    path_errors_by_field = _preview_path_errors_by_field(path_errors)
 
     normalized_args: Dict[str, Any] = {}
     normalized_args["preset"] = defaults["preset"]
@@ -1833,18 +2087,22 @@ def _build_lux_config_preview(
     if depth_device:
         normalized_args["depth_device"] = depth_device
 
-    normalized_args["input_dir"] = _normalize_portal_path_arg(
-        _pick(args, "input_dir", "inputDir", default=""),
+    normalized_args["input_dir"] = _normalize_preview_path_field(
+        args,
         "input_dir",
+        ("input_dir", "inputDir"),
         ALLOWED_INPUT_ROOTS,
         errors,
+        path_errors_by_field,
         required=True,
     )
-    normalized_args["output_dir"] = _normalize_portal_path_arg(
-        _pick(args, "output_dir", "outputDir", default=""),
+    normalized_args["output_dir"] = _normalize_preview_path_field(
+        args,
         "output_dir",
+        ("output_dir", "outputDir"),
         ALLOWED_OUTPUT_ROOTS,
         errors,
+        path_errors_by_field,
         required=True,
     )
 
@@ -1892,11 +2150,13 @@ def _build_lux_config_preview(
         )
         sam2_model_size = str(defaults["sam2_model_size"])
     normalized_args["sam2_model_size"] = sam2_model_size
-    sam2_checkpoint_path = _normalize_portal_path_arg(
-        _pick(args, "sam2_checkpoint_path", "sam2CheckpointPath"),
+    sam2_checkpoint_path = _normalize_preview_path_field(
+        args,
         "sam2_checkpoint_path",
+        ("sam2_checkpoint_path", "sam2CheckpointPath"),
         ALLOWED_INPUT_ROOTS,
         errors,
+        path_errors_by_field,
         required=False,
         must_exist=False,
     )
@@ -1957,11 +2217,13 @@ def _build_lux_config_preview(
         grouping_mode = str(defaults["grouping_mode"])
     normalized_args["grouping_mode"] = grouping_mode
 
-    cameras_sidecar_path = _normalize_portal_path_arg(
-        _pick(args, "cameras_sidecar_path", "camerasSidecarPath"),
+    cameras_sidecar_path = _normalize_preview_path_field(
+        args,
         "cameras_sidecar_path",
+        ("cameras_sidecar_path", "camerasSidecarPath"),
         ALLOWED_INPUT_ROOTS,
         errors,
+        path_errors_by_field,
         required=False,
         must_exist=bool(normalized_args["enable_reconstruction"]),
         must_be_file=True,
@@ -2266,13 +2528,15 @@ def _build_lux_config_preview(
                 {
                     "pipeline": "lux-depth-v3",
                     "args": normalized_args,
-                }
+                },
+                execution_args=normalized_args,
             )
         )
 
     return {
         "pipeline": "lux-depth-v3",
         "normalized_args": effective_args,
+        "execution_args": dict(normalized_args),
         "argv_preview": argv_preview,
         "field_errors": errors,
         "field_warnings": warnings,
@@ -2289,16 +2553,52 @@ def _build_archive_config_preview(
     *,
     readiness_snapshot: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
+    args, path_warnings, path_errors = _normalize_operator_payload_paths(pipeline, args)
     errors: List[Dict[str, Any]] = []
-    if readiness_snapshot is None:
-        readiness_snapshot = _evaluate_pipeline_readiness(
-            pipeline,
-            args,
-            require_dispatch_inputs=True,
-        )
-    argv_preview = ""
+    warnings: List[Dict[str, Any]] = list(path_warnings)
+    path_errors_by_field = _preview_path_errors_by_field(path_errors)
     normalized_args = dict(args)
-    archive_command = str(args.get("archive_command") or "").strip()
+
+    def _set_archive_path_field(
+        field: str,
+        keys: Tuple[str, ...],
+        *,
+        required: bool = False,
+        must_exist: bool = False,
+        must_be_file: bool = False,
+        must_be_dir: bool = False,
+    ) -> str:
+        allowed_roots = _allowed_roots_for_scope(
+            next((scope for canonical, _, scope in PATH_FIELD_SPECS if canonical == field), PATH_SCOPE_ANY)
+        )
+        value = _normalize_preview_path_field(
+            args,
+            field,
+            keys,
+            allowed_roots,
+            errors,
+            path_errors_by_field,
+            required=required,
+            must_exist=must_exist or must_be_dir,
+            must_be_file=must_be_file,
+            must_be_dir=must_be_dir,
+        )
+        for key in keys:
+            normalized_args.pop(key, None)
+        if value or required:
+            normalized_args[field] = value
+        else:
+            normalized_args.pop(field, None)
+        return value
+
+    _set_archive_path_field("input_dir", ("input_dir", "inputDir"), required=True)
+    _set_archive_path_field("output_dir", ("output_dir", "outputDir"), required=True)
+
+    default_command = ARCHIVE_GATE_DEFAULT_COMMANDS[pipeline]
+    archive_command = str(_pick(args, "archive_command", "archiveCommand", default=default_command) or "").strip()
+    if not archive_command:
+        archive_command = default_command
+    normalized_args["archive_command"] = archive_command
     if archive_command and archive_command not in ARCHIVE_GATE_ALLOWED_COMMANDS[pipeline]:
         errors.append(
             _portal_issue(
@@ -2307,52 +2607,121 @@ def _build_archive_config_preview(
                 _portal_safe_error_message("invalid_archive_command"),
             )
         )
-    else:
-        command = archive_command or ARCHIVE_GATE_DEFAULT_COMMANDS[pipeline]
-        archive_integer_specs: List[Tuple[Tuple[str, ...], int]] = []
-        if command in {"fixity-scan", "fixity-verify"}:
-            archive_integer_specs.append((("workers",), 1))
-        if command == "fixity-verify":
-            archive_integer_specs.append((("verify_sample", "verifySample"), 0))
-        invalid_archive_integer = False
-        for keys, minimum in archive_integer_specs:
-            value = _pick(args, *keys, default=None)
-            if value is None or (isinstance(value, str) and not value.strip()):
-                continue
-            try:
-                parsed = int(value)
-            except (TypeError, ValueError):
-                invalid_archive_integer = True
-                break
-            if parsed < minimum:
-                invalid_archive_integer = True
-                break
-        if invalid_archive_integer:
+    command = archive_command or default_command
+
+    if command in {"fixity-scan", "fixity-verify", "manifest-build"}:
+        _set_archive_path_field(
+            "archive_index",
+            ("archive_index", "archiveIndex"),
+            required=command in {"fixity-scan", "manifest-build"},
+            must_exist=command in {"fixity-scan", "manifest-build"},
+            must_be_file=command in {"fixity-scan", "manifest-build"},
+        )
+    if command in {"fixity-verify", "manifest-build"}:
+        _set_archive_path_field(
+            "hash_manifest",
+            ("hash_manifest", "hashManifest"),
+            required=True,
+            must_exist=True,
+            must_be_file=True,
+        )
+    if command == "rights-apply":
+        _set_archive_path_field(
+            "policy_yaml",
+            ("policy_yaml", "policyYaml"),
+            required=True,
+            must_exist=True,
+            must_be_file=True,
+        )
+    if command in {"rights-apply", "bag-build", "dedup-plan", "mets-export", "prov-export", "stac-export"}:
+        _set_archive_path_field(
+            "manifest_jsonl",
+            ("manifest_jsonl", "manifestJsonl"),
+            required=True,
+            must_exist=True,
+            must_be_file=True,
+        )
+    if command == "bag-validate":
+        _set_archive_path_field(
+            "bag_dir",
+            ("bag_dir", "bagDir"),
+            required=True,
+            must_exist=True,
+            must_be_dir=True,
+        )
+
+    for field, keys, _scope in PATH_FIELD_SPECS:
+        if field in normalized_args:
+            continue
+        if not any(key in args for key in keys):
+            continue
+        _set_archive_path_field(field, keys)
+
+    archive_integer_specs: List[Tuple[str, Tuple[str, ...], int, int]] = []
+    if command in {"fixity-scan", "fixity-verify"}:
+        archive_integer_specs.append(("workers", ("workers",), 1, 1))
+    if command == "fixity-verify":
+        archive_integer_specs.append(("verify_sample", ("verify_sample", "verifySample"), 0, 0))
+    for canonical_field, keys, minimum, default_value in archive_integer_specs:
+        value = _pick(args, *keys, default=None)
+        if value is None or (isinstance(value, str) and not value.strip()):
+            normalized_args[canonical_field] = default_value
+            continue
+        try:
+            parsed = int(value)
+        except (TypeError, ValueError):
             errors.append(
                 _portal_issue(
-                    "payload",
+                    canonical_field,
                     "invalid_archive_integer_option",
                     _portal_safe_error_message("invalid_archive_integer_option"),
                 )
             )
-        else:
-            try:
-                argv_preview = _format_argv_preview(_argv_from_request({"pipeline": pipeline, "args": args}))
-            except ValueError:
-                errors.append(
-                    _portal_issue(
-                        "payload",
-                        "invalid_request",
-                        _portal_safe_error_message("invalid_request"),
-                    )
+            continue
+        if parsed < minimum:
+            errors.append(
+                _portal_issue(
+                    canonical_field,
+                    "invalid_archive_integer_option",
+                    _portal_safe_error_message("invalid_archive_integer_option"),
                 )
+            )
+            continue
+        normalized_args[canonical_field] = parsed
+
+    if readiness_snapshot is None:
+        readiness_snapshot = _evaluate_pipeline_readiness(
+            pipeline,
+            normalized_args,
+            require_dispatch_inputs=True,
+        )
+
+    argv_preview = ""
+    if not errors:
+        try:
+            argv_preview = _format_argv_preview(
+                _argv_from_request(
+                    {"pipeline": pipeline, "args": normalized_args},
+                    execution_args=normalized_args,
+                )
+            )
+        except ValueError as exc:
+            reason = _portal_reason_from_exception(exc)
+            errors.append(
+                _portal_issue(
+                    "payload",
+                    reason,
+                    _portal_safe_error_message(reason),
+                )
+            )
 
     return {
         "pipeline": pipeline,
         "normalized_args": normalized_args,
+        "execution_args": dict(normalized_args),
         "argv_preview": argv_preview,
         "field_errors": errors,
-        "field_warnings": [],
+        "field_warnings": warnings,
         "inactive_fields": [],
         "readiness": readiness_snapshot,
         "estimate_summary": {},
@@ -2716,7 +3085,10 @@ async def _request_cancel(job: Job) -> None:
 
 
 def _job_output_dir(job: Job) -> Optional[Path]:
-    args = job.request.get("args")
+    request_payload = (
+        job.effective_request if isinstance(job.effective_request, dict) and job.effective_request else job.request
+    )
+    args = request_payload.get("args") if isinstance(request_payload, dict) else None
     if not isinstance(args, dict):
         return None
     output_dir = str(
@@ -2724,7 +3096,10 @@ def _job_output_dir(job: Job) -> Optional[Path]:
     ).strip()
     if not output_dir:
         return None
-    return Path(output_dir).expanduser()
+    try:
+        return _resolve_allowed_request_path(output_dir, ALLOWED_OUTPUT_ROOTS)
+    except ValueError:
+        return None
 
 
 def _infer_artifact_type(path: Path) -> str:
@@ -3551,18 +3926,29 @@ def _archive_gate_argv(
     return argv
 
 
-def _argv_from_request(payload: Dict[str, Any]) -> List[str]:
+def _argv_from_request(
+    payload: Dict[str, Any],
+    *,
+    execution_args: Optional[Dict[str, Any]] = None,
+) -> List[str]:
     """
     Build argv securely (no shell).
     Input validation: allowlist pipeline/backend/quality, require paths.
     """
-    pipeline = payload.get("pipeline")
-    args = payload.get("args")
+    pipeline = str(payload.get("pipeline") or "").strip()
+    if pipeline not in ALLOWED_PIPELINES:
+        raise _PortalValidationReasonError("Unsupported pipeline", reason="unsupported_pipeline")
+
+    args = execution_args if isinstance(execution_args, dict) else payload.get("args")
     if not isinstance(args, dict):
         args = {}
-
-    if pipeline not in ALLOWED_PIPELINES:
-        raise ValueError("Unsupported pipeline")
+    if execution_args is None:
+        args, _, path_errors = _normalize_operator_payload_paths(str(pipeline), args)
+        if path_errors:
+            raise _PortalValidationReasonError(
+                "Path shorthand traversal disallowed",
+                reason="path_shorthand_traversal_disallowed",
+            )
 
     input_dir_raw = str(
         _pick(args, "input_dir", "inputDir", default=""),
@@ -3571,7 +3957,10 @@ def _argv_from_request(payload: Dict[str, Any]) -> List[str]:
         _pick(args, "output_dir", "outputDir", default=""),
     ).strip()
     if not input_dir_raw or not output_dir_raw:
-        raise ValueError("input_dir and output_dir are required")
+        raise _PortalValidationReasonError(
+            "input_dir and output_dir are required",
+            reason="missing_required_paths",
+        )
     input_dir = _validate_path_against_roots(
         input_dir_raw,
         ALLOWED_INPUT_ROOTS,
@@ -3727,45 +4116,51 @@ def _argv_from_request(payload: Dict[str, Any]) -> List[str]:
         log_level_raw = _pick(args, "log_level", "logLevel")
 
         if quality not in ALLOWED_QUALITY:
-            raise ValueError("Invalid quality_tier")
+            raise _PortalValidationReasonError("Invalid quality_tier", reason="invalid_quality_tier")
         if backend not in ALLOWED_BACKENDS:
-            raise ValueError("Invalid depth_backend")
+            raise _PortalValidationReasonError("Invalid depth_backend", reason="invalid_depth_backend")
         if segmentation_backend not in ALLOWED_SEGMENTATION_BACKENDS:
-            raise ValueError("Invalid segmentation_backend")
+            raise _PortalValidationReasonError(
+                "Invalid segmentation_backend",
+                reason="invalid_segmentation_backend",
+            )
         if segmentation_backend == "sam2" and sam2_model_size not in ALLOWED_SAM2_MODEL_SIZES:
-            raise ValueError("Invalid sam2_model_size")
+            raise _PortalValidationReasonError("Invalid sam2_model_size", reason="invalid_sam2_model_size")
         if grouping_mode not in ALLOWED_GROUPING_MODES:
-            raise ValueError("Invalid grouping_mode")
+            raise _PortalValidationReasonError("Invalid grouping_mode")
 
         reconstruction_tier_value = ""
         if reconstruction_tier is not None and str(reconstruction_tier).strip():
             reconstruction_tier_value = str(reconstruction_tier).strip().lower()
             if reconstruction_tier_value not in ALLOWED_RECONSTRUCTION_TIERS:
-                raise ValueError("Invalid reconstruction_tier")
+                raise _PortalValidationReasonError(
+                    "Invalid reconstruction_tier",
+                    reason="invalid_reconstruction_tier",
+                )
 
         raw_ingest_mode_value = ""
         if raw_ingest_mode is not None and str(raw_ingest_mode).strip():
             raw_ingest_mode_value = str(raw_ingest_mode).strip().lower()
             if raw_ingest_mode_value not in ALLOWED_RAW_INGEST_MODES:
-                raise ValueError("Invalid raw_ingest_mode")
+                raise _PortalValidationReasonError("Invalid raw_ingest_mode", reason="invalid_raw_ingest_mode")
 
         raw_wb_mode_value = ""
         if raw_wb_mode is not None and str(raw_wb_mode).strip():
             raw_wb_mode_value = str(raw_wb_mode).strip().lower()
             if raw_wb_mode_value not in ALLOWED_RAW_WB_MODES:
-                raise ValueError("Invalid raw_wb_mode")
+                raise _PortalValidationReasonError("Invalid raw_wb_mode", reason="invalid_raw_wb_mode")
 
         raw_demosaic_value = ""
         if raw_demosaic is not None and str(raw_demosaic).strip():
             raw_demosaic_value = str(raw_demosaic).strip().upper()
             if raw_demosaic_value not in ALLOWED_RAW_DEMOSAIC:
-                raise ValueError("Invalid raw_demosaic")
+                raise _PortalValidationReasonError("Invalid raw_demosaic", reason="invalid_raw_demosaic")
 
         log_level_value = ""
         if log_level_raw is not None and str(log_level_raw).strip():
             log_level_value = str(log_level_raw).strip().upper()
             if log_level_value not in ALLOWED_LOG_LEVELS:
-                raise ValueError("Invalid log_level")
+                raise _PortalValidationReasonError("Invalid log_level", reason="invalid_log_level")
 
         def _parse_optional_positive_int(
             value: Any,
@@ -3776,9 +4171,9 @@ def _argv_from_request(payload: Dict[str, Any]) -> List[str]:
             try:
                 parsed = int(value)
             except (TypeError, ValueError):
-                raise ValueError(f"Invalid {field_name}") from None
+                raise _PortalValidationReasonError(f"Invalid {field_name}") from None
             if parsed < 1:
-                raise ValueError(f"Invalid {field_name}")
+                raise _PortalValidationReasonError(f"Invalid {field_name}")
             return parsed
 
         reconstruction_iterations = _parse_optional_positive_int(
@@ -4035,7 +4430,10 @@ def _argv_from_request(payload: Dict[str, Any]) -> List[str]:
                 " or --quiet for minimal output.",
                 file=sys.stderr,
             )
-            raise ValueError("verbose and quiet are mutually exclusive")
+            raise _PortalValidationReasonError(
+                "verbose and quiet are mutually exclusive",
+                reason="conflicting_log_verbosity_flags",
+            )
         if verbose_enabled:
             argv.append("--verbose")
         if quiet_enabled:
@@ -4399,15 +4797,9 @@ async def config_metadata(pipeline: str) -> JSONResponse:
 
 @app.post("/v1/config-preview")
 async def config_preview(payload: Dict[str, Any]) -> JSONResponse:
-    pipeline = str(payload.get("pipeline") or "").strip()
-    args = payload.get("args")
-    if not isinstance(args, dict):
-        args = {}
-    if pipeline == "lux-depth-v3":
-        preview = _build_lux_config_preview(args)
-    elif pipeline in ARCHIVE_GATE_PIPELINES:
-        preview = _build_archive_config_preview(pipeline, args)
-    else:
+    try:
+        preview = _build_config_preview(payload)
+    except ValueError:
         return _error_response(
             400,
             code="INVALID_ARGUMENT",
@@ -4451,33 +4843,9 @@ async def portal_events(payload: Dict[str, Any]) -> JSONResponse:
 
 @app.post("/v1/jobs")
 async def create_job(payload: Dict[str, Any]) -> JSONResponse:
-    pipeline = str(payload.get("pipeline") or "").strip()
-    args = payload.get("args")
-    if not isinstance(args, dict):
-        args = {}
-    try:
-        readiness_snapshot = _evaluate_pipeline_readiness(
-            pipeline,
-            args,
-            require_dispatch_inputs=True,
-        )
-        _enforce_job_readiness_preflight(pipeline, readiness_snapshot)
-    except JobPreflightError as exc:
-        status_code = int(exc.status_code)
-        field = str(exc.field or "payload")
-        reason = _portal_reason_code(exc.reason)
-        del exc
-        return _error_response(
-            status_code,
-            code="INVALID_ARGUMENT",
-            message=_portal_safe_error_message(reason, field=field),
-            details={"field": field, "reason": reason},
-        )
-
     try:
         preview = _build_config_preview(
             payload,
-            readiness_snapshot=readiness_snapshot,
         )
     except ValueError:
         return _error_response(
@@ -4486,6 +4854,8 @@ async def create_job(payload: Dict[str, Any]) -> JSONResponse:
             message=_portal_safe_error_message("unsupported_pipeline"),
             details={"field": "payload", "reason": "unsupported_pipeline"},
         )
+
+    pipeline = str(preview.get("pipeline") or payload.get("pipeline") or "").strip()
 
     preview_errors = preview.get("field_errors") or []
     if preview_errors:
@@ -4499,14 +4869,43 @@ async def create_job(payload: Dict[str, Any]) -> JSONResponse:
             details={"field": field, "reason": reason},
         )
 
+    readiness_snapshot = preview.get("readiness")
+    if not isinstance(readiness_snapshot, dict):
+        readiness_snapshot = _evaluate_pipeline_readiness(
+            pipeline,
+            preview.get("execution_args") if isinstance(preview.get("execution_args"), dict) else {},
+            require_dispatch_inputs=True,
+        )
     try:
-        argv = _argv_from_request(payload)
-    except ValueError:
+        _enforce_job_readiness_preflight(pipeline, readiness_snapshot)
+    except JobPreflightError as exc:
+        status_code = int(exc.status_code)
+        field = str(exc.field or "payload")
+        reason = _portal_reason_code(exc.reason)
+        del exc
+        return _error_response(
+            status_code,
+            code="INVALID_ARGUMENT",
+            message=_portal_safe_error_message(reason, field=field),
+            details={"field": field, "reason": reason},
+        )
+
+    execution_args = preview.get("execution_args")
+    if not isinstance(execution_args, dict):
+        execution_args = {}
+
+    try:
+        argv = _argv_from_request(
+            payload,
+            execution_args=execution_args,
+        )
+    except ValueError as exc:
+        reason = _portal_reason_from_exception(exc)
         return _error_response(
             400,
             code="INVALID_ARGUMENT",
-            message="invalid job request",
-            details={"field": "payload", "reason": "invalid_request"},
+            message=_portal_safe_error_message(reason),
+            details={"field": "payload", "reason": reason},
         )
 
     async with JOB_ADMISSION_LOCK:
@@ -4523,7 +4922,8 @@ async def create_job(payload: Dict[str, Any]) -> JSONResponse:
                 },
             )
         jid = "job_" + uuid.uuid4().hex[:8]
-        job = Job(id=jid, created_at=_now(), request=payload)
+        effective_request = {"pipeline": pipeline, "args": dict(execution_args)}
+        job = Job(id=jid, created_at=_now(), request=payload, effective_request=effective_request)
         JOBS[jid] = job
         EVENT_SUBSCRIBERS[jid] = {}
 
