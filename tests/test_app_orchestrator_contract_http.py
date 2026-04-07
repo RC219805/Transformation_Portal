@@ -114,9 +114,10 @@ def test_portal_bootstrap_reports_direct_debug_mode(client: TestClient) -> None:
 
 def test_root_ui_response_is_not_cached(client: TestClient) -> None:
     response = client.get("/")
-    csp = response.headers["Content-Security-Policy"]
-
     assert response.status_code == 200
+    csp = response.headers.get("Content-Security-Policy")
+
+    assert csp is not None
     assert response.headers["Cache-Control"] == "no-store"
     assert response.headers["Pragma"] == "no-cache"
     assert "default-src 'self'" in csp
