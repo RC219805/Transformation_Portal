@@ -563,7 +563,10 @@ def test_portal_direct_debug_api_key_storage_is_session_only() -> None:
     assert "localStorage.setItem(API_KEY_STORAGE_KEY, token);" not in persist_body
     assert "sessionStorage.setItem(API_KEY_STORAGE_KEY, token);" in persist_body
     assert "localStorage.removeItem(API_KEY_STORAGE_KEY);" in persist_body
+    assert "const localValue = localStorage.getItem(API_KEY_STORAGE_KEY) || '';" in load_body
+    assert "const sessionValue = sessionStorage.getItem(API_KEY_STORAGE_KEY) || '';" in load_body
     assert "const stored = sessionValue || localValue;" in load_body
+    assert "if (localValue && !sessionValue) {" in load_body
     assert "sessionStorage.setItem(API_KEY_STORAGE_KEY, localValue);" in load_body
     assert "localStorage.removeItem(API_KEY_STORAGE_KEY);" in load_body
     assert "localStorage.getItem(API_KEY_STORAGE_KEY)" not in current_token_body
@@ -574,6 +577,8 @@ def test_portal_managed_mode_uses_csrf_instead_of_browser_backend_secrets() -> N
     portal_html = Path(__file__).resolve().parents[1] / "portal.html"
     content = portal_html.read_text(encoding="utf-8")
     current_token_body = _extract_js_function_body(content, "_currentApiToken")
+    auth_headers_index = content.index("function _buildAuthHeaders(base = {}, method = 'GET') {")
+    auth_headers_slice = content[auth_headers_index : auth_headers_index + 800]
 
     assert "if (_isManagedAuthMode()) return '';" in current_token_body
     assert "function _buildAuthHeaders(base = {}, method = 'GET') {" in content
@@ -581,6 +586,15 @@ def test_portal_managed_mode_uses_csrf_instead_of_browser_backend_secrets() -> N
     assert "headers['X-CSRF-Token'] = state.auth.csrfToken;" in content
     assert "headers['Authorization'] = `Bearer ${token}`;" in content
     assert "headers['x-api-key'] = token;" in content
+
+    managed_guard_index = auth_headers_slice.index("if (_isManagedAuthMode()) {")
+    csrf_header_index = auth_headers_slice.index("headers['X-CSRF-Token'] = state.auth.csrfToken;")
+    managed_return_index = auth_headers_slice.index("return headers;", managed_guard_index)
+    authorization_header_index = auth_headers_slice.index("headers['Authorization'] = `Bearer ${token}`;")
+    api_key_header_index = auth_headers_slice.index("headers['x-api-key'] = token;")
+
+    assert managed_guard_index < csrf_header_index < managed_return_index
+    assert managed_return_index < authorization_header_index < api_key_header_index
 
 
 def test_portal_auth_helpers_fail_closed_until_bootstrap_ready() -> None:
