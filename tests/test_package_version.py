@@ -9,6 +9,7 @@ import pytest
 from typer.testing import CliRunner
 
 pytestmark = pytest.mark.unit
+REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 @pytest.fixture(autouse=True)
@@ -36,7 +37,7 @@ def test_runtime_version_falls_back_to_pyproject_when_metadata_is_missing(
 ) -> None:
     import transformation_portal
 
-    expected_version = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))["project"]["version"]
+    expected_version = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]["version"]
 
     def _raise_package_not_found(_package_name: str) -> str:
         raise metadata.PackageNotFoundError
