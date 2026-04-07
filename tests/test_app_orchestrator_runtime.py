@@ -11,6 +11,7 @@ import os
 import re
 import subprocess
 import sys
+from functools import lru_cache
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Dict
@@ -40,6 +41,7 @@ def _flag_value(argv: list[str], flag: str) -> str:
     return argv[idx + 1]
 
 
+@lru_cache(maxsize=1)
 def _portal_html_content() -> str:
     return PORTAL_HTML_PATH.read_text(encoding="utf-8")
 
@@ -53,6 +55,7 @@ def _portal_asset_path(asset_url: str) -> Path:
     return candidate
 
 
+@lru_cache(maxsize=1)
 def _portal_css_content() -> str:
     html = _portal_html_content()
     match = re.search(r'<link rel="stylesheet" href="(/portal/assets/[^"]+)"\s*/?>', html)
@@ -61,6 +64,7 @@ def _portal_css_content() -> str:
     return _portal_asset_path(match.group(1)).read_text(encoding="utf-8")
 
 
+@lru_cache(maxsize=1)
 def _portal_js_content() -> str:
     html = _portal_html_content()
     match = re.search(r'<script src="(/portal/assets/[^"]+)"[^>]*></script>', html)
@@ -69,6 +73,7 @@ def _portal_js_content() -> str:
     return _portal_asset_path(match.group(1)).read_text(encoding="utf-8")
 
 
+@lru_cache(maxsize=1)
 def _portal_bundle_content() -> str:
     return "\n".join((_portal_html_content(), _portal_css_content(), _portal_js_content()))
 
@@ -412,6 +417,12 @@ def test_portal_asset_manifest_is_explicit_and_repo_local() -> None:
         "portal.js": orchestrator_app.PORTAL_ASSETS_DIR / "portal.js",
         "fonts/portal-sans.woff2": orchestrator_app.PORTAL_ASSETS_DIR / "fonts" / "portal-sans.woff2",
         "fonts/portal-mono.woff2": orchestrator_app.PORTAL_ASSETS_DIR / "fonts" / "portal-mono.woff2",
+    }
+    assert orchestrator_app.PORTAL_ASSET_MEDIA_TYPES == {
+        "portal.css": "text/css; charset=utf-8",
+        "portal.js": "text/javascript; charset=utf-8",
+        "fonts/portal-sans.woff2": "font/woff2",
+        "fonts/portal-mono.woff2": "font/woff2",
     }
     for asset_path in orchestrator_app.PORTAL_ASSET_PATHS.values():
         assert asset_path.is_file()

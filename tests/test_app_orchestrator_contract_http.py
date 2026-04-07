@@ -161,14 +161,14 @@ def test_portal_asset_endpoint_serves_css_and_js(client: TestClient) -> None:
 
     assert css_response.status_code == 200
     assert css_response.headers["Cache-Control"] == orchestrator_app.PORTAL_ASSET_CACHE_CONTROL
-    assert css_response.headers["content-type"].startswith("text/css")
+    assert css_response.headers["content-type"] == orchestrator_app.PORTAL_ASSET_MEDIA_TYPES["portal.css"]
     assert "@font-face" in css_response.text
     assert "Portal Sans" in css_response.text
     assert "https://fonts.googleapis.com" not in css_response.text
 
     assert js_response.status_code == 200
     assert js_response.headers["Cache-Control"] == orchestrator_app.PORTAL_ASSET_CACHE_CONTROL
-    assert js_response.headers["content-type"].startswith("text/javascript")
+    assert js_response.headers["content-type"] == orchestrator_app.PORTAL_ASSET_MEDIA_TYPES["portal.js"]
     assert "const BOOTSTRAP_TIMEOUT_MS = 3500;" in js_response.text
 
 
@@ -177,7 +177,7 @@ def test_portal_asset_endpoint_serves_repo_local_fonts(client: TestClient) -> No
 
     assert response.status_code == 200
     assert response.headers["Cache-Control"] == orchestrator_app.PORTAL_ASSET_CACHE_CONTROL
-    assert response.headers["content-type"].startswith("font/woff2")
+    assert response.headers["content-type"] == orchestrator_app.PORTAL_ASSET_MEDIA_TYPES["fonts/portal-sans.woff2"]
     assert response.content
 
 

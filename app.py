@@ -36,6 +36,12 @@ from starlette.responses import Response, StreamingResponse
 LOGGER = logging.getLogger(__name__)
 
 
+@dataclass(frozen=True)
+class PortalAssetSpec:
+    path: Path
+    media_type: str
+
+
 def _env_csv(name: str, default: List[str]) -> List[str]:
     raw = os.getenv(name)
     if raw is None:
@@ -79,12 +85,26 @@ PORTAL_ASSETS_DIR = REPO_ROOT / "public" / "portal-assets"
 PORTAL_VIDEO_ASSET_NAME = "dna-portal-video-2.mp4"
 PORTAL_VIDEO_PATH = REPO_ROOT / "public" / "video" / PORTAL_VIDEO_ASSET_NAME
 PORTAL_ASSET_CACHE_CONTROL = "no-store"
-PORTAL_ASSET_PATHS = {
-    "portal.css": PORTAL_ASSETS_DIR / "portal.css",
-    "portal.js": PORTAL_ASSETS_DIR / "portal.js",
-    "fonts/portal-sans.woff2": PORTAL_ASSETS_DIR / "fonts" / "portal-sans.woff2",
-    "fonts/portal-mono.woff2": PORTAL_ASSETS_DIR / "fonts" / "portal-mono.woff2",
+PORTAL_ASSET_MANIFEST: Dict[str, PortalAssetSpec] = {
+    "portal.css": PortalAssetSpec(
+        path=PORTAL_ASSETS_DIR / "portal.css",
+        media_type="text/css; charset=utf-8",
+    ),
+    "portal.js": PortalAssetSpec(
+        path=PORTAL_ASSETS_DIR / "portal.js",
+        media_type="text/javascript; charset=utf-8",
+    ),
+    "fonts/portal-sans.woff2": PortalAssetSpec(
+        path=PORTAL_ASSETS_DIR / "fonts" / "portal-sans.woff2",
+        media_type="font/woff2",
+    ),
+    "fonts/portal-mono.woff2": PortalAssetSpec(
+        path=PORTAL_ASSETS_DIR / "fonts" / "portal-mono.woff2",
+        media_type="font/woff2",
+    ),
 }
+PORTAL_ASSET_PATHS = {name: asset.path for name, asset in PORTAL_ASSET_MANIFEST.items()}
+PORTAL_ASSET_MEDIA_TYPES = {name: asset.media_type for name, asset in PORTAL_ASSET_MANIFEST.items()}
 ARCHIVE_GOVERNANCE_SCRIPT = REPO_ROOT / "tools" / "archive_governance.py"
 LUX_DEPTH_MODULE = "transformation_portal.lux_depth_v3"
 APP_VERSION = "0.3.0"
@@ -3145,17 +3165,17 @@ def _artifact_content_type(path: Path) -> str:
     return guessed or "application/octet-stream"
 
 
-def _resolve_portal_asset_path(asset_path: str) -> Path:
+def _resolve_portal_asset(asset_path: str) -> PortalAssetSpec:
     normalized = str(asset_path or "").strip()
     if not normalized:
         raise FileNotFoundError("missing portal asset path")
 
     try:
-        candidate = PORTAL_ASSET_PATHS[normalized]
+        candidate = PORTAL_ASSET_MANIFEST[normalized]
     except KeyError as exc:
         raise FileNotFoundError("portal asset not found") from exc
 
-    if not candidate.is_file():
+    if not candidate.path.is_file():
         raise FileNotFoundError("portal asset not found")
     return candidate
 
@@ -4830,13 +4850,13 @@ async def serve_ui() -> Response:
 @app.get("/portal/assets/{asset_path:path}")
 async def serve_portal_asset(asset_path: str) -> Response:
     try:
-        resolved_path = _resolve_portal_asset_path(asset_path)
+        resolved_asset = _resolve_portal_asset(asset_path)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail="portal asset not found") from exc
 
     return FileResponse(
-        str(resolved_path),
-        media_type=_artifact_content_type(resolved_path),
+        str(resolved_asset.path),
+        media_type=resolved_asset.media_type,
         headers={"Cache-Control": PORTAL_ASSET_CACHE_CONTROL},
     )
 
