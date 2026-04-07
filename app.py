@@ -3272,12 +3272,27 @@ def _summarize_batch_manifest_payload(payload: Mapping[str, Any]) -> Dict[str, A
     return summary
 
 
+def _artifact_batch_hint(relative_path: str) -> str:
+    match = re.search(r"\d{4}-\d{2}-\d{2}_\d{6}", PurePosixPath(relative_path).stem)
+    return match.group(0) if match else ""
+
+
+def _artifact_recency_key(relative_path: str, artifact_path: Path) -> Tuple[str, float, str]:
+    batch_hint = _artifact_batch_hint(relative_path)
+    try:
+        modified_time = artifact_path.stat().st_mtime
+    except OSError:
+        modified_time = -1.0
+    return (batch_hint, modified_time, relative_path)
+
+
 def _find_job_artifact_path(job: Job, predicate: Callable[[str], bool]) -> Optional[Path]:
     lookup = job.artifact_lookup or _hydrate_artifact_lookup_from_items(job)
-    for relative_path in sorted(lookup):
-        if predicate(relative_path):
-            return lookup[relative_path]
-    return None
+    candidates = [(relative_path, lookup[relative_path]) for relative_path in lookup if predicate(relative_path)]
+    if not candidates:
+        return None
+    _, artifact_path = max(candidates, key=lambda item: _artifact_recency_key(item[0], item[1]))
+    return artifact_path
 
 
 def _refresh_job_run_summary(job: Job) -> Dict[str, Any]:
