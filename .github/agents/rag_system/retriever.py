@@ -308,12 +308,13 @@ class HybridRetriever:
             logger.debug("No chunks match filters")
             return []
 
-        # Create filtered corpus
-        filtered_chunks = [self.chunks[i] for i in filtered_indices]
-        filtered_docs = [chunk.content for chunk in filtered_chunks]
-
-        # Get BM25 results
-        bm25_scores = self._bm25_search(filtered_docs, query, top_k)
+        # Reuse the indexed BM25 corpus when no filters are applied.
+        if chunk_type_filter is None and file_path_filter is None:
+            bm25_scores = self._bm25_search(query, top_k)
+        else:
+            filtered_chunks = [self.chunks[i] for i in filtered_indices]
+            filtered_docs = [chunk.content for chunk in filtered_chunks]
+            bm25_scores = self._bm25_search(query, top_k, documents=filtered_docs)
 
         # Get vector results (if enabled)
         vector_scores = None
@@ -326,16 +327,19 @@ class HybridRetriever:
         logger.debug(f"Retrieved {len(results)} results for query: '{query[:50]}'")
         return results
 
-    def _bm25_search(self, documents: List[str], query: str, top_k: int) -> Dict[int, float]:
+    def _bm25_search(self, query: str, top_k: int, documents: Optional[List[str]] = None) -> Dict[int, float]:
         """
         Perform BM25 search.
 
         Returns:
             Dict mapping local index to BM25 score
         """
-        temp_bm25 = BM25Retriever(k1=self.bm25.k1, b=self.bm25.b)
-        temp_bm25.fit(documents)
-        bm25_results = temp_bm25.search(query, top_k=top_k * 2)  # Get more for hybrid
+        if documents is None:
+            bm25_results = self.bm25.search(query, top_k=top_k * 2)
+        else:
+            temp_bm25 = BM25Retriever(k1=self.bm25.k1, b=self.bm25.b)
+            temp_bm25.fit(documents)
+            bm25_results = temp_bm25.search(query, top_k=top_k * 2)  # Get more for hybrid
 
         scores = {}
         for local_idx, score in bm25_results:

@@ -181,6 +181,20 @@ class TestHybridRetriever:
         if results:
             assert all("test_" in r.file_path for r in results)
 
+    def test_retriever_reuses_indexed_bm25_for_unfiltered_queries(self, sample_chunks, monkeypatch):
+        """Test plain retrieval does not rebuild the BM25 index."""
+        retriever = HybridRetriever(enable_vector_search=False)
+        retriever.index(sample_chunks)
+
+        def fail_fit(_self, _documents):
+            raise AssertionError("retrieve() rebuilt BM25 instead of reusing the indexed corpus")
+
+        monkeypatch.setattr(BM25Retriever, "fit", fail_fit)
+
+        results = retriever.retrieve("process image", top_k=2)
+
+        assert len(results) <= 2
+
 
 class TestReranker:
     """Test ResultReranker."""
