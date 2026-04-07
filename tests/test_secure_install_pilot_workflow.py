@@ -10,6 +10,7 @@ pytestmark = pytest.mark.unit
 REPO_ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "secure-install-pilot.yml"
 REQUIREMENTS_README_PATH = REPO_ROOT / "requirements" / "README.md"
+ROADMAP_PATH = REPO_ROOT / "docs" / "architecture" / "transformation_portal_roadmap_rereview_2026-04-07.md"
 CHECKOUT_SHA = "de0fac2e4500dabe0009e67214ff5f5447ce83dd"
 SETUP_PYTHON_SHA = "a309ff8b426b58ec0e2a45f0f869d46889d02405"
 UPLOAD_ARTIFACT_SHA = "bbbca2ddaa5d8feaa63e36b76fdaad77386f024f"
@@ -83,3 +84,27 @@ def test_secure_install_pilot_readme_mentions_local_toolchain_requirement() -> N
     assert 'python -m pip install --upgrade "pip<26"' in readme
     assert 'python -m pip install "pip-tools==7.5.2"' in readme
     assert ".github/workflows/secure-install-pilot.yml" in readme
+
+
+def test_secure_install_pilot_readme_records_explicit_hash_policy() -> None:
+    readme = REQUIREMENTS_README_PATH.read_text(encoding="utf-8")
+
+    assert "CI-only" in readme
+    assert "advisory control for the non-ML checked-in layered locks" in readme
+    assert "standard local install flows remain" in readme
+    assert "pinned-without-hashes" in readme
+    assert "requirements.txt`, `requirements-ci.txt`, and" in readme
+    assert "`requirements-dev.txt` remain outside this hash-enforced policy decision" in readme
+    assert "Promotion to mandatory `--require-hashes` enforcement requires a separate" in readme
+    assert "policy decision." in readme
+
+
+def test_hash_policy_roadmap_refresh_closes_csp_unlock_and_records_policy_decision() -> None:
+    roadmap = ROADMAP_PATH.read_text(encoding="utf-8")
+
+    assert "The direct-debug portal CSP unlock is complete" in roadmap
+    assert "The hash strategy decision is now explicit" in roadmap
+    assert "CI-only advisory control for the" in roadmap
+    assert "non-ML layered locks" in roadmap
+    assert "No new immediate remediation lane is promoted after the CSP unlock and" in roadmap
+    assert "hash-policy closure work." in roadmap
