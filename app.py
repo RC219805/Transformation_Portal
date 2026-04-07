@@ -79,7 +79,12 @@ PORTAL_ASSETS_DIR = REPO_ROOT / "public" / "portal-assets"
 PORTAL_VIDEO_ASSET_NAME = "dna-portal-video-2.mp4"
 PORTAL_VIDEO_PATH = REPO_ROOT / "public" / "video" / PORTAL_VIDEO_ASSET_NAME
 PORTAL_ASSET_CACHE_CONTROL = "no-store"
-PORTAL_ALLOWED_ASSET_SUFFIXES = frozenset({".css", ".js", ".woff2", ".woff", ".ttf", ".otf"})
+PORTAL_ASSET_PATHS = {
+    "portal.css": PORTAL_ASSETS_DIR / "portal.css",
+    "portal.js": PORTAL_ASSETS_DIR / "portal.js",
+    "fonts/portal-sans.woff2": PORTAL_ASSETS_DIR / "fonts" / "portal-sans.woff2",
+    "fonts/portal-mono.woff2": PORTAL_ASSETS_DIR / "fonts" / "portal-mono.woff2",
+}
 ARCHIVE_GOVERNANCE_SCRIPT = REPO_ROOT / "tools" / "archive_governance.py"
 LUX_DEPTH_MODULE = "transformation_portal.lux_depth_v3"
 APP_VERSION = "0.3.0"
@@ -3141,22 +3146,15 @@ def _artifact_content_type(path: Path) -> str:
 
 
 def _resolve_portal_asset_path(asset_path: str) -> Path:
-    raw = str(asset_path or "").strip().lstrip("/")
-    if not raw:
+    normalized = str(asset_path or "").strip()
+    if not normalized:
         raise FileNotFoundError("missing portal asset path")
 
-    relative_path = PurePosixPath(raw)
-    if relative_path.is_absolute() or any(part in {"", ".", ".."} for part in relative_path.parts):
-        raise FileNotFoundError("invalid portal asset path")
-
-    candidate = (PORTAL_ASSETS_DIR / relative_path).resolve()
     try:
-        candidate.relative_to(PORTAL_ASSETS_DIR.resolve())
-    except ValueError as exc:
-        raise FileNotFoundError("portal asset path escaped root") from exc
+        candidate = PORTAL_ASSET_PATHS[normalized]
+    except KeyError as exc:
+        raise FileNotFoundError("portal asset not found") from exc
 
-    if candidate.suffix.lower() not in PORTAL_ALLOWED_ASSET_SUFFIXES:
-        raise FileNotFoundError("unsupported portal asset type")
     if not candidate.is_file():
         raise FileNotFoundError("portal asset not found")
     return candidate

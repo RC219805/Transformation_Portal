@@ -406,6 +406,18 @@ def test_portal_html_externalizes_direct_debug_assets_without_third_party_hosts(
     assert "Phase 1 local utility snapshot replacing Tailwind CDN for portal.html" in css_content
 
 
+def test_portal_asset_manifest_is_explicit_and_repo_local() -> None:
+    assert orchestrator_app.PORTAL_ASSET_PATHS == {
+        "portal.css": orchestrator_app.PORTAL_ASSETS_DIR / "portal.css",
+        "portal.js": orchestrator_app.PORTAL_ASSETS_DIR / "portal.js",
+        "fonts/portal-sans.woff2": orchestrator_app.PORTAL_ASSETS_DIR / "fonts" / "portal-sans.woff2",
+        "fonts/portal-mono.woff2": orchestrator_app.PORTAL_ASSETS_DIR / "fonts" / "portal-mono.woff2",
+    }
+    for asset_path in orchestrator_app.PORTAL_ASSET_PATHS.values():
+        assert asset_path.is_file()
+        assert asset_path.is_relative_to(orchestrator_app.PORTAL_ASSETS_DIR)
+
+
 def test_portal_fetch_sse_reconnect_scheduler_has_terminal_guard_and_backoff() -> None:
     content = _portal_bundle_content()
     body = _extract_js_function_body(content, "scheduleSseReconnect")

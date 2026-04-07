@@ -187,6 +187,12 @@ def test_portal_asset_endpoint_rejects_path_traversal(client: TestClient) -> Non
     assert response.status_code == 404
 
 
+def test_portal_asset_endpoint_rejects_unknown_assets(client: TestClient) -> None:
+    response = client.get("/portal/assets/fonts/not-real.woff2")
+
+    assert response.status_code == 404
+
+
 def test_portal_video_endpoint_serves_background_asset(
     client: TestClient,
     tmp_path,
