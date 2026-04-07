@@ -824,6 +824,193 @@ def test_jobs_list_and_detail_include_recovery_fields(client: TestClient) -> Non
     assert detail_body["data"]["error"]["code"] == "RUNNER_ERROR"
 
 
+def test_partial_run_card_promotes_reviewable_failed_job_state(tmp_path: Path) -> None:
+    output_dir = tmp_path / "out"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    (output_dir / "run_card_2026-04-06_232022.json").write_text(
+        json.dumps(
+            {
+                "batch_id": "2026-04-06_232022",
+                "total_images": 5,
+                "success_count": 4,
+                "error_count": 1,
+                "artifact_index": [
+                    {
+                        "artifact_type": "run_card",
+                        "path": "run_card_2026-04-06_232022.json",
+                        "relative_path": "run_card_2026-04-06_232022.json",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    job = orchestrator_app.Job(
+        id="job_partial_review",
+        created_at=orchestrator_app._now(),
+        state="failed",
+        exit_code=1,
+        request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(output_dir)}},
+        error={
+            "code": "RUNNER_EXIT_NONZERO",
+            "message": "runner exited with code 1",
+            "details": {"exit_code": 1},
+        },
+    )
+
+    orchestrator_app._index_job_artifacts(job)
+    summary = orchestrator_app._refresh_job_run_summary(job)
+
+    assert summary["partial"] is True
+    assert summary["success_count"] == 4
+    assert summary["error_count"] == 1
+    assert job.state == "partial"
+    assert job.run_summary["batch_id"] == "2026-04-06_232022"
+    assert job.error["code"] == "RUNNER_PARTIAL_FAILURE"
+
+
+def test_partial_run_summary_prefers_newest_run_card_when_output_dir_reused(tmp_path: Path) -> None:
+    output_dir = tmp_path / "out"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    (output_dir / "run_card_2026-04-06_232022.json").write_text(
+        json.dumps(
+            {
+                "batch_id": "2026-04-06_232022",
+                "total_images": 2,
+                "success_count": 1,
+                "error_count": 1,
+            }
+        ),
+        encoding="utf-8",
+    )
+    (output_dir / "run_card_2026-04-07_001500.json").write_text(
+        json.dumps(
+            {
+                "batch_id": "2026-04-07_001500",
+                "total_images": 5,
+                "success_count": 4,
+                "error_count": 1,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    job = orchestrator_app.Job(
+        id="job_partial_review_reused_output_dir",
+        created_at=orchestrator_app._now(),
+        state="failed",
+        exit_code=1,
+        request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(output_dir)}},
+        error={
+            "code": "RUNNER_EXIT_NONZERO",
+            "message": "runner exited with code 1",
+            "details": {"exit_code": 1},
+        },
+    )
+
+    orchestrator_app._index_job_artifacts(job)
+    summary = orchestrator_app._refresh_job_run_summary(job)
+
+    assert summary["batch_id"] == "2026-04-07_001500"
+    assert summary["success_count"] == 4
+    assert summary["error_count"] == 1
+    assert job.state == "partial"
+
+
+def test_partial_run_summary_prefers_newest_batch_manifest_when_run_card_missing(tmp_path: Path) -> None:
+    output_dir = tmp_path / "out"
+    manifests_dir = output_dir / "manifests"
+    manifests_dir.mkdir(parents=True, exist_ok=True)
+    (manifests_dir / "batch_2026-04-06_232022.json").write_text(
+        json.dumps(
+            {
+                "batch_id": "2026-04-06_232022",
+                "results": [{"status": "ok"}, {"status": "error"}],
+                "stats": {"total_images": 2},
+            }
+        ),
+        encoding="utf-8",
+    )
+    (manifests_dir / "batch_2026-04-07_001500.json").write_text(
+        json.dumps(
+            {
+                "batch_id": "2026-04-07_001500",
+                "results": [{"status": "ok"}] * 4 + [{"status": "error"}],
+                "stats": {"total_images": 5},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    job = orchestrator_app.Job(
+        id="job_partial_review_manifest_fallback",
+        created_at=orchestrator_app._now(),
+        state="failed",
+        exit_code=1,
+        request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(output_dir)}},
+        error={
+            "code": "RUNNER_EXIT_NONZERO",
+            "message": "runner exited with code 1",
+            "details": {"exit_code": 1},
+        },
+    )
+
+    orchestrator_app._index_job_artifacts(job)
+    summary = orchestrator_app._refresh_job_run_summary(job)
+
+    assert summary["source"] == "batch_manifest"
+    assert summary["batch_id"] == "2026-04-07_001500"
+    assert summary["success_count"] == 4
+    assert summary["error_count"] == 1
+    assert job.state == "partial"
+
+
+def test_jobs_list_and_detail_include_partial_run_summary(client: TestClient) -> None:
+    job = orchestrator_app.Job(
+        id="job_contract_partial",
+        created_at=orchestrator_app._now(),
+        state="partial",
+        progress=100,
+        request={"pipeline": "lux-depth-v3"},
+        artifacts={
+            "output_dir": "/tmp/out",
+            "items": [{"artifact_type": "metadata", "path": "run_card.json", "relative_path": "run_card.json"}],
+            "indexed_count": 1,
+            "truncated": False,
+        },
+        run_summary={
+            "source": "run_card",
+            "batch_id": "2026-04-06_232022",
+            "total_images": 5,
+            "success_count": 4,
+            "error_count": 1,
+            "partial": True,
+            "reviewable_outputs": True,
+        },
+        error={
+            "code": "RUNNER_PARTIAL_FAILURE",
+            "message": "1/5 images failed; 4 outputs remain reviewable",
+            "details": {"exit_code": 1},
+        },
+    )
+    orchestrator_app.JOBS[job.id] = job
+
+    list_response = client.get("/v1/jobs")
+    list_body = list_response.json()
+    assert list_response.status_code == 200
+    first = list_body["data"]["jobs"][0]
+    assert first["state"] == "partial"
+    assert first["run_summary"]["partial"] is True
+    assert first["run_summary"]["success_count"] == 4
+
+    detail_response = client.get(f"/v1/jobs/{job.id}")
+    detail_body = detail_response.json()
+    assert detail_response.status_code == 200
+    assert detail_body["data"]["state"] == "partial"
+    assert detail_body["data"]["run_summary"]["error_count"] == 1
+
+
 def test_job_artifact_endpoint_serves_indexed_binary_without_exposing_absolute_path(
     client: TestClient,
     tmp_path,
