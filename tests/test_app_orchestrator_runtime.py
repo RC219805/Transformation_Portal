@@ -2608,7 +2608,7 @@ def test_create_job_preserves_raw_request_and_stores_effective_request(
                     "pipeline": "lux-depth-v3",
                     "args": {
                         "input_dir": "/tests/fixtures/archive_small/archive_root",
-                        "output_dir": "/output/lux_depth_effective_request",
+                        "output_dir": "/tests/fixtures/portal_runtime_output/lux_depth_effective_request",
                     },
                 }
             )
@@ -2620,9 +2620,11 @@ def test_create_job_preserves_raw_request_and_stores_effective_request(
         job_id = body["data"]["id"]
         job = orchestrator_app.JOBS[job_id]
         assert job.request["args"]["input_dir"] == "/tests/fixtures/archive_small/archive_root"
-        assert job.request["args"]["output_dir"] == "/output/lux_depth_effective_request"
+        assert job.request["args"]["output_dir"] == "/tests/fixtures/portal_runtime_output/lux_depth_effective_request"
         assert job.effective_request["args"]["input_dir"] == "./tests/fixtures/archive_small/archive_root"
-        assert job.effective_request["args"]["output_dir"] == "./output/lux_depth_effective_request"
+        assert (
+            job.effective_request["args"]["output_dir"] == "./tests/fixtures/portal_runtime_output/lux_depth_effective_request"
+        )
     finally:
         orchestrator_app.JOBS.clear()
         orchestrator_app.EVENT_SUBSCRIBERS.clear()
