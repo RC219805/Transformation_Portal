@@ -44,12 +44,14 @@ def test_secure_install_pilot_workflow_is_advisory_and_uses_pinned_actions() -> 
     workflow = _load_workflow()
     job = workflow["jobs"]["secure-install-pilot"]
     steps = job["steps"]
+    checkout_step = next(step for step in steps if step.get("uses", "").startswith("actions/checkout@"))
+    setup_python_step = next(step for step in steps if step.get("uses", "").startswith("actions/setup-python@"))
+    upload_step = next(step for step in steps if step.get("uses", "").startswith("actions/upload-artifact@"))
 
     assert job["continue-on-error"] == "true"
     assert workflow["permissions"]["contents"] == "read"
-    assert steps[0]["uses"] == f"actions/checkout@{CHECKOUT_SHA}"
-    assert steps[1]["uses"] == f"actions/setup-python@{SETUP_PYTHON_SHA}"
-    upload_step = next(step for step in steps if step.get("uses", "").startswith("actions/upload-artifact@"))
+    assert checkout_step["uses"] == f"actions/checkout@{CHECKOUT_SHA}"
+    assert setup_python_step["uses"] == f"actions/setup-python@{SETUP_PYTHON_SHA}"
     assert upload_step["uses"] == f"actions/upload-artifact@{UPLOAD_ARTIFACT_SHA}"
 
 

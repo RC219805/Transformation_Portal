@@ -59,6 +59,17 @@ def _extract_js_function_body(content: str, function_name: str) -> str:
     raise AssertionError(f"{function_name} closing brace not found")
 
 
+def _extract_js_function_block(content: str, function_name: str) -> str:
+    marker = f"function {function_name}("
+    start = content.find(marker)
+    if start < 0:
+        raise AssertionError(f"{function_name} not found")
+    next_marker = content.find("\n        function ", start + len(marker))
+    if next_marker < 0:
+        return content[start:]
+    return content[start:next_marker]
+
+
 def _extract_portal_canonical_lux_arg_keys(content: str) -> set[str]:
     body = _extract_js_function_body(content, "buildCanonicalLuxDepthArgs")
     args_match = re.search(r"const args = \{(.*?)\n\s*\};", body, flags=re.DOTALL)
@@ -577,21 +588,20 @@ def test_portal_managed_mode_uses_csrf_instead_of_browser_backend_secrets() -> N
     portal_html = Path(__file__).resolve().parents[1] / "portal.html"
     content = portal_html.read_text(encoding="utf-8")
     current_token_body = _extract_js_function_body(content, "_currentApiToken")
-    auth_headers_index = content.index("function _buildAuthHeaders(base = {}, method = 'GET') {")
-    auth_headers_slice = content[auth_headers_index : auth_headers_index + 800]
+    auth_headers_block = _extract_js_function_block(content, "_buildAuthHeaders")
 
     assert "if (_isManagedAuthMode()) return '';" in current_token_body
-    assert "function _buildAuthHeaders(base = {}, method = 'GET') {" in content
-    assert "if (_isManagedAuthMode()) {" in content
-    assert "headers['X-CSRF-Token'] = state.auth.csrfToken;" in content
-    assert "headers['Authorization'] = `Bearer ${token}`;" in content
-    assert "headers['x-api-key'] = token;" in content
+    assert "function _buildAuthHeaders(base = {}, method = 'GET') {" in auth_headers_block
+    assert "if (_isManagedAuthMode()) {" in auth_headers_block
+    assert "headers['X-CSRF-Token'] = state.auth.csrfToken;" in auth_headers_block
+    assert "headers['Authorization'] = `Bearer ${token}`;" in auth_headers_block
+    assert "headers['x-api-key'] = token;" in auth_headers_block
 
-    managed_guard_index = auth_headers_slice.index("if (_isManagedAuthMode()) {")
-    csrf_header_index = auth_headers_slice.index("headers['X-CSRF-Token'] = state.auth.csrfToken;")
-    managed_return_index = auth_headers_slice.index("return headers;", managed_guard_index)
-    authorization_header_index = auth_headers_slice.index("headers['Authorization'] = `Bearer ${token}`;")
-    api_key_header_index = auth_headers_slice.index("headers['x-api-key'] = token;")
+    managed_guard_index = auth_headers_block.index("if (_isManagedAuthMode()) {")
+    csrf_header_index = auth_headers_block.index("headers['X-CSRF-Token'] = state.auth.csrfToken;")
+    managed_return_index = auth_headers_block.index("return headers;", managed_guard_index)
+    authorization_header_index = auth_headers_block.index("headers['Authorization'] = `Bearer ${token}`;")
+    api_key_header_index = auth_headers_block.index("headers['x-api-key'] = token;")
 
     assert managed_guard_index < csrf_header_index < managed_return_index
     assert managed_return_index < authorization_header_index < api_key_header_index
