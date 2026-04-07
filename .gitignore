@@ -40,6 +40,7 @@ MANIFEST
 .ruff_cache/
 .pyre/
 requirements/.pip-tools-cache/
+requirements/.hash-pilot/
 
 # -----------------------------------------------------------------------------
 # IDEs / editors
