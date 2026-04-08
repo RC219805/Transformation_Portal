@@ -826,8 +826,12 @@ def test_portal_review_surface_exposes_warning_banner_and_provenance_contract() 
     assert "_renderArtifactProvenance(null, null);" in render_body
     assert "job.state === 'partial'" in status_body
     assert "job.state === 'failed'" in status_body
+    assert "job.state === 'canceled'" in status_body
+    assert "job.state === 'offline'" in status_body
     assert "job.reconnectBlocked" in status_body
     assert "Outputs ready for review" in status_body
+    assert "Run canceled after partial output capture" in status_body
+    assert "Run is offline with reviewable outputs" in status_body
     assert "formatRelativeTime" in status_body
     assert "els.reviewStatusBanner.dataset.tone = snapshot.tone;" in banner_body
     assert "artifactDisplayLabel(artifact)" in provenance_body

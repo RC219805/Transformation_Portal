@@ -3165,6 +3165,28 @@ function _reviewStatusSnapshot(job, artifact) {
         };
     }
 
+    if (job.state === 'canceled') {
+        return {
+            visible: true,
+            tone: reviewableOutputs ? 'warning' : 'error',
+            title: reviewableOutputs ? 'Run canceled after partial output capture' : 'Run canceled before review outputs were ready',
+            detail: reviewableOutputs
+                ? `${artifactCount} artifact${artifactCount === 1 ? '' : 's'} remain available for review despite cancellation. Updated ${freshnessLabel}.`
+                : 'Execution was canceled before reviewable outputs were indexed.'
+        };
+    }
+
+    if (job.state === 'offline') {
+        return {
+            visible: true,
+            tone: 'warning',
+            title: reviewableOutputs ? 'Run is offline with reviewable outputs' : 'Run is offline',
+            detail: reviewableOutputs
+                ? `${artifactCount} artifact${artifactCount === 1 ? '' : 's'} remain available, but live backend status is stale until connectivity is restored.`
+                : 'Live backend status is stale until connectivity is restored.'
+        };
+    }
+
     if (job.reconnectBlocked) {
         return {
             visible: true,
