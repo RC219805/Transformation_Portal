@@ -16,13 +16,22 @@ html {
 
 body {
     font-family: "Portal Sans", "Segoe UI", sans-serif;
+    font-size: var(--ux-body-size);
+    line-height: 1.5;
 }
 
 :root {
     color-scheme: light;
+    --ux-focus-ring: rgba(8, 145, 178, 0.92);
+    --ux-focus-shadow: rgba(8, 145, 178, 0.18);
+    --ux-panel-border: rgba(100, 116, 139, 0.3);
+    --ux-panel-border-strong: rgba(8, 145, 178, 0.3);
+    --ux-target-min-size: 44px;
+    --ux-label-size: 0.8125rem;
+    --ux-body-size: 1rem;
     --shell-ink: #0f172a;
-    --shell-muted: #4b5563;
-    --shell-border: rgba(148, 163, 184, 0.25);
+    --shell-muted: #475569;
+    --shell-border: var(--ux-panel-border);
     --shell-panel: rgba(255, 255, 255, 0.78);
     --shell-panel-strong: rgba(255, 255, 255, 0.92);
     --shell-accent: #0f766e;
@@ -45,9 +54,13 @@ body {
 
 .dark:root {
     color-scheme: dark;
+    --ux-focus-ring: rgba(103, 232, 249, 0.96);
+    --ux-focus-shadow: rgba(34, 211, 238, 0.2);
+    --ux-panel-border: rgba(100, 116, 139, 0.5);
+    --ux-panel-border-strong: rgba(103, 232, 249, 0.34);
     --shell-ink: #e5eef6;
-    --shell-muted: #94a3b8;
-    --shell-border: rgba(71, 85, 105, 0.55);
+    --shell-muted: #a8b6c8;
+    --shell-border: var(--ux-panel-border);
     --shell-panel: rgba(15, 23, 42, 0.76);
     --shell-panel-strong: rgba(15, 23, 42, 0.9);
     --shell-accent: #2dd4bf;
@@ -81,7 +94,7 @@ body {
 
 .kbd {
     font-family: "Portal Mono", monospace;
-    font-size: 10px;
+    font-size: 12px;
     padding: 3px 6px;
     border-radius: 4px;
     border: 1px solid #e2e8f0;
@@ -90,7 +103,7 @@ body {
 }
 .dark .kbd { border-color: #334155; background: #1e293b; color: #94a3b8; }
 
-.skip-link { position: absolute; left: 1rem; top: -4rem; z-index: 60; }
+.skip-link { position: absolute; left: 1rem; top: -4rem; z-index: 60; display: inline-flex; align-items: center; min-height: var(--ux-target-min-size); }
 .skip-link:focus { top: 1rem; }
 
 .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background-color: #94a3b8; flex-shrink: 0; }
@@ -196,7 +209,7 @@ progress::-moz-progress-bar { background-color: #4f46e5; transition: width 0.3s 
 }
 
 .section-kicker {
-    font-size: 10px;
+    font-size: 12px;
     font-weight: 800;
     letter-spacing: 0.28em;
     text-transform: uppercase;
@@ -1262,7 +1275,8 @@ details[open] .disclosure-chevron {
 /* Operator console reset */
 
 :root {
-    --shell-border: rgba(148, 163, 184, 0.22);
+    --ux-panel-border: rgba(148, 163, 184, 0.22);
+    --shell-border: var(--ux-panel-border);
     --shell-panel: rgba(255, 255, 255, 0.86);
     --shell-panel-strong: rgba(255, 255, 255, 0.94);
     --shell-accent: #0891b2;
@@ -1330,7 +1344,7 @@ details[open] .disclosure-chevron {
 }
 
 .section-kicker {
-    font-size: 11px;
+    font-size: 12px;
     letter-spacing: 0.18em;
 }
 
@@ -1345,7 +1359,7 @@ details[open] .disclosure-chevron {
 }
 
 .stat-label {
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 800;
     letter-spacing: 0.14em;
     text-transform: uppercase;
@@ -1384,9 +1398,10 @@ details[open] .disclosure-chevron {
 }
 
 .hero-action {
-    min-height: 44px;
+    min-height: var(--ux-target-min-size);
     padding: 0.8rem 1rem;
     letter-spacing: 0.12em;
+    font-size: 13px;
 }
 
 .hero-action-primary {
@@ -1430,12 +1445,12 @@ details[open] .disclosure-chevron {
 }
 
 .workspace-link-label {
-    font-size: 12px;
+    font-size: 13px;
     letter-spacing: 0.12em;
 }
 
 .workspace-link-meta {
-    font-size: 13px;
+    font-size: 14px;
     line-height: 1.55;
 }
 
@@ -1514,24 +1529,24 @@ details[open] .disclosure-chevron {
 }
 
 .build-step-label {
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 800;
     letter-spacing: 0.04em;
 }
 
 .build-step-meta {
-    font-size: 12px;
+    font-size: 13px;
     line-height: 1.5;
     color: var(--shell-muted);
 }
 
 .stepper-nav-btn {
-    min-height: 44px;
+    min-height: var(--ux-target-min-size);
     border: 1px solid var(--shell-border);
     border-radius: 999px;
     background: rgba(255, 255, 255, 0.82);
     color: var(--shell-ink);
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 800;
     letter-spacing: 0.12em;
     padding: 0.75rem 1rem;
@@ -1550,6 +1565,9 @@ details[open] .disclosure-chevron {
 
 .field-status {
     min-height: 1.5rem;
+    font-size: 13px;
+    line-height: 1.55;
+    color: var(--shell-muted);
 }
 
 .micro-status,
@@ -1598,9 +1616,38 @@ a:focus-visible,
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible,
-[role="tab"]:focus-visible {
-    outline: 2px solid rgba(8, 145, 178, 0.45);
-    outline-offset: 2px;
+[role="tab"]:focus-visible,
+summary:focus-visible {
+    outline: 3px solid var(--ux-focus-ring);
+    outline-offset: 3px;
+    box-shadow: 0 0 0 6px var(--ux-focus-shadow);
+}
+
+button,
+summary,
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+select,
+textarea,
+.dispatch-tool-btn {
+    min-height: var(--ux-target-min-size);
+}
+
+#build-shell label:not(.sr-only) {
+    font-size: 14px;
+    line-height: 1.45;
+}
+
+.signal-badge,
+.review-provenance-label,
+.micro-status,
+.job-chip,
+.topbar-status,
+[class*="text-[10px]"],
+[class*="text-[11px]"],
+[class*="text-[12px]"],
+[class*="text-xs"] {
+    font-size: 13px;
+    line-height: 1.45;
 }
 
 @media (max-width: 1180px) {

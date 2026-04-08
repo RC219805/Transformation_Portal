@@ -43,6 +43,7 @@ function renderLoginPage({ csrfToken, accessEmail, errorCode }) {
     <link rel="stylesheet" href="/login.css" />
   </head>
   <body>
+    <a class="skip-link" href="#main-content">Skip to sign-in</a>
     <main class="shell">
       <video
         class="hero-video"
@@ -59,7 +60,7 @@ function renderLoginPage({ csrfToken, accessEmail, errorCode }) {
         <source src="${FRONTDOOR_ASSETS.loopVideo}" type="video/mp4" />
       </video>
       <div class="login-vignette" aria-hidden="true"></div>
-      <section class="content">
+      <section id="main-content" class="content" tabindex="-1">
         <div class="login-stage">
           <a class="brand-lockup brand-lockup--stacked" href="/" aria-label="Dynamic Neural Access home">
             <span class="brand-asset-frame brand-asset-frame--login">
