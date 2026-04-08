@@ -586,6 +586,7 @@ def test_portal_bootstrap_loader_uses_abortable_timeout_and_state_contract() -> 
     content = _portal_bundle_content()
     default_body = _extract_js_function_body(content, "_defaultPortalBootstrap")
     body = _extract_js_function_body(content, "loadPortalBootstrap")
+    failure_details_body = _extract_js_function_body(content, "_bootstrapFailureDetails")
     followup_body = _extract_js_function_body(content, "_flushBootstrapOnlineFollowup")
     normalize_body = _extract_js_function_body(content, "_normalizeFetchFailureReason")
     retryable_body = _extract_js_function_body(content, "_isBootstrapRetryableFailure")
@@ -614,13 +615,14 @@ def test_portal_bootstrap_loader_uses_abortable_timeout_and_state_contract() -> 
     assert "onStart: _trackBootstrapRequest" in body
     assert "onFinally: _clearTrackedBootstrapRequest" in body
     assert "if (res.status === 401 || res.status === 403)" in body
-    assert "_finalizeBootstrapRetry('terminal_auth_redirect', { reason: 'auth', httpStatus: res.status });" in body
+    assert "let payload = null;" in body
+    assert "let payloadParsed = false;" in body
+    assert "const failure = _bootstrapFailureDetails(" in body
+    assert "_finalizeBootstrapRetry('terminal_auth_redirect', { reason: failure.reason, httpStatus: res.status });" in body
     assert "window.location.assign('/login');" in body
-    assert "const shouldRetry = _isBootstrapRetryableFailure(failureReason, res.status);" in body
-    assert "const retryScheduled = shouldRetry && _scheduleBootstrapRetry(failureReason, res.status);" in body
-    assert "const shouldRetry = _isBootstrapRetryableFailure(normalizedReason, 0);" in body
-    assert "const retryScheduled = shouldRetry && _scheduleBootstrapRetry(normalizedReason, 0);" in body
-    assert "const status = shouldRetry ? 'degraded' : 'unavailable';" in body
+    assert "const status = failure.retryable ? 'degraded' : 'unavailable';" in body
+    assert "const retryScheduled = failure.retryable && _scheduleBootstrapRetry(failure.reason, res.status);" in body
+    assert "const retryScheduled = failure.retryable && _scheduleBootstrapRetry(failure.reason, 0);" in body
     assert "_finalizeBootstrapRetry('terminal_invalid_json', { reason: 'invalid_json' });" in body
     assert "_finalizeBootstrapRetry('succeeded', {" in body
     assert "_applyPortalBootstrap(payload, { status: 'ready' });" in body
@@ -638,11 +640,18 @@ def test_portal_bootstrap_loader_uses_abortable_timeout_and_state_contract() -> 
     assert "_queueBootstrapOnlineFollowup();" in followup_body
     assert "void fetchPresetsForPipeline(state.pipeline, true);" in followup_body
     assert "void recoverJobs();" in followup_body
+    assert "normalizedReason === 'auth_failure' || normalizedReason === 'auth'" in failure_details_body
+    assert "reason: 'access_outage'" in failure_details_body
+    assert "reason: 'config_failure'" in failure_details_body
+    assert "reason: 'invalid_json'" in failure_details_body
+    assert (
+        "reason: normalizedReason === 'timeout' || normalizedReason === 'network' ? normalizedReason : 'upstream_unavailable'"
+        in failure_details_body
+    )
     assert "reason === String(timeoutReason || '').trim().toLowerCase()" in normalize_body
     assert "name === 'timeouterror'" in normalize_body
     assert "name === 'aborterror'" in normalize_body
-    assert "normalizedReason === 'timeout' || normalizedReason === 'network'" in retryable_body
-    assert "return BOOTSTRAP_RETRIABLE_HTTP_STATUSES.has(normalizedStatus);" in retryable_body
+    assert "return _bootstrapFailureDetails(reason, httpStatus).retryable;" in retryable_body
     assert "Math.random()" in delay_body
     assert "BOOTSTRAP_RETRY_MAX_EXPONENT" in delay_body
     assert "BOOTSTRAP_RETRY_MAX_DELAY_MS" in delay_body
@@ -748,7 +757,8 @@ def test_portal_managed_unavailable_mode_blocks_dispatch_and_api_key_recovery_pr
     sse_body = _extract_js_function_body(content, "_startAuthorizedFetchSse")
 
     assert "_isManagedUnavailableMode()" in block_body
-    assert "Managed front door unavailable." in block_body
+    assert "_bootstrapFailureDetails(state.bootstrap.lastErrorReason, state.bootstrap.lastHttpStatus)" in block_body
+    assert "Unable to ${actionLabel} until recovery completes." in block_body
     assert "_blockManagedUnavailableAction('change job state')" in cancel_body
     assert "_blockManagedUnavailableAction('dispatch jobs')" in submit_body
     assert "Restore the managed session to resume live job events." in sse_body

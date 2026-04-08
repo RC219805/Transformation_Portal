@@ -4,7 +4,13 @@ import { resolveAuthenticatedAccessSession, revokeSessionOnAccessFailure } from 
 import { applySecurityHeaders } from "../../lib/http.js";
 import { copyUpstreamResponseHeaders } from "../../lib/proxy.js";
 import { getConfig } from "../../lib/config.js";
-import { audit } from "../../lib/audit.js";
+import {
+  auditManagedSurfaceFailure,
+  classifyManagedAccessFailure,
+  classifyUpstreamFailureStatus,
+  getManagedFailureMessage,
+  MANAGED_FAILURE_REASON
+} from "../../lib/managed-failure.js";
 import { clearSessionCookie } from "../../lib/sessions.js";
 
 export const runtime = "nodejs";
@@ -12,11 +18,19 @@ export const runtime = "nodejs";
 export async function GET(request) {
   const authState = await resolveAuthenticatedAccessSession(request, { touch: true });
   if (!authState.ok) {
-    if (authState.status === 503) {
+    const reason = classifyManagedAccessFailure(authState.errorCode);
+    auditManagedSurfaceFailure("portal", {
+      actor: authState.session,
+      errorCode: authState.errorCode,
+      path: "/portal",
+      reason,
+      status: authState.status
+    });
+    if (reason !== MANAGED_FAILURE_REASON.AUTH_FAILURE) {
       const headers = new Headers();
       headers.set("Cache-Control", "no-store");
       return applySecurityHeaders(
-        new Response("Managed front door unavailable", {
+        new Response(getManagedFailureMessage("portal", reason), {
           status: 503,
           headers
         })
@@ -44,16 +58,17 @@ export async function GET(request) {
       cache: "no-store"
     });
   } catch (error) {
-    audit("proxy_auth_failure", {
-      path: "/portal",
-      username: session.username,
+    auditManagedSurfaceFailure("portal", {
+      actor: session,
       message: error instanceof Error ? error.message : String(error),
+      path: "/portal",
+      reason: MANAGED_FAILURE_REASON.UPSTREAM_UNAVAILABLE,
       status: 503
     });
     const headers = new Headers();
     headers.set("Cache-Control", "no-store");
     return applySecurityHeaders(
-      new Response("Upstream service unavailable", {
+      new Response(getManagedFailureMessage("portal", MANAGED_FAILURE_REASON.UPSTREAM_UNAVAILABLE), {
         status: 503,
         headers
       })
@@ -61,11 +76,24 @@ export async function GET(request) {
   }
 
   if (!upstream.ok) {
-    audit("authorization_denied", {
-      path: "/portal",
-      username: session.username,
-      status: upstream.status
-    });
+    const reason = classifyUpstreamFailureStatus(upstream.status, { clientErrorIsConfig: true });
+    if (reason) {
+      auditManagedSurfaceFailure("portal", {
+        actor: session,
+        path: "/portal",
+        reason,
+        status: 503,
+        upstreamStatus: upstream.status
+      });
+      const headers = new Headers();
+      headers.set("Cache-Control", "no-store");
+      return applySecurityHeaders(
+        new Response(getManagedFailureMessage("portal", reason), {
+          status: 503,
+          headers
+        })
+      );
+    }
   }
 
   const headers = copyUpstreamResponseHeaders(upstream.headers);

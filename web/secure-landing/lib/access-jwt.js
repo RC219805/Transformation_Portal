@@ -135,6 +135,10 @@ function validateAccessClaims(payload, { expectedIssuer, expectedAudience }) {
   return email;
 }
 
+export function clearAccessCertCache() {
+  ACCESS_CERT_CACHE.clear();
+}
+
 export async function verifyAccessJwt(token, { teamDomain, audience }) {
   const expectedIssuer = normalizeAccessTeamDomain(teamDomain);
   const expectedAudience = String(audience || "").trim();

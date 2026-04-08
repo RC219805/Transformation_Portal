@@ -1,6 +1,12 @@
 import { getConfig } from "../../../../lib/config.js";
 import { audit } from "../../../../lib/audit.js";
 import { applySecurityHeaders } from "../../../../lib/http.js";
+import {
+  auditManagedSurfaceFailure,
+  classifyUpstreamFailureStatus,
+  getManagedFailureMessage,
+  MANAGED_FAILURE_REASON
+} from "../../../../lib/managed-failure.js";
 import { isAllowedPortalAssetPath } from "../../../../lib/portal-asset-manifest.js";
 import {
   buildUpstreamHeaders,
@@ -84,11 +90,13 @@ async function proxyPortalAsset(request, { params }) {
 
   const config = getConfig();
   if (!config.backendApiKey) {
-    audit("portal_asset_proxy_config_error", {
-      assetPath,
-      reason: "missing_backend_api_key"
+    auditManagedSurfaceFailure("portal_asset", {
+      extra: { assetPath },
+      path: `/portal/assets/${assetPath}`,
+      reason: MANAGED_FAILURE_REASON.CONFIG_FAILURE,
+      status: 503
     });
-    return errorResponse(503, "TP_BACKEND_API_KEY is not configured");
+    return errorResponse(503, getManagedFailureMessage("portal_asset", MANAGED_FAILURE_REASON.CONFIG_FAILURE));
   }
 
   const upstreamHeaders = buildUpstreamHeaders(request.headers, {
@@ -109,11 +117,18 @@ async function proxyPortalAsset(request, { params }) {
       buildUpstreamUrl(`/portal/assets/${assetPath.split("/").map(encodeURIComponent).join("/")}`),
       upstreamHeaders
     ));
-  } catch {
-    audit("portal_asset_proxy_upstream_unavailable", {
-      assetPath
+  } catch (error) {
+    auditManagedSurfaceFailure("portal_asset", {
+      extra: { assetPath },
+      message: error instanceof Error ? error.message : String(error),
+      path: `/portal/assets/${assetPath}`,
+      reason: MANAGED_FAILURE_REASON.UPSTREAM_UNAVAILABLE,
+      status: 503
     });
-    return errorResponse(503, "Upstream service unavailable");
+    return errorResponse(
+      503,
+      getManagedFailureMessage("portal_asset", MANAGED_FAILURE_REASON.UPSTREAM_UNAVAILABLE)
+    );
   }
 
   if (request.method === "HEAD" && usedGetFallback && upstream.body) {
@@ -127,10 +142,17 @@ async function proxyPortalAsset(request, { params }) {
   const responseHeaders = copyUpstreamResponseHeaders(upstream.headers);
   responseHeaders.set("Cache-Control", upstream.status < 400 ? upstream.headers.get("cache-control") || "no-store" : "no-store");
   if (upstream.status >= 400) {
-    audit("portal_asset_proxy_upstream_status", {
-      assetPath,
-      status: upstream.status
-    });
+    const reason = classifyUpstreamFailureStatus(upstream.status, { clientErrorIsConfig: true });
+    if (reason) {
+      auditManagedSurfaceFailure("portal_asset", {
+        extra: { assetPath },
+        path: `/portal/assets/${assetPath}`,
+        reason,
+        status: 503,
+        upstreamStatus: upstream.status
+      });
+      return errorResponse(503, getManagedFailureMessage("portal_asset", reason));
+    }
   }
 
   return applySecurityHeaders(
