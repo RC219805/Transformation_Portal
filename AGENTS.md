@@ -7,10 +7,10 @@ Quick reference for common workflows and commands in this repo.
 - `make setup` install package in editable mode.
 - `make install-core` install core runtime + dev tooling dependencies (with constraints if present).
 - `make install-ml` disabled; no trusted checked-in umbrella ML lockfile contract.
-- `make install-ml-core` install ML core layer only (cross-platform baseline: torch, diffusers, transformers).
-- `make install-ml-raw` install ML RAW ingest layer (rawpy, platform-scoped).
+- `make install-ml-core` install the platform-specific checked-in ML core baseline selected from the local OS/architecture.
+- `make install-ml-raw` disabled; no trusted checked-in RAW lockfile contract.
 - `make install-ml-sam2` install ML SAM2 layer (Meta Segment Anything 2, optional).
-- `make install-ml-coreml` install ML CoreML layer (Apple acceleration, macOS only).
+- `make install-ml-coreml` install ML CoreML acceleration on macOS only when a trusted `requirements/ml-coreml.txt` is present.
 - `make test-fast` run fast test subset plus the Phase 6 smoke coverage layer.
 - `make test-novideo` run tests excluding luxury video master grader tests (filters out `video_master_grader`).
 - `make test-full` run full test suite (parallel if xdist installed).
@@ -21,10 +21,10 @@ Quick reference for common workflows and commands in this repo.
 - `make test-orchestrator-http-contract` run HTTP-only orchestrator contract tests (`tests/test_app_orchestrator_contract_http.py`).
 - `make test-portal-contract` run portal runtime/browser contract tests (`tests/test_app_orchestrator_runtime.py`, `tests/validation/test_portal_smoke_scripts.py`).
 - `make test-frontdoor-contract` run managed frontdoor Node contract/build checks (`cd web/secure-landing && npm test && npm run build`).
-- `make run-frontdoor-local` start the canonical local managed frontdoor on `http://localhost:3000` with dev-bypass env guardrails and no silent fallback to `:3001`.
+- `make run-frontdoor-local` start the canonical local managed frontdoor on `http://localhost:3000` after verifying backend readiness, auth env, and no silent fallback to `:3001`.
 - `make validate-orchestrator-http` run the live orchestrator HTTP smoke against a running backend.
 - `make validate-portal-browser` run the live browser smoke against a running portal + backend; requires a matching `TP_API_KEY` when direct-debug preview/auth is enabled.
-- `make validate-frontdoor-browser` run the live managed frontdoor browser smoke against a running frontdoor.
+- `make validate-frontdoor-browser` run the live managed frontdoor browser smoke against a running frontdoor; requires `TP_FRONTDOOR_USERNAME` and `TP_FRONTDOOR_PASSWORD`.
 - `make audit-pipeline-readiness` run the safe local four-pipeline readiness audit using checked-in archive fixtures.
 - `make coverage-fast-scope` run branch coverage for the audited `core/config` and `streaming` paths with `term-missing` output.
 - `make clean` remove Python caches and build/test artifacts.
@@ -35,25 +35,30 @@ Quick reference for common workflows and commands in this repo.
 - `make ci-quick` run quick local CI (`./scripts/local_ci_check.sh --quick`).
 - `make pre-commit` run pre-commit hooks with CI-aligned Black/isort versions.
 - `make install-hooks` install git pre-commit hook.
-- `make quality-check` run lint + CI validation + doc structure checks.
+- `make quality-check` run lint + workflow validation + the root-file placement check.
 - `make fix-quality` auto-fix quality issues (`scripts/auto_fix_quality.py --fix-all`).
 - `make check-quality` dry-run quality auto-fix checks (`scripts/auto_fix_quality.py --dry-run`).
-- `make validate-ci` validate GitHub Actions configs.
+- `make validate-ci` validate GitHub Actions configs plus dependency-update and Dependabot contracts.
 - `make check-json-serialization` fail when raw `json.dump`/`json.dumps` usage is detected outside approved modules.
 - `make check-yaml-governance` fail when raw `yaml.safe_load` usage appears outside the shared preset loader or explicitly exempt non-preset loaders.
 - `make check-piptools-cache` fail if `requirements/.pip-tools-cache` is tracked in git.
+- `make check-requirements-lock-contract` fail when layered lockfile headers, platform purity guards, or lane structure drift from contract.
 - `make check-test-markers` audit test marker coverage (ADR-044) - reports unmarked test functions.
 - `make check-ci-sync` verify CI dependency files are in sync (no drift between `requirements-ci.txt` and `requirements/ci.in`).
 - `make organize-docs` move markdown files into `docs/` (repo hygiene).
 - `make check-docs` dry-run docs organization.
+- `make check-stale-docs` detect changed-file references to deleted or moved docs root paths.
 - `make lock` regenerate all requirements lockfiles.
 - `make lock-prod` regenerate `requirements.lock.txt`.
 - `make lock-ci` regenerate `requirements-ci.lock.txt`.
 - `make lock-dev` regenerate `requirements-dev.lock.txt`.
-- `cd requirements && make compile LOCK_PYTHON_VERSION=3.11` compile all layered lockfiles (including ML layers and security tools).
-- `cd requirements && make compile-ml-layers LOCK_PYTHON_VERSION=3.11` compile only ML layer lockfiles.
-- `cd requirements && make update LOCK_PYTHON_VERSION=3.11` update layered lockfiles (`all/base/ml-*/dev/ci/security/tools-archive`).
-- `cd requirements && make check LOCK_PYTHON_VERSION=3.11` verify layered lockfiles are current.
+- `cd requirements && make compile LOCK_PYTHON_VERSION=3.11` compile all checked-in layered lockfiles (`all/base/ml-core-*/dev/ci/security/tools-archive`).
+- `cd requirements && make compile-ml-layers LOCK_PYTHON_VERSION=3.11` compile only the checked-in platform ML core lockfiles.
+- `cd requirements && make compile-accel LOCK_PYTHON_VERSION=3.11` refresh the checked-in platform ML baseline locks used by profile/acceleration flows.
+- `cd requirements && make compile-hash-pilot LOCK_PYTHON_VERSION=3.11` generate advisory hash-enforced pilot lockfiles into `requirements/.hash-pilot/`.
+- `cd requirements && make update LOCK_PYTHON_VERSION=3.11` update layered lockfiles (`all/base/ml-core-*/dev/ci/security/tools-archive`).
+- `cd requirements && make check LOCK_PYTHON_VERSION=3.11` verify checked-in layered lockfiles are current.
+- `cd requirements && make check-hash-pilot LOCK_PYTHON_VERSION=3.11` validate the pilot lockfiles with `pip install --dry-run --require-hashes`.
 - `python3 scripts/validation/check_requirements_lock_contract.py` validate layered lock contract (headers + platform-core purity/compatibility guards + lane-specific lock structure).
 - `make docs` build API docs with Sphinx.
 - `make docs-clean` remove generated docs output.
@@ -79,13 +84,18 @@ Quick reference for common workflows and commands in this repo.
 - `./scripts/pipelines/run_montecito_apex_lean.sh` run Montecito Shores APEX batch (lean outputs, faster).
 - `./scripts/pipelines/process_source_tiffs_apex.sh` batch APEX V2 enhancement for `input_images/source_tiffs` with optional depth generation.
 - `./scripts/pipelines/process_source_tiffs_individual.sh` per-image APEX V2 enhancement commands (manual execution).
+- `./scripts/pipelines/run_800_picacho_efficientsam_validation.sh` run the 800 Picacho EfficientSAM production validation pass with DA3, Materials V3, V2 tone mapping, and PBR enabled.
+- `./scripts/pipelines/run_sealed_eval_72h.sh --archive-index <path> --archive-root <path>` run sealed pre/post fixity verification around an optional eval command and emit an audit package.
+- `./scripts/pipelines/hdr_production_pipeline.sh` interactive HDR video mastering workflow that pairs source footage with a 3D LUT and writes web deliverables.
 - `./scripts/setup/install_da3_runtime.sh` install the repo-local DA3 subprocess runtime (validated `.runtime/Depth-Anything-3` ref + auto-discovered `./.venv-da3/bin/python` contract + `.runtime/da3-pip-freeze.txt` snapshot).
+- `./scripts/setup/run_frontdoor_local.sh` start the local managed frontdoor only when the backend is ready, auth env is set, and `localhost:3000` is free.
 - `./scripts/test_v2_integration.sh` validate end-to-end lux-depth-v3 + V2 stage integration (`--verbose`, `--clean` available).
 - `./scripts/validate_dependency_constraints.sh` enforce dependency pinning rules used by repo policy (`--verbose` available).
 - `./scripts/pipelines/run_fixity_cycle.sh` run archive hash-manifest scan + verification cycle for fixity evidence (`--archive-index` and `--archive-root` required).
 - `./scripts/diagnostics/full_chain_determinism_trial.sh` run Phase 4C/4D/4E determinism checks (`--input-root` or `--capture-metadata`).
 - `./scripts/setup/auto-organize-install.sh` install repository file-organization guardrails and pre-commit hook.
 - `./scripts/setup/pre-commit-check.sh` run root-file placement validation manually (also used by the hook).
+- `./scripts/runbooks/merge_phase2_runbook.sh` temporary guarded merge runbook for the APEX Phase 2 branch; it checks tree cleanliness, syncs branches, runs fast-lane validation, and prompts before merge/push.
 
 ## ComfyUI workflows (`workflows/`)
 - `python -c "from transformation_portal.comfyui import WorkflowTemplates; WorkflowTemplates.save_all_templates('workflows/templates')"` generate ComfyUI template workflows.
