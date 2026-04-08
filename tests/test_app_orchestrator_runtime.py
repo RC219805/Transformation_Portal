@@ -842,6 +842,38 @@ def test_portal_selected_job_inspector_uses_timeline_tabs_and_log_secondary_view
     assert "els.logsShell.classList.toggle('hidden', !showLogsShell);" in tab_body
 
 
+def test_portal_operate_surfaces_use_jobs_hydration_skeletons_before_empty_state() -> None:
+    content = _portal_bundle_content()
+    helper_body = _extract_js_function_body(content, "_isJobsHydrationPending")
+    queue_body = _extract_js_function_body(content, "renderJobQueue")
+    inspector_body = _extract_js_function_body(content, "renderSelectedJobInspector")
+    artifact_body = _extract_js_function_body(content, "renderArtifactPanel")
+    recover_body = _extract_js_function_body(content, "recoverJobs")
+    flush_body = _extract_js_function_body(content, "_flushBootstrapOnlineFollowup")
+    backend_body = _extract_js_function_body(content, "checkBackend")
+
+    assert "jobsLoadStatus: 'pending'," in content
+    assert 'id="queueSkeletonState"' in content
+    assert 'id="selectedJobSkeletonState"' in content
+    assert 'id="artifactSkeletonState"' in content
+    assert "state.jobsLoadStatus === 'loading'" in helper_body
+    assert "state.bootstrap.status === 'pending' || state.bootstrap.status === 'degraded'" in helper_body
+    assert "const queueLoading = _isJobsHydrationPending();" in queue_body
+    assert "els.queueShell.setAttribute('aria-busy', queueLoading ? 'true' : 'false');" in queue_body
+    assert (
+        "_toggleSurfaceSkeleton(els.selectedJobShell, els.selectedJobShellContent, els.selectedJobSkeletonState, jobsLoading);"
+        in inspector_body
+    )
+    assert (
+        "_toggleSurfaceSkeleton(els.artifactsShell, els.artifactShellContent, els.artifactSkeletonState, jobsLoading);"
+        in artifact_body
+    )
+    assert "state.jobsLoadStatus = 'loading';" in recover_body
+    assert "state.jobsLoadStatus = 'ready';" in recover_body
+    assert "state.jobsLoadStatus = 'loading';" in flush_body
+    assert "state.jobsLoadStatus = 'offline';" in backend_body
+
+
 def test_portal_theme_preference_defaults_to_system_without_persisting_boot_value() -> None:
     content = _portal_bundle_content()
     apply_body = _extract_js_function_body(content, "applyThemePreference")
@@ -939,6 +971,77 @@ def test_portal_build_stepper_and_quick_actions_drive_task_first_navigation() ->
     assert "navigateConsoleView('operate', { jobId });" in content
     assert "navigateConsoleView('review', { jobId });" in content
     assert "els.heroRunBtn.addEventListener('click', submitJob);" not in content
+
+
+def test_portal_dispatch_review_keeps_cli_parity_in_secondary_disclosure() -> None:
+    content = _portal_bundle_content()
+
+    assert 'id="dispatchToolsDetails"' in content
+    assert 'data-ui="dispatch-tools"' in content
+    assert "Review dispatch posture" in content
+    assert "CLI Parity & Config Tools" in content
+    assert 'id="effectiveConfigBtn"' in content
+    assert 'id="importBtn"' in content
+    assert 'id="exportBtn"' in content
+    assert 'id="copyCliBtn"' in content
+    assert 'id="cliPreview"' in content
+
+
+def test_portal_overview_and_build_surfaces_sync_bootstrap_skeletons_and_preview_loading() -> None:
+    content = _portal_bundle_content()
+    helper_body = _extract_js_function_body(content, "_syncOverviewBuildLoadingState")
+    preview_body = _extract_js_function_body(content, "_isBuildPreviewRefreshing")
+    mission_body = _extract_js_function_body(content, "renderMissionControl")
+    bootstrap_body = _extract_js_function_body(content, "_syncBootstrapUi")
+    cli_body = _extract_js_function_body(content, "renderCLI")
+
+    assert 'id="missionShellSkeletonState"' in content
+    assert 'id="intelligenceShellSkeletonState"' in content
+    assert 'id="profileShellSkeletonState"' in content
+    assert 'id="buildStepperSkeletonState"' in content
+    assert 'id="parametersShellSkeletonState"' in content
+    assert "function _isBootstrapSurfaceLoading()" in content
+    assert "function _isBuildPreviewRefreshing(payload = null) {" in content
+    assert "return Boolean(preview && preview.status === 'loading');" in preview_body
+    assert (
+        "_toggleSurfaceSkeleton(els.missionShell, els.missionShellContent, els.missionShellSkeletonState, bootstrapLoading);"
+        in helper_body
+    )
+    assert (
+        "_toggleSurfaceSkeleton(els.intelligenceShell, els.intelligenceShellContent, els.intelligenceShellSkeletonState, bootstrapLoading);"
+        in helper_body
+    )
+    assert (
+        "_toggleSurfaceSkeleton(els.profileShell, els.profileShellContent, els.profileShellSkeletonState, bootstrapLoading);"
+        in helper_body
+    )
+    assert (
+        "_toggleSurfaceSkeleton(els.buildStepperShell, els.buildStepperShellContent, els.buildStepperSkeletonState, bootstrapLoading);"
+        in helper_body
+    )
+    assert (
+        "_toggleSurfaceSkeleton(els.parametersShell, els.parametersShellContent, els.parametersShellSkeletonState, bootstrapLoading);"
+        in helper_body
+    )
+    assert "document.body.dataset.bootstrapLoading = bootstrapLoading ? 'true' : 'false';" in helper_body
+    assert "document.body.dataset.buildPreviewLoading = previewRefreshing ? 'true' : 'false';" in helper_body
+    assert "_syncOverviewBuildLoadingState(currentPayload);" in mission_body
+    assert "_syncOverviewBuildLoadingState();" in bootstrap_body
+    assert "_syncOverviewBuildLoadingState(payload);" in cli_body
+
+
+def test_portal_loading_tokens_and_reduced_motion_cover_overview_and_build_surfaces() -> None:
+    css = _portal_css_content()
+
+    assert ".skeleton-pill" in css
+    assert ".surface-loading" in css
+    assert ".surface-loading::after" in css
+    assert ".status-dot.running," in css
+    assert ".status-dot.partial," in css
+    assert ".skeleton-pill," in css
+    assert ".toast-enter," in css
+    assert ".surface-loading::after {" in css
+    assert "transition: none !important;" in css
 
 
 def test_portal_preview_statuses_render_inline_for_build_fields() -> None:
