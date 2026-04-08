@@ -507,6 +507,22 @@ def _state_probe_expression() -> str:
     selectedJobArtifactCount: text('selectedJobArtifactCount'),
     selectedJobStreamStatus: text('selectedJobStreamStatus'),
     selectedJobSummary: text('selectedJobSummary'),
+    reviewStatusTitle: text('reviewStatusTitle'),
+    reviewStatusDetail: text('reviewStatusDetail'),
+    reviewStatusTone: (() => {
+      const el = document.getElementById('reviewStatusBanner');
+      return el ? String(el.dataset.tone || '') : '';
+    })(),
+    reviewStatusVisible: (() => {
+      const el = document.getElementById('reviewStatusBanner');
+      return !!(el && !el.classList.contains('hidden'));
+    })(),
+    reviewProvenanceArtifactRole: text('reviewProvenanceArtifactRole'),
+    reviewProvenanceRunState: text('reviewProvenanceRunState'),
+    reviewProvenancePath: text('reviewProvenancePath'),
+    reviewProvenanceFreshness: text('reviewProvenanceFreshness'),
+    reviewProvenanceSource: text('reviewProvenanceSource'),
+    reviewProvenanceBatch: text('reviewProvenanceBatch'),
     summaryReconstructionState: text('summaryReconstructionState'),
     summaryRuntimeWorkers: text('summaryRuntimeWorkers'),
     summaryPreviewState: text('summaryPreviewState'),
@@ -1421,6 +1437,8 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
                 and str(value.get("selectedJobId", "")) == submitted_job_id
                 and bool(value.get("queueShellHidden"))
                 and bool(value.get("reviewSurfaceVisible"))
+                and bool(value.get("reviewStatusVisible"))
+                and str(value.get("reviewProvenancePath", "")).strip() != ""
             ),
             timeout_seconds=args.timeout_seconds,
             description="review view to become active",
@@ -1428,6 +1446,27 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         _expect(
             "3 indexed" in str(run_state.get("selectedJobArtifactCount", "")),
             f"Review view lost artifact context: {run_state}",
+        )
+        _expect(
+            str(run_state.get("reviewStatusTone", "")).strip().lower() == "ready",
+            f"Review workspace should expose a ready status banner after a successful run: {run_state}",
+        )
+        _expect(
+            "Outputs ready for review" in str(run_state.get("reviewStatusTitle", "")),
+            f"Review workspace should summarize output readiness directly: {run_state}",
+        )
+        _expect(
+            str(run_state.get("reviewProvenanceRunState", "")).strip().lower().startswith("succeeded"),
+            f"Review provenance should surface the terminal job state: {run_state}",
+        )
+        _expect(
+            str(run_state.get("reviewProvenancePath", "")).strip()
+            != "Preview, metadata, and actions will appear here when outputs are indexed.",
+            f"Review provenance should identify the selected artifact path: {run_state}",
+        )
+        _expect(
+            str(run_state.get("reviewProvenanceFreshness", "")).strip().startswith("Updated "),
+            f"Review provenance should surface freshness for the selected run: {run_state}",
         )
 
         print("portal-browser-smoke: ok")
