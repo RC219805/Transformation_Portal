@@ -289,6 +289,8 @@ test("login GET serves a minimal branded sign-in shell and boots an anonymous se
     assert.match(html, /preload="metadata"/);
     assert.match(html, /\/video\/dna-loop\.mp4/);
     assert.match(html, /\/brand\/dna-mark-dark\.svg/);
+    assert.match(html, /href="#main-content">Skip to sign-in</);
+    assert.match(html, /id="main-content"/);
     assert.match(html, /Transformation Portal operator console/);
     assert.match(html, /form method="post" action="\/login"/);
     assert.match(html, /name="username"/);
