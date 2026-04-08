@@ -9,27 +9,27 @@ attrs==25.4.0
     #   jsonschema
     #   referencing
 bagit==1.9.0
-    # via -r requirements/tools-archive.in
+    # via -r tools-archive.in
 cffi==2.0.0
     # via cryptography
-cryptography==46.0.6
-    # via -r requirements/tools-archive.in
+cryptography==46.0.7
+    # via -r tools-archive.in
 jsonschema==4.26.0
-    # via -r requirements/tools-archive.in
+    # via -r tools-archive.in
 jsonschema-specifications==2025.9.1
     # via jsonschema
 numpy==2.4.3
     # via
-    #   -r requirements/tools-archive.in
+    #   -r tools-archive.in
     #   pandas
 pandas==3.0.1
-    # via -r requirements/tools-archive.in
+    # via -r tools-archive.in
 pycparser==3.0
     # via cffi
 python-dateutil==2.9.0.post0
     # via pandas
 pyyaml==6.0.3
-    # via -r requirements/tools-archive.in
+    # via -r tools-archive.in
 referencing==0.37.0
     # via
     #   jsonschema
