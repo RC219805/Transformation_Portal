@@ -3339,6 +3339,7 @@ function renderArtifactPanel() {
 
     if (!els.artifactMeta || !els.artifactThumbnailRail) return;
     els.artifactThumbnailRail.setAttribute('role', 'listbox');
+    els.artifactThumbnailRail.setAttribute('aria-label', 'Artifact thumbnails');
     const selected = state.jobs.find((item) => item.id === state.selectedJobId);
     const artifacts = Array.isArray(selected?.artifacts) ? rankArtifactsForDisplay(selected.artifacts) : [];
 
@@ -3351,6 +3352,7 @@ function renderArtifactPanel() {
         if (els.artifactCompareBtn) {
             els.artifactCompareBtn.classList.add('hidden');
             els.artifactCompareBtn.setAttribute('aria-pressed', 'false');
+            els.artifactCompareBtn.removeAttribute('aria-controls');
         }
         if (els.artifactPreviewSoloImage) {
             els.artifactPreviewSoloImage.classList.add('hidden');
@@ -3388,6 +3390,7 @@ function renderArtifactPanel() {
         if (els.artifactCompareBtn) {
             els.artifactCompareBtn.classList.add('hidden');
             els.artifactCompareBtn.setAttribute('aria-pressed', 'false');
+            els.artifactCompareBtn.removeAttribute('aria-controls');
         }
         if (els.artifactPreviewSoloImage) {
             els.artifactPreviewSoloImage.classList.add('hidden');
@@ -3428,6 +3431,7 @@ function renderArtifactPanel() {
         } else {
             els.artifactCompareBtn.classList.add('hidden');
             els.artifactCompareBtn.setAttribute('aria-pressed', 'false');
+            els.artifactCompareBtn.removeAttribute('aria-controls');
         }
     }
 

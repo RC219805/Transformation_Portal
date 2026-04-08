@@ -853,11 +853,13 @@ def test_portal_review_surface_supports_compare_summary_and_keyboard_selection()
     assert 'id="reviewCompareDetail"' in content
     assert 'data-ui="review-compare-summary"' in content
     assert "els.artifactThumbnailRail.setAttribute('role', 'listbox');" in render_body
+    assert "els.artifactThumbnailRail.setAttribute('aria-label', 'Artifact thumbnails');" in render_body
     assert "button.setAttribute('role', 'option');" in render_body
     assert "button.setAttribute('aria-selected', active ? 'true' : 'false');" in render_body
     assert "button.tabIndex = active ? 0 : -1;" in render_body
     assert "_renderReviewCompareSummary(selectedArtifact, compareCandidate, compareEnabled);" in render_body
     assert "els.artifactCompareBtn.setAttribute('aria-pressed', compareEnabled ? 'true' : 'false');" in render_body
+    assert "els.artifactCompareBtn.removeAttribute('aria-controls');" in render_body
     assert "els.artifactCompareStage.setAttribute('aria-hidden', compareEnabled ? 'false' : 'true');" in render_body
     assert "Comparing paired outputs" in compare_summary_body
     assert "Compare pair available" in compare_summary_body
