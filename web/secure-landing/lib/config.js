@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 
 const DEFAULT_SESSION_DB_PATH = "/tmp/transformation-portal-frontdoor-sessions.db";
+const DEFAULT_SESSION_SCALING_MODE = "single_instance";
 const SESSION_IDLE_TIMEOUT_MS = 8 * 60 * 60 * 1000;
 const SESSION_ABSOLUTE_TIMEOUT_MS = 24 * 60 * 60 * 1000;
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
@@ -85,6 +86,9 @@ export function getConfig() {
     cfAccessTeamDomain: normalizeAccessTeamDomain(process.env.TP_CF_ACCESS_TEAM_DOMAIN),
     cfAccessAud: String(process.env.TP_CF_ACCESS_AUD || "").trim(),
     sessionDbPath: String(process.env.TP_FRONTDOOR_SESSION_DB || DEFAULT_SESSION_DB_PATH).trim(),
+    sessionScalingMode: String(
+      process.env.TP_FRONTDOOR_SESSION_SCALING_MODE || DEFAULT_SESSION_SCALING_MODE
+    ).trim(),
     users,
     usersFilePath,
     sessionCookieName: isProduction ? "__Host-tp_session" : "tp_session",

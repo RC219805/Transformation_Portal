@@ -21,6 +21,7 @@ export TP_FASTAPI_ORIGIN="http://127.0.0.1:8000"
 export TP_BACKEND_API_KEY="replace-with-strong-backend-token"
 export TP_FRONTDOOR_USERS_FILE="/absolute/path/to/frontdoor-users.json"
 export TP_FRONTDOOR_SESSION_DB="/tmp/transformation-portal-frontdoor-sessions.db"
+export TP_FRONTDOOR_SESSION_SCALING_MODE="single_instance"
 export TP_CF_ACCESS_TEAM_DOMAIN="https://your-team.cloudflareaccess.com"
 export TP_CF_ACCESS_AUD="replace-with-access-application-aud"
 export TP_ALLOW_LOCAL_ACCESS_BYPASS=0
@@ -31,6 +32,7 @@ Notes:
 - `TP_FRONTDOOR_USERS_JSON` remains available only as a local-dev and test fallback when a file is not supplied.
 - `TP_CF_ACCESS_TEAM_DOMAIN` must point at the Cloudflare Access team domain used to mint `Cf-Access-Jwt-Assertion`.
 - `TP_CF_ACCESS_AUD` must match the Access application audience tag for this front door.
+- `TP_FRONTDOOR_SESSION_SCALING_MODE` should stay `single_instance` for the current SQLite-backed front door. Declaring `multi_instance` or `ephemeral_runtime` intentionally fails readiness until a real external session store exists.
 - `TP_ALLOW_LOCAL_ACCESS_BYPASS=1` is for local development only and is honored only when `NODE_ENV=development`.
 - Production login expects a valid `Cf-Access-Jwt-Assertion`, a matching username/password pair, and issuer/audience validation against the configured Access team domain and audience tag.
 - Development uses an HTTP-safe `tp_session` cookie. Production uses `__Host-tp_session` with `Secure`.
@@ -75,6 +77,7 @@ Open `http://localhost:3000/`.
 
 The canonical launcher:
 - exports the known-good local managed env (`NODE_ENV=development`, `TP_ALLOW_LOCAL_ACCESS_BYPASS=1`)
+- pins the supported SQLite session posture with `TP_FRONTDOOR_SESSION_SCALING_MODE=single_instance`
 - reuses `TP_API_KEY` as `TP_BACKEND_API_KEY` when needed
 - verifies FastAPI readiness first
 - refuses to start if `localhost:3000` is already occupied instead of letting Next.js drift to `:3001`
@@ -87,7 +90,7 @@ Route ownership:
 - `GET /portal/bootstrap` returns the managed-mode bootstrap contract for the browser UI.
 - `/v1/*` stays same-origin at the front door and is proxied to FastAPI with server-side secret injection.
 - `GET /healthz` reports front-door readiness plus backend reachability.
-- `GET /healthz` now returns structured readiness checks under `checks.backend`, `checks.access_config`, `checks.user_source`, and `checks.session_store`; required production failures return `503`.
+- `GET /healthz` now returns structured readiness checks under `checks.backend`, `checks.access_config`, `checks.user_source`, `checks.session_store`, and `checks.session_scaling`; required production failures return `503`.
 
 Static front-door assets:
 - `/brand/dna-mark-dark.svg` for dark/video-backed front-door surfaces
@@ -137,7 +140,8 @@ originRequest:
 - Keep app-side JWT verification enabled even when Tunnel origin enforcement is active.
 - Do not route normal browser traffic directly to FastAPI.
 - If the front door is hosted on Vercel, Cloudflare must still front the user-facing hostname, the app must continue to verify the Access JWT, and deployment or preview URLs must be protected with equivalent controls such as Vercel Deployment Protection.
-- The v1 session store is SQLite-backed. Production should assume a single-instance deployment or shared persistent storage for `TP_FRONTDOOR_SESSION_DB`; do not place the session database on ephemeral disk in a horizontally scaled setup.
+- The v1 session store remains SQLite-backed and currently supports only `TP_FRONTDOOR_SESSION_SCALING_MODE=single_instance`.
+- If your deployment target requires `multi_instance` or `ephemeral_runtime`, treat that as a blocked requirement until a dedicated external session store is introduced; the front door now fails `/healthz` under those modes on purpose.
 
 ## Validation
 

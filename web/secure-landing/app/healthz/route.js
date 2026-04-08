@@ -3,6 +3,7 @@ import { NextResponse } from "next/server.js";
 import { getConfig } from "../../lib/config.js";
 import { getDb } from "../../lib/db.js";
 import { applySecurityHeaders } from "../../lib/http.js";
+import { evaluateSessionScaling } from "../../lib/session-scaling.js";
 
 export const runtime = "nodejs";
 
@@ -100,7 +101,8 @@ export async function GET() {
     backend,
     access_config: evaluateAccessConfig(config),
     user_source: evaluateUserSource(config),
-    session_store: evaluateSessionStore(config)
+    session_store: evaluateSessionStore(config),
+    session_scaling: evaluateSessionScaling(config)
   };
   const ok = Object.values(checks).every((check) => !check.required || check.ok);
 
