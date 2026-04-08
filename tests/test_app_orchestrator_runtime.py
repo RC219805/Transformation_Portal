@@ -1048,11 +1048,17 @@ def test_portal_submit_blocks_preview_unavailable_and_debug_bundle_without_ackno
     content = _portal_bundle_content()
     guard_body = _extract_js_function_body(content, "_syncBootstrapGuardedControls")
     submit_body = _extract_js_function_body(content, "submitJob")
+    preview_failure_body = _extract_js_function_body(content, "_previewFailureDetails")
     summary_body = _extract_js_function_body(content, "renderReconstructionRuntimeSummary")
     guardrail_body = _extract_js_function_body(content, "renderDebugBundleGuardrail")
 
     assert "Configuration preview is still refreshing." in submit_body
-    assert "Preview-backed validation is unavailable." in submit_body
+    assert "Preview-backed validation could not authenticate." in preview_failure_body
+    assert "Preview-backed validation rejected the current configuration." in preview_failure_body
+    assert "Preview-backed validation is unavailable." in preview_failure_body
+    assert "preview_auth_failed" in preview_failure_body
+    assert "preview_validation_error" in preview_failure_body
+    assert "preview_service_unavailable" in preview_failure_body
     assert "Acknowledge the reconstruction debug-bundle guardrail before dispatch." in submit_body
     assert "debug_bundle_acknowledgement_required" in submit_body
     assert "_effectiveDebugBundleEnabled(preview)" in guard_body

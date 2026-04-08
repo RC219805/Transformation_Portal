@@ -133,7 +133,7 @@ def _frontdoor_state_probe_expression() -> str:
     homepageHeading: text('main h1'),
     loginHeading: text('.card h1'),
     brandAssetPresent: !!document.querySelector('.brand-asset'),
-    hasHeroVideo: !!document.querySelector('.hero-video'),
+    hasHeroVideo: !!document.querySelector('.hero-video, .homepage-video'),
     loginFormPresent: !!document.querySelector('form[action="/login"]'),
     usernamePresent: !!document.querySelector('input[name="username"]'),
     usernameValue: value('input[name="username"]'),
@@ -176,20 +176,12 @@ def _submit_login_expression(username: str, password: str) -> str:
   passwordInput.value = cfg.password;
   passwordInput.dispatchEvent(new Event('input', {{ bubbles: true }}));
   passwordInput.dispatchEvent(new Event('change', {{ bubbles: true }}));
-  const targetUrl = form.action || '/login';
-  return fetch(targetUrl, {{
-    method: 'POST',
-    body: new FormData(form),
-    credentials: 'same-origin',
-    redirect: 'follow',
-  }}).then((response) => {{
-    if (response.redirected && response.url) {{
-      window.location.assign(response.url);
-      return response.url;
-    }}
-    window.location.reload();
-    return window.location.href;
-  }});
+  if (typeof form.requestSubmit === 'function') {{
+    form.requestSubmit();
+  }} else {{
+    form.submit();
+  }}
+  return 'submitted';
 }})()
 """
 
@@ -250,7 +242,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             predicate=lambda value: (
                 isinstance(value, dict)
                 and value.get("readyState") == "complete"
-                and "Certified Premium Media for the AI Era" in str(value.get("homepageHeading", ""))
+                and "Make premium media verifiable before it ships." in str(value.get("homepageHeading", ""))
             ),
             timeout_seconds=args.timeout_seconds,
             description="front-door homepage to render",

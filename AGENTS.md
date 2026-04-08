@@ -21,8 +21,9 @@ Quick reference for common workflows and commands in this repo.
 - `make test-orchestrator-http-contract` run HTTP-only orchestrator contract tests (`tests/test_app_orchestrator_contract_http.py`).
 - `make test-portal-contract` run portal runtime/browser contract tests (`tests/test_app_orchestrator_runtime.py`, `tests/validation/test_portal_smoke_scripts.py`).
 - `make test-frontdoor-contract` run managed frontdoor Node contract/build checks (`cd web/secure-landing && npm test && npm run build`).
+- `make run-frontdoor-local` start the canonical local managed frontdoor on `http://localhost:3000` with dev-bypass env guardrails and no silent fallback to `:3001`.
 - `make validate-orchestrator-http` run the live orchestrator HTTP smoke against a running backend.
-- `make validate-portal-browser` run the live browser smoke against a running portal + backend.
+- `make validate-portal-browser` run the live browser smoke against a running portal + backend; requires a matching `TP_API_KEY` when direct-debug preview/auth is enabled.
 - `make validate-frontdoor-browser` run the live managed frontdoor browser smoke against a running frontdoor.
 - `make audit-pipeline-readiness` run the safe local four-pipeline readiness audit using checked-in archive fixtures.
 - `make coverage-fast-scope` run branch coverage for the audited `core/config` and `streaming` paths with `term-missing` output.

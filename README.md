@@ -61,7 +61,7 @@ Portal surfaces:
 - `GET /healthz` is the managed front-door liveness contract, `GET /ready` is backend liveness, and `GET /v1/readiness` is the execution-readiness matrix for the four governed pipelines.
 - Shared public branding assets now live at `web/secure-landing/public/brand/dna-mark-dark.svg`, `web/secure-landing/public/brand/dna-mark-light.svg`, and `web/secure-landing/public/video/dna-loop.mp4`.
 - Direct FastAPI portal access is now a `direct_debug` workflow for local troubleshooting, not the preferred production browser path.
-- The front door is a Node app. `web/secure-landing` now documents and enforces its supported Node runtime range, with `22.x` LTS recommended.
+- The front door is a Node app. `web/secure-landing` now documents and enforces **Node 22.x only** for install, dev, test, build, and start flows.
 
 ---
 
@@ -379,15 +379,21 @@ make test-fast
 make test-full
 make ci
 make test-orchestrator-contract
+make test-frontdoor-contract
 make validate-orchestrator-http
 make validate-portal-browser
+make validate-frontdoor-browser
+make run-frontdoor-local
 make audit-pipeline-readiness
 ```
 
 Readiness and validation tiers:
 - `make test-orchestrator-contract` keeps the portal/orchestrator contract suite local and deterministic.
+- `make test-frontdoor-contract` keeps the managed front-door Node contract/build gate deterministic under Node 22.x.
 - `make validate-orchestrator-http` runs the live backend smoke against a running FastAPI origin.
-- `make validate-portal-browser` runs the live browser smoke against the real portal UI.
+- `make validate-portal-browser` runs the live browser smoke against the real portal UI and now fails early if `/v1/config-preview` cannot authenticate or validate.
+- `make validate-frontdoor-browser` runs the live managed front-door browser smoke against `http://localhost:3000` by default.
+- `make run-frontdoor-local` starts the canonical managed front door on `http://localhost:3000` and refuses to fall back to `:3001`.
 - `make audit-pipeline-readiness` runs the safe local four-pipeline readiness audit and reports `ready` / `degraded` / `blocked` outcomes, including separate `lux-depth-v3` base vs canary status.
 
 Direct pytest examples:

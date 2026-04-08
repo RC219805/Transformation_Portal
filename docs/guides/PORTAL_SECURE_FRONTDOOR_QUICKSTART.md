@@ -39,21 +39,22 @@ Notes:
 
 The front door is a Node app.
 
-- Recommended runtime: Node `22.x` LTS
-- Supported install/build range: `>=20.9.0 <21 || >=22 <26`
-- The package now enforces this during `npm install`
+- Required runtime: Node `22.x`
+- Install, dev, test, build, and start now fail fast outside Node 22.x.
+- Runtime guardrails also verify native addons like `better-sqlite3` and `argon2` before the front door boots.
 
 If you use `nvm`, the app includes `.nvmrc`:
 
 ```bash
 cd web/secure-landing
-nvm use
+nvm use 22
 ```
 
 FastAPI still needs its own backend secret for machine and proxy authentication:
 
 ```bash
 export TP_API_KEY="replace-with-strong-backend-token"
+export TP_BACKEND_API_KEY="$TP_API_KEY"
 ```
 
 ## Local Development
@@ -67,12 +68,16 @@ python -m uvicorn app:app --host 127.0.0.1 --port 8000 --reload
 Start the front door in a second shell:
 
 ```bash
-cd web/secure-landing
-npm install
-npm run dev
+make run-frontdoor-local
 ```
 
 Open `http://localhost:3000/`.
+
+The canonical launcher:
+- exports the known-good local managed env (`NODE_ENV=development`, `TP_ALLOW_LOCAL_ACCESS_BYPASS=1`)
+- reuses `TP_API_KEY` as `TP_BACKEND_API_KEY` when needed
+- verifies FastAPI readiness first
+- refuses to start if `localhost:3000` is already occupied instead of letting Next.js drift to `:3001`
 
 Route ownership:
 - `GET /` serves the public Dynamic Neural Access homepage, even for authenticated operators.
@@ -158,6 +163,7 @@ checks manually:
 cd web/secure-landing
 npm test
 npm run build
+npm run start
 
 TP_FRONTDOOR_BASE_URL="http://localhost:3000" \
 TP_FRONTDOOR_USERNAME="<username>" \
@@ -170,8 +176,9 @@ For local managed smoke validation, use `http://localhost:3000` rather than
 checks to `localhost`.
 
 For release validation, prefer running the browser smoke against `npm run start`
-after a successful `npm run build`, not only against `next dev`. Production-like
-`next start` sets secure `__Host-` cookies, so local HTTP login validation needs
+after a successful `npm run build`, not only against `next dev`. The start
+wrapper launches the standalone build output and preserves the production-like
+cookie posture. Local HTTP login validation still needs
 HTTPS (or equivalent) if you want to exercise the full auth flow outside `next dev`.
 
 FastAPI contract gate:
