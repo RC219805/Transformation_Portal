@@ -403,6 +403,15 @@ def test_portal_html_resets_to_static_operator_shell_without_background_video() 
     assert ".shell-bg" in css_content
 
 
+def test_portal_phase1_accessibility_tokens_align_focus_and_target_size() -> None:
+    css_content = _portal_css_content()
+
+    assert "--ux-focus-ring:" in css_content
+    assert "--ux-target-min-size: 44px;" in css_content
+    assert "summary:focus-visible" in css_content
+    assert "#build-shell label:not(.sr-only)" in css_content
+
+
 def test_portal_html_externalizes_direct_debug_assets_without_third_party_hosts() -> None:
     html_content = _portal_html_content()
     css_content = _portal_css_content()
