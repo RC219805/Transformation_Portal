@@ -33,55 +33,63 @@ The following slices are already shipped and should remain closed:
 
 ## Active Risks
 
-- Frontdoor validation is runtime-significant but was not previously a
-  first-class CI surface with dedicated Node setup, `npm test`, and
-  `npm run build`.
-- Live frontdoor browser smoke exists in
-  `scripts/validation/validate_frontdoor_browser_smoke.py`, but it was not
-  wrapped by public Make targets.
-- `/portal/assets/*` is still an interim bridge. It needs a checked-in manifest
-  and drift detection so FastAPI asset references and frontdoor coverage cannot
-  silently diverge.
-- Session-store deployment assumptions were documented but not surfaced through
-  structured readiness checks. Single-instance SQLite remains the default
-  supported deployment posture for this horizon.
+- SQLite-backed sessions remain single-instance by design for this roadmap
+  horizon. Shared or externalized session state is still intentionally deferred
+  until a real deployment target requires multi-instance or ephemeral-runtime
+  support.
+- Managed browser validation still depends on live operator/browser smoke in
+  addition to the now-normalized contract suite.
 
-## Next 3-5 PRs
+## Current Repo Status
 
 ### PR 1: First-class frontdoor CI
 
-- Add public Make targets for frontdoor contract and browser validation.
-- Update GitHub Actions change classification so `web/secure-landing/**`,
-  frontdoor smoke scripts, and the secure-frontdoor quickstart are treated as
-  runtime-affecting changes.
-- Run `npm ci`, `npm test`, and `npm run build` in `web/secure-landing` when
-  frontdoor changes are present.
+- Shipped on `main`.
+- Public Make targets now cover frontdoor contract and browser validation.
+- GitHub Actions change classification treats `web/secure-landing/**`,
+  frontdoor smoke scripts, and secure-frontdoor docs as runtime-affecting.
+- Frontdoor CI runs `npm ci`, `npm test`, and `npm run build` when the managed
+  frontdoor changes.
 
 ### PR 2: Readiness and deployment guardrails
 
-- Extend `GET /healthz` to report structured checks for backend connectivity,
-  Access configuration, user-source availability, and session-store readiness.
-- Return `503` when required production checks fail while keeping the top-level
-  `ok` contract simple.
-- Keep `direct_debug` and local bypass behavior limited to explicit development
-  flows.
+- Shipped on `main`.
+- `GET /healthz` now reports structured checks for backend connectivity, Access
+  configuration, user-source availability, and session-store readiness.
+- The route returns `503` when required production checks fail while preserving
+  the top-level `ok` contract.
+- Local bypass and `direct_debug` behavior remain confined to explicit
+  development flows.
 
 ### PR 3: Managed observability and recovery
 
-- Normalize frontdoor audit coverage and operator-visible failure posture across
-  `/portal`, `/portal/bootstrap`, `/portal/assets/*`, `/portal/video/*`, and
-  `/v1/*`.
-- Distinguish authentication failure, access outage, configuration failure, and
-  upstream unavailability instead of treating all failures as a generic outage.
+- Shipped on `main`.
+- Managed frontdoor failures are normalized across `/portal`,
+  `/portal/bootstrap`, `/portal/assets/*`, `/portal/video/*`, and `/v1/*`
+  through the shared `managed_surface_failure` audit taxonomy.
+- Operator-visible recovery now distinguishes:
+  - authentication failure
+  - access outage
+  - configuration failure
+  - upstream unavailability
+- `/portal/bootstrap` returns additive `reason`, `message`, and `retryable`
+  fields so the browser shell can keep privileged actions fail-closed while
+  surfacing recovery guidance.
+- `/v1/*` preserves the existing error envelope shape while adding normalized
+  `error.details.reason` and retryability metadata for auth/config/upstream
+  failures.
 
 ### PR 4: Harden `/portal/assets/*` into a contract
 
-- Replace the ad hoc allowlist with a checked-in portal-asset manifest shared by
-  the frontdoor proxy and contract tests.
-- Add drift detection so `portal.html` asset references fail tests if the
-  manifest is stale.
-- Keep FastAPI and `portal.html` as the operator-shell system of record in this
+- Shipped on `main`.
+- The portal asset allowlist is now a checked-in manifest shared by the
+  frontdoor proxy and contract tests.
+- Drift detection fails when FastAPI `portal.html` asset references are no
+  longer covered by the managed manifest.
+- FastAPI and `portal.html` remain the operator-shell system of record for this
   roadmap horizon.
+
+## Remaining Next Phase
 
 ### PR 5: Conditional state-scaling follow-up
 

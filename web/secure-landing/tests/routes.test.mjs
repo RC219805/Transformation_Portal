@@ -108,6 +108,19 @@ async function importFresh(relativePath) {
   return import(`${relativePath}?case=${Date.now()}-${Math.random()}`);
 }
 
+async function withCapturedAuditEvents(run) {
+  const { clearAuditObserver, setAuditObserver } = await importFresh("../lib/audit.js");
+  const events = [];
+  setAuditObserver((payload) => {
+    events.push(payload);
+  });
+  try {
+    return await run(events);
+  } finally {
+    clearAuditObserver();
+  }
+}
+
 function extractSessionCookie(response) {
   const cookieHeader = response.headers.get("set-cookie") || "";
   const match = cookieHeader.match(/(?:__Host-tp_session|tp_session)=([^;]+)/);
@@ -879,8 +892,101 @@ test("managed bootstrap rejects authenticated sessions without a current Access 
 
     assert.equal(response.status, 401);
     assert.equal(body.error, "authentication required");
+    assert.equal(body.reason, "auth_failure");
+    assert.equal(body.retryable, false);
     assert.match(response.headers.get("set-cookie") || "", /__Host-tp_session=/);
     assert.equal(sessions.getSessionById(authenticatedSession.id, { touch: false }), null);
+  } finally {
+    env.cleanup();
+  }
+});
+
+test("audit observer failures are swallowed so instrumentation cannot break runtime paths", async () => {
+  const { audit, clearAuditObserver, setAuditObserver } = await importFresh("../lib/audit.js");
+  const originalInfo = console.info;
+  const originalWarn = console.warn;
+  const infos = [];
+  const warns = [];
+
+  console.info = (message) => {
+    infos.push(message);
+  };
+  console.warn = (...args) => {
+    warns.push(args);
+  };
+  setAuditObserver(() => {
+    throw new Error("observer boom");
+  });
+
+  try {
+    assert.doesNotThrow(() => {
+      audit("test_event", { path: "/portal/bootstrap" });
+    });
+    assert.equal(infos.length, 1);
+    assert.equal(warns.length, 1);
+    assert.equal(warns[0][0], "Audit observer error");
+    assert.match(String(warns[0][1]), /observer boom/);
+  } finally {
+    clearAuditObserver();
+    console.info = originalInfo;
+    console.warn = originalWarn;
+  }
+});
+
+test("managed bootstrap classifies Access verification outages as retryable access_outage and audits them", async () => {
+  const outageTeamDomain = "https://tp-frontdoor-outage.cloudflareaccess.com";
+  const env = withTempEnvironment({
+    TP_CF_ACCESS_TEAM_DOMAIN: outageTeamDomain
+  });
+
+  try {
+    const sessions = await importFresh("../lib/sessions.js");
+    const { GET } = await importFresh("../app/portal/bootstrap/route.js");
+
+    const authenticatedSession = sessions.rotateAuthenticatedSession(
+      sessions.createAnonymousSession(),
+      {
+        username: "admin",
+        accessEmail: "admin@example.com",
+        role: "admin"
+      }
+    );
+
+    const originalFetch = global.fetch;
+    global.fetch = async (url, init) => {
+      assert.equal(String(url), `${outageTeamDomain}/cdn-cgi/access/certs`);
+      assert.ok(init.signal);
+      throw Object.assign(new Error("timed out"), { name: "AbortError" });
+    };
+
+    try {
+      await withCapturedAuditEvents(async (events) => {
+        const request = buildRequest("https://portal.example.com/portal/bootstrap", {
+          method: "GET",
+          headers: new Headers({
+            cookie: `__Host-tp_session=${authenticatedSession.id}`,
+            "Cf-Access-Jwt-Assertion": createAccessJwt({ iss: outageTeamDomain })
+          })
+        });
+
+        const response = await GET(request);
+        const body = await response.json();
+
+        assert.equal(response.status, 503);
+        assert.equal(body.error, "managed access unavailable");
+        assert.equal(body.reason, "access_outage");
+        assert.equal(body.retryable, true);
+        assert.match(body.message, /temporarily unavailable/i);
+        assert.equal(events.length, 1);
+        assert.equal(events[0].event, "managed_surface_failure");
+        assert.equal(events[0].surface, "portal_bootstrap");
+        assert.equal(events[0].reason, "access_outage");
+        assert.equal(events[0].retryable, true);
+        assert.equal(events[0].status, 503);
+      });
+    } finally {
+      global.fetch = originalFetch;
+    }
   } finally {
     env.cleanup();
   }
@@ -919,10 +1025,50 @@ test("portal returns 503 with no-store when the FastAPI UI origin is unavailable
 
       assert.equal(response.status, 503);
       assert.equal(response.headers.get("cache-control"), "no-store");
-      assert.equal(await response.text(), "Upstream service unavailable");
+      assert.equal(await response.text(), "Portal upstream unavailable");
     } finally {
       restoreFetch();
     }
+  } finally {
+    env.cleanup();
+  }
+});
+
+test("portal returns configuration guidance when managed access config is incomplete", async () => {
+  const env = withTempEnvironment({
+    TP_CF_ACCESS_AUD: ""
+  });
+
+  try {
+    const sessions = await importFresh("../lib/sessions.js");
+    const { GET } = await importFresh("../app/portal/route.js");
+    const authenticatedSession = sessions.rotateAuthenticatedSession(
+      sessions.createAnonymousSession(),
+      {
+        username: "admin",
+        accessEmail: "admin@example.com",
+        role: "admin"
+      }
+    );
+
+    await withCapturedAuditEvents(async (events) => {
+      const request = buildRequest("https://portal.example.com/portal", {
+        method: "GET",
+        headers: new Headers({
+          cookie: `__Host-tp_session=${authenticatedSession.id}`
+        })
+      });
+
+      const response = await GET(request);
+
+      assert.equal(response.status, 503);
+      assert.equal(response.headers.get("cache-control"), "no-store");
+      assert.equal(await response.text(), "Managed front door configuration unavailable");
+      assert.equal(events.length, 1);
+      assert.equal(events[0].surface, "portal");
+      assert.equal(events[0].reason, "config_failure");
+      assert.equal(events[0].status, 503);
+    });
   } finally {
     env.cleanup();
   }
@@ -1016,6 +1162,47 @@ test("portal video proxy preserves cache-friendly binary delivery", async () => 
   }
 });
 
+test("portal video proxy classifies upstream 404s as managed config failures", async () => {
+  const env = withTempEnvironment({
+    TP_BACKEND_API_KEY: "backend-secret"
+  });
+
+  try {
+    const { GET } = await importFresh("../app/portal/video/[assetName]/route.js");
+    const originalFetch = global.fetch;
+    global.fetch = async () =>
+      new Response(null, {
+        status: 404,
+        headers: {
+          "cache-control": "no-store"
+        }
+      });
+
+    try {
+      await withCapturedAuditEvents(async (events) => {
+        const request = buildRequest("https://portal.example.com/portal/video/dna-portal-video-2.mp4", {
+          method: "GET"
+        });
+
+        const response = await GET(request, {
+          params: Promise.resolve({ assetName: "dna-portal-video-2.mp4" })
+        });
+
+        assert.equal(response.status, 503);
+        assert.equal(await response.text(), "Portal video proxy configuration unavailable");
+        assert.equal(events.length, 1);
+        assert.equal(events[0].surface, "portal_video");
+        assert.equal(events[0].reason, "config_failure");
+        assert.equal(events[0].upstreamStatus, 404);
+      });
+    } finally {
+      global.fetch = originalFetch;
+    }
+  } finally {
+    env.cleanup();
+  }
+});
+
 test("portal video proxy rejects unknown asset names with 404", async () => {
   const env = withTempEnvironment({
     TP_BACKEND_API_KEY: "backend-secret"
@@ -1101,6 +1288,35 @@ test("portal asset proxy preserves content type and strips browser cookies", asy
     } finally {
       global.fetch = originalFetch;
     }
+  } finally {
+    env.cleanup();
+  }
+});
+
+test("portal asset proxy classifies missing backend auth as a config failure", async () => {
+  const env = withTempEnvironment({
+    TP_BACKEND_API_KEY: ""
+  });
+
+  try {
+    const { GET } = await importFresh("../app/portal/assets/[...path]/route.js");
+
+    await withCapturedAuditEvents(async (events) => {
+      const request = buildRequest("https://portal.example.com/portal/assets/portal.css", {
+        method: "GET"
+      });
+
+      const response = await GET(request, {
+        params: Promise.resolve({ path: ["portal.css"] })
+      });
+
+      assert.equal(response.status, 503);
+      assert.equal(await response.text(), "Portal asset proxy configuration unavailable");
+      assert.equal(events.length, 1);
+      assert.equal(events[0].surface, "portal_asset");
+      assert.equal(events[0].reason, "config_failure");
+      assert.equal(events[0].assetPath, "portal.css");
+    });
   } finally {
     env.cleanup();
   }
@@ -1344,17 +1560,19 @@ test("v1 rejects authenticated sessions without a current Access JWT", async () 
       })
     });
 
-    const response = await route.GET(request, {
-      params: { path: ["jobs"] }
-    });
-    const body = await response.json();
+      const response = await route.GET(request, {
+        params: { path: ["jobs"] }
+      });
+      const body = await response.json();
 
-    assert.equal(response.status, 401);
-    assert.equal(body.error.code, "UNAUTHORIZED");
-    assert.match(response.headers.get("set-cookie") || "", /__Host-tp_session=/);
-    assert.equal(sessions.getSessionById(authenticatedSession.id, { touch: false }), null);
-  } finally {
-    env.cleanup();
+      assert.equal(response.status, 401);
+      assert.equal(body.error.code, "UNAUTHORIZED");
+      assert.equal(body.error.details.reason, "auth_failure");
+      assert.equal(body.error.details.retryable, false);
+      assert.match(response.headers.get("set-cookie") || "", /__Host-tp_session=/);
+      assert.equal(sessions.getSessionById(authenticatedSession.id, { touch: false }), null);
+    } finally {
+      env.cleanup();
   }
 });
 
@@ -1392,10 +1610,187 @@ test("v1 returns forbidden when the current Access identity does not match the a
       assert.equal(response.status, 403);
       assert.equal(body.error.code, "FORBIDDEN");
       assert.equal(body.error.message, "forbidden");
+      assert.equal(body.error.details.reason, "auth_failure");
+      assert.equal(body.error.details.retryable, false);
       assert.match(response.headers.get("set-cookie") || "", /__Host-tp_session=/);
       assert.equal(sessions.getSessionById(authenticatedSession.id, { touch: false }), null);
     } finally {
       restoreFetch();
+    }
+  } finally {
+    env.cleanup();
+  }
+});
+
+test("v1 reports managed proxy config failures when the backend API key is missing", async () => {
+  const env = withTempEnvironment({
+    TP_BACKEND_API_KEY: ""
+  });
+
+  try {
+    const sessions = await importFresh("../lib/sessions.js");
+    const route = await importFresh("../app/v1/[...path]/route.js");
+    const restoreFetch = withMockedAccessCerts();
+
+    try {
+      const authenticatedSession = sessions.rotateAuthenticatedSession(
+        sessions.createAnonymousSession(),
+        {
+          username: "admin",
+          accessEmail: "admin@example.com",
+          role: "admin"
+        }
+      );
+
+      await withCapturedAuditEvents(async (events) => {
+        const request = buildRequest("https://portal.example.com/v1/jobs", {
+          method: "GET",
+          headers: new Headers({
+            cookie: `__Host-tp_session=${authenticatedSession.id}`,
+            "Cf-Access-Jwt-Assertion": createAccessJwt()
+          })
+        });
+
+        const response = await route.GET(request, {
+          params: { path: ["jobs"] }
+        });
+        const body = await response.json();
+
+        assert.equal(response.status, 503);
+        assert.equal(body.error.code, "AUTH_CONFIGURATION_ERROR");
+        assert.equal(body.error.details.reason, "config_failure");
+        assert.equal(body.error.details.retryable, false);
+        assert.equal(events.length, 1);
+        assert.equal(events[0].surface, "v1_proxy");
+        assert.equal(events[0].reason, "config_failure");
+      });
+    } finally {
+      restoreFetch();
+    }
+  } finally {
+    env.cleanup();
+  }
+});
+
+test("v1 normalizes upstream outages into a structured retryable error envelope", async () => {
+  const env = withTempEnvironment({
+    TP_BACKEND_API_KEY: "backend-secret"
+  });
+
+  try {
+    const sessions = await importFresh("../lib/sessions.js");
+    const route = await importFresh("../app/v1/[...path]/route.js");
+    const restoreFetch = withMockedAccessCerts(async (url) => {
+      assert.equal(String(url), "http://127.0.0.1:8000/v1/jobs");
+      return Response.json(
+        {
+          detail: "backend temporarily unavailable"
+        },
+        {
+          status: 503
+        }
+      );
+    });
+
+    try {
+      const authenticatedSession = sessions.rotateAuthenticatedSession(
+        sessions.createAnonymousSession(),
+        {
+          username: "admin",
+          accessEmail: "admin@example.com",
+          role: "admin"
+        }
+      );
+
+      await withCapturedAuditEvents(async (events) => {
+        const request = buildRequest("https://portal.example.com/v1/jobs", {
+          method: "GET",
+          headers: new Headers({
+            cookie: `__Host-tp_session=${authenticatedSession.id}`,
+            "Cf-Access-Jwt-Assertion": createAccessJwt()
+          })
+        });
+
+        const response = await route.GET(request, {
+          params: { path: ["jobs"] }
+        });
+        const body = await response.json();
+
+        assert.equal(response.status, 502);
+        assert.equal(body.error.code, "UPSTREAM_UNAVAILABLE");
+        assert.equal(body.error.details.reason, "upstream_unavailable");
+        assert.equal(body.error.details.retryable, true);
+        assert.equal(body.error.details.upstreamStatus, 503);
+        assert.equal(events.length, 1);
+        assert.equal(events[0].surface, "v1_proxy");
+        assert.equal(events[0].reason, "upstream_unavailable");
+        assert.equal(events[0].upstreamStatus, 503);
+      });
+    } finally {
+      restoreFetch();
+    }
+  } finally {
+    env.cleanup();
+  }
+});
+
+test("v1 normalizes upstream auth responses into managed config failures", async () => {
+  const env = withTempEnvironment({
+    TP_BACKEND_API_KEY: "backend-secret"
+  });
+
+  try {
+    const sessions = await importFresh("../lib/sessions.js");
+    const route = await importFresh("../app/v1/[...path]/route.js");
+    const statuses = [401, 403];
+
+    for (const upstreamStatus of statuses) {
+      const restoreFetch = withMockedAccessCerts(async (url) => {
+        assert.equal(String(url), "http://127.0.0.1:8000/v1/jobs");
+        return new Response(null, {
+          status: upstreamStatus
+        });
+      });
+
+      try {
+        const authenticatedSession = sessions.rotateAuthenticatedSession(
+          sessions.createAnonymousSession(),
+          {
+            username: "admin",
+            accessEmail: "admin@example.com",
+            role: "admin"
+          }
+        );
+
+        await withCapturedAuditEvents(async (events) => {
+          const request = buildRequest("https://portal.example.com/v1/jobs", {
+            method: "GET",
+            headers: new Headers({
+              cookie: `__Host-tp_session=${authenticatedSession.id}`,
+              "Cf-Access-Jwt-Assertion": createAccessJwt()
+            })
+          });
+
+          const response = await route.GET(request, {
+            params: { path: ["jobs"] }
+          });
+          const body = await response.json();
+
+          assert.equal(response.status, 503);
+          assert.equal(body.error.code, "AUTH_CONFIGURATION_ERROR");
+          assert.equal(body.error.message, "managed proxy misconfigured");
+          assert.equal(body.error.details.reason, "config_failure");
+          assert.equal(body.error.details.retryable, false);
+          assert.equal(body.error.details.upstreamStatus, upstreamStatus);
+          assert.equal(events.length, 1);
+          assert.equal(events[0].surface, "v1_proxy");
+          assert.equal(events[0].reason, "config_failure");
+          assert.equal(events[0].status, 503);
+          assert.equal(events[0].upstreamStatus, upstreamStatus);
+        });
+      } finally {
+        restoreFetch();
+      }
     }
   } finally {
     env.cleanup();

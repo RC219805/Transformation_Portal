@@ -1,6 +1,12 @@
 import { getConfig } from "../../../../lib/config.js";
 import { audit } from "../../../../lib/audit.js";
 import { applySecurityHeaders } from "../../../../lib/http.js";
+import {
+  auditManagedSurfaceFailure,
+  classifyUpstreamFailureStatus,
+  getManagedFailureMessage,
+  MANAGED_FAILURE_REASON
+} from "../../../../lib/managed-failure.js";
 import { buildUpstreamHeaders, buildUpstreamUrl, copyUpstreamResponseHeaders } from "../../../../lib/proxy.js";
 
 export const runtime = "nodejs";
@@ -31,11 +37,13 @@ async function proxyPortalVideo(request, { params }) {
 
   const config = getConfig();
   if (!config.backendApiKey) {
-    audit("portal_video_proxy_config_error", {
-      assetName,
-      reason: "missing_backend_api_key"
+    auditManagedSurfaceFailure("portal_video", {
+      extra: { assetName },
+      path: `/portal/video/${assetName}`,
+      reason: MANAGED_FAILURE_REASON.CONFIG_FAILURE,
+      status: 503
     });
-    return errorResponse(503, "TP_BACKEND_API_KEY is not configured");
+    return errorResponse(503, getManagedFailureMessage("portal_video", MANAGED_FAILURE_REASON.CONFIG_FAILURE));
   }
 
   const upstreamHeaders = buildUpstreamHeaders(request.headers, {
@@ -56,16 +64,37 @@ async function proxyPortalVideo(request, { params }) {
       cache: "no-store",
       redirect: "manual"
     });
-  } catch {
-    audit("portal_video_proxy_upstream_unavailable", {
-      assetName
+  } catch (error) {
+    auditManagedSurfaceFailure("portal_video", {
+      extra: { assetName },
+      message: error instanceof Error ? error.message : String(error),
+      path: `/portal/video/${assetName}`,
+      reason: MANAGED_FAILURE_REASON.UPSTREAM_UNAVAILABLE,
+      status: 503
     });
-    return errorResponse(503, "Upstream service unavailable");
+    return errorResponse(
+      503,
+      getManagedFailureMessage("portal_video", MANAGED_FAILURE_REASON.UPSTREAM_UNAVAILABLE)
+    );
+  }
+
+  if (upstream.status >= 400) {
+    const reason = classifyUpstreamFailureStatus(upstream.status, { clientErrorIsConfig: true });
+    if (reason) {
+      auditManagedSurfaceFailure("portal_video", {
+        extra: { assetName },
+        path: `/portal/video/${assetName}`,
+        reason,
+        status: 503,
+        upstreamStatus: upstream.status
+      });
+      return errorResponse(503, getManagedFailureMessage("portal_video", reason));
+    }
   }
 
   const responseHeaders = copyUpstreamResponseHeaders(upstream.headers);
-  responseHeaders.set("Cache-Control", upstream.ok ? PORTAL_VIDEO_CACHE_CONTROL : "no-store");
-  if (!upstream.ok) {
+  responseHeaders.set("Cache-Control", upstream.status < 400 ? PORTAL_VIDEO_CACHE_CONTROL : "no-store");
+  if (upstream.status >= 400) {
     audit("portal_video_proxy_upstream_status", {
       assetName,
       status: upstream.status

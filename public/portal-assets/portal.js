@@ -1990,13 +1990,66 @@ function _finalizeBootstrapRetry(outcome, details = null) {
     _recordBootstrapRetryEvent(outcome, details);
 }
 
-function _isBootstrapRetryableFailure(reason = '', httpStatus = 0) {
+function _bootstrapFailureDetails(reason = '', httpStatus = 0, message = '') {
     const normalizedReason = String(reason || '').trim().toLowerCase();
     const normalizedStatus = Number.isFinite(Number(httpStatus)) ? Number(httpStatus) : 0;
-    if (normalizedReason === 'timeout' || normalizedReason === 'network') {
-        return true;
+    const overrideMessage = String(message || '').trim();
+
+    if (normalizedReason === 'auth_failure' || normalizedReason === 'auth' || normalizedStatus === 401 || normalizedStatus === 403) {
+        return {
+            reason: 'auth_failure',
+            retryable: false,
+            toastMessage: overrideMessage || 'Managed authentication expired. Sign in again to restore privileged actions.',
+            actionMessage: 'Managed authentication is required. Sign in again before continuing.'
+        };
     }
-    return BOOTSTRAP_RETRIABLE_HTTP_STATUSES.has(normalizedStatus);
+    if (normalizedReason === 'access_outage') {
+        return {
+            reason: 'access_outage',
+            retryable: true,
+            toastMessage: overrideMessage || 'Managed access verification is temporarily unavailable. Privileged actions stay blocked until Access validation recovers.',
+            actionMessage: 'Managed access verification is temporarily unavailable. Wait for Access validation to recover before continuing.'
+        };
+    }
+    if (normalizedReason === 'config_failure') {
+        return {
+            reason: 'config_failure',
+            retryable: false,
+            toastMessage: overrideMessage || 'Managed front door configuration is incomplete. Privileged actions stay blocked until configuration is fixed.',
+            actionMessage: 'Managed front door configuration is incomplete. Resolve the front door configuration before continuing.'
+        };
+    }
+    if (normalizedReason === 'invalid_json') {
+        return {
+            reason: 'invalid_json',
+            retryable: false,
+            toastMessage: overrideMessage || 'Portal bootstrap returned an invalid response. Privileged actions remain blocked.',
+            actionMessage: 'Portal bootstrap returned an invalid response. Wait for the front door response contract to recover before continuing.'
+        };
+    }
+    if (
+        normalizedReason === 'upstream_unavailable'
+        || normalizedReason === 'timeout'
+        || normalizedReason === 'network'
+        || BOOTSTRAP_RETRIABLE_HTTP_STATUSES.has(normalizedStatus)
+    ) {
+        return {
+            reason: normalizedReason === 'timeout' || normalizedReason === 'network' ? normalizedReason : 'upstream_unavailable',
+            retryable: true,
+            toastMessage: overrideMessage || 'Managed front door is waiting on upstream recovery. Privileged actions remain blocked until the portal service responds again.',
+            actionMessage: 'Managed front door is waiting on upstream recovery. Retry once the portal service becomes available again.'
+        };
+    }
+    return {
+        reason: normalizedReason || 'config_failure',
+        retryable: false,
+        toastMessage: overrideMessage || 'Managed front door is unavailable. Privileged actions remain blocked until configuration is restored.',
+        actionMessage: 'Managed front door is unavailable. Resolve the front door configuration before continuing.'
+    };
+}
+
+function _isBootstrapRetryableFailure(reason = '', httpStatus = 0) {
+    return _bootstrapFailureDetails(reason, httpStatus).retryable;
 }
 
 function _nextBootstrapRetryDelayMs(attempt) {
@@ -2275,30 +2328,45 @@ async function loadPortalBootstrap(options = null) {
                 onFinally: _clearTrackedBootstrapRequest
             }
         );
+        let payload = null;
+        let payloadParsed = false;
+        try {
+            payload = await res.json();
+            payloadParsed = true;
+        } catch {
+            payloadParsed = false;
+        }
         if (res.status === 401 || res.status === 403) {
-            _finalizeBootstrapRetry('terminal_auth_redirect', { reason: 'auth', httpStatus: res.status });
-            _applyPortalBootstrap(fallback, { status: 'unavailable', reason: 'auth', httpStatus: res.status });
+            const failure = _bootstrapFailureDetails(
+                payloadParsed && payload && typeof payload === 'object' ? payload.reason : 'auth_failure',
+                res.status,
+                payloadParsed && payload && typeof payload === 'object' ? payload.message : ''
+            );
+            _finalizeBootstrapRetry('terminal_auth_redirect', { reason: failure.reason, httpStatus: res.status });
+            _applyPortalBootstrap(fallback, { status: 'unavailable', reason: failure.reason, httpStatus: res.status });
+            createToast(failure.toastMessage, 'error');
             window.location.assign('/login');
             return;
         }
         if (!res.ok) {
-            const failureReason = `http_${res.status}`;
-            const shouldRetry = _isBootstrapRetryableFailure(failureReason, res.status);
-            const status = shouldRetry ? 'degraded' : 'unavailable';
-            _applyPortalBootstrap(fallback, { status, reason: failureReason, httpStatus: res.status });
-            const retryScheduled = shouldRetry && _scheduleBootstrapRetry(failureReason, res.status);
+            const failure = _bootstrapFailureDetails(
+                payloadParsed && payload && typeof payload === 'object' ? payload.reason : `http_${res.status}`,
+                res.status,
+                payloadParsed && payload && typeof payload === 'object' ? payload.message : ''
+            );
+            const status = failure.retryable ? 'degraded' : 'unavailable';
+            _applyPortalBootstrap(fallback, { status, reason: failure.reason, httpStatus: res.status });
+            const retryScheduled = failure.retryable && _scheduleBootstrapRetry(failure.reason, res.status);
             if (!isRetryAttempt || !retryScheduled) {
-                createToast('Managed front door unavailable. Privileged actions remain blocked until authentication is restored.', 'error');
+                createToast(failure.toastMessage, 'error');
             }
             return;
         }
-        let payload = null;
-        try {
-            payload = await res.json();
-        } catch {
+        if (!payloadParsed || !payload || typeof payload !== 'object') {
+            const failure = _bootstrapFailureDetails('invalid_json');
             _finalizeBootstrapRetry('terminal_invalid_json', { reason: 'invalid_json' });
             _applyPortalBootstrap(fallback, { status: 'unavailable', reason: 'invalid_json' });
-            createToast('Portal bootstrap returned an invalid response. Privileged actions remain blocked.', 'error');
+            createToast(failure.toastMessage, 'error');
             return;
         }
         if (_hasBootstrapRetryHistory()) {
@@ -2323,19 +2391,20 @@ async function loadPortalBootstrap(options = null) {
         if (normalizedReason === 'aborted') {
             return;
         }
-        const shouldRetry = _isBootstrapRetryableFailure(normalizedReason, 0);
-        const status = shouldRetry ? 'degraded' : 'unavailable';
-        _applyPortalBootstrap(fallback, { status, reason: normalizedReason });
-        const retryScheduled = shouldRetry && _scheduleBootstrapRetry(normalizedReason, 0);
+        const failure = _bootstrapFailureDetails(normalizedReason, 0);
+        const status = failure.retryable ? 'degraded' : 'unavailable';
+        _applyPortalBootstrap(fallback, { status, reason: failure.reason });
+        const retryScheduled = failure.retryable && _scheduleBootstrapRetry(failure.reason, 0);
         if (!isRetryAttempt || !retryScheduled) {
-            createToast('Managed front door unavailable. Privileged actions remain blocked until authentication is restored.', 'error');
+            createToast(failure.toastMessage, 'error');
         }
     }
 }
 
 function _blockManagedUnavailableAction(actionLabel) {
     if (!_isManagedUnavailableMode()) return false;
-    createToast(`Managed front door unavailable. Restore managed authentication before attempting to ${actionLabel}.`, 'error');
+    const failure = _bootstrapFailureDetails(state.bootstrap.lastErrorReason, state.bootstrap.lastHttpStatus);
+    createToast(`${failure.actionMessage} Unable to ${actionLabel} until recovery completes.`, 'error');
     return true;
 }
 

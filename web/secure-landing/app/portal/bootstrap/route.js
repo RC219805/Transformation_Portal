@@ -2,6 +2,11 @@ import { NextResponse } from "next/server.js";
 
 import { revokeSessionOnAccessFailure, resolveAuthenticatedAccessSession } from "../../../lib/access.js";
 import { applySecurityHeaders } from "../../../lib/http.js";
+import {
+  auditManagedSurfaceFailure,
+  buildManagedBootstrapFailure,
+  classifyManagedAccessFailure
+} from "../../../lib/managed-failure.js";
 import { clearSessionCookie } from "../../../lib/sessions.js";
 
 export const runtime = "nodejs";
@@ -9,15 +14,24 @@ export const runtime = "nodejs";
 export async function GET(request) {
   const authState = await resolveAuthenticatedAccessSession(request, { touch: true });
   if (!authState.ok) {
+    const reason = classifyManagedAccessFailure(authState.errorCode);
+    auditManagedSurfaceFailure("portal_bootstrap", {
+      actor: authState.session,
+      errorCode: authState.errorCode,
+      path: "/portal/bootstrap",
+      reason,
+      status: authState.status
+    });
     if (authState.revokeSession) {
       revokeSessionOnAccessFailure(authState.session, authState.errorCode);
     }
 
     const response = applySecurityHeaders(
       NextResponse.json(
-        {
-          error: authState.status === 503 ? "managed access unavailable" : "authentication required"
-        },
+        buildManagedBootstrapFailure({
+          reason,
+          status: authState.status
+        }),
         {
           status: authState.status,
           headers: {

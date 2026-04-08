@@ -4,6 +4,14 @@ import { resolveAuthenticatedAccessSession, revokeSessionOnAccessFailure } from 
 import { audit } from "../../../lib/audit.js";
 import { getConfig } from "../../../lib/config.js";
 import { applySecurityHeaders } from "../../../lib/http.js";
+import {
+  auditManagedSurfaceFailure,
+  buildManagedV1ErrorDetails,
+  classifyManagedAccessFailure,
+  classifyUpstreamFailureStatus,
+  getManagedFailureMessage,
+  MANAGED_FAILURE_REASON
+} from "../../../lib/managed-failure.js";
 import { buildUpstreamHeaders, buildUpstreamUrl, copyUpstreamResponseHeaders, isSsePath } from "../../../lib/proxy.js";
 import { isUnsafeMethod, validateOriginAndReferrer } from "../../../lib/request-security.js";
 import { clearSessionCookie, getRemoteAddress, validateCsrfToken } from "../../../lib/sessions.js";
@@ -104,23 +112,37 @@ async function handleProxy(request, { params }) {
   const authState = await resolveAuthenticatedAccessSession(request, { touch: !sseRequest });
 
   if (!authState.ok) {
+    const reason = classifyManagedAccessFailure(authState.errorCode);
     if (authState.revokeSession) {
       revokeSessionOnAccessFailure(authState.session, authState.errorCode);
     }
-    audit("authorization_denied", {
+    auditManagedSurfaceFailure("v1_proxy", {
+      actor: authState.session,
+      errorCode: authState.errorCode,
       path: pathname,
       remoteAddr: getRemoteAddress(request),
-      errorCode: authState.errorCode
+      reason,
+      status: authState.status
     });
-    const code =
-      authState.status === 503 ? "ACCESS_UNAVAILABLE" : authState.status === 403 ? "FORBIDDEN" : "UNAUTHORIZED";
+    const code = reason === MANAGED_FAILURE_REASON.CONFIG_FAILURE
+      ? "AUTH_CONFIGURATION_ERROR"
+      : authState.status === 503
+        ? "ACCESS_UNAVAILABLE"
+        : authState.status === 403
+          ? "FORBIDDEN"
+          : "UNAUTHORIZED";
     const message =
-      authState.status === 503
-        ? "managed access unavailable"
+      authState.status === 503 || reason === MANAGED_FAILURE_REASON.CONFIG_FAILURE
+        ? getManagedFailureMessage("v1_proxy", reason)
         : authState.status === 403
           ? "forbidden"
           : "authentication required";
-    const response = errorEnvelope(authState.status, code, message, { path: pathname });
+    const response = errorEnvelope(
+      authState.status,
+      code,
+      message,
+      buildManagedV1ErrorDetails(pathname, reason)
+    );
     if (authState.revokeSession) {
       clearSessionCookie(response);
     }
@@ -149,10 +171,21 @@ async function handleProxy(request, { params }) {
 
   const config = getConfig();
   if (!config.backendApiKey) {
-    return errorEnvelope(503, "AUTH_CONFIGURATION_ERROR", "TP_BACKEND_API_KEY is not configured", {
-      env: "TP_BACKEND_API_KEY",
-      path: pathname
+    auditManagedSurfaceFailure("v1_proxy", {
+      actor: session,
+      extra: { env: "TP_BACKEND_API_KEY" },
+      path: pathname,
+      reason: MANAGED_FAILURE_REASON.CONFIG_FAILURE,
+      status: 503
     });
+    return errorEnvelope(
+      503,
+      "AUTH_CONFIGURATION_ERROR",
+      "TP_BACKEND_API_KEY is not configured",
+      buildManagedV1ErrorDetails(pathname, MANAGED_FAILURE_REASON.CONFIG_FAILURE, {
+        env: "TP_BACKEND_API_KEY"
+      })
+    );
   }
 
   const upstreamHeaders = buildUpstreamHeaders(request.headers, {
@@ -184,35 +217,56 @@ async function handleProxy(request, { params }) {
   try {
     upstream = await fetch(upstreamUrl, fetchOptions);
   } catch (error) {
-    audit("proxy_auth_failure", {
+    auditManagedSurfaceFailure("v1_proxy", {
+      actor: session,
+      message: error instanceof Error ? error.message : String(error),
       path: pathname,
-      username: session.username,
-      message: error instanceof Error ? error.message : String(error)
+      reason: MANAGED_FAILURE_REASON.UPSTREAM_UNAVAILABLE,
+      status: 502
     });
-    return errorEnvelope(502, "UPSTREAM_UNAVAILABLE", "upstream request failed", {
-      path: pathname
+    return errorEnvelope(
+      502,
+      "UPSTREAM_UNAVAILABLE",
+      getManagedFailureMessage("v1_proxy", MANAGED_FAILURE_REASON.UPSTREAM_UNAVAILABLE),
+      buildManagedV1ErrorDetails(pathname, MANAGED_FAILURE_REASON.UPSTREAM_UNAVAILABLE)
+    );
+  }
+
+  const upstreamFailureReason = classifyUpstreamFailureStatus(upstream.status);
+  if (upstreamFailureReason) {
+    const status = upstreamFailureReason === MANAGED_FAILURE_REASON.CONFIG_FAILURE ? 503 : 502;
+    const code =
+      upstreamFailureReason === MANAGED_FAILURE_REASON.CONFIG_FAILURE
+        ? "AUTH_CONFIGURATION_ERROR"
+        : "UPSTREAM_UNAVAILABLE";
+    auditManagedSurfaceFailure("v1_proxy", {
+      actor: session,
+      path: pathname,
+      reason: upstreamFailureReason,
+      status,
+      upstreamStatus: upstream.status
     });
+    return errorEnvelope(
+      status,
+      code,
+      getManagedFailureMessage("v1_proxy", upstreamFailureReason),
+      buildManagedV1ErrorDetails(pathname, upstreamFailureReason, {
+        upstreamStatus: upstream.status
+      })
+    );
+  }
+
+  if (sseRequest) {
+    return applySecurityHeaders(await streamSse(upstream, session));
   }
 
   const auditEvent = classifyAuditEvent(request.method, pathname);
-  if (auditEvent) {
+  if (auditEvent && upstream.status < 400) {
     audit(auditEvent, {
       username: session.username,
       accessEmail: session.accessEmail,
       path: pathname
     });
-  }
-
-  if (upstream.status === 401 || upstream.status === 403) {
-    audit("proxy_auth_failure", {
-      path: pathname,
-      username: session.username,
-      status: upstream.status
-    });
-  }
-
-  if (sseRequest) {
-    return applySecurityHeaders(await streamSse(upstream, session));
   }
 
   const responseHeaders = copyUpstreamResponseHeaders(upstream.headers);
