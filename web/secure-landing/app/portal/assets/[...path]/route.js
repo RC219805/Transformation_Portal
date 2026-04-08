@@ -1,5 +1,7 @@
 import { getConfig } from "../../../../lib/config.js";
+import { audit } from "../../../../lib/audit.js";
 import { applySecurityHeaders } from "../../../../lib/http.js";
+import { isAllowedPortalAssetPath } from "../../../../lib/portal-asset-manifest.js";
 import {
   buildUpstreamHeaders,
   buildUpstreamUrl,
@@ -7,13 +9,6 @@ import {
 } from "../../../../lib/proxy.js";
 
 export const runtime = "nodejs";
-
-const ALLOWED_PORTAL_ASSET_PATHS = new Set([
-  "portal.css",
-  "portal.js",
-  "fonts/portal-sans.woff2",
-  "fonts/portal-mono.woff2"
-]);
 
 function errorResponse(status, message) {
   return applySecurityHeaders(
@@ -49,7 +44,7 @@ function normalizeAssetPath(pathParts) {
   }
 
   const assetPath = normalized.join("/");
-  return ALLOWED_PORTAL_ASSET_PATHS.has(assetPath) ? assetPath : null;
+  return isAllowedPortalAssetPath(assetPath) ? assetPath : null;
 }
 
 async function fetchUpstreamAsset(request, upstreamUrl, upstreamHeaders) {
@@ -81,11 +76,18 @@ async function proxyPortalAsset(request, { params }) {
   const resolvedParams = typeof params?.then === "function" ? await params : params;
   const assetPath = normalizeAssetPath(resolvedParams?.path);
   if (!assetPath) {
+    audit("portal_asset_proxy_not_found", {
+      requestedPath: Array.isArray(resolvedParams?.path) ? resolvedParams.path.join("/") : ""
+    });
     return errorResponse(404, "Portal asset not found");
   }
 
   const config = getConfig();
   if (!config.backendApiKey) {
+    audit("portal_asset_proxy_config_error", {
+      assetPath,
+      reason: "missing_backend_api_key"
+    });
     return errorResponse(503, "TP_BACKEND_API_KEY is not configured");
   }
 
@@ -108,6 +110,9 @@ async function proxyPortalAsset(request, { params }) {
       upstreamHeaders
     ));
   } catch {
+    audit("portal_asset_proxy_upstream_unavailable", {
+      assetPath
+    });
     return errorResponse(503, "Upstream service unavailable");
   }
 
@@ -121,6 +126,12 @@ async function proxyPortalAsset(request, { params }) {
 
   const responseHeaders = copyUpstreamResponseHeaders(upstream.headers);
   responseHeaders.set("Cache-Control", upstream.status < 400 ? upstream.headers.get("cache-control") || "no-store" : "no-store");
+  if (upstream.status >= 400) {
+    audit("portal_asset_proxy_upstream_status", {
+      assetPath,
+      status: upstream.status
+    });
+  }
 
   return applySecurityHeaders(
     new Response(request.method === "HEAD" ? null : upstream.body, {

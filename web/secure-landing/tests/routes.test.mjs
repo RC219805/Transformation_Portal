@@ -63,7 +63,9 @@ function restoreEnv(snapshot) {
 function withTempEnvironment(overrides = {}) {
   const snapshot = snapshotEnv();
   const tempDir = mkdtempSync(path.join(os.tmpdir(), "tp-frontdoor-routes-"));
-  const dbPath = path.join(tempDir, "sessions.sqlite");
+  const dbPath = typeof overrides.TP_FRONTDOOR_SESSION_DB === "string"
+    ? overrides.TP_FRONTDOOR_SESSION_DB
+    : path.join(tempDir, "sessions.sqlite");
   const usersFilePath = path.join(tempDir, "frontdoor-users.json");
 
   process.env.NODE_ENV = overrides.NODE_ENV ?? "production";
@@ -1271,6 +1273,17 @@ test("portal asset proxy rejects unknown and traversal-shaped asset paths with 4
   }
 });
 
+test("shared portal asset manifest pins the managed asset proxy allowlist", async () => {
+  const { PORTAL_ASSET_PATHS } = await importFresh("../lib/portal-asset-manifest.js");
+
+  assert.deepEqual(PORTAL_ASSET_PATHS, [
+    "portal.css",
+    "portal.js",
+    "fonts/portal-sans.woff2",
+    "fonts/portal-mono.woff2"
+  ]);
+});
+
 test("v1 POST rejects requests missing valid same-origin CSRF protections", async () => {
   const env = withTempEnvironment();
 
@@ -1640,8 +1653,17 @@ test("Access JWT verification fails closed when cert fetch times out", async () 
   }
 });
 
-test("healthz reports backend status without leaking the backend origin", async () => {
-  const env = withTempEnvironment();
+test("healthz reports structured readiness checks without leaking the backend origin", async () => {
+  const env = withTempEnvironment({
+    usersFileEntries: [
+      {
+        username: "admin",
+        password_hash: "hash",
+        access_email: "admin@example.com",
+        role: "admin"
+      }
+    ]
+  });
 
   try {
     const { GET } = await importFresh("../app/healthz/route.js");
@@ -1659,9 +1681,199 @@ test("healthz reports backend status without leaking the backend origin", async 
       const body = await response.json();
 
       assert.equal(response.status, 200);
+      assert.equal(body.ok, true);
+      assert.equal(body.frontend, "ready");
       assert.equal(body.backend.ok, true);
       assert.equal(body.backend.status, 200);
       assert.equal("origin" in body.backend, false);
+      assert.equal(body.checks.backend.ok, true);
+      assert.equal(body.checks.backend.required, true);
+      assert.equal(body.checks.backend.configured, true);
+      assert.equal(body.checks.access_config.ok, true);
+      assert.equal(body.checks.access_config.required, true);
+      assert.equal(body.checks.user_source.ok, true);
+      assert.equal(body.checks.user_source.source, "file");
+      assert.equal(body.checks.user_source.userCount, 1);
+      assert.equal(body.checks.session_store.ok, true);
+    } finally {
+      global.fetch = originalFetch;
+    }
+  } finally {
+    env.cleanup();
+  }
+});
+
+test("healthz fails closed when backend auth is not configured", async () => {
+  const env = withTempEnvironment({
+    TP_BACKEND_API_KEY: "",
+    usersFileEntries: [
+      {
+        username: "admin",
+        password_hash: "hash",
+        access_email: "admin@example.com",
+        role: "admin"
+      }
+    ]
+  });
+
+  try {
+    const { GET } = await importFresh("../app/healthz/route.js");
+    const response = await GET();
+    const body = await response.json();
+
+    assert.equal(response.status, 503);
+    assert.equal(body.ok, false);
+    assert.equal(body.checks.backend.ok, false);
+    assert.equal(body.checks.backend.reason, "missing_backend_api_key");
+  } finally {
+    env.cleanup();
+  }
+});
+
+test("healthz marks Access config as required in production when bypass is disabled", async () => {
+  const env = withTempEnvironment({
+    TP_CF_ACCESS_AUD: "",
+    usersFileEntries: [
+      {
+        username: "admin",
+        password_hash: "hash",
+        access_email: "admin@example.com",
+        role: "admin"
+      }
+    ]
+  });
+
+  try {
+    const { GET } = await importFresh("../app/healthz/route.js");
+    const originalFetch = global.fetch;
+    global.fetch = async () =>
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: {
+          "content-type": "application/json"
+        }
+      });
+
+    try {
+      const response = await GET();
+      const body = await response.json();
+
+      assert.equal(response.status, 503);
+      assert.equal(body.checks.access_config.ok, false);
+      assert.equal(body.checks.access_config.required, true);
+      assert.equal(body.checks.access_config.reason, "missing_access_audience");
+    } finally {
+      global.fetch = originalFetch;
+    }
+  } finally {
+    env.cleanup();
+  }
+});
+
+test("healthz rejects an empty user source", async () => {
+  const env = withTempEnvironment({
+    TP_FRONTDOOR_USERS_JSON: "[]"
+  });
+
+  try {
+    const { GET } = await importFresh("../app/healthz/route.js");
+    const originalFetch = global.fetch;
+    global.fetch = async () =>
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: {
+          "content-type": "application/json"
+        }
+      });
+
+    try {
+      const response = await GET();
+      const body = await response.json();
+
+      assert.equal(response.status, 503);
+      assert.equal(body.checks.user_source.ok, false);
+      assert.equal(body.checks.user_source.userCount, 0);
+      assert.equal(body.checks.user_source.reason, "no_configured_users");
+    } finally {
+      global.fetch = originalFetch;
+    }
+  } finally {
+    env.cleanup();
+  }
+});
+
+test("healthz rejects an unavailable session store", async () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "tp-frontdoor-session-store-"));
+  const blockedParent = path.join(tempDir, "blocked-parent");
+  writeFileSync(blockedParent, "occupied", "utf-8");
+
+  const env = withTempEnvironment({
+    TP_FRONTDOOR_SESSION_DB: path.join(blockedParent, "sessions.sqlite"),
+    usersFileEntries: [
+      {
+        username: "admin",
+        password_hash: "hash",
+        access_email: "admin@example.com",
+        role: "admin"
+      }
+    ]
+  });
+
+  try {
+    const { GET } = await importFresh("../app/healthz/route.js");
+    const originalFetch = global.fetch;
+    global.fetch = async () =>
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: {
+          "content-type": "application/json"
+        }
+      });
+
+    try {
+      const response = await GET();
+      const body = await response.json();
+
+      assert.equal(response.status, 503);
+      assert.equal(body.checks.session_store.ok, false);
+      assert.equal(body.checks.session_store.reason, "session_store_unavailable");
+    } finally {
+      global.fetch = originalFetch;
+    }
+  } finally {
+    env.cleanup();
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test("healthz reports backend outages as degraded readiness", async () => {
+  const env = withTempEnvironment({
+    usersFileEntries: [
+      {
+        username: "admin",
+        password_hash: "hash",
+        access_email: "admin@example.com",
+        role: "admin"
+      }
+    ]
+  });
+
+  try {
+    const { GET } = await importFresh("../app/healthz/route.js");
+    const originalFetch = global.fetch;
+    global.fetch = async () => {
+      throw new Error("connection refused");
+    };
+
+    try {
+      const response = await GET();
+      const body = await response.json();
+
+      assert.equal(response.status, 503);
+      assert.equal(body.frontend, "degraded");
+      assert.equal(body.checks.backend.ok, false);
+      assert.equal(body.checks.backend.reason, "backend_unreachable");
+      assert.equal(body.backend.status, 0);
     } finally {
       global.fetch = originalFetch;
     }
