@@ -57,6 +57,7 @@ export TP_ALLOW_LOCAL_ACCESS_BYPASS=1
 export TP_FASTAPI_ORIGIN="${FASTAPI_ORIGIN}"
 export TP_BACKEND_API_KEY="${BACKEND_API_KEY}"
 export TP_FRONTDOOR_SESSION_DB="${SESSION_DB}"
+export TP_FRONTDOOR_SESSION_SCALING_MODE=single_instance
 
 echo "Starting managed front door on http://localhost:${FRONTDOOR_PORT}"
 echo "Using FastAPI origin ${TP_FASTAPI_ORIGIN}"

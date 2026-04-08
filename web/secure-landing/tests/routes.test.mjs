@@ -17,6 +17,7 @@ const ENV_KEYS = [
   "TP_FRONTDOOR_USERS_FILE",
   "TP_FRONTDOOR_USERS_JSON",
   "TP_FRONTDOOR_SESSION_DB",
+  "TP_FRONTDOOR_SESSION_SCALING_MODE",
   "TP_CF_ACCESS_TEAM_DOMAIN",
   "TP_CF_ACCESS_AUD",
   "TP_ALLOW_LOCAL_ACCESS_BYPASS"
@@ -85,6 +86,12 @@ function withTempEnvironment(overrides = {}) {
   }
 
   process.env.TP_FRONTDOOR_USERS_JSON = overrides.TP_FRONTDOOR_USERS_JSON ?? "[]";
+
+  if (typeof overrides.TP_FRONTDOOR_SESSION_SCALING_MODE === "string") {
+    process.env.TP_FRONTDOOR_SESSION_SCALING_MODE = overrides.TP_FRONTDOOR_SESSION_SCALING_MODE;
+  } else {
+    delete process.env.TP_FRONTDOOR_SESSION_SCALING_MODE;
+  }
 
   if (typeof overrides.TP_ALLOW_LOCAL_ACCESS_BYPASS === "string") {
     process.env.TP_ALLOW_LOCAL_ACCESS_BYPASS = overrides.TP_ALLOW_LOCAL_ACCESS_BYPASS;
@@ -2090,6 +2097,9 @@ test("healthz reports structured readiness checks without leaking the backend or
       assert.equal(body.checks.user_source.source, "file");
       assert.equal(body.checks.user_source.userCount, 1);
       assert.equal(body.checks.session_store.ok, true);
+      assert.equal(body.checks.session_scaling.ok, true);
+      assert.equal(body.checks.session_scaling.backend, "sqlite");
+      assert.equal(body.checks.session_scaling.mode, "single_instance");
     } finally {
       global.fetch = originalFetch;
     }
@@ -2241,6 +2251,90 @@ test("healthz rejects an unavailable session store", async () => {
   }
 });
 
+test("healthz rejects multi-instance session scaling until an external session store exists", async () => {
+  const env = withTempEnvironment({
+    TP_FRONTDOOR_SESSION_SCALING_MODE: "multi_instance",
+    usersFileEntries: [
+      {
+        username: "admin",
+        password_hash: "hash",
+        access_email: "admin@example.com",
+        role: "admin"
+      }
+    ]
+  });
+
+  try {
+    const { GET } = await importFresh("../app/healthz/route.js");
+    const originalFetch = global.fetch;
+    global.fetch = async () =>
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: {
+          "content-type": "application/json"
+        }
+      });
+
+    try {
+      const response = await GET();
+      const body = await response.json();
+
+      assert.equal(response.status, 503);
+      assert.equal(body.checks.session_scaling.ok, false);
+      assert.equal(body.checks.session_scaling.backend, "sqlite");
+      assert.equal(body.checks.session_scaling.mode, "multi_instance");
+      assert.equal(
+        body.checks.session_scaling.reason,
+        "multi_instance_requires_external_session_store"
+      );
+    } finally {
+      global.fetch = originalFetch;
+    }
+  } finally {
+    env.cleanup();
+  }
+});
+
+test("healthz rejects invalid session scaling mode declarations", async () => {
+  const env = withTempEnvironment({
+    TP_FRONTDOOR_SESSION_SCALING_MODE: "planet-scale",
+    usersFileEntries: [
+      {
+        username: "admin",
+        password_hash: "hash",
+        access_email: "admin@example.com",
+        role: "admin"
+      }
+    ]
+  });
+
+  try {
+    const { GET } = await importFresh("../app/healthz/route.js");
+    const originalFetch = global.fetch;
+    global.fetch = async () =>
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: {
+          "content-type": "application/json"
+        }
+      });
+
+    try {
+      const response = await GET();
+      const body = await response.json();
+
+      assert.equal(response.status, 503);
+      assert.equal(body.checks.session_scaling.ok, false);
+      assert.equal(body.checks.session_scaling.mode, "planet_scale");
+      assert.equal(body.checks.session_scaling.reason, "invalid_session_scaling_mode");
+    } finally {
+      global.fetch = originalFetch;
+    }
+  } finally {
+    env.cleanup();
+  }
+});
+
 test("healthz reports backend outages as degraded readiness", async () => {
   const env = withTempEnvironment({
     usersFileEntries: [
@@ -2269,6 +2363,7 @@ test("healthz reports backend outages as degraded readiness", async () => {
       assert.equal(body.checks.backend.ok, false);
       assert.equal(body.checks.backend.reason, "backend_unreachable");
       assert.equal(body.backend.status, 0);
+      assert.equal(body.checks.session_scaling.ok, true);
     } finally {
       global.fetch = originalFetch;
     }

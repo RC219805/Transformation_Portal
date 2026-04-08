@@ -33,14 +33,19 @@ The following slices are already shipped and should remain closed:
 
 ## Active Risks
 
-- SQLite-backed sessions remain single-instance by design for this roadmap
-  horizon. Shared or externalized session state is still intentionally deferred
-  until a real deployment target requires multi-instance or ephemeral-runtime
-  support.
+- SQLite-backed sessions remain intentionally single-instance for this roadmap
+  horizon. Deployments that explicitly declare `multi_instance` or
+  `ephemeral_runtime` session scaling now fail readiness until a real external
+  session store exists.
 - Managed browser validation still depends on live operator/browser smoke in
   addition to the now-normalized contract suite.
 
 ## Current Repo Status
+
+- Rebaselined against `main` on April 7, 2026.
+- Earlier roadmap drafts treated PR 3 as the next implementation target, but
+  the repo now already contains the PR 1 through PR 4 deliverables listed
+  below.
 
 ### PR 1: First-class frontdoor CI
 
@@ -89,14 +94,19 @@ The following slices are already shipped and should remain closed:
 - FastAPI and `portal.html` remain the operator-shell system of record for this
   roadmap horizon.
 
-## Remaining Next Phase
-
 ### PR 5: Conditional state-scaling follow-up
 
-- Keep SQLite single-instance deployment as the default supported production
-  posture.
-- Only promote shared/externalized session state if an actual deployment target
-  requires multi-instance or ephemeral-runtime support.
+- Shipped on `main`.
+- `TP_FRONTDOOR_SESSION_SCALING_MODE` now makes the supported SQLite session
+  posture explicit.
+- `/healthz` fails closed when operators declare `multi_instance` or
+  `ephemeral_runtime` scaling without a real external session store.
+- Local launcher and frontdoor quickstart now pin the supported
+  `single_instance` posture.
+
+## Roadmap Status
+
+- No queued phases remain for this roadmap horizon.
 
 ## Acceptance Gates
 
@@ -106,10 +116,15 @@ The following slices are already shipped and should remain closed:
 - CI preflight classifies frontdoor changes as runtime-affecting
 - FastAPI `portal.html` asset references remain covered by the checked-in portal
   asset manifest
+- `/healthz` exposes the explicit `session_scaling` readiness check and fails
+  when unsupported multi-instance or ephemeral-runtime modes are declared
+- Local `make test-frontdoor-contract` verification must run under Node 22.x;
+  the frontdoor package explicitly rejects unsupported runtimes such as the
+  current local Node 25.x toolchain.
 
 ## Explicit Non-Goals For This Horizon
 
 - Replatforming the operator shell into Next.js
 - Changing FastAPI `/v1/*` semantics
 - Reopening the closed March 1, 2026 FastAPI/orchestrator roadmap
-- Promoting shared session state before a real deployment requirement exists
+- Promoting a shared session backend before a real deployment requirement exists
