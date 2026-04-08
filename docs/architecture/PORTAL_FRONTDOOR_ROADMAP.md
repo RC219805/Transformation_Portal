@@ -96,7 +96,7 @@ The following slices are already shipped and should remain closed:
 
 ### PR 5: Conditional state-scaling follow-up
 
-- Shipped on `main`.
+- Implemented in PR `#1375`.
 - `TP_FRONTDOOR_SESSION_SCALING_MODE` now makes the supported SQLite session
   posture explicit.
 - `/healthz` fails closed when operators declare `multi_instance` or
@@ -106,7 +106,7 @@ The following slices are already shipped and should remain closed:
 
 ## Roadmap Status
 
-- No queued phases remain for this roadmap horizon.
+- Once PR `#1375` lands, no queued phases remain for this roadmap horizon.
 
 ## Acceptance Gates
 
