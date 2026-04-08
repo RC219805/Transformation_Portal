@@ -82,6 +82,7 @@ def _env_float(name: str, default: float, minimum: float = 0.0) -> float:
 REPO_ROOT = Path(__file__).resolve().parent
 PORTAL_HTML = REPO_ROOT / "portal.html"
 PORTAL_ASSETS_DIR = REPO_ROOT / "public" / "portal-assets"
+PORTAL_ASSETS_DIR_REAL = Path(os.path.realpath(PORTAL_ASSETS_DIR))
 PORTAL_ASSET_MANIFEST_PATH = REPO_ROOT / "config" / "portal_asset_manifest.json"
 PORTAL_VIDEO_ASSET_NAME = "dna-portal-video-2.mp4"
 PORTAL_VIDEO_PATH = REPO_ROOT / "public" / "video" / PORTAL_VIDEO_ASSET_NAME
@@ -110,10 +111,13 @@ def _load_portal_asset_manifest() -> Dict[str, PortalAssetSpec]:
         if not repo_path or not media_type:
             raise RuntimeError(f"Portal asset manifest entry for {asset_name!r} is incomplete")
 
-        manifest[asset_name] = PortalAssetSpec(
-            path=REPO_ROOT / repo_path,
-            media_type=media_type,
-        )
+        resolved_path = Path(os.path.realpath(REPO_ROOT / repo_path))
+        try:
+            resolved_path.relative_to(PORTAL_ASSETS_DIR_REAL)
+        except ValueError as exc:
+            raise RuntimeError(f"Portal asset manifest entry for {asset_name!r} points outside {PORTAL_ASSETS_DIR}") from exc
+
+        manifest[asset_name] = PortalAssetSpec(path=resolved_path, media_type=media_type)
 
     return manifest
 

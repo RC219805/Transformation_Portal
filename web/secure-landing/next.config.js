@@ -1,6 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: "standalone"
+  output: "standalone",
+  outputFileTracingIncludes: {
+    "/portal/assets/[...path]": ["../../config/portal_asset_manifest.json"]
+  }
 };
 
 export default nextConfig;

@@ -1,14 +1,27 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 
-const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
-const REPO_ROOT = path.resolve(MODULE_DIR, "../../..");
-const MANIFEST_PATH = path.join(REPO_ROOT, "config", "portal_asset_manifest.json");
+const MANIFEST_CANDIDATES = Object.freeze([
+  path.resolve(process.cwd(), "../../config/portal_asset_manifest.json"),
+  path.resolve(process.cwd(), "config/portal_asset_manifest.json")
+]);
 
 function loadPortalAssetManifest() {
-  const raw = JSON.parse(readFileSync(MANIFEST_PATH, "utf-8"));
-  const assets = raw?.assets;
+  let rawPortalAssetManifest = null;
+  for (const candidatePath of MANIFEST_CANDIDATES) {
+    try {
+      rawPortalAssetManifest = JSON.parse(readFileSync(candidatePath, "utf-8"));
+      break;
+    } catch {
+      // Keep searching known runtime locations.
+    }
+  }
+
+  if (!rawPortalAssetManifest) {
+    throw new Error("unable to load portal asset manifest from known runtime locations");
+  }
+
+  const assets = rawPortalAssetManifest?.assets;
   if (!assets || typeof assets !== "object" || Array.isArray(assets)) {
     throw new Error("portal asset manifest must define an assets object");
   }

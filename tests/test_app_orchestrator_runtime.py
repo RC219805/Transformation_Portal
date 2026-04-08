@@ -440,6 +440,29 @@ def test_portal_asset_manifest_is_explicit_and_repo_local() -> None:
         assert asset_path.is_relative_to(orchestrator_app.PORTAL_ASSETS_DIR)
 
 
+def test_portal_asset_manifest_rejects_paths_outside_portal_assets_dir(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    manifest_path = tmp_path / "portal-asset-manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "assets": {
+                    "portal.css": {
+                        "repo_path": "../portal.html",
+                        "media_type": "text/css; charset=utf-8",
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(orchestrator_app, "PORTAL_ASSET_MANIFEST_PATH", manifest_path)
+
+    with pytest.raises(RuntimeError, match="points outside"):
+        orchestrator_app._load_portal_asset_manifest()
+
+
 def test_portal_html_asset_references_are_covered_by_manifest() -> None:
     html_asset_urls = _portal_asset_urls_from_html()
     bundled_asset_urls = html_asset_urls | _portal_asset_urls_from_css()
