@@ -20,7 +20,11 @@ export function audit(event, details = {}) {
   };
   const observer = getAuditObserver();
   if (typeof observer === "function") {
-    observer(payload);
+    try {
+      observer(payload);
+    } catch (error) {
+      console.warn("Audit observer error", error);
+    }
   }
   console.info(JSON.stringify(payload));
   return payload;

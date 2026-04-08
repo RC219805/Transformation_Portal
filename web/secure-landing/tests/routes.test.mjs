@@ -901,6 +901,38 @@ test("managed bootstrap rejects authenticated sessions without a current Access 
   }
 });
 
+test("audit observer failures are swallowed so instrumentation cannot break runtime paths", async () => {
+  const { audit, clearAuditObserver, setAuditObserver } = await importFresh("../lib/audit.js");
+  const originalInfo = console.info;
+  const originalWarn = console.warn;
+  const infos = [];
+  const warns = [];
+
+  console.info = (message) => {
+    infos.push(message);
+  };
+  console.warn = (...args) => {
+    warns.push(args);
+  };
+  setAuditObserver(() => {
+    throw new Error("observer boom");
+  });
+
+  try {
+    assert.doesNotThrow(() => {
+      audit("test_event", { path: "/portal/bootstrap" });
+    });
+    assert.equal(infos.length, 1);
+    assert.equal(warns.length, 1);
+    assert.equal(warns[0][0], "Audit observer error");
+    assert.match(String(warns[0][1]), /observer boom/);
+  } finally {
+    clearAuditObserver();
+    console.info = originalInfo;
+    console.warn = originalWarn;
+  }
+});
+
 test("managed bootstrap classifies Access verification outages as retryable access_outage and audits them", async () => {
   const outageTeamDomain = "https://tp-frontdoor-outage.cloudflareaccess.com";
   const env = withTempEnvironment({
@@ -1696,6 +1728,69 @@ test("v1 normalizes upstream outages into a structured retryable error envelope"
       });
     } finally {
       restoreFetch();
+    }
+  } finally {
+    env.cleanup();
+  }
+});
+
+test("v1 normalizes upstream auth responses into managed config failures", async () => {
+  const env = withTempEnvironment({
+    TP_BACKEND_API_KEY: "backend-secret"
+  });
+
+  try {
+    const sessions = await importFresh("../lib/sessions.js");
+    const route = await importFresh("../app/v1/[...path]/route.js");
+    const statuses = [401, 403];
+
+    for (const upstreamStatus of statuses) {
+      const restoreFetch = withMockedAccessCerts(async (url) => {
+        assert.equal(String(url), "http://127.0.0.1:8000/v1/jobs");
+        return new Response(null, {
+          status: upstreamStatus
+        });
+      });
+
+      try {
+        const authenticatedSession = sessions.rotateAuthenticatedSession(
+          sessions.createAnonymousSession(),
+          {
+            username: "admin",
+            accessEmail: "admin@example.com",
+            role: "admin"
+          }
+        );
+
+        await withCapturedAuditEvents(async (events) => {
+          const request = buildRequest("https://portal.example.com/v1/jobs", {
+            method: "GET",
+            headers: new Headers({
+              cookie: `__Host-tp_session=${authenticatedSession.id}`,
+              "Cf-Access-Jwt-Assertion": createAccessJwt()
+            })
+          });
+
+          const response = await route.GET(request, {
+            params: { path: ["jobs"] }
+          });
+          const body = await response.json();
+
+          assert.equal(response.status, 503);
+          assert.equal(body.error.code, "AUTH_CONFIGURATION_ERROR");
+          assert.equal(body.error.message, "managed proxy misconfigured");
+          assert.equal(body.error.details.reason, "config_failure");
+          assert.equal(body.error.details.retryable, false);
+          assert.equal(body.error.details.upstreamStatus, upstreamStatus);
+          assert.equal(events.length, 1);
+          assert.equal(events[0].surface, "v1_proxy");
+          assert.equal(events[0].reason, "config_failure");
+          assert.equal(events[0].status, 503);
+          assert.equal(events[0].upstreamStatus, upstreamStatus);
+        });
+      } finally {
+        restoreFetch();
+      }
     }
   } finally {
     env.cleanup();
