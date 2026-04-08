@@ -258,6 +258,23 @@ def test_portal_browser_smoke_tracks_archive_readiness_fields_and_canonical_comm
     assert '--archive-command "mets-export"' in content
 
 
+def test_portal_browser_smoke_probes_review_warning_and_provenance_contract():
+    content = PORTAL_BROWSER_SCRIPT_PATH.read_text(encoding="utf-8")
+
+    assert "reviewStatusTitle" in content
+    assert "reviewStatusDetail" in content
+    assert "reviewStatusTone" in content
+    assert "reviewStatusVisible" in content
+    assert "reviewProvenanceArtifactRole" in content
+    assert "reviewProvenanceRunState" in content
+    assert "reviewProvenancePath" in content
+    assert "reviewProvenanceFreshness" in content
+    assert "reviewProvenanceSource" in content
+    assert "reviewProvenanceBatch" in content
+    assert "Outputs ready for review" in content
+    assert "Review provenance should identify the selected artifact path" in content
+
+
 def test_portal_browser_smoke_tracks_reconstruction_runtime_summary_and_guardrails():
     content = PORTAL_BROWSER_SCRIPT_PATH.read_text(encoding="utf-8")
 

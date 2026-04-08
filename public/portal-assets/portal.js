@@ -444,6 +444,16 @@ const els = {
     artifactMetadataBar: document.getElementById('artifactMetadataBar'),
     artifactSelectionTitle: document.getElementById('artifactSelectionTitle'),
     artifactSelectionMeta: document.getElementById('artifactSelectionMeta'),
+    reviewStatusBanner: document.getElementById('reviewStatusBanner'),
+    reviewStatusTitle: document.getElementById('reviewStatusTitle'),
+    reviewStatusDetail: document.getElementById('reviewStatusDetail'),
+    reviewProvenanceGrid: document.getElementById('reviewProvenanceGrid'),
+    reviewProvenanceArtifactRole: document.getElementById('reviewProvenanceArtifactRole'),
+    reviewProvenanceRunState: document.getElementById('reviewProvenanceRunState'),
+    reviewProvenancePath: document.getElementById('reviewProvenancePath'),
+    reviewProvenanceFreshness: document.getElementById('reviewProvenanceFreshness'),
+    reviewProvenanceSource: document.getElementById('reviewProvenanceSource'),
+    reviewProvenanceBatch: document.getElementById('reviewProvenanceBatch'),
     openArtifactBtn: document.getElementById('openArtifactBtn'),
     downloadArtifactBtn: document.getElementById('downloadArtifactBtn'),
     copyArtifactPathBtn: document.getElementById('copyArtifactPathBtn'),
@@ -3104,6 +3114,150 @@ function _renderArtifactMetadataCard(job, artifact) {
     els.artifactMetadataCard.appendChild(detail);
 }
 
+function _latestVisibleTransportWarning(job) {
+    const warnings = Array.isArray(job?.transportWarnings) ? job.transportWarnings : [];
+    for (let index = warnings.length - 1; index >= 0; index -= 1) {
+        const warning = warnings[index];
+        if (warning && warning.tone !== 'info') return warning;
+    }
+    return null;
+}
+
+function _reviewStatusSnapshot(job, artifact) {
+    if (!job) {
+        return {
+            visible: false,
+            tone: 'info',
+            title: 'Awaiting completed run',
+            detail: 'Select a job to review related warnings, completion state, and output readiness.'
+        };
+    }
+
+    const artifactCount = Array.isArray(job.artifacts) ? job.artifacts.length : 0;
+    const summary = normalizeRunSummary(job.run_summary);
+    const readableError = getReadableError(job.error);
+    const outcomeSummary = jobOutcomeSummary(job);
+    const freshestActivityAt = Number(job.lastEventAt || job.updatedAt || job.finishedAt || job.createdAt || 0);
+    const freshnessLabel = formatRelativeTime(freshestActivityAt);
+    const visibleWarning = _latestVisibleTransportWarning(job);
+    const reviewableOutputs = Boolean(summary?.reviewable_outputs) || artifactCount > 0;
+
+    if (job.state === 'partial') {
+        return {
+            visible: true,
+            tone: 'warning',
+            title: 'Run partially completed',
+            detail: outcomeSummary
+                ? `${outcomeSummary}. Updated ${freshnessLabel}.`
+                : 'Some inputs failed, but outputs remain reviewable.'
+        };
+    }
+
+    if (job.state === 'failed') {
+        return {
+            visible: true,
+            tone: reviewableOutputs ? 'warning' : 'error',
+            title: reviewableOutputs ? 'Run failed after indexing reviewable outputs' : 'Run failed before outputs were ready',
+            detail: readableError
+                || (reviewableOutputs
+                    ? `${artifactCount} artifact${artifactCount === 1 ? '' : 's'} remain available for review. Updated ${freshnessLabel}.`
+                    : 'No reviewable outputs were indexed before the failure was reported.')
+        };
+    }
+
+    if (job.reconnectBlocked) {
+        return {
+            visible: true,
+            tone: 'warning',
+            title: 'Transport warning recorded',
+            detail: 'Authentication must be restored before live event transport can reconnect.'
+        };
+    }
+
+    if (visibleWarning) {
+        return {
+            visible: true,
+            tone: visibleWarning.tone === 'error' ? 'error' : 'warning',
+            title: 'Transport warning recorded',
+            detail: String(visibleWarning.detail || 'Live transport reported an operator-visible warning.')
+        };
+    }
+
+    if (job.state === 'running' || job.state === 'queued') {
+        return {
+            visible: true,
+            tone: 'info',
+            title: 'Run still in progress',
+            detail: artifactCount > 0
+                ? `${artifactCount} artifact${artifactCount === 1 ? '' : 's'} already indexed. Updated ${freshnessLabel}.`
+                : 'Artifacts and provenance will populate here as outputs arrive.'
+        };
+    }
+
+    return {
+        visible: true,
+        tone: 'ready',
+        title: artifact ? 'Outputs ready for review' : 'Run ready for review',
+        detail: outcomeSummary
+            ? `${outcomeSummary}. Updated ${freshnessLabel}.`
+            : `${artifactCount} artifact${artifactCount === 1 ? '' : 's'} indexed and ready for operator review.`
+    };
+}
+
+function _renderReviewStatusBanner(job, artifact) {
+    if (!els.reviewStatusBanner || !els.reviewStatusTitle || !els.reviewStatusDetail) return;
+    const snapshot = _reviewStatusSnapshot(job, artifact);
+    els.reviewStatusBanner.dataset.tone = snapshot.tone;
+    if (!snapshot.visible) {
+        els.reviewStatusBanner.classList.add('hidden');
+        els.reviewStatusTitle.textContent = snapshot.title;
+        els.reviewStatusDetail.textContent = snapshot.detail;
+        return;
+    }
+    els.reviewStatusTitle.textContent = snapshot.title;
+    els.reviewStatusDetail.textContent = snapshot.detail;
+    els.reviewStatusBanner.classList.remove('hidden');
+}
+
+function _renderArtifactProvenance(job, artifact) {
+    if (!els.reviewProvenanceGrid) return;
+
+    if (!job) {
+        els.reviewProvenanceGrid.classList.add('hidden');
+        if (els.reviewProvenanceArtifactRole) els.reviewProvenanceArtifactRole.textContent = 'Awaiting indexed output';
+        if (els.reviewProvenanceRunState) els.reviewProvenanceRunState.textContent = 'No job selected';
+        if (els.reviewProvenancePath) {
+            els.reviewProvenancePath.textContent = 'Preview, metadata, and actions will appear here when outputs are indexed.';
+            els.reviewProvenancePath.removeAttribute('title');
+        }
+        if (els.reviewProvenanceFreshness) els.reviewProvenanceFreshness.textContent = 'No live telemetry';
+        if (els.reviewProvenanceSource) els.reviewProvenanceSource.textContent = 'Not reported';
+        if (els.reviewProvenanceBatch) els.reviewProvenanceBatch.textContent = 'Not reported';
+        return;
+    }
+
+    const summary = normalizeRunSummary(job.run_summary);
+    const artifactDescriptor = artifact
+        ? `${artifactDisplayLabel(artifact)} • ${artifactContentType(artifact) || 'binary'} • ${formatBytes(artifact.size_bytes)}`
+        : 'Awaiting indexed artifact';
+    const relativePath = artifact ? artifactLabel(artifact) : 'Artifacts will appear here when the selected run indexes outputs.';
+    const freshnessLabel = `Updated ${formatRelativeTime(Number(job.lastEventAt || job.updatedAt || job.finishedAt || job.createdAt || 0))}`;
+    const runStateLabel = `${titleCaseToken(job.state, 'Unknown')} • ${titleCaseToken(job.pipeline, 'Unknown')}`;
+    const sourceLabel = summary?.source || titleCaseToken(job.pipeline, 'Not reported');
+    const batchLabel = summary?.batch_id || 'Not reported';
+
+    if (els.reviewProvenanceArtifactRole) els.reviewProvenanceArtifactRole.textContent = artifactDescriptor;
+    if (els.reviewProvenanceRunState) els.reviewProvenanceRunState.textContent = runStateLabel;
+    if (els.reviewProvenancePath) {
+        els.reviewProvenancePath.textContent = relativePath;
+        els.reviewProvenancePath.title = relativePath;
+    }
+    if (els.reviewProvenanceFreshness) els.reviewProvenanceFreshness.textContent = freshnessLabel;
+    if (els.reviewProvenanceSource) els.reviewProvenanceSource.textContent = sourceLabel;
+    if (els.reviewProvenanceBatch) els.reviewProvenanceBatch.textContent = batchLabel;
+    els.reviewProvenanceGrid.classList.remove('hidden');
+}
+
 function _resetArtifactActionButtons() {
     if (els.openArtifactBtn) {
         els.openArtifactBtn.disabled = true;
@@ -3133,6 +3287,8 @@ function renderArtifactPanel() {
     _toggleSurfaceSkeleton(els.artifactsShell, els.artifactShellContent, els.artifactSkeletonState, jobsLoading);
     if (jobsLoading) {
         _resetArtifactActionButtons();
+        _renderReviewStatusBanner(null, null);
+        _renderArtifactProvenance(null, null);
         if (els.artifactMeta) els.artifactMeta.textContent = 'Hydrating artifacts';
         return;
     }
@@ -3162,6 +3318,8 @@ function renderArtifactPanel() {
         }
         if (els.artifactCompareStage) els.artifactCompareStage.classList.add('hidden');
         _renderArtifactMetadataCard(null, null);
+        _renderReviewStatusBanner(null, null);
+        _renderArtifactProvenance(null, null);
         updateRunCardActions(null);
         if (els.emptyArtifactState) els.emptyArtifactState.style.display = 'block';
         return;
@@ -3176,7 +3334,22 @@ function renderArtifactPanel() {
         if (els.artifactSelectionTitle) els.artifactSelectionTitle.textContent = 'No artifact selected';
         if (els.artifactSelectionMeta) els.artifactSelectionMeta.textContent = 'Artifacts will appear here when the selected run indexes outputs.';
         if (els.artifactCompareBtn) els.artifactCompareBtn.classList.add('hidden');
+        if (els.artifactPreviewSoloImage) {
+            els.artifactPreviewSoloImage.classList.add('hidden');
+            els.artifactPreviewSoloImage.removeAttribute('src');
+        }
+        if (els.artifactPreviewImage) {
+            els.artifactPreviewImage.classList.add('hidden');
+            els.artifactPreviewImage.removeAttribute('src');
+        }
+        if (els.artifactCompareImage) {
+            els.artifactCompareImage.classList.add('hidden');
+            els.artifactCompareImage.removeAttribute('src');
+        }
+        if (els.artifactCompareStage) els.artifactCompareStage.classList.add('hidden');
         _renderArtifactMetadataCard(selected, null);
+        _renderReviewStatusBanner(selected, null);
+        _renderArtifactProvenance(selected, null);
         updateRunCardActions(selected);
         if (els.emptyArtifactState) els.emptyArtifactState.style.display = 'block';
         return;
@@ -3204,6 +3377,8 @@ function renderArtifactPanel() {
             ? `${artifactDisplayLabel(selectedArtifact)} • ${artifactContentType(selectedArtifact) || 'binary'} • ${formatBytes(selectedArtifact.size_bytes)}`
             : 'Preview, metadata, and actions will appear here when outputs are indexed.';
     }
+    _renderReviewStatusBanner(selected, selectedArtifact);
+    _renderArtifactProvenance(selected, selectedArtifact);
 
     if (els.openArtifactBtn) {
         const openUrl = selectedArtifact ? buildArtifactUrl(selected, selectedArtifact) : '';

@@ -799,6 +799,44 @@ def test_portal_artifact_gallery_renders_visual_review_controls() -> None:
     assert "sanitizeManagedAssetUrl(els.downloadArtifactBtn.dataset.url)" in content
 
 
+def test_portal_review_surface_exposes_warning_banner_and_provenance_contract() -> None:
+    content = _portal_bundle_content()
+    render_body = _extract_js_function_body(content, "renderArtifactPanel")
+    status_body = _extract_js_function_body(content, "_reviewStatusSnapshot")
+    banner_body = _extract_js_function_body(content, "_renderReviewStatusBanner")
+    provenance_body = _extract_js_function_body(content, "_renderArtifactProvenance")
+
+    assert 'id="reviewStatusBanner"' in content
+    assert 'id="reviewStatusTitle"' in content
+    assert 'id="reviewStatusDetail"' in content
+    assert 'id="reviewProvenanceGrid"' in content
+    assert 'id="reviewProvenanceArtifactRole"' in content
+    assert 'id="reviewProvenanceRunState"' in content
+    assert 'id="reviewProvenancePath"' in content
+    assert 'id="reviewProvenanceFreshness"' in content
+    assert 'id="reviewProvenanceSource"' in content
+    assert 'id="reviewProvenanceBatch"' in content
+    assert 'data-ui="review-status-banner"' in content
+    assert 'data-ui="review-provenance-grid"' in content
+    assert "_renderReviewStatusBanner(selected, selectedArtifact);" in render_body
+    assert "_renderArtifactProvenance(selected, selectedArtifact);" in render_body
+    assert "_renderReviewStatusBanner(selected, null);" in render_body
+    assert "_renderArtifactProvenance(selected, null);" in render_body
+    assert "_renderReviewStatusBanner(null, null);" in render_body
+    assert "_renderArtifactProvenance(null, null);" in render_body
+    assert "job.state === 'partial'" in status_body
+    assert "job.state === 'failed'" in status_body
+    assert "job.reconnectBlocked" in status_body
+    assert "Outputs ready for review" in status_body
+    assert "formatRelativeTime" in status_body
+    assert "els.reviewStatusBanner.dataset.tone = snapshot.tone;" in banner_body
+    assert "artifactDisplayLabel(artifact)" in provenance_body
+    assert "artifactLabel(artifact)" in provenance_body
+    assert "titleCaseToken(job.state, 'Unknown')" in provenance_body
+    assert "summary?.batch_id" in provenance_body
+    assert "summary?.source" in provenance_body
+
+
 def test_portal_selection_review_surfaces_have_single_render_owner() -> None:
     content = _portal_bundle_content()
     review_body = _extract_js_function_body(content, "renderReviewSurfaces")
