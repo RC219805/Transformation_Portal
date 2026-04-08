@@ -3398,6 +3398,7 @@ def _artifact_compare_group(relative_path: str, path: Path) -> str:
 
 def _artifact_display_hint(relative_path: str, path: Path) -> Dict[str, Any]:
     lower_name = relative_path.lower()
+    stem_lower = PurePosixPath(relative_path).stem.lower()
     artifact_type = _infer_artifact_type(path)
     if _artifact_is_previewable(path):
         if re.search(r"(mask|matte|thumb|preview|debug|overlay|segmentation|albedo|normal|roughness|metallic|ao)", lower_name):
@@ -3421,7 +3422,7 @@ def _artifact_display_hint(relative_path: str, path: Path) -> Dict[str, Any]:
     elif artifact_type == "archive":
         role = "archive"
         priority = 180
-    elif lower_name.endswith(".log") or "/logs/" in lower_name or "log" in PurePosixPath(relative_path).stem.lower():
+    elif lower_name.endswith(".log") or "/logs/" in lower_name or re.search(r"(^|[._\-\s])log($|[._\-\s])", stem_lower):
         role = "log"
         priority = 160
     elif artifact_type == "metadata":

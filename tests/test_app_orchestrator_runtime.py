@@ -2517,6 +2517,30 @@ def test_index_job_artifacts_populates_job_payload(tmp_path: Path) -> None:
     assert manifest_item["display_hint"]["label"] == "Manifest"
 
 
+def test_index_job_artifacts_does_not_misclassify_catalog_metadata_as_log(tmp_path: Path) -> None:
+    output_dir = tmp_path / "out"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    (output_dir / "catalog.json").write_text("{}", encoding="utf-8")
+    (output_dir / "job.log").write_text("ok", encoding="utf-8")
+
+    job = orchestrator_app.Job(
+        id="job_artifacts_catalog",
+        created_at=orchestrator_app._now(),
+        request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(output_dir)}},
+    )
+
+    indexed = orchestrator_app._index_job_artifacts(job)
+
+    catalog_item = next(item for item in indexed if item["path"] == "catalog.json")
+    log_item = next(item for item in indexed if item["path"] == "job.log")
+
+    assert catalog_item["media_kind"] == "metadata"
+    assert catalog_item["display_hint"]["role"] == "metadata"
+    assert catalog_item["display_hint"]["label"] == "Metadata"
+    assert log_item["display_hint"]["role"] == "log"
+    assert log_item["display_hint"]["label"] == "Log"
+
+
 def test_index_job_artifacts_skips_entries_resolving_outside_output_dir(tmp_path: Path) -> None:
     output_dir = tmp_path / "out"
     output_dir.mkdir(parents=True, exist_ok=True)
