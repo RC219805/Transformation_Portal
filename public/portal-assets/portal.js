@@ -1826,6 +1826,9 @@ function syncDisclosurePanels(payload = null) {
     const args = payload?.args || generatePayload().args || {};
     const preset = currentPresetDescriptor();
     const advancedSections = Array.isArray(preset.advanced_sections) ? preset.advanced_sections : [];
+    const researchPreset = _presetRequiresResearchAcknowledgments(preset, args);
+    const reconstructionEnabled = parseBoolLike(args.enable_reconstruction, false);
+    const depthBackend = String(args.depth_backend || '').trim().toLowerCase();
     const previewFieldGroups = {
         advanced: [
             'save_float_depth',
@@ -1872,13 +1875,14 @@ function syncDisclosurePanels(payload = null) {
         || String(args.log_level || '').trim() !== ''
         || String(args.max_workers || '').trim() !== ''
         || String(args.max_gpu_workers || '').trim() !== '';
-    const governanceActive = parseBoolLike(args.non_commercial_ok, false)
+    const governanceActive = researchPreset
+        || depthBackend === 'depth_pro'
+        || reconstructionEnabled
+        || parseBoolLike(args.non_commercial_ok, false)
         || parseBoolLike(args.accept_apple_depth_pro_research_license, false)
         || parseBoolLike(args.accept_research_tools_license, false)
-        || String(args.preset || '').toLowerCase().includes('v3.1')
-        || String(args.depth_backend || '').toLowerCase() === 'depth_pro'
-        || parseBoolLike(args.enable_reconstruction, false);
-    const reconstructionActive = parseBoolLike(args.enable_reconstruction, false)
+        || advancedSections.includes('governance');
+    const reconstructionActive = reconstructionEnabled
         || String(args.cameras_sidecar_path || '').trim() !== ''
         || String(args.grouping_mode || 'single').trim().toLowerCase() !== 'single'
         || String(args.raw_ingest_mode || 'auto').trim().toLowerCase() !== 'auto'

@@ -1125,8 +1125,10 @@ def test_portal_disclosure_defaults_are_state_driven_instead_of_static() -> None
     assert 'id="advancedFlagsDetails" class="disclosure-panel mt-6">' in content
     assert 'id="governanceDetails" class="disclosure-panel mt-6">' in content
     assert "const previewFieldGroups = {" in sync_body
+    assert "const researchPreset = _presetRequiresResearchAcknowledgments(preset, args);" in sync_body
     assert "element.dataset.autoOpen = autoOpenState[name] ? 'true' : 'false';" in sync_body
     assert "disclosurePrefs.dispatchTools === true" in sync_body
+    assert "String(args.preset || '').toLowerCase().includes('v3.1')" not in sync_body
     assert "setupDisclosurePanels();" in init_body
 
 
