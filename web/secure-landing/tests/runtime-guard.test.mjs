@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { EventEmitter } from "node:events";
 import os from "node:os";
 import path from "node:path";
 import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
@@ -9,7 +10,10 @@ import {
   formatNativeDependencyFailureMessage,
   formatUnsupportedNodeMessage
 } from "../lib/runtime-guard.js";
-import { resolveStandaloneServerPath } from "../scripts/start-standalone.mjs";
+import {
+  attachStandaloneLifecycleHandlers,
+  resolveStandaloneServerPath
+} from "../scripts/start-standalone.mjs";
 
 test("runtime guard rejects non-22 runtimes with one recovery path", () => {
   assert.throws(
@@ -49,4 +53,72 @@ test("standalone start resolves both supported server output paths", () => {
   } finally {
     rmSync(tempDir, { recursive: true, force: true });
   }
+});
+
+test("standalone start surfaces actionable spawn failures", () => {
+  const child = new EventEmitter();
+  const errors = [];
+  const exits = [];
+
+  attachStandaloneLifecycleHandlers(child, {
+    serverPath: "/tmp/frontdoor/server.js",
+    processLike: {
+      pid: 42,
+      execPath: process.execPath,
+      env: process.env,
+      exit(code) {
+        exits.push(code);
+      },
+      kill() {}
+    },
+    consoleLike: {
+      error(message) {
+        errors.push(message);
+      }
+    }
+  });
+
+  child.emit("error", new Error("EACCES: permission denied"));
+
+  assert.deepEqual(exits, [1]);
+  assert.equal(errors.length, 1);
+  assert.match(errors[0], /could not start from \/tmp\/frontdoor\/server\.js/);
+  assert.match(errors[0], /EACCES: permission denied/);
+  assert.match(errors[0], /Run npm run build under Node 22/);
+});
+
+test("standalone start exits cleanly when signal relay fails", () => {
+  const child = new EventEmitter();
+  const errors = [];
+  const exits = [];
+  const killCalls = [];
+
+  attachStandaloneLifecycleHandlers(child, {
+    serverPath: "/tmp/frontdoor/server.js",
+    processLike: {
+      pid: 99,
+      execPath: process.execPath,
+      env: process.env,
+      exit(code) {
+        exits.push(code);
+      },
+      kill(pid, signal) {
+        killCalls.push([pid, signal]);
+        throw new Error("unsupported signal relay");
+      }
+    },
+    consoleLike: {
+      error(message) {
+        errors.push(message);
+      }
+    }
+  });
+
+  child.emit("exit", null, "SIGPWR");
+
+  assert.deepEqual(killCalls, [[99, "SIGPWR"]]);
+  assert.deepEqual(exits, [1]);
+  assert.equal(errors.length, 1);
+  assert.match(errors[0], /signal SIGPWR/);
+  assert.match(errors[0], /unsupported signal relay/);
 });

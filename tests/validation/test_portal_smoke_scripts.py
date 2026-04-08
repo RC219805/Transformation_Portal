@@ -88,6 +88,17 @@ def test_portal_browser_parse_args_defaults_api_key_to_empty_when_env_is_unset(
     assert args.api_key == ""
 
 
+def test_portal_browser_help_text_describes_api_key_default(capsys: pytest.CaptureFixture[str]):
+    module = _load_module(PORTAL_BROWSER_SCRIPT_PATH, "tests_validate_portal_browser_smoke_help")
+
+    with pytest.raises(SystemExit, match="0"):
+        module._parse_args(["--help"])
+
+    help_output = " ".join(capsys.readouterr().out.split())
+    assert "API key for protected job endpoints" in help_output
+    assert "default: unset; uses TP_API_KEY when set" in help_output
+
+
 def test_portal_browser_preview_preflight_classifies_auth_failures(monkeypatch: pytest.MonkeyPatch):
     module = _load_module(PORTAL_BROWSER_SCRIPT_PATH, "tests_validate_portal_browser_smoke_preflight_auth")
 

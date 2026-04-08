@@ -25,21 +25,73 @@ export function resolveStandaloneServerPath(frontdoorRoot = FRONTDOOR_ROOT) {
   );
 }
 
-export async function main(argv = process.argv.slice(2)) {
-  const serverPath = resolveStandaloneServerPath();
-  const child = spawn(process.execPath, [serverPath, ...argv], {
-    cwd: FRONTDOOR_ROOT,
-    env: process.env,
-    stdio: "inherit"
+function formatStandaloneErrorDetail(error) {
+  return error instanceof Error ? error.message : String(error);
+}
+
+export function formatStandaloneSpawnFailureMessage(serverPath, error) {
+  return `Managed frontdoor standalone server could not start from ${serverPath}: ${formatStandaloneErrorDetail(error)}. Run npm run build under Node 22, verify the standalone output is readable and executable, then retry.`;
+}
+
+export function formatStandaloneSignalRelayFailureMessage(signal, error) {
+  return `Managed frontdoor standalone server exited with signal ${signal}, but the launcher could not relay that signal cleanly: ${formatStandaloneErrorDetail(error)}. Stop the child process manually and retry if needed.`;
+}
+
+export function attachStandaloneLifecycleHandlers(
+  child,
+  {
+    serverPath,
+    processLike = process,
+    consoleLike = console
+  }
+) {
+  child.on("error", (error) => {
+    consoleLike.error(formatStandaloneSpawnFailureMessage(serverPath, error));
+    processLike.exit(1);
   });
 
   child.on("exit", (code, signal) => {
     if (signal) {
-      process.kill(process.pid, signal);
+      try {
+        processLike.kill(processLike.pid, signal);
+      } catch (error) {
+        consoleLike.error(formatStandaloneSignalRelayFailureMessage(signal, error));
+        processLike.exit(1);
+      }
       return;
     }
-    process.exit(code ?? 0);
+    processLike.exit(code ?? 0);
   });
+
+  return child;
+}
+
+export function spawnStandaloneServer(
+  serverPath,
+  argv = process.argv.slice(2),
+  {
+    spawnImpl = spawn,
+    frontdoorRoot = FRONTDOOR_ROOT,
+    processLike = process,
+    consoleLike = console
+  } = {}
+) {
+  const child = spawnImpl(processLike.execPath ?? process.execPath, [serverPath, ...argv], {
+    cwd: frontdoorRoot,
+    env: processLike.env ?? process.env,
+    stdio: "inherit"
+  });
+
+  return attachStandaloneLifecycleHandlers(child, {
+    serverPath,
+    processLike,
+    consoleLike
+  });
+}
+
+export async function main(argv = process.argv.slice(2)) {
+  const serverPath = resolveStandaloneServerPath();
+  spawnStandaloneServer(serverPath, argv);
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === SCRIPT_PATH) {

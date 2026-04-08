@@ -835,7 +835,7 @@ def _parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
     parser.add_argument(
         "--api-key",
         default=os.getenv("TP_API_KEY", "").strip(),
-        help="API key for protected job endpoints (default: TP_API_KEY or %(default)s)",
+        help="API key for protected job endpoints (default: unset; uses TP_API_KEY when set)",
     )
     parser.add_argument(
         "--chrome-binary",
