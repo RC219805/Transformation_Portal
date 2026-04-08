@@ -275,6 +275,15 @@ def test_portal_browser_smoke_probes_review_warning_and_provenance_contract():
     assert "Review provenance should identify the selected artifact path" in content
 
 
+def test_portal_browser_smoke_probes_review_compare_contract():
+    content = PORTAL_BROWSER_SCRIPT_PATH.read_text(encoding="utf-8")
+
+    assert "reviewCompareTitle" in content
+    assert "reviewCompareDetail" in content
+    assert "reviewCompareVisible" in content
+    assert "reviewCompareEnabled" in content
+
+
 def test_portal_browser_smoke_tracks_reconstruction_runtime_summary_and_guardrails():
     content = PORTAL_BROWSER_SCRIPT_PATH.read_text(encoding="utf-8")
 

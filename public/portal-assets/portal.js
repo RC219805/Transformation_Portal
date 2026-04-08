@@ -454,6 +454,9 @@ const els = {
     reviewProvenanceFreshness: document.getElementById('reviewProvenanceFreshness'),
     reviewProvenanceSource: document.getElementById('reviewProvenanceSource'),
     reviewProvenanceBatch: document.getElementById('reviewProvenanceBatch'),
+    reviewCompareSummary: document.getElementById('reviewCompareSummary'),
+    reviewCompareTitle: document.getElementById('reviewCompareTitle'),
+    reviewCompareDetail: document.getElementById('reviewCompareDetail'),
     openArtifactBtn: document.getElementById('openArtifactBtn'),
     downloadArtifactBtn: document.getElementById('downloadArtifactBtn'),
     copyArtifactPathBtn: document.getElementById('copyArtifactPathBtn'),
@@ -3280,6 +3283,24 @@ function _renderArtifactProvenance(job, artifact) {
     els.reviewProvenanceGrid.classList.remove('hidden');
 }
 
+function _renderReviewCompareSummary(primaryArtifact, compareArtifact, compareEnabled) {
+    if (!els.reviewCompareSummary || !els.reviewCompareTitle || !els.reviewCompareDetail) return;
+    if (!primaryArtifact || !compareArtifact) {
+        els.reviewCompareSummary.classList.add('hidden');
+        els.reviewCompareTitle.textContent = 'Compare pair available';
+        els.reviewCompareDetail.textContent = 'Enable compare mode to inspect paired outputs side by side.';
+        return;
+    }
+
+    const primaryLabel = artifactLabel(primaryArtifact);
+    const compareLabel = artifactLabel(compareArtifact);
+    els.reviewCompareTitle.textContent = compareEnabled ? 'Comparing paired outputs' : 'Compare pair available';
+    els.reviewCompareDetail.textContent = compareEnabled
+        ? `${primaryLabel} is shown against ${compareLabel}.`
+        : `${compareLabel} is available as a side-by-side comparison for ${primaryLabel}.`;
+    els.reviewCompareSummary.classList.remove('hidden');
+}
+
 function _resetArtifactActionButtons() {
     if (els.openArtifactBtn) {
         els.openArtifactBtn.disabled = true;
@@ -3311,11 +3332,14 @@ function renderArtifactPanel() {
         _resetArtifactActionButtons();
         _renderReviewStatusBanner(null, null);
         _renderArtifactProvenance(null, null);
+        _renderReviewCompareSummary(null, null, false);
         if (els.artifactMeta) els.artifactMeta.textContent = 'Hydrating artifacts';
         return;
     }
 
     if (!els.artifactMeta || !els.artifactThumbnailRail) return;
+    els.artifactThumbnailRail.setAttribute('role', 'listbox');
+    els.artifactThumbnailRail.setAttribute('aria-label', 'Artifact thumbnails');
     const selected = state.jobs.find((item) => item.id === state.selectedJobId);
     const artifacts = Array.isArray(selected?.artifacts) ? rankArtifactsForDisplay(selected.artifacts) : [];
 
@@ -3325,7 +3349,11 @@ function renderArtifactPanel() {
         els.artifactThumbnailRail.innerHTML = '';
         if (els.artifactSelectionTitle) els.artifactSelectionTitle.textContent = 'No artifact selected';
         if (els.artifactSelectionMeta) els.artifactSelectionMeta.textContent = 'Preview, metadata, and actions will appear here when outputs are indexed.';
-        if (els.artifactCompareBtn) els.artifactCompareBtn.classList.add('hidden');
+        if (els.artifactCompareBtn) {
+            els.artifactCompareBtn.classList.add('hidden');
+            els.artifactCompareBtn.setAttribute('aria-pressed', 'false');
+            els.artifactCompareBtn.removeAttribute('aria-controls');
+        }
         if (els.artifactPreviewSoloImage) {
             els.artifactPreviewSoloImage.classList.add('hidden');
             els.artifactPreviewSoloImage.removeAttribute('src');
@@ -3338,10 +3366,14 @@ function renderArtifactPanel() {
             els.artifactCompareImage.classList.add('hidden');
             els.artifactCompareImage.removeAttribute('src');
         }
-        if (els.artifactCompareStage) els.artifactCompareStage.classList.add('hidden');
+        if (els.artifactCompareStage) {
+            els.artifactCompareStage.classList.add('hidden');
+            els.artifactCompareStage.setAttribute('aria-hidden', 'true');
+        }
         _renderArtifactMetadataCard(null, null);
         _renderReviewStatusBanner(null, null);
         _renderArtifactProvenance(null, null);
+        _renderReviewCompareSummary(null, null, false);
         updateRunCardActions(null);
         if (els.emptyArtifactState) els.emptyArtifactState.style.display = 'block';
         return;
@@ -3355,7 +3387,11 @@ function renderArtifactPanel() {
         els.artifactThumbnailRail.innerHTML = '';
         if (els.artifactSelectionTitle) els.artifactSelectionTitle.textContent = 'No artifact selected';
         if (els.artifactSelectionMeta) els.artifactSelectionMeta.textContent = 'Artifacts will appear here when the selected run indexes outputs.';
-        if (els.artifactCompareBtn) els.artifactCompareBtn.classList.add('hidden');
+        if (els.artifactCompareBtn) {
+            els.artifactCompareBtn.classList.add('hidden');
+            els.artifactCompareBtn.setAttribute('aria-pressed', 'false');
+            els.artifactCompareBtn.removeAttribute('aria-controls');
+        }
         if (els.artifactPreviewSoloImage) {
             els.artifactPreviewSoloImage.classList.add('hidden');
             els.artifactPreviewSoloImage.removeAttribute('src');
@@ -3368,10 +3404,14 @@ function renderArtifactPanel() {
             els.artifactCompareImage.classList.add('hidden');
             els.artifactCompareImage.removeAttribute('src');
         }
-        if (els.artifactCompareStage) els.artifactCompareStage.classList.add('hidden');
+        if (els.artifactCompareStage) {
+            els.artifactCompareStage.classList.add('hidden');
+            els.artifactCompareStage.setAttribute('aria-hidden', 'true');
+        }
         _renderArtifactMetadataCard(selected, null);
         _renderReviewStatusBanner(selected, null);
         _renderArtifactProvenance(selected, null);
+        _renderReviewCompareSummary(null, null, false);
         updateRunCardActions(selected);
         if (els.emptyArtifactState) els.emptyArtifactState.style.display = 'block';
         return;
@@ -3386,8 +3426,12 @@ function renderArtifactPanel() {
         if (compareCandidate) {
             els.artifactCompareBtn.classList.remove('hidden');
             els.artifactCompareBtn.textContent = compareEnabled ? 'Single View' : 'Compare';
+            els.artifactCompareBtn.setAttribute('aria-pressed', compareEnabled ? 'true' : 'false');
+            els.artifactCompareBtn.setAttribute('aria-controls', 'artifactCompareStage');
         } else {
             els.artifactCompareBtn.classList.add('hidden');
+            els.artifactCompareBtn.setAttribute('aria-pressed', 'false');
+            els.artifactCompareBtn.removeAttribute('aria-controls');
         }
     }
 
@@ -3401,6 +3445,7 @@ function renderArtifactPanel() {
     }
     _renderReviewStatusBanner(selected, selectedArtifact);
     _renderArtifactProvenance(selected, selectedArtifact);
+    _renderReviewCompareSummary(selectedArtifact, compareCandidate, compareEnabled);
 
     if (els.openArtifactBtn) {
         const openUrl = selectedArtifact ? buildArtifactUrl(selected, selectedArtifact) : '';
@@ -3418,7 +3463,10 @@ function renderArtifactPanel() {
         els.copyArtifactPathBtn.dataset.path = selectedArtifact ? artifactLabel(selectedArtifact) : '';
     }
 
-    if (els.artifactCompareStage) els.artifactCompareStage.classList.toggle('hidden', !compareEnabled);
+    if (els.artifactCompareStage) {
+        els.artifactCompareStage.classList.toggle('hidden', !compareEnabled);
+        els.artifactCompareStage.setAttribute('aria-hidden', compareEnabled ? 'false' : 'true');
+    }
     if (els.artifactPreviewSoloImage) els.artifactPreviewSoloImage.classList.toggle('hidden', compareEnabled || !artifactIsPreviewable(selectedArtifact));
     if (els.artifactMetadataCard) els.artifactMetadataCard.classList.toggle('hidden', artifactIsPreviewable(selectedArtifact));
     if (compareEnabled && selectedArtifact && compareCandidate) {
@@ -3467,6 +3515,9 @@ function renderArtifactPanel() {
         const active = selectedArtifact && artifact.path === selectedArtifact.path;
         button.type = 'button';
         button.dataset.artifactPath = String(artifact.path || '');
+        button.setAttribute('role', 'option');
+        button.setAttribute('aria-selected', active ? 'true' : 'false');
+        button.tabIndex = active ? 0 : -1;
         button.className = active
             ? 'rounded-2xl border border-cyan-300 dark:border-cyan-900/60 bg-cyan-50/90 dark:bg-cyan-900/20 p-3 text-left shadow-sm transition-colors'
             : 'rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/50 p-3 text-left hover:bg-white/90 dark:hover:bg-slate-800/80 transition-colors';
@@ -6502,6 +6553,37 @@ function handleJobListKeydown(event) {
     if (nextRow) nextRow.focus();
 }
 
+function _focusArtifactRailButton(path) {
+    if (!els.artifactThumbnailRail) return;
+    const targetPath = String(path || '').trim();
+    if (!targetPath) return;
+    const buttons = Array.from(els.artifactThumbnailRail.querySelectorAll('button[data-artifact-path]'));
+    const nextButton = buttons.find((candidate) => String(candidate.dataset.artifactPath || '').trim() === targetPath);
+    if (nextButton) nextButton.focus();
+}
+
+function handleArtifactRailKeydown(event) {
+    const button = event.target.closest('button[data-artifact-path]');
+    if (!button || !els.artifactThumbnailRail) return;
+    if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        button.click();
+        return;
+    }
+    if (!['ArrowRight', 'ArrowLeft', 'ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+    event.preventDefault();
+    const buttons = Array.from(els.artifactThumbnailRail.querySelectorAll('button[data-artifact-path]'));
+    const currentIndex = buttons.indexOf(button);
+    if (currentIndex === -1) return;
+    let nextIndex = currentIndex;
+    if (event.key === 'ArrowRight' || event.key === 'ArrowDown') nextIndex = Math.min(buttons.length - 1, currentIndex + 1);
+    if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') nextIndex = Math.max(0, currentIndex - 1);
+    if (event.key === 'Home') nextIndex = 0;
+    if (event.key === 'End') nextIndex = buttons.length - 1;
+    const nextButton = buttons[nextIndex];
+    if (nextButton) nextButton.focus();
+}
+
 function logToPane(jobId, line) {
     if (state.selectedJobId === jobId || !state.selectedJobId) {
         if (els.logPane) {
@@ -7450,9 +7532,16 @@ if (els.artifactThumbnailRail) {
         if (!selectedJob) return;
         const path = String(button.dataset.artifactPath || '').trim();
         if (!path) return;
+        const shouldRestoreFocus = event.detail === 0;
         state.artifactUi.selectedByJob[String(selectedJob.id || '')] = path;
         renderReviewSurfaces();
+        if (shouldRestoreFocus) {
+            requestAnimationFrame(() => {
+                _focusArtifactRailButton(path);
+            });
+        }
     });
+    els.artifactThumbnailRail.addEventListener('keydown', handleArtifactRailKeydown);
 }
 
 if (els.artifactCompareBtn) {
