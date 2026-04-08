@@ -8,6 +8,37 @@ import argon2 from "argon2";
 
 import { resetDbCache } from "../lib/db.js";
 
+const ENV_KEYS = [
+  "NODE_ENV",
+  "TP_FRONTDOOR_USERS_FILE",
+  "TP_FRONTDOOR_USERS_JSON",
+  "TP_FRONTDOOR_SESSION_DB",
+  "TP_ALLOW_LOCAL_ACCESS_BYPASS"
+];
+
+let envSnapshot = null;
+
+function snapshotEnv() {
+  return new Map(ENV_KEYS.map((key) => [key, process.env[key]]));
+}
+
+function clearEnv() {
+  for (const key of ENV_KEYS) {
+    delete process.env[key];
+  }
+}
+
+function restoreEnv(snapshot) {
+  for (const key of ENV_KEYS) {
+    const previous = snapshot.get(key);
+    if (typeof previous === "string") {
+      process.env[key] = previous;
+    } else {
+      delete process.env[key];
+    }
+  }
+}
+
 function withTempDb() {
   const tempDir = mkdtempSync(path.join(os.tmpdir(), "tp-frontdoor-"));
   const dbPath = path.join(tempDir, "sessions.sqlite");
@@ -20,6 +51,20 @@ function withTempDb() {
     }
   };
 }
+
+test.beforeEach(() => {
+  envSnapshot = snapshotEnv();
+  clearEnv();
+  resetDbCache();
+});
+
+test.afterEach(() => {
+  resetDbCache();
+  if (envSnapshot) {
+    restoreEnv(envSnapshot);
+    envSnapshot = null;
+  }
+});
 
 test("verifyUserCredentials requires matching Access email unless local bypass is enabled", async () => {
   const passwordHash = await argon2.hash("correct horse battery staple");
@@ -49,6 +94,45 @@ test("verifyUserCredentials requires matching Access email unless local bypass i
     allowAccessBypass: false
   });
   assert.equal(match?.username, "admin");
+});
+
+test("json-backed credential fixtures stay stable unless file precedence is explicitly enabled", async () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "tp-frontdoor-users-precedence-"));
+  const usersFile = path.join(tempDir, "users.json");
+  const passwordHash = await argon2.hash("correct horse battery staple");
+  writeFileSync(
+    usersFile,
+    JSON.stringify([
+      {
+        username: "file-admin",
+        password_hash: passwordHash,
+        access_email: "file-admin@example.com",
+        role: "admin"
+      }
+    ]),
+    "utf-8"
+  );
+
+  process.env.TP_FRONTDOOR_USERS_FILE = usersFile;
+  process.env.TP_FRONTDOOR_USERS_JSON = JSON.stringify([
+    {
+      username: "json-admin",
+      password_hash: passwordHash,
+      access_email: "json-admin@example.com",
+      role: "admin"
+    }
+  ]);
+
+  try {
+    const { getConfig: getConfigWithFile } = await import(`../lib/config.js?case=${Date.now()}-file`);
+    assert.equal(getConfigWithFile().users[0]?.username, "file-admin");
+
+    delete process.env.TP_FRONTDOOR_USERS_FILE;
+    const { getConfig: getJsonConfig } = await import(`../lib/config.js?case=${Date.now()}-json`);
+    assert.equal(getJsonConfig().users[0]?.username, "json-admin");
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
 });
 
 test("config loads users from TP_FRONTDOOR_USERS_FILE before JSON fallback", async () => {

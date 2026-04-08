@@ -24,7 +24,7 @@ PHASE6_SMOKE_TESTS := \
 	tests/test_lux_render_pipeline_smoke.py \
 	tests/lux_depth_v3/test_orchestrator_smoke.py
 
-.PHONY: help test-fast test-novideo test-full test-integration test-structure test-utils test-orchestrator-contract test-orchestrator-http-contract test-portal-contract test-frontdoor-contract validate-orchestrator-http validate-portal-browser validate-frontdoor-browser audit-pipeline-readiness coverage-fast-scope venv setup clean \
+.PHONY: help test-fast test-novideo test-full test-integration test-structure test-utils test-orchestrator-contract test-orchestrator-http-contract test-portal-contract test-frontdoor-contract run-frontdoor-local validate-orchestrator-http validate-portal-browser validate-frontdoor-browser audit-pipeline-readiness coverage-fast-scope venv setup clean \
         lint lint-parity ci ci-full pre-commit install-hooks quality-check fix-quality validate-ci organize-docs check-json-serialization check-piptools-cache \
         check-yaml-governance check-stale-docs lock lock-prod lock-ci lock-dev install-core install-ml install-ml-core install-ml-raw install-ml-sam2 install-ml-coreml docs docs-clean \
         check-test-markers check-ci-sync
@@ -45,6 +45,7 @@ help:
 	@echo "  test-orchestrator-http-contract  Run HTTP-only orchestrator contract tests"
 	@echo "  test-portal-contract  Run portal runtime/browser contract tests"
 	@echo "  test-frontdoor-contract  Run managed frontdoor Node contract/build checks"
+	@echo "  run-frontdoor-local  Start the canonical local managed frontdoor on localhost:3000"
 	@echo "  test-integration   Run integration tests (requires HF_TOKEN)"
 	@echo "  test-structure     Run codebase structure validation tests"
 	@echo "  test-utils         Run tests for performance and error handling utilities"
@@ -206,6 +207,10 @@ test-frontdoor-contract:
 	@echo "Running managed frontdoor contract checks..."
 	@cd web/secure-landing && npm test
 	@cd web/secure-landing && npm run build
+
+run-frontdoor-local:
+	@echo "Starting the canonical local managed frontdoor on localhost:3000..."
+	@./scripts/setup/run_frontdoor_local.sh
 
 validate-orchestrator-http:
 	@echo "Running live orchestrator HTTP smoke validation..."

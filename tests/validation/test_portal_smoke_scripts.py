@@ -77,6 +77,90 @@ def test_portal_browser_ready_probe_accepts_degraded_shell_after_stalled_bootstr
     )
 
 
+def test_portal_browser_parse_args_defaults_api_key_to_empty_when_env_is_unset(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.delenv("TP_API_KEY", raising=False)
+    module = _load_module(PORTAL_BROWSER_SCRIPT_PATH, "tests_validate_portal_browser_smoke_api_key")
+
+    args = module._parse_args([])
+
+    assert args.api_key == ""
+
+
+def test_portal_browser_help_text_describes_api_key_default(capsys: pytest.CaptureFixture[str]):
+    module = _load_module(PORTAL_BROWSER_SCRIPT_PATH, "tests_validate_portal_browser_smoke_help")
+
+    with pytest.raises(SystemExit, match="0"):
+        module._parse_args(["--help"])
+
+    help_output = " ".join(capsys.readouterr().out.split())
+    assert "API key for protected job endpoints" in help_output
+    assert "default: unset; uses TP_API_KEY when set" in help_output
+
+
+def test_portal_browser_preview_preflight_classifies_auth_failures(monkeypatch: pytest.MonkeyPatch):
+    module = _load_module(PORTAL_BROWSER_SCRIPT_PATH, "tests_validate_portal_browser_smoke_preflight_auth")
+
+    monkeypatch.setattr(
+        module,
+        "_request_json",
+        lambda *_args, **_kwargs: (401, {"error": {"code": "UNAUTHORIZED"}}),
+    )
+
+    with pytest.raises(module.SmokeFailure, match="rejected the API key"):
+        module._preflight_lux_config_preview(
+            "http://127.0.0.1:8000",
+            "",
+            archive_root=Path("/tmp/archive-root"),
+            output_dir=Path("/tmp/output-root"),
+        )
+
+
+def test_portal_browser_preview_preflight_classifies_validation_failures(monkeypatch: pytest.MonkeyPatch):
+    module = _load_module(PORTAL_BROWSER_SCRIPT_PATH, "tests_validate_portal_browser_smoke_preflight_validation")
+
+    monkeypatch.setattr(
+        module,
+        "_request_json",
+        lambda *_args, **_kwargs: (
+            400,
+            {
+                "error": {
+                    "code": "INVALID_ARGUMENT",
+                    "details": {"reason": "unsafe_path"},
+                }
+            },
+        ),
+    )
+
+    with pytest.raises(module.SmokeFailure, match="rejected the Lux payload or contract"):
+        module._preflight_lux_config_preview(
+            "http://127.0.0.1:8000",
+            "contract-secret",
+            archive_root=Path("/tmp/archive-root"),
+            output_dir=Path("/tmp/output-root"),
+        )
+
+
+def test_portal_browser_preview_preflight_classifies_service_failures(monkeypatch: pytest.MonkeyPatch):
+    module = _load_module(PORTAL_BROWSER_SCRIPT_PATH, "tests_validate_portal_browser_smoke_preflight_service")
+
+    monkeypatch.setattr(
+        module,
+        "_request_json",
+        lambda *_args, **_kwargs: (503, {"error": {"code": "SERVICE_UNAVAILABLE"}}),
+    )
+
+    with pytest.raises(module.SmokeFailure, match="is unavailable"):
+        module._preflight_lux_config_preview(
+            "http://127.0.0.1:8000",
+            "contract-secret",
+            archive_root=Path("/tmp/archive-root"),
+            output_dir=Path("/tmp/output-root"),
+        )
+
+
 def test_orchestrator_http_request_json_wraps_transport_failures(monkeypatch: pytest.MonkeyPatch):
     module = _load_module(ORCHESTRATOR_HTTP_SCRIPT_PATH, "tests_validate_orchestrator_http_smoke")
 
@@ -146,8 +230,10 @@ def test_frontdoor_browser_waits_for_managed_portal_bootstrap_before_passing():
 
     assert 'and str(value.get("readyState", "")) == "complete"' in content
     assert 'and str(value.get("authModeBadge", "")).lower() == "managed"' in content
-    assert "body: new FormData(form)," in content
-    assert "window.location.assign(response.url);" in content
+    assert "Make premium media verifiable before it ships." in content
+    assert ".hero-video, .homepage-video" in content
+    assert "form.requestSubmit" in content
+    assert "form.submit();" in content
 
 
 def test_portal_browser_smoke_tracks_archive_readiness_fields_and_canonical_commands():

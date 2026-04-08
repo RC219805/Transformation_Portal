@@ -132,7 +132,9 @@ const state = {
         estimate_summary: null,
         debug_bundle_summary: null,
         argv_preview: '',
-        error: ''
+        error: '',
+        error_reason: '',
+        error_status: 0
     },
     portalUi: {
         debugBundleAcknowledged: false,
@@ -3380,7 +3382,9 @@ function _emptyPreviewState(status = 'idle', pipeline = '') {
         estimate_summary: null,
         debug_bundle_summary: null,
         argv_preview: '',
-        error: ''
+        error: '',
+        error_reason: '',
+        error_status: 0
     };
 }
 
@@ -3420,6 +3424,43 @@ function _currentBuildSurfacePathFieldValue(fieldName) {
         default:
             return '';
     }
+}
+
+function _previewFailureDetails(preview = null) {
+    const matchedPreview = preview && typeof preview === 'object' ? preview : _currentPreviewForPayload();
+    const reason = String(matchedPreview?.error_reason || matchedPreview?.error || '').trim().toLowerCase();
+
+    if (reason === 'auth_failure' || reason === 'preview_auth_failed') {
+        return {
+            reason: 'auth_failure',
+            summaryLabel: 'Preview auth failed',
+            healthLabel: 'preview auth failed',
+            luxBlockedMessage: 'BLOCKED: Preview-backed validation could not authenticate. Ensure the portal API key matches TP_API_KEY before dispatch.',
+            archiveWarningMessage: 'WARNING: Preview-backed validation could not authenticate. Local rendering is shown until preview auth is restored.',
+            toastMessage: 'Preview-backed validation could not authenticate. Ensure the portal API key matches TP_API_KEY.',
+            telemetryReason: 'preview_auth_failed'
+        };
+    }
+    if (reason === 'validation_error' || reason === 'preview_validation_error') {
+        return {
+            reason: 'validation_error',
+            summaryLabel: 'Preview invalid',
+            healthLabel: 'preview invalid',
+            luxBlockedMessage: 'BLOCKED: Preview-backed validation rejected the current Lux configuration. Review the active inputs and retry.',
+            archiveWarningMessage: 'WARNING: Preview-backed validation rejected the current configuration. Local rendering is shown until the request is corrected.',
+            toastMessage: 'Preview-backed validation rejected the current configuration. Review the active inputs and retry.',
+            telemetryReason: 'preview_validation_error'
+        };
+    }
+    return {
+        reason: 'service_failure',
+        summaryLabel: 'Preview unavailable',
+        healthLabel: 'preview unavailable',
+        luxBlockedMessage: 'BLOCKED: Preview-backed validation is unavailable. Wait for validation to recover before dispatch.',
+        archiveWarningMessage: 'WARNING: Preview-backed validation is unavailable. Local rendering is shown until validation recovers.',
+        toastMessage: 'Preview-backed validation is unavailable. Dispatch stays paused until validation recovers.',
+        telemetryReason: 'preview_service_unavailable'
+    };
 }
 
 function _setBuildSurfacePathFieldValue(fieldName, nextValue) {
@@ -3770,8 +3811,38 @@ async function fetchConfigPreview(payload) {
             headers,
             body: JSON.stringify(currentPayload)
         });
-        if (!res.ok) throw new Error(`config preview fetch failed (${res.status})`);
         const response = await res.json();
+        if (!res.ok) {
+            const errorPayload = response?.error && typeof response.error === 'object' ? response.error : {};
+            const errorDetails = errorPayload.details && typeof errorPayload.details === 'object' ? errorPayload.details : {};
+            const classifiedFailure = _previewFailureDetails({
+                error_reason: res.status === 401 || res.status === 403
+                    ? 'auth_failure'
+                    : res.status >= 400 && res.status < 500
+                        ? 'validation_error'
+                        : 'service_failure'
+            });
+            if (_configPreviewRequestKey(generatePayload()) !== requestKey) {
+                return;
+            }
+            _setPreviewState({
+                ..._emptyPreviewState('error', currentPayload.pipeline),
+                requestKey,
+                error: String(errorPayload.code || '').trim().toLowerCase() || 'preview_unavailable',
+                error_reason: classifiedFailure.reason,
+                error_status: res.status
+            });
+            if (classifiedFailure.reason === 'validation_error') {
+                void emitPortalEvent('preview_error_seen', {
+                    surface: 'reconstruction_runtime',
+                    reasons: [
+                        String(errorDetails.reason || '').trim().toLowerCase() || classifiedFailure.telemetryReason
+                    ],
+                    metadata: { status: res.status }
+                });
+            }
+            return;
+        }
         const data = response?.success === true && response?.data && typeof response.data === 'object'
             ? response.data
             : null;
@@ -3794,7 +3865,9 @@ async function fetchConfigPreview(payload) {
             estimate_summary: data.estimate_summary && typeof data.estimate_summary === 'object' ? data.estimate_summary : null,
             debug_bundle_summary: data.debug_bundle_summary && typeof data.debug_bundle_summary === 'object' ? data.debug_bundle_summary : null,
             argv_preview: String(data.argv_preview || ''),
-            error: ''
+            error: '',
+            error_reason: '',
+            error_status: 0
         };
         _setPreviewState(_reconcilePreviewRepairedPaths(nextPreviewState));
         if (previewFieldErrors.length > 0) {
@@ -3805,10 +3878,13 @@ async function fetchConfigPreview(payload) {
             });
         }
     } catch {
+        const classifiedFailure = _previewFailureDetails({ error_reason: 'service_failure' });
         _setPreviewState({
             ..._emptyPreviewState('error', currentPayload.pipeline),
             requestKey,
-            error: 'preview_unavailable'
+            error: 'preview_unavailable',
+            error_reason: classifiedFailure.reason,
+            error_status: 0
         });
     } finally {
         renderCLI();
@@ -3849,7 +3925,7 @@ function _formatPreviewStateLabel(payload = null) {
     }
     if (preview.status === 'ready') return 'Preview ready';
     if (preview.status === 'loading') return 'Refreshing';
-    if (preview.status === 'error') return 'Preview unavailable';
+    if (preview.status === 'error') return _previewFailureDetails(preview).summaryLabel;
     if (preview.status === 'offline') return 'Local fallback';
     if (preview.status === 'local_fallback') return 'Local fallback';
     return 'Local fallback';
@@ -4801,9 +4877,10 @@ function renderPreRunDiagnostics(payload) {
                 healthLabel = 'preview cautions';
             }
         } else if (state.backendOk && preview && preview.status === 'error') {
-            warnings.push('BLOCKED: Preview-backed validation is unavailable. Wait for validation to recover before dispatch.');
+            const previewFailure = _previewFailureDetails(preview);
+            warnings.push(previewFailure.luxBlockedMessage);
             healthState = 'risk';
-            healthLabel = 'preview unavailable';
+            healthLabel = previewFailure.healthLabel;
         } else if (!state.backendOk) {
             warnings.push('WARNING: Backend preview is offline. Local fallback rendering is available, but dispatch remains blocked until connectivity is restored.');
             if (healthState === 'good') {
@@ -4873,10 +4950,11 @@ function renderPreRunDiagnostics(payload) {
                 healthLabel = 'preview cautions';
             }
         } else if (state.backendOk && preview && preview.status === 'error') {
-            warnings.push('WARNING: Preview-backed validation is unavailable. Local rendering is shown until validation recovers.');
+            const previewFailure = _previewFailureDetails(preview);
+            warnings.push(previewFailure.archiveWarningMessage);
             if (healthState === 'good') {
                 healthState = 'warn';
-                healthLabel = 'preview unavailable';
+                healthLabel = previewFailure.healthLabel;
             }
         } else if (!state.backendOk) {
             warnings.push('WARNING: Backend preview is offline. Local fallback rendering is available, but dispatch remains blocked until connectivity is restored.');
@@ -5920,10 +5998,11 @@ async function submitJob() {
             return;
         }
         if (preview.status === 'error') {
-            createToast('Preview-backed validation is unavailable. Dispatch stays paused until validation recovers.', 'error');
+            const previewFailure = _previewFailureDetails(preview);
+            createToast(previewFailure.toastMessage, 'error');
             void emitPortalEvent('dispatch_blocked', {
                 surface: 'dispatch',
-                reasons: ['preview_unavailable']
+                reasons: [previewFailure.telemetryReason]
             });
             return;
         }

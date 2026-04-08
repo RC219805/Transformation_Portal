@@ -125,14 +125,26 @@ def _http_get_json(url: str, timeout: float = 10.0) -> Any:
         return json.loads(response.read().decode("utf-8"))
 
 
-def _request_json(base_url: str, path: str, *, api_key: str = "") -> tuple[int, Dict[str, Any]]:
+def _request_json(
+    base_url: str,
+    path: str,
+    *,
+    api_key: str = "",
+    method: str = "GET",
+    payload: Optional[Dict[str, Any]] = None,
+) -> tuple[int, Dict[str, Any]]:
     headers = {"Accept": "application/json"}
     if api_key:
         headers["x-api-key"] = api_key
+    body = None
+    if payload is not None:
+        headers["Content-Type"] = "application/json"
+        body = json.dumps(payload).encode("utf-8")
     request = urllib.request.Request(
         _base_url(base_url) + path,
+        data=body,
         headers=headers,
-        method="GET",
+        method=method,
     )
     try:
         with urllib.request.urlopen(request, timeout=30) as response:
@@ -143,12 +155,12 @@ def _request_json(base_url: str, path: str, *, api_key: str = "") -> tuple[int, 
         raw_body = exc.read().decode("utf-8")
     except (TimeoutError, urllib.error.URLError) as exc:
         reason = getattr(exc, "reason", exc)
-        raise SmokeFailure(f"GET {path} request failed: {reason}") from exc
+        raise SmokeFailure(f"{method} {path} request failed: {reason}") from exc
 
     try:
         body = json.loads(raw_body)
     except json.JSONDecodeError as exc:
-        raise SmokeFailure(f"GET {path} returned non-JSON response: {raw_body[:400]!r}") from exc
+        raise SmokeFailure(f"{method} {path} returned non-JSON response: {raw_body[:400]!r}") from exc
     return status, body
 
 
@@ -160,6 +172,70 @@ def _list_job_ids(base_url: str, api_key: str) -> list[str]:
     if not isinstance(jobs, list):
         raise SmokeFailure(f"GET /v1/jobs returned unexpected payload: {body}")
     return [str(job.get("id") or "").strip() for job in jobs if str(job.get("id") or "").strip()]
+
+
+def _lux_preview_payload(archive_root: Path, output_dir: Path) -> Dict[str, Any]:
+    return {
+        "pipeline": "lux-depth-v3",
+        "args": {
+            "input_dir": str(archive_root),
+            "output_dir": str(output_dir),
+        },
+    }
+
+
+def _preflight_lux_config_preview(
+    base_url: str,
+    api_key: str,
+    *,
+    archive_root: Path,
+    output_dir: Path,
+) -> Dict[str, Any]:
+    payload = _lux_preview_payload(archive_root, output_dir)
+
+    try:
+        status, body = _request_json(
+            base_url,
+            "/v1/config-preview",
+            api_key=api_key,
+            method="POST",
+            payload=payload,
+        )
+    except SmokeFailure as exc:
+        raise SmokeFailure(
+            "Preview preflight failed: /v1/config-preview could not be reached. Check backend preview/readiness before running the browser smoke."
+        ) from exc
+
+    error_payload = body.get("error") if isinstance(body, dict) else {}
+    error_details = error_payload.get("details") if isinstance(error_payload, dict) else {}
+    error_reason = str((error_details or {}).get("reason") or error_payload.get("code") or "").strip().lower()
+
+    if status in {401, 403}:
+        raise SmokeFailure(
+            "Preview preflight failed: /v1/config-preview rejected the API key. Ensure TP_API_KEY matches the running backend before validate-portal-browser."
+        )
+    if status == 400:
+        detail = error_reason or "invalid_request"
+        raise SmokeFailure(f"Preview preflight failed: /v1/config-preview rejected the Lux payload or contract ({detail}).")
+    if status >= 500:
+        raise SmokeFailure(
+            "Preview preflight failed: /v1/config-preview is unavailable. Check backend preview/readiness before dispatch validation."
+        )
+    if status != 200:
+        raise SmokeFailure(f"Preview preflight failed: /v1/config-preview returned unexpected status {status}.")
+
+    data = body.get("data") if isinstance(body, dict) else None
+    if not isinstance(data, dict):
+        raise SmokeFailure("Preview preflight failed: /v1/config-preview returned an invalid JSON envelope.")
+
+    field_errors = data.get("field_errors") or []
+    if field_errors:
+        first_error = field_errors[0] if isinstance(field_errors[0], dict) else {}
+        field = str(first_error.get("field") or "payload").strip()
+        message = str(first_error.get("message") or "Preview validation blocked the Lux payload.").strip()
+        raise SmokeFailure(f"Preview preflight failed: {field}: {message}")
+
+    return data
 
 
 def _poll_for_new_backend_job_id(
@@ -758,8 +834,8 @@ def _parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--api-key",
-        default=os.getenv("TP_API_KEY", "local-dev-key"),
-        help="API key for protected job endpoints (default: TP_API_KEY or %(default)s)",
+        default=os.getenv("TP_API_KEY", "").strip(),
+        help="API key for protected job endpoints (default: unset; uses TP_API_KEY when set)",
     )
     parser.add_argument(
         "--chrome-binary",
@@ -828,6 +904,14 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
     cleanup_output_dir = _should_cleanup_output_dir(
         keep_output=bool(args.keep_output),
         output_dir_is_temp=output_dir_is_temp,
+    )
+
+    print("portal-browser-smoke: preflighting lux config preview", flush=True)
+    _preflight_lux_config_preview(
+        base_url,
+        args.api_key,
+        archive_root=archive_root,
+        output_dir=output_dir,
     )
 
     chrome_process: Optional[subprocess.Popen[str]] = None
