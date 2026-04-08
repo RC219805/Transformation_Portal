@@ -176,32 +176,56 @@ Issues to address:
 
 ## Incremental Delivery Roadmap
 
-### Phase 1: Accessibility and Token Alignment
+### Current Status as of April 8, 2026
+
+The repo moved past the initial re-baseline quickly on April 8, 2026. The
+strategy should therefore treat the following as already shipped rather than
+still pending:
+
+- Shared accessibility and token alignment across homepage, login, and portal
+  landed in commit `42f7ae40` / PR `#1384`.
+- The operator-console redesign and loading-polish work landed in commits
+  `5a84289a` / PR `#1377` and `21e34e3c` / PR `#1378`.
+- Backend-driven operator hints landed in commit `e4228f7b` / PR `#1379`.
+- Review provenance and compare-surface accessibility landed in commits
+  `304b3e86` / PR `#1380` and `57f30b2d` / PR `#1381`.
+
+This leaves the active UX lane as a portal-only Phase 2 close-out, not a fresh
+Phase 1 accessibility pass and not a broader Phase 3 cross-surface polish push.
+
+### Phase 1: Accessibility and Token Alignment (Completed April 8, 2026)
 
 Scope:
-- Contrast audit for frontdoor, login, and portal.
-- Shared focus-ring and panel-border rules across the three surfaces.
-- Touch-target normalization and type-scale cleanup.
+- Contrast-safe text, focus-ring, panel-border, and touch-target alignment
+  across frontdoor, login, and portal.
+- Type-scale cleanup and focus-visible parity across the managed browser
+  surfaces.
 
 Acceptance focus:
 - No route or auth-flow changes.
 - Existing contract coverage remains green.
 - Browser smoke still passes on homepage, login, and portal entry flows.
 
-### Phase 2: Operator Hierarchy and Disclosure Cleanup
+Status:
+- Completed on April 8, 2026.
+
+### Phase 2: Portal Hierarchy and Context Close-out (Active)
 
 Scope:
-- Tighten label/value hierarchy in the portal shells.
-- Revisit which `details` groups default open or closed based on task frequency.
+- Tighten Step 3 and Step 4 hierarchy in the portal only, with `Next Operator
+  Action`, pre-run checks, expected outputs, and dispatch kept primary.
+- Revisit which `details` groups default open or closed based on task
+  frequency, preview warnings, and research-only requirements.
 - Improve selected-job, next-action, and review-context persistence in
-  `operate` and `review`.
+  `operate` and `review`, including `?view=operate&job=...` parity with the
+  existing review route.
 
 Acceptance focus:
 - Preserve `?view=` routing and existing build-step semantics.
 - Preserve shortcut, drawer, and CLI-parity flows.
 - Keep direct-debug and managed mode behavior aligned with existing contracts.
 
-### Phase 3: Cross-surface Visual Continuity
+### Phase 3: Cross-surface Visual Continuity (Deferred)
 
 Scope:
 - Harmonize CTA emphasis, empty/loading/error states, and premium polish across
@@ -215,7 +239,10 @@ Acceptance focus:
 - Decorative motion remains optional and reduced-motion safe.
 - Frontdoor and portal browser smokes both remain required.
 
-### Phase 4: Power-user Enhancements
+Status:
+- Deferred until the portal-only Phase 2 close-out is complete.
+
+### Phase 4: Power-user Enhancements (Deferred)
 
 Scope:
 - Expand shortcut discoverability and cross-view keyboard affordances.
@@ -227,6 +254,10 @@ Acceptance focus:
 - Command palette work is optional and should not block the earlier phases.
 - New keyboard flows must coexist with the current shortcuts modal and
   disclosure model.
+
+Status:
+- Deferred until Phase 2 and any later Phase 3 work both prove that navigation
+  friction remains high.
 
 ## React/Next Migration Decision Gate
 
@@ -277,14 +308,21 @@ Recommended validation commands for any implementation derived from this
 strategy:
 
 ```bash
-make test-frontdoor-contract
 make test-portal-contract
-make validate-frontdoor-browser
 make validate-portal-browser
 ```
 
-Run `make test-orchestrator-contract` as well if a UX change alters `/v1/*`,
-bootstrap behavior, or upstream portal semantics rather than pure presentation.
+Run the frontdoor contract/browser checks only when homepage or login surfaces
+change in the same tranche:
+
+```bash
+make test-frontdoor-contract
+make validate-frontdoor-browser
+```
+
+Run `make test-orchestrator-contract` as well only if a UX change alters
+`/v1/*`, bootstrap behavior, or upstream portal semantics rather than pure
+portal presentation and state handling.
 
 ## Appendix: Already Present vs Proposed
 
@@ -298,16 +336,18 @@ bootstrap behavior, or upstream portal semantics rather than pure presentation.
 - Keyboard support for build tabs, job list navigation, overlays, and existing
   shortcuts
 - Managed login protections including CSRF, throttling, and session rotation
-- Partial 44px control coverage in the portal
+- Cross-surface token alignment and 44px target coverage for the managed
+  browser surfaces
+- Portal loading polish, backend-driven operator hints, review provenance, and
+  review-compare accessibility improvements shipped on April 8, 2026
 
 ### Proposed
 
-- Cross-surface contrast and token audit against live dark/video backgrounds
-- Unified hierarchy rules for type, metadata, and monospace data presentation
+- Finish the remaining portal-only Phase 2 hierarchy cleanup
 - Better default disclosure states for dense operator settings
-- Stronger sticky context in `operate` and `review`
-- Mobile touch-target normalization for homepage and login to match portal
-- Cross-surface polish for empty, loading, warning, and recovery states
+- Stronger selected-job and review-context persistence in `operate` and
+  `review`
+- Cross-surface polish only after the portal close-out lands
 - Optional command-palette evaluation only after earlier IA improvements land
 
 ## Source Notes and Assumptions

@@ -144,7 +144,13 @@ const state = {
         debugBundleGuardrailSeen: false,
         buildStep: 1,
         lastOverlayTrigger: null,
-        lastSelectedJobId: ''
+        lastSelectedJobId: '',
+        disclosurePrefs: {
+            advanced: null,
+            governance: null,
+            reconstruction: null,
+            dispatchTools: false,
+        }
     },
     readiness: {
         server: {},
@@ -835,6 +841,22 @@ function resolveConsoleView(value) {
     return Object.prototype.hasOwnProperty.call(CONSOLE_VIEW_META, candidate) ? candidate : 'overview';
 }
 
+function _normalizeSelectedJobId(jobId) {
+    return String(jobId || '').trim();
+}
+
+function _rememberSelectedJob(jobId) {
+    const normalized = _normalizeSelectedJobId(jobId);
+    if (normalized) {
+        state.portalUi.lastSelectedJobId = normalized;
+    }
+    return normalized;
+}
+
+function _preferredSelectedJobId() {
+    return _normalizeSelectedJobId(state.selectedJobId || state.portalUi.lastSelectedJobId);
+}
+
 function setActiveWorkspaceLink(viewName) {
     document.querySelectorAll('[data-view-link]').forEach((link) => {
         const active = String(link.dataset.viewLink || '') === String(viewName || '');
@@ -850,9 +872,11 @@ function setActiveWorkspaceLink(viewName) {
 
 function _routeUrlForView(viewName, jobId = '') {
     const url = new URL(window.location.href);
-    url.searchParams.set('view', resolveConsoleView(viewName));
-    if (resolveConsoleView(viewName) === 'review' && String(jobId || '').trim()) {
-        url.searchParams.set('job', String(jobId || '').trim());
+    const resolvedView = resolveConsoleView(viewName);
+    const resolvedJobId = _normalizeSelectedJobId(jobId);
+    url.searchParams.set('view', resolvedView);
+    if ((resolvedView === 'operate' || resolvedView === 'review') && resolvedJobId) {
+        url.searchParams.set('job', resolvedJobId);
     } else {
         url.searchParams.delete('job');
     }
@@ -873,10 +897,11 @@ function updateConsoleViewContext() {
     if (els.consoleViewTitle) els.consoleViewTitle.textContent = viewMeta.title;
     if (els.consoleViewSummary) els.consoleViewSummary.textContent = viewMeta.summary;
     if (els.consoleViewMeta) {
-        if (state.currentView === 'review' && state.selectedJobId) {
+        if ((state.currentView === 'operate' || state.currentView === 'review') && state.selectedJobId) {
             const selected = state.jobs.find((job) => job.id === state.selectedJobId) || null;
             const stateLabel = titleCaseToken(selected?.state, 'Pending');
-            els.consoleViewMeta.textContent = `${state.selectedJobId} • ${stateLabel} review surface`;
+            const surfaceLabel = state.currentView === 'review' ? 'review surface' : 'live workspace';
+            els.consoleViewMeta.textContent = `${state.selectedJobId} • ${stateLabel} ${surfaceLabel}`;
         } else {
             els.consoleViewMeta.textContent = viewMeta.meta;
         }
@@ -920,8 +945,18 @@ function applyConsoleViewLayout() {
 
 function navigateConsoleView(viewName, { replace = false, jobId = '' } = {}) {
     state.currentView = resolveConsoleView(viewName);
-    if (String(jobId || '').trim()) {
-        state.selectedJobId = String(jobId || '').trim();
+    const explicitJobId = _normalizeSelectedJobId(jobId);
+    if (explicitJobId) {
+        state.selectedJobId = explicitJobId;
+        _rememberSelectedJob(explicitJobId);
+    } else if (state.currentView === 'operate' || state.currentView === 'review') {
+        const preferredJobId = _preferredSelectedJobId();
+        if (preferredJobId) {
+            state.selectedJobId = preferredJobId;
+            _rememberSelectedJob(preferredJobId);
+        }
+    } else if (state.selectedJobId) {
+        _rememberSelectedJob(state.selectedJobId);
     }
     applyConsoleViewLayout();
     _syncConsoleRoute(replace);
@@ -931,9 +966,18 @@ function navigateConsoleView(viewName, { replace = false, jobId = '' } = {}) {
 function applyConsoleRouteFromLocation(replace = false) {
     const url = new URL(window.location.href);
     state.currentView = resolveConsoleView(url.searchParams.get('view'));
-    const routeJobId = String(url.searchParams.get('job') || '').trim();
+    const routeJobId = _normalizeSelectedJobId(url.searchParams.get('job'));
     if (routeJobId) {
         state.selectedJobId = routeJobId;
+        _rememberSelectedJob(routeJobId);
+    } else if (state.currentView === 'operate' || state.currentView === 'review') {
+        const preferredJobId = _preferredSelectedJobId();
+        if (preferredJobId) {
+            state.selectedJobId = preferredJobId;
+            _rememberSelectedJob(preferredJobId);
+        }
+    } else if (state.selectedJobId) {
+        _rememberSelectedJob(state.selectedJobId);
     }
     applyConsoleViewLayout();
     _syncConsoleRoute(replace);
@@ -1782,6 +1826,42 @@ function syncDisclosurePanels(payload = null) {
     const args = payload?.args || generatePayload().args || {};
     const preset = currentPresetDescriptor();
     const advancedSections = Array.isArray(preset.advanced_sections) ? preset.advanced_sections : [];
+    const previewFieldGroups = {
+        advanced: [
+            'save_float_depth',
+            'force_depth',
+            'strict_inputs',
+            'verify_images',
+            'allow_semantic_fallback',
+            'verbose',
+            'quiet',
+            'raw_ingest_mode',
+            'raw_wb_mode',
+            'raw_demosaic',
+            'max_workers',
+            'max_gpu_workers',
+            'log_level',
+        ],
+        governance: [
+            'preset',
+            'depth_backend',
+            'non_commercial_ok',
+            'accept_apple_depth_pro_research_license',
+            'accept_research_tools_license',
+        ],
+        reconstruction: [
+            'enable_reconstruction',
+            'grouping_mode',
+            'cameras_sidecar_path',
+            'reconstruction_iterations',
+            'reconstruction_tier',
+            'emit_scene_debug_bundle',
+            'raw_ingest_mode',
+            'max_workers',
+            'max_gpu_workers',
+            'log_level',
+        ],
+    };
     const advancedActive = parseBoolLike(args.save_float_depth, false)
         || parseBoolLike(args.force_depth, false)
         || parseBoolLike(args.strict_inputs, false)
@@ -1805,10 +1885,29 @@ function syncDisclosurePanels(payload = null) {
         || String(args.max_workers || '').trim() !== ''
         || String(args.max_gpu_workers || '').trim() !== ''
         || String(args.log_level || '').trim() !== '';
+    const hasPreviewIssueForGroup = (groupName) => previewFieldGroups[groupName].some((fieldName) => Boolean(_previewIssueForField(fieldName, payload)));
+    const disclosurePrefs = state.portalUi.disclosurePrefs || {};
+    const autoOpenState = {
+        advanced: advancedActive || advancedSections.includes('advanced') || hasPreviewIssueForGroup('advanced'),
+        governance: governanceActive || advancedSections.includes('governance') || hasPreviewIssueForGroup('governance'),
+        reconstruction: reconstructionActive || advancedSections.includes('reconstruction') || hasPreviewIssueForGroup('reconstruction'),
+        dispatchTools: false,
+    };
+    const syncPanel = (name, element) => {
+        if (!element) return;
+        const shouldOpen = name === 'dispatchTools'
+            ? disclosurePrefs.dispatchTools === true
+            : autoOpenState[name] || disclosurePrefs[name] === true;
+        element.dataset.autoOpen = autoOpenState[name] ? 'true' : 'false';
+        if (element.open !== shouldOpen) {
+            element.open = shouldOpen;
+        }
+    };
 
-    if (els.advancedFlagsDetails) els.advancedFlagsDetails.open = advancedActive || advancedSections.includes('advanced');
-    if (els.governanceDetails) els.governanceDetails.open = governanceActive || advancedSections.includes('governance');
-    if (els.reconstructionDetails) els.reconstructionDetails.open = reconstructionActive || advancedSections.includes('reconstruction');
+    syncPanel('advanced', els.advancedFlagsDetails);
+    syncPanel('governance', els.governanceDetails);
+    syncPanel('reconstruction', els.reconstructionDetails);
+    syncPanel('dispatchTools', els.dispatchToolsDetails);
 }
 
 function renderGovernanceBanner(payload) {
@@ -3555,7 +3654,7 @@ function renderArtifactPanel() {
 function selectJob(jobId) {
     const previousJobId = state.selectedJobId;
     state.selectedJobId = jobId;
-    state.portalUi.lastSelectedJobId = String(jobId || '');
+    _rememberSelectedJob(jobId);
     if (!state.artifactUi.selectedByJob[String(jobId || '')]) {
         delete state.artifactUi.compareByJob[String(jobId || '')];
     }
@@ -3570,7 +3669,7 @@ function selectJob(jobId) {
     } else if (state.currentView === 'review') {
         setInspectorTab('overview');
     }
-    if (state.currentView === 'review') {
+    if (state.currentView === 'operate' || state.currentView === 'review') {
         _syncConsoleRoute(true);
         updateConsoleViewContext();
     }
@@ -7020,9 +7119,14 @@ async function recoverJobs() {
 
         state.jobsLoadStatus = 'ready';
 
+        if (state.selectedJobId && !state.jobs.some((job) => job.id === state.selectedJobId)) {
+            state.selectedJobId = '';
+        }
         if (!state.selectedJobId && state.jobs.length > 0) {
-            const newest = state.jobs[state.jobs.length - 1];
-            state.selectedJobId = newest.id;
+            const retained = state.jobs.find((job) => job.id === state.portalUi.lastSelectedJobId) || null;
+            const nextSelectedJob = retained || state.jobs[state.jobs.length - 1];
+            state.selectedJobId = nextSelectedJob.id;
+            _rememberSelectedJob(nextSelectedJob.id);
         }
 
         state.jobs.forEach((job) => {
@@ -7890,6 +7994,49 @@ document.addEventListener('visibilitychange', () => {
     startHealthPolling();
 });
 
+function setupDisclosurePanels() {
+    const ensureDisclosurePrefs = () => {
+        if (!state.portalUi.disclosurePrefs) {
+            state.portalUi.disclosurePrefs = {
+                advanced: null,
+                governance: null,
+                reconstruction: null,
+                dispatchTools: false,
+            };
+        }
+        return state.portalUi.disclosurePrefs;
+    };
+
+    const registerDisclosurePanel = (name, element) => {
+        if (!element) return;
+        element.addEventListener('toggle', () => {
+            const disclosurePrefs = ensureDisclosurePrefs();
+            if (name === 'dispatchTools') {
+                disclosurePrefs.dispatchTools = Boolean(element.open);
+                return;
+            }
+
+            const autoOpen = element.dataset.autoOpen === 'true';
+            if (autoOpen) {
+                disclosurePrefs[name] = null;
+                if (!element.open) {
+                    window.requestAnimationFrame(() => {
+                        syncDisclosurePanels(generatePayload());
+                    });
+                }
+                return;
+            }
+
+            disclosurePrefs[name] = Boolean(element.open);
+        });
+    };
+
+    registerDisclosurePanel('advanced', els.advancedFlagsDetails);
+    registerDisclosurePanel('governance', els.governanceDetails);
+    registerDisclosurePanel('reconstruction', els.reconstructionDetails);
+    registerDisclosurePanel('dispatchTools', els.dispatchToolsDetails);
+}
+
 window.addEventListener('beforeunload', cleanupActiveJobHandles);
 window.addEventListener('pagehide', cleanupActiveJobHandles);
 window.addEventListener('pageshow', () => {
@@ -7923,6 +8070,7 @@ async function init() {
     updateUIFromState();
     setupBuildStepper();
     bindInputs();
+    setupDisclosurePanels();
     if (window.requestAnimationFrame) {
         window.requestAnimationFrame(() => {
             reconcileBuildSurfaceFromDom();
