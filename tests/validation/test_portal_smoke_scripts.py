@@ -246,16 +246,22 @@ def test_portal_browser_smoke_tracks_archive_readiness_fields_and_canonical_comm
     assert "rightsManifestFieldVisible" in content
     assert "segmentationBackendVisible" in content
     assert "governanceDetailsVisible" in content
+    assert "advancedFlagsOpen" in content
+    assert "governanceDetailsOpen" in content
     assert "reconstructionConfigVisible" in content
+    assert "reconstructionDetailsOpen" in content
+    assert "dispatchToolsOpen" in content
     assert "v2PresetVisible" in content
     assert "_set_lux_optional_controls_expression" in content
     assert "_restore_archive_gate_form_without_events_expression" in content
     assert "heroReadinessLabel" in content
+    assert "locationSearch" in content
     assert "/tmp/gate-a-smoke-portal" in content
     assert "archive-gate-b" in content
     assert "archive-gate-c" in content
     assert '--archive-command "bag-build"' in content
     assert '--archive-command "mets-export"' in content
+    assert "view=operate&job=" in content
 
 
 def test_portal_browser_smoke_probes_review_warning_and_provenance_contract():

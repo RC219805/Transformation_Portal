@@ -494,6 +494,7 @@ def _state_probe_expression() -> str:
   return {
     title: document.title,
     readyState: document.readyState,
+    locationSearch: window.location.search,
     bootstrapStatus: document.body ? String(document.body.dataset.bootstrapStatus || '') : '',
     currentView: document.body ? String(document.body.dataset.consoleView || '') : '',
     pipeline: value('pipelineSelect'),
@@ -506,6 +507,8 @@ def _state_probe_expression() -> str:
     selectedJobId: text('selectedJobIdLabel'),
     selectedJobArtifactCount: text('selectedJobArtifactCount'),
     selectedJobStreamStatus: text('selectedJobStreamStatus'),
+    selectedJobMetaLine: text('selectedJobMetaLine'),
+    selectedJobFreshness: text('selectedJobFreshness'),
     selectedJobSummary: text('selectedJobSummary'),
     reviewStatusTitle: text('reviewStatusTitle'),
     reviewStatusDetail: text('reviewStatusDetail'),
@@ -636,6 +639,14 @@ def _state_probe_expression() -> str:
       const el = document.getElementById('governanceDetails');
       return !!(el && !el.classList.contains('hidden'));
     })(),
+    advancedFlagsOpen: (() => {
+      const el = document.getElementById('advancedFlagsDetails');
+      return !!(el && el.open);
+    })(),
+    governanceDetailsOpen: (() => {
+      const el = document.getElementById('governanceDetails');
+      return !!(el && el.open);
+    })(),
     licenseAppleVisible: (() => {
       const el = document.getElementById('licenseAppleField');
       return !!(el && !el.classList.contains('hidden'));
@@ -648,9 +659,17 @@ def _state_probe_expression() -> str:
       const el = document.getElementById('reconstructionConfigFields');
       return !!(el && !el.classList.contains('hidden'));
     })(),
+    reconstructionDetailsOpen: (() => {
+      const el = document.getElementById('reconstructionDetails');
+      return !!(el && el.open);
+    })(),
     debugBundleGuardrailVisible: (() => {
       const el = document.getElementById('debugBundleGuardrail');
       return !!(el && !el.classList.contains('hidden'));
+    })(),
+    dispatchToolsOpen: (() => {
+      const el = document.getElementById('dispatchToolsDetails');
+      return !!(el && el.open);
     })(),
     debugBundleAcknowledgeChecked: (() => {
       const el = document.getElementById('debugBundleAcknowledge');
@@ -680,7 +699,7 @@ def _navigate_to_console_view_expression(view: str, job_id: str = "") -> str:
   const cfg = {payload};
   const url = new URL(window.location.href);
   url.searchParams.set('view', cfg.view);
-  if (cfg.view === 'review' && cfg.job_id) {{
+  if ((cfg.view === 'operate' || cfg.view === 'review') && cfg.job_id) {{
     url.searchParams.set('job', cfg.job_id);
   }} else {{
     url.searchParams.delete('job');
@@ -760,10 +779,14 @@ def _set_pipeline_form_expression(
     sam2ModelSizeVisible: !document.getElementById('sam2ModelSizeField').classList.contains('hidden'),
     sam2CheckpointVisible: !document.getElementById('sam2CheckpointField').classList.contains('hidden'),
     governanceDetailsVisible: !document.getElementById('governanceDetails').classList.contains('hidden'),
+    advancedFlagsOpen: !!document.getElementById('advancedFlagsDetails').open,
+    governanceDetailsOpen: !!document.getElementById('governanceDetails').open,
     licenseAppleVisible: !document.getElementById('licenseAppleField').classList.contains('hidden'),
     licenseResearchToolsVisible: !document.getElementById('licenseResearchToolsField').classList.contains('hidden'),
     reconstructionConfigVisible: !document.getElementById('reconstructionConfigFields').classList.contains('hidden'),
+    reconstructionDetailsOpen: !!document.getElementById('reconstructionDetails').open,
     debugBundleGuardrailVisible: !document.getElementById('debugBundleGuardrail').classList.contains('hidden'),
+    dispatchToolsOpen: !!document.getElementById('dispatchToolsDetails').open,
     effectiveConfigDrawerVisible: !document.getElementById('effectiveConfigDrawer').classList.contains('hidden'),
     v2PresetVisible: !document.getElementById('v2PresetField').classList.contains('hidden')
   }};
@@ -1074,8 +1097,20 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             f"Compliance acknowledgments should stay hidden on the default Lux configuration: {lux_state}",
         )
         _expect(
+            not bool(lux_state.get("advancedFlagsOpen")),
+            f"Advanced disclosure should stay collapsed for the default Lux run: {lux_state}",
+        )
+        _expect(
+            not bool(lux_state.get("governanceDetailsOpen")),
+            f"Governance disclosure should stay collapsed until the run requires it: {lux_state}",
+        )
+        _expect(
             not bool(lux_state.get("reconstructionConfigVisible")),
             f"Reconstruction-specific controls should stay hidden until reconstruction is enabled: {lux_state}",
+        )
+        _expect(
+            not bool(lux_state.get("reconstructionDetailsOpen")),
+            f"Reconstruction disclosure should stay collapsed for the default Lux run: {lux_state}",
         )
         _expect(
             str(lux_state.get("summaryReconstructionState", "")).strip() == "Off",
@@ -1092,6 +1127,10 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         _expect(
             not bool(lux_state.get("v2PresetVisible")),
             f"V2 preset input should stay hidden until V2 compatibility is enabled: {lux_state}",
+        )
+        _expect(
+            not bool(lux_state.get("dispatchToolsOpen")),
+            f"Secondary dispatch tools should stay collapsed by default: {lux_state}",
         )
 
         lux_ready_state = _poll(
@@ -1128,9 +1167,11 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
                 and bool(value.get("sam2ModelSizeVisible"))
                 and bool(value.get("sam2CheckpointVisible"))
                 and bool(value.get("governanceDetailsVisible"))
+                and bool(value.get("governanceDetailsOpen"))
                 and bool(value.get("licenseAppleVisible"))
                 and bool(value.get("licenseResearchToolsVisible"))
                 and bool(value.get("reconstructionConfigVisible"))
+                and bool(value.get("reconstructionDetailsOpen"))
                 and bool(value.get("debugBundleGuardrailVisible"))
                 and bool(value.get("v2PresetVisible"))
             ),
@@ -1146,6 +1187,14 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             f"Enabling reconstruction should reveal reconstruction controls: {lux_context_state}",
         )
         _expect(
+            bool(lux_context_state.get("governanceDetailsOpen")),
+            f"Governance disclosure should auto-open once acknowledgments become required: {lux_context_state}",
+        )
+        _expect(
+            bool(lux_context_state.get("reconstructionDetailsOpen")),
+            f"Reconstruction disclosure should auto-open once the feature is enabled: {lux_context_state}",
+        )
+        _expect(
             str(lux_context_state.get("summaryReconstructionState", "")).strip() == "On",
             f"Reconstruction summary should flip to On once the toggle is enabled: {lux_context_state}",
         )
@@ -1157,6 +1206,25 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             bool(lux_context_state.get("v2PresetVisible")),
             f"Enabling V2 should reveal the V2 preset input: {lux_context_state}",
         )
+        _expect(
+            not bool(lux_context_state.get("advancedFlagsOpen")),
+            f"Advanced disclosure should remain closed until its own controls need attention: {lux_context_state}",
+        )
+
+        print("portal-browser-smoke: opening secondary dispatch tools", flush=True)
+        connection.evaluate(_click_expression("#dispatchToolsDetails > summary"))
+        dispatch_tools_state = _poll(
+            connection,
+            _state_probe_expression(),
+            predicate=lambda value: isinstance(value, dict) and bool(value.get("dispatchToolsOpen")),
+            timeout_seconds=args.timeout_seconds,
+            description="secondary dispatch tools disclosure to open",
+        )
+        _expect(
+            bool(dispatch_tools_state.get("dispatchToolsOpen")),
+            f"Secondary dispatch tools should open on explicit operator request: {dispatch_tools_state}",
+        )
+        connection.evaluate(_click_expression("#dispatchToolsDetails > summary"))
 
         print("portal-browser-smoke: opening effective config drawer", flush=True)
         connection.evaluate(_click_expression("#openEffectiveConfigBtn"))
@@ -1431,9 +1499,17 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             f"Portal inspector drifted from submitted job {submitted_job_id}: {terminal_state}",
         )
         _expect(
+            f"view=operate&job={submitted_job_id}" in str(terminal_state.get("locationSearch", "")),
+            f"Operate route should retain the selected job in the query string: {terminal_state}",
+        )
+        _expect(
             "Closed" in str(terminal_state.get("selectedJobStreamStatus", ""))
             or "Inactive" not in str(terminal_state.get("selectedJobStreamStatus", "")),
             f"Unexpected stream status after completion: {terminal_state}",
+        )
+        _expect(
+            str(terminal_state.get("selectedJobFreshness", "")).strip().startswith("Updated "),
+            f"Selected job freshness should stay immediately visible in operate: {terminal_state}",
         )
 
         print("portal-browser-smoke: opening review view", flush=True)
@@ -1477,6 +1553,37 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         _expect(
             str(run_state.get("reviewProvenanceFreshness", "")).strip().startswith("Updated "),
             f"Review provenance should surface freshness for the selected run: {run_state}",
+        )
+
+        print("portal-browser-smoke: round-tripping through build and back to operate", flush=True)
+        connection.evaluate(_navigate_to_console_view_expression("build"))
+        _poll(
+            connection,
+            _state_probe_expression(),
+            predicate=lambda value: (
+                isinstance(value, dict)
+                and str(value.get("currentView", "")) == "build"
+                and bool(value.get("buildViewVisible"))
+            ),
+            timeout_seconds=args.timeout_seconds,
+            description="build view to restore after review",
+        )
+        connection.evaluate(_navigate_to_console_view_expression("operate"))
+        restored_operate_state = _poll(
+            connection,
+            _state_probe_expression(),
+            predicate=lambda value: (
+                isinstance(value, dict)
+                and str(value.get("currentView", "")) == "operate"
+                and str(value.get("selectedJobId", "")).strip() == submitted_job_id
+                and f"view=operate&job={submitted_job_id}" in str(value.get("locationSearch", ""))
+            ),
+            timeout_seconds=args.timeout_seconds,
+            description="operate view to restore the last selected job",
+        )
+        _expect(
+            str(restored_operate_state.get("selectedJobSummary", "")).strip() != "",
+            f"Operate view should keep selected-job summary context visible after returning from build: {restored_operate_state}",
         )
 
         print("portal-browser-smoke: ok")

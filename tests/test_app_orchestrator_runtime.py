@@ -933,6 +933,7 @@ def test_portal_selected_job_inspector_uses_timeline_tabs_and_log_secondary_view
     assert 'id="inspectorLogsTab"' in content
     assert 'id="selectedJobTimelineList"' in content
     assert 'id="selectedJobLogPreview"' in content
+    assert "Primary run context stays pinned above while you inspect the timeline and log stream." in content
     assert "_reconcileJobTimeline(selected);" in inspector_body
     assert "formatDuration" in inspector_body
     assert "_noteTransportWarning" in content
@@ -1033,13 +1034,15 @@ def test_portal_theme_system_listener_only_reacts_while_following_system() -> No
 def test_portal_console_views_use_query_param_navigation_without_backend_route_changes() -> None:
     content = _portal_bundle_content()
     rail_body = _extract_js_function_body(content, "setupSectionRail")
+    route_body = _extract_js_function_body(content, "_routeUrlForView")
     apply_view_body = _extract_js_function_body(content, "applyConsoleViewLayout")
 
     assert 'data-view-link="overview"' in content
     assert 'data-view-link="build"' in content
     assert 'data-view-link="operate"' in content
     assert 'data-view-link="review"' in content
-    assert "url.searchParams.set('view', resolveConsoleView(viewName));" in content
+    assert "const resolvedView = resolveConsoleView(viewName);" in route_body
+    assert "url.searchParams.set('view', resolvedView);" in route_body
     assert "state.currentView = resolveConsoleView(url.searchParams.get('view'));" in content
     assert "candidate === 'run'" not in content
     assert "document.body.dataset.consoleView = state.currentView;" in apply_view_body
@@ -1047,6 +1050,25 @@ def test_portal_console_views_use_query_param_navigation_without_backend_route_c
     assert "const isPlainPrimaryClick = event.button === 0" in rail_body
     assert "if (event.defaultPrevented || !isPlainPrimaryClick)" in rail_body
     assert "navigateConsoleView(nextView);" in rail_body
+    assert "(resolvedView === 'operate' || resolvedView === 'review') && resolvedJobId" in route_body
+
+
+def test_portal_console_routes_reuse_last_selected_job_across_operate_and_review() -> None:
+    content = _portal_bundle_content()
+    navigate_block = _extract_js_function_block(content, "navigateConsoleView")
+    apply_route_body = _extract_js_function_body(content, "applyConsoleRouteFromLocation")
+    select_body = _extract_js_function_body(content, "selectJob")
+    recover_body = _extract_js_function_body(content, "recoverJobs")
+
+    assert "function _rememberSelectedJob(jobId) {" in content
+    assert "function _preferredSelectedJobId() {" in content
+    assert "const explicitJobId = _normalizeSelectedJobId(jobId);" in navigate_block
+    assert "const preferredJobId = _preferredSelectedJobId();" in navigate_block
+    assert "_rememberSelectedJob(explicitJobId);" in navigate_block
+    assert "_rememberSelectedJob(routeJobId);" in apply_route_body
+    assert "_rememberSelectedJob(jobId);" in select_body
+    assert "state.currentView === 'operate' || state.currentView === 'review'" in select_body
+    assert "const retained = state.jobs.find((job) => job.id === state.portalUi.lastSelectedJobId) || null;" in recover_body
 
 
 def test_portal_build_stepper_and_quick_actions_drive_task_first_navigation() -> None:
@@ -1082,12 +1104,32 @@ def test_portal_dispatch_review_keeps_cli_parity_in_secondary_disclosure() -> No
     assert 'id="dispatchToolsDetails"' in content
     assert 'data-ui="dispatch-tools"' in content
     assert "Review dispatch posture" in content
-    assert "CLI Parity & Config Tools" in content
+    assert "Secondary CLI & Config Tools" in content
+    assert "CLI Parity & Config Tools" not in content
     assert 'id="effectiveConfigBtn"' in content
     assert 'id="importBtn"' in content
     assert 'id="exportBtn"' in content
     assert 'id="copyCliBtn"' in content
     assert 'id="cliPreview"' in content
+
+
+def test_portal_disclosure_defaults_are_state_driven_instead_of_static() -> None:
+    content = _portal_bundle_content()
+    sync_body = _extract_js_function_body(content, "syncDisclosurePanels")
+    init_body = _extract_js_function_body(content, "init")
+
+    assert 'id="advancedFlagsDetails"' in content
+    assert 'id="governanceDetails"' in content
+    assert 'id="reconstructionDetails"' in content
+    assert 'id="dispatchToolsDetails"' in content
+    assert 'id="advancedFlagsDetails" class="disclosure-panel mt-6">' in content
+    assert 'id="governanceDetails" class="disclosure-panel mt-6">' in content
+    assert "const previewFieldGroups = {" in sync_body
+    assert "const researchPreset = _presetRequiresResearchAcknowledgments(preset, args);" in sync_body
+    assert "element.dataset.autoOpen = autoOpenState[name] ? 'true' : 'false';" in sync_body
+    assert "disclosurePrefs.dispatchTools === true" in sync_body
+    assert "String(args.preset || '').toLowerCase().includes('v3.1')" not in sync_body
+    assert "setupDisclosurePanels();" in init_body
 
 
 def test_portal_overview_and_build_surfaces_sync_bootstrap_skeletons_and_preview_loading() -> None:
