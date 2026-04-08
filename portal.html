@@ -8,45 +8,17 @@
 </head>
 <body data-console-view="overview" data-bootstrap-status="pending" class="shell-bg text-slate-900 dark:text-slate-100 antialiased selection:bg-cyan-500/25 transition-colors duration-300">
 
-    <div aria-hidden="true" class="portal-video-backdrop">
-        <video
-            class="portal-video-media"
-            autoplay
-            muted
-            loop
-            playsinline
-            preload="metadata"
-            disablePictureInPicture
-            disableRemotePlayback
-            poster=""
-        >
-            <source src="/portal/video/dna-portal-video-2.mp4" type="video/mp4" />
-        </video>
-    </div>
-
     <a href="#main-content" class="skip-link rounded-lg px-4 py-2 text-sm font-medium text-white bg-indigo-600 shadow-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
         Skip to main content
     </a>
 
-    <div aria-hidden="true" class="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
-        <div class="ambient-stage">
-            <div class="ambient-veil"></div>
-            <div class="ambient-grid"></div>
-            <div class="ambient-sweep"></div>
-            <div class="ambient-focus"></div>
-            <div class="ambient-orb ambient-orb--a"></div>
-            <div class="ambient-orb ambient-orb--b"></div>
-            <div class="ambient-orb ambient-orb--c"></div>
-            <div class="ambient-ring ambient-ring--a"></div>
-            <div class="ambient-ring ambient-ring--b"></div>
-        </div>
-    </div>
+    <div aria-hidden="true" class="shell-noise"></div>
 
     <!-- Header -->
-    <header class="sticky top-0 z-40 border-b border-white/40 dark:border-slate-800 bg-white/55 dark:bg-slate-950/45 backdrop-blur-xl transition-colors duration-300">
+    <header class="sticky top-0 z-40 border-b border-white/55 dark:border-slate-800 bg-white/86 dark:bg-slate-950/78 backdrop-blur-xl transition-colors duration-300">
         <div class="mx-auto max-w-7xl px-6 py-4 flex items-center justify-between gap-4">
-            <div class="flex items-center gap-4">
-                <div class="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/50 bg-white/70 text-sm font-black tracking-[0.24em] text-cyan-800 shadow-glow dark:border-slate-700 dark:bg-slate-900/80 dark:text-cyan-200">
+            <div class="flex items-center gap-4 min-w-0">
+                <div class="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/70 bg-white text-sm font-black tracking-[0.24em] text-cyan-800 shadow-soft dark:border-slate-700 dark:bg-slate-900 dark:text-cyan-200">
                     <svg class="h-6 w-6" viewBox="0 0 256 256" role="img" aria-label="Transformation Portal brand mark" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <defs>
                             <linearGradient id="portal-brand-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -60,22 +32,22 @@
                         <path d="M128 88s12-10.3 12-24c0-13-12-20-12-20s-12 7-12 20c0 13.7 12 24 12 24Z" />
                     </svg>
                 </div>
-                <div class="flex flex-col">
+                <div class="flex min-w-0 flex-col">
                     <p class="section-kicker">Operator Console</p>
                     <h1 class="mt-0.5 text-lg font-extrabold tracking-tight">Transformation Portal</h1>
-                    <p class="text-[12px] text-slate-500 dark:text-slate-400">Governed orchestration, run review, and certified output readiness.</p>
+                    <p class="topbar-subtitle">Task-first build, live operations, and governed artifact review.</p>
                 </div>
-                <div class="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-full shell-panel ml-4">
+                <div class="topbar-status hidden lg:flex">
                     <span id="healthIndicator" class="status-dot"></span>
                     <span id="healthText" class="text-[11px] font-mono font-semibold text-slate-600 dark:text-slate-400">Checking...</span>
                 </div>
             </div>
 
-            <div class="flex items-center gap-4">
-                <button id="shortcutsBtn" type="button" class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white transition-colors focus:outline-none">
+            <div class="flex items-center gap-3">
+                <button id="shortcutsBtn" type="button" class="rounded-full border border-slate-200 dark:border-slate-700 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 hover:text-slate-900 hover:border-slate-300 dark:text-slate-400 dark:hover:text-white dark:hover:border-slate-600 transition-colors focus:outline-none focus:ring-2 focus:ring-cyan-500">
                     Shortcuts
                 </button>
-                <button id="themeBtn" type="button" class="rounded-full px-4 py-2 text-xs font-semibold border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/80 hover:bg-white dark:hover:bg-slate-800 transition-colors focus:outline-none focus:ring-2 focus:ring-cyan-500" aria-label="Theme preference: system. Click to switch to dark.">
+                <button id="themeBtn" type="button" class="rounded-full px-4 py-2 text-xs font-semibold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors focus:outline-none focus:ring-2 focus:ring-cyan-500" aria-label="Theme preference: system. Click to switch to dark.">
                     Theme: System
                 </button>
             </div>
@@ -83,63 +55,61 @@
     </header>
 
     <main id="main-content" tabindex="-1" class="mx-auto max-w-7xl px-6 py-8 outline-none">
-        <section id="overview-shell" class="mb-8 grid grid-cols-1 xl:grid-cols-12 gap-6">
-            <div id="mission-shell" data-ambient-zone="mission" data-ambient-focus-x="30" data-ambient-focus-y="18" data-ambient-shift-x="-18" data-ambient-shift-y="-12" data-ambient-stage-scale="1.035" data-ambient-stage-rotate="-0.6" data-ambient-color-a="#2dd4bf" data-ambient-color-b="#fbbf24" data-ambient-color-c="#38bdf8" data-ambient-focus-color="#67e8f9" class="workspace-shell xl:col-span-8 relative overflow-hidden rounded-[2rem] shell-panel-strong shadow-glow p-6 sm:p-8 mission-grid">
-                <div class="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-400/70 to-transparent"></div>
-                <div class="relative">
-                    <div class="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-                        <div class="max-w-2xl">
-                            <p class="section-kicker">Mission Control</p>
-                            <h2 class="mt-3 text-3xl font-extrabold tracking-tight text-slate-950 dark:text-white sm:text-4xl">
-                                Govern premium-ready runs with decisive operational context.
-                            </h2>
-                            <p class="mt-3 text-sm leading-7 text-slate-600 dark:text-slate-300">
-                                Keep preset posture, live health, and next action in one glance, then move directly into build, operate, or governed output review.
-                            </p>
-                        </div>
-                        <div class="flex flex-wrap gap-3">
-                            <button id="heroRunBtn" type="button" class="hero-action hero-action-primary focus:outline-none focus:ring-2 focus:ring-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
-                                Dispatch Current Job
-                            </button>
-                            <button id="heroExportBtn" type="button" class="hero-action hero-action-secondary focus:outline-none focus:ring-2 focus:ring-cyan-500">
-                                Export Config
-                            </button>
-                            <button id="refreshHealthBtn" type="button" class="hero-action hero-action-secondary focus:outline-none focus:ring-2 focus:ring-cyan-500">
-                                Refresh Status
-                            </button>
-                        </div>
+        <section id="overview-shell" data-ui="overview-grid" class="mb-6 grid grid-cols-1 lg:grid-cols-12 gap-4">
+            <div id="mission-shell" class="overview-primary lg:col-span-7 rounded-[1.75rem] shell-panel-strong p-6" data-ui="overview-summary">
+                <div class="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+                    <div class="max-w-2xl">
+                        <p class="section-kicker">Overview</p>
+                        <h2 class="mt-3 text-3xl font-extrabold tracking-tight text-slate-950 dark:text-white">Current operator status</h2>
+                        <p class="mt-3 text-base leading-7 text-slate-600 dark:text-slate-300">
+                            Start a new run, resume the current draft, or jump straight into the latest live or reviewable work.
+                        </p>
                     </div>
+                    <div class="overview-actions" data-ui="overview-actions">
+                        <button id="heroRunBtn" type="button" class="hero-action hero-action-primary focus:outline-none focus:ring-2 focus:ring-cyan-500" data-ui="overview-new-run">
+                            New Run
+                        </button>
+                        <button id="resumeDraftBtn" type="button" class="hero-action hero-action-secondary focus:outline-none focus:ring-2 focus:ring-cyan-500" data-ui="overview-resume-draft">
+                            Resume Draft
+                        </button>
+                        <button id="heroExportBtn" type="button" class="hero-action hero-action-secondary focus:outline-none focus:ring-2 focus:ring-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed" disabled data-ui="overview-active-job">
+                            View Active Job
+                        </button>
+                        <button id="refreshHealthBtn" type="button" class="hero-action hero-action-secondary focus:outline-none focus:ring-2 focus:ring-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed" disabled data-ui="overview-latest-review">
+                            Review Latest Output
+                        </button>
+                    </div>
+                </div>
 
-                    <div class="mt-8 grid grid-cols-2 gap-3 lg:grid-cols-4">
-                        <div class="stat-tile">
-                            <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Pipeline</p>
-                            <p id="heroPipelineValue" class="mt-2 text-sm font-extrabold text-slate-900 dark:text-white">lux-depth-v3</p>
-                        </div>
-                        <div class="stat-tile">
-                            <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Preset</p>
-                            <p id="heroPresetValue" class="mt-2 text-sm font-extrabold text-slate-900 dark:text-white">premium</p>
-                        </div>
-                        <div class="stat-tile">
-                            <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Runtime Mode</p>
-                            <p id="heroModeValue" class="mt-2 text-sm font-extrabold text-slate-900 dark:text-white">Checking…</p>
-                        </div>
-                        <div class="stat-tile">
-                            <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Active Queue</p>
-                            <p id="heroQueueValue" class="mt-2 text-sm font-extrabold text-slate-900 dark:text-white">0 live jobs</p>
-                        </div>
+                <div class="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
+                    <div class="stat-tile" data-ui="overview-card">
+                        <p class="stat-label">Pipeline</p>
+                        <p id="heroPipelineValue" class="stat-value">lux-depth-v3</p>
                     </div>
+                    <div class="stat-tile" data-ui="overview-card">
+                        <p class="stat-label">Preset</p>
+                        <p id="heroPresetValue" class="stat-value">premium</p>
+                    </div>
+                    <div class="stat-tile" data-ui="overview-card">
+                        <p class="stat-label">Connection</p>
+                        <p id="heroModeValue" class="stat-value">Checking…</p>
+                    </div>
+                    <div class="stat-tile" data-ui="overview-card">
+                        <p class="stat-label">Recent Jobs</p>
+                        <p id="heroQueueValue" class="stat-value">0 live jobs</p>
+                    </div>
+                </div>
 
-                    <div class="mt-6">
-                        <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Enabled Capability Stack</p>
-                        <div id="capabilityChips" class="mt-3 flex flex-wrap gap-2"></div>
-                    </div>
+                <div class="mt-5">
+                    <p class="stat-label">Capability Stack</p>
+                    <div id="capabilityChips" class="mt-3 flex flex-wrap gap-2"></div>
                 </div>
             </div>
 
-            <div id="intelligence-shell" data-ambient-zone="intelligence" data-ambient-focus-x="76" data-ambient-focus-y="18" data-ambient-shift-x="16" data-ambient-shift-y="-10" data-ambient-stage-scale="1.03" data-ambient-stage-rotate="0.45" data-ambient-color-a="#22d3ee" data-ambient-color-b="#93c5fd" data-ambient-color-c="#38bdf8" data-ambient-focus-color="#bae6fd" class="workspace-shell xl:col-span-4 rounded-[2rem] shell-panel p-6 shadow-soft dark:shadow-soft-dark">
+            <div id="intelligence-shell" class="overview-secondary lg:col-span-5 rounded-[1.75rem] shell-panel p-6 shadow-soft dark:shadow-soft-dark" data-ui="overview-side">
                 <div class="flex items-start justify-between gap-4">
                     <div>
-                        <p class="section-kicker">Preset Intelligence</p>
+                        <p class="section-kicker">Current Draft</p>
                         <h3 id="presetHeadline" class="mt-3 text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">premium</h3>
                     </div>
                     <div class="flex flex-wrap justify-end gap-2">
@@ -151,60 +121,60 @@
                     Balanced production quality preset.
                 </p>
 
-                <div class="mt-6 grid grid-cols-2 gap-3">
+                <div class="overview-meta-grid mt-6">
                     <div class="panel-subtle rounded-2xl p-4">
-                        <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Input Root</p>
+                        <p class="stat-label">Input Root</p>
                         <p id="heroInputDir" class="mt-2 text-[12px] font-mono leading-6 text-slate-700 dark:text-slate-200 break-all">./input_images</p>
                     </div>
                     <div class="panel-subtle rounded-2xl p-4">
-                        <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Output Root</p>
+                        <p class="stat-label">Output Root</p>
                         <p id="heroOutputDir" class="mt-2 text-[12px] font-mono leading-6 text-slate-700 dark:text-slate-200 break-all">./output/lux_depth_v3_apex</p>
                     </div>
                     <div class="panel-subtle rounded-2xl p-4">
-                        <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Readiness</p>
+                        <p class="stat-label">Readiness</p>
                         <p id="heroReadinessLabel" class="mt-2 text-sm font-bold text-slate-900 dark:text-white">No warnings</p>
                     </div>
                     <div class="panel-subtle rounded-2xl p-4">
-                        <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Warning Count</p>
+                        <p class="stat-label">Warning Count</p>
                         <p id="heroWarningCount" class="mt-2 text-sm font-bold text-slate-900 dark:text-white">0</p>
                     </div>
                 </div>
             </div>
         </section>
 
-        <nav aria-label="Workspace sections" class="workspace-rail mb-8 rounded-[1.75rem] px-4 py-4 lg:sticky lg:top-24 lg:z-30">
+        <nav aria-label="Workspace sections" class="workspace-rail mb-6 rounded-[1.5rem] px-3 py-3" data-ui="view-switcher">
             <div class="workspace-rail-copy">
-                <p class="section-kicker">Console Views</p>
+                <p class="section-kicker">Workspace</p>
                 <p class="workspace-rail-text">
-                    Shift between product surfaces without losing the current operator thread.
+                    Overview, build, live operation, and review in one quiet shell.
                 </p>
             </div>
-            <div class="workspace-rail-links">
-                <a class="workspace-link is-active" data-view-link="overview" href="?view=overview">
+            <div class="workspace-rail-links" role="tablist" aria-label="Console views">
+                <a class="workspace-link is-active" data-view-link="overview" data-ui="view-link" href="?view=overview" role="tab" aria-selected="true">
                     <span class="workspace-link-label">Overview</span>
-                    <span class="workspace-link-meta">Mission, active preset, system health, and next action.</span>
+                    <span class="workspace-link-meta">Status, recent jobs, and next action.</span>
                 </a>
-                <a class="workspace-link" data-view-link="build" href="?view=build">
+                <a class="workspace-link" data-view-link="build" data-ui="view-link" href="?view=build" role="tab" aria-selected="false">
                     <span class="workspace-link-label">Build</span>
-                    <span class="workspace-link-meta">Profile, governance, paths, advanced controls, and dispatch.</span>
+                    <span class="workspace-link-meta">Preview-backed dispatch flow.</span>
                 </a>
-                <a class="workspace-link" data-view-link="operate" href="?view=operate">
+                <a class="workspace-link" data-view-link="operate" data-ui="view-link" href="?view=operate" role="tab" aria-selected="false">
                     <span class="workspace-link-label">Operate</span>
-                    <span class="workspace-link-meta">Inspector, queue, artifacts, and live diagnostics under load.</span>
+                    <span class="workspace-link-meta">Queue, inspector, artifacts, and logs.</span>
                 </a>
-                <a class="workspace-link" data-view-link="run" href="?view=run">
-                    <span class="workspace-link-label">Run Details</span>
-                    <span class="workspace-link-meta">Artifact review, provenance, downloadable outputs, and traceability.</span>
+                <a class="workspace-link" data-view-link="review" data-ui="view-link" href="?view=review" role="tab" aria-selected="false">
+                    <span class="workspace-link-label">Review</span>
+                    <span class="workspace-link-meta">Artifact preview, provenance, and actions.</span>
                 </a>
             </div>
         </nav>
 
-        <section id="console-context-shell" class="mb-8 rounded-[1.75rem] shell-panel px-6 py-5 shadow-soft dark:shadow-soft-dark">
+        <section id="console-context-shell" class="mb-6 rounded-[1.5rem] shell-panel px-6 py-5 shadow-soft dark:shadow-soft-dark">
             <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
                 <div>
                     <p class="section-kicker">Current View</p>
                     <h2 id="consoleViewTitle" class="mt-2 text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">Overview</h2>
-                    <p id="consoleViewSummary" class="mt-2 max-w-3xl text-[13px] leading-7 text-slate-600 dark:text-slate-300">Mission, preset posture, system health, and the clearest next operator action.</p>
+                    <p id="consoleViewSummary" class="mt-2 max-w-3xl text-[14px] leading-7 text-slate-600 dark:text-slate-300">Status, recent jobs, and the clearest next operator action.</p>
                 </div>
                 <p id="consoleViewMeta" class="text-[11px] font-mono text-slate-500 dark:text-slate-400">View routing stays client-side to preserve the live orchestrator contract.</p>
             </div>
@@ -216,8 +186,15 @@
             <section id="build-shell" class="lg:col-span-7 flex flex-col gap-6">
 
                 <!-- Orchestration Profile -->
-                <div id="profile-shell" data-ambient-zone="profile" data-ambient-focus-x="18" data-ambient-focus-y="28" data-ambient-shift-x="-22" data-ambient-shift-y="-4" data-ambient-stage-scale="1.02" data-ambient-stage-rotate="-0.45" data-ambient-color-a="#34d399" data-ambient-color-b="#f59e0b" data-ambient-color-c="#67e8f9" data-ambient-focus-color="#99f6e4" class="workspace-shell deferred-shell rounded-[1.75rem] shell-panel p-6 shadow-soft dark:shadow-soft-dark transition-colors duration-300" data-shell-size="compact">
-                    <h2 class="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-4">Governance & Profiles</h2>
+                <div id="profile-shell" data-ambient-zone="profile" data-ambient-focus-x="18" data-ambient-focus-y="28" data-ambient-shift-x="-22" data-ambient-shift-y="-4" data-ambient-stage-scale="1.02" data-ambient-stage-rotate="-0.45" data-ambient-color-a="#34d399" data-ambient-color-b="#f59e0b" data-ambient-color-c="#67e8f9" data-ambient-focus-color="#99f6e4" class="workspace-shell deferred-shell rounded-[1.75rem] shell-panel p-6 shadow-soft dark:shadow-soft-dark transition-colors duration-300" data-shell-size="compact" data-ui="connection-card">
+                    <div class="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+                        <div>
+                            <p class="section-kicker">Connection</p>
+                            <h2 class="mt-2 text-xl font-extrabold tracking-tight text-slate-900 dark:text-white">Pipeline and auth mode</h2>
+                            <p class="mt-2 text-[14px] leading-7 text-slate-600 dark:text-slate-300">Choose the active pipeline, confirm connection mode, and keep profile restore close at hand.</p>
+                        </div>
+                        <span class="signal-badge">Build prerequisites</span>
+                    </div>
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                             <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="pipelineSelect">Pipeline Execution</label>
@@ -252,7 +229,55 @@
                     </div>
                 </div>
 
-                <section id="governance-shell" data-ambient-zone="governance" data-ambient-focus-x="28" data-ambient-focus-y="42" data-ambient-shift-x="-14" data-ambient-shift-y="4" data-ambient-stage-scale="1.028" data-ambient-stage-rotate="-0.2" data-ambient-color-a="#14b8a6" data-ambient-color-b="#f59e0b" data-ambient-color-c="#fde68a" data-ambient-focus-color="#fdba74" class="workspace-shell deferred-shell governance-banner rounded-[1.75rem] p-6 shadow-soft dark:shadow-soft-dark" data-shell-size="compact">
+                <section id="buildStepperShell" class="rounded-[1.75rem] shell-panel p-5 shadow-soft dark:shadow-soft-dark" data-ui="build-stepper">
+                    <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                        <div>
+                            <p class="section-kicker">Build Flow</p>
+                            <h2 id="buildStepTitle" class="mt-2 text-xl font-extrabold tracking-tight text-slate-900 dark:text-white">1. Configure the draft</h2>
+                            <p id="buildStepSummary" class="mt-2 text-[14px] leading-7 text-slate-600 dark:text-slate-300">Start with the pipeline and preset, then move through paths, contextual options, and dispatch review.</p>
+                        </div>
+                        <div class="build-stepper-actions-inline">
+                            <button id="buildStepBackBtn" type="button" class="stepper-nav-btn focus:outline-none focus:ring-2 focus:ring-cyan-500">
+                                Back
+                            </button>
+                            <button id="buildStepNextBtn" type="button" class="stepper-nav-btn stepper-nav-btn-primary focus:outline-none focus:ring-2 focus:ring-cyan-500">
+                                Next
+                            </button>
+                        </div>
+                    </div>
+                    <div id="buildStepTabs" class="build-step-tabs mt-5" role="tablist" aria-label="Build steps">
+                        <button id="buildStepTab1" type="button" class="build-step-tab is-active" data-build-step-target="1" role="tab" aria-selected="true" data-ui="build-step-tab">
+                            <span class="build-step-index">1</span>
+                            <span class="build-step-copy">
+                                <span class="build-step-label">Configure</span>
+                                <span class="build-step-meta">Pipeline and preset posture.</span>
+                            </span>
+                        </button>
+                        <button id="buildStepTab2" type="button" class="build-step-tab" data-build-step-target="2" role="tab" aria-selected="false" data-ui="build-step-tab">
+                            <span class="build-step-index">2</span>
+                            <span class="build-step-copy">
+                                <span class="build-step-label">Paths</span>
+                                <span class="build-step-meta">Inputs, outputs, and stage-specific files.</span>
+                            </span>
+                        </button>
+                        <button id="buildStepTab3" type="button" class="build-step-tab" data-build-step-target="3" role="tab" aria-selected="false" data-ui="build-step-tab">
+                            <span class="build-step-index">3</span>
+                            <span class="build-step-copy">
+                                <span class="build-step-label">Options</span>
+                                <span class="build-step-meta">Advanced controls and readiness signals.</span>
+                            </span>
+                        </button>
+                        <button id="buildStepTab4" type="button" class="build-step-tab" data-build-step-target="4" role="tab" aria-selected="false" data-ui="build-step-tab">
+                            <span class="build-step-index">4</span>
+                            <span class="build-step-copy">
+                                <span class="build-step-label">Dispatch</span>
+                                <span class="build-step-meta">CLI parity, warnings, and launch.</span>
+                            </span>
+                        </button>
+                    </div>
+                </section>
+
+                <section id="governance-shell" data-build-step-panel="3" data-ambient-zone="governance" data-ambient-focus-x="28" data-ambient-focus-y="42" data-ambient-shift-x="-14" data-ambient-shift-y="4" data-ambient-stage-scale="1.028" data-ambient-stage-rotate="-0.2" data-ambient-color-a="#14b8a6" data-ambient-color-b="#f59e0b" data-ambient-color-c="#fde68a" data-ambient-focus-color="#fdba74" class="workspace-shell deferred-shell governance-banner rounded-[1.75rem] p-6 shadow-soft dark:shadow-soft-dark build-step-panel" data-shell-size="compact" data-ui="build-governance">
                     <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                         <div class="max-w-2xl">
                             <p class="section-kicker">Governance Brief</p>
@@ -276,7 +301,7 @@
                         <span class="signal-badge">Preset-first flow</span>
                     </div>
 
-                    <section id="presetBuilderShell" class="rounded-[1.5rem] border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/50 p-5">
+                    <section id="presetBuilderShell" data-build-step-panel="1" class="rounded-[1.5rem] border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/50 p-5 build-step-panel" data-ui="build-step-panel">
                         <div class="flex items-start justify-between gap-3">
                             <div>
                                 <p class="section-kicker">Step 1</p>
@@ -317,7 +342,7 @@
                         </div>
                     </section>
 
-                    <section class="mt-5 rounded-[1.5rem] border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/50 p-5">
+                    <section id="buildPathsShell" data-build-step-panel="2" class="mt-5 rounded-[1.5rem] border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/50 p-5 build-step-panel" data-ui="build-step-panel">
                         <div class="flex items-start justify-between gap-3">
                             <div>
                                 <p class="section-kicker">Step 2</p>
@@ -330,16 +355,18 @@
                             <div>
                                 <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="inputDir">Input Directory</label>
                                 <input type="text" id="inputDir" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors" value="./input_images" autocomplete="off" spellcheck="false" />
+                                <p id="inputDirStatus" class="field-status mt-1 text-[12px] leading-6 text-slate-500 dark:text-slate-400">Set the source folder for the next run.</p>
                             </div>
                             <div>
                                 <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="outputDir">Output Directory</label>
                                 <input type="text" id="outputDir" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors" value="./output/lux_depth_v3_apex" autocomplete="off" spellcheck="false" />
+                                <p id="outputDirStatus" class="field-status mt-1 text-[12px] leading-6 text-slate-500 dark:text-slate-400">Choose the governed destination for generated outputs.</p>
                             </div>
                         </div>
                     </section>
 
                     <!-- Lux Depth Specific Fields -->
-                    <div id="fieldsLuxDepth" class="pipeline-fields block space-y-6 mt-5 pt-5 border-t border-slate-200 dark:border-slate-800">
+                    <div id="fieldsLuxDepth" data-build-step-panel="3" class="pipeline-fields build-step-panel block space-y-6 mt-5 pt-5 border-t border-slate-200 dark:border-slate-800" data-ui="build-step-panel">
                         <div class="flex items-start justify-between gap-3">
                             <div>
                                 <p class="section-kicker">Step 3</p>
@@ -396,7 +423,7 @@
                     </div>
 
                     <!-- Archive Gate Fields -->
-                    <div id="fieldsArchiveGate" class="pipeline-fields hidden space-y-4 pt-4 border-t border-slate-200 dark:border-slate-800">
+                    <div id="fieldsArchiveGate" data-build-step-panel="2" class="pipeline-fields build-step-panel hidden space-y-4 pt-4 border-t border-slate-200 dark:border-slate-800" data-ui="build-step-panel">
                         <p class="text-[12px] text-slate-500 dark:text-slate-400">Archiving parameters for deterministic packaging and export. Align with repository governance.</p>
                         <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/50 p-4">
                             <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Canonical Command</p>
@@ -406,18 +433,18 @@
                         <div id="archiveIndexField">
                             <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="archiveIndexPath">Archive Index Path</label>
                             <input type="text" id="archiveIndexPath" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors" value="" placeholder="./tests/fixtures/archive_small/archive_index_normalized.csv.gz" autocomplete="off" spellcheck="false" />
-                            <p class="mt-1 text-[11px] leading-5 text-slate-500 dark:text-slate-400">Required for `fixity-scan`. Supply an existing normalized archive index that is safe to read from the local allowlist.</p>
+                            <p id="archiveIndexStatus" class="mt-1 text-[12px] leading-6 text-slate-500 dark:text-slate-400">Required for `fixity-scan`. Supply an existing normalized archive index that is safe to read from the local allowlist.</p>
                         </div>
                         <div id="rightsManifestField" class="hidden">
                             <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="rightsManifestPath">Rights Manifest JSONL</label>
                             <input type="text" id="rightsManifestPath" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors" value="" placeholder="./output/archive_manifest_v2.rights.jsonl" autocomplete="off" spellcheck="false" />
-                            <p class="mt-1 text-[11px] leading-5 text-slate-500 dark:text-slate-400">Required for `bag-build` and `mets-export`. This must point to an existing rights-manifest artifact generated by an earlier archive stage.</p>
+                            <p id="rightsManifestStatus" class="mt-1 text-[12px] leading-6 text-slate-500 dark:text-slate-400">Required for `bag-build` and `mets-export`. This must point to an existing rights-manifest artifact generated by an earlier archive stage.</p>
                         </div>
                     </div>
                 </div>
 
                 <!-- Pipeline Flags -->
-                <fieldset id="flags-shell" data-ambient-zone="flags" data-ambient-focus-x="36" data-ambient-focus-y="66" data-ambient-shift-x="-6" data-ambient-shift-y="14" data-ambient-stage-scale="1.045" data-ambient-stage-rotate="0.3" data-ambient-color-a="#10b981" data-ambient-color-b="#f59e0b" data-ambient-color-c="#38bdf8" data-ambient-focus-color="#fef08a" class="workspace-shell deferred-shell rounded-[1.75rem] shell-panel p-6 shadow-soft dark:shadow-soft-dark transition-colors duration-300" data-shell-size="tall">
+                <fieldset id="flags-shell" data-build-step-panel="3" data-ambient-zone="flags" data-ambient-focus-x="36" data-ambient-focus-y="66" data-ambient-shift-x="-6" data-ambient-shift-y="14" data-ambient-stage-scale="1.045" data-ambient-stage-rotate="0.3" data-ambient-color-a="#10b981" data-ambient-color-b="#f59e0b" data-ambient-color-c="#38bdf8" data-ambient-focus-color="#fef08a" class="workspace-shell deferred-shell rounded-[1.75rem] shell-panel p-6 shadow-soft dark:shadow-soft-dark transition-colors duration-300 build-step-panel" data-shell-size="tall" data-ui="build-step-panel">
                     <legend class="block text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-4">Core Flags & Emit Artifacts</legend>
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
 
@@ -775,7 +802,7 @@
                 </fieldset>
 
                 <!-- CLI Preview & Actions -->
-                <div id="cli-shell" data-ambient-zone="dispatch" data-ambient-focus-x="42" data-ambient-focus-y="82" data-ambient-shift-x="-4" data-ambient-shift-y="18" data-ambient-stage-scale="1.05" data-ambient-stage-rotate="0.35" data-ambient-color-a="#06b6d4" data-ambient-color-b="#f97316" data-ambient-color-c="#14b8a6" data-ambient-focus-color="#fdba74" class="workspace-shell deferred-shell rounded-[1.75rem] shell-panel p-6 shadow-soft dark:shadow-soft-dark transition-colors duration-300" data-shell-size="compact">
+                <div id="cli-shell" data-build-step-panel="4" data-ambient-zone="dispatch" data-ambient-focus-x="42" data-ambient-focus-y="82" data-ambient-shift-x="-4" data-ambient-shift-y="18" data-ambient-stage-scale="1.05" data-ambient-stage-rotate="0.35" data-ambient-color-a="#06b6d4" data-ambient-color-b="#f97316" data-ambient-color-c="#14b8a6" data-ambient-focus-color="#fdba74" class="workspace-shell deferred-shell rounded-[1.75rem] shell-panel p-6 shadow-soft dark:shadow-soft-dark transition-colors duration-300 build-step-panel" data-shell-size="compact" data-ui="build-step-panel">
                     <div class="flex items-center justify-between mb-4">
                         <h3 class="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Equivalent Command</h3>
                         <div class="flex gap-2 items-center">
@@ -810,19 +837,19 @@
                     </div>
 
                     <div class="mt-6 border-t border-slate-200 dark:border-slate-800 pt-6">
-                        <button id="runJobBtn" type="button" class="w-full rounded-2xl px-6 py-4 text-[14px] font-extrabold uppercase tracking-[0.14em] text-white shadow-glow transition-all focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed bg-gradient-to-r from-teal-700 via-cyan-600 to-sky-600 hover:from-teal-600 hover:via-cyan-500 hover:to-sky-500 dark:focus:ring-offset-slate-900" disabled>
-                            Execute Job
-                        </button>
+                            <button id="runJobBtn" type="button" class="w-full rounded-2xl px-6 py-4 text-[14px] font-extrabold uppercase tracking-[0.14em] text-white shadow-glow transition-all focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed bg-gradient-to-r from-teal-700 via-cyan-600 to-sky-600 hover:from-teal-600 hover:via-cyan-500 hover:to-sky-500 dark:focus:ring-offset-slate-900" disabled data-ui="dispatch-cta">
+                                Execute Job
+                            </button>
                     </div>
                 </div>
 
             </section>
 
             <!-- Right Column: Queue & Logs -->
-            <aside id="jobs-shell" class="lg:col-span-5 flex flex-col gap-6">
+            <aside id="jobs-shell" class="lg:col-span-5 flex flex-col gap-6" data-ui="operate-grid">
 
                 <!-- Selected Job Inspector -->
-                <div id="selected-job-shell" data-ambient-zone="inspector" data-ambient-focus-x="78" data-ambient-focus-y="30" data-ambient-shift-x="18" data-ambient-shift-y="-2" data-ambient-stage-scale="1.032" data-ambient-stage-rotate="0.35" data-ambient-color-a="#38bdf8" data-ambient-color-b="#60a5fa" data-ambient-color-c="#22d3ee" data-ambient-focus-color="#bfdbfe" class="workspace-shell sticky-shell rounded-[1.75rem] shell-panel p-6 shadow-soft dark:shadow-soft-dark transition-colors duration-300">
+                <div id="selected-job-shell" data-ambient-zone="inspector" data-ambient-focus-x="78" data-ambient-focus-y="30" data-ambient-shift-x="18" data-ambient-shift-y="-2" data-ambient-stage-scale="1.032" data-ambient-stage-rotate="0.35" data-ambient-color-a="#38bdf8" data-ambient-color-b="#60a5fa" data-ambient-color-c="#22d3ee" data-ambient-focus-color="#bfdbfe" class="workspace-shell sticky-shell rounded-[1.75rem] shell-panel p-6 shadow-soft dark:shadow-soft-dark transition-colors duration-300" data-ui="inspector-panel">
                     <div class="flex items-start justify-between gap-3 pb-4 border-b border-slate-200 dark:border-slate-800">
                         <div>
                             <p class="section-kicker">Selected Job</p>
@@ -834,7 +861,7 @@
                         <div class="flex flex-col items-end gap-2">
                             <span id="selectedJobStateBadge" class="signal-badge">Idle</span>
                             <span id="selectedJobFreshness" class="micro-status">No live telemetry</span>
-                            <button id="openRunDetailsBtn" type="button" class="rounded-full border border-slate-200 dark:border-slate-700 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-300 transition-colors hover:border-cyan-300 hover:text-cyan-700 dark:hover:border-cyan-700 dark:hover:text-cyan-300 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                            <button id="openRunDetailsBtn" type="button" class="rounded-full border border-slate-200 dark:border-slate-700 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-300 transition-colors hover:border-cyan-300 hover:text-cyan-700 dark:hover:border-cyan-700 dark:hover:text-cyan-300 disabled:opacity-50 disabled:cursor-not-allowed" disabled data-ui="review-open">
                                 Open Review
                             </button>
                         </div>
@@ -898,7 +925,7 @@
                 </div>
 
                 <!-- Job Queue -->
-                <div id="queue-shell" data-ambient-zone="queue" data-ambient-focus-x="82" data-ambient-focus-y="46" data-ambient-shift-x="20" data-ambient-shift-y="6" data-ambient-stage-scale="1.036" data-ambient-stage-rotate="0.28" data-ambient-color-a="#14b8a6" data-ambient-color-b="#84cc16" data-ambient-color-c="#38bdf8" data-ambient-focus-color="#bbf7d0" class="workspace-shell deferred-shell rounded-[1.75rem] shell-panel p-6 shadow-soft dark:shadow-soft-dark transition-colors duration-300 flex flex-col max-h-[350px]" data-shell-size="compact">
+                <div id="queue-shell" data-ambient-zone="queue" data-ambient-focus-x="82" data-ambient-focus-y="46" data-ambient-shift-x="20" data-ambient-shift-y="6" data-ambient-stage-scale="1.036" data-ambient-stage-rotate="0.28" data-ambient-color-a="#14b8a6" data-ambient-color-b="#84cc16" data-ambient-color-c="#38bdf8" data-ambient-focus-color="#bbf7d0" class="workspace-shell deferred-shell rounded-[1.75rem] shell-panel p-6 shadow-soft dark:shadow-soft-dark transition-colors duration-300 flex flex-col max-h-[350px]" data-shell-size="compact" data-ui="queue-panel">
                     <div class="flex items-center justify-between mb-4 pb-4 border-b border-slate-200 dark:border-slate-800">
                         <div>
                             <h2 class="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Job Queue</h2>
@@ -908,7 +935,7 @@
                     </div>
 
                     <div class="flex-1 overflow-y-auto custom-scrollbar pr-2 min-h-[100px]">
-                        <ul id="jobList" class="space-y-3" aria-live="polite"></ul>
+                        <ul id="jobList" class="space-y-3" aria-live="polite" data-ui="queue-list"></ul>
                         <div id="emptyQueueState" class="h-full flex flex-col items-center justify-center text-center py-8">
                             <p class="text-[13px] font-medium text-slate-500 dark:text-slate-400">No active jobs.</p>
                         </div>
@@ -916,7 +943,7 @@
                 </div>
 
                 <!-- Artifacts -->
-                <div id="artifacts-shell" data-ambient-zone="artifacts" data-ambient-focus-x="76" data-ambient-focus-y="64" data-ambient-shift-x="14" data-ambient-shift-y="12" data-ambient-stage-scale="1.03" data-ambient-stage-rotate="-0.2" data-ambient-color-a="#0ea5e9" data-ambient-color-b="#f59e0b" data-ambient-color-c="#14b8a6" data-ambient-focus-color="#fde68a" class="workspace-shell deferred-shell rounded-[1.75rem] shell-panel p-6 shadow-soft dark:shadow-soft-dark transition-colors duration-300" data-shell-size="compact">
+                <div id="artifacts-shell" data-ambient-zone="artifacts" data-ambient-focus-x="76" data-ambient-focus-y="64" data-ambient-shift-x="14" data-ambient-shift-y="12" data-ambient-stage-scale="1.03" data-ambient-stage-rotate="-0.2" data-ambient-color-a="#0ea5e9" data-ambient-color-b="#f59e0b" data-ambient-color-c="#14b8a6" data-ambient-focus-color="#fde68a" class="workspace-shell deferred-shell rounded-[1.75rem] shell-panel p-6 shadow-soft dark:shadow-soft-dark transition-colors duration-300" data-shell-size="compact" data-ui="review-surface">
                     <div class="flex items-center justify-between mb-4 pb-3 border-b border-slate-200 dark:border-slate-800">
                         <h2 class="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Artifacts</h2>
                         <div class="flex items-center gap-2">
@@ -971,7 +998,7 @@
                 </div>
 
                 <!-- Live Logs -->
-                <div id="logs-shell" data-ambient-zone="logs" data-ambient-focus-x="70" data-ambient-focus-y="84" data-ambient-shift-x="10" data-ambient-shift-y="18" data-ambient-stage-scale="1.04" data-ambient-stage-rotate="0.18" data-ambient-color-a="#22d3ee" data-ambient-color-b="#60a5fa" data-ambient-color-c="#f97316" data-ambient-focus-color="#fed7aa" class="workspace-shell deferred-shell hidden rounded-[1.75rem] shell-panel flex-col flex-1 min-h-[400px] overflow-hidden transition-colors duration-300 shadow-soft dark:shadow-soft-dark" data-shell-size="tall">
+                <div id="logs-shell" data-ambient-zone="logs" data-ambient-focus-x="70" data-ambient-focus-y="84" data-ambient-shift-x="10" data-ambient-shift-y="18" data-ambient-stage-scale="1.04" data-ambient-stage-rotate="0.18" data-ambient-color-a="#22d3ee" data-ambient-color-b="#60a5fa" data-ambient-color-c="#f97316" data-ambient-focus-color="#fed7aa" class="workspace-shell deferred-shell hidden rounded-[1.75rem] shell-panel flex-col flex-1 min-h-[400px] overflow-hidden transition-colors duration-300 shadow-soft dark:shadow-soft-dark" data-shell-size="tall" data-ui="logs-panel">
                     <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-900">
                         <div>
                             <h2 class="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400 flex items-center gap-2">
@@ -991,7 +1018,7 @@
     </main>
 
     <!-- Shortcuts Modal -->
-    <div id="shortcutsModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 dark:bg-black/60 transition-opacity" aria-hidden="true">
+    <div id="shortcutsModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 dark:bg-black/60 transition-opacity" aria-hidden="true" data-ui="modal-shell">
         <div class="w-full max-w-sm rounded-xl bg-white shadow-2xl border border-slate-200 dark:bg-slate-900 dark:border-slate-800 transform scale-95 opacity-0 transition-all duration-200" id="shortcutsPanel" role="dialog" aria-modal="true" aria-labelledby="shortcutsTitle">
             <div class="px-5 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
                 <h2 id="shortcutsTitle" class="text-sm font-semibold">Keyboard Shortcuts</h2>
@@ -1008,7 +1035,7 @@
         </div>
     </div>
 
-    <div id="effectiveConfigDrawer" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/55 backdrop-blur-sm p-4 dark:bg-black/70 transition-opacity" aria-hidden="true">
+    <div id="effectiveConfigDrawer" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/55 backdrop-blur-sm p-4 dark:bg-black/70 transition-opacity" aria-hidden="true" data-ui="drawer-shell">
         <div class="w-full max-w-5xl rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900" role="dialog" aria-modal="true" aria-labelledby="effectiveConfigTitle">
             <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div>

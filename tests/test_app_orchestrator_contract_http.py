@@ -702,6 +702,30 @@ def test_portal_events_invalid_payload_returns_sanitized_reason(client: TestClie
     assert body["error"]["details"] == {"field": "payload", "reason": "invalid_event_type"}
 
 
+def test_portal_events_allow_operator_console_review_and_stream_events(client: TestClient) -> None:
+    response = client.post(
+        "/v1/portal/events",
+        json={
+            "event_type": "stream_reconnected",
+            "pipeline": "lux-depth-v3",
+            "surface": "stream_transport",
+            "metadata": {
+                "attempt": 2,
+                "job_id": "job_1234abcd",
+                "transport": "fetch",
+            },
+        },
+    )
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["success"] is True
+    event = body["data"]["event"]
+    assert event["event_type"] == "stream_reconnected"
+    assert event["surface"] == "stream_transport"
+    assert event["metadata"] == {"attempt": 2, "job_id": "job_1234abcd", "transport": "fetch"}
+
+
 def test_portal_events_contract_ignores_log_sink_write_failures(
     client: TestClient,
     tmp_path: Path,

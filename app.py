@@ -702,6 +702,14 @@ PORTAL_ALLOWED_EVENT_TYPES = {
     "preview_error_seen",
     "effective_config_opened",
     "config_exported",
+    "step_completed",
+    "job_submitted",
+    "job_selected",
+    "artifact_opened",
+    "artifact_compared",
+    "run_details_opened",
+    "cancel_requested",
+    "stream_reconnected",
     "dispatch_blocked",
     "debug_bundle_guardrail_seen",
 }
@@ -710,6 +718,11 @@ PORTAL_ALLOWED_EVENT_SURFACES = {
     "reconstruction_runtime",
     "effective_config",
     "dispatch",
+    "build_stepper",
+    "job_queue",
+    "job_inspector",
+    "artifact_review",
+    "stream_transport",
 }
 PORTAL_ALLOWED_EVENT_FIELDS = {
     "accept_apple_depth_pro_research_license",
