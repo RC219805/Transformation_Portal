@@ -1140,6 +1140,33 @@ details[open] .disclosure-chevron {
     word-break: break-all;
 }
 
+.review-compare-summary {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    border-radius: 1rem;
+    border: 1px dashed rgba(14, 165, 233, 0.28);
+    background: rgba(255, 255, 255, 0.62);
+    padding: 0.8rem 0.9rem;
+}
+
+.dark .review-compare-summary {
+    border-color: rgba(34, 211, 238, 0.32);
+    background: rgba(15, 23, 42, 0.58);
+}
+
+.review-compare-title {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--shell-ink);
+}
+
+.review-compare-detail {
+    font-size: 12px;
+    line-height: 1.55;
+    color: var(--shell-muted);
+}
+
 .job-chip {
     display: inline-flex;
     align-items: center;
