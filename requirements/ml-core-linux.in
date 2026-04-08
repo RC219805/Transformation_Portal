@@ -27,7 +27,7 @@ torchvision==0.17.2  # CAS determinism: matches torch 2.2.2
 # Diffusion / HuggingFace ecosystem
 # Keep transformers<5 while the repo-wide torch baseline remains on 2.2.x.
 diffusers>=0.36.0,<1
-transformers>=4.57.0,<5
+transformers>=4.57.0,<6
 huggingface-hub>=0.19.0,<2
 accelerate>=0.20.0,<2
 
