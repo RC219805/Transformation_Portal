@@ -926,7 +926,10 @@ def test_portal_build_stepper_and_quick_actions_drive_task_first_navigation() ->
     assert 'id="resumeDraftBtn"' in content
     assert "const BUILD_STEP_CONTENT = Object.freeze({" in content
     assert "button.setAttribute('aria-selected', active ? 'true' : 'false');" in stepper_body
+    assert "panel.hidden = !active;" in stepper_body
     assert "panel.setAttribute('data-step-active', active ? 'true' : 'false');" in stepper_body
+    assert "panel.setAttribute('data-step-hidden', active ? 'false' : 'true');" in stepper_body
+    assert "panel.classList.toggle('hidden', !active);" not in stepper_body
     assert "function setBuildStep(nextStep, options = {}) {" in content
     assert "emitPortalEvent('step_completed'" in content
     assert "state.pipeline !== 'lux-depth-v3' && state.portalUi.buildStep < 2" in update_body

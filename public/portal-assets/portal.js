@@ -1031,8 +1031,9 @@ function syncBuildStepUi() {
     document.querySelectorAll('[data-build-step-panel]').forEach((panel) => {
         const step = Number.parseInt(String(panel.getAttribute('data-build-step-panel') || ''), 10);
         const active = step === activeStep;
-        panel.classList.toggle('hidden', !active);
+        panel.hidden = !active;
         panel.setAttribute('data-step-active', active ? 'true' : 'false');
+        panel.setAttribute('data-step-hidden', active ? 'false' : 'true');
     });
 
     if (els.buildStepBackBtn) {
