@@ -391,19 +391,16 @@ def test_portal_cli_template_excludes_unsupported_lux_flags() -> None:
     assert "--strict-segmentation" in content
 
 
-def test_portal_html_uses_looping_background_video_layer() -> None:
+def test_portal_html_resets_to_static_operator_shell_without_background_video() -> None:
     html_content = _portal_html_content()
     css_content = _portal_css_content()
 
-    assert "portal-video-backdrop" in html_content
-    assert 'class="portal-video-media"' in html_content
-    assert "/portal/video/dna-portal-video-2.mp4" in html_content
-    assert "/v1/portal/video/dna-portal-video-2.mp4" not in html_content
-    assert "autoplay" in html_content
-    assert "muted" in html_content
-    assert "loop" in html_content
-    assert "playsinline" in html_content
-    assert ".performance-lite .portal-video-media" in css_content
+    assert "portal-video-backdrop" not in html_content
+    assert 'class="portal-video-media"' not in html_content
+    assert "/portal/video/dna-portal-video-2.mp4" not in html_content
+    assert "shell-noise" in html_content
+    assert ".shell-noise" in css_content
+    assert ".shell-bg" in css_content
 
 
 def test_portal_html_externalizes_direct_debug_assets_without_third_party_hosts() -> None:
@@ -840,7 +837,8 @@ def test_portal_selected_job_inspector_uses_timeline_tabs_and_log_secondary_view
     assert "_reconcileJobTimeline(selected);" in inspector_body
     assert "formatDuration" in inspector_body
     assert "_noteTransportWarning" in content
-    assert "const showLogsShell = nextTab === 'logs' || state.currentView === 'run';" in tab_body
+    assert "const showLogsShell = nextTab === 'logs' || state.currentView === 'review';" in tab_body
+    assert "button.setAttribute('aria-selected', active ? 'true' : 'false');" in tab_body
     assert "els.logsShell.classList.toggle('hidden', !showLogsShell);" in tab_body
 
 
@@ -905,14 +903,84 @@ def test_portal_console_views_use_query_param_navigation_without_backend_route_c
     assert 'data-view-link="overview"' in content
     assert 'data-view-link="build"' in content
     assert 'data-view-link="operate"' in content
-    assert 'data-view-link="run"' in content
+    assert 'data-view-link="review"' in content
     assert "url.searchParams.set('view', resolveConsoleView(viewName));" in content
     assert "state.currentView = resolveConsoleView(url.searchParams.get('view'));" in content
+    assert "candidate === 'run'" not in content
     assert "document.body.dataset.consoleView = state.currentView;" in apply_view_body
-    assert "els.queueShell.classList.toggle('hidden', state.currentView === 'run');" in apply_view_body
+    assert "els.queueShell.classList.toggle('hidden', state.currentView === 'review');" in apply_view_body
     assert "const isPlainPrimaryClick = event.button === 0" in rail_body
     assert "if (event.defaultPrevented || !isPlainPrimaryClick)" in rail_body
     assert "navigateConsoleView(nextView);" in rail_body
+
+
+def test_portal_build_stepper_and_quick_actions_drive_task_first_navigation() -> None:
+    content = _portal_bundle_content()
+    stepper_body = _extract_js_function_body(content, "syncBuildStepUi")
+    update_body = _extract_js_function_body(content, "updateUIFromState")
+    init_body = _extract_js_function_body(content, "init")
+
+    assert 'id="buildStepTabs"' in content
+    assert 'id="buildStepTab1"' in content
+    assert 'id="buildStepTab4"' in content
+    assert 'id="resumeDraftBtn"' in content
+    assert "const BUILD_STEP_CONTENT = Object.freeze({" in content
+    assert "button.setAttribute('aria-selected', active ? 'true' : 'false');" in stepper_body
+    assert "panel.hidden = !active;" in stepper_body
+    assert "panel.setAttribute('data-step-active', active ? 'true' : 'false');" in stepper_body
+    assert "panel.setAttribute('data-step-hidden', active ? 'false' : 'true');" in stepper_body
+    assert "panel.classList.toggle('hidden', !active);" not in stepper_body
+    assert "function setBuildStep(nextStep, options = {}) {" in content
+    assert "emitPortalEvent('step_completed'" in content
+    assert "state.pipeline !== 'lux-depth-v3' && state.portalUi.buildStep < 2" in update_body
+    assert "setupBuildStepper();" in init_body
+    assert "if (els.heroRunBtn) {" in content
+    assert "navigateConsoleView('build');" in content
+    assert "navigateConsoleView('operate', { jobId });" in content
+    assert "navigateConsoleView('review', { jobId });" in content
+    assert "els.heroRunBtn.addEventListener('click', submitJob);" not in content
+
+
+def test_portal_preview_statuses_render_inline_for_build_fields() -> None:
+    content = _portal_bundle_content()
+    body = _extract_js_function_body(content, "renderFieldPreviewStatuses")
+
+    assert 'id="inputDirStatus"' in content
+    assert 'id="outputDirStatus"' in content
+    assert 'id="archiveIndexStatus"' in content
+    assert 'id="rightsManifestStatus"' in content
+    assert "_previewIssueForField('input_dir', currentPayload)" in body
+    assert "_previewIssueForField('output_dir', currentPayload)" in body
+    assert "_previewIssueForField('archive_index', currentPayload)" in body
+    assert "_previewIssueForField('manifest_jsonl', currentPayload)" in body
+    assert "renderFieldPreviewStatuses(payload);" in _extract_js_function_body(content, "renderCLI")
+
+
+def test_portal_overlay_focus_management_traps_and_restores_focus() -> None:
+    content = _portal_bundle_content()
+    trap_body = _extract_js_function_body(content, "_trapOverlayFocus")
+
+    assert "function _rememberOverlayTrigger" in content
+    assert "function _restoreOverlayFocus" in content
+    assert "function _overlayFocusableElements" in content
+    assert "const toggleModal = (show, trigger = document.activeElement) => {" in content
+    assert "const toggleEffectiveConfigDrawer = (show, trigger = document.activeElement) => {" in content
+    assert "const panel = _activeOverlayPanel();" in trap_body
+    assert "if (event.key !== 'Tab') return false;" in trap_body
+    assert "_rememberOverlayTrigger(trigger);" in content
+    assert "_restoreOverlayFocus();" in content
+
+
+def test_portal_queue_rows_support_keyboard_selection_navigation() -> None:
+    content = _portal_bundle_content()
+    keydown_body = _extract_js_function_body(content, "handleJobListKeydown")
+    queue_body = _extract_js_function_body(content, "renderJobQueue")
+
+    assert "li.setAttribute('role', 'option');" in queue_body
+    assert "li.setAttribute('aria-selected', isSelected ? 'true' : 'false');" in queue_body
+    assert "if (event.key === 'Enter' || event.key === ' ') {" in keydown_body
+    assert "if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;" in keydown_body
+    assert "if (els.jobList) els.jobList.addEventListener('keydown', handleJobListKeydown);" in content
 
 
 def test_portal_timestamp_parsing_normalizes_second_precision_epochs() -> None:

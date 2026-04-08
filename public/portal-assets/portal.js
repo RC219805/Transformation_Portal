@@ -139,7 +139,10 @@ const state = {
     portalUi: {
         debugBundleAcknowledged: false,
         effectiveConfigOpen: false,
-        debugBundleGuardrailSeen: false
+        debugBundleGuardrailSeen: false,
+        buildStep: 1,
+        lastOverlayTrigger: null,
+        lastSelectedJobId: ''
     },
     readiness: {
         server: {},
@@ -194,6 +197,7 @@ const els = {
     consoleViewSummary: document.getElementById('consoleViewSummary'),
     consoleViewMeta: document.getElementById('consoleViewMeta'),
     heroRunBtn: document.getElementById('heroRunBtn'),
+    resumeDraftBtn: document.getElementById('resumeDraftBtn'),
     heroExportBtn: document.getElementById('heroExportBtn'),
     refreshHealthBtn: document.getElementById('refreshHealthBtn'),
     heroPipelineValue: document.getElementById('heroPipelineValue'),
@@ -215,6 +219,15 @@ const els = {
     governanceBannerTitle: document.getElementById('governanceBannerTitle'),
     governanceBannerBody: document.getElementById('governanceBannerBody'),
     governanceChecklist: document.getElementById('governanceChecklist'),
+    buildStepTitle: document.getElementById('buildStepTitle'),
+    buildStepSummary: document.getElementById('buildStepSummary'),
+    buildStepTabs: document.getElementById('buildStepTabs'),
+    buildStepBackBtn: document.getElementById('buildStepBackBtn'),
+    buildStepNextBtn: document.getElementById('buildStepNextBtn'),
+    buildStepTab1: document.getElementById('buildStepTab1'),
+    buildStepTab2: document.getElementById('buildStepTab2'),
+    buildStepTab3: document.getElementById('buildStepTab3'),
+    buildStepTab4: document.getElementById('buildStepTab4'),
 
     pipelineSelect: document.getElementById('pipelineSelect'),
     presetSelect: document.getElementById('presetSelect'),
@@ -227,12 +240,16 @@ const els = {
 
     inputDir: document.getElementById('inputDir'),
     outputDir: document.getElementById('outputDir'),
+    inputDirStatus: document.getElementById('inputDirStatus'),
+    outputDirStatus: document.getElementById('outputDirStatus'),
     archiveCanonicalCommand: document.getElementById('archiveCanonicalCommand'),
     archiveCanonicalCommandHint: document.getElementById('archiveCanonicalCommandHint'),
     archiveIndexField: document.getElementById('archiveIndexField'),
     archiveIndexPath: document.getElementById('archiveIndexPath'),
+    archiveIndexStatus: document.getElementById('archiveIndexStatus'),
     rightsManifestField: document.getElementById('rightsManifestField'),
     rightsManifestPath: document.getElementById('rightsManifestPath'),
+    rightsManifestStatus: document.getElementById('rightsManifestStatus'),
     qualityTier: document.getElementById('qualityTier'),
     depthBackend: document.getElementById('depthBackend'),
     depthDevice: document.getElementById('depthDevice'),
@@ -750,21 +767,21 @@ function setupAmbientMotion() {
 const CONSOLE_VIEW_META = {
     overview: {
         title: 'Overview',
-        summary: 'Mission, preset posture, system health, and the clearest next operator action.',
-        meta: 'Use this surface to understand active preset, runtime health, and next action in a single scan.'
+        summary: 'Status, recent jobs, and the clearest next operator action.',
+        meta: 'Use this surface to understand connection mode, current draft, and where the next useful click should go.'
     },
     build: {
-        title: 'Build & Configure',
-        summary: 'Choose posture, set roots, refine controls only when needed, then dispatch.',
-        meta: 'This view keeps profile, governance, paths, advanced controls, and launch in one guided flow.'
+        title: 'Build',
+        summary: 'Move from pipeline choice to dispatch through one preview-backed step at a time.',
+        meta: 'This view keeps connection mode, paths, contextual options, and launch in one guided build flow.'
     },
     operate: {
-        title: 'Operate & Inspect',
-        summary: 'Timeline first, queue second, live diagnostics close at hand.',
-        meta: 'Operators should identify a failing run and the next corrective action in under five seconds.'
+        title: 'Operate',
+        summary: 'Queue, selected run, artifact arrival, and logs in one live runtime workspace.',
+        meta: 'Operators should identify state, progress, and next action in a single pass.'
     },
-    run: {
-        title: 'Run Details & Review',
+    review: {
+        title: 'Review',
         summary: 'Review governed outputs, provenance, and downloadable artifacts from a dedicated audit surface.',
         meta: 'Completed runs become reviewable products, not just finished jobs.'
     }
@@ -779,6 +796,7 @@ function setActiveWorkspaceLink(viewName) {
     document.querySelectorAll('[data-view-link]').forEach((link) => {
         const active = String(link.dataset.viewLink || '') === String(viewName || '');
         link.classList.toggle('is-active', active);
+        link.setAttribute('aria-selected', active ? 'true' : 'false');
         if (active) {
             link.setAttribute('aria-current', 'location');
         } else {
@@ -790,7 +808,7 @@ function setActiveWorkspaceLink(viewName) {
 function _routeUrlForView(viewName, jobId = '') {
     const url = new URL(window.location.href);
     url.searchParams.set('view', resolveConsoleView(viewName));
-    if (resolveConsoleView(viewName) === 'run' && String(jobId || '').trim()) {
+    if (resolveConsoleView(viewName) === 'review' && String(jobId || '').trim()) {
         url.searchParams.set('job', String(jobId || '').trim());
     } else {
         url.searchParams.delete('job');
@@ -812,7 +830,7 @@ function updateConsoleViewContext() {
     if (els.consoleViewTitle) els.consoleViewTitle.textContent = viewMeta.title;
     if (els.consoleViewSummary) els.consoleViewSummary.textContent = viewMeta.summary;
     if (els.consoleViewMeta) {
-        if (state.currentView === 'run' && state.selectedJobId) {
+        if (state.currentView === 'review' && state.selectedJobId) {
             const selected = state.jobs.find((job) => job.id === state.selectedJobId) || null;
             const stateLabel = titleCaseToken(selected?.state, 'Pending');
             els.consoleViewMeta.textContent = `${state.selectedJobId} • ${stateLabel} review surface`;
@@ -838,19 +856,19 @@ function applyConsoleViewLayout() {
         els.buildShell.style.gridColumn = buildActive ? 'span 12 / span 12' : '';
     }
     if (els.jobsShell) {
-        const jobsActive = state.currentView === 'operate' || state.currentView === 'run';
+        const jobsActive = state.currentView === 'operate' || state.currentView === 'review';
         els.jobsShell.classList.toggle('hidden', !jobsActive);
         els.jobsShell.style.gridColumn = jobsActive ? 'span 12 / span 12' : '';
     }
     if (els.queueShell) {
-        els.queueShell.classList.toggle('hidden', state.currentView === 'run');
+        els.queueShell.classList.toggle('hidden', state.currentView === 'review');
     }
     if (els.openRunDetailsBtn) {
-        els.openRunDetailsBtn.textContent = state.currentView === 'run' ? 'Review Open' : 'Open Review';
+        els.openRunDetailsBtn.textContent = state.currentView === 'review' ? 'Review Open' : 'Open Review';
     }
     if (state.currentView === 'operate' && state.selectedJobId) {
         setInspectorTab('timeline');
-    } else if (state.currentView === 'run') {
+    } else if (state.currentView === 'review') {
         setInspectorTab('overview');
     }
     updateConsoleViewContext();
@@ -895,7 +913,7 @@ function setupSectionRail() {
             }
             event.preventDefault();
             const nextView = resolveConsoleView(link.dataset.viewLink);
-            if (nextView === 'run' && !state.selectedJobId) {
+            if (nextView === 'review' && !state.selectedJobId) {
                 createToast('Select a run first, then open its review surface.', 'info');
                 return;
             }
@@ -903,6 +921,180 @@ function setupSectionRail() {
         });
     });
     setActiveWorkspaceLink(state.currentView);
+}
+
+const BUILD_STEP_CONTENT = Object.freeze({
+    lux: [
+        {
+            label: 'Configure',
+            meta: 'Pipeline and preset posture.',
+            title: '1. Configure the draft',
+            summary: 'Choose the pipeline and preset that should drive the next preview-backed run.'
+        },
+        {
+            label: 'Paths',
+            meta: 'Inputs, outputs, and roots.',
+            title: '2. Set paths',
+            summary: 'Supply input and output roots before opening anything advanced.'
+        },
+        {
+            label: 'Options',
+            meta: 'Contextual controls and readiness.',
+            title: '3. Adjust contextual options',
+            summary: 'Only refine backend, outputs, governance, and runtime controls when the run needs them.'
+        },
+        {
+            label: 'Dispatch',
+            meta: 'Warnings, CLI, and launch.',
+            title: '4. Review and dispatch',
+            summary: 'Use preview-backed warnings, effective argv, and readiness to launch with confidence.'
+        }
+    ],
+    archive: [
+        {
+            label: 'Stage',
+            meta: 'Select the archive stage.',
+            title: '1. Select the archive stage',
+            summary: 'Pick the archive stage from the connection card, then continue into stage-specific inputs.'
+        },
+        {
+            label: 'Paths',
+            meta: 'Required stage files.',
+            title: '2. Provide stage inputs',
+            summary: 'Supply the archive root, archive index, or rights manifest required for the selected stage.'
+        },
+        {
+            label: 'Readiness',
+            meta: 'Review governance signals.',
+            title: '3. Review readiness',
+            summary: 'Confirm the stage-specific readiness checks before moving to dispatch.'
+        },
+        {
+            label: 'Dispatch',
+            meta: 'Canonical command and launch.',
+            title: '4. Dispatch archive job',
+            summary: 'Review the canonical command, warnings, and launch the archive job.'
+        }
+    ]
+});
+
+function _currentBuildStepContent() {
+    return state.pipeline === 'lux-depth-v3' ? BUILD_STEP_CONTENT.lux : BUILD_STEP_CONTENT.archive;
+}
+
+function _minimumBuildStep() {
+    return state.pipeline === 'lux-depth-v3' ? 1 : 2;
+}
+
+function resolveBuildStep(value) {
+    const parsed = Number.parseInt(String(value || ''), 10);
+    const minimum = _minimumBuildStep();
+    if (!Number.isFinite(parsed)) return minimum;
+    return Math.max(minimum, Math.min(4, parsed));
+}
+
+function _buildStepButtons() {
+    return [els.buildStepTab1, els.buildStepTab2, els.buildStepTab3, els.buildStepTab4].filter(Boolean);
+}
+
+function _setBuildStepButtonCopy(button, content) {
+    if (!button || !content) return;
+    const label = button.querySelector('.build-step-label');
+    const meta = button.querySelector('.build-step-meta');
+    if (label) label.textContent = content.label;
+    if (meta) meta.textContent = content.meta;
+}
+
+function syncBuildStepUi() {
+    state.portalUi.buildStep = resolveBuildStep(state.portalUi.buildStep);
+    const activeStep = state.portalUi.buildStep;
+    const minimum = _minimumBuildStep();
+    const stepContent = _currentBuildStepContent();
+
+    if (els.buildStepTitle) els.buildStepTitle.textContent = stepContent[activeStep - 1]?.title || 'Build';
+    if (els.buildStepSummary) els.buildStepSummary.textContent = stepContent[activeStep - 1]?.summary || '';
+
+    _buildStepButtons().forEach((button, index) => {
+        const step = index + 1;
+        const content = stepContent[index] || BUILD_STEP_CONTENT.lux[index];
+        const unavailable = step < minimum;
+        const active = step === activeStep;
+        _setBuildStepButtonCopy(button, content);
+        button.classList.toggle('is-active', active);
+        button.classList.toggle('is-disabled', unavailable);
+        button.disabled = unavailable;
+        button.tabIndex = active ? 0 : -1;
+        button.setAttribute('aria-selected', active ? 'true' : 'false');
+        button.setAttribute('aria-disabled', unavailable ? 'true' : 'false');
+    });
+
+    document.querySelectorAll('[data-build-step-panel]').forEach((panel) => {
+        const step = Number.parseInt(String(panel.getAttribute('data-build-step-panel') || ''), 10);
+        const active = step === activeStep;
+        panel.hidden = !active;
+        panel.setAttribute('data-step-active', active ? 'true' : 'false');
+        panel.setAttribute('data-step-hidden', active ? 'false' : 'true');
+    });
+
+    if (els.buildStepBackBtn) {
+        els.buildStepBackBtn.disabled = activeStep <= minimum;
+    }
+    if (els.buildStepNextBtn) {
+        els.buildStepNextBtn.disabled = activeStep >= 4;
+        els.buildStepNextBtn.textContent = activeStep >= 4 ? 'Dispatch Ready' : 'Next';
+    }
+}
+
+function setBuildStep(nextStep, options = {}) {
+    const previous = resolveBuildStep(state.portalUi.buildStep);
+    const resolved = resolveBuildStep(nextStep);
+    state.portalUi.buildStep = resolved;
+    syncBuildStepUi();
+    if (!options.silent && resolved > previous) {
+        void emitPortalEvent('step_completed', {
+            surface: 'build_stepper',
+            metadata: { step: previous, next_step: resolved }
+        });
+    }
+}
+
+function setupBuildStepper() {
+    _buildStepButtons().forEach((button) => {
+        button.addEventListener('click', () => {
+            setBuildStep(button.dataset.buildStepTarget);
+        });
+        button.addEventListener('keydown', (event) => {
+            if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+            event.preventDefault();
+            const buttons = _buildStepButtons().filter((candidate) => !candidate.disabled);
+            const currentIndex = buttons.indexOf(button);
+            if (currentIndex === -1) return;
+            let nextIndex = currentIndex;
+            if (event.key === 'ArrowRight') nextIndex = Math.min(buttons.length - 1, currentIndex + 1);
+            if (event.key === 'ArrowLeft') nextIndex = Math.max(0, currentIndex - 1);
+            if (event.key === 'Home') nextIndex = 0;
+            if (event.key === 'End') nextIndex = buttons.length - 1;
+            const nextButton = buttons[nextIndex];
+            if (!nextButton) return;
+            nextButton.focus();
+            setBuildStep(nextButton.dataset.buildStepTarget);
+        });
+    });
+
+    if (els.buildStepBackBtn) {
+        els.buildStepBackBtn.addEventListener('click', () => setBuildStep(state.portalUi.buildStep - 1, { silent: true }));
+    }
+    if (els.buildStepNextBtn) {
+        els.buildStepNextBtn.addEventListener('click', () => {
+            if (state.portalUi.buildStep >= 4) {
+                if (els.runJobBtn) els.runJobBtn.focus();
+                return;
+            }
+            setBuildStep(state.portalUi.buildStep + 1);
+        });
+    }
+
+    syncBuildStepUi();
 }
 
 function truncateMiddle(value, maxLength = 44) {
@@ -1242,17 +1434,22 @@ function setInspectorTab(tabName) {
     tabConfig.forEach(({ name, button, panel }) => {
         const active = name === nextTab;
         if (button) {
+            button.setAttribute('role', 'tab');
+            button.setAttribute('aria-selected', active ? 'true' : 'false');
+            button.tabIndex = active ? 0 : -1;
             button.className = active
                 ? 'rounded-full border border-cyan-200 dark:border-cyan-900/60 bg-cyan-50 dark:bg-cyan-900/20 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-cyan-700 dark:text-cyan-300 transition-colors'
                 : 'rounded-full border border-slate-200 dark:border-slate-800 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400 transition-colors';
         }
         if (panel) {
             panel.classList.toggle('hidden', !active);
+            panel.setAttribute('role', 'tabpanel');
+            panel.setAttribute('aria-hidden', active ? 'false' : 'true');
         }
     });
 
     if (els.logsShell) {
-        const showLogsShell = nextTab === 'logs' || state.currentView === 'run';
+        const showLogsShell = nextTab === 'logs' || state.currentView === 'review';
         els.logsShell.classList.toggle('hidden', !showLogsShell);
         els.logsShell.classList.toggle('flex', showLogsShell);
     }
@@ -1699,6 +1896,8 @@ function renderPresetIntelligence(payload) {
 
 function renderMissionControl(payload = null) {
     const currentPayload = payload || generatePayload();
+    const activeJob = _latestActiveJob();
+    const reviewJob = _latestReviewableJob();
     const activeJobs = state.jobs.filter((job) => job && (job.state === 'running' || job.state === 'queued')).length;
     syncBuildSurfaceApplicability(currentPayload);
     if (els.heroPipelineValue) els.heroPipelineValue.textContent = String(state.pipeline || 'lux-depth-v3');
@@ -1716,6 +1915,20 @@ function renderMissionControl(payload = null) {
     }
     if (els.heroQueueValue) {
         els.heroQueueValue.textContent = activeJobs > 0 ? `${activeJobs} live job${activeJobs === 1 ? '' : 's'}` : '0 live jobs';
+    }
+    if (els.heroRunBtn) {
+        els.heroRunBtn.disabled = false;
+    }
+    if (els.resumeDraftBtn) {
+        els.resumeDraftBtn.disabled = false;
+    }
+    if (els.heroExportBtn) {
+        els.heroExportBtn.disabled = !activeJob;
+        els.heroExportBtn.dataset.jobId = activeJob ? String(activeJob.id || '') : '';
+    }
+    if (els.refreshHealthBtn) {
+        els.refreshHealthBtn.disabled = !reviewJob;
+        els.refreshHealthBtn.dataset.jobId = reviewJob ? String(reviewJob.id || '') : '';
     }
 
     renderCapabilityChips(currentPayload);
@@ -2200,9 +2413,6 @@ function _syncBootstrapGuardedControls() {
         && !debugBundleBlocked;
     if (els.runJobBtn && els.runJobBtn.textContent !== 'Dispatching...') {
         els.runJobBtn.disabled = !canRunJobs;
-    }
-    if (els.heroRunBtn) {
-        els.heroRunBtn.disabled = !canRunJobs;
     }
 }
 
@@ -2913,7 +3123,9 @@ function renderArtifactPanel() {
 }
 
 function selectJob(jobId) {
+    const previousJobId = state.selectedJobId;
     state.selectedJobId = jobId;
+    state.portalUi.lastSelectedJobId = String(jobId || '');
     if (!state.artifactUi.selectedByJob[String(jobId || '')]) {
         delete state.artifactUi.compareByJob[String(jobId || '')];
     }
@@ -2925,12 +3137,21 @@ function selectJob(jobId) {
     renderReviewSurfaces();
     if (state.currentView === 'operate') {
         setInspectorTab('timeline');
-    } else if (state.currentView === 'run') {
+    } else if (state.currentView === 'review') {
         setInspectorTab('overview');
     }
-    if (state.currentView === 'run') {
+    if (state.currentView === 'review') {
         _syncConsoleRoute(true);
         updateConsoleViewContext();
+    }
+    if (job && String(jobId || '') !== String(previousJobId || '')) {
+        void emitPortalEvent('job_selected', {
+            surface: 'job_queue',
+            metadata: {
+                job_id: String(job.id || ''),
+                pipeline: String(job.pipeline || '')
+            }
+        });
     }
     scheduleRenderJobQueue(false);
 }
@@ -3764,6 +3985,76 @@ function _renderIssueStatus(el, helperText, issue) {
     } else {
         el.classList.add('text-slate-500', 'dark:text-slate-400');
     }
+}
+
+function _buildFieldStatusCopy(fieldName, payload = null) {
+    const currentPayload = payload || generatePayload();
+    if (fieldName === 'input_dir') {
+        return currentPayload.pipeline === 'archive-gate-a'
+            ? 'Choose the archive root that fixity-scan should inspect.'
+            : 'Set the source folder for the next run.';
+    }
+    if (fieldName === 'output_dir') {
+        return currentPayload.pipeline === 'lux-depth-v3'
+            ? 'Choose the governed destination for generated outputs.'
+            : 'Choose the governed destination for stage outputs.';
+    }
+    if (fieldName === 'archive_index') {
+        return 'Required for fixity-scan. Supply an existing normalized archive index that is safe to read from the local allowlist.';
+    }
+    if (fieldName === 'manifest_jsonl') {
+        return 'Required for bag-build and mets-export. Point to a rights-manifest artifact produced by an earlier archive stage.';
+    }
+    return '';
+}
+
+function renderFieldPreviewStatuses(payload = null) {
+    const currentPayload = payload || generatePayload();
+    _renderIssueStatus(
+        els.inputDirStatus,
+        _buildFieldStatusCopy('input_dir', currentPayload),
+        _previewIssueForField('input_dir', currentPayload)
+    );
+    _renderIssueStatus(
+        els.outputDirStatus,
+        _buildFieldStatusCopy('output_dir', currentPayload),
+        _previewIssueForField('output_dir', currentPayload)
+    );
+    _renderIssueStatus(
+        els.archiveIndexStatus,
+        _buildFieldStatusCopy('archive_index', currentPayload),
+        _previewIssueForField('archive_index', currentPayload)
+    );
+    _renderIssueStatus(
+        els.rightsManifestStatus,
+        _buildFieldStatusCopy('manifest_jsonl', currentPayload),
+        _previewIssueForField('manifest_jsonl', currentPayload)
+    );
+}
+
+function _jobRecencyValue(job) {
+    return Number(job?.updatedAt || job?.finishedAt || job?.startedAt || job?.createdAt || 0);
+}
+
+function _latestJobBy(predicate) {
+    return state.jobs
+        .filter((job) => Boolean(job) && predicate(job))
+        .sort((left, right) => _jobRecencyValue(right) - _jobRecencyValue(left))[0] || null;
+}
+
+function _latestActiveJob() {
+    return _latestJobBy((job) => job.state === 'running' || job.state === 'queued');
+}
+
+function _latestReviewableJob() {
+    return _latestJobBy((job) => {
+        const summary = normalizeRunSummary(job.run_summary);
+        const artifactCount = Array.isArray(job.artifacts) ? job.artifacts.length : 0;
+        return artifactCount > 0
+            || Boolean(summary.reviewable_outputs)
+            || job.state === 'succeeded'
+            || job.state === 'partial';
+    });
 }
 
 function syncRuntimeWorkerModeControls() {
@@ -4676,6 +4967,12 @@ function updateUIFromState() {
         if (els.flagsShell) els.flagsShell.classList.add('hidden');
     }
     refreshArchiveFieldVisibility();
+    if (state.pipeline !== 'lux-depth-v3' && state.portalUi.buildStep < 2) {
+        state.portalUi.buildStep = 2;
+    } else {
+        state.portalUi.buildStep = resolveBuildStep(state.portalUi.buildStep);
+    }
+    syncBuildStepUi();
 
     const c = state.config;
     c.depthBackend = _resolveDepthBackend(c.depthBackend);
@@ -4804,6 +5101,7 @@ function updateUIFromState() {
     }
     syncSegmentationControlState(c);
     syncRuntimeWorkerModeControls();
+    renderFieldPreviewStatuses();
 
     renderCLI();
     scheduleConfigPreview(true);
@@ -5218,6 +5516,7 @@ function renderCLI() {
     } else {
         els.cliPreview.textContent = cli.join('\n');
     }
+    renderFieldPreviewStatuses(payload);
     renderPreRunDiagnostics(payload);
     _syncBootstrapGuardedControls();
 }
@@ -5478,6 +5777,7 @@ function refreshProfileDropdown() {
 
 function renderJobQueue(includeReviewSurfaces = true) {
     if (!els.jobList) return;
+    els.jobList.setAttribute('role', 'listbox');
     if (els.queueCount) els.queueCount.textContent = `${state.jobs.length} jobs`;
     if (state.jobs.length === 0) {
         if (els.emptyQueueState) els.emptyQueueState.style.display = 'flex';
@@ -5492,8 +5792,12 @@ function renderJobQueue(includeReviewSurfaces = true) {
     [...state.jobs].reverse().forEach((job) => {
         const li = document.createElement('li');
         li.dataset.jobId = job.id;
+        li.dataset.ui = 'queue-row';
         const isSelected = state.selectedJobId === job.id;
         li.className = `rounded-2xl border p-4 cursor-pointer transition-all ${isSelected ? 'border-cyan-500 bg-cyan-50/80 dark:bg-cyan-900/20 shadow-md ring-1 ring-cyan-500/15' : 'border-slate-200 dark:border-slate-800 bg-slate-50/75 dark:bg-slate-900/45 hover:bg-white/90 dark:hover:bg-slate-800/80'}`;
+        li.tabIndex = 0;
+        li.setAttribute('role', 'option');
+        li.setAttribute('aria-selected', isSelected ? 'true' : 'false');
 
         let badgeColor = 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700';
         if (job.state === 'running' || job.state === 'partial') badgeColor = 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800';
@@ -5610,6 +5914,28 @@ function renderJobQueue(includeReviewSurfaces = true) {
             : 'Newest jobs stay pinned to the top.';
     }
     if (includeReviewSurfaces) renderReviewSurfaces();
+}
+
+function handleJobListKeydown(event) {
+    const row = event.target.closest('li[data-job-id]');
+    if (!row || !els.jobList) return;
+    if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        selectJob(row.dataset.jobId);
+        return;
+    }
+    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+    event.preventDefault();
+    const rows = Array.from(els.jobList.querySelectorAll('li[data-job-id]'));
+    const currentIndex = rows.indexOf(row);
+    if (currentIndex === -1) return;
+    let nextIndex = currentIndex;
+    if (event.key === 'ArrowDown') nextIndex = Math.min(rows.length - 1, currentIndex + 1);
+    if (event.key === 'ArrowUp') nextIndex = Math.max(0, currentIndex - 1);
+    if (event.key === 'Home') nextIndex = 0;
+    if (event.key === 'End') nextIndex = rows.length - 1;
+    const nextRow = rows[nextIndex];
+    if (nextRow) nextRow.focus();
 }
 
 function logToPane(jobId, line) {
@@ -5833,8 +6159,20 @@ async function _startAuthorizedFetchSse(job, eventsUrl) {
             return;
         }
         if (!res.body) return;
+        const reconnectAttempt = Number(job.sseRetry?.attempt) || 0;
         job.reconnectBlocked = false;
         _markJobEventActivity(job);
+        if (reconnectAttempt > 0) {
+            void emitPortalEvent('stream_reconnected', {
+                surface: 'stream_transport',
+                metadata: {
+                    attempt: reconnectAttempt,
+                    job_id: String(job.id || ''),
+                    transport: 'fetch'
+                }
+            });
+        }
+        scheduleRenderJobQueue();
 
         const reader = res.body.getReader();
         const decoder = new TextDecoder();
@@ -5935,8 +6273,19 @@ function startJobEventStream(job, eventsUrl) {
     job.eventSource = es;
     es.onopen = () => {
         if (job.eventSource !== es) return;
+        const reconnectAttempt = Number(job.sseRetry?.attempt) || 0;
         job.reconnectBlocked = false;
         _markJobEventActivity(job);
+        if (reconnectAttempt > 0) {
+            void emitPortalEvent('stream_reconnected', {
+                surface: 'stream_transport',
+                metadata: {
+                    attempt: reconnectAttempt,
+                    job_id: String(job.id || ''),
+                    transport: 'native'
+                }
+            });
+        }
         scheduleRenderJobQueue();
     };
     const safeParseSseEvent = (eventName, e) => {
@@ -6025,6 +6374,13 @@ async function cancelJob(id) {
     if (!job || (job.state !== 'running' && job.state !== 'queued')) return;
     if (_blockManagedUnavailableAction('change job state')) return;
 
+    void emitPortalEvent('cancel_requested', {
+        surface: 'job_queue',
+        metadata: {
+            job_id: String(job.id || ''),
+            pipeline: String(job.pipeline || '')
+        }
+    });
     stopJobActivity(job);
     job.state = 'canceled';
     appendJobLog(job, `[WARN] Cancelled by user.`);
@@ -6126,9 +6482,6 @@ async function submitJob() {
         els.runJobBtn.disabled = true;
         els.runJobBtn.textContent = "Dispatching...";
     }
-    if (els.heroRunBtn) {
-        els.heroRunBtn.disabled = true;
-    }
 
     const randomId = window.crypto?.randomUUID ? window.crypto.randomUUID().replace(/-/g, '').slice(0, 8) : Math.random().toString(36).slice(2, 8);
     const localId = `job_${randomId}`;
@@ -6183,8 +6536,16 @@ async function submitJob() {
 
         job.id = data.data.id;
         state.selectedJobId = job.id;
+        state.portalUi.lastSelectedJobId = String(job.id || '');
         scheduleRenderJobQueue();
         createToast(`Job dispatched: ${job.id}`, 'success');
+        void emitPortalEvent('job_submitted', {
+            surface: 'dispatch',
+            metadata: {
+                job_id: String(job.id || ''),
+                pipeline: String(job.pipeline || payload.pipeline || '')
+            }
+        });
 
         startJobEventStream(job, data.data.events_url);
     } catch (err) {
@@ -6318,9 +6679,31 @@ if (els.exportBtn) els.exportBtn.addEventListener('click', () => {
     });
 });
 
+if (els.heroRunBtn) {
+    els.heroRunBtn.addEventListener('click', () => {
+        navigateConsoleView('build');
+        setBuildStep(1, { silent: true });
+        if (els.pipelineSelect) els.pipelineSelect.focus();
+    });
+}
+
+if (els.resumeDraftBtn) {
+    els.resumeDraftBtn.addEventListener('click', () => {
+        navigateConsoleView('build');
+        syncBuildStepUi();
+        const activeStep = document.querySelector('.build-step-tab.is-active');
+        if (activeStep && typeof activeStep.focus === 'function') activeStep.focus();
+    });
+}
+
 if (els.heroExportBtn) {
     els.heroExportBtn.addEventListener('click', () => {
-        if (els.exportBtn) els.exportBtn.click();
+        const jobId = String(els.heroExportBtn.dataset.jobId || '').trim();
+        if (!jobId) {
+            createToast('No active job is available right now.', 'info');
+            return;
+        }
+        navigateConsoleView('operate', { jobId });
     });
 }
 
@@ -6456,7 +6839,15 @@ if (els.openRunDetailsBtn) {
             createToast('Select a run first, then open its review surface.', 'info');
             return;
         }
-        navigateConsoleView('run', { jobId: state.selectedJobId });
+        const selectedJob = state.jobs.find((item) => item.id === state.selectedJobId);
+        void emitPortalEvent('run_details_opened', {
+            surface: 'job_inspector',
+            metadata: {
+                job_id: String(state.selectedJobId || ''),
+                pipeline: String(selectedJob?.pipeline || '')
+            }
+        });
+        navigateConsoleView('review', { jobId: state.selectedJobId });
     });
 }
 
@@ -6479,6 +6870,14 @@ if (els.artifactCompareBtn) {
         if (!selectedJob) return;
         const key = String(selectedJob.id || '');
         state.artifactUi.compareByJob[key] = !Boolean(state.artifactUi.compareByJob[key]);
+        void emitPortalEvent('artifact_compared', {
+            surface: 'artifact_review',
+            metadata: {
+                enabled: Boolean(state.artifactUi.compareByJob[key]),
+                job_id: key,
+                pipeline: String(selectedJob.pipeline || '')
+            }
+        });
         renderReviewSurfaces();
     });
 }
@@ -6490,6 +6889,15 @@ if (els.openArtifactBtn) {
             createToast('No artifact URL is available for this selection.', 'error');
             return;
         }
+        const selectedJob = state.jobs.find((item) => item.id === state.selectedJobId);
+        void emitPortalEvent('artifact_opened', {
+            surface: 'artifact_review',
+            metadata: {
+                job_id: String(selectedJob?.id || ''),
+                media_kind: String(_selectedArtifactForJob(selectedJob)?.media_kind || 'file'),
+                pipeline: String(selectedJob?.pipeline || '')
+            }
+        });
         window.open(url, '_blank', 'noopener,noreferrer');
     });
 }
@@ -6556,14 +6964,18 @@ if (els.clearLogsBtn) els.clearLogsBtn.addEventListener('click', () => {
     if (els.logPane) els.logPane.textContent = '';
 });
 if (els.runJobBtn) els.runJobBtn.addEventListener('click', submitJob);
-if (els.heroRunBtn) els.heroRunBtn.addEventListener('click', submitJob);
 if (els.refreshHealthBtn) {
-    els.refreshHealthBtn.addEventListener('click', async () => {
-        await checkBackend(true);
-        createToast(state.backendOk ? 'Backend status refreshed.' : 'Backend still offline; dispatch remains blocked.', state.backendOk ? 'success' : 'info');
+    els.refreshHealthBtn.addEventListener('click', () => {
+        const jobId = String(els.refreshHealthBtn.dataset.jobId || '').trim();
+        if (!jobId) {
+            createToast('No reviewable output is available yet.', 'info');
+            return;
+        }
+        navigateConsoleView('review', { jobId });
     });
 }
 if (els.jobList) els.jobList.addEventListener('click', handleJobListClick);
+if (els.jobList) els.jobList.addEventListener('keydown', handleJobListKeydown);
 
 function _normalizeThemePreference(value) {
     const normalized = String(value || '').trim().toLowerCase();
@@ -6633,8 +7045,65 @@ if (els.themeBtn) els.themeBtn.addEventListener('click', () => {
     applyThemePreference(_nextThemePreference(state.themePreference));
 });
 
-const toggleModal = (show) => {
+function _rememberOverlayTrigger(trigger = document.activeElement) {
+    state.portalUi.lastOverlayTrigger = trigger && typeof trigger.focus === 'function' ? trigger : null;
+}
+
+function _restoreOverlayFocus() {
+    const trigger = state.portalUi.lastOverlayTrigger;
+    if (trigger && document.contains(trigger) && typeof trigger.focus === 'function') {
+        trigger.focus();
+    }
+    state.portalUi.lastOverlayTrigger = null;
+}
+
+function _overlayFocusableElements(root) {
+    if (!root) return [];
+    return Array.from(
+        root.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')
+    ).filter((element) => {
+        if (!(element instanceof HTMLElement)) return false;
+        if (element.hasAttribute('disabled')) return false;
+        if (element.getAttribute('aria-hidden') === 'true') return false;
+        return window.getComputedStyle(element).display !== 'none';
+    });
+}
+
+function _activeOverlayPanel() {
+    if (els.shortcutsModal && !els.shortcutsModal.classList.contains('hidden')) {
+        return els.shortcutsPanel;
+    }
+    if (els.effectiveConfigDrawer && !els.effectiveConfigDrawer.classList.contains('hidden')) {
+        return els.effectiveConfigDrawer.querySelector('[role="dialog"]');
+    }
+    return null;
+}
+
+function _trapOverlayFocus(event) {
+    if (event.key !== 'Tab') return false;
+    const panel = _activeOverlayPanel();
+    if (!panel) return false;
+    const focusable = _overlayFocusableElements(panel);
+    if (focusable.length === 0) return false;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    const activeElement = document.activeElement;
+    if (event.shiftKey && (activeElement === first || !panel.contains(activeElement))) {
+        event.preventDefault();
+        last.focus();
+        return true;
+    }
+    if (!event.shiftKey && (activeElement === last || !panel.contains(activeElement))) {
+        event.preventDefault();
+        first.focus();
+        return true;
+    }
+    return false;
+}
+
+const toggleModal = (show, trigger = document.activeElement) => {
     if (show) {
+        _rememberOverlayTrigger(trigger);
         els.shortcutsModal.classList.remove('hidden');
         els.shortcutsModal.classList.add('flex');
         void els.shortcutsModal.offsetWidth;
@@ -6642,6 +7111,7 @@ const toggleModal = (show) => {
         els.shortcutsPanel.classList.remove('scale-95', 'opacity-0');
         els.shortcutsPanel.classList.add('scale-100', 'opacity-100');
         els.shortcutsModal.setAttribute("aria-hidden", "false");
+        els.shortcutsModal.dataset.overlayOpen = 'true';
         els.closeShortcutsBtn.focus();
     } else {
         els.shortcutsModal.classList.add('opacity-0');
@@ -6651,18 +7121,22 @@ const toggleModal = (show) => {
             els.shortcutsModal.classList.add('hidden');
             els.shortcutsModal.classList.remove('flex');
             els.shortcutsModal.setAttribute("aria-hidden", "true");
+            els.shortcutsModal.dataset.overlayOpen = 'false';
+            _restoreOverlayFocus();
         }, 200);
     }
 };
 
-const toggleEffectiveConfigDrawer = (show) => {
+const toggleEffectiveConfigDrawer = (show, trigger = document.activeElement) => {
     if (!els.effectiveConfigDrawer) return;
     state.portalUi.effectiveConfigOpen = Boolean(show);
     if (show) {
+        _rememberOverlayTrigger(trigger);
         renderEffectiveConfigDrawer(generatePayload());
         els.effectiveConfigDrawer.classList.remove('hidden');
         els.effectiveConfigDrawer.classList.add('flex');
         els.effectiveConfigDrawer.setAttribute('aria-hidden', 'false');
+        els.effectiveConfigDrawer.dataset.overlayOpen = 'true';
         if (els.closeEffectiveConfigBtn) els.closeEffectiveConfigBtn.focus();
         void emitPortalEvent('effective_config_opened', {
             surface: 'effective_config',
@@ -6673,18 +7147,20 @@ const toggleEffectiveConfigDrawer = (show) => {
     els.effectiveConfigDrawer.classList.add('hidden');
     els.effectiveConfigDrawer.classList.remove('flex');
     els.effectiveConfigDrawer.setAttribute('aria-hidden', 'true');
+    els.effectiveConfigDrawer.dataset.overlayOpen = 'false';
+    _restoreOverlayFocus();
 };
 
-if (els.shortcutsBtn) els.shortcutsBtn.addEventListener('click', () => toggleModal(true));
+if (els.shortcutsBtn) els.shortcutsBtn.addEventListener('click', (event) => toggleModal(true, event.currentTarget));
 if (els.closeShortcutsBtn) els.closeShortcutsBtn.addEventListener('click', () => toggleModal(false));
 if (els.shortcutsModal) els.shortcutsModal.addEventListener('click', (e) => {
     if (e.target === els.shortcutsModal) toggleModal(false);
 });
 if (els.openEffectiveConfigBtn) {
-    els.openEffectiveConfigBtn.addEventListener('click', () => toggleEffectiveConfigDrawer(true));
+    els.openEffectiveConfigBtn.addEventListener('click', (event) => toggleEffectiveConfigDrawer(true, event.currentTarget));
 }
 if (els.effectiveConfigBtn) {
-    els.effectiveConfigBtn.addEventListener('click', () => toggleEffectiveConfigDrawer(true));
+    els.effectiveConfigBtn.addEventListener('click', (event) => toggleEffectiveConfigDrawer(true, event.currentTarget));
 }
 if (els.closeEffectiveConfigBtn) {
     els.closeEffectiveConfigBtn.addEventListener('click', () => toggleEffectiveConfigDrawer(false));
@@ -6696,6 +7172,9 @@ if (els.effectiveConfigDrawer) {
 }
 
 document.addEventListener('keydown', (e) => {
+    if (_trapOverlayFocus(e)) {
+        return;
+    }
     if (e.key === "Escape" && els.effectiveConfigDrawer && !els.effectiveConfigDrawer.classList.contains("hidden")) {
         e.preventDefault();
         toggleEffectiveConfigDrawer(false);
@@ -6762,6 +7241,7 @@ async function init() {
     refreshProfileDropdown();
     applyConsoleRouteFromLocation(true);
     updateUIFromState();
+    setupBuildStepper();
     bindInputs();
     if (window.requestAnimationFrame) {
         window.requestAnimationFrame(() => {

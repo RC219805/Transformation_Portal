@@ -561,6 +561,11 @@ def _state_probe_expression() -> str:
       const el = document.getElementById('overview-shell');
       return !!(el && !el.classList.contains('hidden'));
     })(),
+    buildStepperVisible: !!document.querySelector('[data-ui="build-stepper"]'),
+    activeBuildStep: (() => {
+      const el = document.querySelector('#buildStepTabs .build-step-tab.is-active');
+      return el ? String(el.getAttribute('data-build-step-target') || '') : '';
+    })(),
     runJobDisabled: (() => {
       const el = document.getElementById('runJobBtn');
       return !!(el && el.disabled);
@@ -629,6 +634,10 @@ def _state_probe_expression() -> str:
       const el = document.getElementById('effectiveConfigDrawer');
       return !!(el && !el.classList.contains('hidden'));
     })(),
+    reviewSurfaceVisible: (() => {
+      const el = document.querySelector('[data-ui="review-surface"]');
+      return !!(el && !el.classList.contains('hidden'));
+    })(),
     v2PresetVisible: (() => {
       const el = document.getElementById('v2PresetField');
       return !!(el && !el.classList.contains('hidden'));
@@ -645,7 +654,7 @@ def _navigate_to_console_view_expression(view: str, job_id: str = "") -> str:
   const cfg = {payload};
   const url = new URL(window.location.href);
   url.searchParams.set('view', cfg.view);
-  if (cfg.view === 'run' && cfg.job_id) {{
+  if (cfg.view === 'review' && cfg.job_id) {{
     url.searchParams.set('job', cfg.job_id);
   }} else {{
     url.searchParams.delete('job');
@@ -709,6 +718,11 @@ def _set_pipeline_form_expression(
     archiveIndexPath: document.getElementById('archiveIndexPath').value,
     rightsManifestPath: document.getElementById('rightsManifestPath').value,
     runJobDisabled: !!document.getElementById('runJobBtn').disabled,
+    buildStepperVisible: !!document.querySelector('[data-ui="build-stepper"]'),
+    activeBuildStep: (() => {{
+      const el = document.querySelector('#buildStepTabs .build-step-tab.is-active');
+      return el ? String(el.getAttribute('data-build-step-target') || '') : '';
+    }})(),
     heroReadinessLabel: (document.getElementById('heroReadinessLabel').textContent || '').trim(),
     cliFirstLine: ((document.getElementById('cliPreview').textContent || '').trim().split('\\n')[0] || '').trim(),
     cliText: (document.getElementById('cliPreview').textContent || '').trim(),
@@ -1007,6 +1021,10 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         )
         _expect(isinstance(lux_state, dict), f"Unexpected lux portal state: {lux_state!r}")
         _expect(lux_state.get("pipeline") == "lux-depth-v3", f"Lux pipeline did not remain selected: {lux_state}")
+        _expect(
+            bool(lux_state.get("buildStepperVisible")), f"Build stepper should stay visible in the Lux builder: {lux_state}"
+        )
+        _expect(str(lux_state.get("activeBuildStep", "")) == "1", f"Lux builder should begin on step 1: {lux_state}")
         _expect(not bool(lux_state.get("archiveFieldsVisible")), f"Lux build view should hide archive controls: {lux_state}")
         _expect(bool(lux_state.get("flagsShellVisible")), f"Lux build view should keep core flags visible: {lux_state}")
         _expect(
@@ -1154,6 +1172,10 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             f"archive-gate-b must expose the manifest field: {gate_b_state}",
         )
         _expect(
+            str(gate_b_state.get("activeBuildStep", "")) == "2",
+            f"archive-gate-b should move the builder to step 2: {gate_b_state}",
+        )
+        _expect(
             not bool(gate_b_state.get("archiveIndexFieldVisible")),
             f"archive-gate-b should hide archive index input: {gate_b_state}",
         )
@@ -1196,6 +1218,10 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             f"archive-gate-c must expose the manifest field: {gate_c_state}",
         )
         _expect(
+            str(gate_c_state.get("activeBuildStep", "")) == "2",
+            f"archive-gate-c should move the builder to step 2: {gate_c_state}",
+        )
+        _expect(
             not bool(gate_c_state.get("archiveIndexFieldVisible")),
             f"archive-gate-c should hide archive index input: {gate_c_state}",
         )
@@ -1236,6 +1262,10 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         _expect(
             bool(missing_index_state.get("archiveFieldsVisible")) and not bool(missing_index_state.get("luxFieldsVisible")),
             f"Archive-specific UI did not toggle correctly: {missing_index_state}",
+        )
+        _expect(
+            str(missing_index_state.get("activeBuildStep", "")) == "2",
+            f"archive-gate-a should move the builder to step 2: {missing_index_state}",
         )
         _expect(
             not bool(missing_index_state.get("flagsShellVisible")),
@@ -1380,23 +1410,24 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             f"Unexpected stream status after completion: {terminal_state}",
         )
 
-        print("portal-browser-smoke: opening run details view", flush=True)
-        connection.evaluate(_navigate_to_console_view_expression("run", submitted_job_id))
+        print("portal-browser-smoke: opening review view", flush=True)
+        connection.evaluate(_navigate_to_console_view_expression("review", submitted_job_id))
         run_state = _poll(
             connection,
             _state_probe_expression(),
             predicate=lambda value: (
                 isinstance(value, dict)
-                and str(value.get("currentView", "")) == "run"
+                and str(value.get("currentView", "")) == "review"
                 and str(value.get("selectedJobId", "")) == submitted_job_id
                 and bool(value.get("queueShellHidden"))
+                and bool(value.get("reviewSurfaceVisible"))
             ),
             timeout_seconds=args.timeout_seconds,
-            description="run details view to become active",
+            description="review view to become active",
         )
         _expect(
             "3 indexed" in str(run_state.get("selectedJobArtifactCount", "")),
-            f"Run details view lost artifact context: {run_state}",
+            f"Review view lost artifact context: {run_state}",
         )
 
         print("portal-browser-smoke: ok")

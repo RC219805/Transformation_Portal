@@ -838,6 +838,400 @@ details[open] .disclosure-chevron {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 }
+
+/* Operator console reset */
+
+:root {
+    --shell-border: rgba(148, 163, 184, 0.22);
+    --shell-panel: rgba(255, 255, 255, 0.86);
+    --shell-panel-strong: rgba(255, 255, 255, 0.94);
+    --shell-accent: #0891b2;
+    --shell-accent-soft: rgba(8, 145, 178, 0.1);
+}
+
+.shell-bg {
+    min-height: 100vh;
+    background:
+        radial-gradient(circle at 12% 18%, rgba(34, 211, 238, 0.12), transparent 24%),
+        radial-gradient(circle at 88% 10%, rgba(14, 165, 233, 0.08), transparent 20%),
+        linear-gradient(180deg, rgba(248, 250, 252, 0.96) 0%, rgba(241, 245, 249, 0.94) 48%, rgba(248, 250, 252, 0.98) 100%);
+    animation: none;
+}
+
+.dark .shell-bg {
+    background:
+        radial-gradient(circle at 14% 18%, rgba(34, 211, 238, 0.12), transparent 24%),
+        radial-gradient(circle at 86% 12%, rgba(14, 165, 233, 0.1), transparent 22%),
+        linear-gradient(180deg, rgba(2, 6, 23, 0.98) 0%, rgba(15, 23, 42, 0.96) 52%, rgba(2, 6, 23, 1) 100%);
+}
+
+.shell-noise {
+    position: fixed;
+    inset: 0;
+    z-index: -20;
+    pointer-events: none;
+    opacity: 0.2;
+    background-image:
+        radial-gradient(rgba(15, 23, 42, 0.08) 0.45px, transparent 0.45px),
+        radial-gradient(rgba(8, 145, 178, 0.06) 0.45px, transparent 0.45px);
+    background-position: 0 0, 16px 16px;
+    background-size: 22px 22px, 28px 28px;
+}
+
+.dark .shell-noise {
+    opacity: 0.18;
+    background-image:
+        radial-gradient(rgba(255, 255, 255, 0.08) 0.45px, transparent 0.45px),
+        radial-gradient(rgba(34, 211, 238, 0.08) 0.45px, transparent 0.45px);
+}
+
+.topbar-subtitle {
+    margin-top: 0.2rem;
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--shell-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.topbar-status {
+    align-items: center;
+    gap: 0.55rem;
+    margin-left: 1rem;
+    border: 1px solid var(--shell-border);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.75);
+    padding: 0.55rem 0.85rem;
+}
+
+.dark .topbar-status {
+    background: rgba(15, 23, 42, 0.72);
+}
+
+.section-kicker {
+    font-size: 11px;
+    letter-spacing: 0.18em;
+}
+
+.workspace-shell[data-ambient-active="true"] {
+    transform: none;
+    border-color: rgba(8, 145, 178, 0.22);
+    box-shadow: 0 14px 32px rgba(15, 23, 42, 0.06);
+}
+
+.dark .workspace-shell[data-ambient-active="true"] {
+    box-shadow: 0 18px 40px rgba(2, 6, 23, 0.26);
+}
+
+.stat-label {
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--shell-muted);
+}
+
+.stat-value {
+    margin-top: 0.7rem;
+    font-size: 16px;
+    line-height: 1.5;
+    font-weight: 800;
+    color: var(--shell-ink);
+}
+
+.overview-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    justify-content: flex-end;
+}
+
+.overview-meta-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+}
+
+.stat-tile,
+.panel-subtle {
+    background: rgba(255, 255, 255, 0.74);
+}
+
+.dark .stat-tile,
+.dark .panel-subtle {
+    background: rgba(15, 23, 42, 0.72);
+}
+
+.hero-action {
+    min-height: 44px;
+    padding: 0.8rem 1rem;
+    letter-spacing: 0.12em;
+}
+
+.hero-action-primary {
+    background: linear-gradient(135deg, #0f766e, #0891b2);
+    box-shadow: 0 14px 28px rgba(8, 145, 178, 0.16);
+}
+
+.hero-action-secondary {
+    background: rgba(255, 255, 255, 0.88);
+}
+
+.dark .hero-action-secondary {
+    background: rgba(15, 23, 42, 0.78);
+}
+
+.workspace-rail {
+    grid-template-columns: minmax(0, 240px) minmax(0, 1fr);
+    align-items: start;
+    background: rgba(255, 255, 255, 0.8);
+    box-shadow: 0 12px 28px rgba(15, 23, 42, 0.05);
+}
+
+.dark .workspace-rail {
+    background: rgba(15, 23, 42, 0.8);
+}
+
+.workspace-rail-text {
+    font-size: 14px;
+}
+
+.workspace-rail-links {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.65rem;
+}
+
+.workspace-link {
+    min-height: 0;
+    border-radius: 1rem;
+    padding: 0.9rem 1rem;
+    justify-content: flex-start;
+}
+
+.workspace-link-label {
+    font-size: 12px;
+    letter-spacing: 0.12em;
+}
+
+.workspace-link-meta {
+    font-size: 13px;
+    line-height: 1.55;
+}
+
+.build-stepper-actions-inline {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+}
+
+.build-step-tabs {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.75rem;
+}
+
+.build-step-tab {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.8rem;
+    min-height: 88px;
+    width: 100%;
+    border: 1px solid var(--shell-border);
+    border-radius: 1.25rem;
+    background: rgba(255, 255, 255, 0.72);
+    padding: 0.95rem 1rem;
+    text-align: left;
+    color: var(--shell-ink);
+    transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.dark .build-step-tab {
+    background: rgba(15, 23, 42, 0.74);
+}
+
+.build-step-tab:hover,
+.build-step-tab:focus-visible {
+    transform: translateY(-1px);
+    border-color: rgba(8, 145, 178, 0.28);
+    outline: none;
+}
+
+.build-step-tab.is-active {
+    border-color: rgba(8, 145, 178, 0.34);
+    background: linear-gradient(135deg, rgba(34, 211, 238, 0.12), rgba(255, 255, 255, 0.88));
+    box-shadow: 0 12px 24px rgba(8, 145, 178, 0.08);
+}
+
+.dark .build-step-tab.is-active {
+    background: linear-gradient(135deg, rgba(34, 211, 238, 0.16), rgba(15, 23, 42, 0.9));
+}
+
+.build-step-tab.is-disabled {
+    opacity: 0.58;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.build-step-index {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 999px;
+    background: rgba(8, 145, 178, 0.12);
+    color: var(--shell-accent);
+    font-size: 13px;
+    font-weight: 800;
+}
+
+.build-step-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.build-step-label {
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+}
+
+.build-step-meta {
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--shell-muted);
+}
+
+.stepper-nav-btn {
+    min-height: 44px;
+    border: 1px solid var(--shell-border);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.82);
+    color: var(--shell-ink);
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    padding: 0.75rem 1rem;
+    text-transform: uppercase;
+}
+
+.dark .stepper-nav-btn {
+    background: rgba(15, 23, 42, 0.78);
+}
+
+.stepper-nav-btn-primary {
+    background: linear-gradient(135deg, #0f766e, #0891b2);
+    border-color: transparent;
+    color: #fff;
+}
+
+.field-status {
+    min-height: 1.5rem;
+}
+
+.micro-status,
+.job-chip {
+    font-size: 11px;
+    letter-spacing: 0.1em;
+}
+
+#jobs-shell {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: minmax(280px, 0.9fr) minmax(360px, 1.05fr) minmax(340px, 1fr);
+    align-items: start;
+}
+
+#queue-shell {
+    grid-column: 1;
+    max-height: none;
+}
+
+#selected-job-shell {
+    grid-column: 2;
+}
+
+#artifacts-shell,
+#logs-shell {
+    grid-column: 3;
+}
+
+body[data-console-view="review"] #jobs-shell {
+    grid-template-columns: minmax(340px, 0.9fr) minmax(520px, 1.35fr);
+}
+
+body[data-console-view="review"] #selected-job-shell {
+    grid-column: 1;
+}
+
+body[data-console-view="review"] #artifacts-shell,
+body[data-console-view="review"] #logs-shell {
+    grid-column: 2;
+}
+
+#jobList li[data-job-id]:focus-visible,
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[role="tab"]:focus-visible {
+    outline: 2px solid rgba(8, 145, 178, 0.45);
+    outline-offset: 2px;
+}
+
+@media (max-width: 1180px) {
+    .workspace-rail {
+        grid-template-columns: 1fr;
+    }
+
+    .workspace-rail-links,
+    .build-step-tabs,
+    #jobs-shell,
+    body[data-console-view="review"] #jobs-shell {
+        grid-template-columns: 1fr;
+    }
+
+    #queue-shell,
+    #selected-job-shell,
+    #artifacts-shell,
+    #logs-shell,
+    body[data-console-view="review"] #selected-job-shell,
+    body[data-console-view="review"] #artifacts-shell,
+    body[data-console-view="review"] #logs-shell {
+        grid-column: auto;
+    }
+}
+
+@media (max-width: 767px) {
+    .overview-actions,
+    .build-stepper-actions-inline {
+        justify-content: stretch;
+    }
+
+    .overview-meta-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .workspace-link,
+    .build-step-tab {
+        min-height: 0;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .shell-bg,
+    .workspace-shell,
+    .build-step-tab,
+    .workspace-link,
+    .hero-action {
+        animation: none !important;
+        transform: none !important;
+    }
+}
 /* Phase 1 local utility snapshot replacing Tailwind CDN for portal.html */
 
 .focus\:ring-2:focus,
