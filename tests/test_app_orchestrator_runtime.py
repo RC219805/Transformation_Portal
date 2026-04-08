@@ -845,6 +845,7 @@ def test_portal_selected_job_inspector_uses_timeline_tabs_and_log_secondary_view
 def test_portal_operate_surfaces_use_jobs_hydration_skeletons_before_empty_state() -> None:
     content = _portal_bundle_content()
     helper_body = _extract_js_function_body(content, "_isJobsHydrationPending")
+    toggle_body = _extract_js_function_body(content, "_toggleSurfaceSkeleton")
     queue_body = _extract_js_function_body(content, "renderJobQueue")
     inspector_body = _extract_js_function_body(content, "renderSelectedJobInspector")
     artifact_body = _extract_js_function_body(content, "renderArtifactPanel")
@@ -858,8 +859,10 @@ def test_portal_operate_surfaces_use_jobs_hydration_skeletons_before_empty_state
     assert 'id="artifactSkeletonState"' in content
     assert "state.jobsLoadStatus === 'loading'" in helper_body
     assert "state.bootstrap.status === 'pending' || state.bootstrap.status === 'degraded'" in helper_body
+    assert "skeleton.setAttribute('aria-hidden', 'true');" in toggle_body
     assert "const queueLoading = _isJobsHydrationPending();" in queue_body
     assert "els.queueShell.setAttribute('aria-busy', queueLoading ? 'true' : 'false');" in queue_body
+    assert "els.queueSkeletonState.setAttribute('aria-hidden', 'true');" in queue_body
     assert (
         "_toggleSurfaceSkeleton(els.selectedJobShell, els.selectedJobShellContent, els.selectedJobSkeletonState, jobsLoading);"
         in inspector_body
@@ -871,6 +874,7 @@ def test_portal_operate_surfaces_use_jobs_hydration_skeletons_before_empty_state
     assert "state.jobsLoadStatus = 'loading';" in recover_body
     assert "state.jobsLoadStatus = 'ready';" in recover_body
     assert "state.jobsLoadStatus = 'loading';" in flush_body
+    assert "(state.jobsLoadStatus === 'pending' || state.jobsLoadStatus === 'loading')" in backend_body
     assert "state.jobsLoadStatus = 'offline';" in backend_body
 
 

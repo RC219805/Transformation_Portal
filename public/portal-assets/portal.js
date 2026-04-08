@@ -1980,7 +1980,7 @@ function _toggleSurfaceSkeleton(container, content, skeleton, isLoading) {
     }
     if (skeleton) {
         skeleton.classList.toggle('hidden', !isLoading);
-        skeleton.setAttribute('aria-hidden', isLoading ? 'false' : 'true');
+        skeleton.setAttribute('aria-hidden', 'true');
     }
 }
 
@@ -5910,7 +5910,7 @@ function renderJobQueue(includeReviewSurfaces = true) {
     }
     if (els.queueSkeletonState) {
         els.queueSkeletonState.classList.toggle('hidden', !queueLoading);
-        els.queueSkeletonState.setAttribute('aria-hidden', queueLoading ? 'false' : 'true');
+        els.queueSkeletonState.setAttribute('aria-hidden', 'true');
     }
     els.jobList.classList.toggle('hidden', queueLoading);
     if (els.queueCount) els.queueCount.textContent = `${state.jobs.length} jobs`;
@@ -6123,7 +6123,10 @@ async function checkBackend(force = false) {
         state.readiness = { server: {}, pipelines: {} };
         state.bootstrap.pendingOnlineFollowup = false;
         state.bootstrap.onlineFollowupComplete = false;
-        if (state.jobs.length === 0 && state.jobsLoadStatus === 'pending') {
+        if (
+            state.jobs.length === 0 &&
+            (state.jobsLoadStatus === 'pending' || state.jobsLoadStatus === 'loading')
+        ) {
             state.jobsLoadStatus = 'offline';
         }
         state.jobs.forEach((job) => {
