@@ -48,6 +48,7 @@ Key docs:
 - [Portal Secure Front Door Quickstart](docs/guides/PORTAL_SECURE_FRONTDOOR_QUICKSTART.md)
 - [Portal Orchestrator Roadmap (Re-Baselined)](docs/architecture/PORTAL_ORCHESTRATOR_ROADMAP.md)
 - [Portal Frontdoor Roadmap](docs/architecture/PORTAL_FRONTDOOR_ROADMAP.md)
+- [DNA UX/UI Strategy Re-baseline](docs/architecture/DNA_UX_UI_STRATEGY_REBASELINE_2026-04-08.md)
 - [Lux Depth V3 CLI Guide](docs/cli/LUX_DEPTH_V3_CLI_GUIDE.md)
 - [Context-Aware Rendering Guide](docs/guides/CONTEXT_AWARE_RENDERING.md)
 
