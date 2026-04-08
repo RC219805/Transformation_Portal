@@ -82,6 +82,7 @@ Route ownership:
 - `GET /portal/bootstrap` returns the managed-mode bootstrap contract for the browser UI.
 - `/v1/*` stays same-origin at the front door and is proxied to FastAPI with server-side secret injection.
 - `GET /healthz` reports front-door readiness plus backend reachability.
+- `GET /healthz` now returns structured readiness checks under `checks.backend`, `checks.access_config`, `checks.user_source`, and `checks.session_store`; required production failures return `503`.
 
 Static front-door assets:
 - `/brand/dna-mark-dark.svg` for dark/video-backed front-door surfaces
@@ -138,14 +139,26 @@ originRequest:
 Front door checks:
 
 ```bash
-cd web/secure-landing
-npm test
-npm run build
+make test-frontdoor-contract
 ```
 
 Browser smoke against a running managed front door:
 
 ```bash
+TP_FRONTDOOR_BASE_URL="http://localhost:3000" \
+TP_FRONTDOOR_USERNAME="<username>" \
+TP_FRONTDOOR_PASSWORD="<password>" \
+make validate-frontdoor-browser
+```
+
+Equivalent direct commands remain available if you want to run the underlying
+checks manually:
+
+```bash
+cd web/secure-landing
+npm test
+npm run build
+
 TP_FRONTDOOR_BASE_URL="http://localhost:3000" \
 TP_FRONTDOOR_USERNAME="<username>" \
 TP_FRONTDOOR_PASSWORD="<password>" \

@@ -46,6 +46,16 @@ def _portal_html_content() -> str:
     return PORTAL_HTML_PATH.read_text(encoding="utf-8")
 
 
+@lru_cache(maxsize=1)
+def _portal_asset_urls_from_html() -> set[str]:
+    return set(re.findall(r'["\'](/portal/assets/[^"\']+)["\']', _portal_html_content()))
+
+
+@lru_cache(maxsize=1)
+def _portal_asset_urls_from_css() -> set[str]:
+    return set(re.findall(r'url\(["\']?(/portal/assets/[^)"\']+)["\']?\)', _portal_css_content()))
+
+
 def _portal_asset_path(asset_url: str) -> Path:
     if not asset_url.startswith("/portal/assets/"):
         raise AssertionError(f"unexpected portal asset url: {asset_url}")
@@ -412,6 +422,7 @@ def test_portal_html_externalizes_direct_debug_assets_without_third_party_hosts(
 
 
 def test_portal_asset_manifest_is_explicit_and_repo_local() -> None:
+    assert orchestrator_app.PORTAL_ASSET_MANIFEST_PATH.is_file()
     assert orchestrator_app.PORTAL_ASSET_PATHS == {
         "portal.css": orchestrator_app.PORTAL_ASSETS_DIR / "portal.css",
         "portal.js": orchestrator_app.PORTAL_ASSETS_DIR / "portal.js",
@@ -427,6 +438,41 @@ def test_portal_asset_manifest_is_explicit_and_repo_local() -> None:
     for asset_path in orchestrator_app.PORTAL_ASSET_PATHS.values():
         assert asset_path.is_file()
         assert asset_path.is_relative_to(orchestrator_app.PORTAL_ASSETS_DIR)
+
+
+def test_portal_asset_manifest_rejects_paths_outside_portal_assets_dir(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    manifest_path = tmp_path / "portal-asset-manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "assets": {
+                    "portal.css": {
+                        "repo_path": "../portal.html",
+                        "media_type": "text/css; charset=utf-8",
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(orchestrator_app, "PORTAL_ASSET_MANIFEST_PATH", manifest_path)
+
+    with pytest.raises(RuntimeError, match="points outside"):
+        orchestrator_app._load_portal_asset_manifest()
+
+
+def test_portal_html_asset_references_are_covered_by_manifest() -> None:
+    html_asset_urls = _portal_asset_urls_from_html()
+    bundled_asset_urls = html_asset_urls | _portal_asset_urls_from_css()
+    manifest_asset_urls = {f"/portal/assets/{asset_name}" for asset_name in orchestrator_app.PORTAL_ASSET_MANIFEST.keys()}
+
+    assert html_asset_urls
+    assert html_asset_urls <= manifest_asset_urls
+    assert bundled_asset_urls == manifest_asset_urls
+    for asset_url in bundled_asset_urls:
+        _portal_asset_path(asset_url)
 
 
 def test_portal_fetch_sse_reconnect_scheduler_has_terminal_guard_and_backoff() -> None:

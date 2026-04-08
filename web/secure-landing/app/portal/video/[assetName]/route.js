@@ -1,4 +1,5 @@
 import { getConfig } from "../../../../lib/config.js";
+import { audit } from "../../../../lib/audit.js";
 import { applySecurityHeaders } from "../../../../lib/http.js";
 import { buildUpstreamHeaders, buildUpstreamUrl, copyUpstreamResponseHeaders } from "../../../../lib/proxy.js";
 
@@ -22,11 +23,18 @@ async function proxyPortalVideo(request, { params }) {
   const resolvedParams = typeof params?.then === "function" ? await params : params;
   const assetName = String(resolvedParams?.assetName ?? "");
   if (!ALLOWED_PORTAL_VIDEO_ASSETS.has(assetName)) {
+    audit("portal_video_proxy_not_found", {
+      assetName
+    });
     return errorResponse(404, "Portal video asset not found");
   }
 
   const config = getConfig();
   if (!config.backendApiKey) {
+    audit("portal_video_proxy_config_error", {
+      assetName,
+      reason: "missing_backend_api_key"
+    });
     return errorResponse(503, "TP_BACKEND_API_KEY is not configured");
   }
 
@@ -49,11 +57,20 @@ async function proxyPortalVideo(request, { params }) {
       redirect: "manual"
     });
   } catch {
+    audit("portal_video_proxy_upstream_unavailable", {
+      assetName
+    });
     return errorResponse(503, "Upstream service unavailable");
   }
 
   const responseHeaders = copyUpstreamResponseHeaders(upstream.headers);
   responseHeaders.set("Cache-Control", upstream.ok ? PORTAL_VIDEO_CACHE_CONTROL : "no-store");
+  if (!upstream.ok) {
+    audit("portal_video_proxy_upstream_status", {
+      assetName,
+      status: upstream.status
+    });
+  }
 
   return applySecurityHeaders(
     new Response(upstream.body, {
