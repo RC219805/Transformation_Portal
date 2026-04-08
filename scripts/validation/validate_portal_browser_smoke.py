@@ -523,6 +523,16 @@ def _state_probe_expression() -> str:
     reviewProvenanceFreshness: text('reviewProvenanceFreshness'),
     reviewProvenanceSource: text('reviewProvenanceSource'),
     reviewProvenanceBatch: text('reviewProvenanceBatch'),
+    reviewCompareTitle: text('reviewCompareTitle'),
+    reviewCompareDetail: text('reviewCompareDetail'),
+    reviewCompareVisible: (() => {
+      const el = document.getElementById('reviewCompareSummary');
+      return !!(el && !el.classList.contains('hidden'));
+    })(),
+    reviewCompareEnabled: (() => {
+      const el = document.getElementById('artifactCompareBtn');
+      return !!(el && String(el.getAttribute('aria-pressed') || '') === 'true');
+    })(),
     summaryReconstructionState: text('summaryReconstructionState'),
     summaryRuntimeWorkers: text('summaryRuntimeWorkers'),
     summaryPreviewState: text('summaryPreviewState'),
