@@ -282,6 +282,54 @@ progress::-moz-progress-bar { background-color: #4f46e5; transition: width 0.3s 
     background: rgba(15, 23, 42, 0.65);
 }
 
+.next-action-badge[data-tone="blocked"] {
+    border-color: rgba(220, 38, 38, 0.18);
+    background: rgba(254, 242, 242, 0.92);
+    color: rgb(153, 27, 27);
+}
+
+.dark .next-action-badge[data-tone="blocked"] {
+    border-color: rgba(248, 113, 113, 0.26);
+    background: rgba(127, 29, 29, 0.28);
+    color: rgb(252, 165, 165);
+}
+
+.next-action-badge[data-tone="warning"] {
+    border-color: rgba(217, 119, 6, 0.18);
+    background: rgba(255, 251, 235, 0.92);
+    color: rgb(146, 64, 14);
+}
+
+.dark .next-action-badge[data-tone="warning"] {
+    border-color: rgba(251, 191, 36, 0.2);
+    background: rgba(120, 53, 15, 0.28);
+    color: rgb(253, 230, 138);
+}
+
+.next-action-badge[data-tone="ready"] {
+    border-color: rgba(13, 148, 136, 0.18);
+    background: rgba(240, 253, 250, 0.92);
+    color: rgb(15, 118, 110);
+}
+
+.dark .next-action-badge[data-tone="ready"] {
+    border-color: rgba(45, 212, 191, 0.24);
+    background: rgba(17, 94, 89, 0.28);
+    color: rgb(153, 246, 228);
+}
+
+.next-action-badge[data-tone="info"] {
+    border-color: rgba(8, 145, 178, 0.18);
+    background: rgba(240, 249, 255, 0.92);
+    color: rgb(14, 116, 144);
+}
+
+.dark .next-action-badge[data-tone="info"] {
+    border-color: rgba(34, 211, 238, 0.24);
+    background: rgba(14, 116, 144, 0.22);
+    color: rgb(165, 243, 252);
+}
+
 .panel-subtle {
     border: 1px solid var(--shell-border);
     background: rgba(255, 255, 255, 0.5);

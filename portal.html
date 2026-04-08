@@ -992,6 +992,16 @@
                             <ul id="expectedOutputsList" class="mt-2 space-y-1 text-[12px] text-slate-700 dark:text-slate-300"></ul>
                         </section>
                     </div>
+                    <section class="mt-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/70 p-4" data-ui="next-best-action">
+                        <div class="flex items-start justify-between gap-3">
+                            <div class="min-w-0">
+                                <h4 class="text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Next Operator Action</h4>
+                                <p id="nextBestActionLabel" class="mt-2 text-[13px] font-semibold leading-6 text-slate-900 dark:text-white">Review dispatch posture</p>
+                                <p id="nextBestActionDetail" class="mt-2 text-[12px] leading-6 text-slate-600 dark:text-slate-300">Preview guidance will summarize the clearest next step for this draft.</p>
+                            </div>
+                            <span id="nextBestActionTone" class="signal-badge next-action-badge" data-tone="info">Info</span>
+                        </div>
+                    </section>
 
                     <div class="mt-6 border-t border-slate-200 dark:border-slate-800 pt-6">
                             <button id="runJobBtn" type="button" class="w-full rounded-2xl px-6 py-4 text-[14px] font-extrabold uppercase tracking-[0.14em] text-white shadow-glow transition-all focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed bg-gradient-to-r from-teal-700 via-cyan-600 to-sky-600 hover:from-teal-600 hover:via-cyan-500 hover:to-sky-500 dark:focus:ring-offset-slate-900" disabled data-ui="dispatch-cta">

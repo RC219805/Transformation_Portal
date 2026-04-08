@@ -579,6 +579,7 @@ class Job:
     started_at: Optional[float] = None
     finished_at: Optional[float] = None
     done_published_at: Optional[float] = None  # Set after 'done' event is published
+    last_event_at: Optional[float] = None
     state: str = "queued"  # queued|running|succeeded|partial|failed|canceled
     progress: int = 0
     exit_code: Optional[int] = None
@@ -1607,6 +1608,123 @@ def _portal_issue_public_message(issue: Any, *, field: str = "payload") -> str:
     return text
 
 
+def _portal_next_best_action_label(field: Any, default: str) -> str:
+    field_name = str(field or "").strip().replace("_", " ")
+    if not field_name or field_name == "payload":
+        return default
+    return f"Resolve {field_name}"
+
+
+def _portal_next_best_action_detail(issue: Mapping[str, Any], fallback: str) -> str:
+    message = str(issue.get("message") or fallback).strip()
+    suggestion = str(issue.get("suggestion") or "").strip()
+    if suggestion and suggestion not in message:
+        message = f"{message} {suggestion}".strip()
+    return message or fallback
+
+
+def _preview_next_best_action(
+    *,
+    pipeline: str,
+    errors: List[Dict[str, Any]],
+    warnings: List[Dict[str, Any]],
+    readiness_snapshot: Optional[Dict[str, Any]],
+) -> Dict[str, Any]:
+    readiness_issues = (
+        readiness_snapshot.get("missing_prerequisites")
+        if isinstance(readiness_snapshot, Mapping) and isinstance(readiness_snapshot.get("missing_prerequisites"), list)
+        else []
+    )
+    blocked_issue = next(
+        (
+            issue
+            for issue in readiness_issues
+            if isinstance(issue, Mapping) and str(issue.get("severity") or "").strip().lower() == "blocked"
+        ),
+        None,
+    )
+    readiness_warning = next(
+        (
+            issue
+            for issue in readiness_issues
+            if isinstance(issue, Mapping) and str(issue.get("severity") or "").strip().lower() != "blocked"
+        ),
+        None,
+    )
+
+    if errors:
+        issue = errors[0] if isinstance(errors[0], Mapping) else {}
+        field = str(issue.get("field") or "").strip()
+        return {
+            "action": "resolve_validation_error",
+            "field": field,
+            "label": _portal_next_best_action_label(field, "Resolve configuration issue"),
+            "detail": _portal_next_best_action_detail(issue, "Resolve the current configuration issue before dispatch."),
+            "tone": "blocked",
+        }
+
+    if blocked_issue is not None:
+        field = str(blocked_issue.get("field") or "").strip()
+        return {
+            "action": "resolve_readiness",
+            "field": field,
+            "label": _portal_next_best_action_label(field, "Resolve readiness prerequisite"),
+            "detail": _portal_next_best_action_detail(
+                blocked_issue,
+                "A dispatch prerequisite is still missing.",
+            ),
+            "tone": "blocked",
+        }
+
+    if warnings:
+        issue = warnings[0] if isinstance(warnings[0], Mapping) else {}
+        field = str(issue.get("field") or "").strip()
+        return {
+            "action": "review_warning",
+            "field": field,
+            "label": _portal_next_best_action_label(field, "Review warning before dispatch"),
+            "detail": _portal_next_best_action_detail(issue, "Review the current warning before dispatch."),
+            "tone": "warning",
+        }
+
+    if readiness_warning is not None:
+        field = str(readiness_warning.get("field") or "").strip()
+        return {
+            "action": "review_readiness_warning",
+            "field": field,
+            "label": _portal_next_best_action_label(field, "Review readiness warning"),
+            "detail": _portal_next_best_action_detail(
+                readiness_warning,
+                "Review the current readiness warning before dispatch.",
+            ),
+            "tone": "warning",
+        }
+
+    canonical_command = (
+        str(readiness_snapshot.get("canonical_command") or "").strip() if isinstance(readiness_snapshot, Mapping) else ""
+    )
+    if pipeline == "lux-depth-v3":
+        return {
+            "action": "dispatch_ready",
+            "field": "run_job",
+            "label": "Execute the Lux run",
+            "detail": "Preview-backed validation is ready. Review the expected outputs and dispatch when satisfied.",
+            "tone": "ready",
+        }
+    command_detail = (
+        f"Canonical command {canonical_command} is ready. Review the expected outputs and dispatch when satisfied."
+        if canonical_command
+        else "Archive readiness is clear. Review the expected outputs and dispatch when satisfied."
+    )
+    return {
+        "action": "dispatch_ready",
+        "field": "run_job",
+        "label": "Dispatch the archive stage",
+        "detail": command_detail,
+        "tone": "ready",
+    }
+
+
 class _PortalValidationReasonError(ValueError):
     def __init__(self, message: str, *, reason: Optional[str] = None) -> None:
         cleaned_message = str(message or "").strip() or "invalid request"
@@ -2608,6 +2726,12 @@ def _build_lux_config_preview(
         "readiness": readiness_snapshot,
         "estimate_summary": _lux_estimate_summary(normalized_args),
         "debug_bundle_summary": _lux_debug_bundle_summary(normalized_args),
+        "next_best_action": _preview_next_best_action(
+            pipeline="lux-depth-v3",
+            errors=errors,
+            warnings=warnings,
+            readiness_snapshot=readiness_snapshot,
+        ),
     }
 
 
@@ -2790,6 +2914,12 @@ def _build_archive_config_preview(
         "readiness": readiness_snapshot,
         "estimate_summary": {},
         "debug_bundle_summary": {},
+        "next_best_action": _preview_next_best_action(
+            pipeline=pipeline,
+            errors=errors,
+            warnings=warnings,
+            readiness_snapshot=readiness_snapshot,
+        ),
     }
 
 
@@ -3091,6 +3221,10 @@ async def _publish_event(
     event: str,
     data: Dict[str, Any],
 ) -> None:
+    job = JOBS.get(job_id)
+    if job is not None:
+        job.last_event_at = _now()
+
     subscribers = EVENT_SUBSCRIBERS.get(job_id)
     if not subscribers:
         return
@@ -3228,6 +3362,87 @@ def _artifact_is_previewable(path: Path) -> bool:
     return _artifact_media_kind(path) == "image" and _artifact_content_type(path).startswith("image/")
 
 
+def _artifact_display_label(role: str) -> str:
+    return {
+        "primary_preview": "Primary Preview",
+        "review_preview": "Review Preview",
+        "supporting_preview": "Supporting Preview",
+        "run_card": "Run Card",
+        "report": "Report",
+        "manifest": "Manifest",
+        "archive": "Archive",
+        "log": "Log",
+        "metadata": "Metadata",
+    }.get(role, "File")
+
+
+def _artifact_compare_group(relative_path: str, path: Path) -> str:
+    if not _artifact_is_previewable(path):
+        return ""
+    artifact_path = PurePosixPath(relative_path)
+    parent = artifact_path.parent.as_posix()
+    if parent == ".":
+        parent = ""
+    raw_stem = artifact_path.stem.lower()
+    simplified_stem = re.sub(
+        r"(master16|upscaled16|final|result|render|beauty|marketing|depth|preview|thumb|debug|segmentation|overlay|mask|albedo|normal|roughness|metallic|ao)",
+        " ",
+        raw_stem,
+    )
+    normalized_stem = re.sub(r"[^a-z0-9]+", "-", simplified_stem).strip("-")
+    if not normalized_stem:
+        normalized_stem = re.sub(r"[^a-z0-9]+", "-", raw_stem).strip("-")
+    batch_hint = _artifact_batch_hint(relative_path)
+    return "|".join(part for part in (batch_hint, parent, normalized_stem) if part)
+
+
+def _artifact_display_hint(relative_path: str, path: Path) -> Dict[str, Any]:
+    lower_name = relative_path.lower()
+    stem_lower = PurePosixPath(relative_path).stem.lower()
+    artifact_type = _infer_artifact_type(path)
+    if _artifact_is_previewable(path):
+        if re.search(r"(mask|matte|thumb|preview|debug|overlay|segmentation|albedo|normal|roughness|metallic|ao)", lower_name):
+            role = "supporting_preview"
+            priority = 700
+        elif re.search(r"(master16|upscaled16|final|result|render|beauty|marketing|depth)", lower_name):
+            role = "primary_preview"
+            priority = 1000
+        else:
+            role = "review_preview"
+            priority = 850
+    elif "run_card" in lower_name:
+        role = "run_card"
+        priority = 320
+    elif "report" in lower_name:
+        role = "report"
+        priority = 280
+    elif "manifest" in lower_name:
+        role = "manifest"
+        priority = 240
+    elif artifact_type == "archive":
+        role = "archive"
+        priority = 180
+    elif lower_name.endswith(".log") or "/logs/" in lower_name or re.search(r"(^|[._\-\s])log($|[._\-\s])", stem_lower):
+        role = "log"
+        priority = 160
+    elif artifact_type == "metadata":
+        role = "metadata"
+        priority = 120
+    else:
+        role = "file"
+        priority = 100
+
+    hint: Dict[str, Any] = {
+        "role": role,
+        "priority": priority,
+        "label": _artifact_display_label(role),
+    }
+    compare_group = _artifact_compare_group(relative_path, path)
+    if compare_group:
+        hint["compare_group"] = compare_group
+    return hint
+
+
 def _artifact_url(job_id: str, relative_path: str) -> str:
     return f"/v1/jobs/{quote(str(job_id), safe='')}" f"/artifacts/{quote(relative_path, safe='/')}"
 
@@ -3249,6 +3464,7 @@ def _serialize_indexed_artifact(
         "media_kind": _artifact_media_kind(path),
         "previewable": _artifact_is_previewable(path),
         "content_type": content_type,
+        "display_hint": _artifact_display_hint(relative_path, path),
         "url": _artifact_url(job_id, relative_path),
         # Do not expose absolute server paths in API/SSE payloads.
         "path": relative_path,
@@ -3617,6 +3833,7 @@ def _serialize_job(job: Job, *, include_logs: bool = True) -> Dict[str, Any]:
         "artifacts": job.artifacts,
         "error": job.error,
         "run_summary": job.run_summary or None,
+        "last_event_at": job.last_event_at,
     }
     if include_logs:
         data["logs_tail"] = job.logs_tail[-STATUS_LOG_LIMIT:]

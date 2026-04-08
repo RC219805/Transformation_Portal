@@ -767,6 +767,9 @@ def test_portal_artifact_gallery_renders_visual_review_controls() -> None:
     body = _extract_js_function_body(content, "renderArtifactPanel")
     reset_body = _extract_js_function_body(content, "_resetArtifactActionButtons")
     sanitize_body = _extract_js_function_body(content, "sanitizeManagedAssetUrl")
+    rank_body = _extract_js_function_body(content, "rankArtifactsForDisplay")
+    compare_body = _extract_js_function_body(content, "findCompareArtifact")
+    normalize_body = _extract_js_function_body(content, "normalizeArtifactItems")
 
     assert 'id="artifactPreviewStage"' in content
     assert 'id="artifactThumbnailRail"' in content
@@ -776,8 +779,16 @@ def test_portal_artifact_gallery_renders_visual_review_controls() -> None:
     assert 'id="copyArtifactPathBtn"' in content
     assert "artifactHeroScore" in content
     assert "findCompareArtifact" in content
+    assert "artifactDisplayHint" in content
+    assert "artifactDisplayPriority" in content
+    assert "artifactDisplayLabel" in content
     assert "buildArtifactUrl(selected, selectedArtifact)" in body
     assert "artifactIsPreviewable(selectedArtifact)" in body
+    assert "artifactDisplayLabel(selectedArtifact)" in body
+    assert "artifactDisplayLabel(artifact)" in body
+    assert "artifactDisplayPriority(right)" in rank_body
+    assert "artifactCompareGroup(candidate) === primaryGroup" in compare_body
+    assert "display_hint: _normalizeArtifactDisplayHint(item.display_hint)" in normalize_body
     assert "_resetArtifactActionButtons();" in body
     assert "delete els.openArtifactBtn.dataset.url;" in reset_body
     assert "delete els.downloadArtifactBtn.dataset.filename;" in reset_body
@@ -1640,11 +1651,24 @@ def test_portal_segmentation_defaults_align_with_cli_defaults() -> None:
 def test_portal_surfaces_pre_run_diagnostics_and_expected_outputs() -> None:
     content = _portal_bundle_content()
     render_cli_body = _extract_js_function_body(content, "renderCLI")
+    diagnostics_body = _extract_js_function_body(content, "renderPreRunDiagnostics")
+    next_action_body = _extract_js_function_body(content, "renderNextBestAction")
+    local_next_action_body = _extract_js_function_body(content, "_buildLocalNextBestAction")
 
     assert 'id="preRunWarnings"' in content
     assert 'id="expectedOutputsList"' in content
     assert 'id="datasetHealthText"' in content
+    assert 'id="nextBestActionLabel"' in content
+    assert 'id="nextBestActionDetail"' in content
+    assert 'id="nextBestActionTone"' in content
+    assert "next_best_action: null" in content
+    assert "_normalizeNextBestAction(data.next_best_action)" in content
     assert "renderPreRunDiagnostics(payload);" in render_cli_body
+    assert "renderNextBestAction(payload" in diagnostics_body
+    assert "const action = _effectiveNextBestAction(payload, preview);" in next_action_body
+    assert "_normalizeNextBestAction(currentPreview?.next_best_action)" in content
+    assert "Wait for preview to refresh" in local_next_action_body
+    assert "Restore backend connection" in local_next_action_body
 
 
 def test_portal_exposes_run_card_quick_actions() -> None:
@@ -2480,10 +2504,41 @@ def test_index_job_artifacts_populates_job_payload(tmp_path: Path) -> None:
     assert render_item["media_kind"] == "image"
     assert render_item["previewable"] is True
     assert render_item["content_type"] == "image/png"
+    assert render_item["display_hint"]["role"] == "primary_preview"
+    assert render_item["display_hint"]["priority"] == 1000
+    assert render_item["display_hint"]["label"] == "Primary Preview"
+    assert render_item["display_hint"]["compare_group"]
     assert render_item["url"] == f"/v1/jobs/{job.id}/artifacts/render.png"
     manifest_item = next(item for item in indexed if item["path"] == "manifest.json")
     assert manifest_item["media_kind"] == "metadata"
     assert manifest_item["previewable"] is False
+    assert manifest_item["display_hint"]["role"] == "manifest"
+    assert manifest_item["display_hint"]["priority"] == 240
+    assert manifest_item["display_hint"]["label"] == "Manifest"
+
+
+def test_index_job_artifacts_does_not_misclassify_catalog_metadata_as_log(tmp_path: Path) -> None:
+    output_dir = tmp_path / "out"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    (output_dir / "catalog.json").write_text("{}", encoding="utf-8")
+    (output_dir / "job.log").write_text("ok", encoding="utf-8")
+
+    job = orchestrator_app.Job(
+        id="job_artifacts_catalog",
+        created_at=orchestrator_app._now(),
+        request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(output_dir)}},
+    )
+
+    indexed = orchestrator_app._index_job_artifacts(job)
+
+    catalog_item = next(item for item in indexed if item["path"] == "catalog.json")
+    log_item = next(item for item in indexed if item["path"] == "job.log")
+
+    assert catalog_item["media_kind"] == "metadata"
+    assert catalog_item["display_hint"]["role"] == "metadata"
+    assert catalog_item["display_hint"]["label"] == "Metadata"
+    assert log_item["display_hint"]["role"] == "log"
+    assert log_item["display_hint"]["label"] == "Log"
 
 
 def test_index_job_artifacts_skips_entries_resolving_outside_output_dir(tmp_path: Path) -> None:
@@ -3088,11 +3143,21 @@ def test_list_jobs_includes_error_and_artifacts() -> None:
     job = orchestrator_app.Job(
         id="job_summary",
         created_at=orchestrator_app._now(),
+        last_event_at=123.0,
         state="failed",
         progress=72,
         request={"pipeline": "lux-depth-v3"},
         logs_tail=["line-1", "line-2"],
-        artifacts={"output_dir": "/tmp/out", "items": [{"artifact_type": "metadata", "path": "/tmp/out/manifest.json"}]},
+        artifacts={
+            "output_dir": "/tmp/out",
+            "items": [
+                {
+                    "artifact_type": "metadata",
+                    "path": "/tmp/out/manifest.json",
+                    "display_hint": {"role": "manifest", "priority": 240, "label": "Manifest"},
+                }
+            ],
+        },
         error={"code": "RUNNER_ERROR", "message": "boom", "details": {}},
     )
     orchestrator_app.JOBS[job.id] = job
@@ -3104,16 +3169,29 @@ def test_list_jobs_includes_error_and_artifacts() -> None:
     assert response.status_code == 200
     assert first["id"] == "job_summary"
     assert first["error"]["code"] == "RUNNER_ERROR"
+    assert first["last_event_at"] == 123.0
     assert first["artifacts"]["items"][0]["path"].endswith("manifest.json")
+    assert first["artifacts"]["items"][0]["display_hint"]["role"] == "manifest"
 
 
 def test_get_job_includes_artifacts_and_error() -> None:
     job = orchestrator_app.Job(
         id="job_details",
         created_at=orchestrator_app._now(),
+        last_event_at=456.0,
         state="failed",
         request={"pipeline": "lux-depth-v3"},
-        artifacts={"output_dir": "/tmp/out", "items": []},
+        artifacts={
+            "output_dir": "/tmp/out",
+            "items": [
+                {
+                    "artifact_type": "metadata",
+                    "path": "manifest.json",
+                    "relative_path": "manifest.json",
+                    "display_hint": {"role": "manifest", "priority": 240, "label": "Manifest"},
+                }
+            ],
+        },
         error={"code": "RUNNER_ERROR", "message": "boom", "details": {}},
     )
     orchestrator_app.JOBS[job.id] = job
@@ -3124,6 +3202,8 @@ def test_get_job_includes_artifacts_and_error() -> None:
     assert response.status_code == 200
     assert body["data"]["artifacts"]["output_dir"] == "/tmp/out"
     assert body["data"]["error"]["code"] == "RUNNER_ERROR"
+    assert body["data"]["last_event_at"] == 456.0
+    assert body["data"]["artifacts"]["items"][0]["display_hint"]["role"] == "manifest"
 
 
 def test_late_connecting_client_receives_real_events_during_artifact_indexing() -> None:
