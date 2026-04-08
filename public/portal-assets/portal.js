@@ -103,6 +103,7 @@ const state = {
         }
     },
     jobs: [],
+    jobsLoadStatus: 'pending',
     selectedJobId: null,
     currentView: 'overview',
     inspectorTab: 'overview',
@@ -192,7 +193,14 @@ const state = {
 
 const els = {
     overviewShell: document.getElementById('overview-shell'),
+    missionShell: document.getElementById('mission-shell'),
+    missionShellContent: document.getElementById('missionShellContent'),
+    missionShellSkeletonState: document.getElementById('missionShellSkeletonState'),
+    intelligenceShell: document.getElementById('intelligence-shell'),
+    intelligenceShellContent: document.getElementById('intelligenceShellContent'),
+    intelligenceShellSkeletonState: document.getElementById('intelligenceShellSkeletonState'),
     consoleGrid: document.getElementById('console-grid'),
+    consoleContextShell: document.getElementById('console-context-shell'),
     consoleViewTitle: document.getElementById('consoleViewTitle'),
     consoleViewSummary: document.getElementById('consoleViewSummary'),
     consoleViewMeta: document.getElementById('consoleViewMeta'),
@@ -367,6 +375,7 @@ const els = {
     exportBtn: document.getElementById('exportBtn'),
     fileInput: document.getElementById('fileInput'),
     runJobBtn: document.getElementById('runJobBtn'),
+    dispatchToolsDetails: document.getElementById('dispatchToolsDetails'),
     preRunWarnings: document.getElementById('preRunWarnings'),
     preRunWarningsEmpty: document.getElementById('preRunWarningsEmpty'),
     expectedOutputsList: document.getElementById('expectedOutputsList'),
@@ -374,8 +383,22 @@ const els = {
     datasetHealthText: document.getElementById('datasetHealthText'),
 
     buildShell: document.getElementById('build-shell'),
+    profileShell: document.getElementById('profile-shell'),
+    profileShellContent: document.getElementById('profileShellContent'),
+    profileShellSkeletonState: document.getElementById('profileShellSkeletonState'),
+    buildStepperShell: document.getElementById('buildStepperShell'),
+    buildStepperShellContent: document.getElementById('buildStepperShellContent'),
+    buildStepperSkeletonState: document.getElementById('buildStepperSkeletonState'),
+    governanceShell: document.getElementById('governance-shell'),
+    parametersShell: document.getElementById('parameters-shell'),
+    parametersShellContent: document.getElementById('parametersShellContent'),
+    parametersShellSkeletonState: document.getElementById('parametersShellSkeletonState'),
     jobsShell: document.getElementById('jobs-shell'),
+    selectedJobShell: document.getElementById('selected-job-shell'),
+    selectedJobShellContent: document.getElementById('selectedJobShellContent'),
+    selectedJobSkeletonState: document.getElementById('selectedJobSkeletonState'),
     queueShell: document.getElementById('queue-shell'),
+    queueSkeletonState: document.getElementById('queueSkeletonState'),
     jobList: document.getElementById('jobList'),
     emptyQueueState: document.getElementById('emptyQueueState'),
     queueCount: document.getElementById('queueCount'),
@@ -400,6 +423,9 @@ const els = {
     selectedJobTimelineList: document.getElementById('selectedJobTimelineList'),
     selectedJobTimelineEmpty: document.getElementById('selectedJobTimelineEmpty'),
     selectedJobLogPreview: document.getElementById('selectedJobLogPreview'),
+    artifactsShell: document.getElementById('artifacts-shell'),
+    artifactShellContent: document.getElementById('artifactShellContent'),
+    artifactSkeletonState: document.getElementById('artifactSkeletonState'),
     artifactMeta: document.getElementById('artifactMeta'),
     emptyArtifactState: document.getElementById('emptyArtifactState'),
     artifactCompareBtn: document.getElementById('artifactCompareBtn'),
@@ -1935,6 +1961,80 @@ function renderMissionControl(payload = null) {
     renderPresetIntelligence(currentPayload);
     renderGovernanceBanner(currentPayload);
     syncDisclosurePanels(currentPayload);
+    _syncOverviewBuildLoadingState(currentPayload);
+}
+
+function _isJobsHydrationPending() {
+    if (state.jobs.length > 0) return false;
+    if (state.jobsLoadStatus === 'loading') return true;
+    return state.jobsLoadStatus === 'pending'
+        && (state.bootstrap.status === 'pending' || state.bootstrap.status === 'degraded');
+}
+
+function _toggleSurfaceSkeleton(container, content, skeleton, isLoading) {
+    if (container) {
+        container.setAttribute('aria-busy', isLoading ? 'true' : 'false');
+    }
+    if (content) {
+        content.classList.toggle('hidden', isLoading);
+    }
+    if (skeleton) {
+        skeleton.classList.toggle('hidden', !isLoading);
+        skeleton.setAttribute('aria-hidden', 'true');
+    }
+}
+
+function _setSurfaceLoadingState(container, isLoading) {
+    if (!container) return;
+    container.classList.toggle('surface-loading', isLoading);
+    container.setAttribute('data-surface-loading', isLoading ? 'true' : 'false');
+}
+
+function _isBootstrapSurfaceLoading() {
+    return state.bootstrap.status === 'pending';
+}
+
+function _isBuildPreviewRefreshing(payload = null) {
+    if (_isBootstrapSurfaceLoading() || !_isBootstrapReady()) return false;
+    const currentPayload = payload || generatePayload();
+    const preview = _currentPreviewForPayload(currentPayload);
+    return Boolean(preview && preview.status === 'loading');
+}
+
+function _syncOverviewBuildLoadingState(payload = null) {
+    const currentPayload = payload || generatePayload();
+    const bootstrapLoading = _isBootstrapSurfaceLoading();
+    const previewRefreshing = _isBuildPreviewRefreshing(currentPayload);
+    const shellBusy = bootstrapLoading || previewRefreshing;
+
+    _toggleSurfaceSkeleton(els.missionShell, els.missionShellContent, els.missionShellSkeletonState, bootstrapLoading);
+    _toggleSurfaceSkeleton(els.intelligenceShell, els.intelligenceShellContent, els.intelligenceShellSkeletonState, bootstrapLoading);
+    _toggleSurfaceSkeleton(els.profileShell, els.profileShellContent, els.profileShellSkeletonState, bootstrapLoading);
+    _toggleSurfaceSkeleton(els.buildStepperShell, els.buildStepperShellContent, els.buildStepperSkeletonState, bootstrapLoading);
+    _toggleSurfaceSkeleton(els.parametersShell, els.parametersShellContent, els.parametersShellSkeletonState, bootstrapLoading);
+
+    [
+        els.missionShell,
+        els.intelligenceShell,
+        els.profileShell,
+        els.buildStepperShell,
+        els.governanceShell,
+        els.parametersShell
+    ].forEach((container) => {
+        if (!container) return;
+        _setSurfaceLoadingState(container, previewRefreshing && !bootstrapLoading);
+        container.setAttribute('aria-busy', shellBusy ? 'true' : 'false');
+    });
+
+    [els.overviewShell, els.consoleContextShell, els.buildShell].forEach((container) => {
+        if (!container) return;
+        container.setAttribute('aria-busy', shellBusy ? 'true' : 'false');
+    });
+
+    if (document.body) {
+        document.body.dataset.bootstrapLoading = bootstrapLoading ? 'true' : 'false';
+        document.body.dataset.buildPreviewLoading = previewRefreshing ? 'true' : 'false';
+    }
 }
 
 function renderSelectedJobTimeline(job) {
@@ -1993,6 +2093,18 @@ function renderSelectedJobTimeline(job) {
 }
 
 function renderSelectedJobInspector() {
+    const jobsLoading = _isJobsHydrationPending();
+    _toggleSurfaceSkeleton(els.selectedJobShell, els.selectedJobShellContent, els.selectedJobSkeletonState, jobsLoading);
+    if (jobsLoading) {
+        if (els.selectedJobStateBadge) els.selectedJobStateBadge.textContent = 'Syncing';
+        if (els.selectedJobFreshness) els.selectedJobFreshness.textContent = 'Hydrating queue';
+        if (els.selectedJobMetaLine) {
+            els.selectedJobMetaLine.textContent = 'Recovering recent runs, transport state, and previewable outputs.';
+        }
+        if (els.openRunDetailsBtn) els.openRunDetailsBtn.disabled = true;
+        return;
+    }
+
     const selected = state.jobs.find((job) => job.id === state.selectedJobId) || null;
     if (!selected) {
         if (els.selectedJobStateBadge) els.selectedJobStateBadge.textContent = 'Idle';
@@ -2387,6 +2499,10 @@ function _flushBootstrapOnlineFollowup(force = false) {
     void fetchPresetsForPipeline(state.pipeline, true);
     void fetchConfigMetadata(state.pipeline, true);
     scheduleConfigPreview(true);
+    if (state.jobs.length === 0) {
+        state.jobsLoadStatus = 'loading';
+        renderJobQueue();
+    }
     void recoverJobs();
     return true;
 }
@@ -2456,6 +2572,7 @@ function _syncBootstrapUi() {
         els.apiKeyInput.disabled = !showApiKeyInput;
     }
     _syncBootstrapGuardedControls();
+    _syncOverviewBuildLoadingState();
 }
 
 function _applyPortalBootstrap(rawBootstrap, options = {}) {
@@ -2955,6 +3072,14 @@ function renderReviewSurfaces(payload = null) {
 }
 
 function renderArtifactPanel() {
+    const jobsLoading = _isJobsHydrationPending();
+    _toggleSurfaceSkeleton(els.artifactsShell, els.artifactShellContent, els.artifactSkeletonState, jobsLoading);
+    if (jobsLoading) {
+        _resetArtifactActionButtons();
+        if (els.artifactMeta) els.artifactMeta.textContent = 'Hydrating artifacts';
+        return;
+    }
+
     if (!els.artifactMeta || !els.artifactThumbnailRail) return;
     const selected = state.jobs.find((item) => item.id === state.selectedJobId);
     const artifacts = Array.isArray(selected?.artifacts) ? rankArtifactsForDisplay(selected.artifacts) : [];
@@ -5519,6 +5644,7 @@ function renderCLI() {
     renderFieldPreviewStatuses(payload);
     renderPreRunDiagnostics(payload);
     _syncBootstrapGuardedControls();
+    _syncOverviewBuildLoadingState(payload);
 }
 
 function bindInputs() {
@@ -5778,7 +5904,24 @@ function refreshProfileDropdown() {
 function renderJobQueue(includeReviewSurfaces = true) {
     if (!els.jobList) return;
     els.jobList.setAttribute('role', 'listbox');
+    const queueLoading = _isJobsHydrationPending();
+    if (els.queueShell) {
+        els.queueShell.setAttribute('aria-busy', queueLoading ? 'true' : 'false');
+    }
+    if (els.queueSkeletonState) {
+        els.queueSkeletonState.classList.toggle('hidden', !queueLoading);
+        els.queueSkeletonState.setAttribute('aria-hidden', 'true');
+    }
+    els.jobList.classList.toggle('hidden', queueLoading);
     if (els.queueCount) els.queueCount.textContent = `${state.jobs.length} jobs`;
+    if (queueLoading) {
+        if (els.queueCount) els.queueCount.textContent = 'Syncing...';
+        if (els.queueStatusSummary) els.queueStatusSummary.textContent = 'Recovering recent runs and live transport state.';
+        if (els.emptyQueueState) els.emptyQueueState.style.display = 'none';
+        els.jobList.innerHTML = '';
+        if (includeReviewSurfaces) renderReviewSurfaces();
+        return;
+    }
     if (state.jobs.length === 0) {
         if (els.emptyQueueState) els.emptyQueueState.style.display = 'flex';
         if (els.queueStatusSummary) els.queueStatusSummary.textContent = 'Newest jobs stay pinned to the top.';
@@ -5980,6 +6123,12 @@ async function checkBackend(force = false) {
         state.readiness = { server: {}, pipelines: {} };
         state.bootstrap.pendingOnlineFollowup = false;
         state.bootstrap.onlineFollowupComplete = false;
+        if (
+            state.jobs.length === 0 &&
+            (state.jobsLoadStatus === 'pending' || state.jobsLoadStatus === 'loading')
+        ) {
+            state.jobsLoadStatus = 'offline';
+        }
         state.jobs.forEach((job) => {
             if (_isJobStreamRecoverable(job)) {
                 _noteTransportWarning(job, 'backend_offline', 'Backend health check failed. Live telemetry may be stale until connectivity is restored.', 'warn');
@@ -5988,6 +6137,7 @@ async function checkBackend(force = false) {
         if (els.healthIndicator) els.healthIndicator.className = 'status-dot offline';
         if (els.healthText) els.healthText.textContent = 'Backend Offline';
     } finally {
+        renderJobQueue(false);
         renderReviewSurfaces();
         _syncBootstrapGuardedControls();
         healthCheckInFlight = false;
@@ -6327,13 +6477,27 @@ function startJobEventStream(job, eventsUrl) {
 
 async function recoverJobs() {
     if (!state.backendOk) return;
+    if (state.jobs.length === 0) {
+        state.jobsLoadStatus = 'loading';
+        renderJobQueue();
+    }
     try {
         const headers = _buildAuthHeaders({ 'Accept': 'application/json' });
         const res = await fetch(`${API_BASE}/v1/jobs`, { headers });
-        if (!res.ok) return;
+        if (!res.ok) {
+            if (state.jobs.length === 0) {
+                state.jobsLoadStatus = 'error';
+                renderJobQueue();
+            }
+            return;
+        }
         const payload = await res.json();
         const jobsFromServer = Array.isArray(payload?.data?.jobs) ? payload.data.jobs : [];
-        if (jobsFromServer.length === 0) return;
+        if (jobsFromServer.length === 0) {
+            state.jobsLoadStatus = 'ready';
+            renderJobQueue();
+            return;
+        }
 
         const byId = new Map(state.jobs.map((job) => [job.id, job]));
         [...jobsFromServer].reverse().forEach((rawJob) => {
@@ -6350,6 +6514,8 @@ async function recoverJobs() {
             }
         });
 
+        state.jobsLoadStatus = 'ready';
+
         if (!state.selectedJobId && state.jobs.length > 0) {
             const newest = state.jobs[state.jobs.length - 1];
             state.selectedJobId = newest.id;
@@ -6365,7 +6531,10 @@ async function recoverJobs() {
             scheduleRenderJobQueue();
         }
     } catch (err) {
-        // best-effort only
+        if (state.jobs.length === 0) {
+            state.jobsLoadStatus = 'error';
+            renderJobQueue();
+        }
     }
 }
 
@@ -7259,6 +7428,7 @@ async function init() {
     void fetchConfigMetadata(state.pipeline, true);
     startHealthPolling();
     await bootstrapPromise;
+    renderJobQueue();
 }
 
 document.addEventListener('DOMContentLoaded', () => {
