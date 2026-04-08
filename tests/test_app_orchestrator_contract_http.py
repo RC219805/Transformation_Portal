@@ -413,6 +413,8 @@ def test_archive_gate_a_config_preview_returns_authoritative_readiness_and_argv(
     assert preview["field_warnings"] == []
     assert preview["readiness"]["status"] == "ready"
     assert preview["readiness"]["missing_prerequisites"] == []
+    assert preview["next_best_action"]["action"] == "dispatch_ready"
+    assert preview["next_best_action"]["tone"] == "ready"
     assert "fixity-scan" in preview["argv_preview"]
     assert "--archive-index" in preview["argv_preview"]
     assert preview["execution_args"] == preview["normalized_args"]
@@ -887,13 +889,21 @@ def test_jobs_list_and_detail_include_recovery_fields(client: TestClient) -> Non
     job = orchestrator_app.Job(
         id="job_contract_recovery",
         created_at=orchestrator_app._now(),
+        last_event_at=987.0,
         state="failed",
         progress=55,
         request={"pipeline": "lux-depth-v3"},
         logs_tail=["line-a", "line-b"],
         artifacts={
             "output_dir": "/tmp/out",
-            "items": [{"artifact_type": "metadata", "path": "manifest.json", "relative_path": "manifest.json"}],
+            "items": [
+                {
+                    "artifact_type": "metadata",
+                    "path": "manifest.json",
+                    "relative_path": "manifest.json",
+                    "display_hint": {"role": "manifest", "priority": 240, "label": "Manifest"},
+                }
+            ],
             "indexed_count": 1,
             "truncated": False,
         },
@@ -909,14 +919,18 @@ def test_jobs_list_and_detail_include_recovery_fields(client: TestClient) -> Non
     assert first["id"] == job.id
     assert first["events_url"] == f"/v1/jobs/{job.id}/events"
     assert first["error"]["code"] == "RUNNER_ERROR"
+    assert first["last_event_at"] == 987.0
     assert first["artifacts"]["items"][0]["relative_path"] == "manifest.json"
+    assert first["artifacts"]["items"][0]["display_hint"]["role"] == "manifest"
 
     detail_response = client.get(f"/v1/jobs/{job.id}")
     detail_body = detail_response.json()
     assert detail_response.status_code == 200
     assert detail_body["schema"] == "tp.orchestrator.job_status.v1"
     assert detail_body["data"]["events_url"] == f"/v1/jobs/{job.id}/events"
+    assert detail_body["data"]["last_event_at"] == 987.0
     assert detail_body["data"]["artifacts"]["indexed_count"] == 1
+    assert detail_body["data"]["artifacts"]["items"][0]["display_hint"]["label"] == "Manifest"
     assert detail_body["data"]["error"]["code"] == "RUNNER_ERROR"
 
 

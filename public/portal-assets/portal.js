@@ -132,6 +132,7 @@ const state = {
         readiness: null,
         estimate_summary: null,
         debug_bundle_summary: null,
+        next_best_action: null,
         argv_preview: '',
         error: '',
         error_reason: '',
@@ -381,6 +382,9 @@ const els = {
     expectedOutputsList: document.getElementById('expectedOutputsList'),
     datasetHealthIndicator: document.getElementById('datasetHealthIndicator'),
     datasetHealthText: document.getElementById('datasetHealthText'),
+    nextBestActionLabel: document.getElementById('nextBestActionLabel'),
+    nextBestActionDetail: document.getElementById('nextBestActionDetail'),
+    nextBestActionTone: document.getElementById('nextBestActionTone'),
 
     buildShell: document.getElementById('build-shell'),
     profileShell: document.getElementById('profile-shell'),
@@ -1229,6 +1233,38 @@ function artifactLabel(artifact) {
     return String(artifact?.relative_path || artifact?.path || 'artifact').trim();
 }
 
+function _normalizeArtifactDisplayHint(rawHint) {
+    if (!rawHint || typeof rawHint !== 'object') return null;
+    const role = String(rawHint.role || '').trim();
+    const label = String(rawHint.label || '').trim();
+    const compareGroup = String(rawHint.compare_group || '').trim();
+    const priorityValue = Number(rawHint.priority);
+    return {
+        role,
+        label,
+        priority: Number.isFinite(priorityValue) ? priorityValue : null,
+        compare_group: compareGroup
+    };
+}
+
+function artifactDisplayHint(artifact) {
+    return _normalizeArtifactDisplayHint(artifact?.display_hint);
+}
+
+function artifactDisplayPriority(artifact) {
+    const priority = artifactDisplayHint(artifact)?.priority;
+    return Number.isFinite(priority) ? priority : null;
+}
+
+function artifactDisplayLabel(artifact) {
+    const label = String(artifactDisplayHint(artifact)?.label || '').trim();
+    return label || titleCaseToken(artifactMediaKind(artifact), 'File');
+}
+
+function artifactCompareGroup(artifact) {
+    return String(artifactDisplayHint(artifact)?.compare_group || '').trim();
+}
+
 function artifactNameParts(artifact) {
     const relativePath = artifactLabel(artifact);
     const segments = relativePath.split('/');
@@ -1284,6 +1320,8 @@ function artifactHeroScore(artifact) {
 
 function rankArtifactsForDisplay(artifacts) {
     return [...artifacts].sort((left, right) => {
+        const priorityDelta = (artifactDisplayPriority(right) ?? -1) - (artifactDisplayPriority(left) ?? -1);
+        if (priorityDelta !== 0) return priorityDelta;
         const scoreDelta = artifactHeroScore(right) - artifactHeroScore(left);
         if (scoreDelta !== 0) return scoreDelta;
         return artifactLabel(left).localeCompare(artifactLabel(right));
@@ -1292,6 +1330,18 @@ function rankArtifactsForDisplay(artifacts) {
 
 function findCompareArtifact(primaryArtifact, artifacts) {
     if (!primaryArtifact || !artifactIsPreviewable(primaryArtifact)) return null;
+    const primaryGroup = artifactCompareGroup(primaryArtifact);
+    if (primaryGroup) {
+        const hintedCandidate = rankArtifactsForDisplay(
+            artifacts.filter((candidate) => (
+                candidate
+                && candidate.path !== primaryArtifact.path
+                && artifactIsPreviewable(candidate)
+                && artifactCompareGroup(candidate) === primaryGroup
+            ))
+        )[0] || null;
+        if (hintedCandidate) return hintedCandidate;
+    }
     const primary = artifactNameParts(primaryArtifact);
     const primaryExt = primary.fileName.includes('.') ? primary.fileName.split('.').pop().toLowerCase() : '';
     let best = null;
@@ -2149,7 +2199,7 @@ function renderSelectedJobInspector() {
                         : _jobHasActiveStream(selected)
                             ? 'SSE stream active'
                             : (selected.state === 'running' || selected.state === 'queued' ? 'Waiting for stream' : 'Closed');
-    const lastActivityAt = Number(selected.updatedAt || selected.createdAt || 0);
+    const lastActivityAt = Number(selected.lastEventAt || selected.updatedAt || selected.createdAt || 0);
     const activityLabel = formatRelativeTime(lastActivityAt);
     const transportLabel = formatTransportLabel(selected);
     const elapsedLabel = formatDuration(Number(selected.createdAt || 0), Number(selected.finishedAt || Date.now()));
@@ -2955,25 +3005,31 @@ function normalizeArtifactItems(artifactsContainer) {
             path: String(item.path),
             relative_path: String(item.relative_path || item.path),
             size_bytes: typeof item.size_bytes === 'number' ? item.size_bytes : null,
-            sha256: typeof item.sha256 === 'string' ? item.sha256 : ''
+            sha256: typeof item.sha256 === 'string' ? item.sha256 : '',
+            display_hint: _normalizeArtifactDisplayHint(item.display_hint)
         }));
 }
 
 function upsertArtifact(job, artifact) {
     if (!job || !artifact || !artifact.path) return;
     if (!Array.isArray(job.artifacts)) job.artifacts = [];
+    const normalizedArtifact = {
+        ...artifact,
+        display_hint: _normalizeArtifactDisplayHint(artifact.display_hint)
+    };
     const existing = job.artifacts.find((entry) => entry.path === artifact.path);
     if (existing) {
-        existing.artifact_type = artifact.artifact_type || existing.artifact_type;
-        existing.media_kind = artifact.media_kind || existing.media_kind;
-        existing.previewable = typeof artifact.previewable === 'boolean' ? artifact.previewable : existing.previewable;
-        existing.content_type = artifact.content_type || existing.content_type;
-        existing.url = artifact.url || existing.url;
-        existing.relative_path = artifact.relative_path || existing.relative_path;
-        existing.size_bytes = artifact.size_bytes ?? existing.size_bytes;
-        existing.sha256 = artifact.sha256 || existing.sha256;
+        existing.artifact_type = normalizedArtifact.artifact_type || existing.artifact_type;
+        existing.media_kind = normalizedArtifact.media_kind || existing.media_kind;
+        existing.previewable = typeof normalizedArtifact.previewable === 'boolean' ? normalizedArtifact.previewable : existing.previewable;
+        existing.content_type = normalizedArtifact.content_type || existing.content_type;
+        existing.url = normalizedArtifact.url || existing.url;
+        existing.relative_path = normalizedArtifact.relative_path || existing.relative_path;
+        existing.size_bytes = normalizedArtifact.size_bytes ?? existing.size_bytes;
+        existing.sha256 = normalizedArtifact.sha256 || existing.sha256;
+        existing.display_hint = normalizedArtifact.display_hint || existing.display_hint || null;
     } else {
-        job.artifacts.push(artifact);
+        job.artifacts.push(normalizedArtifact);
     }
     _reconcileJobTimeline(job);
 }
@@ -2981,9 +3037,10 @@ function upsertArtifact(job, artifact) {
 function getRunCardArtifact(job) {
     if (!job || !Array.isArray(job.artifacts)) return null;
     return job.artifacts.find((artifact) => {
+        const displayRole = String(artifactDisplayHint(artifact)?.role || '').trim().toLowerCase();
         const type = String(artifact.artifact_type || '').toLowerCase();
         const relPath = String(artifact.relative_path || artifact.path || '').toLowerCase();
-        return type === 'run_card' || relPath.includes('run_card');
+        return displayRole === 'run_card' || type === 'run_card' || relPath.includes('run_card');
     }) || null;
 }
 
@@ -3042,7 +3099,7 @@ function _renderArtifactMetadataCard(job, artifact) {
     } else if (!artifact) {
         detail.textContent = 'Artifacts will appear here when the selected run indexes outputs.';
     } else {
-        detail.textContent = `${titleCaseToken(artifactMediaKind(artifact), 'File')} artifact • ${artifactContentType(artifact) || 'binary'} • ${formatBytes(artifact.size_bytes)}.`;
+        detail.textContent = `${artifactDisplayLabel(artifact)} • ${artifactContentType(artifact) || 'binary'} • ${formatBytes(artifact.size_bytes)}.`;
     }
     els.artifactMetadataCard.appendChild(detail);
 }
@@ -3144,7 +3201,7 @@ function renderArtifactPanel() {
     }
     if (els.artifactSelectionMeta) {
         els.artifactSelectionMeta.textContent = selectedArtifact
-            ? `${titleCaseToken(artifactMediaKind(selectedArtifact), 'File')} • ${artifactContentType(selectedArtifact) || 'binary'} • ${formatBytes(selectedArtifact.size_bytes)}`
+            ? `${artifactDisplayLabel(selectedArtifact)} • ${artifactContentType(selectedArtifact) || 'binary'} • ${formatBytes(selectedArtifact.size_bytes)}`
             : 'Preview, metadata, and actions will appear here when outputs are indexed.';
     }
 
@@ -3226,7 +3283,7 @@ function renderArtifactPanel() {
         } else {
             const placeholder = document.createElement('div');
             placeholder.className = 'flex h-24 items-center justify-center rounded-xl border border-dashed border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/70 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400';
-            placeholder.textContent = titleCaseToken(artifactMediaKind(artifact), 'File');
+            placeholder.textContent = artifactDisplayLabel(artifact);
             button.appendChild(placeholder);
         }
 
@@ -3237,7 +3294,7 @@ function renderArtifactPanel() {
 
         const meta = document.createElement('p');
         meta.className = 'mt-1 text-[10px] font-mono text-slate-500 dark:text-slate-400 truncate';
-        meta.textContent = `${titleCaseToken(artifactMediaKind(artifact), 'File')} • ${formatBytes(artifact.size_bytes)}`;
+        meta.textContent = `${artifactDisplayLabel(artifact)} • ${formatBytes(artifact.size_bytes)}`;
         button.appendChild(meta);
 
         fragment.appendChild(button);
@@ -3287,7 +3344,8 @@ function hydrateJobFromServer(rawJob) {
     const createdAt = parseTimestamp(rawJob.created_at || rawJob.started_at || rawJob.updated_at, Date.now());
     const startedAt = parseTimestamp(rawJob.started_at, 0);
     const finishedAt = parseTimestamp(rawJob.finished_at, 0);
-    const updatedAt = parseTimestamp(rawJob.updated_at || rawJob.finished_at || rawJob.started_at || rawJob.created_at, createdAt);
+    const lastEventAt = parseTimestamp(rawJob.last_event_at, 0);
+    const updatedAt = parseTimestamp(rawJob.last_event_at || rawJob.updated_at || rawJob.finished_at || rawJob.started_at || rawJob.created_at, createdAt);
     const hydrated = {
         id,
         pipeline: String(rawJob.pipeline || 'unknown'),
@@ -3303,7 +3361,7 @@ function hydrateJobFromServer(rawJob) {
         usesFetchSse: false,
         sseRetry: { attempt: 0, timer: null },
         reconnectBlocked: false,
-        lastEventAt: 0,
+        lastEventAt,
         mockInterval: null,
         startedAt,
         finishedAt,
@@ -3406,6 +3464,7 @@ function _syncHydratedJob(existing, hydrated, rawJob = null) {
     existing.finishedAt = hydrated.finishedAt || existing.finishedAt || 0;
     existing.createdAt = hydrated.createdAt || existing.createdAt || Date.now();
     existing.updatedAt = hydrated.updatedAt || existing.updatedAt || existing.createdAt;
+    existing.lastEventAt = hydrated.lastEventAt || existing.lastEventAt || 0;
     existing.timeline = Array.isArray(existing.timeline) && existing.timeline.length > 0 ? existing.timeline : hydrated.timeline;
     existing.transportWarnings = Array.isArray(existing.transportWarnings) ? existing.transportWarnings : hydrated.transportWarnings;
     existing.progressMilestones = Array.isArray(existing.progressMilestones) ? existing.progressMilestones : hydrated.progressMilestones;
@@ -3796,6 +3855,7 @@ function _emptyPreviewState(status = 'idle', pipeline = '') {
         readiness: null,
         estimate_summary: null,
         debug_bundle_summary: null,
+        next_best_action: null,
         argv_preview: '',
         error: '',
         error_reason: '',
@@ -3876,6 +3936,167 @@ function _previewFailureDetails(preview = null) {
         toastMessage: 'Preview-backed validation is unavailable. Dispatch stays paused until validation recovers.',
         telemetryReason: 'preview_service_unavailable'
     };
+}
+
+function _nextBestActionLabel(fieldName, fallback) {
+    const normalizedField = String(fieldName || '').trim().replace(/_/g, ' ');
+    if (!normalizedField || normalizedField === 'payload') return fallback;
+    return `Resolve ${normalizedField}`;
+}
+
+function _nextBestActionDetail(issue, fallback) {
+    if (!issue || typeof issue !== 'object') return fallback;
+    const message = String(issue.message || '').trim().replace(/^(BLOCKED|WARNING):\s*/i, '');
+    const suggestion = String(issue.suggestion || '').trim();
+    const combined = suggestion && suggestion !== message
+        ? `${message || fallback} ${suggestion}`.trim()
+        : (message || fallback);
+    return combined || fallback;
+}
+
+function _normalizeNextBestAction(rawAction) {
+    if (!rawAction || typeof rawAction !== 'object') return null;
+    const action = String(rawAction.action || '').trim();
+    const label = String(rawAction.label || '').trim();
+    const detail = String(rawAction.detail || '').trim();
+    const field = String(rawAction.field || '').trim();
+    const tone = String(rawAction.tone || '').trim().toLowerCase();
+    return {
+        action,
+        field,
+        label: label || 'Review dispatch posture',
+        detail: detail || 'Preview guidance will summarize the clearest next step for this draft.',
+        tone: ['blocked', 'warning', 'ready', 'info'].includes(tone) ? tone : 'info'
+    };
+}
+
+function _buildLocalNextBestAction(payload = null, preview = null) {
+    const currentPayload = payload || generatePayload();
+    const matchedPreview = preview && typeof preview === 'object' ? preview : _currentPreviewForPayload(currentPayload);
+    const previewErrors = matchedPreview && Array.isArray(matchedPreview.field_errors) ? matchedPreview.field_errors : [];
+    const previewWarnings = matchedPreview && Array.isArray(matchedPreview.field_warnings) ? matchedPreview.field_warnings : [];
+    const readinessIssues = currentPipelineReadinessIssues(currentPayload);
+    const blockedReadinessIssue = readinessIssues.find((issue) => String(issue?.severity || '').trim().toLowerCase() === 'blocked');
+    const readinessWarning = readinessIssues.find((issue) => String(issue?.severity || '').trim().toLowerCase() !== 'blocked');
+
+    if (matchedPreview?.status === 'loading') {
+        return {
+            action: 'wait_for_preview',
+            field: 'config_preview',
+            label: 'Wait for preview to refresh',
+            detail: 'Preview-backed validation is refreshing the current draft. Review readiness again when it completes.',
+            tone: 'info'
+        };
+    }
+
+    if (previewErrors.length > 0) {
+        const issue = previewErrors[0];
+        const field = String(issue?.field || '').trim();
+        return {
+            action: 'resolve_validation_error',
+            field,
+            label: _nextBestActionLabel(field, 'Resolve configuration issue'),
+            detail: _nextBestActionDetail(issue, 'Resolve the current configuration issue before dispatch.'),
+            tone: 'blocked'
+        };
+    }
+
+    if (!state.backendOk) {
+        return {
+            action: 'restore_backend_connection',
+            field: 'backend_connection',
+            label: 'Restore backend connection',
+            detail: 'Preview-backed validation and dispatch resume when the orchestrator backend is reachable again.',
+            tone: 'blocked'
+        };
+    }
+
+    if (matchedPreview?.status === 'error') {
+        const previewFailure = _previewFailureDetails(matchedPreview);
+        const detail = currentPayload.pipeline === 'lux-depth-v3'
+            ? String(previewFailure.luxBlockedMessage || '').replace(/^BLOCKED:\s*/i, '')
+            : String(previewFailure.archiveWarningMessage || '').replace(/^WARNING:\s*/i, '');
+        return {
+            action: 'resolve_preview_error',
+            field: 'config_preview',
+            label: currentPayload.pipeline === 'lux-depth-v3' ? 'Resolve preview validation' : 'Review preview status',
+            detail: detail || 'Preview-backed validation needs attention before dispatch.',
+            tone: currentPayload.pipeline === 'lux-depth-v3' ? 'blocked' : 'warning'
+        };
+    }
+
+    if (blockedReadinessIssue) {
+        const field = String(blockedReadinessIssue?.field || '').trim();
+        return {
+            action: 'resolve_readiness',
+            field,
+            label: _nextBestActionLabel(field, 'Resolve readiness prerequisite'),
+            detail: _nextBestActionDetail(blockedReadinessIssue, 'A dispatch prerequisite is still missing.'),
+            tone: 'blocked'
+        };
+    }
+
+    if (previewWarnings.length > 0) {
+        const issue = previewWarnings[0];
+        const field = String(issue?.field || '').trim();
+        return {
+            action: 'review_warning',
+            field,
+            label: _nextBestActionLabel(field, 'Review warning before dispatch'),
+            detail: _nextBestActionDetail(issue, 'Review the current warning before dispatch.'),
+            tone: 'warning'
+        };
+    }
+
+    if (readinessWarning) {
+        const field = String(readinessWarning?.field || '').trim();
+        return {
+            action: 'review_readiness_warning',
+            field,
+            label: _nextBestActionLabel(field, 'Review readiness warning'),
+            detail: _nextBestActionDetail(readinessWarning, 'Review the current readiness warning before dispatch.'),
+            tone: 'warning'
+        };
+    }
+
+    const readiness = currentPipelineReadiness(currentPayload);
+    const canonicalCommand = String(readiness?.canonical_command || canonicalArchiveCommand(currentPayload.pipeline) || '').trim();
+    if (currentPayload.pipeline === 'lux-depth-v3') {
+        return {
+            action: 'dispatch_ready',
+            field: 'run_job',
+            label: 'Execute the Lux run',
+            detail: 'Preview-backed validation is ready. Review the expected outputs and dispatch when satisfied.',
+            tone: 'ready'
+        };
+    }
+    return {
+        action: 'dispatch_ready',
+        field: 'run_job',
+        label: 'Dispatch the archive stage',
+        detail: canonicalCommand
+            ? `Canonical command ${canonicalCommand} is ready. Review the expected outputs and dispatch when satisfied.`
+            : 'Archive readiness is clear. Review the expected outputs and dispatch when satisfied.',
+        tone: 'ready'
+    };
+}
+
+function _effectiveNextBestAction(payload = null, preview = null) {
+    const currentPayload = payload || generatePayload();
+    const currentPreview = preview && typeof preview === 'object' ? preview : _currentPreviewForPayload(currentPayload);
+    return _normalizeNextBestAction(currentPreview?.next_best_action) || _buildLocalNextBestAction(currentPayload, currentPreview);
+}
+
+function renderNextBestAction(payload = null, preview = null) {
+    if (!els.nextBestActionLabel || !els.nextBestActionDetail || !els.nextBestActionTone) return;
+    const action = _effectiveNextBestAction(payload, preview);
+    els.nextBestActionLabel.textContent = String(action?.label || 'Review dispatch posture');
+    els.nextBestActionDetail.textContent = String(
+        action?.detail || 'Preview guidance will summarize the clearest next step for this draft.'
+    );
+    const tone = String(action?.tone || 'info').trim().toLowerCase();
+    els.nextBestActionTone.dataset.tone = tone || 'info';
+    els.nextBestActionTone.textContent = titleCaseToken(tone || 'info', 'Info');
 }
 
 function _setBuildSurfacePathFieldValue(fieldName, nextValue) {
@@ -3981,6 +4202,7 @@ function _effectivePreviewSnapshot(payload = null) {
         readiness: null,
         estimate_summary: _buildLocalEstimateSummary(currentPayload.args || {}),
         debug_bundle_summary: _buildLocalDebugBundleSummary(currentPayload.args || {}),
+        next_best_action: _buildLocalNextBestAction(currentPayload, preview),
         argv_preview: '',
         error: ''
     };
@@ -4158,7 +4380,7 @@ function renderFieldPreviewStatuses(payload = null) {
 }
 
 function _jobRecencyValue(job) {
-    return Number(job?.updatedAt || job?.finishedAt || job?.startedAt || job?.createdAt || 0);
+    return Number(job?.lastEventAt || job?.updatedAt || job?.finishedAt || job?.startedAt || job?.createdAt || 0);
 }
 
 function _latestJobBy(predicate) {
@@ -4349,6 +4571,7 @@ async function fetchConfigPreview(payload) {
             readiness: data.readiness && typeof data.readiness === 'object' ? data.readiness : null,
             estimate_summary: data.estimate_summary && typeof data.estimate_summary === 'object' ? data.estimate_summary : null,
             debug_bundle_summary: data.debug_bundle_summary && typeof data.debug_bundle_summary === 'object' ? data.debug_bundle_summary : null,
+            next_best_action: _normalizeNextBestAction(data.next_best_action),
             argv_preview: String(data.argv_preview || ''),
             error: '',
             error_reason: '',
@@ -5521,6 +5744,7 @@ function renderPreRunDiagnostics(payload) {
     if (els.datasetHealthText) {
         els.datasetHealthText.textContent = `Dataset health: ${healthLabel}`;
     }
+    renderNextBestAction(payload, _currentPreviewForPayload(payload) || _effectivePreviewSnapshot(payload));
 
     state.lastDiagnostics = {
         warnings,
@@ -5956,7 +6180,7 @@ function renderJobQueue(includeReviewSurfaces = true) {
         const errorLine = getReadableError(job.error);
         const outcomeSummary = jobOutcomeSummary(job);
         const transportLabel = formatTransportLabel(job);
-        const freshnessLabel = formatRelativeTime(Number(job.updatedAt || job.createdAt || 0));
+        const freshnessLabel = formatRelativeTime(Number(job.lastEventAt || job.updatedAt || job.createdAt || 0));
 
         const header = document.createElement('div');
         header.className = 'flex items-center justify-between mb-3';
@@ -6200,7 +6424,8 @@ function _applyJobStreamEvent(job, eventName, parsed) {
             path: String(parsed.path || ''),
             relative_path: String(parsed.relative_path || parsed.path || ''),
             size_bytes: typeof parsed.size_bytes === 'number' ? parsed.size_bytes : null,
-            sha256: typeof parsed.sha256 === 'string' ? parsed.sha256 : ''
+            sha256: typeof parsed.sha256 === 'string' ? parsed.sha256 : '',
+            display_hint: _normalizeArtifactDisplayHint(parsed.display_hint)
         });
         _pushTimelineEntry(
             job,
