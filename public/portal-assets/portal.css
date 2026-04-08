@@ -16,7 +16,7 @@ html {
 
 body {
     font-family: "Portal Sans", "Segoe UI", sans-serif;
-    font-size: 1rem;
+    font-size: var(--ux-body-size);
     line-height: 1.5;
 }
 
@@ -1275,7 +1275,8 @@ details[open] .disclosure-chevron {
 /* Operator console reset */
 
 :root {
-    --shell-border: rgba(148, 163, 184, 0.22);
+    --ux-panel-border: rgba(148, 163, 184, 0.22);
+    --shell-border: var(--ux-panel-border);
     --shell-panel: rgba(255, 255, 255, 0.86);
     --shell-panel-strong: rgba(255, 255, 255, 0.94);
     --shell-accent: #0891b2;

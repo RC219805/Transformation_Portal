@@ -408,6 +408,9 @@ def test_portal_phase1_accessibility_tokens_align_focus_and_target_size() -> Non
 
     assert "--ux-focus-ring:" in css_content
     assert "--ux-target-min-size: 44px;" in css_content
+    assert "font-size: var(--ux-body-size);" in css_content
+    assert css_content.count("--shell-border: var(--ux-panel-border);") >= 2
+    assert "--shell-border: rgba(148, 163, 184, 0.22);" not in css_content
     assert "summary:focus-visible" in css_content
     assert "#build-shell label:not(.sr-only)" in css_content
 
