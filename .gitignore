@@ -344,3 +344,6 @@ archive_reports/
 # Local scratch/artifacts
 local_artifacts/
 *.numbers
+# secure-landing isolated Next build outputs
+web/secure-landing/.next-build-verify/
+web/secure-landing/.next-smoke-*/

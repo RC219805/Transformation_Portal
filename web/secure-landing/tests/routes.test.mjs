@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { createSign, generateKeyPairSync } from "node:crypto";
 import os from "node:os";
 import path from "node:path";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 
 import argon2 from "argon2";
 import { NextRequest, NextResponse } from "next/server.js";
@@ -114,6 +114,47 @@ function withTempEnvironment(overrides = {}) {
 async function importFresh(relativePath) {
   return import(`${relativePath}?case=${Date.now()}-${Math.random()}`);
 }
+
+test("next config honors TP_NEXT_DIST_DIR for isolated local frontdoor runs", async () => {
+  const previous = process.env.TP_NEXT_DIST_DIR;
+  process.env.TP_NEXT_DIST_DIR = ".next-smoke-test";
+
+  try {
+    const configModule = await importFresh("../next.config.js");
+    assert.equal(configModule.default.distDir, ".next-smoke-test");
+  } finally {
+    if (typeof previous === "string") {
+      process.env.TP_NEXT_DIST_DIR = previous;
+    } else {
+      delete process.env.TP_NEXT_DIST_DIR;
+    }
+  }
+});
+
+test("run_frontdoor_local launcher supports isolated port and distdir overrides", async () => {
+  const scriptPath = path.resolve(process.cwd(), "..", "..", "scripts", "setup", "run_frontdoor_local.sh");
+  const script = readFileSync(scriptPath, "utf-8");
+
+  assert.match(script, /TP_FRONTDOOR_PORT/);
+  assert.match(script, /TP_FRONTDOOR_DIST_DIR/);
+  assert.match(script, /TP_NEXT_DIST_DIR/);
+});
+
+test("app router root shell exists for framework not-found and global-error routes", () => {
+  const appRoot = path.resolve(process.cwd(), "app");
+  const layoutSource = readFileSync(path.join(appRoot, "layout.js"), "utf-8");
+  const notFoundSource = readFileSync(path.join(appRoot, "not-found.js"), "utf-8");
+  const globalErrorSource = readFileSync(path.join(appRoot, "global-error.js"), "utf-8");
+
+  assert.match(layoutSource, /<html lang="en">/);
+  assert.match(layoutSource, /<body>/);
+  assert.match(layoutSource, /dynamic = "force-dynamic"/);
+  assert.match(notFoundSource, /requested front door route was not found/i);
+  assert.match(notFoundSource, /dynamic = "force-dynamic"/);
+  assert.match(globalErrorSource, /^"use client";/);
+  assert.match(globalErrorSource, /dynamic = "force-dynamic"/);
+  assert.match(globalErrorSource, /reset\(\)/);
+});
 
 async function withCapturedAuditEvents(run) {
   const { clearAuditObserver, setAuditObserver } = await importFresh("../lib/audit.js");
@@ -293,6 +334,7 @@ test("login GET serves a minimal branded sign-in shell and boots an anonymous se
     assert.match(html, /id="main-content"/);
     assert.match(html, /Transformation Portal operator console/);
     assert.match(html, /data-ui="login-title"/);
+    assert.match(html, /data-ui="login-sequence"/);
     assert.match(html, /data-ui="login-form"/);
     assert.match(html, /form method="post" action="\/login"/);
     assert.match(html, /name="username"/);
@@ -335,6 +377,7 @@ test("homepage GET serves the public DNA landing page instead of redirecting", a
     assert.match(html, /\/video\/dna-loop\.mp4/);
     assert.match(html, /\/brand\/dna-mark-dark\.svg/);
     assert.match(html, /data-ui="homepage-hero-title"/);
+    assert.match(html, /(?:data-ui="homepage-learn-link"[^>]*href="#workflow"|href="#workflow"[^>]*data-ui="homepage-learn-link")/);
     assert.match(html, /(?:data-ui="homepage-primary-cta"[^>]*href="\/login"|href="\/login"[^>]*data-ui="homepage-primary-cta")/);
     assert.match(html, /(?:data-ui="homepage-secondary-cta"[^>]*href="#proof-report"|href="#proof-report"[^>]*data-ui="homepage-secondary-cta")/);
     assert.match(html, /(?:data-ui="homepage-utility-cta"[^>]*href="\/login"|href="\/login"[^>]*data-ui="homepage-utility-cta")/);
@@ -452,7 +495,7 @@ test("homepage GET may prune expired sessions without setting cookies", async ()
     assert.equal(response.status, 200);
     assert.equal(response.headers.get("set-cookie"), null);
     assert.equal(sessions.getSessionById(expiredSession.id, { touch: false }), null);
-    assert.match(html, />Secure Access</);
+    assert.match(html, />Operator Access</);
   } finally {
     env.cleanup();
   }

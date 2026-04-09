@@ -223,19 +223,26 @@ still pending:
 - Phase 3 opened on April 9, 2026 as a bounded cross-surface continuity
   tranche across homepage, login, and portal rather than as a new portal-only
   feature lane.
-- The active implementation focus is shared CTA hierarchy, shell/material
-  consistency, loading/error-state polish, and stable homepage/login `data-ui`
-  hooks for contract tests and browser smoke.
+- Stable homepage/login `data-ui` hooks already ship in repo truth, and the
+  frontdoor route/browser validation layer now keys off those selectors rather
+  than exact marketing copy.
+- Shared CTA hierarchy, login information sequence, loading/error-state shell
+  polish, and portal mobile/material compression landed on April 9, 2026 as
+  the implementation body of Phase 3.
 - The frontdoor roadmap remains closed. This strategy document is now the
   active implementation record for the UX tranche instead of opening a new
   frontdoor roadmap phase.
 - The local verification baseline on April 9, 2026 is:
-  - portal runtime/browser contract slice passes;
-  - frontdoor Node contract still requires a Node `22.x` runtime, while the
-    current local shell remains on Node `25.9.0`.
+  - `make test-frontdoor-contract` passes locally under Node `22.22.2`;
+  - `make test-portal-contract` passes locally;
+  - live frontdoor browser validation still depends on a managed frontdoor
+    instance running with the expected local smoke credentials;
+  - live portal browser validation still depends on a backend instance that
+    accepts the configured `TP_API_KEY` for `/v1/config-preview`.
 
-Phase 2B is now closed out. Phase 3 is the active UX lane rather than any
-further portal-only hierarchy catch-up.
+Phase 2B is now closed out. Phase 3 implementation is landed, and the only
+remaining close-out work is green live browser validation against known-good
+local managed frontdoor and backend instances.
 
 ### Phase 1: Accessibility and Token Alignment (Completed April 8, 2026)
 
@@ -279,13 +286,11 @@ Acceptance focus:
 Status:
 - Completed on April 8, 2026.
 
-### Phase 3: Cross-surface Visual Continuity (Active April 9, 2026)
+### Phase 3: Cross-surface Visual Continuity (Validation Close-out April 9, 2026)
 
 Scope:
 - Harmonize CTA emphasis, empty/loading/error states, and premium polish across
   homepage, login, and portal.
-- Add stable homepage/login `data-ui` hooks so route tests and browser smoke
-  key off durable selectors instead of exact marketing copy.
 - Evolve the existing portal shells toward a more deliberate bento-like visual
   rhythm without replacing the current structural model.
 - Improve mobile compression and spacing consistency across all three surfaces.
@@ -299,15 +304,16 @@ Scope:
 Acceptance focus:
 - Managed auth and proxy boundaries stay unchanged.
 - No route, auth, proxy, or `/v1/*` semantic changes are introduced.
-- Homepage/login contract tests and browser smoke must be updated alongside the
-  new selector hooks and continuity polish.
+- Homepage/login contract tests and browser smoke must stay keyed to durable
+  selector hooks rather than exact copy.
 - Decorative motion remains optional and reduced-motion safe.
 - Frontdoor and portal browser smokes both remain required.
 - Frontdoor contract verification still runs only in a Node `22.x`
   environment.
 
 Status:
-- Active as of April 9, 2026.
+- Implementation landed on April 9, 2026; completion remains gated on green
+  live browser validation for both frontdoor and portal.
 
 ### Phase 4: Power-user Enhancements (Deferred)
 
@@ -430,6 +436,13 @@ portal presentation and state handling.
 - Managed login protections including CSRF, throttling, and session rotation
 - Cross-surface token alignment and 44px target coverage for the managed
   browser surfaces
+- Stable homepage/login `data-ui` hooks for route tests and browser smoke
+- Homepage CTA routing that clearly separates learn, verify, and operator
+  access flows
+- Managed login sequencing that distinguishes verified access context from
+  operator credential entry and recovery copy
+- Portal queue/review empty-state polish plus narrow-width shell compression
+  across topbar, context ribbon, queue, inspector, and artifact review shells
 - Portal loading polish, backend-driven operator hints, review provenance, and
   review-compare accessibility improvements shipped on April 8, 2026
 - Portal contract and browser coverage for the context ribbon, additive review
@@ -438,8 +451,8 @@ portal presentation and state handling.
 
 ### Proposed
 
-- Active cross-surface polish across homepage, login, and portal, including
-  stable homepage/login selector hooks for tests and browser smoke
+- Phase 3 completion gate once live browser validation is rerun against
+  known-good local managed frontdoor and backend instances
 - Optional command-palette evaluation only after earlier IA improvements land
 
 ## Source Notes and Assumptions

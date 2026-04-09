@@ -392,8 +392,8 @@ Readiness and validation tiers:
 - `make test-orchestrator-contract` keeps the portal/orchestrator contract suite local and deterministic.
 - `make test-frontdoor-contract` keeps the managed front-door Node contract/build gate deterministic under Node 22.x.
 - `make validate-orchestrator-http` runs the live backend smoke against a running FastAPI origin.
-- `make validate-portal-browser` runs the live browser smoke against the real portal UI and now fails early if `/v1/config-preview` cannot authenticate or validate.
-- `make validate-frontdoor-browser` runs the live managed front-door browser smoke against `http://localhost:3000` by default.
+- `make validate-portal-browser` launches an isolated local backend, then runs the live portal browser smoke and fails early if `/v1/config-preview` cannot authenticate or validate.
+- `make validate-frontdoor-browser` launches isolated local backend and managed front-door runtimes, then runs the live browser smoke against that ephemeral proof setup.
 - `make run-frontdoor-local` starts the canonical managed front door on `http://localhost:3000` and refuses to fall back to `:3001`.
 - `make audit-pipeline-readiness` runs the safe local four-pipeline readiness audit and reports `ready` / `degraded` / `blocked` outcomes, including separate `lux-depth-v3` base vs canary status.
 

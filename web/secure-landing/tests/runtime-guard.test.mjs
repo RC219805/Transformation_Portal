@@ -55,6 +55,33 @@ test("standalone start resolves both supported server output paths", () => {
   }
 });
 
+test("standalone start honors TP_NEXT_DIST_DIR when resolving standalone output", () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "tp-frontdoor-standalone-distdir-"));
+  const env = { TP_NEXT_DIST_DIR: ".next-build-verify" };
+
+  try {
+    const rootServer = path.join(tempDir, ".next-build-verify", "standalone", "server.js");
+    mkdirSync(path.dirname(rootServer), { recursive: true });
+    writeFileSync(rootServer, "// root server", "utf-8");
+    assert.equal(resolveStandaloneServerPath(tempDir, { env }), rootServer);
+
+    rmSync(rootServer, { force: true });
+    const nestedServer = path.join(
+      tempDir,
+      ".next-build-verify",
+      "standalone",
+      "web",
+      "secure-landing",
+      "server.js"
+    );
+    mkdirSync(path.dirname(nestedServer), { recursive: true });
+    writeFileSync(nestedServer, "// nested server", "utf-8");
+    assert.equal(resolveStandaloneServerPath(tempDir, { env }), nestedServer);
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
 test("standalone start surfaces actionable spawn failures", () => {
   const child = new EventEmitter();
   const errors = [];

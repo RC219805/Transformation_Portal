@@ -32,7 +32,13 @@ function resolveLoginMessage(code) {
 
 function renderLoginPage({ csrfToken, accessEmail, errorCode }) {
   const errorMessage = errorCode ? resolveLoginMessage(errorCode) : "";
-  const accessText = accessEmail ? `Access identity verified for <strong>${escapeHtml(accessEmail)}</strong>.` : "";
+  const escapedAccessEmail = accessEmail ? escapeHtml(accessEmail) : "";
+  const accessSequenceDetail = accessEmail
+    ? `Managed access already verified for <strong>${escapedAccessEmail}</strong>.`
+    : "Managed access is verified before operator credentials are accepted.";
+  const accessText = accessEmail
+    ? `Access identity verified for <strong>${escapedAccessEmail}</strong>. Credential entry is now available.`
+    : "";
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -76,10 +82,25 @@ function renderLoginPage({ csrfToken, accessEmail, errorCode }) {
             <p class="eyebrow" data-ui="login-eyebrow">Managed operator access</p>
             <h1 data-ui="login-title">Continue to the operator console.</h1>
             <p class="lede" data-ui="login-lede">
-              Verified access is checked before credentials are accepted. Sign in to resume governed build, live operation, and review work.
+              Managed access and operator credentials stay separate on purpose. Confirm the verified access context first, then complete credential handoff into the governed console.
             </p>
+            <div class="login-sequence" data-ui="login-sequence">
+              <article class="login-sequence-step${accessEmail ? " login-sequence-step--ready" : ""}">
+                <p class="login-sequence-step-kicker">Step 1</p>
+                <p class="login-sequence-step-title">Verified access</p>
+                <p class="login-sequence-step-detail">${accessSequenceDetail}</p>
+              </article>
+              <article class="login-sequence-step login-sequence-step--active">
+                <p class="login-sequence-step-kicker">Step 2</p>
+                <p class="login-sequence-step-title">Operator credentials</p>
+                <p class="login-sequence-step-detail">Use your portal username and password to rotate into the governed build, operate, and review session.</p>
+              </article>
+            </div>
             ${errorMessage || accessText ? `<div class="login-status-stack" data-ui="login-status-stack">
-              ${errorMessage ? `<div class="banner" data-ui="login-error-banner" role="alert">${escapeHtml(errorMessage)}</div>` : ""}
+              ${errorMessage ? `<div class="banner" data-ui="login-error-banner" role="alert">
+                <p class="banner-title">Sign-in needs attention</p>
+                <p class="banner-detail">${escapeHtml(errorMessage)}</p>
+              </div>` : ""}
               ${accessText ? `<p class="card-meta card-meta--verified" data-ui="login-access-context">${accessText}</p>` : ""}
             </div>` : ""}
             <form method="post" action="/login" autocomplete="on" data-ui="login-form">

@@ -186,9 +186,9 @@ body {
 
 .login-stage {
   display: grid;
-  gap: 1.15rem;
+  gap: 1.2rem;
   justify-items: center;
-  width: min(100%, 28rem);
+  width: min(100%, 31rem);
 }
 
 .login-vignette,
@@ -204,7 +204,7 @@ body {
 }
 
 .card {
-  width: min(100%, 24.5rem);
+  width: min(100%, 27rem);
   border: 1px solid var(--frontdoor-border);
   background: var(--frontdoor-panel);
   backdrop-filter: blur(22px);
@@ -258,7 +258,64 @@ h1 {
   margin-bottom: 1.15rem;
 }
 
+.login-sequence {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.8rem;
+  margin-bottom: 1.2rem;
+}
+
+.login-sequence-step {
+  display: grid;
+  gap: 0.45rem;
+  min-height: 100%;
+  border-radius: 1.1rem;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(7, 13, 26, 0.42);
+  padding: 0.95rem 1rem;
+}
+
+.login-sequence-step--ready {
+  border-color: rgba(45, 212, 191, 0.28);
+  background:
+    linear-gradient(180deg, rgba(15, 118, 110, 0.14), rgba(7, 13, 26, 0.58)),
+    rgba(7, 13, 26, 0.54);
+}
+
+.login-sequence-step--active {
+  border-color: rgba(103, 232, 249, 0.3);
+  background:
+    linear-gradient(180deg, rgba(42, 199, 255, 0.12), rgba(7, 13, 26, 0.56)),
+    rgba(7, 13, 26, 0.56);
+}
+
+.login-sequence-step-kicker {
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgba(148, 220, 255, 0.88);
+}
+
+.login-sequence-step-title {
+  margin: 0;
+  font-size: 0.98rem;
+  font-weight: 800;
+  line-height: 1.35;
+  color: var(--frontdoor-ink);
+}
+
+.login-sequence-step-detail {
+  margin: 0;
+  font-size: 0.92rem;
+  line-height: 1.6;
+  color: var(--frontdoor-muted-soft);
+}
+
 .banner {
+  display: grid;
+  gap: 0.35rem;
   border-radius: 1rem;
   border: 1px solid rgba(248, 113, 113, 0.38);
   background: rgba(127, 29, 29, 0.34);
@@ -266,6 +323,19 @@ h1 {
   padding: 0.85rem 1rem;
   font-size: 1rem;
   line-height: 1.6;
+}
+
+.banner-title {
+  margin: 0;
+  font-size: 0.86rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #fee2e2;
+}
+
+.banner-detail {
+  margin: 0;
 }
 
 .card-meta {
@@ -605,6 +675,10 @@ code {
 
   .card {
     width: min(100%, 32rem);
+  }
+
+  .login-sequence {
+    grid-template-columns: 1fr;
   }
 }
 

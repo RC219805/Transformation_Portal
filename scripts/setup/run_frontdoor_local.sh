@@ -3,10 +3,12 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 FRONTDOOR_ROOT="${REPO_ROOT}/web/secure-landing"
-FRONTDOOR_PORT="3000"
+FRONTDOOR_HOST="${TP_FRONTDOOR_HOST:-127.0.0.1}"
+FRONTDOOR_PORT="${TP_FRONTDOOR_PORT:-3000}"
 FASTAPI_ORIGIN="${TP_FASTAPI_ORIGIN:-http://127.0.0.1:8000}"
 SESSION_DB="${TP_FRONTDOOR_SESSION_DB:-/tmp/transformation-portal-frontdoor-sessions.db}"
 BACKEND_API_KEY="${TP_BACKEND_API_KEY:-${TP_API_KEY:-}}"
+FRONTDOOR_DIST_DIR="${TP_FRONTDOOR_DIST_DIR:-}"
 
 ensure_command() {
   if ! command -v "$1" >/dev/null 2>&1; then
@@ -58,9 +60,15 @@ export TP_FASTAPI_ORIGIN="${FASTAPI_ORIGIN}"
 export TP_BACKEND_API_KEY="${BACKEND_API_KEY}"
 export TP_FRONTDOOR_SESSION_DB="${SESSION_DB}"
 export TP_FRONTDOOR_SESSION_SCALING_MODE=single_instance
+if [[ -n "${FRONTDOOR_DIST_DIR}" ]]; then
+  export TP_NEXT_DIST_DIR="${FRONTDOOR_DIST_DIR}"
+fi
 
-echo "Starting managed front door on http://localhost:${FRONTDOOR_PORT}"
+echo "Starting managed front door on http://${FRONTDOOR_HOST}:${FRONTDOOR_PORT}"
 echo "Using FastAPI origin ${TP_FASTAPI_ORIGIN}"
+if [[ -n "${FRONTDOOR_DIST_DIR}" ]]; then
+  echo "Using isolated Next distDir ${TP_FRONTDOOR_DIST_DIR}"
+fi
 
 cd "${FRONTDOOR_ROOT}"
-npm run dev -- --hostname 127.0.0.1 --port "${FRONTDOOR_PORT}"
+npm run dev -- --hostname "${FRONTDOOR_HOST}" --port "${FRONTDOOR_PORT}"
