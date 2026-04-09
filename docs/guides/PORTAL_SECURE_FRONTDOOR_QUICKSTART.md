@@ -91,8 +91,8 @@ The canonical launcher:
 - refuses to start if `localhost:3000` is already occupied instead of letting Next.js drift to `:3001`
 
 The canonical local credential bootstrap:
-- `make seed-frontdoor-user` writes a single-user JSON fixture to `TP_FRONTDOOR_USERS_FILE`
-- it requires `TP_FRONTDOOR_USERS_FILE`, `TP_FRONTDOOR_USERNAME`, and `TP_FRONTDOOR_PASSWORD`
+- `make seed-frontdoor-user` writes a single-user JSON fixture to `TP_FRONTDOOR_USERS_FILE` when you override it, or to `/tmp/tp-frontdoor-users.json` by default
+- `TP_FRONTDOOR_USERS_FILE`, `TP_FRONTDOOR_USERNAME`, and `TP_FRONTDOOR_PASSWORD` override the built-in local bootstrap defaults; they are not required for the canonical local path
 - it defaults `access_email` to `<username>@local.invalid` and `role` to `admin`
 - it overwrites stale local fixture content instead of relying on fragile inline `node -e` snippets
 

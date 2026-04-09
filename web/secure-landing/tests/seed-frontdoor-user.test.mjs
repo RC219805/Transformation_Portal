@@ -10,15 +10,30 @@ import argon2 from "argon2";
 
 const SCRIPT_PATH = fileURLToPath(new URL("../scripts/seed-frontdoor-user.mjs", import.meta.url));
 const SCRIPT_CWD = path.dirname(SCRIPT_PATH);
+const FRONTDOOR_ENV_KEYS = [
+  "TP_FRONTDOOR_USERS_FILE",
+  "TP_FRONTDOOR_USERNAME",
+  "TP_FRONTDOOR_PASSWORD",
+  "TP_FRONTDOOR_ACCESS_EMAIL",
+  "TP_FRONTDOOR_ROLE",
+];
+
+function buildSeedEnv(overrides = {}) {
+  const childEnv = { ...process.env };
+  for (const key of FRONTDOOR_ENV_KEYS) {
+    delete childEnv[key];
+  }
+  return {
+    ...childEnv,
+    ...overrides,
+  };
+}
 
 function runSeed(args = [], env = {}) {
   return spawnSync(process.execPath, [SCRIPT_PATH, ...args], {
     cwd: SCRIPT_CWD,
     encoding: "utf-8",
-    env: {
-      ...process.env,
-      ...env,
-    },
+    env: buildSeedEnv(env),
   });
 }
 
