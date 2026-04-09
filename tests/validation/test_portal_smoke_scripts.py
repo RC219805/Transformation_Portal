@@ -88,6 +88,15 @@ def test_portal_browser_parse_args_defaults_api_key_to_empty_when_env_is_unset(
     assert args.api_key == ""
 
 
+def test_portal_browser_parse_args_supports_local_backend_spawn_flag():
+    module = _load_module(PORTAL_BROWSER_SCRIPT_PATH, "tests_validate_portal_browser_smoke_spawn_backend")
+
+    args = module._parse_args(["--spawn-local-backend", "--backend-startup-timeout-seconds", "12.5"])
+
+    assert args.spawn_local_backend is True
+    assert args.backend_startup_timeout_seconds == 12.5
+
+
 def test_portal_browser_help_text_describes_api_key_default(capsys: pytest.CaptureFixture[str]):
     module = _load_module(PORTAL_BROWSER_SCRIPT_PATH, "tests_validate_portal_browser_smoke_help")
 
@@ -249,18 +258,45 @@ def test_frontdoor_browser_parse_args_does_not_probe_chrome_for_explicit_overrid
     assert args.password == "secret"
 
 
+def test_frontdoor_browser_parse_args_supports_isolated_runtime_flags():
+    module = _load_module(FRONTDOOR_BROWSER_SCRIPT_PATH, "tests_validate_frontdoor_browser_smoke_spawn_flags")
+
+    args = module._parse_args(
+        [
+            "--spawn-local-frontdoor",
+            "--spawn-local-backend",
+            "--backend-base-url",
+            "http://127.0.0.1:9000",
+            "--backend-api-key",
+            "backend-secret",
+        ]
+    )
+
+    assert args.spawn_local_frontdoor is True
+    assert args.spawn_local_backend is True
+    assert args.backend_base_url == "http://127.0.0.1:9000"
+    assert args.backend_api_key == "backend-secret"
+
+
 def test_frontdoor_browser_waits_for_managed_portal_bootstrap_before_passing():
     content = FRONTDOOR_BROWSER_SCRIPT_PATH.read_text(encoding="utf-8")
 
     assert 'and str(value.get("readyState", "")) == "complete"' in content
     assert 'and str(value.get("authModeBadge", "")).lower() == "managed"' in content
     assert "homepageHeroReady" in content
+    assert "homepageLearnLinkReady" in content
     assert "homepagePrimaryCtaHref" in content
+    assert "loginSequenceReady" in content
     assert '[data-ui="homepage-hero-title"]' in content
+    assert '[data-ui="homepage-learn-link"]' in content
     assert '[data-ui="login-form"]' in content
+    assert '[data-ui="login-sequence"]' in content
     assert ".hero-video, .homepage-video" in content
     assert "form.requestSubmit" in content
     assert "form.submit();" in content
+    assert "/healthz" in content
+    assert "--spawn-local-frontdoor" in content
+    assert "--spawn-local-backend" in content
 
 
 def test_portal_browser_smoke_tracks_archive_readiness_fields_and_canonical_commands():
@@ -347,7 +383,7 @@ def test_portal_browser_smoke_tracks_reconstruction_runtime_summary_and_guardrai
     assert "debugBundleGuardrailVisible" in content
     assert "effectiveConfigDrawerVisible" in content
     assert "emit_scene_debug_bundle" in content
-    assert "acknowledgement is required" in content
+    assert "dispatch surface to report a blocked preview/governance state" in content
     assert "#openEffectiveConfigBtn" in content
     assert "#closeEffectiveConfigBtn" in content
 

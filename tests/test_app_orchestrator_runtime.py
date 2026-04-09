@@ -953,6 +953,8 @@ def test_portal_selected_job_inspector_uses_timeline_tabs_and_log_secondary_view
 def test_portal_operate_surfaces_use_jobs_hydration_skeletons_before_empty_state() -> None:
     content = _portal_bundle_content()
     helper_body = _extract_js_function_body(content, "_isJobsHydrationPending")
+    queue_empty_body = _extract_js_function_body(content, "_queueEmptyStateCopy")
+    artifact_empty_body = _extract_js_function_body(content, "_artifactEmptyStateCopy")
     toggle_body = _extract_js_function_body(content, "_toggleSurfaceSkeleton")
     queue_body = _extract_js_function_body(content, "renderJobQueue")
     inspector_body = _extract_js_function_body(content, "renderSelectedJobInspector")
@@ -965,12 +967,25 @@ def test_portal_operate_surfaces_use_jobs_hydration_skeletons_before_empty_state
     assert 'id="queueSkeletonState"' in content
     assert 'id="selectedJobSkeletonState"' in content
     assert 'id="artifactSkeletonState"' in content
+    assert 'id="emptyQueueState"' in content
+    assert 'id="emptyQueueTitle"' in content
+    assert 'id="emptyQueueDetail"' in content
+    assert 'id="emptyArtifactState"' in content
+    assert 'id="emptyArtifactTitle"' in content
+    assert 'id="emptyArtifactDetail"' in content
+    assert 'data-ui="queue-empty-state"' in content
+    assert 'data-ui="artifact-empty-state"' in content
     assert "state.jobsLoadStatus === 'loading'" in helper_body
     assert "state.bootstrap.status === 'pending' || state.bootstrap.status === 'degraded'" in helper_body
+    assert "Queue unavailable" in queue_empty_body
+    assert "Queue recovery needs attention" in queue_empty_body
+    assert "Select a completed run" in artifact_empty_body
+    assert "Outputs are still arriving" in artifact_empty_body
     assert "skeleton.setAttribute('aria-hidden', 'true');" in toggle_body
     assert "const queueLoading = _isJobsHydrationPending();" in queue_body
     assert "els.queueShell.setAttribute('aria-busy', queueLoading ? 'true' : 'false');" in queue_body
     assert "els.queueSkeletonState.setAttribute('aria-hidden', 'true');" in queue_body
+    assert "_setSurfaceEmptyState(els.emptyQueueState, els.emptyQueueTitle, els.emptyQueueDetail, emptyCopy);" in queue_body
     assert (
         "_toggleSurfaceSkeleton(els.selectedJobShell, els.selectedJobShellContent, els.selectedJobSkeletonState, jobsLoading);"
         in inspector_body
@@ -979,6 +994,7 @@ def test_portal_operate_surfaces_use_jobs_hydration_skeletons_before_empty_state
         "_toggleSurfaceSkeleton(els.artifactsShell, els.artifactShellContent, els.artifactSkeletonState, jobsLoading);"
         in artifact_body
     )
+    assert "_setSurfaceEmptyState(" in artifact_body
     assert "state.jobsLoadStatus = 'loading';" in recover_body
     assert "state.jobsLoadStatus = 'ready';" in recover_body
     assert "state.jobsLoadStatus = 'loading';" in flush_body

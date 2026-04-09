@@ -26,9 +26,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 import subprocess
 import sys
+import tempfile
+import time
 from pathlib import Path
 from typing import Iterable, Optional
 
@@ -38,15 +41,198 @@ if str(SCRIPT_DIR) not in sys.path:
 
 from validate_portal_browser_smoke import (  # noqa: E402
     DevToolsConnection,
+    LocalRuntimeHandle,
     SmokeFailure,
+    _base_url,
     _default_profile_dir,
     _expect,
     _find_free_port,
     _poll,
+    _request_json,
     _resolve_chrome_binary,
+    _spawn_local_backend,
+    _terminate_runtime,
     _wait_for_devtools,
     _wait_for_page_target,
 )
+
+DEFAULT_FRONTDOOR_BASE_URL = "http://localhost:3000"
+DEFAULT_BACKEND_BASE_URL = "http://127.0.0.1:8000"
+FRONTDOOR_ROOT = SCRIPT_DIR.parent.parent / "web" / "secure-landing"
+
+
+def _tail_text(path: Path, *, max_chars: int = 1200) -> str:
+    try:
+        content = path.read_text(encoding="utf-8")
+    except OSError:
+        return ""
+    content = content.strip()
+    if len(content) <= max_chars:
+        return content
+    return content[-max_chars:]
+
+
+def _request_frontdoor_health(base_url: str) -> tuple[int, dict]:
+    status, body = _request_json(base_url, "/healthz")
+    if not isinstance(body, dict):
+        raise SmokeFailure("Front-door health probe returned an invalid JSON body.", kind="contract")
+    return status, body
+
+
+def _wait_for_frontdoor_ready(
+    base_url: str,
+    *,
+    timeout_seconds: float,
+    process: Optional[subprocess.Popen[str]] = None,
+    log_path: Optional[Path] = None,
+) -> dict:
+    deadline = time.monotonic() + timeout_seconds
+    last_error: Optional[str] = None
+    while time.monotonic() < deadline:
+        if process is not None and process.poll() is not None:
+            break
+        try:
+            status, body = _request_frontdoor_health(base_url)
+            if status == 200 and body.get("ok") is True:
+                return body
+            last_error = f"status={status} body={body}"
+        except SmokeFailure as exc:
+            last_error = str(exc)
+        time.sleep(0.25)
+
+    if process is not None and process.poll() is not None:
+        exit_code = process.returncode
+        log_tail = _tail_text(log_path) if log_path is not None else ""
+        detail = f"isolated front-door exited before readiness (code {exit_code})"
+        if log_tail:
+            detail = f"{detail}. Recent log output:\n{log_tail}"
+        raise SmokeFailure(detail, kind="runtime")
+
+    detail = last_error or "timed out waiting for /healthz"
+    raise SmokeFailure(
+        f"Front-door did not become ready at {base_url}/healthz within {timeout_seconds:.1f}s ({detail}).",
+        kind="runtime",
+    )
+
+
+def _generate_frontdoor_users_file(username: str, password: str, runtime_root: Path) -> Path:
+    access_email = f"{username}@local.invalid"
+    users_file = runtime_root / "frontdoor-users.json"
+    script = """
+import argon2 from 'argon2';
+import { writeFileSync } from 'node:fs';
+
+const [filePath, username, password, accessEmail] = process.argv.slice(1);
+const passwordHash = await argon2.hash(password);
+writeFileSync(
+  filePath,
+  JSON.stringify([
+    {
+      username,
+      password_hash: passwordHash,
+      access_email: accessEmail,
+      role: 'admin',
+    },
+  ]),
+  'utf-8',
+);
+"""
+    try:
+        subprocess.run(
+            [
+                "node",
+                "--input-type=module",
+                "-e",
+                script,
+                str(users_file),
+                username,
+                password,
+                access_email,
+            ],
+            cwd=str(FRONTDOOR_ROOT),
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except subprocess.CalledProcessError as exc:
+        detail = (exc.stderr or exc.stdout or "").strip() or str(exc)
+        raise SmokeFailure(
+            f"Could not generate isolated front-door credential fixture under {users_file}: {detail}",
+            kind="runtime",
+        ) from exc
+    return users_file
+
+
+def _spawn_local_frontdoor(
+    *,
+    username: str,
+    password: str,
+    backend_base_url: str,
+    backend_api_key: str,
+    timeout_seconds: float,
+) -> LocalRuntimeHandle:
+    runtime_root = Path(
+        tempfile.mkdtemp(
+            prefix="tp-frontdoor-browser-runtime-",
+            dir="/tmp" if os.name != "nt" and Path("/tmp").exists() else None,
+        )
+    )
+    users_file = _generate_frontdoor_users_file(username, password, runtime_root)
+    session_db = runtime_root / "sessions.sqlite"
+    log_path = runtime_root / "frontdoor.log"
+    port = _find_free_port()
+    base_url = f"http://localhost:{port}"
+    dist_dir_name = f".next-smoke-{port}"
+    dist_dir_path = FRONTDOOR_ROOT / dist_dir_name
+
+    env = os.environ.copy()
+    env.update(
+        {
+            "NEXT_TELEMETRY_DISABLED": "1",
+            "TP_FRONTDOOR_HOST": "127.0.0.1",
+            "TP_FRONTDOOR_PORT": str(port),
+            "TP_FRONTDOOR_USERS_FILE": str(users_file),
+            "TP_FRONTDOOR_SESSION_DB": str(session_db),
+            "TP_FRONTDOOR_DIST_DIR": dist_dir_name,
+            "TP_FASTAPI_ORIGIN": backend_base_url,
+            "TP_ALLOW_LOCAL_ACCESS_BYPASS": "1",
+        }
+    )
+    if backend_api_key:
+        env["TP_BACKEND_API_KEY"] = backend_api_key
+    else:
+        env.pop("TP_BACKEND_API_KEY", None)
+
+    log_handle = log_path.open("w", encoding="utf-8")
+    try:
+        process = subprocess.Popen(
+            [str(SCRIPT_DIR.parent / "setup" / "run_frontdoor_local.sh")],
+            cwd=str(SCRIPT_DIR.parent.parent),
+            env=env,
+            stdout=log_handle,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+    finally:
+        log_handle.close()
+
+    handle = LocalRuntimeHandle(
+        process=process,
+        base_url=base_url,
+        log_path=log_path,
+        temp_paths=(runtime_root, dist_dir_path),
+    )
+    try:
+        _wait_for_frontdoor_ready(
+            base_url,
+            timeout_seconds=timeout_seconds,
+            process=process,
+            log_path=log_path,
+        )
+    except Exception:
+        _terminate_runtime(handle)
+        raise
+    return handle
 
 
 def _parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
@@ -55,7 +241,27 @@ def _parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
         "--frontdoor-base-url",
         dest="frontdoor_base_url",
         default=None,
-        help="Front-door base URL (default: TP_FRONTDOOR_BASE_URL or http://localhost:3000)",
+        help=f"Front-door base URL (default: TP_FRONTDOOR_BASE_URL or {DEFAULT_FRONTDOOR_BASE_URL})",
+    )
+    parser.add_argument(
+        "--backend-base-url",
+        default="",
+        help=f"Backend base URL for isolated front-door launches (default: TP_FASTAPI_ORIGIN or {DEFAULT_BACKEND_BASE_URL})",
+    )
+    parser.add_argument(
+        "--backend-api-key",
+        default="",
+        help="Backend API key for isolated front-door launches (default: TP_BACKEND_API_KEY or TP_API_KEY)",
+    )
+    parser.add_argument(
+        "--spawn-local-frontdoor",
+        action="store_true",
+        help="Launch an isolated local managed front-door on a free port before the browser smoke",
+    )
+    parser.add_argument(
+        "--spawn-local-backend",
+        action="store_true",
+        help="Launch an isolated local backend for portal/front-door validation",
     )
     parser.add_argument(
         "--username",
@@ -79,6 +285,18 @@ def _parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
         help="Chrome remote debugging port (default: auto-select free port)",
     )
     parser.add_argument(
+        "--backend-startup-timeout-seconds",
+        type=float,
+        default=30.0,
+        help="Wait budget for an auto-launched local backend to become ready (default: %(default)s)",
+    )
+    parser.add_argument(
+        "--frontdoor-startup-timeout-seconds",
+        type=float,
+        default=45.0,
+        help="Wait budget for an auto-launched local front-door to become ready (default: %(default)s)",
+    )
+    parser.add_argument(
         "--timeout-seconds",
         type=float,
         default=45.0,
@@ -93,22 +311,37 @@ def _parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
 
 
 def _resolve_base_url(args: argparse.Namespace) -> str:
-    import os
-
-    raw = args.frontdoor_base_url or os.getenv("TP_FRONTDOOR_BASE_URL", "http://localhost:3000")
-    return str(raw).strip().rstrip("/")
+    raw = args.frontdoor_base_url or os.getenv("TP_FRONTDOOR_BASE_URL", DEFAULT_FRONTDOOR_BASE_URL)
+    return _base_url(str(raw))
 
 
 def _resolve_username(args: argparse.Namespace) -> str:
-    import os
-
     return str(args.username or os.getenv("TP_FRONTDOOR_USERNAME", "")).strip()
 
 
 def _resolve_password(args: argparse.Namespace) -> str:
-    import os
-
     return str(args.password or os.getenv("TP_FRONTDOOR_PASSWORD", ""))
+
+
+def _resolve_backend_base_url(args: argparse.Namespace) -> str:
+    raw = args.backend_base_url or os.getenv("TP_FASTAPI_ORIGIN", DEFAULT_BACKEND_BASE_URL)
+    return _base_url(str(raw))
+
+
+def _resolve_backend_api_key(args: argparse.Namespace) -> str:
+    return str(args.backend_api_key or os.getenv("TP_BACKEND_API_KEY", "") or os.getenv("TP_API_KEY", "")).strip()
+
+
+def _format_frontdoor_health_failure(status: int, body: dict) -> str:
+    checks = body.get("checks") if isinstance(body.get("checks"), dict) else {}
+    failing_checks = []
+    for key in ("backend", "access_config", "user_source", "session_store", "session_scaling"):
+        check = checks.get(key)
+        if isinstance(check, dict) and check.get("required") and not check.get("ok"):
+            reason = str(check.get("reason") or "unknown").strip() or "unknown"
+            failing_checks.append(f"{key}={reason}")
+    failure_summary = ", ".join(failing_checks) if failing_checks else f"status={status}"
+    return f"Front-door readiness preflight failed at /healthz ({failure_summary})."
 
 
 def _frontdoor_state_probe_expression() -> str:
@@ -135,8 +368,10 @@ def _frontdoor_state_probe_expression() -> str:
     readyState: document.readyState,
     pathname: window.location.pathname,
     homepageHeroReady: !!document.querySelector('[data-ui="homepage-hero-title"]'),
+    homepageLearnLinkReady: !!document.querySelector('[data-ui="homepage-learn-link"]'),
     homepagePrimaryCtaHref: attr('[data-ui="homepage-primary-cta"]', 'href'),
     loginTitleReady: !!document.querySelector('[data-ui="login-title"]'),
+    loginSequenceReady: !!document.querySelector('[data-ui="login-sequence"]'),
     brandAssetPresent: !!document.querySelector('.brand-asset'),
     hasHeroVideo: !!document.querySelector('.hero-video, .homepage-video'),
     loginFormPresent: !!document.querySelector('[data-ui="login-form"]'),
@@ -195,12 +430,50 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
     args = _parse_args(argv)
     base_url = _resolve_base_url(args)
     _expect(base_url, "Front-door base URL cannot be empty")
+    backend_base_url = _resolve_backend_base_url(args)
+    backend_api_key = _resolve_backend_api_key(args)
     username = _resolve_username(args)
     password = _resolve_password(args)
     if not username or not password:
         raise SmokeFailure(
             "Front-door username and password are required. Set TP_FRONTDOOR_USERNAME and TP_FRONTDOOR_PASSWORD or pass flags."
         )
+    if args.spawn_local_frontdoor and args.spawn_local_backend and not backend_api_key:
+        backend_api_key = "contract-secret"
+
+    backend_runtime: Optional[LocalRuntimeHandle] = None
+    frontdoor_runtime: Optional[LocalRuntimeHandle] = None
+
+    if args.spawn_local_backend:
+        print("frontdoor-browser-smoke: launching isolated local backend", flush=True)
+        backend_runtime = _spawn_local_backend(
+            backend_api_key,
+            timeout_seconds=args.backend_startup_timeout_seconds,
+        )
+        backend_base_url = backend_runtime.base_url
+        print(f"frontdoor-browser-smoke: isolated backend ready at {backend_base_url}", flush=True)
+
+    if args.spawn_local_frontdoor:
+        if not backend_api_key:
+            raise SmokeFailure(
+                "An isolated front-door launch requires TP_BACKEND_API_KEY or TP_API_KEY unless --spawn-local-backend is also enabled.",
+                kind="environment",
+            )
+        print("frontdoor-browser-smoke: launching isolated managed front-door", flush=True)
+        frontdoor_runtime = _spawn_local_frontdoor(
+            username=username,
+            password=password,
+            backend_base_url=backend_base_url,
+            backend_api_key=backend_api_key,
+            timeout_seconds=args.frontdoor_startup_timeout_seconds,
+        )
+        base_url = frontdoor_runtime.base_url
+        print(f"frontdoor-browser-smoke: isolated front-door ready at {base_url}", flush=True)
+    else:
+        print("frontdoor-browser-smoke: preflighting /healthz", flush=True)
+        status, body = _request_frontdoor_health(base_url)
+        if status != 200 or body.get("ok") is not True:
+            raise SmokeFailure(_format_frontdoor_health_failure(status, body), kind="environment")
 
     profile_dir = _default_profile_dir()
     port = int(args.debugging_port or _find_free_port())
@@ -248,6 +521,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
                 isinstance(value, dict)
                 and value.get("readyState") == "complete"
                 and bool(value.get("homepageHeroReady"))
+                and bool(value.get("homepageLearnLinkReady"))
                 and str(value.get("homepagePrimaryCtaHref", "")) == "/login"
             ),
             timeout_seconds=args.timeout_seconds,
@@ -265,6 +539,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
                 isinstance(value, dict)
                 and str(value.get("pathname", "")) == "/login"
                 and bool(value.get("loginTitleReady"))
+                and bool(value.get("loginSequenceReady"))
                 and bool(value.get("brandAssetPresent"))
                 and bool(value.get("loginFormPresent"))
                 and bool(value.get("usernamePresent"))
@@ -313,6 +588,10 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
                     chrome_process.kill()
                 except Exception:
                     pass
+        if frontdoor_runtime is not None:
+            _terminate_runtime(frontdoor_runtime)
+        if backend_runtime is not None:
+            _terminate_runtime(backend_runtime)
         if not args.keep_profile:
             shutil.rmtree(profile_dir, ignore_errors=True)
 

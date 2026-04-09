@@ -51,8 +51,8 @@ help:
 	@echo "  test-utils         Run tests for performance and error handling utilities"
 	@echo "  coverage-fast-scope  Run branch coverage for audited core/config and streaming paths"
 	@echo "  validate-orchestrator-http  Run the live orchestrator HTTP smoke audit"
-	@echo "  validate-portal-browser  Run the live browser smoke audit against a running portal"
-	@echo "  validate-frontdoor-browser  Run the live browser smoke audit against a running managed frontdoor"
+	@echo "  validate-portal-browser  Run the live browser smoke audit with an isolated local backend"
+	@echo "  validate-frontdoor-browser  Run the live browser smoke audit with isolated local backend/frontdoor runtimes"
 	@echo "  audit-pipeline-readiness  Run the local four-pipeline readiness audit"
 	@echo "  venv               Create local .venv if missing"
 	@echo "  clean              Remove Python cache files and build artifacts"
@@ -218,11 +218,11 @@ validate-orchestrator-http:
 
 validate-portal-browser:
 	@echo "Running live portal browser smoke validation..."
-	@"$(PY)" scripts/validation/validate_portal_browser_smoke.py
+	@TP_API_KEY="$${TP_API_KEY:-contract-secret}" "$(PY)" scripts/validation/validate_portal_browser_smoke.py --spawn-local-backend --api-key "$${TP_API_KEY:-contract-secret}"
 
 validate-frontdoor-browser:
 	@echo "Running live managed frontdoor browser smoke validation..."
-	@"$(PY)" scripts/validation/validate_frontdoor_browser_smoke.py
+	@"$(PY)" scripts/validation/validate_frontdoor_browser_smoke.py --spawn-local-backend --spawn-local-frontdoor
 
 audit-pipeline-readiness:
 	@echo "Running safe local four-pipeline readiness audit..."

@@ -151,7 +151,7 @@ Front door checks:
 make test-frontdoor-contract
 ```
 
-Browser smoke against a running managed front door:
+Browser smoke with isolated local backend + managed front door:
 
 ```bash
 TP_FRONTDOOR_BASE_URL="http://localhost:3000" \
@@ -166,8 +166,8 @@ checks manually:
 ```bash
 cd web/secure-landing
 npm test
-npm run build
-npm run start
+TP_NEXT_DIST_DIR=.next-build-verify npm run build
+TP_NEXT_DIST_DIR=.next-build-verify npm run start
 
 TP_FRONTDOOR_BASE_URL="http://localhost:3000" \
 TP_FRONTDOOR_USERNAME="<username>" \
@@ -179,10 +179,11 @@ For local managed smoke validation, use `http://localhost:3000` rather than
 `http://127.0.0.1:3000`; the development front door normalizes same-origin CSRF
 checks to `localhost`.
 
-For release validation, prefer running the browser smoke against `npm run start`
-after a successful `npm run build`, not only against `next dev`. The start
-wrapper launches the standalone build output and preserves the production-like
-cookie posture. Local HTTP login validation still needs
+For release validation, prefer running the browser smoke against
+`TP_NEXT_DIST_DIR=.next-build-verify npm run start` after building with the
+same `TP_NEXT_DIST_DIR=.next-build-verify` value, not only against `next dev`.
+The start wrapper launches the standalone build output and preserves the
+production-like cookie posture. Local HTTP login validation still needs
 HTTPS (or equivalent) if you want to exercise the full auth flow outside `next dev`.
 
 FastAPI contract gate:

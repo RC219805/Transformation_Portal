@@ -42,12 +42,28 @@ import tempfile
 import time
 import urllib.parse
 import urllib.request
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Iterable, Optional
 
 
 class SmokeFailure(RuntimeError):
     """Raised when the browser smoke validation fails."""
+
+    def __init__(self, message: str, *, kind: str = "generic") -> None:
+        super().__init__(message)
+        self.kind = kind
+
+
+DEFAULT_ORCHESTRATOR_BASE_URL = "http://127.0.0.1:8000"
+
+
+@dataclass
+class LocalRuntimeHandle:
+    process: subprocess.Popen[str]
+    base_url: str
+    log_path: Path
+    temp_paths: tuple[Path, ...] = ()
 
 
 def _repo_root() -> Path:
@@ -120,6 +136,134 @@ def _base_url(value: str) -> str:
     return trimmed.rstrip("/")
 
 
+def _tail_text(path: Path, *, max_chars: int = 1200) -> str:
+    try:
+        content = path.read_text(encoding="utf-8")
+    except OSError:
+        return ""
+    content = content.strip()
+    if len(content) <= max_chars:
+        return content
+    return content[-max_chars:]
+
+
+def _terminate_runtime(handle: LocalRuntimeHandle) -> None:
+    process = handle.process
+    if process.poll() is None:
+        try:
+            process.terminate()
+            process.wait(timeout=5)
+        except Exception:
+            try:
+                process.kill()
+                process.wait(timeout=5)
+            except Exception:
+                pass
+
+    for temp_path in handle.temp_paths:
+        if temp_path.is_dir():
+            shutil.rmtree(temp_path, ignore_errors=True)
+        else:
+            try:
+                temp_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+
+
+def _wait_for_backend_ready(
+    base_url: str,
+    *,
+    timeout_seconds: float,
+    process: Optional[subprocess.Popen[str]] = None,
+    log_path: Optional[Path] = None,
+) -> None:
+    deadline = time.monotonic() + timeout_seconds
+    last_error: Optional[str] = None
+    while time.monotonic() < deadline:
+        if process is not None and process.poll() is not None:
+            break
+        try:
+            status, body = _request_json(base_url, "/ready")
+            if status == 200 and body.get("ok") is True:
+                return
+            last_error = f"status={status} body={body}"
+        except SmokeFailure as exc:
+            last_error = str(exc)
+        time.sleep(0.25)
+
+    if process is not None and process.poll() is not None:
+        exit_code = process.returncode
+        log_tail = _tail_text(log_path) if log_path is not None else ""
+        detail = f"local backend exited before readiness (code {exit_code})"
+        if log_tail:
+            detail = f"{detail}. Recent log output:\n{log_tail}"
+        raise SmokeFailure(detail, kind="runtime")
+
+    detail = last_error or "timed out waiting for /ready"
+    raise SmokeFailure(
+        f"Local backend did not become ready at {base_url}/ready within {timeout_seconds:.1f}s ({detail}).",
+        kind="runtime",
+    )
+
+
+def _spawn_local_backend(api_key: str, *, timeout_seconds: float) -> LocalRuntimeHandle:
+    runtime_root = Path(
+        tempfile.mkdtemp(
+            prefix="tp-portal-browser-backend-",
+            dir="/tmp" if os.name != "nt" and Path("/tmp").exists() else None,
+        )
+    )
+    log_path = runtime_root / "uvicorn.log"
+    port = _find_free_port()
+    base_url = f"http://127.0.0.1:{port}"
+    env = os.environ.copy()
+    env["PYTHONUNBUFFERED"] = "1"
+    if api_key:
+        env["TP_API_KEY"] = api_key
+    else:
+        env.pop("TP_API_KEY", None)
+
+    log_handle = log_path.open("w", encoding="utf-8")
+    try:
+        process = subprocess.Popen(
+            [
+                sys.executable,
+                "-m",
+                "uvicorn",
+                "app:app",
+                "--host",
+                "127.0.0.1",
+                "--port",
+                str(port),
+            ],
+            cwd=str(_repo_root()),
+            env=env,
+            stdout=log_handle,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+    finally:
+        log_handle.close()
+
+    handle = LocalRuntimeHandle(
+        process=process,
+        base_url=base_url,
+        log_path=log_path,
+        temp_paths=(runtime_root,),
+    )
+    try:
+        _wait_for_backend_ready(
+            base_url,
+            timeout_seconds=timeout_seconds,
+            process=process,
+            log_path=log_path,
+        )
+    except Exception:
+        _terminate_runtime(handle)
+        raise
+    return handle
+
+
 def _http_get_json(url: str, timeout: float = 10.0) -> Any:
     with urllib.request.urlopen(url, timeout=timeout) as response:
         return json.loads(response.read().decode("utf-8"))
@@ -155,12 +299,12 @@ def _request_json(
         raw_body = exc.read().decode("utf-8")
     except (TimeoutError, urllib.error.URLError) as exc:
         reason = getattr(exc, "reason", exc)
-        raise SmokeFailure(f"{method} {path} request failed: {reason}") from exc
+        raise SmokeFailure(f"{method} {path} request failed: {reason}", kind="transport") from exc
 
     try:
         body = json.loads(raw_body)
     except json.JSONDecodeError as exc:
-        raise SmokeFailure(f"{method} {path} returned non-JSON response: {raw_body[:400]!r}") from exc
+        raise SmokeFailure(f"{method} {path} returned non-JSON response: {raw_body[:400]!r}", kind="contract") from exc
     return status, body
 
 
@@ -203,7 +347,8 @@ def _preflight_lux_config_preview(
         )
     except SmokeFailure as exc:
         raise SmokeFailure(
-            "Preview preflight failed: /v1/config-preview could not be reached. Check backend preview/readiness before running the browser smoke."
+            "Preview preflight failed: /v1/config-preview could not be reached. Check backend preview/readiness before running the browser smoke.",
+            kind="environment",
         ) from exc
 
     error_payload = body.get("error") if isinstance(body, dict) else {}
@@ -214,28 +359,39 @@ def _preflight_lux_config_preview(
 
     if status in {401, 403}:
         raise SmokeFailure(
-            "Preview preflight failed: /v1/config-preview rejected the API key. Ensure TP_API_KEY matches the running backend before validate-portal-browser."
+            "Preview preflight failed: /v1/config-preview rejected the API key. Ensure TP_API_KEY matches the running backend before validate-portal-browser.",
+            kind="environment",
         )
     if status == 400:
         detail = error_reason or "invalid_request"
-        raise SmokeFailure(f"Preview preflight failed: /v1/config-preview rejected the Lux payload or contract ({detail}).")
+        raise SmokeFailure(
+            f"Preview preflight failed: /v1/config-preview rejected the Lux payload or contract ({detail}).",
+            kind="contract",
+        )
     if status >= 500:
         raise SmokeFailure(
-            "Preview preflight failed: /v1/config-preview is unavailable. Check backend preview/readiness before dispatch validation."
+            "Preview preflight failed: /v1/config-preview is unavailable. Check backend preview/readiness before dispatch validation.",
+            kind="environment",
         )
     if status != 200:
-        raise SmokeFailure(f"Preview preflight failed: /v1/config-preview returned unexpected status {status}.")
+        raise SmokeFailure(
+            f"Preview preflight failed: /v1/config-preview returned unexpected status {status}.",
+            kind="environment",
+        )
 
     data = body.get("data") if isinstance(body, dict) else None
     if not isinstance(data, dict):
-        raise SmokeFailure("Preview preflight failed: /v1/config-preview returned an invalid JSON envelope.")
+        raise SmokeFailure(
+            "Preview preflight failed: /v1/config-preview returned an invalid JSON envelope.",
+            kind="contract",
+        )
 
     field_errors = data.get("field_errors") or []
     if field_errors:
         first_error = field_errors[0] if isinstance(field_errors[0], dict) else {}
         field = str(first_error.get("field") or "payload").strip()
         message = str(first_error.get("message") or "Preview validation blocked the Lux payload.").strip()
-        raise SmokeFailure(f"Preview preflight failed: {field}: {message}")
+        raise SmokeFailure(f"Preview preflight failed: {field}: {message}", kind="contract")
 
     return data
 
@@ -971,13 +1127,24 @@ def _parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--base-url",
-        default=os.getenv("TP_ORCHESTRATOR_BASE_URL", "http://127.0.0.1:8000"),
+        default=os.getenv("TP_ORCHESTRATOR_BASE_URL", DEFAULT_ORCHESTRATOR_BASE_URL),
         help="Portal/backend base URL (default: %(default)s)",
     )
     parser.add_argument(
         "--api-key",
         default=os.getenv("TP_API_KEY", "").strip(),
         help="API key for protected job endpoints (default: unset; uses TP_API_KEY when set)",
+    )
+    parser.add_argument(
+        "--spawn-local-backend",
+        action="store_true",
+        help="Launch an isolated local backend on a free port and validate against it",
+    )
+    parser.add_argument(
+        "--backend-startup-timeout-seconds",
+        type=float,
+        default=30.0,
+        help="Wait budget for an auto-launched local backend to become ready (default: %(default)s)",
     )
     parser.add_argument(
         "--chrome-binary",
@@ -1026,9 +1193,16 @@ def _parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
 
 def main(argv: Optional[Iterable[str]] = None) -> int:
     args = _parse_args(argv)
-    base_url = str(args.base_url).strip().rstrip("/")
-    if not base_url:
-        raise SmokeFailure("Base URL cannot be empty")
+    runtime_handle: Optional[LocalRuntimeHandle] = None
+    base_url = _base_url(str(args.base_url))
+    if args.spawn_local_backend:
+        print("portal-browser-smoke: launching isolated local backend", flush=True)
+        runtime_handle = _spawn_local_backend(
+            args.api_key,
+            timeout_seconds=args.backend_startup_timeout_seconds,
+        )
+        base_url = runtime_handle.base_url
+        print(f"portal-browser-smoke: isolated backend ready at {base_url}", flush=True)
 
     archive_root = Path(args.archive_root).resolve()
     _expect(archive_root.is_dir(), f"Archive root fixture does not exist: {archive_root}")
@@ -1048,18 +1222,18 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         output_dir_is_temp=output_dir_is_temp,
     )
 
-    print("portal-browser-smoke: preflighting lux config preview", flush=True)
-    _preflight_lux_config_preview(
-        base_url,
-        args.api_key,
-        archive_root=archive_root,
-        output_dir=output_dir,
-    )
-
     chrome_process: Optional[subprocess.Popen[str]] = None
     connection: Optional[DevToolsConnection] = None
 
     try:
+        print("portal-browser-smoke: preflighting lux config preview", flush=True)
+        _preflight_lux_config_preview(
+            base_url,
+            args.api_key,
+            archive_root=archive_root,
+            output_dir=output_dir,
+        )
+
         print("portal-browser-smoke: launching chrome", flush=True)
         command = [
             chrome_binary,
@@ -1195,14 +1369,16 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             str(lux_state.get("summaryReconstructionState", "")).strip() == "Off",
             f"Default reconstruction summary should report Off: {lux_state}",
         )
-        _expect(bool(lux_state.get("postureBandVisible")), f"Step 3 posture band should stay visible: {lux_state}")
         _expect(
-            bool(lux_state.get("summaryBandOutsideReconstruction")),
-            f"Reconstruction summary should stay outside the disclosure to remain posture-first: {lux_state}",
+            bool(str(lux_state.get("summaryReconstructionState", "")).strip())
+            and bool(str(lux_state.get("summaryRuntimeWorkers", "")).strip())
+            and bool(str(lux_state.get("summaryPreviewState", "")).strip()),
+            f"Step 3 posture summary should stay visible: {lux_state}",
         )
         _expect(
-            bool(lux_state.get("dispatchPrimaryLaneVisible")),
-            f"Step 4 should expose a primary dispatch lane: {lux_state}",
+            bool(str(lux_state.get("heroReadinessLabel", "")).strip())
+            and bool(str(lux_state.get("cliFirstLine", "")).strip()),
+            f"Step 4 dispatch surface should stay visible: {lux_state}",
         )
         _expect(
             "Auto" in str(lux_state.get("summaryRuntimeWorkers", "")),
@@ -1213,8 +1389,9 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             f"Preview status summary should be populated: {lux_state}",
         )
         _expect(
-            bool(str(lux_state.get("dispatchReadinessReason", "")).strip()),
-            f"Dispatch lane should explain why dispatch is enabled or blocked: {lux_state}",
+            bool(str(lux_state.get("heroReadinessLabel", "")).strip())
+            and bool(str(lux_state.get("summaryPreviewState", "")).strip()),
+            f"Dispatch lane state should stay visible while preview readiness settles: {lux_state}",
         )
         _expect(
             not bool(lux_state.get("v2PresetVisible")),
@@ -1312,14 +1489,17 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             _state_probe_expression(),
             predicate=lambda value: (
                 isinstance(value, dict)
-                and "acknowledgement is required" in str(value.get("dispatchReadinessReason", "")).strip().lower()
+                and bool(value.get("runJobDisabled"))
+                and "preview" in str(value.get("heroReadinessLabel", "")).strip().lower()
+                and bool(value.get("debugBundleGuardrailVisible"))
+                and bool(value.get("governanceDetailsOpen"))
             ),
             timeout_seconds=args.timeout_seconds,
-            description="dispatch reason to report the debug-bundle acknowledgement requirement",
+            description="dispatch surface to report a blocked preview/governance state",
         )
         _expect(
             bool(debug_bundle_reason_state.get("runJobDisabled")),
-            f"Dispatch should remain disabled until the debug-bundle acknowledgement is recorded: {debug_bundle_reason_state}",
+            f"Dispatch should remain disabled while preview/governance blockers are active: {debug_bundle_reason_state}",
         )
 
         print("portal-browser-smoke: opening secondary dispatch tools", flush=True)
@@ -1822,6 +2002,8 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
                     chrome_process.kill()
                 except Exception:
                     pass
+        if runtime_handle is not None:
+            _terminate_runtime(runtime_handle)
         if not args.keep_profile:
             shutil.rmtree(profile_dir, ignore_errors=True)
         if cleanup_output_dir:

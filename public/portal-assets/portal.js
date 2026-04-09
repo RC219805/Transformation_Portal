@@ -422,6 +422,8 @@ const els = {
     queueSkeletonState: document.getElementById('queueSkeletonState'),
     jobList: document.getElementById('jobList'),
     emptyQueueState: document.getElementById('emptyQueueState'),
+    emptyQueueTitle: document.getElementById('emptyQueueTitle'),
+    emptyQueueDetail: document.getElementById('emptyQueueDetail'),
     queueCount: document.getElementById('queueCount'),
     selectedJobStateBadge: document.getElementById('selectedJobStateBadge'),
     selectedJobIdLabel: document.getElementById('selectedJobIdLabel'),
@@ -449,6 +451,8 @@ const els = {
     artifactSkeletonState: document.getElementById('artifactSkeletonState'),
     artifactMeta: document.getElementById('artifactMeta'),
     emptyArtifactState: document.getElementById('emptyArtifactState'),
+    emptyArtifactTitle: document.getElementById('emptyArtifactTitle'),
+    emptyArtifactDetail: document.getElementById('emptyArtifactDetail'),
     artifactCompareBtn: document.getElementById('artifactCompareBtn'),
     artifactPreviewStage: document.getElementById('artifactPreviewStage'),
     artifactCompareStage: document.getElementById('artifactCompareStage'),
@@ -3527,15 +3531,15 @@ function _renderArtifactMetadataCard(job, artifact) {
     title.className = 'text-[12px] font-semibold text-slate-800 dark:text-slate-100';
     title.textContent = artifact
         ? artifactLabel(artifact)
-        : 'Select a completed job to review the highest-value output here.';
+        : 'Select a completed run to bring the primary review artifact into focus here.';
     els.artifactMetadataCard.appendChild(title);
 
     const detail = document.createElement('p');
     detail.className = 'mt-2 text-[12px] leading-6 text-slate-600 dark:text-slate-300';
     if (!job) {
-        detail.textContent = 'No job selected.';
+        detail.textContent = 'Preview, provenance, and next review actions will appear here after you choose a reviewable job.';
     } else if (!artifact) {
-        detail.textContent = 'Artifacts will appear here when the selected run indexes outputs.';
+        detail.textContent = 'This run has not indexed a reviewable artifact yet. Stay with the inspector for progress, transport, and freshness context.';
     } else {
         detail.textContent = `${artifactDisplayLabel(artifact)} • ${artifactContentType(artifact) || 'binary'} • ${formatBytes(artifact.size_bytes)}.`;
     }
@@ -3768,10 +3772,16 @@ function renderArtifactPanel() {
 
     if (!selected) {
         _resetArtifactActionButtons();
+        _setSurfaceEmptyState(
+            els.emptyArtifactState,
+            els.emptyArtifactTitle,
+            els.emptyArtifactDetail,
+            _artifactEmptyStateCopy(null)
+        );
         els.artifactMeta.textContent = 'No job selected';
         els.artifactThumbnailRail.innerHTML = '';
         if (els.artifactSelectionTitle) els.artifactSelectionTitle.textContent = 'No artifact selected';
-        if (els.artifactSelectionMeta) els.artifactSelectionMeta.textContent = 'Preview, metadata, and actions will appear here when outputs are indexed.';
+        if (els.artifactSelectionMeta) els.artifactSelectionMeta.textContent = 'Preview, provenance, and actions will appear here after you choose a reviewable run.';
         if (els.artifactCompareBtn) {
             els.artifactCompareBtn.classList.add('hidden');
             els.artifactCompareBtn.setAttribute('aria-pressed', 'false');
@@ -3809,9 +3819,15 @@ function renderArtifactPanel() {
 
     if (artifacts.length === 0) {
         _resetArtifactActionButtons();
+        _setSurfaceEmptyState(
+            els.emptyArtifactState,
+            els.emptyArtifactTitle,
+            els.emptyArtifactDetail,
+            _artifactEmptyStateCopy(selected)
+        );
         els.artifactThumbnailRail.innerHTML = '';
         if (els.artifactSelectionTitle) els.artifactSelectionTitle.textContent = 'No artifact selected';
-        if (els.artifactSelectionMeta) els.artifactSelectionMeta.textContent = 'Artifacts will appear here when the selected run indexes outputs.';
+        if (els.artifactSelectionMeta) els.artifactSelectionMeta.textContent = 'Review surfaces will populate here when the selected run indexes outputs.';
         if (els.artifactCompareBtn) {
             els.artifactCompareBtn.classList.add('hidden');
             els.artifactCompareBtn.setAttribute('aria-pressed', 'false');
@@ -6806,6 +6822,64 @@ function refreshProfileDropdown() {
     });
 }
 
+function _setSurfaceEmptyState(container, titleEl, detailEl, copy) {
+    if (!container) return;
+    container.dataset.tone = String(copy?.tone || 'neutral');
+    if (titleEl) titleEl.textContent = String(copy?.title || '');
+    if (detailEl) detailEl.textContent = String(copy?.detail || '');
+}
+
+function _queueEmptyStateCopy() {
+    if (state.jobsLoadStatus === 'offline' || (!state.backendOk && state.jobs.length === 0)) {
+        return {
+            tone: 'warning',
+            title: 'Queue unavailable',
+            detail: 'Backend connectivity is offline. Restore the managed backend to recover recent runs and live transport state.'
+        };
+    }
+    if (state.jobsLoadStatus === 'error') {
+        return {
+            tone: 'error',
+            title: 'Queue recovery needs attention',
+            detail: 'Recent jobs could not be recovered. Refresh the workspace after backend health returns to continue.'
+        };
+    }
+    return {
+        tone: 'neutral',
+        title: 'No runs yet',
+        detail: 'Dispatch a run from Build or wait for recovery to repopulate recent operator activity.'
+    };
+}
+
+function _artifactEmptyStateCopy(job) {
+    if (!job) {
+        return {
+            tone: 'neutral',
+            title: 'Select a completed run',
+            detail: 'Choose a reviewable job to load preview, provenance, and compare context here.'
+        };
+    }
+    if (job.state === 'running' || job.state === 'queued') {
+        return {
+            tone: 'info',
+            title: 'Outputs are still arriving',
+            detail: 'This run has not indexed reviewable artifacts yet. Stay on the inspector for live progress and freshness updates.'
+        };
+    }
+    if (job.state === 'failed' || job.state === 'canceled') {
+        return {
+            tone: 'warning',
+            title: 'No reviewable outputs indexed',
+            detail: 'This run ended before artifacts were available. Inspect the run status and transport warnings above for recovery context.'
+        };
+    }
+    return {
+        tone: 'neutral',
+        title: 'No indexed artifacts yet',
+        detail: 'Artifacts will appear here when the selected run finishes indexing its review outputs.'
+    };
+}
+
 function renderJobQueue(includeReviewSurfaces = true) {
     if (!els.jobList) return;
     els.jobList.setAttribute('role', 'listbox');
@@ -6828,8 +6902,16 @@ function renderJobQueue(includeReviewSurfaces = true) {
         return;
     }
     if (state.jobs.length === 0) {
+        const emptyCopy = _queueEmptyStateCopy();
+        _setSurfaceEmptyState(els.emptyQueueState, els.emptyQueueTitle, els.emptyQueueDetail, emptyCopy);
         if (els.emptyQueueState) els.emptyQueueState.style.display = 'flex';
-        if (els.queueStatusSummary) els.queueStatusSummary.textContent = 'Newest jobs stay pinned to the top.';
+        if (els.queueStatusSummary) {
+            els.queueStatusSummary.textContent = state.jobsLoadStatus === 'ready'
+                ? 'Dispatch a run to populate live queue and inspector context.'
+                : state.jobsLoadStatus === 'offline'
+                    ? 'Queue is paused while backend connectivity is offline.'
+                    : 'Queue recovery needs operator attention before live history can refresh.';
+        }
         els.jobList.innerHTML = '';
         if (includeReviewSurfaces) renderReviewSurfaces();
         return;
