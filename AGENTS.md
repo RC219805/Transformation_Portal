@@ -25,6 +25,7 @@ Quick reference for common workflows and commands in this repo.
 - `make validate-orchestrator-http` run the live orchestrator HTTP smoke against a running backend.
 - `make validate-portal-browser` launch an isolated local backend, then run the live portal browser smoke; it seeds `TP_API_KEY=contract-secret` unless you override it.
 - `make validate-frontdoor-browser` launch isolated local backend and managed frontdoor runtimes, then run the live browser smoke; requires `TP_FRONTDOOR_USERNAME` and `TP_FRONTDOOR_PASSWORD`.
+- `make validate-frontdoor-deployment-gate` run the manual shared-deployment frontdoor posture gate against a Cloudflare-fronted public hostname, a protected Vercel deployment URL, and either a public FastAPI probe URL or explicit non-public attestation.
 - `make audit-pipeline-readiness` run the safe local four-pipeline readiness audit using checked-in archive fixtures.
 - `make coverage-fast-scope` run branch coverage for the audited `core/config` and `streaming` paths with `term-missing` output.
 - `make clean` remove Python caches and build/test artifacts.

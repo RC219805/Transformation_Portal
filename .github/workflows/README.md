@@ -66,6 +66,17 @@ checked-in layered dependency contract.
 - Covers the non-ML checked-in layered locks only.
 - Stays non-blocking while the team evaluates maintenance cost and CI noise.
 
+### 4.2 `frontdoor-deployment-gate.yml`
+**Purpose:** Manual predeploy validation for any shared frontdoor rollout that is about to become internet-reachable.
+**Triggers:** `workflow_dispatch` only.
+**Features:**
+- Targets the Cloudflare-in-front-of-Vercel posture for the managed front door.
+- Verifies the public hostname is Cloudflare Access protected and not serving the real DNA shell unauthenticated.
+- Verifies the Vercel deployment or preview URL is protected and not serving the real DNA shell unauthenticated.
+- Verifies FastAPI is either non-public by explicit operator attestation or does not expose healthy unauthenticated `/ready` or `/healthz`.
+- Runs `make test-frontdoor-contract`, `tests/validation/test_frontdoor_deployment_gate.py`, and `make test-orchestrator-contract` before the live posture probe.
+- Uses GitHub environments `frontdoor-staging` and `frontdoor-production` for reviewer-gated rollout approval.
+
 ### 5. AI Advisory Workflows
 
 The repository includes three AI-powered advisory workflows that provide intelligent suggestions without blocking PR merges. All workflows follow a hardened pattern with timeout bounds and failure visibility.

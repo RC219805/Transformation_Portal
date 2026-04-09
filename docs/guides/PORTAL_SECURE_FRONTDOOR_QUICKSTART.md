@@ -148,6 +148,8 @@ originRequest:
 - Keep app-side JWT verification enabled even when Tunnel origin enforcement is active.
 - Do not route normal browser traffic directly to FastAPI.
 - If the front door is hosted on Vercel, Cloudflare must still front the user-facing hostname, the app must continue to verify the Access JWT, and deployment or preview URLs must be protected with equivalent controls such as Vercel Deployment Protection.
+- Vercel deployment or preview-URL protection is distinct from production-domain coverage. Configure the appropriate Vercel Deployment Protection scope for the environment you are validating; protecting only preview URLs is not sufficient for a production-domain rollout.
+- Treat this posture as a predeploy requirement before any internet-reachable staging or production environment, not as a post-launch hardening task.
 - The v1 session store remains SQLite-backed and currently supports only `TP_FRONTDOOR_SESSION_SCALING_MODE=single_instance`.
 - If your deployment target requires `multi_instance` or `ephemeral_runtime`, treat that as a blocked requirement until a dedicated external session store is introduced; the front door now fails `/healthz` under those modes on purpose.
 
@@ -158,6 +160,23 @@ Front door checks:
 ```bash
 make test-frontdoor-contract
 ```
+
+Manual shared-deployment posture gate:
+
+```bash
+TP_FRONTDOOR_GATE_ENVIRONMENT="staging" \
+TP_FRONTDOOR_GATE_FRONTDOOR_URL="https://portal.example.com" \
+TP_FRONTDOOR_GATE_CF_ACCESS_TEAM_DOMAIN="https://your-team.cloudflareaccess.com" \
+TP_FRONTDOOR_GATE_VERCEL_DEPLOYMENT_URL="https://portal-preview.vercel.app" \
+TP_FRONTDOOR_GATE_CONFIRM_FASTAPI_NON_PUBLIC=1 \
+make validate-frontdoor-deployment-gate
+```
+
+Notes:
+- This gate is a manual predeploy control. It does not reconfigure Cloudflare or Vercel for you.
+- The gate validates edge posture at rollout time. It does not replace app-side Cloudflare Access JWT verification.
+- If FastAPI has a public URL, set `TP_FRONTDOOR_GATE_FASTAPI_PUBLIC_URL` instead of `TP_FRONTDOOR_GATE_CONFIRM_FASTAPI_NON_PUBLIC=1`.
+- The gate fails closed for ambiguous frontdoor or Vercel responses; only clearly protected responses pass.
 
 Browser smoke with isolated local backend + managed front door:
 
@@ -199,6 +218,11 @@ FastAPI contract gate:
 ```bash
 make test-orchestrator-contract
 ```
+
+Manual GitHub predeploy workflow:
+- Use `.github/workflows/frontdoor-deployment-gate.yml` via `workflow_dispatch` for shared staging or production rollouts.
+- Bind `staging` runs to `frontdoor-staging` and `production` runs to `frontdoor-production`.
+- Configure GitHub environment reviewers so deployment approval happens before the live gate executes.
 
 Direct-debug portal browser smoke:
 
