@@ -10,8 +10,9 @@ portal/orchestrator baseline is already re-baselined in
 `docs/architecture/PORTAL_ORCHESTRATOR_ROADMAP.md`.
 
 This roadmap is intentionally narrower than a full shell rewrite. The next
-delivery horizon is production hardening over the next 3-5 PRs, with FastAPI
-and `portal.html` remaining the operator-shell system of record.
+delivery horizon has already shipped; FastAPI and `portal.html` remain the
+operator-shell system of record, and this document now serves as a status and
+validation record rather than an active feature-phase plan.
 
 ## Completed Baseline
 
@@ -107,6 +108,15 @@ The following slices are already shipped and should remain closed:
 ## Roadmap Status
 
 - Once PR `#1375` lands, no queued phases remain for this roadmap horizon.
+- The only UX-adjacent close-out lane was rerunning managed frontdoor
+  contract/build/browser validation under the enforced Node `22.x` runtime.
+- That close-out lane was completed on April 9, 2026:
+  - `make test-frontdoor-contract` passed under Node `22.22.2`;
+  - `make validate-frontdoor-browser` passed under the same Node `22.22.2`
+    environment.
+- The default local workspace runtime may still resolve to Node `25.x`; treat
+  that as an unsupported toolchain posture, not as a frontdoor product
+  regression.
 
 ## Acceptance Gates
 
@@ -120,7 +130,7 @@ The following slices are already shipped and should remain closed:
   when unsupported multi-instance or ephemeral-runtime modes are declared
 - Local `make test-frontdoor-contract` verification must run under Node 22.x;
   the frontdoor package explicitly rejects unsupported runtimes such as the
-  current local Node 25.x toolchain.
+  default local Node 25.x toolchain.
 
 ## Explicit Non-Goals For This Horizon
 
