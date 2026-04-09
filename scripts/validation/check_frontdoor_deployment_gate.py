@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import errno
+import json
 import socket
 import sys
 import urllib.error
@@ -93,8 +94,7 @@ class SurfaceVerdict:
     detail: str
 
     def render(self) -> str:
-        escaped_detail = self.detail.replace("\\", "\\\\").replace('"', '\\"')
-        return f'surface={self.surface} verdict={self.verdict} code={self.code} detail="{escaped_detail}"'
+        return f"surface={self.surface} verdict={self.verdict} code={self.code} detail={json.dumps(self.detail)}"
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -127,12 +127,21 @@ def _normalize_base_url(value: str, *, require_https: bool, label: str) -> str:
         raise ValueError(f"{label} must not include a query string or fragment.")
     if parsed.path not in ("", "/"):
         raise ValueError(f"{label} must be a base URL with an empty path or '/'.")
+    scheme = parsed.scheme.lower()
+    return f"{scheme}://{_normalized_authority(parsed, label=label)}"
+
+
+def _normalized_authority(parsed: urllib.parse.ParseResult, *, label: str) -> str:
     host = parsed.hostname
     if not host:
         raise ValueError(f"{label} must include a host.")
-    port = f":{parsed.port}" if parsed.port is not None else ""
-    scheme = parsed.scheme.lower()
-    return f"{scheme}://{host}{port}"
+    try:
+        parsed_port = parsed.port
+    except ValueError as exc:
+        raise ValueError(f"{label} contains an invalid port.") from exc
+    host_display = f"[{host}]" if ":" in host else host
+    port = f":{parsed_port}" if parsed_port is not None else ""
+    return f"{host_display}{port}"
 
 
 def _normalize_access_team_domain(value: str) -> str:
@@ -140,16 +149,11 @@ def _normalize_access_team_domain(value: str) -> str:
     if not trimmed:
         raise ValueError("Cloudflare Access team domain cannot be empty.")
     normalized = trimmed if "://" in trimmed else f"https://{trimmed}"
-    parsed = urllib.parse.urlparse(normalized)
-    if parsed.scheme.lower() != "https":
-        raise ValueError("Cloudflare Access team domain must use https.")
-    if parsed.username or parsed.password:
-        raise ValueError("Cloudflare Access team domain must not include userinfo.")
-    host = parsed.hostname
-    if not host:
-        raise ValueError("Cloudflare Access team domain must include a host.")
-    port = f":{parsed.port}" if parsed.port is not None else ""
-    return f"https://{host}{port}"
+    return _normalize_base_url(
+        normalized,
+        require_https=True,
+        label="Cloudflare Access team domain",
+    )
 
 
 def _normalized_headers(headers: Iterable[tuple[str, str]]) -> Dict[str, str]:
@@ -292,10 +296,7 @@ def _classify_frontdoor_probe(probe: ProbeResponse, *, access_team_domain: str) 
         return PathOutcome(
             ok=False,
             code="frontdoor_app_shell_exposed",
-            detail=(
-                f"path={probe.path} status={probe.status or 0} "
-                f"app_markers={_format_marker_list(shell_markers)}"
-            ),
+            detail=(f"path={probe.path} status={probe.status or 0} " f"app_markers={_format_marker_list(shell_markers)}"),
         )
 
     if probe.transport_error:
@@ -355,10 +356,7 @@ def _classify_vercel_probe(probe: ProbeResponse) -> PathOutcome:
         return PathOutcome(
             ok=False,
             code="vercel_app_shell_exposed",
-            detail=(
-                f"path={probe.path} status={probe.status or 0} "
-                f"app_markers={_format_marker_list(shell_markers)}"
-            ),
+            detail=(f"path={probe.path} status={probe.status or 0} " f"app_markers={_format_marker_list(shell_markers)}"),
         )
 
     if probe.transport_error:
@@ -385,10 +383,7 @@ def _classify_vercel_probe(probe: ProbeResponse) -> PathOutcome:
         return PathOutcome(
             ok=True,
             code="vercel_protected_status",
-            detail=(
-                f"path={probe.path} status={probe.status} "
-                f"vercel_markers={_format_marker_list(vercel_markers)}"
-            ),
+            detail=(f"path={probe.path} status={probe.status} " f"vercel_markers={_format_marker_list(vercel_markers)}"),
         )
 
     return PathOutcome(
@@ -412,7 +407,11 @@ def _surface_verdict_from_path_outcomes(
     for outcome in outcomes:
         if not outcome.ok:
             return SurfaceVerdict(surface=surface, verdict="FAIL", code=outcome.code, detail=outcome.detail)
-    code = preferred_success_code if all(outcome.code == preferred_success_code for outcome in outcomes) else fallback_success_code
+    code = (
+        preferred_success_code
+        if all(outcome.code == preferred_success_code for outcome in outcomes)
+        else fallback_success_code
+    )
     detail = "; ".join(outcome.detail for outcome in outcomes)
     return SurfaceVerdict(surface=surface, verdict="PASS", code=code, detail=detail)
 
