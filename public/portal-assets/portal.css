@@ -655,22 +655,6 @@ progress::-moz-progress-bar { background-color: #4f46e5; transition: width 0.3s 
         rgba(15, 23, 42, 0.72);
 }
 
-#build-shell > #parameters-shell {
-    order: 3;
-}
-
-#build-shell > #flags-shell {
-    order: 4;
-}
-
-#build-shell > #governance-shell {
-    order: 5;
-}
-
-#build-shell > #cli-shell {
-    order: 6;
-}
-
 .step-primary-note {
     margin: 0 0 1rem;
     max-width: 54rem;
