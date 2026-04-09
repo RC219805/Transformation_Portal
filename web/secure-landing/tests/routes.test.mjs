@@ -292,10 +292,14 @@ test("login GET serves a minimal branded sign-in shell and boots an anonymous se
     assert.match(html, /href="#main-content">Skip to sign-in</);
     assert.match(html, /id="main-content"/);
     assert.match(html, /Transformation Portal operator console/);
+    assert.match(html, /data-ui="login-title"/);
+    assert.match(html, /data-ui="login-form"/);
     assert.match(html, /form method="post" action="\/login"/);
     assert.match(html, /name="username"/);
     assert.match(html, /name="password"/);
-    assert.match(html, />Sign in</);
+    assert.match(html, /data-ui="login-helper"/);
+    assert.match(html, /data-ui="login-submit"[^>]*>Sign in</);
+    assert.match(html, /(?:data-ui="login-secondary-link"[^>]*href="\/"|href="\/"[^>]*data-ui="login-secondary-link")/);
     assert.doesNotMatch(html, /Authorized operators only\./);
     assert.doesNotMatch(html, /Need access\?/);
     assert.doesNotMatch(html, /Secure operator access to governed orchestration\./);
@@ -330,12 +334,13 @@ test("homepage GET serves the public DNA landing page instead of redirecting", a
     assert.equal(sessionCountAfter, 0);
     assert.match(html, /\/video\/dna-loop\.mp4/);
     assert.match(html, /\/brand\/dna-mark-dark\.svg/);
-    assert.match(html, /Make premium media verifiable before it ships\./);
-    assert.match(html, /Start Certification/);
-    assert.match(html, /View Verification Report/);
+    assert.match(html, /data-ui="homepage-hero-title"/);
+    assert.match(html, /(?:data-ui="homepage-primary-cta"[^>]*href="\/login"|href="\/login"[^>]*data-ui="homepage-primary-cta")/);
+    assert.match(html, /(?:data-ui="homepage-secondary-cta"[^>]*href="#proof-report"|href="#proof-report"[^>]*data-ui="homepage-secondary-cta")/);
+    assert.match(html, /(?:data-ui="homepage-utility-cta"[^>]*href="\/login"|href="\/login"[^>]*data-ui="homepage-utility-cta")/);
+    assert.match(html, /(?:data-ui="homepage-final-primary-cta"[^>]*href="\/login"|href="\/login"[^>]*data-ui="homepage-final-primary-cta")/);
     assert.match(html, /Verify\. Enhance\. Enforce\. Distribute\./);
-    assert.match(html, /Operator Login/);
-    assert.match(html, />Secure Access</);
+    assert.match(html, /(?:data-ui="homepage-operator-link"[^>]*href="\/login"|href="\/login"[^>]*data-ui="homepage-operator-link")/);
     assert.match(html, /tp\.meta\.verification_report\.v1/);
     assert.match(html, /when enabled/i);
     assert.match(html, /strip metadata/i);
@@ -387,8 +392,9 @@ test("homepage GET keeps authenticated operators on the public landing page whil
 
     assert.equal(response.status, 200);
     assert.equal(response.headers.get("set-cookie"), null);
+    assert.match(html, /(?:data-ui="homepage-utility-cta"[^>]*href="\/portal"|href="\/portal"[^>]*data-ui="homepage-utility-cta")/);
     assert.match(html, />Open Console</);
-    assert.match(html, /href="\/login"[^>]*>Start Certification</);
+    assert.match(html, /(?:data-ui="homepage-primary-cta"[^>]*href="\/login"|href="\/login"[^>]*data-ui="homepage-primary-cta")/);
     assert.equal(after.last_seen_at, before.last_seen_at);
     assert.equal(after.idle_expires_at, before.idle_expires_at);
     assert.doesNotMatch(html, /307|302/);

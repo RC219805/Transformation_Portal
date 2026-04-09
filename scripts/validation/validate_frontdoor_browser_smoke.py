@@ -122,6 +122,10 @@ def _frontdoor_state_probe_expression() -> str:
     const el = document.querySelector(selector);
     return el ? String(el.value || '') : '';
   };
+  const attr = (selector, name) => {
+    const el = document.querySelector(selector);
+    return el ? String(el.getAttribute(name) || '') : '';
+  };
   const hidden = (id) => {
     const el = document.getElementById(id);
     return !!(el && el.classList.contains('hidden'));
@@ -130,11 +134,12 @@ def _frontdoor_state_probe_expression() -> str:
     title: document.title,
     readyState: document.readyState,
     pathname: window.location.pathname,
-    homepageHeading: text('main h1'),
-    loginHeading: text('.card h1'),
+    homepageHeroReady: !!document.querySelector('[data-ui="homepage-hero-title"]'),
+    homepagePrimaryCtaHref: attr('[data-ui="homepage-primary-cta"]', 'href'),
+    loginTitleReady: !!document.querySelector('[data-ui="login-title"]'),
     brandAssetPresent: !!document.querySelector('.brand-asset'),
     hasHeroVideo: !!document.querySelector('.hero-video, .homepage-video'),
-    loginFormPresent: !!document.querySelector('form[action="/login"]'),
+    loginFormPresent: !!document.querySelector('[data-ui="login-form"]'),
     usernamePresent: !!document.querySelector('input[name="username"]'),
     usernameValue: value('input[name="username"]'),
     passwordPresent: !!document.querySelector('input[name="password"]'),
@@ -242,7 +247,8 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             predicate=lambda value: (
                 isinstance(value, dict)
                 and value.get("readyState") == "complete"
-                and "Make premium media verifiable before it ships." in str(value.get("homepageHeading", ""))
+                and bool(value.get("homepageHeroReady"))
+                and str(value.get("homepagePrimaryCtaHref", "")) == "/login"
             ),
             timeout_seconds=args.timeout_seconds,
             description="front-door homepage to render",
@@ -258,6 +264,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             predicate=lambda value: (
                 isinstance(value, dict)
                 and str(value.get("pathname", "")) == "/login"
+                and bool(value.get("loginTitleReady"))
                 and bool(value.get("brandAssetPresent"))
                 and bool(value.get("loginFormPresent"))
                 and bool(value.get("usernamePresent"))

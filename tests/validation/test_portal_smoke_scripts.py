@@ -254,7 +254,10 @@ def test_frontdoor_browser_waits_for_managed_portal_bootstrap_before_passing():
 
     assert 'and str(value.get("readyState", "")) == "complete"' in content
     assert 'and str(value.get("authModeBadge", "")).lower() == "managed"' in content
-    assert "Make premium media verifiable before it ships." in content
+    assert "homepageHeroReady" in content
+    assert "homepagePrimaryCtaHref" in content
+    assert '[data-ui="homepage-hero-title"]' in content
+    assert '[data-ui="login-form"]' in content
     assert ".hero-video, .homepage-video" in content
     assert "form.requestSubmit" in content
     assert "form.submit();" in content

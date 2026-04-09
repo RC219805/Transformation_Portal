@@ -176,7 +176,7 @@ Issues to address:
 
 ## Incremental Delivery Roadmap
 
-### Current Status as of April 8, 2026
+### Current Status as of April 9, 2026
 
 The repo moved past the initial re-baseline quickly on April 8, 2026. The
 strategy should therefore treat the following as already shipped rather than
@@ -220,10 +220,22 @@ still pending:
   visibly secondary.
 - Operate/review freshness and paired-comparison copy now stay aligned across
   the context ribbon, selected-job inspector, and review compare summary.
+- Phase 3 opened on April 9, 2026 as a bounded cross-surface continuity
+  tranche across homepage, login, and portal rather than as a new portal-only
+  feature lane.
+- The active implementation focus is shared CTA hierarchy, shell/material
+  consistency, loading/error-state polish, and stable homepage/login `data-ui`
+  hooks for contract tests and browser smoke.
+- The frontdoor roadmap remains closed. This strategy document is now the
+  active implementation record for the UX tranche instead of opening a new
+  frontdoor roadmap phase.
+- The local verification baseline on April 9, 2026 is:
+  - portal runtime/browser contract slice passes;
+  - frontdoor Node contract still requires a Node `22.x` runtime, while the
+    current local shell remains on Node `25.9.0`.
 
-Phase 2B is now closed out. The next open UX lane remains the deferred
-cross-surface continuity work in Phase 3 rather than any further portal-only
-hierarchy catch-up.
+Phase 2B is now closed out. Phase 3 is the active UX lane rather than any
+further portal-only hierarchy catch-up.
 
 ### Phase 1: Accessibility and Token Alignment (Completed April 8, 2026)
 
@@ -267,23 +279,35 @@ Acceptance focus:
 Status:
 - Completed on April 8, 2026.
 
-### Phase 3: Cross-surface Visual Continuity (Deferred)
+### Phase 3: Cross-surface Visual Continuity (Active April 9, 2026)
 
 Scope:
 - Harmonize CTA emphasis, empty/loading/error states, and premium polish across
   homepage, login, and portal.
+- Add stable homepage/login `data-ui` hooks so route tests and browser smoke
+  key off durable selectors instead of exact marketing copy.
 - Evolve the existing portal shells toward a more deliberate bento-like visual
   rhythm without replacing the current structural model.
 - Improve mobile compression and spacing consistency across all three surfaces.
+- Keep the implementation in the current CSS sources of truth:
+  `frontdoor-homepage.css`, `login.css`, and the later custom override section
+  of `portal.css`, without introducing a shared CSS asset or new runtime
+  dependency.
+- Keep the frontdoor roadmap closed and record this tranche here rather than
+  opening a separate roadmap lane.
 
 Acceptance focus:
 - Managed auth and proxy boundaries stay unchanged.
+- No route, auth, proxy, or `/v1/*` semantic changes are introduced.
+- Homepage/login contract tests and browser smoke must be updated alongside the
+  new selector hooks and continuity polish.
 - Decorative motion remains optional and reduced-motion safe.
 - Frontdoor and portal browser smokes both remain required.
+- Frontdoor contract verification still runs only in a Node `22.x`
+  environment.
 
 Status:
-- Deferred until a future tranche explicitly opens the broader cross-surface
-  polish lane.
+- Active as of April 9, 2026.
 
 ### Phase 4: Power-user Enhancements (Deferred)
 
@@ -366,6 +390,9 @@ make test-frontdoor-contract
 make validate-frontdoor-browser
 ```
 
+`make test-frontdoor-contract` remains Node `22.x` only because the
+frontdoor package explicitly rejects unsupported runtimes.
+
 Run `make test-orchestrator-contract` as well only if a UX change alters
 `/v1/*`, bootstrap behavior, or upstream portal semantics rather than pure
 portal presentation and state handling.
@@ -411,7 +438,8 @@ portal presentation and state handling.
 
 ### Proposed
 
-- Cross-surface polish only after the portal close-out lands
+- Active cross-surface polish across homepage, login, and portal, including
+  stable homepage/login selector hooks for tests and browser smoke
 - Optional command-palette evaluation only after earlier IA improvements land
 
 ## Source Notes and Assumptions
