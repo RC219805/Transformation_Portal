@@ -184,8 +184,9 @@ npm rebuild better-sqlite3 argon2
 ```
 
 - Run local browser smoke against `http://localhost`, not `http://127.0.0.1`,
-  because the development front door normalizes same-origin CSRF checks to
-  `localhost`.
+  because the browser-smoke harness defaults to `http://localhost:3000` and
+  same-origin CSRF validation requires the exact origin to match, so
+  `127.0.0.1` and `localhost` are different origins.
 - Treat Node `25.x` failures as unsupported-runtime/tooling failures unless the
   same command also fails under Node `22.x`.
 
@@ -248,9 +249,9 @@ front-door instead of `--spawn-local-frontdoor`, continue to pass
 `TP_FRONTDOOR_USERNAME` and `TP_FRONTDOOR_PASSWORD` explicitly.
 
 For local managed smoke validation, use `http://localhost:3000` rather than
-`http://127.0.0.1:3000`; the development front door normalizes same-origin CSRF
-checks to `localhost`, and the browser smoke is expected to exercise that exact
-origin.
+`http://127.0.0.1:3000`; the browser smoke defaults to that origin and the
+front door's same-origin CSRF validation requires an exact origin match, so
+`127.0.0.1:3000` and `localhost:3000` are different origins.
 
 For release validation, prefer running the browser smoke against
 `TP_NEXT_DIST_DIR=.next-build-verify npm run start` after building with the
