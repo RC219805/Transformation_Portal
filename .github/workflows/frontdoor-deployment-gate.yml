@@ -1,0 +1,117 @@
+name: Frontdoor Deployment Gate
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Shared environment being validated
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+      frontdoor_url:
+        description: Public frontdoor base URL
+        required: true
+        type: string
+      cf_access_team_domain:
+        description: Cloudflare Access team domain
+        required: true
+        type: string
+      vercel_deployment_url:
+        description: Vercel deployment or preview URL
+        required: true
+        type: string
+      fastapi_public_url:
+        description: Public FastAPI base URL (leave blank when none exists)
+        required: false
+        type: string
+      confirm_fastapi_non_public:
+        description: Confirm no public FastAPI URL exists
+        required: false
+        default: false
+        type: boolean
+      timeout_seconds:
+        description: Per-request timeout in seconds
+        required: false
+        default: "8"
+        type: string
+      user_agent:
+        description: Validator user agent override
+        required: false
+        default: TransformationPortalFrontdoorDeploymentGate/1.0
+        type: string
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.inputs.environment }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  gate:
+    name: Frontdoor shared-deployment gate
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment == 'production' && 'frontdoor-production' || 'frontdoor-staging' }}
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          fetch-depth: 1
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+        with:
+          python-version: "3.11"
+
+      - name: Install core dependencies
+        run: |
+          set -euo pipefail
+          make install-core
+
+      - name: Set up Node from .nvmrc
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f  # v6.3.0
+        with:
+          node-version-file: web/secure-landing/.nvmrc
+          cache: npm
+          cache-dependency-path: web/secure-landing/package-lock.json
+
+      - name: Install frontdoor dependencies
+        run: |
+          set -euo pipefail
+          cd web/secure-landing
+          npm ci
+
+      - name: Run frontdoor contract checks
+        run: |
+          set -euo pipefail
+          make test-frontdoor-contract
+
+      - name: Run deployment-gate unit tests
+        run: |
+          set -euo pipefail
+          .venv/bin/python -m pytest -q tests/validation/test_frontdoor_deployment_gate.py
+
+      - name: Run orchestrator contract checks
+        run: |
+          set -euo pipefail
+          make test-orchestrator-contract
+
+      - name: Validate live shared-deployment posture
+        env:
+          TP_FRONTDOOR_GATE_ENVIRONMENT: ${{ github.event.inputs.environment }}
+          TP_FRONTDOOR_GATE_FRONTDOOR_URL: ${{ github.event.inputs.frontdoor_url }}
+          TP_FRONTDOOR_GATE_CF_ACCESS_TEAM_DOMAIN: ${{ github.event.inputs.cf_access_team_domain }}
+          TP_FRONTDOOR_GATE_VERCEL_DEPLOYMENT_URL: ${{ github.event.inputs.vercel_deployment_url }}
+          TP_FRONTDOOR_GATE_FASTAPI_PUBLIC_URL: ${{ github.event.inputs.fastapi_public_url }}
+          TP_FRONTDOOR_GATE_CONFIRM_FASTAPI_NON_PUBLIC: ${{ github.event.inputs.confirm_fastapi_non_public && '1' || '' }}
+          TP_FRONTDOOR_GATE_TIMEOUT_SECONDS: ${{ github.event.inputs.timeout_seconds }}
+          TP_FRONTDOOR_GATE_USER_AGENT: ${{ github.event.inputs.user_agent }}
+        run: |
+          set -euo pipefail
+          make validate-frontdoor-deployment-gate

@@ -24,7 +24,7 @@ PHASE6_SMOKE_TESTS := \
 	tests/test_lux_render_pipeline_smoke.py \
 	tests/lux_depth_v3/test_orchestrator_smoke.py
 
-.PHONY: help test-fast test-novideo test-full test-integration test-structure test-utils test-orchestrator-contract test-orchestrator-http-contract test-portal-contract test-frontdoor-contract seed-frontdoor-user run-frontdoor-local validate-orchestrator-http validate-portal-browser validate-frontdoor-browser audit-pipeline-readiness coverage-fast-scope venv setup clean \
+.PHONY: help test-fast test-novideo test-full test-integration test-structure test-utils test-orchestrator-contract test-orchestrator-http-contract test-portal-contract test-frontdoor-contract seed-frontdoor-user run-frontdoor-local validate-orchestrator-http validate-portal-browser validate-frontdoor-browser validate-frontdoor-deployment-gate audit-pipeline-readiness coverage-fast-scope venv setup clean \
         lint lint-parity ci ci-full pre-commit install-hooks quality-check fix-quality validate-ci organize-docs check-json-serialization check-piptools-cache \
         check-yaml-governance check-stale-docs lock lock-prod lock-ci lock-dev install-core install-ml install-ml-core install-ml-raw install-ml-sam2 install-ml-coreml docs docs-clean \
         check-test-markers check-ci-sync
@@ -54,6 +54,7 @@ help:
 	@echo "  validate-orchestrator-http  Run the live orchestrator HTTP smoke audit"
 	@echo "  validate-portal-browser  Run the live browser smoke audit with an isolated local backend"
 	@echo "  validate-frontdoor-browser  Run the live browser smoke audit with isolated local backend/frontdoor runtimes"
+	@echo "  validate-frontdoor-deployment-gate  Run the manual shared-deployment frontdoor posture gate"
 	@echo "  audit-pipeline-readiness  Run the local four-pipeline readiness audit"
 	@echo "  venv               Create local .venv if missing"
 	@echo "  clean              Remove Python cache files and build artifacts"
@@ -228,6 +229,28 @@ validate-portal-browser:
 validate-frontdoor-browser:
 	@echo "Running live managed frontdoor browser smoke validation..."
 	@"$(PY)" scripts/validation/validate_frontdoor_browser_smoke.py --spawn-local-backend --spawn-local-frontdoor
+
+validate-frontdoor-deployment-gate:
+	@echo "Running shared-deployment frontdoor posture gate..."
+	@set -eu; \
+	set -- "$(PY)" scripts/validation/check_frontdoor_deployment_gate.py \
+		--environment "$${TP_FRONTDOOR_GATE_ENVIRONMENT:-}" \
+		--frontdoor-url "$${TP_FRONTDOOR_GATE_FRONTDOOR_URL:-}" \
+		--cf-access-team-domain "$${TP_FRONTDOOR_GATE_CF_ACCESS_TEAM_DOMAIN:-}" \
+		--vercel-deployment-url "$${TP_FRONTDOOR_GATE_VERCEL_DEPLOYMENT_URL:-}"; \
+	if [ -n "$${TP_FRONTDOOR_GATE_FASTAPI_PUBLIC_URL:-}" ]; then \
+		set -- "$$@" --fastapi-public-url "$${TP_FRONTDOOR_GATE_FASTAPI_PUBLIC_URL}"; \
+	fi; \
+	if [ "$${TP_FRONTDOOR_GATE_CONFIRM_FASTAPI_NON_PUBLIC:-}" = "1" ]; then \
+		set -- "$$@" --confirm-fastapi-non-public; \
+	fi; \
+	if [ -n "$${TP_FRONTDOOR_GATE_TIMEOUT_SECONDS:-}" ]; then \
+		set -- "$$@" --timeout-seconds "$${TP_FRONTDOOR_GATE_TIMEOUT_SECONDS}"; \
+	fi; \
+	if [ -n "$${TP_FRONTDOOR_GATE_USER_AGENT:-}" ]; then \
+		set -- "$$@" --user-agent "$${TP_FRONTDOOR_GATE_USER_AGENT}"; \
+	fi; \
+	"$$@"
 
 audit-pipeline-readiness:
 	@echo "Running safe local four-pipeline readiness audit..."
