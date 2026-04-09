@@ -70,6 +70,7 @@ python -m uvicorn app:app --host 127.0.0.1 --port 8000 --reload
 Start the front door in a second shell:
 
 ```bash
+make seed-frontdoor-user
 make run-frontdoor-local
 ```
 
@@ -81,6 +82,12 @@ The canonical launcher:
 - reuses `TP_API_KEY` as `TP_BACKEND_API_KEY` when needed
 - verifies FastAPI readiness first
 - refuses to start if `localhost:3000` is already occupied instead of letting Next.js drift to `:3001`
+
+The canonical local credential bootstrap:
+- `make seed-frontdoor-user` writes a single-user JSON fixture to `TP_FRONTDOOR_USERS_FILE`
+- it requires `TP_FRONTDOOR_USERS_FILE`, `TP_FRONTDOOR_USERNAME`, and `TP_FRONTDOOR_PASSWORD`
+- it defaults `access_email` to `<username>@local.invalid` and `role` to `admin`
+- it overwrites stale local fixture content instead of relying on fragile inline `node -e` snippets
 
 Route ownership:
 - `GET /` serves the public Dynamic Neural Access homepage, even for authenticated operators.

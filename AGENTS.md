@@ -21,6 +21,7 @@ Quick reference for common workflows and commands in this repo.
 - `make test-orchestrator-http-contract` run HTTP-only orchestrator contract tests (`tests/test_app_orchestrator_contract_http.py`).
 - `make test-portal-contract` run portal runtime/browser contract tests (`tests/test_app_orchestrator_runtime.py`, `tests/validation/test_portal_smoke_scripts.py`).
 - `make test-frontdoor-contract` run managed frontdoor Node contract/build checks (`cd web/secure-landing && npm test && npm run build`).
+- `make seed-frontdoor-user` write the canonical local managed-frontdoor credential fixture from `TP_FRONTDOOR_USERS_FILE`, `TP_FRONTDOOR_USERNAME`, and `TP_FRONTDOOR_PASSWORD`.
 - `make run-frontdoor-local` start the canonical local managed frontdoor on `http://localhost:3000` after verifying backend readiness, auth env, and no silent fallback to `:3001`.
 - `make validate-orchestrator-http` run the live orchestrator HTTP smoke against a running backend.
 - `make validate-portal-browser` launch an isolated local backend, then run the live portal browser smoke; it seeds `TP_API_KEY=contract-secret` unless you override it.

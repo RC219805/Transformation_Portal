@@ -384,6 +384,7 @@ make test-frontdoor-contract
 make validate-orchestrator-http
 make validate-portal-browser
 make validate-frontdoor-browser
+make seed-frontdoor-user
 make run-frontdoor-local
 make audit-pipeline-readiness
 ```
@@ -394,6 +395,7 @@ Readiness and validation tiers:
 - `make validate-orchestrator-http` runs the live backend smoke against a running FastAPI origin.
 - `make validate-portal-browser` launches an isolated local backend, then runs the live portal browser smoke and fails early if `/v1/config-preview` cannot authenticate or validate.
 - `make validate-frontdoor-browser` launches isolated local backend and managed front-door runtimes, then runs the live browser smoke against that ephemeral proof setup.
+- `make seed-frontdoor-user` writes the canonical local managed-frontdoor credential fixture from `TP_FRONTDOOR_USERS_FILE`, `TP_FRONTDOOR_USERNAME`, and `TP_FRONTDOOR_PASSWORD`.
 - `make run-frontdoor-local` starts the canonical managed front door on `http://localhost:3000` and refuses to fall back to `:3001`.
 - `make audit-pipeline-readiness` runs the safe local four-pipeline readiness audit and reports `ready` / `degraded` / `blocked` outcomes, including separate `lux-depth-v3` base vs canary status.
 

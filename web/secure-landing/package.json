@@ -8,6 +8,7 @@
     "dev": "node ./scripts/guard-runtime.mjs && next dev",
     "build": "node ./scripts/guard-runtime.mjs && next build",
     "start": "node ./scripts/guard-runtime.mjs && node ./scripts/start-standalone.mjs",
+    "seed-frontdoor-user": "node ./scripts/guard-runtime.mjs && node ./scripts/seed-frontdoor-user.mjs",
     "test": "node ./scripts/guard-runtime.mjs && node --experimental-specifier-resolution=node --test tests/*.test.mjs"
   },
   "engines": {
