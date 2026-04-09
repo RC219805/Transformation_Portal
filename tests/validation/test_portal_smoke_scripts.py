@@ -161,6 +161,30 @@ def test_portal_browser_preview_preflight_classifies_service_failures(monkeypatc
         )
 
 
+def test_portal_browser_preview_preflight_accepts_null_error_envelope(monkeypatch: pytest.MonkeyPatch):
+    module = _load_module(PORTAL_BROWSER_SCRIPT_PATH, "tests_validate_portal_browser_smoke_preflight_null_error")
+
+    expected_data = {
+        "command": "lux-depth-v3 --input-dir /tmp/archive-root --output-dir /tmp/output-root",
+        "field_errors": [],
+    }
+
+    monkeypatch.setattr(
+        module,
+        "_request_json",
+        lambda *_args, **_kwargs: (200, {"data": expected_data, "error": None}),
+    )
+
+    result = module._preflight_lux_config_preview(
+        "http://127.0.0.1:8000",
+        "contract-secret",
+        archive_root=Path("/tmp/archive-root"),
+        output_dir=Path("/tmp/output-root"),
+    )
+
+    assert result == expected_data
+
+
 def test_orchestrator_http_request_json_wraps_transport_failures(monkeypatch: pytest.MonkeyPatch):
     module = _load_module(ORCHESTRATOR_HTTP_SCRIPT_PATH, "tests_validate_orchestrator_http_smoke")
 
@@ -256,12 +280,18 @@ def test_portal_browser_smoke_tracks_archive_readiness_fields_and_canonical_comm
     assert "_restore_archive_gate_form_without_events_expression" in content
     assert "heroReadinessLabel" in content
     assert "locationSearch" in content
+    assert "contextRibbonVisible" in content
+    assert "contextRibbonJob" in content
+    assert "contextRibbonArtifact" in content
+    assert "contextRibbonCompare" in content
     assert "/tmp/gate-a-smoke-portal" in content
     assert "archive-gate-b" in content
     assert "archive-gate-c" in content
     assert '--archive-command "bag-build"' in content
     assert '--archive-command "mets-export"' in content
     assert "view=operate&job=" in content
+    assert "artifact=" in content
+    assert "compare=1" in content
 
 
 def test_portal_browser_smoke_probes_review_warning_and_provenance_contract():
@@ -279,6 +309,10 @@ def test_portal_browser_smoke_probes_review_warning_and_provenance_contract():
     assert "reviewProvenanceBatch" in content
     assert "Outputs ready for review" in content
     assert "Review provenance should identify the selected artifact path" in content
+    assert "Artifact deep link should restore the ribbon artifact context" in content
+    assert "compare-only deep link to preserve compare mode" in content
+    assert "Compare-only deep links should preserve compare mode for the default artifact" in content
+    assert "stale artifact and compare params to normalize" in content
 
 
 def test_portal_browser_smoke_probes_review_compare_contract():
@@ -288,6 +322,7 @@ def test_portal_browser_smoke_probes_review_compare_contract():
     assert "reviewCompareDetail" in content
     assert "reviewCompareVisible" in content
     assert "reviewCompareEnabled" in content
+    assert '_navigate_to_console_view_expression("review", submitted_job_id, "missing/stale-artifact.png", True)' in content
 
 
 def test_portal_browser_smoke_tracks_reconstruction_runtime_summary_and_guardrails():
@@ -296,6 +331,10 @@ def test_portal_browser_smoke_tracks_reconstruction_runtime_summary_and_guardrai
     assert "summaryReconstructionState" in content
     assert "summaryRuntimeWorkers" in content
     assert "summaryPreviewState" in content
+    assert "rawPreviewStatus" in content
+    assert "previewRequestKey" in content
+    assert "currentPreviewRequestKey" in content
+    assert "previewRequestKeyMatches" in content
     assert "debugBundleGuardrailVisible" in content
     assert "effectiveConfigDrawerVisible" in content
     assert "emit_scene_debug_bundle" in content

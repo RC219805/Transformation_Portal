@@ -189,9 +189,18 @@ still pending:
 - Backend-driven operator hints landed in commit `e4228f7b` / PR `#1379`.
 - Review provenance and compare-surface accessibility landed in commits
   `304b3e86` / PR `#1380` and `57f30b2d` / PR `#1381`.
+- Portal dispatch review now already includes `Next Operator Action`, pre-run
+  checks, expected outputs, and a secondary CLI/config disclosure instead of
+  leaving those as planned future concepts.
+- Portal disclosure auto-open behavior is already state-driven from preview
+  issues, research acknowledgments, and reconstruction/runtime posture.
+- `operate` and `review` already preserve selected-job routing through
+  `?view=operate|review&job=...` and reuse the last selected job across view
+  changes.
 
-This leaves the active UX lane as a portal-only Phase 2 close-out, not a fresh
-Phase 1 accessibility pass and not a broader Phase 3 cross-surface polish push.
+This leaves the active UX lane as a smaller portal-only Phase 2B close-out, not
+a fresh Phase 1 accessibility pass and not a broader Phase 3 cross-surface
+polish push.
 
 ### Phase 1: Accessibility and Token Alignment (Completed April 8, 2026)
 
@@ -209,19 +218,24 @@ Acceptance focus:
 Status:
 - Completed on April 8, 2026.
 
-### Phase 2: Portal Hierarchy and Context Close-out (Active)
+### Phase 2B: Portal Hierarchy and Context Close-out (Active)
 
 Scope:
-- Tighten Step 3 and Step 4 hierarchy in the portal only, with `Next Operator
-  Action`, pre-run checks, expected outputs, and dispatch kept primary.
-- Revisit which `details` groups default open or closed based on task
-  frequency, preview warnings, and research-only requirements.
-- Improve selected-job, next-action, and review-context persistence in
-  `operate` and `review`, including `?view=operate&job=...` parity with the
-  existing review route.
+- Truth-sync the UX strategy to shipped portal work so the active lane no
+  longer treats already-landed operator hints, disclosure defaults, and
+  selected-job routing as pending.
+- Tighten Step 3 and Step 4 hierarchy in the portal only by making output
+  posture primary and keeping advanced/research controls visibly secondary.
+- Add a compact operate/review context ribbon plus shareable URL-backed review
+  context through additive `artifact=<relative-path>` and `compare=1` query
+  params on top of the existing `view` and `job` route contract.
+- Normalize stale or invalid job/artifact/compare route state back to the
+  nearest valid client-derived selection without changing backend APIs.
 
 Acceptance focus:
 - Preserve `?view=` routing and existing build-step semantics.
+- Preserve additive `job=` deep links while extending the route contract only
+  through optional `artifact=` and `compare=1` params.
 - Preserve shortcut, drawer, and CLI-parity flows.
 - Keep direct-debug and managed mode behavior aligned with existing contracts.
 
@@ -240,7 +254,7 @@ Acceptance focus:
 - Frontdoor and portal browser smokes both remain required.
 
 Status:
-- Deferred until the portal-only Phase 2 close-out is complete.
+- Deferred until the portal-only Phase 2B close-out is complete.
 
 ### Phase 4: Power-user Enhancements (Deferred)
 
@@ -256,7 +270,7 @@ Acceptance focus:
   disclosure model.
 
 Status:
-- Deferred until Phase 2 and any later Phase 3 work both prove that navigation
+- Deferred until Phase 2B and any later Phase 3 work both prove that navigation
   friction remains high.
 
 ## React/Next Migration Decision Gate
@@ -333,6 +347,11 @@ portal presentation and state handling.
 - Reduced-motion handling across the CSS surfaces
 - Portal build stepper and query-param console routing
 - Progressive disclosure via `details` sections and config drawers
+- Dispatch review with `Next Operator Action`, pre-run checks, expected outputs,
+  and a secondary CLI/config disclosure
+- State-driven disclosure defaults for advanced, governance, reconstruction,
+  and dispatch-tool groupings
+- Selected-job route persistence across `operate` and `review`
 - Keyboard support for build tabs, job list navigation, overlays, and existing
   shortcuts
 - Managed login protections including CSRF, throttling, and session rotation
@@ -343,10 +362,13 @@ portal presentation and state handling.
 
 ### Proposed
 
-- Finish the remaining portal-only Phase 2 hierarchy cleanup
-- Better default disclosure states for dense operator settings
-- Stronger selected-job and review-context persistence in `operate` and
-  `review`
+- Finish the remaining portal-only Phase 2B hierarchy cleanup
+- A compact operate/review context ribbon for selected job, freshness,
+  artifact, and compare state
+- Shareable additive `artifact=` and `compare=1` deep links for review context
+  with stale-route normalization back to valid client state
+- Clearer Step 3 grouping between primary output posture and secondary
+  advanced/research controls
 - Cross-surface polish only after the portal close-out lands
 - Optional command-palette evaluation only after earlier IA improvements land
 
