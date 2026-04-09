@@ -11,8 +11,9 @@
 #   ./scripts/validation/run_full_validation_suite.sh --skip-browser
 #
 # Exit codes:
-#   0 - All validations passed
-#   1 - Validation failed
+#   0       - All validations passed
+#   non-zero - Validation or pre-flight failure; propagates the underlying
+#              failing command's exit code
 # -----------------------------------------------------------------------------
 
 set -euo pipefail
@@ -168,11 +169,44 @@ fi
 # Step 1: Environment pre-flight
 log_step "Step 1/6: Environment Pre-flight Checks"
 if [[ "$SKIP_FRONTDOOR" == "true" ]]; then
-    python3 "${SCRIPT_DIR}/check_local_environment.py" --check python --check venv
+    if python3 "${SCRIPT_DIR}/check_local_environment.py" --check python --check venv; then
+        log_success "Environment checks passed"
+    else
+        PREFLIGHT_STATUS=$?
+        case "$PREFLIGHT_STATUS" in
+            1)
+                log_warning "Environment checks reported optional issues; continuing validation suite"
+                ;;
+            2)
+                log_error "Environment checks failed"
+                exit 2
+                ;;
+            *)
+                log_error "Environment checks exited unexpectedly with status ${PREFLIGHT_STATUS}"
+                exit "$PREFLIGHT_STATUS"
+                ;;
+        esac
+    fi
 else
-    python3 "${SCRIPT_DIR}/check_local_environment.py"
+    if python3 "${SCRIPT_DIR}/check_local_environment.py"; then
+        log_success "Environment checks passed"
+    else
+        PREFLIGHT_STATUS=$?
+        case "$PREFLIGHT_STATUS" in
+            1)
+                log_warning "Environment checks reported optional issues; continuing validation suite"
+                ;;
+            2)
+                log_error "Environment checks failed"
+                exit 2
+                ;;
+            *)
+                log_error "Environment checks exited unexpectedly with status ${PREFLIGHT_STATUS}"
+                exit "$PREFLIGHT_STATUS"
+                ;;
+        esac
+    fi
 fi
-log_success "Environment checks passed"
 
 # Step 2: Fast Python tests
 run_step "Step 2/6: Fast Python Tests" make test-fast

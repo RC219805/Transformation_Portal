@@ -7,11 +7,16 @@
  *   - Managed frontdoor homepage (frontdoor-homepage.css)
  *   - Managed frontdoor login (login.css)
  *
- * Import this file at the top of each surface stylesheet to ensure consistent
- * visual language and accessibility behavior.
+ * Import these tokens at the top of each surface stylesheet to ensure
+ * consistent visual language and accessibility behavior.
  *
  * Usage in CSS:
- *   @import url("/shared/tokens.css");
+ *   @import url("<surface-served-static-url>/tokens.css");
+ *
+ * Important: `/shared/tokens.css` is a repository source path, not a guaranteed
+ * public URL. Consumers must import the copy exposed by their surface's static
+ * asset pipeline (for example, a portal asset URL or a frontdoor public asset
+ * URL), rather than relying on this source-tree location being web-reachable.
  *
  * Note: Each surface may define additional local tokens that extend or override
  * these shared values for surface-specific needs.

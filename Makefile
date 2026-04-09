@@ -60,7 +60,7 @@ help:
 	@echo "  audit-pipeline-readiness  Run the local four-pipeline readiness audit"
 	@echo "  venv               Create local .venv if missing"
 	@echo "  clean              Remove Python cache files and build artifacts"
-	@echo "  clean-frontdoor    Remove frontdoor build artifacts (node_modules, .next)"
+	@echo "  clean-frontdoor    Remove frontdoor build artifacts (.next)"
 	@echo "  clean-all          Remove all build artifacts (Python + Node)"
 	@echo ""
 	@echo "Quality & CI:"

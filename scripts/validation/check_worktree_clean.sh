@@ -121,19 +121,19 @@ else
         
         case "$status_code" in
             " M"|"M "|"MM")
-                ((MODIFIED_COUNT++))
+                ((++MODIFIED_COUNT))
                 echo "  modified: $file_path"
                 ;;
             " A"|"A "|"AM")
-                ((ADDED_COUNT++))
+                ((++ADDED_COUNT))
                 echo "  added:    $file_path"
                 ;;
             " D"|"D ")
-                ((DELETED_COUNT++))
+                ((++DELETED_COUNT))
                 echo "  deleted:  $file_path"
                 ;;
             "??")
-                ((UNTRACKED_COUNT++))
+                ((++UNTRACKED_COUNT))
                 echo "  untracked: $file_path"
                 ;;
             *)
