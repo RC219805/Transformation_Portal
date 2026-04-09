@@ -116,6 +116,40 @@ SAFE_CACHE_KEY = re.compile(r"^[a-f0-9]{64}$")
 
 # Lock acquisition timeout (seconds) - prevents indefinite hangs
 DEFAULT_LOCK_TIMEOUT = 30.0
+_ARTIFACT_TEMP_SUFFIXES = (".committed_tmp", ".npz", ".json")
+
+
+def _mkstemp_path(directory: Path, *, prefix: str, suffix: str) -> tuple[int, Path]:
+    """Create a temporary path with an explicit file descriptor.
+
+    Using ``mkstemp`` avoids relying on ``NamedTemporaryFile`` wrapper lifecycle
+    semantics for atomic rename paths that need to survive close consistently
+    across concurrent POSIX CI runs.
+    """
+
+    fd, tmp_path_str = tempfile.mkstemp(dir=directory, prefix=prefix, suffix=suffix)
+    return fd, Path(tmp_path_str)
+
+
+def _is_artifact_temp_name(name: str) -> bool:
+    """Return True when an artifacts/ entry matches a known temp-file shape.
+
+    Cache payload and provenance files use a SHA256 filename stem. Temp files do
+    not. Match by known temp suffix first, then preserve real cache entries by
+    excluding stems that are valid content-addressed keys.
+    """
+
+    for suffix in _ARTIFACT_TEMP_SUFFIXES:
+        if not name.endswith(suffix):
+            continue
+
+        if suffix == ".committed_tmp":
+            return True
+
+        stem = name[: -len(suffix)]
+        return not SAFE_CACHE_KEY.match(stem)
+
+    return False
 
 
 class CacheLockTimeout(Exception):
@@ -734,16 +768,17 @@ class ArtifactStore:
                 # Atomic commit marker (Issue #929: transactional visibility)
                 # Only after both artifact and provenance are in place,
                 # atomically create the .committed marker via temp+fsync+rename.
-                # Fsync maintains crash consistency symmetry with artifact/provenance.
-                with tempfile.NamedTemporaryFile(
-                    mode="w",
-                    dir=artifact_path.parent,
-                    delete=False,
+                # Use mkstemp here instead of NamedTemporaryFile so the marker
+                # path stays stable after close on Linux CI under concurrent load.
+                marker_fd, tmp_marker_path = _mkstemp_path(
+                    artifact_path.parent,
+                    prefix=".commit_tmp_",
                     suffix=".committed_tmp",
-                ) as tmp_marker:
-                    tmp_marker_path = Path(tmp_marker.name)
-                    tmp_marker.flush()
-                    os.fsync(tmp_marker.fileno())
+                )
+                try:
+                    os.fsync(marker_fd)
+                finally:
+                    os.close(marker_fd)
                 tmp_marker_path.replace(committed_path)
 
                 # Optional: fsync containing directory for crash durability
@@ -996,9 +1031,6 @@ class ArtifactStore:
             "stale_temp_files_removed": 0,
         }
 
-        # Temp file suffixes produced by store() and _save_stats_atomic()
-        _TEMP_SUFFIXES = (".npz", ".json", ".committed_tmp")
-
         # Track uncommitted entries by cache key (to process as units)
         uncommitted_keys: Dict[str, List[Path]] = {}
         now = time.time()
@@ -1014,8 +1046,8 @@ class ArtifactStore:
                 name = entry.name
 
                 # --- Stale temp files ---
-                # NamedTemporaryFile produces names like tmpXXXXXX.suffix
-                if name.startswith("tmp") and any(name.endswith(s) for s in _TEMP_SUFFIXES):
+                # Match known temp suffixes and exclude real SHA256-backed entries.
+                if _is_artifact_temp_name(name):
                     try:
                         age = now - entry.stat().st_mtime
                         if age > max_temp_age_seconds:
@@ -1129,25 +1161,28 @@ class ArtifactStore:
         - Temp file cleaned up on failure (disk full, permissions, etc.)
         - Caller must hold stats lock
         """
-        # Write to temp file in same directory (ensures same filesystem for atomic rename)
-        with tempfile.NamedTemporaryFile(
-            mode="w",
-            dir=self.cache_dir,
-            delete=False,
-            suffix=".json",
-            prefix=".stats_tmp_",
-        ) as tmp_file:
-            tmp_path = Path(tmp_file.name)
-            json.dump(self._stats, tmp_file, indent=2)
-            tmp_file.flush()
-            os.fsync(tmp_file.fileno())
-
-        # Atomic rename with cleanup on failure
+        tmp_fd: Optional[int] = None
+        tmp_path: Optional[Path] = None
         try:
+            # Write to temp file in same directory (ensures same filesystem for atomic rename)
+            tmp_fd, tmp_path = _mkstemp_path(
+                self.cache_dir,
+                prefix=".stats_tmp_",
+                suffix=".json",
+            )
+            with os.fdopen(tmp_fd, "w", encoding="utf-8", newline="\n") as tmp_file:
+                tmp_fd = None
+                json.dump(self._stats, tmp_file, indent=2)
+                tmp_file.flush()
+                os.fsync(tmp_file.fileno())
+
             tmp_path.replace(self.stats_path)
-        except OSError:
+        except Exception:
             # Clean up temp file on failure (disk full, permissions, etc.)
-            tmp_path.unlink(missing_ok=True)
+            if tmp_fd is not None:
+                os.close(tmp_fd)
+            if tmp_path is not None:
+                tmp_path.unlink(missing_ok=True)
             raise
 
     def _record_cache_hit(self) -> None:
