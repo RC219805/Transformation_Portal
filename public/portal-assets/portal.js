@@ -391,6 +391,7 @@ const els = {
     exportBtn: document.getElementById('exportBtn'),
     fileInput: document.getElementById('fileInput'),
     runJobBtn: document.getElementById('runJobBtn'),
+    dispatchReadinessReason: document.getElementById('dispatchReadinessReason'),
     dispatchToolsDetails: document.getElementById('dispatchToolsDetails'),
     preRunWarnings: document.getElementById('preRunWarnings'),
     preRunWarningsEmpty: document.getElementById('preRunWarningsEmpty'),
@@ -973,6 +974,128 @@ function _syncConsoleRoute(replace = false) {
     window.history[method]({ view: state.currentView, jobId: state.selectedJobId || '' }, '', nextHref);
 }
 
+function _jobFreshnessLabel(job) {
+    if (!job) return 'No live telemetry';
+    const lastActivityAt = Number(job.lastEventAt || job.updatedAt || job.finishedAt || job.createdAt || 0);
+    return `Updated ${formatRelativeTime(lastActivityAt)}`;
+}
+
+function _compareSurfaceCopy(selectedArtifact, compareArtifact, compareEnabled) {
+    if (!selectedArtifact || !compareArtifact) {
+        return {
+            ribbonValue: 'No compare pair',
+            ribbonMeta: 'No paired comparison is available for the current artifact.',
+            summaryTitle: 'Paired comparison available',
+            summaryDetail: 'Enable compare mode to inspect paired outputs side by side.',
+        };
+    }
+
+    const primaryLabel = artifactLabel(selectedArtifact);
+    const compareLabel = artifactLabel(compareArtifact);
+    if (compareEnabled) {
+        return {
+            ribbonValue: 'Compare on',
+            ribbonMeta: 'Paired comparison is pinned in the URL-backed review context.',
+            summaryTitle: 'Comparing paired outputs',
+            summaryDetail: `${primaryLabel} is pinned against ${compareLabel} in this review context.`,
+        };
+    }
+
+    return {
+        ribbonValue: 'Pair available',
+        ribbonMeta: 'Paired comparison is available for the current artifact selection.',
+        summaryTitle: 'Paired comparison available',
+        summaryDetail: `${compareLabel} is available as a side-by-side comparison for ${primaryLabel}.`,
+    };
+}
+
+function _dispatchReadinessSnapshot(payload = null) {
+    const currentPayload = payload || generatePayload();
+    const readinessStatus = currentPipelineDispatchStatus(currentPayload);
+
+    if (!_portalPrivilegesReady()) {
+        return {
+            canRun: false,
+            tone: 'blocked',
+            detail: !_isBootstrapReady()
+                ? 'Portal bootstrap is still being confirmed before privileged actions can run.'
+                : 'Managed portal access is unavailable, so dispatch remains disabled.',
+        };
+    }
+
+    if (!state.backendOk) {
+        return {
+            canRun: false,
+            tone: 'blocked',
+            detail: 'Backend is offline. Dispatch resumes when connectivity is restored.',
+        };
+    }
+
+    if (currentPayload.pipeline === 'lux-depth-v3') {
+        const preview = _currentPreviewForPayload(currentPayload);
+        if (!preview || preview.status === 'loading') {
+            return {
+                canRun: false,
+                tone: 'info',
+                detail: 'Preview-backed validation is refreshing. Dispatch unlocks when the current draft settles.',
+            };
+        }
+        if (preview.status === 'error') {
+            const previewFailure = _previewFailureDetails(preview);
+            return {
+                canRun: false,
+                tone: 'blocked',
+                detail: String(previewFailure.luxBlockedMessage || 'Preview-backed validation needs attention before dispatch.')
+                    .replace(/^(BLOCKED|WARNING):\s*/i, ''),
+            };
+        }
+        if (Array.isArray(preview.field_errors) && preview.field_errors.length > 0) {
+            const firstError = preview.field_errors[0];
+            const conflictError = preview.field_errors.find(
+                (item) => String(item?.code || '').trim() === 'conflicting_log_verbosity_flags'
+            );
+            return {
+                canRun: false,
+                tone: 'blocked',
+                detail: conflictError
+                    ? 'verbose and quiet are mutually exclusive; disable one flag before dispatch.'
+                    : String(firstError?.message || 'Preview validation blocked dispatch.'),
+            };
+        }
+        if (_effectiveDebugBundleEnabled(preview, currentPayload) && !state.portalUi.debugBundleAcknowledged) {
+            return {
+                canRun: false,
+                tone: 'blocked',
+                detail: 'Debug bundle acknowledgement is required before dispatch.',
+            };
+        }
+    }
+
+    if (!readinessStatus) {
+        return {
+            canRun: false,
+            tone: 'info',
+            detail: 'Execution readiness is still loading. Dispatch unlocks when readiness finishes.',
+        };
+    }
+    if (readinessStatus !== 'ready') {
+        const firstIssue = currentPipelineReadinessIssues(currentPayload)[0];
+        return {
+            canRun: false,
+            tone: String(firstIssue?.severity || '').trim().toLowerCase() === 'blocked' ? 'blocked' : 'warning',
+            detail: String(firstIssue?.message || 'Pipeline prerequisites still need operator attention before dispatch.'),
+        };
+    }
+
+    return {
+        canRun: true,
+        tone: 'ready',
+        detail: currentPayload.pipeline === 'lux-depth-v3'
+            ? 'Preview-backed validation, readiness, and acknowledgments are clear for dispatch.'
+            : 'Readiness checks are clear for the selected archive stage.',
+    };
+}
+
 function updateConsoleViewContext() {
     const viewMeta = CONSOLE_VIEW_META[state.currentView] || CONSOLE_VIEW_META.overview;
     if (els.consoleViewTitle) els.consoleViewTitle.textContent = viewMeta.title;
@@ -1003,9 +1126,8 @@ function renderConsoleContextRibbon() {
     const selectedArtifact = selected ? _selectedArtifactForJob(selected) : null;
     const compareCandidate = selected ? findCompareArtifact(selectedArtifact, artifacts) : null;
     const compareEnabled = Boolean(selected && compareCandidate && state.artifactUi.compareByJob[String(selected.id || '')]);
-    const lastActivityAt = Number(selected?.lastEventAt || selected?.updatedAt || selected?.createdAt || 0);
-    const freshnessLabel = selected ? `Updated ${formatRelativeTime(lastActivityAt)}` : 'No live telemetry';
     const artifactCount = artifacts.length;
+    const compareCopy = _compareSurfaceCopy(selectedArtifact, compareCandidate, compareEnabled);
 
     if (els.contextRibbonJob) {
         els.contextRibbonJob.textContent = selected ? String(selected.id || 'unknown') : 'No job selected';
@@ -1019,29 +1141,21 @@ function renderConsoleContextRibbon() {
         els.contextRibbonState.textContent = selected ? titleCaseToken(selected.state, 'Unknown') : 'Idle';
     }
     if (els.contextRibbonFreshness) {
-        els.contextRibbonFreshness.textContent = freshnessLabel;
+        els.contextRibbonFreshness.textContent = _jobFreshnessLabel(selected);
     }
     if (els.contextRibbonArtifact) {
         els.contextRibbonArtifact.textContent = selectedArtifact ? artifactLabel(selectedArtifact) : 'Awaiting selection';
     }
     if (els.contextRibbonArtifactMeta) {
         els.contextRibbonArtifactMeta.textContent = selectedArtifact
-            ? `${artifactDisplayLabel(selectedArtifact)}${compareCandidate ? ' • compare pair available' : ''}`
+            ? `${artifactDisplayLabel(selectedArtifact)}${compareCandidate ? ' • paired comparison available' : ' • single artifact context'}`
             : 'Review context will show the active artifact path here.';
     }
     if (els.contextRibbonCompare) {
-        els.contextRibbonCompare.textContent = compareEnabled
-            ? 'Compare on'
-            : compareCandidate
-                ? 'Single view'
-                : 'No compare pair';
+        els.contextRibbonCompare.textContent = selected ? compareCopy.ribbonValue : 'No compare pair';
     }
     if (els.contextRibbonCompareMeta) {
-        els.contextRibbonCompareMeta.textContent = compareEnabled
-            ? 'URL-backed review context includes compare=1 for this selection.'
-            : compareCandidate
-                ? 'Toggle compare to inspect the paired artifact side by side.'
-                : 'Deep-linkable review context stays aligned with the URL.';
+        els.contextRibbonCompareMeta.textContent = selected ? compareCopy.ribbonMeta : 'Deep-linkable review context stays aligned with the URL.';
     }
 }
 
@@ -1186,13 +1300,13 @@ const BUILD_STEP_CONTENT = Object.freeze({
             label: 'Outputs',
             meta: 'Deliverables, posture, and readiness.',
             title: '3. Shape deliverables and confirm output posture',
-            summary: 'Keep deliverables, primary output posture, and immediate readiness readable first.'
+            summary: 'Keep deliverables, the posture band, and immediate readiness readable before opening contextual controls.'
         },
         {
             label: 'Dispatch',
             meta: 'Primary review, launch, and parity tools.',
             title: '4. Review and dispatch',
-            summary: 'Use preview-backed warnings, effective argv, and readiness to launch with confidence.'
+            summary: 'Use the primary dispatch lane first, then open evidence and CLI parity only when needed.'
         }
     ],
     archive: [
@@ -1963,15 +2077,15 @@ function syncBuildSurfaceApplicability(payload = null) {
     );
     if (els.governanceDetailsHint) {
         if (!governanceVisible) {
-            els.governanceDetailsHint.textContent = 'Only shown when the current preset or backend requires explicit acknowledgments.';
+            els.governanceDetailsHint.textContent = 'Open only when the current preset or backend requires explicit acknowledgments.';
         } else if (appleRequired && researchToolsRequired) {
-            els.governanceDetailsHint.textContent = 'This run needs both Depth Pro and reconstruction acknowledgments before dispatch.';
+            els.governanceDetailsHint.textContent = 'Needs attention before dispatch: both Depth Pro and reconstruction acknowledgments are required.';
         } else if (appleRequired) {
-            els.governanceDetailsHint.textContent = 'This run needs Depth Pro research acknowledgments before dispatch.';
+            els.governanceDetailsHint.textContent = 'Needs attention before dispatch: Depth Pro research acknowledgments are required.';
         } else if (researchToolsRequired) {
-            els.governanceDetailsHint.textContent = 'This run needs reconstruction acknowledgments before dispatch.';
+            els.governanceDetailsHint.textContent = 'Needs attention before dispatch: reconstruction acknowledgments are required.';
         } else {
-            els.governanceDetailsHint.textContent = 'This research preset needs a non-commercial acknowledgment before dispatch.';
+            els.governanceDetailsHint.textContent = 'Needs attention before dispatch: this research preset requires a non-commercial acknowledgment.';
         }
     }
 
@@ -1979,23 +2093,31 @@ function syncBuildSurfaceApplicability(payload = null) {
     _setContextVisibility(els.runtimeTuningFields, isLuxPipeline);
     if (els.reconstructionDetailsHint) {
         els.reconstructionDetailsHint.textContent = reconstructionEnabled
-            ? 'Scene reconstruction is active. Grouping, sidecar, tier, and debug controls are now available.'
-            : 'Runtime tuning stays available here. Reconstruction-only settings stay preserved and inactive until you enable the feature.';
+            ? 'Contextual reconstruction controls are active. Grouping, sidecar, tier, and debug settings are now available.'
+            : 'Open only when the posture band or preview calls for deeper runtime tuning.';
     }
 }
 
-function _setDisclosureSummaryBadge(element, text) {
+function _setDisclosureSummaryBadge(element, text, tone = 'info') {
     if (!element) return;
     element.textContent = String(text || '').trim() || 'Optional';
+    element.dataset.tone = String(tone || 'info').trim().toLowerCase() || 'info';
 }
 
 function syncDisclosurePanels(payload = null) {
-    const args = payload?.args || generatePayload().args || {};
+    const currentPayload = payload || generatePayload();
+    const args = currentPayload.args || {};
     const preset = currentPresetDescriptor();
     const advancedSections = Array.isArray(preset.advanced_sections) ? preset.advanced_sections : [];
     const researchPreset = _presetRequiresResearchAcknowledgments(preset, args);
     const reconstructionEnabled = parseBoolLike(args.enable_reconstruction, false);
     const depthBackend = String(args.depth_backend || '').trim().toLowerCase();
+    const nonCommercialRequired = researchPreset || depthBackend === 'depth_pro' || reconstructionEnabled;
+    const appleRequired = depthBackend === 'depth_pro';
+    const researchToolsRequired = reconstructionEnabled;
+    const nonCommercialChecked = parseBoolLike(args.non_commercial_ok, false);
+    const appleChecked = parseBoolLike(args.accept_apple_depth_pro_research_license, false);
+    const researchToolsChecked = parseBoolLike(args.accept_research_tools_license, false);
     const previewFieldGroups = {
         advanced: [
             'save_float_depth',
@@ -2056,7 +2178,15 @@ function syncDisclosurePanels(payload = null) {
         || String(args.max_workers || '').trim() !== ''
         || String(args.max_gpu_workers || '').trim() !== ''
         || String(args.log_level || '').trim() !== '';
-    const hasPreviewIssueForGroup = (groupName) => previewFieldGroups[groupName].some((fieldName) => Boolean(_previewIssueForField(fieldName, payload)));
+    const hasPreviewIssueForGroup = (groupName) => previewFieldGroups[groupName].some((fieldName) => Boolean(_previewIssueForField(fieldName, currentPayload)));
+    const currentPreview = _currentPreviewForPayload(currentPayload);
+    const advancedNeedsAttention = hasPreviewIssueForGroup('advanced');
+    const governanceNeedsAttention = hasPreviewIssueForGroup('governance')
+        || (nonCommercialRequired && !nonCommercialChecked)
+        || (appleRequired && !appleChecked)
+        || (researchToolsRequired && !researchToolsChecked);
+    const reconstructionNeedsAttention = hasPreviewIssueForGroup('reconstruction')
+        || (_effectiveDebugBundleEnabled(currentPreview, currentPayload) && !state.portalUi.debugBundleAcknowledged);
     const disclosurePrefs = state.portalUi.disclosurePrefs || {};
     const autoOpenState = {
         advanced: advancedActive || advancedSections.includes('advanced') || hasPreviewIssueForGroup('advanced'),
@@ -2080,28 +2210,20 @@ function syncDisclosurePanels(payload = null) {
     syncPanel('reconstruction', els.reconstructionDetails);
     syncPanel('dispatchTools', els.dispatchToolsDetails);
 
-    const currentPreview = _currentPreviewForPayload(payload || generatePayload());
     _setDisclosureSummaryBadge(
         els.advancedFlagsSummary,
-        hasPreviewIssueForGroup('advanced') ? 'Needs review' : advancedActive ? 'Active' : 'Optional'
+        advancedNeedsAttention ? 'Needs attention' : advancedActive ? 'Contextual' : 'Secondary',
+        advancedNeedsAttention ? 'attention' : 'contextual'
     );
     _setDisclosureSummaryBadge(
         els.governanceDetailsSummary,
-        hasPreviewIssueForGroup('governance') || researchPreset || depthBackend === 'depth_pro'
-            ? 'Required'
-            : governanceActive
-                ? 'Active'
-                : 'Conditional'
+        governanceNeedsAttention ? 'Needs attention' : governanceActive ? 'Contextual' : 'Contextual',
+        governanceNeedsAttention ? 'attention' : 'contextual'
     );
     _setDisclosureSummaryBadge(
         els.reconstructionDetailsSummary,
-        hasPreviewIssueForGroup('reconstruction')
-            ? 'Needs review'
-            : reconstructionEnabled
-                ? 'Enabled'
-                : reconstructionActive
-                    ? 'Configured'
-                    : 'Runtime baseline'
+        reconstructionNeedsAttention ? 'Needs attention' : reconstructionActive ? 'Contextual' : 'Contextual',
+        reconstructionNeedsAttention ? 'attention' : 'contextual'
     );
     _setDisclosureSummaryBadge(
         els.dispatchToolsSummary,
@@ -2111,7 +2233,14 @@ function syncDisclosurePanels(payload = null) {
                 ? 'Preview loading'
                 : currentPreview?.status === 'error'
                     ? 'Preview error'
-                    : 'Collapsed'
+                    : 'Collapsed',
+        els.dispatchToolsDetails?.open
+            ? 'ready'
+            : currentPreview?.status === 'error'
+                ? 'attention'
+                : currentPreview?.status === 'loading'
+                    ? 'info'
+                    : 'contextual'
     );
 }
 
@@ -2518,8 +2647,6 @@ function renderSelectedJobInspector() {
                         : _jobHasActiveStream(selected)
                             ? 'SSE stream active'
                             : (selected.state === 'running' || selected.state === 'queued' ? 'Waiting for stream' : 'Closed');
-    const lastActivityAt = Number(selected.lastEventAt || selected.updatedAt || selected.createdAt || 0);
-    const activityLabel = formatRelativeTime(lastActivityAt);
     const transportLabel = formatTransportLabel(selected);
     const elapsedLabel = formatDuration(Number(selected.createdAt || 0), Number(selected.finishedAt || Date.now()));
     const latestWarning = Array.isArray(selected.transportWarnings) && selected.transportWarnings.length > 0
@@ -2541,10 +2668,10 @@ function renderSelectedJobInspector() {
         els.selectedJobProgressBar.value = Math.max(0, Math.min(100, Number(selected.progress) || 0));
     }
     if (els.selectedJobMetaLine) {
-        els.selectedJobMetaLine.textContent = `${titleCaseToken(selected.pipeline, 'Unknown')} • ${transportLabel} • ${elapsedLabel}`;
+        els.selectedJobMetaLine.textContent = `${titleCaseToken(selected.state, 'Unknown')} • ${transportLabel} • ${elapsedLabel}`;
     }
     if (els.selectedJobFreshness) {
-        els.selectedJobFreshness.textContent = `Updated ${activityLabel}`;
+        els.selectedJobFreshness.textContent = _jobFreshnessLabel(selected);
     }
     if (els.logMetaLabel) {
         els.logMetaLabel.textContent = `${String(selected.pipeline || 'unknown')} • ${transportLabel} • ${artifactCount} artifact${artifactCount === 1 ? '' : 's'}`;
@@ -2878,27 +3005,13 @@ function _flushBootstrapOnlineFollowup(force = false) {
 }
 
 function _syncBootstrapGuardedControls() {
-    const readinessStatus = currentPipelineDispatchStatus();
-    const preview = _currentPreviewForPayload();
-    const luxPreviewBlocked = state.pipeline === 'lux-depth-v3'
-        && state.backendOk
-        && _isBootstrapReady()
-        && (
-            !preview
-            || preview.status === 'loading'
-            || preview.status === 'error'
-            || (preview.status === 'ready' && Array.isArray(preview.field_errors) && preview.field_errors.length > 0)
-        );
-    const debugBundleBlocked = state.pipeline === 'lux-depth-v3'
-        && _effectiveDebugBundleEnabled(preview)
-        && !state.portalUi.debugBundleAcknowledged;
-    const canRunJobs = _portalPrivilegesReady()
-        && state.backendOk
-        && readinessStatus === 'ready'
-        && !luxPreviewBlocked
-        && !debugBundleBlocked;
+    const readiness = _dispatchReadinessSnapshot();
     if (els.runJobBtn && els.runJobBtn.textContent !== 'Dispatching...') {
-        els.runJobBtn.disabled = !canRunJobs;
+        els.runJobBtn.disabled = !readiness.canRun;
+    }
+    if (els.dispatchReadinessReason) {
+        els.dispatchReadinessReason.textContent = readiness.detail;
+        els.dispatchReadinessReason.dataset.tone = readiness.tone;
     }
 }
 
@@ -3577,7 +3690,7 @@ function _renderArtifactProvenance(job, artifact) {
         ? `${artifactDisplayLabel(artifact)} • ${artifactContentType(artifact) || 'binary'} • ${formatBytes(artifact.size_bytes)}`
         : 'Awaiting indexed artifact';
     const relativePath = artifact ? artifactLabel(artifact) : 'Artifacts will appear here when the selected run indexes outputs.';
-    const freshnessLabel = `Updated ${formatRelativeTime(Number(job.lastEventAt || job.updatedAt || job.finishedAt || job.createdAt || 0))}`;
+    const freshnessLabel = _jobFreshnessLabel(job);
     const runStateLabel = `${titleCaseToken(job.state, 'Unknown')} • ${titleCaseToken(job.pipeline, 'Unknown')}`;
     const sourceLabel = summary?.source || titleCaseToken(job.pipeline, 'Not reported');
     const batchLabel = summary?.batch_id || 'Not reported';
@@ -3596,19 +3709,16 @@ function _renderArtifactProvenance(job, artifact) {
 
 function _renderReviewCompareSummary(primaryArtifact, compareArtifact, compareEnabled) {
     if (!els.reviewCompareSummary || !els.reviewCompareTitle || !els.reviewCompareDetail) return;
+    const compareCopy = _compareSurfaceCopy(primaryArtifact, compareArtifact, compareEnabled);
     if (!primaryArtifact || !compareArtifact) {
         els.reviewCompareSummary.classList.add('hidden');
-        els.reviewCompareTitle.textContent = 'Compare pair available';
-        els.reviewCompareDetail.textContent = 'Enable compare mode to inspect paired outputs side by side.';
+        els.reviewCompareTitle.textContent = compareCopy.summaryTitle;
+        els.reviewCompareDetail.textContent = compareCopy.summaryDetail;
         return;
     }
 
-    const primaryLabel = artifactLabel(primaryArtifact);
-    const compareLabel = artifactLabel(compareArtifact);
-    els.reviewCompareTitle.textContent = compareEnabled ? 'Comparing paired outputs' : 'Compare pair available';
-    els.reviewCompareDetail.textContent = compareEnabled
-        ? `${primaryLabel} is shown against ${compareLabel}.`
-        : `${compareLabel} is available as a side-by-side comparison for ${primaryLabel}.`;
+    els.reviewCompareTitle.textContent = compareCopy.summaryTitle;
+    els.reviewCompareDetail.textContent = compareCopy.summaryDetail;
     els.reviewCompareSummary.classList.remove('hidden');
 }
 
@@ -5268,13 +5378,13 @@ function renderReconstructionRuntimeSummary(payload = null) {
     }
     if (els.reconstructionSummaryHint) {
         if (previewStatus === 'ready') {
-            els.reconstructionSummaryHint.textContent = 'Applies to the next run. Preview-backed validation and normalization are live.';
+            els.reconstructionSummaryHint.textContent = 'Preview-backed validation, normalization, and runtime estimates reflect the next dispatch.';
         } else if (previewStatus === 'error') {
-            els.reconstructionSummaryHint.textContent = 'Preview-backed validation is unavailable right now, so dispatch stays paused until it recovers.';
+            els.reconstructionSummaryHint.textContent = 'Preview-backed validation is unavailable right now, so posture is shown from the current draft while dispatch stays paused.';
         } else if (!state.backendOk) {
-            els.reconstructionSummaryHint.textContent = 'Applies to the next run. Backend preview is unavailable while the orchestrator is offline.';
+            els.reconstructionSummaryHint.textContent = 'Backend preview is unavailable while the orchestrator is offline, so posture is shown from the current local draft.';
         } else {
-            els.reconstructionSummaryHint.textContent = 'Applies to the next run. Reconstruction-specific values are preserved when the feature is off.';
+            els.reconstructionSummaryHint.textContent = 'Primary run posture updates here before you open contextual runtime or research controls.';
         }
     }
 
@@ -6313,6 +6423,7 @@ function renderPreRunDiagnostics(payload) {
     if (els.datasetHealthText) {
         els.datasetHealthText.textContent = `Dataset health: ${healthLabel}`;
     }
+    _syncBootstrapGuardedControls();
     renderNextBestAction(payload, _currentPreviewForPayload(payload) || _effectivePreviewSnapshot(payload));
 
     state.lastDiagnostics = {
