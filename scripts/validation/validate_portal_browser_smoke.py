@@ -550,6 +550,20 @@ def _state_probe_expression() -> str:
     summaryReconstructionState: text('summaryReconstructionState'),
     summaryRuntimeWorkers: text('summaryRuntimeWorkers'),
     summaryPreviewState: text('summaryPreviewState'),
+    postureBandVisible: (() => {
+      const el = document.querySelector('[data-ui="build-posture-band"]');
+      return !!(el && !el.classList.contains('hidden'));
+    })(),
+    summaryBandOutsideReconstruction: (() => {
+      const summary = document.getElementById('reconstructionRuntimeSummary');
+      const disclosure = document.getElementById('reconstructionDetails');
+      return !!(summary && disclosure && !disclosure.contains(summary));
+    })(),
+    dispatchPrimaryLaneVisible: (() => {
+      const el = document.querySelector('[data-ui="dispatch-primary-lane"]');
+      return !!(el && !el.classList.contains('hidden'));
+    })(),
+    dispatchReadinessReason: text('dispatchReadinessReason'),
     rawPreviewStatus: (() => {
       const preview = typeof state !== 'undefined' && state.preview && typeof state.preview === 'object'
         ? state.preview
@@ -1181,6 +1195,15 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             str(lux_state.get("summaryReconstructionState", "")).strip() == "Off",
             f"Default reconstruction summary should report Off: {lux_state}",
         )
+        _expect(bool(lux_state.get("postureBandVisible")), f"Step 3 posture band should stay visible: {lux_state}")
+        _expect(
+            bool(lux_state.get("summaryBandOutsideReconstruction")),
+            f"Reconstruction summary should stay outside the disclosure to remain posture-first: {lux_state}",
+        )
+        _expect(
+            bool(lux_state.get("dispatchPrimaryLaneVisible")),
+            f"Step 4 should expose a primary dispatch lane: {lux_state}",
+        )
         _expect(
             "Auto" in str(lux_state.get("summaryRuntimeWorkers", "")),
             f"Runtime worker summary should default to Auto: {lux_state}",
@@ -1188,6 +1211,10 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         _expect(
             bool(str(lux_state.get("summaryPreviewState", "")).strip()),
             f"Preview status summary should be populated: {lux_state}",
+        )
+        _expect(
+            bool(str(lux_state.get("dispatchReadinessReason", "")).strip()),
+            f"Dispatch lane should explain why dispatch is enabled or blocked: {lux_state}",
         )
         _expect(
             not bool(lux_state.get("v2PresetVisible")),
@@ -1213,6 +1240,10 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         _expect(
             not bool(lux_ready_state.get("runJobDisabled")),
             f"Lux pipeline should become dispatchable once preview-backed validation settles: {lux_ready_state}",
+        )
+        _expect(
+            "clear for dispatch" in str(lux_ready_state.get("dispatchReadinessReason", "")).strip().lower(),
+            f"Dispatch lane should report a clear ready reason once Lux validation settles: {lux_ready_state}",
         )
 
         lux_context_state = _poll(
@@ -1276,6 +1307,21 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             f"Advanced disclosure should auto-open once advanced controls need operator attention: {lux_context_state}",
         )
 
+        debug_bundle_reason_state = _poll(
+            connection,
+            _state_probe_expression(),
+            predicate=lambda value: (
+                isinstance(value, dict)
+                and "acknowledgement is required" in str(value.get("dispatchReadinessReason", "")).strip().lower()
+            ),
+            timeout_seconds=args.timeout_seconds,
+            description="dispatch reason to report the debug-bundle acknowledgement requirement",
+        )
+        _expect(
+            bool(debug_bundle_reason_state.get("runJobDisabled")),
+            f"Dispatch should remain disabled until the debug-bundle acknowledgement is recorded: {debug_bundle_reason_state}",
+        )
+
         print("portal-browser-smoke: opening secondary dispatch tools", flush=True)
         connection.evaluate(_click_expression("#dispatchToolsDetails > summary"))
         dispatch_tools_state = _poll(
@@ -1291,7 +1337,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         )
         connection.evaluate(_click_expression("#dispatchToolsDetails > summary"))
 
-        print("portal-browser-smoke: opening effective config drawer", flush=True)
+        print("portal-browser-smoke: opening effective config drawer from the posture band", flush=True)
         connection.evaluate(_click_expression("#openEffectiveConfigBtn"))
         effective_config_state = _poll(
             connection,

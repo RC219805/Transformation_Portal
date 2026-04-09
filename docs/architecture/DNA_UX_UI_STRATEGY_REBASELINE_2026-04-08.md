@@ -209,10 +209,21 @@ still pending:
   additive review deep links, compare-summary behavior, selected-job reuse, and
   dispatch-tool disclosure so Phase 2B does not need to introduce them as
   net-new capabilities.
+- Step 3 now keeps an always-visible posture band for reconstruction state,
+  runtime workers, RAW ingest, debug-bundle posture, preview status, and
+  estimate summary outside the contextual runtime disclosure.
+- Step 3 disclosure badges and hint copy now frame advanced, governance, and
+  reconstruction controls as contextual or attention-needed layers instead of
+  peers to the primary posture band.
+- Step 4 now groups `Next Operator Action` with a dispatch reason and primary
+  execute CTA while keeping pre-run evidence and CLI/config parity tools
+  visibly secondary.
+- Operate/review freshness and paired-comparison copy now stay aligned across
+  the context ribbon, selected-job inspector, and review compare summary.
 
-This leaves the active UX lane as a smaller portal-only Phase 2B close-out, not
-a fresh Phase 1 accessibility pass and not a broader Phase 3 cross-surface
-polish push.
+Phase 2B is now closed out. The next open UX lane remains the deferred
+cross-surface continuity work in Phase 3 rather than any further portal-only
+hierarchy catch-up.
 
 ### Phase 1: Accessibility and Token Alignment (Completed April 8, 2026)
 
@@ -230,7 +241,7 @@ Acceptance focus:
 Status:
 - Completed on April 8, 2026.
 
-### Phase 2B: Portal Hierarchy and Context Close-out (Active)
+### Phase 2B: Portal Hierarchy and Context Close-out (Completed April 8, 2026)
 
 Scope:
 - Truth-sync the UX strategy to shipped portal work so the active lane no
@@ -253,6 +264,9 @@ Acceptance focus:
 - Preserve shortcut, drawer, and CLI-parity flows.
 - Keep direct-debug and managed mode behavior aligned with existing contracts.
 
+Status:
+- Completed on April 8, 2026.
+
 ### Phase 3: Cross-surface Visual Continuity (Deferred)
 
 Scope:
@@ -268,7 +282,8 @@ Acceptance focus:
 - Frontdoor and portal browser smokes both remain required.
 
 Status:
-- Deferred until the portal-only Phase 2B close-out is complete.
+- Deferred until a future tranche explicitly opens the broader cross-surface
+  polish lane.
 
 ### Phase 4: Power-user Enhancements (Deferred)
 
@@ -284,8 +299,8 @@ Acceptance focus:
   disclosure model.
 
 Status:
-- Deferred until Phase 2B and any later Phase 3 work both prove that navigation
-  friction remains high.
+- Deferred until later UX evidence proves that navigation friction remains high
+  after the completed hierarchy work and any future Phase 3 polish.
 
 ## React/Next Migration Decision Gate
 
@@ -328,8 +343,9 @@ The revised strategy is complete only if all of the following remain true:
 - Every recommendation is mapped to a real current surface: homepage, login, or
   portal.
 - Near-term work preserves managed-auth, proxy, and route contracts.
-- Phase 2B close-out work is framed as truth-sync plus hierarchy polish rather
-  than as a fresh feature tranche for already-shipped portal capabilities.
+- The completed Phase 2B close-out is recorded as truth-sync plus hierarchy
+  polish rather than as a fresh feature tranche for already-shipped portal
+  capabilities.
 - Future-state items are clearly labeled as gated rather than implied defaults.
 - Desktop, mobile, keyboard-only, reduced-motion, and managed-login flows are
   explicitly covered.
@@ -367,8 +383,17 @@ portal presentation and state handling.
   and a secondary CLI/config disclosure
 - State-driven disclosure defaults for advanced, governance, reconstruction,
   and dispatch-tool groupings
+- An always-visible Step 3 posture band for runtime posture, preview status,
+  research risk, and estimate summary outside the reconstruction disclosure
+- Contextual Step 3 badge/hint copy that marks secondary controls as
+  contextual or attention-needed instead of primary
 - A compact operate/review context ribbon for selected job, freshness,
   artifact, and compare state
+- A Step 4 primary dispatch lane that pairs `Next Operator Action` with a live
+  dispatch reason and execute CTA while keeping evidence and parity tools
+  secondary
+- Consistent freshness and paired-comparison copy across the ribbon,
+  selected-job inspector, and review compare summary
 - Shareable additive `artifact=` and `compare=1` deep links for review context
   with stale-route normalization back to valid client state
 - Compare-summary review behavior for paired outputs
@@ -386,9 +411,6 @@ portal presentation and state handling.
 
 ### Proposed
 
-- Finish the remaining portal-only Phase 2B hierarchy cleanup
-- Clearer Step 3 grouping between primary output posture and secondary
-  advanced/research controls
 - Cross-surface polish only after the portal close-out lands
 - Optional command-palette evaluation only after earlier IA improvements land
 

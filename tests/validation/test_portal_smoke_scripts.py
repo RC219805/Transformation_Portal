@@ -284,6 +284,10 @@ def test_portal_browser_smoke_tracks_archive_readiness_fields_and_canonical_comm
     assert "contextRibbonJob" in content
     assert "contextRibbonArtifact" in content
     assert "contextRibbonCompare" in content
+    assert "postureBandVisible" in content
+    assert "summaryBandOutsideReconstruction" in content
+    assert "dispatchPrimaryLaneVisible" in content
+    assert "dispatchReadinessReason" in content
     assert "/tmp/gate-a-smoke-portal" in content
     assert "archive-gate-b" in content
     assert "archive-gate-c" in content
@@ -331,6 +335,8 @@ def test_portal_browser_smoke_tracks_reconstruction_runtime_summary_and_guardrai
     assert "summaryReconstructionState" in content
     assert "summaryRuntimeWorkers" in content
     assert "summaryPreviewState" in content
+    assert "postureBandVisible" in content
+    assert "summaryBandOutsideReconstruction" in content
     assert "rawPreviewStatus" in content
     assert "previewRequestKey" in content
     assert "currentPreviewRequestKey" in content
@@ -338,6 +344,7 @@ def test_portal_browser_smoke_tracks_reconstruction_runtime_summary_and_guardrai
     assert "debugBundleGuardrailVisible" in content
     assert "effectiveConfigDrawerVisible" in content
     assert "emit_scene_debug_bundle" in content
+    assert "acknowledgement is required" in content
     assert "#openEffectiveConfigBtn" in content
     assert "#closeEffectiveConfigBtn" in content
 

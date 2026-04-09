@@ -270,8 +270,8 @@
                 </div>
                 <div class="console-context-card">
                     <p class="console-context-label">Compare</p>
-                    <p id="contextRibbonCompare" class="console-context-value">Single view</p>
-                    <p id="contextRibbonCompareMeta" class="console-context-meta">Deep-linkable review context stays aligned with the URL.</p>
+                    <p id="contextRibbonCompare" class="console-context-value">No compare pair</p>
+                    <p id="contextRibbonCompareMeta" class="console-context-meta">No paired comparison is available for the current artifact.</p>
                 </div>
             </div>
         </section>
@@ -673,60 +673,6 @@
 
                     <div class="mt-6 flex items-start justify-between gap-3">
                         <div>
-                            <p class="section-kicker">Secondary Controls & Policy Detail</p>
-                            <p class="mt-2 text-[12px] leading-6 text-slate-500 dark:text-slate-400">Diagnostics, acknowledgments, and reconstruction/runtime posture stay secondary until the draft or preview flags them.</p>
-                        </div>
-                        <span class="micro-status">Secondary controls stay contextual</span>
-                    </div>
-
-                    <details id="advancedFlagsDetails" class="disclosure-panel mt-6">
-                        <summary class="disclosure-summary">
-                            <div>
-                                <p class="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Advanced Flags</p>
-                                <p class="mt-1 text-[12px] text-slate-500 dark:text-slate-400">Diagnostics, fallback, and runtime strictness controls.</p>
-                            </div>
-                            <div class="disclosure-summary-meta">
-                                <span id="advancedFlagsSummary" class="disclosure-summary-badge">Optional</span>
-                                <span class="disclosure-chevron text-slate-400">▾</span>
-                            </div>
-                        </summary>
-                        <div class="mt-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-                            <label class="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
-                                <input type="checkbox" id="saveFloatDepth" class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 dark:bg-slate-900" />
-                                <span class="text-[11px] font-mono select-none truncate text-slate-600 dark:text-slate-300">save_float_depth</span>
-                            </label>
-                            <label class="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
-                                <input type="checkbox" id="forceDepth" class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 dark:bg-slate-900" />
-                                <span class="text-[11px] font-mono select-none truncate text-slate-600 dark:text-slate-300">force_depth</span>
-                            </label>
-                            <label class="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
-                                <input type="checkbox" id="strictInputs" class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 dark:bg-slate-900" />
-                                <span class="flex items-center gap-2 min-w-0">
-                                    <span class="text-[11px] font-mono select-none truncate text-slate-600 dark:text-slate-300">strict_inputs</span>
-                                    <span class="shrink-0 rounded border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-amber-700 dark:text-amber-400">Debug</span>
-                                </span>
-                            </label>
-                            <label class="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
-                                <input type="checkbox" id="verifyImages" class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 dark:bg-slate-900" />
-                                <span class="text-[11px] font-mono select-none truncate text-slate-600 dark:text-slate-300">verify_images</span>
-                            </label>
-                            <label class="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
-                                <input type="checkbox" id="allowSemanticFallback" class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 dark:bg-slate-900" />
-                                <span class="text-[11px] font-mono select-none truncate text-slate-600 dark:text-slate-300">allow_semantic_fallback</span>
-                            </label>
-                            <label class="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
-                                <input type="checkbox" id="verboseFlag" class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 dark:bg-slate-900" />
-                                <span class="text-[11px] font-mono select-none truncate text-slate-600 dark:text-slate-300">verbose</span>
-                            </label>
-                            <label class="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
-                                <input type="checkbox" id="quietFlag" class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 dark:bg-slate-900" />
-                                <span class="text-[11px] font-mono select-none truncate text-slate-600 dark:text-slate-300">quiet</span>
-                            </label>
-                        </div>
-                    </details>
-
-                    <div class="mt-6 flex items-start justify-between gap-3">
-                        <div>
                             <p class="section-kicker">Expected Deliverables</p>
                             <p class="mt-2 text-[12px] leading-6 text-slate-500 dark:text-slate-400">Keep the primary output set readable before opening deeper runtime or research-only controls.</p>
                         </div>
@@ -757,64 +703,19 @@
                         </label>
                     </div>
 
-                    <!-- Licenses -->
-                    <details id="governanceDetails" class="disclosure-panel mt-6">
-                        <summary class="disclosure-summary">
+                    <section class="mt-6 space-y-4" data-ui="build-posture-band">
+                        <div class="flex items-start justify-between gap-3">
                             <div>
-                                <p class="text-[11px] font-bold uppercase tracking-widest text-amber-600 dark:text-amber-500">Compliance & Research Acknowledgments</p>
-                                <p id="governanceDetailsHint" class="mt-1 text-[12px] text-slate-500 dark:text-slate-400">Only shown when the current preset or backend requires explicit acknowledgments.</p>
+                                <p class="section-kicker">Current Run Posture</p>
+                                <p class="mt-2 text-[12px] leading-6 text-slate-500 dark:text-slate-400">Keep runtime posture, preview status, and research risk visible before opening deeper runtime or research-only controls.</p>
                             </div>
-                            <div class="disclosure-summary-meta">
-                                <span id="governanceDetailsSummary" class="disclosure-summary-badge">Conditional</span>
-                                <span class="disclosure-chevron text-slate-400">▾</span>
-                            </div>
-                        </summary>
-                        <div class="mt-4 p-4 rounded-xl border border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-900/10 transition-colors space-y-3">
-                            <label id="licenseNonCommercialField" class="flex items-start gap-3 cursor-pointer group">
-                                <input type="checkbox" id="licenseNonCommercial" class="w-4 h-4 mt-0.5 rounded text-amber-600 focus:ring-amber-500 border-amber-300 dark:border-amber-700 dark:bg-slate-900" />
-                                <span class="text-[12px] leading-tight select-none text-slate-700 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-white transition-colors">I acknowledge this run is strictly for <strong>Non-Commercial</strong> purposes.</span>
-                            </label>
-                            <label id="licenseAppleField" class="flex items-start gap-3 cursor-pointer group">
-                                <input type="checkbox" id="licenseApple" class="w-4 h-4 mt-0.5 rounded text-amber-600 focus:ring-amber-500 border-amber-300 dark:border-amber-700 dark:bg-slate-900" />
-                                <span class="text-[12px] leading-tight select-none text-slate-700 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-white transition-colors">I accept the <strong>Apple Depth Pro Research License</strong> terms.</span>
-                            </label>
-                            <label id="licenseResearchToolsField" class="flex items-start gap-3 cursor-pointer group">
-                                <input type="checkbox" id="licenseResearchTools" class="w-4 h-4 mt-0.5 rounded text-amber-600 focus:ring-amber-500 border-amber-300 dark:border-amber-700 dark:bg-slate-900" />
-                                <span class="text-[12px] leading-tight select-none text-slate-700 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-white transition-colors">I accept the <strong>Research Tools License</strong> terms required for scene reconstruction.</span>
-                            </label>
+                            <span class="micro-status">Primary run posture</span>
                         </div>
-                    </details>
-
-                    <details id="reconstructionDetails" class="disclosure-panel mt-6">
-                        <summary class="disclosure-summary">
-                            <div>
-                                <p class="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Reconstruction & Runtime</p>
-                                <p id="reconstructionDetailsHint" class="mt-1 text-[12px] text-slate-500 dark:text-slate-400">Runtime tuning stays available here. Reconstruction-only settings appear after you enable the feature.</p>
-                            </div>
-                            <div class="disclosure-summary-meta">
-                                <span id="reconstructionDetailsSummary" class="disclosure-summary-badge">Runtime baseline</span>
-                                <span class="disclosure-chevron text-slate-400">▾</span>
-                            </div>
-                        </summary>
-                        <div class="mt-4 space-y-4">
-                        <div class="grid grid-cols-1 gap-4">
-                            <label class="flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 px-4 py-3.5 cursor-pointer group transition-colors">
-                                <span class="flex items-center gap-2 text-[12px] font-medium select-none text-slate-700 dark:text-slate-300">
-                                    <span>Enable Reconstruction</span>
-                                    <span class="shrink-0 rounded border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-amber-700 dark:text-amber-400">Experimental</span>
-                                </span>
-                                <div class="relative inline-flex items-center">
-                                    <input type="checkbox" id="enableReconstruction" role="switch" class="sr-only peer" />
-                                    <div class="w-9 h-5 rounded-full transition-colors duration-200 ease-in-out peer-focus-visible:ring-2 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-indigo-500 bg-slate-300 dark:bg-slate-600 peer-checked:bg-indigo-600"></div>
-                                    <div class="absolute left-[2px] top-[2px] bg-white w-4 h-4 rounded-full transition-transform duration-200 ease-in-out peer-checked:translate-x-4 shadow-sm"></div>
-                                </div>
-                            </label>
-                        </div>
-                        <div id="reconstructionRuntimeSummary" class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/60 px-4 py-4">
+                        <div id="reconstructionRuntimeSummary" class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/60 px-4 py-4" data-ui="reconstruction-runtime-summary">
                             <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                                 <div>
-                                    <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Effective Reconstruction & Runtime</p>
-                                    <p id="reconstructionSummaryHint" class="mt-2 text-[12px] leading-6 text-slate-600 dark:text-slate-300">Applies to the next run. Reconstruction-specific values are preserved when the feature is off.</p>
+                                    <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Current Run Posture</p>
+                                    <p id="reconstructionSummaryHint" class="mt-2 text-[12px] leading-6 text-slate-600 dark:text-slate-300">Primary output posture updates here before you open contextual runtime or research controls.</p>
                                 </div>
                                 <button id="openEffectiveConfigBtn" type="button" class="rounded-full border border-slate-300 dark:border-slate-700 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-600 dark:text-slate-300 transition-colors hover:border-cyan-300 hover:text-cyan-700 dark:hover:border-cyan-700 dark:hover:text-cyan-300">
                                     View Effective Config
@@ -860,6 +761,115 @@
                                     <p id="estimateSummaryLabel" class="mt-2 text-[12px] font-semibold leading-6 text-slate-900 dark:text-white">Low runtime · Low GPU pressure · None posture</p>
                                 </div>
                             </div>
+                        </div>
+                    </section>
+
+                    <div class="mt-6 flex items-start justify-between gap-3">
+                        <div>
+                            <p class="section-kicker">Secondary Controls & Policy Detail</p>
+                            <p class="mt-2 text-[12px] leading-6 text-slate-500 dark:text-slate-400">Open diagnostics, acknowledgments, and deeper runtime tuning only when the posture band or preview calls for intervention.</p>
+                        </div>
+                        <span class="micro-status">Contextual controls only</span>
+                    </div>
+
+                    <details id="advancedFlagsDetails" class="disclosure-panel disclosure-panel-secondary mt-6">
+                        <summary class="disclosure-summary">
+                            <div>
+                                <p class="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Advanced Flags</p>
+                                <p class="mt-1 text-[12px] text-slate-500 dark:text-slate-400">Secondary diagnostics, fallback, and runtime strictness controls.</p>
+                            </div>
+                            <div class="disclosure-summary-meta">
+                                <span id="advancedFlagsSummary" class="disclosure-summary-badge">Secondary</span>
+                                <span class="disclosure-chevron text-slate-400">▾</span>
+                            </div>
+                        </summary>
+                        <div class="mt-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+                            <label class="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                                <input type="checkbox" id="saveFloatDepth" class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 dark:bg-slate-900" />
+                                <span class="text-[11px] font-mono select-none truncate text-slate-600 dark:text-slate-300">save_float_depth</span>
+                            </label>
+                            <label class="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                                <input type="checkbox" id="forceDepth" class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 dark:bg-slate-900" />
+                                <span class="text-[11px] font-mono select-none truncate text-slate-600 dark:text-slate-300">force_depth</span>
+                            </label>
+                            <label class="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                                <input type="checkbox" id="strictInputs" class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 dark:bg-slate-900" />
+                                <span class="flex items-center gap-2 min-w-0">
+                                    <span class="text-[11px] font-mono select-none truncate text-slate-600 dark:text-slate-300">strict_inputs</span>
+                                    <span class="shrink-0 rounded border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-amber-700 dark:text-amber-400">Debug</span>
+                                </span>
+                            </label>
+                            <label class="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                                <input type="checkbox" id="verifyImages" class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 dark:bg-slate-900" />
+                                <span class="text-[11px] font-mono select-none truncate text-slate-600 dark:text-slate-300">verify_images</span>
+                            </label>
+                            <label class="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                                <input type="checkbox" id="allowSemanticFallback" class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 dark:bg-slate-900" />
+                                <span class="text-[11px] font-mono select-none truncate text-slate-600 dark:text-slate-300">allow_semantic_fallback</span>
+                            </label>
+                            <label class="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                                <input type="checkbox" id="verboseFlag" class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 dark:bg-slate-900" />
+                                <span class="text-[11px] font-mono select-none truncate text-slate-600 dark:text-slate-300">verbose</span>
+                            </label>
+                            <label class="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                                <input type="checkbox" id="quietFlag" class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 dark:bg-slate-900" />
+                                <span class="text-[11px] font-mono select-none truncate text-slate-600 dark:text-slate-300">quiet</span>
+                            </label>
+                        </div>
+                    </details>
+
+                    <!-- Licenses -->
+                    <details id="governanceDetails" class="disclosure-panel disclosure-panel-secondary mt-6">
+                        <summary class="disclosure-summary">
+                            <div>
+                                <p class="text-[11px] font-bold uppercase tracking-widest text-amber-600 dark:text-amber-500">Compliance & Research Acknowledgments</p>
+                                <p id="governanceDetailsHint" class="mt-1 text-[12px] text-slate-500 dark:text-slate-400">Open only when the current preset or backend requires explicit acknowledgments.</p>
+                            </div>
+                            <div class="disclosure-summary-meta">
+                                <span id="governanceDetailsSummary" class="disclosure-summary-badge">Contextual</span>
+                                <span class="disclosure-chevron text-slate-400">▾</span>
+                            </div>
+                        </summary>
+                        <div class="mt-4 p-4 rounded-xl border border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-900/10 transition-colors space-y-3">
+                            <label id="licenseNonCommercialField" class="flex items-start gap-3 cursor-pointer group">
+                                <input type="checkbox" id="licenseNonCommercial" class="w-4 h-4 mt-0.5 rounded text-amber-600 focus:ring-amber-500 border-amber-300 dark:border-amber-700 dark:bg-slate-900" />
+                                <span class="text-[12px] leading-tight select-none text-slate-700 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-white transition-colors">I acknowledge this run is strictly for <strong>Non-Commercial</strong> purposes.</span>
+                            </label>
+                            <label id="licenseAppleField" class="flex items-start gap-3 cursor-pointer group">
+                                <input type="checkbox" id="licenseApple" class="w-4 h-4 mt-0.5 rounded text-amber-600 focus:ring-amber-500 border-amber-300 dark:border-amber-700 dark:bg-slate-900" />
+                                <span class="text-[12px] leading-tight select-none text-slate-700 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-white transition-colors">I accept the <strong>Apple Depth Pro Research License</strong> terms.</span>
+                            </label>
+                            <label id="licenseResearchToolsField" class="flex items-start gap-3 cursor-pointer group">
+                                <input type="checkbox" id="licenseResearchTools" class="w-4 h-4 mt-0.5 rounded text-amber-600 focus:ring-amber-500 border-amber-300 dark:border-amber-700 dark:bg-slate-900" />
+                                <span class="text-[12px] leading-tight select-none text-slate-700 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-white transition-colors">I accept the <strong>Research Tools License</strong> terms required for scene reconstruction.</span>
+                            </label>
+                        </div>
+                    </details>
+
+                    <details id="reconstructionDetails" class="disclosure-panel disclosure-panel-secondary mt-6">
+                        <summary class="disclosure-summary">
+                            <div>
+                                <p class="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Reconstruction & Runtime</p>
+                                <p id="reconstructionDetailsHint" class="mt-1 text-[12px] text-slate-500 dark:text-slate-400">Open only when the posture band or preview calls for deeper runtime tuning.</p>
+                            </div>
+                            <div class="disclosure-summary-meta">
+                                <span id="reconstructionDetailsSummary" class="disclosure-summary-badge">Contextual</span>
+                                <span class="disclosure-chevron text-slate-400">▾</span>
+                            </div>
+                        </summary>
+                        <div class="mt-4 space-y-4">
+                        <div class="grid grid-cols-1 gap-4">
+                            <label class="flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 px-4 py-3.5 cursor-pointer group transition-colors">
+                                <span class="flex items-center gap-2 text-[12px] font-medium select-none text-slate-700 dark:text-slate-300">
+                                    <span>Enable Reconstruction</span>
+                                    <span class="shrink-0 rounded border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-amber-700 dark:text-amber-400">Experimental</span>
+                                </span>
+                                <div class="relative inline-flex items-center">
+                                    <input type="checkbox" id="enableReconstruction" role="switch" class="sr-only peer" />
+                                    <div class="w-9 h-5 rounded-full transition-colors duration-200 ease-in-out peer-focus-visible:ring-2 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-indigo-500 bg-slate-300 dark:bg-slate-600 peer-checked:bg-indigo-600"></div>
+                                    <div class="absolute left-[2px] top-[2px] bg-white w-4 h-4 rounded-full transition-transform duration-200 ease-in-out peer-checked:translate-x-4 shadow-sm"></div>
+                                </div>
+                            </label>
                         </div>
                         <div id="reconstructionConfigFields" class="space-y-4">
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1023,16 +1033,27 @@
                         <span class="micro-status">Dispatch review</span>
                     </div>
 
-                    <section class="mt-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/70 p-4" data-ui="next-best-action">
-                        <div class="flex items-start justify-between gap-3">
-                            <div class="min-w-0">
-                                <h4 class="text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Next Operator Action</h4>
-                                <p id="nextBestActionLabel" class="mt-2 text-[13px] font-semibold leading-6 text-slate-900 dark:text-white">Review dispatch posture</p>
-                                <p id="nextBestActionDetail" class="mt-2 text-[12px] leading-6 text-slate-600 dark:text-slate-300">Preview guidance will summarize the clearest next step for this draft.</p>
+                    <div class="step-four-primary-lane mt-4" data-ui="dispatch-primary-lane">
+                        <section class="step-four-primary-card rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/70 p-4" data-ui="next-best-action">
+                            <div class="flex items-start justify-between gap-3">
+                                <div class="min-w-0">
+                                    <h4 class="text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Next Operator Action</h4>
+                                    <p id="nextBestActionLabel" class="mt-2 text-[13px] font-semibold leading-6 text-slate-900 dark:text-white">Review dispatch posture</p>
+                                    <p id="nextBestActionDetail" class="mt-2 text-[12px] leading-6 text-slate-600 dark:text-slate-300">Preview guidance will summarize the clearest next step for this draft.</p>
+                                </div>
+                                <span id="nextBestActionTone" class="signal-badge next-action-badge" data-tone="info">Info</span>
                             </div>
-                            <span id="nextBestActionTone" class="signal-badge next-action-badge" data-tone="info">Info</span>
-                        </div>
-                    </section>
+                        </section>
+                        <section class="step-four-dispatch-shell rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/70 p-4" data-ui="dispatch-launch">
+                            <div>
+                                <h4 class="text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Dispatch</h4>
+                                <p id="dispatchReadinessReason" class="dispatch-readiness-reason mt-2 text-[12px] leading-6 text-slate-600 dark:text-slate-300" data-tone="info" aria-live="polite" aria-atomic="true">Preview-backed validation will explain when dispatch is ready.</p>
+                            </div>
+                            <button id="runJobBtn" type="button" class="mt-4 w-full rounded-2xl px-6 py-4 text-[14px] font-extrabold uppercase tracking-[0.14em] text-white shadow-glow transition-all focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed bg-gradient-to-r from-teal-700 via-cyan-600 to-sky-600 hover:from-teal-600 hover:via-cyan-500 hover:to-sky-500 dark:focus:ring-offset-slate-900" disabled data-ui="dispatch-cta" aria-describedby="dispatchReadinessReason">
+                                Execute Job
+                            </button>
+                        </section>
+                    </div>
 
                     <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
                         <section class="step-four-primary-card rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/70 p-4">
@@ -1050,12 +1071,6 @@
                             </div>
                             <ul id="expectedOutputsList" class="mt-2 space-y-1 text-[12px] text-slate-700 dark:text-slate-300"></ul>
                         </section>
-                    </div>
-
-                    <div class="mt-6 border-t border-slate-200 dark:border-slate-800 pt-6">
-                            <button id="runJobBtn" type="button" class="w-full rounded-2xl px-6 py-4 text-[14px] font-extrabold uppercase tracking-[0.14em] text-white shadow-glow transition-all focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed bg-gradient-to-r from-teal-700 via-cyan-600 to-sky-600 hover:from-teal-600 hover:via-cyan-500 hover:to-sky-500 dark:focus:ring-offset-slate-900" disabled data-ui="dispatch-cta">
-                                Execute Job
-                            </button>
                     </div>
 
                     <details id="dispatchToolsDetails" class="disclosure-panel mt-6" data-ui="dispatch-tools">
@@ -1339,8 +1354,8 @@
                             </div>
                         </div>
                         <div id="reviewCompareSummary" class="review-compare-summary hidden" data-ui="review-compare-summary" aria-live="polite">
-                            <p id="reviewCompareTitle" class="review-compare-title">Compare pair available</p>
-                            <p id="reviewCompareDetail" class="review-compare-detail">Enable compare mode to inspect paired outputs side by side.</p>
+                            <p id="reviewCompareTitle" class="review-compare-title">No compare pair</p>
+                            <p id="reviewCompareDetail" class="review-compare-detail">No paired comparison is available for the current artifact.</p>
                         </div>
                         <div class="flex flex-wrap items-center gap-2">
                             <button id="openArtifactBtn" type="button" class="rounded-lg border border-slate-300 dark:border-slate-700 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled>Open</button>

@@ -861,6 +861,7 @@ def test_portal_review_surface_supports_compare_summary_and_keyboard_selection()
     content = _portal_bundle_content()
     render_body = _extract_js_function_body(content, "renderArtifactPanel")
     compare_summary_body = _extract_js_function_body(content, "_renderReviewCompareSummary")
+    compare_copy_body = _extract_js_function_body(content, "_compareSurfaceCopy")
     focus_body = _extract_js_function_body(content, "_focusArtifactRailButton")
     keydown_body = _extract_js_function_body(content, "handleArtifactRailKeydown")
 
@@ -877,8 +878,11 @@ def test_portal_review_surface_supports_compare_summary_and_keyboard_selection()
     assert "els.artifactCompareBtn.setAttribute('aria-pressed', compareEnabled ? 'true' : 'false');" in render_body
     assert "els.artifactCompareBtn.removeAttribute('aria-controls');" in render_body
     assert "els.artifactCompareStage.setAttribute('aria-hidden', compareEnabled ? 'false' : 'true');" in render_body
-    assert "Comparing paired outputs" in compare_summary_body
-    assert "Compare pair available" in compare_summary_body
+    assert "const compareCopy = _compareSurfaceCopy(primaryArtifact, compareArtifact, compareEnabled);" in compare_summary_body
+    assert "No compare pair" in compare_copy_body
+    assert "No paired comparison is available for the current artifact." in compare_copy_body
+    assert "Comparing paired outputs" in compare_copy_body
+    assert "Paired comparison available" in compare_copy_body
     assert "button[data-artifact-path]" in focus_body
     assert "_focusArtifactRailButton(path);" in content
     assert "const shouldRestoreFocus = event.detail === 0;" in content
@@ -1110,7 +1114,8 @@ def test_portal_console_context_ribbon_tracks_selected_job_and_review_state() ->
         "els.contextRibbonArtifact.textContent = selectedArtifact ? artifactLabel(selectedArtifact) : 'Awaiting selection';"
         in ribbon_body
     )
-    assert "els.contextRibbonCompare.textContent = compareEnabled" in ribbon_body
+    assert "const compareCopy = _compareSurfaceCopy(selectedArtifact, compareCandidate, compareEnabled);" in ribbon_body
+    assert "els.contextRibbonCompare.textContent = selected ? compareCopy.ribbonValue : 'No compare pair';" in ribbon_body
     assert "renderConsoleContextRibbon();" in apply_view_body
     assert "renderConsoleContextRibbon();" in inspector_body
     assert "renderConsoleContextRibbon();" in artifact_body
@@ -1146,6 +1151,12 @@ def test_portal_build_stepper_and_quick_actions_drive_task_first_navigation() ->
 def test_portal_dispatch_review_keeps_cli_parity_in_secondary_disclosure() -> None:
     content = _portal_bundle_content()
 
+    assert 'data-ui="dispatch-primary-lane"' in content
+    assert 'data-ui="dispatch-launch"' in content
+    assert 'id="dispatchReadinessReason"' in content
+    assert 'aria-live="polite"' in content
+    assert 'aria-atomic="true"' in content
+    assert 'aria-describedby="dispatchReadinessReason"' in content
     assert 'id="dispatchToolsDetails"' in content
     assert 'data-ui="dispatch-tools"' in content
     assert "Review dispatch posture" in content
@@ -1156,6 +1167,35 @@ def test_portal_dispatch_review_keeps_cli_parity_in_secondary_disclosure() -> No
     assert 'id="exportBtn"' in content
     assert 'id="copyCliBtn"' in content
     assert 'id="cliPreview"' in content
+
+
+def test_portal_build_surface_keeps_primary_posture_band_outside_contextual_disclosures() -> None:
+    content = _portal_bundle_content()
+    summary_body = _extract_js_function_body(content, "renderReconstructionRuntimeSummary")
+
+    assert 'data-ui="build-posture-band"' in content
+    assert 'data-ui="reconstruction-runtime-summary"' in content
+    assert "Current Run Posture" in content
+    assert content.index('id="reconstructionRuntimeSummary"') < content.index('id="reconstructionDetails"')
+    assert "Preview-backed validation, normalization, and runtime estimates reflect the next dispatch." in summary_body
+    assert "Primary run posture updates here before you open contextual runtime or research controls." in summary_body
+
+
+def test_portal_dispatch_lane_surfaces_live_readiness_reason() -> None:
+    content = _portal_bundle_content()
+    guard_body = _extract_js_function_body(content, "_syncBootstrapGuardedControls")
+    snapshot_body = _extract_js_function_body(content, "_dispatchReadinessSnapshot")
+
+    assert "function _dispatchReadinessSnapshot(payload = null) {" in content
+    assert (
+        "const DISPATCH_BACKEND_OFFLINE_MESSAGE = 'Backend is offline. Dispatch is disabled until connectivity is restored.';"
+        in content
+    )
+    assert "Preview-backed validation is refreshing. Dispatch unlocks when the current draft settles." in snapshot_body
+    assert "Debug bundle acknowledgement is required before dispatch." in snapshot_body
+    assert "detail: DISPATCH_BACKEND_OFFLINE_MESSAGE" in snapshot_body
+    assert "els.dispatchReadinessReason.textContent = readiness.detail;" in guard_body
+    assert "els.dispatchReadinessReason.dataset.tone = readiness.tone;" in guard_body
 
 
 def test_portal_disclosure_defaults_are_state_driven_instead_of_static() -> None:
@@ -1171,9 +1211,10 @@ def test_portal_disclosure_defaults_are_state_driven_instead_of_static() -> None
     assert 'id="governanceDetailsSummary"' in content
     assert 'id="reconstructionDetailsSummary"' in content
     assert 'id="dispatchToolsSummary"' in content
-    assert 'id="advancedFlagsDetails" class="disclosure-panel mt-6">' in content
-    assert 'id="governanceDetails" class="disclosure-panel mt-6">' in content
-    assert "function _setDisclosureSummaryBadge(element, text) {" in content
+    assert 'id="advancedFlagsDetails" class="disclosure-panel disclosure-panel-secondary mt-6">' in content
+    assert 'id="governanceDetails" class="disclosure-panel disclosure-panel-secondary mt-6">' in content
+    assert "function _setDisclosureSummaryBadge(element, text, tone = 'info') {" in content
+    assert "element.dataset.tone = String(tone || 'info').trim().toLowerCase() || 'info';" in content
     assert "const previewFieldGroups = {" in sync_body
     assert "const researchPreset = _presetRequiresResearchAcknowledgments(preset, args);" in sync_body
     assert "element.dataset.autoOpen = autoOpenState[name] ? 'true' : 'false';" in sync_body
@@ -1182,6 +1223,9 @@ def test_portal_disclosure_defaults_are_state_driven_instead_of_static() -> None
     assert "els.governanceDetailsSummary" in sync_body
     assert "els.reconstructionDetailsSummary" in sync_body
     assert "els.dispatchToolsSummary" in sync_body
+    assert "advancedNeedsAttention ? 'Needs attention' : advancedActive ? 'Contextual' : 'Secondary'" in sync_body
+    assert "governanceNeedsAttention ? 'Needs attention' : governanceActive ? 'Contextual' : 'Contextual'" in sync_body
+    assert "reconstructionNeedsAttention ? 'Needs attention' : reconstructionActive ? 'Contextual' : 'Contextual'" in sync_body
     assert "String(args.preset || '').toLowerCase().includes('v3.1')" not in sync_body
     assert "setupDisclosurePanels();" in init_body
 
@@ -1433,6 +1477,7 @@ def test_portal_preview_metadata_worker_modes_and_export_contract_are_wired() ->
 def test_portal_submit_blocks_preview_unavailable_and_debug_bundle_without_acknowledgement() -> None:
     content = _portal_bundle_content()
     guard_body = _extract_js_function_body(content, "_syncBootstrapGuardedControls")
+    readiness_body = _extract_js_function_body(content, "_dispatchReadinessSnapshot")
     submit_body = _extract_js_function_body(content, "submitJob")
     preview_failure_body = _extract_js_function_body(content, "_previewFailureDetails")
     summary_body = _extract_js_function_body(content, "renderReconstructionRuntimeSummary")
@@ -1447,7 +1492,8 @@ def test_portal_submit_blocks_preview_unavailable_and_debug_bundle_without_ackno
     assert "preview_service_unavailable" in preview_failure_body
     assert "Acknowledge the reconstruction debug-bundle guardrail before dispatch." in submit_body
     assert "debug_bundle_acknowledgement_required" in submit_body
-    assert "_effectiveDebugBundleEnabled(preview)" in guard_body
+    assert "const readiness = _dispatchReadinessSnapshot();" in guard_body
+    assert "_effectiveDebugBundleEnabled(preview, currentPayload)" in readiness_body
     assert "_effectiveDebugBundleEnabled(preview, payload)" in submit_body
     assert "_effectiveDebugBundleEnabled(matchedPreview, currentPayload)" in summary_body
     assert "_effectiveDebugBundleEnabled(currentPreview, currentPayload)" in guardrail_body
@@ -1999,13 +2045,15 @@ def test_portal_lux_build_surface_hides_inapplicable_optional_controls_until_nee
 def test_portal_dispatch_controls_require_backend_readiness_and_live_backend() -> None:
     content = _portal_bundle_content()
     guard_body = _extract_js_function_body(content, "_syncBootstrapGuardedControls")
+    readiness_body = _extract_js_function_body(content, "_dispatchReadinessSnapshot")
     submit_body = _extract_js_function_body(content, "submitJob")
 
-    assert "state.backendOk" in guard_body
-    assert "currentPipelineDispatchStatus()" in guard_body
-    assert "readinessStatus === 'ready'" in guard_body
+    assert "const readiness = _dispatchReadinessSnapshot();" in guard_body
+    assert "state.backendOk" in readiness_body
+    assert "currentPipelineDispatchStatus(currentPayload)" in readiness_body
+    assert "canRun: true" in readiness_body
     assert "Execution readiness is still loading." in submit_body
-    assert "Backend is offline. Dispatch is disabled until connectivity is restored." in submit_body
+    assert "createToast(DISPATCH_BACKEND_OFFLINE_MESSAGE, 'error');" in submit_body
     assert "Pipeline is blocked by missing prerequisites." in submit_body
     assert "mock simulation" not in submit_body
 
