@@ -71,6 +71,7 @@ function renderLoginPage({ csrfToken, accessEmail, errorCode }) {
           <a class="brand-lockup brand-lockup--stacked" href="/" aria-label="Dynamic Neural Access home">
             <span class="brand-asset-frame brand-asset-frame--login">
               ${renderBrandAsset({
+                kind: "lockup",
                 variant: "dark",
                 alt: "Dynamic Neural Access",
                 className: "brand-asset"

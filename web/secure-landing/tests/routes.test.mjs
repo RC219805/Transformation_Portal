@@ -329,7 +329,7 @@ test("login GET serves a minimal branded sign-in shell and boots an anonymous se
     assert.match(html, /class="hero-video"/);
     assert.match(html, /preload="metadata"/);
     assert.match(html, /\/video\/dna-loop\.mp4/);
-    assert.match(html, /\/brand\/dna-mark-dark\.svg/);
+    assert.match(html, /\/brand\/dna-lockup-dark\.svg/);
     assert.match(html, /href="#main-content">Skip to sign-in</);
     assert.match(html, /id="main-content"/);
     assert.match(html, /Transformation Portal operator console/);
@@ -375,7 +375,9 @@ test("homepage GET serves the public DNA landing page instead of redirecting", a
     assert.equal(sessionCountBefore, 0);
     assert.equal(sessionCountAfter, 0);
     assert.match(html, /\/video\/dna-loop\.mp4/);
-    assert.match(html, /\/brand\/dna-mark-dark\.svg/);
+    assert.match(html, /\/brand\/dna-symbol-dark\.svg/);
+    assert.match(html, /\/brand\/dna-lockup-dark\.svg/);
+    assert.match(html, /data-ui="homepage-hero-lockup"/);
     assert.match(html, /data-ui="homepage-hero-title"/);
     assert.match(html, /(?:data-ui="homepage-learn-link"[^>]*href="#workflow"|href="#workflow"[^>]*data-ui="homepage-learn-link")/);
     assert.match(html, /(?:data-ui="homepage-primary-cta"[^>]*href="\/login"|href="\/login"[^>]*data-ui="homepage-primary-cta")/);
@@ -1554,7 +1556,9 @@ test("shared portal asset manifest pins the managed asset proxy allowlist", asyn
     "portal.css",
     "portal.js",
     "fonts/portal-sans.woff2",
-    "fonts/portal-mono.woff2"
+    "fonts/portal-mono.woff2",
+    "brand/dna-symbol-dark.svg",
+    "brand/dna-symbol-light.svg"
   ]);
 });
 

@@ -1611,6 +1611,8 @@ details[open] .disclosure-chevron {
 }
 
 .portal-brand-mark {
+    overflow: hidden;
+    padding: 0.55rem;
     border: 1px solid rgba(255, 255, 255, 0.72);
     background: rgba(255, 255, 255, 0.96);
     color: #155e75;
@@ -1626,6 +1628,25 @@ details[open] .disclosure-chevron {
     box-shadow:
         inset 0 1px 0 rgba(148, 163, 184, 0.06),
         0 18px 36px rgba(2, 6, 23, 0.34);
+}
+
+.portal-brand-asset {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.portal-brand-asset--dark {
+    display: none;
+}
+
+.dark .portal-brand-asset--dark {
+    display: block;
+}
+
+.dark .portal-brand-asset--light {
+    display: none;
 }
 
 .portal-topbar__actions {
