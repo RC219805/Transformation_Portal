@@ -19,6 +19,7 @@ from typing import Any, Dict
 import numpy as np
 import pytest
 
+from transformation_portal.spatial_ai.orchestration.graph import artifact_store as artifact_store_module
 from transformation_portal.spatial_ai.orchestration.graph.artifact_store import ArtifactStore, ProvenanceMetadata
 
 pytestmark = pytest.mark.unit
@@ -801,6 +802,31 @@ class TestCommitMarker:
         loaded = store.load(cache_key)
         assert np.array_equal(loaded["data"], artifact["data"])
         assert store.load_provenance(cache_key).cache_key == cache_key
+
+    def test_store_avoids_named_temporary_file_for_marker_and_stats(
+        self, monkeypatch: pytest.MonkeyPatch, store: ArtifactStore
+    ):
+        """Commit markers and stats writes should not depend on NamedTemporaryFile lifecycle semantics."""
+        cache_key = _make_cache_key("mkstemp_marker_stats_regression")
+        artifact = {"data": np.array([7, 8, 9], dtype=np.int32)}
+        prov = self._make_provenance(cache_key)
+
+        real_named_temporary_file = artifact_store_module.tempfile.NamedTemporaryFile
+
+        def guarded_named_temporary_file(*args, **kwargs):
+            if kwargs.get("suffix") == ".committed_tmp" or kwargs.get("prefix") == ".stats_tmp_":
+                raise AssertionError("commit marker and stats writes must not use NamedTemporaryFile")
+            return real_named_temporary_file(*args, **kwargs)
+
+        monkeypatch.setattr(artifact_store_module.tempfile, "NamedTemporaryFile", guarded_named_temporary_file)
+
+        store.store(cache_key, artifact, prov)
+        loaded = store.load(cache_key)
+
+        assert np.array_equal(loaded["data"], artifact["data"])
+        stats = store.get_stats()
+        assert stats["cache_hits"] >= 1
+        assert stats["cache_misses"] >= 1
 
     def test_reader_self_healing_corruption_detection(self, store: ArtifactStore, cache_dir: Path):
         """Readers detect and report corruption when marker exists but payload is missing."""
