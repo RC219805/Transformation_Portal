@@ -1,15 +1,18 @@
 #!/usr/bin/env node
 
 import argon2 from "argon2";
-import { mkdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+
+import { normalizeAccessEmail, normalizeUsername } from "../lib/config.js";
 
 const DEFAULT_OUTPUT_PATH = "/tmp/tp-frontdoor-users.json";
 const DEFAULT_USERNAME = "smoke-admin";
 const DEFAULT_PASSWORD = "correct horse battery staple";
 const DEFAULT_ROLE = "admin";
+const ALLOWED_ROLES = new Set(["admin"]);
 
 function usage() {
   return [
@@ -90,20 +93,22 @@ function defaultAccessEmail(username) {
   return `${username}@local.invalid`;
 }
 
-async function seedFrontdoorUser({
-  outputPath,
-  username,
-  password,
-  accessEmail,
-  role,
-}) {
+function normalizeRole(value) {
+  const role = String(value || "").trim().toLowerCase();
+  if (!role) {
+    throw new Error("Front-door role cannot be empty.");
+  }
+  if (!ALLOWED_ROLES.has(role)) {
+    throw new Error(`TP_FRONTDOOR_ROLE must be one of: ${[...ALLOWED_ROLES].join(", ")}. Got: "${value}".`);
+  }
+  return role;
+}
+
+async function seedFrontdoorUser({ outputPath, username, password, accessEmail, role }) {
   const resolvedOutputPath = path.resolve(outputPath);
   const outputDir = path.dirname(resolvedOutputPath);
   mkdirSync(outputDir, { recursive: true });
-  const tempOutputPath = path.join(
-    outputDir,
-    `.${path.basename(resolvedOutputPath)}.${process.pid}.${randomUUID()}.tmp`,
-  );
+  const tempOutputPath = path.join(outputDir, `.${path.basename(resolvedOutputPath)}.${process.pid}.${randomUUID()}.tmp`);
 
   const passwordHash = await argon2.hash(password);
   const payload = [
@@ -122,10 +127,14 @@ async function seedFrontdoorUser({
       flag: "wx",
     });
     renameSync(tempOutputPath, resolvedOutputPath);
+    if (process.platform !== "win32") {
+      chmodSync(resolvedOutputPath, 0o600);
+    }
   } catch (error) {
     rmSync(tempOutputPath, { force: true });
     throw error;
   }
+
   return resolvedOutputPath;
 }
 
@@ -147,15 +156,16 @@ async function main(argv = process.argv.slice(2)) {
   }
 
   const outputPath = resolveValue(parsed.output, "TP_FRONTDOOR_USERS_FILE", DEFAULT_OUTPUT_PATH);
-  const username = resolveValue(parsed.username, "TP_FRONTDOOR_USERNAME", DEFAULT_USERNAME).toLowerCase();
+  const username = normalizeUsername(resolveValue(parsed.username, "TP_FRONTDOOR_USERNAME", DEFAULT_USERNAME));
   const password = resolveValue(parsed.password, "TP_FRONTDOOR_PASSWORD", DEFAULT_PASSWORD);
-  const role = resolveValue(parsed.role, "TP_FRONTDOOR_ROLE", DEFAULT_ROLE);
-  const accessEmail = resolveValue(
-    parsed.accessEmail,
-    "TP_FRONTDOOR_ACCESS_EMAIL",
-    defaultAccessEmail(username),
-  ).toLowerCase();
+  const accessEmail = normalizeAccessEmail(
+    resolveValue(parsed.accessEmail, "TP_FRONTDOOR_ACCESS_EMAIL", defaultAccessEmail(username)),
+  );
+  const role = normalizeRole(resolveValue(parsed.role, "TP_FRONTDOOR_ROLE", DEFAULT_ROLE));
 
+  if (!outputPath) {
+    throw new Error("Front-door users output path cannot be empty.");
+  }
   if (!username) {
     throw new Error("Front-door username cannot be empty.");
   }
@@ -181,11 +191,16 @@ async function main(argv = process.argv.slice(2)) {
   }
 }
 
+function reportFatal(error) {
+  console.error(String(error instanceof Error ? error.message : error));
+  process.exitCode = 1;
+}
+
 const invokedPath = process.argv[1] ? path.resolve(process.argv[1]) : "";
 const modulePath = fileURLToPath(import.meta.url);
 
 if (invokedPath === modulePath) {
-  await main();
+  await main().catch(reportFatal);
 }
 
 export {
