@@ -1,3 +1,37 @@
+// ============================================================================
+// TRANSFORMATION PORTAL — OPERATOR CONSOLE
+// ============================================================================
+//
+// This file contains the client-side logic for the portal operator console.
+// It is organized into the following sections:
+//
+//   1. CONSTANTS          - Configuration constants and magic values
+//   2. STATE              - Application state container
+//   3. DOM REFERENCES     - Element references (els)
+//   4. AMBIENT MOTION     - Background animation system
+//   5. ROUTING            - View routing (?view=overview|build|operate|review)
+//   6. BUILD STEPPER      - Multi-step build flow UI
+//   7. UTILITIES          - Format helpers, string manipulation
+//   8. ARTIFACT HELPERS   - Artifact classification and labeling
+//   9. JOB RENDERING      - Job queue and inspector rendering
+//  10. PREVIEW & CONFIG   - Config preview and validation
+//  11. API LAYER          - Fetch, SSE, health checks
+//  12. THEME              - Dark/light mode toggle
+//  13. OVERLAYS           - Shortcuts, effective config drawers
+//  14. INITIALIZATION     - Startup and event binding
+//
+// Contract notes:
+//   - ?view= query param routes: overview, build, operate, review
+//   - job=, artifact=, compare=1 additive params
+//   - data-ui attributes used by browser smoke tests
+//   - /portal/assets/* served by FastAPI
+//
+// ============================================================================
+
+// ============================================================================
+// 1. CONSTANTS
+// ============================================================================
+
 const API_BASE = '';
 const STORAGE_KEY = 'tp_orchestrator_profiles_final';
 const API_KEY_STORAGE_KEY = 'tp_api_key';
@@ -38,6 +72,7 @@ const TIMELINE_PROGRESS_CHECKPOINTS = [5, 25, 50, 75, 100];
 const SAFE_JOB_STATES = new Set(['queued', 'running', 'succeeded', 'partial', 'failed', 'canceled', 'ready', 'offline']);
 const SAFE_HTTP_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
+// Module-level mutable state for scheduling
 let queueRenderScheduled = false;
 let queuedReviewSurfaceRefresh = false;
 let healthPollIntervalId = null;
@@ -45,6 +80,10 @@ let sseWatchdogIntervalId = null;
 let healthCheckInFlight = false;
 let lastHealthCheckAt = 0;
 let configPreviewTimerId = null;
+
+// ============================================================================
+// 2. STATE
+// ============================================================================
 
 const state = {
     pipeline: 'lux-depth-v3',
@@ -198,6 +237,10 @@ const state = {
         healthLabel: 'good'
     }
 };
+
+// ============================================================================
+// 3. DOM REFERENCES
+// ============================================================================
 
 const els = {
     overviewShell: document.getElementById('overview-shell'),
@@ -517,6 +560,10 @@ const els = {
     toastContainer: document.getElementById('toastContainer')
 };
 
+// ============================================================================
+// 4. AMBIENT MOTION
+// ============================================================================
+
 const ambientMotion = {
     rafId: null,
     recomputeId: null,
@@ -831,6 +878,10 @@ function setupAmbientMotion() {
     applyPreference();
     _writeAmbientVariables();
 }
+
+// ============================================================================
+// 5. ROUTING
+// ============================================================================
 
 const CONSOLE_VIEW_META = {
     overview: {
@@ -1287,6 +1338,10 @@ function setupSectionRail() {
     setActiveWorkspaceLink(state.currentView);
 }
 
+// ============================================================================
+// 6. BUILD STEPPER
+// ============================================================================
+
 const BUILD_STEP_CONTENT = Object.freeze({
     lux: [
         {
@@ -1461,6 +1516,10 @@ function setupBuildStepper() {
     syncBuildStepUi();
 }
 
+// ============================================================================
+// 7. UTILITIES
+// ============================================================================
+
 function truncateMiddle(value, maxLength = 44) {
     const text = String(value || '').trim();
     if (text.length <= maxLength) return text || '—';
@@ -1550,6 +1609,10 @@ function formatTimelineTimestamp(timestamp) {
     if (!Number.isFinite(timestamp) || timestamp <= 0) return 'just now';
     return new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
+
+// ============================================================================
+// 8. ARTIFACT HELPERS
+// ============================================================================
 
 function artifactMediaKind(artifact) {
     return String(artifact?.media_kind || artifact?.artifact_type || 'file').trim().toLowerCase();
@@ -6880,6 +6943,10 @@ function _artifactEmptyStateCopy(job) {
     };
 }
 
+// ============================================================================
+// 9. JOB RENDERING
+// ============================================================================
+
 function renderJobQueue(includeReviewSurfaces = true) {
     if (!els.jobList) return;
     els.jobList.setAttribute('role', 'listbox');
@@ -7107,6 +7174,10 @@ function logToPane(jobId, line) {
         }
     }
 }
+
+// ============================================================================
+// 10. API LAYER
+// ============================================================================
 
 async function checkBackend(force = false) {
     const now = Date.now();
@@ -8177,6 +8248,10 @@ if (els.refreshHealthBtn) {
 if (els.jobList) els.jobList.addEventListener('click', handleJobListClick);
 if (els.jobList) els.jobList.addEventListener('keydown', handleJobListKeydown);
 
+// ============================================================================
+// 11. THEME
+// ============================================================================
+
 function _normalizeThemePreference(value) {
     const normalized = String(value || '').trim().toLowerCase();
     return THEME_PREFERENCES.includes(normalized) ? normalized : '';
@@ -8244,6 +8319,10 @@ function applyThemePreference(preference, options) {
 if (els.themeBtn) els.themeBtn.addEventListener('click', () => {
     applyThemePreference(_nextThemePreference(state.themePreference));
 });
+
+// ============================================================================
+// 12. OVERLAYS & PANELS
+// ============================================================================
 
 function _rememberOverlayTrigger(trigger = document.activeElement) {
     state.portalUi.lastOverlayTrigger = trigger && typeof trigger.focus === 'function' ? trigger : null;
@@ -8454,6 +8533,10 @@ function setupDisclosurePanels() {
     registerDisclosurePanel('reconstruction', els.reconstructionDetails);
     registerDisclosurePanel('dispatchTools', els.dispatchToolsDetails);
 }
+
+// ============================================================================
+// 13. INITIALIZATION
+// ============================================================================
 
 window.addEventListener('beforeunload', cleanupActiveJobHandles);
 window.addEventListener('pagehide', cleanupActiveJobHandles);

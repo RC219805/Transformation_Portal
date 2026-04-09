@@ -1,3 +1,30 @@
+/* ============================================================================
+ * TRANSFORMATION PORTAL — OPERATOR CONSOLE STYLES
+ * ============================================================================
+ *
+ * This file contains the CSS for the portal operator console.
+ * It is organized into the following sections:
+ *
+ *   1. FONTS            - @font-face declarations
+ *   2. TOKENS           - CSS custom properties (--ux-*, --shell-*, --ambient-*)
+ *   3. BASE             - Reset, typography, scrollbars
+ *   4. COMPONENTS       - Buttons, badges, forms, panels, cards
+ *   5. NAVIGATION       - Workspace rail, view links
+ *   6. VIEWS            - Overview, build, operate, review specific styles
+ *   7. AMBIENT          - Background animation system
+ *   8. UTILITIES        - Helper classes
+ *
+ * Contract notes:
+ *   - .dark:root toggles dark mode
+ *   - @media (prefers-reduced-motion: reduce) disables animations
+ *   - data-ui attributes used by browser smoke tests
+ *
+ * ============================================================================ */
+
+/* ============================================================================
+ * 1. FONTS
+ * ============================================================================ */
+
 @font-face {
     font-family: "Portal Sans";
     src: url("/portal/assets/fonts/portal-sans.woff2") format("woff2");
@@ -9,6 +36,10 @@
     src: url("/portal/assets/fonts/portal-mono.woff2") format("woff2");
     font-display: swap;
 }
+
+/* ============================================================================
+ * 2. TOKENS
+ * ============================================================================ */
 
 html {
     scroll-behavior: smooth;
@@ -73,6 +104,7 @@ body {
     --ambient-focus-color: 34 211 238;
 }
 
+/* Reduced motion preference */
 @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after {
         animation-duration: 0.01ms !important;
@@ -85,6 +117,10 @@ body {
         display: none;
     }
 }
+
+/* ============================================================================
+ * 3. BASE
+ * ============================================================================ */
 
 .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
 .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
@@ -105,6 +141,10 @@ body {
 
 .skip-link { position: absolute; left: 1rem; top: -4rem; z-index: 60; display: inline-flex; align-items: center; min-height: var(--ux-target-min-size); }
 .skip-link:focus { top: 1rem; }
+
+/* ============================================================================
+ * 4. COMPONENTS
+ * ============================================================================ */
 
 .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background-color: #94a3b8; flex-shrink: 0; }
 .status-dot.running { background-color: #f59e0b; box-shadow: 0 0 8px #f59e0b; animation: pulse 2s infinite; }

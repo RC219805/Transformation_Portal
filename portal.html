@@ -6,6 +6,30 @@
     <title>Transformation Portal — Orchestrator</title>
     <link rel="stylesheet" href="/portal/assets/portal.css" />
 </head>
+<!--
+============================================================================
+TRANSFORMATION PORTAL — OPERATOR CONSOLE
+============================================================================
+
+This file contains the HTML structure for the portal operator console.
+It is organized into the following sections:
+
+  1. HEADER           - Top bar with branding, health status, actions
+  2. OVERVIEW VIEW    - Dashboard with status, recent jobs, next action
+  3. BUILD VIEW       - Pipeline configuration and dispatch stepper
+  4. OPERATE VIEW     - Job queue, inspector, logs, artifacts
+  5. REVIEW VIEW      - Artifact preview and comparison
+  6. OVERLAYS         - Shortcuts, effective config drawers
+  7. SCRIPTS          - Portal JavaScript import
+
+Contract notes:
+  - data-ui attributes used by browser smoke tests
+  - ?view= query param routes: overview, build, operate, review
+  - job=, artifact=, compare=1 additive params
+  - /portal/assets/* served by FastAPI
+
+============================================================================
+-->
 <body data-console-view="overview" data-bootstrap-status="pending" class="shell-bg text-slate-900 dark:text-slate-100 antialiased selection:bg-cyan-500/25 transition-colors duration-300">
 
     <a href="#main-content" class="skip-link rounded-lg px-4 py-2 text-sm font-medium text-white bg-indigo-600 shadow-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
@@ -14,7 +38,9 @@
 
     <div aria-hidden="true" class="shell-noise"></div>
 
-    <!-- Header -->
+    <!-- ============================================ -->
+    <!-- 1. HEADER                                   -->
+    <!-- ============================================ -->
     <header class="portal-topbar sticky top-0 z-40 border-b backdrop-blur-xl transition-colors duration-300" data-ui="portal-topbar">
         <div class="portal-topbar__inner mx-auto max-w-7xl px-6 py-4 flex items-center justify-between gap-4">
             <div class="flex items-center gap-4 min-w-0">
@@ -57,6 +83,9 @@
     </header>
 
     <main id="main-content" tabindex="-1" class="mx-auto max-w-7xl px-6 py-8 outline-none">
+        <!-- ============================================ -->
+        <!-- 2. OVERVIEW VIEW                            -->
+        <!-- ============================================ -->
         <section id="overview-shell" data-ui="overview-grid" class="portal-overview-shell mb-6 grid grid-cols-1 lg:grid-cols-12 gap-4">
             <div id="mission-shell" class="workspace-shell workspace-shell--overview overview-primary lg:col-span-7 rounded-[1.75rem] shell-panel-strong p-6" data-ui="overview-summary">
                 <div id="missionShellSkeletonState" class="hidden space-y-5" aria-hidden="true" data-ui="overview-skeleton">
@@ -278,6 +307,9 @@
             </div>
         </section>
 
+        <!-- ============================================ -->
+        <!-- 3. BUILD VIEW                               -->
+        <!-- ============================================ -->
         <div id="console-grid" class="grid grid-cols-1 lg:grid-cols-12 gap-8 hidden">
 
             <!-- Left Column: Configuration -->
@@ -1225,7 +1257,9 @@
                     </div>
                 </div>
 
-                <!-- Job Queue -->
+                <!-- ============================================ -->
+                <!-- 4. OPERATE VIEW (Job Queue)                 -->
+                <!-- ============================================ -->
                 <div id="queue-shell" data-ambient-zone="queue" data-ambient-focus-x="82" data-ambient-focus-y="46" data-ambient-shift-x="20" data-ambient-shift-y="6" data-ambient-stage-scale="1.036" data-ambient-stage-rotate="0.28" data-ambient-color-a="#14b8a6" data-ambient-color-b="#84cc16" data-ambient-color-c="#38bdf8" data-ambient-focus-color="#bbf7d0" class="workspace-shell deferred-shell rounded-[1.75rem] shell-panel p-6 shadow-soft dark:shadow-soft-dark transition-colors duration-300 flex flex-col max-h-[350px]" data-shell-size="compact" data-ui="queue-panel">
                     <div class="flex items-center justify-between mb-4 pb-4 border-b border-slate-200 dark:border-slate-800">
                         <div>
@@ -1271,7 +1305,9 @@
                     </div>
                 </div>
 
-                <!-- Artifacts -->
+                <!-- ============================================ -->
+                <!-- 5. REVIEW VIEW (Artifacts)                  -->
+                <!-- ============================================ -->
                 <div id="artifacts-shell" data-ambient-zone="artifacts" data-ambient-focus-x="76" data-ambient-focus-y="64" data-ambient-shift-x="14" data-ambient-shift-y="12" data-ambient-stage-scale="1.03" data-ambient-stage-rotate="-0.2" data-ambient-color-a="#0ea5e9" data-ambient-color-b="#f59e0b" data-ambient-color-c="#14b8a6" data-ambient-focus-color="#fde68a" class="workspace-shell deferred-shell rounded-[1.75rem] shell-panel p-6 shadow-soft dark:shadow-soft-dark transition-colors duration-300" data-shell-size="compact" data-ui="review-surface">
                     <div class="flex items-center justify-between mb-4 pb-3 border-b border-slate-200 dark:border-slate-800">
                         <h2 class="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Artifacts</h2>
@@ -1408,6 +1444,10 @@
 
         </div>
     </main>
+
+    <!-- ============================================ -->
+    <!-- 6. OVERLAYS                                 -->
+    <!-- ============================================ -->
 
     <!-- Shortcuts Modal -->
     <div id="shortcutsModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 dark:bg-black/60 transition-opacity" aria-hidden="true" data-ui="modal-shell">

@@ -1,0 +1,204 @@
+/* ============================================================================
+ * TRANSFORMATION PORTAL — SHARED DESIGN TOKENS
+ * ============================================================================
+ *
+ * This file contains CSS custom properties shared across all portal surfaces:
+ *   - Portal operator console (portal.css)
+ *   - Managed frontdoor homepage (frontdoor-homepage.css)
+ *   - Managed frontdoor login (login.css)
+ *
+ * Import this file at the top of each surface stylesheet to ensure consistent
+ * visual language and accessibility behavior.
+ *
+ * Usage in CSS:
+ *   @import url("/shared/tokens.css");
+ *
+ * Note: Each surface may define additional local tokens that extend or override
+ * these shared values for surface-specific needs.
+ *
+ * ============================================================================ */
+
+/* ============================================================================
+ * Focus & Accessibility
+ * ============================================================================ */
+
+:root {
+    /* Focus ring — consistent across all surfaces */
+    --tp-focus-ring: rgba(103, 232, 249, 0.96);
+    --tp-focus-shadow: rgba(34, 211, 238, 0.24);
+    
+    /* Minimum touch target size (WCAG 2.2 Target Size) */
+    --tp-target-min-size: 44px;
+}
+
+/* ============================================================================
+ * Typography Scale
+ * ============================================================================ */
+
+:root {
+    /* Font sizes */
+    --tp-text-xs: 0.75rem;      /* 12px */
+    --tp-text-sm: 0.875rem;     /* 14px */
+    --tp-text-base: 1rem;       /* 16px */
+    --tp-text-lg: 1.125rem;     /* 18px */
+    --tp-text-xl: 1.25rem;      /* 20px */
+    --tp-text-2xl: 1.5rem;      /* 24px */
+    --tp-text-3xl: 1.875rem;    /* 30px */
+    
+    /* Legacy aliases for backward compatibility */
+    --tp-label-size: 0.8125rem; /* 13px */
+    --tp-body-size: 1rem;
+}
+
+/* ============================================================================
+ * Panel & Border
+ * ============================================================================ */
+
+:root {
+    /* Panel borders — consistent glass-like appearance */
+    --tp-panel-border: rgba(148, 163, 184, 0.24);
+    --tp-panel-border-strong: rgba(103, 232, 249, 0.28);
+    
+    /* Continuity tokens — shared across frontdoor surfaces */
+    --tp-continuity-panel: rgba(12, 18, 34, 0.76);
+    --tp-continuity-panel-strong: rgba(7, 12, 26, 0.94);
+    --tp-continuity-panel-soft: rgba(15, 23, 42, 0.7);
+    --tp-continuity-border: rgba(148, 163, 184, 0.24);
+    --tp-continuity-border-strong: rgba(103, 232, 249, 0.28);
+}
+
+/* ============================================================================
+ * Brand Colors
+ * ============================================================================ */
+
+:root {
+    /* Primary accent — cyan/teal family */
+    --tp-accent-primary: #22d3ee;     /* Cyan 400 */
+    --tp-accent-primary-strong: #06b6d4; /* Cyan 500 */
+    
+    /* Secondary accent — blue family */
+    --tp-accent-secondary: #2563eb;   /* Blue 600 */
+    --tp-accent-secondary-strong: #1d4ed8; /* Blue 700 */
+    
+    /* Semantic colors */
+    --tp-success: #34d399;            /* Emerald 400 */
+    --tp-success-strong: #10b981;     /* Emerald 500 */
+    --tp-warning: #fbbf24;            /* Amber 400 */
+    --tp-warning-strong: #f59e0b;     /* Amber 500 */
+    --tp-danger: #f87171;             /* Red 400 */
+    --tp-danger-strong: #ef4444;      /* Red 500 */
+    
+    /* Brand-specific */
+    --tp-brand-azure: #56ccf2;
+    --tp-brand-cyan: #2ac7ff;
+}
+
+/* ============================================================================
+ * Motion & Timing
+ * ============================================================================ */
+
+:root {
+    /* Duration tokens */
+    --tp-motion-duration-instant: 0ms;
+    --tp-motion-duration-fast: 150ms;
+    --tp-motion-duration-normal: 300ms;
+    --tp-motion-duration-slow: 500ms;
+    --tp-motion-duration-slower: 700ms;
+    
+    /* Easing tokens */
+    --tp-motion-easing-default: cubic-bezier(0.16, 1, 0.3, 1);
+    --tp-motion-easing-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+    --tp-motion-easing-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+    --tp-motion-easing-sharp: cubic-bezier(0.4, 0, 0.6, 1);
+}
+
+/* Reduced motion preference — disable animations system-wide */
+@media (prefers-reduced-motion: reduce) {
+    :root {
+        --tp-motion-duration-instant: 0ms;
+        --tp-motion-duration-fast: 0ms;
+        --tp-motion-duration-normal: 0ms;
+        --tp-motion-duration-slow: 0ms;
+        --tp-motion-duration-slower: 0ms;
+    }
+}
+
+/* ============================================================================
+ * Shadows
+ * ============================================================================ */
+
+:root {
+    /* Soft shadows for panels */
+    --tp-shadow-soft: 0 24px 60px rgba(2, 6, 23, 0.26);
+    --tp-shadow-strong: 0 18px 40px rgba(37, 99, 235, 0.22);
+    
+    /* Dark mode shadows */
+    --tp-shadow-soft-dark: 0 24px 60px rgba(2, 6, 23, 0.52);
+    --tp-shadow-strong-dark: 0 32px 90px rgba(2, 6, 23, 0.52);
+}
+
+/* ============================================================================
+ * Z-Index Scale
+ * ============================================================================ */
+
+:root {
+    --tp-z-base: 0;
+    --tp-z-dropdown: 10;
+    --tp-z-sticky: 20;
+    --tp-z-fixed: 30;
+    --tp-z-modal-backdrop: 40;
+    --tp-z-modal: 50;
+    --tp-z-popover: 60;
+    --tp-z-tooltip: 70;
+    --tp-z-toast: 80;
+}
+
+/* ============================================================================
+ * Spacing Scale
+ * ============================================================================ */
+
+:root {
+    --tp-space-0: 0;
+    --tp-space-1: 0.25rem;   /* 4px */
+    --tp-space-2: 0.5rem;    /* 8px */
+    --tp-space-3: 0.75rem;   /* 12px */
+    --tp-space-4: 1rem;      /* 16px */
+    --tp-space-5: 1.25rem;   /* 20px */
+    --tp-space-6: 1.5rem;    /* 24px */
+    --tp-space-8: 2rem;      /* 32px */
+    --tp-space-10: 2.5rem;   /* 40px */
+    --tp-space-12: 3rem;     /* 48px */
+    --tp-space-16: 4rem;     /* 64px */
+}
+
+/* ============================================================================
+ * Border Radius
+ * ============================================================================ */
+
+:root {
+    --tp-radius-sm: 0.25rem;   /* 4px */
+    --tp-radius-md: 0.5rem;    /* 8px */
+    --tp-radius-lg: 0.75rem;   /* 12px */
+    --tp-radius-xl: 1rem;      /* 16px */
+    --tp-radius-2xl: 1.5rem;   /* 24px */
+    --tp-radius-3xl: 1.75rem;  /* 28px */
+    --tp-radius-full: 9999px;
+}
+
+/* ============================================================================
+ * Focus Behavior Utility
+ * ============================================================================
+ * 
+ * Apply this to :focus-visible on interactive elements for consistent
+ * focus indication across all surfaces.
+ * ============================================================================ */
+
+/*
+ * Example usage:
+ *
+ * button:focus-visible {
+ *     outline: 3px solid var(--tp-focus-ring);
+ *     outline-offset: 3px;
+ *     box-shadow: 0 0 0 6px var(--tp-focus-shadow);
+ * }
+ */
