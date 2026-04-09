@@ -252,6 +252,28 @@
                 </div>
                 <p id="consoleViewMeta" class="text-[11px] font-mono text-slate-500 dark:text-slate-400">View routing stays client-side to preserve the live orchestrator contract.</p>
             </div>
+            <div id="consoleContextRibbon" class="console-context-ribbon mt-4 hidden" data-ui="console-context-ribbon" aria-live="polite">
+                <div class="console-context-card">
+                    <p class="console-context-label">Selected Job</p>
+                    <p id="contextRibbonJob" class="console-context-value">No job selected</p>
+                    <p id="contextRibbonJobMeta" class="console-context-meta">Choose a run in operate or review to pin context here.</p>
+                </div>
+                <div class="console-context-card">
+                    <p class="console-context-label">Run State</p>
+                    <p id="contextRibbonState" class="console-context-value">Idle</p>
+                    <p id="contextRibbonFreshness" class="console-context-meta">No live telemetry</p>
+                </div>
+                <div class="console-context-card">
+                    <p class="console-context-label">Selected Artifact</p>
+                    <p id="contextRibbonArtifact" class="console-context-value">Awaiting selection</p>
+                    <p id="contextRibbonArtifactMeta" class="console-context-meta">Review context will show the active artifact path here.</p>
+                </div>
+                <div class="console-context-card">
+                    <p class="console-context-label">Compare Mode</p>
+                    <p id="contextRibbonCompare" class="console-context-value">Single view</p>
+                    <p id="contextRibbonCompareMeta" class="console-context-meta">Deep-linkable review context stays aligned with the URL.</p>
+                </div>
+            </div>
         </section>
 
         <div id="console-grid" class="grid grid-cols-1 lg:grid-cols-12 gap-8 hidden">
@@ -532,10 +554,10 @@
                         <div class="flex items-start justify-between gap-3">
                             <div>
                                 <p class="section-kicker">Step 3</p>
-                                <h3 class="mt-2 text-base font-extrabold tracking-tight text-slate-900 dark:text-white">Advanced controls</h3>
-                                <p class="mt-2 text-[12px] leading-6 text-slate-500 dark:text-slate-400">Backend selection, segmentation, emits, governance acknowledgments, and research/runtime controls stay collapsed unless the current preset or configuration needs them.</p>
+                                <h3 class="mt-2 text-base font-extrabold tracking-tight text-slate-900 dark:text-white">Shape outputs and review advanced posture</h3>
+                                <p class="mt-2 text-[12px] leading-6 text-slate-500 dark:text-slate-400">Keep deliverables and primary output posture readable first, then open advanced, governance, or reconstruction controls only when the current run contract needs them.</p>
                             </div>
-                            <span class="micro-status">Advanced sections stay contextual</span>
+                            <span class="micro-status">Outputs first, research controls second</span>
                         </div>
                         <div>
                             <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="depthBackend">Depth Backend</label>
@@ -662,13 +684,24 @@
                         </div>
                     </div>
 
+                    <div class="mt-6 flex items-start justify-between gap-3">
+                        <div>
+                            <p class="section-kicker">Advanced & Research Controls</p>
+                            <p class="mt-2 text-[12px] leading-6 text-slate-500 dark:text-slate-400">Diagnostics, acknowledgments, and reconstruction/runtime posture remain secondary until the draft or preview flags them.</p>
+                        </div>
+                        <span class="micro-status">Secondary controls stay contextual</span>
+                    </div>
+
                     <details id="advancedFlagsDetails" class="disclosure-panel mt-6">
                         <summary class="disclosure-summary">
                             <div>
                                 <p class="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Advanced Flags</p>
                                 <p class="mt-1 text-[12px] text-slate-500 dark:text-slate-400">Diagnostics, fallback, and runtime strictness controls.</p>
                             </div>
-                            <span class="disclosure-chevron text-slate-400">▾</span>
+                            <div class="disclosure-summary-meta">
+                                <span id="advancedFlagsSummary" class="disclosure-summary-badge">Optional</span>
+                                <span class="disclosure-chevron text-slate-400">▾</span>
+                            </div>
                         </summary>
                         <div class="mt-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
                             <label class="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
@@ -705,8 +738,16 @@
                         </div>
                     </details>
 
+                    <div class="mt-6 flex items-start justify-between gap-3">
+                        <div>
+                            <p class="section-kicker">Expected Deliverables</p>
+                            <p class="mt-2 text-[12px] leading-6 text-slate-500 dark:text-slate-400">Keep the primary output set readable before opening deeper runtime or research-only controls.</p>
+                        </div>
+                        <span class="micro-status">Primary output contract</span>
+                    </div>
+
                     <!-- Native Emit Checkboxes -->
-                    <div class="mt-6 grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3">
+                    <div class="mt-4 grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3">
                         <label class="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
                             <input type="checkbox" id="emitMaster16" checked class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 dark:bg-slate-900" />
                             <span class="text-[11px] font-mono select-none truncate text-slate-600 dark:text-slate-300">master16</span>
@@ -736,7 +777,10 @@
                                 <p class="text-[11px] font-bold uppercase tracking-widest text-amber-600 dark:text-amber-500">Compliance & Research Acknowledgments</p>
                                 <p id="governanceDetailsHint" class="mt-1 text-[12px] text-slate-500 dark:text-slate-400">Only shown when the current preset or backend requires explicit acknowledgments.</p>
                             </div>
-                            <span class="disclosure-chevron text-slate-400">▾</span>
+                            <div class="disclosure-summary-meta">
+                                <span id="governanceDetailsSummary" class="disclosure-summary-badge">Conditional</span>
+                                <span class="disclosure-chevron text-slate-400">▾</span>
+                            </div>
                         </summary>
                         <div class="mt-4 p-4 rounded-xl border border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-900/10 transition-colors space-y-3">
                             <label id="licenseNonCommercialField" class="flex items-start gap-3 cursor-pointer group">
@@ -760,7 +804,10 @@
                                 <p class="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Reconstruction & Runtime</p>
                                 <p id="reconstructionDetailsHint" class="mt-1 text-[12px] text-slate-500 dark:text-slate-400">Runtime tuning stays available here. Reconstruction-only settings appear after you enable the feature.</p>
                             </div>
-                            <span class="disclosure-chevron text-slate-400">▾</span>
+                            <div class="disclosure-summary-meta">
+                                <span id="reconstructionDetailsSummary" class="disclosure-summary-badge">Runtime baseline</span>
+                                <span class="disclosure-chevron text-slate-400">▾</span>
+                            </div>
                         </summary>
                         <div class="mt-4 space-y-4">
                         <div class="grid grid-cols-1 gap-4">
@@ -969,8 +1016,8 @@
                     <div class="flex items-start justify-between gap-3">
                         <div>
                             <p class="section-kicker">Step 4</p>
-                            <h3 class="mt-2 text-base font-extrabold tracking-tight text-slate-900 dark:text-white">Review dispatch posture</h3>
-                            <p class="mt-2 text-[12px] leading-6 text-slate-500 dark:text-slate-400">Readiness, expected outputs, and launch stay primary here. Secondary CLI and config tools stay collapsed until you need exact parity.</p>
+                            <h3 class="mt-2 text-base font-extrabold tracking-tight text-slate-900 dark:text-white">Review dispatch posture and execute</h3>
+                            <p class="mt-2 text-[12px] leading-6 text-slate-500 dark:text-slate-400">Next action, pre-run checks, expected outputs, and launch stay primary here. Secondary CLI and config tools remain collapsed until exact parity is needed.</p>
                         </div>
                         <span class="micro-status">Dispatch review</span>
                     </div>
@@ -1016,7 +1063,10 @@
                                 <p class="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Secondary CLI & Config Tools</p>
                                 <p class="mt-1 text-[12px] text-slate-500 dark:text-slate-400">Open this only when you need exact argv parity, JSON transport, or the normalized effective config.</p>
                             </div>
-                            <span class="disclosure-chevron text-slate-400">▾</span>
+                            <div class="disclosure-summary-meta">
+                                <span id="dispatchToolsSummary" class="disclosure-summary-badge">Collapsed</span>
+                                <span class="disclosure-chevron text-slate-400">▾</span>
+                            </div>
                         </summary>
                         <div class="mt-4 space-y-4">
                             <div class="dispatch-tools-actions">
