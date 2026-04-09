@@ -7,6 +7,7 @@ import json
 import sys
 import urllib.error
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -95,6 +96,41 @@ def test_portal_browser_parse_args_supports_local_backend_spawn_flag():
 
     assert args.spawn_local_backend is True
     assert args.backend_startup_timeout_seconds == 12.5
+
+
+def test_portal_browser_tail_text_reads_only_a_bounded_suffix(tmp_path: Path):
+    module = _load_module(PORTAL_BROWSER_SCRIPT_PATH, "tests_validate_portal_browser_smoke_tail")
+    log_path = tmp_path / "portal.log"
+    log_path.write_text(("0123456789" * 1024) + "tail-marker", encoding="utf-8")
+
+    tail = module._tail_text(log_path, max_chars=24, max_bytes=96)
+
+    assert tail.endswith("tail-marker")
+    assert len(tail) <= 24
+
+
+def test_portal_browser_main_terminates_spawned_backend_on_setup_failure(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+    module = _load_module(PORTAL_BROWSER_SCRIPT_PATH, "tests_validate_portal_browser_smoke_runtime_cleanup")
+    runtime_handle = SimpleNamespace(base_url="http://127.0.0.1:8123")
+    terminated: list[object] = []
+    archive_index = tmp_path / "archive_index.csv.gz"
+    archive_index.write_text("fixture", encoding="utf-8")
+
+    monkeypatch.setattr(module, "_spawn_local_backend", lambda *_args, **_kwargs: runtime_handle)
+    monkeypatch.setattr(module, "_terminate_runtime", lambda handle: terminated.append(handle))
+
+    with pytest.raises(module.SmokeFailure, match="Archive root fixture does not exist"):
+        module.main(
+            [
+                "--spawn-local-backend",
+                "--archive-root",
+                str(tmp_path / "missing-archive-root"),
+                "--archive-index",
+                str(archive_index),
+            ]
+        )
+
+    assert terminated == [runtime_handle]
 
 
 def test_portal_browser_help_text_describes_api_key_default(capsys: pytest.CaptureFixture[str]):
@@ -276,6 +312,47 @@ def test_frontdoor_browser_parse_args_supports_isolated_runtime_flags():
     assert args.spawn_local_backend is True
     assert args.backend_base_url == "http://127.0.0.1:9000"
     assert args.backend_api_key == "backend-secret"
+
+
+def test_frontdoor_browser_tail_text_reads_only_a_bounded_suffix(tmp_path: Path):
+    module = _load_module(FRONTDOOR_BROWSER_SCRIPT_PATH, "tests_validate_frontdoor_browser_smoke_tail")
+    log_path = tmp_path / "frontdoor.log"
+    log_path.write_text(("abcdefghij" * 1024) + "tail-marker", encoding="utf-8")
+
+    tail = module._tail_text(log_path, max_chars=24, max_bytes=96)
+
+    assert tail.endswith("tail-marker")
+    assert len(tail) <= 24
+
+
+def test_frontdoor_browser_main_terminates_spawned_runtimes_on_setup_failure(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+    module = _load_module(FRONTDOOR_BROWSER_SCRIPT_PATH, "tests_validate_frontdoor_browser_smoke_runtime_cleanup")
+    backend_runtime = SimpleNamespace(base_url="http://127.0.0.1:8124")
+    frontdoor_runtime = SimpleNamespace(base_url="http://localhost:3010")
+    terminated: list[object] = []
+
+    monkeypatch.setattr(module, "_spawn_local_backend", lambda *_args, **_kwargs: backend_runtime)
+    monkeypatch.setattr(module, "_spawn_local_frontdoor", lambda **_kwargs: frontdoor_runtime)
+    monkeypatch.setattr(module, "_terminate_runtime", lambda handle: terminated.append(handle))
+    monkeypatch.setattr(module, "_resolve_chrome_binary", lambda _raw: str(tmp_path / "missing-chrome"))
+
+    with pytest.raises(module.SmokeFailure, match="Chrome binary does not exist"):
+        module.main(
+            [
+                "--spawn-local-backend",
+                "--spawn-local-frontdoor",
+                "--backend-api-key",
+                "contract-secret",
+                "--debugging-port",
+                "9222",
+                "--username",
+                "admin",
+                "--password",
+                "secret",
+            ]
+        )
+
+    assert terminated == [frontdoor_runtime, backend_runtime]
 
 
 def test_frontdoor_browser_waits_for_managed_portal_bootstrap_before_passing():

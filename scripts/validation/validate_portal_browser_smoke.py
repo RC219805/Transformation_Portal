@@ -136,9 +136,18 @@ def _base_url(value: str) -> str:
     return trimmed.rstrip("/")
 
 
-def _tail_text(path: Path, *, max_chars: int = 1200) -> str:
+def _tail_text(path: Path, *, max_chars: int = 1200, max_bytes: int = 4096) -> str:
+    if max_chars <= 0 or max_bytes <= 0:
+        return ""
     try:
-        content = path.read_text(encoding="utf-8")
+        with path.open("rb") as handle:
+            handle.seek(0, os.SEEK_END)
+            byte_count = handle.tell()
+            if byte_count <= 0:
+                return ""
+            window = min(byte_count, max_bytes)
+            handle.seek(-window, os.SEEK_END)
+            content = handle.read(window).decode("utf-8", errors="replace")
     except OSError:
         return ""
     content = content.strip()
@@ -1194,38 +1203,41 @@ def _parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
 def main(argv: Optional[Iterable[str]] = None) -> int:
     args = _parse_args(argv)
     runtime_handle: Optional[LocalRuntimeHandle] = None
-    base_url = _base_url(str(args.base_url))
-    if args.spawn_local_backend:
-        print("portal-browser-smoke: launching isolated local backend", flush=True)
-        runtime_handle = _spawn_local_backend(
-            args.api_key,
-            timeout_seconds=args.backend_startup_timeout_seconds,
-        )
-        base_url = runtime_handle.base_url
-        print(f"portal-browser-smoke: isolated backend ready at {base_url}", flush=True)
-
-    archive_root = Path(args.archive_root).resolve()
-    _expect(archive_root.is_dir(), f"Archive root fixture does not exist: {archive_root}")
-    archive_index = Path(args.archive_index).resolve()
-    _expect(archive_index.is_file(), f"Archive index fixture does not exist: {archive_index}")
-
-    output_dir, output_dir_is_temp = _resolve_output_dir(args.output_dir)
-    if output_dir_is_temp and not args.keep_output and output_dir.exists():
-        shutil.rmtree(output_dir, ignore_errors=True)
-    output_dir.mkdir(parents=True, exist_ok=True)
-    profile_dir = _default_profile_dir()
-    port = int(args.debugging_port or _find_free_port())
-    chrome_binary = _resolve_chrome_binary(args.chrome_binary)
-    _expect(Path(chrome_binary).exists(), f"Chrome binary does not exist: {chrome_binary}")
-    cleanup_output_dir = _should_cleanup_output_dir(
-        keep_output=bool(args.keep_output),
-        output_dir_is_temp=output_dir_is_temp,
-    )
-
     chrome_process: Optional[subprocess.Popen[str]] = None
     connection: Optional[DevToolsConnection] = None
+    profile_dir: Optional[Path] = None
+    output_dir: Optional[Path] = None
+    cleanup_output_dir = False
 
     try:
+        base_url = _base_url(str(args.base_url))
+        if args.spawn_local_backend:
+            print("portal-browser-smoke: launching isolated local backend", flush=True)
+            runtime_handle = _spawn_local_backend(
+                args.api_key,
+                timeout_seconds=args.backend_startup_timeout_seconds,
+            )
+            base_url = runtime_handle.base_url
+            print(f"portal-browser-smoke: isolated backend ready at {base_url}", flush=True)
+
+        archive_root = Path(args.archive_root).resolve()
+        _expect(archive_root.is_dir(), f"Archive root fixture does not exist: {archive_root}")
+        archive_index = Path(args.archive_index).resolve()
+        _expect(archive_index.is_file(), f"Archive index fixture does not exist: {archive_index}")
+
+        output_dir, output_dir_is_temp = _resolve_output_dir(args.output_dir)
+        if output_dir_is_temp and not args.keep_output and output_dir.exists():
+            shutil.rmtree(output_dir, ignore_errors=True)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        profile_dir = _default_profile_dir()
+        port = int(args.debugging_port or _find_free_port())
+        chrome_binary = _resolve_chrome_binary(args.chrome_binary)
+        _expect(Path(chrome_binary).exists(), f"Chrome binary does not exist: {chrome_binary}")
+        cleanup_output_dir = _should_cleanup_output_dir(
+            keep_output=bool(args.keep_output),
+            output_dir_is_temp=output_dir_is_temp,
+        )
+
         print("portal-browser-smoke: preflighting lux config preview", flush=True)
         _preflight_lux_config_preview(
             base_url,
@@ -2004,9 +2016,9 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
                     pass
         if runtime_handle is not None:
             _terminate_runtime(runtime_handle)
-        if not args.keep_profile:
+        if profile_dir is not None and not args.keep_profile:
             shutil.rmtree(profile_dir, ignore_errors=True)
-        if cleanup_output_dir:
+        if cleanup_output_dir and output_dir is not None:
             shutil.rmtree(output_dir, ignore_errors=True)
 
 

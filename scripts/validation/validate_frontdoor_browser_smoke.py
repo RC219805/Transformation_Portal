@@ -51,6 +51,7 @@ from validate_portal_browser_smoke import (  # noqa: E402
     _request_json,
     _resolve_chrome_binary,
     _spawn_local_backend,
+    _tail_text,
     _terminate_runtime,
     _wait_for_devtools,
     _wait_for_page_target,
@@ -59,17 +60,6 @@ from validate_portal_browser_smoke import (  # noqa: E402
 DEFAULT_FRONTDOOR_BASE_URL = "http://localhost:3000"
 DEFAULT_BACKEND_BASE_URL = "http://127.0.0.1:8000"
 FRONTDOOR_ROOT = SCRIPT_DIR.parent.parent / "web" / "secure-landing"
-
-
-def _tail_text(path: Path, *, max_chars: int = 1200) -> str:
-    try:
-        content = path.read_text(encoding="utf-8")
-    except OSError:
-        return ""
-    content = content.strip()
-    if len(content) <= max_chars:
-        return content
-    return content[-max_chars:]
 
 
 def _request_frontdoor_health(base_url: str) -> tuple[int, dict]:
@@ -443,47 +433,47 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
 
     backend_runtime: Optional[LocalRuntimeHandle] = None
     frontdoor_runtime: Optional[LocalRuntimeHandle] = None
-
-    if args.spawn_local_backend:
-        print("frontdoor-browser-smoke: launching isolated local backend", flush=True)
-        backend_runtime = _spawn_local_backend(
-            backend_api_key,
-            timeout_seconds=args.backend_startup_timeout_seconds,
-        )
-        backend_base_url = backend_runtime.base_url
-        print(f"frontdoor-browser-smoke: isolated backend ready at {backend_base_url}", flush=True)
-
-    if args.spawn_local_frontdoor:
-        if not backend_api_key:
-            raise SmokeFailure(
-                "An isolated front-door launch requires TP_BACKEND_API_KEY or TP_API_KEY unless --spawn-local-backend is also enabled.",
-                kind="environment",
-            )
-        print("frontdoor-browser-smoke: launching isolated managed front-door", flush=True)
-        frontdoor_runtime = _spawn_local_frontdoor(
-            username=username,
-            password=password,
-            backend_base_url=backend_base_url,
-            backend_api_key=backend_api_key,
-            timeout_seconds=args.frontdoor_startup_timeout_seconds,
-        )
-        base_url = frontdoor_runtime.base_url
-        print(f"frontdoor-browser-smoke: isolated front-door ready at {base_url}", flush=True)
-    else:
-        print("frontdoor-browser-smoke: preflighting /healthz", flush=True)
-        status, body = _request_frontdoor_health(base_url)
-        if status != 200 or body.get("ok") is not True:
-            raise SmokeFailure(_format_frontdoor_health_failure(status, body), kind="environment")
-
-    profile_dir = _default_profile_dir()
-    port = int(args.debugging_port or _find_free_port())
-    chrome_binary = _resolve_chrome_binary(args.chrome_binary)
-    _expect(Path(chrome_binary).exists(), f"Chrome binary does not exist: {chrome_binary}")
-
     chrome_process: Optional[subprocess.Popen[str]] = None
     connection: Optional[DevToolsConnection] = None
+    profile_dir: Optional[Path] = None
 
     try:
+        if args.spawn_local_backend:
+            print("frontdoor-browser-smoke: launching isolated local backend", flush=True)
+            backend_runtime = _spawn_local_backend(
+                backend_api_key,
+                timeout_seconds=args.backend_startup_timeout_seconds,
+            )
+            backend_base_url = backend_runtime.base_url
+            print(f"frontdoor-browser-smoke: isolated backend ready at {backend_base_url}", flush=True)
+
+        if args.spawn_local_frontdoor:
+            if not backend_api_key:
+                raise SmokeFailure(
+                    "An isolated front-door launch requires TP_BACKEND_API_KEY or TP_API_KEY unless --spawn-local-backend is also enabled.",
+                    kind="environment",
+                )
+            print("frontdoor-browser-smoke: launching isolated managed front-door", flush=True)
+            frontdoor_runtime = _spawn_local_frontdoor(
+                username=username,
+                password=password,
+                backend_base_url=backend_base_url,
+                backend_api_key=backend_api_key,
+                timeout_seconds=args.frontdoor_startup_timeout_seconds,
+            )
+            base_url = frontdoor_runtime.base_url
+            print(f"frontdoor-browser-smoke: isolated front-door ready at {base_url}", flush=True)
+        else:
+            print("frontdoor-browser-smoke: preflighting /healthz", flush=True)
+            status, body = _request_frontdoor_health(base_url)
+            if status != 200 or body.get("ok") is not True:
+                raise SmokeFailure(_format_frontdoor_health_failure(status, body), kind="environment")
+
+        profile_dir = _default_profile_dir()
+        port = int(args.debugging_port or _find_free_port())
+        chrome_binary = _resolve_chrome_binary(args.chrome_binary)
+        _expect(Path(chrome_binary).exists(), f"Chrome binary does not exist: {chrome_binary}")
+
         print("frontdoor-browser-smoke: launching chrome", flush=True)
         command = [
             chrome_binary,
@@ -592,7 +582,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             _terminate_runtime(frontdoor_runtime)
         if backend_runtime is not None:
             _terminate_runtime(backend_runtime)
-        if not args.keep_profile:
+        if profile_dir is not None and not args.keep_profile:
             shutil.rmtree(profile_dir, ignore_errors=True)
 
 
