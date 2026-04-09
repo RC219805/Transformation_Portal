@@ -93,9 +93,17 @@ Route ownership:
 - `GET /healthz` now returns structured readiness checks under `checks.backend`, `checks.access_config`, `checks.user_source`, `checks.session_store`, and `checks.session_scaling`; required production failures return `503`.
 
 Static front-door assets:
-- `/brand/dna-mark-dark.svg` for dark/video-backed front-door surfaces
-- `/brand/dna-mark-light.svg` for light surfaces
+- `/brand/dna-symbol-dark.svg` and `/brand/dna-symbol-light.svg` for compact brand marks on dark and light front-door surfaces
+- `/brand/dna-lockup-dark.svg` and `/brand/dna-lockup-light.svg` for explicit full-logo lockups on homepage hero and login shells
 - `/video/dna-loop.mp4` as the canonical branded loop for homepage and login
+
+Managed portal-served brand assets:
+- `/portal/assets/brand/dna-symbol-dark.svg`
+- `/portal/assets/brand/dna-symbol-light.svg`
+
+Brand contract notes:
+- Front-door assets use explicit `symbol` and `lockup` variants instead of the older generic `dna-mark-*` naming.
+- Portal-served assets are limited to mirrored `symbol` variants in this tranche and must remain allowlisted through `config/portal_asset_manifest.json`.
 
 ## Portal Modes
 

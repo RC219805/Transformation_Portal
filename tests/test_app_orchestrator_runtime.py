@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import importlib
 import json
 import os
@@ -24,6 +25,7 @@ pytestmark = pytest.mark.unit
 orchestrator_app = importlib.import_module("app")
 PORTAL_HTML_PATH = Path(__file__).resolve().parents[1] / "portal.html"
 PORTAL_ASSET_ROOT = PORTAL_HTML_PATH.parent / "public" / "portal-assets"
+FRONTDOOR_BRAND_ROOT = PORTAL_HTML_PATH.parent / "web" / "secure-landing" / "public" / "brand"
 
 
 class _FakeRequest:
@@ -437,12 +439,16 @@ def test_portal_asset_manifest_is_explicit_and_repo_local() -> None:
         "portal.js": orchestrator_app.PORTAL_ASSETS_DIR / "portal.js",
         "fonts/portal-sans.woff2": orchestrator_app.PORTAL_ASSETS_DIR / "fonts" / "portal-sans.woff2",
         "fonts/portal-mono.woff2": orchestrator_app.PORTAL_ASSETS_DIR / "fonts" / "portal-mono.woff2",
+        "brand/dna-symbol-dark.svg": orchestrator_app.PORTAL_ASSETS_DIR / "brand" / "dna-symbol-dark.svg",
+        "brand/dna-symbol-light.svg": orchestrator_app.PORTAL_ASSETS_DIR / "brand" / "dna-symbol-light.svg",
     }
     assert orchestrator_app.PORTAL_ASSET_MEDIA_TYPES == {
         "portal.css": "text/css; charset=utf-8",
         "portal.js": "text/javascript; charset=utf-8",
         "fonts/portal-sans.woff2": "font/woff2",
         "fonts/portal-mono.woff2": "font/woff2",
+        "brand/dna-symbol-dark.svg": "image/svg+xml",
+        "brand/dna-symbol-light.svg": "image/svg+xml",
     }
     for asset_path in orchestrator_app.PORTAL_ASSET_PATHS.values():
         assert asset_path.is_file()
@@ -482,6 +488,37 @@ def test_portal_html_asset_references_are_covered_by_manifest() -> None:
     assert bundled_asset_urls == manifest_asset_urls
     for asset_url in bundled_asset_urls:
         _portal_asset_path(asset_url)
+
+
+def test_portal_brand_asset_references_are_manifest_backed_and_repo_local() -> None:
+    brand_asset_urls = {url for url in _portal_asset_urls_from_html() if url.startswith("/portal/assets/brand/")}
+    manifest_asset_urls = {f"/portal/assets/{asset_name}" for asset_name in orchestrator_app.PORTAL_ASSET_MANIFEST.keys()}
+
+    assert brand_asset_urls == {
+        "/portal/assets/brand/dna-symbol-dark.svg",
+        "/portal/assets/brand/dna-symbol-light.svg",
+    }
+    assert brand_asset_urls <= manifest_asset_urls
+    for asset_url in brand_asset_urls:
+        assert _portal_asset_path(asset_url).is_relative_to(orchestrator_app.PORTAL_ASSETS_DIR)
+
+
+@pytest.mark.parametrize("asset_name", ["dna-symbol-dark.svg", "dna-symbol-light.svg"])
+def test_portal_brand_assets_match_frontdoor_sources(asset_name: str) -> None:
+    frontdoor_asset = FRONTDOOR_BRAND_ROOT / asset_name
+    portal_asset = PORTAL_ASSET_ROOT / "brand" / asset_name
+
+    assert frontdoor_asset.is_file()
+    assert portal_asset.is_file()
+
+    frontdoor_bytes = frontdoor_asset.read_bytes()
+    portal_bytes = portal_asset.read_bytes()
+    frontdoor_sha = hashlib.sha256(frontdoor_bytes).hexdigest()
+    portal_sha = hashlib.sha256(portal_bytes).hexdigest()
+
+    assert (
+        portal_bytes == frontdoor_bytes
+    ), f"brand asset drift for {asset_name}: frontdoor={frontdoor_sha} portal={portal_sha}"
 
 
 def test_portal_fetch_sse_reconnect_scheduler_has_terminal_guard_and_backoff() -> None:

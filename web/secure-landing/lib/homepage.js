@@ -449,9 +449,10 @@ export function renderHomepage({ hasAuthenticatedSessionHint }) {
         <a class="brand-lockup" href="/" aria-label="Dynamic Neural Access home">
           <span class="brand-lockup__mark">
             ${renderBrandAsset({
+              kind: "symbol",
               variant: "dark",
               alt: "Dynamic Neural Access",
-              className: "brand-asset"
+              className: "brand-asset brand-asset--symbol"
             })}
           </span>
           <span class="brand-lockup__copy">
@@ -487,6 +488,14 @@ export function renderHomepage({ hasAuthenticatedSessionHint }) {
     <main id="main-content" class="homepage-main" data-ui="homepage-main">
       <section class="hero-section" aria-labelledby="hero-title" data-ui="homepage-hero">
         <div class="hero-copy">
+          <div class="hero-lockup" data-ui="homepage-hero-lockup">
+            ${renderBrandAsset({
+              kind: "lockup",
+              variant: "dark",
+              alt: "Dynamic Neural Access",
+              className: "hero-lockup__asset"
+            })}
+          </div>
           <p class="section-kicker">Dynamic Neural Access</p>
           <h1 id="hero-title" data-ui="homepage-hero-title">Make premium media verifiable before it ships.</h1>
           <p class="hero-lede" data-ui="homepage-hero-lede">

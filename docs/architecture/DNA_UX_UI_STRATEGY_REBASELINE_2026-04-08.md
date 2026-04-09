@@ -34,6 +34,92 @@ boundary.
   `make test-frontdoor-contract`, `make test-portal-contract`,
   `make validate-frontdoor-browser`, and `make validate-portal-browser`.
 
+## Brand-System Unification Across Browser Surfaces
+
+### Scope Lock
+
+This tranche applies only to the browser surfaces at `/`, `/login`, and
+`/portal`.
+
+- No route, auth, proxy, query-param, or `/v1/*` changes.
+- Existing `data-ui` hooks and CTA destinations stay stable.
+- The authoritative art-direction reference sheet for this tranche is
+  `output/lux_depth_v3_apex/v2/DNA logo branding presentation.tif`.
+
+### Verified Review Baseline
+
+- `make test-frontdoor-contract` passed under Node `22.22.2`.
+- `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/pytest tests/test_app_orchestrator_runtime.py tests/validation/test_portal_smoke_scripts.py -q`
+  passed during this review (`175 passed`).
+- `make test-portal-contract` still needs rerun outside the current sandbox
+  when this tranche closes because the observed failure here was
+  `pytest-rerunfailures` socket binding, not product logic drift.
+- Live browser validation remains the completion gate for this tranche:
+  `make validate-frontdoor-browser` and `make validate-portal-browser`.
+
+### Asset Taxonomy and Placement Rules
+
+The browser surfaces now use an explicit brand taxonomy instead of a generic
+single-mark path:
+
+- `kind`: `symbol` | `lockup`
+- `variant`: `dark` | `light`
+
+Canonical asset names:
+
+- `dna-symbol-dark.svg`
+- `dna-symbol-light.svg`
+- `dna-lockup-dark.svg`
+- `dna-lockup-light.svg`
+
+Surface rules:
+
+- Homepage header uses `symbol`.
+- Homepage hero may show a restrained `lockup` without changing CTA order,
+  nav structure, or `data-ui` contracts.
+- Login uses `lockup` in the existing centered branded shell.
+- Portal uses mirrored theme-specific `symbol` assets only and keeps
+  “Transformation Portal” as the dominant text label.
+
+### Split-Shell Asset Contract
+
+Front-door assets live under:
+
+- `web/secure-landing/public/brand/`
+
+Mirrored portal-served symbol assets live under:
+
+- `public/portal-assets/brand/`
+
+The split-shell invariant is strict:
+
+- Each mirrored frontdoor and portal symbol SVG must remain byte-identical.
+- Any `/portal/assets/brand/*` reference must be explicitly allowlisted in
+  `config/portal_asset_manifest.json`.
+- Runtime tests must continue to verify that portal brand references are
+  manifest-backed and repo-local.
+
+### Gap Closed In This Review
+
+Before this tranche, the refined identity existed as art direction but not as a
+formal browser contract. The repo lacked:
+
+- an explicit `symbol` vs `lockup` taxonomy,
+- a portal allowlist for shared brand assets,
+- parity enforcement across the frontdoor and portal copies, and
+- a placement rule preventing a wide lockup from being treated like a square
+  header mark.
+
+This tranche closes that gap by making asset selection deterministic,
+theme-aware, and contract-tested.
+
+### Next Serious Upgrade Sequence
+
+- Modularize the portal shell without changing the FastAPI/HTML contract.
+- Harden managed browser smoke execution into a repeatable local and CI path.
+- Introduce a shared cross-surface token and motion layer after asset parity is
+  stable; keep any React/Next portal migration as a later decision gate.
+
 ## Correction Matrix
 
 | Original draft claim | Status | Repo truth | Revised direction |

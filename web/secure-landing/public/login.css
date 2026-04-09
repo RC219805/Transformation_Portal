@@ -167,14 +167,13 @@ body {
 }
 
 .brand-asset-frame--login {
-  width: min(16rem, 76vw);
+  width: min(18rem, 82vw);
 }
 
 .brand-asset {
   display: block;
   width: 100%;
   height: auto;
-  border-radius: 1rem;
 }
 
 .brand-subtitle {
