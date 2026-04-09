@@ -319,16 +319,22 @@ still pending:
   active implementation record for the UX tranche instead of opening a new
   frontdoor roadmap phase.
 - The local verification baseline on April 9, 2026 is:
-  - `make test-frontdoor-contract` passes locally under Node `22.22.2`;
-  - `make test-portal-contract` passes locally;
-  - live frontdoor browser validation still depends on a managed frontdoor
-    instance running with the expected local smoke credentials;
-  - live portal browser validation still depends on a backend instance that
-    accepts the configured `TP_API_KEY` for `/v1/config-preview`.
+  - `.venv/bin/python -m pytest -q tests/test_app_orchestrator_runtime.py tests/validation/test_portal_smoke_scripts.py`
+    passed in this workspace (`180 passed in 1.99s`);
+  - `.venv/bin/python scripts/validation/validate_portal_browser_smoke.py --spawn-local-backend --api-key contract-secret`
+    passed in this workspace;
+  - `make test-frontdoor-contract` passed after switching the frontdoor toolchain
+    to Node `22.22.2` and rebuilding native modules for that runtime;
+  - `make validate-frontdoor-browser` passed under the same Node `22.22.2`
+    environment;
+  - the default workspace runtime still resolves to Node `25.9.0`, so
+    frontdoor contract/build/browser commands must continue to switch to
+    Node `22.x` before validation.
 
-Phase 2B is now closed out. Phase 3 implementation is landed, and the only
-remaining close-out work is green live browser validation against known-good
-local managed frontdoor and backend instances.
+Phase 2B is now closed out. Phase 3 implementation and validation close-out
+are complete, and no open UX validation gate remains beyond rerunning the same
+contract/browser checks when homepage, login, portal, or managed frontdoor
+behavior changes.
 
 ### Phase 1: Accessibility and Token Alignment (Completed April 8, 2026)
 
@@ -372,7 +378,7 @@ Acceptance focus:
 Status:
 - Completed on April 8, 2026.
 
-### Phase 3: Cross-surface Visual Continuity (Validation Close-out April 9, 2026)
+### Phase 3: Cross-surface Visual Continuity (Completed April 9, 2026)
 
 Scope:
 - Harmonize CTA emphasis, empty/loading/error states, and premium polish across
@@ -398,8 +404,10 @@ Acceptance focus:
   environment.
 
 Status:
-- Implementation landed on April 9, 2026; completion remains gated on green
-  live browser validation for both frontdoor and portal.
+- Implementation and validation close-out completed on April 9, 2026. Portal
+  contract/runtime coverage, live portal browser smoke, frontdoor
+  contract/build verification, and live managed frontdoor browser smoke are
+  green when frontdoor commands run under Node `22.22.2`.
 
 ### Phase 4: Power-user Enhancements (Deferred)
 
@@ -465,25 +473,30 @@ The revised strategy is complete only if all of the following remain true:
 - Future-state items are clearly labeled as gated rather than implied defaults.
 - Desktop, mobile, keyboard-only, reduced-motion, and managed-login flows are
   explicitly covered.
+- Portal contract validation and live portal browser smoke are recorded as
+  complete rather than pending.
+- Managed frontdoor contract/build and live browser validation are recorded as
+  green when run under Node `22.x`, while unsupported runtimes remain
+  explicitly unsupported rather than treated as product regressions.
 
-Recommended validation commands for any implementation derived from this
-strategy:
+Portal truth-sync evidence already green as of April 9, 2026:
 
 ```bash
 make test-portal-contract
 make validate-portal-browser
 ```
 
-Run the frontdoor contract/browser checks only when homepage or login surfaces
-change in the same tranche:
+Managed frontdoor truth-sync evidence is also green as of April 9, 2026 when
+run under Node `22.22.2`:
 
 ```bash
 make test-frontdoor-contract
 make validate-frontdoor-browser
 ```
 
-`make test-frontdoor-contract` remains Node `22.x` only because the
-frontdoor package explicitly rejects unsupported runtimes.
+`make test-frontdoor-contract` and `make validate-frontdoor-browser` remain
+Node `22.x` only because the frontdoor package explicitly rejects unsupported
+runtimes and its native modules must be built against that ABI.
 
 Run `make test-orchestrator-contract` as well only if a UX change alters
 `/v1/*`, bootstrap behavior, or upstream portal semantics rather than pure
@@ -537,8 +550,8 @@ portal presentation and state handling.
 
 ### Proposed
 
-- Phase 3 completion gate once live browser validation is rerun against
-  known-good local managed frontdoor and backend instances
+- Routine rerun of portal/frontdoor contract and browser validation whenever
+  homepage, login, portal, or managed frontdoor behavior changes
 - Optional command-palette evaluation only after earlier IA improvements land
 
 ## Source Notes and Assumptions

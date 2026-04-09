@@ -169,9 +169,33 @@ originRequest:
 
 ## Validation
 
+Validation prerequisites for every local managed frontdoor run:
+
+- Switch the frontdoor shell to Node `22.x` first. `web/secure-landing` ships
+  `.nvmrc` with `22`, and install/test/build/start all fail fast outside that
+  runtime.
+- If the shell previously used another Node major, rebuild the native modules
+  under Node `22.x` before running frontdoor checks:
+
+```bash
+cd web/secure-landing
+nvm use 22
+npm rebuild better-sqlite3 argon2
+```
+
+- Run local browser smoke against `http://localhost`, not `http://127.0.0.1`,
+  because the browser-smoke harness defaults to `http://localhost:3000` and
+  same-origin CSRF validation requires the exact origin to match, so
+  `127.0.0.1` and `localhost` are different origins.
+- Treat Node `25.x` failures as unsupported-runtime/tooling failures unless the
+  same command also fails under Node `22.x`.
+
 Front door checks:
 
 ```bash
+cd web/secure-landing
+nvm use 22
+cd ../..
 make test-frontdoor-contract
 ```
 
@@ -195,6 +219,9 @@ Notes:
 Browser smoke with isolated local backend + managed front door:
 
 ```bash
+cd web/secure-landing
+nvm use 22
+cd ../..
 make validate-frontdoor-browser
 ```
 
@@ -222,8 +249,9 @@ front-door instead of `--spawn-local-frontdoor`, continue to pass
 `TP_FRONTDOOR_USERNAME` and `TP_FRONTDOOR_PASSWORD` explicitly.
 
 For local managed smoke validation, use `http://localhost:3000` rather than
-`http://127.0.0.1:3000`; the development front door normalizes same-origin CSRF
-checks to `localhost`.
+`http://127.0.0.1:3000`; the browser smoke defaults to that origin and the
+front door's same-origin CSRF validation requires an exact origin match, so
+`127.0.0.1:3000` and `localhost:3000` are different origins.
 
 For release validation, prefer running the browser smoke against
 `TP_NEXT_DIST_DIR=.next-build-verify npm run start` after building with the
