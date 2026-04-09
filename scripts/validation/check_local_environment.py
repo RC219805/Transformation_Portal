@@ -233,9 +233,10 @@ def check_port_available(port: int, description: str) -> CheckResult:
     except Exception as e:
         return CheckResult(
             name=f"Port {port}",
-            passed=True,  # Assume available on error
-            message=f"Could not check port {port}: {e}",
+            passed=True,
+            message=f"Could not check port {port} (assuming available): {e}",
             is_hard_requirement=False,
+            guidance="Manually verify port availability if validation fails",
         )
 
 
@@ -281,11 +282,15 @@ def check_frontdoor_dependencies() -> CheckResult:
 def check_env_vars() -> list[CheckResult]:
     """Check for common environment variables (advisory only)."""
     results = []
+    # Variables that should be masked when displaying their values
+    sensitive_patterns = ("KEY", "PASSWORD", "SECRET", "TOKEN", "CREDENTIAL")
+    
     for var in CHECKED_ENV_VARS:
         value = os.environ.get(var)
         if value:
-            # Mask sensitive values
-            display_value = "****" if "KEY" in var or "PASSWORD" in var else value[:20]
+            # Mask sensitive values based on variable name patterns
+            is_sensitive = any(pat in var.upper() for pat in sensitive_patterns)
+            display_value = "****" if is_sensitive else value[:20]
             results.append(
                 CheckResult(
                     name=f"Env: {var}",
