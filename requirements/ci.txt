@@ -7,7 +7,7 @@
 backports-tarfile==1.2.0
 bandit==1.9.4
 build==1.4.2
-cachetools==7.0.2
+cachetools==7.0.5
 certifi==2026.2.25
 cffi==2.0.0
 charset-normalizer==3.4.4
@@ -29,14 +29,14 @@ mdurl==0.1.2
 more-itertools==10.8.0
 nh3==0.3.3
 packaging==26.0
-platformdirs==4.9.2
+platformdirs==4.9.6
 pluggy==1.6.0
 pycparser==3.0
 pygments==2.20.0
 pypdf==6.9.2
 pyproject-api==1.10.0
 pyproject-hooks==1.2.0
-python-discovery==1.1.0
+python-discovery==1.2.2
 pyyaml==6.0.3
 readme-renderer==44.0
 requests==2.33.0
@@ -45,7 +45,8 @@ rfc3986==2.0.0
 rich==14.3.3
 secretstorage==3.5.0
 stevedore==5.7.0
-tox==4.47.3
+tomli-w==1.2.0
+tox==4.52.0
 twine==6.2.0
 urllib3==2.6.3
 virtualenv==21.1.0
