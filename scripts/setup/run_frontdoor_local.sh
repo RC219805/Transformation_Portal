@@ -56,7 +56,12 @@ if [[ -z "${TP_FRONTDOOR_USERS_FILE:-}" && -z "${TP_FRONTDOOR_USERS_JSON:-}" ]];
   )
   export TP_FRONTDOOR_USERS_FILE="${DEFAULT_USERS_FILE}"
   echo "Seeded local front-door user fixture at ${TP_FRONTDOOR_USERS_FILE}"
-  echo "Local operator credentials: ${DEFAULT_FRONTDOOR_USERNAME} / ${DEFAULT_FRONTDOOR_PASSWORD}"
+  echo "Local operator username: ${DEFAULT_FRONTDOOR_USERNAME}"
+  if [[ "${TP_FRONTDOOR_PRINT_PASSWORD:-0}" == "1" ]]; then
+    echo "Local operator password: ${DEFAULT_FRONTDOOR_PASSWORD}"
+  else
+    echo "Password not printed. Set TP_FRONTDOOR_PRINT_PASSWORD=1 to display it explicitly."
+  fi
 fi
 
 if port_in_use; then

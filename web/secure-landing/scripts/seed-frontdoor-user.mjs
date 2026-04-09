@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 
 import argon2 from "argon2";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { randomUUID } from "node:crypto";
+import { fileURLToPath } from "node:url";
 import path from "node:path";
 
 const DEFAULT_OUTPUT_PATH = "/tmp/tp-frontdoor-users.json";
@@ -96,7 +98,12 @@ async function seedFrontdoorUser({
   role,
 }) {
   const resolvedOutputPath = path.resolve(outputPath);
-  mkdirSync(path.dirname(resolvedOutputPath), { recursive: true });
+  const outputDir = path.dirname(resolvedOutputPath);
+  mkdirSync(outputDir, { recursive: true });
+  const tempOutputPath = path.join(
+    outputDir,
+    `.${path.basename(resolvedOutputPath)}.${process.pid}.${randomUUID()}.tmp`,
+  );
 
   const passwordHash = await argon2.hash(password);
   const payload = [
@@ -108,7 +115,17 @@ async function seedFrontdoorUser({
     },
   ];
 
-  writeFileSync(resolvedOutputPath, `${JSON.stringify(payload, null, 2)}\n`, "utf-8");
+  try {
+    writeFileSync(tempOutputPath, `${JSON.stringify(payload, null, 2)}\n`, {
+      encoding: "utf-8",
+      mode: 0o600,
+      flag: "wx",
+    });
+    renameSync(tempOutputPath, resolvedOutputPath);
+  } catch (error) {
+    rmSync(tempOutputPath, { force: true });
+    throw error;
+  }
   return resolvedOutputPath;
 }
 
@@ -164,7 +181,12 @@ async function main(argv = process.argv.slice(2)) {
   }
 }
 
-await main();
+const invokedPath = process.argv[1] ? path.resolve(process.argv[1]) : "";
+const modulePath = fileURLToPath(import.meta.url);
+
+if (invokedPath === modulePath) {
+  await main();
+}
 
 export {
   DEFAULT_OUTPUT_PATH,

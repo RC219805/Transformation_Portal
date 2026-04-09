@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { createSign, generateKeyPairSync } from "node:crypto";
 import os from "node:os";
 import path from "node:path";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 
 import argon2 from "argon2";
 import { NextRequest, NextResponse } from "next/server.js";
@@ -143,16 +143,48 @@ test("run_frontdoor_local launcher supports isolated port, distdir, and local us
   assert.match(script, /TP_FRONTDOOR_PASSWORD:-correct horse battery staple/);
   assert.match(script, /if \[\[ -z "\$\{TP_FRONTDOOR_USERS_FILE:-\}" && -z "\$\{TP_FRONTDOOR_USERS_JSON:-\}" \]\]; then/);
   assert.match(script, /seed-frontdoor-user\.mjs/);
+  assert.match(script, /TP_FRONTDOOR_PRINT_PASSWORD/);
+  assert.match(script, /Local operator username:/);
+  assert.match(script, /Password not printed\./);
+  assert.doesNotMatch(script, /Local operator credentials:/);
 });
 
-test("seed-frontdoor-user helper encodes the canonical local smoke credential defaults", async () => {
-  const scriptPath = path.resolve(process.cwd(), "scripts", "seed-frontdoor-user.mjs");
-  const script = readFileSync(scriptPath, "utf-8");
+test("seed-frontdoor-user helper encodes the canonical local smoke credential defaults and writes restrictive fixtures", async () => {
+  const tmpDir = mkdtempSync(path.join(os.tmpdir(), "tp-frontdoor-seed-"));
 
-  assert.match(script, /DEFAULT_OUTPUT_PATH = "\/tmp\/tp-frontdoor-users\.json"/);
-  assert.match(script, /DEFAULT_USERNAME = "smoke-admin"/);
-  assert.match(script, /DEFAULT_PASSWORD = "correct horse battery staple"/);
-  assert.match(script, /@local\.invalid/);
+  try {
+    const scriptPath = path.resolve(process.cwd(), "scripts", "seed-frontdoor-user.mjs");
+    const script = readFileSync(scriptPath, "utf-8");
+
+    assert.match(script, /DEFAULT_OUTPUT_PATH = "\/tmp\/tp-frontdoor-users\.json"/);
+    assert.match(script, /DEFAULT_USERNAME = "smoke-admin"/);
+    assert.match(script, /DEFAULT_PASSWORD = "correct horse battery staple"/);
+    assert.match(script, /@local\.invalid/);
+    assert.match(script, /renameSync/);
+    assert.match(script, /mode: 0o600/);
+
+    const module = await importFresh("../scripts/seed-frontdoor-user.mjs");
+    const outputPath = path.join(tmpDir, "frontdoor-users.json");
+    const writtenPath = await module.seedFrontdoorUser({
+      outputPath,
+      username: "seed-admin",
+      password: "correct horse battery staple",
+      accessEmail: "seed-admin@local.invalid",
+      role: "admin",
+    });
+
+    assert.equal(writtenPath, path.resolve(outputPath));
+    assert.equal(statSync(outputPath).mode & 0o777, 0o600);
+
+    const payload = JSON.parse(readFileSync(outputPath, "utf-8"));
+    assert.equal(payload.length, 1);
+    assert.equal(payload[0].username, "seed-admin");
+    assert.equal(payload[0].access_email, "seed-admin@local.invalid");
+    assert.equal(payload[0].role, "admin");
+    assert.match(payload[0].password_hash, /^\$argon2/);
+  } finally {
+    rmSync(tmpDir, { recursive: true, force: true });
+  }
 });
 
 test("app router root shell exists for framework not-found and global-error routes", () => {
