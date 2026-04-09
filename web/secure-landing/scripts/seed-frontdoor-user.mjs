@@ -1,4 +1,4 @@
-import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import argon2 from "argon2";
@@ -57,7 +57,6 @@ async function main() {
   ];
 
   writeFileSync(usersFilePath, `${JSON.stringify(payload, null, 2)}\n`, { encoding: "utf-8", mode: 0o600 });
-  chmodSync(usersFilePath, 0o600);
   console.log(`Wrote front-door credential fixture to ${usersFilePath} for ${username}.`);
 }
 

@@ -82,7 +82,7 @@ test("seed-frontdoor-user normalizes username and email to lowercase", async () 
   }
 });
 
-test("seed-frontdoor-user writes file with restrictive permissions", async () => {
+test("seed-frontdoor-user writes file with restrictive permissions", () => {
   if (os.platform() === "win32") {
     return;
   }
