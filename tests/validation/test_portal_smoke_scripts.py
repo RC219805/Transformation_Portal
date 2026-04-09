@@ -310,6 +310,8 @@ def test_portal_browser_smoke_probes_review_warning_and_provenance_contract():
     assert "Outputs ready for review" in content
     assert "Review provenance should identify the selected artifact path" in content
     assert "Artifact deep link should restore the ribbon artifact context" in content
+    assert "compare-only deep link to preserve compare mode" in content
+    assert "Compare-only deep links should preserve compare mode for the default artifact" in content
     assert "stale artifact and compare params to normalize" in content
 
 

@@ -3391,12 +3391,16 @@ function updateRunCardActions(job) {
 
 function _selectedArtifactForJob(job) {
     if (!job || !Array.isArray(job.artifacts) || job.artifacts.length === 0) return null;
+    const normalizedJobId = _normalizeSelectedJobId(job.id);
     const ranked = rankArtifactsForDisplay(job.artifacts);
-    const selectedPath = _normalizeArtifactRoutePath(state.artifactUi.selectedByJob[String(job.id || '')]);
+    const selectedPath = _normalizeArtifactRoutePath(state.artifactUi.selectedByJob[normalizedJobId]);
     const selected = ranked.find((artifact) => _artifactRouteKey(artifact) === selectedPath);
+    if (selectedPath && !selected) {
+        delete state.artifactUi.compareByJob[normalizedJobId];
+    }
     const hero = selected || ranked[0] || null;
     if (hero) {
-        state.artifactUi.selectedByJob[String(job.id || '')] = _artifactRouteKey(hero);
+        state.artifactUi.selectedByJob[normalizedJobId] = _artifactRouteKey(hero);
     }
     return hero;
 }
@@ -3870,9 +3874,6 @@ function selectJob(jobId) {
     const previousJobId = state.selectedJobId;
     state.selectedJobId = jobId;
     _rememberSelectedJob(jobId);
-    if (!state.artifactUi.selectedByJob[String(jobId || '')]) {
-        delete state.artifactUi.compareByJob[String(jobId || '')];
-    }
     const job = state.jobs.find((item) => item.id === jobId);
     if (job && els.logPane) {
         els.logPane.textContent = job.logs.join('\n') + (job.logs.length ? '\n' : '');

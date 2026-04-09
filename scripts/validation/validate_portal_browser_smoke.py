@@ -1666,6 +1666,39 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             f"Artifact deep link should restore the ribbon artifact context: {restored_review_state}",
         )
 
+        if bool(restored_review_state.get("reviewCompareVisible")):
+            print("portal-browser-smoke: restoring compare mode from a compare-only deep link", flush=True)
+            connection.evaluate(_navigate_to_console_view_expression("build"))
+            _poll(
+                connection,
+                _state_probe_expression(),
+                predicate=lambda value: (
+                    isinstance(value, dict)
+                    and str(value.get("currentView", "")) == "build"
+                    and bool(value.get("buildViewVisible"))
+                ),
+                timeout_seconds=args.timeout_seconds,
+                description="build view to restore before compare-only deep-link replay",
+            )
+            connection.evaluate(_navigate_to_console_view_expression("review", submitted_job_id, None, True))
+            compare_only_review_state = _poll(
+                connection,
+                _state_probe_expression(),
+                predicate=lambda value: (
+                    isinstance(value, dict)
+                    and str(value.get("currentView", "")) == "review"
+                    and str(value.get("selectedJobId", "")).strip() == submitted_job_id
+                    and bool(value.get("reviewCompareEnabled"))
+                    and "compare=1" in str(value.get("locationSearch", ""))
+                ),
+                timeout_seconds=args.timeout_seconds,
+                description="compare-only deep link to preserve compare mode",
+            )
+            _expect(
+                str(compare_only_review_state.get("contextRibbonCompare", "")).strip().lower() == "compare on",
+                f"Compare-only deep links should preserve compare mode for the default artifact: {compare_only_review_state}",
+            )
+
         print("portal-browser-smoke: normalizing stale review deep-link params", flush=True)
         connection.evaluate(
             _navigate_to_console_view_expression("review", submitted_job_id, "missing/stale-artifact.png", True)

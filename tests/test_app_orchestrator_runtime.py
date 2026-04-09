@@ -1066,6 +1066,7 @@ def test_portal_console_routes_reuse_last_selected_job_across_operate_and_review
     navigate_block = _extract_js_function_block(content, "navigateConsoleView")
     apply_route_body = _extract_js_function_body(content, "applyConsoleRouteFromLocation")
     select_body = _extract_js_function_body(content, "selectJob")
+    selected_artifact_body = _extract_js_function_body(content, "_selectedArtifactForJob")
     recover_body = _extract_js_function_body(content, "recoverJobs")
 
     assert "function _rememberSelectedJob(jobId) {" in content
@@ -1083,6 +1084,9 @@ def test_portal_console_routes_reuse_last_selected_job_across_operate_and_review
     assert "_rememberArtifactSelection(routeJobId, routeArtifactPath);" in apply_route_body
     assert "_rememberComparePreference(routeJobId, routeCompareEnabled);" in apply_route_body
     assert "_rememberSelectedJob(jobId);" in select_body
+    assert "delete state.artifactUi.compareByJob[String(jobId || '')];" not in select_body
+    assert "if (selectedPath && !selected) {" in selected_artifact_body
+    assert "delete state.artifactUi.compareByJob[normalizedJobId];" in selected_artifact_body
     assert "state.currentView === 'operate' || state.currentView === 'review'" in select_body
     assert "const retained = state.jobs.find((job) => job.id === state.portalUi.lastSelectedJobId) || null;" in recover_body
 
