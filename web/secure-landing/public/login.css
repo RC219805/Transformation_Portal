@@ -8,17 +8,23 @@
   --ux-target-min-size: 44px;
   --ux-label-size: 0.8125rem;
   --ux-body-size: 1rem;
+  --continuity-panel: rgba(10, 16, 31, 0.74);
+  --continuity-panel-strong: rgba(7, 12, 24, 0.82);
+  --continuity-border: rgba(103, 232, 249, 0.28);
+  --continuity-accent: #2ac7ff;
+  --continuity-accent-strong: #2563eb;
+  --continuity-shadow: 0 32px 90px rgba(2, 6, 23, 0.52);
   --brand-azure: #56ccf2;
   --brand-cyan: #2ac7ff;
   --frontdoor-bg: #020617;
-  --frontdoor-panel: rgba(10, 16, 31, 0.74);
-  --frontdoor-panel-strong: rgba(7, 12, 24, 0.82);
-  --frontdoor-border: var(--ux-panel-border-strong);
+  --frontdoor-panel: var(--continuity-panel);
+  --frontdoor-panel-strong: var(--continuity-panel-strong);
+  --frontdoor-border: var(--continuity-border);
   --frontdoor-ink: #eef6ff;
   --frontdoor-muted: rgba(226, 232, 240, 0.84);
   --frontdoor-muted-soft: rgba(206, 221, 237, 0.82);
   --frontdoor-line: var(--ux-panel-border);
-  --frontdoor-shadow: 0 32px 90px rgba(2, 6, 23, 0.52);
+  --frontdoor-shadow: var(--continuity-shadow);
 }
 
 * {
@@ -109,7 +115,7 @@ body {
   min-height: 100vh;
   display: grid;
   place-items: center;
-  padding: 2rem;
+  padding: 1.5rem;
 }
 
 .brand-lockup {
@@ -182,6 +188,7 @@ body {
   display: grid;
   gap: 1.15rem;
   justify-items: center;
+  width: min(100%, 28rem);
 }
 
 .login-vignette,
@@ -201,13 +208,15 @@ body {
   border: 1px solid var(--frontdoor-border);
   background: var(--frontdoor-panel);
   backdrop-filter: blur(22px);
-  border-radius: 1.65rem;
-  padding: 1.5rem;
+  border-radius: 1.8rem;
+  padding: 1.65rem;
   box-shadow: 0 32px 90px rgba(2, 6, 23, 0.56);
 }
 
 .card--login {
-  background: linear-gradient(180deg, rgba(7, 12, 24, 0.72), rgba(10, 16, 31, 0.82));
+  background:
+    radial-gradient(circle at top right, rgba(42, 199, 255, 0.14), transparent 28%),
+    linear-gradient(180deg, rgba(7, 12, 24, 0.74), rgba(10, 16, 31, 0.86));
 }
 
 .sr-only {
@@ -243,8 +252,13 @@ h1 {
   line-height: 1.7;
 }
 
+.login-status-stack {
+  display: grid;
+  gap: 0.85rem;
+  margin-bottom: 1.15rem;
+}
+
 .banner {
-  margin-bottom: 1.25rem;
   border-radius: 1rem;
   border: 1px solid rgba(248, 113, 113, 0.38);
   background: rgba(127, 29, 29, 0.34);
@@ -255,11 +269,19 @@ h1 {
 }
 
 .card-meta {
-  margin: 0 0 1rem;
+  margin: 0;
   font-size: 0.96rem;
   line-height: 1.6;
   color: var(--frontdoor-muted-soft);
-  text-align: center;
+}
+
+.card-meta--verified {
+  border: 1px solid rgba(45, 212, 191, 0.24);
+  border-radius: 1rem;
+  background: rgba(15, 118, 110, 0.16);
+  color: #d1fae5;
+  padding: 0.8rem 0.95rem;
+  text-align: left;
 }
 
 form {
@@ -297,13 +319,45 @@ button {
   padding: 0.95rem 1.15rem;
   font: inherit;
   font-weight: 700;
-  background: linear-gradient(135deg, #0ea5e9, #2563eb);
+  background: linear-gradient(135deg, var(--continuity-accent), var(--continuity-accent-strong));
   color: white;
   cursor: pointer;
+  box-shadow: 0 16px 40px rgba(14, 165, 233, 0.22);
 }
 
 button:hover {
   filter: brightness(1.04);
+}
+
+.login-helper {
+  margin: 0;
+  color: var(--frontdoor-muted-soft);
+  font-size: 0.92rem;
+  line-height: 1.6;
+}
+
+.login-actions {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.login-secondary-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--ux-target-min-size);
+  padding: 0.95rem 1.15rem;
+  border-radius: 999px;
+  border: 1px solid var(--ux-panel-border);
+  background: rgba(7, 13, 26, 0.42);
+  color: var(--frontdoor-ink);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.login-secondary-link:hover {
+  color: #ffffff;
+  border-color: rgba(148, 220, 255, 0.28);
 }
 
 .login-footer {

@@ -15,10 +15,10 @@
     <div aria-hidden="true" class="shell-noise"></div>
 
     <!-- Header -->
-    <header class="sticky top-0 z-40 border-b border-white/55 dark:border-slate-800 bg-white/86 dark:bg-slate-950/78 backdrop-blur-xl transition-colors duration-300">
-        <div class="mx-auto max-w-7xl px-6 py-4 flex items-center justify-between gap-4">
+    <header class="portal-topbar sticky top-0 z-40 border-b border-white/55 dark:border-slate-800 bg-white/86 dark:bg-slate-950/78 backdrop-blur-xl transition-colors duration-300" data-ui="portal-topbar">
+        <div class="portal-topbar__inner mx-auto max-w-7xl px-6 py-4 flex items-center justify-between gap-4">
             <div class="flex items-center gap-4 min-w-0">
-                <div class="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/70 bg-white text-sm font-black tracking-[0.24em] text-cyan-800 shadow-soft dark:border-slate-700 dark:bg-slate-900 dark:text-cyan-200">
+                <div class="portal-brand-mark flex h-12 w-12 items-center justify-center rounded-2xl border border-white/70 bg-white text-sm font-black tracking-[0.24em] text-cyan-800 shadow-soft dark:border-slate-700 dark:bg-slate-900 dark:text-cyan-200">
                     <svg class="h-6 w-6" viewBox="0 0 256 256" role="img" aria-label="Transformation Portal brand mark" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <defs>
                             <linearGradient id="portal-brand-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -43,7 +43,7 @@
                 </div>
             </div>
 
-            <div class="flex items-center gap-3">
+            <div class="portal-topbar__actions flex items-center gap-3" data-ui="portal-topbar-actions">
                 <button id="shortcutsBtn" type="button" class="rounded-full border border-slate-200 dark:border-slate-700 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 hover:text-slate-900 hover:border-slate-300 dark:text-slate-400 dark:hover:text-white dark:hover:border-slate-600 transition-colors focus:outline-none focus:ring-2 focus:ring-cyan-500">
                     Shortcuts
                 </button>
@@ -55,8 +55,8 @@
     </header>
 
     <main id="main-content" tabindex="-1" class="mx-auto max-w-7xl px-6 py-8 outline-none">
-        <section id="overview-shell" data-ui="overview-grid" class="mb-6 grid grid-cols-1 lg:grid-cols-12 gap-4">
-            <div id="mission-shell" class="overview-primary lg:col-span-7 rounded-[1.75rem] shell-panel-strong p-6" data-ui="overview-summary">
+        <section id="overview-shell" data-ui="overview-grid" class="portal-overview-shell mb-6 grid grid-cols-1 lg:grid-cols-12 gap-4">
+            <div id="mission-shell" class="workspace-shell workspace-shell--overview overview-primary lg:col-span-7 rounded-[1.75rem] shell-panel-strong p-6" data-ui="overview-summary">
                 <div id="missionShellSkeletonState" class="hidden space-y-5" aria-hidden="true" data-ui="overview-skeleton">
                     <div class="surface-skeleton-row">
                         <div class="flex-1 space-y-3">
@@ -102,7 +102,7 @@
                             Start a new run, resume the current draft, or jump straight into the latest live or reviewable work.
                         </p>
                     </div>
-                    <div class="overview-actions" data-ui="overview-actions">
+                    <div class="overview-actions" data-ui="overview-actions-cluster">
                         <button id="heroRunBtn" type="button" class="hero-action hero-action-primary focus:outline-none focus:ring-2 focus:ring-cyan-500" data-ui="overview-new-run">
                             New Run
                         </button>
@@ -144,7 +144,7 @@
                 </div>
             </div>
 
-            <div id="intelligence-shell" class="overview-secondary lg:col-span-5 rounded-[1.75rem] shell-panel p-6 shadow-soft dark:shadow-soft-dark" data-ui="overview-side">
+            <div id="intelligence-shell" class="workspace-shell workspace-shell--overview overview-secondary lg:col-span-5 rounded-[1.75rem] shell-panel p-6 shadow-soft dark:shadow-soft-dark" data-ui="overview-side">
                 <div id="intelligenceShellSkeletonState" class="hidden space-y-4" aria-hidden="true" data-ui="overview-draft-skeleton">
                     <div class="surface-skeleton-row">
                         <div class="flex-1 space-y-3">
@@ -216,7 +216,7 @@
             </div>
         </section>
 
-        <nav aria-label="Workspace sections" class="workspace-rail mb-6 rounded-[1.5rem] px-3 py-3" data-ui="view-switcher">
+        <nav aria-label="Workspace sections" class="portal-workspace-rail workspace-rail mb-6 rounded-[1.5rem] px-3 py-3" data-ui="view-switcher">
             <div class="workspace-rail-copy">
                 <p class="section-kicker">Workspace</p>
                 <p class="workspace-rail-text">
@@ -243,16 +243,16 @@
             </div>
         </nav>
 
-        <section id="console-context-shell" class="mb-6 rounded-[1.5rem] shell-panel px-6 py-5 shadow-soft dark:shadow-soft-dark">
-            <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+        <section id="console-context-shell" class="workspace-shell portal-context-shell mb-6 rounded-[1.5rem] shell-panel px-6 py-5 shadow-soft dark:shadow-soft-dark" data-ui="console-context-shell">
+            <div class="portal-context-head flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
                 <div>
                     <p class="section-kicker">Current View</p>
                     <h2 id="consoleViewTitle" class="mt-2 text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">Overview</h2>
                     <p id="consoleViewSummary" class="mt-2 max-w-3xl text-[14px] leading-7 text-slate-600 dark:text-slate-300">Status, recent jobs, and the clearest next operator action.</p>
                 </div>
-                <p id="consoleViewMeta" class="text-[11px] font-mono text-slate-500 dark:text-slate-400">View routing stays client-side to preserve the live orchestrator contract.</p>
+                <p id="consoleViewMeta" class="portal-context-meta text-[11px] font-mono text-slate-500 dark:text-slate-400">View routing stays client-side to preserve the live orchestrator contract.</p>
             </div>
-            <div id="consoleContextRibbon" class="console-context-ribbon mt-4 hidden" data-ui="console-context-ribbon" aria-live="polite">
+            <div id="consoleContextRibbon" class="console-context-ribbon portal-context-ribbon mt-4 hidden" data-ui="console-context-ribbon" aria-live="polite">
                 <div class="console-context-card">
                     <p class="console-context-label">Job</p>
                     <p id="contextRibbonJob" class="console-context-value">No job selected</p>
