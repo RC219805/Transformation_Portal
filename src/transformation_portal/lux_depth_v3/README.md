@@ -214,6 +214,22 @@ ERROR: V2 enhancement script not found: scripts/enhance_image.py
 
 **Why:** V2 is enabled by default and validates the enhancement script at startup. This is **correct fail-fast design** to prevent wasted processing. For PBR-only workflows, disable V2.
 
+### RAW Inputs Require Optional RAW Support
+
+**Error:**
+```
+RAW inputs detected but canonical RAW ingest is unavailable because rawpy is not installed.
+```
+
+**Fix:** Install the optional RAW dependency before dispatching RAW stills:
+```bash
+pip install -e ".[raw]"
+# or
+pip install rawpy
+```
+
+**Why:** Canonical RAW ingest stays deterministic and fail-closed. RAW batches are rejected before dispatch when `rawpy` is unavailable so the pipeline does not start a run that cannot satisfy the ingest contract.
+
 ### More Help
 
 - **Full Troubleshooting Guide:** [docs/guides/LUX_DEPTH_V3_TROUBLESHOOTING.md](../../../../docs/guides/LUX_DEPTH_V3_TROUBLESHOOTING.md)

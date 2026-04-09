@@ -600,6 +600,15 @@ class Job:
             self.logs_tail = self.logs_tail[-limit:]
 
 
+@dataclass(frozen=True)
+class JobRunMetadata:
+    output_dir: Path
+    run_card_path: Optional[Path] = None
+    run_card_payload: Optional[Dict[str, Any]] = None
+    batch_manifest_path: Optional[Path] = None
+    batch_manifest_payload: Optional[Dict[str, Any]] = None
+
+
 JOBS: Dict[str, Job] = {}
 EVENT_SUBSCRIBERS: Dict[str, Dict[str, "asyncio.Queue[Dict[str, Any]]"]] = {}
 RATE_LIMIT_BUCKETS: Dict[str, Deque[float]] = {}
@@ -3578,9 +3587,186 @@ def _artifact_recency_key(relative_path: str, artifact_path: Path) -> Tuple[str,
     return (batch_hint, modified_time, relative_path)
 
 
+def _find_newest_artifact_path(output_dir: Path, candidates: List[Path]) -> Optional[Path]:
+    normalized_candidates: List[Tuple[str, Path]] = []
+    for candidate in candidates:
+        try:
+            resolved = Path(os.path.realpath(candidate))
+        except OSError:
+            continue
+        if not resolved.exists() or not resolved.is_file():
+            continue
+        try:
+            relative_path = str(resolved.relative_to(output_dir))
+        except ValueError:
+            continue
+        normalized_candidates.append((relative_path, resolved))
+    if not normalized_candidates:
+        return None
+    _, artifact_path = max(
+        normalized_candidates,
+        key=lambda item: _artifact_recency_key(item[0], item[1]),
+    )
+    return artifact_path
+
+
+def _resolve_artifact_path_within_output_dir(
+    output_dir: Path,
+    relative_path: str,
+) -> Optional[Tuple[str, Path]]:
+    try:
+        normalized_relative_path = _normalize_artifact_relative_path(relative_path)
+    except ArtifactPathValidationError:
+        return None
+    resolved_candidate = Path(
+        os.path.realpath(
+            output_dir / Path(*PurePosixPath(normalized_relative_path).parts),
+        )
+    )
+    try:
+        canonical_relative_path = str(resolved_candidate.relative_to(output_dir))
+    except ValueError:
+        return None
+    if not resolved_candidate.exists() or not resolved_candidate.is_file():
+        return None
+    return canonical_relative_path, resolved_candidate
+
+
+def _resolve_job_run_metadata(job: Job) -> Optional[JobRunMetadata]:
+    output_dir = _job_output_dir(job)
+    if output_dir is None:
+        return None
+    output_dir = Path(os.path.realpath(output_dir.expanduser()))
+    if not output_dir.exists() or not output_dir.is_dir():
+        return None
+
+    run_card_path = _find_newest_artifact_path(
+        output_dir,
+        list(output_dir.glob("run_card_*.json")),
+    )
+    run_card_payload = _load_bounded_json_object(run_card_path) if run_card_path is not None else None
+
+    batch_manifest_path: Optional[Path] = None
+    batch_manifest_payload: Optional[Dict[str, Any]] = None
+    batch_manifest_dir = output_dir / "manifests"
+    if run_card_payload is not None:
+        batch_id = str(run_card_payload.get("batch_id") or "").strip()
+        if batch_id:
+            matching_manifest_path = batch_manifest_dir / f"batch_{batch_id}.json"
+            if matching_manifest_path.exists() and matching_manifest_path.is_file():
+                batch_manifest_path = Path(os.path.realpath(matching_manifest_path))
+                batch_manifest_payload = _load_bounded_json_object(batch_manifest_path)
+    elif batch_manifest_dir.exists() and batch_manifest_dir.is_dir():
+        batch_manifest_path = _find_newest_artifact_path(
+            output_dir,
+            list(batch_manifest_dir.glob("batch_*.json")),
+        )
+        if batch_manifest_path is not None:
+            batch_manifest_payload = _load_bounded_json_object(batch_manifest_path)
+
+    return JobRunMetadata(
+        output_dir=output_dir,
+        run_card_path=run_card_path,
+        run_card_payload=run_card_payload,
+        batch_manifest_path=batch_manifest_path,
+        batch_manifest_payload=batch_manifest_payload,
+    )
+
+
+def _build_scoped_job_artifacts(
+    *,
+    job: Job,
+    output_dir: Path,
+    candidate_paths: List[Path],
+) -> Tuple[List[Dict[str, Any]], Dict[str, Path], bool]:
+    artifact_lookup: Dict[str, Path] = {}
+    for candidate_path in candidate_paths:
+        try:
+            resolved_path = Path(os.path.realpath(candidate_path))
+        except OSError:
+            continue
+        if not resolved_path.exists() or not resolved_path.is_file():
+            continue
+        try:
+            relative_path = str(resolved_path.relative_to(output_dir))
+        except ValueError:
+            continue
+        artifact_lookup[relative_path] = resolved_path
+
+    ordered_candidates = sorted(
+        artifact_lookup.items(),
+        key=lambda item: (item[0].casefold(), item[0]),
+    )
+    truncated = len(ordered_candidates) > MAX_INDEXED_ARTIFACTS
+    selected_candidates = ordered_candidates[:MAX_INDEXED_ARTIFACTS]
+
+    items = [
+        _serialize_indexed_artifact(
+            job_id=job.id,
+            relative_path=relative_path,
+            path=path,
+        )
+        for relative_path, path in selected_candidates
+    ]
+    return items, artifact_lookup, truncated
+
+
+def _build_scoped_job_artifacts_from_run_metadata(
+    job: Job,
+    metadata: JobRunMetadata,
+) -> Optional[Tuple[List[Dict[str, Any]], Dict[str, Path], bool]]:
+    if metadata.run_card_path is not None and metadata.run_card_payload is not None:
+        artifact_index = metadata.run_card_payload.get("artifact_index")
+        if isinstance(artifact_index, list):
+            candidate_paths: List[Path] = [metadata.run_card_path]
+            for artifact_entry in artifact_index:
+                if not isinstance(artifact_entry, dict):
+                    continue
+                artifact_relative_path = artifact_entry.get("relative_path") or artifact_entry.get("path")
+                if not isinstance(artifact_relative_path, str) or not artifact_relative_path.strip():
+                    continue
+                resolved = _resolve_artifact_path_within_output_dir(
+                    metadata.output_dir,
+                    artifact_relative_path,
+                )
+                if resolved is None:
+                    continue
+                _, resolved_path = resolved
+                candidate_paths.append(resolved_path)
+            if len(candidate_paths) > 1:
+                return _build_scoped_job_artifacts(
+                    job=job,
+                    output_dir=metadata.output_dir,
+                    candidate_paths=candidate_paths,
+                )
+
+    if metadata.batch_manifest_path is not None:
+        candidate_paths = [metadata.batch_manifest_path]
+        if metadata.run_card_path is not None:
+            candidate_paths.insert(0, metadata.run_card_path)
+        return _build_scoped_job_artifacts(
+            job=job,
+            output_dir=metadata.output_dir,
+            candidate_paths=candidate_paths,
+        )
+
+    return None
+
+
 def _find_job_artifact_path(job: Job, predicate: Callable[[str], bool]) -> Optional[Path]:
-    lookup = job.artifact_lookup or _hydrate_artifact_lookup_from_items(job)
-    candidates = [(relative_path, lookup[relative_path]) for relative_path in lookup if predicate(relative_path)]
+    metadata = _resolve_job_run_metadata(job)
+    candidates: List[Tuple[str, Path]] = []
+    if metadata is not None:
+        if metadata.run_card_path is not None:
+            relative_path = str(metadata.run_card_path.relative_to(metadata.output_dir))
+            candidates.append((relative_path, metadata.run_card_path))
+        if metadata.batch_manifest_path is not None:
+            relative_path = str(metadata.batch_manifest_path.relative_to(metadata.output_dir))
+            candidates.append((relative_path, metadata.batch_manifest_path))
+    if not candidates:
+        lookup = job.artifact_lookup or _hydrate_artifact_lookup_from_items(job)
+        candidates = [(relative_path, lookup[relative_path]) for relative_path in lookup]
+    candidates = [candidate for candidate in candidates if predicate(candidate[0])]
     if not candidates:
         return None
     _, artifact_path = max(candidates, key=lambda item: _artifact_recency_key(item[0], item[1]))
@@ -3592,28 +3778,13 @@ def _refresh_job_run_summary(job: Job) -> Dict[str, Any]:
         return {}
 
     existing_summary = dict(job.run_summary) if isinstance(job.run_summary, dict) and job.run_summary else {}
-    run_card_path = _find_job_artifact_path(
-        job,
-        lambda relative_path: PurePosixPath(relative_path).name.startswith("run_card")
-        and relative_path.lower().endswith(".json"),
-    )
+    metadata = _resolve_job_run_metadata(job)
     summary: Dict[str, Any] = {}
-    if run_card_path is not None:
-        payload = _load_bounded_json_object(run_card_path)
-        if payload is not None:
-            summary = _summarize_run_card_payload(payload)
+    if metadata is not None and metadata.run_card_payload is not None:
+        summary = _summarize_run_card_payload(metadata.run_card_payload)
 
-    if not summary:
-        batch_manifest_path = _find_job_artifact_path(
-            job,
-            lambda relative_path: PurePosixPath(relative_path).parent.as_posix() == "manifests"
-            and PurePosixPath(relative_path).name.startswith("batch_")
-            and relative_path.lower().endswith(".json"),
-        )
-        if batch_manifest_path is not None:
-            payload = _load_bounded_json_object(batch_manifest_path)
-            if payload is not None:
-                summary = _summarize_batch_manifest_payload(payload)
+    if not summary and metadata is not None and metadata.batch_manifest_payload is not None:
+        summary = _summarize_batch_manifest_payload(metadata.batch_manifest_payload)
 
     if not summary and existing_summary:
         summary = existing_summary
@@ -3758,6 +3929,20 @@ def _index_job_artifacts(job: Job) -> List[Dict[str, Any]]:
         return []
 
     output_dir = Path(os.path.realpath(output_dir.expanduser()))
+    metadata = _resolve_job_run_metadata(job)
+    if metadata is not None:
+        scoped_artifacts = _build_scoped_job_artifacts_from_run_metadata(job, metadata)
+        if scoped_artifacts is not None:
+            items, artifact_lookup, truncated = scoped_artifacts
+            job.artifacts = {
+                "output_dir": str(output_dir),
+                "items": items,
+                "indexed_count": len(items),
+                "truncated": truncated,
+            }
+            job.artifact_lookup = artifact_lookup
+            return items
+
     selected: List[tuple[tuple[str, str], str, Path]] = []
     selected_keys: List[tuple[str, str]] = []
     artifact_lookup: Dict[str, Path] = {}
