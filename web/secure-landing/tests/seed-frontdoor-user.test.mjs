@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -107,6 +107,48 @@ test("seed-frontdoor-user writes file with restrictive permissions", () => {
     const stats = statSync(usersFile);
     const mode = stats.mode & 0o777;
     assert.equal(mode, 0o600, `Expected mode 0600 but got ${mode.toString(8)}`);
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test("seed-frontdoor-user tightens permissions when overwriting an existing fixture", () => {
+  if (os.platform() === "win32") {
+    return;
+  }
+
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "tp-frontdoor-seed-user-"));
+  const usersFile = path.join(tempDir, "frontdoor-users.json");
+  writeFileSync(
+    usersFile,
+    JSON.stringify([
+      {
+        username: "admin",
+        password_hash: "stale-hash",
+        access_email: "admin@example.com",
+        role: "admin"
+      }
+    ]),
+    { encoding: "utf-8", mode: 0o644 }
+  );
+  chmodSync(usersFile, 0o644);
+
+  try {
+    const result = spawnSync(process.execPath, [SCRIPT_PATH], {
+      cwd: SCRIPT_CWD,
+      encoding: "utf-8",
+      env: {
+        ...process.env,
+        TP_FRONTDOOR_USERS_FILE: usersFile,
+        TP_FRONTDOOR_USERNAME: "admin",
+        TP_FRONTDOOR_PASSWORD: "password123"
+      }
+    });
+
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+
+    const mode = statSync(usersFile).mode & 0o777;
+    assert.equal(mode, 0o600, `Expected overwritten fixture mode 0600 but got ${mode.toString(8)}`);
   } finally {
     rmSync(tempDir, { recursive: true, force: true });
   }
