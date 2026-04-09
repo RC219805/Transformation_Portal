@@ -194,9 +194,21 @@ still pending:
   leaving those as planned future concepts.
 - Portal disclosure auto-open behavior is already state-driven from preview
   issues, research acknowledgments, and reconstruction/runtime posture.
+- `operate` and `review` already ship a compact context ribbon for selected
+  job, freshness, artifact, and compare state rather than leaving that as a
+  future layout concept.
+- Review deep links already extend the route contract through additive
+  `artifact=<relative-path>` and `compare=1` params on top of the existing
+  `view` and `job` state.
+- Review compare surfaces already include paired-output summary behavior instead
+  of treating compare state as an implicit thumbnail-only affordance.
 - `operate` and `review` already preserve selected-job routing through
   `?view=operate|review&job=...` and reuse the last selected job across view
   changes.
+- Portal runtime contracts and browser smoke already pin the context ribbon,
+  additive review deep links, compare-summary behavior, selected-job reuse, and
+  dispatch-tool disclosure so Phase 2B does not need to introduce them as
+  net-new capabilities.
 
 This leaves the active UX lane as a smaller portal-only Phase 2B close-out, not
 a fresh Phase 1 accessibility pass and not a broader Phase 3 cross-surface
@@ -222,20 +234,22 @@ Status:
 
 Scope:
 - Truth-sync the UX strategy to shipped portal work so the active lane no
-  longer treats already-landed operator hints, disclosure defaults, and
-  selected-job routing as pending.
+  longer treats already-landed operator hints, disclosure defaults, selected-job
+  routing, route-backed review context, compare-summary behavior, or dispatch
+  parity tooling as pending.
 - Tighten Step 3 and Step 4 hierarchy in the portal only by making output
   posture primary and keeping advanced/research controls visibly secondary.
-- Add a compact operate/review context ribbon plus shareable URL-backed review
-  context through additive `artifact=<relative-path>` and `compare=1` query
-  params on top of the existing `view` and `job` route contract.
-- Normalize stale or invalid job/artifact/compare route state back to the
-  nearest valid client-derived selection without changing backend APIs.
+- Keep the shipped compact operate/review context ribbon and shareable URL-backed
+  review context, then only refine copy, layout, and consistency where the
+  remaining close-out work still benefits from polish.
+- Preserve the existing stale-route normalization behavior that reconciles
+  invalid job/artifact/compare state back to the nearest valid client-derived
+  selection without changing backend APIs.
 
 Acceptance focus:
 - Preserve `?view=` routing and existing build-step semantics.
-- Preserve additive `job=` deep links while extending the route contract only
-  through optional `artifact=` and `compare=1` params.
+- Preserve additive `job=` deep links plus the existing optional `artifact=`
+  and `compare=1` review params without expanding the route contract further.
 - Preserve shortcut, drawer, and CLI-parity flows.
 - Keep direct-debug and managed mode behavior aligned with existing contracts.
 
@@ -314,6 +328,8 @@ The revised strategy is complete only if all of the following remain true:
 - Every recommendation is mapped to a real current surface: homepage, login, or
   portal.
 - Near-term work preserves managed-auth, proxy, and route contracts.
+- Phase 2B close-out work is framed as truth-sync plus hierarchy polish rather
+  than as a fresh feature tranche for already-shipped portal capabilities.
 - Future-state items are clearly labeled as gated rather than implied defaults.
 - Desktop, mobile, keyboard-only, reduced-motion, and managed-login flows are
   explicitly covered.
@@ -351,6 +367,11 @@ portal presentation and state handling.
   and a secondary CLI/config disclosure
 - State-driven disclosure defaults for advanced, governance, reconstruction,
   and dispatch-tool groupings
+- A compact operate/review context ribbon for selected job, freshness,
+  artifact, and compare state
+- Shareable additive `artifact=` and `compare=1` deep links for review context
+  with stale-route normalization back to valid client state
+- Compare-summary review behavior for paired outputs
 - Selected-job route persistence across `operate` and `review`
 - Keyboard support for build tabs, job list navigation, overlays, and existing
   shortcuts
@@ -359,14 +380,13 @@ portal presentation and state handling.
   browser surfaces
 - Portal loading polish, backend-driven operator hints, review provenance, and
   review-compare accessibility improvements shipped on April 8, 2026
+- Portal contract and browser coverage for the context ribbon, additive review
+  deep links, compare-summary behavior, selected-job reuse, and dispatch-tool
+  disclosure
 
 ### Proposed
 
 - Finish the remaining portal-only Phase 2B hierarchy cleanup
-- A compact operate/review context ribbon for selected job, freshness,
-  artifact, and compare state
-- Shareable additive `artifact=` and `compare=1` deep links for review context
-  with stale-route normalization back to valid client state
 - Clearer Step 3 grouping between primary output posture and secondary
   advanced/research controls
 - Cross-surface polish only after the portal close-out lands
