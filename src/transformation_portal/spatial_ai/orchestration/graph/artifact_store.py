@@ -116,6 +116,7 @@ SAFE_CACHE_KEY = re.compile(r"^[a-f0-9]{64}$")
 
 # Lock acquisition timeout (seconds) - prevents indefinite hangs
 DEFAULT_LOCK_TIMEOUT = 30.0
+_ARTIFACT_TEMP_SUFFIXES = (".committed_tmp", ".npz", ".json")
 
 
 def _mkstemp_path(directory: Path, *, prefix: str, suffix: str) -> tuple[int, Path]:
@@ -128,6 +129,27 @@ def _mkstemp_path(directory: Path, *, prefix: str, suffix: str) -> tuple[int, Pa
 
     fd, tmp_path_str = tempfile.mkstemp(dir=directory, prefix=prefix, suffix=suffix)
     return fd, Path(tmp_path_str)
+
+
+def _is_artifact_temp_name(name: str) -> bool:
+    """Return True when an artifacts/ entry matches a known temp-file shape.
+
+    Cache payload and provenance files use a SHA256 filename stem. Temp files do
+    not. Match by known temp suffix first, then preserve real cache entries by
+    excluding stems that are valid content-addressed keys.
+    """
+
+    for suffix in _ARTIFACT_TEMP_SUFFIXES:
+        if not name.endswith(suffix):
+            continue
+
+        if suffix == ".committed_tmp":
+            return True
+
+        stem = name[: -len(suffix)]
+        return not SAFE_CACHE_KEY.match(stem)
+
+    return False
 
 
 class CacheLockTimeout(Exception):
@@ -1009,9 +1031,6 @@ class ArtifactStore:
             "stale_temp_files_removed": 0,
         }
 
-        # Temp file suffixes produced by store() and _save_stats_atomic()
-        _TEMP_SUFFIXES = (".npz", ".json", ".committed_tmp")
-
         # Track uncommitted entries by cache key (to process as units)
         uncommitted_keys: Dict[str, List[Path]] = {}
         now = time.time()
@@ -1027,8 +1046,8 @@ class ArtifactStore:
                 name = entry.name
 
                 # --- Stale temp files ---
-                # NamedTemporaryFile produces names like tmpXXXXXX.suffix
-                if name.startswith("tmp") and any(name.endswith(s) for s in _TEMP_SUFFIXES):
+                # Match known temp suffixes and exclude real SHA256-backed entries.
+                if _is_artifact_temp_name(name):
                     try:
                         age = now - entry.stat().st_mtime
                         if age > max_temp_age_seconds:

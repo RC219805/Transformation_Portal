@@ -973,6 +973,26 @@ class TestScavenger:
         assert report["stale_temp_files_removed"] == 1
         assert not stale_tmp.exists()
 
+    def test_scavenger_removes_stale_marker_temp_files_without_tmp_prefix(self, store: ArtifactStore, cache_dir: Path):
+        """Stale commit-marker temp files are scavenged by suffix, not prefix."""
+        cache_key = _make_cache_key("stale_marker_temp")
+        prefix = cache_key[:2]
+        prefix_dir = cache_dir / "artifacts" / prefix
+        prefix_dir.mkdir(parents=True, exist_ok=True)
+
+        stale_marker_tmp = prefix_dir / ".commit_tmp_abcd.committed_tmp"
+        stale_marker_tmp.write_text("")
+
+        import os
+        import time
+
+        old_time = time.time() - 600
+        os.utime(stale_marker_tmp, (old_time, old_time))
+
+        report = store.scavenge(max_temp_age_seconds=300.0)
+        assert report["stale_temp_files_removed"] == 1
+        assert not stale_marker_tmp.exists()
+
     def test_scavenger_preserves_fresh_temp_files(self, store: ArtifactStore, cache_dir: Path):
         """Scavenger does NOT remove temp files younger than threshold."""
         cache_key = _make_cache_key("fresh_temp")
