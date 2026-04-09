@@ -107,7 +107,7 @@ The following slices are already shipped and should remain closed:
 
 ## Roadmap Status
 
-- Once PR `#1375` lands, no queued phases remain for this roadmap horizon.
+- With PR `#1375` implemented, no queued phases remain for this roadmap horizon.
 - The only UX-adjacent close-out lane was rerunning managed frontdoor
   contract/build/browser validation under the enforced Node `22.x` runtime.
 - That close-out lane was completed on April 9, 2026:
