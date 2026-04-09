@@ -27,7 +27,7 @@ PHASE6_SMOKE_TESTS := \
 .PHONY: help test-fast test-novideo test-full test-integration test-structure test-utils test-orchestrator-contract test-orchestrator-http-contract test-portal-contract test-frontdoor-contract seed-frontdoor-user run-frontdoor-local validate-orchestrator-http validate-portal-browser validate-frontdoor-browser validate-frontdoor-deployment-gate audit-pipeline-readiness coverage-fast-scope venv setup clean \
         lint lint-parity ci ci-full pre-commit install-hooks quality-check fix-quality validate-ci organize-docs check-json-serialization check-piptools-cache \
         check-yaml-governance check-stale-docs lock lock-prod lock-ci lock-dev install-core install-ml install-ml-core install-ml-raw install-ml-sam2 install-ml-coreml docs docs-clean \
-        check-test-markers check-ci-sync
+        check-test-markers check-ci-sync check-environment validate-full validate-quick clean-frontdoor clean-all check-worktree
 
 help:
 	@echo "Targets:"
@@ -55,9 +55,13 @@ help:
 	@echo "  validate-portal-browser  Run the live browser smoke audit with an isolated local backend"
 	@echo "  validate-frontdoor-browser  Run the live browser smoke audit with isolated local backend/frontdoor runtimes"
 	@echo "  validate-frontdoor-deployment-gate  Run the manual shared-deployment frontdoor posture gate"
+	@echo "  validate-full      Run the full validation suite (all checks + browser smokes)"
+	@echo "  validate-quick     Run quick validation (skip browser smokes)"
 	@echo "  audit-pipeline-readiness  Run the local four-pipeline readiness audit"
 	@echo "  venv               Create local .venv if missing"
 	@echo "  clean              Remove Python cache files and build artifacts"
+	@echo "  clean-frontdoor    Remove frontdoor build artifacts (node_modules, .next)"
+	@echo "  clean-all          Remove all build artifacts (Python + Node)"
 	@echo ""
 	@echo "Quality & CI:"
 	@echo "  lint               Run advisory lint checks (requires 'make install-core')"
@@ -67,6 +71,8 @@ help:
 	@echo "  pre-commit         Run pre-commit hooks manually with CI-aligned formatter versions"
 	@echo "  install-hooks      Install git pre-commit hook"
 	@echo "  quality-check      Run all quality checks (lint + structure + tests)"
+	@echo "  check-environment  Run pre-flight environment validation"
+	@echo "  check-worktree     Check if git worktree is clean"
 	@echo "  check-json-serialization  Fail on raw json.dump/json.dumps outside approved modules"
 	@echo "  check-yaml-governance  Fail on raw yaml.safe_load outside approved preset/exempt boundaries"
 	@echo "  check-piptools-cache  Fail if requirements/.pip-tools-cache is tracked in git"
@@ -413,3 +419,32 @@ docs-clean:
 	@echo "Cleaning generated documentation..."
 	@rm -rf docs/api/_build docs/api/_templates docs/api/_static
 	@echo "✓ Documentation cleaned"
+
+# --- Environment and Validation ---
+
+check-environment:
+	@echo "Running pre-flight environment validation..."
+	@"$(PY)" scripts/validation/check_local_environment.py
+
+check-worktree:
+	@echo "Checking if git worktree is clean..."
+	@./scripts/validation/check_worktree_clean.sh
+
+validate-full:
+	@echo "Running full validation suite..."
+	@./scripts/validation/run_full_validation_suite.sh
+
+validate-quick:
+	@echo "Running quick validation (skip browser smokes)..."
+	@./scripts/validation/run_full_validation_suite.sh --quick
+
+# --- Cleanup ---
+
+clean-frontdoor:
+	@echo "Cleaning frontdoor build artifacts..."
+	@rm -rf web/secure-landing/.next web/secure-landing/.next-build-verify web/secure-landing/.next-smoke-* 2>/dev/null || true
+	@echo "✓ Frontdoor cleanup complete"
+	@echo "Note: node_modules preserved. Run 'rm -rf web/secure-landing/node_modules' to remove."
+
+clean-all: clean clean-frontdoor
+	@echo "✓ Full cleanup complete"

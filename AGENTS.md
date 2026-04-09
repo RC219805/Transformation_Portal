@@ -27,9 +27,13 @@ Quick reference for common workflows and commands in this repo.
 - `make validate-portal-browser` launch an isolated local backend, then run the live portal browser smoke; it seeds `TP_API_KEY=contract-secret` unless you override it.
 - `make validate-frontdoor-browser` launch isolated local backend and managed frontdoor runtimes, then run the live browser smoke; it auto-seeds the canonical local smoke credentials when it creates the managed frontdoor runtime itself.
 - `make validate-frontdoor-deployment-gate` run the manual shared-deployment frontdoor posture gate against a Cloudflare-fronted public hostname, a protected Vercel deployment URL, and either a public FastAPI probe URL or explicit non-public attestation.
+- `make validate-full` run the full validation suite with all checks including browser smokes (`./scripts/validation/run_full_validation_suite.sh`).
+- `make validate-quick` run quick validation skipping browser smokes (`./scripts/validation/run_full_validation_suite.sh --quick`).
 - `make audit-pipeline-readiness` run the safe local four-pipeline readiness audit using checked-in archive fixtures.
 - `make coverage-fast-scope` run branch coverage for the audited `core/config` and `streaming` paths with `term-missing` output.
 - `make clean` remove Python caches and build/test artifacts.
+- `make clean-frontdoor` remove frontdoor build artifacts (.next, .next-build-verify).
+- `make clean-all` remove all build artifacts (Python + Node).
 - `make lint` run flake8 + pylint (non-blocking).
 - `make lint-parity` run the GitHub lint job locally with the CI-pinned Python 3.12 lint environment.
 - `make ci` run local CI checks (lint + check-json-serialization + check-yaml-governance + check-piptools-cache + check-requirements-lock-contract + check-ci-sync + test-fast + test-orchestrator-contract + test-frontdoor-contract).
@@ -40,6 +44,8 @@ Quick reference for common workflows and commands in this repo.
 - `make quality-check` run lint + workflow validation + the root-file placement check.
 - `make fix-quality` auto-fix quality issues (`scripts/auto_fix_quality.py --fix-all`).
 - `make check-quality` dry-run quality auto-fix checks (`scripts/auto_fix_quality.py --dry-run`).
+- `make check-environment` run pre-flight environment validation (`scripts/validation/check_local_environment.py`).
+- `make check-worktree` check if git worktree is clean after builds (`scripts/validation/check_worktree_clean.sh`).
 - `make validate-ci` validate GitHub Actions configs plus dependency-update and Dependabot contracts.
 - `make check-json-serialization` fail when raw `json.dump`/`json.dumps` usage is detected outside approved modules.
 - `make check-yaml-governance` fail when raw `yaml.safe_load` usage appears outside the shared preset loader or explicitly exempt non-preset loaders.
@@ -64,6 +70,17 @@ Quick reference for common workflows and commands in this repo.
 - `python3 scripts/validation/check_requirements_lock_contract.py` validate layered lock contract (headers + platform-core purity/compatibility guards + lane-specific lock structure).
 - `make docs` build API docs with Sphinx.
 - `make docs-clean` remove generated docs output.
+
+## Environment Validation Scripts
+- `./scripts/validation/check_local_environment.py` unified pre-flight validation for Python, Node, Chrome, and port availability.
+- `./scripts/validation/check_local_environment.py --strict` treat soft failures as hard failures.
+- `./scripts/validation/check_local_environment.py --check python` check only Python version.
+- `./scripts/validation/check_local_environment.py --check node` check only Node.js version (22.x required).
+- `./scripts/setup/ensure_node_version.sh` Node version enforcement wrapper with version manager detection.
+- `./scripts/validation/run_full_validation_suite.sh` all-in-one validation orchestrator.
+- `./scripts/validation/run_full_validation_suite.sh --quick` skip browser smokes for faster iteration.
+- `./scripts/validation/run_full_validation_suite.sh --skip-frontdoor` Python-only validation.
+- `./scripts/validation/check_worktree_clean.sh` verify git worktree is clean after builds.
 
 ## ML Layer Bootstrap Script (ADR-032 Platform Matrix)
 ### Core profiles (mutually exclusive)
