@@ -67,6 +67,12 @@ Start the FastAPI origin first:
 python -m uvicorn app:app --host 127.0.0.1 --port 8000 --reload
 ```
 
+Seed the canonical reusable local login fixture if you want a stable localhost sign-in:
+
+```bash
+make seed-frontdoor-user
+```
+
 Start the front door in a second shell:
 
 ```bash
@@ -80,6 +86,7 @@ The canonical launcher:
 - exports the known-good local managed env (`NODE_ENV=development`, `TP_ALLOW_LOCAL_ACCESS_BYPASS=1`)
 - pins the supported SQLite session posture with `TP_FRONTDOOR_SESSION_SCALING_MODE=single_instance`
 - reuses `TP_API_KEY` as `TP_BACKEND_API_KEY` when needed
+- auto-seeds `/tmp/tp-frontdoor-users.json` with `smoke-admin` / `correct horse battery staple` when no explicit `TP_FRONTDOOR_USERS_FILE` or `TP_FRONTDOOR_USERS_JSON` is configured
 - verifies FastAPI readiness first
 - refuses to start if `localhost:3000` is already occupied instead of letting Next.js drift to `:3001`
 
@@ -188,11 +195,13 @@ Notes:
 Browser smoke with isolated local backend + managed front door:
 
 ```bash
-TP_FRONTDOOR_BASE_URL="http://localhost:3000" \
-TP_FRONTDOOR_USERNAME="<username>" \
-TP_FRONTDOOR_PASSWORD="<password>" \
 make validate-frontdoor-browser
 ```
+
+That target launches isolated local backend and managed front-door runtimes and
+auto-seeds the canonical smoke credentials for the managed front-door runtime it
+creates. No manual username/password exports are required for the standard local
+path.
 
 Equivalent direct commands remain available if you want to run the underlying
 checks manually:
@@ -203,11 +212,14 @@ npm test
 TP_NEXT_DIST_DIR=.next-build-verify npm run build
 TP_NEXT_DIST_DIR=.next-build-verify npm run start
 
-TP_FRONTDOOR_BASE_URL="http://localhost:3000" \
-TP_FRONTDOOR_USERNAME="<username>" \
-TP_FRONTDOOR_PASSWORD="<password>" \
-python scripts/validation/validate_frontdoor_browser_smoke.py
+python scripts/validation/validate_frontdoor_browser_smoke.py \
+  --spawn-local-backend \
+  --spawn-local-frontdoor
 ```
+
+If you point the browser smoke at an already running or non-local managed
+front-door instead of `--spawn-local-frontdoor`, continue to pass
+`TP_FRONTDOOR_USERNAME` and `TP_FRONTDOOR_PASSWORD` explicitly.
 
 For local managed smoke validation, use `http://localhost:3000` rather than
 `http://127.0.0.1:3000`; the development front door normalizes same-origin CSRF

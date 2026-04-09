@@ -45,7 +45,7 @@ help:
 	@echo "  test-orchestrator-http-contract  Run HTTP-only orchestrator contract tests"
 	@echo "  test-portal-contract  Run portal runtime/browser contract tests"
 	@echo "  test-frontdoor-contract  Run managed frontdoor Node contract/build checks"
-	@echo "  seed-frontdoor-user  Write the canonical local managed frontdoor credential fixture"
+	@echo "  seed-frontdoor-user  Seed the canonical local managed-frontdoor credential fixture under /tmp"
 	@echo "  run-frontdoor-local  Start the canonical local managed frontdoor on localhost:3000"
 	@echo "  test-integration   Run integration tests (requires HF_TOKEN)"
 	@echo "  test-structure     Run codebase structure validation tests"
@@ -211,8 +211,14 @@ test-frontdoor-contract:
 	@cd web/secure-landing && npm run build
 
 seed-frontdoor-user:
-	@echo "Writing canonical local managed frontdoor credential fixture..."
-	@cd web/secure-landing && npm run seed-frontdoor-user
+	@echo "Seeding canonical local managed frontdoor credential fixture..."
+	@cd web/secure-landing && node ./scripts/guard-runtime.mjs
+	@cd web/secure-landing && node ./scripts/seed-frontdoor-user.mjs \
+		--output "$${TP_FRONTDOOR_USERS_FILE:-/tmp/tp-frontdoor-users.json}" \
+		--username "$${TP_FRONTDOOR_USERNAME:-smoke-admin}" \
+		--password "$${TP_FRONTDOOR_PASSWORD:-correct horse battery staple}" \
+		--access-email "$${TP_FRONTDOOR_ACCESS_EMAIL:-$${TP_FRONTDOOR_USERNAME:-smoke-admin}@local.invalid}" \
+		--role "$${TP_FRONTDOOR_ROLE:-admin}"
 
 run-frontdoor-local:
 	@echo "Starting the canonical local managed frontdoor on localhost:3000..."

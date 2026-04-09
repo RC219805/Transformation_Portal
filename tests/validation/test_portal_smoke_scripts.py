@@ -314,6 +314,20 @@ def test_frontdoor_browser_parse_args_supports_isolated_runtime_flags():
     assert args.backend_api_key == "backend-secret"
 
 
+def test_frontdoor_browser_spawned_local_frontdoor_defaults_credentials(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.delenv("TP_FRONTDOOR_USERNAME", raising=False)
+    monkeypatch.delenv("TP_FRONTDOOR_PASSWORD", raising=False)
+    module = _load_module(FRONTDOOR_BROWSER_SCRIPT_PATH, "tests_validate_frontdoor_browser_smoke_defaults")
+
+    args = module._parse_args(["--spawn-local-frontdoor"])
+
+    assert module._resolve_username(args) == module.DEFAULT_FRONTDOOR_USERNAME
+    assert module._resolve_password(args) == module.DEFAULT_FRONTDOOR_PASSWORD
+    assert module._resolve_access_email(module.DEFAULT_FRONTDOOR_USERNAME) == "smoke-admin@local.invalid"
+
+
 def test_frontdoor_browser_tail_text_reads_only_a_bounded_suffix(tmp_path: Path):
     module = _load_module(FRONTDOOR_BROWSER_SCRIPT_PATH, "tests_validate_frontdoor_browser_smoke_tail")
     log_path = tmp_path / "frontdoor.log"
@@ -330,9 +344,14 @@ def test_frontdoor_browser_main_terminates_spawned_runtimes_on_setup_failure(mon
     backend_runtime = SimpleNamespace(base_url="http://127.0.0.1:8124")
     frontdoor_runtime = SimpleNamespace(base_url="http://localhost:3010")
     terminated: list[object] = []
+    frontdoor_launches: list[dict[str, object]] = []
 
     monkeypatch.setattr(module, "_spawn_local_backend", lambda *_args, **_kwargs: backend_runtime)
-    monkeypatch.setattr(module, "_spawn_local_frontdoor", lambda **_kwargs: frontdoor_runtime)
+    monkeypatch.setattr(
+        module,
+        "_spawn_local_frontdoor",
+        lambda **kwargs: frontdoor_launches.append(kwargs) or frontdoor_runtime,
+    )
     monkeypatch.setattr(module, "_terminate_runtime", lambda handle: terminated.append(handle))
     monkeypatch.setattr(module, "_resolve_chrome_binary", lambda _raw: str(tmp_path / "missing-chrome"))
 
@@ -345,14 +364,31 @@ def test_frontdoor_browser_main_terminates_spawned_runtimes_on_setup_failure(mon
                 "contract-secret",
                 "--debugging-port",
                 "9222",
-                "--username",
-                "admin",
-                "--password",
-                "secret",
             ]
         )
 
+    assert frontdoor_launches == [
+        {
+            "username": module.DEFAULT_FRONTDOOR_USERNAME,
+            "password": module.DEFAULT_FRONTDOOR_PASSWORD,
+            "access_email": "smoke-admin@local.invalid",
+            "backend_base_url": backend_runtime.base_url,
+            "backend_api_key": "contract-secret",
+            "timeout_seconds": 45.0,
+        }
+    ]
     assert terminated == [frontdoor_runtime, backend_runtime]
+
+
+def test_frontdoor_browser_requires_explicit_credentials_for_non_spawned_frontdoor(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.delenv("TP_FRONTDOOR_USERNAME", raising=False)
+    monkeypatch.delenv("TP_FRONTDOOR_PASSWORD", raising=False)
+    module = _load_module(FRONTDOOR_BROWSER_SCRIPT_PATH, "tests_validate_frontdoor_browser_smoke_missing_creds")
+
+    with pytest.raises(module.SmokeFailure, match="Front-door username and password are required"):
+        module.main([])
 
 
 def test_frontdoor_browser_waits_for_managed_portal_bootstrap_before_passing():
