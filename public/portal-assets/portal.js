@@ -211,6 +211,15 @@ const els = {
     consoleViewTitle: document.getElementById('consoleViewTitle'),
     consoleViewSummary: document.getElementById('consoleViewSummary'),
     consoleViewMeta: document.getElementById('consoleViewMeta'),
+    consoleContextRibbon: document.getElementById('consoleContextRibbon'),
+    contextRibbonJob: document.getElementById('contextRibbonJob'),
+    contextRibbonJobMeta: document.getElementById('contextRibbonJobMeta'),
+    contextRibbonState: document.getElementById('contextRibbonState'),
+    contextRibbonFreshness: document.getElementById('contextRibbonFreshness'),
+    contextRibbonArtifact: document.getElementById('contextRibbonArtifact'),
+    contextRibbonArtifactMeta: document.getElementById('contextRibbonArtifactMeta'),
+    contextRibbonCompare: document.getElementById('contextRibbonCompare'),
+    contextRibbonCompareMeta: document.getElementById('contextRibbonCompareMeta'),
     heroRunBtn: document.getElementById('heroRunBtn'),
     resumeDraftBtn: document.getElementById('resumeDraftBtn'),
     heroExportBtn: document.getElementById('heroExportBtn'),
@@ -483,6 +492,10 @@ const els = {
     shortcutsModal: document.getElementById('shortcutsModal'),
     shortcutsPanel: document.getElementById('shortcutsPanel'),
     closeShortcutsBtn: document.getElementById('closeShortcutsBtn'),
+    advancedFlagsSummary: document.getElementById('advancedFlagsSummary'),
+    governanceDetailsSummary: document.getElementById('governanceDetailsSummary'),
+    reconstructionDetailsSummary: document.getElementById('reconstructionDetailsSummary'),
+    dispatchToolsSummary: document.getElementById('dispatchToolsSummary'),
     effectiveConfigDrawer: document.getElementById('effectiveConfigDrawer'),
     closeEffectiveConfigBtn: document.getElementById('closeEffectiveConfigBtn'),
     effectiveConfigMeta: document.getElementById('effectiveConfigMeta'),
@@ -845,6 +858,14 @@ function _normalizeSelectedJobId(jobId) {
     return String(jobId || '').trim();
 }
 
+function _normalizeArtifactRoutePath(value) {
+    return String(value || '').trim();
+}
+
+function _normalizeCompareQueryValue(value) {
+    return String(value || '').trim() === '1';
+}
+
 function _rememberSelectedJob(jobId) {
     const normalized = _normalizeSelectedJobId(jobId);
     if (normalized) {
@@ -853,8 +874,53 @@ function _rememberSelectedJob(jobId) {
     return normalized;
 }
 
+function _rememberArtifactSelection(jobId, artifactPath) {
+    const normalizedJobId = _normalizeSelectedJobId(jobId);
+    if (!normalizedJobId) return '';
+    const normalizedArtifactPath = _normalizeArtifactRoutePath(artifactPath);
+    if (normalizedArtifactPath) {
+        state.artifactUi.selectedByJob[normalizedJobId] = normalizedArtifactPath;
+    } else {
+        delete state.artifactUi.selectedByJob[normalizedJobId];
+    }
+    return normalizedArtifactPath;
+}
+
+function _rememberComparePreference(jobId, enabled) {
+    const normalizedJobId = _normalizeSelectedJobId(jobId);
+    if (!normalizedJobId) return false;
+    const normalizedEnabled = Boolean(enabled);
+    state.artifactUi.compareByJob[normalizedJobId] = normalizedEnabled;
+    return normalizedEnabled;
+}
+
 function _preferredSelectedJobId() {
     return _normalizeSelectedJobId(state.selectedJobId || state.portalUi.lastSelectedJobId);
+}
+
+function _activeRouteContext(jobId = '') {
+    const normalizedJobId = _normalizeSelectedJobId(jobId);
+    if (!normalizedJobId) {
+        return { artifactPath: '', compareEnabled: false };
+    }
+    const selected = state.jobs.find((job) => job.id === normalizedJobId) || null;
+    const fallbackArtifactPath = _normalizeArtifactRoutePath(state.artifactUi.selectedByJob[normalizedJobId]);
+    if (!selected) {
+        return {
+            artifactPath: fallbackArtifactPath,
+            compareEnabled: Boolean(state.artifactUi.compareByJob[normalizedJobId])
+        };
+    }
+    const selectedArtifact = _selectedArtifactForJob(selected);
+    const artifactPath = _normalizeArtifactRoutePath(_artifactRouteKey(selectedArtifact));
+    const compareCandidate = findCompareArtifact(
+        selectedArtifact,
+        rankArtifactsForDisplay(Array.isArray(selected.artifacts) ? selected.artifacts : [])
+    );
+    return {
+        artifactPath,
+        compareEnabled: Boolean(compareCandidate) && Boolean(state.artifactUi.compareByJob[normalizedJobId])
+    };
 }
 
 function setActiveWorkspaceLink(viewName) {
@@ -870,15 +936,30 @@ function setActiveWorkspaceLink(viewName) {
     });
 }
 
-function _routeUrlForView(viewName, jobId = '') {
+function _routeUrlForView(viewName, jobId = '', artifactPath = '', compareEnabled = null) {
     const url = new URL(window.location.href);
     const resolvedView = resolveConsoleView(viewName);
     const resolvedJobId = _normalizeSelectedJobId(jobId);
     url.searchParams.set('view', resolvedView);
     if ((resolvedView === 'operate' || resolvedView === 'review') && resolvedJobId) {
+        const activeContext = _activeRouteContext(resolvedJobId);
+        const resolvedArtifactPath = _normalizeArtifactRoutePath(artifactPath) || activeContext.artifactPath;
+        const resolvedCompareEnabled = compareEnabled === null ? activeContext.compareEnabled : Boolean(compareEnabled);
         url.searchParams.set('job', resolvedJobId);
+        if (resolvedArtifactPath) {
+            url.searchParams.set('artifact', resolvedArtifactPath);
+        } else {
+            url.searchParams.delete('artifact');
+        }
+        if (resolvedCompareEnabled) {
+            url.searchParams.set('compare', '1');
+        } else {
+            url.searchParams.delete('compare');
+        }
     } else {
         url.searchParams.delete('job');
+        url.searchParams.delete('artifact');
+        url.searchParams.delete('compare');
     }
     return url;
 }
@@ -911,6 +992,59 @@ function updateConsoleViewContext() {
         : `Transformation Portal — ${viewMeta.title}`;
 }
 
+function renderConsoleContextRibbon() {
+    if (!els.consoleContextRibbon) return;
+    const ribbonVisible = state.currentView === 'operate' || state.currentView === 'review';
+    els.consoleContextRibbon.classList.toggle('hidden', !ribbonVisible);
+    if (!ribbonVisible) return;
+
+    const selected = state.jobs.find((job) => job.id === state.selectedJobId) || null;
+    const artifacts = Array.isArray(selected?.artifacts) ? rankArtifactsForDisplay(selected.artifacts) : [];
+    const selectedArtifact = selected ? _selectedArtifactForJob(selected) : null;
+    const compareCandidate = selected ? findCompareArtifact(selectedArtifact, artifacts) : null;
+    const compareEnabled = Boolean(selected && compareCandidate && state.artifactUi.compareByJob[String(selected.id || '')]);
+    const lastActivityAt = Number(selected?.lastEventAt || selected?.updatedAt || selected?.createdAt || 0);
+    const freshnessLabel = selected ? `Updated ${formatRelativeTime(lastActivityAt)}` : 'No live telemetry';
+    const artifactCount = artifacts.length;
+
+    if (els.contextRibbonJob) {
+        els.contextRibbonJob.textContent = selected ? String(selected.id || 'unknown') : 'No job selected';
+    }
+    if (els.contextRibbonJobMeta) {
+        els.contextRibbonJobMeta.textContent = selected
+            ? `${String(selected.pipeline || 'unknown')} • ${artifactCount} artifact${artifactCount === 1 ? '' : 's'} indexed`
+            : 'Choose a run in operate or review to pin context here.';
+    }
+    if (els.contextRibbonState) {
+        els.contextRibbonState.textContent = selected ? titleCaseToken(selected.state, 'Unknown') : 'Idle';
+    }
+    if (els.contextRibbonFreshness) {
+        els.contextRibbonFreshness.textContent = freshnessLabel;
+    }
+    if (els.contextRibbonArtifact) {
+        els.contextRibbonArtifact.textContent = selectedArtifact ? artifactLabel(selectedArtifact) : 'Awaiting selection';
+    }
+    if (els.contextRibbonArtifactMeta) {
+        els.contextRibbonArtifactMeta.textContent = selectedArtifact
+            ? `${artifactDisplayLabel(selectedArtifact)}${compareCandidate ? ' • compare pair available' : ''}`
+            : 'Review context will show the active artifact path here.';
+    }
+    if (els.contextRibbonCompare) {
+        els.contextRibbonCompare.textContent = compareEnabled
+            ? 'Compare on'
+            : compareCandidate
+                ? 'Single view'
+                : 'No compare pair';
+    }
+    if (els.contextRibbonCompareMeta) {
+        els.contextRibbonCompareMeta.textContent = compareEnabled
+            ? 'URL-backed review context includes compare=1 for this selection.'
+            : compareCandidate
+                ? 'Toggle compare to inspect the paired artifact side by side.'
+                : 'Deep-linkable review context stays aligned with the URL.';
+    }
+}
+
 function applyConsoleViewLayout() {
     state.currentView = resolveConsoleView(state.currentView);
     if (document.body) {
@@ -941,14 +1075,24 @@ function applyConsoleViewLayout() {
     }
     updateConsoleViewContext();
     setActiveWorkspaceLink(state.currentView);
+    renderConsoleContextRibbon();
 }
 
-function navigateConsoleView(viewName, { replace = false, jobId = '' } = {}) {
+function navigateConsoleView(viewName, options = {}) {
+    const replace = Boolean(options.replace);
     state.currentView = resolveConsoleView(viewName);
-    const explicitJobId = _normalizeSelectedJobId(jobId);
+    const explicitJobId = _normalizeSelectedJobId(options.jobId);
+    const hasArtifactOption = Object.prototype.hasOwnProperty.call(options, 'artifactPath');
+    const hasCompareOption = Object.prototype.hasOwnProperty.call(options, 'compareEnabled');
     if (explicitJobId) {
         state.selectedJobId = explicitJobId;
         _rememberSelectedJob(explicitJobId);
+        if (hasArtifactOption) {
+            _rememberArtifactSelection(explicitJobId, options.artifactPath);
+        }
+        if (hasCompareOption) {
+            _rememberComparePreference(explicitJobId, options.compareEnabled);
+        }
     } else if (state.currentView === 'operate' || state.currentView === 'review') {
         const preferredJobId = _preferredSelectedJobId();
         if (preferredJobId) {
@@ -967,9 +1111,23 @@ function applyConsoleRouteFromLocation(replace = false) {
     const url = new URL(window.location.href);
     state.currentView = resolveConsoleView(url.searchParams.get('view'));
     const routeJobId = _normalizeSelectedJobId(url.searchParams.get('job'));
+    const routeArtifactPath = _normalizeArtifactRoutePath(url.searchParams.get('artifact'));
+    const routeCompareEnabled = _normalizeCompareQueryValue(url.searchParams.get('compare'));
+    const routeHasArtifact = url.searchParams.has('artifact');
+    const routeHasCompare = url.searchParams.has('compare');
     if (routeJobId) {
         state.selectedJobId = routeJobId;
         _rememberSelectedJob(routeJobId);
+        if (routeHasArtifact) {
+            _rememberArtifactSelection(routeJobId, routeArtifactPath);
+        } else {
+            _rememberArtifactSelection(routeJobId, '');
+        }
+        if (routeHasCompare) {
+            _rememberComparePreference(routeJobId, routeCompareEnabled);
+        } else {
+            _rememberComparePreference(routeJobId, false);
+        }
     } else if (state.currentView === 'operate' || state.currentView === 'review') {
         const preferredJobId = _preferredSelectedJobId();
         if (preferredJobId) {
@@ -1288,6 +1446,10 @@ function artifactIsPreviewable(artifact) {
 
 function artifactLabel(artifact) {
     return String(artifact?.relative_path || artifact?.path || 'artifact').trim();
+}
+
+function _artifactRouteKey(artifact) {
+    return _normalizeArtifactRoutePath(artifactLabel(artifact));
 }
 
 function _normalizeArtifactDisplayHint(rawHint) {
@@ -1822,6 +1984,11 @@ function syncBuildSurfaceApplicability(payload = null) {
     }
 }
 
+function _setDisclosureSummaryBadge(element, text) {
+    if (!element) return;
+    element.textContent = String(text || '').trim() || 'Optional';
+}
+
 function syncDisclosurePanels(payload = null) {
     const args = payload?.args || generatePayload().args || {};
     const preset = currentPresetDescriptor();
@@ -1912,6 +2079,40 @@ function syncDisclosurePanels(payload = null) {
     syncPanel('governance', els.governanceDetails);
     syncPanel('reconstruction', els.reconstructionDetails);
     syncPanel('dispatchTools', els.dispatchToolsDetails);
+
+    const currentPreview = _currentPreviewForPayload(payload || generatePayload());
+    _setDisclosureSummaryBadge(
+        els.advancedFlagsSummary,
+        hasPreviewIssueForGroup('advanced') ? 'Needs review' : advancedActive ? 'Active' : 'Optional'
+    );
+    _setDisclosureSummaryBadge(
+        els.governanceDetailsSummary,
+        hasPreviewIssueForGroup('governance') || researchPreset || depthBackend === 'depth_pro'
+            ? 'Required'
+            : governanceActive
+                ? 'Active'
+                : 'Conditional'
+    );
+    _setDisclosureSummaryBadge(
+        els.reconstructionDetailsSummary,
+        hasPreviewIssueForGroup('reconstruction')
+            ? 'Needs review'
+            : reconstructionEnabled
+                ? 'Enabled'
+                : reconstructionActive
+                    ? 'Configured'
+                    : 'Runtime baseline'
+    );
+    _setDisclosureSummaryBadge(
+        els.dispatchToolsSummary,
+        els.dispatchToolsDetails?.open
+            ? 'Open'
+            : currentPreview?.status === 'loading'
+                ? 'Preview loading'
+                : currentPreview?.status === 'error'
+                    ? 'Preview error'
+                    : 'Collapsed'
+    );
 }
 
 function renderGovernanceBanner(payload) {
@@ -2268,6 +2469,7 @@ function renderSelectedJobInspector() {
             els.selectedJobMetaLine.textContent = 'Recovering recent runs, transport state, and previewable outputs.';
         }
         if (els.openRunDetailsBtn) els.openRunDetailsBtn.disabled = true;
+        renderConsoleContextRibbon();
         return;
     }
 
@@ -2294,6 +2496,7 @@ function renderSelectedJobInspector() {
         }
         renderSelectedJobTimeline(null);
         setInspectorTab(state.inspectorTab);
+        renderConsoleContextRibbon();
         return;
     }
 
@@ -2372,6 +2575,7 @@ function renderSelectedJobInspector() {
 
     renderSelectedJobTimeline(selected);
     setInspectorTab(state.inspectorTab);
+    renderConsoleContextRibbon();
 }
 
 function createToast(message, type = 'info') {
@@ -3188,11 +3392,11 @@ function updateRunCardActions(job) {
 function _selectedArtifactForJob(job) {
     if (!job || !Array.isArray(job.artifacts) || job.artifacts.length === 0) return null;
     const ranked = rankArtifactsForDisplay(job.artifacts);
-    const selectedPath = state.artifactUi.selectedByJob[String(job.id || '')];
-    const selected = ranked.find((artifact) => artifact.path === selectedPath);
+    const selectedPath = _normalizeArtifactRoutePath(state.artifactUi.selectedByJob[String(job.id || '')]);
+    const selected = ranked.find((artifact) => _artifactRouteKey(artifact) === selectedPath);
     const hero = selected || ranked[0] || null;
     if (hero) {
-        state.artifactUi.selectedByJob[String(job.id || '')] = hero.path;
+        state.artifactUi.selectedByJob[String(job.id || '')] = _artifactRouteKey(hero);
     }
     return hero;
 }
@@ -3437,6 +3641,7 @@ function renderArtifactPanel() {
         _renderArtifactProvenance(null, null);
         _renderReviewCompareSummary(null, null, false);
         if (els.artifactMeta) els.artifactMeta.textContent = 'Hydrating artifacts';
+        renderConsoleContextRibbon();
         return;
     }
 
@@ -3479,6 +3684,8 @@ function renderArtifactPanel() {
         _renderReviewCompareSummary(null, null, false);
         updateRunCardActions(null);
         if (els.emptyArtifactState) els.emptyArtifactState.style.display = 'block';
+        renderConsoleContextRibbon();
+        _syncConsoleRoute(true);
         return;
     }
 
@@ -3517,6 +3724,8 @@ function renderArtifactPanel() {
         _renderReviewCompareSummary(null, null, false);
         updateRunCardActions(selected);
         if (els.emptyArtifactState) els.emptyArtifactState.style.display = 'block';
+        renderConsoleContextRibbon();
+        _syncConsoleRoute(true);
         return;
     }
 
@@ -3617,7 +3826,7 @@ function renderArtifactPanel() {
         const button = document.createElement('button');
         const active = selectedArtifact && artifact.path === selectedArtifact.path;
         button.type = 'button';
-        button.dataset.artifactPath = String(artifact.path || '');
+        button.dataset.artifactPath = _artifactRouteKey(artifact);
         button.setAttribute('role', 'option');
         button.setAttribute('aria-selected', active ? 'true' : 'false');
         button.tabIndex = active ? 0 : -1;
@@ -3653,6 +3862,8 @@ function renderArtifactPanel() {
     els.artifactThumbnailRail.innerHTML = '';
     els.artifactThumbnailRail.appendChild(fragment);
     updateRunCardActions(selected);
+    renderConsoleContextRibbon();
+    _syncConsoleRoute(true);
 }
 
 function selectJob(jobId) {
@@ -4837,6 +5048,7 @@ async function fetchConfigMetadata(pipelineName = state.pipeline, silent = false
         };
         applyLuxMetadataToControls();
         renderReviewSurfaces();
+        scheduleConfigPreview(true);
     } catch {
         if (!silent) createToast('Failed to refresh config metadata from backend.', 'error');
     }
@@ -4845,13 +5057,18 @@ async function fetchConfigMetadata(pipelineName = state.pipeline, silent = false
 async function fetchConfigPreview(payload) {
     const currentPayload = payload && typeof payload === 'object' ? payload : generatePayload();
     const requestKey = _configPreviewRequestKey(currentPayload);
+    const refreshPreviewDrivenSurfaces = (nextPayload = currentPayload) => {
+        renderCLI();
+        renderPreRunDiagnostics(nextPayload);
+        _syncBootstrapGuardedControls();
+    };
 
     if (!_configPreviewEnabledForPipeline(currentPayload.pipeline)) {
         _setPreviewState({
             ..._emptyPreviewState(state.backendOk ? 'local_fallback' : 'offline', currentPayload.pipeline),
             requestKey
         });
-        renderCLI();
+        refreshPreviewDrivenSurfaces(currentPayload);
         return;
     }
 
@@ -4860,7 +5077,7 @@ async function fetchConfigPreview(payload) {
         requestKey,
         submitted_args: currentPayload.args && typeof currentPayload.args === 'object' ? { ...currentPayload.args } : {}
     });
-    renderCLI();
+    refreshPreviewDrivenSurfaces(currentPayload);
 
     try {
         const headers = _buildAuthHeaders({ 'Content-Type': 'application/json', 'Accept': 'application/json' }, 'POST');
@@ -4946,7 +5163,7 @@ async function fetchConfigPreview(payload) {
             error_status: 0
         });
     } finally {
-        renderCLI();
+        refreshPreviewDrivenSurfaces(generatePayload());
     }
 }
 
@@ -7641,7 +7858,7 @@ if (els.artifactThumbnailRail) {
         const path = String(button.dataset.artifactPath || '').trim();
         if (!path) return;
         const shouldRestoreFocus = event.detail === 0;
-        state.artifactUi.selectedByJob[String(selectedJob.id || '')] = path;
+        _rememberArtifactSelection(String(selectedJob.id || ''), path);
         renderReviewSurfaces();
         if (shouldRestoreFocus) {
             requestAnimationFrame(() => {
@@ -7657,7 +7874,7 @@ if (els.artifactCompareBtn) {
         const selectedJob = state.jobs.find((item) => item.id === state.selectedJobId);
         if (!selectedJob) return;
         const key = String(selectedJob.id || '');
-        state.artifactUi.compareByJob[key] = !Boolean(state.artifactUi.compareByJob[key]);
+        _rememberComparePreference(key, !Boolean(state.artifactUi.compareByJob[key]));
         void emitPortalEvent('artifact_compared', {
             surface: 'artifact_review',
             metadata: {
@@ -8017,6 +8234,7 @@ function setupDisclosurePanels() {
             const disclosurePrefs = ensureDisclosurePrefs();
             if (name === 'dispatchTools') {
                 disclosurePrefs.dispatchTools = Boolean(element.open);
+                syncDisclosurePanels(generatePayload());
                 return;
             }
 
@@ -8032,6 +8250,7 @@ function setupDisclosurePanels() {
             }
 
             disclosurePrefs[name] = Boolean(element.open);
+            syncDisclosurePanels(generatePayload());
         });
     };
 
