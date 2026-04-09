@@ -794,14 +794,18 @@ def test_portal_artifact_gallery_renders_visual_review_controls() -> None:
     assert "artifactDisplayHint" in content
     assert "artifactDisplayPriority" in content
     assert "artifactDisplayLabel" in content
+    assert "function _artifactRouteKey(artifact) {" in content
     assert "buildArtifactUrl(selected, selectedArtifact)" in body
     assert "artifactIsPreviewable(selectedArtifact)" in body
     assert "artifactDisplayLabel(selectedArtifact)" in body
     assert "artifactDisplayLabel(artifact)" in body
+    assert "button.dataset.artifactPath = _artifactRouteKey(artifact);" in body
     assert "artifactDisplayPriority(right)" in rank_body
     assert "artifactCompareGroup(candidate) === primaryGroup" in compare_body
     assert "display_hint: _normalizeArtifactDisplayHint(item.display_hint)" in normalize_body
     assert "_resetArtifactActionButtons();" in body
+    assert "renderConsoleContextRibbon();" in body
+    assert "_syncConsoleRoute(true);" in body
     assert "delete els.openArtifactBtn.dataset.url;" in reset_body
     assert "delete els.downloadArtifactBtn.dataset.filename;" in reset_body
     assert "delete els.copyArtifactPathBtn.dataset.path;" in reset_body
@@ -1043,6 +1047,10 @@ def test_portal_console_views_use_query_param_navigation_without_backend_route_c
     assert 'data-view-link="review"' in content
     assert "const resolvedView = resolveConsoleView(viewName);" in route_body
     assert "url.searchParams.set('view', resolvedView);" in route_body
+    assert "url.searchParams.set('artifact', resolvedArtifactPath);" in route_body
+    assert "url.searchParams.set('compare', '1');" in route_body
+    assert "url.searchParams.delete('artifact');" in route_body
+    assert "url.searchParams.delete('compare');" in route_body
     assert "state.currentView = resolveConsoleView(url.searchParams.get('view'));" in content
     assert "candidate === 'run'" not in content
     assert "document.body.dataset.consoleView = state.currentView;" in apply_view_body
@@ -1058,17 +1066,54 @@ def test_portal_console_routes_reuse_last_selected_job_across_operate_and_review
     navigate_block = _extract_js_function_block(content, "navigateConsoleView")
     apply_route_body = _extract_js_function_body(content, "applyConsoleRouteFromLocation")
     select_body = _extract_js_function_body(content, "selectJob")
+    selected_artifact_body = _extract_js_function_body(content, "_selectedArtifactForJob")
     recover_body = _extract_js_function_body(content, "recoverJobs")
 
     assert "function _rememberSelectedJob(jobId) {" in content
     assert "function _preferredSelectedJobId() {" in content
-    assert "const explicitJobId = _normalizeSelectedJobId(jobId);" in navigate_block
+    assert "function _rememberArtifactSelection(jobId, artifactPath) {" in content
+    assert "function _rememberComparePreference(jobId, enabled) {" in content
+    assert "const explicitJobId = _normalizeSelectedJobId(options.jobId);" in navigate_block
+    assert "const hasArtifactOption = Object.prototype.hasOwnProperty.call(options, 'artifactPath');" in navigate_block
+    assert "const hasCompareOption = Object.prototype.hasOwnProperty.call(options, 'compareEnabled');" in navigate_block
     assert "const preferredJobId = _preferredSelectedJobId();" in navigate_block
     assert "_rememberSelectedJob(explicitJobId);" in navigate_block
     assert "_rememberSelectedJob(routeJobId);" in apply_route_body
+    assert "const routeArtifactPath = _normalizeArtifactRoutePath(url.searchParams.get('artifact'));" in apply_route_body
+    assert "const routeCompareEnabled = _normalizeCompareQueryValue(url.searchParams.get('compare'));" in apply_route_body
+    assert "_rememberArtifactSelection(routeJobId, routeArtifactPath);" in apply_route_body
+    assert "_rememberComparePreference(routeJobId, routeCompareEnabled);" in apply_route_body
     assert "_rememberSelectedJob(jobId);" in select_body
+    assert "delete state.artifactUi.compareByJob[String(jobId || '')];" not in select_body
+    assert "if (selectedPath && !selected) {" in selected_artifact_body
+    assert "delete state.artifactUi.compareByJob[normalizedJobId];" in selected_artifact_body
     assert "state.currentView === 'operate' || state.currentView === 'review'" in select_body
     assert "const retained = state.jobs.find((job) => job.id === state.portalUi.lastSelectedJobId) || null;" in recover_body
+
+
+def test_portal_console_context_ribbon_tracks_selected_job_and_review_state() -> None:
+    content = _portal_bundle_content()
+    ribbon_body = _extract_js_function_body(content, "renderConsoleContextRibbon")
+    apply_view_body = _extract_js_function_body(content, "applyConsoleViewLayout")
+    inspector_body = _extract_js_function_body(content, "renderSelectedJobInspector")
+    artifact_body = _extract_js_function_body(content, "renderArtifactPanel")
+
+    assert 'id="consoleContextRibbon"' in content
+    assert 'id="contextRibbonJob"' in content
+    assert 'id="contextRibbonState"' in content
+    assert 'id="contextRibbonFreshness"' in content
+    assert 'id="contextRibbonArtifact"' in content
+    assert 'id="contextRibbonCompare"' in content
+    assert "const ribbonVisible = state.currentView === 'operate' || state.currentView === 'review';" in ribbon_body
+    assert "els.consoleContextRibbon.classList.toggle('hidden', !ribbonVisible);" in ribbon_body
+    assert (
+        "els.contextRibbonArtifact.textContent = selectedArtifact ? artifactLabel(selectedArtifact) : 'Awaiting selection';"
+        in ribbon_body
+    )
+    assert "els.contextRibbonCompare.textContent = compareEnabled" in ribbon_body
+    assert "renderConsoleContextRibbon();" in apply_view_body
+    assert "renderConsoleContextRibbon();" in inspector_body
+    assert "renderConsoleContextRibbon();" in artifact_body
 
 
 def test_portal_build_stepper_and_quick_actions_drive_task_first_navigation() -> None:
@@ -1122,12 +1167,21 @@ def test_portal_disclosure_defaults_are_state_driven_instead_of_static() -> None
     assert 'id="governanceDetails"' in content
     assert 'id="reconstructionDetails"' in content
     assert 'id="dispatchToolsDetails"' in content
+    assert 'id="advancedFlagsSummary"' in content
+    assert 'id="governanceDetailsSummary"' in content
+    assert 'id="reconstructionDetailsSummary"' in content
+    assert 'id="dispatchToolsSummary"' in content
     assert 'id="advancedFlagsDetails" class="disclosure-panel mt-6">' in content
     assert 'id="governanceDetails" class="disclosure-panel mt-6">' in content
+    assert "function _setDisclosureSummaryBadge(element, text) {" in content
     assert "const previewFieldGroups = {" in sync_body
     assert "const researchPreset = _presetRequiresResearchAcknowledgments(preset, args);" in sync_body
     assert "element.dataset.autoOpen = autoOpenState[name] ? 'true' : 'false';" in sync_body
     assert "disclosurePrefs.dispatchTools === true" in sync_body
+    assert "els.advancedFlagsSummary" in sync_body
+    assert "els.governanceDetailsSummary" in sync_body
+    assert "els.reconstructionDetailsSummary" in sync_body
+    assert "els.dispatchToolsSummary" in sync_body
     assert "String(args.preset || '').toLowerCase().includes('v3.1')" not in sync_body
     assert "setupDisclosurePanels();" in init_body
 
@@ -1340,6 +1394,7 @@ def test_portal_preview_metadata_worker_modes_and_export_contract_are_wired() ->
     content = _portal_bundle_content()
     update_body = _extract_js_function_body(content, "updateUIFromState")
     bind_body = _extract_js_function_body(content, "bindInputs")
+    metadata_body = _extract_js_function_body(content, "fetchConfigMetadata")
     preview_body = _extract_js_function_body(content, "fetchConfigPreview")
     reconcile_body = _extract_js_function_body(content, "_reconcilePreviewRepairedPaths")
     setter_body = _extract_js_function_body(content, "_setBuildSurfacePathFieldValue")
@@ -1362,6 +1417,11 @@ def test_portal_preview_metadata_worker_modes_and_export_contract_are_wired() ->
     assert "argv_preview:" in content
     assert "submitted_args:" in preview_body
     assert "execution_args:" in preview_body
+    assert "const refreshPreviewDrivenSurfaces = (nextPayload = currentPayload) => {" in preview_body
+    assert "renderPreRunDiagnostics(nextPayload);" in preview_body
+    assert "_syncBootstrapGuardedControls();" in preview_body
+    assert "refreshPreviewDrivenSurfaces(generatePayload());" in preview_body
+    assert "scheduleConfigPreview(true);" in metadata_body
     assert "repo_local_path_repaired" in reconcile_body
     assert "_setBuildSurfacePathFieldValue(fieldName, normalizedValue)" in reconcile_body
     assert "state.config = state.config || {};" in setter_body
