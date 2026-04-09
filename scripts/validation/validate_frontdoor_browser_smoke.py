@@ -19,6 +19,7 @@ Environment overrides:
     TP_FRONTDOOR_BASE_URL    Front-door URL (default: http://localhost:3000)
     TP_FRONTDOOR_USERNAME    Front-door username
     TP_FRONTDOOR_PASSWORD    Front-door password
+    TP_FRONTDOOR_ACCESS_EMAIL Optional access email for locally seeded fixtures
     TP_PORTAL_BROWSER_BINARY Chrome binary path override
 """
 
@@ -59,7 +60,12 @@ from validate_portal_browser_smoke import (  # noqa: E402
 
 DEFAULT_FRONTDOOR_BASE_URL = "http://localhost:3000"
 DEFAULT_BACKEND_BASE_URL = "http://127.0.0.1:8000"
+DEFAULT_FRONTDOOR_USERS_FILE = "/tmp/tp-frontdoor-users.json"
+DEFAULT_FRONTDOOR_USERNAME = "smoke-admin"
+DEFAULT_FRONTDOOR_PASSWORD = "correct horse battery staple"
+DEFAULT_FRONTDOOR_ROLE = "admin"
 FRONTDOOR_ROOT = SCRIPT_DIR.parent.parent / "web" / "secure-landing"
+FRONTDOOR_SEED_SCRIPT = FRONTDOOR_ROOT / "scripts" / "seed-frontdoor-user.mjs"
 
 
 def _request_frontdoor_health(base_url: str) -> tuple[int, dict]:
@@ -105,40 +111,38 @@ def _wait_for_frontdoor_ready(
     )
 
 
-def _generate_frontdoor_users_file(username: str, password: str, runtime_root: Path) -> Path:
-    access_email = f"{username}@local.invalid"
-    users_file = runtime_root / "frontdoor-users.json"
-    script = """
-import argon2 from 'argon2';
-import { writeFileSync } from 'node:fs';
+def _default_frontdoor_access_email(username: str) -> str:
+    return f"{username}@local.invalid"
 
-const [filePath, username, password, accessEmail] = process.argv.slice(1);
-const passwordHash = await argon2.hash(password);
-writeFileSync(
-  filePath,
-  JSON.stringify([
-    {
-      username,
-      password_hash: passwordHash,
-      access_email: accessEmail,
-      role: 'admin',
-    },
-  ]),
-  'utf-8',
-);
-"""
+
+def _seed_frontdoor_users_file(
+    *,
+    output_path: Path,
+    username: str,
+    password: str,
+    access_email: str,
+    role: str = DEFAULT_FRONTDOOR_ROLE,
+) -> Path:
+    resolved_output_path = output_path.resolve()
+    resolved_access_email = str(access_email).strip() or _default_frontdoor_access_email(username)
+    command = [
+        "node",
+        str(FRONTDOOR_SEED_SCRIPT),
+        "--output",
+        str(resolved_output_path),
+        "--username",
+        str(username),
+        "--password",
+        str(password),
+        "--access-email",
+        resolved_access_email,
+        "--role",
+        str(role),
+        "--quiet",
+    ]
     try:
         subprocess.run(
-            [
-                "node",
-                "--input-type=module",
-                "-e",
-                script,
-                str(users_file),
-                username,
-                password,
-                access_email,
-            ],
+            command,
             cwd=str(FRONTDOOR_ROOT),
             check=True,
             capture_output=True,
@@ -147,16 +151,27 @@ writeFileSync(
     except subprocess.CalledProcessError as exc:
         detail = (exc.stderr or exc.stdout or "").strip() or str(exc)
         raise SmokeFailure(
-            f"Could not generate isolated front-door credential fixture under {users_file}: {detail}",
+            f"Could not seed isolated front-door credential fixture under {resolved_output_path}: {detail}",
             kind="runtime",
         ) from exc
-    return users_file
+    return resolved_output_path
+
+
+def _generate_frontdoor_users_file(username: str, password: str, runtime_root: Path, *, access_email: str) -> Path:
+    users_file = runtime_root / "frontdoor-users.json"
+    return _seed_frontdoor_users_file(
+        output_path=users_file,
+        username=username,
+        password=password,
+        access_email=access_email,
+    )
 
 
 def _spawn_local_frontdoor(
     *,
     username: str,
     password: str,
+    access_email: str,
     backend_base_url: str,
     backend_api_key: str,
     timeout_seconds: float,
@@ -167,7 +182,12 @@ def _spawn_local_frontdoor(
             dir="/tmp" if os.name != "nt" and Path("/tmp").exists() else None,
         )
     )
-    users_file = _generate_frontdoor_users_file(username, password, runtime_root)
+    users_file = _generate_frontdoor_users_file(
+        username,
+        password,
+        runtime_root,
+        access_email=access_email,
+    )
     session_db = runtime_root / "sessions.sqlite"
     log_path = runtime_root / "frontdoor.log"
     port = _find_free_port()
@@ -256,12 +276,17 @@ def _parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
     parser.add_argument(
         "--username",
         default="",
-        help="Front-door username (default: TP_FRONTDOOR_USERNAME)",
+        help=(
+            "Front-door username " "(default: TP_FRONTDOOR_USERNAME; falls back to smoke-admin for --spawn-local-frontdoor)"
+        ),
     )
     parser.add_argument(
         "--password",
         default="",
-        help="Front-door password (default: TP_FRONTDOOR_PASSWORD)",
+        help=(
+            "Front-door password "
+            "(default: TP_FRONTDOOR_PASSWORD; falls back to the canonical smoke password for --spawn-local-frontdoor)"
+        ),
     )
     parser.add_argument(
         "--chrome-binary",
@@ -306,11 +331,28 @@ def _resolve_base_url(args: argparse.Namespace) -> str:
 
 
 def _resolve_username(args: argparse.Namespace) -> str:
-    return str(args.username or os.getenv("TP_FRONTDOOR_USERNAME", "")).strip()
+    explicit_username = str(args.username or os.getenv("TP_FRONTDOOR_USERNAME", "")).strip()
+    if explicit_username:
+        return explicit_username
+    if args.spawn_local_frontdoor:
+        return DEFAULT_FRONTDOOR_USERNAME
+    return ""
 
 
 def _resolve_password(args: argparse.Namespace) -> str:
-    return str(args.password or os.getenv("TP_FRONTDOOR_PASSWORD", ""))
+    explicit_password = str(args.password or os.getenv("TP_FRONTDOOR_PASSWORD", ""))
+    if explicit_password:
+        return explicit_password
+    if args.spawn_local_frontdoor:
+        return DEFAULT_FRONTDOOR_PASSWORD
+    return ""
+
+
+def _resolve_access_email(username: str) -> str:
+    explicit_access_email = str(os.getenv("TP_FRONTDOOR_ACCESS_EMAIL", "")).strip()
+    if explicit_access_email:
+        return explicit_access_email
+    return _default_frontdoor_access_email(username)
 
 
 def _resolve_backend_base_url(args: argparse.Namespace) -> str:
@@ -453,10 +495,12 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
                     "An isolated front-door launch requires TP_BACKEND_API_KEY or TP_API_KEY unless --spawn-local-backend is also enabled.",
                     kind="environment",
                 )
+            access_email = _resolve_access_email(username)
             print("frontdoor-browser-smoke: launching isolated managed front-door", flush=True)
             frontdoor_runtime = _spawn_local_frontdoor(
                 username=username,
                 password=password,
+                access_email=access_email,
                 backend_base_url=backend_base_url,
                 backend_api_key=backend_api_key,
                 timeout_seconds=args.frontdoor_startup_timeout_seconds,

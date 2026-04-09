@@ -131,13 +131,28 @@ test("next config honors TP_NEXT_DIST_DIR for isolated local frontdoor runs", as
   }
 });
 
-test("run_frontdoor_local launcher supports isolated port and distdir overrides", async () => {
+test("run_frontdoor_local launcher supports isolated port, distdir, and local user seeding defaults", async () => {
   const scriptPath = path.resolve(process.cwd(), "..", "..", "scripts", "setup", "run_frontdoor_local.sh");
   const script = readFileSync(scriptPath, "utf-8");
 
   assert.match(script, /TP_FRONTDOOR_PORT/);
   assert.match(script, /TP_FRONTDOOR_DIST_DIR/);
   assert.match(script, /TP_NEXT_DIST_DIR/);
+  assert.match(script, /TP_FRONTDOOR_USERS_FILE:-\/tmp\/tp-frontdoor-users\.json/);
+  assert.match(script, /TP_FRONTDOOR_USERNAME:-smoke-admin/);
+  assert.match(script, /TP_FRONTDOOR_PASSWORD:-correct horse battery staple/);
+  assert.match(script, /if \[\[ -z "\$\{TP_FRONTDOOR_USERS_FILE:-\}" && -z "\$\{TP_FRONTDOOR_USERS_JSON:-\}" \]\]; then/);
+  assert.match(script, /seed-frontdoor-user\.mjs/);
+});
+
+test("seed-frontdoor-user helper encodes the canonical local smoke credential defaults", async () => {
+  const scriptPath = path.resolve(process.cwd(), "scripts", "seed-frontdoor-user.mjs");
+  const script = readFileSync(scriptPath, "utf-8");
+
+  assert.match(script, /DEFAULT_OUTPUT_PATH = "\/tmp\/tp-frontdoor-users\.json"/);
+  assert.match(script, /DEFAULT_USERNAME = "smoke-admin"/);
+  assert.match(script, /DEFAULT_PASSWORD = "correct horse battery staple"/);
+  assert.match(script, /@local\.invalid/);
 });
 
 test("app router root shell exists for framework not-found and global-error routes", () => {

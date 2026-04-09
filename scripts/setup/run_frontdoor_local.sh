@@ -9,6 +9,10 @@ FASTAPI_ORIGIN="${TP_FASTAPI_ORIGIN:-http://127.0.0.1:8000}"
 SESSION_DB="${TP_FRONTDOOR_SESSION_DB:-/tmp/transformation-portal-frontdoor-sessions.db}"
 BACKEND_API_KEY="${TP_BACKEND_API_KEY:-${TP_API_KEY:-}}"
 FRONTDOOR_DIST_DIR="${TP_FRONTDOOR_DIST_DIR:-}"
+DEFAULT_USERS_FILE="${TP_FRONTDOOR_USERS_FILE:-/tmp/tp-frontdoor-users.json}"
+DEFAULT_FRONTDOOR_USERNAME="${TP_FRONTDOOR_USERNAME:-smoke-admin}"
+DEFAULT_FRONTDOOR_PASSWORD="${TP_FRONTDOOR_PASSWORD:-correct horse battery staple}"
+DEFAULT_FRONTDOOR_ACCESS_EMAIL="${TP_FRONTDOOR_ACCESS_EMAIL:-${DEFAULT_FRONTDOOR_USERNAME}@local.invalid}"
 
 ensure_command() {
   if ! command -v "$1" >/dev/null 2>&1; then
@@ -30,6 +34,7 @@ port_in_use() {
 }
 
 ensure_command curl
+ensure_command node
 ensure_command npm
 
 if [[ -z "${BACKEND_API_KEY}" ]]; then
@@ -38,8 +43,20 @@ if [[ -z "${BACKEND_API_KEY}" ]]; then
 fi
 
 if [[ -z "${TP_FRONTDOOR_USERS_FILE:-}" && -z "${TP_FRONTDOOR_USERS_JSON:-}" ]]; then
-  echo "Set TP_FRONTDOOR_USERS_FILE or TP_FRONTDOOR_USERS_JSON before starting the managed front door."
-  exit 1
+  echo "No explicit front-door user source supplied. Seeding the canonical local smoke user fixture..."
+  (
+    cd "${FRONTDOOR_ROOT}"
+    node ./scripts/seed-frontdoor-user.mjs \
+      --output "${DEFAULT_USERS_FILE}" \
+      --username "${DEFAULT_FRONTDOOR_USERNAME}" \
+      --password "${DEFAULT_FRONTDOOR_PASSWORD}" \
+      --access-email "${DEFAULT_FRONTDOOR_ACCESS_EMAIL}" \
+      --role admin \
+      --quiet
+  )
+  export TP_FRONTDOOR_USERS_FILE="${DEFAULT_USERS_FILE}"
+  echo "Seeded local front-door user fixture at ${TP_FRONTDOOR_USERS_FILE}"
+  echo "Local operator credentials: ${DEFAULT_FRONTDOOR_USERNAME} / ${DEFAULT_FRONTDOOR_PASSWORD}"
 fi
 
 if port_in_use; then
