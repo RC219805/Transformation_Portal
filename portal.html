@@ -254,22 +254,22 @@
             </div>
             <div id="consoleContextRibbon" class="console-context-ribbon mt-4 hidden" data-ui="console-context-ribbon" aria-live="polite">
                 <div class="console-context-card">
-                    <p class="console-context-label">Selected Job</p>
+                    <p class="console-context-label">Job</p>
                     <p id="contextRibbonJob" class="console-context-value">No job selected</p>
                     <p id="contextRibbonJobMeta" class="console-context-meta">Choose a run in operate or review to pin context here.</p>
                 </div>
                 <div class="console-context-card">
-                    <p class="console-context-label">Run State</p>
+                    <p class="console-context-label">State</p>
                     <p id="contextRibbonState" class="console-context-value">Idle</p>
                     <p id="contextRibbonFreshness" class="console-context-meta">No live telemetry</p>
                 </div>
                 <div class="console-context-card">
-                    <p class="console-context-label">Selected Artifact</p>
+                    <p class="console-context-label">Artifact</p>
                     <p id="contextRibbonArtifact" class="console-context-value">Awaiting selection</p>
                     <p id="contextRibbonArtifactMeta" class="console-context-meta">Review context will show the active artifact path here.</p>
                 </div>
                 <div class="console-context-card">
-                    <p class="console-context-label">Compare Mode</p>
+                    <p class="console-context-label">Compare</p>
                     <p id="contextRibbonCompare" class="console-context-value">Single view</p>
                     <p id="contextRibbonCompareMeta" class="console-context-meta">Deep-linkable review context stays aligned with the URL.</p>
                 </div>
@@ -419,33 +419,19 @@
                         <button id="buildStepTab3" type="button" class="build-step-tab" data-build-step-target="3" role="tab" aria-selected="false" data-ui="build-step-tab">
                             <span class="build-step-index">3</span>
                             <span class="build-step-copy">
-                                <span class="build-step-label">Options</span>
-                                <span class="build-step-meta">Advanced controls and readiness signals.</span>
+                                <span class="build-step-label">Outputs</span>
+                                <span class="build-step-meta">Deliverables, posture, and readiness.</span>
                             </span>
                         </button>
                         <button id="buildStepTab4" type="button" class="build-step-tab" data-build-step-target="4" role="tab" aria-selected="false" data-ui="build-step-tab">
                             <span class="build-step-index">4</span>
                             <span class="build-step-copy">
                                 <span class="build-step-label">Dispatch</span>
-                                <span class="build-step-meta">CLI parity, warnings, and launch.</span>
+                                <span class="build-step-meta">Primary review, launch, and parity tools.</span>
                             </span>
                         </button>
                     </div>
                     </div>
-                </section>
-
-                <section id="governance-shell" data-build-step-panel="3" data-ambient-zone="governance" data-ambient-focus-x="28" data-ambient-focus-y="42" data-ambient-shift-x="-14" data-ambient-shift-y="4" data-ambient-stage-scale="1.028" data-ambient-stage-rotate="-0.2" data-ambient-color-a="#14b8a6" data-ambient-color-b="#f59e0b" data-ambient-color-c="#fde68a" data-ambient-focus-color="#fdba74" class="workspace-shell deferred-shell governance-banner rounded-[1.75rem] p-6 shadow-soft dark:shadow-soft-dark build-step-panel" data-shell-size="compact" data-ui="build-governance">
-                    <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                        <div class="max-w-2xl">
-                            <p class="section-kicker">Governance Brief</p>
-                            <h2 id="governanceBannerTitle" class="mt-2 text-xl font-extrabold tracking-tight text-slate-900 dark:text-white">Run posture is clear.</h2>
-                            <p id="governanceBannerBody" class="mt-2 text-sm leading-7 text-slate-600 dark:text-slate-300">
-                                The current configuration is valid for dispatch. Any license acknowledgments or runtime caveats will surface here before execution.
-                            </p>
-                        </div>
-                        <div class="signal-badge">Live contract checks</div>
-                    </div>
-                    <div id="governanceChecklist" class="mt-5 grid grid-cols-1 gap-3"></div>
                 </section>
 
                 <!-- Parameters -->
@@ -554,10 +540,10 @@
                         <div class="flex items-start justify-between gap-3">
                             <div>
                                 <p class="section-kicker">Step 3</p>
-                                <h3 class="mt-2 text-base font-extrabold tracking-tight text-slate-900 dark:text-white">Shape outputs and review advanced posture</h3>
-                                <p class="mt-2 text-[12px] leading-6 text-slate-500 dark:text-slate-400">Keep deliverables and primary output posture readable first, then open advanced, governance, or reconstruction controls only when the current run contract needs them.</p>
+                                <h3 class="mt-2 text-base font-extrabold tracking-tight text-slate-900 dark:text-white">Shape deliverables and confirm output posture</h3>
+                                <p class="mt-2 text-[12px] leading-6 text-slate-500 dark:text-slate-400">Keep deliverables, primary output posture, and immediate readiness readable first, then open advanced, governance, or reconstruction controls only when the current run contract needs them.</p>
                             </div>
-                            <span class="micro-status">Outputs first, research controls second</span>
+                            <span class="micro-status">Deliverables first, research controls second</span>
                         </div>
                         <div>
                             <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="depthBackend">Depth Backend</label>
@@ -630,7 +616,8 @@
 
                 <!-- Pipeline Flags -->
                 <fieldset id="flags-shell" data-build-step-panel="3" data-ambient-zone="flags" data-ambient-focus-x="36" data-ambient-focus-y="66" data-ambient-shift-x="-6" data-ambient-shift-y="14" data-ambient-stage-scale="1.045" data-ambient-stage-rotate="0.3" data-ambient-color-a="#10b981" data-ambient-color-b="#f59e0b" data-ambient-color-c="#38bdf8" data-ambient-focus-color="#fef08a" class="workspace-shell deferred-shell rounded-[1.75rem] shell-panel p-6 shadow-soft dark:shadow-soft-dark transition-colors duration-300 build-step-panel" data-shell-size="tall" data-ui="build-step-panel">
-                    <legend class="block text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-4">Core Flags & Emit Artifacts</legend>
+                    <legend class="block text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-4">Primary Output Posture</legend>
+                    <p class="step-primary-note">Shape the deliverables first. Diagnostics, acknowledgments, and runtime detail stay below as secondary controls unless the preview or contract pulls them forward.</p>
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
 
                         <!-- Toggle Wrapper Template -->
@@ -686,8 +673,8 @@
 
                     <div class="mt-6 flex items-start justify-between gap-3">
                         <div>
-                            <p class="section-kicker">Advanced & Research Controls</p>
-                            <p class="mt-2 text-[12px] leading-6 text-slate-500 dark:text-slate-400">Diagnostics, acknowledgments, and reconstruction/runtime posture remain secondary until the draft or preview flags them.</p>
+                            <p class="section-kicker">Secondary Controls & Policy Detail</p>
+                            <p class="mt-2 text-[12px] leading-6 text-slate-500 dark:text-slate-400">Diagnostics, acknowledgments, and reconstruction/runtime posture stay secondary until the draft or preview flags them.</p>
                         </div>
                         <span class="micro-status">Secondary controls stay contextual</span>
                     </div>
@@ -1011,6 +998,20 @@
                     </details>
                 </fieldset>
 
+                <section id="governance-shell" data-build-step-panel="3" data-ambient-zone="governance" data-ambient-focus-x="28" data-ambient-focus-y="42" data-ambient-shift-x="-14" data-ambient-shift-y="4" data-ambient-stage-scale="1.028" data-ambient-stage-rotate="-0.2" data-ambient-color-a="#14b8a6" data-ambient-color-b="#f59e0b" data-ambient-color-c="#fde68a" data-ambient-focus-color="#fdba74" class="workspace-shell deferred-shell governance-banner rounded-[1.75rem] p-6 shadow-soft dark:shadow-soft-dark build-step-panel" data-shell-size="compact" data-ui="build-governance">
+                    <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                        <div class="max-w-2xl">
+                            <p class="section-kicker">Governance Brief</p>
+                            <h2 id="governanceBannerTitle" class="mt-2 text-xl font-extrabold tracking-tight text-slate-900 dark:text-white">Run posture is clear.</h2>
+                            <p id="governanceBannerBody" class="mt-2 text-sm leading-7 text-slate-600 dark:text-slate-300">
+                                The current configuration is valid for dispatch. Any license acknowledgments or runtime caveats will surface here before execution.
+                            </p>
+                        </div>
+                        <div class="signal-badge">Live contract checks</div>
+                    </div>
+                    <div id="governanceChecklist" class="mt-5 grid grid-cols-1 gap-3"></div>
+                </section>
+
                 <!-- CLI Preview & Actions -->
                 <div id="cli-shell" data-build-step-panel="4" data-ambient-zone="dispatch" data-ambient-focus-x="42" data-ambient-focus-y="82" data-ambient-shift-x="-4" data-ambient-shift-y="18" data-ambient-stage-scale="1.05" data-ambient-stage-rotate="0.35" data-ambient-color-a="#06b6d4" data-ambient-color-b="#f97316" data-ambient-color-c="#14b8a6" data-ambient-focus-color="#fdba74" class="workspace-shell deferred-shell rounded-[1.75rem] shell-panel p-6 shadow-soft dark:shadow-soft-dark transition-colors duration-300 build-step-panel" data-shell-size="compact" data-ui="build-step-panel">
                     <div class="flex items-start justify-between gap-3">
@@ -1034,12 +1035,12 @@
                     </section>
 
                     <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <section class="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/70 p-4">
+                        <section class="step-four-primary-card rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/70 p-4">
                             <h4 class="text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Pre-Run Checks</h4>
                             <ul id="preRunWarnings" class="mt-2 space-y-1 text-[12px] text-amber-700 dark:text-amber-300"></ul>
                             <p id="preRunWarningsEmpty" class="mt-2 text-[12px] text-emerald-700 dark:text-emerald-300">No pre-run warnings.</p>
                         </section>
-                        <section class="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/70 p-4">
+                        <section class="step-four-primary-card rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/70 p-4">
                             <div class="flex items-center justify-between gap-2">
                                 <h4 class="text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Expected Outputs</h4>
                                 <span class="inline-flex items-center gap-2 text-[10px] font-mono text-slate-500 dark:text-slate-400">

@@ -1183,14 +1183,14 @@ const BUILD_STEP_CONTENT = Object.freeze({
             summary: 'Supply input and output roots before opening anything advanced.'
         },
         {
-            label: 'Options',
-            meta: 'Contextual controls and readiness.',
-            title: '3. Adjust contextual options',
-            summary: 'Only refine backend, outputs, governance, and runtime controls when the run needs them.'
+            label: 'Outputs',
+            meta: 'Deliverables, posture, and readiness.',
+            title: '3. Shape deliverables and confirm output posture',
+            summary: 'Keep deliverables, primary output posture, and immediate readiness readable first.'
         },
         {
             label: 'Dispatch',
-            meta: 'Warnings, CLI, and launch.',
+            meta: 'Primary review, launch, and parity tools.',
             title: '4. Review and dispatch',
             summary: 'Use preview-backed warnings, effective argv, and readiness to launch with confidence.'
         }
