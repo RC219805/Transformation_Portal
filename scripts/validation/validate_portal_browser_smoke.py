@@ -207,8 +207,10 @@ def _preflight_lux_config_preview(
         ) from exc
 
     error_payload = body.get("error") if isinstance(body, dict) else {}
-    error_details = error_payload.get("details") if isinstance(error_payload, dict) else {}
-    error_reason = str((error_details or {}).get("reason") or error_payload.get("code") or "").strip().lower()
+    if not isinstance(error_payload, dict):
+        error_payload = {}
+    error_details = error_payload.get("details") if isinstance(error_payload.get("details"), dict) else {}
+    error_reason = str(error_details.get("reason") or error_payload.get("code") or "").strip().lower()
 
     if status in {401, 403}:
         raise SmokeFailure(
@@ -510,6 +512,15 @@ def _state_probe_expression() -> str:
     selectedJobMetaLine: text('selectedJobMetaLine'),
     selectedJobFreshness: text('selectedJobFreshness'),
     selectedJobSummary: text('selectedJobSummary'),
+    contextRibbonVisible: (() => {
+      const el = document.getElementById('consoleContextRibbon');
+      return !!(el && !el.classList.contains('hidden'));
+    })(),
+    contextRibbonJob: text('contextRibbonJob'),
+    contextRibbonState: text('contextRibbonState'),
+    contextRibbonFreshness: text('contextRibbonFreshness'),
+    contextRibbonArtifact: text('contextRibbonArtifact'),
+    contextRibbonCompare: text('contextRibbonCompare'),
     reviewStatusTitle: text('reviewStatusTitle'),
     reviewStatusDetail: text('reviewStatusDetail'),
     reviewStatusTone: (() => {
@@ -539,6 +550,36 @@ def _state_probe_expression() -> str:
     summaryReconstructionState: text('summaryReconstructionState'),
     summaryRuntimeWorkers: text('summaryRuntimeWorkers'),
     summaryPreviewState: text('summaryPreviewState'),
+    rawPreviewStatus: (() => {
+      const preview = typeof state !== 'undefined' && state.preview && typeof state.preview === 'object'
+        ? state.preview
+        : null;
+      return preview ? String(preview.status || '').trim() : '';
+    })(),
+    previewRequestKey: (() => {
+      const preview = typeof state !== 'undefined' && state.preview && typeof state.preview === 'object'
+        ? state.preview
+        : null;
+      return preview ? String(preview.requestKey || '').trim() : '';
+    })(),
+    currentPreviewRequestKey: (() => {
+      try {
+        return String(_configPreviewRequestKey(generatePayload()) || '').trim();
+      } catch (_err) {
+        return '';
+      }
+    })(),
+    previewRequestKeyMatches: (() => {
+      try {
+        const preview = typeof state !== 'undefined' && state.preview && typeof state.preview === 'object'
+          ? state.preview
+          : null;
+        if (!preview) return false;
+        return String(preview.requestKey || '').trim() === String(_configPreviewRequestKey(generatePayload()) || '').trim();
+      } catch (_err) {
+        return false;
+      }
+    })(),
     cliFirstLine: (() => {
       const preview = text('cliPreview');
       return preview ? preview.split('\n')[0].trim() : '';
@@ -692,8 +733,20 @@ def _state_probe_expression() -> str:
 """
 
 
-def _navigate_to_console_view_expression(view: str, job_id: str = "") -> str:
-    payload = json.dumps({"view": view, "job_id": job_id})
+def _navigate_to_console_view_expression(
+    view: str,
+    job_id: str = "",
+    artifact_path: str = "",
+    compare_enabled: bool = False,
+) -> str:
+    payload = json.dumps(
+        {
+            "view": view,
+            "job_id": job_id,
+            "artifact_path": artifact_path,
+            "compare_enabled": compare_enabled,
+        }
+    )
     return f"""
 (() => {{
   const cfg = {payload};
@@ -701,8 +754,20 @@ def _navigate_to_console_view_expression(view: str, job_id: str = "") -> str:
   url.searchParams.set('view', cfg.view);
   if ((cfg.view === 'operate' || cfg.view === 'review') && cfg.job_id) {{
     url.searchParams.set('job', cfg.job_id);
+    if (cfg.artifact_path) {{
+      url.searchParams.set('artifact', cfg.artifact_path);
+    }} else {{
+      url.searchParams.delete('artifact');
+    }}
+    if (cfg.compare_enabled) {{
+      url.searchParams.set('compare', '1');
+    }} else {{
+      url.searchParams.delete('compare');
+    }}
   }} else {{
     url.searchParams.delete('job');
+    url.searchParams.delete('artifact');
+    url.searchParams.delete('compare');
   }}
   window.history.pushState({{}}, '', url.toString());
   window.dispatchEvent(new PopStateEvent('popstate'));
@@ -1207,8 +1272,8 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             f"Enabling V2 should reveal the V2 preset input: {lux_context_state}",
         )
         _expect(
-            not bool(lux_context_state.get("advancedFlagsOpen")),
-            f"Advanced disclosure should remain closed until its own controls need attention: {lux_context_state}",
+            bool(lux_context_state.get("advancedFlagsOpen")),
+            f"Advanced disclosure should auto-open once advanced controls need operator attention: {lux_context_state}",
         )
 
         print("portal-browser-smoke: opening secondary dispatch tools", flush=True)
@@ -1511,6 +1576,11 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             str(terminal_state.get("selectedJobFreshness", "")).strip().startswith("Updated "),
             f"Selected job freshness should stay immediately visible in operate: {terminal_state}",
         )
+        _expect(
+            bool(terminal_state.get("contextRibbonVisible"))
+            and str(terminal_state.get("contextRibbonJob", "")).strip() == submitted_job_id,
+            f"Operate view should expose the compact context ribbon for the selected job: {terminal_state}",
+        )
 
         print("portal-browser-smoke: opening review view", flush=True)
         connection.evaluate(_navigate_to_console_view_expression("review", submitted_job_id))
@@ -1553,6 +1623,103 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         _expect(
             str(run_state.get("reviewProvenanceFreshness", "")).strip().startswith("Updated "),
             f"Review provenance should surface freshness for the selected run: {run_state}",
+        )
+        _expect(
+            bool(run_state.get("contextRibbonVisible"))
+            and str(run_state.get("contextRibbonArtifact", "")).strip()
+            == str(run_state.get("reviewProvenancePath", "")).strip(),
+            f"Review ribbon should stay aligned with the selected artifact context: {run_state}",
+        )
+
+        selected_artifact_path = str(run_state.get("reviewProvenancePath", "")).strip()
+        _expect(selected_artifact_path, f"Review deep-link validation requires a selected artifact path: {run_state}")
+
+        print("portal-browser-smoke: restoring review from an artifact deep link", flush=True)
+        connection.evaluate(_navigate_to_console_view_expression("build"))
+        _poll(
+            connection,
+            _state_probe_expression(),
+            predicate=lambda value: (
+                isinstance(value, dict)
+                and str(value.get("currentView", "")) == "build"
+                and bool(value.get("buildViewVisible"))
+            ),
+            timeout_seconds=args.timeout_seconds,
+            description="build view to restore before artifact deep-link replay",
+        )
+        connection.evaluate(_navigate_to_console_view_expression("review", submitted_job_id, selected_artifact_path))
+        restored_review_state = _poll(
+            connection,
+            _state_probe_expression(),
+            predicate=lambda value: (
+                isinstance(value, dict)
+                and str(value.get("currentView", "")) == "review"
+                and str(value.get("selectedJobId", "")).strip() == submitted_job_id
+                and str(value.get("reviewProvenancePath", "")).strip() == selected_artifact_path
+                and "artifact=" in str(value.get("locationSearch", ""))
+            ),
+            timeout_seconds=args.timeout_seconds,
+            description="artifact deep link to restore review context",
+        )
+        _expect(
+            str(restored_review_state.get("contextRibbonArtifact", "")).strip() == selected_artifact_path,
+            f"Artifact deep link should restore the ribbon artifact context: {restored_review_state}",
+        )
+
+        if bool(restored_review_state.get("reviewCompareVisible")):
+            print("portal-browser-smoke: restoring compare mode from a compare-only deep link", flush=True)
+            connection.evaluate(_navigate_to_console_view_expression("build"))
+            _poll(
+                connection,
+                _state_probe_expression(),
+                predicate=lambda value: (
+                    isinstance(value, dict)
+                    and str(value.get("currentView", "")) == "build"
+                    and bool(value.get("buildViewVisible"))
+                ),
+                timeout_seconds=args.timeout_seconds,
+                description="build view to restore before compare-only deep-link replay",
+            )
+            connection.evaluate(_navigate_to_console_view_expression("review", submitted_job_id, None, True))
+            compare_only_review_state = _poll(
+                connection,
+                _state_probe_expression(),
+                predicate=lambda value: (
+                    isinstance(value, dict)
+                    and str(value.get("currentView", "")) == "review"
+                    and str(value.get("selectedJobId", "")).strip() == submitted_job_id
+                    and bool(value.get("reviewCompareEnabled"))
+                    and "compare=1" in str(value.get("locationSearch", ""))
+                ),
+                timeout_seconds=args.timeout_seconds,
+                description="compare-only deep link to preserve compare mode",
+            )
+            _expect(
+                str(compare_only_review_state.get("contextRibbonCompare", "")).strip().lower() == "compare on",
+                f"Compare-only deep links should preserve compare mode for the default artifact: {compare_only_review_state}",
+            )
+
+        print("portal-browser-smoke: normalizing stale review deep-link params", flush=True)
+        connection.evaluate(
+            _navigate_to_console_view_expression("review", submitted_job_id, "missing/stale-artifact.png", True)
+        )
+        normalized_review_state = _poll(
+            connection,
+            _state_probe_expression(),
+            predicate=lambda value: (
+                isinstance(value, dict)
+                and str(value.get("currentView", "")) == "review"
+                and str(value.get("selectedJobId", "")).strip() == submitted_job_id
+                and str(value.get("reviewProvenancePath", "")).strip() != "missing/stale-artifact.png"
+                and "missing%2Fstale-artifact.png" not in str(value.get("locationSearch", ""))
+                and "compare=1" not in str(value.get("locationSearch", ""))
+            ),
+            timeout_seconds=args.timeout_seconds,
+            description="stale artifact and compare params to normalize",
+        )
+        _expect(
+            str(normalized_review_state.get("contextRibbonCompare", "")).strip().lower() != "compare on",
+            f"Invalid compare deep links should fall back to a valid single-view review state: {normalized_review_state}",
         )
 
         print("portal-browser-smoke: round-tripping through build and back to operate", flush=True)
