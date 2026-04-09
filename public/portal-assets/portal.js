@@ -24,6 +24,7 @@ const SSE_RECONNECT_JITTER_MS = 250;
 const SSE_STALL_CHECK_INTERVAL_MS = 10000;
 const SSE_STALL_THRESHOLD_MS = 45000;
 const CONFIG_PREVIEW_DEBOUNCE_MS = 250;
+const DISPATCH_BACKEND_OFFLINE_MESSAGE = 'Backend is offline. Dispatch is disabled until connectivity is restored.';
 const CONFIG_PREVIEW_SUPPORTED_PIPELINES = new Set([
     'lux-depth-v3',
     'archive-gate-a',
@@ -985,8 +986,8 @@ function _compareSurfaceCopy(selectedArtifact, compareArtifact, compareEnabled) 
         return {
             ribbonValue: 'No compare pair',
             ribbonMeta: 'No paired comparison is available for the current artifact.',
-            summaryTitle: 'Paired comparison available',
-            summaryDetail: 'Enable compare mode to inspect paired outputs side by side.',
+            summaryTitle: 'No compare pair',
+            summaryDetail: 'No paired comparison is available for the current artifact.',
         };
     }
 
@@ -1027,7 +1028,7 @@ function _dispatchReadinessSnapshot(payload = null) {
         return {
             canRun: false,
             tone: 'blocked',
-            detail: 'Backend is offline. Dispatch resumes when connectivity is restored.',
+            detail: DISPATCH_BACKEND_OFFLINE_MESSAGE,
         };
     }
 
@@ -7571,7 +7572,7 @@ async function submitJob() {
     }
 
     if (!state.backendOk) {
-        createToast('Backend is offline. Dispatch is disabled until connectivity is restored.', 'error');
+        createToast(DISPATCH_BACKEND_OFFLINE_MESSAGE, 'error');
         return;
     }
     if (!readinessStatus) {

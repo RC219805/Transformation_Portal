@@ -879,6 +879,8 @@ def test_portal_review_surface_supports_compare_summary_and_keyboard_selection()
     assert "els.artifactCompareBtn.removeAttribute('aria-controls');" in render_body
     assert "els.artifactCompareStage.setAttribute('aria-hidden', compareEnabled ? 'false' : 'true');" in render_body
     assert "const compareCopy = _compareSurfaceCopy(primaryArtifact, compareArtifact, compareEnabled);" in compare_summary_body
+    assert "No compare pair" in compare_copy_body
+    assert "No paired comparison is available for the current artifact." in compare_copy_body
     assert "Comparing paired outputs" in compare_copy_body
     assert "Paired comparison available" in compare_copy_body
     assert "button[data-artifact-path]" in focus_body
@@ -1152,6 +1154,9 @@ def test_portal_dispatch_review_keeps_cli_parity_in_secondary_disclosure() -> No
     assert 'data-ui="dispatch-primary-lane"' in content
     assert 'data-ui="dispatch-launch"' in content
     assert 'id="dispatchReadinessReason"' in content
+    assert 'aria-live="polite"' in content
+    assert 'aria-atomic="true"' in content
+    assert 'aria-describedby="dispatchReadinessReason"' in content
     assert 'id="dispatchToolsDetails"' in content
     assert 'data-ui="dispatch-tools"' in content
     assert "Review dispatch posture" in content
@@ -1182,8 +1187,13 @@ def test_portal_dispatch_lane_surfaces_live_readiness_reason() -> None:
     snapshot_body = _extract_js_function_body(content, "_dispatchReadinessSnapshot")
 
     assert "function _dispatchReadinessSnapshot(payload = null) {" in content
+    assert (
+        "const DISPATCH_BACKEND_OFFLINE_MESSAGE = 'Backend is offline. Dispatch is disabled until connectivity is restored.';"
+        in content
+    )
     assert "Preview-backed validation is refreshing. Dispatch unlocks when the current draft settles." in snapshot_body
     assert "Debug bundle acknowledgement is required before dispatch." in snapshot_body
+    assert "detail: DISPATCH_BACKEND_OFFLINE_MESSAGE" in snapshot_body
     assert "els.dispatchReadinessReason.textContent = readiness.detail;" in guard_body
     assert "els.dispatchReadinessReason.dataset.tone = readiness.tone;" in guard_body
 
@@ -2043,7 +2053,7 @@ def test_portal_dispatch_controls_require_backend_readiness_and_live_backend() -
     assert "currentPipelineDispatchStatus(currentPayload)" in readiness_body
     assert "canRun: true" in readiness_body
     assert "Execution readiness is still loading." in submit_body
-    assert "Backend is offline. Dispatch is disabled until connectivity is restored." in submit_body
+    assert "createToast(DISPATCH_BACKEND_OFFLINE_MESSAGE, 'error');" in submit_body
     assert "Pipeline is blocked by missing prerequisites." in submit_body
     assert "mock simulation" not in submit_body
 

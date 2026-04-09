@@ -1047,9 +1047,9 @@
                         <section class="step-four-dispatch-shell rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/70 p-4" data-ui="dispatch-launch">
                             <div>
                                 <h4 class="text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Dispatch</h4>
-                                <p id="dispatchReadinessReason" class="dispatch-readiness-reason mt-2 text-[12px] leading-6 text-slate-600 dark:text-slate-300" data-tone="info">Preview-backed validation will explain when dispatch is ready.</p>
+                                <p id="dispatchReadinessReason" class="dispatch-readiness-reason mt-2 text-[12px] leading-6 text-slate-600 dark:text-slate-300" data-tone="info" aria-live="polite" aria-atomic="true">Preview-backed validation will explain when dispatch is ready.</p>
                             </div>
-                            <button id="runJobBtn" type="button" class="mt-4 w-full rounded-2xl px-6 py-4 text-[14px] font-extrabold uppercase tracking-[0.14em] text-white shadow-glow transition-all focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed bg-gradient-to-r from-teal-700 via-cyan-600 to-sky-600 hover:from-teal-600 hover:via-cyan-500 hover:to-sky-500 dark:focus:ring-offset-slate-900" disabled data-ui="dispatch-cta">
+                            <button id="runJobBtn" type="button" class="mt-4 w-full rounded-2xl px-6 py-4 text-[14px] font-extrabold uppercase tracking-[0.14em] text-white shadow-glow transition-all focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed bg-gradient-to-r from-teal-700 via-cyan-600 to-sky-600 hover:from-teal-600 hover:via-cyan-500 hover:to-sky-500 dark:focus:ring-offset-slate-900" disabled data-ui="dispatch-cta" aria-describedby="dispatchReadinessReason">
                                 Execute Job
                             </button>
                         </section>
@@ -1354,8 +1354,8 @@
                             </div>
                         </div>
                         <div id="reviewCompareSummary" class="review-compare-summary hidden" data-ui="review-compare-summary" aria-live="polite">
-                            <p id="reviewCompareTitle" class="review-compare-title">Paired comparison available</p>
-                            <p id="reviewCompareDetail" class="review-compare-detail">Enable compare mode to inspect paired outputs side by side.</p>
+                            <p id="reviewCompareTitle" class="review-compare-title">No compare pair</p>
+                            <p id="reviewCompareDetail" class="review-compare-detail">No paired comparison is available for the current artifact.</p>
                         </div>
                         <div class="flex flex-wrap items-center gap-2">
                             <button id="openArtifactBtn" type="button" class="rounded-lg border border-slate-300 dark:border-slate-700 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled>Open</button>
