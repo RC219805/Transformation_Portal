@@ -250,7 +250,7 @@ See [SETUP_GUIDE.md](docs/guides/SETUP_GUIDE.md) for environment details.
 Use `depth_pro` when you need metric depth and are operating in an explicit research-only workflow.
 
 ```bash
-python3 -m venv .venv-depth-pro
+python3.11 -m venv .venv-depth-pro
 ./.venv-depth-pro/bin/python -m pip install --upgrade pip depth-pro
 mkdir -p checkpoints
 curl -L https://ml-site.cdn-apple.com/models/depth-pro/depth_pro.pt -o checkpoints/depth_pro.pt
@@ -310,6 +310,7 @@ cd Transformation_Portal
 make venv
 source .venv/bin/activate  # Windows: .venv\Scripts\activate
 make install-core
+make check-environment
 lux-depth-v3 --help
 ```
 

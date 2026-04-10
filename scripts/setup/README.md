@@ -32,6 +32,7 @@ the auto-discovered `./.venv-da3/bin/python` contract and by explicit
 **What it does:**
 - Clones Depth Anything 3 into `.runtime/Depth-Anything-3` if it is missing
 - Synchronizes that checkout to the validated default ref unless `--ref` overrides it
+- Resolves a Python 3.11+ bootstrap interpreter (preferring the repo `.venv` when available)
 - Creates the isolated DA3 venv at `./.venv-da3`
 - Installs a pinned DA3-compatible dependency set without upstream `xformers`
 - Captures a runtime package snapshot at `.runtime/da3-pip-freeze.txt`
@@ -63,6 +64,7 @@ auto-discovered `./.venv-raw/bin/python` contract and by explicit
 ```
 
 **What it does:**
+- Resolves a Python 3.11+ bootstrap interpreter (preferring the repo `.venv` when available)
 - Creates the isolated RAW venv at `./.venv-raw`
 - Installs the local project with the `raw` extra into that venv
 - Captures a runtime package snapshot at `.runtime/raw-pip-freeze.txt`

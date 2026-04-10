@@ -72,6 +72,71 @@ class TestCheckLocalEnvironment:
         assert hasattr(result, "passed")
         assert result.is_hard_requirement is False  # Venv is optional
 
+    def test_check_venv_active_detects_venv_without_virtual_env_envvar(self, env_module, monkeypatch, tmp_path):
+        """Interpreter-based venv detection should work without VIRTUAL_ENV."""
+        monkeypatch.setattr(env_module, "REPO_ROOT", tmp_path)
+        monkeypatch.setattr(env_module, "REPO_VENV_PYTHON", tmp_path / ".venv" / "bin" / "python")
+        monkeypatch.setattr(env_module.sys, "prefix", str(tmp_path / ".venv"))
+        monkeypatch.setattr(env_module.sys, "base_prefix", str(tmp_path / "python-base"))
+        monkeypatch.setattr(env_module.sys, "executable", str(tmp_path / ".venv" / "bin" / "python"))
+        monkeypatch.delenv("VIRTUAL_ENV", raising=False)
+
+        result = env_module.check_venv_active()
+
+        assert result.passed is True
+        assert result.is_hard_requirement is False
+        assert "Active:" in result.message
+
+    def test_check_venv_active_hard_fails_when_repo_venv_exists_but_interpreter_differs(
+        self,
+        env_module,
+        monkeypatch,
+        tmp_path,
+    ):
+        """Preflight should fail closed when the repo venv exists but is not in use."""
+        repo_python = tmp_path / ".venv" / "bin" / "python"
+        repo_python.parent.mkdir(parents=True, exist_ok=True)
+        repo_python.write_text("", encoding="utf-8")
+        current_python = tmp_path / "bin" / "python"
+        current_python.parent.mkdir(parents=True, exist_ok=True)
+        current_python.write_text("", encoding="utf-8")
+
+        monkeypatch.setattr(env_module, "REPO_ROOT", tmp_path)
+        monkeypatch.setattr(env_module, "REPO_VENV_PYTHON", repo_python)
+        monkeypatch.setattr(env_module.sys, "executable", str(current_python))
+        monkeypatch.setattr(env_module.sys, "prefix", str(tmp_path / "system"))
+        monkeypatch.setattr(env_module.sys, "base_prefix", str(tmp_path / "system"))
+        monkeypatch.delenv("VIRTUAL_ENV", raising=False)
+
+        result = env_module.check_venv_active()
+
+        assert result.passed is False
+        assert result.is_hard_requirement is True
+        assert "make repair-core-venv" in (result.guidance or "")
+
+    def test_dependency_health_check_surfaces_da3_contamination_guidance(self, env_module, monkeypatch):
+        """DA3 contamination should point operators to the repair and isolated-runtime paths."""
+        completed = subprocess.CompletedProcess(
+            args=[sys.executable, "-m", "pip", "check"],
+            returncode=1,
+            stdout=(
+                "depth-anything-3 0.0.0 requires xformers, which is not installed.\n"
+                "depth-anything-3 0.0.0 has requirement numpy<2, but you have numpy 2.4.4.\n"
+            ),
+            stderr="",
+        )
+
+        monkeypatch.setattr(env_module.sys, "executable", "/tmp/repo/.venv/bin/python")
+        monkeypatch.setattr(env_module.subprocess, "run", lambda *args, **kwargs: completed)
+
+        result = env_module.check_dependency_health()
+
+        assert result.passed is False
+        assert result.is_hard_requirement is True
+        assert "depth-anything-3" in result.message
+        assert "make repair-core-venv" in (result.guidance or "")
+        assert "./scripts/setup/install_da3_runtime.sh" in (result.guidance or "")
+
     def test_run_all_checks_returns_results_and_exit_code(self, env_module):
         """run_all_checks should return results and exit code."""
         results, exit_code = env_module.run_all_checks()
@@ -157,6 +222,19 @@ class TestCheckLocalEnvironmentCLI:
         output = json.loads(result.stdout)
         # Should only have Python-related checks
         assert len(output["results"]) == 1
+
+    def test_script_check_specific_dependency_health(self):
+        """Script should accept dependency-health as a specific check."""
+        result = subprocess.run(
+            [sys.executable, str(CHECK_LOCAL_ENVIRONMENT_PATH), "--check", "dependency-health", "--json"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        assert result.returncode in (0, 2)
+        output = json.loads(result.stdout)
+        assert len(output["results"]) == 1
+        assert output["results"][0]["name"] == "Python dependency health"
 
     def test_script_quiet_mode(self):
         """Quiet mode should reduce output."""

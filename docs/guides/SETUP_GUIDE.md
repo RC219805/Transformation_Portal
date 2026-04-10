@@ -19,16 +19,15 @@ This guide walks you through setting up the Transformation Portal with all requi
 git clone https://github.com/RC219805/Transformation_Portal.git
 cd Transformation_Portal
 
-# 2. Create virtual environment (recommended)
-python3 -m venv .venv
+# 2. Create the repo virtual environment
+make venv
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 
-# 3. Install core dependencies and CLI
-pip install -r requirements.txt
-pip install -e .
+# 3. Install pinned core dependencies and CLI
+make install-core
 
-# 4. Verify installation
-python scripts/verification/verify_core.py
+# 4. Verify the environment
+make check-environment
 ```
 
 ---
@@ -47,8 +46,8 @@ python scripts/verification/verify_core.py
 Install the core packages required for basic image processing:
 
 ```bash
-pip install -r requirements.txt
-# or from repo root (preferred for contributors):
+make venv
+source .venv/bin/activate
 make install-core
 ```
 
@@ -57,6 +56,7 @@ This installs:
 - **Pillow**: Image I/O and manipulation
 - **scipy**: Scientific computing
 - **typer**: CLI framework and other pinned core utilities
+- the local project in editable mode without re-resolving dependencies outside the checked-in lockfiles
 
 ### Step 2: ML Dependencies (Optional)
 

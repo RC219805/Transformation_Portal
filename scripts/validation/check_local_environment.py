@@ -11,12 +11,14 @@ Exit codes:
     2 - Hard failure: environment cannot run validation targets
 
 Usage:
-    python scripts/validation/check_local_environment.py
-    python scripts/validation/check_local_environment.py --strict
-    python scripts/validation/check_local_environment.py --check python
-    python scripts/validation/check_local_environment.py --check node
-    python scripts/validation/check_local_environment.py --check chrome
-    python scripts/validation/check_local_environment.py --check ports
+    make check-environment
+    .venv/bin/python scripts/validation/check_local_environment.py
+    .venv/bin/python scripts/validation/check_local_environment.py --strict
+    .venv/bin/python scripts/validation/check_local_environment.py --check python
+    .venv/bin/python scripts/validation/check_local_environment.py --check node
+    .venv/bin/python scripts/validation/check_local_environment.py --check chrome
+    .venv/bin/python scripts/validation/check_local_environment.py --check ports
+    .venv/bin/python scripts/validation/check_local_environment.py --check dependency-health
 """
 
 from __future__ import annotations
@@ -55,6 +57,7 @@ class CheckResult:
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 FRONTDOOR_ROOT = REPO_ROOT / "web" / "secure-landing"
+REPO_VENV_PYTHON = REPO_ROOT / ".venv" / "bin" / "python"
 
 # Required Python version
 MIN_PYTHON_VERSION = (3, 11)
@@ -75,6 +78,12 @@ CHECKED_ENV_VARS = [
     "TP_FRONTDOOR_USERNAME",
     "TP_FRONTDOOR_PASSWORD",
 ]
+
+DA3_CONTAMINATION_MARKERS = (
+    "depth-anything-3",
+    "xformers",
+    "numpy<2",
+)
 
 
 def check_python_version() -> CheckResult:
@@ -309,24 +318,120 @@ def check_env_vars() -> list[CheckResult]:
     return results
 
 
+def _is_virtualenv_interpreter() -> bool:
+    """Return whether the active interpreter is running from a virtualenv."""
+    if os.environ.get("VIRTUAL_ENV"):
+        return True
+    if hasattr(sys, "real_prefix"):
+        return True
+    return getattr(sys, "base_prefix", sys.prefix) != sys.prefix
+
+
+def _repo_venv_matches_current_interpreter() -> bool:
+    """Return whether the active interpreter matches the repo-local .venv."""
+    if not REPO_VENV_PYTHON.exists():
+        return False
+
+    current_executable = Path(sys.executable)
+    if not current_executable.exists():
+        return False
+
+    try:
+        return current_executable.samefile(REPO_VENV_PYTHON)
+    except OSError:
+        return False
+
+
 def check_venv_active() -> CheckResult:
     """Check if a virtual environment is active."""
-    venv_path = os.environ.get("VIRTUAL_ENV")
-    if venv_path:
+    if REPO_VENV_PYTHON.exists() and not _repo_venv_matches_current_interpreter():
+        return CheckResult(
+            name="Python venv",
+            passed=False,
+            message=(
+                f"Repo venv exists at {REPO_VENV_PYTHON}, but the current interpreter is {sys.executable}"
+            ),
+            guidance=(
+                "Use `.venv/bin/python ...` or `source .venv/bin/activate`. "
+                "If `.venv` is broken, run `make repair-core-venv`."
+            ),
+        )
+
+    if _is_virtualenv_interpreter():
         return CheckResult(
             name="Python venv",
             passed=True,
-            message=f"Active: {venv_path}",
+            message=f"Active: {os.environ.get('VIRTUAL_ENV') or sys.prefix}",
             is_hard_requirement=False,
         )
-    else:
+
+    return CheckResult(
+        name="Python venv",
+        passed=True,
+        message="No venv active (using system Python)",
+        is_hard_requirement=False,
+        guidance="Consider: make venv && source .venv/bin/activate",
+    )
+
+
+def _summarize_pip_check_output(output: str) -> str:
+    """Collapse pip check output into a compact single-line summary."""
+    lines = [line.strip() for line in output.splitlines() if line.strip()]
+    if not lines:
+        return "pip check reported dependency issues"
+    return "; ".join(lines[:2])
+
+
+def _dependency_health_guidance(output: str) -> str:
+    """Return actionable dependency-health guidance."""
+    combined = output.lower()
+    if any(marker in combined for marker in DA3_CONTAMINATION_MARKERS):
+        return (
+            "Repair the core repo environment with `make repair-core-venv`, then reinstall "
+            "the isolated DA3 runtime with `./scripts/setup/install_da3_runtime.sh`."
+        )
+    return "Repair the repo environment with `make repair-core-venv`, then rerun this pre-flight check."
+
+
+def check_dependency_health() -> CheckResult:
+    """Check whether the active interpreter has a consistent dependency graph."""
+    try:
+        result = subprocess.run(
+            [sys.executable, "-m", "pip", "check"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+    except subprocess.TimeoutExpired:
         return CheckResult(
-            name="Python venv",
-            passed=True,
-            message="No venv active (using system Python)",
-            is_hard_requirement=False,
-            guidance="Consider: make venv && source .venv/bin/activate",
+            name="Python dependency health",
+            passed=False,
+            message="`python -m pip check` timed out",
+            guidance="Repair the repo environment with `make repair-core-venv`, then retry.",
         )
+    except Exception as exc:
+        return CheckResult(
+            name="Python dependency health",
+            passed=False,
+            message=f"Could not run `{sys.executable} -m pip check`: {exc}",
+            guidance="Repair the repo environment with `make repair-core-venv`, then retry.",
+        )
+
+    combined_output = "\n".join(part for part in (result.stdout, result.stderr) if part).strip()
+    if result.returncode == 0:
+        return CheckResult(
+            name="Python dependency health",
+            passed=True,
+            message=f"`{sys.executable} -m pip check` passed",
+        )
+
+    return CheckResult(
+        name="Python dependency health",
+        passed=False,
+        message=_summarize_pip_check_output(combined_output),
+        guidance=_dependency_health_guidance(combined_output),
+    )
 
 
 def run_all_checks(
@@ -342,6 +447,7 @@ def run_all_checks(
         "ports": check_ports_available,
         "frontdoor": check_frontdoor_dependencies,
         "venv": check_venv_active,
+        "dependency-health": check_dependency_health,
         "env": check_env_vars,
     }
 
@@ -421,6 +527,7 @@ Examples:
     %(prog)s --check node    Check only Node.js version
     %(prog)s --check chrome  Check only Chrome availability
     %(prog)s --check ports   Check only port availability
+    %(prog)s --check dependency-health  Check pip dependency health
     %(prog)s --quiet         Only output failures
         """,
     )
@@ -431,7 +538,7 @@ Examples:
     )
     parser.add_argument(
         "--check",
-        choices=["python", "node", "chrome", "ports", "frontdoor", "venv", "env"],
+        choices=["python", "node", "chrome", "ports", "frontdoor", "venv", "dependency-health", "env"],
         action="append",
         help="Run only specified check(s)",
     )

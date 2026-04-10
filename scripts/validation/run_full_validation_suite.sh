@@ -20,6 +20,14 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+PYTHON_RESOLVER="${REPO_ROOT}/scripts/setup/resolve_python_311.sh"
+
+if [[ ! -x "${PYTHON_RESOLVER}" ]]; then
+    echo "[ERROR] Python resolver missing: ${PYTHON_RESOLVER}" >&2
+    exit 1
+fi
+
+PYTHON_BIN="$("${PYTHON_RESOLVER}")"
 
 # Options
 QUICK_MODE=false
@@ -169,7 +177,7 @@ fi
 # Step 1: Environment pre-flight
 log_step "Step 1/6: Environment Pre-flight Checks"
 if [[ "$SKIP_FRONTDOOR" == "true" ]]; then
-    if python3 "${SCRIPT_DIR}/check_local_environment.py" --check python --check venv; then
+    if "${PYTHON_BIN}" "${SCRIPT_DIR}/check_local_environment.py" --check python --check venv --check dependency-health; then
         log_success "Environment checks passed"
     else
         PREFLIGHT_STATUS=$?
@@ -188,7 +196,7 @@ if [[ "$SKIP_FRONTDOOR" == "true" ]]; then
         esac
     fi
 else
-    if python3 "${SCRIPT_DIR}/check_local_environment.py"; then
+    if "${PYTHON_BIN}" "${SCRIPT_DIR}/check_local_environment.py"; then
         log_success "Environment checks passed"
     else
         PREFLIGHT_STATUS=$?

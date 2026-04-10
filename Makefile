@@ -1,7 +1,9 @@
 SHELL := /bin/sh
 
-# Resolve a Python interpreter: prefer local venv, otherwise fall back to python3
-PY := $(shell if [ -x .venv/bin/python ]; then echo .venv/bin/python; else command -v python3 || command -v python; fi)
+# Resolve Python interpreters at recipe runtime so targets that create or repair
+# .venv immediately switch to the repo interpreter on subsequent lines.
+BOOTSTRAP_PY = $$(./scripts/setup/resolve_python_311.sh)
+PY = $$(if [ -x .venv/bin/python ] && ./.venv/bin/python -c 'import sys; raise SystemExit(0 if sys.version_info[:2] >= (3, 11) else 1)' >/dev/null 2>&1; then printf '%s' .venv/bin/python; else ./scripts/setup/resolve_python_311.sh; fi)
 
 # Common subsets (fast tests avoid heavy/optional paths)
 FAST_TESTS := \
@@ -24,7 +26,7 @@ PHASE6_SMOKE_TESTS := \
 	tests/test_lux_render_pipeline_smoke.py \
 	tests/lux_depth_v3/test_orchestrator_smoke.py
 
-.PHONY: help test-fast test-novideo test-full test-integration test-structure test-utils test-orchestrator-contract test-orchestrator-http-contract test-portal-contract test-frontdoor-contract seed-frontdoor-user run-frontdoor-local validate-orchestrator-http validate-portal-browser validate-frontdoor-browser validate-frontdoor-deployment-gate audit-pipeline-readiness coverage-fast-scope venv setup clean \
+.PHONY: help test-fast test-novideo test-full test-integration test-structure test-utils test-orchestrator-contract test-orchestrator-http-contract test-portal-contract test-frontdoor-contract seed-frontdoor-user run-frontdoor-local validate-orchestrator-http validate-portal-browser validate-frontdoor-browser validate-frontdoor-deployment-gate audit-pipeline-readiness coverage-fast-scope venv repair-core-venv setup clean \
         lint lint-parity ci ci-full pre-commit install-hooks quality-check fix-quality validate-ci organize-docs check-json-serialization check-piptools-cache \
         check-yaml-governance check-stale-docs lock lock-prod lock-ci lock-dev install-core install-ml install-ml-core install-ml-raw install-ml-sam2 install-ml-coreml docs docs-clean \
         check-test-markers check-ci-sync check-environment validate-full validate-quick clean-frontdoor clean-all check-worktree
@@ -32,7 +34,8 @@ PHASE6_SMOKE_TESTS := \
 help:
 	@echo "Targets:"
 	@echo "  setup              Install package in editable mode (pip install -e .)"
-	@echo "  install-core       Install core dependencies with constraints"
+	@echo "  install-core       Install pinned core runtime + dev tooling dependencies into .venv"
+	@echo "  repair-core-venv   Recreate .venv and reinstall the pinned core environment"
 	@echo "  install-ml         Disabled: no trusted umbrella ML lockfile contract"
 	@echo "  install-ml-core    Install ML core layer only (cross-platform baseline)"
 	@echo "  install-ml-raw     Disabled: no trusted checked-in RAW lockfile contract"
@@ -94,10 +97,22 @@ help:
 	@echo "  docs-clean         Clean generated documentation files"
 
 venv:
-	@if [ ! -x .venv/bin/python ]; then \
-		"$(PY)" -m venv .venv && echo "Created .venv"; \
+	@if [ -x .venv/bin/python ]; then \
+		if ./.venv/bin/python -c 'import sys; raise SystemExit(0 if sys.version_info[:2] >= (3, 11) else 1)' >/dev/null 2>&1; then \
+			echo ".venv already present"; \
+		else \
+			venv_version="$$(./.venv/bin/python -V 2>&1 || echo 'Python version unavailable')"; \
+			echo "Error: existing .venv is not using Python 3.11+ ($$venv_version)."; \
+			echo "Error: run 'make repair-core-venv' to recreate the repo environment."; \
+			exit 1; \
+		fi; \
+	elif [ -d .venv ]; then \
+		echo "Error: .venv exists but is missing a usable Python interpreter."; \
+		echo "Error: run 'make repair-core-venv' to recreate the repo environment."; \
+		exit 1; \
 	else \
-		echo ".venv already present"; \
+		bootstrap_py="$(BOOTSTRAP_PY)"; \
+		"$$bootstrap_py" -m venv .venv && echo "Created .venv with $$bootstrap_py"; \
 	fi
 
 setup: venv
@@ -105,13 +120,21 @@ setup: venv
 	@"$(PY)" -m pip install -e .
 
 install-core: venv
-	@echo "Installing core dependencies with constraints..."
-	@if [ -f requirements/constraints.txt ]; then \
-		"$(PY)" -m pip install -e ".[dev]" -c requirements/constraints.txt; \
-	else \
-		echo "Warning: requirements/constraints.txt not found, installing without constraints"; \
-		"$(PY)" -m pip install -e ".[dev]"; \
-	fi
+	@echo "Installing pinned core dependencies into .venv..."
+	@./.venv/bin/python -m pip install -r requirements/base.txt -r requirements/dev.txt -c requirements/constraints.txt
+	@./.venv/bin/python -m pip install -e . --no-deps
+	@./.venv/bin/python -m pip check
+
+repair-core-venv:
+	@echo "Recreating repo .venv with a Python 3.11+ interpreter..."
+	@rm -rf .venv
+	@bootstrap_py="$(BOOTSTRAP_PY)"; \
+		"$$bootstrap_py" -m venv .venv
+	@./.venv/bin/python -m pip install -r requirements/base.txt -r requirements/dev.txt -c requirements/constraints.txt
+	@./.venv/bin/python -m pip install -e . --no-deps
+	@./.venv/bin/python -m pip check
+	@echo "Repo .venv repaired."
+	@echo "Reminder: install Depth Anything 3 into .venv-da3 with ./scripts/setup/install_da3_runtime.sh"
 
 # ML Layer Install Targets
 # These support fine-grained ML capability installation per the layered strategy.
