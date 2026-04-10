@@ -151,6 +151,38 @@ def test_run_extract_cli_args_none_normalizes_to_empty_sequence(tmp_path: Path) 
     assert delegated.cli_args == []
 
 
+def test_run_extract_passes_raw_sidecar_args_to_core_service(tmp_path: Path) -> None:
+    input_path = tmp_path / "sample.cr2"
+    input_path.touch()
+    raw_sidecar_output_path = tmp_path / "sidecars" / "sample.raw.sidecar.json"
+    stub = _StubCoreService()
+    stub.extract_result = CoreExtractResult(
+        path=input_path,
+        success=True,
+        output_path=tmp_path / "sample.provenance.json",
+        elapsed_seconds=0.1,
+    )
+    service = MetadataExtractionService(metadata_service=stub)  # type: ignore[arg-type]
+
+    result = service.run(
+        ServiceRunRequest(
+            command="extract",
+            input_path=input_path,
+            args={
+                "emit_raw_sidecar": False,
+                "raw_sidecar_strict": True,
+                "raw_sidecar_output_path": str(raw_sidecar_output_path),
+            },
+        )
+    )
+
+    assert result.success is True
+    delegated = stub.extract_requests[0]
+    assert delegated.emit_raw_sidecar is False
+    assert delegated.raw_sidecar_strict is True
+    assert delegated.raw_sidecar_output_path == raw_sidecar_output_path
+
+
 def test_run_extract_with_invalid_cli_args_type_returns_other_failure(tmp_path: Path) -> None:
     input_path = tmp_path / "sample.cr2"
     input_path.touch()
@@ -263,6 +295,47 @@ def test_run_extract_batch_preserves_core_default_config_and_normalizes_paths(tm
     assert delegated.input_root == input_dir
     assert list(delegated.input_paths) == [image_path]
     assert delegated.config_dict is None
+
+
+def test_run_extract_batch_passes_raw_sidecar_args_to_core_service(tmp_path: Path) -> None:
+    input_dir = tmp_path / "inputs"
+    input_dir.mkdir(parents=True)
+    image_path = input_dir / "a.cr2"
+    image_path.touch()
+
+    summary = {
+        "total": 1,
+        "success": 1,
+        "failure": 0,
+        "by_exit_code": {
+            code.name: 0 for code in sorted(IngestExitCode, key=lambda code: code.value) if code != IngestExitCode.SUCCESS
+        },
+    }
+    stub = _StubCoreService()
+    stub.batch_result = BatchExtractResult(
+        items=[],
+        total_elapsed=0.01,
+        summary_counts=summary,
+        dominant_error=None,
+    )
+    service = MetadataExtractionService(metadata_service=stub)  # type: ignore[arg-type]
+
+    result = service.run(
+        ServiceRunRequest(
+            command="extract-batch",
+            input_path=input_dir,
+            input_paths=[image_path],
+            args={
+                "emit_raw_sidecar": False,
+                "raw_sidecar_strict": True,
+            },
+        )
+    )
+
+    assert result.success is True
+    delegated = stub.batch_requests[0]
+    assert delegated.emit_raw_sidecar is False
+    assert delegated.raw_sidecar_strict is True
 
 
 def test_run_extract_batch_with_invalid_input_paths_fails_without_silent_drop(tmp_path: Path) -> None:
