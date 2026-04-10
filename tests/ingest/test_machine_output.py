@@ -51,6 +51,8 @@ def test_extract_result_to_dict_shape() -> None:
         output_path=None,
         elapsed_seconds=1.25,
         error=OtherIngestFailure("boom"),
+        raw_sidecar_path=Path("/tmp/input.raw.sidecar.json"),
+        raw_sidecar_error="rawpy missing",
     )
 
     payload = extract_result_to_dict(result, preset="luxury")
@@ -60,6 +62,8 @@ def test_extract_result_to_dict_shape() -> None:
     assert payload["output_path"] is None
     assert payload["preset"] == "luxury"
     assert payload["error"]["type"] == "OtherIngestFailure"
+    assert "raw_sidecar_path" not in payload
+    assert "raw_sidecar_error" not in payload
 
 
 def test_validate_result_to_dict_serializes_typed_errors() -> None:
@@ -151,6 +155,27 @@ def test_batch_item_to_dict_handles_none_values() -> None:
     }
 
 
+def test_batch_item_to_dict_ignores_raw_sidecar_fields() -> None:
+    item = BatchItemResult(
+        path=Path("/tmp/input.cr2"),
+        success=True,
+        output_path=Path("/tmp/input.provenance.json"),
+        elapsed_seconds=0.0,
+        raw_sidecar_path=Path("/tmp/input.raw.sidecar.json"),
+        raw_sidecar_error="rawpy missing",
+    )
+
+    payload = batch_item_to_dict(item)
+
+    assert payload == {
+        "path": "/tmp/input.cr2",
+        "success": True,
+        "output_path": "/tmp/input.provenance.json",
+        "elapsed_seconds": 0.0,
+        "error": None,
+    }
+
+
 def test_batch_result_to_dict_includes_unknown_exit_code_names() -> None:
     result = BatchExtractResult(
         items=[],
@@ -204,6 +229,8 @@ def test_golden_contract_extract_result_canonical_output() -> None:
         output_path=None,
         elapsed_seconds=1.5,
         error=SchemaValidationFailure("golden test error"),
+        raw_sidecar_path=Path("/tmp/test.raw.sidecar.json"),
+        raw_sidecar_error="rawpy missing",
     )
 
     payload = extract_result_to_dict(result, preset="stable")
