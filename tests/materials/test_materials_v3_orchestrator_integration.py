@@ -114,8 +114,12 @@ def test_materials_v3_process_integration(tmp_path, mock_depth_backend, mock_da3
     assert "timing_ms" in pixel_ops
 
 
-def test_run_materials_v3_stage_persists_mask_artifact_and_sets_metadata(tmp_path, mock_depth_backend, mock_da3_available):
-    """Materials V3 stage should persist segmentation mask artifacts and merge metadata."""
+def test_run_materials_v3_stage_aligns_v2_handoff_artifacts_and_sets_metadata(
+    tmp_path,
+    mock_depth_backend,
+    mock_da3_available,
+):
+    """Materials V3 stage should align persisted handoff artifacts to the depth artifact shape."""
     config = EnhanceConfig(
         enable_materials_v3=True,
         apply_pixel_ops=True,
@@ -127,10 +131,11 @@ def test_run_materials_v3_stage_persists_mask_artifact_and_sets_metadata(tmp_pat
     preprocessed_array = np.zeros((8, 8, 3), dtype=np.float32)
     depth_map = np.ones((8, 8), dtype=np.float32)
     glass_mask = np.ones((8, 8), dtype=np.float32)
+    enhanced_image = np.linspace(0.0, 1.0, 8 * 8 * 3, dtype=np.float32).reshape(8, 8, 3)
     output_key = Path("nested/image_01")
 
     materials_result = {
-        "enhanced_image": None,
+        "enhanced_image": enhanced_image,
         "materials_v3_response_plan": {"per_class": {}},
         "materials_v3_pixel_ops": {"applied": [], "blocked": []},
         "materials_v3_metadata": {
@@ -152,14 +157,24 @@ def test_run_materials_v3_stage_persists_mask_artifact_and_sets_metadata(tmp_pat
                     preprocessed_array=preprocessed_array,
                     depth_map=depth_map,
                     output_key=output_key,
+                    artifact_shape=(10, 12),
                 )
 
     assert result is materials_result
-    assert enhanced_path is None
+    assert enhanced_path is not None
+    assert enhanced_path.exists()
+
+    from PIL import Image
+
+    with Image.open(enhanced_path) as enhanced_image_file:
+        assert enhanced_image_file.size == (12, 10)
 
     segmentation_metadata = result["materials_v3_metadata"]["segmentation_metadata"]
     assert segmentation_metadata["clip_runtime"]["weights_source"] == "cache_path"
     assert segmentation_metadata["mask_artifact_format"] == "npz"
+    assert segmentation_metadata["processing_shape"] == [8, 8]
+    assert segmentation_metadata["v2_handoff_shape"] == [10, 12]
+    assert segmentation_metadata["mask_artifact_shape"] == [10, 12]
 
     mask_artifact_path = Path(segmentation_metadata["mask_artifact_path"])
     assert mask_artifact_path == orchestrator._segmentation_mask_artifact_path(output_key)
@@ -169,9 +184,10 @@ def test_run_materials_v3_stage_persists_mask_artifact_and_sets_metadata(tmp_pat
         assert set(data.files) == {"glass"}
         loaded_mask = np.asarray(data["glass"])
 
-    assert loaded_mask.shape == glass_mask.shape
+    assert loaded_mask.shape == (10, 12)
     assert loaded_mask.dtype == np.float32
-    assert np.array_equal(loaded_mask, glass_mask)
+    assert result["material_masks"]["glass"].shape == (10, 12)
+    assert float(loaded_mask.mean()) == pytest.approx(1.0, rel=1e-6, abs=1e-6)
 
 
 def test_materials_v3_manifest_integration(tmp_path, mock_depth_backend, mock_da3_available):
@@ -406,6 +422,8 @@ def test_apex_v2_preflight_rejects_non_canonical_fastpath(tmp_path, mock_depth_b
 
 def test_apex_v2_preflight_accepts_canonical_handoff(tmp_path, mock_depth_backend, mock_da3_available):
     """APEX strict mode should allow V2 preflight only with canonical enhanced input + masks."""
+    from PIL import Image
+
     config = EnhanceConfig(
         quality_tier="apex",
         enable_materials_v3=True,
@@ -420,19 +438,53 @@ def test_apex_v2_preflight_accepts_canonical_handoff(tmp_path, mock_depth_backen
     output_key = Path("image_01")
     depth_path = tmp_path / "depth" / "image_depth.png"
     depth_path.parent.mkdir(parents=True, exist_ok=True)
-    depth_path.write_bytes(b"depth")
+    Image.fromarray(np.full((8, 8), 128, dtype=np.uint8), mode="L").save(depth_path)
 
     expected_path = orchestrator._expected_materials_v3_enhanced_path(output_key)
     expected_path.parent.mkdir(parents=True, exist_ok=True)
-    expected_path.write_bytes(b"enhanced")
+    Image.fromarray(np.full((8, 8, 3), 64, dtype=np.uint8), mode="RGB").save(expected_path)
 
     orchestrator._enforce_apex_v2_canonical_input_preflight(
         depth_path=depth_path,
         output_key=output_key,
         v2_input_path=expected_path,
         enhanced_image_path=expected_path,
-        materials_v3_result={"material_masks": {"glass": np.ones((2, 2), dtype=np.float32)}},
+        materials_v3_result={"material_masks": {"glass": np.ones((8, 8), dtype=np.float32)}},
     )
+
+
+def test_apex_v2_preflight_rejects_dimension_drift(tmp_path, mock_depth_backend, mock_da3_available):
+    """APEX strict mode should fail before V2 when image, depth, and mask shapes drift."""
+    from PIL import Image
+
+    config = EnhanceConfig(
+        quality_tier="apex",
+        enable_materials_v3=True,
+        enable_material_segmentation=True,
+        material_segmentation_backend="efficientsam",
+        strict_backend=True,
+        depth_device="cpu",
+        enable_v2=False,
+    )
+    orchestrator = EnhanceOrchestrator(config, tmp_path)
+
+    output_key = Path("image_01")
+    depth_path = tmp_path / "depth" / "image_depth.png"
+    depth_path.parent.mkdir(parents=True, exist_ok=True)
+    Image.fromarray(np.full((8, 8), 128, dtype=np.uint8), mode="L").save(depth_path)
+
+    expected_path = orchestrator._expected_materials_v3_enhanced_path(output_key)
+    expected_path.parent.mkdir(parents=True, exist_ok=True)
+    Image.fromarray(np.full((6, 6, 3), 64, dtype=np.uint8), mode="RGB").save(expected_path)
+
+    with pytest.raises(RuntimeError, match="dimension drift"):
+        orchestrator._enforce_apex_v2_canonical_input_preflight(
+            depth_path=depth_path,
+            output_key=output_key,
+            v2_input_path=expected_path,
+            enhanced_image_path=expected_path,
+            materials_v3_result={"material_masks": {"glass": np.ones((8, 8), dtype=np.float32)}},
+        )
 
 
 def test_apex_cached_depth_recomputes_materials_for_canonical_handoff(tmp_path, mock_depth_backend, mock_da3_available):
@@ -467,7 +519,8 @@ def test_apex_cached_depth_recomputes_materials_for_canonical_handoff(tmp_path, 
         "materials_v3_metadata": {"version": "3.1"},
     }
 
-    def _run_stage(*, preprocessed_array, depth_map, output_key):  # noqa: ARG001
+    def _run_stage(*, preprocessed_array, depth_map, output_key, artifact_shape):  # noqa: ARG001
+        assert artifact_shape == (4, 4)
         expected_path.write_bytes(b"enhanced")
         return recomputed_result, 0.321, expected_path
 
