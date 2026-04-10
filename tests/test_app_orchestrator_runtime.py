@@ -2905,6 +2905,170 @@ def test_index_job_artifacts_truncation_is_sorted_and_stable(tmp_path: Path) -> 
     assert job.artifacts["indexed_count"] == 2
 
 
+def test_index_job_artifacts_prefers_current_run_card_artifact_index(tmp_path: Path) -> None:
+    output_dir = tmp_path / "out"
+    depth_dir = output_dir / "depth"
+    manifests_dir = output_dir / "manifests"
+    depth_dir.mkdir(parents=True, exist_ok=True)
+    manifests_dir.mkdir(parents=True, exist_ok=True)
+
+    current_depth = depth_dir / "current_depth.png"
+    current_depth.write_bytes(b"current-depth")
+    (depth_dir / "stale_depth.png").write_bytes(b"stale-depth")
+    batch_manifest = manifests_dir / "batch_2026-04-09_132300.json"
+    batch_manifest.write_text(json.dumps({"batch_id": "2026-04-09_132300", "results": []}), encoding="utf-8")
+    run_card = output_dir / "run_card_2026-04-09_132300.json"
+    run_card.write_text(
+        json.dumps(
+            {
+                "batch_id": "2026-04-09_132300",
+                "success_count": 1,
+                "error_count": 0,
+                "artifact_index": [
+                    {"relative_path": "depth/current_depth.png"},
+                    {"relative_path": "manifests/batch_2026-04-09_132300.json"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    job = orchestrator_app.Job(
+        id="job_artifacts_scoped_run_card",
+        created_at=orchestrator_app._now(),
+        request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(output_dir)}},
+    )
+
+    indexed = orchestrator_app._index_job_artifacts(job)
+
+    assert {item["path"] for item in indexed} == {
+        "depth/current_depth.png",
+        "manifests/batch_2026-04-09_132300.json",
+        "run_card_2026-04-09_132300.json",
+    }
+    assert "depth/stale_depth.png" not in job.artifact_lookup
+
+
+def test_index_job_artifacts_uses_current_batch_manifest_when_run_card_lacks_artifact_index(tmp_path: Path) -> None:
+    output_dir = tmp_path / "out"
+    depth_dir = output_dir / "depth"
+    manifests_dir = output_dir / "manifests"
+    depth_dir.mkdir(parents=True, exist_ok=True)
+    manifests_dir.mkdir(parents=True, exist_ok=True)
+
+    (depth_dir / "stale_depth.png").write_bytes(b"stale-depth")
+    batch_manifest = manifests_dir / "batch_2026-04-09_132300.json"
+    batch_manifest.write_text(
+        json.dumps(
+            {
+                "batch_id": "2026-04-09_132300",
+                "results": [{"status": "error"}],
+                "stats": {"total_images": 1},
+            }
+        ),
+        encoding="utf-8",
+    )
+    run_card = output_dir / "run_card_2026-04-09_132300.json"
+    run_card.write_text(
+        json.dumps(
+            {
+                "batch_id": "2026-04-09_132300",
+                "success_count": 0,
+                "error_count": 1,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    job = orchestrator_app.Job(
+        id="job_artifacts_scoped_manifest",
+        created_at=orchestrator_app._now(),
+        request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(output_dir)}},
+    )
+
+    indexed = orchestrator_app._index_job_artifacts(job)
+
+    assert {item["path"] for item in indexed} == {
+        "manifests/batch_2026-04-09_132300.json",
+        "run_card_2026-04-09_132300.json",
+    }
+    assert "depth/stale_depth.png" not in job.artifact_lookup
+
+
+def test_refresh_job_run_summary_uses_current_output_metadata_not_scoped_items(tmp_path: Path) -> None:
+    output_dir = tmp_path / "out"
+    manifests_dir = output_dir / "manifests"
+    manifests_dir.mkdir(parents=True, exist_ok=True)
+
+    old_run_card = output_dir / "run_card_2026-04-06_232022.json"
+    old_run_card.write_text(
+        json.dumps(
+            {
+                "batch_id": "2026-04-06_232022",
+                "total_images": 5,
+                "success_count": 4,
+                "error_count": 1,
+            }
+        ),
+        encoding="utf-8",
+    )
+    current_batch_manifest = manifests_dir / "batch_2026-04-09_132300.json"
+    current_batch_manifest.write_text(
+        json.dumps(
+            {
+                "batch_id": "2026-04-09_132300",
+                "results": [{"status": "error"}] * 6,
+                "stats": {"total_images": 6},
+            }
+        ),
+        encoding="utf-8",
+    )
+    current_run_card = output_dir / "run_card_2026-04-09_132300.json"
+    current_run_card.write_text(
+        json.dumps(
+            {
+                "batch_id": "2026-04-09_132300",
+                "total_images": 6,
+                "success_count": 0,
+                "error_count": 6,
+                "artifact_index": [
+                    {"relative_path": "manifests/batch_2026-04-09_132300.json"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    job = orchestrator_app.Job(
+        id="job_run_summary_current_metadata",
+        created_at=orchestrator_app._now(),
+        state="failed",
+        exit_code=1,
+        request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(output_dir)}},
+        artifacts={
+            "output_dir": str(output_dir),
+            "items": [{"path": "run_card_2026-04-06_232022.json", "relative_path": "run_card_2026-04-06_232022.json"}],
+            "indexed_count": 1,
+            "truncated": False,
+        },
+        error={
+            "code": "RUNNER_EXIT_NONZERO",
+            "message": "runner exited with code 1",
+            "details": {"exit_code": 1},
+        },
+    )
+
+    summary = orchestrator_app._refresh_job_run_summary(job)
+
+    assert summary["batch_id"] == "2026-04-09_132300"
+    assert summary["success_count"] == 0
+    assert summary["error_count"] == 6
+    assert summary["partial"] is False
+    assert summary["reviewable_outputs"] is False
+    assert job.state == "failed"
+    assert job.error["code"] == "RUNNER_EXIT_NONZERO"
+
+
 def test_create_job_validation_uses_typed_error_envelope() -> None:
     response = asyncio.run(orchestrator_app.create_job({"pipeline": "unsupported", "args": {}}))
     body = json.loads(response.body.decode("utf-8"))

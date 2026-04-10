@@ -144,6 +144,7 @@ Troubleshooting:
 """
 
 import logging
+import os
 import sys
 from pathlib import Path
 from typing import Optional
@@ -159,6 +160,7 @@ except ImportError:
 
 from ._backend_contract import backend_alias_warning, is_legacy_backend_alias, normalize_backend_id
 from .config import EnhanceConfig, Preset
+from .ingest_adapter import RAW_PREVIEW_ESCAPE_ENV
 from .orchestrator import EnhanceOrchestrator
 
 logger = logging.getLogger(__name__)
@@ -176,6 +178,58 @@ def _parse_bool_flag(value: str) -> bool:
         return value
     normalized = value.lower().strip()
     return normalized in ("on", "true", "yes", "1")
+
+
+def _raw_preview_escape_enabled() -> bool:
+    raw_value = os.getenv(RAW_PREVIEW_ESCAPE_ENV, "0").strip().lower()
+    return raw_value in {"1", "true", "yes", "on"}
+
+
+def _canonical_raw_ingest_status() -> tuple[bool, Optional[str]]:
+    try:
+        import rawpy  # noqa: F401
+    except ImportError:
+        return False, "rawpy is not installed"
+    except Exception:
+        logger.exception("Canonical RAW ingest is unavailable because rawpy failed to import cleanly")
+        return False, "rawpy is unavailable in this environment"
+    return True, None
+
+
+def _canonical_raw_ingest_available() -> bool:
+    available, _ = _canonical_raw_ingest_status()
+    return available
+
+
+def _preflight_raw_ingest_requirements(image_files: list[Path], raw_ingest_mode: str) -> None:
+    from .raw_loader import is_raw_file
+
+    raw_inputs_detected = any(is_raw_file(image_path) for image_path in image_files)
+    if not raw_inputs_detected:
+        return
+
+    if raw_ingest_mode == "force_preview":
+        if _raw_preview_escape_enabled():
+            return
+        message = f"raw_ingest_mode=force_preview requires {RAW_PREVIEW_ESCAPE_ENV}=1 (debug-only escape hatch)."
+        logger.error(message)
+        print(message, file=sys.stdout)
+        raise typer.Exit(code=1)
+
+    raw_ingest_available, unavailable_reason = _canonical_raw_ingest_status()
+    if raw_ingest_available:
+        return
+
+    message = (
+        "RAW inputs detected but canonical RAW ingest is unavailable because "
+        f"{unavailable_reason or 'rawpy is unavailable in this environment'}. "
+        'Install with: pip install -e ".[raw]" or pip install rawpy'
+    )
+    if unavailable_reason != "rawpy is not installed":
+        message += " If rawpy is already installed, inspect the import/runtime error in the logs."
+    logger.error(message)
+    print(message, file=sys.stdout)
+    raise typer.Exit(code=1)
 
 
 def _configure_logging(
@@ -795,12 +849,6 @@ def main(
     if verify_images:
         setattr(config, "verify_images", verify_images)
 
-    # Create orchestrator
-    logger.info(
-        "Initializing orchestrator with" f" output dir: {output_dir}",
-    )
-    orchestrator = EnhanceOrchestrator(config=config, output_root=output_dir)
-
     # Discover images using same hygiene filters as orchestrator
     from .input_discovery import DiscoveryConfig, discover_images
     from .raw_loader import RAW_EXTENSIONS
@@ -831,6 +879,13 @@ def main(
         raise typer.Exit(code=1)
 
     logger.info(f"Found {len(image_files)} images to process")
+    _preflight_raw_ingest_requirements(image_files, raw_ingest_mode)
+
+    # Create orchestrator only after input discovery and RAW preflight succeed.
+    logger.info(
+        "Initializing orchestrator with" f" output dir: {output_dir}",
+    )
+    orchestrator = EnhanceOrchestrator(config=config, output_root=output_dir)
 
     # Process batch
     try:
