@@ -413,9 +413,12 @@ test("homepage GET serves the public DNA landing page instead of redirecting", a
     const response = await GET(request);
     const html = await response.text();
     const sessionCountAfter = db.prepare("SELECT COUNT(*) AS count FROM sessions").get().count;
+    const cacheControl = response.headers.get("cache-control") || "";
 
     assert.equal(response.status, 200);
-    assert.equal(response.headers.get("cache-control"), "no-store");
+    assert.doesNotMatch(cacheControl, /no-store/i);
+    assert.match(cacheControl, /\bpublic\b/i);
+    assert.match(cacheControl, /\bmax-age=/i);
     assert.match(response.headers.get("content-security-policy") || "", /default-src 'self'/);
     assert.match(response.headers.get("content-security-policy") || "", /script-src 'none'/);
     assert.equal(response.headers.get("set-cookie"), null);
@@ -451,12 +454,13 @@ test("homepage GET serves the public DNA landing page instead of redirecting", a
   }
 });
 
-test("homepage GET keeps authenticated operators on the public landing page while surfacing console entry", async () => {
+test("homepage route is explicitly static and ignores authenticated session hints", async () => {
   const env = withTempEnvironment();
 
   try {
     const sessions = await importFresh("../lib/sessions.js");
     const db = getDb(env.dbPath);
+    const routeSource = readFileSync(path.resolve(process.cwd(), "app", "route.js"), "utf-8");
     const { GET } = await importFresh("../app/route.js");
     const authenticatedSession = sessions.rotateAuthenticatedSession(
       sessions.createAnonymousSession(),
@@ -482,10 +486,11 @@ test("homepage GET keeps authenticated operators on the public landing page whil
       .prepare("SELECT last_seen_at, idle_expires_at FROM sessions WHERE id = ?")
       .get(authenticatedSession.id);
 
+    assert.match(routeSource, /dynamic = "force-static"/);
     assert.equal(response.status, 200);
     assert.equal(response.headers.get("set-cookie"), null);
-    assert.match(html, /(?:data-ui="homepage-utility-cta"[^>]*href="\/portal"|href="\/portal"[^>]*data-ui="homepage-utility-cta")/);
-    assert.match(html, />Open Console</);
+    assert.match(html, /(?:data-ui="homepage-utility-cta"[^>]*href="\/login"|href="\/login"[^>]*data-ui="homepage-utility-cta")/);
+    assert.match(html, />Operator Access</);
     assert.match(html, /(?:data-ui="homepage-primary-cta"[^>]*href="\/login"|href="\/login"[^>]*data-ui="homepage-primary-cta")/);
     assert.equal(after.last_seen_at, before.last_seen_at);
     assert.equal(after.idle_expires_at, before.idle_expires_at);
@@ -517,7 +522,7 @@ test("homepage GET succeeds without backend coupling or fetch side effects", asy
   }
 });
 
-test("homepage GET may prune expired sessions without setting cookies", async () => {
+test("homepage GET does not touch session state even when a stale cookie is present", async () => {
   const env = withTempEnvironment();
 
   try {
@@ -540,10 +545,11 @@ test("homepage GET may prune expired sessions without setting cookies", async ()
 
     const response = await GET(request);
     const html = await response.text();
+    const persisted = db.prepare("SELECT id FROM sessions WHERE id = ?").get(expiredSession.id);
 
     assert.equal(response.status, 200);
     assert.equal(response.headers.get("set-cookie"), null);
-    assert.equal(sessions.getSessionById(expiredSession.id, { touch: false }), null);
+    assert.equal(persisted.id, expiredSession.id);
     assert.match(html, />Operator Access</);
   } finally {
     env.cleanup();
@@ -1358,7 +1364,7 @@ test("portal asset proxy preserves content type and strips browser cookies", asy
 
     const originalFetch = global.fetch;
     global.fetch = async (url, init) => {
-      assert.equal(String(url), "http://127.0.0.1:8000/portal/assets/portal.css");
+      assert.equal(String(url), "http://127.0.0.1:8000/portal/assets/portal.css?v=portal-css-v1");
       assert.equal(init.method, "GET");
       assert.equal(init.headers.get("Authorization"), "Bearer backend-secret");
       assert.equal(init.headers.get("x-api-key"), "backend-secret");
@@ -1376,7 +1382,7 @@ test("portal asset proxy preserves content type and strips browser cookies", asy
     };
 
     try {
-      const request = buildRequest("https://portal.example.com/portal/assets/portal.css", {
+      const request = buildRequest("https://portal.example.com/portal/assets/portal.css?v=portal-css-v1", {
         method: "GET",
         headers: new Headers({
           accept: "text/css",
@@ -1442,7 +1448,7 @@ test("portal asset proxy supports nested asset paths and HEAD fallback", async (
     const originalFetch = global.fetch;
     global.fetch = async (url, init) => {
       fetchCalls.push({ url: String(url), method: init.method });
-      assert.equal(String(url), "http://127.0.0.1:8000/portal/assets/fonts/portal-sans.woff2");
+      assert.equal(String(url), "http://127.0.0.1:8000/portal/assets/fonts/portal-sans.woff2?v=font-v1");
       assert.equal(init.headers.get("Authorization"), "Bearer backend-secret");
       assert.equal(init.headers.get("x-api-key"), "backend-secret");
       if (init.method === "HEAD") {
@@ -1471,7 +1477,7 @@ test("portal asset proxy supports nested asset paths and HEAD fallback", async (
     };
 
     try {
-      const request = buildRequest("https://portal.example.com/portal/assets/fonts/portal-sans.woff2", {
+      const request = buildRequest("https://portal.example.com/portal/assets/fonts/portal-sans.woff2?v=font-v1", {
         method: "HEAD"
       });
 
@@ -1484,11 +1490,11 @@ test("portal asset proxy supports nested asset paths and HEAD fallback", async (
       assert.equal(response.headers.get("cache-control"), "public, max-age=3600");
       assert.deepEqual(fetchCalls, [
         {
-          url: "http://127.0.0.1:8000/portal/assets/fonts/portal-sans.woff2",
+          url: "http://127.0.0.1:8000/portal/assets/fonts/portal-sans.woff2?v=font-v1",
           method: "HEAD"
         },
         {
-          url: "http://127.0.0.1:8000/portal/assets/fonts/portal-sans.woff2",
+          url: "http://127.0.0.1:8000/portal/assets/fonts/portal-sans.woff2?v=font-v1",
           method: "GET"
         }
       ]);
@@ -1511,7 +1517,7 @@ test("portal asset proxy preserves upstream cache headers for 304 responses", as
 
     const originalFetch = global.fetch;
     global.fetch = async (url, init) => {
-      assert.equal(String(url), "http://127.0.0.1:8000/portal/assets/portal.js");
+      assert.equal(String(url), "http://127.0.0.1:8000/portal/assets/portal.js?v=portal-js-v1");
       assert.equal(init.method, "GET");
       assert.equal(init.headers.get("if-none-match"), '"portal-js-v1"');
       return new Response(null, {
@@ -1524,7 +1530,7 @@ test("portal asset proxy preserves upstream cache headers for 304 responses", as
     };
 
     try {
-      const request = buildRequest("https://portal.example.com/portal/assets/portal.js", {
+      const request = buildRequest("https://portal.example.com/portal/assets/portal.js?v=portal-js-v1", {
         method: "GET",
         headers: new Headers({
           "if-none-match": '"portal-js-v1"'

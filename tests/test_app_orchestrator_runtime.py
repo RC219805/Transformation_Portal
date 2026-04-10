@@ -16,6 +16,7 @@ from functools import lru_cache
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Dict
+from urllib.parse import parse_qs, urlparse
 
 import pytest
 from starlette.requests import Request as StarletteRequest
@@ -45,7 +46,7 @@ def _flag_value(argv: list[str], flag: str) -> str:
 
 @lru_cache(maxsize=1)
 def _portal_html_content() -> str:
-    return PORTAL_HTML_PATH.read_text(encoding="utf-8")
+    return orchestrator_app._get_portal_asset_bundle().html
 
 
 @lru_cache(maxsize=1)
@@ -59,12 +60,24 @@ def _portal_asset_urls_from_css() -> set[str]:
 
 
 def _portal_asset_path(asset_url: str) -> Path:
-    if not asset_url.startswith("/portal/assets/"):
+    parsed = urlparse(asset_url)
+    if not parsed.path.startswith("/portal/assets/"):
         raise AssertionError(f"unexpected portal asset url: {asset_url}")
-    candidate = PORTAL_ASSET_ROOT / asset_url.removeprefix("/portal/assets/")
+    candidate = PORTAL_ASSET_ROOT / parsed.path.removeprefix("/portal/assets/")
     if not candidate.is_file():
         raise AssertionError(f"portal asset missing: {candidate}")
     return candidate
+
+
+def _portal_asset_name(asset_url: str) -> str:
+    parsed = urlparse(asset_url)
+    if not parsed.path.startswith("/portal/assets/"):
+        raise AssertionError(f"unexpected portal asset url: {asset_url}")
+    return parsed.path.removeprefix("/portal/assets/")
+
+
+def _portal_asset_version(asset_url: str) -> str:
+    return parse_qs(urlparse(asset_url).query).get("v", [""])[0]
 
 
 @lru_cache(maxsize=1)
@@ -73,7 +86,7 @@ def _portal_css_content() -> str:
     match = re.search(r'<link rel="stylesheet" href="(/portal/assets/[^"]+)"\s*/?>', html)
     if match is None:
         raise AssertionError("portal stylesheet link not found")
-    return _portal_asset_path(match.group(1)).read_text(encoding="utf-8")
+    return orchestrator_app._get_portal_asset_bundle().css
 
 
 @lru_cache(maxsize=1)
@@ -420,9 +433,10 @@ def test_portal_phase1_accessibility_tokens_align_focus_and_target_size() -> Non
 def test_portal_html_externalizes_direct_debug_assets_without_third_party_hosts() -> None:
     html_content = _portal_html_content()
     css_content = _portal_css_content()
+    bundle = orchestrator_app._get_portal_asset_bundle()
 
-    assert 'href="/portal/assets/portal.css"' in html_content
-    assert 'src="/portal/assets/portal.js"' in html_content
+    assert f'href="{bundle.urls["portal.css"]}"' in html_content
+    assert f'src="{bundle.urls["portal.js"]}"' in html_content
     assert "<style>" not in html_content
     assert "<script>" not in html_content
     assert "https://cdn.tailwindcss.com" not in html_content
@@ -479,27 +493,33 @@ def test_portal_asset_manifest_rejects_paths_outside_portal_assets_dir(
 
 
 def test_portal_html_asset_references_are_covered_by_manifest() -> None:
+    bundle = orchestrator_app._get_portal_asset_bundle()
     html_asset_urls = _portal_asset_urls_from_html()
     bundled_asset_urls = html_asset_urls | _portal_asset_urls_from_css()
     manifest_asset_urls = {f"/portal/assets/{asset_name}" for asset_name in orchestrator_app.PORTAL_ASSET_MANIFEST.keys()}
+    normalized_asset_urls = {urlparse(asset_url).path for asset_url in bundled_asset_urls}
 
     assert html_asset_urls
-    assert html_asset_urls <= manifest_asset_urls
-    assert bundled_asset_urls == manifest_asset_urls
+    assert {urlparse(asset_url).path for asset_url in html_asset_urls} <= manifest_asset_urls
+    assert normalized_asset_urls == manifest_asset_urls
     for asset_url in bundled_asset_urls:
+        asset_name = _portal_asset_name(asset_url)
+        assert _portal_asset_version(asset_url) == bundle.fingerprints[asset_name]
         _portal_asset_path(asset_url)
 
 
 def test_portal_brand_asset_references_are_manifest_backed_and_repo_local() -> None:
+    bundle = orchestrator_app._get_portal_asset_bundle()
     brand_asset_urls = {url for url in _portal_asset_urls_from_html() if url.startswith("/portal/assets/brand/")}
     manifest_asset_urls = {f"/portal/assets/{asset_name}" for asset_name in orchestrator_app.PORTAL_ASSET_MANIFEST.keys()}
 
     assert brand_asset_urls == {
-        "/portal/assets/brand/dna-symbol-dark.svg",
-        "/portal/assets/brand/dna-symbol-light.svg",
+        bundle.urls["brand/dna-symbol-dark.svg"],
+        bundle.urls["brand/dna-symbol-light.svg"],
     }
-    assert brand_asset_urls <= manifest_asset_urls
+    assert {urlparse(asset_url).path for asset_url in brand_asset_urls} <= manifest_asset_urls
     for asset_url in brand_asset_urls:
+        assert _portal_asset_version(asset_url) == bundle.fingerprints[_portal_asset_name(asset_url)]
         assert _portal_asset_path(asset_url).is_relative_to(orchestrator_app.PORTAL_ASSETS_DIR)
 
 
