@@ -411,10 +411,7 @@ function renderReleaseBundlePreview() {
   </section>`;
 }
 
-export function renderHomepage({ hasAuthenticatedSessionHint }) {
-  const utilityHref = hasAuthenticatedSessionHint ? "/portal" : "/login";
-  const utilityLabel = hasAuthenticatedSessionHint ? "Open Console" : "Operator Access";
-
+export function renderHomepage() {
   return `<!DOCTYPE html>
 <html lang="en">
   <head>
@@ -467,7 +464,7 @@ export function renderHomepage({ hasAuthenticatedSessionHint }) {
 
         <div class="site-actions">
           <a class="site-link" href="/login" data-ui="homepage-operator-link">Operator Login</a>
-          <a class="site-cta site-cta--ghost" href="${escapeHtml(utilityHref)}" data-ui="homepage-utility-cta">${escapeHtml(utilityLabel)}</a>
+          <a class="site-cta site-cta--ghost" href="/login" data-ui="homepage-utility-cta">Operator Access</a>
         </div>
 
         <details class="site-mobile-menu">
@@ -478,7 +475,7 @@ export function renderHomepage({ hasAuthenticatedSessionHint }) {
             </nav>
             <div class="site-mobile-menu__actions">
               <a class="site-link site-link--mobile" href="/login" data-ui="homepage-mobile-operator-link">Operator Login</a>
-              <a class="site-cta site-cta--ghost site-cta--mobile" href="${escapeHtml(utilityHref)}" data-ui="homepage-mobile-utility-cta">${escapeHtml(utilityLabel)}</a>
+              <a class="site-cta site-cta--ghost site-cta--mobile" href="/login" data-ui="homepage-mobile-utility-cta">Operator Access</a>
             </div>
           </div>
         </details>

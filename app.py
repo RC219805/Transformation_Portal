@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import hmac
 import json
 import logging
@@ -15,6 +16,7 @@ import uuid
 from bisect import bisect_left
 from collections import deque
 from dataclasses import dataclass, field
+from functools import lru_cache
 from importlib.util import find_spec
 from pathlib import Path, PurePosixPath
 from typing import Any, AsyncGenerator, Callable, Deque, Dict, List, Mapping, Optional, Tuple
@@ -40,6 +42,16 @@ LOGGER = logging.getLogger(__name__)
 class PortalAssetSpec:
     path: Path
     media_type: str
+
+
+@dataclass(frozen=True)
+class PortalAssetBundle:
+    html: str
+    html_bytes: bytes
+    css: str
+    css_bytes: bytes
+    fingerprints: Dict[str, str]
+    urls: Dict[str, str]
 
 
 def _env_csv(name: str, default: List[str]) -> List[str]:
@@ -87,6 +99,27 @@ PORTAL_ASSET_MANIFEST_PATH = REPO_ROOT / "config" / "portal_asset_manifest.json"
 PORTAL_VIDEO_ASSET_NAME = "dna-portal-video-2.mp4"
 PORTAL_VIDEO_PATH = REPO_ROOT / "public" / "video" / PORTAL_VIDEO_ASSET_NAME
 PORTAL_ASSET_CACHE_CONTROL = "no-store"
+PORTAL_IMMUTABLE_ASSET_CACHE_CONTROL = "public, max-age=31536000, immutable"
+PORTAL_ASSET_FINGERPRINT_PARAM = "v"
+PORTAL_ASSET_FINGERPRINT_LENGTH = 12
+PORTAL_CSS_TEMPLATE_PATH = PORTAL_ASSETS_DIR / "portal.css"
+PORTAL_DIRECT_FINGERPRINT_ASSET_NAMES = (
+    "portal.js",
+    "fonts/portal-sans.woff2",
+    "fonts/portal-mono.woff2",
+    "brand/dna-symbol-dark.svg",
+    "brand/dna-symbol-light.svg",
+)
+PORTAL_CSS_TEMPLATE_TOKENS = {
+    "__PORTAL_FONT_SANS_URL__": "fonts/portal-sans.woff2",
+    "__PORTAL_FONT_MONO_URL__": "fonts/portal-mono.woff2",
+}
+PORTAL_HTML_TEMPLATE_TOKENS = {
+    "__PORTAL_CSS_URL__": "portal.css",
+    "__PORTAL_JS_URL__": "portal.js",
+    "__PORTAL_BRAND_LIGHT_URL__": "brand/dna-symbol-light.svg",
+    "__PORTAL_BRAND_DARK_URL__": "brand/dna-symbol-dark.svg",
+}
 
 
 def _load_portal_asset_manifest() -> Dict[str, PortalAssetSpec]:
@@ -125,6 +158,102 @@ def _load_portal_asset_manifest() -> Dict[str, PortalAssetSpec]:
 PORTAL_ASSET_MANIFEST = _load_portal_asset_manifest()
 PORTAL_ASSET_PATHS = {name: asset.path for name, asset in PORTAL_ASSET_MANIFEST.items()}
 PORTAL_ASSET_MEDIA_TYPES = {name: asset.media_type for name, asset in PORTAL_ASSET_MANIFEST.items()}
+
+
+def _portal_asset_signature(path: Path) -> Tuple[str, int, int]:
+    stat_result = path.stat()
+    return str(path), stat_result.st_mtime_ns, stat_result.st_size
+
+
+def _portal_bundle_signature() -> Tuple[Tuple[str, int, int], ...]:
+    source_paths = [
+        PORTAL_HTML,
+        PORTAL_CSS_TEMPLATE_PATH,
+        *(PORTAL_ASSET_PATHS[asset_name] for asset_name in PORTAL_DIRECT_FINGERPRINT_ASSET_NAMES),
+    ]
+    deduped_paths = list(dict.fromkeys(source_paths))
+    return tuple(_portal_asset_signature(path) for path in deduped_paths)
+
+
+def _fingerprint_bytes(payload: bytes) -> str:
+    return hashlib.sha256(payload).hexdigest()[:PORTAL_ASSET_FINGERPRINT_LENGTH]
+
+
+def _portal_asset_route_path(asset_name: str) -> str:
+    encoded_parts = [quote(part, safe="") for part in asset_name.split("/")]
+    return "/portal/assets/" + "/".join(encoded_parts)
+
+
+def _portal_asset_versioned_url(asset_name: str, fingerprint: str) -> str:
+    return f"{_portal_asset_route_path(asset_name)}?{PORTAL_ASSET_FINGERPRINT_PARAM}={fingerprint}"
+
+
+def _render_portal_template(template_text: str, replacements: Mapping[str, str], *, template_name: str) -> str:
+    rendered = template_text
+    for token, value in replacements.items():
+        if token not in rendered:
+            raise RuntimeError(f"{template_name} is missing required token {token}")
+        rendered = rendered.replace(token, value)
+
+    unresolved = sorted(set(re.findall(r"__PORTAL_[A-Z0-9_]+__", rendered)))
+    if unresolved:
+        raise RuntimeError(f"{template_name} has unresolved tokens: {', '.join(unresolved)}")
+    return rendered
+
+
+@lru_cache(maxsize=4)
+def _build_portal_asset_bundle(_: Tuple[Tuple[str, int, int], ...]) -> PortalAssetBundle:
+    fingerprints: Dict[str, str] = {}
+    for asset_name in PORTAL_DIRECT_FINGERPRINT_ASSET_NAMES:
+        fingerprints[asset_name] = _fingerprint_bytes(PORTAL_ASSET_PATHS[asset_name].read_bytes())
+
+    css_template = PORTAL_CSS_TEMPLATE_PATH.read_text(encoding="utf-8")
+    css_render = _render_portal_template(
+        css_template,
+        {
+            token: _portal_asset_versioned_url(asset_name, fingerprints[asset_name])
+            for token, asset_name in PORTAL_CSS_TEMPLATE_TOKENS.items()
+        },
+        template_name="portal.css",
+    )
+    css_bytes = css_render.encode("utf-8")
+    fingerprints["portal.css"] = _fingerprint_bytes(css_bytes)
+
+    urls = {
+        asset_name: _portal_asset_versioned_url(asset_name, fingerprint) for asset_name, fingerprint in fingerprints.items()
+    }
+    html_template = PORTAL_HTML.read_text(encoding="utf-8")
+    html_render = _render_portal_template(
+        html_template,
+        {token: urls[asset_name] for token, asset_name in PORTAL_HTML_TEMPLATE_TOKENS.items()},
+        template_name="portal.html",
+    )
+    html_bytes = html_render.encode("utf-8")
+    return PortalAssetBundle(
+        html=html_render,
+        html_bytes=html_bytes,
+        css=css_render,
+        css_bytes=css_bytes,
+        fingerprints=fingerprints,
+        urls=urls,
+    )
+
+
+def _get_portal_asset_bundle() -> PortalAssetBundle:
+    return _build_portal_asset_bundle(_portal_bundle_signature())
+
+
+def _requested_portal_asset_fingerprint(request: Request) -> str:
+    return str(request.query_params.get(PORTAL_ASSET_FINGERPRINT_PARAM, "")).strip()
+
+
+def _portal_asset_cache_control(asset_name: str, requested_fingerprint: str) -> str:
+    current_fingerprint = _get_portal_asset_bundle().fingerprints[asset_name]
+    if requested_fingerprint and hmac.compare_digest(requested_fingerprint, current_fingerprint):
+        return PORTAL_IMMUTABLE_ASSET_CACHE_CONTROL
+    return PORTAL_ASSET_CACHE_CONTROL
+
+
 ARCHIVE_GOVERNANCE_SCRIPT = REPO_ROOT / "tools" / "archive_governance.py"
 LUX_DEPTH_MODULE = "transformation_portal.lux_depth_v3"
 APP_VERSION = "0.3.0"
@@ -5253,26 +5382,43 @@ async def serve_ui() -> Response:
             status_code=500,
             detail="portal.html is missing",
         )
-    return FileResponse(
-        str(PORTAL_HTML),
+    bundle = _get_portal_asset_bundle()
+    return Response(
+        content=bundle.html_bytes,
         headers={
             "Cache-Control": "no-store",
             "Pragma": "no-cache",
+            "Content-Type": "text/html; charset=utf-8",
         },
     )
 
 
 @app.get("/portal/assets/{asset_path:path}")
-async def serve_portal_asset(asset_path: str) -> Response:
+async def serve_portal_asset(asset_path: str, request: Request) -> Response:
     try:
         resolved_asset = _resolve_portal_asset(asset_path)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail="portal asset not found") from exc
 
+    cache_control = _portal_asset_cache_control(asset_path, _requested_portal_asset_fingerprint(request))
+    if asset_path == "portal.css":
+        bundle = _get_portal_asset_bundle()
+        return Response(
+            content=bundle.css_bytes,
+            headers={
+                "Cache-Control": cache_control,
+                "Content-Type": resolved_asset.media_type,
+                "ETag": f'"{bundle.fingerprints[asset_path]}"',
+            },
+        )
+
     return FileResponse(
         str(resolved_asset.path),
         media_type=resolved_asset.media_type,
-        headers={"Cache-Control": PORTAL_ASSET_CACHE_CONTROL},
+        headers={
+            "Cache-Control": cache_control,
+            "ETag": f'"{_get_portal_asset_bundle().fingerprints[asset_path]}"',
+        },
     )
 
 

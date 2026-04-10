@@ -113,6 +113,7 @@ def test_portal_bootstrap_reports_direct_debug_mode(client: TestClient) -> None:
 
 
 def test_root_ui_response_is_not_cached(client: TestClient) -> None:
+    bundle = orchestrator_app._get_portal_asset_bundle()
     response = client.get("/")
     assert response.status_code == 200
     csp = response.headers.get("Content-Security-Policy")
@@ -146,8 +147,8 @@ def test_root_ui_response_is_not_cached(client: TestClient) -> None:
     assert "https://cdn.tailwindcss.com" not in response.text
     assert "https://fonts.googleapis.com" not in response.text
     assert "https://fonts.gstatic.com" not in response.text
-    assert '<link rel="stylesheet" href="/portal/assets/portal.css"' in response.text
-    assert '<script src="/portal/assets/portal.js" defer></script>' in response.text
+    assert f'<link rel="stylesheet" href="{bundle.urls["portal.css"]}"' in response.text
+    assert f'<script src="{bundle.urls["portal.js"]}" defer></script>' in response.text
     assert "<style>" not in response.text
     assert "<script>" not in response.text
     assert "Content-Security-Policy" not in response.text
@@ -156,29 +157,44 @@ def test_root_ui_response_is_not_cached(client: TestClient) -> None:
 
 
 def test_portal_asset_endpoint_serves_css_and_js(client: TestClient) -> None:
-    css_response = client.get("/portal/assets/portal.css")
-    js_response = client.get("/portal/assets/portal.js")
+    bundle = orchestrator_app._get_portal_asset_bundle()
+    css_response = client.get(bundle.urls["portal.css"])
+    js_response = client.get(bundle.urls["portal.js"])
 
     assert css_response.status_code == 200
-    assert css_response.headers["Cache-Control"] == orchestrator_app.PORTAL_ASSET_CACHE_CONTROL
+    assert css_response.headers["Cache-Control"] == orchestrator_app.PORTAL_IMMUTABLE_ASSET_CACHE_CONTROL
     assert css_response.headers["content-type"] == orchestrator_app.PORTAL_ASSET_MEDIA_TYPES["portal.css"]
     assert "@font-face" in css_response.text
     assert "Portal Sans" in css_response.text
+    assert bundle.urls["fonts/portal-sans.woff2"] in css_response.text
+    assert bundle.urls["fonts/portal-mono.woff2"] in css_response.text
     assert "https://fonts.googleapis.com" not in css_response.text
 
     assert js_response.status_code == 200
-    assert js_response.headers["Cache-Control"] == orchestrator_app.PORTAL_ASSET_CACHE_CONTROL
+    assert js_response.headers["Cache-Control"] == orchestrator_app.PORTAL_IMMUTABLE_ASSET_CACHE_CONTROL
     assert js_response.headers["content-type"] == orchestrator_app.PORTAL_ASSET_MEDIA_TYPES["portal.js"]
     assert "const BOOTSTRAP_TIMEOUT_MS = 3500;" in js_response.text
 
 
 def test_portal_asset_endpoint_serves_repo_local_fonts(client: TestClient) -> None:
-    response = client.get("/portal/assets/fonts/portal-sans.woff2")
+    bundle = orchestrator_app._get_portal_asset_bundle()
+    response = client.get(bundle.urls["fonts/portal-sans.woff2"])
+
+    assert response.status_code == 200
+    assert response.headers["Cache-Control"] == orchestrator_app.PORTAL_IMMUTABLE_ASSET_CACHE_CONTROL
+    assert response.headers["content-type"] == orchestrator_app.PORTAL_ASSET_MEDIA_TYPES["fonts/portal-sans.woff2"]
+    assert response.content
+
+
+def test_portal_asset_endpoint_keeps_unversioned_and_stale_requests_backward_compatible(client: TestClient) -> None:
+    response = client.get("/portal/assets/portal.css")
+    stale_response = client.get("/portal/assets/portal.css", params={"v": "stale-version"})
 
     assert response.status_code == 200
     assert response.headers["Cache-Control"] == orchestrator_app.PORTAL_ASSET_CACHE_CONTROL
-    assert response.headers["content-type"] == orchestrator_app.PORTAL_ASSET_MEDIA_TYPES["fonts/portal-sans.woff2"]
-    assert response.content
+    assert stale_response.status_code == 200
+    assert stale_response.headers["Cache-Control"] == orchestrator_app.PORTAL_ASSET_CACHE_CONTROL
+    assert response.text == stale_response.text
 
 
 def test_portal_asset_endpoint_rejects_path_traversal(client: TestClient) -> None:
