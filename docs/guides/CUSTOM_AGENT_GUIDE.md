@@ -200,6 +200,14 @@ contract test and sync the supporting agent docs
 that docs-and-tests sync
 ```
 
+### Automation Support
+
+For recurring review-pattern analysis, use the skill progression automation guide:
+
+- [Skill progression automation](./SKILL_PROGRESSION_AUTOMATION.md)
+
+It documents the GitHub-first evidence flow, the repo-local collector, the ranking rubric, and the required degraded-mode behavior when review-thread data or memory writes fail.
+
 The agent follows a structured response pattern:
 
 1. **Context**: "I understand you're working with [component]..."
