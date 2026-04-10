@@ -146,6 +146,39 @@ def test_orchestrator_explicit_depth_pro_auto_discovers_repo_runtime(tmp_path, m
     assert backend_calls == [("depth_pro", REPO_LOCAL_DEPTH_PRO_PYTHON)]
 
 
+def test_orchestrator_auto_discovers_repo_raw_runtime(tmp_path, monkeypatch):
+    """Orchestrator should persist the repo-local RAW subprocess contract when available."""
+    from transformation_portal.lux_depth_v3.config_resolver import REPO_LOCAL_RAW_PYTHON
+
+    discovered_python = tmp_path / ".venv-raw" / "bin" / "python"
+    discovered_python.parent.mkdir(parents=True)
+    discovered_python.write_text("#!/bin/sh\n", encoding="utf-8")
+    monkeypatch.delenv("TRANSFORMATION_PORTAL_RAW_PYTHON", raising=False)
+    monkeypatch.setattr(
+        "transformation_portal.lux_depth_v3.config_resolver._repo_local_raw_python_path",
+        lambda: discovered_python,
+    )
+
+    class FakeBackend:
+        name = "da3"
+
+        def ensure_available(self):
+            return None
+
+    with patch(
+        "transformation_portal.depth.backends.registry.DepthBackendRegistry.get_backend",
+        return_value=FakeBackend(),
+    ):
+        config = EnhanceConfig(
+            depth_backend="da3",
+            depth_device="cpu",
+            enable_v2=False,
+        )
+        orchestrator = EnhanceOrchestrator(config, tmp_path)
+
+    assert orchestrator.config.raw_python_executable == REPO_LOCAL_RAW_PYTHON
+
+
 def test_orchestrator_explicit_da3_unavailable_fails_without_fallback(tmp_path):
     """Explicit DA3 should fail fast instead of silently selecting DA2."""
     backend_calls = []

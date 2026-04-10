@@ -48,6 +48,7 @@ def _valid_run_card_payload() -> dict:
         "v2_device": "cpu",
         "v2_upscaler_backend": "realesrgan",
         "depth_pro_python_executable": None,
+        "raw_python_executable": None,
         "da3_python_executable": None,
     }
     canonical_json = json.dumps(
@@ -72,6 +73,7 @@ def _valid_run_card_payload() -> dict:
                 "strict_segmentation",
                 "apex_strict_mode",
                 "depth_pro_python_executable",
+                "raw_python_executable",
                 "da3_python_executable",
             )
         },

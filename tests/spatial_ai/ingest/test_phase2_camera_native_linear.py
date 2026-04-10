@@ -126,3 +126,45 @@ def test_ingest_phase2_fails_closed_when_fpstate_enforcement_fails(monkeypatch):
     monkeypatch.setattr(phase2, "enforce_ftz_daz_disabled", _raise)
     with pytest.raises(RuntimeError, match="fpstate violation"):
         phase2.ingest_phase2_xyz_d50_linear_fp32(Path("sample.CR3"))
+
+
+def test_ingest_phase2_uses_dedicated_raw_runtime(monkeypatch):
+    captured: dict[str, object] = {}
+    fake_tensor = np.full((2, 2, 3), 0.5, dtype=np.float32)
+    fake_fingerprint = {
+        "schema_version": "1.0.0",
+        "contract": "camera_native_linear",
+        "input_path": "sample.CR3",
+    }
+
+    def fake_run_raw_worker(*, python_executable, command_name, input_path, payload, start):
+        captured["python_executable"] = python_executable
+        captured["command_name"] = command_name
+        captured["input_path"] = input_path
+        captured["payload"] = payload
+        captured["start"] = start
+        return fake_tensor, {"fingerprint": fake_fingerprint}
+
+    monkeypatch.setattr(phase2, "run_raw_worker", fake_run_raw_worker)
+    monkeypatch.setattr(
+        phase2,
+        "enforce_ftz_daz_disabled",
+        lambda: (_ for _ in ()).throw(AssertionError("in-process Phase II path should not run")),
+    )
+
+    tensor, fingerprint = phase2.ingest_phase2_xyz_d50_linear_fp32(
+        Path("sample.CR3"),
+        wb_mode="auto",
+        demosaic="AHD",
+        raw_python_executable="./.venv-raw/bin/python",
+    )
+
+    assert np.array_equal(tensor, fake_tensor)
+    assert fingerprint == fake_fingerprint
+    assert captured["python_executable"] == "./.venv-raw/bin/python"
+    assert captured["command_name"] == "phase2_decode"
+    assert captured["input_path"] == Path("sample.CR3")
+    assert captured["payload"] == {
+        "wb_mode": "auto",
+        "demosaic": "AHD",
+    }

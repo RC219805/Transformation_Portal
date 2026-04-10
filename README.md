@@ -226,7 +226,22 @@ pip install -e ".[raw]"
 # or: pip install rawpy
 ```
 
-RAW inputs are auto-detected and converted into pipeline-ready RGB using LibRaw via `rawpy`. See [SETUP_GUIDE.md](docs/guides/SETUP_GUIDE.md) for environment details.
+RAW inputs are auto-detected and converted into pipeline-ready RGB using LibRaw via `rawpy`. If `./.venv-raw/bin/python` exists, Lux Depth V3 auto-discovers that repo-local RAW runtime before falling back to the main repo environment.
+
+**Recommended (RAW via isolated runtime):**
+```bash
+./scripts/setup/install_raw_runtime.sh
+
+lux-depth-v3 --input-dir ./input --output-dir ./output
+```
+
+Use `--raw-python` only when you want to override that repo-local runtime explicitly:
+
+```bash
+lux-depth-v3 --input-dir ./input --output-dir ./output --raw-python ~/venvs/raw/bin/python
+```
+
+See [SETUP_GUIDE.md](docs/guides/SETUP_GUIDE.md) for environment details.
 
 ---
 

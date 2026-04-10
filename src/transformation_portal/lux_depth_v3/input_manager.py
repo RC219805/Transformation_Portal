@@ -1,7 +1,7 @@
-"""Input management for lux_depth_v3 pipeline.
+"""Input modeling helpers for Lux Depth V3 batch execution.
 
-STUB IMPLEMENTATION - Critical types to enable package imports.
-Full implementation pending.
+This module keeps the lightweight input records shared by discovery,
+grouping, and orchestrator scheduling paths.
 """
 
 from __future__ import annotations

@@ -18,6 +18,7 @@ from typing import Any, Dict, Literal, Optional
 
 import numpy as np
 
+from transformation_portal.core.raw_runtime import run_raw_worker
 from transformation_portal.determinism.fpstate import enforce_ftz_daz_disabled
 from transformation_portal.determinism.tensor import canonicalize_tensor_f32_le_c
 
@@ -77,6 +78,7 @@ def ingest_phase2_xyz_d50_linear_fp32(
     *,
     wb_mode: Literal["none", "camera", "auto"] = "camera",
     demosaic: str = "AHD",
+    raw_python_executable: str | None = None,
 ) -> tuple[np.ndarray, Dict[str, Any]]:
     """Certified Phase II decode: RAW -> camera RGB (linear) -> XYZ(D65) -> Bradford(D50) -> float32 HWC.
 
@@ -84,6 +86,22 @@ def ingest_phase2_xyz_d50_linear_fp32(
     Returns (tensor, fingerprint) where fingerprint is schema-versioned provenance.
     """
     path = Path(path)
+    if raw_python_executable is not None:
+        tensor, metadata = run_raw_worker(
+            python_executable=raw_python_executable,
+            command_name="phase2_decode",
+            input_path=path,
+            payload={
+                "wb_mode": wb_mode,
+                "demosaic": demosaic,
+            },
+            start=Path(__file__),
+        )
+        fingerprint = metadata.get("fingerprint")
+        if not isinstance(fingerprint, dict):
+            raise RuntimeError(f"RAW worker returned invalid Phase II fingerprint payload: {fingerprint!r}")
+        return np.asarray(tensor, dtype=np.float32), fingerprint
+
     enforce_ftz_daz_disabled()
 
     try:

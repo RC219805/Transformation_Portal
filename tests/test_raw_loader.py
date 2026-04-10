@@ -101,6 +101,47 @@ class TestRawpyNotInstalled:
             error_msg = str(exc_info.value)
             assert "rawpy required" in error_msg or "pip install rawpy" in error_msg
 
+    def test_load_raw_as_rgb_uses_dedicated_runtime_when_configured(self, tmp_path, monkeypatch):
+        """Configured RAW runtime should dispatch through the subprocess worker."""
+        raw_file = tmp_path / "test.cr2"
+        raw_file.write_bytes(b"fake raw data")
+
+        fake_rgb = np.full((8, 8, 3), 1024, dtype=np.uint16)
+        captured: dict[str, object] = {}
+
+        def fake_run_raw_worker(*, python_executable, command_name, input_path, payload, start):
+            captured["python_executable"] = python_executable
+            captured["command_name"] = command_name
+            captured["input_path"] = input_path
+            captured["payload"] = payload
+            captured["start"] = start
+            return fake_rgb, {"dtype": "uint16", "shape": [8, 8, 3]}
+
+        monkeypatch.setattr(
+            "transformation_portal.lux_depth_v3.raw_loader.run_raw_worker",
+            fake_run_raw_worker,
+        )
+
+        rgb = load_raw_as_rgb(
+            raw_file,
+            use_camera_wb=False,
+            half_size=True,
+            output_bps=16,
+            output_linear=True,
+            python_executable="./.venv-raw/bin/python",
+        )
+
+        assert np.array_equal(rgb, fake_rgb)
+        assert captured["python_executable"] == "./.venv-raw/bin/python"
+        assert captured["command_name"] == "load_rgb"
+        assert captured["input_path"] == raw_file
+        assert captured["payload"] == {
+            "use_camera_wb": False,
+            "half_size": True,
+            "output_bps": 16,
+            "output_linear": True,
+        }
+
     def test_load_raw_as_pil_missing_rawpy(self, tmp_path):
         """load_raw_as_pil should also fail gracefully when rawpy missing."""
         raw_file = tmp_path / "test.nef"

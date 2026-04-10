@@ -22,10 +22,12 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Tuple
+from typing import Optional, Tuple
 
 import numpy as np
 from PIL import Image
+
+from transformation_portal.core.raw_runtime import run_raw_worker
 
 logger = logging.getLogger(__name__)
 
@@ -78,6 +80,7 @@ def load_raw_as_rgb(
     half_size: bool = False,
     output_bps: int = 8,
     output_linear: bool = False,
+    python_executable: Optional[str] = None,
 ) -> np.ndarray:
     """Load RAW camera file and convert to RGB numpy array.
 
@@ -92,6 +95,9 @@ def load_raw_as_rgb(
         output_linear: Output linear RGB (True) or gamma-encoded sRGB (False)
                       Default False for legacy compatibility
                       MUST be True for APEX pipeline
+        python_executable: Optional interpreter for an isolated RAW runtime.
+            When provided, the decode runs in a subprocess backed by that
+            interpreter instead of importing rawpy in-process.
 
     Returns:
         RGB numpy array (uint8 or uint16 depending on output_bps)
@@ -118,6 +124,23 @@ def load_raw_as_rgb(
         >>> print(rgb.shape, rgb.dtype)
         (4000, 6000, 3) uint16
     """
+    if python_executable is not None:
+        if not raw_path.exists():
+            raise FileNotFoundError(f"RAW file not found: {raw_path}")
+        rgb, _ = run_raw_worker(
+            python_executable=python_executable,
+            command_name="load_rgb",
+            input_path=raw_path,
+            payload={
+                "use_camera_wb": bool(use_camera_wb),
+                "half_size": bool(half_size),
+                "output_bps": int(output_bps),
+                "output_linear": bool(output_linear),
+            },
+            start=Path(__file__),
+        )
+        return np.asarray(rgb)
+
     try:
         import rawpy
     except ImportError as e:
@@ -180,6 +203,7 @@ def load_raw_as_pil(
     use_camera_wb: bool = True,
     half_size: bool = False,
     output_linear: bool = False,
+    python_executable: Optional[str] = None,
 ) -> Image.Image:
     """Load RAW camera file and convert to PIL Image.
 
@@ -196,6 +220,7 @@ def load_raw_as_pil(
         output_linear: Output linear RGB (True) or gamma-encoded sRGB (False)
                       Default False for legacy compatibility
                       MUST be True for APEX pipeline
+        python_executable: Optional interpreter for an isolated RAW runtime.
 
     Returns:
         PIL Image in RGB mode (uint8)
@@ -214,6 +239,7 @@ def load_raw_as_pil(
         half_size=half_size,
         output_bps=output_bps,
         output_linear=output_linear,
+        python_executable=python_executable,
     )
 
     # Convert to PIL Image with appropriate mode

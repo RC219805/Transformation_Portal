@@ -160,6 +160,7 @@ except ImportError:
 
 from ._backend_contract import backend_alias_warning, is_legacy_backend_alias, normalize_backend_id
 from .config import EnhanceConfig, Preset
+from .config_resolver import apply_effective_raw_runtime_config
 from .ingest_adapter import RAW_PREVIEW_ESCAPE_ENV
 from .orchestrator import EnhanceOrchestrator
 
@@ -185,7 +186,21 @@ def _raw_preview_escape_enabled() -> bool:
     return raw_value in {"1", "true", "yes", "on"}
 
 
-def _canonical_raw_ingest_status() -> tuple[bool, Optional[str]]:
+def _canonical_raw_ingest_status(
+    raw_python_executable: Optional[str] = None,
+) -> tuple[bool, Optional[str]]:
+    if raw_python_executable:
+        from transformation_portal.core.raw_runtime import check_raw_runtime
+
+        try:
+            check_raw_runtime(raw_python_executable, start=Path(__file__))
+        except FileNotFoundError as exc:
+            return False, str(exc)
+        except Exception:
+            logger.exception("Canonical RAW ingest is unavailable because the dedicated RAW runtime failed validation")
+            return False, "the dedicated RAW runtime is unavailable in this environment"
+        return True, None
+
     try:
         import rawpy  # noqa: F401
     except ImportError:
@@ -201,7 +216,11 @@ def _canonical_raw_ingest_available() -> bool:
     return available
 
 
-def _preflight_raw_ingest_requirements(image_files: list[Path], raw_ingest_mode: str) -> None:
+def _preflight_raw_ingest_requirements(
+    image_files: list[Path],
+    raw_ingest_mode: str,
+    raw_python_executable: Optional[str] = None,
+) -> None:
     from .raw_loader import is_raw_file
 
     raw_inputs_detected = any(is_raw_file(image_path) for image_path in image_files)
@@ -216,17 +235,23 @@ def _preflight_raw_ingest_requirements(image_files: list[Path], raw_ingest_mode:
         print(message, file=sys.stdout)
         raise typer.Exit(code=1)
 
-    raw_ingest_available, unavailable_reason = _canonical_raw_ingest_status()
+    raw_ingest_available, unavailable_reason = _canonical_raw_ingest_status(raw_python_executable)
     if raw_ingest_available:
         return
 
     message = (
         "RAW inputs detected but canonical RAW ingest is unavailable because "
-        f"{unavailable_reason or 'rawpy is unavailable in this environment'}. "
-        'Install with: pip install -e ".[raw]" or pip install rawpy'
+        f"{unavailable_reason or 'rawpy is unavailable in this environment'}."
     )
-    if unavailable_reason != "rawpy is not installed":
-        message += " If rawpy is already installed, inspect the import/runtime error in the logs."
+    if raw_python_executable:
+        message += (
+            " Rebuild that dedicated RAW runtime or point --raw-python / "
+            "TRANSFORMATION_PORTAL_RAW_PYTHON at a working interpreter."
+        )
+    else:
+        message += ' Install with: pip install -e ".[raw]" or pip install rawpy'
+        if unavailable_reason != "rawpy is not installed":
+            message += " If rawpy is already installed, inspect the import/runtime error in the logs."
     logger.error(message)
     print(message, file=sys.stdout)
     raise typer.Exit(code=1)
@@ -312,6 +337,16 @@ def main(
             "Use this to keep DA3 out of the main Transformation Portal venv or to override "
             "the auto-discovered repo-local runtime at ./.venv-da3/bin/python "
             "(bootstrap with ./scripts/setup/install_da3_runtime.sh)."
+        ),
+    ),
+    raw_python: Optional[str] = typer.Option(
+        None,
+        "--raw-python",
+        help=(
+            "Optional Python executable for an isolated RAW ingest environment. "
+            "Use this to keep rawpy/LibRaw out of the main Transformation Portal venv or to override "
+            "the auto-discovered repo-local runtime at ./.venv-raw/bin/python "
+            "(bootstrap with ./scripts/setup/install_raw_runtime.sh)."
         ),
     ),
     depth_device: str = typer.Option(
@@ -804,6 +839,7 @@ def main(
         accept_apple_depth_pro_research_license=enable_apple_license,
         accept_research_tools_license=enable_research_tools_license,
         depth_pro_python_executable=depth_pro_python,
+        raw_python_executable=raw_python,
         da3_python_executable=da3_python,
         force_depth=force_depth or overwrite,
         enable_depth_cache=enable_cache_depth,
@@ -835,6 +871,7 @@ def main(
         raw_demosaic=raw_demosaic_normalized,
         allow_semantic_fallback=allow_semantic_fallback,
     )
+    apply_effective_raw_runtime_config(config)
 
     # Forward-compatible knobs: apply via setattr
     # for non-breaking config evolution.
@@ -879,7 +916,11 @@ def main(
         raise typer.Exit(code=1)
 
     logger.info(f"Found {len(image_files)} images to process")
-    _preflight_raw_ingest_requirements(image_files, raw_ingest_mode)
+    _preflight_raw_ingest_requirements(
+        image_files,
+        raw_ingest_mode,
+        config.raw_python_executable,
+    )
 
     # Create orchestrator only after input discovery and RAW preflight succeed.
     logger.info(
