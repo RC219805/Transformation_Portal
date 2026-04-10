@@ -108,17 +108,17 @@ if [[ -z "$STATUS" ]]; then
 else
     log_error "Worktree has uncommitted changes"
     echo ""
-    
+
     # Parse and display changes
     MODIFIED_COUNT=0
     ADDED_COUNT=0
     DELETED_COUNT=0
     UNTRACKED_COUNT=0
-    
+
     while IFS= read -r line; do
         status_code="${line:0:2}"
         file_path="${line:3}"
-        
+
         case "$status_code" in
             " M"|"M "|"MM")
                 ((++MODIFIED_COUNT))
@@ -141,21 +141,21 @@ else
                 ;;
         esac
     done <<< "$STATUS"
-    
+
     echo ""
     echo "Summary:"
     [[ $MODIFIED_COUNT -gt 0 ]] && echo "  Modified:  $MODIFIED_COUNT"
     [[ $ADDED_COUNT -gt 0 ]] && echo "  Added:     $ADDED_COUNT"
     [[ $DELETED_COUNT -gt 0 ]] && echo "  Deleted:   $DELETED_COUNT"
     [[ $UNTRACKED_COUNT -gt 0 ]] && echo "  Untracked: $UNTRACKED_COUNT"
-    
+
     if [[ "$SHOW_DIFF" == "true" ]]; then
         echo ""
         echo "Diff of tracked changes:"
         echo "─────────────────────────────────────────────────────────────"
         git diff
     fi
-    
+
     echo ""
     log_warning "Build artifacts may have dirtied the worktree"
     echo "  Check .gitignore to ensure build outputs are ignored"
@@ -166,6 +166,6 @@ else
     echo ""
     echo "  To reset: git checkout -- ."
     echo "  To see what changed: git diff"
-    
+
     exit 1
 fi
