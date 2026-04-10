@@ -130,7 +130,7 @@ def test_ingest_phase2_fails_closed_when_fpstate_enforcement_fails(monkeypatch):
 
 def test_ingest_phase2_uses_dedicated_raw_runtime(monkeypatch):
     captured: dict[str, object] = {}
-    fake_tensor = np.full((2, 2, 3), 0.5, dtype=np.float32)
+    fake_tensor = np.asfortranarray(np.full((2, 2, 3), 0.5, dtype=np.float64))
     fake_fingerprint = {
         "schema_version": "1.0.0",
         "contract": "camera_native_linear",
@@ -159,7 +159,9 @@ def test_ingest_phase2_uses_dedicated_raw_runtime(monkeypatch):
         raw_python_executable="./.venv-raw/bin/python",
     )
 
-    assert np.array_equal(tensor, fake_tensor)
+    assert np.array_equal(tensor, fake_tensor.astype(np.float32))
+    assert tensor.dtype == np.float32
+    assert tensor.flags["C_CONTIGUOUS"]
     assert fingerprint == fake_fingerprint
     assert captured["python_executable"] == "./.venv-raw/bin/python"
     assert captured["command_name"] == "phase2_decode"
@@ -168,3 +170,17 @@ def test_ingest_phase2_uses_dedicated_raw_runtime(monkeypatch):
         "wb_mode": "auto",
         "demosaic": "AHD",
     }
+
+
+def test_ingest_phase2_rejects_invalid_subprocess_tensor_shape(monkeypatch):
+    def fake_run_raw_worker(*, python_executable, command_name, input_path, payload, start):
+        del python_executable, command_name, input_path, payload, start
+        return np.zeros((4, 4), dtype=np.float32), {"fingerprint": {"schema_version": "1.0.0"}}
+
+    monkeypatch.setattr(phase2, "run_raw_worker", fake_run_raw_worker)
+
+    with pytest.raises(RuntimeError, match="invalid Phase II tensor shape"):
+        phase2.ingest_phase2_xyz_d50_linear_fp32(
+            Path("sample.CR3"),
+            raw_python_executable="./.venv-raw/bin/python",
+        )

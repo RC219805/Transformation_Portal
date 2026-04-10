@@ -24,6 +24,8 @@ _REPO_LOCAL_RAW_PYTHON_PARTS = (".venv-raw", "bin", "python")
 REPO_LOCAL_RAW_PYTHON = f"./{'/'.join(_REPO_LOCAL_RAW_PYTHON_PARTS)}"
 RAW_RUNTIME_ENV_VAR = "TRANSFORMATION_PORTAL_RAW_PYTHON"
 RAW_WORKER_MODULE = "transformation_portal.spatial_ai.ingest.raw_worker"
+RAW_RUNTIME_CHECK_TIMEOUT_SECONDS = 30
+RAW_WORKER_TIMEOUT_SECONDS = 300
 
 
 def repo_local_raw_python_path(start: Path) -> Optional[Path]:
@@ -102,6 +104,26 @@ def _format_subprocess_output(stdout: str, stderr: str) -> str:
     return "<no output>"
 
 
+def _build_subprocess_failure_message(
+    *,
+    title: str,
+    python_executable: str,
+    command: list[str],
+    stdout: str,
+    stderr: str,
+    timeout_seconds: int | None = None,
+) -> str:
+    """Build a deterministic subprocess failure message."""
+    timeout_line = f"Timeout: {timeout_seconds}s\n" if timeout_seconds is not None else ""
+    return (
+        f"{title}\n\n"
+        f"Python: {python_executable}\n"
+        f"Command: {' '.join(command)}\n"
+        f"{timeout_line}"
+        f"Output:\n{_format_subprocess_output(stdout, stderr)}"
+    )
+
+
 def check_raw_runtime(
     python_executable: str,
     *,
@@ -115,21 +137,36 @@ def check_raw_runtime(
         RAW_WORKER_MODULE,
         "--check",
     ]
-    result = subprocess.run(
-        command,
-        capture_output=True,
-        text=True,
-        cwd=_worker_cwd(start),
-        env=build_raw_worker_env(start),
-        check=False,
-    )
-    if result.returncode != 0:
-        output = _format_subprocess_output(result.stdout, result.stderr)
+    try:
+        result = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            cwd=_worker_cwd(start),
+            env=build_raw_worker_env(start),
+            check=False,
+            timeout=RAW_RUNTIME_CHECK_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired as exc:
         raise RuntimeError(
-            "RAW subprocess environment is not ready.\n\n"
-            f"Python: {python_executable}\n"
-            f"Command: {' '.join(command)}\n"
-            f"Output:\n{output}"
+            _build_subprocess_failure_message(
+                title="RAW subprocess environment is not ready.",
+                python_executable=python_executable,
+                command=command,
+                stdout=exc.stdout or "",
+                stderr=exc.stderr or "",
+                timeout_seconds=RAW_RUNTIME_CHECK_TIMEOUT_SECONDS,
+            )
+        ) from exc
+    if result.returncode != 0:
+        raise RuntimeError(
+            _build_subprocess_failure_message(
+                title="RAW subprocess environment is not ready.",
+                python_executable=python_executable,
+                command=command,
+                stdout=result.stdout,
+                stderr=result.stderr,
+            )
         )
 
 
@@ -143,6 +180,7 @@ def run_raw_worker(
 ) -> tuple[np.ndarray, dict[str, Any]]:
     """Execute the RAW subprocess worker and return the array + metadata."""
     worker_python = resolve_raw_python_for_execution(python_executable, start=start)
+    resolved_input_path = Path(input_path).expanduser().resolve()
 
     with tempfile.TemporaryDirectory(prefix="tp-raw-worker-") as tmpdir:
         temp_root = Path(tmpdir)
@@ -167,7 +205,7 @@ def run_raw_worker(
             "--command",
             command_name,
             "--input-path",
-            str(input_path),
+            str(resolved_input_path),
             "--payload-json",
             str(payload_path),
             "--output-array",
@@ -175,21 +213,36 @@ def run_raw_worker(
             "--output-json",
             str(output_json_path),
         ]
-        result = subprocess.run(
-            command,
-            capture_output=True,
-            text=True,
-            cwd=_worker_cwd(start),
-            env=build_raw_worker_env(start),
-            check=False,
-        )
-        if result.returncode != 0:
-            output = _format_subprocess_output(result.stdout, result.stderr)
+        try:
+            result = subprocess.run(
+                command,
+                capture_output=True,
+                text=True,
+                cwd=_worker_cwd(start),
+                env=build_raw_worker_env(start),
+                check=False,
+                timeout=RAW_WORKER_TIMEOUT_SECONDS,
+            )
+        except subprocess.TimeoutExpired as exc:
             raise RuntimeError(
-                "RAW subprocess worker failed.\n\n"
-                f"Python: {python_executable}\n"
-                f"Command: {' '.join(command)}\n"
-                f"Output:\n{output}"
+                _build_subprocess_failure_message(
+                    title="RAW subprocess worker failed.",
+                    python_executable=python_executable,
+                    command=command,
+                    stdout=exc.stdout or "",
+                    stderr=exc.stderr or "",
+                    timeout_seconds=RAW_WORKER_TIMEOUT_SECONDS,
+                )
+            ) from exc
+        if result.returncode != 0:
+            raise RuntimeError(
+                _build_subprocess_failure_message(
+                    title="RAW subprocess worker failed.",
+                    python_executable=python_executable,
+                    command=command,
+                    stdout=result.stdout,
+                    stderr=result.stderr,
+                )
             )
 
         array = np.load(output_array_path, allow_pickle=False)

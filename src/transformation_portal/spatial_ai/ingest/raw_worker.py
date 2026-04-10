@@ -146,7 +146,7 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--command, --input-path, --output-array, and --output-json are required unless --check is used.")
 
     payload = _load_payload(args.payload_json)
-    input_path = args.input_path.expanduser()
+    input_path = args.input_path.expanduser().resolve()
 
     if args.command == "load_rgb":
         array, metadata = _run_load_rgb(input_path, payload)

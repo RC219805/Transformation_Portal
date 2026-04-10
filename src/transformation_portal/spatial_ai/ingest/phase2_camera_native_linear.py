@@ -100,7 +100,13 @@ def ingest_phase2_xyz_d50_linear_fp32(
         fingerprint = metadata.get("fingerprint")
         if not isinstance(fingerprint, dict):
             raise RuntimeError(f"RAW worker returned invalid Phase II fingerprint payload: {fingerprint!r}")
-        return np.asarray(tensor, dtype=np.float32), fingerprint
+        tensor_f32 = np.asarray(tensor, dtype=np.float32)
+        if tensor_f32.ndim != 3 or tensor_f32.shape[2] != 3:
+            raise RuntimeError(
+                "RAW worker returned invalid Phase II tensor shape; expected float32 HWC with 3 channels, "
+                f"got shape {tensor_f32.shape!r}"
+            )
+        return canonicalize_tensor_f32_le_c(tensor_f32), fingerprint
 
     enforce_ftz_daz_disabled()
 
