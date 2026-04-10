@@ -63,16 +63,36 @@ Earlier local run.
     assert ts_apr9.hour == 10 and ts_apr9.minute == 0 and ts_apr9.second == 0
 
 
-def test_parse_memory_timestamps_treats_unknown_timezone_suffix_as_local() -> None:
-    """Unknown timezone suffixes (e.g., PST) should be treated as local time."""
+def test_parse_memory_timestamps_handles_common_us_timezone_suffixes() -> None:
+    """Known timezone suffixes should use deterministic fixed offsets."""
 
     memory_text = """\
 ## 2026-04-10 09:00:00 PST
+
+## 2026-04-10 10:00:00 PDT
+    """
+    timestamps = module.parse_memory_timestamps(memory_text)
+
+    assert len(timestamps) == 2
+
+    pst_timestamp = next((ts for ts in timestamps if ts.hour == 9), None)
+    pdt_timestamp = next((ts for ts in timestamps if ts.hour == 10), None)
+
+    assert pst_timestamp is not None
+    assert pdt_timestamp is not None
+    assert pst_timestamp.tzinfo == module.MEMORY_HEADING_TZINFOS["PST"]
+    assert pdt_timestamp.tzinfo == module.MEMORY_HEADING_TZINFOS["PDT"]
+
+
+def test_parse_memory_timestamps_treats_unknown_timezone_suffix_as_local() -> None:
+    """Unknown timezone suffixes should still fall back to local time."""
+
+    memory_text = """\
+## 2026-04-10 09:00:00 FOO
 """
     timestamps = module.parse_memory_timestamps(memory_text)
 
     assert len(timestamps) == 1
-    # Unknown suffix → treated as local time
     assert timestamps[0].tzinfo == module.LOCAL_TZ
     assert timestamps[0].hour == 9
 

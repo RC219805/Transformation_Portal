@@ -14,7 +14,7 @@ import re
 import subprocess
 import sys
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterable, Sequence
 
@@ -32,6 +32,18 @@ MAX_LOCAL_COMMITS = 50
 
 LOCAL_TZ = datetime.now().astimezone().tzinfo or UTC
 GITHUB_NOISE_AUTHORS = frozenset({"github-actions", "chatgpt-codex-connector"})
+MEMORY_HEADING_TZINFOS = {
+    "UTC": UTC,
+    "GMT": UTC,
+    "PST": timezone(timedelta(hours=-8), "PST"),
+    "PDT": timezone(timedelta(hours=-7), "PDT"),
+    "MST": timezone(timedelta(hours=-7), "MST"),
+    "MDT": timezone(timedelta(hours=-6), "MDT"),
+    "CST": timezone(timedelta(hours=-6), "CST"),
+    "CDT": timezone(timedelta(hours=-5), "CDT"),
+    "EST": timezone(timedelta(hours=-5), "EST"),
+    "EDT": timezone(timedelta(hours=-4), "EDT"),
+}
 
 REVIEW_SOURCE_WEIGHT = 3.0
 REVIEW_SUMMARY_WEIGHT = 2.0
@@ -143,11 +155,10 @@ def parse_memory_timestamps(memory_text: str) -> list[datetime]:
         except ValueError:
             continue
         tz_suffix = match.group("tz")
-        if tz_suffix == "UTC":
-            timestamps.append(parsed.replace(tzinfo=UTC))
-        else:
-            # Treat missing or unrecognized timezone suffix as local time
-            timestamps.append(parsed.replace(tzinfo=LOCAL_TZ))
+        if tz_suffix:
+            timestamps.append(parsed.replace(tzinfo=MEMORY_HEADING_TZINFOS.get(tz_suffix, LOCAL_TZ)))
+            continue
+        timestamps.append(parsed.replace(tzinfo=LOCAL_TZ))
 
     return sorted(timestamps)
 
