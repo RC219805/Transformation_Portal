@@ -3753,26 +3753,6 @@ def _build_scoped_job_artifacts_from_run_metadata(
     return None
 
 
-def _find_job_artifact_path(job: Job, predicate: Callable[[str], bool]) -> Optional[Path]:
-    metadata = _resolve_job_run_metadata(job)
-    candidates: List[Tuple[str, Path]] = []
-    if metadata is not None:
-        if metadata.run_card_path is not None:
-            relative_path = str(metadata.run_card_path.relative_to(metadata.output_dir))
-            candidates.append((relative_path, metadata.run_card_path))
-        if metadata.batch_manifest_path is not None:
-            relative_path = str(metadata.batch_manifest_path.relative_to(metadata.output_dir))
-            candidates.append((relative_path, metadata.batch_manifest_path))
-    if not candidates:
-        lookup = job.artifact_lookup or _hydrate_artifact_lookup_from_items(job)
-        candidates = [(relative_path, lookup[relative_path]) for relative_path in lookup]
-    candidates = [candidate for candidate in candidates if predicate(candidate[0])]
-    if not candidates:
-        return None
-    _, artifact_path = max(candidates, key=lambda item: _artifact_recency_key(item[0], item[1]))
-    return artifact_path
-
-
 def _refresh_job_run_summary(job: Job) -> Dict[str, Any]:
     if not job:
         return {}

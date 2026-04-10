@@ -185,12 +185,20 @@ def _raw_preview_escape_enabled() -> bool:
     return raw_value in {"1", "true", "yes", "on"}
 
 
-def _canonical_raw_ingest_available() -> bool:
+def _canonical_raw_ingest_status() -> tuple[bool, Optional[str]]:
     try:
         import rawpy  # noqa: F401
+    except ImportError:
+        return False, "rawpy is not installed"
     except Exception:
-        return False
-    return True
+        logger.exception("Canonical RAW ingest is unavailable because rawpy failed to import cleanly")
+        return False, "rawpy is unavailable in this environment"
+    return True, None
+
+
+def _canonical_raw_ingest_available() -> bool:
+    available, _ = _canonical_raw_ingest_status()
+    return available
 
 
 def _preflight_raw_ingest_requirements(image_files: list[Path], raw_ingest_mode: str) -> None:
@@ -208,13 +216,17 @@ def _preflight_raw_ingest_requirements(image_files: list[Path], raw_ingest_mode:
         print(message, file=sys.stdout)
         raise typer.Exit(code=1)
 
-    if _canonical_raw_ingest_available():
+    raw_ingest_available, unavailable_reason = _canonical_raw_ingest_status()
+    if raw_ingest_available:
         return
 
     message = (
-        "RAW inputs detected but canonical RAW ingest is unavailable because rawpy is not installed. "
+        "RAW inputs detected but canonical RAW ingest is unavailable because "
+        f"{unavailable_reason or 'rawpy is unavailable in this environment'}. "
         'Install with: pip install -e ".[raw]" or pip install rawpy'
     )
+    if unavailable_reason != "rawpy is not installed":
+        message += " If rawpy is already installed, inspect the import/runtime error in the logs."
     logger.error(message)
     print(message, file=sys.stdout)
     raise typer.Exit(code=1)

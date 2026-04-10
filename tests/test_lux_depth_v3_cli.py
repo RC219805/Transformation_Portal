@@ -244,7 +244,10 @@ class TestCLIValidation:
                 raise AssertionError("orchestrator should not be constructed when RAW preflight fails")
 
         monkeypatch.setattr("transformation_portal.lux_depth_v3.__main__.EnhanceOrchestrator", FakeOrchestrator)
-        monkeypatch.setattr("transformation_portal.lux_depth_v3.__main__._canonical_raw_ingest_available", lambda: False)
+        monkeypatch.setattr(
+            "transformation_portal.lux_depth_v3.__main__._canonical_raw_ingest_status",
+            lambda: (False, "rawpy is not installed"),
+        )
 
         result = runner.invoke(
             app,
@@ -274,7 +277,10 @@ class TestCLIValidation:
                 return [{"status": "ok"}]
 
         monkeypatch.setattr("transformation_portal.lux_depth_v3.__main__.EnhanceOrchestrator", FakeOrchestrator)
-        monkeypatch.setattr("transformation_portal.lux_depth_v3.__main__._canonical_raw_ingest_available", lambda: False)
+        monkeypatch.setattr(
+            "transformation_portal.lux_depth_v3.__main__._canonical_raw_ingest_status",
+            lambda: (False, "rawpy is not installed"),
+        )
 
         result = runner.invoke(
             app,
@@ -316,6 +322,37 @@ class TestCLIValidation:
 
         assert result.exit_code == 1
         assert "tp_allow_raw_preview=1" in result.stdout.lower()
+
+    def test_raw_inputs_report_runtime_unavailability_without_claiming_rawpy_missing(self, monkeypatch, tmp_path):
+        """RAW preflight should distinguish missing rawpy from other import/runtime failures."""
+        input_dir = tmp_path / "input"
+        input_dir.mkdir()
+        (input_dir / "scene_01.DNG").write_bytes(b"raw-payload")
+
+        class FakeOrchestrator:
+            def __init__(self, *_args, **_kwargs):
+                raise AssertionError("orchestrator should not be constructed when RAW preflight fails")
+
+        monkeypatch.setattr("transformation_portal.lux_depth_v3.__main__.EnhanceOrchestrator", FakeOrchestrator)
+        monkeypatch.setattr(
+            "transformation_portal.lux_depth_v3.__main__._canonical_raw_ingest_status",
+            lambda: (False, "rawpy is unavailable in this environment"),
+        )
+
+        result = runner.invoke(
+            app,
+            [
+                "--input-dir",
+                str(input_dir),
+                "--output-dir",
+                str(tmp_path / "output"),
+            ],
+        )
+
+        assert result.exit_code == 1
+        assert "rawpy is unavailable in this environment" in result.stdout.lower()
+        assert "not installed" not in result.stdout.lower()
+        assert "inspect the import/runtime error in the logs" in result.stdout.lower()
 
     def test_apex_materials_v3_requires_segmentation_enabled(self, tmp_path):
         """APEX strict gate should require explicit segmentation when Materials V3 is on."""
