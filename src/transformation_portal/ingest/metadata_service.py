@@ -6,6 +6,7 @@ import hashlib
 import os
 import time
 from collections import Counter
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence
@@ -134,7 +135,6 @@ class MetadataExtractionService:
             should_emit_raw_sidecar = req.emit_raw_sidecar and is_raw_image_path(req.input_path)
             resolved_raw_sidecar_path = (
                 self._derive_raw_sidecar_output_path(
-                    input_path=req.input_path,
                     provenance_output_path=output_path,
                     explicit_output_path=req.raw_sidecar_output_path,
                 )
@@ -159,12 +159,16 @@ class MetadataExtractionService:
 
             if should_emit_raw_sidecar and resolved_raw_sidecar_path is not None:
                 precomputed_file_sha256, precomputed_file_size = self._extract_precomputed_file_integrity(sidecar)
+                precomputed_exiftool_payload = self._extract_precomputed_exiftool_payload(sidecar)
+                precomputed_exiftool_version = self._extract_precomputed_exiftool_version(sidecar)
                 try:
                     raw_result = self._generate_raw_sidecar(
                         req.input_path,
                         output_path=resolved_raw_sidecar_path,
                         file_sha256=precomputed_file_sha256,
                         file_size_bytes=precomputed_file_size,
+                        precomputed_exiftool_payload=precomputed_exiftool_payload,
+                        precomputed_exiftool_version=precomputed_exiftool_version,
                         fsync=req.fsync,
                     )
                     raw_sidecar_path = raw_result.output_path
@@ -418,7 +422,6 @@ class MetadataExtractionService:
     def _derive_raw_sidecar_output_path(
         self,
         *,
-        input_path: Path,
         provenance_output_path: Path,
         explicit_output_path: Optional[Path],
     ) -> Path:
@@ -430,7 +433,7 @@ class MetadataExtractionService:
         if provenance_name.endswith(suffix):
             base_name = provenance_name[: -len(suffix)]
             return provenance_output_path.with_name(f"{base_name}.raw.sidecar.json")
-        return provenance_output_path.with_name(f"{input_path.stem}.raw.sidecar.json")
+        return provenance_output_path.with_name(f"{provenance_output_path.stem}.raw.sidecar.json")
 
     def _remove_if_exists(self, path: Path) -> None:
         try:
@@ -454,3 +457,36 @@ class MetadataExtractionService:
             str(sha256) if isinstance(sha256, str) else None,
             int(size_bytes) if isinstance(size_bytes, int) else None,
         )
+
+    def _extract_precomputed_exiftool_payload(
+        self,
+        sidecar: Any,
+    ) -> Optional[Dict[str, Any]]:
+        exif = getattr(sidecar, "exif", None)
+        if exif is None:
+            return None
+
+        all_tags = getattr(exif, "all_tags", None)
+        if isinstance(all_tags, Mapping):
+            return dict(all_tags)
+        return None
+
+    def _extract_precomputed_exiftool_version(
+        self,
+        sidecar: Any,
+    ) -> Optional[str]:
+        toolchain = getattr(sidecar, "toolchain", None)
+        if not isinstance(toolchain, (list, tuple)):
+            return None
+
+        for tool in toolchain:
+            if isinstance(tool, Mapping):
+                tool_name = tool.get("name")
+                tool_version = tool.get("version")
+            else:
+                tool_name = getattr(tool, "name", None)
+                tool_version = getattr(tool, "version", None)
+
+            if tool_name == "exiftool" and tool_version is not None:
+                return str(tool_version)
+        return None

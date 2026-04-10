@@ -35,6 +35,8 @@ def test_extract_generates_raw_sidecar_for_raw_inputs_and_records_path(tmp_path:
         fsync: bool = False,
         file_sha256: str | None = None,
         file_size_bytes: int | None = None,
+        precomputed_exiftool_payload: dict[str, object] | None = None,
+        precomputed_exiftool_version: str | None = None,
     ) -> RawSidecarResult:
         raw_sidecar_calls.append((input_path_arg, output_path, fsync, file_sha256, file_size_bytes))
         return RawSidecarResult(
@@ -74,6 +76,8 @@ def test_extract_non_raw_input_does_not_attempt_raw_sidecar(tmp_path: Path) -> N
         fsync: bool = False,
         file_sha256: str | None = None,
         file_size_bytes: int | None = None,
+        precomputed_exiftool_payload: dict[str, object] | None = None,
+        precomputed_exiftool_version: str | None = None,
     ) -> RawSidecarResult:
         raw_sidecar_calls.append(input_path_arg)
         return RawSidecarResult(
@@ -110,6 +114,8 @@ def test_extract_can_disable_raw_sidecar_generation(tmp_path: Path) -> None:
         fsync: bool = False,
         file_sha256: str | None = None,
         file_size_bytes: int | None = None,
+        precomputed_exiftool_payload: dict[str, object] | None = None,
+        precomputed_exiftool_version: str | None = None,
     ) -> RawSidecarResult:
         raw_sidecar_calls.append(input_path_arg)
         return RawSidecarResult(
@@ -151,6 +157,8 @@ def test_extract_raw_sidecar_failure_soft_fails_by_default(tmp_path: Path) -> No
         fsync: bool = False,
         file_sha256: str | None = None,
         file_size_bytes: int | None = None,
+        precomputed_exiftool_payload: dict[str, object] | None = None,
+        precomputed_exiftool_version: str | None = None,
     ) -> RawSidecarResult:
         raise RuntimeError(f"boom: {output_path.name}")
 
@@ -186,6 +194,8 @@ def test_extract_raw_sidecar_failure_can_be_strict_and_writes_no_provenance(tmp_
         fsync: bool = False,
         file_sha256: str | None = None,
         file_size_bytes: int | None = None,
+        precomputed_exiftool_payload: dict[str, object] | None = None,
+        precomputed_exiftool_version: str | None = None,
     ) -> RawSidecarResult:
         raise RuntimeError("strict failure")
 
@@ -225,6 +235,8 @@ def test_extract_provenance_write_failure_removes_generated_raw_sidecar(tmp_path
         fsync: bool = False,
         file_sha256: str | None = None,
         file_size_bytes: int | None = None,
+        precomputed_exiftool_payload: dict[str, object] | None = None,
+        precomputed_exiftool_version: str | None = None,
     ) -> RawSidecarResult:
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text("{}", encoding="utf-8")
@@ -280,6 +292,8 @@ def test_extract_reuses_precomputed_file_integrity_for_raw_sidecar(tmp_path: Pat
         fsync: bool = False,
         file_sha256: str | None = None,
         file_size_bytes: int | None = None,
+        precomputed_exiftool_payload: dict[str, object] | None = None,
+        precomputed_exiftool_version: str | None = None,
     ) -> RawSidecarResult:
         raw_sidecar_calls.append((file_sha256, file_size_bytes))
         return RawSidecarResult(
@@ -302,6 +316,54 @@ def test_extract_reuses_precomputed_file_integrity_for_raw_sidecar(tmp_path: Pat
     assert raw_sidecar_calls == [("a" * 64, 12345)]
 
 
+def test_extract_reuses_precomputed_exiftool_metadata_for_raw_sidecar(tmp_path: Path) -> None:
+    input_path = tmp_path / "sample.dng"
+    input_path.write_bytes(b"raw-bytes")
+    output_dir = tmp_path / "out"
+    raw_sidecar_calls: list[tuple[dict[str, object] | None, str | None]] = []
+
+    class _Exif:
+        all_tags = {"EXIF:ISO": 100}
+
+    class _ToolchainEntry:
+        name = "exiftool"
+        version = "13.55"
+
+    class _Sidecar:
+        exif = _Exif()
+        toolchain = [_ToolchainEntry()]
+
+    def fake_generate_raw_sidecar(
+        input_path_arg: Path,
+        *,
+        output_path: Path,
+        fsync: bool = False,
+        file_sha256: str | None = None,
+        file_size_bytes: int | None = None,
+        precomputed_exiftool_payload: dict[str, object] | None = None,
+        precomputed_exiftool_version: str | None = None,
+    ) -> RawSidecarResult:
+        raw_sidecar_calls.append((precomputed_exiftool_payload, precomputed_exiftool_version))
+        return RawSidecarResult(
+            input_path=input_path_arg,
+            output_path=output_path,
+            rawpy_available=True,
+            rawpy_ok=True,
+        )
+
+    service = MetadataExtractionService(
+        capture_provenance_fn=lambda **_: _Sidecar(),
+        write_sidecar_fn=lambda *_args, **_kwargs: None,
+        generate_raw_sidecar_fn=fake_generate_raw_sidecar,
+        clock_fn=_clock,
+    )
+
+    result = service.extract(ExtractRequest(input_path=input_path, output_dir=output_dir))
+
+    assert result.success is True
+    assert raw_sidecar_calls == [({"EXIF:ISO": 100}, "13.55")]
+
+
 def test_extract_respects_explicit_raw_sidecar_output_path(tmp_path: Path) -> None:
     input_path = tmp_path / "sample.cr3"
     input_path.touch()
@@ -315,6 +377,8 @@ def test_extract_respects_explicit_raw_sidecar_output_path(tmp_path: Path) -> No
         fsync: bool = False,
         file_sha256: str | None = None,
         file_size_bytes: int | None = None,
+        precomputed_exiftool_payload: dict[str, object] | None = None,
+        precomputed_exiftool_version: str | None = None,
     ) -> RawSidecarResult:
         raw_sidecar_calls.append(output_path)
         return RawSidecarResult(
@@ -344,6 +408,50 @@ def test_extract_respects_explicit_raw_sidecar_output_path(tmp_path: Path) -> No
     assert raw_sidecar_calls == [explicit_output_path]
 
 
+def test_extract_derives_raw_sidecar_name_from_custom_provenance_output_path(tmp_path: Path) -> None:
+    input_path = tmp_path / "sample.cr3"
+    input_path.touch()
+    custom_provenance_output_path = tmp_path / "out" / "custom.prov.json"
+    raw_sidecar_calls: list[Path] = []
+
+    def fake_generate_raw_sidecar(
+        input_path_arg: Path,
+        *,
+        output_path: Path,
+        fsync: bool = False,
+        file_sha256: str | None = None,
+        file_size_bytes: int | None = None,
+        precomputed_exiftool_payload: dict[str, object] | None = None,
+        precomputed_exiftool_version: str | None = None,
+    ) -> RawSidecarResult:
+        raw_sidecar_calls.append(output_path)
+        return RawSidecarResult(
+            input_path=input_path_arg,
+            output_path=output_path,
+            rawpy_available=True,
+            rawpy_ok=True,
+        )
+
+    service = MetadataExtractionService(
+        capture_provenance_fn=lambda **_: object(),
+        write_sidecar_fn=lambda *_args, **_kwargs: None,
+        generate_raw_sidecar_fn=fake_generate_raw_sidecar,
+        clock_fn=_clock,
+    )
+
+    result = service.extract(
+        ExtractRequest(
+            input_path=input_path,
+            output_path=custom_provenance_output_path,
+        )
+    )
+
+    assert result.success is True
+    assert result.output_path == custom_provenance_output_path
+    assert result.raw_sidecar_path == tmp_path / "out" / "custom.prov.raw.sidecar.json"
+    assert raw_sidecar_calls == [tmp_path / "out" / "custom.prov.raw.sidecar.json"]
+
+
 def test_batch_extract_preserves_disambiguated_raw_sidecar_paths(tmp_path: Path) -> None:
     input_root = tmp_path / "inputs"
     first_dir = input_root / "first"
@@ -355,15 +463,27 @@ def test_batch_extract_preserves_disambiguated_raw_sidecar_paths(tmp_path: Path)
     first.touch()
     second.touch()
 
-    service = MetadataExtractionService(
-        capture_provenance_fn=lambda **_: object(),
-        write_sidecar_fn=lambda *_args, **_kwargs: None,
-        generate_raw_sidecar_fn=lambda input_path_arg, *, output_path, fsync=False, file_sha256=None, file_size_bytes=None: RawSidecarResult(
+    def fake_generate_raw_sidecar(
+        input_path_arg: Path,
+        *,
+        output_path: Path,
+        fsync: bool = False,
+        file_sha256: str | None = None,
+        file_size_bytes: int | None = None,
+        precomputed_exiftool_payload: dict[str, object] | None = None,
+        precomputed_exiftool_version: str | None = None,
+    ) -> RawSidecarResult:
+        return RawSidecarResult(
             input_path=input_path_arg,
             output_path=output_path,
             rawpy_available=True,
             rawpy_ok=True,
-        ),
+        )
+
+    service = MetadataExtractionService(
+        capture_provenance_fn=lambda **_: object(),
+        write_sidecar_fn=lambda *_args, **_kwargs: None,
+        generate_raw_sidecar_fn=fake_generate_raw_sidecar,
         clock_fn=_clock,
     )
 

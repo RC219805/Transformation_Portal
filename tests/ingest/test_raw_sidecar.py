@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import stat
 import subprocess
 from pathlib import Path
 
@@ -146,6 +147,73 @@ def test_build_raw_sidecar_payload_uses_precomputed_file_integrity(
     assert payload["file"]["sha256"] == "b" * 64
 
 
+def test_build_raw_sidecar_payload_reuses_precomputed_exiftool_metadata(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    input_path = tmp_path / "frame.dng"
+    input_path.write_bytes(b"raw-bytes")
+
+    monkeypatch.setattr(
+        raw_sidecar_module,
+        "_get_exiftool_version",
+        lambda _path: (_ for _ in ()).throw(AssertionError("should not read live exiftool version")),
+    )
+    monkeypatch.setattr(
+        raw_sidecar_module,
+        "_run_exiftool_json",
+        lambda _input_path, _exiftool_path: (_ for _ in ()).throw(AssertionError("should not re-run exiftool")),
+    )
+    monkeypatch.setattr(
+        raw_sidecar_module,
+        "_read_rawpy_metadata",
+        lambda _input_path: (
+            None,
+            {"available": False, "ok": False, "error": "rawpy missing", "version": None, "libraw_version": None},
+        ),
+    )
+
+    payload = raw_sidecar_module.build_raw_sidecar_payload(
+        input_path,
+        precomputed_exiftool_version="13.55",
+        precomputed_exiftool_payload={"File:FileAccessDate": "volatile", "EXIF:ISO": 100},
+    )
+
+    assert payload["capture_status"]["exiftool"]["version"] == "13.55"
+    assert payload["metadata_exiftool"] == {"EXIF:ISO": 100}
+
+
+def test_build_raw_sidecar_payload_preserves_input_path_semantics(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    nested_dir = tmp_path / "nested"
+    nested_dir.mkdir()
+    input_path = Path("nested/frame.dng")
+    (nested_dir / "frame.dng").write_bytes(b"raw-bytes")
+    monkeypatch.chdir(tmp_path)
+
+    monkeypatch.setattr(raw_sidecar_module, "_get_exiftool_version", lambda _path: "13.55")
+    monkeypatch.setattr(
+        raw_sidecar_module,
+        "_run_exiftool_json",
+        lambda _input_path, _exiftool_path: {"EXIF:ISO": 100},
+    )
+    monkeypatch.setattr(
+        raw_sidecar_module,
+        "_read_rawpy_metadata",
+        lambda _input_path: (
+            None,
+            {"available": False, "ok": False, "error": "rawpy missing", "version": None, "libraw_version": None},
+        ),
+    )
+
+    payload = raw_sidecar_module.build_raw_sidecar_payload(input_path, exiftool_path="exiftool")
+
+    assert payload["source_file"] == "nested/frame.dng"
+    assert payload["file"]["source_file"] == "nested/frame.dng"
+
+
 def test_generate_raw_sidecar_propagates_exiftool_timeout(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -166,3 +234,35 @@ def test_generate_raw_sidecar_propagates_exiftool_timeout(
             output_path=tmp_path / "frame.raw.sidecar.json",
             exiftool_path="exiftool",
         )
+
+
+def test_generate_raw_sidecar_matches_default_file_permissions(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    input_path = tmp_path / "frame.cr2"
+    input_path.write_bytes(b"raw-bytes")
+
+    baseline_path = tmp_path / "baseline.txt"
+    baseline_path.write_text("baseline", encoding="utf-8")
+    baseline_mode = stat.S_IMODE(baseline_path.stat().st_mode)
+
+    monkeypatch.setattr(raw_sidecar_module, "_get_exiftool_version", lambda _path: "13.55")
+    monkeypatch.setattr(
+        raw_sidecar_module,
+        "_run_exiftool_json",
+        lambda _input_path, _exiftool_path: {"EXIF:ISO": 200},
+    )
+    monkeypatch.setattr(
+        raw_sidecar_module,
+        "_read_rawpy_metadata",
+        lambda _input_path: (
+            None,
+            {"available": False, "ok": False, "error": "rawpy missing", "version": None, "libraw_version": None},
+        ),
+    )
+
+    output_path = tmp_path / "frame.raw.sidecar.json"
+    raw_sidecar_module.generate_raw_sidecar(input_path, output_path=output_path, exiftool_path="exiftool")
+
+    assert stat.S_IMODE(output_path.stat().st_mode) == baseline_mode

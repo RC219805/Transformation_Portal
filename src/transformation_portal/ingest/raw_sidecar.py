@@ -4,10 +4,8 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import shutil
 import subprocess
-import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from types import ModuleType
@@ -75,31 +73,22 @@ def _canonical_json(payload: Dict[str, Any]) -> str:
 
 def _write_json_atomic(payload: Dict[str, Any], output_path: Path, *, fsync: bool) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    tmp_fd: Optional[int] = None
-    tmp_name: Optional[str] = None
+    temp_path = output_path.with_suffix(output_path.suffix + ".tmp")
     try:
-        tmp_fd, tmp_name = tempfile.mkstemp(
-            prefix=f".{output_path.name}.",
-            suffix=".tmp",
-            dir=str(output_path.parent),
-        )
-        with os.fdopen(tmp_fd, "w", encoding="utf-8") as handle:
-            tmp_fd = None
+        with temp_path.open("w", encoding="utf-8") as handle:
             handle.write(_canonical_json(payload))
             if fsync:
                 handle.flush()
+                import os
+
                 os.fsync(handle.fileno())
-        Path(tmp_name).replace(output_path)
+        temp_path.replace(output_path)
     finally:
-        if tmp_fd is not None:
-            os.close(tmp_fd)
-        if tmp_name is not None:
-            tmp_path = Path(tmp_name)
-            if tmp_path.exists():
-                try:
-                    tmp_path.unlink()
-                except OSError:
-                    pass
+        if temp_path.exists():
+            try:
+                temp_path.unlink()
+            except OSError:
+                pass
 
 
 def _sanitize_exiftool_payload(raw_payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -216,7 +205,7 @@ def _build_file_metadata(
 ) -> Dict[str, Any]:
     stat = input_path.stat()
     return {
-        "source_file": str(input_path.resolve()),
+        "source_file": str(input_path),
         "file_name": input_path.name,
         "suffix": input_path.suffix.lower(),
         "size_bytes": stat.st_size if size_bytes is None else size_bytes,
@@ -230,18 +219,27 @@ def build_raw_sidecar_payload(
     exiftool_path: Optional[str] = None,
     file_size_bytes: Optional[int] = None,
     file_sha256: Optional[str] = None,
+    precomputed_exiftool_payload: Optional[Dict[str, Any]] = None,
+    precomputed_exiftool_version: Optional[str] = None,
 ) -> Dict[str, Any]:
     resolved_exiftool = exiftool_path or shutil.which("exiftool")
-    if not resolved_exiftool:
-        raise FileNotFoundError("exiftool not found on PATH")
+    if precomputed_exiftool_version is None or precomputed_exiftool_payload is None:
+        if not resolved_exiftool:
+            raise FileNotFoundError("exiftool not found on PATH")
 
-    exiftool_version = _get_exiftool_version(resolved_exiftool)
-    exiftool_payload = _sanitize_exiftool_payload(_run_exiftool_json(input_path, resolved_exiftool))
+    exiftool_version = (
+        precomputed_exiftool_version if precomputed_exiftool_version is not None else _get_exiftool_version(resolved_exiftool)
+    )
+    exiftool_payload = _sanitize_exiftool_payload(
+        precomputed_exiftool_payload
+        if precomputed_exiftool_payload is not None
+        else _run_exiftool_json(input_path, resolved_exiftool)
+    )
     rawpy_payload, rawpy_status = _read_rawpy_metadata(input_path)
 
     return {
         "sidecar_schema": RAW_SIDECAR_SCHEMA,
-        "source_file": str(input_path.resolve()),
+        "source_file": str(input_path),
         "file": _build_file_metadata(
             input_path,
             size_bytes=file_size_bytes,
@@ -268,6 +266,8 @@ def generate_raw_sidecar(
     exiftool_path: Optional[str] = None,
     file_size_bytes: Optional[int] = None,
     file_sha256: Optional[str] = None,
+    precomputed_exiftool_payload: Optional[Dict[str, Any]] = None,
+    precomputed_exiftool_version: Optional[str] = None,
     fsync: bool = False,
 ) -> RawSidecarResult:
     if not input_path.exists():
@@ -281,6 +281,8 @@ def generate_raw_sidecar(
         exiftool_path=exiftool_path,
         file_size_bytes=file_size_bytes,
         file_sha256=file_sha256,
+        precomputed_exiftool_payload=precomputed_exiftool_payload,
+        precomputed_exiftool_version=precomputed_exiftool_version,
     )
     _write_json_atomic(payload, resolved_output, fsync=fsync)
 
