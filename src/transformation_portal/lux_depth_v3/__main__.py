@@ -158,6 +158,7 @@ except ImportError:
     )
     sys.exit(1)
 
+from ..core.raw_runtime import RAW_RUNTIME_ENV_VAR
 from ._backend_contract import backend_alias_warning, is_legacy_backend_alias, normalize_backend_id
 from .config import EnhanceConfig, Preset
 from .config_resolver import apply_effective_raw_runtime_config
@@ -245,8 +246,7 @@ def _preflight_raw_ingest_requirements(
     )
     if raw_python_executable:
         message += (
-            " Rebuild that dedicated RAW runtime or point --raw-python / "
-            "TRANSFORMATION_PORTAL_RAW_PYTHON at a working interpreter."
+            " Rebuild that dedicated RAW runtime or point --raw-python / " f"{RAW_RUNTIME_ENV_VAR} at a working interpreter."
         )
     else:
         message += ' Install with: pip install -e ".[raw]" or pip install rawpy'

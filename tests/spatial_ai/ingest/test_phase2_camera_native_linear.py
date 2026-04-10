@@ -130,6 +130,7 @@ def test_ingest_phase2_fails_closed_when_fpstate_enforcement_fails(monkeypatch):
 
 def test_ingest_phase2_uses_dedicated_raw_runtime(monkeypatch):
     captured: dict[str, object] = {}
+    enforced = {"called": False}
     fake_tensor = np.asfortranarray(np.full((2, 2, 3), 0.5, dtype=np.float64))
     fake_fingerprint = {
         "schema_version": "1.0.0",
@@ -146,11 +147,7 @@ def test_ingest_phase2_uses_dedicated_raw_runtime(monkeypatch):
         return fake_tensor, {"fingerprint": fake_fingerprint}
 
     monkeypatch.setattr(phase2, "run_raw_worker", fake_run_raw_worker)
-    monkeypatch.setattr(
-        phase2,
-        "enforce_ftz_daz_disabled",
-        lambda: (_ for _ in ()).throw(AssertionError("in-process Phase II path should not run")),
-    )
+    monkeypatch.setattr(phase2, "enforce_ftz_daz_disabled", lambda: enforced.__setitem__("called", True))
 
     tensor, fingerprint = phase2.ingest_phase2_xyz_d50_linear_fp32(
         Path("sample.CR3"),
@@ -159,6 +156,7 @@ def test_ingest_phase2_uses_dedicated_raw_runtime(monkeypatch):
         raw_python_executable="./.venv-raw/bin/python",
     )
 
+    assert enforced["called"] is True
     assert np.array_equal(tensor, fake_tensor.astype(np.float32))
     assert tensor.dtype == np.float32
     assert tensor.flags["C_CONTIGUOUS"]
@@ -170,6 +168,24 @@ def test_ingest_phase2_uses_dedicated_raw_runtime(monkeypatch):
         "wb_mode": "auto",
         "demosaic": "AHD",
     }
+
+
+def test_ingest_phase2_subprocess_branch_fails_closed_before_dispatch(monkeypatch):
+    def _raise() -> None:
+        raise RuntimeError("fpstate violation")
+
+    monkeypatch.setattr(phase2, "enforce_ftz_daz_disabled", _raise)
+    monkeypatch.setattr(
+        phase2,
+        "run_raw_worker",
+        lambda **_kwargs: (_ for _ in ()).throw(AssertionError("subprocess dispatch should not run")),
+    )
+
+    with pytest.raises(RuntimeError, match="fpstate violation"):
+        phase2.ingest_phase2_xyz_d50_linear_fp32(
+            Path("sample.CR3"),
+            raw_python_executable="./.venv-raw/bin/python",
+        )
 
 
 def test_ingest_phase2_rejects_invalid_subprocess_tensor_shape(monkeypatch):

@@ -40,7 +40,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from ..core.da3_runtime import REPO_LOCAL_DA3_PYTHON, find_repo_root, repo_local_da3_python_path
-from ..core.raw_runtime import REPO_LOCAL_RAW_PYTHON, repo_local_raw_python_path
+from ..core.raw_runtime import RAW_RUNTIME_ENV_VAR, REPO_LOCAL_RAW_PYTHON, repo_local_raw_python_path
 from ..ingest.canonical_json import canonicalize_json
 from .config import DA3Config, EnhanceConfig, ModelVariant, Preset
 from .manifest import ConfigFingerprint
@@ -119,14 +119,14 @@ def resolve_effective_raw_python_executable(
 
     Resolution precedence:
     1. Explicit config.raw_python_executable
-    2. TRANSFORMATION_PORTAL_RAW_PYTHON environment override
+    2. RAW runtime environment override
     3. Repo-local stable contract path when present
     """
     configured = _normalize_python_executable(getattr(config, "raw_python_executable", None))
     if configured:
         return configured
 
-    env_candidate = _normalize_python_executable(os.environ.get("TRANSFORMATION_PORTAL_RAW_PYTHON"))
+    env_candidate = _normalize_python_executable(os.environ.get(RAW_RUNTIME_ENV_VAR))
     if env_candidate:
         return env_candidate
 

@@ -86,6 +86,8 @@ def ingest_phase2_xyz_d50_linear_fp32(
     Returns (tensor, fingerprint) where fingerprint is schema-versioned provenance.
     """
     path = Path(path)
+    enforce_ftz_daz_disabled()
+
     if raw_python_executable is not None:
         tensor, metadata = run_raw_worker(
             python_executable=raw_python_executable,
@@ -107,8 +109,6 @@ def ingest_phase2_xyz_d50_linear_fp32(
                 f"got shape {tensor_f32.shape!r}"
             )
         return canonicalize_tensor_f32_le_c(tensor_f32), fingerprint
-
-    enforce_ftz_daz_disabled()
 
     try:
         import rawpy  # type: ignore
