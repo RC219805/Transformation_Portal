@@ -54,6 +54,13 @@ class PortalAssetBundle:
     urls: Dict[str, str]
 
 
+@dataclass(frozen=True)
+class PortalRenderedTextAsset:
+    text: str
+    content_bytes: bytes
+    fingerprint: str
+
+
 def _env_csv(name: str, default: List[str]) -> List[str]:
     raw = os.getenv(name)
     if raw is None:
@@ -165,16 +172,6 @@ def _portal_asset_signature(path: Path) -> Tuple[str, int, int]:
     return str(path), stat_result.st_mtime_ns, stat_result.st_size
 
 
-def _portal_bundle_signature() -> Tuple[Tuple[str, int, int], ...]:
-    source_paths = [
-        PORTAL_HTML,
-        PORTAL_CSS_TEMPLATE_PATH,
-        *(PORTAL_ASSET_PATHS[asset_name] for asset_name in PORTAL_DIRECT_FINGERPRINT_ASSET_NAMES),
-    ]
-    deduped_paths = list(dict.fromkeys(source_paths))
-    return tuple(_portal_asset_signature(path) for path in deduped_paths)
-
-
 def _fingerprint_bytes(payload: bytes) -> str:
     return hashlib.sha256(payload).hexdigest()[:PORTAL_ASSET_FINGERPRINT_LENGTH]
 
@@ -201,24 +198,74 @@ def _render_portal_template(template_text: str, replacements: Mapping[str, str],
     return rendered
 
 
-@lru_cache(maxsize=4)
-def _build_portal_asset_bundle(_: Tuple[Tuple[str, int, int], ...]) -> PortalAssetBundle:
-    fingerprints: Dict[str, str] = {}
-    for asset_name in PORTAL_DIRECT_FINGERPRINT_ASSET_NAMES:
-        fingerprints[asset_name] = _fingerprint_bytes(PORTAL_ASSET_PATHS[asset_name].read_bytes())
+def _portal_direct_asset_signature(asset_name: str) -> Tuple[str, int, int]:
+    return _portal_asset_signature(PORTAL_ASSET_PATHS[asset_name])
 
+
+@lru_cache(maxsize=16)
+def _build_portal_direct_asset_fingerprint(asset_name: str, _: Tuple[str, int, int]) -> str:
+    return _fingerprint_bytes(PORTAL_ASSET_PATHS[asset_name].read_bytes())
+
+
+def _get_portal_direct_asset_fingerprint(asset_name: str) -> str:
+    return _build_portal_direct_asset_fingerprint(asset_name, _portal_direct_asset_signature(asset_name))
+
+
+def _portal_css_signature() -> Tuple[object, ...]:
+    return (
+        _portal_asset_signature(PORTAL_CSS_TEMPLATE_PATH),
+        ("fonts/portal-sans.woff2", _get_portal_direct_asset_fingerprint("fonts/portal-sans.woff2")),
+        ("fonts/portal-mono.woff2", _get_portal_direct_asset_fingerprint("fonts/portal-mono.woff2")),
+    )
+
+
+@lru_cache(maxsize=4)
+def _build_portal_css_asset(_: Tuple[object, ...]) -> PortalRenderedTextAsset:
+    font_fingerprints = {
+        "fonts/portal-sans.woff2": _get_portal_direct_asset_fingerprint("fonts/portal-sans.woff2"),
+        "fonts/portal-mono.woff2": _get_portal_direct_asset_fingerprint("fonts/portal-mono.woff2"),
+    }
     css_template = PORTAL_CSS_TEMPLATE_PATH.read_text(encoding="utf-8")
     css_render = _render_portal_template(
         css_template,
         {
-            token: _portal_asset_versioned_url(asset_name, fingerprints[asset_name])
+            token: _portal_asset_versioned_url(asset_name, font_fingerprint)
             for token, asset_name in PORTAL_CSS_TEMPLATE_TOKENS.items()
+            for font_fingerprint in [font_fingerprints[asset_name]]
         },
         template_name="portal.css",
     )
     css_bytes = css_render.encode("utf-8")
-    fingerprints["portal.css"] = _fingerprint_bytes(css_bytes)
+    return PortalRenderedTextAsset(
+        text=css_render,
+        content_bytes=css_bytes,
+        fingerprint=_fingerprint_bytes(css_bytes),
+    )
 
+
+def _get_portal_css_asset() -> PortalRenderedTextAsset:
+    return _build_portal_css_asset(_portal_css_signature())
+
+
+def _portal_html_signature() -> Tuple[object, ...]:
+    css_asset = _get_portal_css_asset()
+    return (
+        _portal_asset_signature(PORTAL_HTML),
+        ("portal.css", css_asset.fingerprint),
+        *(
+            (asset_name, _get_portal_direct_asset_fingerprint(asset_name))
+            for asset_name in ("portal.js", "brand/dna-symbol-dark.svg", "brand/dna-symbol-light.svg")
+        ),
+    )
+
+
+@lru_cache(maxsize=4)
+def _build_portal_asset_bundle(_: Tuple[object, ...]) -> PortalAssetBundle:
+    css_asset = _get_portal_css_asset()
+    fingerprints = {
+        asset_name: _get_portal_direct_asset_fingerprint(asset_name) for asset_name in PORTAL_DIRECT_FINGERPRINT_ASSET_NAMES
+    }
+    fingerprints["portal.css"] = css_asset.fingerprint
     urls = {
         asset_name: _portal_asset_versioned_url(asset_name, fingerprint) for asset_name, fingerprint in fingerprints.items()
     }
@@ -232,23 +279,22 @@ def _build_portal_asset_bundle(_: Tuple[Tuple[str, int, int], ...]) -> PortalAss
     return PortalAssetBundle(
         html=html_render,
         html_bytes=html_bytes,
-        css=css_render,
-        css_bytes=css_bytes,
+        css=css_asset.text,
+        css_bytes=css_asset.content_bytes,
         fingerprints=fingerprints,
         urls=urls,
     )
 
 
 def _get_portal_asset_bundle() -> PortalAssetBundle:
-    return _build_portal_asset_bundle(_portal_bundle_signature())
+    return _build_portal_asset_bundle(_portal_html_signature())
 
 
 def _requested_portal_asset_fingerprint(request: Request) -> str:
     return str(request.query_params.get(PORTAL_ASSET_FINGERPRINT_PARAM, "")).strip()
 
 
-def _portal_asset_cache_control(asset_name: str, requested_fingerprint: str) -> str:
-    current_fingerprint = _get_portal_asset_bundle().fingerprints[asset_name]
+def _portal_asset_cache_control(current_fingerprint: str, requested_fingerprint: str) -> str:
     if requested_fingerprint and hmac.compare_digest(requested_fingerprint, current_fingerprint):
         return PORTAL_IMMUTABLE_ASSET_CACHE_CONTROL
     return PORTAL_ASSET_CACHE_CONTROL
@@ -5400,24 +5446,27 @@ async def serve_portal_asset(asset_path: str, request: Request) -> Response:
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail="portal asset not found") from exc
 
-    cache_control = _portal_asset_cache_control(asset_path, _requested_portal_asset_fingerprint(request))
+    requested_fingerprint = _requested_portal_asset_fingerprint(request)
     if asset_path == "portal.css":
-        bundle = _get_portal_asset_bundle()
+        css_asset = _get_portal_css_asset()
+        cache_control = _portal_asset_cache_control(css_asset.fingerprint, requested_fingerprint)
         return Response(
-            content=bundle.css_bytes,
+            content=css_asset.content_bytes,
             headers={
                 "Cache-Control": cache_control,
                 "Content-Type": resolved_asset.media_type,
-                "ETag": f'"{bundle.fingerprints[asset_path]}"',
+                "ETag": f'"{css_asset.fingerprint}"',
             },
         )
 
+    direct_fingerprint = _get_portal_direct_asset_fingerprint(asset_path)
+    cache_control = _portal_asset_cache_control(direct_fingerprint, requested_fingerprint)
     return FileResponse(
         str(resolved_asset.path),
         media_type=resolved_asset.media_type,
         headers={
             "Cache-Control": cache_control,
-            "ETag": f'"{_get_portal_asset_bundle().fingerprints[asset_path]}"',
+            "ETag": f'"{direct_fingerprint}"',
         },
     )
 

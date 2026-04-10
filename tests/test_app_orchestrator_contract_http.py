@@ -197,6 +197,39 @@ def test_portal_asset_endpoint_keeps_unversioned_and_stale_requests_backward_com
     assert response.text == stale_response.text
 
 
+def test_portal_css_endpoint_does_not_depend_on_html_bundle_inputs(
+    client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    css_asset = orchestrator_app._get_portal_css_asset()
+    monkeypatch.setattr(orchestrator_app, "PORTAL_HTML", tmp_path / "missing-portal.html")
+    orchestrator_app._build_portal_asset_bundle.cache_clear()
+
+    response = client.get("/portal/assets/portal.css", params={"v": css_asset.fingerprint})
+
+    assert response.status_code == 200
+    assert response.headers["Cache-Control"] == orchestrator_app.PORTAL_IMMUTABLE_ASSET_CACHE_CONTROL
+    assert response.headers["ETag"] == f'"{css_asset.fingerprint}"'
+    assert response.text == css_asset.text
+
+
+def test_portal_direct_asset_endpoint_does_not_depend_on_html_bundle_inputs(
+    client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    current_fingerprint = orchestrator_app._get_portal_direct_asset_fingerprint("fonts/portal-sans.woff2")
+    monkeypatch.setattr(orchestrator_app, "PORTAL_HTML", tmp_path / "missing-portal.html")
+    orchestrator_app._build_portal_asset_bundle.cache_clear()
+
+    response = client.get(
+        "/portal/assets/fonts/portal-sans.woff2",
+        params={"v": current_fingerprint},
+    )
+
+    assert response.status_code == 200
+    assert response.headers["Cache-Control"] == orchestrator_app.PORTAL_IMMUTABLE_ASSET_CACHE_CONTROL
+    assert response.headers["ETag"] == f'"{current_fingerprint}"'
+    assert response.content
+
+
 def test_portal_asset_endpoint_rejects_path_traversal(client: TestClient) -> None:
     response = client.get("/portal/assets/../portal.html")
 
