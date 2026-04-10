@@ -13,6 +13,8 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any, Dict, Optional
 
+from .canonical_json import dumps_json
+
 RAW_EXTENSIONS = {
     ".cr2",
     ".cr3",
@@ -61,7 +63,7 @@ def _sha256_file(path: Path, *, chunk_size: int = 1024 * 1024) -> str:
 
 
 def _canonical_json(payload: Dict[str, Any]) -> str:
-    return json.dumps(
+    return dumps_json(
         payload,
         indent=2,
         sort_keys=True,
