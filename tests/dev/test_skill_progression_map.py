@@ -150,6 +150,55 @@ def test_collect_gh_prs_marks_degraded_when_review_threads_fail(monkeypatch: pyt
     assert any(command[:3] == ("gh", "api", "graphql") for command in commands)
 
 
+def test_collect_gh_prs_marks_degraded_when_detail_fetch_fails(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """PR detail (gh pr view) failure must degrade review_threads and evidence_quality."""
+
+    def fake_run(command: tuple[str, ...], *, cwd: Path, timeout: int) -> module.CommandResult:
+        if command[:3] == ("gh", "auth", "status"):
+            return module.CommandResult(
+                command=tuple(command),
+                returncode=0,
+                stdout="github.com\n  ✓ Logged in to github.com account RC219805 (keyring)\n",
+                stderr="",
+            )
+        if command[:3] == ("gh", "pr", "list"):
+            payload = [
+                {
+                    "number": 1409,
+                    "title": "feat(portal): fingerprint assets",
+                    "state": "MERGED",
+                    "url": "https://github.com/RC219805/Transformation_Portal/pull/1409",
+                    "updatedAt": "2026-04-10T17:22:23Z",
+                    "mergedAt": "2026-04-10T17:22:23Z",
+                    "isDraft": False,
+                }
+            ]
+            return module.CommandResult(tuple(command), 0, json.dumps(payload), "")
+        if command[:3] == ("gh", "pr", "view"):
+            # Simulate a failed detail fetch
+            return module.CommandResult(tuple(command), 1, "", "gh: PR not found")
+        raise AssertionError(f"Unexpected command: {command}")
+
+    monkeypatch.setattr(module, "_run_command", fake_run)
+
+    report = module._collect_gh_prs(
+        repo="RC219805/Transformation_Portal",
+        author="RC219805",
+        since=datetime(2026, 4, 3, 0, 0, 0, tzinfo=UTC),
+        limit=5,
+        repo_root=tmp_path,
+        now=datetime(2026, 4, 10, 18, 0, 0, tzinfo=UTC),
+    )
+
+    assert report["success"] is True
+    assert report["source_status"]["degraded"] is True
+    # detail failure must count as a thread failure → not "ok"
+    assert report["source_status"]["gh_cli"]["review_threads"] != "ok"
+    # evidence_quality must not be "high" when all detail fetches failed
+    assert report["source_status"]["evidence_quality"] != "high"
+    assert any("Failed to inspect PR" in note for note in report["source_status"]["gh_cli"]["notes"])
+
+
 def test_rank_themes_prioritizes_recent_review_threads_over_changed_file_volume() -> None:
     now = datetime(2026, 4, 10, 18, 0, 0, tzinfo=UTC)
     recent_pr = {

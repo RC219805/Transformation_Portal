@@ -782,6 +782,7 @@ def _collect_gh_prs(
                 f"Failed to inspect PR #{number}: {detail_result.stderr.strip() or detail_result.error or 'unknown error'}"
             )
             source_status["degraded"] = True
+            thread_failures += 1
             continue
 
         detail_payload = _safe_json_loads(detail_result.stdout) or {}
