@@ -1,0 +1,280 @@
+"""RAW metadata sidecar generation helpers."""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+import shutil
+import subprocess
+import tempfile
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Dict, Optional
+
+RAW_EXTENSIONS = {
+    ".cr2",
+    ".cr3",
+    ".nef",
+    ".nrw",
+    ".arw",
+    ".srf",
+    ".dng",
+    ".raf",
+    ".orf",
+    ".rw2",
+    ".pef",
+    ".srw",
+}
+RAW_SIDECAR_SCHEMA = "raw-image-sidecar/v2"
+EXIFTOOL_VERSION_TIMEOUT_SECONDS = 5
+EXIFTOOL_METADATA_TIMEOUT_SECONDS = 30
+_VOLATILE_EXIFTOOL_KEYS = {
+    "FileAccessDate",
+    "FileInodeChangeDate",
+}
+
+
+@dataclass(frozen=True)
+class RawSidecarResult:
+    input_path: Path
+    output_path: Path
+    rawpy_available: bool
+    rawpy_ok: bool
+    rawpy_error: Optional[str] = None
+
+
+def is_raw_image_path(path: Path) -> bool:
+    return path.suffix.lower() in RAW_EXTENSIONS
+
+
+def _sha256_file(path: Path, *, chunk_size: int = 1024 * 1024) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        while True:
+            chunk = handle.read(chunk_size)
+            if not chunk:
+                break
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _canonical_json(payload: Dict[str, Any]) -> str:
+    return json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=True, allow_nan=False) + "\n"
+
+
+def _write_json_atomic(payload: Dict[str, Any], output_path: Path, *, fsync: bool) -> None:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_fd: Optional[int] = None
+    tmp_name: Optional[str] = None
+    try:
+        tmp_fd, tmp_name = tempfile.mkstemp(
+            prefix=f".{output_path.name}.",
+            suffix=".tmp",
+            dir=str(output_path.parent),
+        )
+        with os.fdopen(tmp_fd, "w", encoding="utf-8") as handle:
+            tmp_fd = None
+            handle.write(_canonical_json(payload))
+            if fsync:
+                handle.flush()
+                os.fsync(handle.fileno())
+        Path(tmp_name).replace(output_path)
+    finally:
+        if tmp_fd is not None:
+            os.close(tmp_fd)
+        if tmp_name is not None:
+            tmp_path = Path(tmp_name)
+            if tmp_path.exists():
+                try:
+                    tmp_path.unlink()
+                except OSError:
+                    pass
+
+
+def _sanitize_exiftool_payload(raw_payload: Dict[str, Any]) -> Dict[str, Any]:
+    cleaned: Dict[str, Any] = {}
+    for key, value in raw_payload.items():
+        terminal_key = key.split(":")[-1]
+        if terminal_key in _VOLATILE_EXIFTOOL_KEYS:
+            continue
+        cleaned[key] = value
+    return cleaned
+
+
+def _get_exiftool_version(exiftool_path: str) -> str:
+    completed = subprocess.run(
+        [exiftool_path, "-ver"],
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=EXIFTOOL_VERSION_TIMEOUT_SECONDS,
+    )
+    return completed.stdout.strip()
+
+
+def _run_exiftool_json(input_path: Path, exiftool_path: str) -> Dict[str, Any]:
+    completed = subprocess.run(
+        [exiftool_path, "-json", "-G1", "-a", "-u", "-n", str(input_path)],
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=EXIFTOOL_METADATA_TIMEOUT_SECONDS,
+    )
+    payload = json.loads(completed.stdout)
+    if not isinstance(payload, list) or not payload or not isinstance(payload[0], dict):
+        raise ValueError("Unexpected exiftool JSON payload shape")
+    return _sanitize_exiftool_payload(payload[0])
+
+
+def _rawpy_status_payload() -> tuple[Optional[Dict[str, Any]], Dict[str, Any]]:
+    try:
+        import rawpy  # type: ignore
+    except Exception as exc:  # noqa: BLE001
+        return None, {
+            "available": False,
+            "ok": False,
+            "error": str(exc),
+            "version": None,
+            "libraw_version": None,
+        }
+
+    rawpy_version = getattr(rawpy, "__version__", None)
+    libraw_version = getattr(rawpy, "libraw_version", None)
+    if isinstance(libraw_version, (tuple, list)):
+        libraw_version = ".".join(str(part) for part in libraw_version)
+    elif libraw_version is not None:
+        libraw_version = str(libraw_version)
+
+    return rawpy, {
+        "available": True,
+        "ok": True,
+        "error": None,
+        "version": str(rawpy_version) if rawpy_version is not None else None,
+        "libraw_version": libraw_version,
+    }
+
+
+def _read_rawpy_metadata(input_path: Path) -> tuple[Optional[Dict[str, Any]], Dict[str, Any]]:
+    rawpy_module, status = _rawpy_status_payload()
+    if rawpy_module is None:
+        return None, status
+
+    try:
+        with rawpy_module.imread(str(input_path)) as raw:
+            payload = {
+                "raw_type": str(raw.raw_type),
+                "sizes": {
+                    "raw_height": raw.sizes.raw_height,
+                    "raw_width": raw.sizes.raw_width,
+                    "height": raw.sizes.height,
+                    "width": raw.sizes.width,
+                    "top_margin": raw.sizes.top_margin,
+                    "left_margin": raw.sizes.left_margin,
+                    "iheight": raw.sizes.iheight,
+                    "iwidth": raw.sizes.iwidth,
+                    "pixel_aspect": raw.sizes.pixel_aspect,
+                    "flip": raw.sizes.flip,
+                    "crop_left_margin": raw.sizes.crop_left_margin,
+                    "crop_top_margin": raw.sizes.crop_top_margin,
+                    "crop_width": raw.sizes.crop_width,
+                    "crop_height": raw.sizes.crop_height,
+                },
+                "color_desc": (
+                    raw.color_desc.decode("ascii", errors="replace")
+                    if raw.color_desc is not None
+                    else None
+                ),
+                "num_colors": raw.num_colors,
+                "black_level_per_channel": (
+                    list(raw.black_level_per_channel)
+                    if raw.black_level_per_channel is not None
+                    else None
+                ),
+                "white_level": raw.white_level,
+                "camera_whitebalance": (
+                    list(raw.camera_whitebalance)
+                    if raw.camera_whitebalance is not None
+                    else None
+                ),
+                "daylight_whitebalance": (
+                    list(raw.daylight_whitebalance)
+                    if raw.daylight_whitebalance is not None
+                    else None
+                ),
+                "raw_pattern": raw.raw_pattern.tolist() if raw.raw_pattern is not None else None,
+            }
+            return payload, status
+    except Exception as exc:  # noqa: BLE001
+        failed_status = dict(status)
+        failed_status["ok"] = False
+        failed_status["error"] = str(exc)
+        return None, failed_status
+
+
+def _build_file_metadata(input_path: Path) -> Dict[str, Any]:
+    stat = input_path.stat()
+    return {
+        "source_file": str(input_path.resolve()),
+        "file_name": input_path.name,
+        "suffix": input_path.suffix.lower(),
+        "size_bytes": stat.st_size,
+        "sha256": _sha256_file(input_path),
+    }
+
+
+def build_raw_sidecar_payload(
+    input_path: Path,
+    *,
+    exiftool_path: Optional[str] = None,
+) -> Dict[str, Any]:
+    resolved_exiftool = exiftool_path or shutil.which("exiftool")
+    if not resolved_exiftool:
+        raise FileNotFoundError("exiftool not found on PATH")
+
+    exiftool_version = _get_exiftool_version(resolved_exiftool)
+    exiftool_payload = _sanitize_exiftool_payload(_run_exiftool_json(input_path, resolved_exiftool))
+    rawpy_payload, rawpy_status = _read_rawpy_metadata(input_path)
+
+    return {
+        "sidecar_schema": RAW_SIDECAR_SCHEMA,
+        "source_file": str(input_path.resolve()),
+        "file": _build_file_metadata(input_path),
+        "capture_status": {
+            "exiftool": {
+                "available": True,
+                "ok": True,
+                "error": None,
+                "version": exiftool_version,
+            },
+            "rawpy": rawpy_status,
+        },
+        "metadata_exiftool": exiftool_payload,
+        "metadata_rawpy": rawpy_payload,
+    }
+
+
+def generate_raw_sidecar(
+    input_path: Path,
+    *,
+    output_path: Optional[Path] = None,
+    exiftool_path: Optional[str] = None,
+    fsync: bool = False,
+) -> RawSidecarResult:
+    if not input_path.exists():
+        raise FileNotFoundError(f"Input not found: {input_path}")
+    if not input_path.is_file():
+        raise ValueError(f"Input path is not a file: {input_path}")
+
+    resolved_output = output_path or input_path.with_name(f"{input_path.stem}.raw.sidecar.json")
+    payload = build_raw_sidecar_payload(input_path, exiftool_path=exiftool_path)
+    _write_json_atomic(payload, resolved_output, fsync=fsync)
+
+    rawpy_status = payload["capture_status"]["rawpy"]
+    return RawSidecarResult(
+        input_path=input_path,
+        output_path=resolved_output,
+        rawpy_available=bool(rawpy_status.get("available", False)),
+        rawpy_ok=bool(rawpy_status.get("ok", False)),
+        rawpy_error=rawpy_status.get("error"),
+    )

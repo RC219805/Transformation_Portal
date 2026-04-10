@@ -12,6 +12,7 @@ from typing import Any, Callable, Dict, List, Optional, Sequence
 
 from .errors import IngestError, IngestExitCode, OtherIngestFailure, aggregate_errors
 from .provenance import capture_provenance
+from .raw_sidecar import generate_raw_sidecar, is_raw_image_path
 from .sidecar import write_sidecar
 from .validator import validate_schema_errors
 
@@ -25,6 +26,9 @@ class ExtractRequest:
     cli_args: Sequence[str] = ()
     config_dict: Optional[Dict[str, Any]] = None
     fsync: bool = False
+    emit_raw_sidecar: bool = True
+    raw_sidecar_output_path: Optional[Path] = None
+    raw_sidecar_strict: bool = False
 
 
 @dataclass(frozen=True)
@@ -34,6 +38,8 @@ class ExtractResult:
     output_path: Optional[Path]
     elapsed_seconds: float
     error: Optional[IngestError] = None
+    raw_sidecar_path: Optional[Path] = None
+    raw_sidecar_error: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -62,6 +68,8 @@ class BatchExtractRequest:
     fail_fast: bool = False
     preserve_structure: bool = True
     input_root: Optional[Path] = None
+    emit_raw_sidecar: bool = True
+    raw_sidecar_strict: bool = False
 
 
 @dataclass(frozen=True)
@@ -71,6 +79,8 @@ class BatchItemResult:
     output_path: Optional[Path]
     elapsed_seconds: float
     error: Optional[IngestError] = None
+    raw_sidecar_path: Optional[Path] = None
+    raw_sidecar_error: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -94,16 +104,21 @@ class MetadataExtractionService:
         capture_provenance_fn: Callable[..., Any] = capture_provenance,
         write_sidecar_fn: Callable[..., Any] = write_sidecar,
         validate_schema_errors_fn: Callable[..., List[IngestError]] = validate_schema_errors,
+        generate_raw_sidecar_fn: Callable[..., Any] = generate_raw_sidecar,
         clock_fn: Callable[[], float] = time.perf_counter,
     ) -> None:
         self._capture_provenance = capture_provenance_fn
         self._write_sidecar = write_sidecar_fn
         self._validate_schema_errors = validate_schema_errors_fn
+        self._generate_raw_sidecar = generate_raw_sidecar_fn
         self._clock = clock_fn
 
     def extract(self, req: ExtractRequest) -> ExtractResult:
         """Extract provenance for a single input and write sidecar."""
         start = self._clock()
+        raw_sidecar_path: Optional[Path] = None
+        raw_sidecar_error: Optional[str] = None
+        raw_sidecar_written = False
         try:
             if not req.input_path.exists():
                 not_found_err = OtherIngestFailure(f"Input not found: {req.input_path}")
@@ -116,6 +131,16 @@ class MetadataExtractionService:
                 )
 
             output_path = self._derive_output_path(req)
+            should_emit_raw_sidecar = req.emit_raw_sidecar and is_raw_image_path(req.input_path)
+            resolved_raw_sidecar_path = (
+                self._derive_raw_sidecar_output_path(
+                    input_path=req.input_path,
+                    provenance_output_path=output_path,
+                    explicit_output_path=req.raw_sidecar_output_path,
+                )
+                if should_emit_raw_sidecar
+                else None
+            )
             config_dict = (
                 req.config_dict
                 if req.config_dict is not None
@@ -131,13 +156,37 @@ class MetadataExtractionService:
                 config_dict=config_dict,
                 preset=req.preset,
             )
-            self._write_sidecar(sidecar, output_path, fsync=req.fsync)
+
+            if should_emit_raw_sidecar and resolved_raw_sidecar_path is not None:
+                try:
+                    raw_result = self._generate_raw_sidecar(
+                        req.input_path,
+                        output_path=resolved_raw_sidecar_path,
+                        fsync=req.fsync,
+                    )
+                    raw_sidecar_path = raw_result.output_path
+                    raw_sidecar_error = raw_result.rawpy_error
+                    raw_sidecar_written = True
+                except Exception as exc:  # noqa: BLE001
+                    raw_sidecar_error = str(exc)
+                    if req.raw_sidecar_strict:
+                        raise OtherIngestFailure(f"RAW sidecar generation failed for {req.input_path}: {exc}") from exc
+
+            try:
+                self._write_sidecar(sidecar, output_path, fsync=req.fsync)
+            except Exception:
+                if raw_sidecar_written and raw_sidecar_path is not None:
+                    self._remove_if_exists(raw_sidecar_path)
+                    raw_sidecar_path = None
+                raise
 
             return ExtractResult(
                 path=req.input_path,
                 success=True,
                 output_path=output_path,
                 elapsed_seconds=self._clock() - start,
+                raw_sidecar_path=raw_sidecar_path,
+                raw_sidecar_error=raw_sidecar_error,
             )
         except IngestError as error:
             return ExtractResult(
@@ -146,6 +195,8 @@ class MetadataExtractionService:
                 output_path=None,
                 elapsed_seconds=self._clock() - start,
                 error=error,
+                raw_sidecar_path=raw_sidecar_path,
+                raw_sidecar_error=raw_sidecar_error,
             )
         except Exception as exc:  # noqa: BLE001
             wrapped_error = OtherIngestFailure(str(exc))
@@ -155,6 +206,8 @@ class MetadataExtractionService:
                 output_path=None,
                 elapsed_seconds=self._clock() - start,
                 error=wrapped_error,
+                raw_sidecar_path=raw_sidecar_path,
+                raw_sidecar_error=raw_sidecar_error,
             )
 
     def validate(self, req: ValidateRequest) -> ValidateResult:
@@ -222,6 +275,8 @@ class MetadataExtractionService:
                     cli_args=req.cli_args,
                     config_dict=config_dict,
                     fsync=req.fsync,
+                    emit_raw_sidecar=req.emit_raw_sidecar,
+                    raw_sidecar_strict=req.raw_sidecar_strict,
                 )
             )
             item = BatchItemResult(
@@ -230,6 +285,8 @@ class MetadataExtractionService:
                 output_path=result.output_path,
                 elapsed_seconds=result.elapsed_seconds,
                 error=result.error,
+                raw_sidecar_path=result.raw_sidecar_path,
+                raw_sidecar_error=result.raw_sidecar_error,
             )
             items.append(item)
 
@@ -354,3 +411,28 @@ class MetadataExtractionService:
             return req.output_dir / stem_name
 
         return req.input_path.with_name(stem_name)
+
+    def _derive_raw_sidecar_output_path(
+        self,
+        *,
+        input_path: Path,
+        provenance_output_path: Path,
+        explicit_output_path: Optional[Path],
+    ) -> Path:
+        if explicit_output_path is not None:
+            return explicit_output_path
+
+        provenance_name = provenance_output_path.name
+        suffix = ".provenance.json"
+        if provenance_name.endswith(suffix):
+            base_name = provenance_name[: -len(suffix)]
+            return provenance_output_path.with_name(f"{base_name}.raw.sidecar.json")
+        return provenance_output_path.with_name(f"{input_path.stem}.raw.sidecar.json")
+
+    def _remove_if_exists(self, path: Path) -> None:
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            return
+        except OSError:
+            return
