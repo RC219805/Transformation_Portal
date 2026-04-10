@@ -71,6 +71,7 @@ from .config_resolver import (
     PresetInfo,
     ResolvedConfig,
     apply_effective_da3_runtime_config,
+    apply_effective_raw_runtime_config,
     build_apex_depth_gate_fingerprint_payload,
     build_depth_cache_payload,
     build_materials_fingerprint_payload,
@@ -373,6 +374,7 @@ class EnhanceOrchestrator:
         _log_dependency_status()
 
         self.config = apply_effective_da3_runtime_config(config)
+        self.config = apply_effective_raw_runtime_config(self.config)
         self.output_root = Path(output_root)
         self.verify_outputs = verify_outputs
 

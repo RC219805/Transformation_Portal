@@ -246,7 +246,7 @@ class TestCLIValidation:
         monkeypatch.setattr("transformation_portal.lux_depth_v3.__main__.EnhanceOrchestrator", FakeOrchestrator)
         monkeypatch.setattr(
             "transformation_portal.lux_depth_v3.__main__._canonical_raw_ingest_status",
-            lambda: (False, "rawpy is not installed"),
+            lambda *_args: (False, "rawpy is not installed"),
         )
 
         result = runner.invoke(
@@ -279,7 +279,7 @@ class TestCLIValidation:
         monkeypatch.setattr("transformation_portal.lux_depth_v3.__main__.EnhanceOrchestrator", FakeOrchestrator)
         monkeypatch.setattr(
             "transformation_portal.lux_depth_v3.__main__._canonical_raw_ingest_status",
-            lambda: (False, "rawpy is not installed"),
+            lambda *_args: (False, "rawpy is not installed"),
         )
 
         result = runner.invoke(
@@ -336,7 +336,7 @@ class TestCLIValidation:
         monkeypatch.setattr("transformation_portal.lux_depth_v3.__main__.EnhanceOrchestrator", FakeOrchestrator)
         monkeypatch.setattr(
             "transformation_portal.lux_depth_v3.__main__._canonical_raw_ingest_status",
-            lambda: (False, "rawpy is unavailable in this environment"),
+            lambda *_args: (False, "rawpy is unavailable in this environment"),
         )
 
         result = runner.invoke(
@@ -851,6 +851,79 @@ class TestCLIConfiguration:
 
         assert captured_config is not None
         assert captured_config.da3_python_executable == "./.venv-da3/bin/python"
+
+    def test_raw_python_flag_sets_config(self, tmp_path):
+        """--raw-python should be forwarded into EnhanceConfig."""
+        from unittest.mock import MagicMock, patch
+
+        input_dir = tmp_path / "input"
+        input_dir.mkdir()
+        (input_dir / "test.jpg").touch()
+
+        captured_config = None
+
+        def mock_orch_init(config, output_root):
+            nonlocal captured_config
+            captured_config = config
+            mock_orch = MagicMock()
+            mock_orch.enhance_batch.return_value = {"total": 0, "succeeded": 0}
+            return mock_orch
+
+        with patch(
+            "transformation_portal.lux_depth_v3.__main__.EnhanceOrchestrator",
+            side_effect=mock_orch_init,
+        ):
+            _result = runner.invoke(
+                app,
+                [
+                    "--input-dir",
+                    str(input_dir),
+                    "--output-dir",
+                    str(tmp_path / "output"),
+                    "--raw-python",
+                    "./.venv-raw/bin/python",
+                ],
+            )
+
+        assert captured_config is not None
+        assert captured_config.raw_python_executable == "./.venv-raw/bin/python"
+
+    def test_raw_preflight_uses_dedicated_raw_runtime(self, monkeypatch, tmp_path):
+        """RAW preflight should validate the dedicated RAW runtime when configured."""
+        input_dir = tmp_path / "input"
+        input_dir.mkdir()
+        (input_dir / "scene_01.DNG").write_bytes(b"raw-payload")
+
+        captured: dict[str, str | None] = {"raw_python": None}
+
+        class FakeOrchestrator:
+            def __init__(self, *_args, **_kwargs):
+                pass
+
+            def enhance_batch(self, *_args, **_kwargs):
+                return [{"status": "ok"}]
+
+        def fake_status(raw_python_executable=None):
+            captured["raw_python"] = raw_python_executable
+            return True, None
+
+        monkeypatch.setattr("transformation_portal.lux_depth_v3.__main__.EnhanceOrchestrator", FakeOrchestrator)
+        monkeypatch.setattr("transformation_portal.lux_depth_v3.__main__._canonical_raw_ingest_status", fake_status)
+
+        result = runner.invoke(
+            app,
+            [
+                "--input-dir",
+                str(input_dir),
+                "--output-dir",
+                str(tmp_path / "output"),
+                "--raw-python",
+                "./.venv-raw/bin/python",
+            ],
+        )
+
+        assert result.exit_code == 0
+        assert captured["raw_python"] == "./.venv-raw/bin/python"
 
     def test_save_float_depth_defaults_false(self, tmp_path):
         """save_float_depth should default to False when flag is omitted."""

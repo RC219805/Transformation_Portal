@@ -168,6 +168,7 @@ def test_auto_mode_retries_non_positive_camera_wb_with_rawpy_auto_wb(
         "half_size": False,
         "output_bps": 16,
         "output_linear": True,
+        "python_executable": None,
     }
 
 

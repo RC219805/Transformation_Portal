@@ -1,7 +1,7 @@
-"""Configuration module for lux_depth_v3 pipeline.
+"""Lux Depth V3 configuration types and runtime defaults.
 
-STUB IMPLEMENTATION - Critical types to enable package imports.
-Full implementation pending.
+This module defines the typed configuration surface used by the CLI, portal
+preview layer, orchestrator, and reproducibility metadata.
 """
 
 from __future__ import annotations
@@ -225,6 +225,9 @@ class EnhanceConfig:
     # Optional Python executable for a
     # dedicated Depth Pro environment
     depth_pro_python_executable: Optional[str] = None
+    # Optional Python executable for a
+    # dedicated RAW ingest environment
+    raw_python_executable: Optional[str] = None
     # Optional Python executable for a
     # dedicated DA3 / depth-anything-3 environment
     da3_python_executable: Optional[str] = None

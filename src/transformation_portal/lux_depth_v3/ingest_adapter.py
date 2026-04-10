@@ -83,6 +83,7 @@ def build_raw_ingest_options(
         )
         .strip()
         .upper(),
+        raw_python_executable=getattr(config, "raw_python_executable", None),
         no_auto_bright=True,
         no_auto_scale=True,
         gamma_mode="linear",
@@ -91,6 +92,8 @@ def build_raw_ingest_options(
 
 def raw_ingest_summary(
     config: "EnhanceConfig",
+    *,
+    raw_python_executable: str | None = None,
 ) -> Dict[str, Any]:
     """Return deterministic digest summary.
 
@@ -104,6 +107,7 @@ def raw_ingest_summary(
         "contract": options.contract,
         "wb_mode": options.wb_mode,
         "demosaic": options.demosaic,
+        "raw_python_executable": raw_python_executable or getattr(config, "raw_python_executable", None),
         "no_auto_bright": options.no_auto_bright,
         "no_auto_scale": options.no_auto_scale,
         "gamma_mode": options.gamma_mode,
@@ -137,7 +141,11 @@ def _is_camera_wb_metadata_failure(exc: Exception) -> bool:
     return RAW_CAMERA_WB_NON_POSITIVE_TOKEN in str(exc)
 
 
-def _decode_auto_wb_linear_rgb(path: Path) -> np.ndarray:
+def _decode_auto_wb_linear_rgb(
+    path: Path,
+    *,
+    python_executable: str | None,
+) -> np.ndarray:
     from .raw_loader import load_raw_as_rgb
 
     linear_rgb_u16 = load_raw_as_rgb(
@@ -146,6 +154,7 @@ def _decode_auto_wb_linear_rgb(path: Path) -> np.ndarray:
         half_size=False,
         output_bps=16,
         output_linear=True,
+        python_executable=python_executable,
     )
     return np.clip(linear_rgb_u16.astype(np.float32) / 65535.0, 0.0, 1.0).astype(np.float32)
 
@@ -195,7 +204,10 @@ def decode_for_lux_depth(
                 path.name,
             )
             try:
-                return _decode_auto_wb_linear_rgb(path)
+                return _decode_auto_wb_linear_rgb(
+                    path,
+                    python_executable=getattr(config, "raw_python_executable", None),
+                )
             except Exception as fallback_exc:
                 raise RawIngestError(
                     "Canonical RAW decode failed for {}: {}. "

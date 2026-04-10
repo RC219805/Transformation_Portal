@@ -27,6 +27,7 @@ class IngestOptions:
     tensor_role: str = "xyz_d50_linear_fp32"
     wb_mode: Literal["none", "camera", "auto"] = "camera"
     demosaic: str = field(default="AHD")
+    raw_python_executable: str | None = None
     no_auto_bright: bool = True
     no_auto_scale: bool = True
     gamma_mode: Literal["linear"] = "linear"
@@ -60,6 +61,7 @@ def decode_contract(input_path: Path | str, opts: IngestOptions) -> np.ndarray:
             path=input_path,
             wb_mode=opts.wb_mode,
             demosaic=opts.demosaic,
+            raw_python_executable=opts.raw_python_executable,
         )
         return tensor
 
@@ -70,7 +72,11 @@ def decode_contract(input_path: Path | str, opts: IngestOptions) -> np.ndarray:
             raise ValueError("legacy_linear_srgb currently supports demosaic='AHD' only.")
         from .linear_decoder import LinearDecoder
 
-        result = LinearDecoder(gamma=1.0, strict_ingest=True).decode(input_path)
+        result = LinearDecoder(
+            gamma=1.0,
+            strict_ingest=True,
+            raw_python_executable=opts.raw_python_executable,
+        ).decode(input_path)
         return result.linear_rgb
 
     raise ValueError(

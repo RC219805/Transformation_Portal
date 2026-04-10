@@ -41,6 +41,7 @@ from typing import Any, Dict, Optional, Tuple
 import numpy as np
 from PIL import Image
 
+from ...core.raw_runtime import run_raw_worker
 from ...ingest.canonical_json import dump_json
 from .exceptions import BitDepthViolationError, ColorSpaceError, UnsupportedFormatError
 from .provenance import ProvenanceCapture
@@ -184,6 +185,7 @@ class LinearDecoder:
         bit_depth: int = 32,
         strict_ingest: bool = False,
         telemetry: IngestTelemetry | None = None,
+        raw_python_executable: str | None = None,
     ):
         """Initialize linear decoder.
 
@@ -209,6 +211,7 @@ class LinearDecoder:
         self.bit_depth = bit_depth
         self.strict_ingest = strict_ingest
         self._telemetry: IngestTelemetry = telemetry or NullTelemetry()
+        self._raw_python_executable = raw_python_executable
 
     def _emit_telemetry(self, event: str, **fields: object) -> None:
         """Best-effort telemetry emission that never interrupts ingest flow."""
@@ -260,17 +263,20 @@ class LinearDecoder:
         format_str = self._detect_format(input_path)
         logger.debug(f"Detected format: {format_str}")
 
-        # Detect color space (especially for RAW files)
-        if format_str.startswith("RAW_"):
-            color_space = self._detect_raw_color_space(input_path)
+        if format_str.startswith("RAW_") and self._raw_python_executable is not None:
+            linear_rgb, input_size, ingest_fingerprint, color_space = self._decode_raw_via_subprocess(input_path)
         else:
-            # Non-RAW formats: assume linear_sRGB for Phase I
-            # (TIFF/PNG/EXR don't have embedded color matrices like RAW)
-            color_space = "linear_sRGB"
-        logger.debug(f"Color space: {color_space}")
+            # Detect color space (especially for RAW files)
+            if format_str.startswith("RAW_"):
+                color_space = self._detect_raw_color_space(input_path)
+            else:
+                # Non-RAW formats: assume linear_sRGB for Phase I
+                # (TIFF/PNG/EXR don't have embedded color matrices like RAW)
+                color_space = "linear_sRGB"
+            logger.debug(f"Color space: {color_space}")
 
-        # Decode to linear RGB
-        linear_rgb, input_size, ingest_fingerprint = self._decode_linear(input_path, format_str)
+            # Decode to linear RGB
+            linear_rgb, input_size, ingest_fingerprint = self._decode_linear(input_path, format_str)
 
         # Compute content hash
         content_hash = self._compute_content_hash(linear_rgb)
@@ -314,6 +320,36 @@ class LinearDecoder:
         )
 
         return result
+
+    def _decode_raw_via_subprocess(
+        self,
+        path: Path,
+    ) -> Tuple[np.ndarray, Tuple[int, int], Optional[str], str]:
+        """Decode RAW via an isolated subprocess runtime."""
+        if self._raw_python_executable is None:
+            raise RuntimeError("RAW subprocess decode requested without a Python executable.")
+
+        array, metadata = run_raw_worker(
+            python_executable=self._raw_python_executable,
+            command_name="linear_decode",
+            input_path=path,
+            payload={
+                "gamma": self.gamma,
+                "bit_depth": self.bit_depth,
+                "strict_ingest": self.strict_ingest,
+            },
+            start=Path(__file__),
+        )
+        linear_rgb = np.asarray(array, dtype=np.float32)
+        size_payload = metadata.get("input_size")
+        if not isinstance(size_payload, list) or len(size_payload) != 2:
+            raise RuntimeError(f"RAW worker returned invalid input_size metadata: {size_payload!r}")
+        input_size = (int(size_payload[0]), int(size_payload[1]))
+        color_space = str(metadata.get("color_space") or "linear_sRGB")
+        ingest_fingerprint = metadata.get("ingest_fingerprint")
+        if ingest_fingerprint is not None:
+            ingest_fingerprint = str(ingest_fingerprint)
+        return linear_rgb, input_size, ingest_fingerprint, color_space
 
     def _detect_format(self, path: Path) -> str:
         """Detect image format from file extension.
@@ -1004,6 +1040,7 @@ def decode(
     output_dir: Optional[Path | str] = None,
     emit_exr: bool = False,
     emit_provenance: bool = False,
+    raw_python_executable: str | None = None,
 ) -> LinearIngestResult:
     """Decode image to float32 linear light (convenience function).
 
@@ -1024,7 +1061,12 @@ def decode(
         >>> assert result.gamma == 1.0
         >>> assert result.linear_rgb.dtype == np.float32
     """
-    decoder = LinearDecoder(gamma=gamma, bit_depth=bit_depth, strict_ingest=strict_ingest)
+    decoder = LinearDecoder(
+        gamma=gamma,
+        bit_depth=bit_depth,
+        strict_ingest=strict_ingest,
+        raw_python_executable=raw_python_executable,
+    )
     return decoder.decode(
         input_path=input_path,
         output_dir=output_dir,

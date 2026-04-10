@@ -1,7 +1,8 @@
-"""Manifest management for pipeline reproducibility.
+"""Lux Depth V3 manifest and reproducibility data models.
 
-STUB IMPLEMENTATION - Critical types to enable package imports.
-Full implementation pending.
+This module defines the typed manifest payloads written for per-image outputs,
+batch summaries, and config fingerprint material used by reuse and governance
+checks.
 """
 
 from __future__ import annotations
@@ -312,6 +313,7 @@ class ConfigFingerprint:
     depth_backend: Optional[str] = None
     depth_pro_checkpoint_path: Optional[str] = None
     depth_pro_python_executable: Optional[str] = None
+    raw_python_executable: Optional[str] = None
     da3_python_executable: Optional[str] = None
     quality_tier: Optional[str] = None
     materials_config: Optional[Dict[str, Any]] = None
@@ -336,6 +338,7 @@ class ConfigFingerprint:
             depth_backend=self.depth_backend,
             depth_pro_checkpoint_path=self.depth_pro_checkpoint_path,
             depth_pro_python_executable=self.depth_pro_python_executable,
+            raw_python_executable=self.raw_python_executable,
             da3_python_executable=self.da3_python_executable,
             quality_tier=self.quality_tier,
             materials_config=self.materials_config,
@@ -362,6 +365,7 @@ class ConfigFingerprint:
             depth_backend=None,
             depth_pro_checkpoint_path=None,
             depth_pro_python_executable=None,
+            raw_python_executable=None,
             da3_python_executable=None,
             quality_tier=None,
             materials_config=None,

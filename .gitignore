@@ -58,6 +58,7 @@ requirements/.hash-pilot/
 .env
 .venv/
 .venv-da3/
+.venv-raw/
 .venv-lint/
 .runtime/
 env/
