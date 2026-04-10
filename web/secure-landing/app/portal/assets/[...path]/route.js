@@ -114,7 +114,10 @@ async function proxyPortalAsset(request, { params }) {
   try {
     ({ upstream, usedGetFallback } = await fetchUpstreamAsset(
       request,
-      buildUpstreamUrl(`/portal/assets/${assetPath.split("/").map(encodeURIComponent).join("/")}`),
+      buildUpstreamUrl(
+        `/portal/assets/${assetPath.split("/").map(encodeURIComponent).join("/")}`,
+        request.nextUrl.search
+      ),
       upstreamHeaders
     ));
   } catch (error) {

@@ -27,13 +27,13 @@
 
 @font-face {
     font-family: "Portal Sans";
-    src: url("/portal/assets/fonts/portal-sans.woff2") format("woff2");
+    src: url("__PORTAL_FONT_SANS_URL__") format("woff2");
     font-display: swap;
 }
 
 @font-face {
     font-family: "Portal Mono";
-    src: url("/portal/assets/fonts/portal-mono.woff2") format("woff2");
+    src: url("__PORTAL_FONT_MONO_URL__") format("woff2");
     font-display: swap;
 }
 
