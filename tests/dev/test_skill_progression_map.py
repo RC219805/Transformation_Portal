@@ -23,6 +23,19 @@ def test_resolve_since_falls_back_to_trailing_seven_days_when_memory_missing(tmp
     assert metadata["last_run"] is None
 
 
+def test_resolve_since_falls_back_when_memory_cannot_be_decoded(tmp_path: Path) -> None:
+    fixed_now = datetime(2026, 4, 10, 18, 0, 0, tzinfo=UTC)
+    memory_path = tmp_path / "memory.md"
+    memory_path.write_bytes(b"\xff\xfe\x00")
+
+    since, metadata = module.resolve_since(memory_path, now=fixed_now)
+
+    assert since == fixed_now - timedelta(days=7)
+    assert metadata["loaded"] is False
+    assert metadata["status"] == "read_error"
+    assert "UnicodeDecodeError" in str(metadata["notes"])
+
+
 def test_parse_memory_timestamps_handles_utc_suffix_correctly() -> None:
     """Timestamp headings with 'UTC' suffix must be interpreted as UTC, not local time."""
 
@@ -158,6 +171,45 @@ def test_classify_issue_class_does_not_treat_block_as_lock() -> None:
     assert issue_class == "timeout/runtime guard"
 
 
+def test_safe_json_loads_returns_none_and_records_note_on_invalid_json() -> None:
+    notes: list[str] = []
+
+    result = module._safe_json_loads("not-json", notes=notes, context="test payload")
+
+    assert result is None
+    assert notes
+    assert "test payload was not valid JSON" in notes[0]
+
+
+def test_collect_gh_prs_fails_closed_on_invalid_pr_list_json(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    def fake_run(command: tuple[str, ...], *, cwd: Path, timeout: int) -> module.CommandResult:
+        if command[:3] == ("gh", "auth", "status"):
+            return module.CommandResult(
+                command=tuple(command),
+                returncode=0,
+                stdout="github.com\n  ✓ Logged in to github.com account RC219805 (keyring)\n",
+                stderr="",
+            )
+        if command[:3] == ("gh", "pr", "list"):
+            return module.CommandResult(tuple(command), 0, "not-json", "")
+        raise AssertionError(f"Unexpected command: {command}")
+
+    monkeypatch.setattr(module, "_run_command", fake_run)
+
+    report = module._collect_gh_prs(
+        repo="RC219805/Transformation_Portal",
+        author="RC219805",
+        since=datetime(2026, 4, 3, 0, 0, 0, tzinfo=UTC),
+        limit=5,
+        repo_root=tmp_path,
+        now=datetime(2026, 4, 10, 18, 0, 0, tzinfo=UTC),
+    )
+
+    assert report["success"] is False
+    assert report["source_status"]["gh_cli"]["pr_list"] == "failed"
+    assert any("not valid JSON" in note for note in report["source_status"]["gh_cli"]["notes"])
+
+
 def test_collect_gh_prs_marks_degraded_when_review_threads_fail(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     commands: list[tuple[str, ...]] = []
 
@@ -273,6 +325,45 @@ def test_collect_gh_prs_marks_degraded_when_detail_fetch_fails(monkeypatch: pyte
     assert any("Failed to inspect PR" in note for note in report["source_status"]["gh_cli"]["notes"])
 
 
+def test_collect_local_git_fallback_matches_git_config_author_when_login_differs(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    commands: list[tuple[str, ...]] = []
+
+    def fake_run(command: tuple[str, ...], *, cwd: Path, timeout: int) -> module.CommandResult:
+        commands.append(tuple(command))
+        if command[:4] == ("git", "config", "--get", "user.name"):
+            return module.CommandResult(tuple(command), 0, "Richard Cheetham\n", "")
+        if command[:4] == ("git", "config", "--get", "user.email"):
+            return module.CommandResult(tuple(command), 0, "richard@example.com\n", "")
+        if command[:2] == ("git", "log"):
+            assert "--author" not in command
+            stdout = "\n".join(
+                (
+                    "abc12345\t2026-04-10T18:00:00+00:00\tRichard Cheetham\trichard@example.com\tfeat: matching commit",
+                    "def67890\t2026-04-10T17:00:00+00:00\tSomeone Else\tother@example.com\tfeat: other commit",
+                )
+            )
+            return module.CommandResult(tuple(command), 0, stdout, "")
+        if command[:3] == ("git", "show", "--name-only"):
+            return module.CommandResult(tuple(command), 0, "src/transformation_portal/dev/skill_progression_map.py\n", "")
+        raise AssertionError(f"Unexpected command: {command}")
+
+    monkeypatch.setattr(module, "_run_command", fake_run)
+
+    report = module._collect_local_git_fallback(
+        author="RC219805",
+        since=datetime(2026, 4, 3, 0, 0, 0, tzinfo=UTC),
+        limit=5,
+        repo_root=tmp_path,
+        now=datetime(2026, 4, 10, 18, 0, 0, tzinfo=UTC),
+    )
+
+    assert report["success"] is True
+    assert len(report["fallback_commits"]) == 1
+    assert report["fallback_commits"][0]["sha"] == "abc12345"
+
+
 def test_rank_themes_prioritizes_recent_review_threads_over_changed_file_volume() -> None:
     now = datetime(2026, 4, 10, 18, 0, 0, tzinfo=UTC)
     recent_pr = {
@@ -340,6 +431,42 @@ def test_rank_themes_prioritizes_recent_review_threads_over_changed_file_volume(
 
     assert ranked[0]["theme_id"] == "ml_runtime_isolation_and_subprocess_contract_design"
     assert ranked[0]["score"] > ranked[1]["score"]
+
+
+def test_build_report_marks_memory_not_read_when_since_explicit(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    memory_path = tmp_path / "memory.md"
+    memory_path.write_text("## 2026-04-10 10:00:00 UTC\n", encoding="utf-8")
+
+    def fake_collect_gh_prs(**_: object) -> dict[str, object]:
+        return {
+            "success": True,
+            "inspected_prs": [],
+            "evidence_records": [],
+            "source_status": {
+                "connector": "not-run-by-helper",
+                "gh_cli": {"auth": "ok", "pr_list": "ok", "review_threads": "no-prs", "notes": []},
+                "local_git": {"used": False, "status": "not-used", "notes": []},
+                "memory": {},
+                "degraded": False,
+                "evidence_quality": "low",
+            },
+        }
+
+    monkeypatch.setattr(module, "_collect_gh_prs", fake_collect_gh_prs)
+
+    report = module.build_skill_progression_report(
+        repo="RC219805/Transformation_Portal",
+        author="RC219805",
+        since=datetime(2026, 4, 10, 18, 0, 0, tzinfo=UTC),
+        limit=1,
+        repo_root=tmp_path,
+        memory_path=memory_path,
+        now=datetime(2026, 4, 10, 18, 0, 0, tzinfo=UTC),
+    )
+
+    assert report["source_status"]["memory"]["exists"] is True
+    assert report["source_status"]["memory"]["loaded"] is False
+    assert report["source_status"]["memory"]["status"] == "not-read"
 
 
 def test_main_json_output_contains_ranked_themes_and_source_status(

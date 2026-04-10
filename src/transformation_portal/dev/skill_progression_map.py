@@ -172,22 +172,32 @@ def resolve_since(
 
     current_time = (now or datetime.now(UTC)).astimezone(UTC)
     resolved_memory_path = memory_path or default_memory_path()
+    memory_exists = resolved_memory_path.exists()
     memory_meta: dict[str, Any] = {
         "path": str(resolved_memory_path),
+        "exists": memory_exists,
         "loaded": False,
         "timestamp_found": False,
         "last_run": None,
+        "status": "missing",
+        "notes": None,
     }
 
-    if resolved_memory_path.exists():
-        content = resolved_memory_path.read_text(encoding="utf-8")
-        memory_meta["loaded"] = True
-        parsed_timestamps = parse_memory_timestamps(content)
-        if parsed_timestamps:
-            latest = parsed_timestamps[-1].astimezone(UTC)
-            memory_meta["timestamp_found"] = True
-            memory_meta["last_run"] = latest.isoformat().replace("+00:00", "Z")
-            return latest, memory_meta
+    if memory_exists:
+        try:
+            content = resolved_memory_path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as exc:
+            memory_meta["status"] = "read_error"
+            memory_meta["notes"] = f"{type(exc).__name__}: {exc}"
+        else:
+            memory_meta["loaded"] = True
+            memory_meta["status"] = "loaded"
+            parsed_timestamps = parse_memory_timestamps(content)
+            if parsed_timestamps:
+                latest = parsed_timestamps[-1].astimezone(UTC)
+                memory_meta["timestamp_found"] = True
+                memory_meta["last_run"] = latest.isoformat().replace("+00:00", "Z")
+                return latest, memory_meta
 
     fallback = current_time - timedelta(days=FALLBACK_WINDOW_DAYS)
     return fallback, memory_meta
@@ -238,11 +248,69 @@ def resolve_github_login(repo_root: Path) -> str:
     return login
 
 
-def _safe_json_loads(text: str) -> Any:
+def _safe_json_loads(
+    text: str,
+    *,
+    notes: list[str] | None = None,
+    context: str | None = None,
+) -> Any:
     payload = text.strip()
     if not payload:
         return None
-    return json.loads(payload)
+    try:
+        return json.loads(payload)
+    except json.JSONDecodeError as exc:
+        if notes is not None:
+            label = context or "JSON payload"
+            notes.append(f"{label} was not valid JSON: {exc.msg} (line {exc.lineno}, column {exc.colno}).")
+        return None
+
+
+def _normalize_author_token(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = value.strip().casefold()
+    return normalized or None
+
+
+def _collect_git_author_filters(repo_root: Path, author: str) -> set[str]:
+    filters: set[str] = set()
+
+    def add(value: str | None) -> None:
+        normalized = _normalize_author_token(value)
+        if not normalized:
+            return
+        filters.add(normalized)
+        if "@" in normalized:
+            filters.add(normalized.split("@", maxsplit=1)[0])
+
+    add(author)
+
+    for command in (
+        ("git", "config", "--get", "user.name"),
+        ("git", "config", "--get", "user.email"),
+    ):
+        result = _run_command(command, cwd=repo_root, timeout=5)
+        if result.returncode == 0:
+            add(result.stdout.strip())
+
+    return filters
+
+
+def _commit_matches_git_author(filters: set[str], author_name: str, author_email: str) -> bool:
+    if not filters:
+        return True
+
+    candidates: set[str] = set()
+    for value in (author_name, author_email, f"{author_name} <{author_email}>"):
+        normalized = _normalize_author_token(value)
+        if not normalized:
+            continue
+        candidates.add(normalized)
+        if "@" in normalized:
+            candidates.add(normalized.split("@", maxsplit=1)[0])
+
+    return bool(filters.intersection(candidates))
 
 
 def _normalize_datetime_string(value: str | None) -> str | None:
@@ -761,7 +829,21 @@ def _collect_gh_prs(
         }
     source_status["gh_cli"]["pr_list"] = "ok"
 
-    raw_prs = _safe_json_loads(list_result.stdout) or []
+    raw_prs = _safe_json_loads(
+        list_result.stdout,
+        notes=source_status["gh_cli"]["notes"],
+        context="`gh pr list` output",
+    )
+    if not isinstance(raw_prs, list):
+        source_status["gh_cli"]["pr_list"] = "failed"
+        source_status["degraded"] = True
+        source_status["evidence_quality"] = "low"
+        return {
+            "success": False,
+            "inspected_prs": [],
+            "evidence_records": [],
+            "source_status": source_status,
+        }
     since_utc = since.astimezone(UTC)
     filtered_prs = []
     for pr in raw_prs:
@@ -801,7 +883,16 @@ def _collect_gh_prs(
             thread_failures += 1
             continue
 
-        detail_payload = _safe_json_loads(detail_result.stdout) or {}
+        detail_payload = _safe_json_loads(
+            detail_result.stdout,
+            notes=source_status["gh_cli"]["notes"],
+            context=f"`gh pr view` output for PR #{number}",
+        )
+        if not isinstance(detail_payload, dict):
+            source_status["gh_cli"]["notes"].append(f"Failed to parse PR #{number} detail payload.")
+            source_status["degraded"] = True
+            thread_failures += 1
+            continue
         summary["changed_file_count"] = len(detail_payload.get("files", []))
 
         threads_payload: dict[str, Any] | None = None
@@ -831,16 +922,26 @@ def _collect_gh_prs(
         )
         thread_result = _run_command(graphql_command, cwd=repo_root, timeout=GRAPHQL_TIMEOUT_SECONDS)
         if thread_result.returncode == 0:
-            threads_payload = _safe_json_loads(thread_result.stdout) or {}
-            thread_records = _normalize_review_threads(
-                pr_summary=summary,
-                threads_payload=threads_payload,
-                author_login=author,
-                now=now,
+            threads_payload = _safe_json_loads(
+                thread_result.stdout,
+                notes=source_status["gh_cli"]["notes"],
+                context=f"GraphQL review thread payload for PR #{number}",
             )
-            evidence_records.extend(thread_records)
-            summary["review_thread_count"] = len(thread_records)
-            thread_successes += 1
+            if not isinstance(threads_payload, dict):
+                thread_failures += 1
+                source_status["degraded"] = True
+                source_status["gh_cli"]["notes"].append(f"Failed to parse review thread payload for PR #{number}.")
+                threads_payload = None
+            else:
+                thread_records = _normalize_review_threads(
+                    pr_summary=summary,
+                    threads_payload=threads_payload,
+                    author_login=author,
+                    now=now,
+                )
+                evidence_records.extend(thread_records)
+                summary["review_thread_count"] = len(thread_records)
+                thread_successes += 1
         else:
             thread_failures += 1
             source_status["degraded"] = True
@@ -911,15 +1012,14 @@ def _collect_local_git_fallback(
         "evidence_quality": "low",
     }
 
+    author_filters = _collect_git_author_filters(repo_root, author)
     log_command = (
         "git",
         "log",
         "--since",
         since.astimezone(UTC).isoformat().replace("+00:00", "Z"),
-        "--author",
-        author,
-        "--pretty=format:%H%x09%aI%x09%s",
-        f"--max-count={min(max(limit * 5, limit), MAX_LOCAL_COMMITS)}",
+        "--pretty=format:%H%x09%aI%x09%an%x09%ae%x09%s",
+        f"--max-count={min(max(limit * 10, limit), MAX_LOCAL_COMMITS)}",
     )
     log_result = _run_command(log_command, cwd=repo_root, timeout=LOCAL_GIT_TIMEOUT_SECONDS)
     if log_result.returncode != 0:
@@ -935,12 +1035,12 @@ def _collect_local_git_fallback(
     fallback_commits: list[dict[str, Any]] = []
     evidence_records: list[dict[str, Any]] = []
 
-    for index, line in enumerate(filter(None, log_result.stdout.splitlines()), start=1):
-        if index > limit:
-            break
+    for line in filter(None, log_result.stdout.splitlines()):
         try:
-            commit_sha, authored_at, subject = line.split("\t", maxsplit=2)
+            commit_sha, authored_at, commit_author_name, commit_author_email, subject = line.split("\t", maxsplit=4)
         except ValueError:
+            continue
+        if not _commit_matches_git_author(author_filters, commit_author_name, commit_author_email):
             continue
         commit_payload = {
             "sha": commit_sha,
@@ -992,6 +1092,11 @@ def _collect_local_git_fallback(
                 )
             )
 
+        if len(fallback_commits) >= limit:
+            break
+
+    if not fallback_commits:
+        source_status["local_git"]["notes"].append("No local commits matched the resolved git author filters.")
     source_status["local_git"]["status"] = "ok" if fallback_commits else "no-data"
     return {
         "success": bool(fallback_commits),
@@ -1078,16 +1183,20 @@ def build_skill_progression_report(
     current_time = (now or datetime.now(UTC)).astimezone(UTC)
     resolved_repo = repo or resolve_repo_slug(resolved_repo_root)
     resolved_author = author or resolve_github_login(resolved_repo_root)
+    resolved_memory_path = memory_path or default_memory_path()
     resolved_since, memory_meta = (
-        resolve_since(memory_path, now=current_time)
+        resolve_since(resolved_memory_path, now=current_time)
         if since is None
         else (
             since.astimezone(UTC),
             {
-                "path": str(memory_path or default_memory_path()),
-                "loaded": memory_path.exists() if memory_path else default_memory_path().exists(),
+                "path": str(resolved_memory_path),
+                "exists": resolved_memory_path.exists(),
+                "loaded": False,
                 "timestamp_found": False,
                 "last_run": None,
+                "status": "not-read",
+                "notes": "Memory was not read because since was provided explicitly.",
             },
         )
     )
