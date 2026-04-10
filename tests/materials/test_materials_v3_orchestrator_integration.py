@@ -389,8 +389,8 @@ def test_apex_strict_gate_not_applied_outside_apex(tmp_path, mock_depth_backend,
     orchestrator._enforce_apex_materials_gate({"materials": {}})
 
 
-def test_apex_v2_preflight_rejects_non_canonical_fastpath(tmp_path, mock_depth_backend, mock_da3_available):
-    """APEX strict mode should fail before V2 when cached fast-path drifts from canonical stem."""
+def test_apex_v2_preflight_skips_when_v2_disabled(tmp_path, mock_depth_backend, mock_da3_available):
+    """APEX+Materials flows with V2 disabled must not fail on the V2-only preflight invariant."""
     config = EnhanceConfig(
         quality_tier="apex",
         enable_materials_v3=True,
@@ -401,6 +401,38 @@ def test_apex_v2_preflight_rejects_non_canonical_fastpath(tmp_path, mock_depth_b
         enable_v2=False,
     )
     orchestrator = EnhanceOrchestrator(config, tmp_path)
+
+    depth_path = tmp_path / "depth" / "image_depth.png"
+    depth_path.parent.mkdir(parents=True, exist_ok=True)
+    depth_path.write_bytes(b"depth")
+
+    non_canonical_input = tmp_path / "input" / "image.png"
+    non_canonical_input.parent.mkdir(parents=True, exist_ok=True)
+    non_canonical_input.write_bytes(b"raw")
+
+    # Must not raise even though the input is not canonical: V2 is disabled.
+    orchestrator._enforce_apex_v2_canonical_input_preflight(
+        depth_path=depth_path,
+        output_key=Path("image_01"),
+        v2_input_path=non_canonical_input,
+        enhanced_image_path=None,
+        materials_v3_result={"materials_v3_metadata": {"version": "3.1"}},
+    )
+
+
+def test_apex_v2_preflight_rejects_non_canonical_fastpath(tmp_path, mock_depth_backend, mock_da3_available):
+    """APEX strict mode should fail before V2 when cached fast-path drifts from canonical stem."""
+    config = EnhanceConfig(
+        quality_tier="apex",
+        enable_materials_v3=True,
+        enable_material_segmentation=True,
+        material_segmentation_backend="efficientsam",
+        strict_backend=True,
+        depth_device="cpu",
+        enable_v2=True,
+    )
+    orchestrator = EnhanceOrchestrator(config, tmp_path)
+    orchestrator.v2_runner = MagicMock()
 
     depth_path = tmp_path / "depth" / "image_depth.png"
     depth_path.parent.mkdir(parents=True, exist_ok=True)
@@ -431,9 +463,10 @@ def test_apex_v2_preflight_accepts_canonical_handoff(tmp_path, mock_depth_backen
         material_segmentation_backend="efficientsam",
         strict_backend=True,
         depth_device="cpu",
-        enable_v2=False,
+        enable_v2=True,
     )
     orchestrator = EnhanceOrchestrator(config, tmp_path)
+    orchestrator.v2_runner = MagicMock()
 
     output_key = Path("image_01")
     depth_path = tmp_path / "depth" / "image_depth.png"
@@ -464,9 +497,10 @@ def test_apex_v2_preflight_rejects_dimension_drift(tmp_path, mock_depth_backend,
         material_segmentation_backend="efficientsam",
         strict_backend=True,
         depth_device="cpu",
-        enable_v2=False,
+        enable_v2=True,
     )
     orchestrator = EnhanceOrchestrator(config, tmp_path)
+    orchestrator.v2_runner = MagicMock()
 
     output_key = Path("image_01")
     depth_path = tmp_path / "depth" / "image_depth.png"

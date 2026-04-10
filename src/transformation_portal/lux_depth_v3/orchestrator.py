@@ -3021,6 +3021,8 @@ class EnhanceOrchestrator:
         materials_v3_result: Optional[dict],
     ) -> None:
         """Fail early when APEX strict violates handoff."""
+        if not self.config.enable_v2 or self.v2_runner is None:
+            return
         if not self._is_apex_materials_gate_enabled():
             return
         if not depth_path or not depth_path.exists():
