@@ -23,6 +23,60 @@ def test_resolve_since_falls_back_to_trailing_seven_days_when_memory_missing(tmp
     assert metadata["last_run"] is None
 
 
+def test_parse_memory_timestamps_handles_utc_suffix_correctly() -> None:
+    """Timestamp headings with 'UTC' suffix must be interpreted as UTC, not local time."""
+
+    memory_text = """\
+# Skill Progression Run
+
+## 2026-04-10 14:30:00 UTC
+
+Some notes from the run.
+
+## 2026-04-09 10:00:00
+
+Earlier local run.
+"""
+    timestamps = module.parse_memory_timestamps(memory_text)
+
+    assert len(timestamps) == 2
+
+    # Find timestamp by naive value (date + time) to isolate which is which
+    ts_apr10 = next(
+        (ts for ts in timestamps if ts.year == 2026 and ts.month == 4 and ts.day == 10),
+        None,
+    )
+    ts_apr9 = next(
+        (ts for ts in timestamps if ts.year == 2026 and ts.month == 4 and ts.day == 9),
+        None,
+    )
+
+    assert ts_apr10 is not None, "Expected 2026-04-10 timestamp"
+    assert ts_apr9 is not None, "Expected 2026-04-09 timestamp"
+
+    # The UTC-suffixed timestamp must have exactly UTC timezone
+    assert ts_apr10.tzinfo == UTC, f"Expected UTC for '2026-04-10 14:30:00 UTC', got {ts_apr10.tzinfo}"
+    assert ts_apr10.hour == 14 and ts_apr10.minute == 30 and ts_apr10.second == 0
+
+    # The unsuffixed timestamp must have LOCAL_TZ (which may be UTC in CI)
+    assert ts_apr9.tzinfo == module.LOCAL_TZ, f"Expected LOCAL_TZ for unsuffixed timestamp, got {ts_apr9.tzinfo}"
+    assert ts_apr9.hour == 10 and ts_apr9.minute == 0 and ts_apr9.second == 0
+
+
+def test_parse_memory_timestamps_treats_unknown_timezone_suffix_as_local() -> None:
+    """Unknown timezone suffixes (e.g., PST) should be treated as local time."""
+
+    memory_text = """\
+## 2026-04-10 09:00:00 PST
+"""
+    timestamps = module.parse_memory_timestamps(memory_text)
+
+    assert len(timestamps) == 1
+    # Unknown suffix → treated as local time
+    assert timestamps[0].tzinfo == module.LOCAL_TZ
+    assert timestamps[0].hour == 9
+
+
 def test_normalize_review_threads_tags_timeout_issue_for_raw_runtime() -> None:
     pr_summary = {
         "number": 1408,

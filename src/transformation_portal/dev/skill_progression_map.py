@@ -134,7 +134,7 @@ def parse_memory_timestamps(memory_text: str) -> list[datetime]:
             timestamps.append(parsed)
 
     for match in re.finditer(
-        r"^##\s+(?P<stamp>\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})(?:\s+[A-Z]{2,4})?$",
+        r"^##\s+(?P<stamp>\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})(?:\s+(?P<tz>[A-Z]{2,4}))?$",
         memory_text,
         flags=re.MULTILINE,
     ):
@@ -142,7 +142,12 @@ def parse_memory_timestamps(memory_text: str) -> list[datetime]:
             parsed = datetime.strptime(match.group("stamp"), "%Y-%m-%d %H:%M:%S")
         except ValueError:
             continue
-        timestamps.append(parsed.replace(tzinfo=LOCAL_TZ))
+        tz_suffix = match.group("tz")
+        if tz_suffix == "UTC":
+            timestamps.append(parsed.replace(tzinfo=UTC))
+        else:
+            # Treat missing or unrecognized timezone suffix as local time
+            timestamps.append(parsed.replace(tzinfo=LOCAL_TZ))
 
     return sorted(timestamps)
 
