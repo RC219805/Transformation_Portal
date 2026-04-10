@@ -10,6 +10,7 @@ import subprocess
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
+from types import ModuleType
 from typing import Any, Dict, Optional
 
 RAW_EXTENSIONS = {
@@ -60,7 +61,14 @@ def _sha256_file(path: Path, *, chunk_size: int = 1024 * 1024) -> str:
 
 
 def _canonical_json(payload: Dict[str, Any]) -> str:
-    return json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=True, allow_nan=False) + "\n"
+    return json.dumps(
+        payload,
+        indent=2,
+        sort_keys=True,
+        ensure_ascii=False,
+        allow_nan=False,
+        separators=(",", ": "),
+    )
 
 
 def _write_json_atomic(payload: Dict[str, Any], output_path: Path, *, fsync: bool) -> None:
@@ -124,10 +132,10 @@ def _run_exiftool_json(input_path: Path, exiftool_path: str) -> Dict[str, Any]:
     payload = json.loads(completed.stdout)
     if not isinstance(payload, list) or not payload or not isinstance(payload[0], dict):
         raise ValueError("Unexpected exiftool JSON payload shape")
-    return _sanitize_exiftool_payload(payload[0])
+    return payload[0]
 
 
-def _rawpy_status_payload() -> tuple[Optional[Dict[str, Any]], Dict[str, Any]]:
+def _rawpy_status_payload() -> tuple[Optional[ModuleType], Dict[str, Any]]:
     try:
         import rawpy  # type: ignore
     except Exception as exc:  # noqa: BLE001
@@ -180,28 +188,14 @@ def _read_rawpy_metadata(input_path: Path) -> tuple[Optional[Dict[str, Any]], Di
                     "crop_width": raw.sizes.crop_width,
                     "crop_height": raw.sizes.crop_height,
                 },
-                "color_desc": (
-                    raw.color_desc.decode("ascii", errors="replace")
-                    if raw.color_desc is not None
-                    else None
-                ),
+                "color_desc": (raw.color_desc.decode("ascii", errors="replace") if raw.color_desc is not None else None),
                 "num_colors": raw.num_colors,
                 "black_level_per_channel": (
-                    list(raw.black_level_per_channel)
-                    if raw.black_level_per_channel is not None
-                    else None
+                    list(raw.black_level_per_channel) if raw.black_level_per_channel is not None else None
                 ),
                 "white_level": raw.white_level,
-                "camera_whitebalance": (
-                    list(raw.camera_whitebalance)
-                    if raw.camera_whitebalance is not None
-                    else None
-                ),
-                "daylight_whitebalance": (
-                    list(raw.daylight_whitebalance)
-                    if raw.daylight_whitebalance is not None
-                    else None
-                ),
+                "camera_whitebalance": (list(raw.camera_whitebalance) if raw.camera_whitebalance is not None else None),
+                "daylight_whitebalance": (list(raw.daylight_whitebalance) if raw.daylight_whitebalance is not None else None),
                 "raw_pattern": raw.raw_pattern.tolist() if raw.raw_pattern is not None else None,
             }
             return payload, status
@@ -212,14 +206,19 @@ def _read_rawpy_metadata(input_path: Path) -> tuple[Optional[Dict[str, Any]], Di
         return None, failed_status
 
 
-def _build_file_metadata(input_path: Path) -> Dict[str, Any]:
+def _build_file_metadata(
+    input_path: Path,
+    *,
+    size_bytes: Optional[int] = None,
+    sha256: Optional[str] = None,
+) -> Dict[str, Any]:
     stat = input_path.stat()
     return {
         "source_file": str(input_path.resolve()),
         "file_name": input_path.name,
         "suffix": input_path.suffix.lower(),
-        "size_bytes": stat.st_size,
-        "sha256": _sha256_file(input_path),
+        "size_bytes": stat.st_size if size_bytes is None else size_bytes,
+        "sha256": _sha256_file(input_path) if sha256 is None else sha256,
     }
 
 
@@ -227,6 +226,8 @@ def build_raw_sidecar_payload(
     input_path: Path,
     *,
     exiftool_path: Optional[str] = None,
+    file_size_bytes: Optional[int] = None,
+    file_sha256: Optional[str] = None,
 ) -> Dict[str, Any]:
     resolved_exiftool = exiftool_path or shutil.which("exiftool")
     if not resolved_exiftool:
@@ -239,7 +240,11 @@ def build_raw_sidecar_payload(
     return {
         "sidecar_schema": RAW_SIDECAR_SCHEMA,
         "source_file": str(input_path.resolve()),
-        "file": _build_file_metadata(input_path),
+        "file": _build_file_metadata(
+            input_path,
+            size_bytes=file_size_bytes,
+            sha256=file_sha256,
+        ),
         "capture_status": {
             "exiftool": {
                 "available": True,
@@ -259,6 +264,8 @@ def generate_raw_sidecar(
     *,
     output_path: Optional[Path] = None,
     exiftool_path: Optional[str] = None,
+    file_size_bytes: Optional[int] = None,
+    file_sha256: Optional[str] = None,
     fsync: bool = False,
 ) -> RawSidecarResult:
     if not input_path.exists():
@@ -267,7 +274,12 @@ def generate_raw_sidecar(
         raise ValueError(f"Input path is not a file: {input_path}")
 
     resolved_output = output_path or input_path.with_name(f"{input_path.stem}.raw.sidecar.json")
-    payload = build_raw_sidecar_payload(input_path, exiftool_path=exiftool_path)
+    payload = build_raw_sidecar_payload(
+        input_path,
+        exiftool_path=exiftool_path,
+        file_size_bytes=file_size_bytes,
+        file_sha256=file_sha256,
+    )
     _write_json_atomic(payload, resolved_output, fsync=fsync)
 
     rawpy_status = payload["capture_status"]["rawpy"]

@@ -158,10 +158,13 @@ class MetadataExtractionService:
             )
 
             if should_emit_raw_sidecar and resolved_raw_sidecar_path is not None:
+                precomputed_file_sha256, precomputed_file_size = self._extract_precomputed_file_integrity(sidecar)
                 try:
                     raw_result = self._generate_raw_sidecar(
                         req.input_path,
                         output_path=resolved_raw_sidecar_path,
+                        file_sha256=precomputed_file_sha256,
+                        file_size_bytes=precomputed_file_size,
                         fsync=req.fsync,
                     )
                     raw_sidecar_path = raw_result.output_path
@@ -436,3 +439,18 @@ class MetadataExtractionService:
             return
         except OSError:
             return
+
+    def _extract_precomputed_file_integrity(
+        self,
+        sidecar: Any,
+    ) -> tuple[Optional[str], Optional[int]]:
+        file_integrity = getattr(sidecar, "file_integrity", None)
+        if file_integrity is None:
+            return None, None
+
+        sha256 = getattr(file_integrity, "sha256", None)
+        size_bytes = getattr(file_integrity, "size_bytes", None)
+        return (
+            str(sha256) if isinstance(sha256, str) else None,
+            int(size_bytes) if isinstance(size_bytes, int) else None,
+        )

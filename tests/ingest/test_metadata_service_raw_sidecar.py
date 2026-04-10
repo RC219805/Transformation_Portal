@@ -23,13 +23,20 @@ def test_extract_generates_raw_sidecar_for_raw_inputs_and_records_path(tmp_path:
     output_dir = tmp_path / "out"
 
     written_paths: list[Path] = []
-    raw_sidecar_calls: list[tuple[Path, Path, bool]] = []
+    raw_sidecar_calls: list[tuple[Path, Path, bool, str | None, int | None]] = []
 
     def fake_write_sidecar(_sidecar: object, output_path: Path, fsync: bool = False) -> None:
         written_paths.append(output_path)
 
-    def fake_generate_raw_sidecar(input_path_arg: Path, *, output_path: Path, fsync: bool = False) -> RawSidecarResult:
-        raw_sidecar_calls.append((input_path_arg, output_path, fsync))
+    def fake_generate_raw_sidecar(
+        input_path_arg: Path,
+        *,
+        output_path: Path,
+        fsync: bool = False,
+        file_sha256: str | None = None,
+        file_size_bytes: int | None = None,
+    ) -> RawSidecarResult:
+        raw_sidecar_calls.append((input_path_arg, output_path, fsync, file_sha256, file_size_bytes))
         return RawSidecarResult(
             input_path=input_path_arg,
             output_path=output_path,
@@ -52,7 +59,7 @@ def test_extract_generates_raw_sidecar_for_raw_inputs_and_records_path(tmp_path:
     assert result.raw_sidecar_path == output_dir / "sample.raw.sidecar.json"
     assert result.raw_sidecar_error is None
     assert written_paths == [output_dir / "sample.provenance.json"]
-    assert raw_sidecar_calls == [(input_path, output_dir / "sample.raw.sidecar.json", False)]
+    assert raw_sidecar_calls == [(input_path, output_dir / "sample.raw.sidecar.json", False, None, None)]
 
 
 def test_extract_non_raw_input_does_not_attempt_raw_sidecar(tmp_path: Path) -> None:
@@ -60,7 +67,14 @@ def test_extract_non_raw_input_does_not_attempt_raw_sidecar(tmp_path: Path) -> N
     input_path.touch()
     raw_sidecar_calls: list[Path] = []
 
-    def fake_generate_raw_sidecar(input_path_arg: Path, *, output_path: Path, fsync: bool = False) -> RawSidecarResult:
+    def fake_generate_raw_sidecar(
+        input_path_arg: Path,
+        *,
+        output_path: Path,
+        fsync: bool = False,
+        file_sha256: str | None = None,
+        file_size_bytes: int | None = None,
+    ) -> RawSidecarResult:
         raw_sidecar_calls.append(input_path_arg)
         return RawSidecarResult(
             input_path=input_path_arg,
@@ -89,7 +103,14 @@ def test_extract_can_disable_raw_sidecar_generation(tmp_path: Path) -> None:
     input_path.touch()
     raw_sidecar_calls: list[Path] = []
 
-    def fake_generate_raw_sidecar(input_path_arg: Path, *, output_path: Path, fsync: bool = False) -> RawSidecarResult:
+    def fake_generate_raw_sidecar(
+        input_path_arg: Path,
+        *,
+        output_path: Path,
+        fsync: bool = False,
+        file_sha256: str | None = None,
+        file_size_bytes: int | None = None,
+    ) -> RawSidecarResult:
         raw_sidecar_calls.append(input_path_arg)
         return RawSidecarResult(
             input_path=input_path_arg,
@@ -123,7 +144,14 @@ def test_extract_raw_sidecar_failure_soft_fails_by_default(tmp_path: Path) -> No
     input_path = tmp_path / "sample.dng"
     input_path.touch()
 
-    def fail_generate_raw_sidecar(_input_path: Path, *, output_path: Path, fsync: bool = False) -> RawSidecarResult:
+    def fail_generate_raw_sidecar(
+        _input_path: Path,
+        *,
+        output_path: Path,
+        fsync: bool = False,
+        file_sha256: str | None = None,
+        file_size_bytes: int | None = None,
+    ) -> RawSidecarResult:
         raise RuntimeError(f"boom: {output_path.name}")
 
     service = MetadataExtractionService(
@@ -151,7 +179,14 @@ def test_extract_raw_sidecar_failure_can_be_strict_and_writes_no_provenance(tmp_
         written_paths.append(output_path)
         output_path.write_text("should-not-exist", encoding="utf-8")
 
-    def fail_generate_raw_sidecar(_input_path: Path, *, output_path: Path, fsync: bool = False) -> RawSidecarResult:
+    def fail_generate_raw_sidecar(
+        _input_path: Path,
+        *,
+        output_path: Path,
+        fsync: bool = False,
+        file_sha256: str | None = None,
+        file_size_bytes: int | None = None,
+    ) -> RawSidecarResult:
         raise RuntimeError("strict failure")
 
     service = MetadataExtractionService(
@@ -183,7 +218,14 @@ def test_extract_provenance_write_failure_removes_generated_raw_sidecar(tmp_path
     input_path.touch()
     output_dir = tmp_path / "out"
 
-    def fake_generate_raw_sidecar(input_path_arg: Path, *, output_path: Path, fsync: bool = False) -> RawSidecarResult:
+    def fake_generate_raw_sidecar(
+        input_path_arg: Path,
+        *,
+        output_path: Path,
+        fsync: bool = False,
+        file_sha256: str | None = None,
+        file_size_bytes: int | None = None,
+    ) -> RawSidecarResult:
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text("{}", encoding="utf-8")
         return RawSidecarResult(
@@ -218,13 +260,62 @@ def test_extract_provenance_write_failure_removes_generated_raw_sidecar(tmp_path
     assert not (output_dir / "sample.raw.sidecar.json").exists()
 
 
+def test_extract_reuses_precomputed_file_integrity_for_raw_sidecar(tmp_path: Path) -> None:
+    input_path = tmp_path / "sample.dng"
+    input_path.write_bytes(b"raw-bytes")
+    output_dir = tmp_path / "out"
+    raw_sidecar_calls: list[tuple[str | None, int | None]] = []
+
+    class _FileIntegrity:
+        sha256 = "a" * 64
+        size_bytes = 12345
+
+    class _Sidecar:
+        file_integrity = _FileIntegrity()
+
+    def fake_generate_raw_sidecar(
+        input_path_arg: Path,
+        *,
+        output_path: Path,
+        fsync: bool = False,
+        file_sha256: str | None = None,
+        file_size_bytes: int | None = None,
+    ) -> RawSidecarResult:
+        raw_sidecar_calls.append((file_sha256, file_size_bytes))
+        return RawSidecarResult(
+            input_path=input_path_arg,
+            output_path=output_path,
+            rawpy_available=True,
+            rawpy_ok=True,
+        )
+
+    service = MetadataExtractionService(
+        capture_provenance_fn=lambda **_: _Sidecar(),
+        write_sidecar_fn=lambda *_args, **_kwargs: None,
+        generate_raw_sidecar_fn=fake_generate_raw_sidecar,
+        clock_fn=_clock,
+    )
+
+    result = service.extract(ExtractRequest(input_path=input_path, output_dir=output_dir))
+
+    assert result.success is True
+    assert raw_sidecar_calls == [("a" * 64, 12345)]
+
+
 def test_extract_respects_explicit_raw_sidecar_output_path(tmp_path: Path) -> None:
     input_path = tmp_path / "sample.cr3"
     input_path.touch()
     explicit_output_path = tmp_path / "custom" / "sample.custom.raw.sidecar.json"
     raw_sidecar_calls: list[Path] = []
 
-    def fake_generate_raw_sidecar(input_path_arg: Path, *, output_path: Path, fsync: bool = False) -> RawSidecarResult:
+    def fake_generate_raw_sidecar(
+        input_path_arg: Path,
+        *,
+        output_path: Path,
+        fsync: bool = False,
+        file_sha256: str | None = None,
+        file_size_bytes: int | None = None,
+    ) -> RawSidecarResult:
         raw_sidecar_calls.append(output_path)
         return RawSidecarResult(
             input_path=input_path_arg,
@@ -267,7 +358,7 @@ def test_batch_extract_preserves_disambiguated_raw_sidecar_paths(tmp_path: Path)
     service = MetadataExtractionService(
         capture_provenance_fn=lambda **_: object(),
         write_sidecar_fn=lambda *_args, **_kwargs: None,
-        generate_raw_sidecar_fn=lambda input_path_arg, *, output_path, fsync=False: RawSidecarResult(
+        generate_raw_sidecar_fn=lambda input_path_arg, *, output_path, fsync=False, file_sha256=None, file_size_bytes=None: RawSidecarResult(
             input_path=input_path_arg,
             output_path=output_path,
             rawpy_available=True,
