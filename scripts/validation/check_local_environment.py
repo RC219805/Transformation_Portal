@@ -242,9 +242,7 @@ def check_port_available(port: int, description: str) -> CheckResult:
 
 def check_ports_available() -> list[CheckResult]:
     """Check if all validation ports are available."""
-    return [
-        check_port_available(port, desc) for port, desc in VALIDATION_PORTS.items()
-    ]
+    return [check_port_available(port, desc) for port, desc in VALIDATION_PORTS.items()]
 
 
 def check_frontdoor_dependencies() -> CheckResult:
@@ -284,7 +282,7 @@ def check_env_vars() -> list[CheckResult]:
     results = []
     # Variables that should be masked when displaying their values
     sensitive_patterns = ("KEY", "PASSWORD", "SECRET", "TOKEN", "CREDENTIAL")
-    
+
     for var in CHECKED_ENV_VARS:
         value = os.environ.get(var)
         if value:
@@ -471,9 +469,7 @@ Examples:
             ],
             "exit_code": int(exit_code),
             "status": (
-                "pass"
-                if exit_code == ExitCode.PASS
-                else ("soft_fail" if exit_code == ExitCode.SOFT_FAIL else "hard_fail")
+                "pass" if exit_code == ExitCode.PASS else ("soft_fail" if exit_code == ExitCode.SOFT_FAIL else "hard_fail")
             ),
         }
         print(json.dumps(output, indent=2))

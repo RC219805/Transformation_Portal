@@ -52,7 +52,7 @@ if ! command -v node &> /dev/null; then
     echo ""
     log_info "Install Node.js ${REQUIRED_MAJOR}.x using one of these methods:"
     echo ""
-    
+
     # Check for version managers
     if command -v nvm &> /dev/null || [[ -d "$HOME/.nvm" ]]; then
         log_info "  nvm detected — run:"
@@ -94,7 +94,7 @@ fi
 # Validate version
 if [[ "$NODE_MAJOR" -eq "$REQUIRED_MAJOR" ]]; then
     log_success "Node.js ${NODE_VERSION} meets requirement (${REQUIRED_MAJOR}.x)"
-    
+
     # Show .nvmrc info if present
     if [[ -n "$NVMRC_VERSION" ]]; then
         log_info "  .nvmrc specifies: ${NVMRC_VERSION}"
@@ -103,13 +103,13 @@ if [[ "$NODE_MAJOR" -eq "$REQUIRED_MAJOR" ]]; then
 else
     log_error "Node.js ${NODE_VERSION} does not match required ${REQUIRED_MAJOR}.x"
     echo ""
-    
+
     # Provide specific guidance based on version manager
     if [[ -n "${NVM_DIR:-}" ]] || [[ -d "$HOME/.nvm" ]]; then
         log_info "nvm detected — switch version:"
         log_info "  nvm install ${REQUIRED_MAJOR}"
         log_info "  nvm use ${REQUIRED_MAJOR}"
-        
+
         # Check if the version is already installed
         if [[ -d "$HOME/.nvm/versions/node" ]]; then
             INSTALLED=$(ls "$HOME/.nvm/versions/node" 2>/dev/null | grep "^v${REQUIRED_MAJOR}" | head -1 || true)
@@ -131,11 +131,11 @@ else
         log_info "  Install a version manager like nvm, fnm, or volta"
         log_info "  Or download from https://nodejs.org/"
     fi
-    
+
     echo ""
     log_warning "The secure-landing frontdoor requires Node ${REQUIRED_MAJOR}.x"
     log_info "  Native dependencies (better-sqlite3, argon2) are ABI-sensitive"
     log_info "  See: web/secure-landing/package.json engines constraint"
-    
+
     exit 1
 fi

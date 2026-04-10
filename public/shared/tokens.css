@@ -31,7 +31,7 @@
     /* Focus ring — consistent across all surfaces */
     --tp-focus-ring: rgba(103, 232, 249, 0.96);
     --tp-focus-shadow: rgba(34, 211, 238, 0.24);
-    
+
     /* Minimum touch target size (WCAG 2.2 Target Size) */
     --tp-target-min-size: 44px;
 }
@@ -49,7 +49,7 @@
     --tp-text-xl: 1.25rem;      /* 20px */
     --tp-text-2xl: 1.5rem;      /* 24px */
     --tp-text-3xl: 1.875rem;    /* 30px */
-    
+
     /* Legacy aliases for backward compatibility */
     --tp-label-size: 0.8125rem; /* 13px */
     --tp-body-size: 1rem;
@@ -63,7 +63,7 @@
     /* Panel borders — consistent glass-like appearance */
     --tp-panel-border: rgba(148, 163, 184, 0.24);
     --tp-panel-border-strong: rgba(103, 232, 249, 0.28);
-    
+
     /* Continuity tokens — shared across frontdoor surfaces */
     --tp-continuity-panel: rgba(12, 18, 34, 0.76);
     --tp-continuity-panel-strong: rgba(7, 12, 26, 0.94);
@@ -80,11 +80,11 @@
     /* Primary accent — cyan/teal family */
     --tp-accent-primary: #22d3ee;     /* Cyan 400 */
     --tp-accent-primary-strong: #06b6d4; /* Cyan 500 */
-    
+
     /* Secondary accent — blue family */
     --tp-accent-secondary: #2563eb;   /* Blue 600 */
     --tp-accent-secondary-strong: #1d4ed8; /* Blue 700 */
-    
+
     /* Semantic colors */
     --tp-success: #34d399;            /* Emerald 400 */
     --tp-success-strong: #10b981;     /* Emerald 500 */
@@ -92,7 +92,7 @@
     --tp-warning-strong: #f59e0b;     /* Amber 500 */
     --tp-danger: #f87171;             /* Red 400 */
     --tp-danger-strong: #ef4444;      /* Red 500 */
-    
+
     /* Brand-specific */
     --tp-brand-azure: #56ccf2;
     --tp-brand-cyan: #2ac7ff;
@@ -109,7 +109,7 @@
     --tp-motion-duration-normal: 300ms;
     --tp-motion-duration-slow: 500ms;
     --tp-motion-duration-slower: 700ms;
-    
+
     /* Easing tokens */
     --tp-motion-easing-default: cubic-bezier(0.16, 1, 0.3, 1);
     --tp-motion-easing-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -136,7 +136,7 @@
     /* Soft shadows for panels */
     --tp-shadow-soft: 0 24px 60px rgba(2, 6, 23, 0.26);
     --tp-shadow-strong: 0 18px 40px rgba(37, 99, 235, 0.22);
-    
+
     /* Dark mode shadows */
     --tp-shadow-soft-dark: 0 24px 60px rgba(2, 6, 23, 0.52);
     --tp-shadow-strong-dark: 0 32px 90px rgba(2, 6, 23, 0.52);
@@ -193,7 +193,7 @@
 /* ============================================================================
  * Focus Behavior Utility
  * ============================================================================
- * 
+ *
  * Apply this to :focus-visible on interactive elements for consistent
  * focus indication across all surfaces.
  * ============================================================================ */

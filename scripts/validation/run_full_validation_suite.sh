@@ -135,9 +135,9 @@ run_step() {
     local step_name="$1"
     shift
     local step_start=$(date +%s)
-    
+
     log_step "$step_name"
-    
+
     if "$@"; then
         local step_end=$(date +%s)
         local duration=$((step_end - step_start))
