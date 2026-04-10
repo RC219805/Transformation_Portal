@@ -59,6 +59,7 @@ def _valid_run_card_payload(module) -> dict:
         "v2_device": "cpu",
         "v2_upscaler_backend": "realesrgan",
         "depth_pro_python_executable": None,
+        "raw_python_executable": None,
         "da3_python_executable": None,
     }
     canonical_json = json.dumps(
@@ -83,6 +84,7 @@ def _valid_run_card_payload(module) -> dict:
                 "strict_segmentation",
                 "apex_strict_mode",
                 "depth_pro_python_executable",
+                "raw_python_executable",
                 "da3_python_executable",
             )
         },
@@ -324,6 +326,7 @@ def test_verify_run_card_integrity_accepts_config_fingerprint_with_raw_ingest_fi
         "v2_device",
         "v2_upscaler_backend",
         "depth_pro_python_executable",
+        "raw_python_executable",
         "da3_python_executable",
         "preset_requested",
         "preset_resolved",

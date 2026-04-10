@@ -148,6 +148,12 @@
             "null"
           ]
         },
+        "raw_python_executable": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "da3_python_executable": {
           "type": [
             "string",

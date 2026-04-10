@@ -228,6 +228,17 @@ pip install -e ".[raw]"
 pip install rawpy
 ```
 
+For deterministic isolation, bootstrap the repo-local RAW runtime and let the
+pipeline auto-discover `./.venv-raw/bin/python` for RAW batches:
+```bash
+./scripts/setup/install_raw_runtime.sh
+```
+
+You can also override the interpreter explicitly with:
+```bash
+--raw-python "./.venv-raw/bin/python"
+```
+
 **Why:** Canonical RAW ingest stays deterministic and fail-closed. RAW batches are rejected before dispatch when `rawpy` is unavailable so the pipeline does not start a run that cannot satisfy the ingest contract.
 
 ### More Help

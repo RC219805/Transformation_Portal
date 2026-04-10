@@ -51,6 +51,31 @@ lux-depth-v3 --input-dir ./input --output-dir ./output --da3-python ~/venvs/da3/
 - Git repository
 - Bash shell (Linux, macOS, or Windows with WSL/Git Bash)
 
+### `install_raw_runtime.sh`
+
+Bootstraps the repo-local RAW subprocess runtime used by the
+auto-discovered `./.venv-raw/bin/python` contract and by explicit
+`--raw-python` overrides.
+
+**Usage:**
+```bash
+./scripts/setup/install_raw_runtime.sh
+```
+
+**What it does:**
+- Creates the isolated RAW venv at `./.venv-raw`
+- Installs the local project with the `raw` extra into that venv
+- Captures a runtime package snapshot at `.runtime/raw-pip-freeze.txt`
+- Runs the RAW worker readiness check used by canonical ingest
+
+**Stable contract:**
+```bash
+lux-depth-v3 --input-dir ./input --output-dir ./output --raw-python ./.venv-raw/bin/python
+```
+
+If you want the repo-local runtime to be used automatically for RAW batches,
+just create `./.venv-raw/bin/python` with this script and omit `--raw-python`.
+
 ### `pre-commit-check.sh`
 
 Canonical root-placement validator used by the repository hook set and by the

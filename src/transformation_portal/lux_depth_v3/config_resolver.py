@@ -40,6 +40,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from ..core.da3_runtime import REPO_LOCAL_DA3_PYTHON, find_repo_root, repo_local_da3_python_path
+from ..core.raw_runtime import RAW_RUNTIME_ENV_VAR, REPO_LOCAL_RAW_PYTHON, repo_local_raw_python_path
 from ..ingest.canonical_json import canonicalize_json
 from .config import DA3Config, EnhanceConfig, ModelVariant, Preset
 from .manifest import ConfigFingerprint
@@ -60,6 +61,11 @@ def _repo_local_depth_pro_python_path() -> Optional[Path]:
     if repo_root is None:
         return None
     return repo_root.joinpath(*_REPO_LOCAL_DEPTH_PRO_PYTHON_PARTS)
+
+
+def _repo_local_raw_python_path() -> Optional[Path]:
+    """Return the canonical repo-local RAW interpreter path."""
+    return repo_local_raw_python_path(Path(__file__))
 
 
 def _normalize_python_executable(value: Any) -> Optional[str]:
@@ -103,6 +109,39 @@ def apply_effective_da3_runtime_config(
 ) -> EnhanceConfig:
     """Persist the effective DA3 runtime choice onto the config object."""
     config.da3_python_executable = resolve_effective_da3_python_executable(config)
+    return config
+
+
+def resolve_effective_raw_python_executable(
+    config: EnhanceConfig,
+) -> Optional[str]:
+    """Resolve the effective RAW runtime executable for this config.
+
+    Resolution precedence:
+    1. Explicit config.raw_python_executable
+    2. RAW runtime environment override
+    3. Repo-local stable contract path when present
+    """
+    configured = _normalize_python_executable(getattr(config, "raw_python_executable", None))
+    if configured:
+        return configured
+
+    env_candidate = _normalize_python_executable(os.environ.get(RAW_RUNTIME_ENV_VAR))
+    if env_candidate:
+        return env_candidate
+
+    repo_local_python = _repo_local_raw_python_path()
+    if repo_local_python is not None and repo_local_python.exists():
+        return REPO_LOCAL_RAW_PYTHON
+
+    return None
+
+
+def apply_effective_raw_runtime_config(
+    config: EnhanceConfig,
+) -> EnhanceConfig:
+    """Persist the effective RAW runtime choice onto the config object."""
+    config.raw_python_executable = resolve_effective_raw_python_executable(config)
     return config
 
 
@@ -389,6 +428,7 @@ def build_depth_cache_payload(
     if mv is None:
         mv = ModelVariant.METRIC_LARGE
     effective_da3_python = resolve_effective_da3_python_executable(config)
+    effective_raw_python = resolve_effective_raw_python_executable(config)
 
     return {
         "model_variant": mv.value.name,
@@ -397,6 +437,7 @@ def build_depth_cache_payload(
         "depth_backend": config.depth_backend,
         "depth_pro_checkpoint_path": config.depth_pro_checkpoint_path,
         "depth_pro_python_executable": config.depth_pro_python_executable,
+        "raw_python_executable": effective_raw_python,
         "da3_python_executable": effective_da3_python,
     }
 
@@ -421,6 +462,7 @@ def compute_config_fingerprint(
     if mv is None:
         mv = ModelVariant.METRIC_LARGE
     effective_da3_python = resolve_effective_da3_python_executable(config)
+    effective_raw_python = resolve_effective_raw_python_executable(config)
 
     return ConfigFingerprint(
         model_variant=mv.value.name,
@@ -433,6 +475,7 @@ def compute_config_fingerprint(
         depth_backend=config.depth_backend,
         depth_pro_checkpoint_path=config.depth_pro_checkpoint_path,
         depth_pro_python_executable=config.depth_pro_python_executable,
+        raw_python_executable=effective_raw_python,
         da3_python_executable=effective_da3_python,
         quality_tier=str(config.quality_tier),
         materials_config=build_materials_fingerprint_payload(config),
@@ -465,7 +508,10 @@ def build_run_card_config_fingerprint(
     from .ingest_adapter import raw_ingest_summary
 
     base = compute_config_fingerprint(config, model_variant)
-    raw_summary = raw_ingest_summary(config)
+    raw_summary = raw_ingest_summary(
+        config,
+        raw_python_executable=base.raw_python_executable,
+    )
 
     preset_requested = getattr(config, "preset_requested", None) or (config.preset.value if config.preset else None)
     preset_resolved = config.preset.value if config.preset else f"quality_tier:{config.quality_tier}"
@@ -490,6 +536,7 @@ def build_run_card_config_fingerprint(
         "v2_device": base.v2_device,
         "v2_upscaler_backend": base.v2_upscaler_backend,
         "depth_pro_python_executable": base.depth_pro_python_executable,
+        "raw_python_executable": base.raw_python_executable,
         "da3_python_executable": base.da3_python_executable,
         "preset_requested": preset_requested,
         "preset_resolved": preset_resolved,
@@ -566,6 +613,7 @@ class ConfigResolver:
         """
         # Resolve preset and model variant
         apply_effective_da3_runtime_config(config)
+        apply_effective_raw_runtime_config(config)
         da3_config, resolved_model = resolve_preset(
             config.preset,
             config.model_variant,
