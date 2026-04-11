@@ -152,6 +152,42 @@ def load_lock_ownership(path: Path = MANIFEST_PATH) -> dict[str, dict[str, objec
     return normalized
 
 
+def _validate_manifest_entry(lock_name: str, entry: dict[str, object]) -> list[str]:
+    """Return shape validation errors for a single manifest entry."""
+    errors: list[str] = []
+    target_id = entry.get("target_id")
+    python_version = entry.get("python_version")
+    status = entry.get("status")
+    allowed_contexts = entry.get("allowed_contexts")
+
+    if not isinstance(target_id, str) or not target_id.strip():
+        errors.append(f"requirements/lock_ownership.yml entry {lock_name!r} must declare a non-empty target_id")
+
+    if not isinstance(python_version, str) or not python_version.strip():
+        errors.append(f"requirements/lock_ownership.yml entry {lock_name!r} must declare python_version as a string")
+
+    if status not in VALID_STATUSES:
+        errors.append(
+            f"requirements/lock_ownership.yml entry {lock_name!r} must declare status as one of " f"{sorted(VALID_STATUSES)!r}"
+        )
+
+    if not isinstance(allowed_contexts, list) or any(
+        not isinstance(value, str) or not value.strip() for value in allowed_contexts
+    ):
+        errors.append(
+            f"requirements/lock_ownership.yml entry {lock_name!r} must declare allowed_contexts as a list of strings"
+        )
+        return errors
+
+    if status == "active" and not allowed_contexts:
+        errors.append(f"requirements/lock_ownership.yml entry {lock_name!r} is active and must allow at least one context")
+
+    if status == "frozen" and allowed_contexts:
+        errors.append(f"requirements/lock_ownership.yml entry {lock_name!r} is frozen and must not declare allowed contexts")
+
+    return errors
+
+
 def validate_manifest_contract(
     manifest: dict[str, dict[str, object]],
     *,
@@ -171,39 +207,7 @@ def validate_manifest_contract(
         errors.append(f"requirements/lock_ownership.yml declares unexpected lock {lock_name!r}")
 
     for lock_name in sorted(governed_set & manifest_set):
-        entry = manifest[lock_name]
-        target_id = entry.get("target_id")
-        python_version = entry.get("python_version")
-        status = entry.get("status")
-        allowed_contexts = entry.get("allowed_contexts")
-
-        if not isinstance(target_id, str) or not target_id.strip():
-            errors.append(f"requirements/lock_ownership.yml entry {lock_name!r} must declare a non-empty target_id")
-
-        if not isinstance(python_version, str) or not python_version.strip():
-            errors.append(f"requirements/lock_ownership.yml entry {lock_name!r} must declare python_version as a string")
-
-        if status not in VALID_STATUSES:
-            errors.append(
-                f"requirements/lock_ownership.yml entry {lock_name!r} must declare status as one of "
-                f"{sorted(VALID_STATUSES)!r}"
-            )
-
-        if not isinstance(allowed_contexts, list) or any(
-            not isinstance(value, str) or not value.strip() for value in allowed_contexts
-        ):
-            errors.append(
-                f"requirements/lock_ownership.yml entry {lock_name!r} must declare allowed_contexts as a list of strings"
-            )
-            continue
-
-        if status == "active" and not allowed_contexts:
-            errors.append(f"requirements/lock_ownership.yml entry {lock_name!r} is active and must allow at least one context")
-
-        if status == "frozen" and allowed_contexts:
-            errors.append(
-                f"requirements/lock_ownership.yml entry {lock_name!r} is frozen and must not declare allowed contexts"
-            )
+        errors.extend(_validate_manifest_entry(lock_name, manifest[lock_name]))
 
     return errors
 
@@ -226,9 +230,14 @@ def validate_changed_files_against_context(
             continue
 
         entry = manifest[lock_name]
-        status = entry["status"]
-        target_id = entry["target_id"]
-        allowed_contexts = entry["allowed_contexts"]
+        entry_errors = _validate_manifest_entry(lock_name, entry)
+        if entry_errors:
+            errors.extend(entry_errors)
+            continue
+
+        status = entry.get("status")
+        target_id = entry.get("target_id")
+        allowed_contexts = entry.get("allowed_contexts")
 
         if status == "frozen":
             errors.append(
@@ -270,14 +279,16 @@ def main() -> int:
     if args.changed_files_file is not None:
         changed_files.extend(_read_changed_files_file(args.changed_files_file))
 
-    errors = validate_manifest_contract(manifest)
-    errors.extend(
-        validate_changed_files_against_context(
-            manifest,
-            changed_files=changed_files,
-            contexts=args.context,
+    manifest_errors = validate_manifest_contract(manifest)
+    errors = list(manifest_errors)
+    if not manifest_errors:
+        errors.extend(
+            validate_changed_files_against_context(
+                manifest,
+                changed_files=changed_files,
+                contexts=args.context,
+            )
         )
-    )
 
     if errors:
         print("ERROR: lock ownership validation failed:", file=sys.stderr)

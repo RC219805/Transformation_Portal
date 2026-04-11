@@ -102,6 +102,27 @@ def test_load_lock_ownership_rejects_unsupported_indentation(tmp_path: Path) -> 
         ownership.load_lock_ownership(manifest_path)
 
 
+def test_malformed_manifest_entry_reports_contract_errors_without_keyerror() -> None:
+    manifest = manifest_fixture()
+    manifest["ml-core-linux.txt"] = {
+        "target_id": "linux-x86_64",
+        "python_version": "3.11",
+        # Missing status and malformed allowed_contexts would previously trigger KeyError.
+        "allowed_contexts": "ubuntu-x64-linux",
+    }
+
+    errors = ownership.validate_changed_files_against_context(
+        manifest,
+        changed_files=["requirements/ml-core-linux.txt"],
+        contexts=["ubuntu-x64-linux"],
+    )
+
+    assert errors == [
+        "requirements/lock_ownership.yml entry 'ml-core-linux.txt' must declare status as one of ['active', 'frozen']",
+        "requirements/lock_ownership.yml entry 'ml-core-linux.txt' must declare allowed_contexts as a list of strings",
+    ]
+
+
 def test_ubuntu_generic_linux_lane_accepts_only_generic_and_linux_locks() -> None:
     manifest = manifest_fixture()
 
