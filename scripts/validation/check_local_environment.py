@@ -153,7 +153,8 @@ def check_node_version() -> CheckResult:
                 name="Node.js version",
                 passed=False,
                 message=f"Node.js {version_str} does not match required {REQUIRED_NODE_MAJOR}.x",
-                guidance=f"Switch to Node {REQUIRED_NODE_MAJOR}.x: nvm use {REQUIRED_NODE_MAJOR} / fnm use {REQUIRED_NODE_MAJOR}",
+                guidance=f"Switch to Node {REQUIRED_NODE_MAJOR}.x: nvm use {REQUIRED_NODE_MAJOR} / fnm use "
+                f"{REQUIRED_NODE_MAJOR}",
             )
     except subprocess.TimeoutExpired:
         return CheckResult(
@@ -491,7 +492,6 @@ def print_results(results: list[CheckResult], exit_code: ExitCode) -> None:
 
     # Group results
     passed = [r for r in results if r.passed]
-    failed = [r for r in results if not r.passed]
 
     for result in results:
         status = "✓" if result.passed else "✗"
