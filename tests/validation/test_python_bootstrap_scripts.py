@@ -19,6 +19,7 @@ RESOLVER_PATH = PROJECT_ROOT / "scripts" / "setup" / "resolve_python_311.sh"
 DA3_RUNTIME_INSTALLER_PATH = PROJECT_ROOT / "scripts" / "setup" / "install_da3_runtime.sh"
 RAW_RUNTIME_INSTALLER_PATH = PROJECT_ROOT / "scripts" / "setup" / "install_raw_runtime.sh"
 VALIDATION_SUITE_PATH = PROJECT_ROOT / "scripts" / "validation" / "run_full_validation_suite.sh"
+ML_STACK_INSTALLER_PATH = PROJECT_ROOT / "scripts" / "bootstrap" / "install_ml_stack.sh"
 
 
 def _write_executable(path: Path, content: str) -> Path:
@@ -260,6 +261,37 @@ def test_make_install_ml_core_selects_darwin_arm64_lockfile(tmp_path: Path) -> N
     assert "platform-specific ML core lockfile not found" not in (result.stdout + result.stderr)
     pip_commands = pip_log_path.read_text(encoding="utf-8")
     assert "-m pip install -r requirements/ml-core-darwin-arm64.txt" in pip_commands
+    assert "-m pip install -e ." in pip_commands
+    assert str(fake_python) not in (result.stdout + result.stderr)
+
+
+def test_make_install_ml_sam2_uses_core_mps_profile_on_darwin_arm64(tmp_path: Path) -> None:
+    repo_root = tmp_path / "repo"
+    pip_log_path = repo_root / "pip-install.log"
+    profile_log_path = repo_root / "sam2-profile.log"
+    _copy_repo_file(MAKEFILE_PATH, repo_root / "Makefile")
+    _copy_repo_file(RESOLVER_PATH, repo_root / "scripts" / "setup" / "resolve_python_311.sh")
+    _copy_repo_file(ML_STACK_INSTALLER_PATH, repo_root / "scripts" / "bootstrap" / "install_ml_stack.sh")
+    fake_python = _write_fake_ml_core_python(
+        repo_root / ".venv" / "bin" / "python",
+        version="3.11.15",
+        platform_system="Darwin",
+        platform_machine="arm64",
+        pip_log_path=pip_log_path,
+    )
+    _write_executable(
+        repo_root / "scripts" / "bootstrap" / "install_ml_stack.sh",
+        ("#!/bin/sh\n" f"printf '%s\\n' \"$*\" >> {shlex.quote(str(profile_log_path))}\n" "exit 0\n"),
+    )
+
+    env = {**os.environ, "PATH": "/usr/bin:/bin"}
+    result = subprocess.run(["make", "install-ml-sam2"], cwd=repo_root, env=env, capture_output=True, text=True, check=False)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert ".venv already present" in result.stdout
+    assert "Using ML SAM2 profile core-mps,sam2" in result.stdout
+    assert profile_log_path.read_text(encoding="utf-8").strip() == "--profile core-mps,sam2"
+    pip_commands = pip_log_path.read_text(encoding="utf-8")
     assert "-m pip install -e ." in pip_commands
     assert str(fake_python) not in (result.stdout + result.stderr)
 

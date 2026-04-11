@@ -17,7 +17,7 @@ def _read_makefile() -> str:
 
 def _target_body(name: str) -> str:
     text = _read_makefile()
-    match = re.search(rf"^{re.escape(name)}:\n(?P<body>(?:\t.*\n)+)", text, flags=re.MULTILINE)
+    match = re.search(rf"^{re.escape(name)}:(?:[^\n]*)\n(?P<body>(?:\t.*\n)+)", text, flags=re.MULTILINE)
     assert match is not None, f"Makefile target {name} not found"
     return match.group("body")
 

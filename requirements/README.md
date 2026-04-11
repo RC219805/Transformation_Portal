@@ -17,8 +17,8 @@ requirements/
 ├── ml-core-darwin-x86_64.txt # ML core layer - macOS Intel pinned lock
 ├── ml-core-darwin-arm64.in   # ML core layer - macOS Apple Silicon baseline
 ├── ml-core-darwin-arm64.txt  # ML core layer - macOS Apple Silicon pinned lock
-├── ml-core-linux.in          # ML core layer - Linux (torch 2.2.2)
-├── ml-core-linux.txt         # ML core layer - Linux (pinned)
+├── ml-core-linux.in          # ML core layer - Linux x86_64 (torch 2.2.2)
+├── ml-core-linux.txt         # ML core layer - Linux x86_64 (pinned)
 ├── ml-cpu.in               # ML CPU acceleration layer
 ├── ml-cpu.txt              # Deprecated optional ML lock (not checked in)
 ├── ml-mps.in               # ML MPS acceleration layer (Apple Silicon)
@@ -63,25 +63,25 @@ ML dependencies use an explicit platform matrix with three orthogonal axes:
 - `linux-x86_64-cuda` (Linux Intel/AMD, NVIDIA GPU)
 - `linux-arm64-cpu` (Linux ARM)
 
-### Platform-Specific Lockfiles
+### Target-Owned Lockfiles
 
 **IMPORTANT:** pip-compile cannot resolve multi-platform conditional dependencies in a single graph.
 
-To ensure deterministic builds, the checked-in ML contract is limited to platform-specific core lockfiles:
+To ensure deterministic builds, the checked-in ML contract is limited to target-owned core lockfiles:
 
-| Platform | Lockfile | Governed baseline |
+| Target | Lockfile | Governed baseline |
 |----------|----------|-------------------|
-| macOS Intel (`x86_64`) | `ml-core-darwin-x86_64.txt` | `torch==2.2.2` + `numpy<2` + `transformers<5` |
-| macOS Apple Silicon (`arm64`) | `ml-core-darwin-arm64.txt` | `torch==2.2.2` + `transformers<5` + pinned `coremltools` |
-| Linux | `ml-core-linux.txt` | validated independently against the runtime and lock contract checks |
+| macOS Intel (`darwin-x86_64`) | `ml-core-darwin-x86_64.txt` | `torch==2.2.2` + `numpy<2` + `transformers<5` (frozen pending authoritative lane) |
+| macOS Apple Silicon (`darwin-arm64`) | `ml-core-darwin-arm64.txt` | `torch==2.2.2` + `transformers<5` + pinned `coremltools` |
+| Linux x86_64 (`linux-x86_64`) | `ml-core-linux.txt` | validated independently against the runtime and lock contract checks |
 
 **Contract notes:**
-- All platform core locks still anchor on torch 2.2.2 for deterministic CAS identity.
+- All target-owned core locks still anchor on torch 2.2.2 for deterministic CAS identity.
 - The Intel Darwin lock is the conservative compatibility lane and must keep `numpy<2` and `transformers<5`.
 - The Apple Silicon Darwin lock must keep pinned `coremltools` and must remain free of Linux/CUDA-only packages.
-- Darwin platform-core lockfiles must never contain `nvidia-*` or `triton`.
+- Darwin target-owned lockfiles must never contain `nvidia-*` or `triton`.
 - Linux lock state may evolve independently, but that drift must not be propagated into Darwin lockfiles.
-- Platform core locks must not collapse to identical dependency graphs.
+- Target-owned core locks must not collapse to identical dependency graphs.
 
 **Important:** Acceleration is NEVER inferred from OS—it must be explicitly specified via profile.
 
@@ -136,7 +136,7 @@ This baseline was validated and merged via the curated compatibility path on 202
 
 The ML dependencies are split into capability layers for:
 
-1. **Platform-safe compilation**: Each layer is compiled independently, allowing platform-specific handling
+1. **Target-safe compilation**: Generic locks compile together, while target-owned ML locks require explicit authoritative-lane commands
 2. **Deterministic installs**: Each layer has explicit contracts (CPU-only, platform markers, etc.)
 3. **Capability-gated promotion**: Optional features can be added incrementally
 4. **Better failure semantics**: Instead of "pip install fails halfway through," you get clear capability boundaries
@@ -285,12 +285,12 @@ To install the package with specific dependency sets:
 # Install core dependencies only
 pip install -r requirements/base.txt
 
-# Install ML core layer (platform-specific baseline)
+# Install ML core layer (target-owned baseline)
 pip install -r requirements/ml-core-darwin-x86_64.txt  # macOS Intel
 # or
 pip install -r requirements/ml-core-darwin-arm64.txt   # macOS Apple Silicon
 # or
-pip install -r requirements/ml-core-linux.txt    # Linux
+pip install -r requirements/ml-core-linux.txt    # Linux x86_64
 
 # Optional non-core ML layers no longer have trusted checked-in lockfiles.
 # Use target-specific bootstrap flows once those contracts exist again.
@@ -310,6 +310,7 @@ make install-ml-core
 make install-ml-raw
 
 # Install ML SAM2 layer
+# Uses the MPS profile on native Apple Silicon and the CPU profile elsewhere
 make install-ml-sam2
 
 # Install ML CoreML layer (macOS only)
@@ -355,33 +356,57 @@ pip install -e .
 
 1. Edit the appropriate `.in` file (e.g., `base.in`, `ml-core.in`, `ml-raw.in`, `dev.in`, etc.)
 2. Add your dependency with a version constraint (e.g., `requests>=2.28,<3`)
-3. Recompile all requirements:
+3. Recompile the generic checked-in requirements:
 
 ```bash
 cd requirements/
 make compile
 ```
 
-4. Commit the `.in` file and any `.txt` files that are part of the checked-in contract for that layer
+4. If the change affects a target-owned ML lock, run the explicit target command on the authoritative lane:
+
+```bash
+cd requirements/
+make compile-ml-darwin-arm64      # native Darwin arm64 only
+make compile-ml-linux-x86_64      # native Linux x86_64 only
+```
+
+5. Commit the `.in` file and any `.txt` files that are part of the checked-in contract for that layer
 
 #### Updating Dependencies
 
-To update all dependencies to their latest allowed versions:
+To update the generic checked-in lockfiles to their latest allowed versions:
 
 ```bash
 cd requirements/
 make update
 ```
 
-This will respect the version constraints in the `.in` files but find the newest versions within those constraints.
+For target-owned ML locks, use the explicit authoritative-lane command instead:
+
+```bash
+cd requirements/
+make update-ml-darwin-arm64
+make update-ml-linux-x86_64
+```
+
+These commands respect the version constraints in the `.in` files but only the explicit target-owned commands may regenerate governed ML target locks.
 
 #### Checking for Drift
 
-To verify that `.txt` files are up-to-date with `.in` files:
+To verify that the generic checked-in lockfiles are up-to-date with `.in` files:
 
 ```bash
 cd requirements/
 make check
+```
+
+For target-owned ML locks, use:
+
+```bash
+cd requirements/
+make check-ml-darwin-arm64
+make check-ml-linux-x86_64
 ```
 
 ## 🔧 Makefile Targets
@@ -390,18 +415,29 @@ Run `make help` in this directory to see all available targets:
 
 ```
 Targets:
-  compile           Compile all pinned requirements from .in files
+  compile           Compile generic checked-in lockfiles only
   compile-all       Same as compile (for compatibility)
-  compile-ml-layers Compile only ML layer lockfiles
-  compile-accel     Compile acceleration layer lockfiles (ml-cpu, ml-mps, ml-cuda)
-  update            Update all dependencies to latest versions
-  check             Verify that .txt files are up-to-date with .in files
+  compile-ml-layers Refuse broad ML regeneration; use explicit target-owned commands
+  compile-accel     Refuse broad ML regeneration; use explicit target-owned commands
+  update            Update generic checked-in lockfiles only
+  check             Verify generic checked-in lockfiles only
   clean             Remove all compiled .txt files
 
-Checked-in ML layer targets (platform-core contract, CPU-only PyTorch index):
-  ml-core-darwin-x86_64.txt  macOS Intel ML baseline
+Target-owned ML commands:
+  compile-ml-darwin-arm64    Compile the Darwin arm64 ML lock on native Darwin arm64 only
+  update-ml-darwin-arm64     Update the Darwin arm64 ML lock on native Darwin arm64 only
+  check-ml-darwin-arm64      Verify the Darwin arm64 ML lock on native Darwin arm64 only
+  compile-ml-linux-x86_64    Compile the Linux x86_64 ML lock on native Linux x86_64 only
+  update-ml-linux-x86_64     Update the Linux x86_64 ML lock on native Linux x86_64 only
+  check-ml-linux-x86_64      Verify the Linux x86_64 ML lock on native Linux x86_64 only
+  compile-ml-darwin-x86_64   Frozen lane - always fails closed
+  update-ml-darwin-x86_64    Frozen lane - always fails closed
+  check-ml-darwin-x86_64     Frozen lane - always fails closed
+
+Target-owned ML lockfiles:
+  ml-core-darwin-x86_64.txt  macOS Intel ML baseline (frozen)
   ml-core-darwin-arm64.txt   macOS Apple Silicon ML baseline
-  ml-core-linux.txt   Linux ML baseline
+  ml-core-linux.txt          Linux x86_64 ML baseline
 
 Forbidden checked-in optional ML lock targets:
   ml-core.txt       not part of checked-in contract
@@ -427,7 +463,7 @@ The system uses a two-phase compilation strategy:
 
 2. **Layer-Specific Outputs**: Then, each individual `.in` file is compiled using `all.txt` as a constraint file. This ensures that the subset of packages in each layer uses the same versions as in the global resolution.
 
-3. **Target-correct compilation**: Platform-core lockfiles must be regenerated on their target lanes. In particular, Darwin lockfiles must remain free of Linux/CUDA-only packages such as `nvidia-*` and `triton`.
+3. **Target-correct compilation**: Target-owned ML lockfiles must be regenerated on their authoritative lanes. In particular, Darwin lockfiles must remain free of Linux/CUDA-only packages such as `nvidia-*` and `triton`.
 
 This approach prevents conflicts between layers and ensures reproducible builds.
 

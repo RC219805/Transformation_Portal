@@ -38,12 +38,80 @@ def write_lockfile(tmp_path: Path, name: str, python_version: str, body: str = "
     )
 
 
+def write_lock_ownership_manifest(tmp_path: Path) -> None:
+    (tmp_path / "requirements" / "lock_ownership.yml").write_text(
+        "\n".join(
+            [
+                "version: 1",
+                "locks:",
+                "  all.txt:",
+                "    target_id: generic",
+                '    python_version: "3.11"',
+                "    status: active",
+                "    allowed_contexts:",
+                "      - ubuntu-x64-generic",
+                "  base.txt:",
+                "    target_id: generic",
+                '    python_version: "3.11"',
+                "    status: active",
+                "    allowed_contexts:",
+                "      - ubuntu-x64-generic",
+                "  dev.txt:",
+                "    target_id: generic",
+                '    python_version: "3.11"',
+                "    status: active",
+                "    allowed_contexts:",
+                "      - ubuntu-x64-generic",
+                "  ci.txt:",
+                "    target_id: generic",
+                '    python_version: "3.11"',
+                "    status: active",
+                "    allowed_contexts:",
+                "      - ubuntu-x64-generic",
+                "  security.txt:",
+                "    target_id: generic",
+                '    python_version: "3.11"',
+                "    status: active",
+                "    allowed_contexts:",
+                "      - ubuntu-x64-generic",
+                "  tools-archive.txt:",
+                "    target_id: generic",
+                '    python_version: "3.11"',
+                "    status: active",
+                "    allowed_contexts:",
+                "      - ubuntu-x64-generic",
+                "  ml-core-linux.txt:",
+                "    target_id: linux-x86_64",
+                '    python_version: "3.11"',
+                "    status: active",
+                "    allowed_contexts:",
+                "      - ubuntu-x64-linux",
+                "  ml-core-darwin-arm64.txt:",
+                "    target_id: darwin-arm64",
+                '    python_version: "3.11"',
+                "    status: active",
+                "    allowed_contexts:",
+                "      - local-darwin-arm64",
+                "  ml-core-darwin-x86_64.txt:",
+                "    target_id: darwin-x86_64",
+                '    python_version: "3.11"',
+                "    status: frozen",
+                "    allowed_contexts: []",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+
 @pytest.fixture(name="isolated_repo")
 def fixture_isolated_repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setattr(contract, "REPO_ROOT", tmp_path)
     monkeypatch.setattr(contract, "REQUIREMENTS_DIR", tmp_path / "requirements")
     monkeypatch.setattr(contract, "MAKEFILE_PATH", tmp_path / "requirements" / "Makefile")
+    monkeypatch.setattr(contract, "LOCK_OWNERSHIP_PATH", tmp_path / "requirements" / "lock_ownership.yml")
     write_makefile(tmp_path)
+    write_lock_ownership_manifest(tmp_path)
     for name in contract.ALL_LOCK_FILES:
         write_lockfile(tmp_path, name, "3.11")
     write_lockfile(
@@ -72,6 +140,35 @@ def test_missing_platform_core_lockfile_is_reported(isolated_repo: Path) -> None
     expected = contract.read_expected_lock_python_version()
     errors = contract.validate_lockfile_headers(expected)
     assert errors == [f"Missing required lockfile: {isolated_repo / 'requirements' / 'ml-core-darwin-arm64.txt'}"]
+
+
+def test_missing_lock_ownership_manifest_entry_is_reported(isolated_repo: Path) -> None:
+    manifest_path = isolated_repo / "requirements" / "lock_ownership.yml"
+    manifest_path.write_text(
+        manifest_path.read_text(encoding="utf-8").replace(
+            '  base.txt:\n    target_id: generic\n    python_version: "3.11"\n    status: active\n    allowed_contexts:\n      - ubuntu-x64-generic\n',
+            "",
+            1,
+        ),
+        encoding="utf-8",
+    )
+
+    errors = contract.validate_lock_ownership_manifest()
+
+    assert errors == ["requirements/lock_ownership.yml must declare governed lock 'base.txt'"]
+
+
+def test_unexpected_lock_ownership_manifest_entry_is_reported(isolated_repo: Path) -> None:
+    manifest_path = isolated_repo / "requirements" / "lock_ownership.yml"
+    manifest_path.write_text(
+        manifest_path.read_text(encoding="utf-8")
+        + '\n  unexpected.txt:\n    target_id: unexpected\n    python_version: "3.11"\n    status: active\n    allowed_contexts:\n      - ubuntu-x64-generic\n',
+        encoding="utf-8",
+    )
+
+    errors = contract.validate_lock_ownership_manifest()
+
+    assert errors == ["requirements/lock_ownership.yml declares unexpected lock 'unexpected.txt'"]
 
 
 def test_noncore_optional_lockfile_is_reported(isolated_repo: Path) -> None:

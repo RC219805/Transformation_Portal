@@ -29,7 +29,10 @@ PHASE6_SMOKE_TESTS := \
 .PHONY: help test-fast test-novideo test-full test-integration test-structure test-utils test-orchestrator-contract test-orchestrator-http-contract test-portal-contract test-frontdoor-contract seed-frontdoor-user run-frontdoor-local validate-orchestrator-http validate-portal-browser validate-frontdoor-browser validate-frontdoor-deployment-gate audit-pipeline-readiness coverage-fast-scope venv repair-core-venv setup clean \
         lint lint-parity ci ci-full pre-commit install-hooks quality-check fix-quality validate-ci organize-docs check-json-serialization check-piptools-cache \
         check-yaml-governance check-stale-docs lock lock-prod lock-ci lock-dev install-core install-ml install-ml-core install-ml-raw install-ml-sam2 install-ml-coreml docs docs-clean \
-        check-test-markers check-ci-sync check-environment validate-full validate-quick clean-frontdoor clean-all check-worktree
+        check check-test-markers check-ci-sync check-environment validate-full validate-quick clean-frontdoor clean-all check-worktree \
+        compile-ml-darwin-arm64 update-ml-darwin-arm64 check-ml-darwin-arm64 \
+        compile-ml-linux-x86_64 update-ml-linux-x86_64 check-ml-linux-x86_64 \
+        compile-ml-darwin-x86_64 update-ml-darwin-x86_64 check-ml-darwin-x86_64
 
 help:
 	@echo "Targets:"
@@ -75,10 +78,20 @@ help:
 	@echo "  install-hooks      Install git pre-commit hook"
 	@echo "  quality-check      Run all quality checks (lint + structure + tests)"
 	@echo "  check-environment  Run pre-flight environment validation"
+	@echo "  check             Verify generic layered requirements under requirements/"
 	@echo "  check-worktree     Check if git worktree is clean"
 	@echo "  check-json-serialization  Fail on raw json.dump/json.dumps outside approved modules"
 	@echo "  check-yaml-governance  Fail on raw yaml.safe_load outside approved preset/exempt boundaries"
 	@echo "  check-piptools-cache  Fail if requirements/.pip-tools-cache is tracked in git"
+	@echo "  compile-ml-darwin-arm64  Compile target-owned Darwin arm64 ML lock via requirements/"
+	@echo "  update-ml-darwin-arm64   Update target-owned Darwin arm64 ML lock via requirements/"
+	@echo "  check-ml-darwin-arm64    Verify target-owned Darwin arm64 ML lock via requirements/"
+	@echo "  compile-ml-linux-x86_64  Compile target-owned Linux x86_64 ML lock via requirements/"
+	@echo "  update-ml-linux-x86_64   Update target-owned Linux x86_64 ML lock via requirements/"
+	@echo "  check-ml-linux-x86_64    Verify target-owned Linux x86_64 ML lock via requirements/"
+	@echo "  compile-ml-darwin-x86_64 Frozen target-owned Darwin x86_64 ML lock (fails closed)"
+	@echo "  update-ml-darwin-x86_64  Frozen target-owned Darwin x86_64 ML lock (fails closed)"
+	@echo "  check-ml-darwin-x86_64   Frozen target-owned Darwin x86_64 ML lock (fails closed)"
 	@echo "  check-stale-docs   Detect changed-file references to deleted docs root paths"
 	@echo "  check-test-markers Audit test marker coverage (ADR-044)"
 	@echo "  check-ci-sync      Verify CI dependency files are in sync (no drift)"
@@ -187,7 +200,18 @@ install-ml-raw: venv
 install-ml-sam2: venv
 	@echo "Installing ML SAM2 segmentation layer via bootstrap script..."
 	@echo "SAM2 requires non-standard install semantics and is scripted-only."
-	@./scripts/bootstrap/install_ml_stack.sh --profile core-cpu,sam2
+	@py_os="$$("$(PY)" -c 'import platform; print(platform.system())')"; \
+	py_arch="$$("$(PY)" -c 'import platform; print(platform.machine())')"; \
+	case "$$py_arch" in \
+		aarch64) py_arch="arm64" ;; \
+		amd64) py_arch="x86_64" ;; \
+	esac; \
+	profile="core-cpu,sam2"; \
+	if [ "$$py_os" = "Darwin" ] && [ "$$py_arch" = "arm64" ]; then \
+		profile="core-mps,sam2"; \
+	fi; \
+	echo "Using ML SAM2 profile $$profile"; \
+	./scripts/bootstrap/install_ml_stack.sh --profile "$$profile"
 	@"$(PY)" -m pip install -e .
 
 install-ml-coreml: venv
@@ -395,6 +419,10 @@ check-requirements-lock-contract:
 	@echo "Checking requirements lock contract..."
 	@"$(PY)" scripts/validation/check_requirements_lock_contract.py
 
+check:
+	@echo "Checking generic layered requirements in requirements/..."
+	@$(MAKE) -C requirements check LOCK_PYTHON_VERSION=3.11
+
 check-test-markers:
 	@echo "Auditing test marker coverage (ADR-044)..."
 	@"$(PY)" scripts/validation/check_test_markers.py --audit
@@ -435,6 +463,33 @@ lock-dev:
 	@pip-compile --generate-hashes \
 		-o requirements-dev.lock.txt \
 		requirements-dev.txt
+
+compile-ml-darwin-arm64:
+	@$(MAKE) -C requirements compile-ml-darwin-arm64 LOCK_PYTHON_VERSION=3.11
+
+update-ml-darwin-arm64:
+	@$(MAKE) -C requirements update-ml-darwin-arm64 LOCK_PYTHON_VERSION=3.11
+
+check-ml-darwin-arm64:
+	@$(MAKE) -C requirements check-ml-darwin-arm64 LOCK_PYTHON_VERSION=3.11
+
+compile-ml-linux-x86_64:
+	@$(MAKE) -C requirements compile-ml-linux-x86_64 LOCK_PYTHON_VERSION=3.11
+
+update-ml-linux-x86_64:
+	@$(MAKE) -C requirements update-ml-linux-x86_64 LOCK_PYTHON_VERSION=3.11
+
+check-ml-linux-x86_64:
+	@$(MAKE) -C requirements check-ml-linux-x86_64 LOCK_PYTHON_VERSION=3.11
+
+compile-ml-darwin-x86_64:
+	@$(MAKE) -C requirements compile-ml-darwin-x86_64 LOCK_PYTHON_VERSION=3.11
+
+update-ml-darwin-x86_64:
+	@$(MAKE) -C requirements update-ml-darwin-x86_64 LOCK_PYTHON_VERSION=3.11
+
+check-ml-darwin-x86_64:
+	@$(MAKE) -C requirements check-ml-darwin-x86_64 LOCK_PYTHON_VERSION=3.11
 
 # --- Documentation ---
 
