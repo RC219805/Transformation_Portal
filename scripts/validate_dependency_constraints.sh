@@ -14,6 +14,10 @@
 
 set -eo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+PYTHON_BIN="$("${REPO_ROOT}/scripts/setup/resolve_python_311.sh")"
+
 # Colors for output
 RED='\033[0;31m'
 YELLOW='\033[1;33m'
@@ -47,7 +51,7 @@ load_banned_packages() {
     parsed_registry="$(mktemp)"
     parse_error="$(mktemp)"
 
-    if ! BANNED_REGISTRY="$BANNED_REGISTRY" python3 << 'PY' >"$parsed_registry" 2>"$parse_error"
+    if ! BANNED_REGISTRY="$BANNED_REGISTRY" "${PYTHON_BIN}" << 'PY' >"$parsed_registry" 2>"$parse_error"
 import json
 import os
 from pathlib import Path
@@ -201,7 +205,7 @@ version_gte() {
     local v2="$2"
 
     # Use Python for accurate semantic version comparison
-    python3 << EOF
+    "${PYTHON_BIN}" << EOF
 from packaging.version import Version
 import sys
 try:
@@ -412,7 +416,7 @@ validate_pyproject_security_minimums() {
             fi
         fi
     done < <(
-        python3 << 'PY'
+        "${PYTHON_BIN}" << 'PY'
 import re
 import tomllib
 from pathlib import Path
