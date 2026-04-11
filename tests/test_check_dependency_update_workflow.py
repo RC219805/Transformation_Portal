@@ -18,7 +18,13 @@ def valid_workflow_text() -> str:
     required_pr_refs = "\n".join(f"          {ref}" for ref in workflow_contract.REQUIRED_PR_BODY_REFERENCES)
     required_pr_snippets = "\n".join(f"          {snippet}" for snippet in workflow_contract.REQUIRED_PR_BODY_SNIPPETS)
     required_workflow_snippets = "\n".join(f"        {snippet}" for snippet in workflow_contract.REQUIRED_WORKFLOW_SNIPPETS)
+    required_install_snippets = "\n".join(
+        f"        {snippet}" for snippet in workflow_contract.REQUIRED_INSTALL_TOOLCHAIN_SNIPPETS
+    )
     return f"""
+    - name: Install lock generation tools
+      run: |
+{required_install_snippets}
     - name: Update dependencies
       run: |
 {required_workflow_snippets}
@@ -43,7 +49,10 @@ def remove_from_pr_body(text: str, needle: str) -> str:
 
 
 def remove_from_audit_targets(text: str, needle: str) -> str:
-    return text.replace(f"{needle}\n", "", 1)
+    before_block, rest = text.split("        audit_targets=(\n", maxsplit=1)
+    audit_targets_block, after_block = rest.split("        )\n", maxsplit=1)
+    audit_targets_block = audit_targets_block.replace(f"{needle}\n", "", 1)
+    return f"{before_block}        audit_targets=(\n{audit_targets_block}        )\n{after_block}"
 
 
 def remove_audit_targets_block(text: str) -> str:
@@ -90,6 +99,14 @@ def test_missing_required_workflow_snippet_is_reported() -> None:
     assert (
         "dependency-update workflow must include snippet " "'make update-ml-linux-x86_64 LOCK_PYTHON_VERSION=3.11'"
     ) in errors
+
+
+def test_missing_required_install_toolchain_snippet_is_reported() -> None:
+    broken = remove_workflow_snippet(valid_workflow_text(), 'python -m pip install --upgrade "pip<26"')
+    errors = workflow_contract.validate_dependency_update_workflow(broken)
+    assert (
+        "dependency-update workflow must include install-tool snippet 'python -m pip install --upgrade \"pip<26\"'" in errors
+    )
 
 
 def test_forbidden_target_agnostic_update_command_is_reported() -> None:

@@ -64,6 +64,12 @@ REQUIRED_WORKFLOW_SNIPPETS = (
     "requirements/ml-core-darwin-x86_64.txt",
 )
 
+REQUIRED_INSTALL_TOOLCHAIN_SNIPPETS = (
+    'python -m pip install --upgrade "pip<26"',
+    'python -m pip install "pip-tools==7.5.2"',
+    "python -m pip install -r requirements/security.txt",
+)
+
 FORBIDDEN_WORKFLOW_SNIPPETS = (
     "make update LOCK_PYTHON_VERSION=3.11",
     "make check LOCK_PYTHON_VERSION=3.11",
@@ -149,6 +155,10 @@ def validate_dependency_update_workflow(text: str) -> list[str]:
     for snippet in REQUIRED_WORKFLOW_SNIPPETS:
         if snippet not in text:
             errors.append(f"dependency-update workflow must include snippet {snippet!r}")
+
+    for snippet in REQUIRED_INSTALL_TOOLCHAIN_SNIPPETS:
+        if snippet not in text:
+            errors.append(f"dependency-update workflow must include install-tool snippet {snippet!r}")
 
     for snippet in FORBIDDEN_WORKFLOW_SNIPPETS:
         if snippet in text:
