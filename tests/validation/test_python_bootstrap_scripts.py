@@ -36,7 +36,10 @@ def _copy_repo_file(source: Path, destination: Path) -> Path:
 
 
 def _write_fake_python(path: Path, *, version: str, real_python: str) -> Path:
-    supported = version.startswith(("3.11", "3.12", "3.13", "3.14", "3.15"))
+    version_parts = version.split(".")
+    major = int(version_parts[0])
+    minor = int(version_parts[1])
+    supported = (major, minor) >= (3, 11)
     exit_code = "0" if supported else "1"
     script = f"""#!/bin/sh
 REAL_PYTHON={shlex.quote(real_python)}
@@ -95,6 +98,39 @@ def test_resolver_falls_back_to_python311_when_repo_venv_missing(tmp_path: Path)
 
     assert result.returncode == 0, result.stdout + result.stderr
     assert result.stdout.strip() == str(python311)
+
+
+def test_resolver_discovers_newer_versioned_python_commands(tmp_path: Path) -> None:
+    repo_root = tmp_path / "repo"
+    script_path = _copy_repo_file(RESOLVER_PATH, repo_root / "scripts" / "setup" / "resolve_python_311.sh")
+    fakebin = tmp_path / "fakebin"
+    python316 = _write_fake_python(fakebin / "python3.16", version="3.16.0", real_python=sys.executable)
+    _write_fake_python(fakebin / "python3.15", version="3.15.2", real_python=sys.executable)
+    _write_fake_python(fakebin / "python3.11", version="3.11.15", real_python=sys.executable)
+    _write_fake_python(fakebin / "python3", version="3.9.6", real_python=sys.executable)
+    _write_fake_python(fakebin / "python", version="3.9.6", real_python=sys.executable)
+
+    env = {**os.environ, "PATH": f"{fakebin}:/usr/bin:/bin"}
+    result = subprocess.run(["bash", str(script_path)], cwd=repo_root, env=env, capture_output=True, text=True, check=False)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert result.stdout.strip() == str(python316)
+
+
+def test_resolver_prefers_windows_repo_venv_layout(tmp_path: Path) -> None:
+    repo_root = tmp_path / "repo"
+    script_path = _copy_repo_file(RESOLVER_PATH, repo_root / "scripts" / "setup" / "resolve_python_311.sh")
+    repo_python = _write_fake_python(
+        repo_root / ".venv" / "Scripts" / "python.exe",
+        version="3.12.4",
+        real_python=sys.executable,
+    )
+
+    env = {**os.environ, "PATH": "/usr/bin:/bin"}
+    result = subprocess.run(["bash", str(script_path)], cwd=repo_root, env=env, capture_output=True, text=True, check=False)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert result.stdout.strip() == str(repo_python)
 
 
 def test_resolver_rejects_old_python_candidates(tmp_path: Path) -> None:
