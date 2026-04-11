@@ -48,6 +48,12 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Disable broken Azure CLI apt source when present
+        run: |
+          if ls /etc/apt/sources.list.d/azure-cli*.list >/dev/null 2>&1; then
+            sudo rm -f /etc/apt/sources.list.d/azure-cli*.list
+          fi
+
       - name: Install exiftool
         run: |
           sudo apt-get update

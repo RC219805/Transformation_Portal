@@ -202,6 +202,53 @@ class TestLinearDecoder:
         with pytest.raises((RuntimeError, ColorSpaceError, ImportError)):
             decoder.decode(raw_path)
 
+    def test_raw_format_uses_dedicated_runtime_when_configured(self, tmp_path: Path, monkeypatch):
+        """Configured RAW runtime should dispatch through the subprocess worker."""
+        raw_path = tmp_path / "test.cr2"
+        raw_path.write_text("dummy")
+
+        fake_linear = np.full((4, 5, 3), 0.25, dtype=np.float32)
+        captured: dict[str, object] = {}
+
+        def fake_run_raw_worker(*, python_executable, command_name, input_path, payload, start):
+            captured["python_executable"] = python_executable
+            captured["command_name"] = command_name
+            captured["input_path"] = input_path
+            captured["payload"] = payload
+            captured["start"] = start
+            return fake_linear, {
+                "input_size": [4, 5],
+                "input_format": "RAW_CR2",
+                "color_space": "linear_sRGB",
+                "ingest_fingerprint": "f" * 64,
+                "dtype": "float32",
+            }
+
+        monkeypatch.setattr(
+            "transformation_portal.spatial_ai.ingest.linear_decoder.run_raw_worker",
+            fake_run_raw_worker,
+        )
+
+        result = LinearDecoder(
+            gamma=1.0,
+            bit_depth=32,
+            strict_ingest=True,
+            raw_python_executable="./.venv-raw/bin/python",
+        ).decode(raw_path)
+
+        assert np.array_equal(result.linear_rgb, fake_linear)
+        assert result.input_size == (4, 5)
+        assert result.color_space == "linear_sRGB"
+        assert result.ingest_fingerprint == "f" * 64
+        assert captured["python_executable"] == "./.venv-raw/bin/python"
+        assert captured["command_name"] == "linear_decode"
+        assert captured["input_path"] == raw_path
+        assert captured["payload"] == {
+            "gamma": 1.0,
+            "bit_depth": 32,
+            "strict_ingest": True,
+        }
+
     def test_content_hash_reproducible(self, tmp_path: Path):
         """Test that content hash is deterministic."""
         # Create test image

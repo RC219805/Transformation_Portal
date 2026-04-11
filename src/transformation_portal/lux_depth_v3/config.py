@@ -1,7 +1,7 @@
-"""Configuration module for lux_depth_v3 pipeline.
+"""Lux Depth V3 configuration types and runtime defaults.
 
-STUB IMPLEMENTATION - Critical types to enable package imports.
-Full implementation pending.
+This module defines the typed configuration surface used by the CLI, portal
+preview layer, orchestrator, and reproducibility metadata.
 """
 
 from __future__ import annotations
@@ -226,6 +226,9 @@ class EnhanceConfig:
     # dedicated Depth Pro environment
     depth_pro_python_executable: Optional[str] = None
     # Optional Python executable for a
+    # dedicated RAW ingest environment
+    raw_python_executable: Optional[str] = None
+    # Optional Python executable for a
     # dedicated DA3 / depth-anything-3 environment
     da3_python_executable: Optional[str] = None
     # Timeout for DA3 subprocess calls
@@ -379,6 +382,8 @@ class EnhanceConfig:
     emit_marketing: bool = False  # Emit marketing-ready output
     emit_report: bool = True  # Emit processing report
     emit_run_card: bool = True  # Emit run card for reproducibility
+    run_card_version: str = "v1"  # v1 legacy commitment or v2 transparency tree
+    run_card_include_proofs: bool = False  # Opt-in per-artifact inclusion proofs for v2 run cards
 
     # Phase B1: optional scene-level reconstruction (off by default)
     enable_reconstruction: bool = False

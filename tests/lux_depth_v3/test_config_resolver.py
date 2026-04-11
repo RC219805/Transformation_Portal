@@ -235,6 +235,61 @@ class TestEffectiveDepthProRuntimeResolution:
         assert resolve_effective_depth_pro_python_executable(EnhanceConfig()) == REPO_LOCAL_DEPTH_PRO_PYTHON
 
 
+class TestEffectiveRawRuntimeResolution:
+    """Test effective RAW runtime resolution."""
+
+    def test_auto_discovers_repo_local_contract(self, monkeypatch, tmp_path):
+        """Repo-local RAW runtime should resolve to the stable contract path."""
+        from transformation_portal.lux_depth_v3.config import EnhanceConfig
+        from transformation_portal.lux_depth_v3.config_resolver import (
+            REPO_LOCAL_RAW_PYTHON,
+            resolve_effective_raw_python_executable,
+        )
+
+        discovered_python = tmp_path / "bin" / "python"
+        discovered_python.parent.mkdir(parents=True)
+        discovered_python.write_text("#!/bin/sh\n", encoding="utf-8")
+        monkeypatch.delenv("TRANSFORMATION_PORTAL_RAW_PYTHON", raising=False)
+        monkeypatch.setattr(
+            "transformation_portal.lux_depth_v3.config_resolver._repo_local_raw_python_path",
+            lambda: discovered_python,
+        )
+
+        assert resolve_effective_raw_python_executable(EnhanceConfig()) == REPO_LOCAL_RAW_PYTHON
+
+    def test_prefers_explicit_config(self, monkeypatch, tmp_path):
+        """Explicit RAW config should win over env and repo-local discovery."""
+        from transformation_portal.lux_depth_v3.config import EnhanceConfig
+        from transformation_portal.lux_depth_v3.config_resolver import resolve_effective_raw_python_executable
+
+        discovered_python = tmp_path / "bin" / "python"
+        discovered_python.parent.mkdir(parents=True)
+        discovered_python.write_text("#!/bin/sh\n", encoding="utf-8")
+        monkeypatch.setenv("TRANSFORMATION_PORTAL_RAW_PYTHON", "/env/raw-python")
+        monkeypatch.setattr(
+            "transformation_portal.lux_depth_v3.config_resolver._repo_local_raw_python_path",
+            lambda: discovered_python,
+        )
+
+        config = EnhanceConfig(raw_python_executable="/config/raw-python")
+
+        assert resolve_effective_raw_python_executable(config) == "/config/raw-python"
+
+    def test_uses_env_when_config_unset(self, monkeypatch, tmp_path):
+        """Environment override should win when RAW config is unset."""
+        from transformation_portal.lux_depth_v3.config import EnhanceConfig
+        from transformation_portal.lux_depth_v3.config_resolver import resolve_effective_raw_python_executable
+
+        missing_python = tmp_path / "missing" / "python"
+        monkeypatch.setenv("TRANSFORMATION_PORTAL_RAW_PYTHON", "/env/raw-python")
+        monkeypatch.setattr(
+            "transformation_portal.lux_depth_v3.config_resolver._repo_local_raw_python_path",
+            lambda: missing_python,
+        )
+
+        assert resolve_effective_raw_python_executable(EnhanceConfig()) == "/env/raw-python"
+
+
 class TestComputeConfigFingerprint:
     """Test configuration fingerprint computation."""
 
@@ -326,6 +381,27 @@ class TestComputeConfigFingerprint:
         fingerprint = compute_config_fingerprint(EnhanceConfig())
 
         assert fingerprint.da3_python_executable == REPO_LOCAL_DA3_PYTHON
+
+    def test_fingerprint_records_auto_discovered_raw_runtime(self, monkeypatch, tmp_path):
+        """Fingerprint should capture the effective repo-local RAW runtime."""
+        from transformation_portal.lux_depth_v3.config import EnhanceConfig
+        from transformation_portal.lux_depth_v3.config_resolver import (
+            REPO_LOCAL_RAW_PYTHON,
+            compute_config_fingerprint,
+        )
+
+        discovered_python = tmp_path / "bin" / "python"
+        discovered_python.parent.mkdir(parents=True)
+        discovered_python.write_text("#!/bin/sh\n", encoding="utf-8")
+        monkeypatch.delenv("TRANSFORMATION_PORTAL_RAW_PYTHON", raising=False)
+        monkeypatch.setattr(
+            "transformation_portal.lux_depth_v3.config_resolver._repo_local_raw_python_path",
+            lambda: discovered_python,
+        )
+
+        fingerprint = compute_config_fingerprint(EnhanceConfig())
+
+        assert fingerprint.raw_python_executable == REPO_LOCAL_RAW_PYTHON
 
 
 class TestBuildFingerprintPayloads:
@@ -448,6 +524,27 @@ class TestBuildRunCardConfigFingerprint:
 
         assert fingerprint["da3_python_executable"] == REPO_LOCAL_DA3_PYTHON
 
+    def test_run_card_fingerprint_records_auto_discovered_raw_runtime(self, monkeypatch, tmp_path):
+        """Run-card fingerprint should record the effective repo-local RAW runtime."""
+        from transformation_portal.lux_depth_v3.config import EnhanceConfig
+        from transformation_portal.lux_depth_v3.config_resolver import (
+            REPO_LOCAL_RAW_PYTHON,
+            build_run_card_config_fingerprint,
+        )
+
+        discovered_python = tmp_path / "bin" / "python"
+        discovered_python.parent.mkdir(parents=True)
+        discovered_python.write_text("#!/bin/sh\n", encoding="utf-8")
+        monkeypatch.delenv("TRANSFORMATION_PORTAL_RAW_PYTHON", raising=False)
+        monkeypatch.setattr(
+            "transformation_portal.lux_depth_v3.config_resolver._repo_local_raw_python_path",
+            lambda: discovered_python,
+        )
+
+        fingerprint = build_run_card_config_fingerprint(EnhanceConfig())
+
+        assert fingerprint["raw_python_executable"] == REPO_LOCAL_RAW_PYTHON
+
 
 class TestConfigResolverClass:
     """Test the ConfigResolver class interface."""
@@ -494,6 +591,26 @@ class TestConfigResolverClass:
         assert resolved.enhance_config is config
         assert resolved.da3_config is not None
         assert resolved.fingerprint is not None
+
+    def test_resolver_persists_auto_discovered_raw_runtime(self, monkeypatch, tmp_path):
+        """Resolver should persist the effective RAW runtime on config."""
+        from transformation_portal.lux_depth_v3.config import EnhanceConfig
+        from transformation_portal.lux_depth_v3.config_resolver import REPO_LOCAL_RAW_PYTHON, ConfigResolver
+
+        discovered_python = tmp_path / "bin" / "python"
+        discovered_python.parent.mkdir(parents=True)
+        discovered_python.write_text("#!/bin/sh\n", encoding="utf-8")
+        monkeypatch.delenv("TRANSFORMATION_PORTAL_RAW_PYTHON", raising=False)
+        monkeypatch.setattr(
+            "transformation_portal.lux_depth_v3.config_resolver._repo_local_raw_python_path",
+            lambda: discovered_python,
+        )
+
+        config = EnhanceConfig()
+        resolved = ConfigResolver().resolve(config)
+
+        assert resolved.enhance_config.raw_python_executable == REPO_LOCAL_RAW_PYTHON
+        assert resolved.enhance_config is config
 
     def test_resolver_resolve_with_preset(self):
         """Test resolver resolve with preset."""

@@ -60,7 +60,7 @@ Portal surfaces:
   - `/login` operator login
   - `/portal` governed operator console
 - `GET /healthz` is the managed front-door liveness contract, `GET /ready` is backend liveness, and `GET /v1/readiness` is the execution-readiness matrix for the four governed pipelines.
-- Shared public branding assets now live at `web/secure-landing/public/brand/dna-mark-dark.svg`, `web/secure-landing/public/brand/dna-mark-light.svg`, and `web/secure-landing/public/video/dna-loop.mp4`.
+- Shared public branding assets now live at `web/secure-landing/public/brand/dna-symbol-*.svg`, `web/secure-landing/public/brand/dna-lockup-*.svg`, and `web/secure-landing/public/video/dna-loop.mp4`.
 - Direct FastAPI portal access is now a `direct_debug` workflow for local troubleshooting, not the preferred production browser path.
 - The front door is a Node app. `web/secure-landing` now documents and enforces **Node 22.x only** for install, dev, test, build, and start flows.
 
@@ -226,7 +226,22 @@ pip install -e ".[raw]"
 # or: pip install rawpy
 ```
 
-RAW inputs are auto-detected and converted into pipeline-ready RGB using LibRaw via `rawpy`. See [SETUP_GUIDE.md](docs/guides/SETUP_GUIDE.md) for environment details.
+RAW inputs are auto-detected and converted into pipeline-ready RGB using LibRaw via `rawpy`. If `./.venv-raw/bin/python` exists, Lux Depth V3 auto-discovers that repo-local RAW runtime before falling back to the main repo environment.
+
+**Recommended (RAW via isolated runtime):**
+```bash
+./scripts/setup/install_raw_runtime.sh
+
+lux-depth-v3 --input-dir ./input --output-dir ./output
+```
+
+Use `--raw-python` only when you want to override that repo-local runtime explicitly:
+
+```bash
+lux-depth-v3 --input-dir ./input --output-dir ./output --raw-python ~/venvs/raw/bin/python
+```
+
+See [SETUP_GUIDE.md](docs/guides/SETUP_GUIDE.md) for environment details.
 
 ---
 
@@ -235,7 +250,9 @@ RAW inputs are auto-detected and converted into pipeline-ready RGB using LibRaw 
 Use `depth_pro` when you need metric depth and are operating in an explicit research-only workflow.
 
 ```bash
-python3 -m venv .venv-depth-pro
+# Use any Python 3.11+ interpreter (e.g., python3.11, python3.12, python3.13)
+# The resolver picks a compatible one automatically:
+"$(./scripts/setup/resolve_python_311.sh)" -m venv .venv-depth-pro
 ./.venv-depth-pro/bin/python -m pip install --upgrade pip depth-pro
 mkdir -p checkpoints
 curl -L https://ml-site.cdn-apple.com/models/depth-pro/depth_pro.pt -o checkpoints/depth_pro.pt
@@ -295,6 +312,7 @@ cd Transformation_Portal
 make venv
 source .venv/bin/activate  # Windows: .venv\Scripts\activate
 make install-core
+make check-environment
 lux-depth-v3 --help
 ```
 
@@ -381,6 +399,7 @@ make test-full
 make ci
 make test-orchestrator-contract
 make test-frontdoor-contract
+make seed-frontdoor-user
 make validate-orchestrator-http
 make validate-portal-browser
 make validate-frontdoor-browser
@@ -391,10 +410,11 @@ make audit-pipeline-readiness
 Readiness and validation tiers:
 - `make test-orchestrator-contract` keeps the portal/orchestrator contract suite local and deterministic.
 - `make test-frontdoor-contract` keeps the managed front-door Node contract/build gate deterministic under Node 22.x.
+- `make seed-frontdoor-user` writes the canonical local managed-frontdoor credential fixture to `/tmp/tp-frontdoor-users.json` using `smoke-admin` / `correct horse battery staple` unless you override the frontdoor credential env vars.
 - `make validate-orchestrator-http` runs the live backend smoke against a running FastAPI origin.
-- `make validate-portal-browser` runs the live browser smoke against the real portal UI and now fails early if `/v1/config-preview` cannot authenticate or validate.
-- `make validate-frontdoor-browser` runs the live managed front-door browser smoke against `http://localhost:3000` by default.
-- `make run-frontdoor-local` starts the canonical managed front door on `http://localhost:3000` and refuses to fall back to `:3001`.
+- `make validate-portal-browser` launches an isolated local backend, then runs the live portal browser smoke and fails early if `/v1/config-preview` cannot authenticate or validate.
+- `make validate-frontdoor-browser` launches isolated local backend and managed front-door runtimes, auto-seeds the canonical local smoke credentials for that ephemeral runtime, and then runs the live browser smoke against the managed proof setup.
+- `make run-frontdoor-local` starts the canonical managed front door on `http://localhost:3000`, auto-seeds the same canonical local user fixture when no explicit frontdoor user source is configured, and refuses to fall back to `:3001`.
 - `make audit-pipeline-readiness` runs the safe local four-pipeline readiness audit and reports `ready` / `degraded` / `blocked` outcomes, including separate `lux-depth-v3` base vs canary status.
 
 Direct pytest examples:

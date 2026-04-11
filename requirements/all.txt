@@ -32,7 +32,7 @@ black==26.3.1
     # via -r dev.in
 build==1.4.2
     # via -r ci.in
-cachetools==7.0.2
+cachetools==7.0.5
     # via tox
 certifi==2026.2.25
     # via
@@ -81,7 +81,7 @@ httpcore==1.0.9
     # via httpx
 httpx==0.28.1
     # via -r dev.in
-hypothesis==6.151.10
+hypothesis==6.151.12
     # via -r dev.in
 id==1.6.1
     # via twine
@@ -169,7 +169,7 @@ pathspec==1.0.4
     #   mypy
 pillow==12.1.1
     # via -r base.in
-platformdirs==4.9.2
+platformdirs==4.9.6
     # via
     #   black
     #   pylint
@@ -202,13 +202,13 @@ pygments==2.20.0
     #   rich
 pylint==4.0.5
     # via -r dev.in
-pypdf==6.9.2
+pypdf==6.10.0
     # via -r ci.in
 pyproject-api==1.10.0
     # via tox
 pyproject-hooks==1.2.0
     # via build
-pytest==9.0.2
+pytest==9.0.3
     # via
     #   -r dev.in
     #   pytest-asyncio
@@ -229,8 +229,10 @@ pytest-rerunfailures==16.1
     # via -r dev.in
 pytest-xdist==3.8.0
     # via -r dev.in
-python-discovery==1.1.0
-    # via virtualenv
+python-discovery==1.2.2
+    # via
+    #   tox
+    #   virtualenv
 pytokens==0.4.1
     # via black
 pyyaml==6.0.3
@@ -282,9 +284,11 @@ threadpoolctl==3.6.0
     # via scikit-learn
 tifffile==2026.3.3
     # via -r base.in
+tomli-w==1.2.0
+    # via tox
 tomlkit==0.14.0
     # via pylint
-tox==4.47.3
+tox==4.52.0
     # via -r ci.in
 tqdm==4.67.3
     # via -r base.in

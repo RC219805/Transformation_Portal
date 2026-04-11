@@ -60,16 +60,19 @@ class RunCardValidationError(RuntimeError):
         super().__init__(message)
 
 
-def _default_schema_path() -> Path:
+def _default_schema_path(version: str = "v1") -> Path:
     """Return repository-local run card schema path.
 
     The schema is located at:
-    <repo_root>/docs/schemas/run_card/run_card.v1.schema.json
+    <repo_root>/docs/schemas/run_card/run_card.<version>.schema.json
 
     This path is resolved relative to this module's location in the
     installed package structure.
     """
-    return Path(__file__).resolve().parents[4] / "docs" / "schemas" / "run_card" / "run_card.v1.schema.json"
+    normalized_version = str(version or "v1").strip().lower()
+    if normalized_version not in {"v1", "v2"}:
+        raise ValueError(f"Unsupported run card schema version: {version!r}")
+    return Path(__file__).resolve().parents[4] / "docs" / "schemas" / "run_card" / f"run_card.{normalized_version}.schema.json"
 
 
 @lru_cache(maxsize=1)

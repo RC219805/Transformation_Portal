@@ -1,7 +1,9 @@
 SHELL := /bin/sh
 
-# Resolve a Python interpreter: prefer local venv, otherwise fall back to python3
-PY := $(shell if [ -x .venv/bin/python ]; then echo .venv/bin/python; else command -v python3 || command -v python; fi)
+# Resolve Python interpreters at recipe runtime so targets that create or repair
+# .venv immediately switch to the repo interpreter on subsequent lines.
+BOOTSTRAP_PY = $$(./scripts/setup/resolve_python_311.sh)
+PY = $$(./scripts/setup/resolve_python_311.sh)
 
 # Common subsets (fast tests avoid heavy/optional paths)
 FAST_TESTS := \
@@ -24,15 +26,16 @@ PHASE6_SMOKE_TESTS := \
 	tests/test_lux_render_pipeline_smoke.py \
 	tests/lux_depth_v3/test_orchestrator_smoke.py
 
-.PHONY: help test-fast test-novideo test-full test-integration test-structure test-utils test-orchestrator-contract test-orchestrator-http-contract test-portal-contract test-frontdoor-contract run-frontdoor-local validate-orchestrator-http validate-portal-browser validate-frontdoor-browser audit-pipeline-readiness coverage-fast-scope venv setup clean \
+.PHONY: help test-fast test-novideo test-full test-integration test-structure test-utils test-orchestrator-contract test-orchestrator-http-contract test-portal-contract test-frontdoor-contract seed-frontdoor-user run-frontdoor-local validate-orchestrator-http validate-portal-browser validate-frontdoor-browser validate-frontdoor-deployment-gate audit-pipeline-readiness coverage-fast-scope venv repair-core-venv setup clean \
         lint lint-parity ci ci-full pre-commit install-hooks quality-check fix-quality validate-ci organize-docs check-json-serialization check-piptools-cache \
         check-yaml-governance check-stale-docs lock lock-prod lock-ci lock-dev install-core install-ml install-ml-core install-ml-raw install-ml-sam2 install-ml-coreml docs docs-clean \
-        check-test-markers check-ci-sync
+        check-test-markers check-ci-sync check-environment validate-full validate-quick clean-frontdoor clean-all check-worktree
 
 help:
 	@echo "Targets:"
 	@echo "  setup              Install package in editable mode (pip install -e .)"
-	@echo "  install-core       Install core dependencies with constraints"
+	@echo "  install-core       Install pinned core runtime + dev tooling dependencies into .venv"
+	@echo "  repair-core-venv   Recreate .venv and reinstall the pinned core environment"
 	@echo "  install-ml         Disabled: no trusted umbrella ML lockfile contract"
 	@echo "  install-ml-core    Install ML core layer only (cross-platform baseline)"
 	@echo "  install-ml-raw     Disabled: no trusted checked-in RAW lockfile contract"
@@ -45,17 +48,23 @@ help:
 	@echo "  test-orchestrator-http-contract  Run HTTP-only orchestrator contract tests"
 	@echo "  test-portal-contract  Run portal runtime/browser contract tests"
 	@echo "  test-frontdoor-contract  Run managed frontdoor Node contract/build checks"
+	@echo "  seed-frontdoor-user  Seed the canonical local managed-frontdoor credential fixture under /tmp"
 	@echo "  run-frontdoor-local  Start the canonical local managed frontdoor on localhost:3000"
 	@echo "  test-integration   Run integration tests (requires HF_TOKEN)"
 	@echo "  test-structure     Run codebase structure validation tests"
 	@echo "  test-utils         Run tests for performance and error handling utilities"
 	@echo "  coverage-fast-scope  Run branch coverage for audited core/config and streaming paths"
 	@echo "  validate-orchestrator-http  Run the live orchestrator HTTP smoke audit"
-	@echo "  validate-portal-browser  Run the live browser smoke audit against a running portal"
-	@echo "  validate-frontdoor-browser  Run the live browser smoke audit against a running managed frontdoor"
+	@echo "  validate-portal-browser  Run the live browser smoke audit with an isolated local backend"
+	@echo "  validate-frontdoor-browser  Run the live browser smoke audit with isolated local backend/frontdoor runtimes"
+	@echo "  validate-frontdoor-deployment-gate  Run the manual shared-deployment frontdoor posture gate"
+	@echo "  validate-full      Run the full validation suite (all checks + browser smokes)"
+	@echo "  validate-quick     Run quick validation (skip browser smokes)"
 	@echo "  audit-pipeline-readiness  Run the local four-pipeline readiness audit"
-	@echo "  venv               Create local .venv if missing"
+	@echo "  venv               Create or validate .venv with Python 3.11+; fail on unsupported or broken environments"
 	@echo "  clean              Remove Python cache files and build artifacts"
+	@echo "  clean-frontdoor    Remove frontdoor build artifacts (.next)"
+	@echo "  clean-all          Remove all build artifacts (Python + Node)"
 	@echo ""
 	@echo "Quality & CI:"
 	@echo "  lint               Run advisory lint checks (requires 'make install-core')"
@@ -65,6 +74,8 @@ help:
 	@echo "  pre-commit         Run pre-commit hooks manually with CI-aligned formatter versions"
 	@echo "  install-hooks      Install git pre-commit hook"
 	@echo "  quality-check      Run all quality checks (lint + structure + tests)"
+	@echo "  check-environment  Run pre-flight environment validation"
+	@echo "  check-worktree     Check if git worktree is clean"
 	@echo "  check-json-serialization  Fail on raw json.dump/json.dumps outside approved modules"
 	@echo "  check-yaml-governance  Fail on raw yaml.safe_load outside approved preset/exempt boundaries"
 	@echo "  check-piptools-cache  Fail if requirements/.pip-tools-cache is tracked in git"
@@ -86,10 +97,28 @@ help:
 	@echo "  docs-clean         Clean generated documentation files"
 
 venv:
-	@if [ ! -x .venv/bin/python ]; then \
-		"$(PY)" -m venv .venv && echo "Created .venv"; \
+	@repo_venv_py=""; \
+	if [ -x .venv/bin/python ]; then \
+		repo_venv_py=.venv/bin/python; \
+	elif [ -x .venv/Scripts/python.exe ]; then \
+		repo_venv_py=.venv/Scripts/python.exe; \
+	fi; \
+	if [ -n "$$repo_venv_py" ]; then \
+		if "$$repo_venv_py" -c 'import sys; raise SystemExit(0 if sys.version_info[:2] >= (3, 11) else 1)' >/dev/null 2>&1; then \
+			echo ".venv already present"; \
+		else \
+			venv_version="$$("$$repo_venv_py" -V 2>&1 || echo 'Python version unavailable')"; \
+			echo "Error: existing .venv is not using Python 3.11+ ($$venv_version)."; \
+			echo "Error: run 'make repair-core-venv' to recreate the repo environment."; \
+			exit 1; \
+		fi; \
+	elif [ -d .venv ]; then \
+		echo "Error: .venv exists but is missing a usable Python interpreter."; \
+		echo "Error: run 'make repair-core-venv' to recreate the repo environment."; \
+		exit 1; \
 	else \
-		echo ".venv already present"; \
+		bootstrap_py="$(BOOTSTRAP_PY)"; \
+		"$$bootstrap_py" -m venv .venv && echo "Created .venv with $$bootstrap_py"; \
 	fi
 
 setup: venv
@@ -97,13 +126,21 @@ setup: venv
 	@"$(PY)" -m pip install -e .
 
 install-core: venv
-	@echo "Installing core dependencies with constraints..."
-	@if [ -f requirements/constraints.txt ]; then \
-		"$(PY)" -m pip install -e ".[dev]" -c requirements/constraints.txt; \
-	else \
-		echo "Warning: requirements/constraints.txt not found, installing without constraints"; \
-		"$(PY)" -m pip install -e ".[dev]"; \
-	fi
+	@echo "Installing pinned core dependencies into .venv..."
+	@"$(PY)" -m pip install -r requirements/base.txt -r requirements/dev.txt -c requirements/constraints.txt
+	@"$(PY)" -m pip install -e . --no-deps
+	@"$(PY)" -m pip check
+
+repair-core-venv:
+	@echo "Recreating repo .venv with a Python 3.11+ interpreter..."
+	@rm -rf .venv
+	@bootstrap_py="$(BOOTSTRAP_PY)"; \
+		"$$bootstrap_py" -m venv .venv
+	@"$(PY)" -m pip install -r requirements/base.txt -r requirements/dev.txt -c requirements/constraints.txt
+	@"$(PY)" -m pip install -e . --no-deps
+	@"$(PY)" -m pip check
+	@echo "Repo .venv repaired."
+	@echo "Reminder: install Depth Anything 3 into .venv-da3 with ./scripts/setup/install_da3_runtime.sh"
 
 # ML Layer Install Targets
 # These support fine-grained ML capability installation per the layered strategy.
@@ -120,8 +157,8 @@ install-ml: venv
 install-ml-core: venv
 	@echo "Installing ML core layer (cross-platform baseline)..."
 	@ml_lock=""; \
-	py_os="$$(\"$(PY)\" -c 'import platform; print(platform.system())')"; \
-	py_arch="$$(\"$(PY)\" -c 'import platform; print(platform.machine())')"; \
+	py_os="$$("$(PY)" -c 'import platform; print(platform.system())')"; \
+	py_arch="$$("$(PY)" -c 'import platform; print(platform.machine())')"; \
 	case "$$py_arch" in \
 		aarch64) py_arch="arm64" ;; \
 		amd64) py_arch="x86_64" ;; \
@@ -208,6 +245,16 @@ test-frontdoor-contract:
 	@cd web/secure-landing && npm test
 	@cd web/secure-landing && npm run build
 
+seed-frontdoor-user:
+	@echo "Seeding canonical local managed frontdoor credential fixture..."
+	@cd web/secure-landing && node ./scripts/guard-runtime.mjs
+	@cd web/secure-landing && node ./scripts/seed-frontdoor-user.mjs \
+		--output "$${TP_FRONTDOOR_USERS_FILE:-/tmp/tp-frontdoor-users.json}" \
+		--username "$${TP_FRONTDOOR_USERNAME:-smoke-admin}" \
+		--password "$${TP_FRONTDOOR_PASSWORD:-correct horse battery staple}" \
+		--access-email "$${TP_FRONTDOOR_ACCESS_EMAIL:-$${TP_FRONTDOOR_USERNAME:-smoke-admin}@local.invalid}" \
+		--role "$${TP_FRONTDOOR_ROLE:-admin}"
+
 run-frontdoor-local:
 	@echo "Starting the canonical local managed frontdoor on localhost:3000..."
 	@./scripts/setup/run_frontdoor_local.sh
@@ -218,11 +265,33 @@ validate-orchestrator-http:
 
 validate-portal-browser:
 	@echo "Running live portal browser smoke validation..."
-	@"$(PY)" scripts/validation/validate_portal_browser_smoke.py
+	@TP_API_KEY="$${TP_API_KEY:-contract-secret}" "$(PY)" scripts/validation/validate_portal_browser_smoke.py --spawn-local-backend --api-key "$${TP_API_KEY:-contract-secret}"
 
 validate-frontdoor-browser:
 	@echo "Running live managed frontdoor browser smoke validation..."
-	@"$(PY)" scripts/validation/validate_frontdoor_browser_smoke.py
+	@"$(PY)" scripts/validation/validate_frontdoor_browser_smoke.py --spawn-local-backend --spawn-local-frontdoor
+
+validate-frontdoor-deployment-gate:
+	@echo "Running shared-deployment frontdoor posture gate..."
+	@set -eu; \
+	set -- "$(PY)" scripts/validation/check_frontdoor_deployment_gate.py \
+		--environment "$${TP_FRONTDOOR_GATE_ENVIRONMENT:-}" \
+		--frontdoor-url "$${TP_FRONTDOOR_GATE_FRONTDOOR_URL:-}" \
+		--cf-access-team-domain "$${TP_FRONTDOOR_GATE_CF_ACCESS_TEAM_DOMAIN:-}" \
+		--vercel-deployment-url "$${TP_FRONTDOOR_GATE_VERCEL_DEPLOYMENT_URL:-}"; \
+	if [ -n "$${TP_FRONTDOOR_GATE_FASTAPI_PUBLIC_URL:-}" ]; then \
+		set -- "$$@" --fastapi-public-url "$${TP_FRONTDOOR_GATE_FASTAPI_PUBLIC_URL}"; \
+	fi; \
+	if [ "$${TP_FRONTDOOR_GATE_CONFIRM_FASTAPI_NON_PUBLIC:-}" = "1" ]; then \
+		set -- "$$@" --confirm-fastapi-non-public; \
+	fi; \
+	if [ -n "$${TP_FRONTDOOR_GATE_TIMEOUT_SECONDS:-}" ]; then \
+		set -- "$$@" --timeout-seconds "$${TP_FRONTDOOR_GATE_TIMEOUT_SECONDS}"; \
+	fi; \
+	if [ -n "$${TP_FRONTDOOR_GATE_USER_AGENT:-}" ]; then \
+		set -- "$$@" --user-agent "$${TP_FRONTDOOR_GATE_USER_AGENT}"; \
+	fi; \
+	"$$@"
 
 audit-pipeline-readiness:
 	@echo "Running safe local four-pipeline readiness audit..."
@@ -379,3 +448,32 @@ docs-clean:
 	@echo "Cleaning generated documentation..."
 	@rm -rf docs/api/_build docs/api/_templates docs/api/_static
 	@echo "✓ Documentation cleaned"
+
+# --- Environment and Validation ---
+
+check-environment:
+	@echo "Running pre-flight environment validation..."
+	@"$(PY)" scripts/validation/check_local_environment.py
+
+check-worktree:
+	@echo "Checking if git worktree is clean..."
+	@./scripts/validation/check_worktree_clean.sh
+
+validate-full:
+	@echo "Running full validation suite..."
+	@./scripts/validation/run_full_validation_suite.sh
+
+validate-quick:
+	@echo "Running quick validation (skip browser smokes)..."
+	@./scripts/validation/run_full_validation_suite.sh --quick
+
+# --- Cleanup ---
+
+clean-frontdoor:
+	@echo "Cleaning frontdoor build artifacts..."
+	@rm -rf web/secure-landing/.next web/secure-landing/.next-build-verify web/secure-landing/.next-smoke-* 2>/dev/null || true
+	@echo "✓ Frontdoor cleanup complete"
+	@echo "Note: node_modules preserved. Run 'rm -rf web/secure-landing/node_modules' to remove."
+
+clean-all: clean clean-frontdoor
+	@echo "✓ Full cleanup complete"

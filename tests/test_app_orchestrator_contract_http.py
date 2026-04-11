@@ -113,6 +113,7 @@ def test_portal_bootstrap_reports_direct_debug_mode(client: TestClient) -> None:
 
 
 def test_root_ui_response_is_not_cached(client: TestClient) -> None:
+    bundle = orchestrator_app._get_portal_asset_bundle()
     response = client.get("/")
     assert response.status_code == 200
     csp = response.headers.get("Content-Security-Policy")
@@ -146,8 +147,8 @@ def test_root_ui_response_is_not_cached(client: TestClient) -> None:
     assert "https://cdn.tailwindcss.com" not in response.text
     assert "https://fonts.googleapis.com" not in response.text
     assert "https://fonts.gstatic.com" not in response.text
-    assert '<link rel="stylesheet" href="/portal/assets/portal.css"' in response.text
-    assert '<script src="/portal/assets/portal.js" defer></script>' in response.text
+    assert f'<link rel="stylesheet" href="{bundle.urls["portal.css"]}"' in response.text
+    assert f'<script src="{bundle.urls["portal.js"]}" defer></script>' in response.text
     assert "<style>" not in response.text
     assert "<script>" not in response.text
     assert "Content-Security-Policy" not in response.text
@@ -156,28 +157,76 @@ def test_root_ui_response_is_not_cached(client: TestClient) -> None:
 
 
 def test_portal_asset_endpoint_serves_css_and_js(client: TestClient) -> None:
-    css_response = client.get("/portal/assets/portal.css")
-    js_response = client.get("/portal/assets/portal.js")
+    bundle = orchestrator_app._get_portal_asset_bundle()
+    css_response = client.get(bundle.urls["portal.css"])
+    js_response = client.get(bundle.urls["portal.js"])
 
     assert css_response.status_code == 200
-    assert css_response.headers["Cache-Control"] == orchestrator_app.PORTAL_ASSET_CACHE_CONTROL
+    assert css_response.headers["Cache-Control"] == orchestrator_app.PORTAL_IMMUTABLE_ASSET_CACHE_CONTROL
     assert css_response.headers["content-type"] == orchestrator_app.PORTAL_ASSET_MEDIA_TYPES["portal.css"]
     assert "@font-face" in css_response.text
     assert "Portal Sans" in css_response.text
+    assert bundle.urls["fonts/portal-sans.woff2"] in css_response.text
+    assert bundle.urls["fonts/portal-mono.woff2"] in css_response.text
     assert "https://fonts.googleapis.com" not in css_response.text
 
     assert js_response.status_code == 200
-    assert js_response.headers["Cache-Control"] == orchestrator_app.PORTAL_ASSET_CACHE_CONTROL
+    assert js_response.headers["Cache-Control"] == orchestrator_app.PORTAL_IMMUTABLE_ASSET_CACHE_CONTROL
     assert js_response.headers["content-type"] == orchestrator_app.PORTAL_ASSET_MEDIA_TYPES["portal.js"]
     assert "const BOOTSTRAP_TIMEOUT_MS = 3500;" in js_response.text
 
 
 def test_portal_asset_endpoint_serves_repo_local_fonts(client: TestClient) -> None:
-    response = client.get("/portal/assets/fonts/portal-sans.woff2")
+    bundle = orchestrator_app._get_portal_asset_bundle()
+    response = client.get(bundle.urls["fonts/portal-sans.woff2"])
+
+    assert response.status_code == 200
+    assert response.headers["Cache-Control"] == orchestrator_app.PORTAL_IMMUTABLE_ASSET_CACHE_CONTROL
+    assert response.headers["content-type"] == orchestrator_app.PORTAL_ASSET_MEDIA_TYPES["fonts/portal-sans.woff2"]
+    assert response.content
+
+
+def test_portal_asset_endpoint_keeps_unversioned_and_stale_requests_backward_compatible(client: TestClient) -> None:
+    response = client.get("/portal/assets/portal.css")
+    stale_response = client.get("/portal/assets/portal.css", params={"v": "stale-version"})
 
     assert response.status_code == 200
     assert response.headers["Cache-Control"] == orchestrator_app.PORTAL_ASSET_CACHE_CONTROL
-    assert response.headers["content-type"] == orchestrator_app.PORTAL_ASSET_MEDIA_TYPES["fonts/portal-sans.woff2"]
+    assert stale_response.status_code == 200
+    assert stale_response.headers["Cache-Control"] == orchestrator_app.PORTAL_ASSET_CACHE_CONTROL
+    assert response.text == stale_response.text
+
+
+def test_portal_css_endpoint_does_not_depend_on_html_bundle_inputs(
+    client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    css_asset = orchestrator_app._get_portal_css_asset()
+    monkeypatch.setattr(orchestrator_app, "PORTAL_HTML", tmp_path / "missing-portal.html")
+    orchestrator_app._build_portal_asset_bundle.cache_clear()
+
+    response = client.get("/portal/assets/portal.css", params={"v": css_asset.fingerprint})
+
+    assert response.status_code == 200
+    assert response.headers["Cache-Control"] == orchestrator_app.PORTAL_IMMUTABLE_ASSET_CACHE_CONTROL
+    assert response.headers["ETag"] == f'"{css_asset.fingerprint}"'
+    assert response.text == css_asset.text
+
+
+def test_portal_direct_asset_endpoint_does_not_depend_on_html_bundle_inputs(
+    client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    current_fingerprint = orchestrator_app._get_portal_direct_asset_fingerprint("fonts/portal-sans.woff2")
+    monkeypatch.setattr(orchestrator_app, "PORTAL_HTML", tmp_path / "missing-portal.html")
+    orchestrator_app._build_portal_asset_bundle.cache_clear()
+
+    response = client.get(
+        "/portal/assets/fonts/portal-sans.woff2",
+        params={"v": current_fingerprint},
+    )
+
+    assert response.status_code == 200
+    assert response.headers["Cache-Control"] == orchestrator_app.PORTAL_IMMUTABLE_ASSET_CACHE_CONTROL
+    assert response.headers["ETag"] == f'"{current_fingerprint}"'
     assert response.content
 
 
@@ -1074,6 +1123,80 @@ def test_partial_run_summary_prefers_newest_batch_manifest_when_run_card_missing
     assert summary["success_count"] == 4
     assert summary["error_count"] == 1
     assert job.state == "partial"
+
+
+def test_failed_run_summary_prefers_newest_all_error_run_card_when_output_dir_reused(tmp_path: Path) -> None:
+    output_dir = tmp_path / "out"
+    manifests_dir = output_dir / "manifests"
+    manifests_dir.mkdir(parents=True, exist_ok=True)
+    (output_dir / "run_card_2026-04-06_232022.json").write_text(
+        json.dumps(
+            {
+                "batch_id": "2026-04-06_232022",
+                "total_images": 5,
+                "success_count": 4,
+                "error_count": 1,
+            }
+        ),
+        encoding="utf-8",
+    )
+    (manifests_dir / "batch_2026-04-09_132300.json").write_text(
+        json.dumps(
+            {
+                "batch_id": "2026-04-09_132300",
+                "results": [{"status": "error"}] * 6,
+                "stats": {"total_images": 6},
+            }
+        ),
+        encoding="utf-8",
+    )
+    (output_dir / "run_card_2026-04-09_132300.json").write_text(
+        json.dumps(
+            {
+                "batch_id": "2026-04-09_132300",
+                "total_images": 6,
+                "success_count": 0,
+                "error_count": 6,
+                "artifact_index": [
+                    {
+                        "artifact_type": "batch_manifest",
+                        "path": "manifests/batch_2026-04-09_132300.json",
+                        "relative_path": "manifests/batch_2026-04-09_132300.json",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    (output_dir / "stale_preview.png").write_bytes(b"stale-preview")
+
+    job = orchestrator_app.Job(
+        id="job_failed_reused_output_dir",
+        created_at=orchestrator_app._now(),
+        state="failed",
+        exit_code=1,
+        request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(output_dir)}},
+        error={
+            "code": "RUNNER_EXIT_NONZERO",
+            "message": "runner exited with code 1",
+            "details": {"exit_code": 1},
+        },
+    )
+
+    indexed = orchestrator_app._index_job_artifacts(job)
+    summary = orchestrator_app._refresh_job_run_summary(job)
+
+    assert {item["path"] for item in indexed} == {
+        "manifests/batch_2026-04-09_132300.json",
+        "run_card_2026-04-09_132300.json",
+    }
+    assert summary["batch_id"] == "2026-04-09_132300"
+    assert summary["success_count"] == 0
+    assert summary["error_count"] == 6
+    assert summary["reviewable_outputs"] is False
+    assert summary["partial"] is False
+    assert job.state == "failed"
+    assert job.error["code"] == "RUNNER_EXIT_NONZERO"
 
 
 def test_jobs_list_and_detail_include_partial_run_summary(client: TestClient) -> None:

@@ -32,6 +32,7 @@ the auto-discovered `./.venv-da3/bin/python` contract and by explicit
 **What it does:**
 - Clones Depth Anything 3 into `.runtime/Depth-Anything-3` if it is missing
 - Synchronizes that checkout to the validated default ref unless `--ref` overrides it
+- Resolves a Python 3.11+ bootstrap interpreter (preferring the repo `.venv` when available)
 - Creates the isolated DA3 venv at `./.venv-da3`
 - Installs a pinned DA3-compatible dependency set without upstream `xformers`
 - Captures a runtime package snapshot at `.runtime/da3-pip-freeze.txt`
@@ -50,6 +51,32 @@ lux-depth-v3 --input-dir ./input --output-dir ./output --da3-python ~/venvs/da3/
 **Requirements:**
 - Git repository
 - Bash shell (Linux, macOS, or Windows with WSL/Git Bash)
+
+### `install_raw_runtime.sh`
+
+Bootstraps the repo-local RAW subprocess runtime used by the
+auto-discovered `./.venv-raw/bin/python` contract and by explicit
+`--raw-python` overrides.
+
+**Usage:**
+```bash
+./scripts/setup/install_raw_runtime.sh
+```
+
+**What it does:**
+- Resolves a Python 3.11+ bootstrap interpreter (preferring the repo `.venv` when available)
+- Creates the isolated RAW venv at `./.venv-raw`
+- Installs the local project with the `raw` extra into that venv
+- Captures a runtime package snapshot at `.runtime/raw-pip-freeze.txt`
+- Runs the RAW worker readiness check used by canonical ingest
+
+**Stable contract:**
+```bash
+lux-depth-v3 --input-dir ./input --output-dir ./output --raw-python ./.venv-raw/bin/python
+```
+
+If you want the repo-local runtime to be used automatically for RAW batches,
+just create `./.venv-raw/bin/python` with this script and omit `--raw-python`.
 
 ### `pre-commit-check.sh`
 

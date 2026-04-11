@@ -146,6 +146,39 @@ def test_orchestrator_explicit_depth_pro_auto_discovers_repo_runtime(tmp_path, m
     assert backend_calls == [("depth_pro", REPO_LOCAL_DEPTH_PRO_PYTHON)]
 
 
+def test_orchestrator_auto_discovers_repo_raw_runtime(tmp_path, monkeypatch):
+    """Orchestrator should persist the repo-local RAW subprocess contract when available."""
+    from transformation_portal.lux_depth_v3.config_resolver import REPO_LOCAL_RAW_PYTHON
+
+    discovered_python = tmp_path / ".venv-raw" / "bin" / "python"
+    discovered_python.parent.mkdir(parents=True)
+    discovered_python.write_text("#!/bin/sh\n", encoding="utf-8")
+    monkeypatch.delenv("TRANSFORMATION_PORTAL_RAW_PYTHON", raising=False)
+    monkeypatch.setattr(
+        "transformation_portal.lux_depth_v3.config_resolver._repo_local_raw_python_path",
+        lambda: discovered_python,
+    )
+
+    class FakeBackend:
+        name = "da3"
+
+        def ensure_available(self):
+            return None
+
+    with patch(
+        "transformation_portal.depth.backends.registry.DepthBackendRegistry.get_backend",
+        return_value=FakeBackend(),
+    ):
+        config = EnhanceConfig(
+            depth_backend="da3",
+            depth_device="cpu",
+            enable_v2=False,
+        )
+        orchestrator = EnhanceOrchestrator(config, tmp_path)
+
+    assert orchestrator.config.raw_python_executable == REPO_LOCAL_RAW_PYTHON
+
+
 def test_orchestrator_explicit_da3_unavailable_fails_without_fallback(tmp_path):
     """Explicit DA3 should fail fast instead of silently selecting DA2."""
     backend_calls = []
@@ -636,6 +669,65 @@ def test_enhance_image_reuses_initialized_backend_metadata_without_recapture(tmp
 
     assert result["status"] == "ok"
     capture_mock.assert_not_called()
+
+
+def test_apex_gate_evaluates_native_depth_grid_before_artifact_resize(tmp_path, mock_da3_available):
+    """APEX gate should inspect the backend/native grid, not the resized depth artifact."""
+    import json
+
+    from PIL import Image
+
+    from transformation_portal.lux_depth_v3.input_manager import ImageInput
+
+    test_image = tmp_path / "native_grid_gate.png"
+    Image.new("RGB", (65, 65), color="white").save(test_image)
+
+    config = EnhanceConfig(
+        depth_backend="da3",
+        depth_device="cpu",
+        enable_v2=False,
+        quality_tier="apex",
+    )
+    orchestrator = EnhanceOrchestrator(config, tmp_path)
+    orchestrator.postprocessor = Mock(process=lambda result: result)
+
+    seen: dict[str, tuple[int, int] | None] = {
+        "gate_shape": None,
+        "native_shape": None,
+        "artifact_shape": None,
+    }
+
+    def _capture_gate(depth_map, depth_units=None, *, native_shape=None, artifact_shape=None):  # noqa: ARG001
+        seen["gate_shape"] = tuple(int(value) for value in depth_map.shape[:2])
+        seen["native_shape"] = tuple(int(value) for value in native_shape)
+        seen["artifact_shape"] = tuple(int(value) for value in artifact_shape)
+        return {
+            "passed": True,
+            "failure_codes": [],
+            "warnings": [],
+            "metrics": {},
+            "thresholds": {},
+            "shape_context": {
+                "gate_evaluated_shape": list(seen["gate_shape"]),
+                "native_shape": list(seen["native_shape"]),
+                "artifact_shape": list(seen["artifact_shape"]),
+            },
+        }
+
+    with patch.object(orchestrator.depth_backend, "compute", return_value=_make_depth_result(width=56, height=56)):
+        with patch.object(orchestrator, "_enforce_apex_depth_validity_gate", side_effect=_capture_gate):
+            result = orchestrator.enhance_image(ImageInput(path=test_image))
+
+    assert result["status"] == "ok"
+    assert seen["gate_shape"] == (56, 56)
+    assert seen["native_shape"] == (56, 56)
+    assert seen["artifact_shape"] == (65, 65)
+
+    manifest = json.loads(Path(result["manifest"]).read_text())
+    depth_stats = manifest["depth"]["stats"]
+    assert depth_stats["native_shape"] == [56, 56]
+    assert depth_stats["artifact_shape"] == [65, 65]
+    assert depth_stats["gate_evaluated_shape"] == [56, 56]
 
 
 def test_runtime_operational_failure_falls_back_to_da2_with_attempt_provenance(tmp_path):

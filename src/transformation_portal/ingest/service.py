@@ -120,6 +120,7 @@ class MetadataExtractionService:
             config_dict = None
 
         output_path = self._as_path(request.args.get("output_path"))
+        raw_sidecar_output_path = self._as_path(request.args.get("raw_sidecar_output_path"))
         output_dir = self._as_path(request.output_dir)
         cli_args, cli_args_error = self._normalize_cli_args(
             request.args.get("cli_args"),
@@ -139,6 +140,9 @@ class MetadataExtractionService:
                 cli_args=cli_args,
                 config_dict=config_dict,
                 fsync=bool(request.args.get("fsync", False)),
+                emit_raw_sidecar=bool(request.args.get("emit_raw_sidecar", True)),
+                raw_sidecar_output_path=raw_sidecar_output_path,
+                raw_sidecar_strict=bool(request.args.get("raw_sidecar_strict", False)),
             )
         )
 
@@ -212,6 +216,8 @@ class MetadataExtractionService:
                 fail_fast=bool(request.args.get("fail_fast", False)),
                 preserve_structure=True,
                 input_root=input_dir,
+                emit_raw_sidecar=bool(request.args.get("emit_raw_sidecar", True)),
+                raw_sidecar_strict=bool(request.args.get("raw_sidecar_strict", False)),
             )
         )
 

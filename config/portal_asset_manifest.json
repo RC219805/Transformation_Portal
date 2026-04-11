@@ -15,6 +15,14 @@
     "fonts/portal-mono.woff2": {
       "repo_path": "public/portal-assets/fonts/portal-mono.woff2",
       "media_type": "font/woff2"
+    },
+    "brand/dna-symbol-dark.svg": {
+      "repo_path": "public/portal-assets/brand/dna-symbol-dark.svg",
+      "media_type": "image/svg+xml"
+    },
+    "brand/dna-symbol-light.svg": {
+      "repo_path": "public/portal-assets/brand/dna-symbol-light.svg",
+      "media_type": "image/svg+xml"
     }
   }
 }

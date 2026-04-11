@@ -32,6 +32,30 @@ const HERO_HIGHLIGHTS = Object.freeze([
   }
 ]);
 
+const HERO_PATHS = Object.freeze([
+  {
+    kicker: "Learn",
+    title: "Explore the governed workflow",
+    detail: "See how verify, enhance, enforce, and distribute fit together before you touch the console.",
+    href: "#workflow",
+    dataUi: "homepage-learn-link"
+  },
+  {
+    kicker: "Verify",
+    title: "Inspect the proof surface",
+    detail: "Review the public verification report, bundle structure, and standards posture first.",
+    href: "#proof-report",
+    dataUi: "homepage-verify-link"
+  },
+  {
+    kicker: "Operator Access",
+    title: "Enter the managed console",
+    detail: "Resume build, operate, and review work inside the governed operator shell.",
+    href: "/login",
+    dataUi: "homepage-access-link"
+  }
+]);
+
 const OUTCOME_CARDS = Object.freeze([
   {
     title: "Approve faster",
@@ -251,6 +275,14 @@ function renderHighlightCard(item) {
   </article>`;
 }
 
+function renderHeroRouteCard(item) {
+  return `<a class="hero-route-card" href="${escapeHtml(item.href)}" data-ui="${escapeHtml(item.dataUi)}">
+    <p class="hero-route-kicker">${escapeHtml(item.kicker)}</p>
+    <p class="hero-route-title">${escapeHtml(item.title)}</p>
+    <p class="hero-route-detail">${escapeHtml(item.detail)}</p>
+  </a>`;
+}
+
 function renderOutcomeCard(item) {
   return `<article class="feature-card">
     <h3>${escapeHtml(item.title)}</h3>
@@ -379,10 +411,7 @@ function renderReleaseBundlePreview() {
   </section>`;
 }
 
-export function renderHomepage({ hasAuthenticatedSessionHint }) {
-  const utilityHref = hasAuthenticatedSessionHint ? "/portal" : "/login";
-  const utilityLabel = hasAuthenticatedSessionHint ? "Open Console" : "Secure Access";
-
+export function renderHomepage() {
   return `<!DOCTYPE html>
 <html lang="en">
   <head>
@@ -391,7 +420,7 @@ export function renderHomepage({ hasAuthenticatedSessionHint }) {
     <title>Dynamic Neural Access</title>
     <link rel="stylesheet" href="/frontdoor-homepage.css" />
   </head>
-  <body class="frontdoor-homepage">
+  <body class="frontdoor-homepage" data-ui="homepage-shell">
     <a class="skip-link" href="#main-content">Skip to content</a>
     <div class="homepage-backdrop" aria-hidden="true">
       <video
@@ -412,14 +441,15 @@ export function renderHomepage({ hasAuthenticatedSessionHint }) {
       <div class="homepage-backdrop__glow homepage-backdrop__glow--bottom"></div>
     </div>
 
-    <header class="site-header">
+    <header class="site-header" data-ui="homepage-header">
       <div class="site-header__inner">
         <a class="brand-lockup" href="/" aria-label="Dynamic Neural Access home">
           <span class="brand-lockup__mark">
             ${renderBrandAsset({
+              kind: "symbol",
               variant: "dark",
               alt: "Dynamic Neural Access",
-              className: "brand-asset"
+              className: "brand-asset brand-asset--symbol"
             })}
           </span>
           <span class="brand-lockup__copy">
@@ -428,13 +458,13 @@ export function renderHomepage({ hasAuthenticatedSessionHint }) {
           </span>
         </a>
 
-        <nav class="site-nav site-nav--desktop" aria-label="Primary navigation">
+        <nav class="site-nav site-nav--desktop" aria-label="Primary navigation" data-ui="homepage-nav">
           ${renderList(NAV_LINKS, (item) => renderAnchor(`#${item.id}`, item.label))}
         </nav>
 
         <div class="site-actions">
-          <a class="site-link" href="/login">Operator Login</a>
-          <a class="site-cta site-cta--ghost" href="${escapeHtml(utilityHref)}">${escapeHtml(utilityLabel)}</a>
+          <a class="site-link" href="/login" data-ui="homepage-operator-link">Operator Login</a>
+          <a class="site-cta site-cta--ghost" href="/login" data-ui="homepage-utility-cta">Operator Access</a>
         </div>
 
         <details class="site-mobile-menu">
@@ -444,25 +474,39 @@ export function renderHomepage({ hasAuthenticatedSessionHint }) {
               ${renderList(NAV_LINKS, (item) => renderAnchor(`#${item.id}`, item.label, "homepage-mobile-link"))}
             </nav>
             <div class="site-mobile-menu__actions">
-              <a class="site-link site-link--mobile" href="/login">Operator Login</a>
-              <a class="site-cta site-cta--ghost site-cta--mobile" href="${escapeHtml(utilityHref)}">${escapeHtml(utilityLabel)}</a>
+              <a class="site-link site-link--mobile" href="/login" data-ui="homepage-mobile-operator-link">Operator Login</a>
+              <a class="site-cta site-cta--ghost site-cta--mobile" href="/login" data-ui="homepage-mobile-utility-cta">Operator Access</a>
             </div>
           </div>
         </details>
       </div>
     </header>
 
-    <main id="main-content" class="homepage-main">
-      <section class="hero-section" aria-labelledby="hero-title">
+    <main id="main-content" class="homepage-main" data-ui="homepage-main">
+      <section class="hero-section" aria-labelledby="hero-title" data-ui="homepage-hero">
         <div class="hero-copy">
+          <div class="hero-lockup" data-ui="homepage-hero-lockup">
+            ${renderBrandAsset({
+              kind: "lockup",
+              variant: "dark",
+              alt: "Dynamic Neural Access",
+              className: "hero-lockup__asset"
+            })}
+          </div>
           <p class="section-kicker">Dynamic Neural Access</p>
-          <h1 id="hero-title">Make premium media verifiable before it ships.</h1>
-          <p class="hero-lede">
+          <h1 id="hero-title" data-ui="homepage-hero-title">Make premium media verifiable before it ships.</h1>
+          <p class="hero-lede" data-ui="homepage-hero-lede">
             Dynamic Neural Access is the certification layer for high-value media workflows. Turn raw or AI-assisted assets into partner-safe releases with reviewable provenance, rights posture, operator history, and distribution-ready proof.
           </p>
-          <div class="hero-actions">
-            <a class="site-cta" href="/login">Start Certification</a>
-            <a class="site-cta site-cta--secondary" href="#proof-report">View Verification Report</a>
+          <div class="hero-actions" data-ui="homepage-hero-actions">
+            <a class="site-cta" href="/login" data-ui="homepage-primary-cta">Operator Access</a>
+            <a class="site-cta site-cta--secondary" href="#proof-report" data-ui="homepage-secondary-cta">Inspect Verification Report</a>
+          </div>
+          <p class="hero-access-note" data-ui="homepage-hero-note">
+            Review the public proof surface first. Operator build, operate, and review work remains gated behind managed access.
+          </p>
+          <div class="hero-route-grid" data-ui="homepage-route-grid">
+            ${renderList(HERO_PATHS, renderHeroRouteCard)}
           </div>
           <div class="signal-strip" aria-label="Proof signals">
             ${renderList(HERO_SIGNALS, (item) => `<span class="signal-pill">${escapeHtml(item)}</span>`)}
@@ -565,18 +609,18 @@ export function renderHomepage({ hasAuthenticatedSessionHint }) {
         </div>
       </section>
 
-      <section class="homepage-section homepage-section--cta" aria-labelledby="cta-title">
+      <section class="homepage-section homepage-section--cta" aria-labelledby="cta-title" data-ui="homepage-final-cta">
         <div class="cta-panel">
           <div class="section-head">
             <p class="section-kicker">Next move</p>
             <h2 id="cta-title">Bring certification to every asset that leaves your pipeline.</h2>
             <p>
-              Start operator access for secure orchestration, or inspect the public proof surface before you step into the governed console.
+              Choose the public proof path when you need orientation, or continue into managed operator access when you are ready to run governed work.
             </p>
           </div>
-          <div class="hero-actions">
-            <a class="site-cta" href="/login">Operator Login</a>
-            <a class="site-cta site-cta--secondary" href="#faq">Review FAQ</a>
+          <div class="hero-actions" data-ui="homepage-final-actions">
+            <a class="site-cta" href="/login" data-ui="homepage-final-primary-cta">Open Operator Access</a>
+            <a class="site-cta site-cta--secondary" href="#workflow" data-ui="homepage-final-secondary-cta">Explore Workflow</a>
           </div>
         </div>
       </section>
@@ -588,7 +632,7 @@ export function renderHomepage({ hasAuthenticatedSessionHint }) {
           <p class="site-footer__title">Dynamic Neural Access</p>
           <p class="site-footer__copy">Verifier-backed release proof for premium media.</p>
         </div>
-        <a class="site-link" href="/login">Operator Login</a>
+        <a class="site-link" href="/login" data-ui="homepage-footer-login">Operator Login</a>
       </div>
     </footer>
   </body>

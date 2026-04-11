@@ -3,10 +3,16 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 FRONTDOOR_ROOT="${REPO_ROOT}/web/secure-landing"
-FRONTDOOR_PORT="3000"
+FRONTDOOR_HOST="${TP_FRONTDOOR_HOST:-127.0.0.1}"
+FRONTDOOR_PORT="${TP_FRONTDOOR_PORT:-3000}"
 FASTAPI_ORIGIN="${TP_FASTAPI_ORIGIN:-http://127.0.0.1:8000}"
 SESSION_DB="${TP_FRONTDOOR_SESSION_DB:-/tmp/transformation-portal-frontdoor-sessions.db}"
 BACKEND_API_KEY="${TP_BACKEND_API_KEY:-${TP_API_KEY:-}}"
+FRONTDOOR_DIST_DIR="${TP_FRONTDOOR_DIST_DIR:-}"
+DEFAULT_USERS_FILE="${TP_FRONTDOOR_USERS_FILE:-/tmp/tp-frontdoor-users.json}"
+DEFAULT_FRONTDOOR_USERNAME="${TP_FRONTDOOR_USERNAME:-smoke-admin}"
+DEFAULT_FRONTDOOR_PASSWORD="${TP_FRONTDOOR_PASSWORD:-correct horse battery staple}"
+DEFAULT_FRONTDOOR_ACCESS_EMAIL="${TP_FRONTDOOR_ACCESS_EMAIL:-${DEFAULT_FRONTDOOR_USERNAME}@local.invalid}"
 
 ensure_command() {
   if ! command -v "$1" >/dev/null 2>&1; then
@@ -28,6 +34,7 @@ port_in_use() {
 }
 
 ensure_command curl
+ensure_command node
 ensure_command npm
 
 if [[ -z "${BACKEND_API_KEY}" ]]; then
@@ -36,8 +43,25 @@ if [[ -z "${BACKEND_API_KEY}" ]]; then
 fi
 
 if [[ -z "${TP_FRONTDOOR_USERS_FILE:-}" && -z "${TP_FRONTDOOR_USERS_JSON:-}" ]]; then
-  echo "Set TP_FRONTDOOR_USERS_FILE or TP_FRONTDOOR_USERS_JSON before starting the managed front door."
-  exit 1
+  echo "No explicit front-door user source supplied. Seeding the canonical local smoke user fixture..."
+  (
+    cd "${FRONTDOOR_ROOT}"
+    node ./scripts/seed-frontdoor-user.mjs \
+      --output "${DEFAULT_USERS_FILE}" \
+      --username "${DEFAULT_FRONTDOOR_USERNAME}" \
+      --password "${DEFAULT_FRONTDOOR_PASSWORD}" \
+      --access-email "${DEFAULT_FRONTDOOR_ACCESS_EMAIL}" \
+      --role admin \
+      --quiet
+  )
+  export TP_FRONTDOOR_USERS_FILE="${DEFAULT_USERS_FILE}"
+  echo "Seeded local front-door user fixture at ${TP_FRONTDOOR_USERS_FILE}"
+  echo "Local operator username: ${DEFAULT_FRONTDOOR_USERNAME}"
+  if [[ "${TP_FRONTDOOR_PRINT_PASSWORD:-0}" == "1" ]]; then
+    echo "Local operator password: ${DEFAULT_FRONTDOOR_PASSWORD}"
+  else
+    echo "Password not printed. Set TP_FRONTDOOR_PRINT_PASSWORD=1 to display it explicitly."
+  fi
 fi
 
 if port_in_use; then
@@ -58,9 +82,15 @@ export TP_FASTAPI_ORIGIN="${FASTAPI_ORIGIN}"
 export TP_BACKEND_API_KEY="${BACKEND_API_KEY}"
 export TP_FRONTDOOR_SESSION_DB="${SESSION_DB}"
 export TP_FRONTDOOR_SESSION_SCALING_MODE=single_instance
+if [[ -n "${FRONTDOOR_DIST_DIR}" ]]; then
+  export TP_NEXT_DIST_DIR="${FRONTDOOR_DIST_DIR}"
+fi
 
-echo "Starting managed front door on http://localhost:${FRONTDOOR_PORT}"
+echo "Starting managed front door on http://${FRONTDOOR_HOST}:${FRONTDOOR_PORT}"
 echo "Using FastAPI origin ${TP_FASTAPI_ORIGIN}"
+if [[ -n "${FRONTDOOR_DIST_DIR}" ]]; then
+  echo "Using isolated Next distDir ${TP_FRONTDOOR_DIST_DIR}"
+fi
 
 cd "${FRONTDOOR_ROOT}"
-npm run dev -- --hostname 127.0.0.1 --port "${FRONTDOOR_PORT}"
+npm run dev -- --hostname "${FRONTDOOR_HOST}" --port "${FRONTDOOR_PORT}"

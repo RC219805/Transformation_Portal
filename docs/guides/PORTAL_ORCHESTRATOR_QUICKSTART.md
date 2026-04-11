@@ -206,9 +206,13 @@ make audit-pipeline-readiness
 ```
 
 `make validate-portal-browser` now preflights `POST /v1/config-preview` before
-launching Chrome. When the backend is running in `direct_debug` mode with
-`TP_API_KEY` configured, export the same `TP_API_KEY` in the shell that runs the
-browser smoke or it will fail early with an explicit preview-auth error.
+launching Chrome. The Make target now launches an isolated local backend by
+default; if you want to aim the smoke at an already-running backend instead,
+call `python scripts/validation/validate_portal_browser_smoke.py` directly
+without `--spawn-local-backend`. When the backend is running in `direct_debug`
+mode with `TP_API_KEY` configured, export the same `TP_API_KEY` in the shell
+that runs the browser smoke or it will fail early with an explicit
+preview-auth error.
 
 Direct pytest equivalent:
 

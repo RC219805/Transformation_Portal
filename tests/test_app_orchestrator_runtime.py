@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import importlib
 import json
 import os
@@ -15,6 +16,7 @@ from functools import lru_cache
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Dict
+from urllib.parse import parse_qs, urlparse
 
 import pytest
 from starlette.requests import Request as StarletteRequest
@@ -24,6 +26,7 @@ pytestmark = pytest.mark.unit
 orchestrator_app = importlib.import_module("app")
 PORTAL_HTML_PATH = Path(__file__).resolve().parents[1] / "portal.html"
 PORTAL_ASSET_ROOT = PORTAL_HTML_PATH.parent / "public" / "portal-assets"
+FRONTDOOR_BRAND_ROOT = PORTAL_HTML_PATH.parent / "web" / "secure-landing" / "public" / "brand"
 
 
 class _FakeRequest:
@@ -43,7 +46,7 @@ def _flag_value(argv: list[str], flag: str) -> str:
 
 @lru_cache(maxsize=1)
 def _portal_html_content() -> str:
-    return PORTAL_HTML_PATH.read_text(encoding="utf-8")
+    return orchestrator_app._get_portal_asset_bundle().html
 
 
 @lru_cache(maxsize=1)
@@ -57,12 +60,24 @@ def _portal_asset_urls_from_css() -> set[str]:
 
 
 def _portal_asset_path(asset_url: str) -> Path:
-    if not asset_url.startswith("/portal/assets/"):
+    parsed = urlparse(asset_url)
+    if not parsed.path.startswith("/portal/assets/"):
         raise AssertionError(f"unexpected portal asset url: {asset_url}")
-    candidate = PORTAL_ASSET_ROOT / asset_url.removeprefix("/portal/assets/")
+    candidate = PORTAL_ASSET_ROOT / parsed.path.removeprefix("/portal/assets/")
     if not candidate.is_file():
         raise AssertionError(f"portal asset missing: {candidate}")
     return candidate
+
+
+def _portal_asset_name(asset_url: str) -> str:
+    parsed = urlparse(asset_url)
+    if not parsed.path.startswith("/portal/assets/"):
+        raise AssertionError(f"unexpected portal asset url: {asset_url}")
+    return parsed.path.removeprefix("/portal/assets/")
+
+
+def _portal_asset_version(asset_url: str) -> str:
+    return parse_qs(urlparse(asset_url).query).get("v", [""])[0]
 
 
 @lru_cache(maxsize=1)
@@ -71,7 +86,7 @@ def _portal_css_content() -> str:
     match = re.search(r'<link rel="stylesheet" href="(/portal/assets/[^"]+)"\s*/?>', html)
     if match is None:
         raise AssertionError("portal stylesheet link not found")
-    return _portal_asset_path(match.group(1)).read_text(encoding="utf-8")
+    return orchestrator_app._get_portal_asset_bundle().css
 
 
 @lru_cache(maxsize=1)
@@ -268,6 +283,7 @@ def test_argv_normalization_accepts_canonical_keys() -> None:
     assert _flag_value(argv, "--depth-backend") == "da3"
     assert _flag_value(argv, "--depth-device") == "cuda"
     assert _flag_value(argv, "--emit-report") == "on"
+    assert _flag_value(argv, "--run-card-version") == "v1"
 
 
 def test_argv_normalization_accepts_legacy_keys() -> None:
@@ -363,6 +379,7 @@ def test_argv_normalization_trims_and_normalizes_string_values() -> None:
     assert _flag_value(argv, "--emit-marketing") == "off"
     assert _flag_value(argv, "--emit-report") == "on"
     assert _flag_value(argv, "--emit-run-card") == "off"
+    assert _flag_value(argv, "--run-card-version") == "v1"
 
 
 def test_argv_normalization_trims_pipeline_name() -> None:
@@ -418,9 +435,10 @@ def test_portal_phase1_accessibility_tokens_align_focus_and_target_size() -> Non
 def test_portal_html_externalizes_direct_debug_assets_without_third_party_hosts() -> None:
     html_content = _portal_html_content()
     css_content = _portal_css_content()
+    bundle = orchestrator_app._get_portal_asset_bundle()
 
-    assert 'href="/portal/assets/portal.css"' in html_content
-    assert 'src="/portal/assets/portal.js"' in html_content
+    assert f'href="{bundle.urls["portal.css"]}"' in html_content
+    assert f'src="{bundle.urls["portal.js"]}"' in html_content
     assert "<style>" not in html_content
     assert "<script>" not in html_content
     assert "https://cdn.tailwindcss.com" not in html_content
@@ -437,12 +455,16 @@ def test_portal_asset_manifest_is_explicit_and_repo_local() -> None:
         "portal.js": orchestrator_app.PORTAL_ASSETS_DIR / "portal.js",
         "fonts/portal-sans.woff2": orchestrator_app.PORTAL_ASSETS_DIR / "fonts" / "portal-sans.woff2",
         "fonts/portal-mono.woff2": orchestrator_app.PORTAL_ASSETS_DIR / "fonts" / "portal-mono.woff2",
+        "brand/dna-symbol-dark.svg": orchestrator_app.PORTAL_ASSETS_DIR / "brand" / "dna-symbol-dark.svg",
+        "brand/dna-symbol-light.svg": orchestrator_app.PORTAL_ASSETS_DIR / "brand" / "dna-symbol-light.svg",
     }
     assert orchestrator_app.PORTAL_ASSET_MEDIA_TYPES == {
         "portal.css": "text/css; charset=utf-8",
         "portal.js": "text/javascript; charset=utf-8",
         "fonts/portal-sans.woff2": "font/woff2",
         "fonts/portal-mono.woff2": "font/woff2",
+        "brand/dna-symbol-dark.svg": "image/svg+xml",
+        "brand/dna-symbol-light.svg": "image/svg+xml",
     }
     for asset_path in orchestrator_app.PORTAL_ASSET_PATHS.values():
         assert asset_path.is_file()
@@ -473,15 +495,52 @@ def test_portal_asset_manifest_rejects_paths_outside_portal_assets_dir(
 
 
 def test_portal_html_asset_references_are_covered_by_manifest() -> None:
+    bundle = orchestrator_app._get_portal_asset_bundle()
     html_asset_urls = _portal_asset_urls_from_html()
     bundled_asset_urls = html_asset_urls | _portal_asset_urls_from_css()
     manifest_asset_urls = {f"/portal/assets/{asset_name}" for asset_name in orchestrator_app.PORTAL_ASSET_MANIFEST.keys()}
+    normalized_asset_urls = {urlparse(asset_url).path for asset_url in bundled_asset_urls}
 
     assert html_asset_urls
-    assert html_asset_urls <= manifest_asset_urls
-    assert bundled_asset_urls == manifest_asset_urls
+    assert {urlparse(asset_url).path for asset_url in html_asset_urls} <= manifest_asset_urls
+    assert normalized_asset_urls == manifest_asset_urls
     for asset_url in bundled_asset_urls:
+        asset_name = _portal_asset_name(asset_url)
+        assert _portal_asset_version(asset_url) == bundle.fingerprints[asset_name]
         _portal_asset_path(asset_url)
+
+
+def test_portal_brand_asset_references_are_manifest_backed_and_repo_local() -> None:
+    bundle = orchestrator_app._get_portal_asset_bundle()
+    brand_asset_urls = {url for url in _portal_asset_urls_from_html() if url.startswith("/portal/assets/brand/")}
+    manifest_asset_urls = {f"/portal/assets/{asset_name}" for asset_name in orchestrator_app.PORTAL_ASSET_MANIFEST.keys()}
+
+    assert brand_asset_urls == {
+        bundle.urls["brand/dna-symbol-dark.svg"],
+        bundle.urls["brand/dna-symbol-light.svg"],
+    }
+    assert {urlparse(asset_url).path for asset_url in brand_asset_urls} <= manifest_asset_urls
+    for asset_url in brand_asset_urls:
+        assert _portal_asset_version(asset_url) == bundle.fingerprints[_portal_asset_name(asset_url)]
+        assert _portal_asset_path(asset_url).is_relative_to(orchestrator_app.PORTAL_ASSETS_DIR)
+
+
+@pytest.mark.parametrize("asset_name", ["dna-symbol-dark.svg", "dna-symbol-light.svg"])
+def test_portal_brand_assets_match_frontdoor_sources(asset_name: str) -> None:
+    frontdoor_asset = FRONTDOOR_BRAND_ROOT / asset_name
+    portal_asset = PORTAL_ASSET_ROOT / "brand" / asset_name
+
+    assert frontdoor_asset.is_file()
+    assert portal_asset.is_file()
+
+    frontdoor_bytes = frontdoor_asset.read_bytes()
+    portal_bytes = portal_asset.read_bytes()
+    frontdoor_sha = hashlib.sha256(frontdoor_bytes).hexdigest()
+    portal_sha = hashlib.sha256(portal_bytes).hexdigest()
+
+    assert (
+        portal_bytes == frontdoor_bytes
+    ), f"brand asset drift for {asset_name}: frontdoor={frontdoor_sha} portal={portal_sha}"
 
 
 def test_portal_fetch_sse_reconnect_scheduler_has_terminal_guard_and_backoff() -> None:
@@ -861,6 +920,7 @@ def test_portal_review_surface_supports_compare_summary_and_keyboard_selection()
     content = _portal_bundle_content()
     render_body = _extract_js_function_body(content, "renderArtifactPanel")
     compare_summary_body = _extract_js_function_body(content, "_renderReviewCompareSummary")
+    compare_copy_body = _extract_js_function_body(content, "_compareSurfaceCopy")
     focus_body = _extract_js_function_body(content, "_focusArtifactRailButton")
     keydown_body = _extract_js_function_body(content, "handleArtifactRailKeydown")
 
@@ -877,8 +937,11 @@ def test_portal_review_surface_supports_compare_summary_and_keyboard_selection()
     assert "els.artifactCompareBtn.setAttribute('aria-pressed', compareEnabled ? 'true' : 'false');" in render_body
     assert "els.artifactCompareBtn.removeAttribute('aria-controls');" in render_body
     assert "els.artifactCompareStage.setAttribute('aria-hidden', compareEnabled ? 'false' : 'true');" in render_body
-    assert "Comparing paired outputs" in compare_summary_body
-    assert "Compare pair available" in compare_summary_body
+    assert "const compareCopy = _compareSurfaceCopy(primaryArtifact, compareArtifact, compareEnabled);" in compare_summary_body
+    assert "No compare pair" in compare_copy_body
+    assert "No paired comparison is available for the current artifact." in compare_copy_body
+    assert "Comparing paired outputs" in compare_copy_body
+    assert "Paired comparison available" in compare_copy_body
     assert "button[data-artifact-path]" in focus_body
     assert "_focusArtifactRailButton(path);" in content
     assert "const shouldRestoreFocus = event.detail === 0;" in content
@@ -949,6 +1012,8 @@ def test_portal_selected_job_inspector_uses_timeline_tabs_and_log_secondary_view
 def test_portal_operate_surfaces_use_jobs_hydration_skeletons_before_empty_state() -> None:
     content = _portal_bundle_content()
     helper_body = _extract_js_function_body(content, "_isJobsHydrationPending")
+    queue_empty_body = _extract_js_function_body(content, "_queueEmptyStateCopy")
+    artifact_empty_body = _extract_js_function_body(content, "_artifactEmptyStateCopy")
     toggle_body = _extract_js_function_body(content, "_toggleSurfaceSkeleton")
     queue_body = _extract_js_function_body(content, "renderJobQueue")
     inspector_body = _extract_js_function_body(content, "renderSelectedJobInspector")
@@ -961,12 +1026,25 @@ def test_portal_operate_surfaces_use_jobs_hydration_skeletons_before_empty_state
     assert 'id="queueSkeletonState"' in content
     assert 'id="selectedJobSkeletonState"' in content
     assert 'id="artifactSkeletonState"' in content
+    assert 'id="emptyQueueState"' in content
+    assert 'id="emptyQueueTitle"' in content
+    assert 'id="emptyQueueDetail"' in content
+    assert 'id="emptyArtifactState"' in content
+    assert 'id="emptyArtifactTitle"' in content
+    assert 'id="emptyArtifactDetail"' in content
+    assert 'data-ui="queue-empty-state"' in content
+    assert 'data-ui="artifact-empty-state"' in content
     assert "state.jobsLoadStatus === 'loading'" in helper_body
     assert "state.bootstrap.status === 'pending' || state.bootstrap.status === 'degraded'" in helper_body
+    assert "Queue unavailable" in queue_empty_body
+    assert "Queue recovery needs attention" in queue_empty_body
+    assert "Select a completed run" in artifact_empty_body
+    assert "Outputs are still arriving" in artifact_empty_body
     assert "skeleton.setAttribute('aria-hidden', 'true');" in toggle_body
     assert "const queueLoading = _isJobsHydrationPending();" in queue_body
     assert "els.queueShell.setAttribute('aria-busy', queueLoading ? 'true' : 'false');" in queue_body
     assert "els.queueSkeletonState.setAttribute('aria-hidden', 'true');" in queue_body
+    assert "_setSurfaceEmptyState(els.emptyQueueState, els.emptyQueueTitle, els.emptyQueueDetail, emptyCopy);" in queue_body
     assert (
         "_toggleSurfaceSkeleton(els.selectedJobShell, els.selectedJobShellContent, els.selectedJobSkeletonState, jobsLoading);"
         in inspector_body
@@ -975,6 +1053,7 @@ def test_portal_operate_surfaces_use_jobs_hydration_skeletons_before_empty_state
         "_toggleSurfaceSkeleton(els.artifactsShell, els.artifactShellContent, els.artifactSkeletonState, jobsLoading);"
         in artifact_body
     )
+    assert "_setSurfaceEmptyState(" in artifact_body
     assert "state.jobsLoadStatus = 'loading';" in recover_body
     assert "state.jobsLoadStatus = 'ready';" in recover_body
     assert "state.jobsLoadStatus = 'loading';" in flush_body
@@ -1110,7 +1189,8 @@ def test_portal_console_context_ribbon_tracks_selected_job_and_review_state() ->
         "els.contextRibbonArtifact.textContent = selectedArtifact ? artifactLabel(selectedArtifact) : 'Awaiting selection';"
         in ribbon_body
     )
-    assert "els.contextRibbonCompare.textContent = compareEnabled" in ribbon_body
+    assert "const compareCopy = _compareSurfaceCopy(selectedArtifact, compareCandidate, compareEnabled);" in ribbon_body
+    assert "els.contextRibbonCompare.textContent = selected ? compareCopy.ribbonValue : 'No compare pair';" in ribbon_body
     assert "renderConsoleContextRibbon();" in apply_view_body
     assert "renderConsoleContextRibbon();" in inspector_body
     assert "renderConsoleContextRibbon();" in artifact_body
@@ -1146,6 +1226,12 @@ def test_portal_build_stepper_and_quick_actions_drive_task_first_navigation() ->
 def test_portal_dispatch_review_keeps_cli_parity_in_secondary_disclosure() -> None:
     content = _portal_bundle_content()
 
+    assert 'data-ui="dispatch-primary-lane"' in content
+    assert 'data-ui="dispatch-launch"' in content
+    assert 'id="dispatchReadinessReason"' in content
+    assert 'aria-live="polite"' in content
+    assert 'aria-atomic="true"' in content
+    assert 'aria-describedby="dispatchReadinessReason"' in content
     assert 'id="dispatchToolsDetails"' in content
     assert 'data-ui="dispatch-tools"' in content
     assert "Review dispatch posture" in content
@@ -1156,6 +1242,35 @@ def test_portal_dispatch_review_keeps_cli_parity_in_secondary_disclosure() -> No
     assert 'id="exportBtn"' in content
     assert 'id="copyCliBtn"' in content
     assert 'id="cliPreview"' in content
+
+
+def test_portal_build_surface_keeps_primary_posture_band_outside_contextual_disclosures() -> None:
+    content = _portal_bundle_content()
+    summary_body = _extract_js_function_body(content, "renderReconstructionRuntimeSummary")
+
+    assert 'data-ui="build-posture-band"' in content
+    assert 'data-ui="reconstruction-runtime-summary"' in content
+    assert "Current Run Posture" in content
+    assert content.index('id="reconstructionRuntimeSummary"') < content.index('id="reconstructionDetails"')
+    assert "Preview-backed validation, normalization, and runtime estimates reflect the next dispatch." in summary_body
+    assert "Primary run posture updates here before you open contextual runtime or research controls." in summary_body
+
+
+def test_portal_dispatch_lane_surfaces_live_readiness_reason() -> None:
+    content = _portal_bundle_content()
+    guard_body = _extract_js_function_body(content, "_syncBootstrapGuardedControls")
+    snapshot_body = _extract_js_function_body(content, "_dispatchReadinessSnapshot")
+
+    assert "function _dispatchReadinessSnapshot(payload = null) {" in content
+    assert (
+        "const DISPATCH_BACKEND_OFFLINE_MESSAGE = 'Backend is offline. Dispatch is disabled until connectivity is restored.';"
+        in content
+    )
+    assert "Preview-backed validation is refreshing. Dispatch unlocks when the current draft settles." in snapshot_body
+    assert "Debug bundle acknowledgement is required before dispatch." in snapshot_body
+    assert "detail: DISPATCH_BACKEND_OFFLINE_MESSAGE" in snapshot_body
+    assert "els.dispatchReadinessReason.textContent = readiness.detail;" in guard_body
+    assert "els.dispatchReadinessReason.dataset.tone = readiness.tone;" in guard_body
 
 
 def test_portal_disclosure_defaults_are_state_driven_instead_of_static() -> None:
@@ -1171,9 +1286,10 @@ def test_portal_disclosure_defaults_are_state_driven_instead_of_static() -> None
     assert 'id="governanceDetailsSummary"' in content
     assert 'id="reconstructionDetailsSummary"' in content
     assert 'id="dispatchToolsSummary"' in content
-    assert 'id="advancedFlagsDetails" class="disclosure-panel mt-6">' in content
-    assert 'id="governanceDetails" class="disclosure-panel mt-6">' in content
-    assert "function _setDisclosureSummaryBadge(element, text) {" in content
+    assert 'id="advancedFlagsDetails" class="disclosure-panel disclosure-panel-secondary mt-6">' in content
+    assert 'id="governanceDetails" class="disclosure-panel disclosure-panel-secondary mt-6">' in content
+    assert "function _setDisclosureSummaryBadge(element, text, tone = 'info') {" in content
+    assert "element.dataset.tone = String(tone || 'info').trim().toLowerCase() || 'info';" in content
     assert "const previewFieldGroups = {" in sync_body
     assert "const researchPreset = _presetRequiresResearchAcknowledgments(preset, args);" in sync_body
     assert "element.dataset.autoOpen = autoOpenState[name] ? 'true' : 'false';" in sync_body
@@ -1182,6 +1298,9 @@ def test_portal_disclosure_defaults_are_state_driven_instead_of_static() -> None
     assert "els.governanceDetailsSummary" in sync_body
     assert "els.reconstructionDetailsSummary" in sync_body
     assert "els.dispatchToolsSummary" in sync_body
+    assert "advancedNeedsAttention ? 'Needs attention' : advancedActive ? 'Contextual' : 'Secondary'" in sync_body
+    assert "governanceNeedsAttention ? 'Needs attention' : governanceActive ? 'Contextual' : 'Contextual'" in sync_body
+    assert "reconstructionNeedsAttention ? 'Needs attention' : reconstructionActive ? 'Contextual' : 'Contextual'" in sync_body
     assert "String(args.preset || '').toLowerCase().includes('v3.1')" not in sync_body
     assert "setupDisclosurePanels();" in init_body
 
@@ -1304,6 +1423,8 @@ def test_portal_preset_selection_applies_recommended_defaults_without_changing_c
     assert "depth_backend" in preset_body
     assert "segmentation_backend" in preset_body
     assert "emit_run_card" in preset_body
+    assert "run_card_version" in preset_body
+    assert "run_card_include_proofs" in preset_body
     assert "advanced_sections" in fetch_body
     assert "recommended_args" in fetch_body
 
@@ -1433,6 +1554,7 @@ def test_portal_preview_metadata_worker_modes_and_export_contract_are_wired() ->
 def test_portal_submit_blocks_preview_unavailable_and_debug_bundle_without_acknowledgement() -> None:
     content = _portal_bundle_content()
     guard_body = _extract_js_function_body(content, "_syncBootstrapGuardedControls")
+    readiness_body = _extract_js_function_body(content, "_dispatchReadinessSnapshot")
     submit_body = _extract_js_function_body(content, "submitJob")
     preview_failure_body = _extract_js_function_body(content, "_previewFailureDetails")
     summary_body = _extract_js_function_body(content, "renderReconstructionRuntimeSummary")
@@ -1447,7 +1569,8 @@ def test_portal_submit_blocks_preview_unavailable_and_debug_bundle_without_ackno
     assert "preview_service_unavailable" in preview_failure_body
     assert "Acknowledge the reconstruction debug-bundle guardrail before dispatch." in submit_body
     assert "debug_bundle_acknowledgement_required" in submit_body
-    assert "_effectiveDebugBundleEnabled(preview)" in guard_body
+    assert "const readiness = _dispatchReadinessSnapshot();" in guard_body
+    assert "_effectiveDebugBundleEnabled(preview, currentPayload)" in readiness_body
     assert "_effectiveDebugBundleEnabled(preview, payload)" in submit_body
     assert "_effectiveDebugBundleEnabled(matchedPreview, currentPayload)" in summary_body
     assert "_effectiveDebugBundleEnabled(currentPreview, currentPayload)" in guardrail_body
@@ -1479,6 +1602,8 @@ def test_lux_cli_parity_links_portal_canonical_args_and_backend_argv() -> None:
         "emit_marketing": "--emit-marketing",
         "emit_report": "--emit-report",
         "emit_run_card": "--emit-run-card",
+        "run_card_version": "--run-card-version",
+        "run_card_include_proofs": "--run-card-include-proofs",
         "non_commercial_ok": "--non-commercial-ok",
         "accept_apple_depth_pro_research_license": "--accept-apple-depth-pro-research-license",
         "accept_research_tools_license": "--accept-research-tools-license",
@@ -1529,6 +1654,8 @@ def test_lux_cli_parity_links_portal_canonical_args_and_backend_argv() -> None:
             "emit_marketing": False,
             "emit_report": True,
             "emit_run_card": True,
+            "run_card_version": "v2",
+            "run_card_include_proofs": True,
             "enable_v2": True,
             "v2_preset": "default",
             "non_commercial_ok": True,
@@ -1578,6 +1705,7 @@ def test_lux_cli_parity_links_portal_canonical_args_and_backend_argv() -> None:
     assert _flag_value(argv, "--emit-marketing") == "off"
     assert _flag_value(argv, "--emit-report") == "on"
     assert _flag_value(argv, "--emit-run-card") == "on"
+    assert _flag_value(argv, "--run-card-version") == "v2"
     assert _flag_value(argv, "--enable-v2") == "on"
     assert _flag_value(argv, "--v2-preset") == "default"
     assert _flag_value(argv, "--non-commercial-ok") == "true"
@@ -1644,6 +1772,8 @@ def test_lux_ui_backend_and_direct_cli_paths_share_config_fingerprint(tmp_path: 
             "emit_marketing": False,
             "emit_report": True,
             "emit_run_card": True,
+            "run_card_version": "v2",
+            "run_card_include_proofs": False,
             "enable_v2": True,
             "v2_preset": "default",
             "non_commercial_ok": True,
@@ -1692,6 +1822,8 @@ def test_lux_ui_backend_and_direct_cli_paths_share_config_fingerprint(tmp_path: 
         "on",
         "--emit-run-card",
         "on",
+        "--run-card-version",
+        "v2",
         "--enable-v2",
         "on",
         "--v2-preset",
@@ -1999,13 +2131,15 @@ def test_portal_lux_build_surface_hides_inapplicable_optional_controls_until_nee
 def test_portal_dispatch_controls_require_backend_readiness_and_live_backend() -> None:
     content = _portal_bundle_content()
     guard_body = _extract_js_function_body(content, "_syncBootstrapGuardedControls")
+    readiness_body = _extract_js_function_body(content, "_dispatchReadinessSnapshot")
     submit_body = _extract_js_function_body(content, "submitJob")
 
-    assert "state.backendOk" in guard_body
-    assert "currentPipelineDispatchStatus()" in guard_body
-    assert "readinessStatus === 'ready'" in guard_body
+    assert "const readiness = _dispatchReadinessSnapshot();" in guard_body
+    assert "state.backendOk" in readiness_body
+    assert "currentPipelineDispatchStatus(currentPayload)" in readiness_body
+    assert "canRun: true" in readiness_body
     assert "Execution readiness is still loading." in submit_body
-    assert "Backend is offline. Dispatch is disabled until connectivity is restored." in submit_body
+    assert "createToast(DISPATCH_BACKEND_OFFLINE_MESSAGE, 'error');" in submit_body
     assert "Pipeline is blocked by missing prerequisites." in submit_body
     assert "mock simulation" not in submit_body
 
@@ -2802,6 +2936,170 @@ def test_index_job_artifacts_truncation_is_sorted_and_stable(tmp_path: Path) -> 
     assert [item["path"] for item in indexed] == ["alpha.txt", "mid.txt"]
     assert job.artifacts["truncated"] is True
     assert job.artifacts["indexed_count"] == 2
+
+
+def test_index_job_artifacts_prefers_current_run_card_artifact_index(tmp_path: Path) -> None:
+    output_dir = tmp_path / "out"
+    depth_dir = output_dir / "depth"
+    manifests_dir = output_dir / "manifests"
+    depth_dir.mkdir(parents=True, exist_ok=True)
+    manifests_dir.mkdir(parents=True, exist_ok=True)
+
+    current_depth = depth_dir / "current_depth.png"
+    current_depth.write_bytes(b"current-depth")
+    (depth_dir / "stale_depth.png").write_bytes(b"stale-depth")
+    batch_manifest = manifests_dir / "batch_2026-04-09_132300.json"
+    batch_manifest.write_text(json.dumps({"batch_id": "2026-04-09_132300", "results": []}), encoding="utf-8")
+    run_card = output_dir / "run_card_2026-04-09_132300.json"
+    run_card.write_text(
+        json.dumps(
+            {
+                "batch_id": "2026-04-09_132300",
+                "success_count": 1,
+                "error_count": 0,
+                "artifact_index": [
+                    {"relative_path": "depth/current_depth.png"},
+                    {"relative_path": "manifests/batch_2026-04-09_132300.json"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    job = orchestrator_app.Job(
+        id="job_artifacts_scoped_run_card",
+        created_at=orchestrator_app._now(),
+        request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(output_dir)}},
+    )
+
+    indexed = orchestrator_app._index_job_artifacts(job)
+
+    assert {item["path"] for item in indexed} == {
+        "depth/current_depth.png",
+        "manifests/batch_2026-04-09_132300.json",
+        "run_card_2026-04-09_132300.json",
+    }
+    assert "depth/stale_depth.png" not in job.artifact_lookup
+
+
+def test_index_job_artifacts_uses_current_batch_manifest_when_run_card_lacks_artifact_index(tmp_path: Path) -> None:
+    output_dir = tmp_path / "out"
+    depth_dir = output_dir / "depth"
+    manifests_dir = output_dir / "manifests"
+    depth_dir.mkdir(parents=True, exist_ok=True)
+    manifests_dir.mkdir(parents=True, exist_ok=True)
+
+    (depth_dir / "stale_depth.png").write_bytes(b"stale-depth")
+    batch_manifest = manifests_dir / "batch_2026-04-09_132300.json"
+    batch_manifest.write_text(
+        json.dumps(
+            {
+                "batch_id": "2026-04-09_132300",
+                "results": [{"status": "error"}],
+                "stats": {"total_images": 1},
+            }
+        ),
+        encoding="utf-8",
+    )
+    run_card = output_dir / "run_card_2026-04-09_132300.json"
+    run_card.write_text(
+        json.dumps(
+            {
+                "batch_id": "2026-04-09_132300",
+                "success_count": 0,
+                "error_count": 1,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    job = orchestrator_app.Job(
+        id="job_artifacts_scoped_manifest",
+        created_at=orchestrator_app._now(),
+        request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(output_dir)}},
+    )
+
+    indexed = orchestrator_app._index_job_artifacts(job)
+
+    assert {item["path"] for item in indexed} == {
+        "manifests/batch_2026-04-09_132300.json",
+        "run_card_2026-04-09_132300.json",
+    }
+    assert "depth/stale_depth.png" not in job.artifact_lookup
+
+
+def test_refresh_job_run_summary_uses_current_output_metadata_not_scoped_items(tmp_path: Path) -> None:
+    output_dir = tmp_path / "out"
+    manifests_dir = output_dir / "manifests"
+    manifests_dir.mkdir(parents=True, exist_ok=True)
+
+    old_run_card = output_dir / "run_card_2026-04-06_232022.json"
+    old_run_card.write_text(
+        json.dumps(
+            {
+                "batch_id": "2026-04-06_232022",
+                "total_images": 5,
+                "success_count": 4,
+                "error_count": 1,
+            }
+        ),
+        encoding="utf-8",
+    )
+    current_batch_manifest = manifests_dir / "batch_2026-04-09_132300.json"
+    current_batch_manifest.write_text(
+        json.dumps(
+            {
+                "batch_id": "2026-04-09_132300",
+                "results": [{"status": "error"}] * 6,
+                "stats": {"total_images": 6},
+            }
+        ),
+        encoding="utf-8",
+    )
+    current_run_card = output_dir / "run_card_2026-04-09_132300.json"
+    current_run_card.write_text(
+        json.dumps(
+            {
+                "batch_id": "2026-04-09_132300",
+                "total_images": 6,
+                "success_count": 0,
+                "error_count": 6,
+                "artifact_index": [
+                    {"relative_path": "manifests/batch_2026-04-09_132300.json"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    job = orchestrator_app.Job(
+        id="job_run_summary_current_metadata",
+        created_at=orchestrator_app._now(),
+        state="failed",
+        exit_code=1,
+        request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(output_dir)}},
+        artifacts={
+            "output_dir": str(output_dir),
+            "items": [{"path": "run_card_2026-04-06_232022.json", "relative_path": "run_card_2026-04-06_232022.json"}],
+            "indexed_count": 1,
+            "truncated": False,
+        },
+        error={
+            "code": "RUNNER_EXIT_NONZERO",
+            "message": "runner exited with code 1",
+            "details": {"exit_code": 1},
+        },
+    )
+
+    summary = orchestrator_app._refresh_job_run_summary(job)
+
+    assert summary["batch_id"] == "2026-04-09_132300"
+    assert summary["success_count"] == 0
+    assert summary["error_count"] == 6
+    assert summary["partial"] is False
+    assert summary["reviewable_outputs"] is False
+    assert job.state == "failed"
+    assert job.error["code"] == "RUNNER_EXIT_NONZERO"
 
 
 def test_create_job_validation_uses_typed_error_envelope() -> None:
