@@ -212,6 +212,18 @@ class _MaskSerializationRejected(RuntimeError):
     """Internal signal for non-fatal mask serialization rejection."""
 
 
+def _shape_2d(arr: np.ndarray) -> tuple[int, int]:
+    """Extract 2D shape from array as properly typed tuple[int, int].
+
+    This helper converts numpy shape slices into typed 2-element tuples
+    to satisfy mypy's strict tuple type checking. Without this, the
+    generator expression `tuple(int(v) for v in arr.shape[:2])` produces
+    `tuple[int, ...]` which is incompatible with `tuple[int, int]`.
+    """
+    height, width = int(arr.shape[0]), int(arr.shape[1])
+    return (height, width)
+
+
 def _log_dependency_status() -> dict:
     """Log startup dependency availability report.
 
@@ -1906,7 +1918,7 @@ class EnhanceOrchestrator:
                             depth_candidate,
                             dtype=np.float32,
                         )
-                        current_shape = tuple(int(value) for value in native_depth_map.shape[:2])
+                        current_shape = _shape_2d(native_depth_map)
 
                         result_metadata = dict(
                             getattr(
@@ -2126,7 +2138,7 @@ class EnhanceOrchestrator:
                         preprocessed_array=preprocessed_array,
                         depth_map=depth_map,
                         output_key=output_key,
-                        artifact_shape=tuple(int(value) for value in result.depth.shape[:2]),
+                        artifact_shape=_shape_2d(result.depth),
                     )
 
                 # 3. Write quantized depth (PNG 16-bit)
@@ -2545,9 +2557,9 @@ class EnhanceOrchestrator:
         """Resize Materials V3 handoff artifacts to the depth artifact shape."""
         from PIL import Image as PILImage
 
-        target_shape = tuple(int(value) for value in artifact_shape)
-        processing_shape_list = [int(value) for value in processing_shape]
-        handoff_shape_list = [int(value) for value in target_shape]
+        target_shape: tuple[int, int] = artifact_shape
+        processing_shape_list = [processing_shape[0], processing_shape[1]]
+        handoff_shape_list = [target_shape[0], target_shape[1]]
 
         enhanced_image = materials_v3_result.get("enhanced_image")
         if enhanced_image is not None:
@@ -2605,7 +2617,7 @@ class EnhanceOrchestrator:
         if isinstance(material_masks, dict) and material_masks:
             resolved_shape: Optional[tuple[int, int]] = None
             for mask in material_masks.values():
-                mask_shape = tuple(int(value) for value in np.asarray(mask).shape[:2])
+                mask_shape = _shape_2d(np.asarray(mask))
                 if resolved_shape is None:
                     resolved_shape = mask_shape
                     continue
@@ -2624,7 +2636,7 @@ class EnhanceOrchestrator:
         with np.load(mask_artifact_path) as data:
             resolved_shape = None
             for mask_name in data.files:
-                mask_shape = tuple(int(value) for value in np.asarray(data[mask_name]).shape[:2])
+                mask_shape = _shape_2d(np.asarray(data[mask_name]))
                 if resolved_shape is None:
                     resolved_shape = mask_shape
                     continue
@@ -2721,7 +2733,7 @@ class EnhanceOrchestrator:
                     materials_v3_result = self._align_materials_v3_handoff_payload(
                         materials_v3_result,
                         artifact_shape=artifact_shape,
-                        processing_shape=tuple(int(value) for value in preprocessed_array.shape[:2]),
+                        processing_shape=_shape_2d(preprocessed_array),
                     )
 
                 material_masks = materials_v3_result.get("material_masks")
@@ -2973,7 +2985,7 @@ class EnhanceOrchestrator:
                 dtype=np.float32,
             ),
             output_key=output_key,
-            artifact_shape=tuple(int(value) for value in np.asarray(depth_for_materials).shape[:2]),
+            artifact_shape=_shape_2d(np.asarray(depth_for_materials)),
         )
 
         has_recomputed_masks = bool(
