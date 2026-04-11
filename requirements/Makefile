@@ -4,7 +4,7 @@
 # LAYERED ML DEPENDENCY STRATEGY (ADR-032)
 # ========================================
 # ML dependencies are split into capability-specific layers for:
-# - Platform-safe compilation (CPU-only baseline, platform-specific extras)
+# - Target-safe compilation (generic locks plus explicit target-owned ML lanes)
 # - Deterministic installs (each layer has explicit contracts)
 # - Capability-gated promotion (optional features can be added incrementally)
 #
@@ -15,17 +15,17 @@
 # ISA        arm64 / x86_64            platform_machine
 # Accel      cpu / mps / cuda          explicit profile (NEVER inferred)
 #
-# PLATFORM-SPECIFIC LOCKFILES (pip-compile cannot resolve multi-platform .in)
-# ---------------------------------------------------------------------------
-# Platform          Lockfile                 Baseline
-# darwin-x86_64     ml-core-darwin-x86_64.txt  torch 2.2.2 + numpy<2 + transformers<5
+# TARGET-OWNED ML LOCKFILES (pip-compile cannot resolve multi-platform .in)
+# -------------------------------------------------------------------------
+# Target            Lockfile                    Baseline
+# darwin-x86_64     ml-core-darwin-x86_64.txt  torch 2.2.2 + numpy<2 + transformers<5 (frozen)
 # darwin-arm64      ml-core-darwin-arm64.txt   Apple Silicon baseline + CoreML tooling
-# linux-*           ml-core-linux.txt          torch 2.2.2 + transformers<5
+# linux-x86_64      ml-core-linux.txt          torch 2.2.2 + transformers<5
 #
-# Checked-In ML Lockfiles (compiled via this Makefile):
-#   ml-core-darwin-x86_64.txt  macOS Intel conservative ML baseline
+# Target-owned ML lockfiles:
+#   ml-core-darwin-x86_64.txt  macOS Intel conservative ML baseline (frozen pending authoritative lane)
 #   ml-core-darwin-arm64.txt   macOS Apple Silicon ML baseline
-#   ml-core-linux.txt          Linux ML baseline (torch 2.2.2 + transformers<5)
+#   ml-core-linux.txt          Linux x86_64 ML baseline (torch 2.2.2 + transformers<5)
 #
 # Non-core optional ML layers are not part of the checked-in lockfile contract.
 # Host-generated outputs for ml-core.txt, ml-cpu.txt, ml-mps.txt, ml-cuda.txt,
@@ -35,33 +35,42 @@
 #   ml-sam2          SAM2 segmentation - requires non-standard install semantics
 #                    Install via: ./scripts/bootstrap/install_ml_stack.sh --profile core-cpu,sam2
 #
-# See requirements/README.md for full documentation.
+# See requirements/README.md and requirements/lock_ownership.yml for full documentation.
 
 SHELL := /bin/bash
 LOCK_PYTHON_VERSION ?= 3.11
 PIP_TOOLS_CACHE_DIR ?= $(CURDIR)/.pip-tools-cache
 HASH_PILOT_OUT_DIR ?= $(CURDIR)/.hash-pilot
-PIP_COMPILE_BASE := pip-compile -q --resolver=backtracking
-PIP_COMPILE_PY_FLAG := $(shell pip-compile --help 2>/dev/null | grep -q -- '--python-version' && echo "--python-version=$(LOCK_PYTHON_VERSION)" || true)
+PIP_COMPILE_BIN := $(if $(wildcard $(CURDIR)/../.venv/bin/pip-compile),$(CURDIR)/../.venv/bin/pip-compile,pip-compile)
+PIP_COMPILE_BASE := $(PIP_COMPILE_BIN) -q --resolver=backtracking
+PIP_COMPILE_PY_FLAG := $(shell $(PIP_COMPILE_BIN) --help 2>/dev/null | grep -q -- '--python-version' && echo "--python-version=$(LOCK_PYTHON_VERSION)" || true)
 PIP_COMPILE := mkdir -p "$(PIP_TOOLS_CACHE_DIR)" && PIP_TOOLS_CACHE_DIR="$(PIP_TOOLS_CACHE_DIR)" $(PIP_COMPILE_BASE) $(PIP_COMPILE_PY_FLAG)
 PIP_COMPILE_HASHED := mkdir -p "$(PIP_TOOLS_CACHE_DIR)" && PIP_TOOLS_CACHE_DIR="$(PIP_TOOLS_CACHE_DIR)" $(PIP_COMPILE_BASE) $(PIP_COMPILE_PY_FLAG) --generate-hashes
 
 # PyTorch CPU index for CI/cross-platform lockfiles
 PYTORCH_CPU_INDEX := --extra-index-url https://download.pytorch.org/whl/cpu
 
-# Default target: compile all requirements
-.PHONY: all compile compile-all compile-ml-layers compile-accel compile-hash-pilot check-hash-pilot update help clean check \
+# Default target: compile generic checked-in requirements
+.PHONY: all compile compile-all compile-generic compile-ml-layers compile-accel compile-hash-pilot check-hash-pilot \
+	update update-generic help clean check check-generic \
+	compile-ml-darwin-arm64 update-ml-darwin-arm64 check-ml-darwin-arm64 \
+	compile-ml-linux-x86_64 update-ml-linux-x86_64 check-ml-linux-x86_64 \
+	compile-ml-darwin-x86_64 update-ml-darwin-x86_64 check-ml-darwin-x86_64 \
+	require-pip-compile require-darwin-arm64-authority require-linux-x86_64-authority refuse-darwin-x86_64-authority \
 	ml-core.txt ml-cpu.txt ml-mps.txt ml-cuda.txt ml-raw.txt ml-coreml.txt ml-research.txt ml.txt
 
 help:
 	@echo "Targets:"
-	@echo "  compile           Compile all pinned requirements from .in files"
+	@echo "  compile           Compile generic checked-in lockfiles only"
 	@echo "  compile-all       Same as compile (for compatibility)"
-	@echo "  compile-ml-layers Compile only ML layer lockfiles"
-	@echo "  compile-accel     Compile acceleration layer lockfiles (ml-cpu, ml-mps, ml-cuda)"
+	@echo "  compile-generic   Compile the generic checked-in lockfiles only"
+	@echo "  compile-ml-layers Refuse broad ML regeneration; use explicit target-owned commands"
+	@echo "  compile-accel     Refuse broad ML regeneration; use explicit target-owned commands"
 	@echo "  compile-hash-pilot Generate hash-enforced pilot lockfiles into HASH_PILOT_OUT_DIR"
-	@echo "  update            Update all dependencies to latest versions"
-	@echo "  check             Verify that .txt files are up-to-date with .in files"
+	@echo "  update            Update generic checked-in lockfiles only"
+	@echo "  update-generic    Update generic checked-in lockfiles only"
+	@echo "  check             Verify generic checked-in lockfiles only"
+	@echo "  check-generic     Verify generic checked-in lockfiles only"
 	@echo "  check-hash-pilot  Validate the generated pilot lockfiles with --require-hashes"
 	@echo "  clean             Remove all compiled .txt files"
 	@echo ""
@@ -69,15 +78,21 @@ help:
 	@echo "  all.txt              Compile all.txt (checked-in contract aggregate)"
 	@echo "  base.txt             Compile base.txt (constrained by all.txt)"
 	@echo ""
-	@echo "Platform-specific ML Core targets:"
-	@echo "  ml-core-darwin-x86_64.txt  macOS Intel conservative ML baseline"
-	@echo "  ml-core-darwin-arm64.txt   macOS Apple Silicon ML baseline"
-	@echo "  ml-core-linux.txt          Linux ML baseline (torch 2.2.2 + transformers<5)"
+	@echo "Target-owned ML commands:"
+	@echo "  compile-ml-darwin-arm64    Compile the Darwin arm64 ML lock on native Darwin arm64 only"
+	@echo "  update-ml-darwin-arm64     Update the Darwin arm64 ML lock on native Darwin arm64 only"
+	@echo "  check-ml-darwin-arm64      Verify the Darwin arm64 ML lock on native Darwin arm64 only"
+	@echo "  compile-ml-linux-x86_64    Compile the Linux x86_64 ML lock on native Linux x86_64 only"
+	@echo "  update-ml-linux-x86_64     Update the Linux x86_64 ML lock on native Linux x86_64 only"
+	@echo "  check-ml-linux-x86_64      Verify the Linux x86_64 ML lock on native Linux x86_64 only"
+	@echo "  compile-ml-darwin-x86_64   Frozen lane - always fails closed"
+	@echo "  update-ml-darwin-x86_64    Frozen lane - always fails closed"
+	@echo "  check-ml-darwin-x86_64     Frozen lane - always fails closed"
 	@echo ""
-	@echo "Checked-in ML lockfiles:"
-	@echo "  ml-core-darwin-x86_64.txt  macOS Intel conservative ML baseline"
+	@echo "Target-owned ML lockfiles:"
+	@echo "  ml-core-darwin-x86_64.txt  macOS Intel conservative ML baseline (frozen)"
 	@echo "  ml-core-darwin-arm64.txt   macOS Apple Silicon ML baseline"
-	@echo "  ml-core-linux.txt          Linux ML baseline (torch 2.2.2 + transformers<5)"
+	@echo "  ml-core-linux.txt          Linux x86_64 ML baseline (torch 2.2.2 + transformers<5)"
 	@echo ""
 	@echo "Non-core optional ML layers are not part of the checked-in lock contract:"
 	@echo "  ml-core.txt, ml-cpu.txt, ml-mps.txt, ml-cuda.txt,"
@@ -92,27 +107,37 @@ help:
 	@echo "  security.txt         Compile security.txt (CI security scanning tools)"
 	@echo "  tools-archive.txt    Compile tools-archive.txt (constrained by all.txt)"
 
-# Compile all requirements in correct order
-# Note: SAM2 is scripted-only and NOT compiled here - use bootstrap script
-compile: all.txt base.txt ml-core-darwin-x86_64.txt ml-core-darwin-arm64.txt ml-core-linux.txt dev.txt ci.txt security.txt tools-archive.txt
-	@echo "✓ All requirements compiled successfully"
+# Compile generic requirements in correct order
+# Note: target-owned ML lockfiles must be regenerated via explicit target commands.
+compile: compile-generic
+
+compile-generic: all.txt base.txt dev.txt ci.txt security.txt tools-archive.txt
+	@echo "✓ Generic requirements compiled successfully"
 
 compile-all: compile
 
-# Compile only ML layers (useful for ML-focused updates)
-# Note: SAM2 is scripted-only and NOT compiled here
-compile-ml-layers: all.txt base.txt ml-core-darwin-x86_64.txt ml-core-darwin-arm64.txt ml-core-linux.txt
-	@echo "✓ ML layer requirements compiled successfully"
+compile-ml-layers:
+	@echo "ERROR: target-owned ML locks require explicit authoritative-lane commands."
+	@echo "ERROR: Use 'make compile-ml-darwin-arm64' on native Darwin arm64 or 'make compile-ml-linux-x86_64' on native Linux x86_64."
+	@exit 1
 
-# Compile only acceleration layers (useful for profile updates)
-compile-accel: all.txt base.txt ml-core-darwin-x86_64.txt ml-core-darwin-arm64.txt ml-core-linux.txt
-	@echo "✓ Acceleration layer requirements compiled successfully"
+compile-accel:
+	@echo "ERROR: target-owned ML locks require explicit authoritative-lane commands."
+	@echo "ERROR: Acceleration/bootstrap flows must start from a target-owned ML core command, not compile-accel."
+	@exit 1
+
+require-pip-compile:
+	@if ! command -v "$(PIP_COMPILE_BIN)" >/dev/null 2>&1; then \
+		echo "ERROR: pip-compile is required for requirements/Makefile targets."; \
+		echo "ERROR: Install pip-tools==7.5.2 in the active environment before running compile/update/check commands."; \
+		exit 1; \
+	fi
 
 # Hash pilot lane for secure-install evaluation.
 # This intentionally covers only the non-ML checked-in contract so we can
 # evaluate hash enforcement without pulling platform-specific ML lockfiles or
 # changing the canonical repository install surface.
-compile-hash-pilot:
+compile-hash-pilot: require-pip-compile
 	@echo "Compiling secure-install hash pilot into $(HASH_PILOT_OUT_DIR)..."
 	@mkdir -p "$(HASH_PILOT_OUT_DIR)"
 	@$(PIP_COMPILE_HASHED) all.in -o "$(HASH_PILOT_OUT_DIR)/all.txt"
@@ -123,7 +148,7 @@ compile-hash-pilot:
 	@$(PIP_COMPILE_HASHED) -c "$(HASH_PILOT_OUT_DIR)/all.txt" tools-archive.in -o "$(HASH_PILOT_OUT_DIR)/tools-archive.txt"
 	@echo "✓ Secure-install hash pilot compiled successfully"
 
-check-hash-pilot:
+check-hash-pilot: require-pip-compile
 	@echo "Checking secure-install hash pilot in $(HASH_PILOT_OUT_DIR)..."
 	@set -euo pipefail; \
 	for lock in all.txt base.txt dev.txt ci.txt security.txt tools-archive.txt; do \
@@ -139,92 +164,172 @@ check-hash-pilot:
 
 # Compile all.txt first for global resolution
 # Note: all.txt intentionally excludes optional ML layers from the checked-in contract.
-all.txt: all.in base.in dev.in ci.in
+all.txt: require-pip-compile all.in base.in dev.in ci.in
 	@echo "Compiling all.txt (checked-in contract aggregate)..."
 	@$(PIP_COMPILE) all.in -o all.txt
 
 # Compile individual files constrained by all.txt
-base.txt: base.in all.txt
+base.txt: require-pip-compile base.in all.txt
 	@echo "Compiling base.txt..."
 	@$(PIP_COMPILE) -c all.txt base.in -o base.txt
 
-# ML Layer lockfiles - checked-in contract is limited to platform-specific core.
-# Platform-specific core lockfiles resolve against the base layer contract.
+# ML layer lockfiles - checked-in contract is limited to target-owned core locks.
+# Target-owned core lockfiles resolve against the base layer contract.
 # Linux keeps the exact base.txt constraint. Darwin uses base.in so the
 # conservative macOS ML lock can carry numpy<2 without inheriting the
 # host-resolved base.txt NumPy exact pin.
 # NOTE: Non-core optional ML layers are not compiled here.
 # NOTE: SAM2 is scripted-only and NOT compiled here - use bootstrap script
 
-# Platform-specific ml-core lockfiles (pip-compile cannot resolve multi-platform .in)
-ml-core-darwin-x86_64.txt: ml-core-darwin-x86_64.in base.in
-	@echo "Compiling ml-core-darwin-x86_64.txt (macOS Intel conservative baseline)..."
-	@$(PIP_COMPILE) $(PYTORCH_CPU_INDEX) -c base.in ml-core-darwin-x86_64.in -o ml-core-darwin-x86_64.txt
+# Target-owned ml-core lockfiles (pip-compile cannot resolve multi-platform .in)
+require-darwin-arm64-authority:
+	@os="$$(uname -s)"; arch="$$(uname -m)"; \
+	if [ "$$arch" = "aarch64" ]; then arch="arm64"; fi; \
+	if [ "$$os" != "Darwin" ] || [ "$$arch" != "arm64" ]; then \
+		echo "ERROR: Darwin arm64 ML lock generation is authoritative only on native Darwin arm64."; \
+		echo "ERROR: Run 'make compile-ml-darwin-arm64' or related Darwin arm64 commands on an Apple Silicon macOS host."; \
+		exit 1; \
+	fi
 
-ml-core-darwin-arm64.txt: ml-core-darwin-arm64.in base.txt
+require-linux-x86_64-authority:
+	@os="$$(uname -s)"; arch="$$(uname -m)"; \
+	if [ "$$arch" = "amd64" ]; then arch="x86_64"; fi; \
+	if [ "$$os" != "Linux" ] || [ "$$arch" != "x86_64" ]; then \
+		echo "ERROR: Linux x86_64 ML lock generation is authoritative only on native Linux x86_64."; \
+		echo "ERROR: Run 'make compile-ml-linux-x86_64' or related Linux x86_64 commands on a native Linux x86_64 host."; \
+		exit 1; \
+	fi
+
+refuse-darwin-x86_64-authority:
+	@echo "ERROR: ml-core-darwin-x86_64.txt is frozen pending an authoritative Darwin x86_64 lane decision."
+	@echo "ERROR: Do not regenerate this lockfile from local tooling or scheduled automation."
+	@exit 1
+
+ml-core-darwin-x86_64.txt: refuse-darwin-x86_64-authority
+
+ml-core-darwin-arm64.txt: require-darwin-arm64-authority require-pip-compile ml-core-darwin-arm64.in base.txt
 	@echo "Compiling ml-core-darwin-arm64.txt (macOS Apple Silicon baseline)..."
 	@$(PIP_COMPILE) $(PYTORCH_CPU_INDEX) -c base.txt ml-core-darwin-arm64.in -o ml-core-darwin-arm64.txt
 
-ml-core-linux.txt: ml-core-linux.in base.txt
-	@echo "Compiling ml-core-linux.txt (Linux baseline, transformers<5)..."
+ml-core-linux.txt: require-linux-x86_64-authority require-pip-compile ml-core-linux.in base.txt
+	@echo "Compiling ml-core-linux.txt (Linux x86_64 baseline, transformers<5)..."
 	@$(PIP_COMPILE) $(PYTORCH_CPU_INDEX) -c base.txt ml-core-linux.in -o ml-core-linux.txt
+
+compile-ml-darwin-arm64: ml-core-darwin-arm64.txt
+	@echo "✓ Darwin arm64 ML lock compiled successfully"
+
+update-ml-darwin-arm64: require-darwin-arm64-authority require-pip-compile
+	@echo "Updating ml-core-darwin-arm64.txt on authoritative Darwin arm64 lane..."
+	@$(PIP_COMPILE) --upgrade $(PYTORCH_CPU_INDEX) -c base.txt ml-core-darwin-arm64.in -o ml-core-darwin-arm64.txt
+	@echo "✓ Darwin arm64 ML lock updated successfully"
+
+check-ml-darwin-arm64: require-darwin-arm64-authority require-pip-compile
+	@echo "Checking Darwin arm64 ML lock..."
+	@set -euo pipefail; \
+	repo_dir="$$(pwd)"; \
+	tmp_dir="$$(mktemp -d)"; \
+	trap 'rm -rf "$$tmp_dir"' EXIT; \
+	cp base.txt ml-core-darwin-arm64.in "$$tmp_dir"/; \
+	if [ -f "$$repo_dir/ml-core-darwin-arm64.txt" ]; then \
+		cp "$$repo_dir/ml-core-darwin-arm64.txt" "$$tmp_dir"/; \
+	else \
+		echo "ERROR: Required lockfile missing: ml-core-darwin-arm64.txt"; \
+		exit 1; \
+	fi; \
+	cd "$$tmp_dir"; \
+	$(PIP_COMPILE) $(PYTORCH_CPU_INDEX) -c base.txt ml-core-darwin-arm64.in -o ml-core-darwin-arm64.txt >/dev/null; \
+	normalize_req() { \
+		awk 'BEGIN{start=0} { if (!start) { if ($$0 ~ /^#/ || $$0 ~ /^[[:space:]]*$$/) next; start=1 } print }' "$$1"; \
+	}; \
+	if ! diff -u <(normalize_req "$$tmp_dir/ml-core-darwin-arm64.txt") <(normalize_req "$$repo_dir/ml-core-darwin-arm64.txt") >/dev/null; then \
+		echo "❌ ml-core-darwin-arm64.txt is out of date. Run 'make compile-ml-darwin-arm64' on native Darwin arm64."; \
+		exit 1; \
+	fi; \
+	echo "✓ Darwin arm64 ML lock is up-to-date"
+
+compile-ml-linux-x86_64: ml-core-linux.txt
+	@echo "✓ Linux x86_64 ML lock compiled successfully"
+
+update-ml-linux-x86_64: require-linux-x86_64-authority require-pip-compile
+	@echo "Updating ml-core-linux.txt on authoritative Linux x86_64 lane..."
+	@$(PIP_COMPILE) --upgrade $(PYTORCH_CPU_INDEX) -c base.txt ml-core-linux.in -o ml-core-linux.txt
+	@echo "✓ Linux x86_64 ML lock updated successfully"
+
+check-ml-linux-x86_64: require-linux-x86_64-authority require-pip-compile
+	@echo "Checking Linux x86_64 ML lock..."
+	@set -euo pipefail; \
+	repo_dir="$$(pwd)"; \
+	tmp_dir="$$(mktemp -d)"; \
+	trap 'rm -rf "$$tmp_dir"' EXIT; \
+	cp base.txt ml-core-linux.in "$$tmp_dir"/; \
+	if [ -f "$$repo_dir/ml-core-linux.txt" ]; then \
+		cp "$$repo_dir/ml-core-linux.txt" "$$tmp_dir"/; \
+	else \
+		echo "ERROR: Required lockfile missing: ml-core-linux.txt"; \
+		exit 1; \
+	fi; \
+	cd "$$tmp_dir"; \
+	$(PIP_COMPILE) $(PYTORCH_CPU_INDEX) -c base.txt ml-core-linux.in -o ml-core-linux.txt >/dev/null; \
+	normalize_req() { \
+		awk 'BEGIN{start=0} { if (!start) { if ($$0 ~ /^#/ || $$0 ~ /^[[:space:]]*$$/) next; start=1 } print }' "$$1"; \
+	}; \
+	if ! diff -u <(normalize_req "$$tmp_dir/ml-core-linux.txt") <(normalize_req "$$repo_dir/ml-core-linux.txt") >/dev/null; then \
+		echo "❌ ml-core-linux.txt is out of date. Run 'make compile-ml-linux-x86_64' on native Linux x86_64."; \
+		exit 1; \
+	fi; \
+	echo "✓ Linux x86_64 ML lock is up-to-date"
+
+compile-ml-darwin-x86_64 update-ml-darwin-x86_64 check-ml-darwin-x86_64: refuse-darwin-x86_64-authority
 
 ml-core.txt ml-cpu.txt ml-mps.txt ml-cuda.txt ml-raw.txt ml-coreml.txt ml-research.txt ml.txt:
 	@echo "ERROR: $@ is not part of the checked-in lockfile contract."
 	@echo "ERROR: Use target-specific bootstrap/install flows instead of checking in host-generated optional ML layer locks."
 	@exit 1
 
-dev.txt: dev.in all.txt
+dev.txt: require-pip-compile dev.in all.txt
 	@echo "Compiling dev.txt..."
 	@$(PIP_COMPILE) -c all.txt dev.in -o dev.txt
 
-ci.txt: ci.in all.txt
+ci.txt: require-pip-compile ci.in all.txt
 	@echo "Compiling ci.txt..."
 	@$(PIP_COMPILE) -c all.txt ci.in -o ci.txt
 
 # Security scanning tools (standalone layer for CI security job)
 # NOT constrained by all.txt to ensure latest security tool versions
-security.txt: security.in
+security.txt: require-pip-compile security.in
 	@echo "Compiling security.txt..."
 	@$(PIP_COMPILE) security.in -o security.txt
 
-tools-archive.txt: tools-archive.in all.txt
+tools-archive.txt: require-pip-compile tools-archive.in all.txt
 	@echo "Compiling tools-archive.txt..."
 	@$(PIP_COMPILE) -c all.txt tools-archive.in -o tools-archive.txt
 
-# Update all dependencies to latest allowed versions
-# Note: SAM2 is scripted-only and NOT updated here
-update:
-	@echo "Updating all dependencies to latest versions..."
+# Update generic dependencies to latest allowed versions
+# Note: target-owned ML locks must be updated via explicit target commands.
+update: update-generic
+
+update-generic: require-pip-compile
+	@echo "Updating generic checked-in lockfiles to latest allowed versions..."
 	@$(PIP_COMPILE) --upgrade all.in -o all.txt
 	@$(PIP_COMPILE) --upgrade -c all.txt base.in -o base.txt
-	@$(PIP_COMPILE) --upgrade $(PYTORCH_CPU_INDEX) -c base.in ml-core-darwin-x86_64.in -o ml-core-darwin-x86_64.txt
-	@$(PIP_COMPILE) --upgrade $(PYTORCH_CPU_INDEX) -c base.txt ml-core-darwin-arm64.in -o ml-core-darwin-arm64.txt
-	@$(PIP_COMPILE) --upgrade $(PYTORCH_CPU_INDEX) -c base.txt ml-core-linux.in -o ml-core-linux.txt
 	@$(PIP_COMPILE) --upgrade -c all.txt dev.in -o dev.txt
 	@$(PIP_COMPILE) --upgrade -c all.txt ci.in -o ci.txt
 	@$(PIP_COMPILE) --upgrade security.in -o security.txt
 	@$(PIP_COMPILE) --upgrade -c all.txt tools-archive.in -o tools-archive.txt
-	@echo "✓ All requirements updated successfully"
+	@echo "✓ Generic requirements updated successfully"
 
 # Check if .txt files are up-to-date
-# Note: SAM2 is scripted-only and NOT checked here
-check:
-	@echo "Checking if requirements are up-to-date..."
+# Note: target-owned ML locks must be checked via explicit target commands.
+check: check-generic
+
+check-generic: require-pip-compile
+	@echo "Checking if generic requirements are up-to-date..."
 	@set -euo pipefail; \
 	repo_dir="$$(pwd)"; \
 	tmp_dir="$$(mktemp -d)"; \
 	trap 'rm -rf "$$tmp_dir"' EXIT; \
-	cp all.in base.in ml.in ml-core.in ml-core-darwin-x86_64.in ml-core-darwin-arm64.in ml-core-linux.in ml-cpu.in ml-mps.in ml-cuda.in ml-raw.in ml-coreml.in ml-research.in dev.in ci.in security.in tools-archive.in "$$tmp_dir"/; \
+	cp all.in base.in dev.in ci.in security.in tools-archive.in "$$tmp_dir"/; \
 	for f in all.txt base.txt dev.txt ci.txt security.txt tools-archive.txt; do \
-		if [ -f "$$repo_dir/$$f" ]; then \
-			cp "$$repo_dir/$$f" "$$tmp_dir"/; \
-		else \
-			echo "ERROR: Required lockfile missing: $$f"; \
-			exit 1; \
-		fi; \
-	done; \
-	for f in ml-core-darwin-x86_64.txt ml-core-darwin-arm64.txt ml-core-linux.txt; do \
 		if [ -f "$$repo_dir/$$f" ]; then \
 			cp "$$repo_dir/$$f" "$$tmp_dir"/; \
 		else \
@@ -235,9 +340,6 @@ check:
 	cd "$$tmp_dir"; \
 	$(PIP_COMPILE) all.in -o all.txt >/dev/null; \
 	$(PIP_COMPILE) -c all.txt base.in -o base.txt >/dev/null; \
-	$(PIP_COMPILE) $(PYTORCH_CPU_INDEX) -c base.in ml-core-darwin-x86_64.in -o ml-core-darwin-x86_64.txt >/dev/null; \
-	$(PIP_COMPILE) $(PYTORCH_CPU_INDEX) -c base.txt ml-core-darwin-arm64.in -o ml-core-darwin-arm64.txt >/dev/null; \
-	$(PIP_COMPILE) $(PYTORCH_CPU_INDEX) -c base.txt ml-core-linux.in -o ml-core-linux.txt >/dev/null; \
 	$(PIP_COMPILE) -c all.txt dev.in -o dev.txt >/dev/null; \
 	$(PIP_COMPILE) -c all.txt ci.in -o ci.txt >/dev/null; \
 	$(PIP_COMPILE) security.in -o security.txt >/dev/null; \
@@ -251,15 +353,7 @@ check:
 			exit 1; \
 		fi; \
 	done; \
-	for f in ml-core-darwin-x86_64.txt ml-core-darwin-arm64.txt ml-core-linux.txt; do \
-		if [ -f "$$repo_dir/$$f" ]; then \
-			if ! diff -u <(normalize_req "$$tmp_dir/$$f") <(normalize_req "$$repo_dir/$$f") >/dev/null; then \
-				echo "❌ $$f is out of date. Run 'make compile' to update."; \
-				exit 1; \
-			fi; \
-		fi; \
-	done; \
-	echo "✓ All requirements are up-to-date"
+	echo "✓ Generic requirements are up-to-date"
 
 # Clean compiled files
 # Note: ml-sam2.txt removed if present (historical artifact)

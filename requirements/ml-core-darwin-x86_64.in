@@ -1,10 +1,10 @@
 # ML Core layer for macOS Intel (Darwin x86_64)
-# Platform-specific lockfile for deterministic pip-compile resolution.
+# Target-owned lockfile for deterministic pip-compile resolution.
 #
 # This file is macOS-specific because pip-compile cannot resolve
 # conditional dependencies across platforms in a single graph.
 #
-# Run `make compile` in this directory to generate pinned ml-core-darwin-x86_64.txt
+# This target is frozen pending an authoritative Darwin x86_64 lane decision.
 #
 # PLATFORM TARGET: darwin-x86_64-cpu (macOS Intel)
 #
