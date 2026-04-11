@@ -396,7 +396,7 @@ install_profile() {
                 # Create secure temporary file for error logging
                 local error_log
                 error_log="$(mktemp)"
-                trap 'rm -f "${error_log}"' RETURN
+                trap 'if [[ -n "${error_log:-}" ]]; then rm -f "${error_log}"; fi' RETURN
 
                 # Try standard install first
                 log_info "Attempting standard SAM2 install..."

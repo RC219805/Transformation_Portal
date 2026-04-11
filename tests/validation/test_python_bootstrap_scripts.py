@@ -441,6 +441,38 @@ def test_install_raw_runtime_uses_resolved_python_for_venv_creation(tmp_path: Pa
     assert f"+ {python311} -m venv {repo_root / '.venv-raw'}" in result.stdout
 
 
+def test_install_ml_stack_sam2_success_does_not_fail_on_return_trap(tmp_path: Path) -> None:
+    repo_root = tmp_path / "repo"
+    script_path = _copy_repo_file(ML_STACK_INSTALLER_PATH, repo_root / "scripts" / "bootstrap" / "install_ml_stack.sh")
+    resolver_path = repo_root / "scripts" / "setup" / "resolve_python_311.sh"
+    pip_log_path = repo_root / "pip-install.log"
+    fake_python = _write_fake_ml_core_python(
+        repo_root / ".venv" / "bin" / "python",
+        version="3.11.15",
+        platform_system="Darwin",
+        platform_machine="arm64",
+        pip_log_path=pip_log_path,
+    )
+    _write_executable(resolver_path, f"#!/bin/sh\nprintf '%s\\n' {shlex.quote(str(fake_python))}\n")
+    (repo_root / "requirements").mkdir(parents=True, exist_ok=True)
+
+    env = {**os.environ, "PATH": "/usr/bin:/bin"}
+    result = subprocess.run(
+        ["bash", str(script_path), "--profile", "sam2"],
+        cwd=repo_root,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "SAM2 installed successfully via standard path." in result.stdout
+    assert "unbound variable" not in (result.stdout + result.stderr)
+    pip_commands = pip_log_path.read_text(encoding="utf-8")
+    assert "-m pip install --extra-index-url https://download.pytorch.org/whl/cpu sam2==1.1.0" in pip_commands
+
+
 def test_resolver_prefers_python314_over_python311(tmp_path: Path) -> None:
     """Test that resolver prefers newer Python versions (e.g., 3.14) over 3.11."""
     repo_root = tmp_path / "repo"
