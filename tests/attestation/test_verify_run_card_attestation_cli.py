@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
 import os
@@ -309,6 +310,22 @@ def test_verify_cli_rejects_missing_explicit_sigstore_bundle_path(tmp_path: Path
 
     assert result.returncode == 5
     assert f"Sigstore bundle not found: {bundle_path}" in result.stderr
+
+
+def test_verify_cli_rejects_dsse_release_assessment_missing_status(tmp_path: Path) -> None:
+    run_card_path, _, dsse_path, _ = _build_inputs(tmp_path)
+    dsse_attestation = json.loads(dsse_path.read_text(encoding="utf-8"))
+    statement = json.loads(base64.b64decode(dsse_attestation["payload"]).decode("utf-8"))
+    statement["predicate"]["release_assessment"] = {"sha256": "c" * 64}
+    dsse_attestation["payload"] = base64.b64encode(
+        json.dumps(statement, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    ).decode("ascii")
+    dsse_path.write_text(json.dumps(dsse_attestation), encoding="utf-8")
+
+    result = _run_tool("--run-card", str(run_card_path), "--require-dsse")
+
+    assert result.returncode == 5
+    assert "release_assessment.status is required" in result.stderr
 
 
 def test_verify_cli_runs_from_source_checkout_without_pyproject_install(tmp_path: Path) -> None:

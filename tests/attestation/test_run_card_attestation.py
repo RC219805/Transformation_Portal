@@ -223,7 +223,7 @@ def test_dsse_statement_rejects_missing_release_assessment_status() -> None:
     )
     del statement["predicate"]["release_assessment"]["status"]
 
-    with pytest.raises(ValueError, match="release_assessment.status must be present"):
+    with pytest.raises(ValueError, match="release_assessment.status is required"):
         validate_run_card_statement_binding(
             statement,
             run_card_path=Path("run_card_2026-04-10_120000.json"),
