@@ -213,6 +213,25 @@ def test_dsse_statement_rejects_non_string_release_assessment_status() -> None:
         )
 
 
+def test_dsse_statement_rejects_missing_release_assessment_status() -> None:
+    run_card_payload, run_card_bytes = _run_card_v2()
+    statement = build_run_card_statement(
+        run_card_path=Path("run_card_2026-04-10_120000.json"),
+        run_card_payload=run_card_payload,
+        run_card_bytes=run_card_bytes,
+        release_assessment={"status": "PASS"},
+    )
+    del statement["predicate"]["release_assessment"]["status"]
+
+    with pytest.raises(ValueError, match="release_assessment.status must be present"):
+        validate_run_card_statement_binding(
+            statement,
+            run_card_path=Path("run_card_2026-04-10_120000.json"),
+            run_card_payload=run_card_payload,
+            run_card_bytes=run_card_bytes,
+        )
+
+
 def test_run_card_detached_schema_allows_null_attestation_sha256() -> None:
     jsonschema = pytest.importorskip("jsonschema")
 

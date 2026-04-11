@@ -9,6 +9,7 @@ from json import JSONDecodeError
 from pathlib import Path
 from typing import Any
 
+from transformation_portal.ingest.canonical_json import dumps_json
 from transformation_portal.lux_depth_v3.artifact_manager import compute_artifact_merkle_root
 from transformation_portal.lux_depth_v3.artifact_tree import verify_artifact_tree_payload
 
@@ -40,7 +41,7 @@ def _load_json(path: Path) -> tuple[Any | None, str | None]:
 
 
 def canonical_json_text(payload: Any) -> str:
-    return json.dumps(payload, indent=2, sort_keys=True)
+    return dumps_json(payload, indent=2, sort_keys=True, ensure_ascii=False, allow_nan=False)
 
 
 def format_error_path(error_path: Any) -> str:
@@ -259,10 +260,12 @@ def _verify_config_fingerprint(run_card_payload: dict[str, Any], errors: list[st
     )
     present_optional_fields = tuple(field for field in optional_fields if field in config_fingerprint)
     fingerprint_fields = (*fields, *present_optional_fields)
-    expected_canonical_json = json.dumps(
+    expected_canonical_json = dumps_json(
         {field: config_fingerprint.get(field) for field in fingerprint_fields},
         sort_keys=True,
         separators=(",", ":"),
+        ensure_ascii=False,
+        allow_nan=False,
     )
     if canonical_json != expected_canonical_json:
         errors.append("config_fingerprint.canonical_json does not match canonicalized config fingerprint fields")
