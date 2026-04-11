@@ -12,6 +12,54 @@ from PIL import Image
 
 pytestmark = pytest.mark.unit
 
+
+class TestShape2dHelper:
+    """Unit tests for the _shape_2d helper function."""
+
+    def test_shape_2d_with_2d_array(self) -> None:
+        """_shape_2d extracts correct shape from 2D array."""
+        from transformation_portal.lux_depth_v3.orchestrator import _shape_2d
+
+        arr = np.zeros((100, 200), dtype=np.float32)
+        result = _shape_2d(arr)
+        assert result == (100, 200)
+        assert isinstance(result, tuple)
+        assert len(result) == 2
+
+    def test_shape_2d_with_3d_array(self) -> None:
+        """_shape_2d extracts first two dimensions from 3D array."""
+        from transformation_portal.lux_depth_v3.orchestrator import _shape_2d
+
+        arr = np.zeros((100, 200, 3), dtype=np.float32)
+        result = _shape_2d(arr)
+        assert result == (100, 200)
+
+    def test_shape_2d_returns_int_types(self) -> None:
+        """_shape_2d returns Python ints, not numpy int types."""
+        from transformation_portal.lux_depth_v3.orchestrator import _shape_2d
+
+        arr = np.zeros((100, 200), dtype=np.float32)
+        height, width = _shape_2d(arr)
+        assert type(height) is int
+        assert type(width) is int
+
+    def test_shape_2d_rejects_1d_array(self) -> None:
+        """_shape_2d raises IndexError for 1D array."""
+        from transformation_portal.lux_depth_v3.orchestrator import _shape_2d
+
+        arr = np.zeros((100,), dtype=np.float32)
+        with pytest.raises(IndexError, match="at least 2 dimensions"):
+            _shape_2d(arr)
+
+    def test_shape_2d_rejects_0d_array(self) -> None:
+        """_shape_2d raises IndexError for 0D (scalar) array."""
+        from transformation_portal.lux_depth_v3.orchestrator import _shape_2d
+
+        arr = np.array(5.0)
+        with pytest.raises(IndexError, match="at least 2 dimensions"):
+            _shape_2d(arr)
+
+
 PIPELINE_PACKAGE = "transformation_portal.lux_depth_v3"
 ORCHESTRATOR_MODULE = "transformation_portal.lux_depth_v3.orchestrator"
 
