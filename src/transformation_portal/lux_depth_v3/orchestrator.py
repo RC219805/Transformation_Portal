@@ -5596,7 +5596,16 @@ class EnhanceOrchestrator:
             run_card_version = "v1"
         artifact_tree = None
         if run_card_version == "v2":
-            artifact_tree = build_artifact_tree(artifact_index, include_proofs=True)
+            include_proofs_config = getattr(self.config, "run_card_include_proofs", True)
+            include_proofs = include_proofs_config
+            if isinstance(include_proofs_config, str):
+                include_proofs = include_proofs_config.strip().lower() in {
+                    "1",
+                    "true",
+                    "yes",
+                    "on",
+                }
+            artifact_tree = build_artifact_tree(artifact_index, include_proofs=bool(include_proofs))
         artifact_merkle_root = _compute_artifact_merkle_root(artifact_index)
         backend_summary = self._compute_backend_summary(results)
         requested_backend_defect = self._requested_backend_fulfillment_defect(

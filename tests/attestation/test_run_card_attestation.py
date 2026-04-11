@@ -218,12 +218,7 @@ def test_run_card_detached_schema_allows_null_attestation_sha256() -> None:
 
     repo_root = Path(__file__).resolve().parents[2]
     schema_path = (
-        repo_root
-        / "docs"
-        / "schemas"
-        / "attestation"
-        / "tp.run_card.attestation.detached.v1"
-        / "attestation.schema.json"
+        repo_root / "docs" / "schemas" / "attestation" / "tp.run_card.attestation.detached.v1" / "attestation.schema.json"
     )
     schema = json.loads(schema_path.read_text(encoding="utf-8"))
     run_card_payload, run_card_bytes = _run_card_v2()

@@ -200,7 +200,7 @@ def test_assess_run_card_release_script_runs_from_source_checkout(tmp_path: Path
     validator_path.write_text(
         (
             "def assess_run_card_release(*, run_card_path, **_kwargs):\n"
-            "    return {\"status\": \"PASS\", \"run_card\": str(run_card_path)}\n"
+            '    return {"status": "PASS", "run_card": str(run_card_path)}\n'
         ),
         encoding="utf-8",
     )
