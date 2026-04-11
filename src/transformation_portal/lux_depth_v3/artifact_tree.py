@@ -187,6 +187,10 @@ def verify_artifact_tree_payload(
             continue
         sibling_hashes: list[bytes] = []
         position_error = False
+        # CT audit-path position validation state.
+        # fn = first node index (current leaf/node position in the level)
+        # sn = subtree node count - 1 (last valid index in the level)
+        # These are used to walk the tree structure and determine expected sibling positions.
         fn = leaf_index
         sn = len(expected_artifacts) - 1
         step_index = 0
@@ -203,6 +207,9 @@ def verify_artifact_tree_payload(
                 break
             step_position = step.get("position")
             if step_position is not None:
+                # Walk the tree state to find where the next sibling is expected.
+                # If fn is odd, sibling is on the left; if fn < sn and even, sibling is on right.
+                # Skip levels where no sibling exists (fn == sn and both even).
                 while sn > 0:
                     if fn % 2 == 1:
                         expected_position = "left"
