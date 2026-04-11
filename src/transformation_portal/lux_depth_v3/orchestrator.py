@@ -61,6 +61,7 @@ from .artifact_manager import (
     make_output_key,
     v2_log_filename,
 )
+from .artifact_tree import build_artifact_tree
 from .batch_stats import compute_batch_runtime_stats, detect_runtime_outliers
 from .camera_metadata_loader import load_scene_cameras, load_sidecar_payload
 from .config import DA3Config, EnhanceConfig, ModelVariant
@@ -5856,7 +5857,28 @@ class EnhanceOrchestrator:
             self.output_root,
             artifact_paths,
         )
-        artifact_merkle_root = _compute_artifact_merkle_root(artifact_index)
+        run_card_version = str(getattr(self.config, "run_card_version", "v1") or "v1").strip().lower()
+        if run_card_version not in {"v1", "v2"}:
+            logger.warning(
+                "Unsupported run_card_version=%r; falling back to v1",
+                run_card_version,
+            )
+            run_card_version = "v1"
+        artifact_tree = None
+        if run_card_version == "v2":
+            include_proofs_config = getattr(self.config, "run_card_include_proofs", False)
+            include_proofs = include_proofs_config
+            if isinstance(include_proofs_config, str):
+                include_proofs = include_proofs_config.strip().lower() in {
+                    "1",
+                    "true",
+                    "yes",
+                    "on",
+                }
+            artifact_tree = build_artifact_tree(artifact_index, include_proofs=bool(include_proofs))
+            artifact_merkle_root = None
+        else:
+            artifact_merkle_root = _compute_artifact_merkle_root(artifact_index)
         backend_summary = self._compute_backend_summary(results)
         requested_backend_defect = self._requested_backend_fulfillment_defect(
             results,
@@ -5915,7 +5937,11 @@ class EnhanceOrchestrator:
             "success_count": sum(1 for r in results if r.get("status") == "ok"),
             "error_count": sum(1 for r in results if r.get("status") == "error"),
             "artifact_index": artifact_index,
-            "artifact_merkle_root": artifact_merkle_root,
+            **(
+                {"artifact_tree": artifact_tree}
+                if run_card_version == "v2"
+                else {"artifact_merkle_root": artifact_merkle_root}
+            ),
         }
 
         def _json_default(obj: Any) -> Any:
@@ -5975,7 +6001,7 @@ class EnhanceOrchestrator:
             # --- Final deterministic fallback ---
             return str(obj)
 
-        schema_path = _run_card_schema_path()
+        schema_path = _run_card_schema_path(run_card_version)
         if not schema_path.exists():
             logger.warning(
                 "Run card schema not found" " at %s; skipping run card" " emission for" " batch_id=%s",

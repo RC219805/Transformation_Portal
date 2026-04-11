@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import subprocess
+import tempfile
+from pathlib import Path
 
 _GPG_TIMEOUT_SECONDS = 5
 
@@ -44,3 +46,52 @@ def gpg_verify_clearsign(signature_text: str) -> None:
     if proc.returncode != 0:
         stderr = proc.stderr.decode("utf-8", errors="replace")
         raise ValueError(f"gpg verify failed: {stderr.strip()}")
+
+
+def gpg_detached_sign_bytes(payload: bytes, *, key_id: str | None = None, armor: bool = True) -> bytes:
+    """Produce a detached signature over payload bytes.
+
+    The default armored output is stable for DSSE envelope storage because it
+    can be base64-encoded directly into the ``sig`` field and verified later.
+    """
+    cmd = ["gpg", "--detach-sign", "--batch", "--yes", "--no-tty", "--output", "-"]
+    if armor:
+        cmd.append("--armor")
+    if key_id:
+        cmd.extend(["--local-user", key_id])
+
+    try:
+        proc = subprocess.run(
+            cmd,
+            input=payload,
+            capture_output=True,
+            check=False,
+            timeout=_GPG_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise ValueError(f"gpg detached signing timed out after {_GPG_TIMEOUT_SECONDS} seconds") from exc
+    if proc.returncode != 0:
+        stderr = proc.stderr.decode("utf-8", errors="replace")
+        raise ValueError(f"gpg detached signing failed: {stderr.strip()}")
+    return proc.stdout
+
+
+def gpg_verify_detached_signature_bytes(signature_bytes: bytes, payload: bytes) -> None:
+    """Verify a detached signature against the supplied payload bytes."""
+    with tempfile.TemporaryDirectory(prefix="tp-gpg-verify-") as tmp_dir:
+        signature_path = Path(tmp_dir) / "signature.asc"
+        payload_path = Path(tmp_dir) / "payload.bin"
+        signature_path.write_bytes(signature_bytes)
+        payload_path.write_bytes(payload)
+        try:
+            proc = subprocess.run(
+                ["gpg", "--verify", "--batch", "--no-tty", str(signature_path), str(payload_path)],
+                capture_output=True,
+                check=False,
+                timeout=_GPG_TIMEOUT_SECONDS,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise ValueError(f"gpg detached verify timed out after {_GPG_TIMEOUT_SECONDS} seconds") from exc
+        if proc.returncode != 0:
+            stderr = proc.stderr.decode("utf-8", errors="replace")
+            raise ValueError(f"gpg detached verify failed: {stderr.strip()}")
