@@ -219,7 +219,20 @@ def _shape_2d(arr: np.ndarray) -> tuple[int, int]:
     to satisfy mypy's strict tuple type checking. Without this, the
     generator expression `tuple(int(v) for v in arr.shape[:2])` produces
     `tuple[int, ...]` which is incompatible with `tuple[int, int]`.
+
+    Args:
+        arr: A numpy array with at least 2 dimensions (depth maps, masks, images).
+
+    Returns:
+        A tuple of (height, width) representing the first two dimensions.
+
+    Raises:
+        IndexError: If the array has fewer than 2 dimensions.
     """
+    if arr.ndim < 2:
+        raise IndexError(
+            f"_shape_2d requires an array with at least 2 dimensions, got {arr.ndim}D array"
+        )
     height, width = int(arr.shape[0]), int(arr.shape[1])
     return (height, width)
 
