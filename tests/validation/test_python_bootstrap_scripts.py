@@ -81,7 +81,9 @@ def test_resolver_falls_back_to_python311_when_repo_venv_missing(tmp_path: Path)
     script_path = _copy_repo_file(RESOLVER_PATH, repo_root / "scripts" / "setup" / "resolve_python_311.sh")
     fakebin = tmp_path / "fakebin"
     python311 = _write_fake_python(fakebin / "python3.11", version="3.11.15", real_python=sys.executable)
-    # Provide fake python3.12/3.13 that report unsupported versions to isolate from system
+    # Provide fake python3.12-3.15 that report unsupported versions to isolate from system
+    _write_fake_python(fakebin / "python3.15", version="3.9.0", real_python=sys.executable)
+    _write_fake_python(fakebin / "python3.14", version="3.9.0", real_python=sys.executable)
     _write_fake_python(fakebin / "python3.13", version="3.9.0", real_python=sys.executable)
     _write_fake_python(fakebin / "python3.12", version="3.9.0", real_python=sys.executable)
     _write_fake_python(fakebin / "python3", version="3.9.6", real_python=sys.executable)
@@ -100,6 +102,8 @@ def test_resolver_rejects_old_python_candidates(tmp_path: Path) -> None:
     script_path = _copy_repo_file(RESOLVER_PATH, repo_root / "scripts" / "setup" / "resolve_python_311.sh")
     fakebin = tmp_path / "fakebin"
     # All candidates report old unsupported versions
+    _write_fake_python(fakebin / "python3.15", version="3.9.0", real_python=sys.executable)
+    _write_fake_python(fakebin / "python3.14", version="3.9.0", real_python=sys.executable)
     _write_fake_python(fakebin / "python3.13", version="3.9.0", real_python=sys.executable)
     _write_fake_python(fakebin / "python3.12", version="3.9.0", real_python=sys.executable)
     _write_fake_python(fakebin / "python3.11", version="3.9.0", real_python=sys.executable)
@@ -112,7 +116,9 @@ def test_resolver_rejects_old_python_candidates(tmp_path: Path) -> None:
 
     assert result.returncode == 1
     assert "make venv" in result.stderr
-    assert "python3.11 -m venv .venv" in result.stderr
+    # Updated guidance now includes multiple Python version examples
+    assert "python3.13 -m venv .venv" in result.stderr
+    assert "python3.12 -m venv .venv" in result.stderr
 
 
 def test_make_venv_refuses_wrong_version_existing_repo_venv(tmp_path: Path) -> None:
@@ -145,7 +151,9 @@ def test_validation_suite_uses_resolved_python_for_preflight(tmp_path: Path) -> 
 
     fakebin = tmp_path / "fakebin"
     python311 = _write_fake_python(fakebin / "python3.11", version="3.11.15", real_python=sys.executable)
-    # Provide fake python3.12/3.13 that report unsupported versions to isolate from system
+    # Provide fake python3.12-3.15 that report unsupported versions to isolate from system
+    _write_fake_python(fakebin / "python3.15", version="3.9.0", real_python=sys.executable)
+    _write_fake_python(fakebin / "python3.14", version="3.9.0", real_python=sys.executable)
     _write_fake_python(fakebin / "python3.13", version="3.9.0", real_python=sys.executable)
     _write_fake_python(fakebin / "python3.12", version="3.9.0", real_python=sys.executable)
     _write_fake_python(fakebin / "python3", version="3.9.6", real_python=sys.executable)
@@ -177,7 +185,9 @@ def test_install_da3_runtime_uses_resolved_python_for_venv_creation(tmp_path: Pa
 
     fakebin = tmp_path / "fakebin"
     python311 = _write_fake_python(fakebin / "python3.11", version="3.11.15", real_python=sys.executable)
-    # Provide fake python3.12/3.13 that report unsupported versions to isolate from system
+    # Provide fake python3.12-3.15 that report unsupported versions to isolate from system
+    _write_fake_python(fakebin / "python3.15", version="3.9.0", real_python=sys.executable)
+    _write_fake_python(fakebin / "python3.14", version="3.9.0", real_python=sys.executable)
     _write_fake_python(fakebin / "python3.13", version="3.9.0", real_python=sys.executable)
     _write_fake_python(fakebin / "python3.12", version="3.9.0", real_python=sys.executable)
     _write_fake_python(fakebin / "python3", version="3.9.6", real_python=sys.executable)
@@ -215,7 +225,9 @@ def test_install_raw_runtime_uses_resolved_python_for_venv_creation(tmp_path: Pa
 
     fakebin = tmp_path / "fakebin"
     python311 = _write_fake_python(fakebin / "python3.11", version="3.11.15", real_python=sys.executable)
-    # Provide fake python3.12/3.13 that report unsupported versions to isolate from system
+    # Provide fake python3.12-3.15 that report unsupported versions to isolate from system
+    _write_fake_python(fakebin / "python3.15", version="3.9.0", real_python=sys.executable)
+    _write_fake_python(fakebin / "python3.14", version="3.9.0", real_python=sys.executable)
     _write_fake_python(fakebin / "python3.13", version="3.9.0", real_python=sys.executable)
     _write_fake_python(fakebin / "python3.12", version="3.9.0", real_python=sys.executable)
     _write_fake_python(fakebin / "python3", version="3.9.6", real_python=sys.executable)
@@ -242,3 +254,26 @@ def test_install_raw_runtime_uses_resolved_python_for_venv_creation(tmp_path: Pa
     assert result.returncode == 0, result.stdout + result.stderr
     assert f"Using bootstrap interpreter: {python311}" in result.stdout
     assert f"+ {python311} -m venv {repo_root / '.venv-raw'}" in result.stdout
+
+
+def test_resolver_prefers_python314_over_python311(tmp_path: Path) -> None:
+    """Test that resolver prefers newer Python versions (e.g., 3.14) over 3.11."""
+    repo_root = tmp_path / "repo"
+    script_path = _copy_repo_file(RESOLVER_PATH, repo_root / "scripts" / "setup" / "resolve_python_311.sh")
+    fakebin = tmp_path / "fakebin"
+    # Python 3.14 is available and supported
+    python314 = _write_fake_python(fakebin / "python3.14", version="3.14.0", real_python=sys.executable)
+    # Python 3.11 is also available but should not be preferred
+    _write_fake_python(fakebin / "python3.11", version="3.11.15", real_python=sys.executable)
+    # Other candidates report unsupported versions
+    _write_fake_python(fakebin / "python3.15", version="3.9.0", real_python=sys.executable)
+    _write_fake_python(fakebin / "python3.13", version="3.9.0", real_python=sys.executable)
+    _write_fake_python(fakebin / "python3.12", version="3.9.0", real_python=sys.executable)
+    _write_fake_python(fakebin / "python3", version="3.9.6", real_python=sys.executable)
+    _write_fake_python(fakebin / "python", version="3.9.6", real_python=sys.executable)
+
+    env = {**os.environ, "PATH": f"{fakebin}:/usr/bin:/bin"}
+    result = subprocess.run(["bash", str(script_path)], cwd=repo_root, env=env, capture_output=True, text=True, check=False)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert result.stdout.strip() == str(python314)

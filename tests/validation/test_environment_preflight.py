@@ -114,6 +114,32 @@ class TestCheckLocalEnvironment:
         assert result.is_hard_requirement is True
         assert "make repair-core-venv" in (result.guidance or "")
 
+    def test_check_venv_guidance_is_platform_aware(self, env_module, monkeypatch, tmp_path):
+        """Venv guidance should use platform-appropriate paths."""
+        repo_python = tmp_path / ".venv" / "bin" / "python"
+        repo_python.parent.mkdir(parents=True, exist_ok=True)
+        repo_python.write_text("", encoding="utf-8")
+        current_python = tmp_path / "bin" / "python"
+        current_python.parent.mkdir(parents=True, exist_ok=True)
+        current_python.write_text("", encoding="utf-8")
+
+        monkeypatch.setattr(env_module, "REPO_ROOT", tmp_path)
+        monkeypatch.setattr(env_module, "REPO_VENV_PYTHON", repo_python)
+        monkeypatch.setattr(env_module.sys, "executable", str(current_python))
+        monkeypatch.setattr(env_module.sys, "prefix", str(tmp_path / "system"))
+        monkeypatch.setattr(env_module.sys, "base_prefix", str(tmp_path / "system"))
+        monkeypatch.delenv("VIRTUAL_ENV", raising=False)
+
+        # Set POSIX-style guidance constants
+        monkeypatch.setattr(env_module, "_VENV_PYTHON_REL", ".venv/bin/python")
+        monkeypatch.setattr(env_module, "_VENV_ACTIVATE_CMD", "source .venv/bin/activate")
+
+        result = env_module.check_venv_active()
+
+        # Guidance should use the platform-appropriate paths
+        assert ".venv/bin/python" in (result.guidance or "")
+        assert "source .venv/bin/activate" in (result.guidance or "")
+
     def test_dependency_health_check_surfaces_da3_contamination_guidance(self, env_module, monkeypatch):
         """DA3 contamination should point operators to the repair and isolated-runtime paths."""
         completed = subprocess.CompletedProcess(

@@ -60,8 +60,12 @@ FRONTDOOR_ROOT = REPO_ROOT / "web" / "secure-landing"
 # Platform-aware venv interpreter path
 if sys.platform == "win32":
     REPO_VENV_PYTHON = REPO_ROOT / ".venv" / "Scripts" / "python.exe"
+    _VENV_PYTHON_REL = r".venv\Scripts\python.exe"
+    _VENV_ACTIVATE_CMD = r".venv\Scripts\activate"
 else:
     REPO_VENV_PYTHON = REPO_ROOT / ".venv" / "bin" / "python"
+    _VENV_PYTHON_REL = ".venv/bin/python"
+    _VENV_ACTIVATE_CMD = "source .venv/bin/activate"
 
 # Required Python version
 MIN_PYTHON_VERSION = (3, 11)
@@ -355,7 +359,7 @@ def check_venv_active() -> CheckResult:
             passed=False,
             message=(f"Repo venv exists at {REPO_VENV_PYTHON}, but the current interpreter is {sys.executable}"),
             guidance=(
-                "Use `.venv/bin/python ...` or `source .venv/bin/activate`. "
+                f"Use `{_VENV_PYTHON_REL} ...` or `{_VENV_ACTIVATE_CMD}`. "
                 "If `.venv` is broken, run `make repair-core-venv`."
             ),
         )
@@ -373,7 +377,7 @@ def check_venv_active() -> CheckResult:
         passed=True,
         message="No venv active (using system Python)",
         is_hard_requirement=False,
-        guidance="Consider: make venv && source .venv/bin/activate",
+        guidance=f"Consider: make venv && {_VENV_ACTIVATE_CMD}",
     )
 
 
