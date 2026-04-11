@@ -60,3 +60,32 @@ def test_verify_artifact_tree_payload_rejects_tampered_root() -> None:
 
     errors = verify_artifact_tree_payload(tree, artifact_index=artifact_index)
     assert any("artifact_tree.root_sha256 mismatch" in error for error in errors)
+
+
+def test_verify_artifact_tree_payload_rejects_wrong_leaf_index() -> None:
+    artifact_index = [
+        _artifact("depth/a.png", digest="a" * 64),
+        _artifact("depth/b.png", digest="b" * 64),
+    ]
+    tree = build_artifact_tree(artifact_index, include_proofs=True)
+    tree["proofs"][0]["leaf_index"] = 1
+
+    errors = verify_artifact_tree_payload(tree, artifact_index=artifact_index)
+    assert any("artifact_tree proof leaf_index mismatch" in error for error in errors)
+
+
+def test_verify_artifact_tree_payload_rejects_wrong_position() -> None:
+    artifact_index = [
+        _artifact("depth/a.png", digest="a" * 64),
+        _artifact("depth/b.png", digest="b" * 64),
+    ]
+    tree = build_artifact_tree(artifact_index, include_proofs=True)
+    for proof in tree["proofs"]:
+        for step in proof["path"]:
+            if step["position"] == "left":
+                step["position"] = "right"
+            elif step["position"] == "right":
+                step["position"] = "left"
+
+    errors = verify_artifact_tree_payload(tree, artifact_index=artifact_index)
+    assert any("artifact_tree proof path position mismatch" in error for error in errors)

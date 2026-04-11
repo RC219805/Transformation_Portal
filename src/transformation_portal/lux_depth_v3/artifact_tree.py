@@ -139,7 +139,7 @@ def verify_artifact_tree_payload(
     if artifact_tree.get("root_sha256") != expected_tree["root_sha256"]:
         errors.append(
             "artifact_tree.root_sha256 mismatch: "
-            f"expected={artifact_tree.get('root_sha256')}, recomputed={expected_tree['root_sha256']}"
+            f"provided={artifact_tree.get('root_sha256')}, expected={expected_tree['root_sha256']}"
         )
 
     expected_artifacts = expected_tree["artifacts"]
@@ -162,7 +162,7 @@ def verify_artifact_tree_payload(
             proof_by_path[relative_path] = proof_entry
 
     expected_root_bytes = bytes.fromhex(expected_tree["root_sha256"])
-    for expected_artifact in expected_artifacts:
+    for expected_index, expected_artifact in enumerate(expected_artifacts):
         relative_path = expected_artifact["relative_path"]
         proof_entry = proof_by_path.get(relative_path)
         if proof_entry is None:
@@ -175,11 +175,21 @@ def verify_artifact_tree_payload(
         if not isinstance(leaf_index, int):
             errors.append(f"artifact_tree proof leaf_index must be integer for {relative_path}")
             continue
+        if leaf_index != expected_index:
+            errors.append(
+                f"artifact_tree proof leaf_index mismatch for {relative_path}: "
+                f"provided={leaf_index}, expected={expected_index}"
+            )
+            continue
         proof_path = proof_entry.get("path")
         if not isinstance(proof_path, list):
             errors.append(f"artifact_tree proof path must be a list for {relative_path}")
             continue
         sibling_hashes: list[bytes] = []
+        position_error = False
+        fn = leaf_index
+        sn = len(expected_artifacts) - 1
+        step_index = 0
         for step in proof_path:
             if not isinstance(step, Mapping):
                 errors.append(f"artifact_tree proof path steps must be objects for {relative_path}")
@@ -191,6 +201,31 @@ def verify_artifact_tree_payload(
                 errors.append(f"artifact_tree proof hash invalid for {relative_path}: {exc}")
                 sibling_hashes = []
                 break
+            step_position = step.get("position")
+            if step_position is not None:
+                while sn > 0:
+                    if fn % 2 == 1:
+                        expected_position = "left"
+                        break
+                    elif fn < sn:
+                        expected_position = "right"
+                        break
+                    fn //= 2
+                    sn //= 2
+                else:
+                    expected_position = None
+                if expected_position is not None and step_position != expected_position:
+                    errors.append(
+                        f"artifact_tree proof path position mismatch at step {step_index} for {relative_path}: "
+                        f"provided={step_position}, expected={expected_position}"
+                    )
+                    position_error = True
+                    break
+                fn //= 2
+                sn //= 2
+            step_index += 1
+        if position_error:
+            continue
         if not sibling_hashes and proof_path:
             continue
         if not verify_ct_inclusion_proof(
