@@ -655,6 +655,7 @@ PRESET_CATALOG: Dict[str, List[Dict[str, Any]]] = {
                 "emit_upscaled16": True,
                 "emit_report": True,
                 "emit_run_card": True,
+                "run_card_version": "v1",
                 "emit_marketing": False,
                 "enable_v2": False,
                 "enable_reconstruction": False,
@@ -679,6 +680,7 @@ PRESET_CATALOG: Dict[str, List[Dict[str, Any]]] = {
                 "emit_upscaled16": False,
                 "emit_report": True,
                 "emit_run_card": True,
+                "run_card_version": "v1",
                 "emit_marketing": False,
                 "enable_v2": False,
                 "enable_reconstruction": False,
@@ -703,6 +705,7 @@ PRESET_CATALOG: Dict[str, List[Dict[str, Any]]] = {
                 "emit_upscaled16": True,
                 "emit_report": True,
                 "emit_run_card": True,
+                "run_card_version": "v2",
                 "emit_marketing": False,
                 "enable_v2": True,
                 "v2_preset": "default",
@@ -927,6 +930,7 @@ PORTAL_ALLOWED_EVENT_FIELDS = {
     "raw_ingest_mode",
     "reconstruction_iterations",
     "reconstruction_tier",
+    "run_card_version",
     "segmentation_backend",
     "strict_segmentation",
 }
@@ -978,6 +982,7 @@ LUX_PORTAL_DEFAULT_ARGS: Dict[str, Any] = {
     "emit_marketing": False,
     "emit_report": True,
     "emit_run_card": True,
+    "run_card_version": "v1",
     "non_commercial_ok": False,
     "accept_apple_depth_pro_research_license": False,
     "accept_research_tools_license": False,
@@ -2558,6 +2563,13 @@ def _build_lux_config_preview(
         normalized_args[field_name] = _as_bool(
             _pick(args, field_name, default=defaults[field_name]), default=bool(defaults[field_name])
         )
+    normalized_args["run_card_version"] = (
+        str(_pick(args, "run_card_version", "runCardVersion", default=defaults["run_card_version"]) or "v1").strip().lower()
+        or "v1"
+    )
+    if normalized_args["run_card_version"] not in {"v1", "v2"}:
+        errors.append(_portal_issue("run_card_version", "invalid_value", "Run card version must be v1 or v2."))
+        normalized_args["run_card_version"] = str(defaults["run_card_version"])
 
     normalized_args["v2_preset"] = str(
         _pick(args, "v2_preset", "v2Preset", default=defaults["v2_preset"]) or defaults["v2_preset"]
@@ -5113,6 +5125,16 @@ def _argv_from_request(
                         default=True,
                     )
                 ),
+                "--run-card-version",
+                str(
+                    _pick(
+                        args,
+                        "run_card_version",
+                        "runCardVersion",
+                        default="v1",
+                    )
+                    or "v1"
+                ).strip().lower(),
             ]
         )
 

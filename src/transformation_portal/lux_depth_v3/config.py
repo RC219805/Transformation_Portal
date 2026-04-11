@@ -382,6 +382,7 @@ class EnhanceConfig:
     emit_marketing: bool = False  # Emit marketing-ready output
     emit_report: bool = True  # Emit processing report
     emit_run_card: bool = True  # Emit run card for reproducibility
+    run_card_version: str = "v1"  # v1 legacy commitment or v2 transparency tree
 
     # Phase B1: optional scene-level reconstruction (off by default)
     enable_reconstruction: bool = False

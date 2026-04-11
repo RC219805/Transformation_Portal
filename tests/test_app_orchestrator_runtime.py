@@ -283,6 +283,7 @@ def test_argv_normalization_accepts_canonical_keys() -> None:
     assert _flag_value(argv, "--depth-backend") == "da3"
     assert _flag_value(argv, "--depth-device") == "cuda"
     assert _flag_value(argv, "--emit-report") == "on"
+    assert _flag_value(argv, "--run-card-version") == "v1"
 
 
 def test_argv_normalization_accepts_legacy_keys() -> None:
@@ -378,6 +379,7 @@ def test_argv_normalization_trims_and_normalizes_string_values() -> None:
     assert _flag_value(argv, "--emit-marketing") == "off"
     assert _flag_value(argv, "--emit-report") == "on"
     assert _flag_value(argv, "--emit-run-card") == "off"
+    assert _flag_value(argv, "--run-card-version") == "v1"
 
 
 def test_argv_normalization_trims_pipeline_name() -> None:
@@ -1421,6 +1423,7 @@ def test_portal_preset_selection_applies_recommended_defaults_without_changing_c
     assert "depth_backend" in preset_body
     assert "segmentation_backend" in preset_body
     assert "emit_run_card" in preset_body
+    assert "run_card_version" in preset_body
     assert "advanced_sections" in fetch_body
     assert "recommended_args" in fetch_body
 
@@ -1598,6 +1601,7 @@ def test_lux_cli_parity_links_portal_canonical_args_and_backend_argv() -> None:
         "emit_marketing": "--emit-marketing",
         "emit_report": "--emit-report",
         "emit_run_card": "--emit-run-card",
+        "run_card_version": "--run-card-version",
         "non_commercial_ok": "--non-commercial-ok",
         "accept_apple_depth_pro_research_license": "--accept-apple-depth-pro-research-license",
         "accept_research_tools_license": "--accept-research-tools-license",
@@ -1648,6 +1652,7 @@ def test_lux_cli_parity_links_portal_canonical_args_and_backend_argv() -> None:
             "emit_marketing": False,
             "emit_report": True,
             "emit_run_card": True,
+            "run_card_version": "v2",
             "enable_v2": True,
             "v2_preset": "default",
             "non_commercial_ok": True,
@@ -1697,6 +1702,7 @@ def test_lux_cli_parity_links_portal_canonical_args_and_backend_argv() -> None:
     assert _flag_value(argv, "--emit-marketing") == "off"
     assert _flag_value(argv, "--emit-report") == "on"
     assert _flag_value(argv, "--emit-run-card") == "on"
+    assert _flag_value(argv, "--run-card-version") == "v2"
     assert _flag_value(argv, "--enable-v2") == "on"
     assert _flag_value(argv, "--v2-preset") == "default"
     assert _flag_value(argv, "--non-commercial-ok") == "true"
@@ -1763,6 +1769,7 @@ def test_lux_ui_backend_and_direct_cli_paths_share_config_fingerprint(tmp_path: 
             "emit_marketing": False,
             "emit_report": True,
             "emit_run_card": True,
+            "run_card_version": "v2",
             "enable_v2": True,
             "v2_preset": "default",
             "non_commercial_ok": True,
@@ -1811,6 +1818,8 @@ def test_lux_ui_backend_and_direct_cli_paths_share_config_fingerprint(tmp_path: 
         "on",
         "--emit-run-card",
         "on",
+        "--run-card-version",
+        "v2",
         "--enable-v2",
         "on",
         "--v2-preset",

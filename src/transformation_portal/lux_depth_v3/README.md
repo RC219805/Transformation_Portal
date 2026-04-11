@@ -24,6 +24,7 @@ lux-depth-v3 \
   --depth-device "mps" \
   --pbr "on" \
   --enable-v2 "off" \
+  --run-card-version "v2" \
   --emit-master16 "on"
 ```
 
@@ -124,6 +125,7 @@ lux-depth-v3 \
   --materials-v3 "on" \
   --enable-v2 "off" \
   --cache-depth "on" \
+  --run-card-version "v2" \
   --emit-master16 "on" \
   --emit-upscaled16 "on" \
   --emit-marketing "on"
@@ -136,6 +138,33 @@ lux-depth-v3 \
 - `*_marketing.jpg` - Marketing-ready 8-bit JPEG
 - `*_combined.json` - Processing manifest
 - `*_run_card.json` - Reproducibility card
+
+### Run Card Trust Layers
+
+Use `--run-card-version "v2"` for production trust decisions. Run Card v2 replaces the legacy batch hash with a transparency-style CT Merkle artifact tree while keeping v1 verification support for historical bundles.
+
+Common operator commands:
+
+```bash
+python scripts/verify_run_card_integrity.py ./output/client/run_card_batch.json --check-canonical-json
+
+python tools/sign_run_card_attestation.py \
+  --run-card ./output/client/run_card_batch.json \
+  --format both \
+  --key-id "release-signer"
+
+python tools/verify_run_card_attestation.py \
+  --run-card ./output/client/run_card_batch.json \
+  --require-native \
+  --require-dsse
+
+python scripts/validation/assess_run_card_release.py \
+  ./output/client/run_card_batch.json \
+  --require-native-attestation \
+  --require-dsse-attestation
+```
+
+`tools/sign_run_card_attestation.py` can also emit an optional Sigstore bundle sidecar when `cosign` is available locally. Offline verification of the run card, artifact tree, native detached attestation, and DSSE binding does not depend on Rekor or network access.
 
 ### Fast Iteration (Development)
 

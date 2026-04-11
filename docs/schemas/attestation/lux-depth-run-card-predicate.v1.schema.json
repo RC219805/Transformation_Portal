@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rc219805.github.io/Transformation_Portal/docs/schemas/attestation/lux-depth-run-card-predicate.v1.schema.json",
+  "title": "Lux Depth Run Card Predicate v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "artifact_tree",
+    "backend_selection",
+    "batch_id",
+    "config_fingerprint_sha256",
+    "git_revision",
+    "run_card_schema",
+    "run_card_sha256"
+  ],
+  "properties": {
+    "run_card_schema": {
+      "const": "https://rc219805.github.io/Transformation_Portal/docs/schemas/run_card/run_card.v2.schema.json"
+    },
+    "run_card_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "batch_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "artifact_tree": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "algorithm",
+        "leaf_count",
+        "leaf_format",
+        "root_sha256"
+      ],
+      "properties": {
+        "algorithm": {
+          "const": "ct-sha256-v1"
+        },
+        "leaf_format": {
+          "const": "tp.run_card.artifact_leaf.v1"
+        },
+        "leaf_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "root_sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      }
+    },
+    "backend_selection": {
+      "type": "object"
+    },
+    "config_fingerprint_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "git_revision": {
+      "type": "object"
+    },
+    "release_assessment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sha256",
+        "status"
+      ],
+      "properties": {
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "status": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    }
+  }
+}

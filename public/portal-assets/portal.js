@@ -117,7 +117,7 @@ const state = {
         },
         v2Preset: 'default',
         emits: {
-            master16: true, upscaled16: true, marketing: false, report: true, runCard: true
+            master16: true, upscaled16: true, marketing: false, report: true, runCard: true, runCardVersion: 'v1'
         },
         gate: { archiveIndex: '', manifestJsonl: '' },
         licenses: { nonCommercialOk: false, acceptApple: false, acceptResearchTools: false },
@@ -4434,6 +4434,11 @@ function _resolveGroupingMode(value) {
     return 'single';
 }
 
+function _resolveRunCardVersion(value) {
+    const normalized = String(value || '').trim().toLowerCase();
+    return normalized === 'v2' ? 'v2' : 'v1';
+}
+
 function _parsePositiveIntOrNull(value) {
     if (value === null || value === undefined) return null;
     const text = String(value).trim();
@@ -5745,6 +5750,7 @@ function buildCanonicalLuxDepthArgs(config) {
     const emitRunCard = els.emits.runCard
         ? Boolean(els.emits.runCard.checked)
         : parseBoolLike(config.emits?.runCard, true);
+    const runCardVersion = _resolveRunCardVersion(config.emits?.runCardVersion);
 
     const nonCommercialOk = els.licenses.nonCommercialOk
         ? Boolean(els.licenses.nonCommercialOk.checked)
@@ -5833,6 +5839,7 @@ function buildCanonicalLuxDepthArgs(config) {
         emit_marketing: emitMarketing,
         emit_report: emitReport,
         emit_run_card: emitRunCard,
+        run_card_version: runCardVersion,
         non_commercial_ok: nonCommercialOk,
         accept_apple_depth_pro_research_license: acceptApple,
         accept_research_tools_license: acceptResearchTools,
@@ -5924,6 +5931,9 @@ function applyPresetRecommendedArgs(presetName) {
     if (Object.prototype.hasOwnProperty.call(recommended, 'emit_marketing')) c.emits.marketing = parseBoolLike(recommended.emit_marketing, c.emits.marketing);
     if (Object.prototype.hasOwnProperty.call(recommended, 'emit_report')) c.emits.report = parseBoolLike(recommended.emit_report, c.emits.report);
     if (Object.prototype.hasOwnProperty.call(recommended, 'emit_run_card')) c.emits.runCard = parseBoolLike(recommended.emit_run_card, c.emits.runCard);
+    if (Object.prototype.hasOwnProperty.call(recommended, 'run_card_version')) {
+        c.emits.runCardVersion = _resolveRunCardVersion(recommended.run_card_version);
+    }
 
     c.licenses = c.licenses || {};
     if (Object.prototype.hasOwnProperty.call(recommended, 'non_commercial_ok')) c.licenses.nonCommercialOk = parseBoolLike(recommended.non_commercial_ok, c.licenses.nonCommercialOk);
@@ -6109,6 +6119,7 @@ function updateUIFromState() {
     c.emits.marketing = parseBoolLike(c.emits.marketing, false);
     c.emits.report = parseBoolLike(c.emits.report, true);
     c.emits.runCard = parseBoolLike(c.emits.runCard, true);
+    c.emits.runCardVersion = _resolveRunCardVersion(c.emits.runCardVersion);
     c.gate = c.gate || {};
     c.gate.archiveIndex = _textOrFallback(c.gate.archiveIndex, '');
     c.gate.manifestJsonl = _textOrFallback(c.gate.manifestJsonl, '');
@@ -6555,6 +6566,7 @@ function renderCLI() {
         cliLines.push(`  --emit-marketing ${onoff(payload.args.emit_marketing)}`);
         cliLines.push(`  --emit-report ${onoff(payload.args.emit_report)}`);
         cliLines.push(`  --emit-run-card ${onoff(payload.args.emit_run_card)}`);
+        cliLines.push(`  --run-card-version ${q(payload.args.run_card_version || 'v1')}`);
         cliLines.push(`  --enable-v2 ${onoff(payload.args.enable_v2)}`);
 
         if (parseBoolLike(payload.args.enable_v2, false) && payload.args.v2_preset) {
@@ -8019,6 +8031,7 @@ if (els.fileInput) els.fileInput.addEventListener('change', async (e) => {
             c.emits.marketing = parseBoolLike(data.args.emit_marketing, c.emits.marketing);
             c.emits.report = parseBoolLike(data.args.emit_report, c.emits.report);
             c.emits.runCard = parseBoolLike(data.args.emit_run_card, c.emits.runCard);
+            c.emits.runCardVersion = _resolveRunCardVersion(data.args.run_card_version || c.emits.runCardVersion);
 
             c.gate = c.gate || {};
             c.gate.archiveIndex = _textOrFallback(

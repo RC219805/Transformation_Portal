@@ -9,6 +9,9 @@ from pathlib import Path
 
 import pytest
 
+from transformation_portal.lux_depth_v3.artifact_manager import compute_artifact_merkle_root
+from transformation_portal.lux_depth_v3.artifact_tree import build_artifact_tree
+
 pytest.importorskip("jsonschema")
 
 
@@ -139,7 +142,11 @@ def _valid_run_card_payload(module) -> dict:
         "success_count": 1,
         "error_count": 0,
         "artifact_index": artifact_index,
-        "artifact_merkle_root": module.compute_artifact_merkle_root(artifact_index),
+        "artifact_merkle_root": (
+            module.compute_artifact_merkle_root(artifact_index)
+            if module is not None
+            else compute_artifact_merkle_root(artifact_index)
+        ),
     }
 
 
@@ -161,6 +168,13 @@ def _artifact_entry(*, output_root: Path, file_path: Path, artifact_type: str) -
         "size_bytes": len(data),
         "sha256": hashlib.sha256(data).hexdigest(),
     }
+
+
+def _valid_run_card_v2_payload() -> dict:
+    payload = _valid_run_card_payload(module=None)  # type: ignore[arg-type]
+    payload.pop("artifact_merkle_root")
+    payload["artifact_tree"] = build_artifact_tree(payload["artifact_index"], include_proofs=True)
+    return payload
 
 
 def test_verify_run_card_integrity_accepts_valid_payload(tmp_path: Path):
@@ -216,6 +230,27 @@ def test_verify_run_card_integrity_rejects_non_deterministic_ordering(tmp_path: 
 
     errors = module.verify_run_card_integrity(run_card_path)
     assert any("ordering is non-deterministic" in error for error in errors)
+
+
+def test_verify_run_card_integrity_accepts_valid_v2_payload(tmp_path: Path):
+    module = _load_script_module("verify_run_card_integrity_script_v2", "scripts/verify_run_card_integrity.py")
+    run_card_path = tmp_path / "run_card_valid_v2.json"
+    payload = _valid_run_card_v2_payload()
+    _write_json(run_card_path, payload)
+
+    errors = module.verify_run_card_integrity(run_card_path)
+    assert errors == []
+
+
+def test_verify_run_card_integrity_rejects_artifact_tree_root_mismatch(tmp_path: Path):
+    module = _load_script_module("verify_run_card_integrity_script_v2_root", "scripts/verify_run_card_integrity.py")
+    run_card_path = tmp_path / "run_card_bad_v2_root.json"
+    payload = _valid_run_card_v2_payload()
+    payload["artifact_tree"]["root_sha256"] = "f" * 64
+    _write_json(run_card_path, payload)
+
+    errors = module.verify_run_card_integrity(run_card_path)
+    assert any("artifact_tree.root_sha256 mismatch" in error for error in errors)
 
 
 def test_verify_run_card_integrity_detects_canonical_json_drift(tmp_path: Path):
