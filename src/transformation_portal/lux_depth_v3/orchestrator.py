@@ -2627,14 +2627,21 @@ class EnhanceOrchestrator:
         material_masks = materials_v3_result.get("material_masks")
         if isinstance(material_masks, dict) and material_masks:
             resolved_shape: Optional[tuple[int, int]] = None
-            for mask in material_masks.values():
+            for material_key, mask in material_masks.items():
                 mask_shape = _shape_2d(np.asarray(mask))
                 if resolved_shape is None:
                     resolved_shape = mask_shape
                     continue
                 if resolved_shape != mask_shape:
-                    raise RuntimeError(
-                        "Materials V3 mask handoff uses inconsistent mask shapes: " f"{resolved_shape} vs {mask_shape}"
+                    raise ApexStrictGateError(
+                        "APEX_MATERIAL_MASK_SHAPE_MISMATCH",
+                        "APEX strict mode requires consistent Materials V3 mask shapes before V2 handoff.",
+                        details={
+                            "source": "material_masks",
+                            "material_key": str(material_key),
+                            "expected_mask_shape": list(resolved_shape),
+                            "observed_mask_shape": list(mask_shape),
+                        },
                     )
             return resolved_shape
 
@@ -2652,9 +2659,16 @@ class EnhanceOrchestrator:
                     resolved_shape = mask_shape
                     continue
                 if resolved_shape != mask_shape:
-                    raise RuntimeError(
-                        "Materials V3 persisted mask artifact uses inconsistent mask shapes: "
-                        f"{resolved_shape} vs {mask_shape}"
+                    raise ApexStrictGateError(
+                        "APEX_MATERIAL_MASK_SHAPE_MISMATCH",
+                        "APEX strict mode requires consistent Materials V3 mask shapes before V2 handoff.",
+                        details={
+                            "source": "mask_artifact",
+                            "mask_artifact_path": str(mask_artifact_path),
+                            "material_key": str(mask_name),
+                            "expected_mask_shape": list(resolved_shape),
+                            "observed_mask_shape": list(mask_shape),
+                        },
                     )
         return resolved_shape
 
@@ -3059,8 +3073,11 @@ class EnhanceOrchestrator:
         enhanced_path_resolved = enhanced_image_path.resolve() if enhanced_image_path else None
         has_masks = bool(
             materials_v3_result
-            and materials_v3_result.get(
-                "material_masks",
+            and (
+                materials_v3_result.get(
+                    "material_masks",
+                )
+                or self._persisted_material_mask_artifact_path(materials_v3_result) is not None
             )
         )
 

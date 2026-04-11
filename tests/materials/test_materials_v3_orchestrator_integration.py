@@ -521,6 +521,120 @@ def test_apex_v2_preflight_rejects_dimension_drift(tmp_path, mock_depth_backend,
         )
 
 
+def test_apex_v2_preflight_rejects_in_memory_mask_shape_drift_with_structured_gate_error(
+    tmp_path,
+    mock_depth_backend,
+    mock_da3_available,
+):
+    """APEX strict mode should surface inconsistent in-memory mask shapes as structured gate errors."""
+    from PIL import Image
+
+    config = EnhanceConfig(
+        quality_tier="apex",
+        enable_materials_v3=True,
+        enable_material_segmentation=True,
+        material_segmentation_backend="efficientsam",
+        strict_backend=True,
+        depth_device="cpu",
+        enable_v2=True,
+    )
+    orchestrator = EnhanceOrchestrator(config, tmp_path)
+    orchestrator.v2_runner = MagicMock()
+
+    output_key = Path("image_01")
+    depth_path = tmp_path / "depth" / "image_depth.png"
+    depth_path.parent.mkdir(parents=True, exist_ok=True)
+    Image.fromarray(np.full((8, 8), 128, dtype=np.uint8), mode="L").save(depth_path)
+
+    expected_path = orchestrator._expected_materials_v3_enhanced_path(output_key)
+    expected_path.parent.mkdir(parents=True, exist_ok=True)
+    Image.fromarray(np.full((8, 8, 3), 64, dtype=np.uint8), mode="RGB").save(expected_path)
+
+    with pytest.raises(ApexStrictGateError) as exc_info:
+        orchestrator._enforce_apex_v2_canonical_input_preflight(
+            depth_path=depth_path,
+            output_key=output_key,
+            v2_input_path=expected_path,
+            enhanced_image_path=expected_path,
+            materials_v3_result={
+                "material_masks": {
+                    "glass": np.ones((8, 8), dtype=np.float32),
+                    "metal": np.ones((6, 6), dtype=np.float32),
+                }
+            },
+        )
+
+    assert exc_info.value.code == "APEX_MATERIAL_MASK_SHAPE_MISMATCH"
+    assert exc_info.value.details == {
+        "source": "material_masks",
+        "material_key": "metal",
+        "expected_mask_shape": [8, 8],
+        "observed_mask_shape": [6, 6],
+    }
+
+
+def test_apex_v2_preflight_rejects_persisted_mask_shape_drift_with_structured_gate_error(
+    tmp_path,
+    mock_depth_backend,
+    mock_da3_available,
+):
+    """APEX strict mode should surface persisted mask-shape drift as structured gate errors."""
+    from PIL import Image
+
+    config = EnhanceConfig(
+        quality_tier="apex",
+        enable_materials_v3=True,
+        enable_material_segmentation=True,
+        material_segmentation_backend="efficientsam",
+        strict_backend=True,
+        depth_device="cpu",
+        enable_v2=True,
+    )
+    orchestrator = EnhanceOrchestrator(config, tmp_path)
+    orchestrator.v2_runner = MagicMock()
+
+    output_key = Path("image_01")
+    depth_path = tmp_path / "depth" / "image_depth.png"
+    depth_path.parent.mkdir(parents=True, exist_ok=True)
+    Image.fromarray(np.full((8, 8), 128, dtype=np.uint8), mode="L").save(depth_path)
+
+    expected_path = orchestrator._expected_materials_v3_enhanced_path(output_key)
+    expected_path.parent.mkdir(parents=True, exist_ok=True)
+    Image.fromarray(np.full((8, 8, 3), 64, dtype=np.uint8), mode="RGB").save(expected_path)
+
+    mask_artifact_path = tmp_path / "materials" / "mask_bundle.npz"
+    mask_artifact_path.parent.mkdir(parents=True, exist_ok=True)
+    np.savez(
+        mask_artifact_path,
+        glass=np.ones((8, 8), dtype=np.float32),
+        metal=np.ones((6, 6), dtype=np.float32),
+    )
+
+    with pytest.raises(ApexStrictGateError) as exc_info:
+        orchestrator._enforce_apex_v2_canonical_input_preflight(
+            depth_path=depth_path,
+            output_key=output_key,
+            v2_input_path=expected_path,
+            enhanced_image_path=expected_path,
+            materials_v3_result={
+                "materials_v3_metadata": {
+                    "segmentation_metadata": {
+                        "mask_artifact_path": str(mask_artifact_path),
+                    }
+                }
+            },
+        )
+
+    assert exc_info.value.code == "APEX_MATERIAL_MASK_SHAPE_MISMATCH"
+    assert exc_info.value.details == {
+        "source": "mask_artifact",
+        "mask_artifact_path": str(mask_artifact_path),
+        "material_key": "metal",
+        "expected_mask_shape": [8, 8],
+        "observed_mask_shape": [6, 6],
+    }
+
+
 def test_apex_cached_depth_recomputes_materials_for_canonical_handoff(tmp_path, mock_depth_backend, mock_da3_available):
     """APEX strict mode should recompute Materials V3 when cached depth lacks canonical handoff artifacts."""
     config = EnhanceConfig(
