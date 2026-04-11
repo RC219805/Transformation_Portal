@@ -230,9 +230,7 @@ def _shape_2d(arr: np.ndarray) -> tuple[int, int]:
         IndexError: If the array has fewer than 2 dimensions.
     """
     if arr.ndim < 2:
-        raise IndexError(
-            f"_shape_2d requires an array with at least 2 dimensions, got {arr.ndim}D array"
-        )
+        raise IndexError(f"_shape_2d requires an array with at least 2 dimensions, got {arr.ndim}D array")
     height, width = int(arr.shape[0]), int(arr.shape[1])
     return (height, width)
 
