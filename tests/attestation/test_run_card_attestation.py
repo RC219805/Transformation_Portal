@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -171,6 +173,68 @@ def test_dsse_statement_binds_to_run_card() -> None:
     )
     assert decoded_statement == statement
     assert json.loads(decode_dsse_payload(envelope).decode("utf-8"))["_type"] == "https://in-toto.io/Statement/v1"
+
+
+def test_dsse_statement_rejects_non_hex_release_assessment_sha256() -> None:
+    run_card_payload, run_card_bytes = _run_card_v2()
+    statement = build_run_card_statement(
+        run_card_path=Path("run_card_2026-04-10_120000.json"),
+        run_card_payload=run_card_payload,
+        run_card_bytes=run_card_bytes,
+        release_assessment={"status": "PASS"},
+    )
+    statement["predicate"]["release_assessment"]["sha256"] = "g" * 64
+
+    with pytest.raises(ValueError, match="release_assessment.sha256"):
+        validate_run_card_statement_binding(
+            statement,
+            run_card_path=Path("run_card_2026-04-10_120000.json"),
+            run_card_payload=run_card_payload,
+            run_card_bytes=run_card_bytes,
+        )
+
+
+def test_dsse_statement_rejects_non_string_release_assessment_status() -> None:
+    run_card_payload, run_card_bytes = _run_card_v2()
+    statement = build_run_card_statement(
+        run_card_path=Path("run_card_2026-04-10_120000.json"),
+        run_card_payload=run_card_payload,
+        run_card_bytes=run_card_bytes,
+        release_assessment={"status": "PASS"},
+    )
+    statement["predicate"]["release_assessment"]["status"] = 1
+
+    with pytest.raises(ValueError, match="release_assessment.status"):
+        validate_run_card_statement_binding(
+            statement,
+            run_card_path=Path("run_card_2026-04-10_120000.json"),
+            run_card_payload=run_card_payload,
+            run_card_bytes=run_card_bytes,
+        )
+
+
+def test_run_card_detached_schema_allows_null_attestation_sha256() -> None:
+    jsonschema = pytest.importorskip("jsonschema")
+
+    repo_root = Path(__file__).resolve().parents[2]
+    schema_path = (
+        repo_root
+        / "docs"
+        / "schemas"
+        / "attestation"
+        / "tp.run_card.attestation.detached.v1"
+        / "attestation.schema.json"
+    )
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    run_card_payload, run_card_bytes = _run_card_v2()
+    attestation = build_run_card_detached_attestation_payload(
+        run_card_payload,
+        run_card_bytes=run_card_bytes,
+        signature={"algorithm": "unit-test", "key_id": "test", "signature": "deadbeef"},
+    )
+    attestation["attestation_sha256"] = None
+
+    jsonschema.Draft202012Validator(schema).validate(attestation)
 
 
 def test_run_card_attestation_preimage_is_deterministic() -> None:

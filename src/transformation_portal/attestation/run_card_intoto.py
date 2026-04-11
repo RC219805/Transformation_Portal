@@ -25,6 +25,10 @@ def _string_field(value: Any, *, field: str) -> str:
     return value
 
 
+def _is_sha256_digest(value: Any) -> bool:
+    return isinstance(value, str) and len(value) == 64 and all(char in "0123456789abcdef" for char in value.lower())
+
+
 def _subject_digest(name: str, sha256: str) -> dict[str, Any]:
     return {
         "name": name,
@@ -214,5 +218,8 @@ def validate_run_card_statement_binding(
         if not isinstance(release_assessment, Mapping):
             raise ValueError("Statement predicate release_assessment must be an object when present")
         sha256_value = release_assessment.get("sha256")
-        if not isinstance(sha256_value, str) or len(sha256_value) != 64:
+        if not _is_sha256_digest(sha256_value):
             raise ValueError("Statement predicate release_assessment.sha256 must be a sha256 digest")
+        status_value = release_assessment.get("status")
+        if status_value is not None and not isinstance(status_value, str):
+            raise ValueError("Statement predicate release_assessment.status must be a string or null")

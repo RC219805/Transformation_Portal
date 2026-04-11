@@ -8,6 +8,11 @@ import json
 import sys
 from pathlib import Path
 
+# Allow running from source checkout without pip install
+_SRC = Path(__file__).resolve().parents[2] / "src"
+if _SRC.is_dir():
+    sys.path.insert(0, str(_SRC))
+
 from transformation_portal.lux_depth_v3.validators.release_assessment import assess_run_card_release
 
 

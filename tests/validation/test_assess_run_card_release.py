@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import subprocess
+import sys
 from pathlib import Path
 
 from transformation_portal.attestation.run_card_detached import build_run_card_detached_attestation_payload
@@ -175,3 +177,44 @@ def test_release_assessment_requires_rekor_inclusion_when_requested(tmp_path: Pa
     assert assessment["status"] == "FAIL"
     sigstore_check = next(check for check in assessment["checks"] if check["name"] == "sigstore_bundle")
     assert sigstore_check["status"] == "FAIL"
+
+
+def test_assess_run_card_release_script_runs_from_source_checkout(tmp_path: Path) -> None:
+    repo_root = tmp_path / "repo"
+    script_path = repo_root / "scripts" / "validation" / "assess_run_card_release.py"
+    script_path.parent.mkdir(parents=True, exist_ok=True)
+    script_path.write_text(
+        (Path(__file__).resolve().parents[2] / "scripts" / "validation" / "assess_run_card_release.py").read_text(
+            encoding="utf-8"
+        ),
+        encoding="utf-8",
+    )
+    for package_dir in (
+        repo_root / "src" / "transformation_portal",
+        repo_root / "src" / "transformation_portal" / "lux_depth_v3",
+        repo_root / "src" / "transformation_portal" / "lux_depth_v3" / "validators",
+    ):
+        package_dir.mkdir(parents=True, exist_ok=True)
+        (package_dir / "__init__.py").write_text("", encoding="utf-8")
+    validator_path = repo_root / "src" / "transformation_portal" / "lux_depth_v3" / "validators" / "release_assessment.py"
+    validator_path.write_text(
+        (
+            "def assess_run_card_release(*, run_card_path, **_kwargs):\n"
+            "    return {\"status\": \"PASS\", \"run_card\": str(run_card_path)}\n"
+        ),
+        encoding="utf-8",
+    )
+    run_card_path = repo_root / "run_card.json"
+    run_card_path.write_text("{}", encoding="utf-8")
+
+    result = subprocess.run(
+        [sys.executable, str(script_path), str(run_card_path)],
+        cwd=repo_root,
+        env={"PATH": "/usr/bin:/bin"},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert json.loads(result.stdout) == {"run_card": str(run_card_path), "status": "PASS"}

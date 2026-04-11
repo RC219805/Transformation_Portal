@@ -12,11 +12,13 @@ _SRC = Path(__file__).resolve().parents[1] / "src"
 if _SRC.is_dir():
     sys.path.insert(0, str(_SRC))
 
-from transformation_portal.lux_depth_v3.artifact_manager import compute_artifact_merkle_root
+from transformation_portal.lux_depth_v3.artifact_manager import compute_artifact_merkle_root as _compute_artifact_merkle_root
 from transformation_portal.lux_depth_v3.validators.run_card_integrity import (
     DEFAULT_SCHEMA_V1_PATH,
     verify_run_card_integrity,
 )
+
+compute_artifact_merkle_root = _compute_artifact_merkle_root
 
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
