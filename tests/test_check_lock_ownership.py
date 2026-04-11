@@ -51,6 +51,57 @@ def test_manifest_must_cover_every_governed_lock_exactly_once() -> None:
     assert "requirements/lock_ownership.yml declares unexpected lock 'unexpected.txt'" in errors
 
 
+def test_load_lock_ownership_parses_manifest_without_pyyaml(tmp_path: Path) -> None:
+    manifest_path = tmp_path / "lock_ownership.yml"
+    manifest_path.write_text(
+        "\n".join(
+            [
+                "version: 1",
+                "locks:",
+                "  all.txt:",
+                "    target_id: generic",
+                '    python_version: "3.11"',
+                "    status: active",
+                "    allowed_contexts:",
+                "      - ubuntu-x64-generic",
+                "  ml-core-darwin-x86_64.txt:",
+                "    target_id: darwin-x86_64",
+                '    python_version: "3.11"',
+                "    status: frozen",
+                "    allowed_contexts: []",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    manifest = ownership.load_lock_ownership(manifest_path)
+
+    assert manifest == {
+        "all.txt": _entry(target_id="generic", status="active", allowed_contexts=["ubuntu-x64-generic"]),
+        "ml-core-darwin-x86_64.txt": _entry(target_id="darwin-x86_64", status="frozen", allowed_contexts=[]),
+    }
+
+
+def test_load_lock_ownership_rejects_unsupported_indentation(tmp_path: Path) -> None:
+    manifest_path = tmp_path / "lock_ownership.yml"
+    manifest_path.write_text(
+        "\n".join(
+            [
+                "version: 1",
+                "locks:",
+                " all.txt:",
+                "    target_id: generic",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="two-space indentation"):
+        ownership.load_lock_ownership(manifest_path)
+
+
 def test_ubuntu_generic_linux_lane_accepts_only_generic_and_linux_locks() -> None:
     manifest = manifest_fixture()
 

@@ -4,10 +4,9 @@
 from __future__ import annotations
 
 import argparse
+import ast
 import sys
 from pathlib import Path
-
-import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 REQUIREMENTS_DIR = REPO_ROOT / "requirements"
@@ -37,9 +36,105 @@ def _normalize_lock_name(value: str) -> str:
     return path.name if path.suffix == ".txt" else value
 
 
+def _parse_manifest_scalar(raw_value: str, *, path: Path, line_number: int) -> object:
+    value = raw_value.strip()
+    if value == "[]":
+        return []
+    if not value:
+        return ""
+    if value[:1] in {'"', "'"}:
+        try:
+            return ast.literal_eval(value)
+        except (SyntaxError, ValueError) as exc:
+            raise ValueError(f"{path}:{line_number} contains an invalid quoted scalar: {value!r}") from exc
+    return value
+
+
+def _parse_lock_ownership_manifest(path: Path) -> dict[str, object]:
+    """Parse the lock ownership YAML subset without requiring PyYAML."""
+    text = path.read_text(encoding="utf-8")
+    data: dict[str, object] = {}
+    locks: dict[str, dict[str, object]] = {}
+    current_lock: dict[str, object] | None = None
+    current_lock_name: str | None = None
+    current_list_key: str | None = None
+
+    for line_number, raw_line in enumerate(text.splitlines(), start=1):
+        stripped = raw_line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+
+        indent = len(raw_line) - len(raw_line.lstrip(" "))
+        if indent % 2 != 0:
+            raise ValueError(f"{path}:{line_number} must use two-space indentation")
+
+        if indent == 0:
+            current_lock = None
+            current_lock_name = None
+            current_list_key = None
+            if ":" not in stripped:
+                raise ValueError(f"{path}:{line_number} must contain a top-level key/value mapping")
+            key, raw_value = stripped.split(":", 1)
+            key = key.strip()
+            raw_value = raw_value.strip()
+            if key == "locks":
+                if raw_value:
+                    raise ValueError(f"{path}:{line_number} top-level 'locks' key must not carry an inline value")
+                data["locks"] = locks
+                continue
+            data[key] = _parse_manifest_scalar(raw_value, path=path, line_number=line_number)
+            continue
+
+        if indent == 2:
+            if "locks" not in data:
+                raise ValueError(f"{path}:{line_number} lock entries must appear under the top-level 'locks' mapping")
+            if not stripped.endswith(":"):
+                raise ValueError(f"{path}:{line_number} lock entry lines must end with ':'")
+            current_lock_name = stripped[:-1].strip()
+            if not current_lock_name:
+                raise ValueError(f"{path}:{line_number} lock entry key must be non-empty")
+            current_lock = {}
+            locks[current_lock_name] = current_lock
+            current_list_key = None
+            continue
+
+        if indent == 4:
+            if current_lock is None or current_lock_name is None:
+                raise ValueError(f"{path}:{line_number} lock fields must belong to a declared lock entry")
+            if ":" not in stripped:
+                raise ValueError(f"{path}:{line_number} lock fields must contain ':'")
+            key, raw_value = stripped.split(":", 1)
+            key = key.strip()
+            raw_value = raw_value.strip()
+            if not key:
+                raise ValueError(f"{path}:{line_number} lock field key must be non-empty")
+            if raw_value:
+                current_lock[key] = _parse_manifest_scalar(raw_value, path=path, line_number=line_number)
+                current_list_key = None
+            else:
+                current_lock[key] = []
+                current_list_key = key
+            continue
+
+        if indent == 6:
+            if current_lock is None or current_list_key is None:
+                raise ValueError(f"{path}:{line_number} list items must follow a list-valued lock field")
+            if not stripped.startswith("- "):
+                raise ValueError(f"{path}:{line_number} list items must start with '- '")
+            list_value = current_lock[current_list_key]
+            if not isinstance(list_value, list):
+                raise ValueError(f"{path}:{line_number} list item target must be a list")
+            list_value.append(str(_parse_manifest_scalar(stripped[2:], path=path, line_number=line_number)))
+            continue
+
+        raise ValueError(f"{path}:{line_number} uses unsupported indentation depth {indent}")
+
+    return data
+
+
 def load_lock_ownership(path: Path = MANIFEST_PATH) -> dict[str, dict[str, object]]:
     """Return the parsed lock ownership manifest."""
-    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    data = _parse_lock_ownership_manifest(path)
     if not isinstance(data, dict):
         raise ValueError(f"{path} must contain a top-level mapping")
 
