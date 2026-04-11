@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import os
+import shlex
 import stat
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -14,6 +16,7 @@ pytestmark = pytest.mark.unit
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT_PATH = PROJECT_ROOT / "scripts" / "validate_dependency_constraints.sh"
 BANNED_REGISTRY_PATH = PROJECT_ROOT / "scripts" / "security" / "banned_dependencies.json"
+RESOLVER_PATH = PROJECT_ROOT / "scripts" / "setup" / "resolve_python_311.sh"
 
 
 def _copy_repo_file(source: Path, destination: Path) -> Path:
@@ -21,6 +24,21 @@ def _copy_repo_file(source: Path, destination: Path) -> Path:
     destination.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
     destination.chmod(source.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
     return destination
+
+
+def _write_executable(path: Path, content: str) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding="utf-8")
+    path.chmod(path.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+    return path
+
+
+def _prepare_repo_python(repo_root: Path) -> None:
+    _copy_repo_file(RESOLVER_PATH, repo_root / "scripts" / "setup" / "resolve_python_311.sh")
+    _write_executable(
+        repo_root / ".venv" / "bin" / "python",
+        f'#!/bin/sh\nexec {shlex.quote(sys.executable)} "$@"\n',
+    )
 
 
 def _write_lockfile(path: Path) -> None:
@@ -44,6 +62,7 @@ def test_target_owned_ml_stale_warning_uses_lane_specific_fix(tmp_path: Path) ->
     repo_root = tmp_path / "repo"
     _copy_repo_file(SCRIPT_PATH, repo_root / "scripts" / "validate_dependency_constraints.sh")
     _copy_repo_file(BANNED_REGISTRY_PATH, repo_root / "scripts" / "security" / "banned_dependencies.json")
+    _prepare_repo_python(repo_root)
 
     requirements_dir = repo_root / "requirements"
     requirements_dir.mkdir(parents=True, exist_ok=True)
@@ -75,6 +94,7 @@ def test_frozen_target_owned_ml_stale_warning_preserves_freeze_guidance(tmp_path
     repo_root = tmp_path / "repo"
     _copy_repo_file(SCRIPT_PATH, repo_root / "scripts" / "validate_dependency_constraints.sh")
     _copy_repo_file(BANNED_REGISTRY_PATH, repo_root / "scripts" / "security" / "banned_dependencies.json")
+    _prepare_repo_python(repo_root)
 
     requirements_dir = repo_root / "requirements"
     requirements_dir.mkdir(parents=True, exist_ok=True)
@@ -99,3 +119,42 @@ def test_frozen_target_owned_ml_stale_warning_preserves_freeze_guidance(tmp_path
     assert result.returncode == 2, result.stdout + result.stderr
     assert "ml-core-darwin-x86_64.in: Compiled .txt file is stale" in result.stdout
     assert "Darwin x86_64 is frozen; do not regenerate until an authoritative lane is defined." in result.stdout
+
+
+def test_validator_uses_repo_resolved_python_instead_of_path_python3(tmp_path: Path) -> None:
+    repo_root = tmp_path / "repo"
+    _copy_repo_file(SCRIPT_PATH, repo_root / "scripts" / "validate_dependency_constraints.sh")
+    _copy_repo_file(BANNED_REGISTRY_PATH, repo_root / "scripts" / "security" / "banned_dependencies.json")
+    _prepare_repo_python(repo_root)
+
+    fakebin = tmp_path / "fakebin"
+    _write_executable(
+        fakebin / "python3",
+        "#!/bin/sh\n" "echo 'broken python3 should not be used' >&2\n" "exit 99\n",
+    )
+    requirements_dir = repo_root / "requirements"
+    requirements_dir.mkdir(parents=True, exist_ok=True)
+    (requirements_dir / "base.in").write_text(
+        "\n".join(
+            [
+                "Pillow>=10.3.0,<13  # Security regression coverage",
+                "starlette==1.0.0  # direct runtime import + curated Starlette 1.x validation target",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    env = {**os.environ, "PATH": f"{fakebin}:/usr/bin:/bin"}
+    result = subprocess.run(
+        ["bash", str(repo_root / "scripts" / "validate_dependency_constraints.sh")],
+        cwd=repo_root,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "broken python3 should not be used" not in (result.stdout + result.stderr)
+    assert "✅ base.in: All constraints valid" in result.stdout
