@@ -7,7 +7,9 @@ This guide helps you get started with Apple's Depth Pro for metric depth estimat
 ### 1. Create a Dedicated Depth Pro Environment
 
 ```bash
-python3.11 -m venv .venv-depth-pro
+# Use any Python 3.11+ interpreter (e.g., python3.11, python3.12, python3.13).
+# The resolver picks a compatible one automatically:
+"$(./scripts/setup/resolve_python_311.sh)" -m venv .venv-depth-pro
 ./.venv-depth-pro/bin/python -m pip install --upgrade pip
 ./.venv-depth-pro/bin/python -m pip install depth-pro
 ```
