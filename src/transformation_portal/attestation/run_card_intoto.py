@@ -217,11 +217,13 @@ def validate_run_card_statement_binding(
         release_assessment = predicate["release_assessment"]
         if not isinstance(release_assessment, Mapping):
             raise ValueError("Statement predicate release_assessment must be an object when present")
-        sha256_value = release_assessment.get("sha256")
+        if "sha256" not in release_assessment:
+            raise ValueError("Statement predicate release_assessment.sha256 is required")
+        sha256_value = release_assessment["sha256"]
         if not _is_sha256_digest(sha256_value):
             raise ValueError("Statement predicate release_assessment.sha256 must be a sha256 digest")
         if "status" not in release_assessment:
-            raise ValueError("Statement predicate release_assessment.status must be present")
+            raise ValueError("Statement predicate release_assessment.status is required")
         status_value = release_assessment["status"]
         if status_value is not None and not isinstance(status_value, str):
             raise ValueError("Statement predicate release_assessment.status must be a string or null")
