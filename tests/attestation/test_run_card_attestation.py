@@ -10,8 +10,8 @@ import pytest
 
 from transformation_portal.attestation.dsse import decode_dsse_payload
 from transformation_portal.attestation.run_card_detached import (
-    build_run_card_detached_attestation_payload,
     bind_run_card_detached_attestation,
+    build_run_card_detached_attestation_payload,
     canonical_run_card_attestation_preimage_bytes,
     compute_run_card_attestation_sha256,
     validate_run_card_detached_attestation_surface,

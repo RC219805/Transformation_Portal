@@ -78,24 +78,38 @@ def main() -> int:
     try:
         integrity_errors = verify_run_card_integrity(run_card_path, check_canonical_json=True)
         if integrity_errors:
-            raise ValueError("run card integrity verification failed before attestation verification: " + "; ".join(integrity_errors))
+            raise ValueError(
+                "run card integrity verification failed before attestation verification: " + "; ".join(integrity_errors)
+            )
         run_card_payload = _read_json_object(run_card_path, name="run card")
         run_card_bytes = run_card_path.read_bytes()
     except ValueError as exc:
         print(str(exc), file=sys.stderr)
         return EXIT_INPUT_ERROR
 
-    native_path = Path(args.native_attestation) if args.native_attestation else _default_sidecar_path(
-        run_card_path,
-        ".attestation.native.json",
+    native_path = (
+        Path(args.native_attestation)
+        if args.native_attestation
+        else _default_sidecar_path(
+            run_card_path,
+            ".attestation.native.json",
+        )
     )
-    dsse_path = Path(args.dsse_attestation) if args.dsse_attestation else _default_sidecar_path(
-        run_card_path,
-        ".attestation.dsse.json",
+    dsse_path = (
+        Path(args.dsse_attestation)
+        if args.dsse_attestation
+        else _default_sidecar_path(
+            run_card_path,
+            ".attestation.dsse.json",
+        )
     )
-    bundle_path = Path(args.sigstore_bundle) if args.sigstore_bundle else _default_sidecar_path(
-        run_card_path,
-        ".attestation.dsse.sigstore.bundle.json",
+    bundle_path = (
+        Path(args.sigstore_bundle)
+        if args.sigstore_bundle
+        else _default_sidecar_path(
+            run_card_path,
+            ".attestation.dsse.sigstore.bundle.json",
+        )
     )
     sigstore_bundle_requested = args.sigstore_bundle is not None or args.require_sigstore_bundle
 
@@ -123,6 +137,8 @@ def main() -> int:
                     )
                 gpg_verify_clearsign(str(native_attestation["signature"]["signature"]))
 
+        if sigstore_bundle_requested and not dsse_path.exists():
+            raise ValueError("cannot verify a Sigstore bundle when the DSSE attestation is missing")
         if args.require_dsse and not dsse_path.exists():
             raise ValueError(f"required DSSE attestation not found: {dsse_path}")
         if dsse_path.exists():

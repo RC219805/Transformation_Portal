@@ -248,3 +248,19 @@ def test_verify_cli_accepts_gpg_and_sigstore_bundle_when_helpers_exist(tmp_path:
     )
 
     assert result.returncode == 0, result.stderr
+
+
+def test_verify_cli_rejects_explicit_sigstore_bundle_without_dsse_attestation(tmp_path: Path) -> None:
+    run_card_path, _, dsse_path, bundle_path = _build_inputs(tmp_path)
+    dsse_path.unlink()
+
+    result = _run_tool(
+        "--run-card",
+        str(run_card_path),
+        "--sigstore-bundle",
+        str(bundle_path),
+    )
+
+    assert result.returncode == 5
+    assert "Sigstore bundle" in result.stderr
+    assert "DSSE attestation is missing" in result.stderr
