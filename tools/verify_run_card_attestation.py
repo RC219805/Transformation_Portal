@@ -9,6 +9,11 @@ import sys
 import traceback
 from pathlib import Path
 
+_SRC = Path(__file__).resolve().parents[1] / "src"
+if _SRC.is_dir():
+    sys.path.insert(0, str(_SRC))
+
+# pylint: disable=wrong-import-position
 from transformation_portal.attestation.dsse import (
     DSSE_IN_TOTO_JSON_PAYLOAD_TYPE,
     decode_dsse_payload,

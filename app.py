@@ -2554,7 +2554,6 @@ def _build_lux_config_preview(
         "emit_marketing",
         "emit_report",
         "emit_run_card",
-        "run_card_include_proofs",
         "non_commercial_ok",
         "accept_apple_depth_pro_research_license",
         "accept_research_tools_license",

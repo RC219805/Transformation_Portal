@@ -5876,7 +5876,9 @@ class EnhanceOrchestrator:
                     "on",
                 }
             artifact_tree = build_artifact_tree(artifact_index, include_proofs=bool(include_proofs))
-        artifact_merkle_root = _compute_artifact_merkle_root(artifact_index)
+            artifact_merkle_root = None
+        else:
+            artifact_merkle_root = _compute_artifact_merkle_root(artifact_index)
         backend_summary = self._compute_backend_summary(results)
         requested_backend_defect = self._requested_backend_fulfillment_defect(
             results,

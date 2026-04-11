@@ -276,3 +276,67 @@ def test_sign_cli_rejects_sigstore_bundle_path_for_native_only_output(tmp_path: 
     assert result.returncode == 2
     assert "--sigstore-bundle-out requires --format dsse or --format both" in result.stderr
     assert not bundle_path.exists()
+
+
+def test_sign_cli_runs_from_source_checkout_without_pyproject_install(tmp_path: Path) -> None:
+    repo_root = tmp_path / "repo"
+    tool_path = repo_root / "tools" / "sign_run_card_attestation.py"
+    tool_path.parent.mkdir(parents=True, exist_ok=True)
+    tool_path.write_text(TOOL_PATH.read_text(encoding="utf-8"), encoding="utf-8")
+
+    package_roots = [
+        repo_root / "src" / "transformation_portal",
+        repo_root / "src" / "transformation_portal" / "attestation",
+        repo_root / "src" / "transformation_portal" / "lux_depth_v3",
+    ]
+    for package_dir in package_roots:
+        package_dir.mkdir(parents=True, exist_ok=True)
+        (package_dir / "__init__.py").write_text("", encoding="utf-8")
+
+    (repo_root / "src" / "transformation_portal" / "attestation" / "dsse.py").write_text(
+        'DSSE_IN_TOTO_JSON_PAYLOAD_TYPE = "application/test"\ndef pre_auth_encode(*_args, **_kwargs):\n    return b""\n',
+        encoding="utf-8",
+    )
+    (repo_root / "src" / "transformation_portal" / "attestation" / "gpg.py").write_text(
+        "def gpg_clearsign_bytes(*_args, **_kwargs):\n"
+        '    return ""\n'
+        "def gpg_detached_sign_bytes(*_args, **_kwargs):\n"
+        '    return b""\n',
+        encoding="utf-8",
+    )
+    (repo_root / "src" / "transformation_portal" / "attestation" / "run_card_detached.py").write_text(
+        "def build_run_card_detached_attestation_payload(*_args, **_kwargs):\n"
+        "    return {}\n"
+        "def canonical_run_card_attestation_bytes(*_args, **_kwargs):\n"
+        '    return b""\n'
+        "def canonical_run_card_attestation_preimage_bytes(*_args, **_kwargs):\n"
+        '    return b""\n',
+        encoding="utf-8",
+    )
+    (repo_root / "src" / "transformation_portal" / "attestation" / "run_card_intoto.py").write_text(
+        "def build_run_card_dsse_envelope(*_args, **_kwargs):\n"
+        "    return {}\n"
+        "def canonical_run_card_statement_bytes(*_args, **_kwargs):\n"
+        '    return b""\n',
+        encoding="utf-8",
+    )
+    (repo_root / "src" / "transformation_portal" / "attestation" / "sigstore.py").write_text(
+        "def cosign_sign_blob(*_args, **_kwargs):\n    return None\n",
+        encoding="utf-8",
+    )
+    (repo_root / "src" / "transformation_portal" / "lux_depth_v3" / "validators.py").write_text(
+        "def verify_run_card_integrity(*_args, **_kwargs):\n    return []\n",
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        [sys.executable, str(tool_path), "--help"],
+        cwd=repo_root,
+        env={"PATH": "/usr/bin:/bin"},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "--run-card" in result.stdout
