@@ -114,8 +114,12 @@ def test_materials_v3_process_integration(tmp_path, mock_depth_backend, mock_da3
     assert "timing_ms" in pixel_ops
 
 
-def test_run_materials_v3_stage_persists_mask_artifact_and_sets_metadata(tmp_path, mock_depth_backend, mock_da3_available):
-    """Materials V3 stage should persist segmentation mask artifacts and merge metadata."""
+def test_run_materials_v3_stage_aligns_v2_handoff_artifacts_and_sets_metadata(
+    tmp_path,
+    mock_depth_backend,
+    mock_da3_available,
+):
+    """Materials V3 stage should align persisted handoff artifacts to the depth artifact shape."""
     config = EnhanceConfig(
         enable_materials_v3=True,
         apply_pixel_ops=True,
@@ -127,10 +131,11 @@ def test_run_materials_v3_stage_persists_mask_artifact_and_sets_metadata(tmp_pat
     preprocessed_array = np.zeros((8, 8, 3), dtype=np.float32)
     depth_map = np.ones((8, 8), dtype=np.float32)
     glass_mask = np.ones((8, 8), dtype=np.float32)
+    enhanced_image = np.linspace(0.0, 1.0, 8 * 8 * 3, dtype=np.float32).reshape(8, 8, 3)
     output_key = Path("nested/image_01")
 
     materials_result = {
-        "enhanced_image": None,
+        "enhanced_image": enhanced_image,
         "materials_v3_response_plan": {"per_class": {}},
         "materials_v3_pixel_ops": {"applied": [], "blocked": []},
         "materials_v3_metadata": {
@@ -152,14 +157,24 @@ def test_run_materials_v3_stage_persists_mask_artifact_and_sets_metadata(tmp_pat
                     preprocessed_array=preprocessed_array,
                     depth_map=depth_map,
                     output_key=output_key,
+                    artifact_shape=(10, 12),
                 )
 
     assert result is materials_result
-    assert enhanced_path is None
+    assert enhanced_path is not None
+    assert enhanced_path.exists()
+
+    from PIL import Image
+
+    with Image.open(enhanced_path) as enhanced_image_file:
+        assert enhanced_image_file.size == (12, 10)
 
     segmentation_metadata = result["materials_v3_metadata"]["segmentation_metadata"]
     assert segmentation_metadata["clip_runtime"]["weights_source"] == "cache_path"
     assert segmentation_metadata["mask_artifact_format"] == "npz"
+    assert segmentation_metadata["processing_shape"] == [8, 8]
+    assert segmentation_metadata["v2_handoff_shape"] == [10, 12]
+    assert segmentation_metadata["mask_artifact_shape"] == [10, 12]
 
     mask_artifact_path = Path(segmentation_metadata["mask_artifact_path"])
     assert mask_artifact_path == orchestrator._segmentation_mask_artifact_path(output_key)
@@ -169,9 +184,10 @@ def test_run_materials_v3_stage_persists_mask_artifact_and_sets_metadata(tmp_pat
         assert set(data.files) == {"glass"}
         loaded_mask = np.asarray(data["glass"])
 
-    assert loaded_mask.shape == glass_mask.shape
+    assert loaded_mask.shape == (10, 12)
     assert loaded_mask.dtype == np.float32
-    assert np.array_equal(loaded_mask, glass_mask)
+    assert result["material_masks"]["glass"].shape == (10, 12)
+    assert float(loaded_mask.mean()) == pytest.approx(1.0, rel=1e-6, abs=1e-6)
 
 
 def test_materials_v3_manifest_integration(tmp_path, mock_depth_backend, mock_da3_available):
@@ -373,8 +389,8 @@ def test_apex_strict_gate_not_applied_outside_apex(tmp_path, mock_depth_backend,
     orchestrator._enforce_apex_materials_gate({"materials": {}})
 
 
-def test_apex_v2_preflight_rejects_non_canonical_fastpath(tmp_path, mock_depth_backend, mock_da3_available):
-    """APEX strict mode should fail before V2 when cached fast-path drifts from canonical stem."""
+def test_apex_v2_preflight_skips_when_v2_disabled(tmp_path, mock_depth_backend, mock_da3_available):
+    """APEX+Materials flows with V2 disabled must not fail on the V2-only preflight invariant."""
     config = EnhanceConfig(
         quality_tier="apex",
         enable_materials_v3=True,
@@ -385,6 +401,38 @@ def test_apex_v2_preflight_rejects_non_canonical_fastpath(tmp_path, mock_depth_b
         enable_v2=False,
     )
     orchestrator = EnhanceOrchestrator(config, tmp_path)
+
+    depth_path = tmp_path / "depth" / "image_depth.png"
+    depth_path.parent.mkdir(parents=True, exist_ok=True)
+    depth_path.write_bytes(b"depth")
+
+    non_canonical_input = tmp_path / "input" / "image.png"
+    non_canonical_input.parent.mkdir(parents=True, exist_ok=True)
+    non_canonical_input.write_bytes(b"raw")
+
+    # Must not raise even though the input is not canonical: V2 is disabled.
+    orchestrator._enforce_apex_v2_canonical_input_preflight(
+        depth_path=depth_path,
+        output_key=Path("image_01"),
+        v2_input_path=non_canonical_input,
+        enhanced_image_path=None,
+        materials_v3_result={"materials_v3_metadata": {"version": "3.1"}},
+    )
+
+
+def test_apex_v2_preflight_rejects_non_canonical_fastpath(tmp_path, mock_depth_backend, mock_da3_available):
+    """APEX strict mode should fail before V2 when cached fast-path drifts from canonical stem."""
+    config = EnhanceConfig(
+        quality_tier="apex",
+        enable_materials_v3=True,
+        enable_material_segmentation=True,
+        material_segmentation_backend="efficientsam",
+        strict_backend=True,
+        depth_device="cpu",
+        enable_v2=True,
+    )
+    orchestrator = EnhanceOrchestrator(config, tmp_path)
+    orchestrator.v2_runner = MagicMock()
 
     depth_path = tmp_path / "depth" / "image_depth.png"
     depth_path.parent.mkdir(parents=True, exist_ok=True)
@@ -406,6 +454,8 @@ def test_apex_v2_preflight_rejects_non_canonical_fastpath(tmp_path, mock_depth_b
 
 def test_apex_v2_preflight_accepts_canonical_handoff(tmp_path, mock_depth_backend, mock_da3_available):
     """APEX strict mode should allow V2 preflight only with canonical enhanced input + masks."""
+    from PIL import Image
+
     config = EnhanceConfig(
         quality_tier="apex",
         enable_materials_v3=True,
@@ -413,26 +463,176 @@ def test_apex_v2_preflight_accepts_canonical_handoff(tmp_path, mock_depth_backen
         material_segmentation_backend="efficientsam",
         strict_backend=True,
         depth_device="cpu",
-        enable_v2=False,
+        enable_v2=True,
     )
     orchestrator = EnhanceOrchestrator(config, tmp_path)
+    orchestrator.v2_runner = MagicMock()
 
     output_key = Path("image_01")
     depth_path = tmp_path / "depth" / "image_depth.png"
     depth_path.parent.mkdir(parents=True, exist_ok=True)
-    depth_path.write_bytes(b"depth")
+    Image.fromarray(np.full((8, 8), 128, dtype=np.uint8), mode="L").save(depth_path)
 
     expected_path = orchestrator._expected_materials_v3_enhanced_path(output_key)
     expected_path.parent.mkdir(parents=True, exist_ok=True)
-    expected_path.write_bytes(b"enhanced")
+    Image.fromarray(np.full((8, 8, 3), 64, dtype=np.uint8), mode="RGB").save(expected_path)
 
     orchestrator._enforce_apex_v2_canonical_input_preflight(
         depth_path=depth_path,
         output_key=output_key,
         v2_input_path=expected_path,
         enhanced_image_path=expected_path,
-        materials_v3_result={"material_masks": {"glass": np.ones((2, 2), dtype=np.float32)}},
+        materials_v3_result={"material_masks": {"glass": np.ones((8, 8), dtype=np.float32)}},
     )
+
+
+def test_apex_v2_preflight_rejects_dimension_drift(tmp_path, mock_depth_backend, mock_da3_available):
+    """APEX strict mode should fail before V2 when image, depth, and mask shapes drift."""
+    from PIL import Image
+
+    config = EnhanceConfig(
+        quality_tier="apex",
+        enable_materials_v3=True,
+        enable_material_segmentation=True,
+        material_segmentation_backend="efficientsam",
+        strict_backend=True,
+        depth_device="cpu",
+        enable_v2=True,
+    )
+    orchestrator = EnhanceOrchestrator(config, tmp_path)
+    orchestrator.v2_runner = MagicMock()
+
+    output_key = Path("image_01")
+    depth_path = tmp_path / "depth" / "image_depth.png"
+    depth_path.parent.mkdir(parents=True, exist_ok=True)
+    Image.fromarray(np.full((8, 8), 128, dtype=np.uint8), mode="L").save(depth_path)
+
+    expected_path = orchestrator._expected_materials_v3_enhanced_path(output_key)
+    expected_path.parent.mkdir(parents=True, exist_ok=True)
+    Image.fromarray(np.full((6, 6, 3), 64, dtype=np.uint8), mode="RGB").save(expected_path)
+
+    with pytest.raises(RuntimeError, match="dimension drift"):
+        orchestrator._enforce_apex_v2_canonical_input_preflight(
+            depth_path=depth_path,
+            output_key=output_key,
+            v2_input_path=expected_path,
+            enhanced_image_path=expected_path,
+            materials_v3_result={"material_masks": {"glass": np.ones((8, 8), dtype=np.float32)}},
+        )
+
+
+def test_apex_v2_preflight_rejects_in_memory_mask_shape_drift_with_structured_gate_error(
+    tmp_path,
+    mock_depth_backend,
+    mock_da3_available,
+):
+    """APEX strict mode should surface inconsistent in-memory mask shapes as structured gate errors."""
+    from PIL import Image
+
+    config = EnhanceConfig(
+        quality_tier="apex",
+        enable_materials_v3=True,
+        enable_material_segmentation=True,
+        material_segmentation_backend="efficientsam",
+        strict_backend=True,
+        depth_device="cpu",
+        enable_v2=True,
+    )
+    orchestrator = EnhanceOrchestrator(config, tmp_path)
+    orchestrator.v2_runner = MagicMock()
+
+    output_key = Path("image_01")
+    depth_path = tmp_path / "depth" / "image_depth.png"
+    depth_path.parent.mkdir(parents=True, exist_ok=True)
+    Image.fromarray(np.full((8, 8), 128, dtype=np.uint8), mode="L").save(depth_path)
+
+    expected_path = orchestrator._expected_materials_v3_enhanced_path(output_key)
+    expected_path.parent.mkdir(parents=True, exist_ok=True)
+    Image.fromarray(np.full((8, 8, 3), 64, dtype=np.uint8), mode="RGB").save(expected_path)
+
+    with pytest.raises(ApexStrictGateError) as exc_info:
+        orchestrator._enforce_apex_v2_canonical_input_preflight(
+            depth_path=depth_path,
+            output_key=output_key,
+            v2_input_path=expected_path,
+            enhanced_image_path=expected_path,
+            materials_v3_result={
+                "material_masks": {
+                    "glass": np.ones((8, 8), dtype=np.float32),
+                    "metal": np.ones((6, 6), dtype=np.float32),
+                }
+            },
+        )
+
+    assert exc_info.value.code == "APEX_MATERIAL_MASK_SHAPE_MISMATCH"
+    assert exc_info.value.details == {
+        "source": "material_masks",
+        "material_key": "metal",
+        "expected_mask_shape": [8, 8],
+        "observed_mask_shape": [6, 6],
+    }
+
+
+def test_apex_v2_preflight_rejects_persisted_mask_shape_drift_with_structured_gate_error(
+    tmp_path,
+    mock_depth_backend,
+    mock_da3_available,
+):
+    """APEX strict mode should surface persisted mask-shape drift as structured gate errors."""
+    from PIL import Image
+
+    config = EnhanceConfig(
+        quality_tier="apex",
+        enable_materials_v3=True,
+        enable_material_segmentation=True,
+        material_segmentation_backend="efficientsam",
+        strict_backend=True,
+        depth_device="cpu",
+        enable_v2=True,
+    )
+    orchestrator = EnhanceOrchestrator(config, tmp_path)
+    orchestrator.v2_runner = MagicMock()
+
+    output_key = Path("image_01")
+    depth_path = tmp_path / "depth" / "image_depth.png"
+    depth_path.parent.mkdir(parents=True, exist_ok=True)
+    Image.fromarray(np.full((8, 8), 128, dtype=np.uint8), mode="L").save(depth_path)
+
+    expected_path = orchestrator._expected_materials_v3_enhanced_path(output_key)
+    expected_path.parent.mkdir(parents=True, exist_ok=True)
+    Image.fromarray(np.full((8, 8, 3), 64, dtype=np.uint8), mode="RGB").save(expected_path)
+
+    mask_artifact_path = tmp_path / "materials" / "mask_bundle.npz"
+    mask_artifact_path.parent.mkdir(parents=True, exist_ok=True)
+    np.savez(
+        mask_artifact_path,
+        glass=np.ones((8, 8), dtype=np.float32),
+        metal=np.ones((6, 6), dtype=np.float32),
+    )
+
+    with pytest.raises(ApexStrictGateError) as exc_info:
+        orchestrator._enforce_apex_v2_canonical_input_preflight(
+            depth_path=depth_path,
+            output_key=output_key,
+            v2_input_path=expected_path,
+            enhanced_image_path=expected_path,
+            materials_v3_result={
+                "materials_v3_metadata": {
+                    "segmentation_metadata": {
+                        "mask_artifact_path": str(mask_artifact_path),
+                    }
+                }
+            },
+        )
+
+    assert exc_info.value.code == "APEX_MATERIAL_MASK_SHAPE_MISMATCH"
+    assert exc_info.value.details == {
+        "source": "mask_artifact",
+        "mask_artifact_path": str(mask_artifact_path),
+        "material_key": "metal",
+        "expected_mask_shape": [8, 8],
+        "observed_mask_shape": [6, 6],
+    }
 
 
 def test_apex_cached_depth_recomputes_materials_for_canonical_handoff(tmp_path, mock_depth_backend, mock_da3_available):
@@ -467,7 +667,8 @@ def test_apex_cached_depth_recomputes_materials_for_canonical_handoff(tmp_path, 
         "materials_v3_metadata": {"version": "3.1"},
     }
 
-    def _run_stage(*, preprocessed_array, depth_map, output_key):  # noqa: ARG001
+    def _run_stage(*, preprocessed_array, depth_map, output_key, artifact_shape):  # noqa: ARG001
+        assert artifact_shape == (4, 4)
         expected_path.write_bytes(b"enhanced")
         return recomputed_result, 0.321, expected_path
 

@@ -34,6 +34,7 @@ import json
 import logging
 import os
 import platform
+import re
 import subprocess
 import sys
 from dataclasses import asdict, dataclass
@@ -161,6 +162,78 @@ def extract_exif_metadata(image_path: Path) -> Dict[str, Any]:
         raise ProvenanceError("Failed to parse exiftool" f" JSON output: {e}") from e
     except subprocess.TimeoutExpired as e:
         raise ProvenanceError("exiftool timed out after 30s") from e
+
+
+_BENIGN_EXIFTOOL_WARNING_PATTERNS = (
+    (
+        "EXIFTOOL_MAKERNOTE_OFFSET_WARNING",
+        re.compile(
+            r"^\[minor\]\s+Possibly incorrect maker notes offsets\b",
+            re.IGNORECASE,
+        ),
+    ),
+)
+
+
+def _normalize_exiftool_warning_messages(exif_metadata: Dict[str, Any]) -> list[str]:
+    """Normalize ExifTool warning payloads into a list of strings."""
+    raw_warning = exif_metadata.get("ExifTool:Warning")
+    if isinstance(raw_warning, str):
+        warning = raw_warning.strip()
+        return [warning] if warning else []
+    if isinstance(raw_warning, list):
+        warnings = []
+        for value in raw_warning:
+            if not isinstance(value, str):
+                continue
+            warning = value.strip()
+            if warning:
+                warnings.append(warning)
+        return warnings
+    return []
+
+
+def _classify_exiftool_warnings(exif_metadata: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Classify raw ExifTool warnings without mutating the captured EXIF payload."""
+    warnings = _normalize_exiftool_warning_messages(exif_metadata)
+    if not warnings:
+        return None
+
+    benign = []
+    actionable = []
+    for warning in warnings:
+        matched_code = None
+        for code, pattern in _BENIGN_EXIFTOOL_WARNING_PATTERNS:
+            if pattern.search(warning):
+                matched_code = code
+                break
+        entry = {
+            "tag": "ExifTool:Warning",
+            "message": warning,
+        }
+        if matched_code is not None:
+            benign.append(
+                {
+                    **entry,
+                    "code": matched_code,
+                    "classification": "benign",
+                }
+            )
+        else:
+            actionable.append(
+                {
+                    **entry,
+                    "code": "EXIFTOOL_WARNING_UNCLASSIFIED",
+                    "classification": "actionable",
+                }
+            )
+
+    return {
+        "exiftool": {
+            "benign": benign,
+            "actionable": actionable,
+        }
+    }
 
 
 def get_toolchain_versions() -> Dict[str, Optional[str]]:
@@ -314,6 +387,7 @@ class ProvenanceMetadata:
     exif: Dict[str, Any]
     toolchain: Dict[str, Optional[str]]
     ingest_context: IngestContext
+    warning_classification: Optional[Dict[str, Any]] = None
 
     def validate_required_fields(self) -> None:
         """Validate that all required fields are present and well-formed.
@@ -373,6 +447,7 @@ class ProvenanceMetadata:
             "exif": self.exif,
             "toolchain": self.toolchain,
             "ingest_context": self.ingest_context.to_dict(),
+            **({"warning_classification": self.warning_classification} if self.warning_classification is not None else {}),
         }
 
     def to_json(self, indent: int = 2) -> str:
@@ -456,6 +531,7 @@ class ProvenanceMetadata:
             schema_version=schema_version,
             input=InputFileMetadata(**data["input"]),
             exif=data["exif"],
+            warning_classification=data.get("warning_classification"),
             toolchain=data["toolchain"],
             ingest_context=IngestContext(**data["ingest_context"]),
         )
@@ -580,6 +656,7 @@ def capture_provenance(
         schema_version=PROVENANCE_SCHEMA_VERSION,
         input=input_metadata,
         exif=exif_metadata,
+        warning_classification=_classify_exiftool_warnings(exif_metadata),
         toolchain=toolchain,
         ingest_context=ingest_context,
     )

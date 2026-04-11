@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.transformation-portal.dev/attestation/tp.run_card.attestation.detached.v1/attestation.schema.json",
+  "title": "Run Card Detached Attestation (tp.run_card.attestation.detached.v1)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "attestation_sha256",
+    "canonicalization",
+    "schema",
+    "signature",
+    "subject"
+  ],
+  "properties": {
+    "schema": {
+      "const": "tp.run_card.attestation.detached.v1"
+    },
+    "canonicalization": {
+      "const": "tp.canonical.json.v1"
+    },
+    "subject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_tree_root_sha256",
+        "batch_id",
+        "run_card_schema",
+        "run_card_sha256"
+      ],
+      "properties": {
+        "run_card_schema": {
+          "const": "https://rc219805.github.io/Transformation_Portal/docs/schemas/run_card/run_card.v2.schema.json"
+        },
+        "batch_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "run_card_sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "artifact_tree_root_sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      }
+    },
+    "signature": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "algorithm",
+        "key_id",
+        "signature"
+      ],
+      "properties": {
+        "algorithm": {
+          "type": "string",
+          "minLength": 1
+        },
+        "key_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "signature": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "signed_at": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+        }
+      ]
+    },
+    "toolchain": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object"
+        }
+      ]
+    },
+    "claims": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object"
+        }
+      ]
+    },
+    "attestation_sha256": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      ]
+    }
+  }
+}

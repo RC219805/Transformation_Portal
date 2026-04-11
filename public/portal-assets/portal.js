@@ -117,7 +117,13 @@ const state = {
         },
         v2Preset: 'default',
         emits: {
-            master16: true, upscaled16: true, marketing: false, report: true, runCard: true
+            master16: true,
+            upscaled16: true,
+            marketing: false,
+            report: true,
+            runCard: true,
+            runCardVersion: 'v1',
+            runCardIncludeProofs: false
         },
         gate: { archiveIndex: '', manifestJsonl: '' },
         licenses: { nonCommercialOk: false, acceptApple: false, acceptResearchTools: false },
@@ -356,7 +362,8 @@ const els = {
         upscaled16: document.getElementById('emitUpscaled16'),
         marketing: document.getElementById('emitMarketing'),
         report: document.getElementById('emitReport'),
-        runCard: document.getElementById('emitRunCard')
+        runCard: document.getElementById('emitRunCard'),
+        runCardIncludeProofs: document.getElementById('emitRunCardIncludeProofs')
     },
 
     licenses: {
@@ -2075,6 +2082,9 @@ function renderCapabilityChips(payload) {
     if (parseBoolLike(args.pbr, false)) chips.push('PBR generation');
     if (parseBoolLike(args.enable_reconstruction, false)) chips.push('Scene reconstruction');
     if (parseBoolLike(args.emit_run_card, false)) chips.push('Run card emission');
+    if (parseBoolLike(args.emit_run_card, false) && parseBoolLike(args.run_card_include_proofs, false)) {
+        chips.push('Run card proofs');
+    }
 
     els.capabilityChips.innerHTML = '';
     chips.forEach((chip) => {
@@ -4434,6 +4444,11 @@ function _resolveGroupingMode(value) {
     return 'single';
 }
 
+function _resolveRunCardVersion(value) {
+    const normalized = String(value || '').trim().toLowerCase();
+    return normalized === 'v2' ? 'v2' : 'v1';
+}
+
 function _parsePositiveIntOrNull(value) {
     if (value === null || value === undefined) return null;
     const text = String(value).trim();
@@ -5745,6 +5760,10 @@ function buildCanonicalLuxDepthArgs(config) {
     const emitRunCard = els.emits.runCard
         ? Boolean(els.emits.runCard.checked)
         : parseBoolLike(config.emits?.runCard, true);
+    const emitRunCardIncludeProofs = els.emits.runCardIncludeProofs
+        ? Boolean(els.emits.runCardIncludeProofs.checked)
+        : parseBoolLike(config.emits?.runCardIncludeProofs, false);
+    const runCardVersion = _resolveRunCardVersion(config.emits?.runCardVersion);
 
     const nonCommercialOk = els.licenses.nonCommercialOk
         ? Boolean(els.licenses.nonCommercialOk.checked)
@@ -5833,6 +5852,8 @@ function buildCanonicalLuxDepthArgs(config) {
         emit_marketing: emitMarketing,
         emit_report: emitReport,
         emit_run_card: emitRunCard,
+        run_card_version: runCardVersion,
+        run_card_include_proofs: emitRunCardIncludeProofs,
         non_commercial_ok: nonCommercialOk,
         accept_apple_depth_pro_research_license: acceptApple,
         accept_research_tools_license: acceptResearchTools,
@@ -5924,6 +5945,12 @@ function applyPresetRecommendedArgs(presetName) {
     if (Object.prototype.hasOwnProperty.call(recommended, 'emit_marketing')) c.emits.marketing = parseBoolLike(recommended.emit_marketing, c.emits.marketing);
     if (Object.prototype.hasOwnProperty.call(recommended, 'emit_report')) c.emits.report = parseBoolLike(recommended.emit_report, c.emits.report);
     if (Object.prototype.hasOwnProperty.call(recommended, 'emit_run_card')) c.emits.runCard = parseBoolLike(recommended.emit_run_card, c.emits.runCard);
+    if (Object.prototype.hasOwnProperty.call(recommended, 'run_card_version')) {
+        c.emits.runCardVersion = _resolveRunCardVersion(recommended.run_card_version);
+    }
+    if (Object.prototype.hasOwnProperty.call(recommended, 'run_card_include_proofs')) {
+        c.emits.runCardIncludeProofs = parseBoolLike(recommended.run_card_include_proofs, c.emits.runCardIncludeProofs);
+    }
 
     c.licenses = c.licenses || {};
     if (Object.prototype.hasOwnProperty.call(recommended, 'non_commercial_ok')) c.licenses.nonCommercialOk = parseBoolLike(recommended.non_commercial_ok, c.licenses.nonCommercialOk);
@@ -6109,6 +6136,8 @@ function updateUIFromState() {
     c.emits.marketing = parseBoolLike(c.emits.marketing, false);
     c.emits.report = parseBoolLike(c.emits.report, true);
     c.emits.runCard = parseBoolLike(c.emits.runCard, true);
+    c.emits.runCardVersion = _resolveRunCardVersion(c.emits.runCardVersion);
+    c.emits.runCardIncludeProofs = parseBoolLike(c.emits.runCardIncludeProofs, false);
     c.gate = c.gate || {};
     c.gate.archiveIndex = _textOrFallback(c.gate.archiveIndex, '');
     c.gate.manifestJsonl = _textOrFallback(c.gate.manifestJsonl, '');
@@ -6194,6 +6223,7 @@ function updateUIFromState() {
     safeSyncCheck(els.emits.marketing, c.emits.marketing);
     safeSyncCheck(els.emits.report, c.emits.report);
     safeSyncCheck(els.emits.runCard, c.emits.runCard);
+    safeSyncCheck(els.emits.runCardIncludeProofs, c.emits.runCardIncludeProofs);
 
     safeSyncCheck(els.licenses.nonCommercialOk, c.licenses.nonCommercialOk);
     safeSyncCheck(els.licenses.acceptApple, c.licenses.acceptApple);
@@ -6555,6 +6585,8 @@ function renderCLI() {
         cliLines.push(`  --emit-marketing ${onoff(payload.args.emit_marketing)}`);
         cliLines.push(`  --emit-report ${onoff(payload.args.emit_report)}`);
         cliLines.push(`  --emit-run-card ${onoff(payload.args.emit_run_card)}`);
+        cliLines.push(`  --run-card-version ${q(payload.args.run_card_version || 'v1')}`);
+        cliLines.push(`  --run-card-include-proofs ${onoff(payload.args.run_card_include_proofs)}`);
         cliLines.push(`  --enable-v2 ${onoff(payload.args.enable_v2)}`);
 
         if (parseBoolLike(payload.args.enable_v2, false) && payload.args.v2_preset) {
@@ -6806,6 +6838,7 @@ function bindInputs() {
     safeBindCheck(els.emits.marketing, 'emits', 'marketing');
     safeBindCheck(els.emits.report, 'emits', 'report');
     safeBindCheck(els.emits.runCard, 'emits', 'runCard');
+    safeBindCheck(els.emits.runCardIncludeProofs, 'emits', 'runCardIncludeProofs');
 
     safeBindCheck(els.licenses.nonCommercialOk, 'licenses', 'nonCommercialOk');
     safeBindCheck(els.licenses.acceptApple, 'licenses', 'acceptApple');
@@ -8019,6 +8052,11 @@ if (els.fileInput) els.fileInput.addEventListener('change', async (e) => {
             c.emits.marketing = parseBoolLike(data.args.emit_marketing, c.emits.marketing);
             c.emits.report = parseBoolLike(data.args.emit_report, c.emits.report);
             c.emits.runCard = parseBoolLike(data.args.emit_run_card, c.emits.runCard);
+            c.emits.runCardVersion = _resolveRunCardVersion(data.args.run_card_version || c.emits.runCardVersion);
+            c.emits.runCardIncludeProofs = parseBoolLike(
+                data.args.run_card_include_proofs,
+                c.emits.runCardIncludeProofs
+            );
 
             c.gate = c.gate || {};
             c.gate.archiveIndex = _textOrFallback(

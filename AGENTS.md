@@ -3,9 +3,10 @@
 Quick reference for common workflows and commands in this repo.
 
 ## Common commands (Makefile)
-- `make venv` create local `.venv` if missing.
+- `make venv` create local `.venv` with a Python 3.11+ interpreter, or fail closed if an existing `.venv` is unsupported.
 - `make setup` install package in editable mode.
-- `make install-core` install core runtime + dev tooling dependencies (with constraints if present).
+- `make install-core` install the pinned core runtime + dev tooling lockfiles into `.venv`, install the project editable with `--no-deps`, and run `pip check`.
+- `make repair-core-venv` recreate `.venv`, reinstall the pinned core environment, and re-run `pip check`.
 - `make install-ml` disabled; no trusted checked-in umbrella ML lockfile contract.
 - `make install-ml-core` install the platform-specific checked-in ML core baseline selected from the local OS/architecture.
 - `make install-ml-raw` disabled; no trusted checked-in RAW lockfile contract.
@@ -44,7 +45,7 @@ Quick reference for common workflows and commands in this repo.
 - `make quality-check` run lint + workflow validation + the root-file placement check.
 - `make fix-quality` auto-fix quality issues (`scripts/auto_fix_quality.py --fix-all`).
 - `make check-quality` dry-run quality auto-fix checks (`scripts/auto_fix_quality.py --dry-run`).
-- `make check-environment` run pre-flight environment validation (`scripts/validation/check_local_environment.py`).
+- `make check-environment` run pre-flight environment validation through the resolved repo interpreter.
 - `make check-worktree` check if git worktree is clean after builds (`scripts/validation/check_worktree_clean.sh`).
 - `make validate-ci` validate GitHub Actions configs plus dependency-update and Dependabot contracts.
 - `make check-json-serialization` fail when raw `json.dump`/`json.dumps` usage is detected outside approved modules.
@@ -72,10 +73,12 @@ Quick reference for common workflows and commands in this repo.
 - `make docs-clean` remove generated docs output.
 
 ## Environment Validation Scripts
-- `./scripts/validation/check_local_environment.py` unified pre-flight validation for Python, Node, Chrome, and port availability.
-- `./scripts/validation/check_local_environment.py --strict` treat soft failures as hard failures.
-- `./scripts/validation/check_local_environment.py --check python` check only Python version.
-- `./scripts/validation/check_local_environment.py --check node` check only Node.js version (22.x required).
+- `make check-environment` run the canonical pre-flight validation flow.
+- `./.venv/bin/python scripts/validation/check_local_environment.py` run the pre-flight validation script directly when you need a specific check.
+- `./.venv/bin/python scripts/validation/check_local_environment.py --strict` treat soft failures as hard failures.
+- `./.venv/bin/python scripts/validation/check_local_environment.py --check python` check only Python version.
+- `./.venv/bin/python scripts/validation/check_local_environment.py --check node` check only Node.js version (22.x required).
+- `./.venv/bin/python scripts/validation/check_local_environment.py --check dependency-health` run `pip check` for the active interpreter.
 - `./scripts/setup/ensure_node_version.sh` Node version enforcement wrapper with version manager detection.
 - `./scripts/validation/run_full_validation_suite.sh` all-in-one validation orchestrator.
 - `./scripts/validation/run_full_validation_suite.sh --quick` skip browser smokes for faster iteration.

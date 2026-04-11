@@ -68,6 +68,16 @@ jobs:
         run: |
           pytest -v -m "not ml and not slow and not benchmark" tests/test_verify_run_card_integrity.py
 
+      - name: Run card trust unit gate
+        run: |
+          pytest -v -m "not ml and not slow and not benchmark" \
+            tests/crypto/test_ct_merkle.py \
+            tests/lux_depth_v3/test_artifact_tree.py \
+            tests/attestation/test_run_card_attestation.py \
+            tests/attestation/test_sign_run_card_attestation_cli.py \
+            tests/attestation/test_verify_run_card_attestation_cli.py \
+            tests/validation/test_assess_run_card_release.py
+
       - name: Generate minimal runtime run card artifact
         env:
           TP_ALLOW_SYNTHETIC_FALLBACK: "1"
@@ -90,6 +100,7 @@ jobs:
             --depth-device cpu \
             --enable-v2 off \
             --emit-run-card on \
+            --run-card-version v2 \
             --cache-depth off \
             --pbr off
 

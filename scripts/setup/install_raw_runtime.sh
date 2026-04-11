@@ -7,6 +7,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+PYTHON_RESOLVER="${REPO_ROOT}/scripts/setup/resolve_python_311.sh"
 
 VENV_DIR="${REPO_ROOT}/.venv-raw"
 RUNTIME_METADATA_DIR="${REPO_ROOT}/.runtime"
@@ -89,14 +90,17 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-if ! command -v python3 >/dev/null 2>&1; then
-    printf '[ERROR] python3 is required but not available on PATH.\n' >&2
+if [[ ! -x "${PYTHON_RESOLVER}" ]]; then
+    printf '[ERROR] Python resolver missing: %s\n' "${PYTHON_RESOLVER}" >&2
     exit 1
 fi
 
+BOOTSTRAP_PYTHON="$("${PYTHON_RESOLVER}")"
+
 if [[ ! -d "${VENV_DIR}" ]]; then
     log "Creating isolated RAW venv at ${VENV_DIR}"
-    run python3 -m venv "${VENV_DIR}"
+    log "Using bootstrap interpreter: ${BOOTSTRAP_PYTHON}"
+    run "${BOOTSTRAP_PYTHON}" -m venv "${VENV_DIR}"
 fi
 
 PYTHON_BIN="${VENV_DIR}/bin/python"

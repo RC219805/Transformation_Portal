@@ -6,6 +6,7 @@ import hashlib
 import json
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import patch
 
 import numpy as np
 import pytest
@@ -695,3 +696,110 @@ def test_resolve_run_card_backend_model_artifact_prefers_selected_attempt():
         "model_artifact_filename": "depth_pro.pt",
         "model_artifact_sha256": "b" * 64,
     }
+
+
+def test_emit_run_card_respects_run_card_include_proofs_flag(tmp_path: Path):
+    config = EnhanceConfig(
+        model_variant=ModelVariant.METRIC_LARGE,
+        run_card_version="v2",
+        run_card_include_proofs=False,
+    )
+    orch = EnhanceOrchestrator(config, tmp_path)
+
+    artifact_path = tmp_path / "depth" / "image_01_depth.png"
+    artifact_path.parent.mkdir(parents=True, exist_ok=True)
+    artifact_path.write_bytes(b"depth")
+    missing_schema_path = tmp_path / "missing_run_card.schema.json"
+
+    with (
+        patch(
+            "transformation_portal.lux_depth_v3.orchestrator.build_artifact_tree", return_value={"artifacts": []}
+        ) as build_tree,
+        patch.object(orch, "_collect_run_card_artifact_paths", return_value=[artifact_path]),
+        patch.object(
+            orch,
+            "_compute_backend_summary",
+            return_value={
+                "requested_backend": "da3",
+                "primary_backend": "da3",
+                "final_backends_used": ["da3"],
+                "fallback_images": 0,
+                "semantic_fallback_images": 0,
+                "operational_fallback_images": 0,
+            },
+        ),
+        patch.object(orch, "_requested_backend_fulfillment_defect", return_value=None),
+        patch.object(
+            orch,
+            "_resolve_run_card_backend_model_artifact",
+            return_value={"model_artifact_filename": None, "model_artifact_sha256": None},
+        ),
+        patch.object(orch, "_resolve_run_card_backend_model_id", return_value="depth-anything/DA3"),
+        patch("transformation_portal.lux_depth_v3.orchestrator._run_card_schema_path", return_value=missing_schema_path),
+    ):
+        orch._emit_run_card(
+            batch_id="2026-04-10_120000",
+            start_time="2026-04-10T12:00:00Z",
+            end_time="2026-04-10T12:05:00Z",
+            results=[{"status": "ok"}],
+            runtime_stats={"count": 1},
+            outliers=[],
+        )
+
+    build_tree.assert_called_once()
+    assert build_tree.call_args.kwargs["include_proofs"] is False
+
+
+def test_emit_run_card_skips_legacy_merkle_root_for_v2(tmp_path: Path):
+    config = EnhanceConfig(
+        model_variant=ModelVariant.METRIC_LARGE,
+        run_card_version="v2",
+    )
+    orch = EnhanceOrchestrator(config, tmp_path)
+
+    artifact_path = tmp_path / "depth" / "image_01_depth.png"
+    artifact_path.parent.mkdir(parents=True, exist_ok=True)
+    artifact_path.write_bytes(b"depth")
+    missing_schema_path = tmp_path / "missing_run_card.schema.json"
+
+    with (
+        patch(
+            "transformation_portal.lux_depth_v3.orchestrator.build_artifact_tree", return_value={"artifacts": []}
+        ) as build_tree,
+        patch(
+            "transformation_portal.lux_depth_v3.orchestrator._compute_artifact_merkle_root",
+            side_effect=AssertionError("legacy merkle root should not be computed for v2"),
+        ) as merkle_root,
+        patch.object(orch, "_collect_run_card_artifact_paths", return_value=[artifact_path]),
+        patch.object(
+            orch,
+            "_compute_backend_summary",
+            return_value={
+                "requested_backend": "da3",
+                "primary_backend": "da3",
+                "final_backends_used": ["da3"],
+                "fallback_images": 0,
+                "semantic_fallback_images": 0,
+                "operational_fallback_images": 0,
+            },
+        ),
+        patch.object(orch, "_requested_backend_fulfillment_defect", return_value=None),
+        patch.object(
+            orch,
+            "_resolve_run_card_backend_model_artifact",
+            return_value={"model_artifact_filename": None, "model_artifact_sha256": None},
+        ),
+        patch.object(orch, "_resolve_run_card_backend_model_id", return_value="depth-anything/DA3"),
+        patch("transformation_portal.lux_depth_v3.orchestrator._run_card_schema_path", return_value=missing_schema_path),
+    ):
+        orch._emit_run_card(
+            batch_id="2026-04-10_120000",
+            start_time="2026-04-10T12:00:00Z",
+            end_time="2026-04-10T12:05:00Z",
+            results=[{"status": "ok"}],
+            runtime_stats={"count": 1},
+            outliers=[],
+        )
+
+    build_tree.assert_called_once()
+    merkle_root.assert_not_called()

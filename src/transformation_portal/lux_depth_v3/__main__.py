@@ -450,6 +450,16 @@ def main(
         "--emit-run-card",
         help="Emit run card for reproducibility: on/off",
     ),
+    run_card_version: str = typer.Option(
+        "v1",
+        "--run-card-version",
+        help="Run card format version: v1 (legacy hash-of-hashes) or v2 (transparency artifact tree).",
+    ),
+    run_card_include_proofs: str = typer.Option(
+        "off",
+        "--run-card-include-proofs",
+        help="Include per-artifact inclusion proofs in v2 run cards: on/off",
+    ),
     # License and Research Acknowledgements
     non_commercial_ok: str = typer.Option(
         "false",
@@ -613,6 +623,13 @@ def main(
     enable_emit_marketing = _parse_bool_flag(emit_marketing)
     enable_emit_report = _parse_bool_flag(emit_report)
     enable_emit_run_card = _parse_bool_flag(emit_run_card)
+    enable_run_card_include_proofs = _parse_bool_flag(run_card_include_proofs)
+    normalized_run_card_version = str(run_card_version or "v1").strip().lower()
+    if normalized_run_card_version not in {"v1", "v2"}:
+        error_msg = f"Invalid --run-card-version '{run_card_version}'. " "Must be one of: v1, v2"
+        logger.error(error_msg)
+        print(error_msg, file=sys.stdout)
+        raise typer.Exit(code=1)
     enable_non_commercial = _parse_bool_flag(non_commercial_ok)
     enable_apple_license = _parse_bool_flag(
         accept_apple_depth_pro_research_license,
@@ -859,6 +876,8 @@ def main(
         emit_marketing=enable_emit_marketing,
         emit_report=enable_emit_report,
         emit_run_card=enable_emit_run_card,
+        run_card_version=normalized_run_card_version,
+        run_card_include_proofs=enable_run_card_include_proofs,
         enable_reconstruction=enable_reconstruction_bool,
         grouping_mode=grouping_mode_normalized,
         cameras_sidecar_path=(str(cameras_sidecar_path) if cameras_sidecar_path else None),

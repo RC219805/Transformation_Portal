@@ -61,6 +61,7 @@ from .artifact_manager import (
     make_output_key,
     v2_log_filename,
 )
+from .artifact_tree import build_artifact_tree
 from .batch_stats import compute_batch_runtime_stats, detect_runtime_outliers
 from .camera_metadata_loader import load_scene_cameras, load_sidecar_payload
 from .config import DA3Config, EnhanceConfig, ModelVariant
@@ -210,6 +211,29 @@ class ApexStrictGateError(RuntimeError):
 
 class _MaskSerializationRejected(RuntimeError):
     """Internal signal for non-fatal mask serialization rejection."""
+
+
+def _shape_2d(arr: np.ndarray) -> tuple[int, int]:
+    """Extract 2D shape from array as properly typed tuple[int, int].
+
+    This helper converts numpy shape slices into typed 2-element tuples
+    to satisfy mypy's strict tuple type checking. Without this, the
+    generator expression `tuple(int(v) for v in arr.shape[:2])` produces
+    `tuple[int, ...]` which is incompatible with `tuple[int, int]`.
+
+    Args:
+        arr: A numpy array with at least 2 dimensions (depth maps, masks, images).
+
+    Returns:
+        A tuple of (height, width) representing the first two dimensions.
+
+    Raises:
+        IndexError: If the array has fewer than 2 dimensions.
+    """
+    if arr.ndim < 2:
+        raise IndexError(f"_shape_2d requires an array with at least 2 dimensions, got {arr.ndim}D array")
+    height, width = int(arr.shape[0]), int(arr.shape[1])
+    return (height, width)
 
 
 def _log_dependency_status() -> dict:
@@ -954,6 +978,17 @@ class EnhanceOrchestrator:
         if "mps" in message and "not available" in message:
             return "MPS_UNAVAILABLE"
         return "BACKEND_RUNTIME_ERROR"
+
+    def _set_active_depth_state(
+        self,
+        backend_metadata: Optional[BackendSelectionMetadata],
+        depth_attempts: List[Dict[str, Any]],
+        selected_attempt_index: Optional[int],
+    ) -> None:
+        """Persist per-image depth state for downstream error/reporting paths."""
+        self._active_backend_metadata = backend_metadata
+        self._active_depth_attempts = list(depth_attempts)
+        self._active_selected_attempt_index = selected_attempt_index
 
     def _build_backend_metadata_for_attempts(
         self,
@@ -1739,6 +1774,7 @@ class EnhanceOrchestrator:
                 depth_validity_metrics = None
                 selected_backend_id = _primary_backend_name
                 selected_attempt_index: Optional[int] = None
+                native_depth_shape: Optional[tuple[int, int]] = None
                 last_error: Optional[Exception] = None
                 attempt_offset = len(depth_attempts)
 
@@ -1882,8 +1918,6 @@ class EnhanceOrchestrator:
                         if isinstance(result_device, str) and result_device:
                             attempt_record["device"] = result_device
 
-                        # CRITICAL FIX (#2): Resize depth
-                        # back to original dimensions
                         depth_candidate = (
                             result_candidate.depth_map
                             if hasattr(
@@ -1892,43 +1926,11 @@ class EnhanceOrchestrator:
                             )
                             else result_candidate.depth
                         )
-                        current_shape = depth_candidate.shape[:2]
-                        if current_shape != original_shape:
-                            from PIL import Image as PILImage
-
-                            logger.debug(
-                                "Resizing depth map" " from %s back to" " original %s",
-                                current_shape,
-                                original_shape,
-                            )
-                            # Preserve raw numeric depth
-                            # semantics during resize.
-                            depth_pil = PILImage.fromarray(
-                                np.asarray(
-                                    depth_candidate,
-                                    dtype=np.float32,
-                                ),
-                                mode="F",
-                            )
-                            depth_pil_resized = depth_pil.resize(
-                                (
-                                    original_shape[1],
-                                    original_shape[0],
-                                ),
-                                PILImage.Resampling.BILINEAR,
-                            )
-                            depth_candidate = np.array(
-                                depth_pil_resized,
-                                dtype=np.float32,
-                            )
-                            if hasattr(result_candidate, "depth_map"):
-                                result_candidate.depth_map = depth_candidate
-                            else:
-                                object.__setattr__(
-                                    result_candidate,
-                                    "depth",
-                                    depth_candidate,
-                                )
+                        native_depth_map = np.asarray(
+                            depth_candidate,
+                            dtype=np.float32,
+                        )
+                        current_shape = _shape_2d(native_depth_map)
 
                         result_metadata = dict(
                             getattr(
@@ -1976,13 +1978,50 @@ class EnhanceOrchestrator:
                         # 2b. APEX depth validity gate
                         # (plateau/saturation guardrails)
                         gate_result = self._enforce_apex_depth_validity_gate(
-                            depth_candidate,
+                            native_depth_map,
                             depth_units=getattr(
                                 result_candidate,
                                 "depth_units",
                                 None,
                             ),
+                            native_shape=current_shape,
+                            artifact_shape=original_shape,
                         )
+
+                        artifact_depth_map = native_depth_map
+                        if current_shape != original_shape:
+                            from PIL import Image as PILImage
+
+                            logger.debug(
+                                "Resizing depth map" " from %s back to" " original %s",
+                                current_shape,
+                                original_shape,
+                            )
+                            # Preserve raw numeric depth
+                            # semantics during resize.
+                            depth_pil = PILImage.fromarray(
+                                native_depth_map,
+                                mode="F",
+                            )
+                            depth_pil_resized = depth_pil.resize(
+                                (
+                                    original_shape[1],
+                                    original_shape[0],
+                                ),
+                                PILImage.Resampling.BILINEAR,
+                            )
+                            artifact_depth_map = np.array(
+                                depth_pil_resized,
+                                dtype=np.float32,
+                            )
+                            if hasattr(result_candidate, "depth_map"):
+                                result_candidate.depth_map = artifact_depth_map
+                            else:
+                                object.__setattr__(
+                                    result_candidate,
+                                    "depth",
+                                    artifact_depth_map,
+                                )
 
                         attempt_record.update(
                             {
@@ -2000,10 +2039,11 @@ class EnhanceOrchestrator:
                         depth_attempts.append(attempt_record)
 
                         result = result_candidate
-                        depth_map = depth_candidate
+                        depth_map = native_depth_map
                         depth_validity_metrics = gate_result
                         selected_backend_id = backend_id
                         selected_attempt_index = attempt_slot
+                        native_depth_shape = current_shape
                         break
 
                     except LicenseRestrictionError as license_error:
@@ -2094,9 +2134,11 @@ class EnhanceOrchestrator:
                     ),
                     selected_attempt_index=(selected_attempt_index),
                 )
-                self._active_backend_metadata = active_backend_metadata
-                self._active_depth_attempts = depth_attempts
-                self._active_selected_attempt_index = selected_attempt_index
+                self._set_active_depth_state(
+                    active_backend_metadata,
+                    depth_attempts,
+                    selected_attempt_index,
+                )
 
                 # 2c. Materials V3 Processing (if enabled)
                 if self.materials_v3_engine:
@@ -2108,6 +2150,7 @@ class EnhanceOrchestrator:
                         preprocessed_array=preprocessed_array,
                         depth_map=depth_map,
                         output_key=output_key,
+                        artifact_shape=_shape_2d(result.depth),
                     )
 
                 # 3. Write quantized depth (PNG 16-bit)
@@ -2134,6 +2177,10 @@ class EnhanceOrchestrator:
                     "non_commercial_ok": self.config.non_commercial_ok,
                     "dtype": "uint16",
                     "shape": list(result.depth.shape[:2]),
+                    "native_shape": (
+                        list(native_depth_shape) if native_depth_shape is not None else list(result.depth.shape[:2])
+                    ),
+                    "artifact_shape": list(result.depth.shape[:2]),
                     "representation": "depth",
                     "convention": "higher_is_farther",
                     "unit": (
@@ -2189,6 +2236,11 @@ class EnhanceOrchestrator:
                 }
                 if depth_validity_metrics:
                     stats["apex_depth_validity"] = depth_validity_metrics
+                    shape_context = depth_validity_metrics.get("shape_context")
+                    if isinstance(shape_context, dict):
+                        gate_shape = shape_context.get("gate_evaluated_shape")
+                        if isinstance(gate_shape, list):
+                            stats["gate_evaluated_shape"] = gate_shape
 
                 # Merge inference provenance into depth stats
                 _md = getattr(result, "metadata", None) or {}
@@ -2247,6 +2299,11 @@ class EnhanceOrchestrator:
 
             except Exception as e:
                 logger.error(f"Depth failed: {e}")
+                self._set_active_depth_state(
+                    active_backend_metadata,
+                    depth_attempts,
+                    selected_attempt_index,
+                )
                 if isinstance(e, ApexStrictGateError):
                     logger.error(
                         "APEX strict gate failure:" " code=%s details=%s",
@@ -2257,8 +2314,6 @@ class EnhanceOrchestrator:
                 if self.config.depth_fallback == "fail":
                     raise
                 elif self.config.depth_fallback == "skip":
-                    self._active_backend_metadata = active_backend_metadata
-                    self._active_depth_attempts = depth_attempts
                     return (
                         None,
                         0.0,
@@ -2275,8 +2330,6 @@ class EnhanceOrchestrator:
                     )
                     if depth_path.exists():
                         depth_path.unlink()
-                    self._active_backend_metadata = active_backend_metadata
-                    self._active_depth_attempts = depth_attempts
                     return (
                         None,
                         0.0,
@@ -2471,6 +2524,155 @@ class EnhanceOrchestrator:
         """Return canonical segmentation mask path."""
         return self.segmentation_dir / output_key.parent / f"{output_key.stem}" "_materials_v3_masks.npz"
 
+    @staticmethod
+    def _resize_float_array_to_shape(
+        array: np.ndarray,
+        target_shape: tuple[int, int],
+        *,
+        resample: Any,
+    ) -> np.ndarray:
+        """Resize 2D or RGB float arrays deterministically."""
+        from PIL import Image as PILImage
+
+        float_array = np.asarray(array, dtype=np.float32)
+        if float_array.shape[:2] == target_shape:
+            return float_array.astype(np.float32, copy=False)
+
+        if float_array.ndim == 2:
+            image = PILImage.fromarray(float_array, mode="F")
+            resized = image.resize(
+                (target_shape[1], target_shape[0]),
+                resample=resample,
+            )
+            return np.asarray(resized, dtype=np.float32)
+
+        if float_array.ndim == 3 and float_array.shape[2] == 3:
+            channels = [
+                EnhanceOrchestrator._resize_float_array_to_shape(
+                    float_array[..., channel_index],
+                    target_shape,
+                    resample=resample,
+                )
+                for channel_index in range(float_array.shape[2])
+            ]
+            return np.stack(channels, axis=-1).astype(np.float32)
+
+        raise ValueError(f"Expected 2D mask or RGB image for handoff resize, got shape {float_array.shape}")
+
+    def _align_materials_v3_handoff_payload(
+        self,
+        materials_v3_result: Dict[str, Any],
+        *,
+        artifact_shape: tuple[int, int],
+        processing_shape: tuple[int, int],
+    ) -> Dict[str, Any]:
+        """Resize Materials V3 handoff artifacts to the depth artifact shape."""
+        from PIL import Image as PILImage
+
+        target_shape: tuple[int, int] = artifact_shape
+        processing_shape_list = [processing_shape[0], processing_shape[1]]
+        handoff_shape_list = [target_shape[0], target_shape[1]]
+
+        enhanced_image = materials_v3_result.get("enhanced_image")
+        if enhanced_image is not None:
+            materials_v3_result["enhanced_image"] = self._resize_float_array_to_shape(
+                np.asarray(enhanced_image, dtype=np.float32),
+                target_shape,
+                resample=PILImage.Resampling.BILINEAR,
+            )
+
+        material_masks = materials_v3_result.get("material_masks")
+        if isinstance(material_masks, dict) and material_masks:
+            aligned_masks: Dict[str, np.ndarray] = {}
+            for material_name, mask in material_masks.items():
+                aligned_masks[material_name] = self._resize_float_array_to_shape(
+                    np.asarray(mask, dtype=np.float32),
+                    target_shape,
+                    resample=PILImage.Resampling.NEAREST,
+                )
+            materials_v3_result["material_masks"] = aligned_masks
+
+        materials_v3_metadata = materials_v3_result.setdefault(
+            "materials_v3_metadata",
+            {},
+        )
+        if not isinstance(materials_v3_metadata, dict):
+            materials_v3_metadata = {}
+            materials_v3_result["materials_v3_metadata"] = materials_v3_metadata
+
+        segmentation_metadata = materials_v3_metadata.get(
+            "segmentation_metadata",
+        )
+        segmentation_metadata = dict(segmentation_metadata) if isinstance(segmentation_metadata, dict) else {}
+        segmentation_metadata["processing_shape"] = processing_shape_list
+        segmentation_metadata["v2_handoff_shape"] = handoff_shape_list
+        materials_v3_metadata["segmentation_metadata"] = segmentation_metadata
+        return materials_v3_result
+
+    @staticmethod
+    def _artifact_image_shape(image_path: Path) -> tuple[int, int]:
+        """Read image artifact dimensions as (height, width)."""
+        from PIL import Image as PILImage
+
+        with PILImage.open(image_path) as image:
+            return int(image.size[1]), int(image.size[0])
+
+    def _material_mask_shape(
+        self,
+        materials_v3_result: Optional[dict],
+    ) -> Optional[tuple[int, int]]:
+        """Resolve a common material mask shape from in-memory or persisted artifacts."""
+        if not isinstance(materials_v3_result, dict):
+            return None
+
+        material_masks = materials_v3_result.get("material_masks")
+        if isinstance(material_masks, dict) and material_masks:
+            resolved_shape: Optional[tuple[int, int]] = None
+            for material_key, mask in material_masks.items():
+                mask_shape = _shape_2d(np.asarray(mask))
+                if resolved_shape is None:
+                    resolved_shape = mask_shape
+                    continue
+                if resolved_shape != mask_shape:
+                    raise ApexStrictGateError(
+                        "APEX_MATERIAL_MASK_SHAPE_MISMATCH",
+                        "APEX strict mode requires consistent Materials V3 mask shapes before V2 handoff.",
+                        details={
+                            "source": "material_masks",
+                            "material_key": str(material_key),
+                            "expected_mask_shape": list(resolved_shape),
+                            "observed_mask_shape": list(mask_shape),
+                        },
+                    )
+            return resolved_shape
+
+        mask_artifact_path = self._persisted_material_mask_artifact_path(
+            materials_v3_result,
+        )
+        if mask_artifact_path is None:
+            return None
+
+        with np.load(mask_artifact_path) as data:
+            resolved_shape = None
+            for mask_name in data.files:
+                mask_shape = _shape_2d(np.asarray(data[mask_name]))
+                if resolved_shape is None:
+                    resolved_shape = mask_shape
+                    continue
+                if resolved_shape != mask_shape:
+                    raise ApexStrictGateError(
+                        "APEX_MATERIAL_MASK_SHAPE_MISMATCH",
+                        "APEX strict mode requires consistent Materials V3 mask shapes before V2 handoff.",
+                        details={
+                            "source": "mask_artifact",
+                            "mask_artifact_path": str(mask_artifact_path),
+                            "material_key": str(mask_name),
+                            "expected_mask_shape": list(resolved_shape),
+                            "observed_mask_shape": list(mask_shape),
+                        },
+                    )
+        return resolved_shape
+
     def _persist_material_masks_artifact(
         self,
         masks: Dict[str, np.ndarray],
@@ -2495,6 +2697,7 @@ class EnhanceOrchestrator:
         preprocessed_array: np.ndarray,
         depth_map: np.ndarray,
         output_key: Path,
+        artifact_shape: Optional[tuple[int, int]] = None,
     ) -> tuple[Optional[dict], float, Optional[Path]]:
         """Run Materials V3 stage and persist artifacts."""
         if not self.materials_v3_engine:
@@ -2552,6 +2755,13 @@ class EnhanceOrchestrator:
             runtime_s = time.time() - t_materials_start
 
             if materials_v3_result:
+                if artifact_shape is not None:
+                    materials_v3_result = self._align_materials_v3_handoff_payload(
+                        materials_v3_result,
+                        artifact_shape=artifact_shape,
+                        processing_shape=_shape_2d(preprocessed_array),
+                    )
+
                 material_masks = materials_v3_result.get("material_masks")
                 if isinstance(material_masks, dict) and material_masks:
                     mask_artifact_path = self._persist_material_masks_artifact(
@@ -2580,6 +2790,9 @@ class EnhanceOrchestrator:
                             mask_artifact_path,
                         )
                         segmentation_metadata["mask_artifact_format"] = "npz"
+                        segmentation_metadata["mask_artifact_shape"] = list(
+                            np.asarray(next(iter(material_masks.values()))).shape[:2]
+                        )
                         materials_v3_metadata["segmentation_metadata"] = segmentation_metadata
 
                 enhanced_image = materials_v3_result.get("enhanced_image")
@@ -2798,6 +3011,7 @@ class EnhanceOrchestrator:
                 dtype=np.float32,
             ),
             output_key=output_key,
+            artifact_shape=_shape_2d(np.asarray(depth_for_materials)),
         )
 
         has_recomputed_masks = bool(
@@ -2845,6 +3059,8 @@ class EnhanceOrchestrator:
         materials_v3_result: Optional[dict],
     ) -> None:
         """Fail early when APEX strict violates handoff."""
+        if not self.config.enable_v2 or self.v2_runner is None:
+            return
         if not self._is_apex_materials_gate_enabled():
             return
         if not depth_path or not depth_path.exists():
@@ -2858,12 +3074,30 @@ class EnhanceOrchestrator:
         enhanced_path_resolved = enhanced_image_path.resolve() if enhanced_image_path else None
         has_masks = bool(
             materials_v3_result
-            and materials_v3_result.get(
-                "material_masks",
+            and (
+                materials_v3_result.get(
+                    "material_masks",
+                )
+                or self._persisted_material_mask_artifact_path(materials_v3_result) is not None
             )
         )
 
         if actual_path_resolved == expected_path_resolved and expected_path.exists() and has_masks:
+            depth_shape = self._artifact_image_shape(depth_path)
+            v2_input_shape = self._artifact_image_shape(Path(v2_input_path))
+            mask_shape = self._material_mask_shape(materials_v3_result)
+            if v2_input_shape != depth_shape or mask_shape != depth_shape:
+                raise ApexStrictGateError(
+                    "APEX_V2_HANDOFF_DIMENSION_DRIFT",
+                    "APEX strict mode forbids V2 handoff dimension drift.",
+                    details={
+                        "depth_path": str(depth_path),
+                        "v2_input_path": str(v2_input_path),
+                        "depth_shape": list(depth_shape),
+                        "v2_input_shape": list(v2_input_shape),
+                        "mask_shape": list(mask_shape) if mask_shape is not None else None,
+                    },
+                )
             return
 
         raise ApexStrictGateError(
@@ -4046,10 +4280,40 @@ class EnhanceOrchestrator:
             "gate_normalization": normalization,
         }
 
+    @staticmethod
+    def _shape_list(shape: Any) -> Optional[List[int]]:
+        """Normalize an arbitrary HxW shape payload to a JSON-safe list."""
+        if isinstance(shape, (tuple, list)) and len(shape) >= 2:
+            try:
+                return [int(shape[0]), int(shape[1])]
+            except (TypeError, ValueError):
+                return None
+        return None
+
+    def _build_apex_depth_shape_context(
+        self,
+        *,
+        gate_evaluated_shape: Any,
+        native_shape: Any,
+        artifact_shape: Any,
+    ) -> Dict[str, Optional[List[int]]]:
+        """Build explicit shape context for APEX gate telemetry."""
+        gate_shape = self._shape_list(gate_evaluated_shape)
+        native_shape_list = self._shape_list(native_shape) or gate_shape
+        artifact_shape_list = self._shape_list(artifact_shape) or native_shape_list
+        return {
+            "gate_evaluated_shape": gate_shape,
+            "native_shape": native_shape_list,
+            "artifact_shape": artifact_shape_list,
+        }
+
     def _enforce_apex_depth_validity_gate(
         self,
         depth_map: np.ndarray,
         depth_units: Optional[str] = None,
+        *,
+        native_shape: Optional[Any] = None,
+        artifact_shape: Optional[Any] = None,
     ) -> Optional[Dict[str, Any]]:
         """APEX-only depth quality gate."""
         if not self._is_apex_tier():
@@ -4058,6 +4322,11 @@ class EnhanceOrchestrator:
         metrics = self._compute_depth_validity_metrics(
             depth_map,
             depth_units=depth_units,
+        )
+        shape_context = self._build_apex_depth_shape_context(
+            gate_evaluated_shape=np.asarray(depth_map).shape[:2],
+            native_shape=native_shape or np.asarray(depth_map).shape[:2],
+            artifact_shape=artifact_shape or native_shape or np.asarray(depth_map).shape[:2],
         )
 
         _cfg = self.config
@@ -4191,6 +4460,7 @@ class EnhanceOrchestrator:
                 "failure_codes": failure_codes,
                 "metrics": metrics,
                 "thresholds": thresholds,
+                "shape_context": shape_context,
             }
             raise ApexStrictGateError(
                 failure_codes[0] if len(failure_codes) == 1 else "APEX_DEPTH_INVALID",
@@ -4214,6 +4484,7 @@ class EnhanceOrchestrator:
             "warnings": warnings,
             "metrics": metrics,
             "thresholds": thresholds,
+            "shape_context": shape_context,
         }
 
     def _enforce_apex_materials_gate(
@@ -5586,7 +5857,28 @@ class EnhanceOrchestrator:
             self.output_root,
             artifact_paths,
         )
-        artifact_merkle_root = _compute_artifact_merkle_root(artifact_index)
+        run_card_version = str(getattr(self.config, "run_card_version", "v1") or "v1").strip().lower()
+        if run_card_version not in {"v1", "v2"}:
+            logger.warning(
+                "Unsupported run_card_version=%r; falling back to v1",
+                run_card_version,
+            )
+            run_card_version = "v1"
+        artifact_tree = None
+        if run_card_version == "v2":
+            include_proofs_config = getattr(self.config, "run_card_include_proofs", False)
+            include_proofs = include_proofs_config
+            if isinstance(include_proofs_config, str):
+                include_proofs = include_proofs_config.strip().lower() in {
+                    "1",
+                    "true",
+                    "yes",
+                    "on",
+                }
+            artifact_tree = build_artifact_tree(artifact_index, include_proofs=bool(include_proofs))
+            artifact_merkle_root = None
+        else:
+            artifact_merkle_root = _compute_artifact_merkle_root(artifact_index)
         backend_summary = self._compute_backend_summary(results)
         requested_backend_defect = self._requested_backend_fulfillment_defect(
             results,
@@ -5645,7 +5937,11 @@ class EnhanceOrchestrator:
             "success_count": sum(1 for r in results if r.get("status") == "ok"),
             "error_count": sum(1 for r in results if r.get("status") == "error"),
             "artifact_index": artifact_index,
-            "artifact_merkle_root": artifact_merkle_root,
+            **(
+                {"artifact_tree": artifact_tree}
+                if run_card_version == "v2"
+                else {"artifact_merkle_root": artifact_merkle_root}
+            ),
         }
 
         def _json_default(obj: Any) -> Any:
@@ -5705,7 +6001,7 @@ class EnhanceOrchestrator:
             # --- Final deterministic fallback ---
             return str(obj)
 
-        schema_path = _run_card_schema_path()
+        schema_path = _run_card_schema_path(run_card_version)
         if not schema_path.exists():
             logger.warning(
                 "Run card schema not found" " at %s; skipping run card" " emission for" " batch_id=%s",

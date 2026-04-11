@@ -45,6 +45,7 @@ lux-depth-v3 \
   --emit-marketing "on" \
   --emit-report "on" \
   --emit-run-card "on" \
+  --run-card-version "v2" \
   --overwrite
 ```
 
@@ -101,6 +102,7 @@ lux-depth-v3 \
   --emit-marketing "on" \
   --emit-report "on" \
   --emit-run-card "on" \
+  --run-card-version "v2" \
   --overwrite
 ```
 
@@ -129,6 +131,7 @@ lux-depth-v3 \
   --emit-marketing "on" \
   --emit-report "on" \
   --emit-run-card "on" \
+  --run-card-version "v2" \
   --overwrite
 ```
 
@@ -184,6 +187,9 @@ lux-depth-v3 \
 - `--emit-marketing TEXT`: Emit marketing-ready output (default: `off`)
 - `--emit-report TEXT`: Emit processing report (default: `on`)
 - `--emit-run-card TEXT`: Emit run card for reproducibility (default: `on`)
+- `--run-card-version TEXT`: Run card contract version (default: `v1`)
+  - Options: `v1`, `v2`
+  - Use `v2` for production trust decisions and detached attestation workflows
 
 ### License Acknowledgements
 
@@ -242,6 +248,41 @@ When APEX mode is enabled with all emit flags, the following outputs are generat
 ### Metadata
 - `*_combined.json`: Processing manifest with provenance (when `--emit-report on`)
 - `*_run_card.json`: Run card for reproducibility tracking (when `--emit-run-card on`)
+- `*.attestation.native.json`: Repo-native detached attestation for a v2 run card (when signed)
+- `*.attestation.dsse.json`: DSSE + in-toto detached attestation sidecar (when signed)
+- `*.attestation.dsse.sigstore.bundle.json`: Optional Sigstore verification bundle (when signed with `cosign`)
+
+## Run Card Verification and Signing
+
+Use the offline verifier for both v1 and v2 bundles:
+
+```bash
+python scripts/verify_run_card_integrity.py ./path/to/run_card.json --check-canonical-json
+```
+
+For v2 run cards, detached attestation helpers are available:
+
+```bash
+python tools/sign_run_card_attestation.py \
+  --run-card ./path/to/run_card.json \
+  --format both \
+  --key-id "release-signer"
+
+python tools/verify_run_card_attestation.py \
+  --run-card ./path/to/run_card.json \
+  --require-native \
+  --require-dsse
+```
+
+When you need policy-based release gating instead of low-level integrity checks, use:
+
+```bash
+python scripts/validation/assess_run_card_release.py \
+  ./path/to/run_card.json \
+  --require-v2 \
+  --require-native-attestation \
+  --require-dsse-attestation
+```
 
 ## Example Workflows
 
