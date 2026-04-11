@@ -455,6 +455,11 @@ def main(
         "--run-card-version",
         help="Run card format version: v1 (legacy hash-of-hashes) or v2 (transparency artifact tree).",
     ),
+    run_card_include_proofs: str = typer.Option(
+        "off",
+        "--run-card-include-proofs",
+        help="Include per-artifact inclusion proofs in v2 run cards: on/off",
+    ),
     # License and Research Acknowledgements
     non_commercial_ok: str = typer.Option(
         "false",
@@ -618,6 +623,7 @@ def main(
     enable_emit_marketing = _parse_bool_flag(emit_marketing)
     enable_emit_report = _parse_bool_flag(emit_report)
     enable_emit_run_card = _parse_bool_flag(emit_run_card)
+    enable_run_card_include_proofs = _parse_bool_flag(run_card_include_proofs)
     normalized_run_card_version = str(run_card_version or "v1").strip().lower()
     if normalized_run_card_version not in {"v1", "v2"}:
         error_msg = f"Invalid --run-card-version '{run_card_version}'. " "Must be one of: v1, v2"
@@ -871,6 +877,7 @@ def main(
         emit_report=enable_emit_report,
         emit_run_card=enable_emit_run_card,
         run_card_version=normalized_run_card_version,
+        run_card_include_proofs=enable_run_card_include_proofs,
         enable_reconstruction=enable_reconstruction_bool,
         grouping_mode=grouping_mode_normalized,
         cameras_sidecar_path=(str(cameras_sidecar_path) if cameras_sidecar_path else None),

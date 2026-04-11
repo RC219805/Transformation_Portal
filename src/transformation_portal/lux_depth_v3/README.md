@@ -141,7 +141,7 @@ lux-depth-v3 \
 
 ### Run Card Trust Layers
 
-Use `--run-card-version "v2"` for production trust decisions. Run Card v2 replaces the legacy batch hash with a transparency-style CT Merkle artifact tree while keeping v1 verification support for historical bundles.
+Use `--run-card-version "v2"` for production trust decisions. Run Card v2 replaces the legacy batch hash with a transparency-style CT Merkle artifact tree while keeping v1 verification support for historical bundles. Per-artifact inclusion proofs are now opt-in via `--run-card-include-proofs on` so large batches do not pay the proof-size and proof-build cost by default.
 
 Common operator commands:
 

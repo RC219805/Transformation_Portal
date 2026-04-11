@@ -82,6 +82,13 @@ def _read_json_object(path: Path, *, name: str) -> dict[str, object]:
     return payload
 
 
+def _read_bytes(path: Path, *, name: str) -> bytes:
+    try:
+        return path.read_bytes()
+    except OSError as exc:
+        raise ValueError(f"Unable to read {name} bytes: {exc}") from exc
+
+
 def _default_sidecar_path(run_card_path: Path, suffix: str) -> Path:
     return run_card_path.with_suffix(suffix)
 
@@ -89,13 +96,16 @@ def _default_sidecar_path(run_card_path: Path, suffix: str) -> Path:
 def main() -> int:
     args = _parse_args()
     run_card_path = Path(args.run_card)
+    if args.sigstore_bundle_out and args.format == "native":
+        print("--sigstore-bundle-out requires --format dsse or --format both", file=sys.stderr)
+        return EXIT_INPUT_ERROR
 
     try:
         integrity_errors = verify_run_card_integrity(run_card_path, check_canonical_json=True)
         if integrity_errors:
             raise ValueError("run card integrity verification failed before signing: " + "; ".join(integrity_errors))
         run_card_payload = _read_json_object(run_card_path, name="run card")
-        run_card_bytes = run_card_path.read_bytes()
+        run_card_bytes = _read_bytes(run_card_path, name="run card")
         release_assessment = (
             _read_json_object(Path(args.release_assessment), name="release assessment")
             if args.release_assessment is not None

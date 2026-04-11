@@ -780,6 +780,44 @@ class TestCLIConfiguration:
         assert captured_config is not None
         assert captured_config.v2_preset is None
 
+    def test_run_card_include_proofs_flag_sets_config(self, tmp_path):
+        """--run-card-include-proofs should wire through to EnhanceConfig."""
+        from unittest.mock import MagicMock, patch
+
+        input_dir = tmp_path / "input"
+        input_dir.mkdir()
+        (input_dir / "test.jpg").touch()
+
+        captured_config = None
+
+        def mock_orch_init(config, output_root):
+            nonlocal captured_config
+            captured_config = config
+            mock_orch = MagicMock()
+            mock_orch.enhance_batch.return_value = {"total": 0, "succeeded": 0}
+            return mock_orch
+
+        with patch(
+            "transformation_portal.lux_depth_v3.__main__.EnhanceOrchestrator",
+            side_effect=mock_orch_init,
+        ):
+            runner.invoke(
+                app,
+                [
+                    "--input-dir",
+                    str(input_dir),
+                    "--output-dir",
+                    str(tmp_path / "output"),
+                    "--run-card-version",
+                    "v2",
+                    "--run-card-include-proofs",
+                    "on",
+                ],
+            )
+
+        assert captured_config is not None
+        assert captured_config.run_card_include_proofs is True
+
     def test_depth_pro_python_flag_sets_config(self, tmp_path):
         """--depth-pro-python should be forwarded into EnhanceConfig."""
         from unittest.mock import MagicMock, patch

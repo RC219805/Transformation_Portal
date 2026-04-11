@@ -255,3 +255,24 @@ def test_sign_cli_can_emit_sigstore_bundle_for_dsse_sidecar(tmp_path: Path) -> N
 
     assert result.returncode == 0, result.stderr
     assert bundle_path.exists()
+
+
+def test_sign_cli_rejects_sigstore_bundle_path_for_native_only_output(tmp_path: Path) -> None:
+    run_card_path = _write_run_card_v2(tmp_path)
+    bundle_path = run_card_path.with_suffix(".attestation.dsse.sigstore.bundle.json")
+
+    result = _run_tool(
+        "--run-card",
+        str(run_card_path),
+        "--gpg",
+        "--key-id",
+        "test-key",
+        "--format",
+        "native",
+        "--sigstore-bundle-out",
+        str(bundle_path),
+    )
+
+    assert result.returncode == 2
+    assert "--sigstore-bundle-out requires --format dsse or --format both" in result.stderr
+    assert not bundle_path.exists()

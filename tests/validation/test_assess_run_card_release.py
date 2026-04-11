@@ -179,6 +179,30 @@ def test_release_assessment_requires_rekor_inclusion_when_requested(tmp_path: Pa
     assert sigstore_check["status"] == "FAIL"
 
 
+def test_release_assessment_can_allow_missing_native_attestation_sha(tmp_path: Path) -> None:
+    run_card_path = _write_run_card_v2(tmp_path)
+    _write_attestations(run_card_path)
+    native_path = run_card_path.with_suffix(".attestation.native.json")
+    native_attestation = json.loads(native_path.read_text(encoding="utf-8"))
+    native_attestation["attestation_sha256"] = None
+    native_path.write_text(json.dumps(native_attestation), encoding="utf-8")
+
+    default_assessment = assess_run_card_release(
+        run_card_path=run_card_path,
+        require_native_attestation=True,
+    )
+    tolerant_assessment = assess_run_card_release(
+        run_card_path=run_card_path,
+        require_native_attestation=True,
+        allow_missing_attestation_sha=True,
+    )
+
+    assert default_assessment["status"] == "FAIL"
+    native_check = next(check for check in default_assessment["checks"] if check["name"] == "native_attestation")
+    assert any("attestation_sha256" in error for error in native_check["details"]["errors"])
+    assert tolerant_assessment["status"] == "PASS"
+
+
 def test_assess_run_card_release_script_runs_from_source_checkout(tmp_path: Path) -> None:
     repo_root = tmp_path / "repo"
     script_path = repo_root / "scripts" / "validation" / "assess_run_card_release.py"

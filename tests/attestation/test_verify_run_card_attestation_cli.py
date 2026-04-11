@@ -264,3 +264,48 @@ def test_verify_cli_rejects_explicit_sigstore_bundle_without_dsse_attestation(tm
     assert result.returncode == 5
     assert "Sigstore bundle" in result.stderr
     assert "DSSE attestation is missing" in result.stderr
+
+
+def test_verify_cli_rejects_missing_explicit_native_attestation_path(tmp_path: Path) -> None:
+    run_card_path, native_path, _, _ = _build_inputs(tmp_path)
+    native_path.unlink()
+
+    result = _run_tool(
+        "--run-card",
+        str(run_card_path),
+        "--native-attestation",
+        str(native_path),
+    )
+
+    assert result.returncode == 5
+    assert f"native detached attestation not found: {native_path}" in result.stderr
+
+
+def test_verify_cli_rejects_missing_explicit_dsse_attestation_path(tmp_path: Path) -> None:
+    run_card_path, _, dsse_path, _ = _build_inputs(tmp_path)
+    dsse_path.unlink()
+
+    result = _run_tool(
+        "--run-card",
+        str(run_card_path),
+        "--dsse-attestation",
+        str(dsse_path),
+    )
+
+    assert result.returncode == 5
+    assert f"DSSE attestation not found: {dsse_path}" in result.stderr
+
+
+def test_verify_cli_rejects_missing_explicit_sigstore_bundle_path(tmp_path: Path) -> None:
+    run_card_path, _, _, bundle_path = _build_inputs(tmp_path)
+    bundle_path.unlink()
+
+    result = _run_tool(
+        "--run-card",
+        str(run_card_path),
+        "--sigstore-bundle",
+        str(bundle_path),
+    )
+
+    assert result.returncode == 5
+    assert f"Sigstore bundle not found: {bundle_path}" in result.stderr

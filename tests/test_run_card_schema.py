@@ -699,9 +699,11 @@ def test_resolve_run_card_backend_model_artifact_prefers_selected_attempt():
 
 
 def test_emit_run_card_respects_run_card_include_proofs_flag(tmp_path: Path):
-    config = EnhanceConfig(model_variant=ModelVariant.METRIC_LARGE)
-    setattr(config, "run_card_version", "v2")
-    setattr(config, "run_card_include_proofs", False)
+    config = EnhanceConfig(
+        model_variant=ModelVariant.METRIC_LARGE,
+        run_card_version="v2",
+        run_card_include_proofs=False,
+    )
     orch = EnhanceOrchestrator(config, tmp_path)
 
     artifact_path = tmp_path / "depth" / "image_01_depth.png"

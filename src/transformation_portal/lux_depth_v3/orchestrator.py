@@ -5866,7 +5866,7 @@ class EnhanceOrchestrator:
             run_card_version = "v1"
         artifact_tree = None
         if run_card_version == "v2":
-            include_proofs_config = getattr(self.config, "run_card_include_proofs", True)
+            include_proofs_config = getattr(self.config, "run_card_include_proofs", False)
             include_proofs = include_proofs_config
             if isinstance(include_proofs_config, str):
                 include_proofs = include_proofs_config.strip().lower() in {

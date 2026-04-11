@@ -50,6 +50,18 @@ def test_verify_artifact_tree_payload_accepts_built_tree() -> None:
     assert verify_artifact_tree_payload(tree, artifact_index=artifact_index) == []
 
 
+def test_build_artifact_tree_can_omit_proofs() -> None:
+    artifact_index = [
+        _artifact("depth/a.png", digest="a" * 64),
+        _artifact("depth/b.png", digest="b" * 64),
+    ]
+
+    tree = build_artifact_tree(artifact_index, include_proofs=False)
+
+    assert "proofs" not in tree
+    assert verify_artifact_tree_payload(tree, artifact_index=artifact_index) == []
+
+
 def test_verify_artifact_tree_payload_rejects_tampered_root() -> None:
     artifact_index = [
         _artifact("depth/a.png", digest="a" * 64),

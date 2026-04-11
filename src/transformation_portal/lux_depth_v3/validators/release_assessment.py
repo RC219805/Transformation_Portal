@@ -58,6 +58,7 @@ def assess_run_card_release(
     require_dsse_attestation: bool = False,
     require_sigstore_bundle: bool = False,
     require_rekor_inclusion: bool = False,
+    allow_missing_attestation_sha: bool = False,
     verify_gpg: bool = False,
     cosign_key_path: Path | None = None,
 ) -> dict[str, Any]:
@@ -107,7 +108,10 @@ def assess_run_card_release(
                     run_card_payload,
                     run_card_bytes=run_card_bytes,
                 )
-                verify_run_card_attestation_self_hash(native_attestation)
+                verify_run_card_attestation_self_hash(
+                    native_attestation,
+                    require_digest=(not allow_missing_attestation_sha),
+                )
                 if verify_gpg:
                     gpg_verify_clearsign(str(native_attestation["signature"]["signature"]))
             except Exception as exc:  # noqa: BLE001 - normalized assessment surface

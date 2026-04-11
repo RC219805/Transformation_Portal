@@ -383,6 +383,7 @@ class EnhanceConfig:
     emit_report: bool = True  # Emit processing report
     emit_run_card: bool = True  # Emit run card for reproducibility
     run_card_version: str = "v1"  # v1 legacy commitment or v2 transparency tree
+    run_card_include_proofs: bool = False  # Opt-in per-artifact inclusion proofs for v2 run cards
 
     # Phase B1: optional scene-level reconstruction (off by default)
     enable_reconstruction: bool = False

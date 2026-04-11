@@ -67,6 +67,13 @@ def _read_json_object(path: Path, *, name: str) -> dict[str, object]:
     return payload
 
 
+def _read_bytes(path: Path, *, name: str) -> bytes:
+    try:
+        return path.read_bytes()
+    except OSError as exc:
+        raise ValueError(f"Unable to read {name} bytes: {exc}") from exc
+
+
 def _default_sidecar_path(run_card_path: Path, suffix: str) -> Path:
     return run_card_path.with_suffix(suffix)
 
@@ -82,7 +89,7 @@ def main() -> int:
                 "run card integrity verification failed before attestation verification: " + "; ".join(integrity_errors)
             )
         run_card_payload = _read_json_object(run_card_path, name="run card")
-        run_card_bytes = run_card_path.read_bytes()
+        run_card_bytes = _read_bytes(run_card_path, name="run card")
     except ValueError as exc:
         print(str(exc), file=sys.stderr)
         return EXIT_INPUT_ERROR
@@ -111,11 +118,13 @@ def main() -> int:
             ".attestation.dsse.sigstore.bundle.json",
         )
     )
+    native_requested = args.native_attestation is not None
+    dsse_requested = args.dsse_attestation is not None
     sigstore_bundle_requested = args.sigstore_bundle is not None or args.require_sigstore_bundle
 
     try:
-        if args.require_native and not native_path.exists():
-            raise ValueError(f"required native detached attestation not found: {native_path}")
+        if (args.require_native or native_requested) and not native_path.exists():
+            raise ValueError(f"native detached attestation not found: {native_path}")
         if native_path.exists():
             native_attestation = _read_json_object(native_path, name="native attestation")
             validate_run_card_detached_attestation_surface(native_attestation)
@@ -139,8 +148,8 @@ def main() -> int:
 
         if sigstore_bundle_requested and not dsse_path.exists():
             raise ValueError("cannot verify a Sigstore bundle when the DSSE attestation is missing")
-        if args.require_dsse and not dsse_path.exists():
-            raise ValueError(f"required DSSE attestation not found: {dsse_path}")
+        if (args.require_dsse or dsse_requested) and not dsse_path.exists():
+            raise ValueError(f"DSSE attestation not found: {dsse_path}")
         if dsse_path.exists():
             dsse_envelope = _read_json_object(dsse_path, name="DSSE attestation")
             statement = decode_run_card_statement_from_envelope(dsse_envelope)
@@ -157,6 +166,8 @@ def main() -> int:
                 )
             if args.require_sigstore_bundle and not bundle_path.exists():
                 raise ValueError(f"required Sigstore bundle not found: {bundle_path}")
+            if sigstore_bundle_requested and not bundle_path.exists():
+                raise ValueError(f"Sigstore bundle not found: {bundle_path}")
             if sigstore_bundle_requested and bundle_path.exists():
                 cosign_verify_blob(
                     blob_path=dsse_path,

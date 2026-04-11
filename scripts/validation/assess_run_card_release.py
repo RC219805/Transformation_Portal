@@ -24,6 +24,11 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--require-dsse-attestation", action="store_true")
     parser.add_argument("--require-sigstore-bundle", action="store_true")
     parser.add_argument("--require-rekor-inclusion", action="store_true")
+    parser.add_argument(
+        "--allow-missing-attestation-sha",
+        action="store_true",
+        help="Allow missing/null native attestation_sha256 during migration validation.",
+    )
     parser.add_argument("--gpg", action="store_true", help="Verify native/DSSE GPG signatures when present.")
     parser.add_argument("--sigstore-key", default=None, help="Optional cosign key path for Sigstore bundle verification.")
     return parser.parse_args(argv)
@@ -38,6 +43,7 @@ def main(argv: list[str] | None = None) -> int:
         require_dsse_attestation=bool(args.require_dsse_attestation),
         require_sigstore_bundle=bool(args.require_sigstore_bundle),
         require_rekor_inclusion=bool(args.require_rekor_inclusion),
+        allow_missing_attestation_sha=bool(args.allow_missing_attestation_sha),
         verify_gpg=bool(args.gpg),
         cosign_key_path=(Path(args.sigstore_key) if args.sigstore_key else None),
     )
