@@ -8,9 +8,9 @@ Quick reference for common workflows and commands in this repo.
 - `make install-core` install the pinned core runtime + dev tooling lockfiles into `.venv`, install the project editable with `--no-deps`, and run `pip check`.
 - `make repair-core-venv` recreate `.venv`, reinstall the pinned core environment, and re-run `pip check`.
 - `make install-ml` disabled; no trusted checked-in umbrella ML lockfile contract.
-- `make install-ml-core` install the platform-specific checked-in ML core baseline selected from the local OS/architecture.
+- `make install-ml-core` install the target-owned checked-in ML core baseline selected from the local OS/architecture.
 - `make install-ml-raw` disabled; no trusted checked-in RAW lockfile contract.
-- `make install-ml-sam2` install ML SAM2 layer (Meta Segment Anything 2, optional).
+- `make install-ml-sam2` install ML SAM2 layer (Meta Segment Anything 2, optional); it uses the Apple Silicon MPS path on native Darwin arm64 and the CPU path elsewhere.
 - `make install-ml-coreml` install ML CoreML acceleration on macOS only when a trusted `requirements/ml-coreml.txt` is present.
 - `make test-fast` run fast test subset plus the Phase 6 smoke coverage layer.
 - `make test-novideo` run tests excluding luxury video master grader tests (filters out `video_master_grader`).
@@ -51,7 +51,8 @@ Quick reference for common workflows and commands in this repo.
 - `make check-json-serialization` fail when raw `json.dump`/`json.dumps` usage is detected outside approved modules.
 - `make check-yaml-governance` fail when raw `yaml.safe_load` usage appears outside the shared preset loader or explicitly exempt non-preset loaders.
 - `make check-piptools-cache` fail if `requirements/.pip-tools-cache` is tracked in git.
-- `make check-requirements-lock-contract` fail when layered lockfile headers, platform purity guards, or lane structure drift from contract.
+- `make check-requirements-lock-contract` fail when layered lockfile headers, target-owned purity guards, or lane structure drift from contract.
+- `make check` verify the generic layered requirements surface under `requirements/`.
 - `make check-test-markers` audit test marker coverage (ADR-044) - reports unmarked test functions.
 - `make check-ci-sync` verify CI dependency files are in sync (no drift between `requirements-ci.txt` and `requirements/ci.in`).
 - `make organize-docs` move markdown files into `docs/` (repo hygiene).
@@ -61,14 +62,21 @@ Quick reference for common workflows and commands in this repo.
 - `make lock-prod` regenerate `requirements.lock.txt`.
 - `make lock-ci` regenerate `requirements-ci.lock.txt`.
 - `make lock-dev` regenerate `requirements-dev.lock.txt`.
-- `cd requirements && make compile LOCK_PYTHON_VERSION=3.11` compile all checked-in layered lockfiles (`all/base/ml-core-*/dev/ci/security/tools-archive`).
-- `cd requirements && make compile-ml-layers LOCK_PYTHON_VERSION=3.11` compile only the checked-in platform ML core lockfiles.
-- `cd requirements && make compile-accel LOCK_PYTHON_VERSION=3.11` refresh the checked-in platform ML baseline locks used by profile/acceleration flows.
+- `cd requirements && make compile LOCK_PYTHON_VERSION=3.11` compile only the generic checked-in layered lockfiles (`all/base/dev/ci/security/tools-archive`).
+- `cd requirements && make compile-ml-darwin-arm64 LOCK_PYTHON_VERSION=3.11` compile the Darwin arm64 target-owned ML lock on native Darwin arm64 only.
+- `cd requirements && make compile-ml-linux-x86_64 LOCK_PYTHON_VERSION=3.11` compile the Linux x86_64 target-owned ML lock on native Linux x86_64 only.
+- `cd requirements && make compile-ml-darwin-x86_64 LOCK_PYTHON_VERSION=3.11` fail closed because the Darwin x86_64 target-owned ML lock is frozen pending an authoritative lane decision.
+- `cd requirements && make compile-ml-layers LOCK_PYTHON_VERSION=3.11` fail closed and direct operators to the explicit target-owned ML commands.
+- `cd requirements && make compile-accel LOCK_PYTHON_VERSION=3.11` fail closed and direct operators to the explicit target-owned ML commands.
 - `cd requirements && make compile-hash-pilot LOCK_PYTHON_VERSION=3.11` generate advisory hash-enforced pilot lockfiles into `requirements/.hash-pilot/`.
-- `cd requirements && make update LOCK_PYTHON_VERSION=3.11` update layered lockfiles (`all/base/ml-core-*/dev/ci/security/tools-archive`).
-- `cd requirements && make check LOCK_PYTHON_VERSION=3.11` verify checked-in layered lockfiles are current.
+- `cd requirements && make update LOCK_PYTHON_VERSION=3.11` update only the generic checked-in layered lockfiles.
+- `cd requirements && make update-ml-darwin-arm64 LOCK_PYTHON_VERSION=3.11` update the Darwin arm64 target-owned ML lock on native Darwin arm64 only.
+- `cd requirements && make update-ml-linux-x86_64 LOCK_PYTHON_VERSION=3.11` update the Linux x86_64 target-owned ML lock on native Linux x86_64 only.
+- `cd requirements && make check LOCK_PYTHON_VERSION=3.11` verify only the generic checked-in layered lockfiles are current.
+- `cd requirements && make check-ml-darwin-arm64 LOCK_PYTHON_VERSION=3.11` verify the Darwin arm64 target-owned ML lock on native Darwin arm64 only.
+- `cd requirements && make check-ml-linux-x86_64 LOCK_PYTHON_VERSION=3.11` verify the Linux x86_64 target-owned ML lock on native Linux x86_64 only.
 - `cd requirements && make check-hash-pilot LOCK_PYTHON_VERSION=3.11` validate the pilot lockfiles with `pip install --dry-run --require-hashes`.
-- `python3 scripts/validation/check_requirements_lock_contract.py` validate layered lock contract (headers + platform-core purity/compatibility guards + lane-specific lock structure).
+- `python3 scripts/validation/check_requirements_lock_contract.py` validate layered lock contract (headers + target-owned purity/compatibility guards + lock ownership manifest coverage).
 - `make docs` build API docs with Sphinx.
 - `make docs-clean` remove generated docs output.
 

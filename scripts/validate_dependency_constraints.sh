@@ -145,6 +145,7 @@ get_approved_exception() {
 
 # Production files (require range pins or strict pins)
 PRODUCTION_FILES=("base.in" "ml.in")
+TARGET_OWNED_ML_INPUTS=("ml-core-darwin-x86_64.in" "ml-core-darwin-arm64.in" "ml-core-linux.in")
 
 echo -e "${BLUE}${BOLD}🔍 Validating dependency constraints...${NC}\n"
 load_banned_packages
@@ -154,6 +155,17 @@ extract_package_name() {
     local line="$1"
     # Remove version constraints and extras, handle pip-compile markers
     echo "$line" | sed -E 's/[>=<~!]=.*$//' | sed 's/\[.*\]$//' | tr -d ' '
+}
+
+is_target_owned_ml_input() {
+    local basename="$1"
+    local target_input=""
+    for target_input in "${TARGET_OWNED_ML_INPUTS[@]}"; do
+        if [[ "$basename" == "$target_input" ]]; then
+            return 0
+        fi
+    done
+    return 1
 }
 
 # Function: Extract version from constraint
@@ -305,10 +317,14 @@ validate_in_file() {
     local txt_file="${in_file%.in}.txt"
     if [[ -f "$txt_file" ]]; then
         if [[ "$txt_file" -ot "$in_file" ]]; then
-            echo -e "${YELLOW}⚠️  $basename: Compiled .txt file is stale${NC}"
-            echo -e "   ${BOLD}WARNING:${NC} $(basename "$txt_file") is older than $basename"
-            echo -e "   ${BOLD}Fix:${NC} Run 'cd requirements && make compile' to regenerate\n"
-            file_warnings=$((file_warnings + 1))
+            if is_target_owned_ml_input "$basename"; then
+                [[ $VERBOSE -eq 1 ]] && echo -e "${BLUE}ℹ️  $basename: Target-owned ML freshness is enforced via explicit lane commands${NC}"
+            else
+                echo -e "${YELLOW}⚠️  $basename: Compiled .txt file is stale${NC}"
+                echo -e "   ${BOLD}WARNING:${NC} $(basename "$txt_file") is older than $basename"
+                echo -e "   ${BOLD}Fix:${NC} Run 'cd requirements && make compile' to regenerate\n"
+                file_warnings=$((file_warnings + 1))
+            fi
         fi
 
         # Check for pip-compile header (ensures it wasn't manually edited)

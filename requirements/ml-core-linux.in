@@ -1,15 +1,14 @@
-# ML Core layer for Linux
-# Platform-specific lockfile for deterministic pip-compile resolution.
+# ML Core layer for Linux x86_64
+# Target-owned lockfile for deterministic pip-compile resolution.
 #
 # This file is Linux-specific because pip-compile cannot resolve
 # conditional dependencies across platforms in a single graph.
 #
-# Run `make compile` in this directory to generate pinned ml-core-linux.txt
+# Run `make compile-ml-linux-x86_64` in this directory to generate pinned ml-core-linux.txt
 #
-# PLATFORM TARGET: linux-* (Linux Intel/AMD/ARM)
+# PLATFORM TARGETS:
 #   - linux-x86_64-cpu    (Linux Intel/AMD, CPU baseline)
 #   - linux-x86_64-cuda   (Linux Intel/AMD, NVIDIA GPU)
-#   - linux-arm64-cpu     (Linux ARM, CPU-only)
 #
 # SECURITY NOTE (CVE-2025-32434):
 #   torch < 2.6.0 has a critical RCE vulnerability via torch.load()

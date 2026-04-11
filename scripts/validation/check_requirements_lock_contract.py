@@ -3,24 +3,25 @@
 
 This validator enforces the following contracts:
 1. All checked-in lockfiles must be generated with the expected Python version
-2. Checked-in ML lockfiles are limited to the platform-core contract
+2. Checked-in ML lockfiles are limited to the target-owned core contract
 3. Non-core optional ML lockfiles must not be checked in as host-generated artifacts
-4. Darwin x86_64 and arm64 ML inputs must preserve their platform-specific contracts
-5. Platform-specific core lockfiles must not collapse to identical dependency graphs
+4. Darwin x86_64 and arm64 ML inputs must preserve their target-specific contracts
+5. Target-owned core lockfiles must not collapse to identical dependency graphs
 6. Known-bad torch/transformers/numpy runtime combinations must be rejected in lockfiles
+7. The lock ownership manifest must cover every governed checked-in lock exactly once
 
 CONTRACT SEPARATION:
-- Platform-specific lockfiles: ml-core-darwin-x86_64, ml-core-darwin-arm64, ml-core-linux
+- Target-owned ML lockfiles: ml-core-darwin-x86_64, ml-core-darwin-arm64, ml-core-linux
 - Non-core optional ML layers are not part of the checked-in lockfile contract
 - Scripted-only layers: ml-sam2 (requires non-standard install semantics)
 
-PLATFORM MATRIX (ADR-032):
-- Platform-specific lockfiles:
+TARGET MATRIX (ADR-032):
+- Target-owned ML lockfiles:
   - ml-core-darwin-x86_64.txt (macOS Intel conservative baseline)
   - ml-core-darwin-arm64.txt (macOS Apple Silicon baseline)
-  - ml-core-linux.txt (Linux baseline)
+  - ml-core-linux.txt (Linux x86_64 baseline)
 - Non-core optional ML lockfiles must be absent from the checked-in repository state
-- Platform-specific core lockfiles must not carry the wrong OS markers
+- Target-owned ML core lockfiles must not carry the wrong OS markers
 
 Scripted-only layers are NOT validated as standard lockfile contracts.
 They exist for documentation but install path is via bootstrap script.
@@ -32,9 +33,16 @@ import re
 import sys
 from pathlib import Path
 
+SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+
+from check_lock_ownership import load_lock_ownership, validate_manifest_contract
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 REQUIREMENTS_DIR = REPO_ROOT / "requirements"
 MAKEFILE_PATH = REQUIREMENTS_DIR / "Makefile"
+LOCK_OWNERSHIP_PATH = REQUIREMENTS_DIR / "lock_ownership.yml"
 
 # Core lockfiles that must always exist
 CORE_LOCK_FILES = (
@@ -46,12 +54,13 @@ CORE_LOCK_FILES = (
     "tools-archive.txt",
 )
 
-# Platform-specific ML core lockfiles (pip-compile multi-platform fix)
+# Target-owned ML core lockfiles (pip-compile multi-platform fix)
 PLATFORM_ML_CORE_LOCK_FILES = (
     "ml-core-darwin-x86_64.txt",
     "ml-core-darwin-arm64.txt",
     "ml-core-linux.txt",
 )
+GOVERNED_LOCK_FILES = CORE_LOCK_FILES + PLATFORM_ML_CORE_LOCK_FILES
 
 # Non-core optional ML lockfiles are not part of the checked-in contract.
 # If they appear in the repository state, validation fails so accidental
@@ -72,7 +81,7 @@ NONCORE_OPTIONAL_ML_LOCK_FILES = (
 SCRIPTED_ONLY_ML_LAYERS = ("ml-sam2.txt",)
 
 # All lockfiles for header validation (includes scripted for consistency checking)
-ALL_LOCK_FILES = CORE_LOCK_FILES + PLATFORM_ML_CORE_LOCK_FILES + SCRIPTED_ONLY_ML_LAYERS
+ALL_LOCK_FILES = GOVERNED_LOCK_FILES + SCRIPTED_ONLY_ML_LAYERS
 PLATFORM_LOCK_FORBIDDEN_PATTERNS = {
     "ml-core-darwin-x86_64.txt": (
         r"""platform_system\s*==\s*["']Linux["']""",
@@ -224,6 +233,19 @@ def validate_ml_layer_structure() -> list[str]:
         if not in_path.is_file():
             errors.append(f"Missing ML layer input file: {in_path}")
     return errors
+
+
+def validate_lock_ownership_manifest() -> list[str]:
+    """Ensure the lock ownership manifest covers the governed lock surface."""
+    try:
+        manifest = load_lock_ownership(LOCK_OWNERSHIP_PATH)
+    except ValueError as exc:
+        return [str(exc)]
+
+    return validate_manifest_contract(
+        manifest,
+        governed_lock_files=GOVERNED_LOCK_FILES,
+    )
 
 
 def _normalize_package_name(name: str) -> str:
@@ -419,6 +441,7 @@ def main() -> int:
         return 1
 
     errors.extend(validate_ml_layer_structure())
+    errors.extend(validate_lock_ownership_manifest())
     errors.extend(validate_lockfile_headers(expected_python))
     errors.extend(validate_noncore_optional_lockfiles_absent())
     errors.extend(validate_platform_lock_markers())
@@ -436,7 +459,7 @@ def main() -> int:
 
     print(
         f"requirements lock contract passed: headers match "
-        f"Python {expected_python}, checked-in ML platform core lockfiles verified."
+        f"Python {expected_python}, target-owned ML lockfiles and ownership manifest verified."
     )
     return 0
 

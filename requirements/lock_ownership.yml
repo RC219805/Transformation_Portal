@@ -1,0 +1,55 @@
+version: 1
+locks:
+  all.txt:
+    target_id: generic
+    python_version: "3.11"
+    status: active
+    allowed_contexts:
+      - ubuntu-x64-generic
+  base.txt:
+    target_id: generic
+    python_version: "3.11"
+    status: active
+    allowed_contexts:
+      - ubuntu-x64-generic
+  dev.txt:
+    target_id: generic
+    python_version: "3.11"
+    status: active
+    allowed_contexts:
+      - ubuntu-x64-generic
+  ci.txt:
+    target_id: generic
+    python_version: "3.11"
+    status: active
+    allowed_contexts:
+      - ubuntu-x64-generic
+  security.txt:
+    target_id: generic
+    python_version: "3.11"
+    status: active
+    allowed_contexts:
+      - ubuntu-x64-generic
+  tools-archive.txt:
+    target_id: generic
+    python_version: "3.11"
+    status: active
+    allowed_contexts:
+      - ubuntu-x64-generic
+  ml-core-linux.txt:
+    target_id: linux-x86_64
+    python_version: "3.11"
+    status: active
+    allowed_contexts:
+      - ubuntu-x64-linux
+  ml-core-darwin-arm64.txt:
+    target_id: darwin-arm64
+    python_version: "3.11"
+    status: active
+    allowed_contexts:
+      - local-darwin-arm64
+  ml-core-darwin-x86_64.txt:
+    target_id: darwin-x86_64
+    python_version: "3.11"
+    status: frozen
+    allowed_contexts: []
