@@ -102,6 +102,59 @@ def test_load_lock_ownership_rejects_unsupported_indentation(tmp_path: Path) -> 
         ownership.load_lock_ownership(manifest_path)
 
 
+def test_load_lock_ownership_rejects_duplicate_lock_entry(tmp_path: Path) -> None:
+    manifest_path = tmp_path / "lock_ownership.yml"
+    manifest_path.write_text(
+        "\n".join(
+            [
+                "version: 1",
+                "locks:",
+                "  all.txt:",
+                "    target_id: generic",
+                '    python_version: "3.11"',
+                "    status: active",
+                "    allowed_contexts:",
+                "      - ubuntu-x64-generic",
+                "  all.txt:",
+                "    target_id: generic",
+                '    python_version: "3.11"',
+                "    status: active",
+                "    allowed_contexts:",
+                "      - ubuntu-x64-generic",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="duplicate lock entry 'all.txt'"):
+        ownership.load_lock_ownership(manifest_path)
+
+
+def test_load_lock_ownership_rejects_duplicate_field_key(tmp_path: Path) -> None:
+    manifest_path = tmp_path / "lock_ownership.yml"
+    manifest_path.write_text(
+        "\n".join(
+            [
+                "version: 1",
+                "locks:",
+                "  all.txt:",
+                "    target_id: generic",
+                "    target_id: generic",
+                '    python_version: "3.11"',
+                "    status: active",
+                "    allowed_contexts:",
+                "      - ubuntu-x64-generic",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="duplicate field 'target_id' for lock entry 'all.txt'"):
+        ownership.load_lock_ownership(manifest_path)
+
+
 def test_malformed_manifest_entry_reports_contract_errors_without_keyerror() -> None:
     manifest = manifest_fixture()
     manifest["ml-core-linux.txt"] = {

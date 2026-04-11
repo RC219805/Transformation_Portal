@@ -168,6 +168,26 @@ is_target_owned_ml_input() {
     return 1
 }
 
+target_owned_ml_stale_fix() {
+    local basename="$1"
+    case "$basename" in
+        "ml-core-darwin-arm64.in")
+            echo "Run 'cd requirements && make compile-ml-darwin-arm64' on native Darwin arm64."
+            return 0
+            ;;
+        "ml-core-linux.in")
+            echo "Run 'cd requirements && make compile-ml-linux-x86_64' on native Linux x86_64."
+            return 0
+            ;;
+        "ml-core-darwin-x86_64.in")
+            echo "Darwin x86_64 is frozen; do not regenerate until an authoritative lane is defined."
+            return 0
+            ;;
+    esac
+    echo "Run the authoritative lane-specific compile command for this target-owned ML lock."
+    return 0
+}
+
 # Function: Extract version from constraint
 extract_version() {
     local constraint="$1"
@@ -318,7 +338,12 @@ validate_in_file() {
     if [[ -f "$txt_file" ]]; then
         if [[ "$txt_file" -ot "$in_file" ]]; then
             if is_target_owned_ml_input "$basename"; then
-                [[ $VERBOSE -eq 1 ]] && echo -e "${BLUE}ℹ️  $basename: Target-owned ML freshness is enforced via explicit lane commands${NC}"
+                local stale_fix
+                stale_fix=$(target_owned_ml_stale_fix "$basename")
+                echo -e "${YELLOW}⚠️  $basename: Compiled .txt file is stale${NC}"
+                echo -e "   ${BOLD}WARNING:${NC} $(basename "$txt_file") is older than $basename"
+                echo -e "   ${BOLD}Fix:${NC} $stale_fix\n"
+                file_warnings=$((file_warnings + 1))
             else
                 echo -e "${YELLOW}⚠️  $basename: Compiled .txt file is stale${NC}"
                 echo -e "   ${BOLD}WARNING:${NC} $(basename "$txt_file") is older than $basename"

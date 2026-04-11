@@ -78,10 +78,14 @@ def _parse_lock_ownership_manifest(path: Path) -> dict[str, object]:
             key = key.strip()
             raw_value = raw_value.strip()
             if key == "locks":
+                if "locks" in data:
+                    raise ValueError(f"{path}:{line_number} contains duplicate top-level key 'locks'")
                 if raw_value:
                     raise ValueError(f"{path}:{line_number} top-level 'locks' key must not carry an inline value")
                 data["locks"] = locks
                 continue
+            if key in data:
+                raise ValueError(f"{path}:{line_number} contains duplicate top-level key {key!r}")
             data[key] = _parse_manifest_scalar(raw_value, path=path, line_number=line_number)
             continue
 
@@ -93,6 +97,8 @@ def _parse_lock_ownership_manifest(path: Path) -> dict[str, object]:
             current_lock_name = stripped[:-1].strip()
             if not current_lock_name:
                 raise ValueError(f"{path}:{line_number} lock entry key must be non-empty")
+            if current_lock_name in locks:
+                raise ValueError(f"{path}:{line_number} contains duplicate lock entry {current_lock_name!r}")
             current_lock = {}
             locks[current_lock_name] = current_lock
             current_list_key = None
@@ -108,6 +114,8 @@ def _parse_lock_ownership_manifest(path: Path) -> dict[str, object]:
             raw_value = raw_value.strip()
             if not key:
                 raise ValueError(f"{path}:{line_number} lock field key must be non-empty")
+            if key in current_lock:
+                raise ValueError(f"{path}:{line_number} contains duplicate field {key!r} for lock entry {current_lock_name!r}")
             if raw_value:
                 current_lock[key] = _parse_manifest_scalar(raw_value, path=path, line_number=line_number)
                 current_list_key = None
