@@ -3,7 +3,7 @@ SHELL := /bin/sh
 # Resolve Python interpreters at recipe runtime so targets that create or repair
 # .venv immediately switch to the repo interpreter on subsequent lines.
 BOOTSTRAP_PY = $$(./scripts/setup/resolve_python_311.sh)
-PY = $$(if [ -x .venv/bin/python ] && ./.venv/bin/python -c 'import sys; raise SystemExit(0 if sys.version_info[:2] >= (3, 11) else 1)' >/dev/null 2>&1; then printf '%s' .venv/bin/python; else ./scripts/setup/resolve_python_311.sh; fi)
+PY = $$(./scripts/setup/resolve_python_311.sh)
 
 # Common subsets (fast tests avoid heavy/optional paths)
 FAST_TESTS := \
@@ -97,11 +97,17 @@ help:
 	@echo "  docs-clean         Clean generated documentation files"
 
 venv:
-	@if [ -x .venv/bin/python ]; then \
-		if ./.venv/bin/python -c 'import sys; raise SystemExit(0 if sys.version_info[:2] >= (3, 11) else 1)' >/dev/null 2>&1; then \
+	@repo_venv_py=""; \
+	if [ -x .venv/bin/python ]; then \
+		repo_venv_py=.venv/bin/python; \
+	elif [ -x .venv/Scripts/python.exe ]; then \
+		repo_venv_py=.venv/Scripts/python.exe; \
+	fi; \
+	if [ -n "$$repo_venv_py" ]; then \
+		if "$$repo_venv_py" -c 'import sys; raise SystemExit(0 if sys.version_info[:2] >= (3, 11) else 1)' >/dev/null 2>&1; then \
 			echo ".venv already present"; \
 		else \
-			venv_version="$$(./.venv/bin/python -V 2>&1 || echo 'Python version unavailable')"; \
+			venv_version="$$("$$repo_venv_py" -V 2>&1 || echo 'Python version unavailable')"; \
 			echo "Error: existing .venv is not using Python 3.11+ ($$venv_version)."; \
 			echo "Error: run 'make repair-core-venv' to recreate the repo environment."; \
 			exit 1; \
@@ -121,18 +127,18 @@ setup: venv
 
 install-core: venv
 	@echo "Installing pinned core dependencies into .venv..."
-	@./.venv/bin/python -m pip install -r requirements/base.txt -r requirements/dev.txt -c requirements/constraints.txt
-	@./.venv/bin/python -m pip install -e . --no-deps
-	@./.venv/bin/python -m pip check
+	@"$(PY)" -m pip install -r requirements/base.txt -r requirements/dev.txt -c requirements/constraints.txt
+	@"$(PY)" -m pip install -e . --no-deps
+	@"$(PY)" -m pip check
 
 repair-core-venv:
 	@echo "Recreating repo .venv with a Python 3.11+ interpreter..."
 	@rm -rf .venv
 	@bootstrap_py="$(BOOTSTRAP_PY)"; \
 		"$$bootstrap_py" -m venv .venv
-	@./.venv/bin/python -m pip install -r requirements/base.txt -r requirements/dev.txt -c requirements/constraints.txt
-	@./.venv/bin/python -m pip install -e . --no-deps
-	@./.venv/bin/python -m pip check
+	@"$(PY)" -m pip install -r requirements/base.txt -r requirements/dev.txt -c requirements/constraints.txt
+	@"$(PY)" -m pip install -e . --no-deps
+	@"$(PY)" -m pip check
 	@echo "Repo .venv repaired."
 	@echo "Reminder: install Depth Anything 3 into .venv-da3 with ./scripts/setup/install_da3_runtime.sh"
 

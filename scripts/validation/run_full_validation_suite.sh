@@ -27,8 +27,6 @@ if [[ ! -x "${PYTHON_RESOLVER}" ]]; then
     exit 1
 fi
 
-PYTHON_BIN="$("${PYTHON_RESOLVER}")"
-
 # Options
 QUICK_MODE=false
 SKIP_BROWSER=false
@@ -132,6 +130,8 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+PYTHON_BIN="$("${PYTHON_RESOLVER}")"
 
 cd "$REPO_ROOT"
 

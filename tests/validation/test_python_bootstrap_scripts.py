@@ -170,6 +170,19 @@ def test_make_venv_refuses_wrong_version_existing_repo_venv(tmp_path: Path) -> N
     assert "make repair-core-venv" in (result.stdout + result.stderr)
 
 
+def test_make_venv_accepts_supported_windows_repo_venv_layout(tmp_path: Path) -> None:
+    repo_root = tmp_path / "repo"
+    _copy_repo_file(MAKEFILE_PATH, repo_root / "Makefile")
+    _copy_repo_file(RESOLVER_PATH, repo_root / "scripts" / "setup" / "resolve_python_311.sh")
+    _write_fake_python(repo_root / ".venv" / "Scripts" / "python.exe", version="3.12.4", real_python=sys.executable)
+
+    env = {**os.environ, "PATH": "/usr/bin:/bin"}
+    result = subprocess.run(["make", "venv"], cwd=repo_root, env=env, capture_output=True, text=True, check=False)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert ".venv already present" in result.stdout
+
+
 def test_validation_suite_uses_resolved_python_for_preflight(tmp_path: Path) -> None:
     repo_root = tmp_path / "repo"
     _copy_repo_file(VALIDATION_SUITE_PATH, repo_root / "scripts" / "validation" / "run_full_validation_suite.sh")
@@ -212,6 +225,29 @@ def test_validation_suite_uses_resolved_python_for_preflight(tmp_path: Path) -> 
 
     assert result.returncode == 0, result.stdout + result.stderr
     assert marker_path.read_text(encoding="utf-8").strip() == str(python311)
+
+
+def test_validation_suite_help_skips_python_resolution(tmp_path: Path) -> None:
+    repo_root = tmp_path / "repo"
+    _copy_repo_file(VALIDATION_SUITE_PATH, repo_root / "scripts" / "validation" / "run_full_validation_suite.sh")
+    _write_executable(
+        repo_root / "scripts" / "setup" / "resolve_python_311.sh",
+        "#!/bin/sh\n" "echo missing-python >&2\n" "exit 1\n",
+    )
+
+    env = {**os.environ, "PATH": "/usr/bin:/bin"}
+    result = subprocess.run(
+        ["bash", str(repo_root / "scripts" / "validation" / "run_full_validation_suite.sh"), "--help"],
+        cwd=repo_root,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "Usage" in result.stdout
+    assert "missing-python" not in result.stderr
 
 
 def test_install_da3_runtime_uses_resolved_python_for_venv_creation(tmp_path: Path) -> None:

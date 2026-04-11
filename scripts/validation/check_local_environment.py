@@ -12,13 +12,12 @@ Exit codes:
 
 Usage:
     make check-environment
-    .venv/bin/python scripts/validation/check_local_environment.py
-    .venv/bin/python scripts/validation/check_local_environment.py --strict
-    .venv/bin/python scripts/validation/check_local_environment.py --check python
-    .venv/bin/python scripts/validation/check_local_environment.py --check node
-    .venv/bin/python scripts/validation/check_local_environment.py --check chrome
-    .venv/bin/python scripts/validation/check_local_environment.py --check ports
-    .venv/bin/python scripts/validation/check_local_environment.py --check dependency-health
+    make check-environment CHECK_ENV_ARGS="--strict"
+    make check-environment CHECK_ENV_ARGS="--check python"
+    make check-environment CHECK_ENV_ARGS="--check node"
+    make check-environment CHECK_ENV_ARGS="--check chrome"
+    make check-environment CHECK_ENV_ARGS="--check ports"
+    make check-environment CHECK_ENV_ARGS="--check dependency-health"
 """
 
 from __future__ import annotations
