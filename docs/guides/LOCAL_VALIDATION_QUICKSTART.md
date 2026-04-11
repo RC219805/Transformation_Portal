@@ -17,7 +17,7 @@ This guide covers the canonical workflow for validating the Transformation Porta
 Run the pre-flight check to verify your environment:
 
 ```bash
-python scripts/validation/check_local_environment.py
+make check-environment
 ```
 
 This validates:
@@ -221,6 +221,31 @@ Chrome or Chromium not found
 export TP_PORTAL_BROWSER_BINARY="/path/to/chrome"
 ```
 
+### Python Snippet Pasted Into zsh
+
+If you need to run an ad hoc Python snippet, execute it through the repo interpreter instead of pasting raw Python into the shell:
+
+```bash
+.venv/bin/python - <<'PY'
+print("run Python here")
+PY
+```
+
+### Repo venv Drift or Wrong Interpreter
+
+If pre-flight reports the wrong interpreter or `pip check` dependency conflicts, rebuild the core repo environment:
+
+```bash
+make repair-core-venv
+make check-environment
+```
+
+If the conflict mentions `depth-anything-3`, keep DA3 isolated and reinstall it separately:
+
+```bash
+./scripts/setup/install_da3_runtime.sh
+```
+
 ### Build Dirties Worktree
 
 If `make test-frontdoor-contract` or other builds dirty the worktree:
@@ -239,7 +264,7 @@ The frontdoor build should use `TP_NEXT_DIST_DIR=.next-build-verify` for isolati
 
 ```bash
 # Pre-flight check
-python scripts/validation/check_local_environment.py
+make check-environment
 
 # Node version check
 ./scripts/setup/ensure_node_version.sh
