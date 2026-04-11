@@ -157,8 +157,8 @@ install-ml: venv
 install-ml-core: venv
 	@echo "Installing ML core layer (cross-platform baseline)..."
 	@ml_lock=""; \
-	py_os="$$(\"$(PY)\" -c 'import platform; print(platform.system())')"; \
-	py_arch="$$(\"$(PY)\" -c 'import platform; print(platform.machine())')"; \
+	py_os="$$("$(PY)" -c 'import platform; print(platform.system())')"; \
+	py_arch="$$("$(PY)" -c 'import platform; print(platform.machine())')"; \
 	case "$$py_arch" in \
 		aarch64) py_arch="arm64" ;; \
 		amd64) py_arch="x86_64" ;; \

@@ -57,6 +57,57 @@ if [ "$1" = "-m" ] && [ "$2" = "pip" ] && [ "$3" = "--version" ]; then
 fi
 export FAKE_PYTHON_LAUNCHER="$0"
 exec "$REAL_PYTHON" "$@"
+    """
+    return _write_executable(path, script)
+
+
+def _write_fake_ml_core_python(
+    path: Path,
+    *,
+    version: str,
+    platform_system: str,
+    platform_machine: str,
+    pip_log_path: Path,
+) -> Path:
+    version_parts = version.split(".")
+    major = int(version_parts[0])
+    minor = int(version_parts[1])
+    supported = (major, minor) >= (3, 11)
+    exit_code = "0" if supported else "1"
+    script = f"""#!/bin/sh
+FAKE_VERSION={shlex.quote(version)}
+PLATFORM_SYSTEM={shlex.quote(platform_system)}
+PLATFORM_MACHINE={shlex.quote(platform_machine)}
+PIP_LOG_PATH={shlex.quote(str(pip_log_path))}
+if [ "$1" = "-c" ]; then
+    case "$2" in
+        *"platform.system()"*)
+            echo "$PLATFORM_SYSTEM"
+            exit 0
+            ;;
+        *"platform.machine()"*)
+            echo "$PLATFORM_MACHINE"
+            exit 0
+            ;;
+        *)
+            exit {exit_code}
+            ;;
+    esac
+fi
+if [ "$1" = "-V" ] || [ "$1" = "--version" ]; then
+    echo "Python $FAKE_VERSION"
+    exit 0
+fi
+if [ "$1" = "-m" ] && [ "$2" = "pip" ] && [ "$3" = "--version" ]; then
+    echo "pip 24.0 from fake ($FAKE_VERSION)"
+    exit 0
+fi
+if [ "$1" = "-m" ] && [ "$2" = "pip" ] && [ "$3" = "install" ]; then
+    printf '%s\\n' "$*" >> "$PIP_LOG_PATH"
+    exit 0
+fi
+export FAKE_PYTHON_LAUNCHER="$0"
+exit 0
 """
     return _write_executable(path, script)
 
@@ -181,6 +232,36 @@ def test_make_venv_accepts_supported_windows_repo_venv_layout(tmp_path: Path) ->
 
     assert result.returncode == 0, result.stdout + result.stderr
     assert ".venv already present" in result.stdout
+
+
+def test_make_install_ml_core_selects_darwin_arm64_lockfile(tmp_path: Path) -> None:
+    repo_root = tmp_path / "repo"
+    pip_log_path = repo_root / "pip-install.log"
+    _copy_repo_file(MAKEFILE_PATH, repo_root / "Makefile")
+    _copy_repo_file(RESOLVER_PATH, repo_root / "scripts" / "setup" / "resolve_python_311.sh")
+    _copy_repo_file(
+        PROJECT_ROOT / "requirements" / "ml-core-darwin-arm64.txt",
+        repo_root / "requirements" / "ml-core-darwin-arm64.txt",
+    )
+    fake_python = _write_fake_ml_core_python(
+        repo_root / ".venv" / "bin" / "python",
+        version="3.11.15",
+        platform_system="Darwin",
+        platform_machine="arm64",
+        pip_log_path=pip_log_path,
+    )
+
+    env = {**os.environ, "PATH": "/usr/bin:/bin"}
+    result = subprocess.run(["make", "install-ml-core"], cwd=repo_root, env=env, capture_output=True, text=True, check=False)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert ".venv already present" in result.stdout
+    assert "Using requirements/ml-core-darwin-arm64.txt" in result.stdout
+    assert "platform-specific ML core lockfile not found" not in (result.stdout + result.stderr)
+    pip_commands = pip_log_path.read_text(encoding="utf-8")
+    assert "-m pip install -r requirements/ml-core-darwin-arm64.txt" in pip_commands
+    assert "-m pip install -e ." in pip_commands
+    assert str(fake_python) not in (result.stdout + result.stderr)
 
 
 def test_validation_suite_uses_resolved_python_for_preflight(tmp_path: Path) -> None:
