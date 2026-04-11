@@ -33,7 +33,7 @@ platformdirs==4.9.6
 pluggy==1.6.0
 pycparser==3.0
 pygments==2.20.0
-pypdf==6.9.2
+pypdf==6.10.0
 pyproject-api==1.10.0
 pyproject-hooks==1.2.0
 python-discovery==1.2.2
