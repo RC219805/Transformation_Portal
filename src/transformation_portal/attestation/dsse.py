@@ -6,7 +6,6 @@ import base64
 from collections.abc import Mapping
 from typing import Any
 
-
 DSSE_IN_TOTO_JSON_PAYLOAD_TYPE = "application/vnd.in-toto+json"
 
 

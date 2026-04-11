@@ -10,9 +10,7 @@ from transformation_portal.ingest.canonical_json import TP_CANONICAL_JSON_PROFIL
 
 RUN_CARD_ATTESTATION_SCHEMA_VERSION = "tp.run_card.attestation.detached.v1"
 RUN_CARD_ATTESTATION_PREIMAGE_SCHEMA_VERSION = "tp.run_card.attestation.detached.v1.preimage"
-RUN_CARD_V2_SCHEMA_URI = (
-    "https://rc219805.github.io/Transformation_Portal/docs/schemas/run_card/run_card.v2.schema.json"
-)
+RUN_CARD_V2_SCHEMA_URI = "https://rc219805.github.io/Transformation_Portal/docs/schemas/run_card/run_card.v2.schema.json"
 _HEX_CHARS = frozenset("0123456789abcdef")
 
 

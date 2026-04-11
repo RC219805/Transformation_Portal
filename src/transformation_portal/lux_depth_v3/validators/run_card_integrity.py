@@ -458,8 +458,7 @@ def verify_run_card_integrity(
             recomputed_merkle_root = compute_artifact_merkle_root(artifact_index)
             if recomputed_merkle_root != expected_merkle_root:
                 errors.append(
-                    "artifact_merkle_root mismatch: "
-                    f"expected={expected_merkle_root}, recomputed={recomputed_merkle_root}"
+                    f"artifact_merkle_root mismatch: expected={expected_merkle_root}, recomputed={recomputed_merkle_root}"
                 )
 
     artifact_index_by_relative_path = {}
