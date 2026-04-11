@@ -395,17 +395,23 @@ install_profile() {
             else
                 # Create secure temporary file for error logging
                 local error_log
+                local cleanup_trap
                 error_log="$(mktemp)"
-                trap 'if [[ -n "${error_log:-}" ]]; then rm -f "${error_log}"; fi' RETURN
+                cleanup_trap="$(printf 'rm -f %q' "${error_log}")"
+                trap "${cleanup_trap}" RETURN
 
                 # Try standard install first
                 log_info "Attempting standard SAM2 install..."
                 log_verbose "Using PyTorch index: ${PYTORCH_INDEX}"
                 if "${pip_cmd[@]}" --extra-index-url "${PYTORCH_INDEX}" sam2==1.1.0 2>"${error_log}"; then
+                    rm -f "${error_log}"
+                    trap - RETURN
                     log_info "SAM2 installed successfully via standard path."
                 else
                     log_warn "Standard install failed. Error log:"
                     cat "${error_log}" >&2
+                    rm -f "${error_log}"
+                    trap - RETURN
                     log_warn "Retrying with --no-build-isolation (torch must be pre-installed)..."
                     if "${pip_cmd[@]}" --extra-index-url "${PYTORCH_INDEX}" --no-build-isolation sam2==1.1.0; then
                         log_info "SAM2 installed successfully with --no-build-isolation."

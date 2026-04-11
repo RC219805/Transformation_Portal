@@ -446,6 +446,8 @@ def test_install_ml_stack_sam2_success_does_not_fail_on_return_trap(tmp_path: Pa
     script_path = _copy_repo_file(ML_STACK_INSTALLER_PATH, repo_root / "scripts" / "bootstrap" / "install_ml_stack.sh")
     resolver_path = repo_root / "scripts" / "setup" / "resolve_python_311.sh"
     pip_log_path = repo_root / "pip-install.log"
+    fakebin = tmp_path / "fakebin"
+    error_log_path = tmp_path / "sam2-error.log"
     fake_python = _write_fake_ml_core_python(
         repo_root / ".venv" / "bin" / "python",
         version="3.11.15",
@@ -454,9 +456,19 @@ def test_install_ml_stack_sam2_success_does_not_fail_on_return_trap(tmp_path: Pa
         pip_log_path=pip_log_path,
     )
     _write_executable(resolver_path, f"#!/bin/sh\nprintf '%s\\n' {shlex.quote(str(fake_python))}\n")
+    _write_executable(
+        fakebin / "mktemp",
+        (
+            "#!/bin/sh\n"
+            f"tmp={shlex.quote(str(error_log_path))}\n"
+            'rm -f "$tmp"\n'
+            'touch "$tmp"\n'
+            "printf '%s\\n' \"$tmp\"\n"
+        ),
+    )
     (repo_root / "requirements").mkdir(parents=True, exist_ok=True)
 
-    env = {**os.environ, "PATH": "/usr/bin:/bin"}
+    env = {**os.environ, "PATH": f"{fakebin}:/usr/bin:/bin"}
     result = subprocess.run(
         ["bash", str(script_path), "--profile", "sam2"],
         cwd=repo_root,
@@ -469,6 +481,7 @@ def test_install_ml_stack_sam2_success_does_not_fail_on_return_trap(tmp_path: Pa
     assert result.returncode == 0, result.stdout + result.stderr
     assert "SAM2 installed successfully via standard path." in result.stdout
     assert "unbound variable" not in (result.stdout + result.stderr)
+    assert not error_log_path.exists()
     pip_commands = pip_log_path.read_text(encoding="utf-8")
     assert "-m pip install --extra-index-url https://download.pytorch.org/whl/cpu sam2==1.1.0" in pip_commands
 
