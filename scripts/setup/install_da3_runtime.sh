@@ -7,6 +7,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+PYTHON_RESOLVER="${REPO_ROOT}/scripts/setup/resolve_python_311.sh"
 
 CHECKOUT_DIR="${REPO_ROOT}/.runtime/Depth-Anything-3"
 VENV_DIR="${REPO_ROOT}/.venv-da3"
@@ -94,10 +95,12 @@ if ! command -v git >/dev/null 2>&1; then
     exit 1
 fi
 
-if ! command -v python3 >/dev/null 2>&1; then
-    printf '[ERROR] python3 is required but not available on PATH.\n' >&2
+if [[ ! -x "${PYTHON_RESOLVER}" ]]; then
+    printf '[ERROR] Python resolver missing: %s\n' "${PYTHON_RESOLVER}" >&2
     exit 1
 fi
+
+BOOTSTRAP_PYTHON="$("${PYTHON_RESOLVER}")"
 
 mkdir -p "$(dirname "${CHECKOUT_DIR}")"
 
@@ -116,7 +119,8 @@ run git -C "${CHECKOUT_DIR}" clean -fd
 
 if [[ ! -d "${VENV_DIR}" ]]; then
     log "Creating isolated DA3 venv at ${VENV_DIR}"
-    run python3 -m venv "${VENV_DIR}"
+    log "Using bootstrap interpreter: ${BOOTSTRAP_PYTHON}"
+    run "${BOOTSTRAP_PYTHON}" -m venv "${VENV_DIR}"
 fi
 
 PYTHON_BIN="${VENV_DIR}/bin/python"

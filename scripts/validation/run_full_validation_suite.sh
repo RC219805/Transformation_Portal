@@ -20,6 +20,46 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+PYTHON_RESOLVER="${REPO_ROOT}/scripts/setup/resolve_python_311.sh"
+
+# Handle --help early so it works even if the resolver is missing
+for arg in "$@"; do
+    case "${arg}" in
+        -h|--help)
+            cat <<EOF
+Usage: $(basename "$0") [OPTIONS]
+
+All-in-one validation orchestrator for local development.
+
+Options:
+    --quick           Run quick validation (skip browser smokes)
+    --skip-browser    Skip browser smoke tests
+    --skip-frontdoor  Skip frontdoor validation (Node/npm)
+    --verbose         Show verbose output
+    -h, --help        Show this help message
+
+Validation sequence:
+    1. Environment pre-flight checks
+    2. Fast Python tests (make test-fast)
+    3. Orchestrator contract tests (make test-orchestrator-contract)
+    4. Frontdoor contract tests (make test-frontdoor-contract)
+    5. Portal browser smoke (make validate-portal-browser)
+    6. Frontdoor browser smoke (make validate-frontdoor-browser)
+
+Examples:
+    $(basename "$0")                  # Full validation suite
+    $(basename "$0") --quick          # Skip browser smokes
+    $(basename "$0") --skip-frontdoor # Python-only validation
+EOF
+            exit 0
+            ;;
+    esac
+done
+
+if [[ ! -x "${PYTHON_RESOLVER}" ]]; then
+    echo "[ERROR] Python resolver missing: ${PYTHON_RESOLVER}" >&2
+    exit 1
+fi
 
 # Options
 QUICK_MODE=false
@@ -65,35 +105,7 @@ log_info() {
     echo "  $1"
 }
 
-usage() {
-    cat <<EOF
-Usage: $(basename "$0") [OPTIONS]
-
-All-in-one validation orchestrator for local development.
-
-Options:
-    --quick           Run quick validation (skip browser smokes)
-    --skip-browser    Skip browser smoke tests
-    --skip-frontdoor  Skip frontdoor validation (Node/npm)
-    --verbose         Show verbose output
-    -h, --help        Show this help message
-
-Validation sequence:
-    1. Environment pre-flight checks
-    2. Fast Python tests (make test-fast)
-    3. Orchestrator contract tests (make test-orchestrator-contract)
-    4. Frontdoor contract tests (make test-frontdoor-contract)
-    5. Portal browser smoke (make validate-portal-browser)
-    6. Frontdoor browser smoke (make validate-frontdoor-browser)
-
-Examples:
-    $(basename "$0")                  # Full validation suite
-    $(basename "$0") --quick          # Skip browser smokes
-    $(basename "$0") --skip-frontdoor # Python-only validation
-EOF
-}
-
-# Parse arguments
+# Parse arguments (--help already handled above)
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --quick)
@@ -113,17 +125,15 @@ while [[ $# -gt 0 ]]; do
             VERBOSE=true
             shift
             ;;
-        -h|--help)
-            usage
-            exit 0
-            ;;
         *)
-            echo "Unknown option: $1"
-            usage
+            echo "Unknown option: $1" >&2
+            echo "Use --help for usage information." >&2
             exit 1
             ;;
     esac
 done
+
+PYTHON_BIN="$("${PYTHON_RESOLVER}")"
 
 cd "$REPO_ROOT"
 
@@ -169,7 +179,7 @@ fi
 # Step 1: Environment pre-flight
 log_step "Step 1/6: Environment Pre-flight Checks"
 if [[ "$SKIP_FRONTDOOR" == "true" ]]; then
-    if python3 "${SCRIPT_DIR}/check_local_environment.py" --check python --check venv; then
+    if "${PYTHON_BIN}" "${SCRIPT_DIR}/check_local_environment.py" --check python --check venv --check dependency-health; then
         log_success "Environment checks passed"
     else
         PREFLIGHT_STATUS=$?
@@ -188,7 +198,7 @@ if [[ "$SKIP_FRONTDOOR" == "true" ]]; then
         esac
     fi
 else
-    if python3 "${SCRIPT_DIR}/check_local_environment.py"; then
+    if "${PYTHON_BIN}" "${SCRIPT_DIR}/check_local_environment.py"; then
         log_success "Environment checks passed"
     else
         PREFLIGHT_STATUS=$?
