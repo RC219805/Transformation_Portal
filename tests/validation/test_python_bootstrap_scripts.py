@@ -82,8 +82,8 @@ def test_resolver_falls_back_to_python311_when_repo_venv_missing(tmp_path: Path)
     fakebin = tmp_path / "fakebin"
     python311 = _write_fake_python(fakebin / "python3.11", version="3.11.15", real_python=sys.executable)
     # Provide fake python3.12/3.13 that report unsupported versions to isolate from system
-    _write_fake_python(fakebin / "python3.13", version="3.10.0", real_python=sys.executable)
-    _write_fake_python(fakebin / "python3.12", version="3.10.0", real_python=sys.executable)
+    _write_fake_python(fakebin / "python3.13", version="3.9.0", real_python=sys.executable)
+    _write_fake_python(fakebin / "python3.12", version="3.9.0", real_python=sys.executable)
     _write_fake_python(fakebin / "python3", version="3.9.6", real_python=sys.executable)
     _write_fake_python(fakebin / "python", version="3.9.6", real_python=sys.executable)
 
@@ -146,8 +146,8 @@ def test_validation_suite_uses_resolved_python_for_preflight(tmp_path: Path) -> 
     fakebin = tmp_path / "fakebin"
     python311 = _write_fake_python(fakebin / "python3.11", version="3.11.15", real_python=sys.executable)
     # Provide fake python3.12/3.13 that report unsupported versions to isolate from system
-    _write_fake_python(fakebin / "python3.13", version="3.10.0", real_python=sys.executable)
-    _write_fake_python(fakebin / "python3.12", version="3.10.0", real_python=sys.executable)
+    _write_fake_python(fakebin / "python3.13", version="3.9.0", real_python=sys.executable)
+    _write_fake_python(fakebin / "python3.12", version="3.9.0", real_python=sys.executable)
     _write_fake_python(fakebin / "python3", version="3.9.6", real_python=sys.executable)
     _write_fake_python(fakebin / "python", version="3.9.6", real_python=sys.executable)
     _write_executable(
@@ -178,8 +178,8 @@ def test_install_da3_runtime_uses_resolved_python_for_venv_creation(tmp_path: Pa
     fakebin = tmp_path / "fakebin"
     python311 = _write_fake_python(fakebin / "python3.11", version="3.11.15", real_python=sys.executable)
     # Provide fake python3.12/3.13 that report unsupported versions to isolate from system
-    _write_fake_python(fakebin / "python3.13", version="3.10.0", real_python=sys.executable)
-    _write_fake_python(fakebin / "python3.12", version="3.10.0", real_python=sys.executable)
+    _write_fake_python(fakebin / "python3.13", version="3.9.0", real_python=sys.executable)
+    _write_fake_python(fakebin / "python3.12", version="3.9.0", real_python=sys.executable)
     _write_fake_python(fakebin / "python3", version="3.9.6", real_python=sys.executable)
     _write_fake_python(fakebin / "python", version="3.9.6", real_python=sys.executable)
 
@@ -216,8 +216,8 @@ def test_install_raw_runtime_uses_resolved_python_for_venv_creation(tmp_path: Pa
     fakebin = tmp_path / "fakebin"
     python311 = _write_fake_python(fakebin / "python3.11", version="3.11.15", real_python=sys.executable)
     # Provide fake python3.12/3.13 that report unsupported versions to isolate from system
-    _write_fake_python(fakebin / "python3.13", version="3.10.0", real_python=sys.executable)
-    _write_fake_python(fakebin / "python3.12", version="3.10.0", real_python=sys.executable)
+    _write_fake_python(fakebin / "python3.13", version="3.9.0", real_python=sys.executable)
+    _write_fake_python(fakebin / "python3.12", version="3.9.0", real_python=sys.executable)
     _write_fake_python(fakebin / "python3", version="3.9.6", real_python=sys.executable)
     _write_fake_python(fakebin / "python", version="3.9.6", real_python=sys.executable)
 
