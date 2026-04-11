@@ -61,7 +61,7 @@ help:
 	@echo "  validate-full      Run the full validation suite (all checks + browser smokes)"
 	@echo "  validate-quick     Run quick validation (skip browser smokes)"
 	@echo "  audit-pipeline-readiness  Run the local four-pipeline readiness audit"
-	@echo "  venv               Create local .venv if missing"
+	@echo "  venv               Create or validate .venv with Python 3.11+; fail on unsupported or broken environments"
 	@echo "  clean              Remove Python cache files and build artifacts"
 	@echo "  clean-frontdoor    Remove frontdoor build artifacts (.next)"
 	@echo "  clean-all          Remove all build artifacts (Python + Node)"

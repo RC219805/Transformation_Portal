@@ -57,7 +57,11 @@ class CheckResult:
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 FRONTDOOR_ROOT = REPO_ROOT / "web" / "secure-landing"
-REPO_VENV_PYTHON = REPO_ROOT / ".venv" / "bin" / "python"
+# Platform-aware venv interpreter path
+if sys.platform == "win32":
+    REPO_VENV_PYTHON = REPO_ROOT / ".venv" / "Scripts" / "python.exe"
+else:
+    REPO_VENV_PYTHON = REPO_ROOT / ".venv" / "bin" / "python"
 
 # Required Python version
 MIN_PYTHON_VERSION = (3, 11)
@@ -348,9 +352,7 @@ def check_venv_active() -> CheckResult:
         return CheckResult(
             name="Python venv",
             passed=False,
-            message=(
-                f"Repo venv exists at {REPO_VENV_PYTHON}, but the current interpreter is {sys.executable}"
-            ),
+            message=(f"Repo venv exists at {REPO_VENV_PYTHON}, but the current interpreter is {sys.executable}"),
             guidance=(
                 "Use `.venv/bin/python ...` or `source .venv/bin/activate`. "
                 "If `.venv` is broken, run `make repair-core-venv`."

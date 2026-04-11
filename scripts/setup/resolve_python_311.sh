@@ -30,9 +30,11 @@ emit_guidance() {
 [ERROR] Transformation Portal requires Python ${MIN_MAJOR}.${MIN_MINOR}+.
 [ERROR] Checked candidates:
 [ERROR]   1. ${REPO_VENV_PYTHON}
-[ERROR]   2. python3.11
-[ERROR]   3. python3
-[ERROR]   4. python
+[ERROR]   2. python3.13
+[ERROR]   3. python3.12
+[ERROR]   4. python3.11
+[ERROR]   5. python3
+[ERROR]   6. python
 [ERROR]
 [ERROR] Install Python ${MIN_MAJOR}.${MIN_MINOR}+ and retry, then run:
 [ERROR]   make venv
@@ -45,6 +47,8 @@ main() {
     local candidate
     for candidate in \
         "${REPO_VENV_PYTHON}" \
+        python3.13 \
+        python3.12 \
         python3.11 \
         python3 \
         python; do
