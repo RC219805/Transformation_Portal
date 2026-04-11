@@ -107,6 +107,10 @@ DARWIN_ARM64_COREML_PATTERN = re.compile(r"^coremltools\b[^\n]*$", re.IGNORECASE
 LINUX_TRANSFORMERS_GUARD_PATTERN = re.compile(r"^transformers[^#\n]*<\s*5(?:\.0+)?(?:\s|$)", re.IGNORECASE)
 DARWIN_LOCKFILE_FORBIDDEN_PACKAGES = ("triton",)
 DARWIN_LOCKFILE_FORBIDDEN_PREFIXES = ("nvidia-",)
+GENERIC_LINUX_KEYRING_REQUIRED_PACKAGES = {
+    "all.txt": ("jeepney", "secretstorage"),
+    "ci.txt": ("cffi", "cryptography", "jeepney", "pycparser", "secretstorage"),
+}
 # Note: [^\n]* (not [^#\n]*) intentionally matches lines that carry inline comments,
 # because ml-core-darwin-arm64.in declares coremltools with a trailing # comment.
 # The x86 guard patterns check stripped non-comment lines, so they use [^#\n]*.
@@ -266,6 +270,31 @@ def _read_pinned_packages(lock_path: Path) -> dict[str, str]:
         if match:
             packages[_normalize_package_name(match.group(1))] = match.group(2)
     return packages
+
+
+def validate_generic_linux_keyring_pins() -> list[str]:
+    """Ensure generic locks keep the Linux keyring backend pinned."""
+    errors: list[str] = []
+
+    for lock_name, required_packages in GENERIC_LINUX_KEYRING_REQUIRED_PACKAGES.items():
+        lock_path = REQUIREMENTS_DIR / lock_name
+        if not lock_path.is_file():
+            continue
+
+        packages = _read_pinned_packages(lock_path)
+        if "keyring" not in packages:
+            continue
+
+        missing = [package for package in required_packages if package not in packages]
+        if missing:
+            missing_text = ", ".join(repr(package) for package in missing)
+            errors.append(
+                f"{lock_path} pins keyring=={packages['keyring']} but is missing Linux keyring-chain packages "
+                f"{missing_text}. Regenerate the generic lock on ubuntu-x64-generic or restore the pinned "
+                "Linux transitive dependencies explicitly."
+            )
+
+    return errors
 
 
 def validate_darwin_lock_purity() -> list[str]:
@@ -444,6 +473,7 @@ def main() -> int:
     errors.extend(validate_lock_ownership_manifest())
     errors.extend(validate_lockfile_headers(expected_python))
     errors.extend(validate_noncore_optional_lockfiles_absent())
+    errors.extend(validate_generic_linux_keyring_pins())
     errors.extend(validate_platform_lock_markers())
     errors.extend(validate_darwin_input_guards())
     errors.extend(validate_linux_input_guards())

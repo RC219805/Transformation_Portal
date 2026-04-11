@@ -180,6 +180,59 @@ def test_noncore_optional_lockfile_is_reported(isolated_repo: Path) -> None:
     ]
 
 
+def test_generic_lock_requires_linux_keyring_transitives_in_all_lock(isolated_repo: Path) -> None:
+    write_lockfile(
+        isolated_repo,
+        "all.txt",
+        "3.11",
+        body="keyring==25.7.0\ncryptography==46.0.7\ncffi==2.0.0\npycparser==3.0\n",
+    )
+
+    errors = contract.validate_generic_linux_keyring_pins()
+
+    assert errors == [
+        f"{isolated_repo / 'requirements' / 'all.txt'} pins keyring==25.7.0 but is missing Linux keyring-chain packages "
+        "'jeepney', 'secretstorage'. Regenerate the generic lock on ubuntu-x64-generic or restore the pinned "
+        "Linux transitive dependencies explicitly."
+    ]
+
+
+def test_generic_lock_requires_linux_keyring_transitives_in_ci_lock(isolated_repo: Path) -> None:
+    write_lockfile(
+        isolated_repo,
+        "ci.txt",
+        "3.11",
+        body="keyring==25.7.0\njeepney==0.9.0\nsecretstorage==3.5.0\n",
+    )
+
+    errors = contract.validate_generic_linux_keyring_pins()
+
+    assert errors == [
+        f"{isolated_repo / 'requirements' / 'ci.txt'} pins keyring==25.7.0 but is missing Linux keyring-chain packages "
+        "'cffi', 'cryptography', 'pycparser'. Regenerate the generic lock on ubuntu-x64-generic or restore the pinned "
+        "Linux transitive dependencies explicitly."
+    ]
+
+
+def test_generic_lock_accepts_complete_linux_keyring_chain(isolated_repo: Path) -> None:
+    write_lockfile(
+        isolated_repo,
+        "all.txt",
+        "3.11",
+        body="keyring==25.7.0\njeepney==0.9.0\nsecretstorage==3.5.0\ncryptography==46.0.7\ncffi==2.0.0\npycparser==3.0\n",
+    )
+    write_lockfile(
+        isolated_repo,
+        "ci.txt",
+        "3.11",
+        body="keyring==25.7.0\njeepney==0.9.0\nsecretstorage==3.5.0\ncryptography==46.0.7\ncffi==2.0.0\npycparser==3.0\n",
+    )
+
+    errors = contract.validate_generic_linux_keyring_pins()
+
+    assert errors == []
+
+
 def test_platform_lock_wrong_os_marker_is_reported(isolated_repo: Path) -> None:
     write_lockfile(
         isolated_repo,
