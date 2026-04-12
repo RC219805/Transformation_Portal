@@ -262,12 +262,20 @@ const els = {
     consoleViewSummary: document.getElementById('consoleViewSummary'),
     consoleViewMeta: document.getElementById('consoleViewMeta'),
     consoleContextRibbon: document.getElementById('consoleContextRibbon'),
+    contextRibbonCard1: document.getElementById('contextRibbonCard1'),
+    contextRibbonCard1Label: document.getElementById('contextRibbonCard1Label'),
     contextRibbonJob: document.getElementById('contextRibbonJob'),
     contextRibbonJobMeta: document.getElementById('contextRibbonJobMeta'),
+    contextRibbonCard2: document.getElementById('contextRibbonCard2'),
+    contextRibbonCard2Label: document.getElementById('contextRibbonCard2Label'),
     contextRibbonState: document.getElementById('contextRibbonState'),
     contextRibbonFreshness: document.getElementById('contextRibbonFreshness'),
+    contextRibbonCard3: document.getElementById('contextRibbonCard3'),
+    contextRibbonCard3Label: document.getElementById('contextRibbonCard3Label'),
     contextRibbonArtifact: document.getElementById('contextRibbonArtifact'),
     contextRibbonArtifactMeta: document.getElementById('contextRibbonArtifactMeta'),
+    contextRibbonCard4: document.getElementById('contextRibbonCard4'),
+    contextRibbonCard4Label: document.getElementById('contextRibbonCard4Label'),
     contextRibbonCompare: document.getElementById('contextRibbonCompare'),
     contextRibbonCompareMeta: document.getElementById('contextRibbonCompareMeta'),
     heroRunBtn: document.getElementById('heroRunBtn'),
@@ -302,6 +310,18 @@ const els = {
     buildStepTab2: document.getElementById('buildStepTab2'),
     buildStepTab3: document.getElementById('buildStepTab3'),
     buildStepTab4: document.getElementById('buildStepTab4'),
+    buildPulseDraftCard: document.getElementById('buildPulseDraftCard'),
+    buildPulseDraft: document.getElementById('buildPulseDraft'),
+    buildPulseDraftMeta: document.getElementById('buildPulseDraftMeta'),
+    buildPulseStepCard: document.getElementById('buildPulseStepCard'),
+    buildPulseStep: document.getElementById('buildPulseStep'),
+    buildPulseStepMeta: document.getElementById('buildPulseStepMeta'),
+    buildPulsePreviewCard: document.getElementById('buildPulsePreviewCard'),
+    buildPulsePreview: document.getElementById('buildPulsePreview'),
+    buildPulsePreviewMeta: document.getElementById('buildPulsePreviewMeta'),
+    buildPulseDispatchCard: document.getElementById('buildPulseDispatchCard'),
+    buildPulseDispatch: document.getElementById('buildPulseDispatch'),
+    buildPulseDispatchMeta: document.getElementById('buildPulseDispatchMeta'),
 
     pipelineSelect: document.getElementById('pipelineSelect'),
     presetSelect: document.getElementById('presetSelect'),
@@ -1178,48 +1198,232 @@ function updateConsoleViewContext() {
         : `Transformation Portal — ${viewMeta.title}`;
 }
 
+function _summaryTone(value) {
+    const tone = String(value || '').trim().toLowerCase();
+    return ['ready', 'warning', 'blocked', 'info'].includes(tone) ? tone : 'info';
+}
+
+function _setSummaryCard(card, labelElement, valueElement, metaElement, summary) {
+    if (!valueElement || !metaElement) return;
+    const nextSummary = summary && typeof summary === 'object' ? summary : {};
+    if (labelElement) labelElement.textContent = String(nextSummary.label || '');
+    valueElement.textContent = String(nextSummary.value || '');
+    metaElement.textContent = String(nextSummary.meta || '');
+    if (card) {
+        card.dataset.tone = _summaryTone(nextSummary.tone);
+    }
+}
+
+function _jobSurfaceTone(job) {
+    const stateLabel = String(job?.state || '').trim().toLowerCase();
+    if (['succeeded', 'ready', 'partial'].includes(stateLabel)) return 'ready';
+    if (['failed', 'canceled', 'offline'].includes(stateLabel)) return 'blocked';
+    return 'info';
+}
+
+function _previewSurfaceSummary(payload = null) {
+    const currentPayload = payload || generatePayload();
+    const preview = _currentPreviewForPayload(currentPayload);
+    if (!state.backendOk) {
+        return {
+            value: 'Backend offline',
+            meta: 'Preview-backed validation resumes when the orchestrator backend becomes reachable again.',
+            tone: 'blocked'
+        };
+    }
+    if (!preview) {
+        return {
+            value: 'Refreshing',
+            meta: 'Preview-backed validation is hydrating the current draft.',
+            tone: 'info'
+        };
+    }
+    if (preview.status === 'loading') {
+        return {
+            value: 'Refreshing',
+            meta: 'Preview-backed validation is recalculating the active draft.',
+            tone: 'info'
+        };
+    }
+    if (preview.status === 'error') {
+        const details = _previewFailureDetails(preview);
+        const message = currentPayload.pipeline === 'lux-depth-v3'
+            ? String(details.luxBlockedMessage || '').replace(/^BLOCKED:\s*/i, '')
+            : String(details.archiveWarningMessage || '').replace(/^WARNING:\s*/i, '');
+        return {
+            value: details.summaryLabel,
+            meta: message || 'Preview-backed validation needs operator attention.',
+            tone: currentPayload.pipeline === 'lux-depth-v3' ? 'blocked' : 'warning'
+        };
+    }
+    if (preview.status === 'ready') {
+        const errors = Array.isArray(preview.field_errors) ? preview.field_errors.length : 0;
+        const warnings = Array.isArray(preview.field_warnings) ? preview.field_warnings.length : 0;
+        if (errors > 0) {
+            return {
+                value: 'Preview invalid',
+                meta: `${errors} blocking issue${errors === 1 ? '' : 's'} need resolution before dispatch.`,
+                tone: 'blocked'
+            };
+        }
+        if (warnings > 0) {
+            return {
+                value: 'Preview ready with warnings',
+                meta: `${warnings} warning${warnings === 1 ? '' : 's'} remain visible before dispatch.`,
+                tone: 'warning'
+            };
+        }
+        return {
+            value: 'Preview ready',
+            meta: 'Preview-backed validation and normalized arguments are aligned with the current draft.',
+            tone: 'ready'
+        };
+    }
+    if (preview.status === 'offline' || preview.status === 'local_fallback') {
+        return {
+            value: 'Local fallback',
+            meta: 'Local rendering is standing in while preview-backed validation is unavailable.',
+            tone: 'warning'
+        };
+    }
+    return {
+        value: _formatPreviewStateLabel(currentPayload),
+        meta: 'Preview-backed validation will summarize the active draft here.',
+        tone: 'info'
+    };
+}
+
+function renderBuildStepPulse(payload = null) {
+    const currentPayload = payload || generatePayload();
+    const activeStep = resolveBuildStep(state.portalUi.buildStep);
+    const stepContent = _currentBuildStepContent();
+    const activeStepContent = stepContent[activeStep - 1] || BUILD_STEP_CONTENT.lux[activeStep - 1];
+    const nextAction = _effectiveNextBestAction(currentPayload);
+    const previewSummary = _previewSurfaceSummary(currentPayload);
+    const draftValue = state.pipeline === 'lux-depth-v3'
+        ? String(currentPayload?.args?.preset || state.config.preset || 'custom')
+        : canonicalArchiveCommand(state.pipeline) || 'archive';
+    const draftMeta = state.pipeline === 'lux-depth-v3'
+        ? `${String(state.pipeline || 'lux-depth-v3')} • ${titleCaseToken(currentPayload?.args?.quality_tier || state.config.qualityTier || 'premium', 'Premium')} posture`
+        : `${String(state.pipeline || 'archive')} • deterministic archive stage`;
+
+    _setSummaryCard(els.buildPulseDraftCard, null, els.buildPulseDraft, els.buildPulseDraftMeta, {
+        value: draftValue,
+        meta: draftMeta,
+        tone: state.backendOk ? 'ready' : 'info'
+    });
+    _setSummaryCard(els.buildPulseStepCard, null, els.buildPulseStep, els.buildPulseStepMeta, {
+        value: `${activeStep} of 4 · ${String(activeStepContent?.label || 'Focus')}`,
+        meta: String(activeStepContent?.summary || activeStepContent?.meta || 'Build focus is pinned here.'),
+        tone: 'info'
+    });
+    _setSummaryCard(els.buildPulsePreviewCard, null, els.buildPulsePreview, els.buildPulsePreviewMeta, previewSummary);
+    _setSummaryCard(els.buildPulseDispatchCard, null, els.buildPulseDispatch, els.buildPulseDispatchMeta, {
+        value: String(nextAction?.label || 'Review dispatch posture'),
+        meta: String(nextAction?.detail || 'The next operator action stays pinned here while the draft changes.'),
+        tone: String(nextAction?.tone || 'info')
+    });
+}
+
 function renderConsoleContextRibbon() {
     if (!els.consoleContextRibbon) return;
-    const ribbonVisible = state.currentView === 'operate' || state.currentView === 'review';
+    const ribbonVisible = ['overview', 'build', 'operate', 'review'].includes(state.currentView);
     els.consoleContextRibbon.classList.toggle('hidden', !ribbonVisible);
     if (!ribbonVisible) return;
 
-    const selected = state.jobs.find((job) => job.id === state.selectedJobId) || null;
-    const artifacts = Array.isArray(selected?.artifacts) ? rankArtifactsForDisplay(selected.artifacts) : [];
-    const selectedArtifact = selected ? _selectedArtifactForJob(selected) : null;
-    const compareCandidate = selected ? findCompareArtifact(selectedArtifact, artifacts) : null;
-    const compareEnabled = Boolean(selected && compareCandidate && state.artifactUi.compareByJob[String(selected.id || '')]);
-    const artifactCount = artifacts.length;
-    const compareCopy = _compareSurfaceCopy(selectedArtifact, compareCandidate, compareEnabled);
+    if (state.currentView === 'operate' || state.currentView === 'review') {
+        const selected = state.jobs.find((job) => job.id === state.selectedJobId) || null;
+        const artifacts = Array.isArray(selected?.artifacts) ? rankArtifactsForDisplay(selected.artifacts) : [];
+        const selectedArtifact = selected ? _selectedArtifactForJob(selected) : null;
+        const compareCandidate = selected ? findCompareArtifact(selectedArtifact, artifacts) : null;
+        const compareEnabled = Boolean(selected && compareCandidate && state.artifactUi.compareByJob[String(selected.id || '')]);
+        const artifactCount = artifacts.length;
+        const compareCopy = _compareSurfaceCopy(selectedArtifact, compareCandidate, compareEnabled);
 
-    if (els.contextRibbonJob) {
-        els.contextRibbonJob.textContent = selected ? String(selected.id || 'unknown') : 'No job selected';
+        _setSummaryCard(els.contextRibbonCard1, els.contextRibbonCard1Label, els.contextRibbonJob, els.contextRibbonJobMeta, {
+            label: 'Job',
+            value: selected ? String(selected.id || 'unknown') : 'No job selected',
+            meta: selected
+                ? `${String(selected.pipeline || 'unknown')} • ${artifactCount} artifact${artifactCount === 1 ? '' : 's'} indexed`
+                : 'Choose a run in operate or review to pin context here.',
+            tone: selected ? _jobSurfaceTone(selected) : 'info'
+        });
+        _setSummaryCard(els.contextRibbonCard2, els.contextRibbonCard2Label, els.contextRibbonState, els.contextRibbonFreshness, {
+            label: 'State',
+            value: selected ? titleCaseToken(selected.state, 'Unknown') : 'Idle',
+            meta: _jobFreshnessLabel(selected),
+            tone: selected ? _jobSurfaceTone(selected) : 'info'
+        });
+        _setSummaryCard(els.contextRibbonCard3, els.contextRibbonCard3Label, els.contextRibbonArtifact, els.contextRibbonArtifactMeta, {
+            label: 'Artifact',
+            value: selectedArtifact ? artifactLabel(selectedArtifact) : 'Awaiting selection',
+            meta: selectedArtifact
+                ? `${artifactDisplayLabel(selectedArtifact)}${compareCandidate ? ' • paired comparison available' : ' • single artifact context'}`
+                : 'Review context will show the active artifact path here.',
+            tone: selectedArtifact ? 'ready' : 'info'
+        });
+        _setSummaryCard(els.contextRibbonCard4, els.contextRibbonCard4Label, els.contextRibbonCompare, els.contextRibbonCompareMeta, {
+            label: 'Compare',
+            value: selected ? compareCopy.ribbonValue : 'No compare pair',
+            meta: selected ? compareCopy.ribbonMeta : 'Deep-linkable review context stays aligned with the URL.',
+            tone: selected && compareEnabled ? 'ready' : 'info'
+        });
+        return;
     }
-    if (els.contextRibbonJobMeta) {
-        els.contextRibbonJobMeta.textContent = selected
-            ? `${String(selected.pipeline || 'unknown')} • ${artifactCount} artifact${artifactCount === 1 ? '' : 's'} indexed`
-            : 'Choose a run in operate or review to pin context here.';
-    }
-    if (els.contextRibbonState) {
-        els.contextRibbonState.textContent = selected ? titleCaseToken(selected.state, 'Unknown') : 'Idle';
-    }
-    if (els.contextRibbonFreshness) {
-        els.contextRibbonFreshness.textContent = _jobFreshnessLabel(selected);
-    }
-    if (els.contextRibbonArtifact) {
-        els.contextRibbonArtifact.textContent = selectedArtifact ? artifactLabel(selectedArtifact) : 'Awaiting selection';
-    }
-    if (els.contextRibbonArtifactMeta) {
-        els.contextRibbonArtifactMeta.textContent = selectedArtifact
-            ? `${artifactDisplayLabel(selectedArtifact)}${compareCandidate ? ' • paired comparison available' : ' • single artifact context'}`
-            : 'Review context will show the active artifact path here.';
-    }
-    if (els.contextRibbonCompare) {
-        els.contextRibbonCompare.textContent = selected ? compareCopy.ribbonValue : 'No compare pair';
-    }
-    if (els.contextRibbonCompareMeta) {
-        els.contextRibbonCompareMeta.textContent = selected ? compareCopy.ribbonMeta : 'Deep-linkable review context stays aligned with the URL.';
-    }
+
+    const currentPayload = generatePayload();
+    const activeJob = _latestActiveJob();
+    const reviewJob = _latestReviewableJob();
+    const activeJobTone = activeJob ? _jobSurfaceTone(activeJob) : (state.backendOk ? 'info' : 'blocked');
+    const reviewJobTone = reviewJob ? _jobSurfaceTone(reviewJob) : 'info';
+    const nextAction = _effectiveNextBestAction(currentPayload);
+    const stepContent = _currentBuildStepContent();
+    const activeStep = resolveBuildStep(state.portalUi.buildStep);
+    const activeStepContent = stepContent[activeStep - 1] || BUILD_STEP_CONTENT.lux[activeStep - 1];
+    const draftValue = state.pipeline === 'lux-depth-v3'
+        ? String(currentPayload?.args?.preset || state.config.preset || 'custom')
+        : canonicalArchiveCommand(state.pipeline) || 'archive';
+
+    _setSummaryCard(els.contextRibbonCard1, els.contextRibbonCard1Label, els.contextRibbonJob, els.contextRibbonJobMeta, {
+        label: 'Live lane',
+        value: activeJob
+            ? `${titleCaseToken(activeJob.state, 'Unknown')} • ${Math.max(0, Math.min(100, Number(activeJob.progress) || 0))}%`
+            : state.backendOk
+                ? 'No live run'
+                : 'Backend offline',
+        meta: activeJob
+            ? `${String(activeJob.pipeline || 'unknown')} • ${_jobFreshnessLabel(activeJob)}`
+            : state.backendOk
+                ? 'Dispatch from Build to watch live progress here.'
+                : 'Restore the orchestrator connection to unlock preview-backed dispatch.',
+        tone: activeJobTone
+    });
+    _setSummaryCard(els.contextRibbonCard2, els.contextRibbonCard2Label, els.contextRibbonState, els.contextRibbonFreshness, {
+        label: 'Review lane',
+        value: reviewJob
+            ? (jobOutcomeSummary(reviewJob) || 'Review available')
+            : 'No review target',
+        meta: reviewJob
+            ? `${Array.isArray(reviewJob.artifacts) ? reviewJob.artifacts.length : 0} artifact${Array.isArray(reviewJob.artifacts) && reviewJob.artifacts.length === 1 ? '' : 's'} indexed • open Review to inspect the latest output.`
+            : 'Completed or partial outputs will appear here when the current draft finishes.',
+        tone: reviewJobTone
+    });
+    _setSummaryCard(els.contextRibbonCard3, els.contextRibbonCard3Label, els.contextRibbonArtifact, els.contextRibbonArtifactMeta, {
+        label: 'Dispatch lane',
+        value: String(nextAction?.label || 'Review dispatch posture'),
+        meta: String(nextAction?.detail || 'Preview guidance will summarize the clearest next step for this draft.'),
+        tone: String(nextAction?.tone || 'info')
+    });
+    _setSummaryCard(els.contextRibbonCard4, els.contextRibbonCard4Label, els.contextRibbonCompare, els.contextRibbonCompareMeta, {
+        label: state.currentView === 'build' ? 'Current focus' : 'Draft',
+        value: state.currentView === 'build'
+            ? `${activeStep} of 4 · ${String(activeStepContent?.label || 'Focus')}`
+            : draftValue,
+        meta: state.currentView === 'build'
+            ? String(activeStepContent?.summary || activeStepContent?.meta || 'Build focus is pinned here.')
+            : `${String(state.pipeline || 'lux-depth-v3')} • ${state.backendOk ? 'live backend connected' : 'dispatch paused until the backend recovers'}.`,
+        tone: 'info'
+    });
 }
 
 function applyConsoleViewLayout() {
@@ -1469,6 +1673,8 @@ function syncBuildStepUi() {
         els.buildStepNextBtn.disabled = activeStep >= 4;
         els.buildStepNextBtn.textContent = activeStep >= 4 ? 'Dispatch Ready' : 'Next';
     }
+
+    renderBuildStepPulse(generatePayload());
 }
 
 function setBuildStep(nextStep, options = {}) {
@@ -2535,6 +2741,8 @@ function renderMissionControl(payload = null) {
     renderPresetIntelligence(currentPayload);
     renderGovernanceBanner(currentPayload);
     syncDisclosurePanels(currentPayload);
+    renderBuildStepPulse(currentPayload);
+    renderConsoleContextRibbon();
     _syncOverviewBuildLoadingState(currentPayload);
 }
 

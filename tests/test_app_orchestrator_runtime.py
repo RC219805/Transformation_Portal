@@ -1176,6 +1176,10 @@ def test_portal_console_context_ribbon_tracks_selected_job_and_review_state() ->
     apply_view_body = _extract_js_function_body(content, "applyConsoleViewLayout")
     inspector_body = _extract_js_function_body(content, "renderSelectedJobInspector")
     artifact_body = _extract_js_function_body(content, "renderArtifactPanel")
+    operate_branch_idx = ribbon_body.index("if (state.currentView === 'operate' || state.currentView === 'review') {")
+    operate_return_idx = ribbon_body.index("        return;", operate_branch_idx)
+    selected_idx = ribbon_body.index("const selected = state.jobs.find((job) => job.id === state.selectedJobId) || null;")
+    current_payload_idx = ribbon_body.index("const currentPayload = generatePayload();")
 
     assert 'id="consoleContextRibbon"' in content
     assert 'id="contextRibbonJob"' in content
@@ -1183,14 +1187,17 @@ def test_portal_console_context_ribbon_tracks_selected_job_and_review_state() ->
     assert 'id="contextRibbonFreshness"' in content
     assert 'id="contextRibbonArtifact"' in content
     assert 'id="contextRibbonCompare"' in content
-    assert "const ribbonVisible = state.currentView === 'operate' || state.currentView === 'review';" in ribbon_body
+    assert "const ribbonVisible = ['overview', 'build', 'operate', 'review'].includes(state.currentView);" in ribbon_body
     assert "els.consoleContextRibbon.classList.toggle('hidden', !ribbonVisible);" in ribbon_body
     assert (
-        "els.contextRibbonArtifact.textContent = selectedArtifact ? artifactLabel(selectedArtifact) : 'Awaiting selection';"
+        "_setSummaryCard(els.contextRibbonCard1, els.contextRibbonCard1Label, els.contextRibbonJob, els.contextRibbonJobMeta, {"
         in ribbon_body
     )
     assert "const compareCopy = _compareSurfaceCopy(selectedArtifact, compareCandidate, compareEnabled);" in ribbon_body
-    assert "els.contextRibbonCompare.textContent = selected ? compareCopy.ribbonValue : 'No compare pair';" in ribbon_body
+    assert "label: 'Artifact'," in ribbon_body
+    assert "value: selected ? compareCopy.ribbonValue : 'No compare pair'" in ribbon_body
+    assert selected_idx > operate_branch_idx
+    assert current_payload_idx > operate_return_idx
     assert "renderConsoleContextRibbon();" in apply_view_body
     assert "renderConsoleContextRibbon();" in inspector_body
     assert "renderConsoleContextRibbon();" in artifact_body
@@ -1991,6 +1998,30 @@ def test_portal_surfaces_pre_run_diagnostics_and_expected_outputs() -> None:
     assert "_normalizeNextBestAction(currentPreview?.next_best_action)" in content
     assert "Wait for preview to refresh" in local_next_action_body
     assert "Restore backend connection" in local_next_action_body
+
+
+def test_portal_operator_briefing_and_build_pulse_surfaces_are_present() -> None:
+    content = _portal_bundle_content()
+    ribbon_body = _extract_js_function_body(content, "renderConsoleContextRibbon")
+    pulse_body = _extract_js_function_body(content, "renderBuildStepPulse")
+    mission_body = _extract_js_function_body(content, "renderMissionControl")
+    stepper_body = _extract_js_function_body(content, "syncBuildStepUi")
+
+    assert 'id="contextRibbonCard1Label"' in content
+    assert 'id="contextRibbonCard4Label"' in content
+    assert 'id="buildPulseDraft"' in content
+    assert 'id="buildPulsePreview"' in content
+    assert 'id="buildPulseDispatch"' in content
+    assert 'data-ui="build-step-pulse"' in content
+    assert "label: 'Live lane'" in ribbon_body
+    assert "label: 'Review lane'" in ribbon_body
+    assert "label: 'Dispatch lane'" in ribbon_body
+    assert "state.currentView === 'build' ? 'Current focus' : 'Draft'" in ribbon_body
+    assert "_previewSurfaceSummary(currentPayload)" in pulse_body
+    assert "_effectiveNextBestAction(currentPayload)" in pulse_body
+    assert "renderBuildStepPulse(currentPayload);" in mission_body
+    assert "renderConsoleContextRibbon();" in mission_body
+    assert "renderBuildStepPulse(generatePayload());" in stepper_body
 
 
 def test_portal_exposes_run_card_quick_actions() -> None:
