@@ -65,6 +65,66 @@ _KNOWN_IMAGE_EXTENSIONS = (
     ".exr",
 )
 
+_RAW_SOURCE_EXTENSIONS = {
+    ".3fr",
+    ".arw",
+    ".cr2",
+    ".cr3",
+    ".crw",
+    ".dng",
+    ".iiq",
+    ".nef",
+    ".nrw",
+    ".orf",
+    ".pef",
+    ".raf",
+    ".rw2",
+    ".sr2",
+    ".srf",
+    ".srw",
+}
+
+
+def emitted_v2_suffix_for_bit_depth(bit_depth: int) -> str:
+    """Return the canonical emitted suffix for a V2 artifact."""
+    return ".tif" if int(bit_depth) >= 16 else ".png"
+
+
+def resolve_v2_emitted_artifact_path(
+    output_path: Path,
+    *,
+    bit_depth: int,
+    identity: str | None = None,
+) -> Path:
+    """Normalize a V2 emitted artifact path to the canonical basename and suffix."""
+    candidate_path = Path(output_path)
+    normalized_identity = canonical_asset_stem(identity) if identity else canonical_asset_stem(candidate_path.stem)
+    if not normalized_identity:
+        normalized_identity = "artifact"
+    emitted_name = f"{normalized_identity}_materials_v3_enhanced{emitted_v2_suffix_for_bit_depth(bit_depth)}"
+    return candidate_path.with_name(emitted_name)
+
+
+def infer_v2_output_bit_depth(input_path: Path, *, allow_8bit_output: bool = False) -> int:
+    """Infer the likely emitted V2 bit depth before enhancement runs."""
+    if allow_8bit_output:
+        return 8
+
+    input_path = Path(input_path)
+    if input_path.suffix.lower() in _RAW_SOURCE_EXTENSIONS:
+        return 16
+
+    try:
+        with Image.open(input_path) as pil_image:
+            return 16 if detect_input_bit_depth(pil_image) == 16 else 8
+    except Exception as exc:  # pragma: no cover - best-effort inference fallback
+        logger.debug("Could not inspect input bit depth for %s: %s", input_path, exc)
+
+    if input_path.suffix.lower() in {".tif", ".tiff"}:
+        return 16
+
+    return 8
+
 
 def _coerce_to_stem_preserving_dots(input_path_or_stem: str) -> str:
     """Treat value as a stem by default; only strip extensions for path-like inputs."""
@@ -552,7 +612,10 @@ def enhance_image(
                 raise V2EnhancementError(f"Unsupported dtype conversion: {enhanced_image.dtype} → {target_dtype}")
 
         # Ensure output directory exists
-        output_path = Path(output_path)
+        output_path = resolve_v2_emitted_artifact_path(
+            output_path,
+            bit_depth=target_bits,
+        )
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Save enhanced image with metadata preservation and correct bit-depth

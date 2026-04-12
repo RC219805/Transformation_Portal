@@ -15,9 +15,11 @@ from PIL import Image
 from transformation_portal.lux_depth_v3.v2_enhance import (
     V2EnhancementError,
     canonical_asset_stem,
+    emitted_v2_suffix_for_bit_depth,
     enhance_image,
     find_depth_map,
     load_depth_map,
+    resolve_v2_emitted_artifact_path,
 )
 from transformation_portal.lux_depth_v3.v2_presets import V2EnhancementConfig
 from transformation_portal.stage_graph.stage import StageStatus
@@ -114,6 +116,33 @@ class TestFindDepthMap:
         assert find_depth_map(Path("/nonexistent"), "test") is None
 
 
+class TestEmittedArtifactPath:
+    """Test canonical emitted V2 artifact naming."""
+
+    @pytest.mark.parametrize(
+        ("candidate_name", "bit_depth", "expected_name"),
+        [
+            ("scene.DNG", 16, "scene_materials_v3_enhanced.tif"),
+            ("scene.CR2", 16, "scene_materials_v3_enhanced.tif"),
+            ("scene_materials_v3_enhanced.nef", 16, "scene_materials_v3_enhanced.tif"),
+            ("scene.jpg", 8, "scene_materials_v3_enhanced.png"),
+        ],
+    )
+    def test_resolve_v2_emitted_artifact_path_normalizes_basename_and_suffix(
+        self,
+        tmp_path,
+        candidate_name,
+        bit_depth,
+        expected_name,
+    ):
+        candidate_path = tmp_path / candidate_name
+
+        resolved = resolve_v2_emitted_artifact_path(candidate_path, bit_depth=bit_depth)
+
+        assert resolved == tmp_path / expected_name
+        assert resolved.suffix == emitted_v2_suffix_for_bit_depth(bit_depth)
+
+
 class TestLoadDepthMap:
     """Test depth map loading and normalization."""
 
@@ -192,6 +221,7 @@ class TestEnhanceImage:
         Image.fromarray(test_image, mode="RGB").save(input_path)
 
         output_path = tmp_path / "output.png"
+        expected_output = resolve_v2_emitted_artifact_path(output_path, bit_depth=8)
 
         # Mock EnhancementStage to avoid actual processing
         with patch("transformation_portal.lux_depth_v3.v2_enhance.EnhancementStage") as mock_stage_cls:
@@ -214,11 +244,11 @@ class TestEnhanceImage:
             # Verify report
             assert report["status"] == "success"
             assert report["input"] == str(input_path)
-            assert report["output"] == str(output_path)
+            assert report["output"] == str(expected_output)
             assert report["preset"] == "default"
             assert report["depth_consumed"] is False
             assert "runtime_s" in report
-            assert output_path.exists()
+            assert expected_output.exists()
 
     def test_enhance_image_with_depth_map(self, tmp_path):
         """Test enhancement with depth map."""
@@ -268,6 +298,7 @@ class TestEnhanceImage:
         Image.fromarray(depth_data, mode="L").save(depth_path)
 
         output_path = tmp_path / "output.png"
+        expected_output = resolve_v2_emitted_artifact_path(output_path, bit_depth=8)
         config = V2EnhancementConfig(
             preset="default",
             enhancement_strength=0.7,
@@ -279,9 +310,9 @@ class TestEnhanceImage:
 
         assert report["status"] == "success"
         assert report["depth_consumed"] is True
-        assert output_path.exists()
+        assert expected_output.exists()
 
-        output_image = Image.open(output_path)
+        output_image = Image.open(expected_output)
         assert output_image.size == (100, 80)
 
     def test_enhance_image_depth_consumed_prefers_stage_metadata(self, tmp_path):
@@ -468,6 +499,32 @@ class TestEnhanceImage:
             # Verify output file exists (copied from input)
             assert output_path.exists()
 
+    def test_enhance_image_normalizes_inherited_raw_suffix_for_8bit_output(self, tmp_path):
+        """8-bit enhancement should overwrite inherited RAW suffixes before save."""
+        input_path = tmp_path / "input.png"
+        test_image = np.random.randint(0, 256, (100, 100, 3), dtype=np.uint8)
+        Image.fromarray(test_image, mode="RGB").save(input_path)
+
+        raw_suffix_output = tmp_path / "input.DNG"
+        expected_output = tmp_path / "input_materials_v3_enhanced.png"
+
+        with patch("transformation_portal.lux_depth_v3.v2_enhance.EnhancementStage") as mock_stage_cls:
+            mock_stage = Mock()
+            mock_stage_cls.return_value = mock_stage
+
+            mock_result = Mock()
+            mock_result.status = StageStatus.COMPLETED
+            mock_result.artifacts = {"enhanced_image": test_image}
+            mock_result.metadata = {}
+            mock_stage.compute.return_value = mock_result
+
+            report = enhance_image(input_path, raw_suffix_output)
+
+        assert report["status"] == "success"
+        assert report["output"] == str(expected_output)
+        assert expected_output.exists()
+        assert not raw_suffix_output.exists()
+
     def test_enhance_image_input_not_found(self, tmp_path):
         """Test error handling for nonexistent input."""
         input_path = tmp_path / "nonexistent.png"
@@ -505,6 +562,7 @@ class TestEnhanceImage:
 
         # Output path in non-existent directory
         output_path = tmp_path / "subdir" / "nested" / "output.png"
+        expected_output = resolve_v2_emitted_artifact_path(output_path, bit_depth=8)
 
         with patch("transformation_portal.lux_depth_v3.v2_enhance.EnhancementStage") as mock_stage_cls:
             mock_stage = Mock()
@@ -520,7 +578,7 @@ class TestEnhanceImage:
 
             # Verify output directory was created
             assert output_path.parent.exists()
-            assert output_path.exists()
+            assert expected_output.exists()
 
     def test_enhance_image_device_selection(self, tmp_path):
         """Test that device parameter is passed to stage context."""
@@ -553,6 +611,7 @@ class TestEnhanceImage:
         """Test that RGBA inputs preserve alpha channel byte-for-byte."""
         input_path = tmp_path / "input.png"
         output_path = tmp_path / "output.png"
+        expected_output = resolve_v2_emitted_artifact_path(output_path, bit_depth=8)
 
         # Create RGBA test image with distinct alpha channel
         rgb = np.random.randint(0, 256, (100, 100, 3), dtype=np.uint8)
@@ -577,7 +636,7 @@ class TestEnhanceImage:
             report = enhance_image(input_path, output_path)
 
             # Verify output is RGBA
-            output_image = Image.open(output_path)
+            output_image = Image.open(expected_output)
             assert output_image.mode == "RGBA"
 
             # Verify alpha channel preserved byte-for-byte
@@ -595,6 +654,7 @@ class TestEnhanceImage:
         """Test that enhancement never changes spatial dimensions."""
         input_path = tmp_path / "input.png"
         output_path = tmp_path / "output.png"
+        expected_output = resolve_v2_emitted_artifact_path(output_path, bit_depth=8)
 
         # Test with various image sizes
         test_sizes = [(100, 100), (640, 480), (1920, 1080), (99, 157)]  # Including odd dimensions
@@ -616,7 +676,7 @@ class TestEnhanceImage:
                 enhance_image(input_path, output_path)
 
                 # Verify spatial dimensions preserved
-                output_image = Image.open(output_path)
+                output_image = Image.open(expected_output)
                 assert output_image.size == (width, height), f"Dimensions changed for {width}x{height}"
 
     def test_enhance_image_passthrough_sha256_identical(self, tmp_path):
@@ -625,6 +685,7 @@ class TestEnhanceImage:
 
         input_path = tmp_path / "input.jpg"
         output_path = tmp_path / "output.jpg"
+        expected_output = resolve_v2_emitted_artifact_path(output_path, bit_depth=8)
 
         # Create test JPEG with EXIF and ICC profile
         test_image = np.random.randint(0, 256, (100, 100, 3), dtype=np.uint8)
@@ -658,6 +719,7 @@ class TestEnhanceImage:
         """Test that ICC color profiles are preserved in enhanced images."""
         input_path = tmp_path / "input.jpg"
         output_path = tmp_path / "output.jpg"
+        expected_output = resolve_v2_emitted_artifact_path(output_path, bit_depth=8)
 
         # Create test image with ICC profile
         test_image = np.random.randint(0, 256, (100, 100, 3), dtype=np.uint8)
@@ -679,11 +741,40 @@ class TestEnhanceImage:
             enhance_image(input_path, output_path)
 
             # Verify ICC profile preserved
-            output_image = Image.open(output_path)
+            output_image = Image.open(expected_output)
             output_icc = output_image.info.get("icc_profile")
 
             assert output_icc is not None, "ICC profile was not preserved"
             assert output_icc == icc_profile, "ICC profile data differs"
+
+    def test_enhance_image_normalizes_inherited_raw_suffix_for_16bit_output(self, tmp_path):
+        """16-bit enhancement should overwrite inherited RAW suffixes before save."""
+        tifffile = pytest.importorskip("tifffile")
+
+        input_path = tmp_path / "input_16bit.tif"
+        output_path = tmp_path / "input.CR2"
+        expected_output = tmp_path / "input_materials_v3_enhanced.tif"
+
+        test_image_16 = np.random.randint(0, 65536, (32, 32, 3), dtype=np.uint16)
+        tifffile.imwrite(input_path, test_image_16, photometric="rgb", compression=None)
+
+        with patch("transformation_portal.lux_depth_v3.v2_enhance.EnhancementStage") as mock_stage_cls:
+            mock_stage = Mock()
+            mock_stage_cls.return_value = mock_stage
+
+            mock_result = Mock()
+            mock_result.status = StageStatus.COMPLETED
+            mock_result.artifacts = {"enhanced_image": test_image_16}
+            mock_result.metadata = {}
+            mock_stage.compute.return_value = mock_result
+
+            report = enhance_image(input_path, output_path, allow_8bit_output=False)
+
+        assert report["status"] == "success"
+        assert report["output"] == str(expected_output)
+        assert Path(report["output"]) == expected_output
+        assert expected_output.exists()
+        assert not output_path.exists()
 
     def test_enhance_image_preserves_icc_profile_16bit_tiff(self, tmp_path):
         """Test that ICC profiles are preserved in 16-bit TIFF output via tifffile.
