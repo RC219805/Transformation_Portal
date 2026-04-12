@@ -76,7 +76,7 @@ function renderLoginPage({ csrfToken, accessEmail, errorCode }) {
     : accessEmail
       ? {
         title: "Verified access context",
-        detail: `Managed access has already been verified for ${escapedAccessEmail}. Successful sign-in rotates this browser into the governed portal session.`
+        detail: `Managed access has already been verified for ${accessEmail}. Successful sign-in rotates this browser into the governed portal session.`
       }
       : null;
 

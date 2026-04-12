@@ -43,13 +43,14 @@ function resolveManagedRecoveryContent(reason, message) {
 }
 
 function renderManagedPortalRecoveryPage({ reason, message }) {
-  const content = resolveManagedRecoveryContent(reason, message);
-  const safeReason = escapeHtml(reason || MANAGED_FAILURE_REASON.UPSTREAM_UNAVAILABLE);
+  const resolvedReason = reason || MANAGED_FAILURE_REASON.UPSTREAM_UNAVAILABLE;
+  const content = resolveManagedRecoveryContent(resolvedReason, message);
+  const safeReason = escapeHtml(resolvedReason);
   const safeLabel = escapeHtml(content.label);
   const safeTitle = escapeHtml(content.title);
   const safeDetail = escapeHtml(content.detail);
   const safeNextStep = escapeHtml(content.nextStep);
-  const recoveryTone = safeReason === MANAGED_FAILURE_REASON.ACCESS_OUTAGE ? "waiting" : "blocked";
+  const recoveryTone = resolvedReason === MANAGED_FAILURE_REASON.ACCESS_OUTAGE ? "waiting" : "blocked";
 
   return `<!DOCTYPE html>
 <html lang="en">

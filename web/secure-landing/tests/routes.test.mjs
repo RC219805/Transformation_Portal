@@ -404,6 +404,38 @@ test("login GET serves a minimal branded sign-in shell and boots an anonymous se
   }
 });
 
+test("login GET escapes verified access context exactly once in the recovery card", async () => {
+  const env = withTempEnvironment();
+
+  try {
+    const { GET } = await importFresh("../app/login/route.js");
+    const restoreFetch = withMockedAccessCerts();
+
+    try {
+      const accessEmail = "admin+ops&support@example.com";
+      const request = buildRequest("https://portal.example.com/login", {
+        headers: new Headers({
+          "Cf-Access-Jwt-Assertion": createAccessJwt({ email: accessEmail }),
+          "cf-access-authenticated-user-email": accessEmail
+        })
+      });
+
+      const response = await GET(request);
+      const html = await response.text();
+
+      assert.equal(response.status, 200);
+      assert.match(html, /data-access-state="verified"/);
+      assert.match(html, /data-ui="login-recovery-card"/);
+      assert.match(html, /Managed access has already been verified for admin\+ops&amp;support@example\.com\./);
+      assert.doesNotMatch(html, /admin\+ops&amp;amp;support@example\.com/);
+    } finally {
+      restoreFetch();
+    }
+  } finally {
+    env.cleanup();
+  }
+});
+
 test("homepage GET serves the public DNA landing page instead of redirecting", async () => {
   const env = withTempEnvironment();
 
@@ -1150,6 +1182,56 @@ test("portal returns 503 with no-store when the FastAPI UI origin is unavailable
       assert.match(html, /Return to login/);
     } finally {
       restoreFetch();
+    }
+  } finally {
+    env.cleanup();
+  }
+});
+
+test("portal renders waiting recovery posture for Access outages", async () => {
+  const outageTeamDomain = "https://tp-frontdoor-outage.cloudflareaccess.com";
+  const env = withTempEnvironment({
+    TP_CF_ACCESS_TEAM_DOMAIN: outageTeamDomain
+  });
+
+  try {
+    const sessions = await importFresh("../lib/sessions.js");
+    const { GET } = await importFresh("../app/portal/route.js");
+    const originalFetch = global.fetch;
+    global.fetch = async (url, init) => {
+      assert.equal(String(url), `${outageTeamDomain}/cdn-cgi/access/certs`);
+      assert.ok(init.signal);
+      throw Object.assign(new Error("timed out"), { name: "AbortError" });
+    };
+
+    try {
+      const authenticatedSession = sessions.rotateAuthenticatedSession(
+        sessions.createAnonymousSession(),
+        {
+          username: "admin",
+          accessEmail: "admin@example.com",
+          role: "admin"
+        }
+      );
+
+      const request = buildRequest("https://portal.example.com/portal", {
+        method: "GET",
+        headers: new Headers({
+          cookie: `__Host-tp_session=${authenticatedSession.id}`,
+          "Cf-Access-Jwt-Assertion": createAccessJwt({ iss: outageTeamDomain })
+        })
+      });
+
+      const response = await GET(request);
+      const html = await response.text();
+
+      assert.equal(response.status, 503);
+      assert.match(html, /data-ui="managed-recovery-shell"/);
+      assert.match(html, /data-reason="access_outage"/);
+      assert.match(html, /class="login-status-card" data-state="waiting"/);
+      assert.match(html, /Retry when Access recovers/);
+    } finally {
+      global.fetch = originalFetch;
     }
   } finally {
     env.cleanup();
