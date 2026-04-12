@@ -159,6 +159,7 @@ def test_root_ui_response_is_not_cached(client: TestClient) -> None:
 def test_portal_asset_endpoint_serves_css_and_js(client: TestClient) -> None:
     bundle = orchestrator_app._get_portal_asset_bundle()
     css_response = client.get(bundle.urls["portal.css"])
+    shared_tokens_response = client.get(bundle.urls["shared-ui-tokens.css"])
     js_response = client.get(bundle.urls["portal.js"])
 
     assert css_response.status_code == 200
@@ -166,9 +167,15 @@ def test_portal_asset_endpoint_serves_css_and_js(client: TestClient) -> None:
     assert css_response.headers["content-type"] == orchestrator_app.PORTAL_ASSET_MEDIA_TYPES["portal.css"]
     assert "@font-face" in css_response.text
     assert "Portal Sans" in css_response.text
+    assert bundle.urls["shared-ui-tokens.css"] in css_response.text
     assert bundle.urls["fonts/portal-sans.woff2"] in css_response.text
     assert bundle.urls["fonts/portal-mono.woff2"] in css_response.text
     assert "https://fonts.googleapis.com" not in css_response.text
+
+    assert shared_tokens_response.status_code == 200
+    assert shared_tokens_response.headers["Cache-Control"] == orchestrator_app.PORTAL_IMMUTABLE_ASSET_CACHE_CONTROL
+    assert shared_tokens_response.headers["content-type"] == orchestrator_app.PORTAL_ASSET_MEDIA_TYPES["shared-ui-tokens.css"]
+    assert "--ux-target-min-size: 44px;" in shared_tokens_response.text
 
     assert js_response.status_code == 200
     assert js_response.headers["Cache-Control"] == orchestrator_app.PORTAL_IMMUTABLE_ASSET_CACHE_CONTROL

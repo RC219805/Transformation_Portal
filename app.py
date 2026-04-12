@@ -112,12 +112,14 @@ PORTAL_ASSET_FINGERPRINT_LENGTH = 12
 PORTAL_CSS_TEMPLATE_PATH = PORTAL_ASSETS_DIR / "portal.css"
 PORTAL_DIRECT_FINGERPRINT_ASSET_NAMES = (
     "portal.js",
+    "shared-ui-tokens.css",
     "fonts/portal-sans.woff2",
     "fonts/portal-mono.woff2",
     "brand/dna-symbol-dark.svg",
     "brand/dna-symbol-light.svg",
 )
 PORTAL_CSS_TEMPLATE_TOKENS = {
+    "__PORTAL_SHARED_TOKENS_URL__": "shared-ui-tokens.css",
     "__PORTAL_FONT_SANS_URL__": "fonts/portal-sans.woff2",
     "__PORTAL_FONT_MONO_URL__": "fonts/portal-mono.woff2",
 }
@@ -214,24 +216,25 @@ def _get_portal_direct_asset_fingerprint(asset_name: str) -> str:
 def _portal_css_signature() -> Tuple[object, ...]:
     return (
         _portal_asset_signature(PORTAL_CSS_TEMPLATE_PATH),
-        ("fonts/portal-sans.woff2", _get_portal_direct_asset_fingerprint("fonts/portal-sans.woff2")),
-        ("fonts/portal-mono.woff2", _get_portal_direct_asset_fingerprint("fonts/portal-mono.woff2")),
+        *(
+            (asset_name, _get_portal_direct_asset_fingerprint(asset_name))
+            for asset_name in ("shared-ui-tokens.css", "fonts/portal-sans.woff2", "fonts/portal-mono.woff2")
+        ),
     )
 
 
 @lru_cache(maxsize=4)
 def _build_portal_css_asset(_: Tuple[object, ...]) -> PortalRenderedTextAsset:
-    font_fingerprints = {
-        "fonts/portal-sans.woff2": _get_portal_direct_asset_fingerprint("fonts/portal-sans.woff2"),
-        "fonts/portal-mono.woff2": _get_portal_direct_asset_fingerprint("fonts/portal-mono.woff2"),
+    direct_asset_fingerprints = {
+        asset_name: _get_portal_direct_asset_fingerprint(asset_name)
+        for asset_name in dict.fromkeys(PORTAL_CSS_TEMPLATE_TOKENS.values())
     }
     css_template = PORTAL_CSS_TEMPLATE_PATH.read_text(encoding="utf-8")
     css_render = _render_portal_template(
         css_template,
         {
-            token: _portal_asset_versioned_url(asset_name, font_fingerprint)
+            token: _portal_asset_versioned_url(asset_name, direct_asset_fingerprints[asset_name])
             for token, asset_name in PORTAL_CSS_TEMPLATE_TOKENS.items()
-            for font_fingerprint in [font_fingerprints[asset_name]]
         },
         template_name="portal.css",
     )

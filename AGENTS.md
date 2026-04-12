@@ -21,7 +21,7 @@ Quick reference for common workflows and commands in this repo.
 - `make test-orchestrator-contract` run the full portal/orchestrator contract suite (`tests/test_app_orchestrator_runtime.py`, `tests/test_app_orchestrator_contract_http.py`, `tests/validation/test_portal_smoke_scripts.py`).
 - `make test-orchestrator-http-contract` run HTTP-only orchestrator contract tests (`tests/test_app_orchestrator_contract_http.py`).
 - `make test-portal-contract` run portal runtime/browser contract tests (`tests/test_app_orchestrator_runtime.py`, `tests/validation/test_portal_smoke_scripts.py`).
-- `make test-frontdoor-contract` run managed frontdoor Node contract/build checks (`cd web/secure-landing && npm test && npm run build`).
+- `make test-frontdoor-contract` run managed frontdoor Node 22 contract/build checks (`./scripts/setup/ensure_node_version.sh && cd web/secure-landing && npm test && npm run build`).
 - `make seed-frontdoor-user` write the canonical local managed-frontdoor credential fixture to `/tmp/tp-frontdoor-users.json` using `smoke-admin` / `correct horse battery staple` unless you override the env vars.
 - `make run-frontdoor-local` start the canonical local managed frontdoor on `http://localhost:3000` after verifying backend readiness, auth env, and no silent fallback to `:3001`; it auto-seeds the canonical local user fixture when no explicit frontdoor user source is configured.
 - `make validate-orchestrator-http` run the live orchestrator HTTP smoke against a running backend.
@@ -55,6 +55,7 @@ Quick reference for common workflows and commands in this repo.
 - `make check` verify the generic layered requirements surface under `requirements/`.
 - `make check-test-markers` audit test marker coverage (ADR-044) - reports unmarked test functions.
 - `make check-ci-sync` verify CI dependency files are in sync (no drift between `requirements-ci.txt` and `requirements/ci.in`).
+- `make check-portal-asset-budgets` validate raw and gzipped portal asset size budgets against the checked-in budget contract.
 - `make organize-docs` move markdown files into `docs/` (repo hygiene).
 - `make check-docs` dry-run docs organization.
 - `make check-stale-docs` detect changed-file references to deleted or moved docs root paths.
@@ -88,6 +89,7 @@ Quick reference for common workflows and commands in this repo.
 - `./.venv/bin/python scripts/validation/check_local_environment.py --check node` check only Node.js version (22.x required).
 - `./.venv/bin/python scripts/validation/check_local_environment.py --check dependency-health` run `pip check` for the active interpreter.
 - `./scripts/setup/ensure_node_version.sh` Node version enforcement wrapper with version manager detection.
+- `cd web/secure-landing && npm run build:portal` bundle the modularized portal sources back into the shipped `public/portal-assets/portal.js` asset and sync shared UI token primitives.
 - `./scripts/validation/run_full_validation_suite.sh` all-in-one validation orchestrator.
 - `./scripts/validation/run_full_validation_suite.sh --quick` skip browser smokes for faster iteration.
 - `./scripts/validation/run_full_validation_suite.sh --skip-frontdoor` Python-only validation.
