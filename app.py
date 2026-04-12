@@ -2188,6 +2188,126 @@ def _lux_config_metadata() -> Dict[str, Any]:
             "gpu_pressure": ["low", "medium", "high"],
             "research_risk": ["none", "research_only", "experimental"],
         },
+        "backend_catalog": {
+            "da3": {
+                "label": "DA3",
+                "kind": "depth_backend",
+                "operator_summary": ("Default managed depth backend for standard Lux runs."),
+                "policy_posture": {
+                    "code": "governed_default",
+                    "label": "Governed default",
+                    "detail": (
+                        "Treat the managed preset and backend-owned release" " policy as the operator source of truth."
+                    ),
+                },
+                "required_acknowledgments": [],
+                "checkpoint_expectation": {
+                    "required": False,
+                    "field": None,
+                    "detail": (
+                        "Prefers the repo-local canary runtime when it is"
+                        " available, but base readiness is evaluated"
+                        " separately."
+                    ),
+                },
+                "model_provider_label": "Depth Anything",
+                "model_display_label": "Depth Anything v3",
+            },
+            "depth_pro": {
+                "label": "Depth Pro",
+                "kind": "depth_backend",
+                "operator_summary": (
+                    "Metric depth backend reserved for research-oriented runs" " and higher-cost validation."
+                ),
+                "policy_posture": {
+                    "code": "research_only",
+                    "label": "Research only",
+                    "detail": (
+                        "This backend stays behind explicit" " non-commercial and Apple research-license" " acknowledgments."
+                    ),
+                },
+                "required_acknowledgments": [
+                    {
+                        "field": "non_commercial_ok",
+                        "label": "Non-commercial acknowledgment",
+                    },
+                    {
+                        "field": "accept_apple_depth_pro_research_license",
+                        "label": "Apple Depth Pro research license",
+                    },
+                ],
+                "checkpoint_expectation": {
+                    "required": True,
+                    "field": None,
+                    "detail": ("Requires a local Depth Pro checkpoint in the active" " runtime before execution."),
+                },
+                "model_provider_label": "Apple",
+                "model_display_label": "Depth Pro",
+            },
+            "efficientsam": {
+                "label": "EfficientSAM",
+                "kind": "segmentation_backend",
+                "operator_summary": (
+                    "Lighter segmentation backend for managed runs that need" " masks without the heaviest research posture."
+                ),
+                "policy_posture": {
+                    "code": "managed_optional",
+                    "label": "Managed optional",
+                    "detail": (
+                        "Suitable for standard segmentation coverage when the" " run contract does not require the SAM2 path."
+                    ),
+                },
+                "required_acknowledgments": [],
+                "checkpoint_expectation": {
+                    "required": False,
+                    "field": None,
+                    "detail": "No explicit checkpoint path is required.",
+                },
+                "model_provider_label": "EfficientSAM",
+                "model_display_label": "EfficientSAM",
+            },
+            "sam2": {
+                "label": "SAM2",
+                "kind": "segmentation_backend",
+                "operator_summary": ("Highest-fidelity segmentation path for runs that need" " stronger scene coverage."),
+                "policy_posture": {
+                    "code": "experimental_segmentation",
+                    "label": "Experimental",
+                    "detail": (
+                        "Use when the run benefits from deeper segmentation"
+                        " coverage and the higher runtime cost is acceptable."
+                    ),
+                },
+                "required_acknowledgments": [],
+                "checkpoint_expectation": {
+                    "required": False,
+                    "field": "sam2_checkpoint_path",
+                    "detail": (
+                        "A local checkpoint path is optional. Supply one only" " when the runtime requires a pinned SAM2 file."
+                    ),
+                },
+                "model_provider_label": "Meta",
+                "model_display_label": "SAM2 Hiera",
+            },
+            "stub": {
+                "label": "Stub",
+                "kind": "segmentation_backend",
+                "operator_summary": ("Deterministic no-model fallback used for contract checks" " and low-risk iteration."),
+                "policy_posture": {
+                    "code": "deterministic_fallback",
+                    "label": "Deterministic fallback",
+                    "detail": ("Keeps segmentation semantics explicit without adding" " a model dependency."),
+                },
+                "required_acknowledgments": [],
+                "checkpoint_expectation": {
+                    "required": False,
+                    "field": None,
+                    "detail": "No checkpoint is used.",
+                },
+                "model_provider_label": "Built-in",
+                "model_display_label": "Portal stub",
+            },
+        },
         "debug_bundle_policy": {
             "acknowledgement_required": True,
             "destination_template": LUX_DEBUG_BUNDLE_DESTINATION_TEMPLATE,
@@ -5148,7 +5268,9 @@ def _argv_from_request(
                         default="v1",
                     )
                     or "v1"
-                ).strip().lower(),
+                )
+                .strip()
+                .lower(),
                 "--run-card-include-proofs",
                 onoff(
                     _pick(

@@ -163,7 +163,8 @@ const state = {
         fields: {},
         estimate_bands: {},
         debug_bundle_policy: {},
-        advanced_sections: []
+        advanced_sections: [],
+        backend_catalog: {},
     },
     preview: {
         pipeline: '',
@@ -250,6 +251,8 @@ const state = {
 
 const els = {
     overviewShell: document.getElementById('overview-shell'),
+    overviewRuntimeClarityShell: document.getElementById('overviewRuntimeClarityShell'),
+    overviewRuntimeBriefing: document.getElementById('overviewRuntimeBriefing'),
     missionShell: document.getElementById('mission-shell'),
     missionShellContent: document.getElementById('missionShellContent'),
     missionShellSkeletonState: document.getElementById('missionShellSkeletonState'),
@@ -477,6 +480,8 @@ const els = {
     profileShell: document.getElementById('profile-shell'),
     profileShellContent: document.getElementById('profileShellContent'),
     profileShellSkeletonState: document.getElementById('profileShellSkeletonState'),
+    buildRuntimeClarityShell: document.getElementById('buildRuntimeClarityShell'),
+    buildRuntimeBriefing: document.getElementById('buildRuntimeBriefing'),
     buildStepperShell: document.getElementById('buildStepperShell'),
     buildStepperShellContent: document.getElementById('buildStepperShellContent'),
     buildStepperSkeletonState: document.getElementById('buildStepperSkeletonState'),
@@ -494,6 +499,7 @@ const els = {
     emptyQueueState: document.getElementById('emptyQueueState'),
     emptyQueueTitle: document.getElementById('emptyQueueTitle'),
     emptyQueueDetail: document.getElementById('emptyQueueDetail'),
+    emptyQueueAction: document.getElementById('emptyQueueAction'),
     queueCount: document.getElementById('queueCount'),
     selectedJobStateBadge: document.getElementById('selectedJobStateBadge'),
     selectedJobIdLabel: document.getElementById('selectedJobIdLabel'),
@@ -505,6 +511,8 @@ const els = {
     selectedJobMetaLine: document.getElementById('selectedJobMetaLine'),
     selectedJobFreshness: document.getElementById('selectedJobFreshness'),
     selectedJobSummary: document.getElementById('selectedJobSummary'),
+    selectedJobRecoveryTitle: document.getElementById('selectedJobRecoveryTitle'),
+    selectedJobRecoveryDetail: document.getElementById('selectedJobRecoveryDetail'),
     selectedJobTransportAlert: document.getElementById('selectedJobTransportAlert'),
     openRunDetailsBtn: document.getElementById('openRunDetailsBtn'),
     inspectorOverviewTab: document.getElementById('inspectorOverviewTab'),
@@ -523,6 +531,7 @@ const els = {
     emptyArtifactState: document.getElementById('emptyArtifactState'),
     emptyArtifactTitle: document.getElementById('emptyArtifactTitle'),
     emptyArtifactDetail: document.getElementById('emptyArtifactDetail'),
+    emptyArtifactAction: document.getElementById('emptyArtifactAction'),
     artifactCompareBtn: document.getElementById('artifactCompareBtn'),
     artifactPreviewStage: document.getElementById('artifactPreviewStage'),
     artifactCompareStage: document.getElementById('artifactCompareStage'),
@@ -538,6 +547,7 @@ const els = {
     reviewStatusBanner: document.getElementById('reviewStatusBanner'),
     reviewStatusTitle: document.getElementById('reviewStatusTitle'),
     reviewStatusDetail: document.getElementById('reviewStatusDetail'),
+    reviewStatusAction: document.getElementById('reviewStatusAction'),
     reviewProvenanceGrid: document.getElementById('reviewProvenanceGrid'),
     reviewProvenanceArtifactRole: document.getElementById('reviewProvenanceArtifactRole'),
     reviewProvenanceRunState: document.getElementById('reviewProvenanceRunState'),
@@ -1291,6 +1301,376 @@ function _previewSurfaceSummary(payload = null) {
         meta: 'Preview-backed validation will summarize the active draft here.',
         tone: 'info'
     };
+}
+
+function _metadataBackendEntry(name) {
+    const catalog = state.metadata?.backend_catalog;
+    const key = String(name || '').trim().toLowerCase();
+    if (!key || !catalog || typeof catalog !== 'object') return null;
+    const entry = catalog[key];
+    return entry && typeof entry === 'object' ? entry : null;
+}
+
+function _runtimeBriefingPolicyTone(entry) {
+    const code = String(entry?.policy_posture?.code || '').trim().toLowerCase();
+    if (code === 'governed_default') return 'ready';
+    if (code === 'managed_optional' || code === 'deterministic_fallback') return 'info';
+    if (code === 'research_only' || code === 'experimental_segmentation') return 'warning';
+    return 'info';
+}
+
+function _runtimeBriefingArgs(payload = null) {
+    const currentPayload = payload || generatePayload();
+    const preview = _currentPreviewForPayload(currentPayload);
+    const normalizedArgs = preview?.normalized_args && typeof preview.normalized_args === 'object'
+        ? preview.normalized_args
+        : null;
+    return {
+        payload: currentPayload,
+        preview,
+        args: normalizedArgs ? { ...(currentPayload.args || {}), ...normalizedArgs } : (currentPayload.args || {})
+    };
+}
+
+function _runtimeAcknowledgmentSnapshot(entry, args = {}) {
+    const required = Array.isArray(entry?.required_acknowledgments) ? entry.required_acknowledgments : [];
+    const pending = [];
+    const completed = [];
+    required.forEach((item) => {
+        const field = String(item?.field || '').trim();
+        if (!field) return;
+        const label = String(item?.label || titleCaseToken(field, field)).trim();
+        if (parseBoolLike(args[field], false)) {
+            completed.push(label);
+            return;
+        }
+        pending.push(label);
+    });
+    return { pending, completed };
+}
+
+function _runtimeBriefingCardSummary(summary = {}) {
+    return {
+        label: String(summary.label || 'Runtime summary'),
+        value: String(summary.value || 'Unavailable'),
+        detail: String(summary.detail || ''),
+        meta: String(summary.meta || ''),
+        tone: String(summary.tone || 'info')
+    };
+}
+
+function _runtimeDepthBackendSummary(args = {}) {
+    const backendName = _resolveDepthBackend(args.depth_backend || state.config.depthBackend || 'da3');
+    const entry = _metadataBackendEntry(backendName);
+    const acknowledgments = _runtimeAcknowledgmentSnapshot(entry, args);
+    const meta = [
+        entry?.model_provider_label,
+        entry?.model_display_label,
+        acknowledgments.pending.length > 0
+            ? `Pending: ${acknowledgments.pending.join(', ')}`
+            : entry?.policy_posture?.label
+    ].filter(Boolean).join(' • ');
+    return _runtimeBriefingCardSummary({
+        label: 'Depth backend',
+        value: entry?.label || titleCaseToken(backendName, 'Unknown'),
+        detail: entry?.operator_summary || 'Backend-owned metadata is unavailable, so keep using readiness and preview as the source of truth.',
+        meta: meta || 'Backend-owned policy',
+        tone: acknowledgments.pending.length > 0 ? 'blocked' : _runtimeBriefingPolicyTone(entry)
+    });
+}
+
+function _runtimeSegmentationBackendSummary(args = {}) {
+    const segmentationEnabled = parseBoolLike(args.enable_segmentation, false);
+    if (!segmentationEnabled) {
+        return _runtimeBriefingCardSummary({
+            label: 'Segmentation backend',
+            value: 'Segmentation off',
+            detail: 'This draft stays on the deterministic path until segmentation is enabled.',
+            meta: 'Enable segmentation to choose EfficientSAM or SAM2.',
+            tone: 'info'
+        });
+    }
+
+    const backendName = _resolveSegmentationBackend(args.segmentation_backend || state.config.segmentation?.backend || 'stub');
+    const entry = _metadataBackendEntry(backendName);
+    const modelSize = backendName === 'sam2'
+        ? _resolveSam2ModelSize(args.sam2_model_size || state.config.segmentation?.sam2ModelSize || 'base')
+        : '';
+    const meta = [
+        entry?.model_provider_label,
+        entry?.model_display_label,
+        modelSize ? `Model ${_titleizeEstimateToken(modelSize)}` : '',
+        parseBoolLike(args.strict_segmentation, false) ? 'Strict masks on' : 'Strict masks off'
+    ].filter(Boolean).join(' • ');
+    return _runtimeBriefingCardSummary({
+        label: 'Segmentation backend',
+        value: entry?.label || titleCaseToken(backendName, 'Unknown'),
+        detail: entry?.operator_summary || 'Segmentation metadata is unavailable, so keep the configured backend visible in the draft.',
+        meta: meta || 'Backend-owned policy',
+        tone: _runtimeBriefingPolicyTone(entry)
+    });
+}
+
+function _runtimeStateSummary(payload = null) {
+    const { preview } = _runtimeBriefingArgs(payload);
+    const readiness = currentPipelineReadiness(payload);
+    const issues = currentPipelineReadinessIssues(payload);
+    const dispatchStatus = titleCaseToken(currentPipelineDispatchStatus(payload) || readiness?.status || 'unknown', 'Unknown');
+
+    if (!state.backendOk) {
+        return _runtimeBriefingCardSummary({
+            label: 'Canary/runtime state',
+            value: 'Backend offline',
+            detail: 'Live readiness, canary posture, and recent-run recovery resume when backend connectivity returns.',
+            meta: 'Preview-backed dispatch remains paused while the orchestrator backend is offline.',
+            tone: 'blocked'
+        });
+    }
+
+    if (preview?.status === 'loading' && !readiness) {
+        return _runtimeBriefingCardSummary({
+            label: 'Canary/runtime state',
+            value: 'Refreshing',
+            detail: 'Preview-backed readiness is recalculating the active draft.',
+            meta: 'Canary posture appears here when backend readiness returns.',
+            tone: 'info'
+        });
+    }
+
+    if (!readiness || typeof readiness !== 'object') {
+        return _runtimeBriefingCardSummary({
+            label: 'Canary/runtime state',
+            value: 'Readiness loading',
+            detail: 'Base readiness and canary posture are still hydrating from the backend.',
+            meta: 'Dispatch state becomes authoritative when readiness finishes.',
+            tone: 'info'
+        });
+    }
+
+    const canaryLabel = `Canary ${titleCaseToken(readiness.canary_status || 'unknown', 'Unknown')}`;
+    const firstIssue = issues[0];
+    if (firstIssue) {
+        return _runtimeBriefingCardSummary({
+            label: 'Canary/runtime state',
+            value: `${dispatchStatus} • ${canaryLabel}`,
+            detail: String(firstIssue.message || 'Pipeline readiness reported an operator-facing prerequisite.'),
+            meta: 'Resolve the current readiness issue before dispatching this draft.',
+            tone: String(firstIssue.severity || '').trim().toLowerCase() === 'blocked' ? 'blocked' : 'warning'
+        });
+    }
+
+    const notes = Array.isArray(readiness.notes)
+        ? readiness.notes.map((item) => String(item || '').trim()).filter(Boolean)
+        : [];
+    return _runtimeBriefingCardSummary({
+        label: 'Canary/runtime state',
+        value: canaryLabel,
+        detail: notes[notes.length - 1] || notes[0] || 'Base readiness and canary posture are aligned with the current draft.',
+        meta: `Dispatch ${dispatchStatus}`,
+        tone: readiness.canary_status === 'ready'
+            ? 'ready'
+            : readiness.canary_status === 'degraded' || readiness.canary_status === 'unavailable'
+                ? 'warning'
+                : 'info'
+    });
+}
+
+function _runtimeCheckpointExpectationSummary(args = {}) {
+    const depthEntry = _metadataBackendEntry(_resolveDepthBackend(args.depth_backend || state.config.depthBackend || 'da3'));
+    const entries = [{ entry: depthEntry }];
+    if (parseBoolLike(args.enable_segmentation, false)) {
+        entries.push({
+            entry: _metadataBackendEntry(
+                _resolveSegmentationBackend(args.segmentation_backend || state.config.segmentation?.backend || 'stub')
+            )
+        });
+    }
+
+    const statements = [];
+    const details = [];
+    let hasRequiredFieldMissing = false;
+    let hasRuntimeManagedRequirement = false;
+    let hasOptionalPath = false;
+    let hasOptionalUnset = false;
+    let hasNoPathRequirement = false;
+
+    entries.forEach(({ entry }) => {
+        if (!entry) return;
+        const expectation = entry.checkpoint_expectation && typeof entry.checkpoint_expectation === 'object'
+            ? entry.checkpoint_expectation
+            : null;
+        if (!expectation) return;
+        const entryLabel = String(entry.label || 'Backend').trim();
+        const field = String(expectation.field || '').trim();
+        const providedValue = field ? String(args[field] || '').trim() : '';
+
+        if (expectation.required && field && !providedValue) {
+            hasRequiredFieldMissing = true;
+            statements.push(`${entryLabel}: required checkpoint path missing.`);
+        } else if (expectation.required && field && providedValue) {
+            statements.push(`${entryLabel}: required checkpoint path supplied.`);
+        } else if (expectation.required) {
+            hasRuntimeManagedRequirement = true;
+            statements.push(`${entryLabel}: runtime-managed checkpoint required.`);
+        } else if (field && providedValue) {
+            hasOptionalPath = true;
+            statements.push(`${entryLabel}: optional checkpoint path supplied.`);
+        } else if (field) {
+            hasOptionalUnset = true;
+            statements.push(`${entryLabel}: optional checkpoint path not set.`);
+        } else {
+            hasNoPathRequirement = true;
+            statements.push(`${entryLabel}: no explicit checkpoint path required.`);
+        }
+
+        const detail = String(expectation.detail || '').trim();
+        if (detail) details.push(detail);
+    });
+
+    let value = 'No explicit path required';
+    let tone = 'ready';
+    if (hasRequiredFieldMissing) {
+        value = 'Checkpoint path missing';
+        tone = 'blocked';
+    } else if (hasRuntimeManagedRequirement) {
+        value = 'Runtime checkpoint required';
+        tone = 'warning';
+    } else if (hasOptionalPath) {
+        value = 'Checkpoint path supplied';
+        tone = 'ready';
+    } else if (hasOptionalUnset) {
+        value = 'Checkpoint path optional';
+        tone = 'info';
+    } else if (hasNoPathRequirement) {
+        value = 'No explicit path required';
+        tone = 'ready';
+    }
+
+    return _runtimeBriefingCardSummary({
+        label: 'Checkpoint expectation',
+        value,
+        detail: statements.join(' ') || 'Checkpoint expectations load from backend metadata.',
+        meta: details.join(' ') || 'Backend-owned runtime expectation',
+        tone
+    });
+}
+
+function _runtimeLicensePostureSummary(args = {}) {
+    const selectedEntries = [
+        _metadataBackendEntry(_resolveDepthBackend(args.depth_backend || state.config.depthBackend || 'da3'))
+    ];
+    if (parseBoolLike(args.enable_segmentation, false)) {
+        selectedEntries.push(
+            _metadataBackendEntry(
+                _resolveSegmentationBackend(args.segmentation_backend || state.config.segmentation?.backend || 'stub')
+            )
+        );
+    }
+
+    const postures = [];
+    const pending = new Set();
+    const completed = new Set();
+    const details = [];
+    let tone = 'ready';
+
+    selectedEntries.filter(Boolean).forEach((entry) => {
+        const acknowledgments = _runtimeAcknowledgmentSnapshot(entry, args);
+        const postureLabel = String(entry?.policy_posture?.label || entry?.label || 'Policy').trim();
+        postures.push(`${String(entry?.label || 'Backend').trim()}: ${postureLabel}`);
+        acknowledgments.pending.forEach((label) => pending.add(label));
+        acknowledgments.completed.forEach((label) => completed.add(label));
+        const detail = String(entry?.policy_posture?.detail || entry?.operator_summary || '').trim();
+        if (detail) details.push(detail);
+        if (acknowledgments.pending.length > 0) {
+            tone = 'blocked';
+        } else if (tone !== 'blocked') {
+            const entryTone = _runtimeBriefingPolicyTone(entry);
+            tone = entryTone === 'ready' ? tone : entryTone;
+        }
+    });
+
+    const meta = [];
+    if (pending.size > 0) {
+        meta.push(`Pending: ${Array.from(pending).join(', ')}`);
+    } else if (completed.size > 0) {
+        meta.push(`Acknowledged: ${Array.from(completed).join(', ')}`);
+    } else {
+        meta.push('No backend acknowledgments are currently required.');
+    }
+    if (parseBoolLike(args.enable_reconstruction, false)) {
+        meta.push('Scene reconstruction governance stays in the primary governance panel.');
+    }
+
+    return _runtimeBriefingCardSummary({
+        label: 'License posture',
+        value: pending.size > 0 ? 'Acknowledgment required' : (postures.join(' • ') || 'Backend-owned policy'),
+        detail: details.join(' ') || 'Backend-owned policy remains the operator source of truth for selected backends.',
+        meta: meta.join(' • '),
+        tone
+    });
+}
+
+function _renderRuntimeBriefingCard(summary = {}) {
+    const card = document.createElement('article');
+    card.className = 'runtime-briefing-card';
+    card.dataset.tone = String(summary.tone || 'info');
+
+    const label = document.createElement('p');
+    label.className = 'runtime-briefing-label';
+    label.textContent = String(summary.label || 'Runtime summary');
+
+    const value = document.createElement('p');
+    value.className = 'runtime-briefing-value';
+    value.textContent = String(summary.value || 'Unavailable');
+
+    const detail = document.createElement('p');
+    detail.className = 'runtime-briefing-detail';
+    detail.textContent = String(summary.detail || '');
+
+    const meta = document.createElement('p');
+    meta.className = 'runtime-briefing-meta';
+    meta.textContent = String(summary.meta || '');
+
+    card.appendChild(label);
+    card.appendChild(value);
+    if (detail.textContent) card.appendChild(detail);
+    if (meta.textContent) card.appendChild(meta);
+    return card;
+}
+
+function renderRuntimeBriefing(payload = null) {
+    const currentPayload = payload || generatePayload();
+    const shells = [els.overviewRuntimeClarityShell, els.buildRuntimeClarityShell].filter(Boolean);
+    const containers = [els.overviewRuntimeBriefing, els.buildRuntimeBriefing].filter(Boolean);
+    const isLuxPipeline = String(currentPayload.pipeline || '').trim() === 'lux-depth-v3';
+
+    shells.forEach((shell) => {
+        shell.classList.toggle('hidden', !isLuxPipeline);
+    });
+    if (!isLuxPipeline) {
+        containers.forEach((container) => {
+            container.innerHTML = '';
+        });
+        return;
+    }
+
+    const { args } = _runtimeBriefingArgs(currentPayload);
+    const summaries = [
+        _runtimeDepthBackendSummary(args),
+        _runtimeSegmentationBackendSummary(args),
+        _runtimeStateSummary(currentPayload),
+        _runtimeCheckpointExpectationSummary(args),
+        _runtimeLicensePostureSummary(args)
+    ];
+
+    containers.forEach((container) => {
+        container.innerHTML = '';
+        const fragment = document.createDocumentFragment();
+        summaries.forEach((summary) => {
+            fragment.appendChild(_renderRuntimeBriefingCard(summary));
+        });
+        container.appendChild(fragment);
+    });
 }
 
 function renderBuildStepPulse(payload = null) {
@@ -2742,6 +3122,7 @@ function renderMissionControl(payload = null) {
     renderGovernanceBanner(currentPayload);
     syncDisclosurePanels(currentPayload);
     renderBuildStepPulse(currentPayload);
+    renderRuntimeBriefing(currentPayload);
     renderConsoleContextRibbon();
     _syncOverviewBuildLoadingState(currentPayload);
 }
@@ -2874,6 +3255,85 @@ function renderSelectedJobTimeline(job) {
     els.selectedJobTimelineList.appendChild(fragment);
 }
 
+function _selectedJobRecoverySnapshot(job) {
+    if (!job) {
+        return {
+            title: 'Select or dispatch a run',
+            detail: 'Use Queue to inspect a recent run or open Build to create the next governed dispatch.'
+        };
+    }
+
+    const artifactCount = Array.isArray(job.artifacts) ? job.artifacts.length : 0;
+    const visibleWarning = _latestVisibleTransportWarning(job);
+
+    if (job.reconnectBlocked) {
+        return {
+            title: 'Restore authentication',
+            detail: 'Authentication must be restored before live transport can reconnect and freshness can recover.'
+        };
+    }
+
+    if (visibleWarning) {
+        return {
+            title: 'Review the latest warning',
+            detail: String(visibleWarning.detail || 'Live transport reported an operator-visible warning.')
+        };
+    }
+
+    if (job.state === 'failed' || job.state === 'canceled') {
+        return artifactCount > 0
+            ? {
+                title: 'Open review for retained outputs',
+                detail: 'Review the indexed outputs before deciding whether this run needs a retry.'
+            }
+            : {
+                title: 'Inspect failure before rerun',
+                detail: 'No reviewable outputs were indexed. Use the run state and warning context above before retrying.'
+            };
+    }
+
+    if (job.state === 'offline') {
+        return artifactCount > 0
+            ? {
+                title: 'Review cached outputs while backend recovers',
+                detail: 'Outputs remain available, but live backend state is stale until connectivity returns.'
+            }
+            : {
+                title: 'Restore backend connectivity',
+                detail: 'Backend connectivity must recover before this run state can be trusted again.'
+            };
+    }
+
+    if (job.state === 'running' || job.state === 'queued') {
+        return artifactCount > 0
+            ? {
+                title: 'Stay with the live run',
+                detail: 'Fresh artifacts are already indexing. Keep Operate open until review context stabilizes.'
+            }
+            : {
+                title: 'Wait for indexed outputs',
+                detail: 'Use the selected run state, warning context, and freshness above to decide whether to recover or open review.'
+            };
+    }
+
+    if (job.state === 'partial') {
+        return {
+            title: 'Open review for partial outputs',
+            detail: 'Review the indexed artifacts and warning context before deciding whether to rerun the failed inputs.'
+        };
+    }
+
+    return artifactCount > 0
+        ? {
+            title: 'Open review',
+            detail: 'Outputs and provenance are ready. Move to Review when you want compare and artifact actions.'
+        }
+        : {
+            title: 'Wait for indexed outputs',
+            detail: 'Use the selected run state, warning context, and freshness above to decide whether to recover or open review.'
+        };
+}
+
 function renderSelectedJobInspector() {
     const jobsLoading = _isJobsHydrationPending();
     _toggleSurfaceSkeleton(els.selectedJobShell, els.selectedJobShellContent, els.selectedJobSkeletonState, jobsLoading);
@@ -2882,6 +3342,10 @@ function renderSelectedJobInspector() {
         if (els.selectedJobFreshness) els.selectedJobFreshness.textContent = 'Hydrating queue';
         if (els.selectedJobMetaLine) {
             els.selectedJobMetaLine.textContent = 'Recovering recent runs, transport state, and previewable outputs.';
+        }
+        if (els.selectedJobRecoveryTitle) els.selectedJobRecoveryTitle.textContent = 'Recovering selected run context';
+        if (els.selectedJobRecoveryDetail) {
+            els.selectedJobRecoveryDetail.textContent = 'The latest warning, artifact freshness, and recovery action will repopulate here when queue hydration finishes.';
         }
         if (els.openRunDetailsBtn) els.openRunDetailsBtn.disabled = true;
         renderConsoleContextRibbon();
@@ -2901,6 +3365,10 @@ function renderSelectedJobInspector() {
         if (els.selectedJobFreshness) els.selectedJobFreshness.textContent = 'No live telemetry';
         if (els.logMetaLabel) els.logMetaLabel.textContent = 'Select a job to stream or inspect its log output.';
         if (els.selectedJobSummary) els.selectedJobSummary.textContent = 'Choose a job from the queue or dispatch a new run to inspect progress, artifacts, and live stream state.';
+        if (els.selectedJobRecoveryTitle) els.selectedJobRecoveryTitle.textContent = 'Select or dispatch a run';
+        if (els.selectedJobRecoveryDetail) {
+            els.selectedJobRecoveryDetail.textContent = 'Use Queue to inspect a recent run or open Build to create the next governed dispatch.';
+        }
         if (els.selectedJobTransportAlert) {
             els.selectedJobTransportAlert.classList.add('hidden');
             els.selectedJobTransportAlert.textContent = '';
@@ -2971,6 +3439,9 @@ function renderSelectedJobInspector() {
                     ? `${outcomeSummary}.`
                     : `Operators can now read ${titleCaseToken(selected.state, 'job')} state at a glance: ${artifactCount} artifact${artifactCount === 1 ? '' : 's'} indexed, ${transportLabel} transport, ${elapsedLabel}.`;
     }
+    const recovery = _selectedJobRecoverySnapshot(selected);
+    if (els.selectedJobRecoveryTitle) els.selectedJobRecoveryTitle.textContent = recovery.title;
+    if (els.selectedJobRecoveryDetail) els.selectedJobRecoveryDetail.textContent = recovery.detail;
     if (els.selectedJobTransportAlert) {
         if (visibleAlert) {
             els.selectedJobTransportAlert.textContent = String(visibleAlert.detail || '');
@@ -3842,7 +4313,8 @@ function _reviewStatusSnapshot(job, artifact) {
             visible: false,
             tone: 'info',
             title: 'Awaiting completed run',
-            detail: 'Select a job to review related warnings, completion state, and output readiness.'
+            detail: 'Select a job to review related warnings, completion state, and output readiness.',
+            action: 'Next action: use the selected run state, warning context, and freshness above to decide whether to recover or open review.'
         };
     }
 
@@ -3862,7 +4334,8 @@ function _reviewStatusSnapshot(job, artifact) {
             title: 'Run partially completed',
             detail: outcomeSummary
                 ? `${outcomeSummary}. Updated ${freshnessLabel}.`
-                : 'Some inputs failed, but outputs remain reviewable.'
+                : 'Some inputs failed, but outputs remain reviewable.',
+            action: 'Next action: open review for the retained outputs before rerunning failed inputs.'
         };
     }
 
@@ -3874,7 +4347,10 @@ function _reviewStatusSnapshot(job, artifact) {
             detail: readableError
                 || (reviewableOutputs
                     ? `${artifactCount} artifact${artifactCount === 1 ? '' : 's'} remain available for review. Updated ${freshnessLabel}.`
-                    : 'No reviewable outputs were indexed before the failure was reported.')
+                    : 'No reviewable outputs were indexed before the failure was reported.'),
+            action: reviewableOutputs
+                ? 'Next action: open review for the retained outputs, then decide whether this run needs a retry.'
+                : 'Next action: inspect the latest warning and failure context in Operate before retrying the run.'
         };
     }
 
@@ -3885,7 +4361,10 @@ function _reviewStatusSnapshot(job, artifact) {
             title: reviewableOutputs ? 'Run canceled after partial output capture' : 'Run canceled before review outputs were ready',
             detail: reviewableOutputs
                 ? `${artifactCount} artifact${artifactCount === 1 ? '' : 's'} remain available for review despite cancellation. Updated ${freshnessLabel}.`
-                : 'Execution was canceled before reviewable outputs were indexed.'
+                : 'Execution was canceled before reviewable outputs were indexed.',
+            action: reviewableOutputs
+                ? 'Next action: review the retained outputs before deciding whether to rerun the canceled work.'
+                : 'Next action: reopen Build or restore the run context before dispatching again.'
         };
     }
 
@@ -3896,7 +4375,10 @@ function _reviewStatusSnapshot(job, artifact) {
             title: reviewableOutputs ? 'Run is offline with reviewable outputs' : 'Run is offline',
             detail: reviewableOutputs
                 ? `${artifactCount} artifact${artifactCount === 1 ? '' : 's'} remain available, but live backend status is stale until connectivity is restored.`
-                : 'Live backend status is stale until connectivity is restored.'
+                : 'Live backend status is stale until connectivity is restored.',
+            action: reviewableOutputs
+                ? 'Next action: review the cached outputs while backend connectivity recovers.'
+                : 'Next action: restore backend connectivity before depending on this run state.'
         };
     }
 
@@ -3905,7 +4387,8 @@ function _reviewStatusSnapshot(job, artifact) {
             visible: true,
             tone: 'warning',
             title: 'Transport warning recorded',
-            detail: 'Authentication must be restored before live event transport can reconnect.'
+            detail: 'Authentication must be restored before live event transport can reconnect.',
+            action: 'Next action: restore authentication so live transport and freshness can recover.'
         };
     }
 
@@ -3914,7 +4397,8 @@ function _reviewStatusSnapshot(job, artifact) {
             visible: true,
             tone: visibleWarning.tone === 'error' ? 'error' : 'warning',
             title: 'Transport warning recorded',
-            detail: String(visibleWarning.detail || 'Live transport reported an operator-visible warning.')
+            detail: String(visibleWarning.detail || 'Live transport reported an operator-visible warning.'),
+            action: 'Next action: inspect the latest transport warning in Operate before continuing into review.'
         };
     }
 
@@ -3925,7 +4409,10 @@ function _reviewStatusSnapshot(job, artifact) {
             title: 'Run still in progress',
             detail: artifactCount > 0
                 ? `${artifactCount} artifact${artifactCount === 1 ? '' : 's'} already indexed. Updated ${freshnessLabel}.`
-                : 'Artifacts and provenance will populate here as outputs arrive.'
+                : 'Artifacts and provenance will populate here as outputs arrive.',
+            action: artifactCount > 0
+                ? 'Next action: keep review open only if you need the early artifacts; Operate remains the primary live surface.'
+                : 'Next action: stay in Operate until indexed outputs or a blocking warning arrives.'
         };
     }
 
@@ -3935,7 +4422,8 @@ function _reviewStatusSnapshot(job, artifact) {
         title: artifact ? 'Outputs ready for review' : 'Run ready for review',
         detail: outcomeSummary
             ? `${outcomeSummary}. Updated ${freshnessLabel}.`
-            : `${artifactCount} artifact${artifactCount === 1 ? '' : 's'} indexed and ready for operator review.`
+            : `${artifactCount} artifact${artifactCount === 1 ? '' : 's'} indexed and ready for operator review.`,
+        action: 'Next action: use the selected run state, warning context, and freshness above to decide whether to recover or open review.'
     };
 }
 
@@ -3947,10 +4435,12 @@ function _renderReviewStatusBanner(job, artifact) {
         els.reviewStatusBanner.classList.add('hidden');
         els.reviewStatusTitle.textContent = snapshot.title;
         els.reviewStatusDetail.textContent = snapshot.detail;
+        if (els.reviewStatusAction) els.reviewStatusAction.textContent = snapshot.action;
         return;
     }
     els.reviewStatusTitle.textContent = snapshot.title;
     els.reviewStatusDetail.textContent = snapshot.detail;
+    if (els.reviewStatusAction) els.reviewStatusAction.textContent = snapshot.action;
     els.reviewStatusBanner.classList.remove('hidden');
 }
 
@@ -4053,12 +4543,14 @@ function renderArtifactPanel() {
 
     if (!selected) {
         _resetArtifactActionButtons();
+        const emptyCopy = _artifactEmptyStateCopy(null);
         _setSurfaceEmptyState(
             els.emptyArtifactState,
             els.emptyArtifactTitle,
             els.emptyArtifactDetail,
-            _artifactEmptyStateCopy(null)
+            emptyCopy
         );
+        if (els.emptyArtifactAction) els.emptyArtifactAction.textContent = emptyCopy.action || '';
         els.artifactMeta.textContent = 'No job selected';
         els.artifactThumbnailRail.innerHTML = '';
         if (els.artifactSelectionTitle) els.artifactSelectionTitle.textContent = 'No artifact selected';
@@ -4100,12 +4592,14 @@ function renderArtifactPanel() {
 
     if (artifacts.length === 0) {
         _resetArtifactActionButtons();
+        const emptyCopy = _artifactEmptyStateCopy(selected);
         _setSurfaceEmptyState(
             els.emptyArtifactState,
             els.emptyArtifactTitle,
             els.emptyArtifactDetail,
-            _artifactEmptyStateCopy(selected)
+            emptyCopy
         );
+        if (els.emptyArtifactAction) els.emptyArtifactAction.textContent = emptyCopy.action || '';
         els.artifactThumbnailRail.innerHTML = '';
         if (els.artifactSelectionTitle) els.artifactSelectionTitle.textContent = 'No artifact selected';
         if (els.artifactSelectionMeta) els.artifactSelectionMeta.textContent = 'Review surfaces will populate here when the selected run indexes outputs.';
@@ -5436,7 +5930,8 @@ async function fetchConfigMetadata(pipelineName = state.pipeline, silent = false
             fields: {},
             estimate_bands: {},
             debug_bundle_policy: {},
-            advanced_sections: []
+            advanced_sections: [],
+            backend_catalog: {},
         };
         renderReviewSurfaces();
         return;
@@ -5458,7 +5953,8 @@ async function fetchConfigMetadata(pipelineName = state.pipeline, silent = false
             fields: data.fields && typeof data.fields === 'object' ? data.fields : {},
             estimate_bands: data.estimate_bands && typeof data.estimate_bands === 'object' ? data.estimate_bands : {},
             debug_bundle_policy: data.debug_bundle_policy && typeof data.debug_bundle_policy === 'object' ? data.debug_bundle_policy : {},
-            advanced_sections: Array.isArray(data.advanced_sections) ? data.advanced_sections.map((item) => String(item || '')) : []
+            advanced_sections: Array.isArray(data.advanced_sections) ? data.advanced_sections.map((item) => String(item || '')) : [],
+            backend_catalog: data.backend_catalog && typeof data.backend_catalog === 'object' ? data.backend_catalog : {},
         };
         applyLuxMetadataToControls();
         renderReviewSurfaces();
@@ -7138,20 +7634,23 @@ function _queueEmptyStateCopy() {
         return {
             tone: 'warning',
             title: 'Queue unavailable',
-            detail: 'Backend connectivity is offline. Restore the managed backend to recover recent runs and live transport state.'
+            detail: 'Backend connectivity is offline. Restore the managed backend to recover recent runs and live transport state.',
+            action: 'Next action: restore backend connectivity so recent runs and live transport can recover.'
         };
     }
     if (state.jobsLoadStatus === 'error') {
         return {
             tone: 'error',
             title: 'Queue recovery needs attention',
-            detail: 'Recent jobs could not be recovered. Refresh the workspace after backend health returns to continue.'
+            detail: 'Recent jobs could not be recovered. Refresh the workspace after backend health returns to continue.',
+            action: 'Next action: confirm backend health, then refresh the workspace to rehydrate recent runs.'
         };
     }
     return {
         tone: 'neutral',
         title: 'No runs yet',
-        detail: 'Dispatch a run from Build or wait for recovery to repopulate recent operator activity.'
+        detail: 'Dispatch a run from Build or wait for recovery to repopulate recent operator activity.',
+        action: 'Next action: open Build to prepare the next run or restore backend connectivity to recover recent history.'
     };
 }
 
@@ -7160,27 +7659,31 @@ function _artifactEmptyStateCopy(job) {
         return {
             tone: 'neutral',
             title: 'Select a completed run',
-            detail: 'Choose a reviewable job to load preview, provenance, and compare context here.'
+            detail: 'Choose a reviewable job to load preview, provenance, and compare context here.',
+            action: 'Next action: inspect the selected run in Operate or wait for indexed outputs before reopening review.'
         };
     }
     if (job.state === 'running' || job.state === 'queued') {
         return {
             tone: 'info',
             title: 'Outputs are still arriving',
-            detail: 'This run has not indexed reviewable artifacts yet. Stay on the inspector for live progress and freshness updates.'
+            detail: 'This run has not indexed reviewable artifacts yet. Stay on the inspector for live progress and freshness updates.',
+            action: 'Next action: keep the run in Operate until indexed outputs appear or a blocking warning arrives.'
         };
     }
     if (job.state === 'failed' || job.state === 'canceled') {
         return {
             tone: 'warning',
             title: 'No reviewable outputs indexed',
-            detail: 'This run ended before artifacts were available. Inspect the run status and transport warnings above for recovery context.'
+            detail: 'This run ended before artifacts were available. Inspect the run status and transport warnings above for recovery context.',
+            action: 'Next action: inspect the selected run in Operate or decide whether the failed run should be retried.'
         };
     }
     return {
         tone: 'neutral',
         title: 'No indexed artifacts yet',
-        detail: 'Artifacts will appear here when the selected run finishes indexing its review outputs.'
+        detail: 'Artifacts will appear here when the selected run finishes indexing its review outputs.',
+        action: 'Next action: inspect the selected run in Operate or wait for indexed outputs before reopening review.'
     };
 }
 
@@ -7212,6 +7715,7 @@ function renderJobQueue(includeReviewSurfaces = true) {
     if (state.jobs.length === 0) {
         const emptyCopy = _queueEmptyStateCopy();
         _setSurfaceEmptyState(els.emptyQueueState, els.emptyQueueTitle, els.emptyQueueDetail, emptyCopy);
+        if (els.emptyQueueAction) els.emptyQueueAction.textContent = emptyCopy.action || '';
         if (els.emptyQueueState) els.emptyQueueState.style.display = 'flex';
         if (els.queueStatusSummary) {
             els.queueStatusSummary.textContent = state.jobsLoadStatus === 'ready'
