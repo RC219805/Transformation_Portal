@@ -299,6 +299,9 @@ def test_config_metadata_contract_for_lux_depth_pipeline(client: TestClient) -> 
     assert body["data"]["fields"]["reconstruction_tier"]["default"] == "apex_research"
     assert body["data"]["fields"]["reconstruction_iterations"]["recommended"]["balanced"] == 1000
     assert body["data"]["fields"]["raw_wb_mode"]["kind"] == "locked"
+    assert body["data"]["backend_catalog"]["da3"]["policy_posture"]["code"] == "governed_default"
+    assert body["data"]["backend_catalog"]["depth_pro"]["required_acknowledgments"][0]["field"] == "non_commercial_ok"
+    assert body["data"]["backend_catalog"]["sam2"]["checkpoint_expectation"]["field"] == "sam2_checkpoint_path"
     assert body["data"]["debug_bundle_policy"]["acknowledgement_required"] is True
 
 

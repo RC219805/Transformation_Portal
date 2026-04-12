@@ -1549,6 +1549,12 @@ def test_portal_preview_metadata_worker_modes_and_export_contract_are_wired() ->
     assert "renderPreRunDiagnostics(nextPayload);" in preview_body
     assert "_syncBootstrapGuardedControls();" in preview_body
     assert "refreshPreviewDrivenSurfaces(generatePayload());" in preview_body
+    assert "backend_catalog: {}," in content
+    assert (
+        "backend_catalog: data.backend_catalog && typeof data.backend_catalog === 'object' ? data.backend_catalog : {},"
+        in metadata_body
+    )
+    assert "function renderRuntimeBriefing(payload = null) {" in content
     assert "scheduleConfigPreview(true);" in metadata_body
     assert "repo_local_path_repaired" in reconcile_body
     assert "_setBuildSurfacePathFieldValue(fieldName, normalizedValue)" in reconcile_body
@@ -1556,6 +1562,41 @@ def test_portal_preview_metadata_worker_modes_and_export_contract_are_wired() ->
     assert "state.config.gate = state.config.gate || {};" in setter_body
     assert "state.config.segmentation = state.config.segmentation || {};" in setter_body
     assert "state.config.reconstruction = state.config.reconstruction || {};" in setter_body
+
+
+def test_portal_runtime_briefing_and_recovery_surfaces_stay_additive_and_selector_stable() -> None:
+    content = _portal_bundle_content()
+    mission_body = _extract_js_function_body(content, "renderMissionControl")
+    review_status_body = _extract_js_function_body(content, "_reviewStatusSnapshot")
+    queue_empty_body = _extract_js_function_body(content, "_queueEmptyStateCopy")
+    artifact_empty_body = _extract_js_function_body(content, "_artifactEmptyStateCopy")
+    inspector_body = _extract_js_function_body(content, "renderSelectedJobInspector")
+
+    assert 'id="overviewRuntimeBriefing"' in content
+    assert 'data-ui="runtime-clarity-grid"' in content
+    assert 'id="buildRuntimeBriefing"' in content
+    assert 'data-ui="build-runtime-clarity"' in content
+    assert 'id="reviewStatusAction"' in content
+    assert 'id="emptyQueueAction"' in content
+    assert 'id="emptyArtifactAction"' in content
+    assert 'id="selectedJobRecoveryTitle"' in content
+    assert 'id="selectedJobRecoveryDetail"' in content
+    assert "renderRuntimeBriefing(currentPayload);" in mission_body
+    assert (
+        "action: 'Next action: open Build to prepare the next run or restore backend connectivity to recover recent history.'"
+        in queue_empty_body
+    )
+    assert (
+        "action: 'Next action: inspect the selected run in Operate or wait for indexed outputs before reopening review.'"
+        in artifact_empty_body
+    )
+    assert (
+        "action: 'Next action: use the selected run state, warning context, and freshness above to decide whether to recover or open review.'"
+        in review_status_body
+    )
+    assert "els.reviewStatusAction.textContent = snapshot.action;" in content
+    assert "els.selectedJobRecoveryTitle.textContent = recovery.title;" in inspector_body
+    assert "els.selectedJobRecoveryDetail.textContent = recovery.detail;" in inspector_body
 
 
 def test_portal_submit_blocks_preview_unavailable_and_debug_bundle_without_acknowledgement() -> None:

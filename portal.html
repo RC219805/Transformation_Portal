@@ -243,6 +243,18 @@ Contract notes:
                         <p id="heroWarningCount" class="mt-2 text-sm font-bold text-slate-900 dark:text-white">0</p>
                     </div>
                 </div>
+                <section id="overviewRuntimeClarityShell" class="mt-6">
+                    <div class="flex items-start justify-between gap-3">
+                        <div>
+                            <p class="section-kicker">Runtime Clarity</p>
+                            <p class="mt-2 text-[12px] leading-6 text-slate-500 dark:text-slate-400">
+                                Selected backends, runtime posture, checkpoint expectations, and license acknowledgments stay visible while the draft changes.
+                            </p>
+                        </div>
+                        <span class="micro-status">Backend-owned policy</span>
+                    </div>
+                    <div id="overviewRuntimeBriefing" class="runtime-briefing-grid mt-4" data-ui="runtime-clarity-grid"></div>
+                </section>
                 </div>
             </div>
         </section>
@@ -384,6 +396,18 @@ Contract notes:
                             <input type="password" id="apiKeyInput" class="flex-1 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors" placeholder="Bearer token for /v1/jobs endpoints" autocomplete="off" spellcheck="false" disabled />
                         </div>
                     </div>
+                    <section id="buildRuntimeClarityShell" class="mt-5">
+                        <div class="flex items-start justify-between gap-3">
+                            <div>
+                                <p class="section-kicker">Execution Briefing</p>
+                                <p class="mt-2 text-[12px] leading-6 text-slate-500 dark:text-slate-400">
+                                    The selected depth path, segmentation mode, checkpoint expectation, and license posture stay pinned here while you move through Steps 2-4.
+                                </p>
+                            </div>
+                            <span class="micro-status">Decision support</span>
+                        </div>
+                        <div id="buildRuntimeBriefing" class="runtime-briefing-grid runtime-briefing-grid--compact mt-4" data-ui="build-runtime-clarity"></div>
+                    </section>
                     </div>
                 </div>
 
@@ -1257,6 +1281,13 @@ Contract notes:
                                 Choose a job from the queue or dispatch a new run to inspect progress, artifacts, and live stream state.
                             </p>
                         </div>
+                        <div class="panel-subtle rounded-2xl p-4" data-ui="selected-job-recovery">
+                            <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Next Recovery Action</p>
+                            <p id="selectedJobRecoveryTitle" class="mt-2 text-[12px] font-semibold text-slate-800 dark:text-slate-100">Select a run or dispatch one</p>
+                            <p id="selectedJobRecoveryDetail" class="mt-2 text-[12px] leading-6 text-slate-600 dark:text-slate-300">
+                                Use the selected run state, warning context, and freshness above to decide whether to recover or open review.
+                            </p>
+                        </div>
                     </div>
 
                     <div class="mt-5 flex flex-wrap items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-4">
@@ -1327,6 +1358,7 @@ Contract notes:
                             <p class="surface-empty-kicker">Queue</p>
                             <p id="emptyQueueTitle" class="surface-empty-title">No runs yet</p>
                             <p id="emptyQueueDetail" class="surface-empty-detail">Dispatch a run from Build or restore backend connectivity to recover recent operator activity.</p>
+                            <p id="emptyQueueAction" class="surface-empty-action">Next action: open Build to prepare the next run or restore backend connectivity to recover recent history.</p>
                         </div>
                     </div>
                 </div>
@@ -1392,6 +1424,7 @@ Contract notes:
                             <p class="review-status-kicker">Run Status</p>
                             <p id="reviewStatusTitle" class="review-status-title">Awaiting completed run</p>
                             <p id="reviewStatusDetail" class="review-status-detail">Select a job to review related warnings, completion state, and output readiness.</p>
+                            <p id="reviewStatusAction" class="review-status-action">Next action: use the selected run state, warning context, and freshness above to decide whether to recover or open review.</p>
                         </div>
                         <div id="reviewProvenanceGrid" class="review-provenance-grid hidden" data-ui="review-provenance-grid">
                             <div class="review-provenance-item">
@@ -1446,6 +1479,7 @@ Contract notes:
                             <p class="surface-empty-kicker">Review</p>
                             <p id="emptyArtifactTitle" class="surface-empty-title">No indexed artifacts</p>
                             <p id="emptyArtifactDetail" class="surface-empty-detail">Choose a completed run or wait for outputs to index so review surfaces can populate.</p>
+                            <p id="emptyArtifactAction" class="surface-empty-action">Next action: inspect the selected run in Operate or wait for indexed outputs before reopening review.</p>
                         </div>
                     </div>
                     </div>
