@@ -21,7 +21,26 @@ def _read_budgets() -> dict:
     assets = payload.get("assets")
     if not isinstance(assets, dict) or not assets:
         raise RuntimeError("Portal asset budgets must define a non-empty assets object")
-    return assets
+    normalized_assets: dict[str, dict[str, int]] = {}
+    for asset_name, budget in assets.items():
+        if not isinstance(budget, dict):
+            raise RuntimeError(
+                f"Portal asset budget for {asset_name} must be an object"
+            )
+        normalized_assets[asset_name] = {
+            "max_bytes": _read_limit(asset_name, budget, "max_bytes"),
+            "max_gzip_bytes": _read_limit(asset_name, budget, "max_gzip_bytes"),
+        }
+    return normalized_assets
+
+
+def _read_limit(asset_name: str, budget: dict, field_name: str) -> int:
+    value = budget.get(field_name)
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        raise RuntimeError(
+            f"Portal asset budget for {asset_name} must define a positive integer {field_name}"
+        )
+    return value
 
 
 def _measure(path: Path) -> tuple[int, int]:
@@ -39,8 +58,8 @@ def main() -> int:
             failures.append(f"{asset_name}: missing asset at {asset_path}")
             continue
 
-        max_bytes = int(budget.get("max_bytes", 0))
-        max_gzip_bytes = int(budget.get("max_gzip_bytes", 0))
+        max_bytes = budget["max_bytes"]
+        max_gzip_bytes = budget["max_gzip_bytes"]
         raw_bytes, gzip_bytes = _measure(asset_path)
 
         print(

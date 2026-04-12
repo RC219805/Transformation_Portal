@@ -8,6 +8,10 @@
     "portal.css": {
       "max_bytes": 100000,
       "max_gzip_bytes": 18000
+    },
+    "shared-ui-tokens.css": {
+      "max_bytes": 2048,
+      "max_gzip_bytes": 768
     }
   }
 }
