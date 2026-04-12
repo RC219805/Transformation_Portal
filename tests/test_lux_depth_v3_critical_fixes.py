@@ -22,7 +22,7 @@ from PIL import Image, ImageOps
 from transformation_portal.lux_depth_v3.batch_stats import compute_batch_runtime_stats, detect_runtime_outliers
 from transformation_portal.lux_depth_v3.input_discovery import DiscoveryConfig, discover_images
 from transformation_portal.lux_depth_v3.preprocessing import preprocess_image
-from transformation_portal.lux_depth_v3.v2_enhance import enhance_image
+from transformation_portal.lux_depth_v3.v2_enhance import enhance_image, resolve_v2_emitted_artifact_path
 
 pytestmark = pytest.mark.unit
 
@@ -67,12 +67,14 @@ class TestFix1DoubleEXIFRotation:
 
             # Run enhancement
             result = enhance_image(input_path, output_path, config=None)
+            emitted_output = resolve_v2_emitted_artifact_path(output_path, bit_depth=8)
 
             assert result["status"] == "success"
-            assert output_path.exists()
+            assert Path(result["output"]) == emitted_output
+            assert emitted_output.exists()
 
             # Load output and check that EXIF is not present or orientation is reset
-            output_img = Image.open(output_path)
+            output_img = Image.open(emitted_output)
             exif_data = output_img.info.get("exif")
 
             # After fix: EXIF should be None (stripped) to prevent double rotation
@@ -99,6 +101,7 @@ class TestFix1DoubleEXIFRotation:
 
             result = enhance_image(input_path, output_path, config=None)
             assert result["status"] == "success"
+            assert Path(result["output"]) == resolve_v2_emitted_artifact_path(output_path, bit_depth=8)
 
 
 class TestFix2DimensionMismatch:
@@ -275,12 +278,14 @@ class TestFix5AlphaChannelSafety:
 
             # Run enhancement - should not crash despite dimension mismatch
             result = enhance_image(input_path, output_path, config=None)
+            emitted_output = resolve_v2_emitted_artifact_path(output_path, bit_depth=8)
 
             assert result["status"] == "success"
-            assert output_path.exists()
+            assert Path(result["output"]) == emitted_output
+            assert emitted_output.exists()
 
             # Verify output has alpha channel and correct dimensions
-            output_img = Image.open(output_path)
+            output_img = Image.open(emitted_output)
             assert output_img.mode == "RGBA", "Output should preserve RGBA mode"
             # Output should match enhanced dimensions (80, 60), not original (100, 50)
             assert output_img.size == (60, 80), f"Output should match enhanced dimensions (60, 80), got {output_img.size}"
@@ -308,9 +313,11 @@ class TestFix5AlphaChannelSafety:
             mock_instance.compute.return_value = mock_result
 
             result = enhance_image(input_path, output_path, config=None)
+            emitted_output = resolve_v2_emitted_artifact_path(output_path, bit_depth=8)
             assert result["status"] == "success"
+            assert Path(result["output"]) == emitted_output
 
-            output_img = Image.open(output_path)
+            output_img = Image.open(emitted_output)
             assert output_img.mode == "RGBA"
             assert output_img.size == (100, 50)
 
