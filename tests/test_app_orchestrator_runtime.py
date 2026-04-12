@@ -422,9 +422,10 @@ def test_portal_html_resets_to_static_operator_shell_without_background_video() 
 
 def test_portal_phase1_accessibility_tokens_align_focus_and_target_size() -> None:
     css_content = _portal_css_content()
+    shared_tokens = orchestrator_app.PORTAL_ASSET_PATHS["shared-ui-tokens.css"].read_text(encoding="utf-8")
 
     assert "--ux-focus-ring:" in css_content
-    assert "--ux-target-min-size: 44px;" in css_content
+    assert "--ux-target-min-size: 44px;" in shared_tokens
     assert "font-size: var(--ux-body-size);" in css_content
     assert css_content.count("--shell-border: var(--ux-panel-border);") >= 2
     assert "--shell-border: rgba(148, 163, 184, 0.22);" not in css_content
@@ -439,6 +440,7 @@ def test_portal_html_externalizes_direct_debug_assets_without_third_party_hosts(
 
     assert f'href="{bundle.urls["portal.css"]}"' in html_content
     assert f'src="{bundle.urls["portal.js"]}"' in html_content
+    assert bundle.urls["shared-ui-tokens.css"] in css_content
     assert "<style>" not in html_content
     assert "<script>" not in html_content
     assert "https://cdn.tailwindcss.com" not in html_content
@@ -452,6 +454,7 @@ def test_portal_asset_manifest_is_explicit_and_repo_local() -> None:
     assert orchestrator_app.PORTAL_ASSET_MANIFEST_PATH.is_file()
     assert orchestrator_app.PORTAL_ASSET_PATHS == {
         "portal.css": orchestrator_app.PORTAL_ASSETS_DIR / "portal.css",
+        "shared-ui-tokens.css": orchestrator_app.PORTAL_ASSETS_DIR / "shared-ui-tokens.css",
         "portal.js": orchestrator_app.PORTAL_ASSETS_DIR / "portal.js",
         "fonts/portal-sans.woff2": orchestrator_app.PORTAL_ASSETS_DIR / "fonts" / "portal-sans.woff2",
         "fonts/portal-mono.woff2": orchestrator_app.PORTAL_ASSETS_DIR / "fonts" / "portal-mono.woff2",
@@ -460,6 +463,7 @@ def test_portal_asset_manifest_is_explicit_and_repo_local() -> None:
     }
     assert orchestrator_app.PORTAL_ASSET_MEDIA_TYPES == {
         "portal.css": "text/css; charset=utf-8",
+        "shared-ui-tokens.css": "text/css; charset=utf-8",
         "portal.js": "text/javascript; charset=utf-8",
         "fonts/portal-sans.woff2": "font/woff2",
         "fonts/portal-mono.woff2": "font/woff2",
@@ -553,6 +557,20 @@ def test_portal_fetch_sse_reconnect_scheduler_has_terminal_guard_and_backoff() -
     assert "SSE_RECONNECT_BASE_DELAY_MS" in body
     assert "setTimeout" in body
     assert "startJobEventStream(job, job.eventStreamUrl);" in body
+
+
+def test_portal_bundle_embeds_internal_modules_without_changing_public_contracts() -> None:
+    content = _portal_bundle_content()
+
+    assert "const portalInternals = __PortalInternal;" in content
+    assert "const portalRoute = portalInternals.createPortalRouteHelpers(window);" in content
+    assert "const portalDom = portalInternals.createDomContract(document, {" in content
+    assert "const _domId = (id, required = false) => portalDom.id(id, { required });" in content
+    assert "config: portalInternals.createPortalConfigState()," in content
+    assert "auth: portalInternals.createPortalAuthState()," in content
+    assert "bootstrap: portalInternals.createPortalBootstrapState(Date.now())," in content
+    assert "portalDom.assertPresent(els, [" in content
+    assert "portalRenderSurfaces.register('jobQueue'" in content
 
 
 def test_portal_fetch_sse_reconnect_schedules_on_unexpected_disconnect_only() -> None:
@@ -1142,20 +1160,21 @@ def test_portal_console_views_use_query_param_navigation_without_backend_route_c
     assert 'aria-keyshortcuts="2"' in content
     assert 'aria-keyshortcuts="3"' in content
     assert 'aria-keyshortcuts="4"' in content
-    assert "const resolvedView = resolveConsoleView(viewName);" in route_body
-    assert "url.searchParams.set('view', resolvedView);" in route_body
-    assert "url.searchParams.set('artifact', resolvedArtifactPath);" in route_body
-    assert "url.searchParams.set('compare', '1');" in route_body
-    assert "url.searchParams.delete('artifact');" in route_body
-    assert "url.searchParams.delete('compare');" in route_body
-    assert "state.currentView = resolveConsoleView(url.searchParams.get('view'));" in content
+    assert "return portalRoute.build({" in route_body
+    assert "resolveView: resolveConsoleView," in route_body
+    assert "normalizeSelectedJobId: _normalizeSelectedJobId," in route_body
+    assert "normalizeArtifactRoutePath: _normalizeArtifactRoutePath," in route_body
+    assert "activeContext: _activeRouteContext" in route_body
+    assert "const routeState = portalRoute.read({" in content
+    assert "resolveView: resolveConsoleView," in content
     assert "candidate === 'run'" not in content
     assert "document.body.dataset.consoleView = state.currentView;" in apply_view_body
     assert "els.queueShell.classList.toggle('hidden', state.currentView === 'review');" in apply_view_body
     assert "const isPlainPrimaryClick = event.button === 0" in rail_body
     assert "if (event.defaultPrevented || !isPlainPrimaryClick)" in rail_body
     assert "navigateConsoleView(nextView);" in rail_body
-    assert "(resolvedView === 'operate' || resolvedView === 'review') && resolvedJobId" in route_body
+    assert "viewName," in route_body
+    assert "compareEnabled," in route_body
 
 
 def test_portal_console_routes_reuse_last_selected_job_across_operate_and_review() -> None:
@@ -1176,8 +1195,9 @@ def test_portal_console_routes_reuse_last_selected_job_across_operate_and_review
     assert "const preferredJobId = _preferredSelectedJobId();" in navigate_block
     assert "_rememberSelectedJob(explicitJobId);" in navigate_block
     assert "_rememberSelectedJob(routeJobId);" in apply_route_body
-    assert "const routeArtifactPath = _normalizeArtifactRoutePath(url.searchParams.get('artifact'));" in apply_route_body
-    assert "const routeCompareEnabled = _normalizeCompareQueryValue(url.searchParams.get('compare'));" in apply_route_body
+    assert "const routeState = portalRoute.read({" in apply_route_body
+    assert "const routeArtifactPath = routeState.artifactPath;" in apply_route_body
+    assert "const routeCompareEnabled = routeState.compareEnabled;" in apply_route_body
     assert "_rememberArtifactSelection(routeJobId, routeArtifactPath);" in apply_route_body
     assert "_rememberComparePreference(routeJobId, routeCompareEnabled);" in apply_route_body
     assert "_rememberSelectedJob(jobId);" in select_body
@@ -1488,11 +1508,12 @@ def test_portal_init_establishes_interactive_shell_before_bootstrap_settles() ->
 def test_portal_bootstrap_online_followup_state_is_tracked_until_auth_ready() -> None:
     content = _portal_bundle_content()
 
-    assert "lastHealthEndpointPath: ''" in content
+    assert "bootstrap: portalInternals.createPortalBootstrapState(Date.now())," in content
+    assert 'lastHealthEndpointPath: ""' in content
     assert "pendingOnlineFollowup: false" in content
     assert "onlineFollowupComplete: false" in content
     assert "deadlineAt: 0" in content
-    assert "lastOutcome: ''" in content
+    assert 'lastOutcome: ""' in content
 
 
 def test_portal_bootstrap_retry_lifecycle_tracks_active_state_and_teardown() -> None:
@@ -1564,8 +1585,8 @@ def test_portal_preview_metadata_worker_modes_and_export_contract_are_wired() ->
     reconcile_body = _extract_js_function_body(content, "_reconcilePreviewRepairedPaths")
     setter_body = _extract_js_function_body(content, "_setBuildSurfacePathFieldValue")
 
-    assert "maxWorkersMode: 'auto'," in content
-    assert "maxGpuWorkersMode: 'auto'," in content
+    assert 'maxWorkersMode: "auto",' in content
+    assert 'maxGpuWorkersMode: "auto",' in content
     assert 'id="maxWorkersMode"' in content
     assert 'id="maxGpuWorkersMode"' in content
     assert "function fetchConfigMetadata" in content
@@ -2050,8 +2071,8 @@ def test_argv_rejects_invalid_log_level() -> None:
 def test_portal_segmentation_defaults_align_with_cli_defaults() -> None:
     content = _portal_bundle_content()
     assert "enable: false," in content
-    assert "backend: 'stub'," in content
-    assert "sam2ModelSize: 'base'," in content
+    assert 'backend: "stub",' in content
+    assert 'sam2ModelSize: "base",' in content
     assert "strict: false" in content
 
 
@@ -2201,7 +2222,7 @@ def test_portal_archive_pipelines_hide_lux_flag_shell() -> None:
     content = _portal_bundle_content()
     update_body = _extract_js_function_body(content, "updateUIFromState")
 
-    assert "flagsShell: document.getElementById('flags-shell')" in content
+    assert "flagsShell: _domId('flags-shell')" in content
     assert "if (els.flagsShell) els.flagsShell.classList.remove('hidden');" in update_body
     assert "if (els.flagsShell) els.flagsShell.classList.add('hidden');" in update_body
 
@@ -2215,14 +2236,14 @@ def test_portal_lux_build_surface_hides_inapplicable_optional_controls_until_nee
     fallback_body = _extract_js_function_body(content, "seedPresetFallbacks")
     fetch_body = _extract_js_function_body(content, "fetchPresetsForPipeline")
 
-    assert "segmentationBackendField: document.getElementById('segmentationBackendField')" in content
-    assert "sam2ModelSizeField: document.getElementById('sam2ModelSizeField')" in content
-    assert "strictSegmentationField: document.getElementById('strictSegmentationField')" in content
-    assert "sam2CheckpointField: document.getElementById('sam2CheckpointField')" in content
-    assert "v2PresetField: document.getElementById('v2PresetField')" in content
-    assert "governanceDetailsHint: document.getElementById('governanceDetailsHint')" in content
-    assert "licenseAppleField: document.getElementById('licenseAppleField')" in content
-    assert "reconstructionConfigFields: document.getElementById('reconstructionConfigFields')" in content
+    assert "segmentationBackendField: _domId('segmentationBackendField')" in content
+    assert "sam2ModelSizeField: _domId('sam2ModelSizeField')" in content
+    assert "strictSegmentationField: _domId('strictSegmentationField')" in content
+    assert "sam2CheckpointField: _domId('sam2CheckpointField')" in content
+    assert "v2PresetField: _domId('v2PresetField')" in content
+    assert "governanceDetailsHint: _domId('governanceDetailsHint')" in content
+    assert "licenseAppleField: _domId('licenseAppleField')" in content
+    assert "reconstructionConfigFields: _domId('reconstructionConfigFields')" in content
     assert "function _derivePresetResearchFlag" in content
     assert ".includes('research')" in preset_research_body
     assert "is_research: _derivePresetResearchFlag({" in preset_body

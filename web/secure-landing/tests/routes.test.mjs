@@ -1703,6 +1703,7 @@ test("shared portal asset manifest pins the managed asset proxy allowlist", asyn
 
   assert.deepEqual(PORTAL_ASSET_PATHS, [
     "portal.css",
+    "shared-ui-tokens.css",
     "portal.js",
     "fonts/portal-sans.woff2",
     "fonts/portal-mono.woff2",

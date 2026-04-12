@@ -1,3 +1,5 @@
+@import url("/shared-ui-tokens.css");
+
 :root {
   color-scheme: dark;
   font-family: "Manrope", "Segoe UI", sans-serif;
@@ -5,9 +7,6 @@
   --ux-focus-shadow: rgba(34, 211, 238, 0.24);
   --ux-panel-border: rgba(148, 163, 184, 0.24);
   --ux-panel-border-strong: rgba(103, 232, 249, 0.28);
-  --ux-target-min-size: 44px;
-  --ux-label-size: 0.8125rem;
-  --ux-body-size: 1rem;
   --continuity-panel: rgba(10, 16, 31, 0.74);
   --continuity-panel-strong: rgba(7, 12, 24, 0.82);
   --continuity-border: rgba(103, 232, 249, 0.28);
