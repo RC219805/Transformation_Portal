@@ -734,14 +734,27 @@ def test_portal_bootstrap_loader_uses_abortable_timeout_and_state_contract() -> 
 def test_portal_managed_mode_clears_api_keys_and_hides_secret_ui() -> None:
     content = _portal_bundle_content()
     clear_body = _extract_js_function_body(content, "_clearStoredApiKeyState")
+    summary_body = _extract_js_function_body(content, "_bootstrapSurfaceSummary")
     sync_body = _extract_js_function_body(content, "_syncBootstrapUi")
 
     assert "localStorage.removeItem(API_KEY_STORAGE_KEY);" in clear_body
     assert "sessionStorage.removeItem(API_KEY_STORAGE_KEY);" in clear_body
     assert "_clearStoredApiKeyState(true);" in content
     assert "_loadApiKeyIntoInputs();" in content
+    assert 'id="portalAccessState"' in content
+    assert 'id="bootstrapStatusBadge"' in content
+    assert 'id="bootstrapRecoveryHint"' in content
+    assert "badge: 'Managed access'" in summary_body
+    assert "badge: 'Direct debug'" in summary_body
+    assert "badge: failure.retryable ? 'Recovery pending' : 'Recovery required'" in summary_body
+    assert "badge: 'Confirming access'" in summary_body
     assert "const showApiKeyInput = bootstrapReady && state.auth.features.apiKeyInput;" in sync_body
     assert "els.apiKeySection.classList.toggle('hidden', !showApiKeyInput);" in sync_body
+    assert "document.body.dataset.bootstrapReason = String(state.bootstrap.lastErrorReason || '');" in sync_body
+    assert "document.body.dataset.authMode = String(state.auth.mode || 'managed_unavailable');" in sync_body
+    assert "els.portalAccessState.dataset.bootstrapStatus = String(state.bootstrap.status || 'pending');" in sync_body
+    assert "els.bootstrapStatusBadge.textContent = summary.badge;" in sync_body
+    assert "els.bootstrapRecoveryHint.textContent = summary.detail;" in sync_body
     assert "els.apiKeyInput.disabled = !showApiKeyInput;" in sync_body
     assert "rememberApiKey" not in content
 
@@ -1124,6 +1137,11 @@ def test_portal_console_views_use_query_param_navigation_without_backend_route_c
     assert 'data-view-link="build"' in content
     assert 'data-view-link="operate"' in content
     assert 'data-view-link="review"' in content
+    assert 'data-ui="workspace-shortcut-hint"' in content
+    assert 'aria-keyshortcuts="1"' in content
+    assert 'aria-keyshortcuts="2"' in content
+    assert 'aria-keyshortcuts="3"' in content
+    assert 'aria-keyshortcuts="4"' in content
     assert "const resolvedView = resolveConsoleView(viewName);" in route_body
     assert "url.searchParams.set('view', resolvedView);" in route_body
     assert "url.searchParams.set('artifact', resolvedArtifactPath);" in route_body
@@ -1235,6 +1253,8 @@ def test_portal_dispatch_review_keeps_cli_parity_in_secondary_disclosure() -> No
 
     assert 'data-ui="dispatch-primary-lane"' in content
     assert 'data-ui="dispatch-launch"' in content
+    assert 'data-ui="dispatch-shortcut-hint"' in content
+    assert 'data-ui="governance-posture-hint"' in content
     assert 'id="dispatchReadinessReason"' in content
     assert 'aria-live="polite"' in content
     assert 'aria-atomic="true"' in content
@@ -1249,6 +1269,23 @@ def test_portal_dispatch_review_keeps_cli_parity_in_secondary_disclosure() -> No
     assert 'id="exportBtn"' in content
     assert 'id="copyCliBtn"' in content
     assert 'id="cliPreview"' in content
+
+
+def test_portal_keyboard_shortcuts_cover_view_navigation_and_help_without_text_fragility() -> None:
+    content = _portal_bundle_content()
+    typing_body = _extract_js_function_body(content, "_isTypingTarget")
+
+    assert "const WORKSPACE_VIEW_SHORTCUTS = Object.freeze({" in content
+    assert "'1': 'overview'" in content
+    assert "'4': 'review'" in content
+    assert "function _isTypingTarget(target) {" in content
+    assert "target.isContentEditable || target.closest('[contenteditable=\"true\"]')" in typing_body
+    assert "tagName === 'textarea' || tagName === 'select'" in typing_body
+    assert "if (isPlainShortcut && (key === '?' || (key === '/' && e.shiftKey)))" in content
+    assert "toggleModal(true);" in content
+    assert "if (isPlainShortcut && Object.prototype.hasOwnProperty.call(WORKSPACE_VIEW_SHORTCUTS, key)) {" in content
+    assert "const nextView = WORKSPACE_VIEW_SHORTCUTS[key];" in content
+    assert "navigateConsoleView(nextView);" in content
 
 
 def test_portal_build_surface_keeps_primary_posture_band_outside_contextual_disclosures() -> None:

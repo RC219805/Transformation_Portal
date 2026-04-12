@@ -334,6 +334,10 @@ const els = {
     apiKeyInput: document.getElementById('apiKeyInput'),
     authModeBadge: document.getElementById('authModeBadge'),
     apiKeyManagedHint: document.getElementById('apiKeyManagedHint'),
+    portalAccessState: document.getElementById('portalAccessState'),
+    bootstrapStatusBadge: document.getElementById('bootstrapStatusBadge'),
+    bootstrapRecoveryHint: document.getElementById('bootstrapRecoveryHint'),
+    governancePostureHint: document.getElementById('governancePostureHint'),
 
     inputDir: document.getElementById('inputDir'),
     outputDir: document.getElementById('outputDir'),
@@ -942,6 +946,13 @@ const CONSOLE_VIEW_META = {
         meta: 'Completed runs become reviewable products, not just finished jobs.'
     }
 };
+
+const WORKSPACE_VIEW_SHORTCUTS = Object.freeze({
+    '1': 'overview',
+    '2': 'build',
+    '3': 'operate',
+    '4': 'review'
+});
 
 function resolveConsoleView(value) {
     const candidate = String(value || '').trim().toLowerCase();
@@ -2916,6 +2927,7 @@ function renderGovernanceBanner(payload) {
     const items = [];
     let title = 'Run posture is clear.';
     let body = 'The current configuration is valid for dispatch. Any license acknowledgments or runtime caveats will surface here before execution.';
+    let postureHint = 'Step 4 stays aligned to this checklist, so blocked governance items clear here before launch becomes trustworthy.';
 
     if (state.pipeline === 'lux-depth-v3') {
         if (String(args.preset || '').toLowerCase().includes('v3.1')) {
@@ -2991,13 +3003,16 @@ function renderGovernanceBanner(payload) {
     if (hasWarnings) {
         title = 'Execution is blocked.';
         body = 'Before dispatch, satisfy the blocked readiness prerequisites listed below.';
+        postureHint = 'Clear the blocked governance items in this panel before treating the Step 4 launch lane as actionable.';
     } else if (items.some((item) => item.tone === 'info')) {
         title = 'Configuration is valid with readiness caveats.';
         body = 'The run contract is coherent, but at least one prerequisite still needs operator attention before dispatch can be treated as fully ready.';
+        postureHint = 'Use this panel to resolve readiness caveats first; Step 4 will remain cautious until they settle.';
     }
 
     if (els.governanceBannerTitle) els.governanceBannerTitle.textContent = title;
     if (els.governanceBannerBody) els.governanceBannerBody.textContent = body;
+    if (els.governancePostureHint) els.governancePostureHint.textContent = postureHint;
 
     els.governanceChecklist.innerHTML = '';
     items.forEach((item) => {
@@ -3780,6 +3795,42 @@ function _isManagedUnavailableMode() {
     return state.auth && state.auth.mode === 'managed_unavailable';
 }
 
+function _bootstrapSurfaceSummary() {
+    const bootstrapStatus = String(state.bootstrap.status || 'pending').trim().toLowerCase();
+    if (bootstrapStatus === 'ready') {
+        if (_isManagedAuthMode()) {
+            return {
+                tone: 'ready',
+                badge: 'Managed access',
+                detail: 'Managed access is verified. Backend credentials stay server-side and browser-side API key entry remains hidden.',
+                apiHint: 'Managed mode is active. Backend credentials stay server-side and are never stored in the browser.'
+            };
+        }
+        return {
+            tone: 'warning',
+            badge: 'Direct debug',
+            detail: 'Direct debug is active. Browser-side API key entry is available only for local troubleshooting.',
+            apiHint: 'Direct debug is active. Browser-side API key entry is available only for local troubleshooting.'
+        };
+    }
+    if (bootstrapStatus === 'degraded' || bootstrapStatus === 'unavailable') {
+        const failure = _bootstrapFailureDetails(state.bootstrap.lastErrorReason, state.bootstrap.lastHttpStatus);
+        const tone = failure.retryable ? 'warning' : 'blocked';
+        return {
+            tone,
+            badge: failure.retryable ? 'Recovery pending' : 'Recovery required',
+            detail: failure.actionMessage,
+            apiHint: failure.actionMessage
+        };
+    }
+    return {
+        tone: 'info',
+        badge: 'Confirming access',
+        detail: 'Bootstrap is still being confirmed. Privileged actions remain disabled until portal authentication is resolved.',
+        apiHint: 'Bootstrap is still being confirmed. Privileged actions remain disabled until portal authentication is resolved.'
+    };
+}
+
 function _clearStoredApiKeyState(clearPersisted = true) {
     if (clearPersisted) {
         localStorage.removeItem(API_KEY_STORAGE_KEY);
@@ -3792,20 +3843,35 @@ function _syncBootstrapUi() {
     const bootstrapReady = _isBootstrapReady();
     const showApiKeyInput = bootstrapReady && state.auth.features.apiKeyInput;
     const badgeLabel = bootstrapReady ? state.auth.mode : 'unknown';
+    const summary = _bootstrapSurfaceSummary();
     if (els.apiKeySection) {
         els.apiKeySection.classList.toggle('hidden', !showApiKeyInput);
     }
     if (els.authModeBadge) {
         els.authModeBadge.textContent = badgeLabel;
     }
+    if (document.body) {
+        document.body.dataset.bootstrapReason = String(state.bootstrap.lastErrorReason || '');
+        document.body.dataset.authMode = String(state.auth.mode || 'managed_unavailable');
+    }
+    if (els.portalAccessState) {
+        els.portalAccessState.dataset.tone = summary.tone;
+        els.portalAccessState.dataset.bootstrapStatus = String(state.bootstrap.status || 'pending');
+        els.portalAccessState.dataset.bootstrapReason = String(state.bootstrap.lastErrorReason || '');
+    }
+    if (els.bootstrapStatusBadge) {
+        els.bootstrapStatusBadge.dataset.tone = summary.tone;
+        els.bootstrapStatusBadge.textContent = summary.badge;
+    }
+    if (els.bootstrapRecoveryHint) {
+        els.bootstrapRecoveryHint.textContent = summary.detail;
+    }
     if (els.apiKeyManagedHint) {
         if (bootstrapReady && !_isManagedAuthMode()) {
             els.apiKeyManagedHint.classList.add('hidden');
         } else {
             els.apiKeyManagedHint.classList.remove('hidden');
-            els.apiKeyManagedHint.textContent = bootstrapReady
-                ? 'Managed mode is active. Backend credentials stay server-side and are never stored in the browser.'
-                : 'Bootstrap is still being confirmed. Privileged actions remain disabled until portal authentication is resolved.';
+            els.apiKeyManagedHint.textContent = summary.apiHint;
         }
     }
     if (els.apiKeyInput) {
@@ -9130,6 +9196,16 @@ function _trapOverlayFocus(event) {
     return false;
 }
 
+function _isTypingTarget(target) {
+    if (!(target instanceof HTMLElement)) return false;
+    const tagName = String(target.tagName || '').toLowerCase();
+    if (target.isContentEditable || target.closest('[contenteditable="true"]')) return true;
+    if (tagName === 'textarea' || tagName === 'select') return true;
+    if (tagName !== 'input') return false;
+    const inputType = String(target.getAttribute('type') || 'text').trim().toLowerCase();
+    return !['button', 'checkbox', 'color', 'file', 'hidden', 'radio', 'range', 'reset', 'submit'].includes(inputType);
+}
+
 const toggleModal = (show, trigger = document.activeElement) => {
     if (show) {
         _rememberOverlayTrigger(trigger);
@@ -9204,6 +9280,8 @@ document.addEventListener('keydown', (e) => {
     if (_trapOverlayFocus(e)) {
         return;
     }
+    const key = String(e.key || '');
+    const isPlainShortcut = !e.ctrlKey && !e.metaKey && !e.altKey && !_isTypingTarget(e.target);
     if (e.key === "Escape" && els.effectiveConfigDrawer && !els.effectiveConfigDrawer.classList.contains("hidden")) {
         e.preventDefault();
         toggleEffectiveConfigDrawer(false);
@@ -9212,6 +9290,24 @@ document.addEventListener('keydown', (e) => {
     if (e.key === "Escape" && els.shortcutsModal && !els.shortcutsModal.classList.contains("hidden")) {
         e.preventDefault();
         toggleModal(false);
+        return;
+    }
+    if (isPlainShortcut && (key === '?' || (key === '/' && e.shiftKey))) {
+        if (els.shortcutsModal && els.shortcutsModal.classList.contains('hidden')) {
+            e.preventDefault();
+            toggleModal(true);
+        }
+        return;
+    }
+    if (isPlainShortcut && Object.prototype.hasOwnProperty.call(WORKSPACE_VIEW_SHORTCUTS, key)) {
+        const nextView = WORKSPACE_VIEW_SHORTCUTS[key];
+        if (nextView === 'review' && !state.selectedJobId) {
+            e.preventDefault();
+            createToast('Select a run first, then open its review surface.', 'info');
+            return;
+        }
+        e.preventDefault();
+        navigateConsoleView(nextView);
         return;
     }
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {

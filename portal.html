@@ -73,7 +73,7 @@ Contract notes:
 
             <div class="portal-topbar__actions flex items-center gap-3" data-ui="portal-topbar-actions">
                 <button id="shortcutsBtn" type="button" class="rounded-full border border-slate-200 dark:border-slate-700 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 hover:text-slate-900 hover:border-slate-300 dark:text-slate-400 dark:hover:text-white dark:hover:border-slate-600 transition-colors focus:outline-none focus:ring-2 focus:ring-cyan-500">
-                    Shortcuts
+                    Shortcuts <span class="kbd">?</span>
                 </button>
                 <button id="themeBtn" type="button" class="rounded-full px-4 py-2 text-xs font-semibold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors focus:outline-none focus:ring-2 focus:ring-cyan-500" aria-label="Theme preference: system. Click to switch to dark.">
                     Theme: System
@@ -265,22 +265,37 @@ Contract notes:
                 <p class="workspace-rail-text">
                     Overview, build, live operation, and review in one quiet shell.
                 </p>
+                <p class="workspace-shortcut-hint" data-ui="workspace-shortcut-hint">
+                    Keyboard: <span class="kbd">1</span> overview, <span class="kbd">2</span> build, <span class="kbd">3</span> operate, <span class="kbd">4</span> review, <span class="kbd">?</span> shortcuts.
+                </p>
             </div>
             <div class="workspace-rail-links" role="tablist" aria-label="Console views">
-                <a class="workspace-link is-active" data-view-link="overview" data-ui="view-link" href="?view=overview" role="tab" aria-selected="true">
-                    <span class="workspace-link-label">Overview</span>
+                <a class="workspace-link is-active" data-view-link="overview" data-ui="view-link" href="?view=overview" role="tab" aria-selected="true" aria-keyshortcuts="1">
+                    <span class="workspace-link-heading">
+                        <span class="workspace-link-label">Overview</span>
+                        <span class="workspace-link-shortcut" aria-hidden="true">1</span>
+                    </span>
                     <span class="workspace-link-meta">Status, recent jobs, and next action.</span>
                 </a>
-                <a class="workspace-link" data-view-link="build" data-ui="view-link" href="?view=build" role="tab" aria-selected="false">
-                    <span class="workspace-link-label">Build</span>
+                <a class="workspace-link" data-view-link="build" data-ui="view-link" href="?view=build" role="tab" aria-selected="false" aria-keyshortcuts="2">
+                    <span class="workspace-link-heading">
+                        <span class="workspace-link-label">Build</span>
+                        <span class="workspace-link-shortcut" aria-hidden="true">2</span>
+                    </span>
                     <span class="workspace-link-meta">Preview-backed dispatch flow.</span>
                 </a>
-                <a class="workspace-link" data-view-link="operate" data-ui="view-link" href="?view=operate" role="tab" aria-selected="false">
-                    <span class="workspace-link-label">Operate</span>
+                <a class="workspace-link" data-view-link="operate" data-ui="view-link" href="?view=operate" role="tab" aria-selected="false" aria-keyshortcuts="3">
+                    <span class="workspace-link-heading">
+                        <span class="workspace-link-label">Operate</span>
+                        <span class="workspace-link-shortcut" aria-hidden="true">3</span>
+                    </span>
                     <span class="workspace-link-meta">Queue, inspector, artifacts, and logs.</span>
                 </a>
-                <a class="workspace-link" data-view-link="review" data-ui="view-link" href="?view=review" role="tab" aria-selected="false">
-                    <span class="workspace-link-label">Review</span>
+                <a class="workspace-link" data-view-link="review" data-ui="view-link" href="?view=review" role="tab" aria-selected="false" aria-keyshortcuts="4">
+                    <span class="workspace-link-heading">
+                        <span class="workspace-link-label">Review</span>
+                        <span class="workspace-link-shortcut" aria-hidden="true">4</span>
+                    </span>
                     <span class="workspace-link-meta">Artifact preview, provenance, and actions.</span>
                 </a>
             </div>
@@ -394,6 +409,15 @@ Contract notes:
                         <p id="apiKeyManagedHint" class="text-[12px] leading-relaxed text-slate-500 dark:text-slate-400">Managed mode is active. Backend credentials stay server-side and are never stored in the browser.</p>
                         <div class="flex flex-col sm:flex-row gap-2 sm:items-center">
                             <input type="password" id="apiKeyInput" class="flex-1 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors" placeholder="Bearer token for /v1/jobs endpoints" autocomplete="off" spellcheck="false" disabled />
+                        </div>
+                    </div>
+                    <div id="portalAccessState" class="portal-access-state mt-4" data-ui="portal-access-state" data-tone="info" data-bootstrap-status="pending">
+                        <div class="portal-access-state__head">
+                            <div>
+                                <p class="portal-access-state__kicker">Access posture</p>
+                                <p id="bootstrapRecoveryHint" class="portal-access-state__detail">Bootstrap is still being confirmed. Privileged actions remain disabled until portal authentication is resolved.</p>
+                            </div>
+                            <span id="bootstrapStatusBadge" class="signal-badge portal-access-state__badge" data-tone="info">Confirming access</span>
                         </div>
                     </div>
                     <section id="buildRuntimeClarityShell" class="mt-5">
@@ -1100,6 +1124,9 @@ Contract notes:
                             <p id="governanceBannerBody" class="mt-2 text-sm leading-7 text-slate-600 dark:text-slate-300">
                                 The current configuration is valid for dispatch. Any license acknowledgments or runtime caveats will surface here before execution.
                             </p>
+                            <p id="governancePostureHint" class="step-primary-note mt-3" data-ui="governance-posture-hint">
+                                Step 4 stays aligned to this checklist, so blocked governance items clear here before launch becomes trustworthy.
+                            </p>
                         </div>
                         <div class="signal-badge">Live contract checks</div>
                     </div>
@@ -1136,6 +1163,9 @@ Contract notes:
                             <button id="runJobBtn" type="button" class="mt-4 w-full rounded-2xl px-6 py-4 text-[14px] font-extrabold uppercase tracking-[0.14em] text-white shadow-glow transition-all focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed bg-gradient-to-r from-teal-700 via-cyan-600 to-sky-600 hover:from-teal-600 hover:via-cyan-500 hover:to-sky-500 dark:focus:ring-offset-slate-900" disabled data-ui="dispatch-cta" aria-describedby="dispatchReadinessReason">
                                 Execute Job
                             </button>
+                            <p class="dispatch-shortcut-hint mt-3" data-ui="dispatch-shortcut-hint">
+                                Once dispatch unlocks, use <span class="kbd">Ctrl/⌘ + Enter</span> to execute without leaving the keyboard.
+                            </p>
                         </section>
                     </div>
 
@@ -1519,6 +1549,8 @@ Contract notes:
                 </button>
             </div>
             <div class="p-5 text-sm text-slate-700 dark:text-slate-300 space-y-4">
+                <div class="flex justify-between items-center"><span class="text-slate-600 dark:text-slate-400">Open Shortcuts</span> <kbd class="kbd text-[11px]">?</kbd></div>
+                <div class="flex justify-between items-center"><span class="text-slate-600 dark:text-slate-400">Jump to Overview / Build / Operate / Review</span> <kbd class="kbd text-[11px]">1 / 2 / 3 / 4</kbd></div>
                 <div class="flex justify-between items-center"><span class="text-slate-600 dark:text-slate-400">Run Job</span> <kbd class="kbd text-[11px]">Ctrl/⌘ + Enter</kbd></div>
                 <div class="flex justify-between items-center"><span class="text-slate-600 dark:text-slate-400">Copy Command</span> <kbd class="kbd text-[11px]">Ctrl/⌘ + Shift + C</kbd></div>
                 <div class="flex justify-between items-center"><span class="text-slate-600 dark:text-slate-400">Cycle Theme</span> <kbd class="kbd text-[11px]">Ctrl/⌘ + J</kbd></div>

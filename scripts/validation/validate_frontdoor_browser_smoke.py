@@ -400,9 +400,11 @@ def _frontdoor_state_probe_expression() -> str:
     readyState: document.readyState,
     pathname: window.location.pathname,
     homepageHeroReady: !!document.querySelector('[data-ui="homepage-hero-title"]'),
+    homepageEntryRailReady: !!document.querySelector('[data-ui="homepage-entry-rail"]'),
     homepageLearnLinkReady: !!document.querySelector('[data-ui="homepage-learn-link"]'),
     homepagePrimaryCtaHref: attr('[data-ui="homepage-primary-cta"]', 'href'),
     loginTitleReady: !!document.querySelector('[data-ui="login-title"]'),
+    loginEntryStateReady: !!document.querySelector('[data-ui="login-entry-state"]'),
     loginSequenceReady: !!document.querySelector('[data-ui="login-sequence"]'),
     brandAssetPresent: !!document.querySelector('.brand-asset'),
     hasHeroVideo: !!document.querySelector('.hero-video, .homepage-video'),
@@ -412,7 +414,8 @@ def _frontdoor_state_probe_expression() -> str:
     passwordPresent: !!document.querySelector('input[name="password"]'),
     authModeBadge: text('#authModeBadge'),
     currentView: document.body ? String(document.body.dataset.consoleView || '') : '',
-    apiKeySectionHidden: hidden('apiKeySection')
+    apiKeySectionHidden: hidden('apiKeySection'),
+    portalAccessStateReady: !!document.querySelector('[data-ui="portal-access-state"]')
   };
 })()
 """
@@ -555,6 +558,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
                 isinstance(value, dict)
                 and value.get("readyState") == "complete"
                 and bool(value.get("homepageHeroReady"))
+                and bool(value.get("homepageEntryRailReady"))
                 and bool(value.get("homepageLearnLinkReady"))
                 and str(value.get("homepagePrimaryCtaHref", "")) == "/login"
             ),
@@ -573,6 +577,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
                 isinstance(value, dict)
                 and str(value.get("pathname", "")) == "/login"
                 and bool(value.get("loginTitleReady"))
+                and bool(value.get("loginEntryStateReady"))
                 and bool(value.get("loginSequenceReady"))
                 and bool(value.get("brandAssetPresent"))
                 and bool(value.get("loginFormPresent"))
@@ -595,6 +600,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
                 and str(value.get("pathname", "")) == "/portal"
                 and str(value.get("currentView", "")) == "overview"
                 and bool(value.get("apiKeySectionHidden"))
+                and bool(value.get("portalAccessStateReady"))
                 and str(value.get("authModeBadge", "")).lower() == "managed"
             ),
             timeout_seconds=args.timeout_seconds,

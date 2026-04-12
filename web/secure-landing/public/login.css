@@ -251,6 +251,64 @@ h1 {
   line-height: 1.7;
 }
 
+.login-entry-state {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.8rem;
+  margin-bottom: 1.2rem;
+}
+
+.login-status-card {
+  display: grid;
+  gap: 0.35rem;
+  min-height: 100%;
+  border-radius: 1.1rem;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(7, 13, 26, 0.48);
+  padding: 0.95rem 1rem;
+}
+
+.login-status-card[data-state="verified"],
+.login-status-card[data-state="ready"] {
+  border-color: rgba(45, 212, 191, 0.28);
+  background:
+    linear-gradient(180deg, rgba(15, 118, 110, 0.12), rgba(7, 13, 26, 0.6)),
+    rgba(7, 13, 26, 0.56);
+}
+
+.login-status-card[data-state="blocked"] {
+  border-color: rgba(248, 113, 113, 0.34);
+  background:
+    linear-gradient(180deg, rgba(127, 29, 29, 0.18), rgba(7, 13, 26, 0.6)),
+    rgba(7, 13, 26, 0.58);
+}
+
+.login-status-card-kicker,
+.login-recovery-card-title {
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgba(148, 220, 255, 0.88);
+}
+
+.login-status-card-title {
+  margin: 0;
+  font-size: 0.98rem;
+  font-weight: 800;
+  line-height: 1.35;
+  color: var(--frontdoor-ink);
+}
+
+.login-status-card-detail,
+.login-recovery-card-detail {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: var(--frontdoor-muted-soft);
+}
+
 .login-status-stack {
   display: grid;
   gap: 0.85rem;
@@ -351,6 +409,30 @@ h1 {
   color: #d1fae5;
   padding: 0.8rem 0.95rem;
   text-align: left;
+}
+
+.login-recovery-card {
+  display: grid;
+  gap: 0.35rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(7, 13, 26, 0.54);
+  padding: 0.85rem 0.95rem;
+}
+
+.login-recovery-card[data-state="clear"] {
+  border-color: rgba(45, 212, 191, 0.24);
+}
+
+.login-recovery-card[data-state="access"],
+.login-recovery-card[data-state="access_outage"],
+.login-recovery-card[data-state="configuration"],
+.login-recovery-card[data-state="config_failure"],
+.login-recovery-card[data-state="csrf"],
+.login-recovery-card[data-state="throttled"],
+.login-recovery-card[data-state="invalid"],
+.login-recovery-card[data-state="upstream_unavailable"] {
+  border-color: rgba(248, 113, 113, 0.28);
 }
 
 form {
@@ -676,6 +758,7 @@ code {
     width: min(100%, 32rem);
   }
 
+  .login-entry-state,
   .login-sequence {
     grid-template-columns: 1fr;
   }

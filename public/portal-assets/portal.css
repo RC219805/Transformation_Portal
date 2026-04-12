@@ -713,6 +713,106 @@ progress::-moz-progress-bar { background-color: #4f46e5; transition: width 0.3s 
     background: rgba(15, 23, 42, 0.48);
 }
 
+.portal-access-state {
+    border: 1px solid var(--shell-border);
+    border-radius: 1rem;
+    background: rgba(255, 255, 255, 0.68);
+    padding: 0.95rem 1rem;
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.24),
+        0 14px 26px rgba(15, 23, 42, 0.05);
+}
+
+.dark .portal-access-state {
+    background: rgba(15, 23, 42, 0.66);
+}
+
+.portal-access-state__head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.85rem;
+}
+
+.portal-access-state__kicker {
+    margin: 0;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--shell-muted);
+}
+
+.portal-access-state__detail {
+    margin: 0.45rem 0 0;
+    font-size: 12px;
+    line-height: 1.65;
+    color: var(--shell-muted);
+}
+
+.portal-access-state__badge[data-tone="blocked"],
+.portal-access-state[data-tone="blocked"] .portal-access-state__badge {
+    border-color: rgba(220, 38, 38, 0.18);
+    background: rgba(254, 242, 242, 0.92);
+    color: rgb(153, 27, 27);
+}
+
+.dark .portal-access-state__badge[data-tone="blocked"],
+.dark .portal-access-state[data-tone="blocked"] .portal-access-state__badge {
+    border-color: rgba(248, 113, 113, 0.26);
+    background: rgba(127, 29, 29, 0.28);
+    color: rgb(252, 165, 165);
+}
+
+.portal-access-state__badge[data-tone="warning"],
+.portal-access-state[data-tone="warning"] .portal-access-state__badge {
+    border-color: rgba(217, 119, 6, 0.18);
+    background: rgba(255, 251, 235, 0.92);
+    color: rgb(146, 64, 14);
+}
+
+.dark .portal-access-state__badge[data-tone="warning"],
+.dark .portal-access-state[data-tone="warning"] .portal-access-state__badge {
+    border-color: rgba(251, 191, 36, 0.2);
+    background: rgba(120, 53, 15, 0.28);
+    color: rgb(253, 230, 138);
+}
+
+.portal-access-state__badge[data-tone="ready"],
+.portal-access-state[data-tone="ready"] .portal-access-state__badge {
+    border-color: rgba(13, 148, 136, 0.18);
+    background: rgba(240, 253, 250, 0.92);
+    color: rgb(15, 118, 110);
+}
+
+.dark .portal-access-state__badge[data-tone="ready"],
+.dark .portal-access-state[data-tone="ready"] .portal-access-state__badge {
+    border-color: rgba(45, 212, 191, 0.24);
+    background: rgba(17, 94, 89, 0.28);
+    color: rgb(153, 246, 228);
+}
+
+.portal-access-state__badge[data-tone="info"],
+.portal-access-state[data-tone="info"] .portal-access-state__badge {
+    border-color: rgba(8, 145, 178, 0.18);
+    background: rgba(240, 249, 255, 0.92);
+    color: rgb(14, 116, 144);
+}
+
+.dark .portal-access-state__badge[data-tone="info"],
+.dark .portal-access-state[data-tone="info"] .portal-access-state__badge {
+    border-color: rgba(34, 211, 238, 0.24);
+    background: rgba(14, 116, 144, 0.22);
+    color: rgb(165, 243, 252);
+}
+
+.dispatch-shortcut-hint {
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.55;
+    color: var(--shell-muted);
+}
+
 .console-context-ribbon {
     display: grid;
     gap: 0.75rem;
@@ -1383,6 +1483,13 @@ details[open] .disclosure-chevron {
         box-shadow 0.2s ease;
 }
 
+.workspace-link-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
 .workspace-link:hover,
 .workspace-link:focus-visible {
     transform: translateY(-1px);
@@ -1428,6 +1535,21 @@ details[open] .disclosure-chevron {
     text-transform: uppercase;
 }
 
+.workspace-link-shortcut {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.5rem;
+    min-height: 1.5rem;
+    border-radius: 0.4rem;
+    border: 1px solid rgba(148, 163, 184, 0.24);
+    background: rgba(255, 255, 255, 0.65);
+    color: var(--shell-muted);
+    font-family: "Portal Mono", monospace;
+    font-size: 11px;
+    font-weight: 700;
+}
+
 .workspace-link-meta {
     font-size: 12px;
     line-height: 1.45;
@@ -1440,6 +1562,19 @@ details[open] .disclosure-chevron {
 
 .dark .workspace-link.is-active .workspace-link-meta {
     color: rgba(226, 232, 240, 0.82);
+}
+
+.dark .workspace-link-shortcut {
+    border-color: rgba(71, 85, 105, 0.7);
+    background: rgba(15, 23, 42, 0.72);
+    color: rgba(203, 213, 225, 0.88);
+}
+
+.workspace-shortcut-hint {
+    margin: 0.45rem 0 0;
+    font-size: 12px;
+    line-height: 1.65;
+    color: var(--shell-muted);
 }
 
 .micro-status {
@@ -2093,6 +2228,10 @@ details[open] .disclosure-chevron {
     line-height: 1.55;
 }
 
+.workspace-link-heading {
+    gap: 0.6rem;
+}
+
 .dark .workspace-link {
     background: rgba(15, 23, 42, 0.76);
     box-shadow: inset 0 1px 0 rgba(148, 163, 184, 0.08);
@@ -2485,6 +2624,10 @@ textarea,
         gap: 0.6rem;
     }
 
+    .portal-access-state__head {
+        flex-direction: column;
+    }
+
     #selectedJobShellContent > .mt-5.grid {
         grid-template-columns: 1fr;
     }
@@ -2511,6 +2654,10 @@ textarea,
 @media (max-width: 640px) {
     .console-context-ribbon {
         grid-template-columns: 1fr;
+    }
+
+    .workspace-link-heading {
+        align-items: flex-start;
     }
 
     .review-provenance-grid {
