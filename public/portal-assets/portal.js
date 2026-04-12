@@ -1331,16 +1331,15 @@ function renderConsoleContextRibbon() {
     els.consoleContextRibbon.classList.toggle('hidden', !ribbonVisible);
     if (!ribbonVisible) return;
 
-    const currentPayload = generatePayload();
-    const selected = state.jobs.find((job) => job.id === state.selectedJobId) || null;
-    const artifacts = Array.isArray(selected?.artifacts) ? rankArtifactsForDisplay(selected.artifacts) : [];
-    const selectedArtifact = selected ? _selectedArtifactForJob(selected) : null;
-    const compareCandidate = selected ? findCompareArtifact(selectedArtifact, artifacts) : null;
-    const compareEnabled = Boolean(selected && compareCandidate && state.artifactUi.compareByJob[String(selected.id || '')]);
-    const artifactCount = artifacts.length;
-    const compareCopy = _compareSurfaceCopy(selectedArtifact, compareCandidate, compareEnabled);
-
     if (state.currentView === 'operate' || state.currentView === 'review') {
+        const selected = state.jobs.find((job) => job.id === state.selectedJobId) || null;
+        const artifacts = Array.isArray(selected?.artifacts) ? rankArtifactsForDisplay(selected.artifacts) : [];
+        const selectedArtifact = selected ? _selectedArtifactForJob(selected) : null;
+        const compareCandidate = selected ? findCompareArtifact(selectedArtifact, artifacts) : null;
+        const compareEnabled = Boolean(selected && compareCandidate && state.artifactUi.compareByJob[String(selected.id || '')]);
+        const artifactCount = artifacts.length;
+        const compareCopy = _compareSurfaceCopy(selectedArtifact, compareCandidate, compareEnabled);
+
         _setSummaryCard(els.contextRibbonCard1, els.contextRibbonCard1Label, els.contextRibbonJob, els.contextRibbonJobMeta, {
             label: 'Job',
             value: selected ? String(selected.id || 'unknown') : 'No job selected',
@@ -1372,6 +1371,7 @@ function renderConsoleContextRibbon() {
         return;
     }
 
+    const currentPayload = generatePayload();
     const activeJob = _latestActiveJob();
     const reviewJob = _latestReviewableJob();
     const activeJobTone = activeJob ? _jobSurfaceTone(activeJob) : (state.backendOk ? 'info' : 'blocked');

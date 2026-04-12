@@ -1176,6 +1176,10 @@ def test_portal_console_context_ribbon_tracks_selected_job_and_review_state() ->
     apply_view_body = _extract_js_function_body(content, "applyConsoleViewLayout")
     inspector_body = _extract_js_function_body(content, "renderSelectedJobInspector")
     artifact_body = _extract_js_function_body(content, "renderArtifactPanel")
+    operate_branch_idx = ribbon_body.index("if (state.currentView === 'operate' || state.currentView === 'review') {")
+    operate_return_idx = ribbon_body.index("        return;", operate_branch_idx)
+    selected_idx = ribbon_body.index("const selected = state.jobs.find((job) => job.id === state.selectedJobId) || null;")
+    current_payload_idx = ribbon_body.index("const currentPayload = generatePayload();")
 
     assert 'id="consoleContextRibbon"' in content
     assert 'id="contextRibbonJob"' in content
@@ -1192,6 +1196,8 @@ def test_portal_console_context_ribbon_tracks_selected_job_and_review_state() ->
     assert "const compareCopy = _compareSurfaceCopy(selectedArtifact, compareCandidate, compareEnabled);" in ribbon_body
     assert "label: 'Artifact'," in ribbon_body
     assert "value: selected ? compareCopy.ribbonValue : 'No compare pair'" in ribbon_body
+    assert selected_idx > operate_branch_idx
+    assert current_payload_idx > operate_return_idx
     assert "renderConsoleContextRibbon();" in apply_view_body
     assert "renderConsoleContextRibbon();" in inspector_body
     assert "renderConsoleContextRibbon();" in artifact_body
