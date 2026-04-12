@@ -30,8 +30,37 @@ function resolveLoginMessage(code) {
   return "Invalid username or password.";
 }
 
+function resolveRecoveryGuidance(code) {
+  if (code === "access") return "Re-open the verified access path, then return here after Access identity is restored.";
+  if (code === "csrf") return "Refresh the page to mint a clean session, then retry the operator credential handoff.";
+  if (code === "throttled") return "Wait for the throttle window to clear before attempting the operator credential handoff again.";
+  if (code === "configuration") return "Managed entry is fail-closed until the front door configuration is restored.";
+  return "Re-enter operator credentials after verifying the managed access context above.";
+}
+
+function resolveEntryState({ accessEmail, errorCode }) {
+  const hasVerifiedAccess = Boolean(accessEmail);
+  const hasRecoveryIssue = Boolean(errorCode);
+  return {
+    accessState: hasVerifiedAccess ? "verified" : "required",
+    credentialState: hasRecoveryIssue ? "blocked" : hasVerifiedAccess ? "ready" : "waiting",
+    accessLabel: hasVerifiedAccess ? "Verified access ready" : "Managed access required",
+    accessDetail: hasVerifiedAccess
+      ? `Cloudflare Access is already verified for <strong>${escapeHtml(accessEmail)}</strong>.`
+      : "Managed access verification completes before operator credential handoff opens.",
+    credentialLabel: hasRecoveryIssue ? "Recovery required" : hasVerifiedAccess ? "Credential handoff ready" : "Waiting on verified access",
+    credentialDetail: hasRecoveryIssue
+      ? escapeHtml(resolveRecoveryGuidance(errorCode))
+      : hasVerifiedAccess
+        ? "Continue with operator credentials to rotate into the governed portal session."
+        : "Operator credential handoff stays blocked until the verified access context is present.",
+    recoveryState: hasRecoveryIssue ? String(errorCode || "").trim().toLowerCase() || "invalid" : "clear",
+  };
+}
+
 function renderLoginPage({ csrfToken, accessEmail, errorCode }) {
   const errorMessage = errorCode ? resolveLoginMessage(errorCode) : "";
+  const entryState = resolveEntryState({ accessEmail, errorCode });
   const escapedAccessEmail = accessEmail ? escapeHtml(accessEmail) : "";
   const accessSequenceDetail = accessEmail
     ? `Managed access already verified for <strong>${escapedAccessEmail}</strong>.`
@@ -39,6 +68,17 @@ function renderLoginPage({ csrfToken, accessEmail, errorCode }) {
   const accessText = accessEmail
     ? `Access identity verified for <strong>${escapedAccessEmail}</strong>. Credential entry is now available.`
     : "";
+  const recoveryCard = errorMessage
+    ? {
+      title: "Recovery path",
+      detail: resolveRecoveryGuidance(errorCode)
+    }
+    : accessEmail
+      ? {
+        title: "Verified access context",
+        detail: `Managed access has already been verified for ${escapedAccessEmail}. Successful sign-in rotates this browser into the governed portal session.`
+      }
+      : null;
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -66,7 +106,15 @@ function renderLoginPage({ csrfToken, accessEmail, errorCode }) {
         <source src="${FRONTDOOR_ASSETS.loopVideo}" type="video/mp4" />
       </video>
       <div class="login-vignette" aria-hidden="true"></div>
-      <section id="main-content" class="content" tabindex="-1" data-ui="login-shell">
+      <section
+        id="main-content"
+        class="content"
+        tabindex="-1"
+        data-ui="login-shell"
+        data-access-state="${escapeHtml(entryState.accessState)}"
+        data-credential-state="${escapeHtml(entryState.credentialState)}"
+        data-recovery-state="${escapeHtml(entryState.recoveryState)}"
+      >
         <div class="login-stage" data-ui="login-stage">
           <a class="brand-lockup brand-lockup--stacked" href="/" aria-label="Dynamic Neural Access home">
             <span class="brand-asset-frame brand-asset-frame--login">
@@ -85,6 +133,18 @@ function renderLoginPage({ csrfToken, accessEmail, errorCode }) {
             <p class="lede" data-ui="login-lede">
               Managed access and operator credentials stay separate on purpose. Confirm the verified access context first, then complete credential handoff into the governed console.
             </p>
+            <div class="login-entry-state" data-ui="login-entry-state">
+              <article class="login-status-card" data-ui="login-access-status" data-state="${escapeHtml(entryState.accessState)}">
+                <p class="login-status-card-kicker">Verified access</p>
+                <p class="login-status-card-title">${entryState.accessLabel}</p>
+                <p class="login-status-card-detail">${entryState.accessDetail}</p>
+              </article>
+              <article class="login-status-card" data-ui="login-credential-status" data-state="${escapeHtml(entryState.credentialState)}">
+                <p class="login-status-card-kicker">Credential handoff</p>
+                <p class="login-status-card-title">${entryState.credentialLabel}</p>
+                <p class="login-status-card-detail">${entryState.credentialDetail}</p>
+              </article>
+            </div>
             <div class="login-sequence" data-ui="login-sequence">
               <article class="login-sequence-step${accessEmail ? " login-sequence-step--ready" : ""}">
                 <p class="login-sequence-step-kicker">Step 1</p>
@@ -103,6 +163,10 @@ function renderLoginPage({ csrfToken, accessEmail, errorCode }) {
                 <p class="banner-detail">${escapeHtml(errorMessage)}</p>
               </div>` : ""}
               ${accessText ? `<p class="card-meta card-meta--verified" data-ui="login-access-context">${accessText}</p>` : ""}
+              ${recoveryCard ? `<div class="login-recovery-card" data-ui="login-recovery-card" data-state="${escapeHtml(entryState.recoveryState)}">
+                <p class="login-recovery-card-title">${escapeHtml(recoveryCard.title)}</p>
+                <p class="login-recovery-card-detail">${escapeHtml(recoveryCard.detail)}</p>
+              </div>` : ""}
             </div>` : ""}
             <form method="post" action="/login" autocomplete="on" data-ui="login-form">
               <input type="hidden" name="csrf_token" value="${escapeHtml(csrfToken)}" />

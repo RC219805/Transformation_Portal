@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server.js";
 
 import { resolveAuthenticatedAccessSession, revokeSessionOnAccessFailure } from "../../lib/access.js";
-import { applySecurityHeaders } from "../../lib/http.js";
+import { escapeHtml, FRONTDOOR_ASSETS, renderBrandAsset } from "../../lib/brand.js";
+import { applySecurityHeaders, LOGIN_CSP } from "../../lib/http.js";
 import { copyUpstreamResponseHeaders } from "../../lib/proxy.js";
 import { getConfig } from "../../lib/config.js";
 import {
@@ -14,6 +15,114 @@ import {
 import { clearSessionCookie } from "../../lib/sessions.js";
 
 export const runtime = "nodejs";
+
+function resolveManagedRecoveryContent(reason, message) {
+  const detail = String(message || "").trim();
+  if (reason === MANAGED_FAILURE_REASON.ACCESS_OUTAGE) {
+    return {
+      title: "Managed entry is waiting on access recovery.",
+      label: "Retry when Access recovers",
+      detail: detail || "Managed access verification is temporarily unavailable.",
+      nextStep: "Refresh the verified access session, then return to the portal once Access validation responds again."
+    };
+  }
+  if (reason === MANAGED_FAILURE_REASON.CONFIG_FAILURE) {
+    return {
+      title: "Managed entry is blocked by configuration.",
+      label: "Configuration required",
+      detail: detail || "Managed front door configuration is unavailable.",
+      nextStep: "Restore the managed front door configuration before retrying portal entry."
+    };
+  }
+  return {
+    title: "Portal handoff is waiting on backend recovery.",
+    label: "Backend recovery",
+    detail: detail || "The upstream portal service is temporarily unavailable.",
+    nextStep: "Wait for the FastAPI operator shell to recover, then retry portal entry from the managed boundary."
+  };
+}
+
+function renderManagedPortalRecoveryPage({ reason, message }) {
+  const content = resolveManagedRecoveryContent(reason, message);
+  const safeReason = escapeHtml(reason || MANAGED_FAILURE_REASON.UPSTREAM_UNAVAILABLE);
+  const safeLabel = escapeHtml(content.label);
+  const safeTitle = escapeHtml(content.title);
+  const safeDetail = escapeHtml(content.detail);
+  const safeNextStep = escapeHtml(content.nextStep);
+  const recoveryTone = safeReason === MANAGED_FAILURE_REASON.ACCESS_OUTAGE ? "waiting" : "blocked";
+
+  return `<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Dynamic Neural Access | Managed Recovery</title>
+    <link rel="stylesheet" href="/login.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">Skip to recovery</a>
+    <main class="shell">
+      <video
+        class="hero-video"
+        autoplay
+        muted
+        loop
+        playsinline
+        preload="metadata"
+        disablePictureInPicture
+        disableRemotePlayback
+        poster=""
+        aria-hidden="true"
+      >
+        <source src="${FRONTDOOR_ASSETS.loopVideo}" type="video/mp4" />
+      </video>
+      <div class="login-vignette" aria-hidden="true"></div>
+      <section id="main-content" class="content" tabindex="-1" data-ui="managed-recovery-shell" data-reason="${safeReason}">
+        <div class="login-stage">
+          <a class="brand-lockup brand-lockup--stacked" href="/" aria-label="Dynamic Neural Access home">
+            <span class="brand-asset-frame brand-asset-frame--login">
+              ${renderBrandAsset({
+                kind: "lockup",
+                variant: "dark",
+                alt: "Dynamic Neural Access",
+                className: "brand-asset"
+              })}
+            </span>
+            <span class="brand-subtitle">Managed portal recovery</span>
+          </a>
+          <div class="card card--login" data-ui="managed-recovery-card">
+            <p class="eyebrow">Managed portal entry</p>
+            <h1>${safeTitle}</h1>
+            <p class="lede">${safeDetail}</p>
+            <div class="login-entry-state">
+              <article class="login-status-card" data-state="${recoveryTone}">
+                <p class="login-status-card-kicker">State</p>
+                <p class="login-status-card-title">${safeLabel}</p>
+                <p class="login-status-card-detail">${safeDetail}</p>
+              </article>
+              <article class="login-status-card" data-state="${recoveryTone}">
+                <p class="login-status-card-kicker">Next step</p>
+                <p class="login-status-card-title">Recover, then retry</p>
+                <p class="login-status-card-detail">${safeNextStep}</p>
+              </article>
+            </div>
+            <div class="login-status-stack">
+              <div class="login-recovery-card" data-ui="managed-recovery-guidance" data-state="${safeReason}">
+                <p class="login-recovery-card-title">Managed boundary stays fail-closed</p>
+                <p class="login-recovery-card-detail">Browser-side API key entry remains unavailable in managed mode while portal recovery is pending.</p>
+              </div>
+            </div>
+            <div class="login-actions" data-ui="managed-recovery-actions">
+              <a class="login-secondary-link" href="/login">Return to login</a>
+              <a class="login-secondary-link" href="/">Review public proof surface</a>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>`;
+}
 
 export async function GET(request) {
   const authState = await resolveAuthenticatedAccessSession(request, { touch: true });
@@ -29,11 +138,16 @@ export async function GET(request) {
     if (reason !== MANAGED_FAILURE_REASON.AUTH_FAILURE) {
       const headers = new Headers();
       headers.set("Cache-Control", "no-store");
+      headers.set("Content-Type", "text/html; charset=utf-8");
       return applySecurityHeaders(
-        new Response(getManagedFailureMessage("portal", reason), {
+        new Response(renderManagedPortalRecoveryPage({
+          reason,
+          message: getManagedFailureMessage("portal", reason)
+        }), {
           status: 503,
           headers
-        })
+        }),
+        { csp: LOGIN_CSP }
       );
     }
 
@@ -67,11 +181,16 @@ export async function GET(request) {
     });
     const headers = new Headers();
     headers.set("Cache-Control", "no-store");
+    headers.set("Content-Type", "text/html; charset=utf-8");
     return applySecurityHeaders(
-      new Response(getManagedFailureMessage("portal", MANAGED_FAILURE_REASON.UPSTREAM_UNAVAILABLE), {
+      new Response(renderManagedPortalRecoveryPage({
+        reason: MANAGED_FAILURE_REASON.UPSTREAM_UNAVAILABLE,
+        message: getManagedFailureMessage("portal", MANAGED_FAILURE_REASON.UPSTREAM_UNAVAILABLE)
+      }), {
         status: 503,
         headers
-      })
+      }),
+      { csp: LOGIN_CSP }
     );
   }
 
@@ -87,11 +206,16 @@ export async function GET(request) {
       });
       const headers = new Headers();
       headers.set("Cache-Control", "no-store");
+      headers.set("Content-Type", "text/html; charset=utf-8");
       return applySecurityHeaders(
-        new Response(getManagedFailureMessage("portal", reason), {
+        new Response(renderManagedPortalRecoveryPage({
+          reason,
+          message: getManagedFailureMessage("portal", reason)
+        }), {
           status: 503,
           headers
-        })
+        }),
+        { csp: LOGIN_CSP }
       );
     }
   }

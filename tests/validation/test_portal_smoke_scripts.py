@@ -397,13 +397,19 @@ def test_frontdoor_browser_waits_for_managed_portal_bootstrap_before_passing():
     assert 'and str(value.get("readyState", "")) == "complete"' in content
     assert 'and str(value.get("authModeBadge", "")).lower() == "managed"' in content
     assert "homepageHeroReady" in content
+    assert "homepageEntryRailReady" in content
     assert "homepageLearnLinkReady" in content
     assert "homepagePrimaryCtaHref" in content
+    assert "loginEntryStateReady" in content
     assert "loginSequenceReady" in content
+    assert "portalAccessStateReady" in content
     assert '[data-ui="homepage-hero-title"]' in content
+    assert '[data-ui="homepage-entry-rail"]' in content
     assert '[data-ui="homepage-learn-link"]' in content
     assert '[data-ui="login-form"]' in content
+    assert '[data-ui="login-entry-state"]' in content
     assert '[data-ui="login-sequence"]' in content
+    assert '[data-ui="portal-access-state"]' in content
     assert ".hero-video, .homepage-video" in content
     assert "form.requestSubmit" in content
     assert "form.submit();" in content

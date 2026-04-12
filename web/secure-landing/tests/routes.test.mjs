@@ -381,6 +381,9 @@ test("login GET serves a minimal branded sign-in shell and boots an anonymous se
     assert.match(html, /id="main-content"/);
     assert.match(html, /Transformation Portal operator console/);
     assert.match(html, /data-ui="login-title"/);
+    assert.match(html, /data-ui="login-entry-state"/);
+    assert.match(html, /data-ui="login-access-status"/);
+    assert.match(html, /data-ui="login-credential-status"/);
     assert.match(html, /data-ui="login-sequence"/);
     assert.match(html, /data-ui="login-form"/);
     assert.match(html, /form method="post" action="\/login"/);
@@ -429,6 +432,7 @@ test("homepage GET serves the public DNA landing page instead of redirecting", a
     assert.match(html, /\/brand\/dna-lockup-dark\.svg/);
     assert.match(html, /data-ui="homepage-hero-lockup"/);
     assert.match(html, /data-ui="homepage-hero-title"/);
+    assert.match(html, /data-ui="homepage-entry-rail"/);
     assert.match(html, /(?:data-ui="homepage-learn-link"[^>]*href="#workflow"|href="#workflow"[^>]*data-ui="homepage-learn-link")/);
     assert.match(html, /(?:data-ui="homepage-primary-cta"[^>]*href="\/login"|href="\/login"[^>]*data-ui="homepage-primary-cta")/);
     assert.match(html, /(?:data-ui="homepage-secondary-cta"[^>]*href="#proof-report"|href="#proof-report"[^>]*data-ui="homepage-secondary-cta")/);
@@ -1138,7 +1142,12 @@ test("portal returns 503 with no-store when the FastAPI UI origin is unavailable
 
       assert.equal(response.status, 503);
       assert.equal(response.headers.get("cache-control"), "no-store");
-      assert.equal(await response.text(), "Portal upstream unavailable");
+      assert.match(response.headers.get("content-security-policy") || "", /default-src 'self'/);
+      const html = await response.text();
+      assert.match(html, /data-ui="managed-recovery-shell"/);
+      assert.match(html, /data-reason="upstream_unavailable"/);
+      assert.match(html, /Portal upstream unavailable/);
+      assert.match(html, /Return to login/);
     } finally {
       restoreFetch();
     }
@@ -1176,7 +1185,12 @@ test("portal returns configuration guidance when managed access config is incomp
 
       assert.equal(response.status, 503);
       assert.equal(response.headers.get("cache-control"), "no-store");
-      assert.equal(await response.text(), "Managed front door configuration unavailable");
+      assert.match(response.headers.get("content-security-policy") || "", /default-src 'self'/);
+      const html = await response.text();
+      assert.match(html, /data-ui="managed-recovery-shell"/);
+      assert.match(html, /data-reason="config_failure"/);
+      assert.match(html, /Managed front door configuration unavailable/);
+      assert.match(html, /Managed boundary stays fail-closed/);
       assert.equal(events.length, 1);
       assert.equal(events[0].surface, "portal");
       assert.equal(events[0].reason, "config_failure");

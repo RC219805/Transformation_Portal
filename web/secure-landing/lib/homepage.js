@@ -505,6 +505,23 @@ export function renderHomepage() {
           <p class="hero-access-note" data-ui="homepage-hero-note">
             Review the public proof surface first. Operator build, operate, and review work remains gated behind managed access.
           </p>
+          <div class="entry-rail" data-ui="homepage-entry-rail">
+            <article class="entry-card" data-state="public-proof">
+              <p class="entry-card__kicker">Public proof</p>
+              <p class="entry-card__title">Start with orientation.</p>
+              <p class="entry-card__detail">Open the public proof surface to inspect release posture, verification context, and workflow scope before any operator session begins.</p>
+            </article>
+            <article class="entry-card" data-state="verified-access">
+              <p class="entry-card__kicker">Verified access</p>
+              <p class="entry-card__title">Confirm identity before credential handoff.</p>
+              <p class="entry-card__detail">Managed entry keeps Cloudflare Access verification separate from operator credentials so the browser never becomes the system of record.</p>
+            </article>
+            <article class="entry-card" data-state="governed-console">
+              <p class="entry-card__kicker">Governed console</p>
+              <p class="entry-card__title">Run build, operate, and review work inside the portal.</p>
+              <p class="entry-card__detail">Managed entry hands work into the operator console only after verification is complete and the governed shell is ready.</p>
+            </article>
+          </div>
           <div class="hero-route-grid" data-ui="homepage-route-grid">
             ${renderList(HERO_PATHS, renderHeroRouteCard)}
           </div>
