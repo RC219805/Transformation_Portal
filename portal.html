@@ -284,23 +284,23 @@ Contract notes:
                 <p id="consoleViewMeta" class="portal-context-meta text-[11px] font-mono text-slate-500 dark:text-slate-400">View routing stays client-side to preserve the live orchestrator contract.</p>
             </div>
             <div id="consoleContextRibbon" class="console-context-ribbon portal-context-ribbon mt-4 hidden" data-ui="console-context-ribbon" aria-live="polite">
-                <div class="console-context-card">
-                    <p class="console-context-label">Job</p>
+                <div id="contextRibbonCard1" class="console-context-card" data-tone="info">
+                    <p id="contextRibbonCard1Label" class="console-context-label">Job</p>
                     <p id="contextRibbonJob" class="console-context-value">No job selected</p>
                     <p id="contextRibbonJobMeta" class="console-context-meta">Choose a run in operate or review to pin context here.</p>
                 </div>
-                <div class="console-context-card">
-                    <p class="console-context-label">State</p>
+                <div id="contextRibbonCard2" class="console-context-card" data-tone="info">
+                    <p id="contextRibbonCard2Label" class="console-context-label">State</p>
                     <p id="contextRibbonState" class="console-context-value">Idle</p>
                     <p id="contextRibbonFreshness" class="console-context-meta">No live telemetry</p>
                 </div>
-                <div class="console-context-card">
-                    <p class="console-context-label">Artifact</p>
+                <div id="contextRibbonCard3" class="console-context-card" data-tone="info">
+                    <p id="contextRibbonCard3Label" class="console-context-label">Artifact</p>
                     <p id="contextRibbonArtifact" class="console-context-value">Awaiting selection</p>
                     <p id="contextRibbonArtifactMeta" class="console-context-meta">Review context will show the active artifact path here.</p>
                 </div>
-                <div class="console-context-card">
-                    <p class="console-context-label">Compare</p>
+                <div id="contextRibbonCard4" class="console-context-card" data-tone="info">
+                    <p id="contextRibbonCard4Label" class="console-context-label">Compare</p>
                     <p id="contextRibbonCompare" class="console-context-value">No compare pair</p>
                     <p id="contextRibbonCompareMeta" class="console-context-meta">No paired comparison is available for the current artifact.</p>
                 </div>
@@ -433,6 +433,28 @@ Contract notes:
                             <button id="buildStepNextBtn" type="button" class="stepper-nav-btn stepper-nav-btn-primary focus:outline-none focus:ring-2 focus:ring-cyan-500">
                                 Next
                             </button>
+                        </div>
+                    </div>
+                    <div id="buildPulseGrid" class="build-pulse-grid mt-5" data-ui="build-step-pulse">
+                        <div id="buildPulseDraftCard" class="build-pulse-card" data-tone="info">
+                            <p class="build-pulse-label">Draft</p>
+                            <p id="buildPulseDraft" class="build-pulse-value">premium</p>
+                            <p id="buildPulseDraftMeta" class="build-pulse-meta">lux-depth-v3 draft is staged for preview-backed dispatch.</p>
+                        </div>
+                        <div id="buildPulseStepCard" class="build-pulse-card" data-tone="info">
+                            <p class="build-pulse-label">Current Focus</p>
+                            <p id="buildPulseStep" class="build-pulse-value">1 of 4 · Configure</p>
+                            <p id="buildPulseStepMeta" class="build-pulse-meta">Pipeline and preset posture.</p>
+                        </div>
+                        <div id="buildPulsePreviewCard" class="build-pulse-card" data-tone="info">
+                            <p class="build-pulse-label">Preview</p>
+                            <p id="buildPulsePreview" class="build-pulse-value">Refreshing</p>
+                            <p id="buildPulsePreviewMeta" class="build-pulse-meta">Preview-backed validation will summarize the draft here.</p>
+                        </div>
+                        <div id="buildPulseDispatchCard" class="build-pulse-card" data-tone="info">
+                            <p class="build-pulse-label">Dispatch</p>
+                            <p id="buildPulseDispatch" class="build-pulse-value">Review dispatch posture</p>
+                            <p id="buildPulseDispatchMeta" class="build-pulse-meta">The next operator action stays pinned here while the draft changes.</p>
                         </div>
                     </div>
                     <div id="buildStepTabs" class="build-step-tabs mt-5" role="tablist" aria-label="Build steps">
