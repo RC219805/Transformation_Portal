@@ -24,6 +24,8 @@ from typing import Any, Dict, Optional
 from transformation_portal.core.security.path import safe_resolve_path
 from transformation_portal.core.security.validation import ValidationError
 
+from .path_aliasing import normalize_lexical_path
+
 logger = logging.getLogger(__name__)
 
 
@@ -145,7 +147,7 @@ class V2Runner:
         except ValidationError:
             # Input paths may legitimately be outside repo (user data directories)
             # Fall back to resolving and logging
-            validated_input = Path(input_path).resolve()
+            validated_input = normalize_lexical_path(input_path)
             logger.debug(f"Input path outside repo root (allowed): {validated_input}")
 
         # Output directory validation - must be within repo or explicitly allowed
@@ -153,7 +155,7 @@ class V2Runner:
             validated_output = safe_resolve_path(output_dir, allowed_root=self.repo_root)
         except ValidationError:
             # Output paths may also be outside repo - resolve but warn
-            validated_output = Path(output_dir).resolve()
+            validated_output = normalize_lexical_path(output_dir)
             logger.warning(
                 f"Output directory outside repo root: {validated_output}. "
                 "Consider using paths within the repository for better isolation."
@@ -165,7 +167,7 @@ class V2Runner:
             try:
                 validated_depth_dir = safe_resolve_path(depth_dir, allowed_root=self.repo_root)
             except ValidationError:
-                validated_depth_dir = Path(depth_dir).resolve()
+                validated_depth_dir = normalize_lexical_path(depth_dir)
                 logger.debug(f"Depth directory outside repo root (allowed): {validated_depth_dir}")
 
         # Validate masks_file if provided
@@ -174,7 +176,7 @@ class V2Runner:
             try:
                 validated_masks_file = safe_resolve_path(masks_file, allowed_root=self.repo_root)
             except ValidationError:
-                validated_masks_file = Path(masks_file).resolve()
+                validated_masks_file = normalize_lexical_path(masks_file)
                 logger.debug(f"Masks file outside repo root (allowed): {validated_masks_file}")
 
         # Validate log_file if provided
@@ -183,7 +185,7 @@ class V2Runner:
             try:
                 validated_log_file = safe_resolve_path(log_file, allowed_root=self.repo_root)
             except ValidationError:
-                validated_log_file = Path(log_file).resolve()
+                validated_log_file = normalize_lexical_path(log_file)
                 logger.debug(f"Log file outside repo root (allowed): {validated_log_file}")
 
         # Ensure output directory exists

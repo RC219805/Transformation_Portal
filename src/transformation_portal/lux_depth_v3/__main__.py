@@ -326,7 +326,9 @@ def main(
         "--depth-pro-python",
         help=(
             "Optional Python executable for an isolated Depth Pro environment. "
-            "Use this to keep depth_pro out of the main Transformation Portal venv."
+            "Use this to keep depth_pro out of the main Transformation Portal venv or to override "
+            "the auto-discovered repo-local runtime at ./.venv-depth-pro/bin/python "
+            "(bootstrap with ./scripts/setup/install_depth_pro_runtime.sh)."
         ),
     ),
     da3_python: Optional[str] = typer.Option(

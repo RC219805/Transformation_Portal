@@ -17,6 +17,11 @@ import sys
 import time
 from pathlib import Path
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
+SRC_ROOT = REPO_ROOT / "src"
+if SRC_ROOT.exists():
+    sys.path.insert(0, str(SRC_ROOT))
+
 # Expected values
 EXPECTED_SHA256 = "3eb35ca68168ad3d14cb150f8947a4edf85589941661fdb2686259c80685c0ce"
 EXPECTED_SIZE_GB_MIN = 1.5
@@ -129,7 +134,7 @@ def check_depth_pro_package():
     except ImportError:
         print_error("depth-pro package not installed")
         print("\n  Install with:")
-        print("    pip install depth-pro")
+        print("    ./scripts/setup/install_depth_pro_runtime.sh --skip-verify")
         return False
 
 

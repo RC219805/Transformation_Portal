@@ -23,6 +23,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Optional
 
+from .path_aliasing import normalize_lexical_path, resolve_real_path
 from .raw_loader import RAW_EXTENSIONS
 
 logger = logging.getLogger(__name__)
@@ -128,19 +129,21 @@ def discover_images(
     # Exclude only true descendants of output_dir
     # (avoid prefix false positives such as out vs out2)
     output_dir_resolved: Optional[Path] = None
+    output_dir_display: Optional[Path] = None
     if output_dir:
         try:
-            resolved_candidate = output_dir.expanduser().resolve()
+            output_dir_display = normalize_lexical_path(output_dir)
+            resolved_candidate = resolve_real_path(output_dir)
             if not resolved_candidate.is_dir():
                 logger.warning(
                     "Output directory exclusion " + "skipped: %s is not a directory",
-                    resolved_candidate,
+                    output_dir_display,
                 )
             else:
                 output_dir_resolved = resolved_candidate
                 logger.debug(
                     "Output directory to exclude: %s",
-                    output_dir_resolved,
+                    output_dir_display,
                 )
         except Exception as e:
             logger.warning(f"Failed to normalize output_dir: {e}")
@@ -159,7 +162,7 @@ def discover_images(
         # Check if file is in output directory before other checks
         if output_dir_resolved:
             try:
-                candidate_resolved = candidate.resolve()
+                candidate_resolved = resolve_real_path(candidate)
                 if candidate_resolved.is_relative_to(output_dir_resolved):
                     reason = "in output directory"
                     excluded_artifacts.append((candidate, reason))

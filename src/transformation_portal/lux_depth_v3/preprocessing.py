@@ -615,11 +615,10 @@ def normalize_exif_orientation(input_path: Path, output_path: Path) -> None:
             pass
 
         # Save with preserved EXIF (orientation normalized)
-        save_kwargs = {}
         if exif_data:
-            save_kwargs["exif"] = exif_data
-
-        corrected.save(output_path, **save_kwargs)
+            corrected.save(output_path, exif=exif_data)
+        else:
+            corrected.save(output_path)
         logger.debug("Normalized EXIF orientation: %s -> %s", input_path, output_path)
 
     except (OSError, ValueError) as exc:

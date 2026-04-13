@@ -112,6 +112,7 @@ from .reconstruction_runner import (
     run_scene_reconstruction,
     write_scene_debug_bundle,
 )
+from .run_card_contract import render_run_card_output_relative_path
 from .scene_context import SceneContext
 from .scene_groups import SceneGroup, build_scene_groups
 from .scene_integrity import (
@@ -5912,18 +5913,7 @@ class EnhanceOrchestrator:
 
     def _run_card_output_relative_path(self, path_value: Any) -> Optional[str]:
         """Render an output-root-relative path suitable for run-card summaries."""
-        if not isinstance(path_value, str) or not path_value.strip():
-            return None
-        candidate = Path(path_value)
-        output_root_resolved = self.output_root.resolve(strict=False)
-        try:
-            relative_path = candidate.resolve(strict=False).relative_to(output_root_resolved)
-        except ValueError:
-            try:
-                relative_path = candidate.relative_to(self.output_root)
-            except ValueError:
-                relative_path = Path(candidate.name)
-        return str(relative_path).replace(os.sep, "/")
+        return render_run_card_output_relative_path(path_value, self.output_root)
 
     @staticmethod
     def _extract_run_card_segmentation_metadata(materials_v3_result: Any) -> Optional[Dict[str, Any]]:
@@ -6063,6 +6053,10 @@ class EnhanceOrchestrator:
             backend_selection["logical_backend"] = self._backend_metadata.resolved_backend
             backend_selection["resolved_engine"] = backend_selection_resolved
 
+        artifact_summary_payload: dict[str, Any] = (
+            {"artifact_tree": artifact_tree} if run_card_version == "v2" else {"artifact_merkle_root": artifact_merkle_root}
+        )
+
         run_card = {
             "run_card_version": run_card_version,
             "batch_id": batch_id,
@@ -6088,11 +6082,7 @@ class EnhanceOrchestrator:
             "success_count": sum(1 for r in results if r.get("status") == "ok"),
             "error_count": sum(1 for r in results if r.get("status") == "error"),
             "artifact_index": artifact_index,
-            **(
-                {"artifact_tree": artifact_tree}
-                if run_card_version == "v2"
-                else {"artifact_merkle_root": artifact_merkle_root}
-            ),
+            **artifact_summary_payload,
         }
 
         def _json_default(obj: Any) -> Any:
