@@ -12,7 +12,7 @@ bandit==1.9.4
     # via
     #   -c all.txt
     #   -r ci.in
-build==1.4.2
+build==1.4.3
     # via
     #   -c all.txt
     #   -r ci.in
@@ -28,7 +28,7 @@ cffi==2.0.0
     # via
     #   -c all.txt
     #   cryptography
-charset-normalizer==3.4.4
+charset-normalizer==3.4.7
     # via
     #   -c all.txt
     #   requests
@@ -48,7 +48,7 @@ docutils==0.22.4
     # via
     #   -c all.txt
     #   readme-renderer
-filelock==3.25.0
+filelock==3.25.2
     # via
     #   -c all.txt
     #   python-discovery
@@ -62,7 +62,7 @@ idna==3.11
     # via
     #   -c all.txt
     #   requests
-importlib-metadata==8.7.1
+importlib-metadata==9.0.0
     # via
     #   -c all.txt
     #   keyring
@@ -70,7 +70,7 @@ jaraco-classes==3.4.0
     # via
     #   -c all.txt
     #   keyring
-jaraco-context==6.1.0
+jaraco-context==6.1.2
     # via
     #   -c all.txt
     #   keyring
@@ -95,12 +95,12 @@ mdurl==0.1.2
     # via
     #   -c all.txt
     #   markdown-it-py
-more-itertools==10.8.0
+more-itertools==11.0.2
     # via
     #   -c all.txt
     #   jaraco-classes
     #   jaraco-functools
-nh3==0.3.3
+nh3==0.3.4
     # via
     #   -c all.txt
     #   readme-renderer
@@ -155,7 +155,7 @@ readme-renderer==44.0
     # via
     #   -c all.txt
     #   twine
-requests==2.33.0
+requests==2.33.1
     # via
     #   -c all.txt
     #   requests-toolbelt
@@ -168,7 +168,7 @@ rfc3986==2.0.0
     # via
     #   -c all.txt
     #   twine
-rich==14.3.3
+rich==15.0.0
     # via
     #   -c all.txt
     #   bandit
@@ -185,7 +185,7 @@ tomli-w==1.2.0
     # via
     #   -c all.txt
     #   tox
-tox==4.52.0
+tox==4.52.1
     # via
     #   -c all.txt
     #   -r ci.in
@@ -199,7 +199,7 @@ urllib3==2.6.3
     #   id
     #   requests
     #   twine
-virtualenv==21.1.0
+virtualenv==21.2.1
     # via
     #   -c all.txt
     #   tox
