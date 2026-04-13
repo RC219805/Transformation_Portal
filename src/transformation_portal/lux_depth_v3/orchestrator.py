@@ -567,6 +567,7 @@ class EnhanceOrchestrator:
         self._active_backend_metadata: Optional[BackendSelectionMetadata] = self._backend_metadata
         self._active_depth_attempts: List[Dict[str, Any]] = []
         self._active_selected_attempt_index: Optional[int] = None
+        self._active_run_card_segmentation_metadata: Dict[str, Dict[str, Any]] = {}
 
     @property
     def _model_variant(self) -> ModelVariant:
@@ -3458,6 +3459,11 @@ class EnhanceOrchestrator:
             materials_v3_runtime_s: V3 runtime
             backend_selection_metadata:
                 Per-image backend provenance
+
+        Returns:
+            The normalized input SHA-256 recorded for the manifest input when
+            hashing is available, or ``None`` when hashing is intentionally
+            skipped or unavailable under the current hash-mode contract.
         """
         # --- PROVENANCE CAPTURE (audit-grade) ---
         # Capture provenance sidecar for RAW/TIFF inputs at ingestion point
@@ -4000,27 +4006,27 @@ class EnhanceOrchestrator:
             backend_selection_metadata=backend_selection_metadata,
         )
 
-        segmentation_mask_path: Optional[str] = None
-        if materials_v3_result:
-            materials_v3_metadata = materials_v3_result.get(
-                "materials_v3_metadata",
+        segmentation_metadata = self._extract_run_card_segmentation_metadata(
+            materials_v3_result,
+        )
+        if segmentation_metadata is not None:
+            self._active_run_card_segmentation_metadata[str(manifest_path)] = copy.deepcopy(
+                segmentation_metadata,
             )
-            if isinstance(materials_v3_metadata, dict):
-                segmentation_metadata = materials_v3_metadata.get(
-                    "segmentation_metadata",
+
+        segmentation_mask_path: Optional[str] = None
+        if isinstance(segmentation_metadata, dict):
+            mask_artifact_path = segmentation_metadata.get(
+                "mask_artifact_path",
+            )
+            if (
+                isinstance(
+                    mask_artifact_path,
+                    str,
                 )
-                if isinstance(segmentation_metadata, dict):
-                    mask_artifact_path = segmentation_metadata.get(
-                        "mask_artifact_path",
-                    )
-                    if (
-                        isinstance(
-                            mask_artifact_path,
-                            str,
-                        )
-                        and mask_artifact_path
-                    ):
-                        segmentation_mask_path = mask_artifact_path
+                and mask_artifact_path
+            ):
+                segmentation_mask_path = mask_artifact_path
 
         return {
             "status": "ok",
@@ -4864,6 +4870,7 @@ class EnhanceOrchestrator:
 
         batch_id = datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S")
         self._active_batch_id = batch_id
+        self._active_run_card_segmentation_metadata = {}
         logger.info(
             "Batch %s: Scanning %s",
             batch_id,
@@ -5918,8 +5925,26 @@ class EnhanceOrchestrator:
                 relative_path = Path(candidate.name)
         return str(relative_path).replace(os.sep, "/")
 
+    @staticmethod
+    def _extract_run_card_segmentation_metadata(materials_v3_result: Any) -> Optional[Dict[str, Any]]:
+        """Extract a replay-safe copy of Materials V3 segmentation metadata."""
+        if not isinstance(materials_v3_result, dict):
+            return None
+        materials_v3_metadata = materials_v3_result.get("materials_v3_metadata")
+        if not isinstance(materials_v3_metadata, dict):
+            return None
+        segmentation_metadata = materials_v3_metadata.get("segmentation_metadata")
+        if not isinstance(segmentation_metadata, dict):
+            return None
+        return copy.deepcopy(segmentation_metadata)
+
     def _build_run_card_result_summary(self, results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Build a compact per-image execution summary for replay triage."""
+        cached_segmentation_metadata = getattr(
+            self,
+            "_active_run_card_segmentation_metadata",
+            {},
+        )
         summary_rows: List[Dict[str, Any]] = []
         for result in results:
             image_path = result.get("image")
@@ -5927,15 +5952,10 @@ class EnhanceOrchestrator:
                 continue
             manifest_path = result.get("manifest")
             segmentation_metadata = None
-            if isinstance(manifest_path, str) and manifest_path.strip():
-                try:
-                    manifest_payload = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
-                except (OSError, UnicodeDecodeError, json.JSONDecodeError):
-                    manifest_payload = None
-                if isinstance(manifest_payload, dict):
-                    materials_v3 = manifest_payload.get("materials_v3")
-                    if isinstance(materials_v3, dict):
-                        segmentation_metadata = materials_v3.get("segmentation_metadata")
+            if isinstance(cached_segmentation_metadata, dict) and isinstance(manifest_path, str) and manifest_path.strip():
+                cached_metadata = cached_segmentation_metadata.get(manifest_path)
+                if isinstance(cached_metadata, dict):
+                    segmentation_metadata = copy.deepcopy(cached_metadata)
             summary_rows.append(
                 {
                     "image": Path(image_path).name,

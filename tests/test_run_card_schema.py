@@ -344,6 +344,54 @@ def test_collect_run_card_artifacts_includes_segmentation_mask_artifact(tmp_path
     assert artifacts_by_path["segmentation/image_01_materials_v3_masks.npz"]["artifact_type"] == "segmentation_mask_npz"
 
 
+def test_build_run_card_result_summary_uses_cached_segmentation_metadata(tmp_path: Path) -> None:
+    output_root = tmp_path / "output"
+    manifests_dir = output_root / "manifests"
+    manifests_dir.mkdir(parents=True, exist_ok=True)
+    manifest_path = manifests_dir / "image_01_combined.json"
+
+    orch = object.__new__(EnhanceOrchestrator)
+    orch.output_root = output_root
+    orch._active_run_card_segmentation_metadata = {
+        str(manifest_path): {
+            "mask_artifact_path": str(output_root / "segmentation" / "image_01_materials_v3_masks.npz"),
+            "mask_artifact_format": "npz",
+            "tile_size": 1024,
+        }
+    }
+
+    with patch.object(Path, "read_text", side_effect=AssertionError("manifest reread")):
+        summary = orch._build_run_card_result_summary(
+            [
+                {
+                    "image": str(tmp_path / "inputs" / "image_01.png"),
+                    "status": "ok",
+                    "backend": "da3",
+                    "runtime_s": 1.23,
+                    "manifest": str(manifest_path),
+                }
+            ]
+        )
+
+    assert summary == [
+        {
+            "image": "image_01.png",
+            "status": "ok",
+            "backend": "da3",
+            "runtime_s": 1.23,
+            "manifest_path": "manifests/image_01_combined.json",
+            "error_code": None,
+            "error_message": None,
+            "error_details": None,
+            "segmentation_metadata": {
+                "mask_artifact_path": str(output_root / "segmentation" / "image_01_materials_v3_masks.npz"),
+                "mask_artifact_format": "npz",
+                "tile_size": 1024,
+            },
+        }
+    ]
+
+
 def test_collect_run_card_artifacts_includes_reconstruction_report(tmp_path: Path):
     output_root = tmp_path / "output"
     manifests_dir = output_root / "manifests"
