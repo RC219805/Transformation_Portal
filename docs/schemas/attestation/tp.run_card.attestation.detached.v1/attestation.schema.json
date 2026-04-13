@@ -111,7 +111,41 @@
             }
           ]
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "run_card_version": {
+                "const": "v1"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "run_card_schema": {
+                "const": "https://rc219805.github.io/Transformation_Portal/docs/schemas/run_card/run_card.v1.schema.json"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "run_card_version": {
+                "const": "v2"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "run_card_schema": {
+                "const": "https://rc219805.github.io/Transformation_Portal/docs/schemas/run_card/run_card.v2.schema.json"
+              }
+            }
+          }
+        }
+      ]
     },
     "signature": {
       "type": "object",

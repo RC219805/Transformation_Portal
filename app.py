@@ -5,6 +5,7 @@ import hashlib
 import hmac
 import json
 import logging
+import math
 import mimetypes
 import os
 import re
@@ -2085,7 +2086,7 @@ def _normalize_optional_probability(
             )
         )
         return None
-    if parsed < 0.0 or parsed > 1.0:
+    if not math.isfinite(parsed) or parsed < 0.0 or parsed > 1.0:
         errors.append(
             _portal_issue(
                 field,
@@ -5361,7 +5362,7 @@ def _argv_from_request(
                 parsed = float(value)
             except (TypeError, ValueError):
                 raise _PortalValidationReasonError(f"Invalid {field_name}") from None
-            if parsed < 0.0 or parsed > 1.0:
+            if not math.isfinite(parsed) or parsed < 0.0 or parsed > 1.0:
                 raise _PortalValidationReasonError(f"Invalid {field_name}")
             return parsed
 

@@ -27,6 +27,7 @@ from transformation_portal.lux_depth_v3.orchestrator import (
     _validate_run_card_backend_semantics,
     _validate_run_card_payload,
 )
+from transformation_portal.lux_depth_v3.security import HashMode
 from transformation_portal.schemas.run_card import load_run_card_schema
 
 
@@ -161,6 +162,15 @@ def test_run_card_schema_enforces_datetime_format() -> None:
     pytest.importorskip("jsonschema")
     payload = _valid_run_card_payload()
     payload["start_time"] = "not-a-date-time"
+
+    with pytest.raises(RuntimeError, match="start_time"):
+        _validate_run_card_payload(payload, _run_card_schema_path())
+
+
+def test_run_card_schema_rejects_space_separated_datetime() -> None:
+    pytest.importorskip("jsonschema")
+    payload = _valid_run_card_payload()
+    payload["start_time"] = "2026-02-28 12:00:00Z"
 
     with pytest.raises(RuntimeError, match="start_time"):
         _validate_run_card_payload(payload, _run_card_schema_path())
@@ -818,4 +828,43 @@ def test_emit_run_card_skips_legacy_merkle_root_for_v2(tmp_path: Path):
         )
 
     build_tree.assert_called_once()
-    merkle_root.assert_not_called()
+
+
+def test_build_run_card_inputs_skips_hashing_when_hash_mode_never(tmp_path: Path) -> None:
+    config = EnhanceConfig(
+        model_variant=ModelVariant.METRIC_LARGE,
+        hash_mode=HashMode.NEVER,
+    )
+    orch = EnhanceOrchestrator(config, tmp_path)
+    input_path = tmp_path / "inputs" / "image_01.png"
+    input_path.parent.mkdir(parents=True, exist_ok=True)
+    input_path.write_bytes(b"pixels")
+
+    with patch("transformation_portal.lux_depth_v3.orchestrator.compute_file_sha256", side_effect=AssertionError("hashing")):
+        assert orch._build_run_card_inputs([{"image": str(input_path)}]) == []
+
+
+def test_build_run_card_inputs_reuses_result_input_sha256(tmp_path: Path) -> None:
+    config = EnhanceConfig(model_variant=ModelVariant.METRIC_LARGE)
+    orch = EnhanceOrchestrator(config, tmp_path)
+    input_path = tmp_path / "inputs" / "image_01.png"
+    input_path.parent.mkdir(parents=True, exist_ok=True)
+    input_path.write_bytes(b"pixels")
+
+    with patch("transformation_portal.lux_depth_v3.orchestrator.compute_file_sha256", side_effect=AssertionError("rehash")):
+        records = orch._build_run_card_inputs(
+            [
+                {
+                    "image": str(input_path),
+                    "input_sha256": "A" * 64,
+                }
+            ]
+        )
+
+    assert records == [
+        {
+            "path": "image_01.png",
+            "sha256": "a" * 64,
+            "size_bytes": len(b"pixels"),
+        }
+    ]

@@ -202,9 +202,11 @@ def _verify_requested_depth_pro_fulfillment(
     primary_backend = backend_summary.get("primary_backend")
     total_images = run_card_payload.get("total_images")
     error_count = run_card_payload.get("error_count")
-    run_failed = (
-        isinstance(error_count, int) and error_count > 0 or isinstance(total_images, int) and success_count < total_images
+    has_error_failures = isinstance(error_count, int) and error_count > 0
+    has_incomplete_successes = (
+        isinstance(success_count, int) and isinstance(total_images, int) and success_count < total_images
     )
+    run_failed = has_error_failures or has_incomplete_successes
     if (
         not isinstance(success_count, int)
         or success_count <= 0

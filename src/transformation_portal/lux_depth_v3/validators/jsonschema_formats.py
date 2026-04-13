@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from typing import Any
+
+_RFC3339_DATETIME_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$")
 
 
 def build_jsonschema_format_checker() -> Any:
@@ -19,8 +22,10 @@ def build_jsonschema_format_checker() -> Any:
     def _validate_datetime(value: object) -> bool:
         if not isinstance(value, str):
             return True
-        candidate = value.strip()
-        if not candidate:
+        if value != value.strip():
+            return False
+        candidate = value
+        if not candidate or _RFC3339_DATETIME_RE.fullmatch(candidate) is None:
             return False
         normalized = f"{candidate[:-1]}+00:00" if candidate.endswith("Z") else candidate
         try:

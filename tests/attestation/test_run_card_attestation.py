@@ -303,6 +303,26 @@ def test_run_card_detached_schema_allows_null_attestation_sha256() -> None:
     jsonschema.Draft202012Validator(schema).validate(attestation)
 
 
+def test_run_card_detached_schema_rejects_mismatched_version_and_schema_uri() -> None:
+    jsonschema = pytest.importorskip("jsonschema")
+
+    repo_root = Path(__file__).resolve().parents[2]
+    schema_path = (
+        repo_root / "docs" / "schemas" / "attestation" / "tp.run_card.attestation.detached.v1" / "attestation.schema.json"
+    )
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    run_card_payload, run_card_bytes = _run_card_v2()
+    attestation = build_run_card_detached_attestation_payload(
+        run_card_payload,
+        run_card_bytes=run_card_bytes,
+        signature={"algorithm": "unit-test", "key_id": "test", "signature": "deadbeef"},
+    )
+    attestation["subject"]["run_card_version"] = "v1"
+
+    with pytest.raises(jsonschema.ValidationError, match="run_card_schema"):
+        jsonschema.Draft202012Validator(schema).validate(attestation)
+
+
 def test_run_card_attestation_preimage_is_deterministic() -> None:
     run_card_payload, run_card_bytes = _run_card_v2()
     reordered_payload = {

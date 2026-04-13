@@ -2048,6 +2048,44 @@ def test_argv_normalization_includes_sam2_tiling_and_generator_controls() -> Non
     assert _flag_value(argv, "--sam2-crop-n-layers") == "2"
 
 
+def test_argv_rejects_non_finite_sam2_probability_controls() -> None:
+    payload: Dict[str, object] = {
+        "pipeline": "lux-depth-v3",
+        "args": {
+            "input_dir": "./input_images",
+            "output_dir": "./output",
+            "enable_segmentation": True,
+            "segmentation_backend": "sam2",
+            "sam2_pred_iou_thresh": float("nan"),
+        },
+    }
+
+    with pytest.raises(ValueError, match="Invalid sam2_pred_iou_thresh"):
+        orchestrator_app._argv_from_request(payload)
+
+
+def test_lux_config_preview_rejects_non_finite_sam2_probability_controls(tmp_path: Path) -> None:
+    input_dir = tmp_path / "input"
+    output_dir = tmp_path / "output"
+    input_dir.mkdir()
+    output_dir.mkdir()
+
+    preview = orchestrator_app._build_lux_config_preview(
+        {
+            "input_dir": str(input_dir),
+            "output_dir": str(output_dir),
+            "enable_segmentation": True,
+            "segmentation_backend": "sam2",
+            "sam2_stability_score_thresh": float("inf"),
+        }
+    )
+
+    assert any(
+        error["field"] == "sam2_stability_score_thresh" and error["code"] == "invalid_sam2_stability_score_thresh"
+        for error in preview["field_errors"]
+    )
+
+
 def test_argv_normalization_ignores_sam2_model_size_when_backend_is_not_sam2() -> None:
     payload: Dict[str, object] = {
         "pipeline": "lux-depth-v3",

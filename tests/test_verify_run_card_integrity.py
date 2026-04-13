@@ -305,6 +305,29 @@ def test_verify_run_card_integrity_rejects_requested_depth_pro_full_fallback(tmp
     assert any("requested backend 'depth_pro' was not honored" in error for error in errors)
 
 
+def test_verify_run_card_integrity_handles_non_integer_success_count_without_crashing(tmp_path: Path):
+    module = _load_script_module(
+        "verify_run_card_integrity_script_depth_pro_type_guard", "scripts/verify_run_card_integrity.py"
+    )
+    run_card_path = tmp_path / "run_card_depth_pro_invalid_success_count.json"
+    payload = _valid_run_card_payload(module)
+    payload["backend_selection"]["requested"] = "depth_pro"
+    payload["backend_selection"]["resolved"] = "da3"
+    payload["backend_summary"]["requested_backend"] = "depth_pro"
+    payload["backend_summary"]["primary_backend"] = "da3"
+    payload["backend_summary"]["final_backends_used"] = ["da3"]
+    payload["backend_summary"]["fallback_images"] = 1
+    payload["total_images"] = 1
+    payload["success_count"] = "1"
+    payload["error_count"] = 0
+    _write_json(run_card_path, payload)
+
+    errors = module.verify_run_card_integrity(run_card_path)
+
+    assert errors
+    assert any("success_count" in error for error in errors)
+
+
 def test_verify_run_card_integrity_rejects_combined_manifest_path_escape(tmp_path: Path):
     module = _load_script_module("verify_run_card_integrity_script_combined_escape", "scripts/verify_run_card_integrity.py")
     output_root = tmp_path / "output"

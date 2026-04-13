@@ -4024,6 +4024,7 @@ class EnhanceOrchestrator:
         return {
             "status": "ok",
             "image": str(image_input.path),
+            "input_sha256": input_sha,
             "backend": (backend_selection_metadata.resolved_backend if backend_selection_metadata else None),
             "fallback_used": bool(backend_selection_metadata and (backend_selection_metadata.resolution_status != "success")),
             "model_id": (backend_selection_metadata.model_id if backend_selection_metadata else None),
@@ -5830,6 +5831,9 @@ class EnhanceOrchestrator:
 
     def _build_run_card_inputs(self, results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Build ordered input records with deterministic source hashes."""
+        if self.config.hash_mode == HashMode.NEVER:
+            return []
+
         input_paths: List[Path] = []
         for result in results:
             image_path = result.get("image")
@@ -5859,6 +5863,15 @@ class EnhanceOrchestrator:
             if relative_path in seen_paths:
                 continue
             seen_paths.add(relative_path)
+            source_hash = self._normalize_sha256(result.get("input_sha256"))
+            if source_hash is None:
+                source_hash = self._compute_or_skip_hash(
+                    input_path,
+                    manifest_exists=False,
+                    for_manifest_write=True,
+                )
+            if source_hash is None:
+                continue
             try:
                 size_bytes = input_path.stat().st_size
             except OSError:
@@ -5866,7 +5879,7 @@ class EnhanceOrchestrator:
             records.append(
                 {
                     "path": relative_path,
-                    "sha256": compute_file_sha256(input_path),
+                    "sha256": source_hash,
                     "size_bytes": size_bytes,
                 }
             )
