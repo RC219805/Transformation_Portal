@@ -462,6 +462,7 @@ def _frontdoor_accessibility_probe_expression() -> str:
   })();
   return {
     pathname: window.location.pathname,
+    readyState: document.readyState,
     homepagePrimaryMinTarget: minTarget('[data-ui="homepage-primary-cta"]'),
     homepageSecondaryMinTarget: minTarget('[data-ui="homepage-secondary-cta"]'),
     homepageLearnMinTarget: minTarget('[data-ui="homepage-learn-link"]'),
@@ -488,6 +489,34 @@ def _frontdoor_accessibility_probe_expression() -> str:
   };
 })()
 """
+
+
+def _frontdoor_accessibility_snapshot(result: object, *, page: str) -> dict[str, object]:
+    payload = result if isinstance(result, dict) else {}
+    scoped_keys = {
+        "homepage": (
+            "pathname",
+            "readyState",
+            "homepagePrimaryMinTarget",
+            "homepageSecondaryMinTarget",
+            "homepageLearnMinTarget",
+            "focusVisibleWithStickyHeader",
+            "maxDisclosureDepth",
+        ),
+        "login": (
+            "pathname",
+            "readyState",
+            "loginSubmitMinTarget",
+            "loginSecondaryMinTarget",
+            "maxDisclosureDepth",
+            "reducedMotion",
+            "decorativeMotionStatic",
+        ),
+    }
+    keys = scoped_keys.get(page)
+    if keys is None:
+        raise ValueError(f"Unsupported frontdoor accessibility page scope: {page}")
+    return {key: payload.get(key) for key in keys}
 
 
 def _navigate_expression(pathname: str) -> str:
@@ -636,7 +665,10 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         )
         _expect(str(homepage_state.get("pathname", "")) == "/", f"Front-door homepage did not load at root: {homepage_state}")
         _expect(bool(homepage_state.get("hasHeroVideo")), f"Homepage video canvas was not rendered: {homepage_state}")
-        homepage_accessibility = connection.evaluate(_frontdoor_accessibility_probe_expression())
+        homepage_accessibility = _frontdoor_accessibility_snapshot(
+            connection.evaluate(_frontdoor_accessibility_probe_expression()),
+            page="homepage",
+        )
         _expect(
             bool(homepage_accessibility.get("homepagePrimaryMinTarget"))
             and bool(homepage_accessibility.get("homepageSecondaryMinTarget"))
@@ -659,6 +691,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             _frontdoor_state_probe_expression(),
             predicate=lambda value: (
                 isinstance(value, dict)
+                and str(value.get("readyState", "")) == "complete"
                 and str(value.get("pathname", "")) == "/login"
                 and bool(value.get("loginTitleReady"))
                 and bool(value.get("loginEntryStateReady"))
@@ -672,7 +705,10 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             description="front-door login to render",
         )
         _expect(bool(login_state.get("hasHeroVideo")), f"Login page lost hero video shell: {login_state}")
-        login_accessibility = connection.evaluate(_frontdoor_accessibility_probe_expression())
+        login_accessibility = _frontdoor_accessibility_snapshot(
+            connection.evaluate(_frontdoor_accessibility_probe_expression()),
+            page="login",
+        )
         _expect(
             bool(login_accessibility.get("loginSubmitMinTarget")) and bool(login_accessibility.get("loginSecondaryMinTarget")),
             f"Login interactive targets fell below the 44px contract: {login_accessibility}",
@@ -692,6 +728,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             _frontdoor_accessibility_probe_expression(),
             predicate=lambda value: (
                 isinstance(value, dict)
+                and str(value.get("readyState", "")) == "complete"
                 and str(value.get("pathname", "")) == "/login"
                 and bool(value.get("reducedMotion"))
                 and bool(value.get("decorativeMotionStatic"))
@@ -700,6 +737,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             timeout_seconds=args.timeout_seconds,
             description="front-door reduced-motion login shell",
         )
+        reduced_motion_state = _frontdoor_accessibility_snapshot(reduced_motion_state, page="login")
         _expect(
             bool(reduced_motion_state.get("decorativeMotionStatic")),
             f"Reduced-motion mode left decorative front-door motion active: {reduced_motion_state}",
