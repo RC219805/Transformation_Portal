@@ -235,13 +235,35 @@ checks manually:
 
 ```bash
 cd web/secure-landing
+nvm use 22
 npm test
 TP_NEXT_DIST_DIR=.next-build-verify npm run build
-TP_NEXT_DIST_DIR=.next-build-verify npm run start
+```
 
-python scripts/validation/validate_frontdoor_browser_smoke.py \
-  --spawn-local-backend \
-  --spawn-local-frontdoor
+If you want to launch the standalone build, do that in a separate shell after
+the backend is ready and the local credential fixture exists:
+
+```bash
+make seed-frontdoor-user
+cd web/secure-landing
+TP_FASTAPI_ORIGIN=http://127.0.0.1:8000 \
+TP_BACKEND_API_KEY="${TP_BACKEND_API_KEY:-$TP_API_KEY}" \
+TP_FRONTDOOR_USERS_FILE=/tmp/tp-frontdoor-users.json \
+TP_FRONTDOOR_SESSION_DB=/tmp/transformation-portal-frontdoor-sessions-standalone.db \
+TP_FRONTDOOR_SESSION_SCALING_MODE=single_instance \
+TP_NEXT_DIST_DIR=.next-build-verify \
+npm run start
+```
+
+If you want browser smoke against an already running managed front door, run it
+from the repo root and point it at that instance instead of
+`--spawn-local-frontdoor`:
+
+```bash
+TP_FRONTDOOR_BASE_URL="https://portal.example.com" \
+TP_FRONTDOOR_USERNAME="replace-with-operator-username" \
+TP_FRONTDOOR_PASSWORD="replace-with-operator-password" \
+python scripts/validation/validate_frontdoor_browser_smoke.py
 ```
 
 If you point the browser smoke at an already running or non-local managed
