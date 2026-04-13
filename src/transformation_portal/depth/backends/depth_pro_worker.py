@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import argparse
+import json
+import platform
 import sys
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 from PIL import Image
@@ -51,8 +54,69 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _check_availability(checkpoint: Path) -> int:
-    """Validate imports and checkpoint presence for subprocess mode."""
+def _torch_diagnostics(device: str) -> dict[str, Any]:
+    """Collect structured device diagnostics for readiness checks."""
+    diagnostics: dict[str, Any] = {
+        "device": device,
+        "machine": platform.machine(),
+        "platform": platform.platform(),
+    }
+    macos_version = platform.mac_ver()[0]
+    if macos_version:
+        diagnostics["macos_version"] = macos_version
+
+    try:
+        import torch
+    except ImportError as exc:
+        diagnostics["torch_import_error"] = str(exc)
+        return diagnostics
+
+    diagnostics["torch_version"] = getattr(torch, "__version__", "unknown")
+    diagnostics["mps_built"] = bool(torch.backends.mps.is_built())
+    diagnostics["mps_available"] = bool(torch.backends.mps.is_available())
+    diagnostics["cuda_available"] = bool(torch.cuda.is_available())
+    return diagnostics
+
+
+def _emit_check_failure(reason: str, diagnostics: dict[str, Any]) -> int:
+    """Emit a structured readiness failure for subprocess availability checks."""
+    payload = {
+        "status": "unavailable",
+        "reason": reason,
+        **diagnostics,
+    }
+    print(json.dumps(payload, sort_keys=True), file=sys.stderr)
+    return 1
+
+
+def _check_device_availability(device: str) -> int:
+    """Validate that the requested device is actually usable."""
+    normalized_device = str(device or "cpu").strip().lower() or "cpu"
+    diagnostics = _torch_diagnostics(normalized_device)
+
+    if normalized_device == "cpu":
+        return 0
+
+    if "torch_import_error" in diagnostics:
+        return _emit_check_failure("PyTorch import failed for device readiness check.", diagnostics)
+
+    if normalized_device == "mps":
+        if not diagnostics.get("mps_built"):
+            return _emit_check_failure("PyTorch was not built with MPS support.", diagnostics)
+        if not diagnostics.get("mps_available"):
+            return _emit_check_failure("PyTorch MPS backend is not available in this runtime.", diagnostics)
+        return 0
+
+    if normalized_device == "cuda":
+        if not diagnostics.get("cuda_available"):
+            return _emit_check_failure("PyTorch CUDA backend is not available in this runtime.", diagnostics)
+        return 0
+
+    return _emit_check_failure(f"Unsupported depth device: {normalized_device}", diagnostics)
+
+
+def _check_availability(checkpoint: Path, device: str) -> int:
+    """Validate imports, checkpoint presence, and requested device readiness."""
     import depth_pro  # noqa: F401
 
     from ...stage_graph.stages.depth_pro import DepthProStage
@@ -62,7 +126,7 @@ def _check_availability(checkpoint: Path) -> int:
         return 1
 
     _ = DepthProStage
-    return 0
+    return _check_device_availability(device)
 
 
 def _run_inference(
@@ -138,7 +202,7 @@ def main(argv: list[str] | None = None) -> int:
 
     checkpoint = args.checkpoint.expanduser()
     if args.check:
-        return _check_availability(checkpoint)
+        return _check_availability(checkpoint, str(args.device))
 
     if args.input_image is None or args.output_depth is None or args.output_json is None:
         parser.error("--input-image, --output-depth, and --output-json are required unless --check is used.")

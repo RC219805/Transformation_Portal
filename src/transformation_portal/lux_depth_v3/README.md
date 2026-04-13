@@ -327,7 +327,8 @@ Output Deliverables
 ```
 
 The CLI **enforces license compliance** at startup to prevent accidental violations.
-For safe installation, keep `depth-pro` in a dedicated NumPy 1.x environment
+For safe installation, bootstrap `depth-pro` with
+`./scripts/setup/install_depth_pro_runtime.sh` and keep it in a dedicated NumPy 1.x environment
 and point the main pipeline at it with `--depth-pro-python` or
 `TRANSFORMATION_PORTAL_DEPTH_PRO_PYTHON`.
 When explicit `depth_pro` runs are launched from a repo checkout, the pipeline

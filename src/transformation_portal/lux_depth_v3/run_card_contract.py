@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from pathlib import PurePosixPath
-from typing import Any
+from typing import Any, Optional
 
 from transformation_portal.schemas.run_card import (
     RUN_CARD_SCHEMA_URIS,
@@ -12,6 +12,8 @@ from transformation_portal.schemas.run_card import (
     get_run_card_schema_uri,
     normalize_run_card_version,
 )
+
+from .path_aliasing import normalize_lexical_path, relative_to_path_alias
 
 
 class RunCardPathValidationError(ValueError):
@@ -57,6 +59,17 @@ def normalize_run_card_relative_path(relative_path: Any) -> str:
     return normalized
 
 
+def render_run_card_output_relative_path(path_value: Any, output_root: Any) -> Optional[str]:
+    """Render an output-root-relative path while tolerating alias-equivalent roots."""
+    if not isinstance(path_value, str) or not path_value.strip():
+        return None
+    try:
+        relative_path = relative_to_path_alias(path_value, output_root)
+    except ValueError:
+        relative_path = PurePosixPath(normalize_lexical_path(path_value).name)
+    return relative_path.as_posix()
+
+
 __all__ = [
     "RUN_CARD_SCHEMA_URIS",
     "SUPPORTED_RUN_CARD_VERSIONS",
@@ -66,5 +79,6 @@ __all__ = [
     "infer_run_card_version",
     "normalize_run_card_relative_path",
     "normalize_run_card_version",
+    "render_run_card_output_relative_path",
     "with_inferred_run_card_version",
 ]

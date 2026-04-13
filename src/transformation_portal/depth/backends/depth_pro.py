@@ -69,7 +69,7 @@ class DepthProBackend:
         self._checkpoint_path = self._resolve_checkpoint_path(config)
         self._checkpoint_hash_cached: Optional[str] = None
         self._python_executable = self._resolve_python_executable(config)
-        self._subprocess_available_checked = False
+        self._subprocess_available_devices: set[str] = set()
 
     def _find_repo_root(self) -> Optional[Path]:
         """Find repository root by walking parent directories when in a checkout."""
@@ -212,23 +212,26 @@ class DepthProBackend:
             raise ImportError(
                 "depth_pro package not installed in the active environment.\n\n"
                 "Preferred setup:\n"
-                "  1. Create a dedicated Depth Pro environment\n"
-                "  2. Install depth-pro there\n"
-                "  3. Set depth_pro_python_executable or TRANSFORMATION_PORTAL_DEPTH_PRO_PYTHON\n\n"
+                "  1. Bootstrap the repo-local Depth Pro runtime with\n"
+                "     ./scripts/setup/install_depth_pro_runtime.sh\n"
+                "  2. Set depth_pro_python_executable or TRANSFORMATION_PORTAL_DEPTH_PRO_PYTHON\n\n"
                 "Legacy in-process install:\n"
                 "  pip install depth-pro\n\n"
                 "See: https://github.com/apple/ml-depth-pro"
             ) from exc
 
-    def _ensure_subprocess_available(self) -> None:
+    def _ensure_subprocess_available(self, device: Optional[str] = None) -> None:
         """Ensure the dedicated Depth Pro subprocess environment is usable."""
-        if self._subprocess_available_checked:
+        use_device = str(device or self._device).strip().lower() or "cpu"
+        if use_device in self._subprocess_available_devices:
             return
 
         command = self._build_worker_command(
             "--check",
             "--checkpoint",
             str(self._checkpoint_path.resolve()),
+            "--device",
+            use_device,
         )
         result = subprocess.run(
             command,
@@ -246,7 +249,7 @@ class DepthProBackend:
                 f"Command: {' '.join(command)}\n"
                 f"Output:\n{output}"
             )
-        self._subprocess_available_checked = True
+        self._subprocess_available_devices.add(use_device)
 
     @staticmethod
     def _format_subprocess_output(stdout: str, stderr: str) -> str:
@@ -261,11 +264,11 @@ class DepthProBackend:
             return stdout_clean
         return "(no output)"
 
-    def ensure_available(self) -> None:
+    def ensure_available(self, device: Optional[str] = None) -> None:
         """Ensure Depth Pro dependencies and checkpoint are available."""
         self._ensure_checkpoint_exists()
         if self._uses_subprocess():
-            self._ensure_subprocess_available()
+            self._ensure_subprocess_available(device=device)
             return
         self._ensure_local_package_available()
 
@@ -281,11 +284,12 @@ class DepthProBackend:
     ) -> DepthResult:
         """Estimate metric depth from image."""
         self._validate_license_runtime()
-        self.ensure_available()
+        use_device = device or self._device
+        self.ensure_available(device=use_device)
 
         if self._uses_subprocess():
-            return self._compute_subprocess(image, device)
-        return self._compute_local(image, device)
+            return self._compute_subprocess(image, use_device)
+        return self._compute_local(image, use_device)
 
     def _prepare_image(
         self,

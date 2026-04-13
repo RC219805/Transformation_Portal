@@ -40,6 +40,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from .manifest import compute_file_sha256
+from .path_aliasing import normalize_lexical_path, relative_to_path_alias
 from .security import sanitize_path_component_nonlossy
 
 logger = logging.getLogger(__name__)
@@ -293,18 +294,18 @@ def make_output_key(
     Returns:
         Path representing the output key with preserved directory structure
     """
-    input_resolved = input_path.resolve()
-    root_resolved = input_root.resolve()
+    input_normalized = normalize_lexical_path(input_path)
+    root_normalized = normalize_lexical_path(input_root)
 
     try:
-        relpath = input_resolved.relative_to(root_resolved)
+        relpath = relative_to_path_alias(input_normalized, root_normalized)
     except ValueError:
         logger.warning(
             "%s is not relative to %s, using flat naming",
-            input_path,
-            input_root,
+            input_normalized,
+            root_normalized,
         )
-        relpath = Path(input_resolved.name)
+        relpath = Path(input_normalized.name)
 
     rel_dir = relpath.parent
     name = relpath.stem

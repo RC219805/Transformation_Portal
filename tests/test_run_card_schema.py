@@ -28,6 +28,7 @@ from transformation_portal.lux_depth_v3.orchestrator import (
     _validate_run_card_backend_semantics,
     _validate_run_card_payload,
 )
+from transformation_portal.lux_depth_v3.run_card_contract import render_run_card_output_relative_path
 from transformation_portal.lux_depth_v3.security import HashMode
 from transformation_portal.schemas.run_card import load_run_card_schema
 
@@ -209,6 +210,20 @@ def test_run_card_schema_rejects_empty_artifact_index():
 
     with pytest.raises(RuntimeError, match="artifact_index"):
         _validate_run_card_payload(payload, _run_card_schema_path())
+
+
+def test_run_card_output_relative_path_handles_alias_equivalent_roots(tmp_path: Path):
+    actual_root = tmp_path / "actual_output"
+    actual_manifest = actual_root / "manifests" / "alpha.json"
+    actual_manifest.parent.mkdir(parents=True)
+    actual_manifest.write_text("{}")
+
+    alias_root = tmp_path / "alias_output"
+    alias_root.symlink_to(actual_root, target_is_directory=True)
+
+    relative_path = render_run_card_output_relative_path(str(actual_manifest), alias_root)
+
+    assert relative_path == "manifests/alpha.json"
 
 
 def test_build_artifact_index_is_deterministic(tmp_path: Path):
