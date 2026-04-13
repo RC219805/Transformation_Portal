@@ -1,3 +1,6 @@
+import { getConfig } from "./config.js";
+import { buildRequestUrl } from "./http.js";
+
 const UNSAFE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
 function originFromReferrer(referrer) {
@@ -15,7 +18,7 @@ export function isUnsafeMethod(method) {
 export function validateOriginAndReferrer(request) {
   if (!isUnsafeMethod(request.method)) return true;
 
-  const expectedOrigin = request.nextUrl.origin;
+  const expectedOrigin = buildRequestUrl(request, request.nextUrl.pathname || "/").origin;
   const origin = request.headers.get("origin");
   if (origin) {
     return origin === expectedOrigin;
@@ -26,5 +29,5 @@ export function validateOriginAndReferrer(request) {
     return originFromReferrer(referrer) === expectedOrigin;
   }
 
-  return false;
+  return Boolean(getConfig().allowLocalAccessBypass);
 }

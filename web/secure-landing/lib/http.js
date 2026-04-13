@@ -21,6 +21,29 @@ export const FRONTDOOR_CSP = [
 
 export const LOGIN_CSP = FRONTDOOR_CSP;
 
+function firstHeaderValue(value) {
+  return String(value || "")
+    .split(",")[0]
+    .trim();
+}
+
+export function buildRequestUrl(request, pathname) {
+  const url = new URL(pathname, request.url);
+  const host = firstHeaderValue(request.headers.get("x-forwarded-host"))
+    || firstHeaderValue(request.headers.get("host"))
+    || request.nextUrl.host;
+  const proto = firstHeaderValue(request.headers.get("x-forwarded-proto"))
+    || String(request.nextUrl.protocol || "").replace(/:$/, "");
+
+  if (host) {
+    url.host = host;
+  }
+  if (proto) {
+    url.protocol = proto.endsWith(":") ? proto : `${proto}:`;
+  }
+  return url;
+}
+
 export function applySecurityHeaders(response, { csp = null } = {}) {
   for (const [name, value] of Object.entries(BASE_SECURITY_HEADERS)) {
     if (!response.headers.has(name)) {

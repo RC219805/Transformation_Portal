@@ -272,11 +272,43 @@ test("validateOriginAndReferrer rejects cross-origin unsafe requests", async () 
   const { validateOriginAndReferrer } = await import(`../lib/request-security.js?case=${Date.now()}`);
   const request = {
     method: "POST",
-    nextUrl: { origin: "https://portal.example.com" },
+    url: "https://portal.example.com/login",
+    nextUrl: { origin: "https://portal.example.com", pathname: "/login", protocol: "https:" },
     headers: new Headers({
       origin: "https://evil.example.com"
     })
   };
 
   assert.equal(validateOriginAndReferrer(request), false);
+});
+
+test("validateOriginAndReferrer allows missing origin hints during local bypass", async () => {
+  process.env.NODE_ENV = "development";
+  process.env.TP_ALLOW_LOCAL_ACCESS_BYPASS = "1";
+
+  const { validateOriginAndReferrer } = await import(`../lib/request-security.js?case=${Date.now()}`);
+  const request = {
+    method: "POST",
+    url: "http://127.0.0.1:3000/login",
+    nextUrl: { origin: "http://127.0.0.1:3000", pathname: "/login", protocol: "http:" },
+    headers: new Headers()
+  };
+
+  assert.equal(validateOriginAndReferrer(request), true);
+});
+
+test("validateOriginAndReferrer honors the forwarded local host when Next normalizes nextUrl", async () => {
+  const { validateOriginAndReferrer } = await import(`../lib/request-security.js?case=${Date.now()}`);
+  const request = {
+    method: "POST",
+    url: "http://127.0.0.1:3000/login",
+    nextUrl: { origin: "http://localhost:3000", pathname: "/login", protocol: "http:" },
+    headers: new Headers({
+      host: "127.0.0.1:3000",
+      origin: "http://127.0.0.1:3000",
+      referer: "http://127.0.0.1:3000/login",
+    })
+  };
+
+  assert.equal(validateOriginAndReferrer(request), true);
 });

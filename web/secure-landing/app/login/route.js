@@ -3,7 +3,7 @@ import { NextResponse } from "next/server.js";
 import { resolveAccessContext, resolveAuthenticatedAccessSession, revokeSessionOnAccessFailure } from "../../lib/access.js";
 import { escapeHtml, FRONTDOOR_ASSETS, renderBrandAsset } from "../../lib/brand.js";
 import { audit } from "../../lib/audit.js";
-import { applySecurityHeaders, FRONTDOOR_CSP } from "../../lib/http.js";
+import { applySecurityHeaders, buildRequestUrl, FRONTDOOR_CSP } from "../../lib/http.js";
 import {
   clearSessionCookie,
   createAnonymousSession,
@@ -38,34 +38,48 @@ function resolveRecoveryGuidance(code) {
   return "Re-enter operator credentials after verifying the managed access context above.";
 }
 
-function resolveEntryState({ accessEmail, errorCode }) {
-  const hasVerifiedAccess = Boolean(accessEmail);
+function resolveEntryState({ accessEmail, errorCode, bypass = false }) {
+  const hasVerifiedAccess = Boolean(accessEmail) || Boolean(bypass);
   const hasRecoveryIssue = Boolean(errorCode);
+  const accessLabel = bypass
+    ? "Local development bypass active"
+    : hasVerifiedAccess
+      ? "Verified access ready"
+      : "Managed access required";
+  const accessDetail = bypass
+    ? "Managed access is bypassed for local troubleshooting. Credential handoff is available."
+    : hasVerifiedAccess
+      ? `Verified for <strong>${escapeHtml(accessEmail)}</strong>.`
+      : "Managed access verification opens the next step.";
+  const credentialLabel = hasRecoveryIssue ? "Recovery required" : hasVerifiedAccess ? "Credential handoff ready" : "Waiting on verified access";
+  const credentialDetail = hasRecoveryIssue
+    ? escapeHtml(resolveRecoveryGuidance(errorCode))
+    : hasVerifiedAccess
+      ? "Continue with operator credentials."
+      : "Credential handoff stays closed until access is verified.";
   return {
     accessState: hasVerifiedAccess ? "verified" : "required",
     credentialState: hasRecoveryIssue ? "blocked" : hasVerifiedAccess ? "ready" : "waiting",
-    accessLabel: hasVerifiedAccess ? "Verified access ready" : "Managed access required",
-    accessDetail: hasVerifiedAccess
-      ? `Verified for <strong>${escapeHtml(accessEmail)}</strong>.`
-      : "Managed access verification opens the next step.",
-    credentialLabel: hasRecoveryIssue ? "Recovery required" : hasVerifiedAccess ? "Credential handoff ready" : "Waiting on verified access",
-    credentialDetail: hasRecoveryIssue
-      ? escapeHtml(resolveRecoveryGuidance(errorCode))
-      : hasVerifiedAccess
-        ? "Continue with operator credentials."
-        : "Credential handoff stays closed until access is verified.",
+    accessLabel,
+    accessDetail,
+    credentialLabel,
+    credentialDetail,
     recoveryState: hasRecoveryIssue ? String(errorCode || "").trim().toLowerCase() || "invalid" : "clear",
   };
 }
 
-function renderLoginPage({ csrfToken, accessEmail, errorCode }) {
+function renderLoginPage({ csrfToken, accessEmail, errorCode, bypass = false }) {
   const errorMessage = errorCode ? resolveLoginMessage(errorCode) : "";
-  const entryState = resolveEntryState({ accessEmail, errorCode });
+  const entryState = resolveEntryState({ accessEmail, errorCode, bypass });
   const escapedAccessEmail = accessEmail ? escapeHtml(accessEmail) : "";
-  const accessSequenceDetail = accessEmail
+  const accessSequenceDetail = bypass
+    ? "Local troubleshooting bypass is active for this front door session."
+    : accessEmail
     ? `Managed access already verified for <strong>${escapedAccessEmail}</strong>.`
     : "Managed access is verified before operator credentials are accepted.";
-  const accessText = accessEmail
+  const accessText = bypass
+    ? "Local troubleshooting bypass is active. Operator credentials can continue without verified managed access."
+    : accessEmail
     ? `Access identity verified for <strong>${escapedAccessEmail}</strong>. Credential entry is now available.`
     : "";
   const recoveryCard = errorMessage
@@ -73,7 +87,12 @@ function renderLoginPage({ csrfToken, accessEmail, errorCode }) {
       title: "Recovery path",
       detail: resolveRecoveryGuidance(errorCode)
     }
-    : accessEmail
+    : bypass
+      ? {
+        title: "Bypass context",
+        detail: "Local development bypass is active for this session. Successful sign-in rotates the browser into the governed portal session."
+      }
+      : accessEmail
       ? {
         title: "Verified access context",
         detail: `Managed access has already been verified for ${accessEmail}. Successful sign-in rotates this browser into the governed portal session.`
@@ -81,12 +100,14 @@ function renderLoginPage({ csrfToken, accessEmail, errorCode }) {
       : null;
   const nextStepTitle = errorMessage
     ? "Recovery is required before sign-in can continue."
-    : accessEmail
+    : bypass || accessEmail
       ? "Credential handoff is ready."
       : "Managed access must complete first.";
   const nextStepDetail = errorMessage
     ? resolveRecoveryGuidance(errorCode)
-    : accessEmail
+    : bypass
+      ? "Use your operator username and password to continue into the governed console."
+      : accessEmail
       ? "Use your operator username and password to continue into the governed console."
       : "Return after managed access verification opens operator credential entry.";
 
@@ -218,7 +239,7 @@ function renderLoginPage({ csrfToken, accessEmail, errorCode }) {
 }
 
 function redirectToLogin(request, errorCode, session) {
-  const url = new URL("/login", request.url);
+  const url = buildRequestUrl(request, "/login");
   if (errorCode) url.searchParams.set("error", errorCode);
   const response = applySecurityHeaders(NextResponse.redirect(url, 303));
   if (session?.id) {
@@ -233,7 +254,7 @@ export async function GET(request) {
   if (currentSession?.authenticated) {
     const authState = await resolveAuthenticatedAccessSession(request, { touch: false });
     if (authState.ok) {
-      return applySecurityHeaders(NextResponse.redirect(new URL("/portal", request.url), 302));
+      return applySecurityHeaders(NextResponse.redirect(buildRequestUrl(request, "/portal"), 302));
     }
     if (authState.revokeSession) {
       revokeSessionOnAccessFailure(currentSession, authState.errorCode);
@@ -248,7 +269,8 @@ export async function GET(request) {
   const html = renderLoginPage({
     csrfToken: session.csrfToken,
     accessEmail: accessContext.accessEmail,
-    errorCode: request.nextUrl.searchParams.get("error")
+    errorCode: request.nextUrl.searchParams.get("error"),
+    bypass: accessContext.bypass
   });
   const response = new NextResponse(html, {
     status: 200,
@@ -353,7 +375,7 @@ export async function POST(request) {
     bypass: accessContext.bypass
   });
 
-  const response = applySecurityHeaders(NextResponse.redirect(new URL("/portal", request.url), 303));
+  const response = applySecurityHeaders(NextResponse.redirect(buildRequestUrl(request, "/portal"), 303));
   setSessionCookie(response, authenticatedSession.id);
   return response;
 }

@@ -532,15 +532,14 @@ def _navigate_expression(pathname: str) -> str:
 """
 
 
-def _submit_login_expression(username: str, password: str) -> str:
+def _populate_login_expression(username: str, password: str) -> str:
     payload = json.dumps({"username": username, "password": password})
     return f"""
 (() => {{
   const cfg = {payload};
-  const form = document.querySelector('form[action="/login"]');
   const usernameInput = document.querySelector('input[name="username"]');
   const passwordInput = document.querySelector('input[name="password"]');
-  if (!form || !usernameInput || !passwordInput) {{
+  if (!usernameInput || !passwordInput) {{
     throw new Error('login form is unavailable');
   }}
   usernameInput.value = cfg.username;
@@ -549,12 +548,19 @@ def _submit_login_expression(username: str, password: str) -> str:
   passwordInput.value = cfg.password;
   passwordInput.dispatchEvent(new Event('input', {{ bubbles: true }}));
   passwordInput.dispatchEvent(new Event('change', {{ bubbles: true }}));
-  if (typeof form.requestSubmit === 'function') {{
-    form.requestSubmit();
-  }} else {{
-    form.submit();
-  }}
-  return 'submitted';
+  return 'prepared';
+}})()
+"""
+
+
+def _click_expression(selector: str) -> str:
+    encoded = json.dumps(selector)
+    return f"""
+(() => {{
+  const el = document.querySelector({encoded});
+  if (!el) throw new Error('missing element for selector ' + {encoded});
+  el.click();
+  return true;
 }})()
 """
 
@@ -748,7 +754,9 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         )
 
         print("frontdoor-browser-smoke: submitting operator login", flush=True)
-        connection.evaluate(_submit_login_expression(username, password))
+        connection.evaluate(_populate_login_expression(username, password))
+        time.sleep(0.1)
+        connection.evaluate(_click_expression('[data-ui="login-submit"]'))
         portal_state = _poll(
             connection,
             _frontdoor_state_probe_expression(),

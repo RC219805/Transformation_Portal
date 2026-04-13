@@ -2,7 +2,7 @@ import { NextResponse } from "next/server.js";
 
 import { resolveAuthenticatedAccessSession, revokeSessionOnAccessFailure } from "../../lib/access.js";
 import { escapeHtml, FRONTDOOR_ASSETS, renderBrandAsset } from "../../lib/brand.js";
-import { applySecurityHeaders, LOGIN_CSP } from "../../lib/http.js";
+import { applySecurityHeaders, buildRequestUrl, LOGIN_CSP } from "../../lib/http.js";
 import { copyUpstreamResponseHeaders } from "../../lib/proxy.js";
 import { getConfig } from "../../lib/config.js";
 import {
@@ -156,7 +156,7 @@ export async function GET(request) {
       revokeSessionOnAccessFailure(authState.session, authState.errorCode);
     }
 
-    const response = applySecurityHeaders(NextResponse.redirect(new URL("/login", request.url), 302));
+    const response = applySecurityHeaders(NextResponse.redirect(buildRequestUrl(request, "/login"), 302));
     if (authState.revokeSession) {
       clearSessionCookie(response);
     }
