@@ -240,12 +240,15 @@ npm test
 TP_NEXT_DIST_DIR=.next-build-verify npm run build
 ```
 
-If you want to launch the standalone build, do that in a separate shell after
-the backend is ready and the local credential fixture exists:
+If you want to launch the standalone build locally without Cloudflare Access,
+do that in a separate shell after the backend is ready and the local credential
+fixture exists:
 
 ```bash
 make seed-frontdoor-user
 cd web/secure-landing
+NODE_ENV=development \
+TP_ALLOW_LOCAL_ACCESS_BYPASS=1 \
 TP_FASTAPI_ORIGIN=http://127.0.0.1:8000 \
 TP_BACKEND_API_KEY="${TP_BACKEND_API_KEY:-$TP_API_KEY}" \
 TP_FRONTDOOR_USERS_FILE=/tmp/tp-frontdoor-users.json \
@@ -254,6 +257,16 @@ TP_FRONTDOOR_SESSION_SCALING_MODE=single_instance \
 TP_NEXT_DIST_DIR=.next-build-verify \
 npm run start
 ```
+
+For local standalone runs, keep `NODE_ENV=development` and
+`TP_ALLOW_LOCAL_ACCESS_BYPASS=1`; otherwise the front door treats Cloudflare
+Access as required and `/healthz` fails closed until `TP_CF_ACCESS_TEAM_DOMAIN`
+and `TP_CF_ACCESS_AUD` are configured.
+
+If you want standalone validation with the production auth posture instead of
+the local bypass, keep `NODE_ENV=production`, supply
+`TP_CF_ACCESS_TEAM_DOMAIN` + `TP_CF_ACCESS_AUD`, and run it behind HTTPS (or an
+equivalent trusted edge) so the secure-cookie flow remains valid.
 
 If you want browser smoke against an already running managed front door, run it
 from the repo root and point it at that instance instead of
