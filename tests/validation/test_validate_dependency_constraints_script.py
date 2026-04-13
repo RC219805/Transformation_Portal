@@ -17,6 +17,26 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT_PATH = PROJECT_ROOT / "scripts" / "validate_dependency_constraints.sh"
 BANNED_REGISTRY_PATH = PROJECT_ROOT / "scripts" / "security" / "banned_dependencies.json"
 RESOLVER_PATH = PROJECT_ROOT / "scripts" / "setup" / "resolve_python_311.sh"
+DEFAULT_PATH = "/usr/bin:/bin"
+
+TARGET_OWNED_LANE_CASES = (
+    (
+        "ml-core-darwin-arm64.in",
+        "ml-core-darwin-arm64.txt",
+        "Darwin",
+        "arm64",
+        "check-ml-darwin-arm64",
+        "Run 'cd requirements && make compile-ml-darwin-arm64' on native Darwin arm64.",
+    ),
+    (
+        "ml-core-linux.in",
+        "ml-core-linux.txt",
+        "Linux",
+        "x86_64",
+        "check-ml-linux-x86_64",
+        "Run 'cd requirements && make compile-ml-linux-x86_64' on native Linux x86_64.",
+    ),
+)
 
 
 def _copy_repo_file(source: Path, destination: Path) -> Path:
@@ -58,25 +78,63 @@ def _write_lockfile(path: Path) -> None:
     )
 
 
-def test_target_owned_ml_stale_warning_uses_lane_specific_fix(tmp_path: Path) -> None:
-    repo_root = tmp_path / "repo"
+def _prepare_validator_repo(repo_root: Path) -> None:
     _copy_repo_file(SCRIPT_PATH, repo_root / "scripts" / "validate_dependency_constraints.sh")
     _copy_repo_file(BANNED_REGISTRY_PATH, repo_root / "scripts" / "security" / "banned_dependencies.json")
     _prepare_repo_python(repo_root)
 
-    requirements_dir = repo_root / "requirements"
-    requirements_dir.mkdir(parents=True, exist_ok=True)
-    in_path = requirements_dir / "ml-core-linux.in"
-    txt_path = requirements_dir / "ml-core-linux.txt"
-    in_path.write_text("numpy>=1.24,<2.5  # Test dependency\n", encoding="utf-8")
-    _write_lockfile(txt_path)
 
+def _make_stale(in_path: Path, txt_path: Path) -> None:
     txt_stat = txt_path.stat()
     os.utime(in_path, (txt_stat.st_atime + 10, txt_stat.st_mtime + 10))
 
-    env = {**os.environ, "PATH": "/usr/bin:/bin"}
-    result = subprocess.run(
-        ["bash", str(repo_root / "scripts" / "validate_dependency_constraints.sh")],
+
+def _write_fake_uname(path: Path, *, system: str, machine: str) -> Path:
+    return _write_executable(
+        path,
+        "#!/bin/sh\n"
+        'case "$1" in\n'
+        f"  -s) echo {shlex.quote(system)} ;;\n"
+        f"  -m) echo {shlex.quote(machine)} ;;\n"
+        '  *) echo "unsupported uname arg: $1" >&2; exit 1 ;;\n'
+        "esac\n",
+    )
+
+
+def _write_fake_make(
+    path: Path,
+    *,
+    expected_target: str | None,
+    exit_code: int,
+    stdout_text: str = "",
+    stderr_text: str = "",
+) -> Path:
+    if expected_target is None:
+        content = '#!/bin/sh\necho "unexpected make invocation: $*" >&2\nexit 97\n'
+        return _write_executable(path, content)
+
+    content = (
+        "#!/bin/sh\n"
+        + 'if [ "$1" != "-C" ] || [ "$2" != "requirements" ] || [ "$3" != "'
+        + expected_target
+        + '" ] || [ "$4" != "LOCK_PYTHON_VERSION=3.11" ]; then\n'
+        + '  echo "unexpected make args: $*" >&2\n'
+        + "  exit 98\n"
+        + "fi\n"
+        + (f"printf '%s\\n' {shlex.quote(stdout_text)}\n" if stdout_text else "")
+        + (f"printf '%s\\n' {shlex.quote(stderr_text)} >&2\n" if stderr_text else "")
+        + f"exit {exit_code}\n"
+    )
+    return _write_executable(path, content)
+
+
+def _run_validator(repo_root: Path, *, path: str = DEFAULT_PATH, verbose: bool = False) -> subprocess.CompletedProcess[str]:
+    command = ["bash", str(repo_root / "scripts" / "validate_dependency_constraints.sh")]
+    if verbose:
+        command.append("--verbose")
+    env = {**os.environ, "PATH": path}
+    return subprocess.run(
+        command,
         cwd=repo_root,
         env=env,
         capture_output=True,
@@ -84,17 +142,30 @@ def test_target_owned_ml_stale_warning_uses_lane_specific_fix(tmp_path: Path) ->
         check=False,
     )
 
+
+def test_generic_stale_warning_preserves_make_compile_guidance(tmp_path: Path) -> None:
+    repo_root = tmp_path / "repo"
+    _prepare_validator_repo(repo_root)
+
+    requirements_dir = repo_root / "requirements"
+    requirements_dir.mkdir(parents=True, exist_ok=True)
+    in_path = requirements_dir / "base.in"
+    txt_path = requirements_dir / "base.txt"
+    in_path.write_text("Pillow>=10.3.0,<13  # Generic stale warning regression coverage\n", encoding="utf-8")
+    _write_lockfile(txt_path)
+    _make_stale(in_path, txt_path)
+
+    result = _run_validator(repo_root)
+
     assert result.returncode == 2, result.stdout + result.stderr
-    assert "ml-core-linux.in: Compiled .txt file is stale" in result.stdout
-    assert "Run 'cd requirements && make compile-ml-linux-x86_64' on native Linux x86_64." in result.stdout
+    assert "base.in: Compiled .txt file is stale" in result.stdout
+    assert "Run 'cd requirements && make compile' to regenerate" in result.stdout
     assert "Consider addressing warnings for best practices." in result.stdout
 
 
-def test_frozen_target_owned_ml_stale_warning_preserves_freeze_guidance(tmp_path: Path) -> None:
+def test_frozen_target_owned_ml_input_skips_stale_warning_and_emits_verbose_note(tmp_path: Path) -> None:
     repo_root = tmp_path / "repo"
-    _copy_repo_file(SCRIPT_PATH, repo_root / "scripts" / "validate_dependency_constraints.sh")
-    _copy_repo_file(BANNED_REGISTRY_PATH, repo_root / "scripts" / "security" / "banned_dependencies.json")
-    _prepare_repo_python(repo_root)
+    _prepare_validator_repo(repo_root)
 
     requirements_dir = repo_root / "requirements"
     requirements_dir.mkdir(parents=True, exist_ok=True)
@@ -102,30 +173,171 @@ def test_frozen_target_owned_ml_stale_warning_preserves_freeze_guidance(tmp_path
     txt_path = requirements_dir / "ml-core-darwin-x86_64.txt"
     in_path.write_text("numpy<2  # Frozen lane regression coverage\n", encoding="utf-8")
     _write_lockfile(txt_path)
+    _make_stale(in_path, txt_path)
 
-    txt_stat = txt_path.stat()
-    os.utime(in_path, (txt_stat.st_atime + 10, txt_stat.st_mtime + 10))
+    result = _run_validator(repo_root, verbose=True)
 
-    env = {**os.environ, "PATH": "/usr/bin:/bin"}
-    result = subprocess.run(
-        ["bash", str(repo_root / "scripts" / "validate_dependency_constraints.sh")],
-        cwd=repo_root,
-        env=env,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "Compiled .txt file is stale" not in result.stdout
+    assert "INFO: ml-core-darwin-x86_64.in is frozen and excluded from freshness regeneration checks." in result.stdout
+
+
+@pytest.mark.parametrize(
+    ("input_name", "lock_name", "system", "machine"),
+    (
+        ("ml-core-darwin-arm64.in", "ml-core-darwin-arm64.txt", "Linux", "x86_64"),
+        ("ml-core-linux.in", "ml-core-linux.txt", "Darwin", "arm64"),
+    ),
+)
+def test_target_owned_ml_inputs_skip_freshness_warning_off_lane(
+    tmp_path: Path,
+    input_name: str,
+    lock_name: str,
+    system: str,
+    machine: str,
+) -> None:
+    repo_root = tmp_path / "repo"
+    _prepare_validator_repo(repo_root)
+
+    requirements_dir = repo_root / "requirements"
+    requirements_dir.mkdir(parents=True, exist_ok=True)
+    in_path = requirements_dir / input_name
+    txt_path = requirements_dir / lock_name
+    in_path.write_text("numpy>=1.24,<2.5  # Off-lane regression coverage\n", encoding="utf-8")
+    _write_lockfile(txt_path)
+    _make_stale(in_path, txt_path)
+
+    fakebin = tmp_path / "fakebin"
+    _write_fake_uname(fakebin / "uname", system=system, machine=machine)
+    _write_fake_make(fakebin / "make", expected_target=None, exit_code=97)
+
+    result = _run_validator(repo_root, path=f"{fakebin}:{DEFAULT_PATH}")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "Compiled .txt file is stale" not in result.stdout
+    assert "Target-owned ML lock freshness check failed" not in result.stdout
+
+
+@pytest.mark.parametrize(
+    ("input_name", "lock_name", "system", "machine", "check_target", "compile_fix"),
+    TARGET_OWNED_LANE_CASES,
+)
+def test_target_owned_ml_inputs_use_lane_check_on_authoritative_host_when_check_passes(
+    tmp_path: Path,
+    input_name: str,
+    lock_name: str,
+    system: str,
+    machine: str,
+    check_target: str,
+    compile_fix: str,
+) -> None:
+    repo_root = tmp_path / "repo"
+    _prepare_validator_repo(repo_root)
+
+    requirements_dir = repo_root / "requirements"
+    requirements_dir.mkdir(parents=True, exist_ok=True)
+    in_path = requirements_dir / input_name
+    txt_path = requirements_dir / lock_name
+    in_path.write_text("numpy>=1.24,<2.5  # Authoritative lane pass coverage\n", encoding="utf-8")
+    _write_lockfile(txt_path)
+    _make_stale(in_path, txt_path)
+
+    fakebin = tmp_path / "fakebin"
+    _write_fake_uname(fakebin / "uname", system=system, machine=machine)
+    _write_fake_make(fakebin / "make", expected_target=check_target, exit_code=0)
+
+    result = _run_validator(repo_root, path=f"{fakebin}:{DEFAULT_PATH}")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "Compiled .txt file is stale" not in result.stdout
+    assert "Target-owned ML lock freshness check failed" not in result.stdout
+    assert compile_fix not in result.stdout
+
+
+@pytest.mark.parametrize(
+    ("input_name", "lock_name", "system", "machine", "check_target", "compile_fix"),
+    TARGET_OWNED_LANE_CASES,
+)
+def test_target_owned_ml_inputs_warn_when_authoritative_lane_check_fails(
+    tmp_path: Path,
+    input_name: str,
+    lock_name: str,
+    system: str,
+    machine: str,
+    check_target: str,
+    compile_fix: str,
+) -> None:
+    repo_root = tmp_path / "repo"
+    _prepare_validator_repo(repo_root)
+
+    requirements_dir = repo_root / "requirements"
+    requirements_dir.mkdir(parents=True, exist_ok=True)
+    in_path = requirements_dir / input_name
+    txt_path = requirements_dir / lock_name
+    in_path.write_text("numpy>=1.24,<2.5  # Authoritative lane fail coverage\n", encoding="utf-8")
+    _write_lockfile(txt_path)
+    _make_stale(in_path, txt_path)
+
+    fakebin = tmp_path / "fakebin"
+    _write_fake_uname(fakebin / "uname", system=system, machine=machine)
+    _write_fake_make(fakebin / "make", expected_target=check_target, exit_code=1)
+
+    result = _run_validator(repo_root, path=f"{fakebin}:{DEFAULT_PATH}")
 
     assert result.returncode == 2, result.stdout + result.stderr
-    assert "ml-core-darwin-x86_64.in: Compiled .txt file is stale" in result.stdout
-    assert "Darwin x86_64 is frozen; do not regenerate until an authoritative lane is defined." in result.stdout
+    assert "Target-owned ML lock freshness check failed" in result.stdout
+    assert check_target in result.stdout
+    assert compile_fix in result.stdout
+    assert "unexpected make" not in result.stdout
+
+
+@pytest.mark.parametrize(
+    ("input_name", "lock_name", "system", "machine", "check_target"),
+    (
+        ("ml-core-darwin-arm64.in", "ml-core-darwin-arm64.txt", "Darwin", "arm64", "check-ml-darwin-arm64"),
+        ("ml-core-linux.in", "ml-core-linux.txt", "Linux", "x86_64", "check-ml-linux-x86_64"),
+    ),
+)
+def test_target_owned_ml_inputs_surface_lane_check_output_in_verbose_mode(
+    tmp_path: Path,
+    input_name: str,
+    lock_name: str,
+    system: str,
+    machine: str,
+    check_target: str,
+) -> None:
+    repo_root = tmp_path / "repo"
+    _prepare_validator_repo(repo_root)
+
+    requirements_dir = repo_root / "requirements"
+    requirements_dir.mkdir(parents=True, exist_ok=True)
+    in_path = requirements_dir / input_name
+    txt_path = requirements_dir / lock_name
+    in_path.write_text("numpy>=1.24,<2.5  # Verbose delegated failure coverage\n", encoding="utf-8")
+    _write_lockfile(txt_path)
+    _make_stale(in_path, txt_path)
+
+    fakebin = tmp_path / "fakebin"
+    _write_fake_uname(fakebin / "uname", system=system, machine=machine)
+    _write_fake_make(
+        fakebin / "make",
+        expected_target=check_target,
+        exit_code=1,
+        stdout_text="delegated stdout detail",
+        stderr_text="delegated stderr detail",
+    )
+
+    result = _run_validator(repo_root, path=f"{fakebin}:{DEFAULT_PATH}", verbose=True)
+
+    assert result.returncode == 2, result.stdout + result.stderr
+    assert "Details:" in result.stdout
+    assert "delegated stdout detail" in result.stdout
+    assert "delegated stderr detail" in result.stdout
 
 
 def test_validator_uses_repo_resolved_python_instead_of_path_python3(tmp_path: Path) -> None:
     repo_root = tmp_path / "repo"
-    _copy_repo_file(SCRIPT_PATH, repo_root / "scripts" / "validate_dependency_constraints.sh")
-    _copy_repo_file(BANNED_REGISTRY_PATH, repo_root / "scripts" / "security" / "banned_dependencies.json")
-    _prepare_repo_python(repo_root)
+    _prepare_validator_repo(repo_root)
 
     fakebin = tmp_path / "fakebin"
     _write_executable(
@@ -145,15 +357,7 @@ def test_validator_uses_repo_resolved_python_instead_of_path_python3(tmp_path: P
         encoding="utf-8",
     )
 
-    env = {**os.environ, "PATH": f"{fakebin}:/usr/bin:/bin"}
-    result = subprocess.run(
-        ["bash", str(repo_root / "scripts" / "validate_dependency_constraints.sh")],
-        cwd=repo_root,
-        env=env,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    result = _run_validator(repo_root, path=f"{fakebin}:{DEFAULT_PATH}")
 
     assert result.returncode == 0, result.stdout + result.stderr
     assert "broken python3 should not be used" not in (result.stdout + result.stderr)
