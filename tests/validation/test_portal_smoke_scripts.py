@@ -319,7 +319,8 @@ def test_orchestrator_http_smoke_covers_readiness_and_fail_closed_archive_prereq
     assert "GET /v1/readiness" in content
     assert '"archive-gate-b"' in content
     assert '"archive-gate-c"' in content
-    assert "rights_manifest_required" in content
+    assert '"details") or {}).get("field") == "manifest_jsonl"' in content
+    assert '"details") or {}).get("reason") == "required"' in content
     assert "manifest-build" in content
     assert "rights-apply" in content
     assert "bag-build" in content
@@ -454,6 +455,7 @@ def test_frontdoor_browser_waits_for_managed_portal_bootstrap_before_passing():
     content = FRONTDOOR_BROWSER_SCRIPT_PATH.read_text(encoding="utf-8")
 
     assert 'and str(value.get("readyState", "")) == "complete"' in content
+    assert content.count('and str(value.get("readyState", "")) == "complete"') >= 3
     assert 'and str(value.get("authModeBadge", "")).lower() == "managed"' in content
     assert "homepageHeroReady" in content
     assert "homepageEntryRailReady" in content
@@ -482,6 +484,7 @@ def test_frontdoor_browser_accessibility_probe_tracks_target_size_and_reduced_mo
 
     expression = module._frontdoor_accessibility_probe_expression()
 
+    assert "readyState: document.readyState" in expression
     assert '[data-ui="homepage-primary-cta"]' in expression
     assert '[data-ui="homepage-secondary-cta"]' in expression
     assert '[data-ui="homepage-learn-link"]' in expression
@@ -491,6 +494,38 @@ def test_frontdoor_browser_accessibility_probe_tracks_target_size_and_reduced_mo
     assert "focusVisibleWithStickyHeader" in expression
     assert "prefers-reduced-motion" in expression
     assert "decorativeMotionStatic" in expression
+
+
+def test_frontdoor_browser_accessibility_snapshot_is_page_scoped():
+    module = _load_module(FRONTDOOR_BROWSER_SCRIPT_PATH, "tests_validate_frontdoor_browser_smoke_accessibility_scope")
+
+    snapshot = {
+        "pathname": "/login",
+        "readyState": "complete",
+        "homepagePrimaryMinTarget": True,
+        "homepageSecondaryMinTarget": True,
+        "homepageLearnMinTarget": True,
+        "focusVisibleWithStickyHeader": True,
+        "loginSubmitMinTarget": False,
+        "loginSecondaryMinTarget": True,
+        "maxDisclosureDepth": 1,
+        "reducedMotion": False,
+        "decorativeMotionStatic": True,
+    }
+
+    homepage_snapshot = module._frontdoor_accessibility_snapshot(snapshot, page="homepage")
+    login_snapshot = module._frontdoor_accessibility_snapshot(snapshot, page="login")
+
+    assert homepage_snapshot["pathname"] == "/login"
+    assert homepage_snapshot["readyState"] == "complete"
+    assert homepage_snapshot["homepagePrimaryMinTarget"] is True
+    assert "loginSubmitMinTarget" not in homepage_snapshot
+
+    assert login_snapshot["pathname"] == "/login"
+    assert login_snapshot["readyState"] == "complete"
+    assert login_snapshot["loginSubmitMinTarget"] is False
+    assert login_snapshot["decorativeMotionStatic"] is True
+    assert "homepagePrimaryMinTarget" not in login_snapshot
 
 
 def test_portal_browser_smoke_tracks_archive_readiness_fields_and_canonical_commands():
