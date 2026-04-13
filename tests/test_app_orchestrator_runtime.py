@@ -873,6 +873,7 @@ def test_portal_artifact_gallery_renders_visual_review_controls() -> None:
     rank_body = _extract_js_function_body(content, "rankArtifactsForDisplay")
     compare_body = _extract_js_function_body(content, "findCompareArtifact")
     normalize_body = _extract_js_function_body(content, "normalizeArtifactItems")
+    route_key_body = _extract_js_function_body(content, "_artifactRouteKey")
 
     assert 'id="artifactPreviewStage"' in content
     assert 'id="artifactThumbnailRail"' in content
@@ -894,6 +895,7 @@ def test_portal_artifact_gallery_renders_visual_review_controls() -> None:
     assert "artifactDisplayPriority(right)" in rank_body
     assert "artifactCompareGroup(candidate) === primaryGroup" in compare_body
     assert "display_hint: _normalizeArtifactDisplayHint(item.display_hint)" in normalize_body
+    assert "if (!artifact || typeof artifact !== 'object') return '';" in route_key_body
     assert "_resetArtifactActionButtons();" in body
     assert "renderConsoleContextRibbon();" in body
     assert "_syncConsoleRoute(true);" in body

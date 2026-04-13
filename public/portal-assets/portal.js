@@ -3059,6 +3059,7 @@ function artifactLabel(artifact) {
 }
 
 function _artifactRouteKey(artifact) {
+    if (!artifact || typeof artifact !== 'object') return '';
     return _normalizeArtifactRoutePath(artifactLabel(artifact));
 }
 
