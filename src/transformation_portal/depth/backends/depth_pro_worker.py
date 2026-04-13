@@ -125,13 +125,13 @@ def _check_device_availability(device: str) -> int:
 
 def _check_availability(checkpoint: Path, device: str) -> int:
     """Validate imports, checkpoint presence, and requested device readiness."""
-    import depth_pro  # noqa: F401
-
-    from ...stage_graph.stages.depth_pro import DepthProStage
-
     if not checkpoint.exists():
         print(f"Checkpoint not found: {checkpoint}", file=sys.stderr)
         return 1
+
+    import depth_pro  # noqa: F401
+
+    from ...stage_graph.stages.depth_pro import DepthProStage
 
     _ = DepthProStage
     return _check_device_availability(device)

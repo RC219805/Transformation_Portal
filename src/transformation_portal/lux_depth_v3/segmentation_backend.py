@@ -443,7 +443,9 @@ class EfficientSAMBackend:
             image: Input RGB image (H, W, 3), uint8 [0-255]
 
         Returns:
-            Dict mapping material names to binary masks (H, W), float32 [0.0-1.0]
+            Dict mapping material names to ``(mask, confidence)`` tuples:
+            - mask: Binary mask (H, W), float32 [0.0-1.0]
+            - confidence: Material confidence score [0.0-1.0]
             V2: Real EfficientSAM + CLIP classification (if dependencies available)
             V1: Heuristic-based segmentation (fallback)
 

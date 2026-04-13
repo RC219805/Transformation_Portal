@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import builtins
 import json
 import subprocess
 import sys
@@ -14,6 +15,7 @@ import pytest
 
 from transformation_portal.depth.backends.depth_pro import DepthProBackend
 from transformation_portal.depth.backends.depth_pro_worker import (
+    _check_availability,
     _check_device_availability,
     _torch_diagnostics,
 )
@@ -127,6 +129,27 @@ def test_torch_diagnostics_handles_missing_optional_accelerator_backends(
     assert diagnostics["mps_built"] is False
     assert diagnostics["mps_available"] is False
     assert diagnostics["cuda_available"] is False
+
+
+def test_check_availability_reports_missing_checkpoint_before_imports(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    missing_checkpoint = tmp_path / "missing-depth-pro.pt"
+    real_import = builtins.__import__
+
+    def _guarded_import(name: str, *args: object, **kwargs: object) -> object:
+        if name == "depth_pro":
+            raise AssertionError("depth_pro import should not run when checkpoint is missing")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", _guarded_import)
+
+    returncode = _check_availability(missing_checkpoint, "cpu")
+
+    assert returncode == 1
+    assert f"Checkpoint not found: {missing_checkpoint}" in capsys.readouterr().err
 
 
 def test_compute_normalizes_device_override_for_readiness_and_subprocess(tmp_path: Path) -> None:
