@@ -464,6 +464,9 @@ input::placeholder {
 
 button {
   border: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border-radius: 999px;
   min-height: var(--ux-target-min-size);
   padding: 0.95rem 1.15rem;
@@ -761,6 +764,194 @@ code {
   .login-sequence {
     grid-template-columns: 1fr;
   }
+}
+
+body {
+  background:
+    radial-gradient(circle at top right, rgba(56, 189, 248, 0.08), transparent 24%),
+    linear-gradient(180deg, #020617 0%, #081122 48%, #020617 100%);
+}
+
+.hero-video {
+  opacity: 0.12;
+  filter: saturate(0.84) brightness(0.7) contrast(1);
+}
+
+.shell::after {
+  background: linear-gradient(180deg, rgba(2, 6, 23, 0.28), rgba(2, 6, 23, 0.88));
+}
+
+.brand-kicker,
+.brand-subtitle,
+.eyebrow,
+.login-status-card-kicker,
+.login-recovery-card-title,
+.login-sequence-step-kicker,
+.login-next-step-kicker {
+  letter-spacing: var(--ux-meta-tracking);
+}
+
+.card,
+.card--login,
+.login-status-card,
+.login-sequence-step,
+.login-recovery-card,
+.banner,
+.card-meta--verified,
+input,
+button,
+.login-secondary-link,
+.login-next-step,
+.login-secondary-details,
+.login-secondary-details summary {
+  border-radius: var(--ux-radius-lg);
+}
+
+.card {
+  width: min(100%, 29rem);
+  border-color: var(--ux-border-subtle);
+  background: rgba(8, 15, 29, 0.92);
+  backdrop-filter: blur(12px);
+  box-shadow: var(--ux-shadow-overlay);
+}
+
+.card--login {
+  background: rgba(8, 15, 29, 0.94);
+}
+
+.lede {
+  margin-bottom: 1.15rem;
+  color: var(--ux-text-muted);
+}
+
+.login-entry-state {
+  grid-template-columns: 1fr;
+  margin-bottom: 1rem;
+}
+
+.login-status-card,
+.login-sequence-step,
+.login-recovery-card,
+.card-meta--verified,
+.login-next-step {
+  border-color: var(--ux-border-subtle);
+  background: rgba(15, 23, 42, 0.74);
+  box-shadow: var(--ux-shadow-surface);
+}
+
+.login-status-card[data-state="verified"],
+.login-status-card[data-state="ready"],
+.login-sequence-step--ready,
+.card-meta--verified {
+  border-color: rgba(94, 234, 212, 0.24);
+  background:
+    linear-gradient(180deg, rgba(15, 118, 110, 0.1), rgba(15, 23, 42, 0.78)),
+    rgba(15, 23, 42, 0.76);
+}
+
+.login-status-card[data-state="blocked"],
+.login-recovery-card[data-state="access"],
+.login-recovery-card[data-state="access_outage"],
+.login-recovery-card[data-state="configuration"],
+.login-recovery-card[data-state="config_failure"],
+.login-recovery-card[data-state="csrf"],
+.login-recovery-card[data-state="throttled"],
+.login-recovery-card[data-state="invalid"],
+.login-recovery-card[data-state="upstream_unavailable"] {
+  border-color: rgba(248, 113, 113, 0.24);
+  background:
+    linear-gradient(180deg, rgba(127, 29, 29, 0.12), rgba(15, 23, 42, 0.78)),
+    rgba(15, 23, 42, 0.76);
+}
+
+.login-next-step {
+  display: grid;
+  gap: 0.35rem;
+  margin-bottom: 1rem;
+  padding: 0.95rem 1rem;
+}
+
+.login-next-step-kicker,
+.login-next-step-title,
+.login-next-step-detail {
+  margin: 0;
+}
+
+.login-next-step-title {
+  font-size: 0.98rem;
+  font-weight: 800;
+  line-height: 1.35;
+  color: var(--frontdoor-ink);
+}
+
+.login-next-step-detail {
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: var(--frontdoor-muted-soft);
+}
+
+.login-secondary-details {
+  margin-bottom: 1rem;
+  border: 1px solid var(--ux-border-subtle);
+  background: rgba(8, 15, 29, 0.88);
+  box-shadow: var(--ux-shadow-surface);
+}
+
+.login-secondary-details summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-height: var(--ux-target-min-size);
+  padding: 0.85rem 1rem;
+  cursor: pointer;
+  list-style: none;
+  color: var(--frontdoor-ink);
+  font-weight: 700;
+}
+
+.login-secondary-details summary::-webkit-details-marker {
+  display: none;
+}
+
+.login-secondary-details__meta {
+  color: var(--frontdoor-muted-soft);
+  font-size: var(--ux-label-size);
+  letter-spacing: var(--ux-meta-tracking);
+  text-transform: uppercase;
+}
+
+.login-secondary-details__content {
+  display: grid;
+  gap: 0.9rem;
+  padding: 0 1rem 1rem;
+}
+
+input,
+button,
+.login-secondary-link {
+  min-height: var(--ux-target-min-size);
+}
+
+input {
+  border-color: var(--ux-border-subtle);
+  background: rgba(15, 23, 42, 0.78);
+}
+
+button {
+  border: 1px solid rgba(125, 211, 252, 0.18);
+  background: linear-gradient(135deg, rgba(15, 118, 110, 0.96), rgba(8, 145, 178, 0.9));
+  box-shadow: var(--ux-shadow-surface);
+}
+
+.login-secondary-link {
+  border-color: var(--ux-border-subtle);
+  background: rgba(15, 23, 42, 0.74);
+}
+
+button,
+.login-secondary-link {
+  width: 100%;
 }
 
 @media (prefers-reduced-motion: reduce) {

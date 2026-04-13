@@ -162,6 +162,22 @@ def test_portal_browser_state_probe_tracks_contextual_action_controls():
     assert "reviewStatusPrimaryKey" in expression
 
 
+def test_portal_browser_accessibility_probe_tracks_target_size_and_disclosure_contracts():
+    module = _load_module(PORTAL_BROWSER_SCRIPT_PATH, "tests_validate_portal_browser_smoke_accessibility_probe")
+
+    expression = module._accessibility_probe_expression()
+
+    assert "#themeBtn" in expression
+    assert "#shortcutsBtn" in expression
+    assert '[data-ui="view-link"]' in expression
+    assert "#buildStepTab1" in expression
+    assert "focusVisibleWithStickyShells" in expression
+    assert "maxDisclosureDepth" in expression
+    assert "discoverableDisclosures" in expression
+    assert "prefers-reduced-motion" in expression
+    assert "decorativeMotionStatic" in expression
+
+
 def test_portal_browser_can_simulate_bootstrap_degraded_recovery_actions():
     module = _load_module(PORTAL_BROWSER_SCRIPT_PATH, "tests_validate_portal_browser_smoke_degraded_expr")
 
@@ -459,6 +475,22 @@ def test_frontdoor_browser_waits_for_managed_portal_bootstrap_before_passing():
     assert "/healthz" in content
     assert "--spawn-local-frontdoor" in content
     assert "--spawn-local-backend" in content
+
+
+def test_frontdoor_browser_accessibility_probe_tracks_target_size_and_reduced_motion():
+    module = _load_module(FRONTDOOR_BROWSER_SCRIPT_PATH, "tests_validate_frontdoor_browser_smoke_accessibility_probe")
+
+    expression = module._frontdoor_accessibility_probe_expression()
+
+    assert '[data-ui="homepage-primary-cta"]' in expression
+    assert '[data-ui="homepage-secondary-cta"]' in expression
+    assert '[data-ui="homepage-learn-link"]' in expression
+    assert '[data-ui="login-submit"]' in expression
+    assert '[data-ui="login-secondary-link"]' in expression
+    assert "maxDisclosureDepth" in expression
+    assert "focusVisibleWithStickyHeader" in expression
+    assert "prefers-reduced-motion" in expression
+    assert "decorativeMotionStatic" in expression
 
 
 def test_portal_browser_smoke_tracks_archive_readiness_fields_and_canonical_commands():

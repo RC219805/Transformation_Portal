@@ -1,6 +1,87 @@
-/* Shared UI primitives used by both the managed frontdoor and portal console. */
+/* Canonical shared UI token source used by both the managed frontdoor and portal console. */
+/* build-portal-bundle.mjs copies this file into the shipped frontdoor and portal asset targets. */
 :root {
+  color-scheme: light dark;
+
   --ux-target-min-size: 44px;
-  --ux-label-size: 0.8125rem;
   --ux-body-size: 1rem;
+  --ux-label-size: 0.75rem;
+  --ux-meta-size: 0.8125rem;
+
+  --ux-space-1: 0.25rem;
+  --ux-space-2: 0.5rem;
+  --ux-space-3: 0.75rem;
+  --ux-space-4: 1rem;
+  --ux-space-5: 1.25rem;
+  --ux-space-6: 1.5rem;
+  --ux-space-8: 2rem;
+
+  --ux-radius-sm: 6px;
+  --ux-radius-md: 8px;
+  --ux-radius-lg: 8px;
+  --ux-radius-pill: 999px;
+
+  --ux-focus-ring: rgba(8, 145, 178, 0.92);
+  --ux-focus-shadow: rgba(8, 145, 178, 0.18);
+
+  --ux-shadow-surface: 0 10px 24px rgba(15, 23, 42, 0.06);
+  --ux-shadow-overlay: 0 20px 44px rgba(15, 23, 42, 0.16);
+
+  --ux-border-subtle: rgba(100, 116, 139, 0.18);
+  --ux-border-strong: rgba(8, 145, 178, 0.24);
+
+  --ux-text-strong: #0f172a;
+  --ux-text-primary: #1e293b;
+  --ux-text-muted: #475569;
+  --ux-text-soft: #64748b;
+
+  --ux-surface-canvas: #f4f7fb;
+  --ux-surface-elevated: rgba(255, 255, 255, 0.92);
+  --ux-surface-muted: rgba(248, 250, 252, 0.9);
+  --ux-surface-overlay: rgba(255, 255, 255, 0.97);
+
+  --ux-accent-primary: #0f766e;
+  --ux-accent-secondary: #0f766e;
+  --ux-status-ready: #0f766e;
+  --ux-status-warning: #b45309;
+  --ux-status-blocked: #b91c1c;
+
+  --ux-meta-tracking: 0.12em;
+  --ux-motion-fast: 160ms;
+  --ux-motion-normal: 220ms;
+}
+
+:root.dark,
+.dark:root {
+  --ux-focus-ring: rgba(103, 232, 249, 0.96);
+  --ux-focus-shadow: rgba(34, 211, 238, 0.18);
+
+  --ux-shadow-surface: 0 12px 28px rgba(2, 6, 23, 0.22);
+  --ux-shadow-overlay: 0 22px 48px rgba(2, 6, 23, 0.38);
+
+  --ux-border-subtle: rgba(100, 116, 139, 0.34);
+  --ux-border-strong: rgba(103, 232, 249, 0.22);
+
+  --ux-text-strong: #f8fafc;
+  --ux-text-primary: #e2e8f0;
+  --ux-text-muted: #b8c4d4;
+  --ux-text-soft: #94a3b8;
+
+  --ux-surface-canvas: #020617;
+  --ux-surface-elevated: rgba(12, 18, 34, 0.9);
+  --ux-surface-muted: rgba(15, 23, 42, 0.86);
+  --ux-surface-overlay: rgba(8, 15, 29, 0.96);
+
+  --ux-accent-primary: #67e8f9;
+  --ux-accent-secondary: #99f6e4;
+  --ux-status-ready: #5eead4;
+  --ux-status-warning: #fbbf24;
+  --ux-status-blocked: #fca5a5;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --ux-motion-fast: 0ms;
+    --ux-motion-normal: 0ms;
+  }
 }

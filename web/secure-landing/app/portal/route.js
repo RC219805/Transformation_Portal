@@ -94,18 +94,18 @@ function renderManagedPortalRecoveryPage({ reason, message }) {
           <div class="card card--login" data-ui="managed-recovery-card">
             <p class="eyebrow">Managed portal entry</p>
             <h1>${safeTitle}</h1>
-            <p class="lede">${safeDetail}</p>
+            <p class="lede">The managed boundary stays closed until the blocking condition is resolved.</p>
             <div class="login-entry-state">
-              <article class="login-status-card" data-state="${recoveryTone}">
-                <p class="login-status-card-kicker">State</p>
+              <article class="login-status-card login-status-card--full" data-state="${recoveryTone}">
+                <p class="login-status-card-kicker">Current state</p>
                 <p class="login-status-card-title">${safeLabel}</p>
                 <p class="login-status-card-detail">${safeDetail}</p>
               </article>
-              <article class="login-status-card" data-state="${recoveryTone}">
-                <p class="login-status-card-kicker">Next step</p>
-                <p class="login-status-card-title">Recover, then retry</p>
-                <p class="login-status-card-detail">${safeNextStep}</p>
-              </article>
+            </div>
+            <div class="login-next-step" data-state="${recoveryTone}">
+              <p class="login-next-step-kicker">Next step</p>
+              <p class="login-next-step-title">Recover, then retry</p>
+              <p class="login-next-step-detail">${safeNextStep}</p>
             </div>
             <div class="login-status-stack">
               <div class="login-recovery-card" data-ui="managed-recovery-guidance" data-state="${safeReason}">

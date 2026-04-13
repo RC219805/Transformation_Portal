@@ -1228,7 +1228,8 @@ test("portal renders waiting recovery posture for Access outages", async () => {
       assert.equal(response.status, 503);
       assert.match(html, /data-ui="managed-recovery-shell"/);
       assert.match(html, /data-reason="access_outage"/);
-      assert.match(html, /class="login-status-card" data-state="waiting"/);
+      assert.match(html, /class="[^"]*\blogin-status-card\b[^"]*"/);
+      assert.match(html, /data-state="waiting"/);
       assert.match(html, /Retry when Access recovers/);
     } finally {
       global.fetch = originalFetch;
@@ -1710,6 +1711,22 @@ test("shared portal asset manifest pins the managed asset proxy allowlist", asyn
     "brand/dna-symbol-dark.svg",
     "brand/dna-symbol-light.svg"
   ]);
+});
+
+test("shared UI tokens stay synced to the canonical source", () => {
+  const repoRoot = path.resolve(process.cwd(), "..", "..");
+  const canonicalTokenPath = path.join(repoRoot, "web", "shared", "shared-ui-tokens.css");
+  const frontdoorTokenPath = path.join(process.cwd(), "public", "shared-ui-tokens.css");
+  const portalTokenPath = path.join(repoRoot, "public", "portal-assets", "shared-ui-tokens.css");
+  const buildScriptPath = path.join(process.cwd(), "scripts", "build-portal-bundle.mjs");
+  const canonicalTokens = readFileSync(canonicalTokenPath, "utf-8");
+  const buildScript = readFileSync(buildScriptPath, "utf-8");
+
+  assert.equal(readFileSync(frontdoorTokenPath, "utf-8"), canonicalTokens);
+  assert.equal(readFileSync(portalTokenPath, "utf-8"), canonicalTokens);
+  assert.match(buildScript, /const SHARED_TOKEN_SOURCE_PATH = path\.resolve\(REPO_ROOT, "web", "shared", "shared-ui-tokens\.css"\);/);
+  assert.match(buildScript, /copyIfChanged\(SHARED_TOKEN_SOURCE_PATH,\s*PORTAL_SHARED_TOKEN_TARGET\)/);
+  assert.match(buildScript, /copyIfChanged\(SHARED_TOKEN_SOURCE_PATH,\s*FRONTDOOR_SHARED_TOKEN_TARGET\)/);
 });
 
 test("v1 POST rejects requests missing valid same-origin CSRF protections", async () => {
