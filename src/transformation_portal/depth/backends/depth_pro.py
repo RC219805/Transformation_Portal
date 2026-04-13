@@ -264,13 +264,17 @@ class DepthProBackend:
             return stdout_clean
         return "(no output)"
 
-    def ensure_available(self, device: Optional[str] = None) -> None:
-        """Ensure Depth Pro dependencies and checkpoint are available."""
+    def _ensure_runtime_available(self, device: Optional[str] = None) -> None:
+        """Ensure Depth Pro dependencies and checkpoint are available for a device."""
         self._ensure_checkpoint_exists()
         if self._uses_subprocess():
             self._ensure_subprocess_available(device=device)
             return
         self._ensure_local_package_available()
+
+    def ensure_available(self) -> None:
+        """Ensure Depth Pro dependencies and checkpoint are available."""
+        self._ensure_runtime_available(device=self._device)
 
     @classmethod
     def required_packages(cls) -> list[str]:
@@ -285,7 +289,7 @@ class DepthProBackend:
         """Estimate metric depth from image."""
         self._validate_license_runtime()
         use_device = device or self._device
-        self.ensure_available(device=use_device)
+        self._ensure_runtime_available(device=use_device)
 
         if self._uses_subprocess():
             return self._compute_subprocess(image, use_device)

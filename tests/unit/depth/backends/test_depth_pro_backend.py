@@ -6,12 +6,16 @@ import json
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
 
 from transformation_portal.depth.backends.depth_pro import DepthProBackend
-from transformation_portal.depth.backends.depth_pro_worker import _check_device_availability
+from transformation_portal.depth.backends.depth_pro_worker import (
+    _check_device_availability,
+    _torch_diagnostics,
+)
 from transformation_portal.lux_depth_v3.config import EnhanceConfig
 
 pytestmark = [
@@ -103,3 +107,21 @@ def test_worker_reports_structured_mps_diagnostics(capsys: pytest.CaptureFixture
     assert payload["status"] == "unavailable"
     assert payload["device"] == "mps"
     assert payload["mps_available"] is False
+
+
+def test_torch_diagnostics_handles_missing_optional_accelerator_backends(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_torch = SimpleNamespace(
+        __version__="test",
+        backends=SimpleNamespace(),
+        cuda=None,
+    )
+    monkeypatch.setitem(sys.modules, "torch", fake_torch)
+
+    diagnostics = _torch_diagnostics("mps")
+
+    assert diagnostics["torch_version"] == "test"
+    assert diagnostics["mps_built"] is False
+    assert diagnostics["mps_available"] is False
+    assert diagnostics["cuda_available"] is False

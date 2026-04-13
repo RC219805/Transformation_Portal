@@ -8,9 +8,6 @@ import sys
 from pathlib import Path
 from typing import Any
 
-import numpy as np
-from PIL import Image
-
 from ...ingest.canonical_json import dump_json, dumps_json
 
 
@@ -70,10 +67,22 @@ def _torch_diagnostics(device: str) -> dict[str, Any]:
         diagnostics["torch_import_error"] = str(exc)
         return diagnostics
 
+    def _safe_bool_call(callback: Any) -> bool:
+        if not callable(callback):
+            return False
+        try:
+            return bool(callback())
+        except Exception:
+            return False
+
+    torch_backends = getattr(torch, "backends", None)
+    mps_backend = getattr(torch_backends, "mps", None)
+    torch_cuda = getattr(torch, "cuda", None)
+
     diagnostics["torch_version"] = getattr(torch, "__version__", "unknown")
-    diagnostics["mps_built"] = bool(torch.backends.mps.is_built())
-    diagnostics["mps_available"] = bool(torch.backends.mps.is_available())
-    diagnostics["cuda_available"] = bool(torch.cuda.is_available())
+    diagnostics["mps_built"] = _safe_bool_call(getattr(mps_backend, "is_built", None))
+    diagnostics["mps_available"] = _safe_bool_call(getattr(mps_backend, "is_available", None))
+    diagnostics["cuda_available"] = _safe_bool_call(getattr(torch_cuda, "is_available", None))
     return diagnostics
 
 
@@ -136,6 +145,9 @@ def _run_inference(
     device: str,
 ) -> int:
     """Run Depth Pro inference and persist structured outputs."""
+    import numpy as np
+    from PIL import Image
+
     from ...stage_graph.stage import StageContext, StageStatus
     from ...stage_graph.stages.depth_pro import DepthProStage
 
