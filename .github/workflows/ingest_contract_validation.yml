@@ -65,7 +65,7 @@ jobs:
           python -m pip install --upgrade pip
           # Keep the ingest contract lane lightweight and deterministic.
           # The tests exercise ingest schemas/validators, not the full runtime stack.
-          python -m pip install "numpy>=1.24,<2.5.0" "pydantic>=2.0,<3" pytest "jsonschema>=4.23,<5"
+          python -m pip install "numpy>=1.24,<2.5.0" "pydantic>=2.0,<3" "Pillow>=10.0.0,<13" pytest "jsonschema>=4.23,<5"
           python -m pip install -e . --no-deps
           python -c "import jsonschema; print(jsonschema.__version__)"
 
