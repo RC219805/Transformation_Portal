@@ -5835,7 +5835,7 @@ class EnhanceOrchestrator:
         if self.config.hash_mode == HashMode.NEVER:
             return []
 
-        input_paths: List[Path] = []
+        input_entries: List[tuple[Path, Dict[str, Any]]] = []
         for result in results:
             image_path = result.get("image")
             if not isinstance(image_path, str) or not image_path.strip():
@@ -5843,10 +5843,12 @@ class EnhanceOrchestrator:
             candidate = Path(image_path)
             if not candidate.exists() or not candidate.is_file():
                 continue
-            input_paths.append(candidate)
+            input_entries.append((candidate, result))
 
-        if not input_paths:
+        if not input_entries:
             return []
+
+        input_paths = [candidate for candidate, _ in input_entries]
 
         try:
             common_root = Path(os.path.commonpath([str(path.parent) for path in input_paths]))
@@ -5855,7 +5857,7 @@ class EnhanceOrchestrator:
 
         records: List[Dict[str, Any]] = []
         seen_paths: set[str] = set()
-        for input_path in input_paths:
+        for input_path, result in input_entries:
             try:
                 relative_path = str(input_path.relative_to(common_root))
             except ValueError:
@@ -5877,13 +5879,13 @@ class EnhanceOrchestrator:
                 size_bytes = input_path.stat().st_size
             except OSError:
                 size_bytes = None
-            records.append(
-                {
-                    "path": relative_path,
-                    "sha256": source_hash,
-                    "size_bytes": size_bytes,
-                }
-            )
+            record: Dict[str, Any] = {
+                "path": relative_path,
+                "sha256": source_hash,
+            }
+            if isinstance(size_bytes, int):
+                record["size_bytes"] = size_bytes
+            records.append(record)
         return records
 
     def _build_run_card_effective_config(

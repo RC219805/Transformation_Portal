@@ -6,6 +6,7 @@ import hashlib
 import json
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import patch
 
 import numpy as np
@@ -866,5 +867,82 @@ def test_build_run_card_inputs_reuses_result_input_sha256(tmp_path: Path) -> Non
             "path": "image_01.png",
             "sha256": "a" * 64,
             "size_bytes": len(b"pixels"),
+        }
+    ]
+
+
+def test_build_run_card_inputs_preserves_per_result_input_sha256(tmp_path: Path) -> None:
+    config = EnhanceConfig(model_variant=ModelVariant.METRIC_LARGE)
+    orch = EnhanceOrchestrator(config, tmp_path)
+    input_dir = tmp_path / "inputs"
+    input_dir.mkdir(parents=True, exist_ok=True)
+    input_a = input_dir / "image_01.png"
+    input_b = input_dir / "image_02.png"
+    input_a.write_bytes(b"first")
+    input_b.write_bytes(b"second")
+
+    with patch(
+        "transformation_portal.lux_depth_v3.orchestrator.compute_file_sha256",
+        side_effect=AssertionError("rehash"),
+    ):
+        records = orch._build_run_card_inputs(
+            [
+                {
+                    "image": str(input_a),
+                    "input_sha256": "A" * 64,
+                },
+                {
+                    "image": str(input_b),
+                    "input_sha256": "B" * 64,
+                },
+            ]
+        )
+
+    assert records == [
+        {
+            "path": "image_01.png",
+            "sha256": "a" * 64,
+            "size_bytes": len(b"first"),
+        },
+        {
+            "path": "image_02.png",
+            "sha256": "b" * 64,
+            "size_bytes": len(b"second"),
+        },
+    ]
+
+
+def test_build_run_card_inputs_omits_size_bytes_when_stat_fails(tmp_path: Path) -> None:
+    config = EnhanceConfig(model_variant=ModelVariant.METRIC_LARGE)
+    orch = EnhanceOrchestrator(config, tmp_path)
+    input_path = tmp_path / "inputs" / "image_01.png"
+    input_path.parent.mkdir(parents=True, exist_ok=True)
+    input_path.write_bytes(b"pixels")
+
+    original_stat = type(input_path).stat
+    stat_calls = 0
+
+    def flaky_stat(path_obj: Path, *args: Any, **kwargs: Any):
+        nonlocal stat_calls
+        if path_obj == input_path:
+            stat_calls += 1
+            if stat_calls >= 3:
+                raise OSError("stat unavailable")
+        return original_stat(path_obj, *args, **kwargs)
+
+    with patch.object(type(input_path), "stat", autospec=True, side_effect=flaky_stat):
+        records = orch._build_run_card_inputs(
+            [
+                {
+                    "image": str(input_path),
+                    "input_sha256": "A" * 64,
+                }
+            ]
+        )
+
+    assert records == [
+        {
+            "path": "image_01.png",
+            "sha256": "a" * 64,
         }
     ]
