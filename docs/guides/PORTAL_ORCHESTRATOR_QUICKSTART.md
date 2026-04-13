@@ -64,7 +64,8 @@ export TP_READY_VERBOSE=1
 ## Endpoints
 
 - `GET /ready` returns a shallow backend liveness signal.
-- `GET /healthz` returns the managed front-door liveness signal.
+- `GET /healthz` returns the backend's minimal liveness signal; the secure front
+  door exposes its own `/healthz` route with the managed readiness checks.
 - `GET /v1/readiness` returns the operator-truth execution readiness matrix for `lux-depth-v3`, `archive-gate-a`, `archive-gate-b`, and `archive-gate-c`.
 - `GET /portal/bootstrap` returns the standalone portal bootstrap contract for `direct_debug` mode.
 - `GET /v1/presets?pipeline=lux-depth-v3` dynamic UI preset catalog.
