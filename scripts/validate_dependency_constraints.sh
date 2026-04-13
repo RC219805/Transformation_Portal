@@ -204,6 +204,7 @@ validate_target_owned_ml_freshness() {
     local host_arch=""
     local check_target=""
     local compile_fix=""
+    local check_output=""
 
     case "$basename" in
         "ml-core-darwin-x86_64.in")
@@ -235,12 +236,24 @@ validate_target_owned_ml_freshness() {
             ;;
     esac
 
-    if make -C requirements "$check_target" LOCK_PYTHON_VERSION=3.11 >/dev/null 2>&1; then
-        return 0
+    if [[ $VERBOSE -eq 1 ]]; then
+        if check_output=$(make -C requirements "$check_target" LOCK_PYTHON_VERSION=3.11 2>&1); then
+            return 0
+        fi
+    else
+        if make -C requirements "$check_target" LOCK_PYTHON_VERSION=3.11 >/dev/null 2>&1; then
+            return 0
+        fi
     fi
 
     echo -e "${YELLOW}⚠️  $basename: Target-owned ML lock freshness check failed${NC}"
     echo -e "   ${BOLD}WARNING:${NC} $(basename "$txt_file") could not be validated by $check_target on this authoritative lane"
+    if [[ $VERBOSE -eq 1 && -n "$check_output" ]]; then
+        echo -e "   ${BOLD}Details:${NC}"
+        while IFS= read -r output_line; do
+            echo "     $output_line"
+        done <<< "$check_output"
+    fi
     echo -e "   ${BOLD}Fix:${NC} $compile_fix\n"
     return 1
 }

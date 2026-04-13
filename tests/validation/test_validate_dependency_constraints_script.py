@@ -101,20 +101,29 @@ def _write_fake_uname(path: Path, *, system: str, machine: str) -> Path:
     )
 
 
-def _write_fake_make(path: Path, *, expected_target: str | None, exit_code: int) -> Path:
+def _write_fake_make(
+    path: Path,
+    *,
+    expected_target: str | None,
+    exit_code: int,
+    stdout_text: str = "",
+    stderr_text: str = "",
+) -> Path:
     if expected_target is None:
         content = '#!/bin/sh\necho "unexpected make invocation: $*" >&2\nexit 97\n'
         return _write_executable(path, content)
 
     content = (
         "#!/bin/sh\n"
-        'if [ "$1" != "-C" ] || [ "$2" != "requirements" ] || [ "$3" != "'
+        + 'if [ "$1" != "-C" ] || [ "$2" != "requirements" ] || [ "$3" != "'
         + expected_target
         + '" ] || [ "$4" != "LOCK_PYTHON_VERSION=3.11" ]; then\n'
-        '  echo "unexpected make args: $*" >&2\n'
-        "  exit 98\n"
-        "fi\n"
-        f"exit {exit_code}\n"
+        + '  echo "unexpected make args: $*" >&2\n'
+        + "  exit 98\n"
+        + "fi\n"
+        + (f"printf '%s\\n' {shlex.quote(stdout_text)}\n" if stdout_text else "")
+        + (f"printf '%s\\n' {shlex.quote(stderr_text)} >&2\n" if stderr_text else "")
+        + f"exit {exit_code}\n"
     )
     return _write_executable(path, content)
 
@@ -279,6 +288,51 @@ def test_target_owned_ml_inputs_warn_when_authoritative_lane_check_fails(
     assert "Target-owned ML lock freshness check failed" in result.stdout
     assert check_target in result.stdout
     assert compile_fix in result.stdout
+    assert "unexpected make" not in result.stdout
+
+
+@pytest.mark.parametrize(
+    ("input_name", "lock_name", "system", "machine", "check_target"),
+    (
+        ("ml-core-darwin-arm64.in", "ml-core-darwin-arm64.txt", "Darwin", "arm64", "check-ml-darwin-arm64"),
+        ("ml-core-linux.in", "ml-core-linux.txt", "Linux", "x86_64", "check-ml-linux-x86_64"),
+    ),
+)
+def test_target_owned_ml_inputs_surface_lane_check_output_in_verbose_mode(
+    tmp_path: Path,
+    input_name: str,
+    lock_name: str,
+    system: str,
+    machine: str,
+    check_target: str,
+) -> None:
+    repo_root = tmp_path / "repo"
+    _prepare_validator_repo(repo_root)
+
+    requirements_dir = repo_root / "requirements"
+    requirements_dir.mkdir(parents=True, exist_ok=True)
+    in_path = requirements_dir / input_name
+    txt_path = requirements_dir / lock_name
+    in_path.write_text("numpy>=1.24,<2.5  # Verbose delegated failure coverage\n", encoding="utf-8")
+    _write_lockfile(txt_path)
+    _make_stale(in_path, txt_path)
+
+    fakebin = tmp_path / "fakebin"
+    _write_fake_uname(fakebin / "uname", system=system, machine=machine)
+    _write_fake_make(
+        fakebin / "make",
+        expected_target=check_target,
+        exit_code=1,
+        stdout_text="delegated stdout detail",
+        stderr_text="delegated stderr detail",
+    )
+
+    result = _run_validator(repo_root, path=f"{fakebin}:{DEFAULT_PATH}", verbose=True)
+
+    assert result.returncode == 2, result.stdout + result.stderr
+    assert "Details:" in result.stdout
+    assert "delegated stdout detail" in result.stdout
+    assert "delegated stderr detail" in result.stdout
 
 
 def test_validator_uses_repo_resolved_python_instead_of_path_python3(tmp_path: Path) -> None:
