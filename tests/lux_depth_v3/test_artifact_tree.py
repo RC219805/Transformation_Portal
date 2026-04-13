@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from transformation_portal.lux_depth_v3.artifact_tree import (
     RUN_CARD_ARTIFACT_LEAF_FORMAT,
     RUN_CARD_ARTIFACT_TREE_ALGORITHM,
@@ -9,6 +11,8 @@ from transformation_portal.lux_depth_v3.artifact_tree import (
     build_artifact_tree,
     verify_artifact_tree_payload,
 )
+
+pytestmark = pytest.mark.unit
 
 
 def _artifact(relative_path: str, *, digest: str) -> dict[str, object]:

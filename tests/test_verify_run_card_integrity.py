@@ -296,7 +296,9 @@ def test_verify_run_card_integrity_rejects_requested_depth_pro_full_fallback(tmp
     payload["backend_summary"]["primary_backend"] = "da3"
     payload["backend_summary"]["final_backends_used"] = ["da3"]
     payload["backend_summary"]["fallback_images"] = 2
+    payload["total_images"] = 2
     payload["success_count"] = 2
+    payload["error_count"] = 0
     _write_json(run_card_path, payload)
 
     errors = module.verify_run_card_integrity(run_card_path)
@@ -328,7 +330,9 @@ def test_verify_run_card_integrity_rejects_combined_manifest_path_escape(tmp_pat
 
     errors = module.verify_run_card_integrity(run_card_path)
     assert any(
-        "combined_manifest artifact relative_path escapes run card root: ../outside_manifest.json" in error for error in errors
+        "artifact_index[1].relative_path artifact relative_path must not contain traversal segments: ../outside_manifest.json"
+        in error
+        for error in errors
     )
     assert not any("secret outside reason" in error for error in errors)
 
@@ -496,8 +500,7 @@ def test_verify_run_card_integrity_rejects_reconstruction_diagnostics_path_escap
 
     errors = module.verify_run_card_integrity(run_card_path)
     assert any(
-        "reconstruction_diagnostics artifact relative_path escapes run card root: ../outside_diagnostics.json" in error
-        for error in errors
+        "artifact relative_path must not contain traversal segments: ../outside_diagnostics.json" in error for error in errors
     )
 
 

@@ -569,6 +569,174 @@ def test_segment_materials_sam2_backend_with_mock(sample_image, config_sam2, mon
     assert float(masks["glass"].max()) == 1.0
 
 
+def test_segment_materials_sam2_backend_forwards_generator_and_tiling_config(sample_image, monkeypatch):
+    """segment_materials should forward SAM2 generator and tiling controls through the wrapper."""
+    import transformation_portal.lux_depth_v3.segmentation_backend as seg_module
+
+    captured: dict[str, object] = {}
+
+    class FakeSpatialSAM2Backend:
+        def __init__(
+            self,
+            model_size,
+            device,
+            checkpoint_path,
+            generator_kwargs,
+            enable_material_classification,
+            material_confidence_threshold,
+            tiling,
+        ):
+            captured["model_size"] = model_size
+            captured["device"] = device
+            captured["checkpoint_path"] = checkpoint_path
+            captured["generator_kwargs"] = dict(generator_kwargs)
+            captured["enable_material_classification"] = enable_material_classification
+            captured["material_confidence_threshold"] = material_confidence_threshold
+            captured["configured_tiling"] = tiling
+            self.device = device
+            self.tiling = tiling
+
+        def segment(self, seg_input):
+            captured["effective_tiling"] = self.tiling
+            h, w = seg_input.image.shape[:2]
+            masks = np.zeros((1, h, w), dtype=bool)
+            masks[0, 10:30, 10:30] = True
+            scores = np.array([0.88], dtype=np.float32)
+            metadata = [
+                SimpleNamespace(
+                    area=400,
+                    bbox=(10, 10, 20, 20),
+                    stability_score=0.9,
+                    material_label="clear glass",
+                    material_confidence=0.91,
+                )
+            ]
+            return SimpleNamespace(masks=masks, scores=scores, metadata=metadata)
+
+    monkeypatch.setattr(seg_module, "SPATIAL_SAM2_AVAILABLE", True)
+    monkeypatch.setattr(seg_module, "SpatialSAM2Backend", FakeSpatialSAM2Backend)
+    seg_module._get_backend_instance.cache_clear()
+
+    config = EnhanceConfig(
+        enable_material_segmentation=True,
+        material_segmentation_backend="sam2",
+        depth_device="cpu",
+        sam2_model_size="large",
+        sam2_tiling_enabled=True,
+        sam2_tile_size_px=1024,
+        sam2_overlap_px=128,
+        sam2_global_pass_longest_side=900,
+        sam2_max_concurrency=1,
+        sam2_points_per_side=16,
+        sam2_points_per_batch=32,
+        sam2_pred_iou_thresh=0.77,
+        sam2_stability_score_thresh=0.66,
+        sam2_crop_n_layers=2,
+    )
+
+    try:
+        masks = segment_materials(sample_image, config)
+    finally:
+        seg_module._get_backend_instance.cache_clear()
+
+    assert "glass" in masks
+    assert captured["model_size"] == "large"
+    assert captured["device"] == "cpu"
+    assert captured["generator_kwargs"] == {
+        "points_per_side": 16,
+        "points_per_batch": 32,
+        "pred_iou_thresh": pytest.approx(0.77),
+        "stability_score_thresh": pytest.approx(0.66),
+        "crop_n_layers": 2,
+    }
+    configured_tiling = captured["configured_tiling"]
+    assert getattr(configured_tiling, "enabled", False) is True
+    assert getattr(configured_tiling, "tile_size_px", None) == 1024
+    assert getattr(configured_tiling, "overlap_px", None) == 128
+    assert getattr(getattr(configured_tiling, "global_pass", None), "longest_side", None) == 900
+    assert getattr(configured_tiling, "max_concurrency", None) == 1
+
+    metadata = get_last_segmentation_runtime_metadata()
+    assert metadata is not None
+    assert metadata["sam2_runtime"]["generator_kwargs"]["points_per_side"] == 16
+    assert metadata["sam2_runtime"]["generator_kwargs"]["points_per_batch"] == 32
+    assert metadata["sam2_runtime"]["tiling"]["effective"]["enabled"] is True
+    assert metadata["sam2_runtime"]["tiling"]["auto_enabled"] is False
+
+
+def test_segment_materials_sam2_backend_auto_enables_tiling_for_large_images(monkeypatch):
+    """Large images should auto-enable deterministic tiling even when not explicitly requested."""
+    import transformation_portal.lux_depth_v3.segmentation_backend as seg_module
+
+    captured: dict[str, object] = {}
+
+    class FakeSpatialSAM2Backend:
+        def __init__(
+            self,
+            model_size,
+            device,
+            checkpoint_path,
+            generator_kwargs,
+            enable_material_classification,
+            material_confidence_threshold,
+            tiling,
+        ):
+            del model_size, checkpoint_path, generator_kwargs, enable_material_classification, material_confidence_threshold
+            captured["configured_tiling"] = tiling
+            self.device = device
+            self.tiling = tiling
+
+        def segment(self, seg_input):
+            captured["effective_tiling"] = self.tiling
+            h, w = seg_input.image.shape[:2]
+            masks = np.zeros((1, h, w), dtype=bool)
+            masks[0, :2, :1] = True
+            scores = np.array([0.75], dtype=np.float32)
+            metadata = [
+                SimpleNamespace(
+                    area=2,
+                    bbox=(0, 0, 1, 2),
+                    stability_score=0.8,
+                    material_label="clear glass",
+                    material_confidence=0.75,
+                )
+            ]
+            return SimpleNamespace(masks=masks, scores=scores, metadata=metadata)
+
+    monkeypatch.setattr(seg_module, "SPATIAL_SAM2_AVAILABLE", True)
+    monkeypatch.setattr(seg_module, "SpatialSAM2Backend", FakeSpatialSAM2Backend)
+    seg_module._get_backend_instance.cache_clear()
+
+    large_image = np.zeros((4097, 2, 3), dtype=np.uint8)
+    config = EnhanceConfig(
+        enable_material_segmentation=True,
+        material_segmentation_backend="sam2",
+        depth_device="cpu",
+    )
+
+    try:
+        masks = segment_materials(large_image, config)
+    finally:
+        seg_module._get_backend_instance.cache_clear()
+
+    assert "glass" in masks
+    configured_tiling = captured["configured_tiling"]
+    assert getattr(configured_tiling, "enabled", False) is False
+    effective_tiling = captured["effective_tiling"]
+    assert getattr(effective_tiling, "enabled", False) is True
+    assert getattr(effective_tiling, "tile_size_px", None) == 1536
+    assert getattr(effective_tiling, "overlap_px", None) == 256
+    assert getattr(getattr(effective_tiling, "global_pass", None), "longest_side", None) == 1280
+    assert getattr(effective_tiling, "max_concurrency", None) == 1
+
+    metadata = get_last_segmentation_runtime_metadata()
+    assert metadata is not None
+    assert metadata["sam2_runtime"]["tiling"]["auto_enabled"] is True
+    assert metadata["sam2_runtime"]["tiling"]["decision"] == "auto_large_image"
+    assert metadata["sam2_runtime"]["tiling"]["effective"]["enabled"] is True
+    assert metadata["sam2_runtime"]["tiling"]["image_shape"] == [4097, 2, 3]
+
+
 def test_segment_materials_sam2_strict_mode_missing_backend(sample_image, monkeypatch):
     """Strict mode should raise when SAM2 backend dependencies are unavailable."""
     import transformation_portal.lux_depth_v3.segmentation_backend as seg_module

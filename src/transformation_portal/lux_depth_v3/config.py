@@ -375,6 +375,17 @@ class EnhanceConfig:
     sam2_model_size: str = "base"
     # Optional SAM2 checkpoint override path
     sam2_checkpoint_path: Optional[str] = None
+    # Explicit SAM2 tiling controls for large-image segmentation
+    sam2_tiling_enabled: bool = False
+    sam2_tile_size_px: int = 1536
+    sam2_overlap_px: int = 256
+    sam2_global_pass_longest_side: int = 1280
+    sam2_max_concurrency: int = 1
+    sam2_points_per_side: int = 32
+    sam2_points_per_batch: int = 64
+    sam2_pred_iou_thresh: float = 0.88
+    sam2_stability_score_thresh: float = 0.85
+    sam2_crop_n_layers: int = 1
 
     # Emit flags (deliverables)
     emit_master16: bool = False  # Emit master 16-bit output

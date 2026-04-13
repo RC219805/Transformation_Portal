@@ -2013,6 +2013,41 @@ def test_argv_normalization_includes_segmentation_controls() -> None:
     assert "--strict-segmentation" in argv
 
 
+def test_argv_normalization_includes_sam2_tiling_and_generator_controls() -> None:
+    payload: Dict[str, object] = {
+        "pipeline": "lux-depth-v3",
+        "args": {
+            "input_dir": "./input_images",
+            "output_dir": "./output",
+            "enable_segmentation": True,
+            "segmentation_backend": "sam2",
+            "sam2_model_size": "large",
+            "sam2_tiling_enabled": True,
+            "sam2_tile_size_px": 1024,
+            "sam2_overlap_px": 128,
+            "sam2_global_pass_longest_side": 900,
+            "sam2_max_concurrency": 1,
+            "sam2_points_per_side": 16,
+            "sam2_points_per_batch": 32,
+            "sam2_pred_iou_thresh": 0.77,
+            "sam2_stability_score_thresh": 0.66,
+            "sam2_crop_n_layers": 2,
+        },
+    }
+
+    argv = orchestrator_app._argv_from_request(payload)
+    assert "--sam2-tiling-enabled" in argv
+    assert _flag_value(argv, "--sam2-tile-size-px") == "1024"
+    assert _flag_value(argv, "--sam2-overlap-px") == "128"
+    assert _flag_value(argv, "--sam2-global-pass-longest-side") == "900"
+    assert _flag_value(argv, "--sam2-max-concurrency") == "1"
+    assert _flag_value(argv, "--sam2-points-per-side") == "16"
+    assert _flag_value(argv, "--sam2-points-per-batch") == "32"
+    assert _flag_value(argv, "--sam2-pred-iou-thresh") == "0.77"
+    assert _flag_value(argv, "--sam2-stability-score-thresh") == "0.66"
+    assert _flag_value(argv, "--sam2-crop-n-layers") == "2"
+
+
 def test_argv_normalization_ignores_sam2_model_size_when_backend_is_not_sam2() -> None:
     payload: Dict[str, object] = {
         "pipeline": "lux-depth-v3",
@@ -3200,9 +3235,62 @@ def test_index_job_artifacts_uses_current_batch_manifest_when_run_card_lacks_art
 
     assert {item["path"] for item in indexed} == {
         "manifests/batch_2026-04-09_132300.json",
-        "run_card_2026-04-09_132300.json",
     }
     assert "depth/stale_depth.png" not in job.artifact_lookup
+
+
+def test_index_job_artifacts_prefers_batch_matched_run_card_over_newer_unmatched_run_card(tmp_path: Path) -> None:
+    output_dir = tmp_path / "out"
+    depth_dir = output_dir / "depth"
+    manifests_dir = output_dir / "manifests"
+    depth_dir.mkdir(parents=True, exist_ok=True)
+    manifests_dir.mkdir(parents=True, exist_ok=True)
+
+    matched_depth = depth_dir / "matched_depth.png"
+    unmatched_depth = depth_dir / "unmatched_depth.png"
+    matched_depth.write_bytes(b"matched")
+    unmatched_depth.write_bytes(b"unmatched")
+
+    batch_manifest = manifests_dir / "batch_2026-04-09_132300.json"
+    batch_manifest.write_text(json.dumps({"batch_id": "2026-04-09_132300", "results": []}), encoding="utf-8")
+
+    matched_run_card = output_dir / "run_card_2026-04-09_132300.json"
+    matched_run_card.write_text(
+        json.dumps(
+            {
+                "batch_id": "2026-04-09_132300",
+                "artifact_index": [{"relative_path": "depth/matched_depth.png"}],
+            }
+        ),
+        encoding="utf-8",
+    )
+    unmatched_run_card = output_dir / "run_card_2026-04-10_120000.json"
+    unmatched_run_card.write_text(
+        json.dumps(
+            {
+                "batch_id": "2026-04-10_120000",
+                "artifact_index": [{"relative_path": "depth/unmatched_depth.png"}],
+            }
+        ),
+        encoding="utf-8",
+    )
+    now = orchestrator_app._now()
+    os.utime(matched_run_card, (now - 5, now - 5))
+    os.utime(unmatched_run_card, (now, now))
+
+    job = orchestrator_app.Job(
+        id="job_artifacts_prefers_matched_run_card",
+        created_at=orchestrator_app._now(),
+        request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(output_dir)}},
+    )
+
+    indexed = orchestrator_app._index_job_artifacts(job)
+
+    assert {item["path"] for item in indexed} == {
+        "depth/matched_depth.png",
+        "run_card_2026-04-09_132300.json",
+    }
+    assert "depth/unmatched_depth.png" not in job.artifact_lookup
 
 
 def test_refresh_job_run_summary_uses_current_output_metadata_not_scoped_items(tmp_path: Path) -> None:

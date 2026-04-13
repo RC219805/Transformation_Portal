@@ -12,13 +12,22 @@ from typing import Any
 from transformation_portal.ingest.canonical_json import dumps_json
 from transformation_portal.lux_depth_v3.artifact_manager import compute_artifact_merkle_root
 from transformation_portal.lux_depth_v3.artifact_tree import verify_artifact_tree_payload
+from transformation_portal.lux_depth_v3.run_card_contract import (
+    RunCardPathValidationError,
+    infer_run_card_version,
+    normalize_run_card_relative_path,
+    with_inferred_run_card_version,
+)
+from transformation_portal.schemas.run_card import load_run_card_schema
 
+from .jsonschema_formats import build_jsonschema_format_checker
 from .run_card_validator import _default_schema_path
 
 try:
-    from jsonschema import Draft202012Validator
+    from jsonschema import Draft202012Validator, FormatChecker
 except ImportError:  # pragma: no cover - runtime guard for environments missing optional deps
     Draft202012Validator = None  # type: ignore[assignment]
+    FormatChecker = None  # type: ignore[assignment]
 
 
 SHA256_HEX_RE = re.compile(r"^[a-f0-9]{64}$")
@@ -56,16 +65,17 @@ def resolve_artifact_path(
     context: str,
 ) -> tuple[Path | None, str | None]:
     """Resolve an artifact path while keeping reads confined to the run-card root."""
-    candidate = Path(relative_path)
-    if candidate.is_absolute():
-        return None, f"{context} relative_path must not be absolute: {relative_path}"
+    try:
+        normalized_relative_path = normalize_run_card_relative_path(relative_path)
+    except RunCardPathValidationError as exc:
+        return None, f"{context} {exc}"
 
     root_resolved = run_card_root.resolve()
-    artifact_path = (root_resolved / candidate).resolve()
+    artifact_path = (root_resolved / Path(*Path(normalized_relative_path).parts)).resolve()
     try:
         artifact_path.relative_to(root_resolved)
     except ValueError:
-        return None, f"{context} relative_path escapes run card root: {relative_path}"
+        return None, f"{context} relative_path escapes run card root: {normalized_relative_path}"
     return artifact_path, None
 
 
@@ -190,6 +200,11 @@ def _verify_requested_depth_pro_fulfillment(
     success_count = run_card_payload.get("success_count")
     fallback_images = backend_summary.get("fallback_images")
     primary_backend = backend_summary.get("primary_backend")
+    total_images = run_card_payload.get("total_images")
+    error_count = run_card_payload.get("error_count")
+    run_failed = (
+        isinstance(error_count, int) and error_count > 0 or isinstance(total_images, int) and success_count < total_images
+    )
     if (
         not isinstance(success_count, int)
         or success_count <= 0
@@ -197,6 +212,7 @@ def _verify_requested_depth_pro_fulfillment(
         or fallback_images != success_count
         or not isinstance(primary_backend, str)
         or primary_backend == requested_backend
+        or run_failed
     ):
         return
 
@@ -383,9 +399,7 @@ def _verify_reconstruction_diagnostics(
 def infer_schema_path_for_payload(payload: dict[str, Any], explicit_schema_path: Path | None = None) -> Path:
     if explicit_schema_path is not None:
         return explicit_schema_path
-    if "artifact_tree" in payload:
-        return DEFAULT_SCHEMA_V2_PATH
-    return DEFAULT_SCHEMA_V1_PATH
+    return DEFAULT_SCHEMA_V2_PATH if infer_run_card_version(payload) == "v2" else DEFAULT_SCHEMA_V1_PATH
 
 
 def verify_run_card_integrity(
@@ -397,24 +411,28 @@ def verify_run_card_integrity(
     """Return list of integrity errors for a run card."""
     if not run_card_path.exists():
         return [f"Run card not found: {run_card_path}"]
-    if Draft202012Validator is None:
+    if Draft202012Validator is None or FormatChecker is None:
         return ["jsonschema dependency is required (install jsonschema>=4.21.0,<5)"]
 
-    run_card_payload, run_card_load_error = _load_json(run_card_path)
+    raw_run_card_payload, run_card_load_error = _load_json(run_card_path)
     if run_card_load_error:
         return [run_card_load_error]
-    if not isinstance(run_card_payload, dict):
+    if not isinstance(raw_run_card_payload, dict):
         return [f"Run card root must be a JSON object: {run_card_path}"]
+    run_card_payload = with_inferred_run_card_version(raw_run_card_payload)
 
     effective_schema_path = infer_schema_path_for_payload(run_card_payload, explicit_schema_path=schema_path)
-    if not effective_schema_path.exists():
-        return [f"Run card schema not found: {effective_schema_path}"]
-    schema_payload, schema_load_error = _load_json(effective_schema_path)
-    if schema_load_error:
-        return [schema_load_error]
+    if schema_path is not None:
+        if not effective_schema_path.exists():
+            return [f"Run card schema not found: {effective_schema_path}"]
+        schema_payload, schema_load_error = _load_json(effective_schema_path)
+        if schema_load_error:
+            return [schema_load_error]
+    else:
+        schema_payload = load_run_card_schema(infer_run_card_version(run_card_payload))
 
     errors: list[str] = []
-    validator = Draft202012Validator(schema_payload)
+    validator = Draft202012Validator(schema_payload, format_checker=build_jsonschema_format_checker())
     schema_errors = sorted(validator.iter_errors(run_card_payload), key=lambda item: list(item.path))
     for item in schema_errors:
         errors.append(f"Schema validation failed at {format_error_path(item.path)}: {item.message}")
@@ -434,7 +452,14 @@ def verify_run_card_integrity(
         if not isinstance(relative_path, str) or not relative_path:
             errors.append(f"artifact_index[{index}].relative_path must be a non-empty string")
         else:
-            relative_paths.append(relative_path)
+            try:
+                normalized_relative_path = normalize_run_card_relative_path(relative_path)
+            except RunCardPathValidationError as exc:
+                errors.append(f"artifact_index[{index}].relative_path {exc}")
+            else:
+                if normalized_relative_path != relative_path:
+                    errors.append("artifact_index" f"[{index}].relative_path must already be normalized POSIX-style")
+                relative_paths.append(normalized_relative_path)
 
         sha256_hex = artifact.get("sha256")
         if not isinstance(sha256_hex, str) or not SHA256_HEX_RE.fullmatch(sha256_hex):
@@ -471,7 +496,11 @@ def verify_run_card_integrity(
         relative_path = artifact.get("relative_path")
         if not isinstance(relative_path, str) or not relative_path:
             continue
-        artifact_index_by_relative_path[relative_path] = artifact
+        try:
+            normalized_relative_path = normalize_run_card_relative_path(relative_path)
+        except RunCardPathValidationError:
+            continue
+        artifact_index_by_relative_path[normalized_relative_path] = artifact
     _verify_reconstruction_scene_manifests(
         run_card_payload,
         run_card_root=run_card_path.parent,
@@ -494,7 +523,7 @@ def verify_run_card_integrity(
 
     if check_canonical_json:
         raw_text = run_card_path.read_text(encoding="utf-8")
-        canonical = canonical_json_text(run_card_payload)
+        canonical = canonical_json_text(raw_run_card_payload)
         if raw_text not in (canonical, canonical + "\n"):
             errors.append("JSON canonical serialization drift detected (expected sort_keys=True, indent=2)")
 

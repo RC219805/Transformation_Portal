@@ -31,6 +31,8 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.responses import Response, StreamingResponse
 
+from transformation_portal.lux_depth_v3.run_card_contract import infer_run_card_version
+
 # ----------------------------
 # In-memory job store (MVP)
 # ----------------------------
@@ -936,6 +938,17 @@ PORTAL_ALLOWED_EVENT_FIELDS = {
     "raw_ingest_mode",
     "reconstruction_iterations",
     "reconstruction_tier",
+    "sam2_crop_n_layers",
+    "sam2_global_pass_longest_side",
+    "sam2_max_concurrency",
+    "sam2_model_size",
+    "sam2_overlap_px",
+    "sam2_points_per_batch",
+    "sam2_points_per_side",
+    "sam2_pred_iou_thresh",
+    "sam2_stability_score_thresh",
+    "sam2_tile_size_px",
+    "sam2_tiling_enabled",
     "run_card_include_proofs",
     "run_card_version",
     "segmentation_backend",
@@ -977,6 +990,16 @@ LUX_PORTAL_DEFAULT_ARGS: Dict[str, Any] = {
     "enable_segmentation": False,
     "segmentation_backend": "stub",
     "sam2_model_size": "base",
+    "sam2_tiling_enabled": False,
+    "sam2_tile_size_px": 1536,
+    "sam2_overlap_px": 256,
+    "sam2_global_pass_longest_side": 1280,
+    "sam2_max_concurrency": 1,
+    "sam2_points_per_side": 32,
+    "sam2_points_per_batch": 64,
+    "sam2_pred_iou_thresh": 0.88,
+    "sam2_stability_score_thresh": 0.85,
+    "sam2_crop_n_layers": 1,
     "strict_segmentation": False,
     "materials_v3": True,
     "pbr": True,
@@ -2014,6 +2037,66 @@ def _normalize_optional_positive_int(
     return parsed
 
 
+def _normalize_optional_non_negative_int(
+    value: Any,
+    field: str,
+    errors: List[Dict[str, Any]],
+) -> Optional[int]:
+    if value is None or (isinstance(value, str) and not value.strip()):
+        return None
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        errors.append(
+            _portal_issue(
+                field,
+                f"invalid_{field}",
+                f"{field} must be an integer greater than or equal to 0.",
+            )
+        )
+        return None
+    if parsed < 0:
+        errors.append(
+            _portal_issue(
+                field,
+                f"invalid_{field}",
+                f"{field} must be greater than or equal to 0.",
+            )
+        )
+        return None
+    return parsed
+
+
+def _normalize_optional_probability(
+    value: Any,
+    field: str,
+    errors: List[Dict[str, Any]],
+) -> Optional[float]:
+    if value is None or (isinstance(value, str) and not value.strip()):
+        return None
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        errors.append(
+            _portal_issue(
+                field,
+                f"invalid_{field}",
+                f"{field} must be a number in the range [0, 1].",
+            )
+        )
+        return None
+    if parsed < 0.0 or parsed > 1.0:
+        errors.append(
+            _portal_issue(
+                field,
+                f"invalid_{field}",
+                f"{field} must be in the range [0, 1].",
+            )
+        )
+        return None
+    return parsed
+
+
 def _normalize_portal_path_arg(
     value: Any,
     field: str,
@@ -2661,6 +2744,45 @@ def _build_lux_config_preview(
     )
     if sam2_checkpoint_path:
         normalized_args["sam2_checkpoint_path"] = sam2_checkpoint_path
+    normalized_args["sam2_tiling_enabled"] = _as_bool(
+        _pick(args, "sam2_tiling_enabled", "sam2TilingEnabled", default=defaults["sam2_tiling_enabled"]),
+        default=bool(defaults["sam2_tiling_enabled"]),
+    )
+    for field_name in (
+        "sam2_tile_size_px",
+        "sam2_global_pass_longest_side",
+        "sam2_max_concurrency",
+        "sam2_points_per_side",
+        "sam2_points_per_batch",
+    ):
+        value = _normalize_optional_positive_int(
+            _pick(args, field_name, default=defaults[field_name]),
+            field_name,
+            errors,
+        )
+        normalized_args[field_name] = int(defaults[field_name]) if value is None else value
+    for field_name in ("sam2_overlap_px", "sam2_crop_n_layers"):
+        value = _normalize_optional_non_negative_int(
+            _pick(args, field_name, default=defaults[field_name]),
+            field_name,
+            errors,
+        )
+        normalized_args[field_name] = int(defaults[field_name]) if value is None else value
+    for field_name in ("sam2_pred_iou_thresh", "sam2_stability_score_thresh"):
+        value = _normalize_optional_probability(
+            _pick(args, field_name, default=defaults[field_name]),
+            field_name,
+            errors,
+        )
+        normalized_args[field_name] = float(defaults[field_name]) if value is None else value
+    if normalized_args["sam2_overlap_px"] >= normalized_args["sam2_tile_size_px"]:
+        errors.append(
+            _portal_issue(
+                "sam2_overlap_px",
+                "invalid_sam2_overlap_px",
+                "sam2_overlap_px must be smaller than sam2_tile_size_px.",
+            )
+        )
     normalized_args["strict_segmentation"] = _as_bool(
         _pick(args, "strict_segmentation", "strictSegmentation", default=defaults["strict_segmentation"]),
         default=bool(defaults["strict_segmentation"]),
@@ -3832,6 +3954,34 @@ def _load_bounded_json_object(path: Path, *, max_bytes: int = JOB_RUN_SUMMARY_MA
     return payload if isinstance(payload, dict) else None
 
 
+def _load_bounded_run_card_payload(path: Optional[Path]) -> Optional[Dict[str, Any]]:
+    if path is None:
+        return None
+    payload = _load_bounded_json_object(path)
+    if payload is None:
+        return None
+
+    batch_id = str(payload.get("batch_id") or "").strip()
+    artifact_index = payload.get("artifact_index")
+    if not batch_id or not isinstance(artifact_index, list) or not artifact_index:
+        return None
+    try:
+        infer_run_card_version(payload)
+    except ValueError:
+        return None
+    for artifact in artifact_index:
+        if not isinstance(artifact, Mapping):
+            return None
+        candidate_path = artifact.get("relative_path") or artifact.get("path")
+        if not isinstance(candidate_path, str) or not candidate_path.strip():
+            return None
+        try:
+            _normalize_artifact_relative_path(candidate_path)
+        except ArtifactPathValidationError:
+            return None
+    return payload
+
+
 def _summarize_run_card_payload(payload: Mapping[str, Any]) -> Dict[str, Any]:
     summary: Dict[str, Any] = {"source": "run_card"}
 
@@ -3964,22 +4114,44 @@ def _resolve_job_run_metadata(job: Job) -> Optional[JobRunMetadata]:
     if not output_dir.exists() or not output_dir.is_dir():
         return None
 
-    run_card_path = _find_newest_artifact_path(
-        output_dir,
-        list(output_dir.glob("run_card_*.json")),
-    )
-    run_card_payload = _load_bounded_json_object(run_card_path) if run_card_path is not None else None
+    batch_manifest_dir = output_dir / "manifests"
+    run_card_candidates: List[Tuple[int, Tuple[str, float, str], Path, Dict[str, Any], Optional[Path]]] = []
+    for candidate in output_dir.glob("run_card_*.json"):
+        try:
+            resolved_candidate = Path(os.path.realpath(candidate))
+            relative_path = str(resolved_candidate.relative_to(output_dir))
+        except (OSError, ValueError):
+            continue
+        run_card_payload = _load_bounded_run_card_payload(resolved_candidate)
+        if run_card_payload is None:
+            continue
+        batch_id = str(run_card_payload.get("batch_id") or "").strip()
+        matching_manifest_path: Optional[Path] = None
+        if batch_id:
+            manifest_candidate = batch_manifest_dir / f"batch_{batch_id}.json"
+            if manifest_candidate.exists() and manifest_candidate.is_file():
+                matching_manifest_path = Path(os.path.realpath(manifest_candidate))
+        run_card_candidates.append(
+            (
+                1 if matching_manifest_path is not None else 0,
+                _artifact_recency_key(relative_path, resolved_candidate),
+                resolved_candidate,
+                run_card_payload,
+                matching_manifest_path,
+            )
+        )
 
+    run_card_path: Optional[Path] = None
+    run_card_payload: Optional[Dict[str, Any]] = None
     batch_manifest_path: Optional[Path] = None
     batch_manifest_payload: Optional[Dict[str, Any]] = None
-    batch_manifest_dir = output_dir / "manifests"
-    if run_card_payload is not None:
-        batch_id = str(run_card_payload.get("batch_id") or "").strip()
-        if batch_id:
-            matching_manifest_path = batch_manifest_dir / f"batch_{batch_id}.json"
-            if matching_manifest_path.exists() and matching_manifest_path.is_file():
-                batch_manifest_path = Path(os.path.realpath(matching_manifest_path))
-                batch_manifest_payload = _load_bounded_json_object(batch_manifest_path)
+    if run_card_candidates:
+        _, _, run_card_path, run_card_payload, batch_manifest_path = max(
+            run_card_candidates,
+            key=lambda item: (item[0], item[1]),
+        )
+        if batch_manifest_path is not None:
+            batch_manifest_payload = _load_bounded_json_object(batch_manifest_path)
     elif batch_manifest_dir.exists() and batch_manifest_dir.is_dir():
         batch_manifest_path = _find_newest_artifact_path(
             output_dir,
@@ -5022,6 +5194,29 @@ def _argv_from_request(
             "sam2_checkpoint_path",
             "sam2CheckpointPath",
         )
+        sam2_tiling_enabled = _pick(
+            args,
+            "sam2_tiling_enabled",
+            "sam2TilingEnabled",
+            default=False,
+        )
+        sam2_tile_size_px_raw = _pick(args, "sam2_tile_size_px", "sam2TileSizePx")
+        sam2_overlap_px_raw = _pick(args, "sam2_overlap_px", "sam2OverlapPx")
+        sam2_global_pass_longest_side_raw = _pick(
+            args,
+            "sam2_global_pass_longest_side",
+            "sam2GlobalPassLongestSide",
+        )
+        sam2_max_concurrency_raw = _pick(args, "sam2_max_concurrency", "sam2MaxConcurrency")
+        sam2_points_per_side_raw = _pick(args, "sam2_points_per_side", "sam2PointsPerSide")
+        sam2_points_per_batch_raw = _pick(args, "sam2_points_per_batch", "sam2PointsPerBatch")
+        sam2_pred_iou_thresh_raw = _pick(args, "sam2_pred_iou_thresh", "sam2PredIouThresh")
+        sam2_stability_score_thresh_raw = _pick(
+            args,
+            "sam2_stability_score_thresh",
+            "sam2StabilityScoreThresh",
+        )
+        sam2_crop_n_layers_raw = _pick(args, "sam2_crop_n_layers", "sam2CropNLayers")
         enable_segmentation = _pick(
             args,
             "enable_segmentation",
@@ -5142,6 +5337,34 @@ def _argv_from_request(
                 raise _PortalValidationReasonError(f"Invalid {field_name}")
             return parsed
 
+        def _parse_optional_non_negative_int(
+            value: Any,
+            field_name: str,
+        ) -> Optional[int]:
+            if value is None or (isinstance(value, str) and not value.strip()):
+                return None
+            try:
+                parsed = int(value)
+            except (TypeError, ValueError):
+                raise _PortalValidationReasonError(f"Invalid {field_name}") from None
+            if parsed < 0:
+                raise _PortalValidationReasonError(f"Invalid {field_name}")
+            return parsed
+
+        def _parse_optional_probability(
+            value: Any,
+            field_name: str,
+        ) -> Optional[float]:
+            if value is None or (isinstance(value, str) and not value.strip()):
+                return None
+            try:
+                parsed = float(value)
+            except (TypeError, ValueError):
+                raise _PortalValidationReasonError(f"Invalid {field_name}") from None
+            if parsed < 0.0 or parsed > 1.0:
+                raise _PortalValidationReasonError(f"Invalid {field_name}")
+            return parsed
+
         reconstruction_iterations = _parse_optional_positive_int(
             reconstruction_iterations_raw,
             "reconstruction_iterations",
@@ -5154,6 +5377,23 @@ def _argv_from_request(
             max_gpu_workers_raw,
             "max_gpu_workers",
         )
+        sam2_tile_size_px = _parse_optional_positive_int(sam2_tile_size_px_raw, "sam2_tile_size_px")
+        sam2_overlap_px = _parse_optional_non_negative_int(sam2_overlap_px_raw, "sam2_overlap_px")
+        sam2_global_pass_longest_side = _parse_optional_positive_int(
+            sam2_global_pass_longest_side_raw,
+            "sam2_global_pass_longest_side",
+        )
+        sam2_max_concurrency = _parse_optional_positive_int(sam2_max_concurrency_raw, "sam2_max_concurrency")
+        sam2_points_per_side = _parse_optional_positive_int(sam2_points_per_side_raw, "sam2_points_per_side")
+        sam2_points_per_batch = _parse_optional_positive_int(sam2_points_per_batch_raw, "sam2_points_per_batch")
+        sam2_pred_iou_thresh = _parse_optional_probability(sam2_pred_iou_thresh_raw, "sam2_pred_iou_thresh")
+        sam2_stability_score_thresh = _parse_optional_probability(
+            sam2_stability_score_thresh_raw,
+            "sam2_stability_score_thresh",
+        )
+        sam2_crop_n_layers = _parse_optional_non_negative_int(sam2_crop_n_layers_raw, "sam2_crop_n_layers")
+        if sam2_tile_size_px is not None and sam2_overlap_px is not None and sam2_overlap_px >= sam2_tile_size_px:
+            raise _PortalValidationReasonError("Invalid sam2_overlap_px")
 
         sam2_checkpoint_path = ""
         if sam2_checkpoint_path_raw is not None and str(sam2_checkpoint_path_raw).strip():
@@ -5209,6 +5449,26 @@ def _argv_from_request(
             argv.extend(["--sam2-model-size", sam2_model_size])
         if segmentation_backend == "sam2" and sam2_checkpoint_path:
             argv.extend(["--sam2-checkpoint-path", sam2_checkpoint_path])
+        if segmentation_backend == "sam2" and _as_bool(sam2_tiling_enabled, default=False):
+            argv.append("--sam2-tiling-enabled")
+        if segmentation_backend == "sam2" and sam2_tile_size_px is not None:
+            argv.extend(["--sam2-tile-size-px", str(sam2_tile_size_px)])
+        if segmentation_backend == "sam2" and sam2_overlap_px is not None:
+            argv.extend(["--sam2-overlap-px", str(sam2_overlap_px)])
+        if segmentation_backend == "sam2" and sam2_global_pass_longest_side is not None:
+            argv.extend(["--sam2-global-pass-longest-side", str(sam2_global_pass_longest_side)])
+        if segmentation_backend == "sam2" and sam2_max_concurrency is not None:
+            argv.extend(["--sam2-max-concurrency", str(sam2_max_concurrency)])
+        if segmentation_backend == "sam2" and sam2_points_per_side is not None:
+            argv.extend(["--sam2-points-per-side", str(sam2_points_per_side)])
+        if segmentation_backend == "sam2" and sam2_points_per_batch is not None:
+            argv.extend(["--sam2-points-per-batch", str(sam2_points_per_batch)])
+        if segmentation_backend == "sam2" and sam2_pred_iou_thresh is not None:
+            argv.extend(["--sam2-pred-iou-thresh", str(sam2_pred_iou_thresh)])
+        if segmentation_backend == "sam2" and sam2_stability_score_thresh is not None:
+            argv.extend(["--sam2-stability-score-thresh", str(sam2_stability_score_thresh)])
+        if segmentation_backend == "sam2" and sam2_crop_n_layers is not None:
+            argv.extend(["--sam2-crop-n-layers", str(sam2_crop_n_layers)])
         if _as_bool(strict_segmentation, default=False):
             argv.append("--strict-segmentation")
 

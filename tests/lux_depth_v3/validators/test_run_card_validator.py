@@ -294,14 +294,12 @@ class TestBackendSemanticsValidation:
                 "primary_backend": "da3",
                 "fallback_images": 2,
             },
+            "total_images": 3,
             "success_count": 2,
+            "error_count": 1,
         }
 
-        with pytest.raises(
-            RuntimeError,
-            match="requested backend 'depth_pro' was not honored",
-        ):
-            validate_run_card_backend_semantics(payload)
+        validate_run_card_backend_semantics(payload)
 
 
 class TestWrapperSemanticsValidation:

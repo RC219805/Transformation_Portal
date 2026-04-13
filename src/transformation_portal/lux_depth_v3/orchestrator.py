@@ -30,6 +30,7 @@ import os
 import time
 import zipfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import asdict
 from enum import Enum
 from functools import lru_cache
 from multiprocessing import cpu_count
@@ -5827,6 +5828,113 @@ class EnhanceOrchestrator:
             backend=backend_cache.get(resolved_backend),
         )
 
+    def _build_run_card_inputs(self, results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Build ordered input records with deterministic source hashes."""
+        input_paths: List[Path] = []
+        for result in results:
+            image_path = result.get("image")
+            if not isinstance(image_path, str) or not image_path.strip():
+                continue
+            candidate = Path(image_path)
+            if not candidate.exists() or not candidate.is_file():
+                continue
+            input_paths.append(candidate)
+
+        if not input_paths:
+            return []
+
+        try:
+            common_root = Path(os.path.commonpath([str(path.parent) for path in input_paths]))
+        except ValueError:
+            common_root = input_paths[0].parent
+
+        records: List[Dict[str, Any]] = []
+        seen_paths: set[str] = set()
+        for input_path in input_paths:
+            try:
+                relative_path = str(input_path.relative_to(common_root))
+            except ValueError:
+                relative_path = input_path.name
+            relative_path = relative_path.replace(os.sep, "/")
+            if relative_path in seen_paths:
+                continue
+            seen_paths.add(relative_path)
+            try:
+                size_bytes = input_path.stat().st_size
+            except OSError:
+                size_bytes = None
+            records.append(
+                {
+                    "path": relative_path,
+                    "sha256": compute_file_sha256(input_path),
+                    "size_bytes": size_bytes,
+                }
+            )
+        return records
+
+    def _build_run_card_effective_config(
+        self,
+        *,
+        run_card_version: str,
+        include_proofs: bool,
+    ) -> Dict[str, Any]:
+        """Build the replay-oriented effective config surface for the run card."""
+        fingerprint = asdict(self.compute_config_fingerprint())
+        fingerprint["run_card_version"] = run_card_version
+        fingerprint["run_card_include_proofs"] = bool(include_proofs)
+        fingerprint["emit_run_card"] = bool(getattr(self.config, "emit_run_card", False))
+        fingerprint["enable_reconstruction"] = bool(getattr(self.config, "enable_reconstruction", False))
+        fingerprint["grouping_mode"] = str(getattr(self.config, "grouping_mode", "single"))
+        return fingerprint
+
+    def _run_card_output_relative_path(self, path_value: Any) -> Optional[str]:
+        """Render an output-root-relative path suitable for run-card summaries."""
+        if not isinstance(path_value, str) or not path_value.strip():
+            return None
+        candidate = Path(path_value)
+        output_root_resolved = self.output_root.resolve(strict=False)
+        try:
+            relative_path = candidate.resolve(strict=False).relative_to(output_root_resolved)
+        except ValueError:
+            try:
+                relative_path = candidate.relative_to(self.output_root)
+            except ValueError:
+                relative_path = Path(candidate.name)
+        return str(relative_path).replace(os.sep, "/")
+
+    def _build_run_card_result_summary(self, results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Build a compact per-image execution summary for replay triage."""
+        summary_rows: List[Dict[str, Any]] = []
+        for result in results:
+            image_path = result.get("image")
+            if not isinstance(image_path, str) or not image_path.strip():
+                continue
+            manifest_path = result.get("manifest")
+            segmentation_metadata = None
+            if isinstance(manifest_path, str) and manifest_path.strip():
+                try:
+                    manifest_payload = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
+                except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+                    manifest_payload = None
+                if isinstance(manifest_payload, dict):
+                    materials_v3 = manifest_payload.get("materials_v3")
+                    if isinstance(materials_v3, dict):
+                        segmentation_metadata = materials_v3.get("segmentation_metadata")
+            summary_rows.append(
+                {
+                    "image": Path(image_path).name,
+                    "status": result.get("status"),
+                    "backend": result.get("backend"),
+                    "runtime_s": result.get("runtime_s"),
+                    "manifest_path": self._run_card_output_relative_path(manifest_path),
+                    "error_code": result.get("error_code"),
+                    "error_message": result.get("error"),
+                    "error_details": result.get("error_details"),
+                    "segmentation_metadata": segmentation_metadata,
+                }
+            )
+        return summary_rows
+
     def _emit_run_card(
         self,
         batch_id: str,
@@ -5920,10 +6028,17 @@ class EnhanceOrchestrator:
             backend_selection["resolved_engine"] = backend_selection_resolved
 
         run_card = {
+            "run_card_version": run_card_version,
             "batch_id": batch_id,
             "start_time": start_time,
             "end_time": end_time,
             "config_fingerprint": self._build_run_card_config_fingerprint(),
+            "inputs": self._build_run_card_inputs(results),
+            "effective_config": self._build_run_card_effective_config(
+                run_card_version=run_card_version,
+                include_proofs=bool(artifact_tree.get("proofs")) if isinstance(artifact_tree, dict) else False,
+            ),
+            "result_summary": self._build_run_card_result_summary(results),
             "backend_selection": backend_selection,
             "backend_summary": backend_summary,
             "environment": self.environment,
@@ -6001,15 +6116,6 @@ class EnhanceOrchestrator:
             # --- Final deterministic fallback ---
             return str(obj)
 
-        schema_path = _run_card_schema_path(run_card_version)
-        if not schema_path.exists():
-            logger.warning(
-                "Run card schema not found" " at %s; skipping run card" " emission for" " batch_id=%s",
-                schema_path,
-                batch_id,
-            )
-            return
-
         try:
             serialized_run_card = json.loads(
                 dumps_json(
@@ -6020,7 +6126,10 @@ class EnhanceOrchestrator:
                     allow_nan=False,
                 )
             )
-            _validate_run_card_payload(serialized_run_card, schema_path)
+            _validate_run_card_payload(
+                serialized_run_card,
+                schema_version=run_card_version,
+            )
             _validate_run_card_backend_semantics(serialized_run_card)
 
             with open(run_card_path, "w", encoding="utf-8") as f:
@@ -6035,14 +6144,8 @@ class EnhanceOrchestrator:
                 )
         except (OSError, TypeError, ValueError, RuntimeError):
             logger.exception(
-                "Run card emission failed"
-                " for batch_id=%s"
-                " (schema: %s,"
-                " output: %s)."
-                " Continuing without"
-                " run card.",
+                "Run card emission failed" " for batch_id=%s" " (output: %s)." " Continuing without" " run card.",
                 batch_id,
-                schema_path,
                 run_card_path,
             )
             return

@@ -25,6 +25,7 @@ from transformation_portal.attestation.run_card_intoto import (
     decode_run_card_statement_from_envelope,
     validate_run_card_statement_binding,
 )
+from transformation_portal.lux_depth_v3.artifact_manager import compute_artifact_merkle_root
 from transformation_portal.lux_depth_v3.artifact_tree import build_artifact_tree
 
 pytestmark = pytest.mark.unit
@@ -71,6 +72,7 @@ def _run_card_v2() -> tuple[dict[str, object], bytes]:
     }
     canonical_json = json.dumps(config_fingerprint, sort_keys=True, separators=(",", ":"))
     payload = {
+        "run_card_version": "v2",
         "batch_id": "2026-04-10_120000",
         "start_time": "2026-04-10T12:00:00Z",
         "end_time": "2026-04-10T12:05:00Z",
@@ -122,6 +124,16 @@ def _run_card_v2() -> tuple[dict[str, object], bytes]:
     return payload, run_card_bytes
 
 
+def _run_card_v1() -> tuple[dict[str, object], bytes]:
+    payload, _ = _run_card_v2()
+    payload = dict(payload)
+    payload["run_card_version"] = "v1"
+    payload.pop("artifact_tree", None)
+    payload["artifact_merkle_root"] = compute_artifact_merkle_root(payload["artifact_index"])
+    run_card_bytes = json.dumps(payload, indent=2, sort_keys=True).encode("utf-8")
+    return payload, run_card_bytes
+
+
 def test_native_run_card_attestation_binds_to_run_card() -> None:
     run_card_payload, run_card_bytes = _run_card_v2()
     attestation = build_run_card_detached_attestation_payload(
@@ -134,6 +146,20 @@ def test_native_run_card_attestation_binds_to_run_card() -> None:
     bind_run_card_detached_attestation(attestation, run_card_payload, run_card_bytes=run_card_bytes)
     verify_run_card_attestation_self_hash(attestation)
     assert attestation["attestation_sha256"] == compute_run_card_attestation_sha256(attestation)
+    assert attestation["subject"]["artifact_commitment"]["kind"] == "artifact_tree_v2"
+
+
+def test_native_run_card_attestation_binds_to_v1_run_card() -> None:
+    run_card_payload, run_card_bytes = _run_card_v1()
+    attestation = build_run_card_detached_attestation_payload(
+        run_card_payload,
+        run_card_bytes=run_card_bytes,
+        signature={"algorithm": "unit-test", "key_id": "test", "signature": "deadbeef"},
+    )
+
+    validate_run_card_detached_attestation_surface(attestation)
+    bind_run_card_detached_attestation(attestation, run_card_payload, run_card_bytes=run_card_bytes)
+    assert attestation["subject"]["artifact_commitment"]["kind"] == "artifact_commitment_v1"
 
 
 def test_native_run_card_attestation_detects_tamper() -> None:
@@ -173,6 +199,32 @@ def test_dsse_statement_binds_to_run_card() -> None:
     )
     assert decoded_statement == statement
     assert json.loads(decode_dsse_payload(envelope).decode("utf-8"))["_type"] == "https://in-toto.io/Statement/v1"
+    assert statement["predicate"]["artifact_commitment"]["kind"] == "artifact_tree_v2"
+
+
+def test_dsse_statement_binds_to_v1_run_card() -> None:
+    run_card_payload, run_card_bytes = _run_card_v1()
+    statement = build_run_card_statement(
+        run_card_path=Path("run_card_2026-04-10_120000.json"),
+        run_card_payload=run_card_payload,
+        run_card_bytes=run_card_bytes,
+    )
+    envelope = build_run_card_dsse_envelope(
+        run_card_path=Path("run_card_2026-04-10_120000.json"),
+        run_card_payload=run_card_payload,
+        run_card_bytes=run_card_bytes,
+        key_id="test",
+        signature_bytes=b"fake-signature",
+    )
+
+    decoded_statement = decode_run_card_statement_from_envelope(envelope)
+    validate_run_card_statement_binding(
+        decoded_statement,
+        run_card_path=Path("run_card_2026-04-10_120000.json"),
+        run_card_payload=run_card_payload,
+        run_card_bytes=run_card_bytes,
+    )
+    assert decoded_statement["predicate"]["artifact_commitment"]["kind"] == "artifact_commitment_v1"
 
 
 def test_dsse_statement_rejects_non_hex_release_assessment_sha256() -> None:

@@ -27,6 +27,7 @@ from transformation_portal.lux_depth_v3.orchestrator import (
     _validate_run_card_backend_semantics,
     _validate_run_card_payload,
 )
+from transformation_portal.schemas.run_card import load_run_card_schema
 
 
 def _valid_run_card_payload() -> dict:
@@ -148,6 +149,21 @@ def test_run_card_schema_validates_payload():
 
     _validate_run_card_payload(payload, _run_card_schema_path())
     _validate_run_card_backend_semantics(payload)
+
+
+def test_packaged_run_card_schemas_match_documented_copies() -> None:
+    for version in ("v1", "v2"):
+        documented_schema = json.loads(_run_card_schema_path(version).read_text(encoding="utf-8"))
+        assert load_run_card_schema(version) == documented_schema
+
+
+def test_run_card_schema_enforces_datetime_format() -> None:
+    pytest.importorskip("jsonschema")
+    payload = _valid_run_card_payload()
+    payload["start_time"] = "not-a-date-time"
+
+    with pytest.raises(RuntimeError, match="start_time"):
+        _validate_run_card_payload(payload, _run_card_schema_path())
 
 
 def test_run_card_schema_rejects_invalid_merkle_root():
