@@ -105,9 +105,14 @@ class DepthProBackend:
         if config is not None:
             device = getattr(config, "depth_device", None)
             if device:
-                return device
+                return self._normalize_device(device)
 
         return "cpu"
+
+    @staticmethod
+    def _normalize_device(device: Any) -> str:
+        """Normalize explicit or override device strings to worker-safe tokens."""
+        return str(device or "").strip().lower() or "cpu"
 
     def _resolve_checkpoint_path(
         self,
@@ -222,7 +227,7 @@ class DepthProBackend:
 
     def _ensure_subprocess_available(self, device: Optional[str] = None) -> None:
         """Ensure the dedicated Depth Pro subprocess environment is usable."""
-        use_device = str(device or self._device).strip().lower() or "cpu"
+        use_device = self._normalize_device(device or self._device)
         if use_device in self._subprocess_available_devices:
             return
 
@@ -288,7 +293,7 @@ class DepthProBackend:
     ) -> DepthResult:
         """Estimate metric depth from image."""
         self._validate_license_runtime()
-        use_device = device or self._device
+        use_device = self._normalize_device(device or self._device)
         self._ensure_runtime_available(device=use_device)
 
         if self._uses_subprocess():
@@ -326,7 +331,7 @@ class DepthProBackend:
 
         from ...stage_graph.stage import StageContext, StageStatus
 
-        use_device = device or self._device
+        use_device = self._normalize_device(device or self._device)
         context = StageContext(
             artifacts={"image": image_pil},
             device=use_device,
@@ -367,7 +372,7 @@ class DepthProBackend:
     ) -> DepthResult:
         """Run Depth Pro inference in a dedicated Python subprocess."""
         image_pil, image_array = self._prepare_image(image)
-        use_device = device or self._device
+        use_device = self._normalize_device(device or self._device)
 
         with tempfile.TemporaryDirectory(prefix="tp_depth_pro_") as tmpdir:
             tmp_root = Path(tmpdir)

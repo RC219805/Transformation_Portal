@@ -9,6 +9,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
+import numpy as np
 import pytest
 
 from transformation_portal.depth.backends.depth_pro import DepthProBackend
@@ -16,6 +17,7 @@ from transformation_portal.depth.backends.depth_pro_worker import (
     _check_device_availability,
     _torch_diagnostics,
 )
+from transformation_portal.depth.backends.protocol import DepthResult
 from transformation_portal.lux_depth_v3.config import EnhanceConfig
 
 pytestmark = [
@@ -125,3 +127,35 @@ def test_torch_diagnostics_handles_missing_optional_accelerator_backends(
     assert diagnostics["mps_built"] is False
     assert diagnostics["mps_available"] is False
     assert diagnostics["cuda_available"] is False
+
+
+def test_compute_normalizes_device_override_for_readiness_and_subprocess(tmp_path: Path) -> None:
+    checkpoint = tmp_path / "depth_pro.pt"
+    checkpoint.write_bytes(b"checkpoint")
+    backend = DepthProBackend(_depth_pro_config(checkpoint, device="cpu"))
+
+    with (
+        patch.object(backend, "_ensure_runtime_available") as mock_ready,
+        patch.object(
+            backend,
+            "_compute_subprocess",
+            return_value=DepthResult(
+                depth_map=np.zeros((1, 1), dtype=np.float32),
+                original_image=np.zeros((1, 1, 3), dtype=np.uint8),
+                metadata={},
+                depth_units="meters",
+                focal_length_px=None,
+                field_of_view_deg=None,
+                backend_id=backend.name,
+                device="mps",
+                dtype="float32",
+                input_size=(1, 1),
+            ),
+        ) as mock_subprocess,
+    ):
+        image = np.zeros((1, 1, 3), dtype=np.uint8)
+        backend.compute(image, device="  MPS  ")
+
+    mock_ready.assert_called_once_with(device="mps")
+    mock_subprocess.assert_called_once()
+    assert mock_subprocess.call_args.args[1] == "mps"
