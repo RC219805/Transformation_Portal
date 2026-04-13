@@ -63,8 +63,10 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e .
-          pip install pytest "jsonschema>=4.23,<5"
+          # Keep the ingest contract lane lightweight and deterministic.
+          # The tests exercise ingest schemas/validators, not the full runtime stack.
+          python -m pip install "numpy>=1.24,<2.5.0" "pydantic>=2.0,<3" pytest "jsonschema>=4.23,<5"
+          python -m pip install -e . --no-deps
           python -c "import jsonschema; print(jsonschema.__version__)"
 
       - name: Run ingest contract validation
@@ -120,7 +122,8 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e .
+          python -m pip install "pydantic>=2.0,<3"
+          python -m pip install -e . --no-deps
 
       - name: Check for schema changes with policy enforcement
         run: |
