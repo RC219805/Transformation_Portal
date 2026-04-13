@@ -48,7 +48,7 @@ function parseHost(value) {
   }
 }
 
-function isLoopbackHostname(hostname) {
+export function isLoopbackHostname(hostname) {
   return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1" || hostname === "[::1]";
 }
 

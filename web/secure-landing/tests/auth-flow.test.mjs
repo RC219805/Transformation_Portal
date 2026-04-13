@@ -297,6 +297,21 @@ test("validateOriginAndReferrer allows missing origin hints during local bypass"
   assert.equal(validateOriginAndReferrer(request), true);
 });
 
+test("validateOriginAndReferrer rejects missing origin hints off loopback even during local bypass", async () => {
+  process.env.NODE_ENV = "development";
+  process.env.TP_ALLOW_LOCAL_ACCESS_BYPASS = "1";
+
+  const { validateOriginAndReferrer } = await import(`../lib/request-security.js?case=${Date.now()}`);
+  const request = {
+    method: "POST",
+    url: "http://192.168.1.24:3000/login",
+    nextUrl: { origin: "http://192.168.1.24:3000", pathname: "/login", protocol: "http:", host: "192.168.1.24:3000" },
+    headers: new Headers()
+  };
+
+  assert.equal(validateOriginAndReferrer(request), false);
+});
+
 test("validateOriginAndReferrer honors the forwarded local host when Next normalizes nextUrl", async () => {
   const { validateOriginAndReferrer } = await import(`../lib/request-security.js?case=${Date.now()}`);
   const request = {

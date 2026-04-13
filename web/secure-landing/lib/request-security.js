@@ -1,5 +1,5 @@
 import { isLocalAccessBypassEnabled } from "./config.js";
-import { buildRequestUrl } from "./http.js";
+import { buildRequestUrl, isLoopbackHostname } from "./http.js";
 
 const UNSAFE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
@@ -18,7 +18,8 @@ export function isUnsafeMethod(method) {
 export function validateOriginAndReferrer(request) {
   if (!isUnsafeMethod(request.method)) return true;
 
-  const expectedOrigin = buildRequestUrl(request, request.nextUrl.pathname || "/").origin;
+  const requestUrl = buildRequestUrl(request, request.nextUrl.pathname || "/");
+  const expectedOrigin = requestUrl.origin;
   const origin = request.headers.get("origin");
   if (origin) {
     return origin === expectedOrigin;
@@ -29,5 +30,5 @@ export function validateOriginAndReferrer(request) {
     return originFromReferrer(referrer) === expectedOrigin;
   }
 
-  return isLocalAccessBypassEnabled();
+  return isLocalAccessBypassEnabled() && isLoopbackHostname(requestUrl.hostname);
 }

@@ -755,7 +755,6 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
 
         print("frontdoor-browser-smoke: submitting operator login", flush=True)
         connection.evaluate(_populate_login_expression(username, password))
-        time.sleep(0.1)
         connection.evaluate(_click_expression('[data-ui="login-submit"]'))
         portal_state = _poll(
             connection,
