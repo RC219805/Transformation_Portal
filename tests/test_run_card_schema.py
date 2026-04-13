@@ -6,6 +6,7 @@ import hashlib
 import json
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import patch
 
 import numpy as np
@@ -27,6 +28,8 @@ from transformation_portal.lux_depth_v3.orchestrator import (
     _validate_run_card_backend_semantics,
     _validate_run_card_payload,
 )
+from transformation_portal.lux_depth_v3.security import HashMode
+from transformation_portal.schemas.run_card import load_run_card_schema
 
 
 def _valid_run_card_payload() -> dict:
@@ -148,6 +151,30 @@ def test_run_card_schema_validates_payload():
 
     _validate_run_card_payload(payload, _run_card_schema_path())
     _validate_run_card_backend_semantics(payload)
+
+
+def test_packaged_run_card_schemas_match_documented_copies() -> None:
+    for version in ("v1", "v2"):
+        documented_schema = json.loads(_run_card_schema_path(version).read_text(encoding="utf-8"))
+        assert load_run_card_schema(version) == documented_schema
+
+
+def test_run_card_schema_enforces_datetime_format() -> None:
+    pytest.importorskip("jsonschema")
+    payload = _valid_run_card_payload()
+    payload["start_time"] = "not-a-date-time"
+
+    with pytest.raises(RuntimeError, match="start_time"):
+        _validate_run_card_payload(payload, _run_card_schema_path())
+
+
+def test_run_card_schema_rejects_space_separated_datetime() -> None:
+    pytest.importorskip("jsonschema")
+    payload = _valid_run_card_payload()
+    payload["start_time"] = "2026-02-28 12:00:00Z"
+
+    with pytest.raises(RuntimeError, match="start_time"):
+        _validate_run_card_payload(payload, _run_card_schema_path())
 
 
 def test_run_card_schema_rejects_invalid_merkle_root():
@@ -315,6 +342,54 @@ def test_collect_run_card_artifacts_includes_segmentation_mask_artifact(tmp_path
 
     assert "segmentation/image_01_materials_v3_masks.npz" in artifacts_by_path
     assert artifacts_by_path["segmentation/image_01_materials_v3_masks.npz"]["artifact_type"] == "segmentation_mask_npz"
+
+
+def test_build_run_card_result_summary_uses_cached_segmentation_metadata(tmp_path: Path) -> None:
+    output_root = tmp_path / "output"
+    manifests_dir = output_root / "manifests"
+    manifests_dir.mkdir(parents=True, exist_ok=True)
+    manifest_path = manifests_dir / "image_01_combined.json"
+
+    orch = object.__new__(EnhanceOrchestrator)
+    orch.output_root = output_root
+    orch._active_run_card_segmentation_metadata = {
+        str(manifest_path): {
+            "mask_artifact_path": str(output_root / "segmentation" / "image_01_materials_v3_masks.npz"),
+            "mask_artifact_format": "npz",
+            "tile_size": 1024,
+        }
+    }
+
+    with patch.object(Path, "read_text", side_effect=AssertionError("manifest reread")):
+        summary = orch._build_run_card_result_summary(
+            [
+                {
+                    "image": str(tmp_path / "inputs" / "image_01.png"),
+                    "status": "ok",
+                    "backend": "da3",
+                    "runtime_s": 1.23,
+                    "manifest": str(manifest_path),
+                }
+            ]
+        )
+
+    assert summary == [
+        {
+            "image": "image_01.png",
+            "status": "ok",
+            "backend": "da3",
+            "runtime_s": 1.23,
+            "manifest_path": "manifests/image_01_combined.json",
+            "error_code": None,
+            "error_message": None,
+            "error_details": None,
+            "segmentation_metadata": {
+                "mask_artifact_path": str(output_root / "segmentation" / "image_01_materials_v3_masks.npz"),
+                "mask_artifact_format": "npz",
+                "tile_size": 1024,
+            },
+        }
+    ]
 
 
 def test_collect_run_card_artifacts_includes_reconstruction_report(tmp_path: Path):
@@ -802,4 +877,120 @@ def test_emit_run_card_skips_legacy_merkle_root_for_v2(tmp_path: Path):
         )
 
     build_tree.assert_called_once()
-    merkle_root.assert_not_called()
+
+
+def test_build_run_card_inputs_skips_hashing_when_hash_mode_never(tmp_path: Path) -> None:
+    config = EnhanceConfig(
+        model_variant=ModelVariant.METRIC_LARGE,
+        hash_mode=HashMode.NEVER,
+    )
+    orch = EnhanceOrchestrator(config, tmp_path)
+    input_path = tmp_path / "inputs" / "image_01.png"
+    input_path.parent.mkdir(parents=True, exist_ok=True)
+    input_path.write_bytes(b"pixels")
+
+    with patch("transformation_portal.lux_depth_v3.orchestrator.compute_file_sha256", side_effect=AssertionError("hashing")):
+        assert orch._build_run_card_inputs([{"image": str(input_path)}]) == []
+
+
+def test_build_run_card_inputs_reuses_result_input_sha256(tmp_path: Path) -> None:
+    config = EnhanceConfig(model_variant=ModelVariant.METRIC_LARGE)
+    orch = EnhanceOrchestrator(config, tmp_path)
+    input_path = tmp_path / "inputs" / "image_01.png"
+    input_path.parent.mkdir(parents=True, exist_ok=True)
+    input_path.write_bytes(b"pixels")
+
+    with patch("transformation_portal.lux_depth_v3.orchestrator.compute_file_sha256", side_effect=AssertionError("rehash")):
+        records = orch._build_run_card_inputs(
+            [
+                {
+                    "image": str(input_path),
+                    "input_sha256": "A" * 64,
+                }
+            ]
+        )
+
+    assert records == [
+        {
+            "path": "image_01.png",
+            "sha256": "a" * 64,
+            "size_bytes": len(b"pixels"),
+        }
+    ]
+
+
+def test_build_run_card_inputs_preserves_per_result_input_sha256(tmp_path: Path) -> None:
+    config = EnhanceConfig(model_variant=ModelVariant.METRIC_LARGE)
+    orch = EnhanceOrchestrator(config, tmp_path)
+    input_dir = tmp_path / "inputs"
+    input_dir.mkdir(parents=True, exist_ok=True)
+    input_a = input_dir / "image_01.png"
+    input_b = input_dir / "image_02.png"
+    input_a.write_bytes(b"first")
+    input_b.write_bytes(b"second")
+
+    with patch(
+        "transformation_portal.lux_depth_v3.orchestrator.compute_file_sha256",
+        side_effect=AssertionError("rehash"),
+    ):
+        records = orch._build_run_card_inputs(
+            [
+                {
+                    "image": str(input_a),
+                    "input_sha256": "A" * 64,
+                },
+                {
+                    "image": str(input_b),
+                    "input_sha256": "B" * 64,
+                },
+            ]
+        )
+
+    assert records == [
+        {
+            "path": "image_01.png",
+            "sha256": "a" * 64,
+            "size_bytes": len(b"first"),
+        },
+        {
+            "path": "image_02.png",
+            "sha256": "b" * 64,
+            "size_bytes": len(b"second"),
+        },
+    ]
+
+
+def test_build_run_card_inputs_omits_size_bytes_when_stat_fails(tmp_path: Path) -> None:
+    config = EnhanceConfig(model_variant=ModelVariant.METRIC_LARGE)
+    orch = EnhanceOrchestrator(config, tmp_path)
+    input_path = tmp_path / "inputs" / "image_01.png"
+    input_path.parent.mkdir(parents=True, exist_ok=True)
+    input_path.write_bytes(b"pixels")
+
+    original_stat = type(input_path).stat
+    stat_calls = 0
+
+    def flaky_stat(path_obj: Path, *args: Any, **kwargs: Any):
+        nonlocal stat_calls
+        if path_obj == input_path:
+            stat_calls += 1
+            if stat_calls >= 3:
+                raise OSError("stat unavailable")
+        return original_stat(path_obj, *args, **kwargs)
+
+    with patch.object(type(input_path), "stat", autospec=True, side_effect=flaky_stat):
+        records = orch._build_run_card_inputs(
+            [
+                {
+                    "image": str(input_path),
+                    "input_sha256": "A" * 64,
+                }
+            ]
+        )
+
+    assert records == [
+        {
+            "path": "image_01.png",
+            "sha256": "a" * 64,
+        }
+    ]

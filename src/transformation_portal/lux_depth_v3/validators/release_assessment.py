@@ -24,6 +24,7 @@ from transformation_portal.attestation.run_card_intoto import (
     validate_run_card_statement_binding,
 )
 from transformation_portal.attestation.sigstore import cosign_verify_blob
+from transformation_portal.lux_depth_v3.run_card_contract import infer_run_card_version
 from transformation_portal.lux_depth_v3.validators.run_card_integrity import verify_run_card_integrity
 
 
@@ -82,7 +83,7 @@ def assess_run_card_release(
 
     run_card_payload = _load_json_object(run_card_path, label="run card")
     run_card_bytes = run_card_path.read_bytes()
-    run_card_version = "v2" if "artifact_tree" in run_card_payload else "v1"
+    run_card_version = infer_run_card_version(run_card_payload)
     checks.append(
         {
             "name": "run_card_version",
