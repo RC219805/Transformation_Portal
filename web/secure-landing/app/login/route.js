@@ -46,14 +46,14 @@ function resolveEntryState({ accessEmail, errorCode }) {
     credentialState: hasRecoveryIssue ? "blocked" : hasVerifiedAccess ? "ready" : "waiting",
     accessLabel: hasVerifiedAccess ? "Verified access ready" : "Managed access required",
     accessDetail: hasVerifiedAccess
-      ? `Cloudflare Access is already verified for <strong>${escapeHtml(accessEmail)}</strong>.`
-      : "Managed access verification completes before operator credential handoff opens.",
+      ? `Verified for <strong>${escapeHtml(accessEmail)}</strong>.`
+      : "Managed access verification opens the next step.",
     credentialLabel: hasRecoveryIssue ? "Recovery required" : hasVerifiedAccess ? "Credential handoff ready" : "Waiting on verified access",
     credentialDetail: hasRecoveryIssue
       ? escapeHtml(resolveRecoveryGuidance(errorCode))
       : hasVerifiedAccess
-        ? "Continue with operator credentials to rotate into the governed portal session."
-        : "Operator credential handoff stays blocked until the verified access context is present.",
+        ? "Continue with operator credentials."
+        : "Credential handoff stays closed until access is verified.",
     recoveryState: hasRecoveryIssue ? String(errorCode || "").trim().toLowerCase() || "invalid" : "clear",
   };
 }
@@ -79,6 +79,16 @@ function renderLoginPage({ csrfToken, accessEmail, errorCode }) {
         detail: `Managed access has already been verified for ${accessEmail}. Successful sign-in rotates this browser into the governed portal session.`
       }
       : null;
+  const nextStepTitle = errorMessage
+    ? "Recovery is required before sign-in can continue."
+    : accessEmail
+      ? "Credential handoff is ready."
+      : "Managed access must complete first.";
+  const nextStepDetail = errorMessage
+    ? resolveRecoveryGuidance(errorCode)
+    : accessEmail
+      ? "Use your operator username and password to continue into the governed console."
+      : "Return after managed access verification opens operator credential entry.";
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -131,7 +141,7 @@ function renderLoginPage({ csrfToken, accessEmail, errorCode }) {
             <p class="eyebrow" data-ui="login-eyebrow">Managed operator access</p>
             <h1 data-ui="login-title">Continue to the operator console.</h1>
             <p class="lede" data-ui="login-lede">
-              Managed access and operator credentials stay separate on purpose. Confirm the verified access context first, then complete credential handoff into the governed console.
+              Confirm the managed access state, then complete operator credential handoff into the governed console.
             </p>
             <div class="login-entry-state" data-ui="login-entry-state">
               <article class="login-status-card" data-ui="login-access-status" data-state="${escapeHtml(entryState.accessState)}">
@@ -145,29 +155,42 @@ function renderLoginPage({ csrfToken, accessEmail, errorCode }) {
                 <p class="login-status-card-detail">${entryState.credentialDetail}</p>
               </article>
             </div>
-            <div class="login-sequence" data-ui="login-sequence">
-              <article class="login-sequence-step${accessEmail ? " login-sequence-step--ready" : ""}">
-                <p class="login-sequence-step-kicker">Step 1</p>
-                <p class="login-sequence-step-title">Verified access</p>
-                <p class="login-sequence-step-detail">${accessSequenceDetail}</p>
-              </article>
-              <article class="login-sequence-step login-sequence-step--active">
-                <p class="login-sequence-step-kicker">Step 2</p>
-                <p class="login-sequence-step-title">Operator credentials</p>
-                <p class="login-sequence-step-detail">Use your portal username and password to rotate into the governed build, operate, and review session.</p>
-              </article>
+            <div class="login-next-step" data-state="${escapeHtml(entryState.credentialState)}">
+              <p class="login-next-step-kicker">Next step</p>
+              <p class="login-next-step-title">${escapeHtml(nextStepTitle)}</p>
+              <p class="login-next-step-detail">${escapeHtml(nextStepDetail)}</p>
             </div>
-            ${errorMessage || accessText ? `<div class="login-status-stack" data-ui="login-status-stack">
+            ${errorMessage ? `<div class="login-status-stack" data-ui="login-status-stack">
               ${errorMessage ? `<div class="banner" data-ui="login-error-banner" role="alert">
                 <p class="banner-title">Sign-in needs attention</p>
                 <p class="banner-detail">${escapeHtml(errorMessage)}</p>
               </div>` : ""}
-              ${accessText ? `<p class="card-meta card-meta--verified" data-ui="login-access-context">${accessText}</p>` : ""}
-              ${recoveryCard ? `<div class="login-recovery-card" data-ui="login-recovery-card" data-state="${escapeHtml(entryState.recoveryState)}">
-                <p class="login-recovery-card-title">${escapeHtml(recoveryCard.title)}</p>
-                <p class="login-recovery-card-detail">${escapeHtml(recoveryCard.detail)}</p>
-              </div>` : ""}
             </div>` : ""}
+            <details class="login-secondary-details" data-ui="login-sequence">
+              <summary>
+                <span>Access details</span>
+                <span class="login-secondary-details__meta">${accessEmail ? "Verified context" : "Managed entry flow"}</span>
+              </summary>
+              <div class="login-secondary-details__content">
+                <div class="login-sequence">
+                  <article class="login-sequence-step${accessEmail ? " login-sequence-step--ready" : ""}">
+                    <p class="login-sequence-step-kicker">Step 1</p>
+                    <p class="login-sequence-step-title">Verified access</p>
+                    <p class="login-sequence-step-detail">${accessSequenceDetail}</p>
+                  </article>
+                  <article class="login-sequence-step login-sequence-step--active">
+                    <p class="login-sequence-step-kicker">Step 2</p>
+                    <p class="login-sequence-step-title">Operator credentials</p>
+                    <p class="login-sequence-step-detail">Use your portal username and password to rotate into the governed build, operate, and review session.</p>
+                  </article>
+                </div>
+                ${accessText ? `<p class="card-meta card-meta--verified" data-ui="login-access-context">${accessText}</p>` : ""}
+                ${recoveryCard ? `<div class="login-recovery-card" data-ui="login-recovery-card" data-state="${escapeHtml(entryState.recoveryState)}">
+                  <p class="login-recovery-card-title">${escapeHtml(recoveryCard.title)}</p>
+                  <p class="login-recovery-card-detail">${escapeHtml(recoveryCard.detail)}</p>
+                </div>` : ""}
+              </div>
+            </details>
             <form method="post" action="/login" autocomplete="on" data-ui="login-form">
               <input type="hidden" name="csrf_token" value="${escapeHtml(csrfToken)}" />
               <label data-ui="login-username-field">
@@ -179,7 +202,7 @@ function renderLoginPage({ csrfToken, accessEmail, errorCode }) {
                 <input type="password" name="password" autocomplete="current-password" required />
               </label>
               <p class="login-helper" data-ui="login-helper">
-                Use your operator credentials. Successful sign-in rotates the session before handoff to the governed portal.
+                Use your operator credentials. Successful sign-in rotates the session before portal handoff.
               </p>
               <div class="login-actions" data-ui="login-actions">
                 <button type="submit" data-ui="login-submit">Sign in</button>

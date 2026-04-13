@@ -496,43 +496,35 @@ export function renderHomepage() {
           <p class="section-kicker">Dynamic Neural Access</p>
           <h1 id="hero-title" data-ui="homepage-hero-title">Make premium media verifiable before it ships.</h1>
           <p class="hero-lede" data-ui="homepage-hero-lede">
-            Dynamic Neural Access is the certification layer for high-value media workflows. Turn raw or AI-assisted assets into partner-safe releases with reviewable provenance, rights posture, operator history, and distribution-ready proof.
+            Verifier-backed release proof for premium media. Keep provenance, rights posture, and operator history attached before anything leaves the workflow.
           </p>
           <div class="hero-actions" data-ui="homepage-hero-actions">
             <a class="site-cta" href="/login" data-ui="homepage-primary-cta">Operator Access</a>
             <a class="site-cta site-cta--secondary" href="#proof-report" data-ui="homepage-secondary-cta">Inspect Verification Report</a>
+            <a class="hero-inline-link" href="#workflow" data-ui="homepage-learn-link">Explore workflow</a>
           </div>
           <p class="hero-access-note" data-ui="homepage-hero-note">
-            Review the public proof surface first. Operator build, operate, and review work remains gated behind managed access.
+            Public proof stays visible. Managed entry opens only when operator work needs to continue.
           </p>
           <div class="entry-rail" data-ui="homepage-entry-rail">
-            <article class="entry-card" data-state="public-proof">
-              <p class="entry-card__kicker">Public proof</p>
-              <p class="entry-card__title">Start with orientation.</p>
-              <p class="entry-card__detail">Open the public proof surface to inspect release posture, verification context, and workflow scope before any operator session begins.</p>
+            <article class="entry-card entry-card--proofband" data-state="public-proof">
+              <div class="entry-card__summary">
+                <p class="entry-card__kicker">Proof snapshot</p>
+                <p class="entry-card__title">One release bundle, one decision path.</p>
+                <p class="entry-card__detail">Verification report, provenance artifacts, rights posture, and operator review stay in one reviewable handoff.</p>
+              </div>
+              <div class="entry-card__meta">
+                <p><strong>Public proof</strong> Inspect the report before access is requested.</p>
+                <p><strong>Managed entry</strong> Access verification stays separate from operator credentials.</p>
+                <p><strong>Operator console</strong> Build, operate, and review continue inside the governed shell.</p>
+              </div>
             </article>
-            <article class="entry-card" data-state="verified-access">
-              <p class="entry-card__kicker">Verified access</p>
-              <p class="entry-card__title">Confirm identity before credential handoff.</p>
-              <p class="entry-card__detail">Managed entry keeps Cloudflare Access verification separate from operator credentials so the browser never becomes the system of record.</p>
-            </article>
-            <article class="entry-card" data-state="governed-console">
-              <p class="entry-card__kicker">Governed console</p>
-              <p class="entry-card__title">Run build, operate, and review work inside the portal.</p>
-              <p class="entry-card__detail">Managed entry hands work into the operator console only after verification is complete and the governed shell is ready.</p>
-            </article>
-          </div>
-          <div class="hero-route-grid" data-ui="homepage-route-grid">
-            ${renderList(HERO_PATHS, renderHeroRouteCard)}
           </div>
           <div class="signal-strip" aria-label="Proof signals">
             ${renderList(HERO_SIGNALS, (item) => `<span class="signal-pill">${escapeHtml(item)}</span>`)}
           </div>
           <div class="guardrail-callout">
             <strong>Not a truth engine.</strong> A release-readiness system for provenance context, rights clarity, and reviewable evidence.
-          </div>
-          <div class="highlight-grid">
-            ${renderList(HERO_HIGHLIGHTS, renderHighlightCard)}
           </div>
         </div>
         ${renderReleaseBundlePreview()}

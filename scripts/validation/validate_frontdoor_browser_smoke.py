@@ -421,6 +421,66 @@ def _frontdoor_state_probe_expression() -> str:
 """
 
 
+def _frontdoor_accessibility_probe_expression() -> str:
+    return r"""
+(() => {
+  const visible = (el) => {
+    if (!el) return false;
+    const style = window.getComputedStyle(el);
+    const rect = el.getBoundingClientRect();
+    return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0;
+  };
+  const minTarget = (selector) => {
+    const el = document.querySelector(selector);
+    if (!visible(el)) return false;
+    const rect = el.getBoundingClientRect();
+    return rect.width >= 44 && rect.height >= 44;
+  };
+  const maxDisclosureDepth = (() => {
+    const detailsNodes = Array.from(document.querySelectorAll('details'));
+    if (!detailsNodes.length) return 0;
+    const depthFor = (node) => {
+      let depth = 1;
+      let current = node.parentElement;
+      while (current) {
+        if (current.tagName === 'DETAILS') depth += 1;
+        current = current.parentElement;
+      }
+      return depth;
+    };
+    return Math.max(...detailsNodes.map(depthFor));
+  })();
+  const focusVisibleWithStickyHeader = (() => {
+    const header = document.querySelector('.site-header');
+    const target = document.querySelector('[data-ui="homepage-primary-cta"]');
+    if (!header || !visible(target)) return false;
+    target.scrollIntoView({ block: 'center' });
+    target.focus();
+    const headerRect = header.getBoundingClientRect();
+    const targetRect = target.getBoundingClientRect();
+    return targetRect.top >= headerRect.bottom - 2 && targetRect.bottom <= window.innerHeight + 2;
+  })();
+  return {
+    pathname: window.location.pathname,
+    homepagePrimaryMinTarget: minTarget('[data-ui="homepage-primary-cta"]'),
+    homepageSecondaryMinTarget: minTarget('[data-ui="homepage-secondary-cta"]'),
+    homepageLearnMinTarget: minTarget('[data-ui="homepage-learn-link"]'),
+    loginSubmitMinTarget: minTarget('[data-ui="login-submit"]'),
+    loginSecondaryMinTarget: minTarget('[data-ui="login-secondary-link"]'),
+    focusVisibleWithStickyHeader,
+    maxDisclosureDepth,
+    reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+    decorativeMotionStatic: (() => {
+      const video = document.querySelector('.hero-video, .homepage-video');
+      if (!video) return true;
+      const style = window.getComputedStyle(video);
+      return style.display === 'none' || style.animationName === 'none' || style.animationDuration === '0s';
+    })()
+  };
+})()
+"""
+
+
 def _navigate_expression(pathname: str) -> str:
     encoded = json.dumps(pathname)
     return f"""
@@ -567,6 +627,21 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         )
         _expect(str(homepage_state.get("pathname", "")) == "/", f"Front-door homepage did not load at root: {homepage_state}")
         _expect(bool(homepage_state.get("hasHeroVideo")), f"Homepage video canvas was not rendered: {homepage_state}")
+        homepage_accessibility = connection.evaluate(_frontdoor_accessibility_probe_expression())
+        _expect(
+            bool(homepage_accessibility.get("homepagePrimaryMinTarget"))
+            and bool(homepage_accessibility.get("homepageSecondaryMinTarget"))
+            and bool(homepage_accessibility.get("homepageLearnMinTarget")),
+            f"Homepage interactive targets fell below the 44px contract: {homepage_accessibility}",
+        )
+        _expect(
+            bool(homepage_accessibility.get("focusVisibleWithStickyHeader")),
+            f"Homepage sticky header obscured focused actions: {homepage_accessibility}",
+        )
+        _expect(
+            int(homepage_accessibility.get("maxDisclosureDepth", 0)) <= 1,
+            f"Homepage disclosure depth exceeded the single-level contract: {homepage_accessibility}",
+        )
 
         print("frontdoor-browser-smoke: opening login", flush=True)
         connection.evaluate(_navigate_expression("/login"))
@@ -588,6 +663,42 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             description="front-door login to render",
         )
         _expect(bool(login_state.get("hasHeroVideo")), f"Login page lost hero video shell: {login_state}")
+        login_accessibility = connection.evaluate(_frontdoor_accessibility_probe_expression())
+        _expect(
+            bool(login_accessibility.get("loginSubmitMinTarget")) and bool(login_accessibility.get("loginSecondaryMinTarget")),
+            f"Login interactive targets fell below the 44px contract: {login_accessibility}",
+        )
+        _expect(
+            int(login_accessibility.get("maxDisclosureDepth", 0)) <= 1,
+            f"Login disclosure depth exceeded the single-level contract: {login_accessibility}",
+        )
+
+        print("frontdoor-browser-smoke: checking reduced motion", flush=True)
+        connection.call(
+            "Emulation.setEmulatedMedia",
+            {"features": [{"name": "prefers-reduced-motion", "value": "reduce"}]},
+        )
+        reduced_motion_state = _poll(
+            connection,
+            _frontdoor_accessibility_probe_expression(),
+            predicate=lambda value: (
+                isinstance(value, dict)
+                and str(value.get("pathname", "")) == "/login"
+                and bool(value.get("reducedMotion"))
+                and bool(value.get("decorativeMotionStatic"))
+                and bool(value.get("loginSubmitMinTarget"))
+            ),
+            timeout_seconds=args.timeout_seconds,
+            description="front-door reduced-motion login shell",
+        )
+        _expect(
+            bool(reduced_motion_state.get("decorativeMotionStatic")),
+            f"Reduced-motion mode left decorative front-door motion active: {reduced_motion_state}",
+        )
+        connection.call(
+            "Emulation.setEmulatedMedia",
+            {"features": [{"name": "prefers-reduced-motion", "value": "no-preference"}]},
+        )
 
         print("frontdoor-browser-smoke: submitting operator login", flush=True)
         connection.evaluate(_submit_login_expression(username, password))

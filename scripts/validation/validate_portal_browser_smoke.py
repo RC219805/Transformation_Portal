@@ -961,6 +961,118 @@ def _state_probe_expression() -> str:
 """
 
 
+def _accessibility_probe_expression() -> str:
+    return r"""
+(() => {
+  const visible = (el) => {
+    if (!el) return false;
+    const style = window.getComputedStyle(el);
+    const rect = el.getBoundingClientRect();
+    return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0;
+  };
+  const minTarget = (selector) => {
+    const el = document.querySelector(selector);
+    if (!visible(el)) return false;
+    const rect = el.getBoundingClientRect();
+    return rect.width >= 44 && rect.height >= 44;
+  };
+  const maxDisclosureDepth = (() => {
+    const detailsNodes = Array.from(document.querySelectorAll('details'));
+    if (!detailsNodes.length) return 0;
+    const depthFor = (node) => {
+      let depth = 1;
+      let current = node.parentElement;
+      while (current) {
+        if (current.tagName === 'DETAILS') depth += 1;
+        current = current.parentElement;
+      }
+      return depth;
+    };
+    return Math.max(...detailsNodes.map(depthFor));
+  })();
+  const focusVisibleWithStickyShells = (() => {
+    const target =
+      document.getElementById('pipelineSelect')
+      || document.getElementById('presetSelect')
+      || document.getElementById('buildStepTab1')
+      || document.querySelector('[data-ui="view-link"]')
+      || document.getElementById('themeBtn');
+    if (!visible(target)) return false;
+    const absoluteTop = target.getBoundingClientRect().top + window.scrollY;
+    const root = document.documentElement;
+    const previousScrollBehavior = root.style.scrollBehavior;
+    root.style.scrollBehavior = 'auto';
+    window.scrollTo(0, Math.max(0, absoluteTop - 220));
+    root.style.scrollBehavior = previousScrollBehavior;
+    target.focus();
+    const blockers = Array.from(document.querySelectorAll('.portal-topbar, [data-ui="console-context-shell"]'))
+      .filter((el) => {
+        if (!visible(el)) return false;
+        const position = window.getComputedStyle(el).position;
+        return position === 'sticky' || position === 'fixed';
+      });
+    const blockerBottom = blockers.reduce((max, el) => Math.max(max, el.getBoundingClientRect().bottom), 0);
+    const targetRect = target.getBoundingClientRect();
+    return targetRect.top >= blockerBottom - 2 && targetRect.bottom <= window.innerHeight + 2;
+  })();
+  const discoverableDisclosures = Array.from(document.querySelectorAll('details > summary'))
+    .filter((summary) => visible(summary) && String(summary.textContent || '').trim().length > 0)
+    .length;
+  const shellNoise = document.querySelector('.shell-noise');
+  const visiblePulseAnimation = Array.from(document.querySelectorAll('.animate-pulse'))
+    .some((el) => visible(el) && window.getComputedStyle(el).animationName !== 'none' && window.getComputedStyle(el).animationDuration !== '0s');
+  return {
+    currentView: document.body ? String(document.body.dataset.consoleView || '') : '',
+    themeTargetMin: minTarget('#themeBtn'),
+    shortcutsTargetMin: minTarget('#shortcutsBtn'),
+    workspaceLinkTargetMin: minTarget('[data-ui="view-link"]'),
+    buildStepTargetMin: minTarget('#buildStepTab1'),
+    focusTargetId: (() => {
+      const target =
+        document.getElementById('pipelineSelect')
+        || document.getElementById('presetSelect')
+        || document.getElementById('buildStepTab1')
+        || document.querySelector('[data-ui="view-link"]')
+        || document.getElementById('themeBtn');
+      return target ? String(target.id || target.getAttribute('data-ui') || target.tagName || '') : '';
+    })(),
+    focusTargetTop: (() => {
+      const target =
+        document.getElementById('pipelineSelect')
+        || document.getElementById('presetSelect')
+        || document.getElementById('buildStepTab1')
+        || document.querySelector('[data-ui="view-link"]')
+        || document.getElementById('themeBtn');
+      return target ? Number(target.getBoundingClientRect().top || 0) : 0;
+    })(),
+    focusTargetBottom: (() => {
+      const target =
+        document.getElementById('pipelineSelect')
+        || document.getElementById('presetSelect')
+        || document.getElementById('buildStepTab1')
+        || document.querySelector('[data-ui="view-link"]')
+        || document.getElementById('themeBtn');
+      return target ? Number(target.getBoundingClientRect().bottom || 0) : 0;
+    })(),
+    stickyBlockerBottom: Array.from(document.querySelectorAll('.portal-topbar, [data-ui="console-context-shell"]'))
+      .filter((el) => {
+        if (!visible(el)) return false;
+        const position = window.getComputedStyle(el).position;
+        return position === 'sticky' || position === 'fixed';
+      })
+      .reduce((max, el) => Math.max(max, el.getBoundingClientRect().bottom), 0),
+    focusVisibleWithStickyShells,
+    maxDisclosureDepth,
+    discoverableDisclosures,
+    reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+    decorativeMotionStatic:
+      (!shellNoise || window.getComputedStyle(shellNoise).display === 'none')
+      && !visiblePulseAnimation
+  };
+})()
+"""
+
+
 def _navigate_to_console_view_expression(
     view: str,
     job_id: str = "",
@@ -1419,6 +1531,21 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             f"Portal did not default to lux-depth-v3: {online_state}",
         )
         _expect(bool(online_state.get("overviewViewVisible")), f"Overview shell did not remain visible: {online_state}")
+        overview_accessibility = connection.evaluate(_accessibility_probe_expression())
+        _expect(
+            bool(overview_accessibility.get("themeTargetMin"))
+            and bool(overview_accessibility.get("shortcutsTargetMin"))
+            and bool(overview_accessibility.get("workspaceLinkTargetMin")),
+            f"Portal overview controls fell below the 44px contract: {overview_accessibility}",
+        )
+        _expect(
+            int(overview_accessibility.get("maxDisclosureDepth", 0)) <= 1,
+            f"Portal disclosure depth exceeded the single-level contract: {overview_accessibility}",
+        )
+        _expect(
+            int(overview_accessibility.get("discoverableDisclosures", 0)) >= 1,
+            f"Portal disclosures were no longer discoverable: {overview_accessibility}",
+        )
 
         print("portal-browser-smoke: opening build view", flush=True)
         connection.evaluate(_navigate_to_console_view_expression("build"))
@@ -1436,6 +1563,41 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         _expect(
             not bool(build_state.get("operateViewVisible")),
             f"Build view should suppress operate shell: {build_state}",
+        )
+        build_accessibility = connection.evaluate(_accessibility_probe_expression())
+        _expect(
+            bool(build_accessibility.get("buildStepTargetMin")),
+            f"Build step tabs fell below the 44px contract: {build_accessibility}",
+        )
+        _expect(
+            bool(build_accessibility.get("focusVisibleWithStickyShells")),
+            f"Sticky portal chrome obscured focused controls: {build_accessibility}",
+        )
+
+        print("portal-browser-smoke: checking reduced motion", flush=True)
+        connection.call(
+            "Emulation.setEmulatedMedia",
+            {"features": [{"name": "prefers-reduced-motion", "value": "reduce"}]},
+        )
+        reduced_motion_state = _poll(
+            connection,
+            _accessibility_probe_expression(),
+            predicate=lambda value: (
+                isinstance(value, dict)
+                and bool(value.get("reducedMotion"))
+                and bool(value.get("decorativeMotionStatic"))
+                and bool(value.get("buildStepTargetMin"))
+            ),
+            timeout_seconds=args.timeout_seconds,
+            description="portal reduced-motion shell",
+        )
+        _expect(
+            bool(reduced_motion_state.get("decorativeMotionStatic")),
+            f"Reduced-motion mode left decorative portal motion active: {reduced_motion_state}",
+        )
+        connection.call(
+            "Emulation.setEmulatedMedia",
+            {"features": [{"name": "prefers-reduced-motion", "value": "no-preference"}]},
         )
 
         print("portal-browser-smoke: confirming lux-depth-v3 build defaults", flush=True)
@@ -2142,9 +2304,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         )
 
         print("portal-browser-smoke: simulating degraded auth recovery controls", flush=True)
-        degraded_state = connection.evaluate(
-            _simulate_bootstrap_degraded_expression(reason="auth_failure", http_status=401)
-        )
+        degraded_state = connection.evaluate(_simulate_bootstrap_degraded_expression(reason="auth_failure", http_status=401))
         _expect(isinstance(degraded_state, dict), f"Unexpected degraded portal state: {degraded_state!r}")
         _expect(
             str(degraded_state.get("actionPrimaryKey", "")).strip() == "restore_access",

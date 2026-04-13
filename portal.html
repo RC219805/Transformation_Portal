@@ -243,18 +243,21 @@ Contract notes:
                         <p id="heroWarningCount" class="mt-2 text-sm font-bold text-slate-900 dark:text-white">0</p>
                     </div>
                 </div>
-                <section id="overviewRuntimeClarityShell" class="mt-6">
-                    <div class="flex items-start justify-between gap-3">
+                <details id="overviewRuntimeClarityShell" class="quiet-disclosure mt-6">
+                    <summary class="quiet-disclosure__summary">
                         <div>
-                            <p class="section-kicker">Runtime Clarity</p>
-                            <p class="mt-2 text-[12px] leading-6 text-slate-500 dark:text-slate-400">
-                                Selected backends, runtime posture, checkpoint expectations, and license acknowledgments stay visible while the draft changes.
-                            </p>
+                            <p class="section-kicker">Runtime summary</p>
+                            <p class="quiet-disclosure__title">Open runtime posture and checkpoint detail</p>
                         </div>
                         <span class="micro-status">Backend-owned policy</span>
+                    </summary>
+                    <div class="quiet-disclosure__body">
+                        <p class="text-[12px] leading-6 text-slate-500 dark:text-slate-400">
+                            Selected backends, runtime posture, checkpoint expectations, and license acknowledgments stay available while the draft changes.
+                        </p>
+                        <div id="overviewRuntimeBriefing" class="runtime-briefing-grid mt-4" data-ui="runtime-clarity-grid"></div>
                     </div>
-                    <div id="overviewRuntimeBriefing" class="runtime-briefing-grid mt-4" data-ui="runtime-clarity-grid"></div>
-                </section>
+                </details>
                 </div>
             </div>
         </section>
@@ -310,43 +313,45 @@ Contract notes:
                 </div>
                 <p id="consoleViewMeta" class="portal-context-meta text-[11px] font-mono text-slate-500 dark:text-slate-400">View routing stays client-side to preserve the live orchestrator contract.</p>
             </div>
-            <div id="consoleContextRibbon" class="console-context-ribbon portal-context-ribbon mt-4 hidden" data-ui="console-context-ribbon" aria-live="polite">
-                <div id="contextRibbonCard1" class="console-context-card" data-tone="info">
-                    <p id="contextRibbonCard1Label" class="console-context-label">Job</p>
-                    <p id="contextRibbonJob" class="console-context-value">No job selected</p>
-                    <p id="contextRibbonJobMeta" class="console-context-meta">Choose a run in operate or review to pin context here.</p>
+            <div class="console-context-strip mt-4" data-ui="console-context-strip">
+                <div id="consoleContextRibbon" class="console-context-ribbon portal-context-ribbon hidden" data-ui="console-context-ribbon" aria-live="polite">
+                    <div id="contextRibbonCard1" class="console-context-card" data-tone="info">
+                        <p id="contextRibbonCard1Label" class="console-context-label">Job</p>
+                        <p id="contextRibbonJob" class="console-context-value">No job selected</p>
+                        <p id="contextRibbonJobMeta" class="console-context-meta">Choose a run in operate or review to pin context here.</p>
+                    </div>
+                    <div id="contextRibbonCard2" class="console-context-card" data-tone="info">
+                        <p id="contextRibbonCard2Label" class="console-context-label">State</p>
+                        <p id="contextRibbonState" class="console-context-value">Idle</p>
+                        <p id="contextRibbonFreshness" class="console-context-meta">No live telemetry</p>
+                    </div>
+                    <div id="contextRibbonCard3" class="console-context-card" data-tone="info">
+                        <p id="contextRibbonCard3Label" class="console-context-label">Artifact</p>
+                        <p id="contextRibbonArtifact" class="console-context-value">Awaiting selection</p>
+                        <p id="contextRibbonArtifactMeta" class="console-context-meta">Review context will show the active artifact path here.</p>
+                    </div>
+                    <div id="contextRibbonCard4" class="console-context-card" data-tone="info">
+                        <p id="contextRibbonCard4Label" class="console-context-label">Compare</p>
+                        <p id="contextRibbonCompare" class="console-context-value">No compare pair</p>
+                        <p id="contextRibbonCompareMeta" class="console-context-meta">No paired comparison is available for the current artifact.</p>
+                    </div>
                 </div>
-                <div id="contextRibbonCard2" class="console-context-card" data-tone="info">
-                    <p id="contextRibbonCard2Label" class="console-context-label">State</p>
-                    <p id="contextRibbonState" class="console-context-value">Idle</p>
-                    <p id="contextRibbonFreshness" class="console-context-meta">No live telemetry</p>
-                </div>
-                <div id="contextRibbonCard3" class="console-context-card" data-tone="info">
-                    <p id="contextRibbonCard3Label" class="console-context-label">Artifact</p>
-                    <p id="contextRibbonArtifact" class="console-context-value">Awaiting selection</p>
-                    <p id="contextRibbonArtifactMeta" class="console-context-meta">Review context will show the active artifact path here.</p>
-                </div>
-                <div id="contextRibbonCard4" class="console-context-card" data-tone="info">
-                    <p id="contextRibbonCard4Label" class="console-context-label">Compare</p>
-                    <p id="contextRibbonCompare" class="console-context-value">No compare pair</p>
-                    <p id="contextRibbonCompareMeta" class="console-context-meta">No paired comparison is available for the current artifact.</p>
-                </div>
+                <section id="consoleActionRail" class="console-action-rail hidden" data-ui="console-action-rail" data-tone="info" aria-live="polite">
+                    <div class="console-action-rail-copy">
+                        <p class="console-action-rail-kicker">Action rail</p>
+                        <p id="consoleActionRailTitle" class="console-action-rail-title">Keep the next operator move pinned</p>
+                        <p id="consoleActionRailDetail" class="console-action-rail-detail">Contextual review, artifact, compare, and recovery actions update here from the current run state.</p>
+                        <p id="consoleActionRailHint" class="console-action-rail-hint" data-ui="console-action-shortcuts">
+                            Keyboard: <span class="kbd">1</span> overview, <span class="kbd">2</span> build, <span class="kbd">3</span> operate, <span class="kbd">4</span> review, <span class="kbd">?</span> shortcuts.
+                        </p>
+                    </div>
+                    <div id="consoleActionRailActions" class="console-action-rail-actions">
+                        <button id="consoleActionPrimaryBtn" type="button" class="operator-action-btn operator-action-btn-primary hidden" data-ui="console-action-primary"></button>
+                        <button id="consoleActionSecondaryBtn1" type="button" class="operator-action-btn operator-action-btn-secondary hidden" data-ui="console-action-secondary-1"></button>
+                        <button id="consoleActionSecondaryBtn2" type="button" class="operator-action-btn operator-action-btn-secondary hidden" data-ui="console-action-secondary-2"></button>
+                    </div>
+                </section>
             </div>
-            <section id="consoleActionRail" class="console-action-rail mt-4 hidden" data-ui="console-action-rail" data-tone="info" aria-live="polite">
-                <div class="console-action-rail-copy">
-                    <p class="console-action-rail-kicker">Action Rail</p>
-                    <p id="consoleActionRailTitle" class="console-action-rail-title">Keep the next operator move pinned</p>
-                    <p id="consoleActionRailDetail" class="console-action-rail-detail">Contextual review, artifact, compare, and recovery actions will update here from the current run state.</p>
-                    <p id="consoleActionRailHint" class="console-action-rail-hint" data-ui="console-action-shortcuts">
-                        Keyboard: <span class="kbd">1</span> overview, <span class="kbd">2</span> build, <span class="kbd">3</span> operate, <span class="kbd">4</span> review, <span class="kbd">?</span> shortcuts.
-                    </p>
-                </div>
-                <div id="consoleActionRailActions" class="console-action-rail-actions">
-                    <button id="consoleActionPrimaryBtn" type="button" class="operator-action-btn operator-action-btn-primary hidden" data-ui="console-action-primary"></button>
-                    <button id="consoleActionSecondaryBtn1" type="button" class="operator-action-btn operator-action-btn-secondary hidden" data-ui="console-action-secondary-1"></button>
-                    <button id="consoleActionSecondaryBtn2" type="button" class="operator-action-btn operator-action-btn-secondary hidden" data-ui="console-action-secondary-2"></button>
-                </div>
-            </section>
         </section>
 
         <!-- ============================================ -->
@@ -435,18 +440,21 @@ Contract notes:
                             <span id="bootstrapStatusBadge" class="signal-badge portal-access-state__badge" data-tone="info">Confirming access</span>
                         </div>
                     </div>
-                    <section id="buildRuntimeClarityShell" class="mt-5">
-                        <div class="flex items-start justify-between gap-3">
+                    <details id="buildRuntimeClarityShell" class="quiet-disclosure mt-5">
+                        <summary class="quiet-disclosure__summary">
                             <div>
-                                <p class="section-kicker">Execution Briefing</p>
-                                <p class="mt-2 text-[12px] leading-6 text-slate-500 dark:text-slate-400">
-                                    The selected depth path, segmentation mode, checkpoint expectation, and license posture stay pinned here while you move through Steps 2-4.
-                                </p>
+                                <p class="section-kicker">Execution briefing</p>
+                                <p class="quiet-disclosure__title">Open runtime and license posture detail</p>
                             </div>
                             <span class="micro-status">Decision support</span>
+                        </summary>
+                        <div class="quiet-disclosure__body">
+                            <p class="text-[12px] leading-6 text-slate-500 dark:text-slate-400">
+                                The selected depth path, segmentation mode, checkpoint expectation, and license posture stay pinned here while you move through Steps 2-4.
+                            </p>
+                            <div id="buildRuntimeBriefing" class="runtime-briefing-grid runtime-briefing-grid--compact mt-4" data-ui="build-runtime-clarity"></div>
                         </div>
-                        <div id="buildRuntimeBriefing" class="runtime-briefing-grid runtime-briefing-grid--compact mt-4" data-ui="build-runtime-clarity"></div>
-                    </section>
+                    </details>
                     </div>
                 </div>
 

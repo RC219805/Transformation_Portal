@@ -1228,7 +1228,7 @@ test("portal renders waiting recovery posture for Access outages", async () => {
       assert.equal(response.status, 503);
       assert.match(html, /data-ui="managed-recovery-shell"/);
       assert.match(html, /data-reason="access_outage"/);
-      assert.match(html, /class="login-status-card" data-state="waiting"/);
+      assert.match(html, /class="login-status-card(?: [^"]*)?" data-state="waiting"/);
       assert.match(html, /Retry when Access recovers/);
     } finally {
       global.fetch = originalFetch;
