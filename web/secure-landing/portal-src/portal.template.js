@@ -141,6 +141,14 @@ const els = {
     consoleViewSummary: _domId('consoleViewSummary'),
     consoleViewMeta: _domId('consoleViewMeta'),
     consoleContextRibbon: _domId('consoleContextRibbon'),
+    consoleActionRail: _domId('consoleActionRail'),
+    consoleActionRailTitle: _domId('consoleActionRailTitle'),
+    consoleActionRailDetail: _domId('consoleActionRailDetail'),
+    consoleActionRailHint: _domId('consoleActionRailHint'),
+    consoleActionRailActions: _domId('consoleActionRailActions'),
+    consoleActionPrimaryBtn: _domId('consoleActionPrimaryBtn'),
+    consoleActionSecondaryBtn1: _domId('consoleActionSecondaryBtn1'),
+    consoleActionSecondaryBtn2: _domId('consoleActionSecondaryBtn2'),
     contextRibbonCard1: _domId('contextRibbonCard1'),
     contextRibbonCard1Label: _domId('contextRibbonCard1Label'),
     contextRibbonJob: _domId('contextRibbonJob'),
@@ -393,6 +401,9 @@ const els = {
     selectedJobSummary: _domId('selectedJobSummary'),
     selectedJobRecoveryTitle: _domId('selectedJobRecoveryTitle'),
     selectedJobRecoveryDetail: _domId('selectedJobRecoveryDetail'),
+    selectedJobRecoveryActions: _domId('selectedJobRecoveryActions'),
+    selectedJobRecoveryPrimaryBtn: _domId('selectedJobRecoveryPrimaryBtn'),
+    selectedJobRecoverySecondaryBtn: _domId('selectedJobRecoverySecondaryBtn'),
     selectedJobTransportAlert: _domId('selectedJobTransportAlert'),
     openRunDetailsBtn: _domId('openRunDetailsBtn'),
     inspectorOverviewTab: _domId('inspectorOverviewTab'),
@@ -428,6 +439,9 @@ const els = {
     reviewStatusTitle: _domId('reviewStatusTitle'),
     reviewStatusDetail: _domId('reviewStatusDetail'),
     reviewStatusAction: _domId('reviewStatusAction'),
+    reviewStatusActions: _domId('reviewStatusActions'),
+    reviewStatusPrimaryBtn: _domId('reviewStatusPrimaryBtn'),
+    reviewStatusSecondaryBtn: _domId('reviewStatusSecondaryBtn'),
     reviewProvenanceGrid: _domId('reviewProvenanceGrid'),
     reviewProvenanceArtifactRole: _domId('reviewProvenanceArtifactRole'),
     reviewProvenanceRunState: _domId('reviewProvenanceRunState'),
@@ -985,6 +999,528 @@ function _compareSurfaceCopy(selectedArtifact, compareArtifact, compareEnabled) 
         summaryTitle: 'Paired comparison available',
         summaryDetail: `${compareLabel} is available as a side-by-side comparison for ${primaryLabel}.`,
     };
+}
+
+function _findJobById(jobId) {
+    const normalizedJobId = _normalizeSelectedJobId(jobId);
+    if (!normalizedJobId) return null;
+    return state.jobs.find((job) => _normalizeSelectedJobId(job?.id) === normalizedJobId) || null;
+}
+
+function _jobHasReviewableOutputs(job) {
+    if (!job) return false;
+    const summary = normalizeRunSummary(job.run_summary);
+    const artifactCount = Array.isArray(job.artifacts) ? job.artifacts.length : 0;
+    return artifactCount > 0 || Boolean(summary?.reviewable_outputs);
+}
+
+function _operatorAction(key, label, options = {}) {
+    const normalizedKey = String(key || '').trim();
+    const normalizedLabel = String(label || '').trim();
+    if (!normalizedKey || !normalizedLabel) return null;
+    return {
+        key: normalizedKey,
+        label: normalizedLabel,
+        tone: String(options.tone || 'info'),
+        jobId: _normalizeSelectedJobId(options.jobId || ''),
+        artifactPath: _normalizeArtifactRoutePath(options.artifactPath || ''),
+        detail: String(options.detail || '').trim(),
+        disabled: Boolean(options.disabled)
+    };
+}
+
+function _compactOperatorActions(actions, maxCount = 2) {
+    const seen = new Set();
+    const compact = [];
+    (Array.isArray(actions) ? actions : []).forEach((action) => {
+        if (!action || !action.key || seen.has(action.key)) return;
+        seen.add(action.key);
+        compact.push(action);
+    });
+    return compact.slice(0, maxCount);
+}
+
+function _operatorActionContext(job) {
+    const normalizedJobId = _normalizeSelectedJobId(job?.id);
+    const artifacts = Array.isArray(job?.artifacts) ? rankArtifactsForDisplay(job.artifacts) : [];
+    const selectedArtifact = job ? _selectedArtifactForJob(job) : null;
+    const heroArtifact = artifacts[0] || selectedArtifact || null;
+    const activeArtifact = selectedArtifact || heroArtifact;
+    const compareCandidate = job ? findCompareArtifact(activeArtifact, artifacts) : null;
+    const compareEnabled = Boolean(
+        normalizedJobId
+        && compareCandidate
+        && state.artifactUi.compareByJob[normalizedJobId]
+    );
+    return {
+        job,
+        jobId: normalizedJobId,
+        artifacts,
+        artifactCount: artifacts.length,
+        selectedArtifact: activeArtifact,
+        heroArtifact,
+        compareCandidate,
+        compareEnabled,
+        reviewableOutputs: _jobHasReviewableOutputs(job)
+    };
+}
+
+function _preferredOperatorActionJob() {
+    const preferredJobId = _preferredSelectedJobId();
+    return _findJobById(preferredJobId) || _latestActiveJob() || _latestReviewableJob() || null;
+}
+
+function _operatorActionHintHtml() {
+    const base = [
+        '<span class="kbd">1</span> overview',
+        '<span class="kbd">2</span> build',
+        '<span class="kbd">3</span> operate',
+        '<span class="kbd">4</span> review',
+        '<span class="kbd">?</span> shortcuts'
+    ];
+    if (state.currentView === 'build') {
+        base.push('<span class="kbd">Ctrl/⌘ + Enter</span> dispatch');
+        base.push('<span class="kbd">Ctrl/⌘ + Shift + C</span> copy CLI');
+    }
+    return `Keyboard: ${base.join(', ')}.`;
+}
+
+function _operatorRecoveryActionSnapshot(context) {
+    const job = context.job;
+    const bootstrapStatus = String(state.bootstrap?.status || 'pending').trim().toLowerCase();
+    const reconnectBlocked = Boolean(job?.reconnectBlocked);
+    const hasBootstrapFailure = bootstrapStatus === 'degraded' || bootstrapStatus === 'unavailable';
+    if (!reconnectBlocked && !hasBootstrapFailure) return null;
+
+    const failure = reconnectBlocked
+        ? _bootstrapFailureDetails('auth_failure', 401)
+        : _bootstrapFailureDetails(state.bootstrap.lastErrorReason, state.bootstrap.lastHttpStatus);
+    const tone = failure.retryable ? 'warning' : 'blocked';
+
+    if (failure.reason === 'auth_failure' || reconnectBlocked) {
+        return {
+            title: 'Restore access before live actions continue',
+            detail: failure.actionMessage,
+            tone,
+            primary: _operatorAction('restore_access', 'Restore Access', {
+                jobId: context.jobId,
+                tone,
+                detail: failure.actionMessage
+            }),
+            secondary: _compactOperatorActions([
+                _operatorAction('retry_status_check', 'Retry Status Check', {
+                    jobId: context.jobId,
+                    tone: 'info',
+                    detail: 'Retry bootstrap and backend status checks without expanding the route contract.'
+                })
+            ])
+        };
+    }
+
+    return {
+        title: failure.reason === 'access_outage' ? 'Managed access is degraded' : 'Portal recovery is required',
+        detail: failure.actionMessage,
+        tone,
+        primary: _operatorAction('retry_status_check', 'Retry Status Check', {
+            jobId: context.jobId,
+            tone,
+            detail: failure.actionMessage
+        }),
+        secondary: _compactOperatorActions([
+            context.reviewableOutputs
+                ? _operatorAction('review_retained_outputs', 'Review Retained Outputs', {
+                    jobId: context.jobId,
+                    tone: 'warning',
+                    detail: 'Open retained outputs while live status is recovering.'
+                })
+                : _operatorAction('return_to_build', 'Return to Build', {
+                    tone: 'info',
+                    detail: 'Return to the build surface while access recovery completes.'
+                })
+        ])
+    };
+}
+
+function _operatorActionRailSnapshot(jobOverride = undefined) {
+    const job = arguments.length > 0 ? jobOverride : _preferredOperatorActionJob();
+    const context = _operatorActionContext(job);
+    const recoverySnapshot = _operatorRecoveryActionSnapshot(context);
+    if (recoverySnapshot) return recoverySnapshot;
+
+    if (!job) {
+        return {
+            title: state.backendOk ? 'Prepare the next governed dispatch' : 'Restore backend connectivity',
+            detail: state.backendOk
+                ? 'Open Build to continue the active draft. The last selected run will stay actionable when one exists.'
+                : 'Connectivity must recover before preview-backed dispatch and live review can continue.',
+            tone: state.backendOk ? 'info' : 'warning',
+            primary: _operatorAction('open_build', 'Open Build', {
+                tone: 'info',
+                detail: 'Open Build without changing any route or API contract.'
+            }),
+            secondary: _compactOperatorActions([
+                _operatorAction('resume_draft', 'Resume Draft', {
+                    tone: 'info',
+                    detail: 'Resume the current draft and keep the active step focused.'
+                }),
+                !state.backendOk
+                    ? _operatorAction('retry_status_check', 'Retry Status Check', {
+                        tone: 'warning',
+                        detail: 'Retry bootstrap and backend checks while the portal is offline.'
+                    })
+                    : null
+            ])
+        };
+    }
+
+    if (job.state === 'running' || job.state === 'queued') {
+        return {
+            title: context.artifactCount > 0 ? 'Live run already has early outputs' : 'Stay with the live run',
+            detail: context.artifactCount > 0
+                ? 'Operate stays primary while early artifacts index. Review remains one click away when you need the retained outputs.'
+                : 'Use Operate to watch progress, warnings, and transport freshness until the first artifacts arrive.',
+            tone: _jobSurfaceTone(job),
+            primary: _operatorAction('stay_in_operate', 'Stay in Operate', {
+                jobId: context.jobId,
+                tone: _jobSurfaceTone(job),
+                detail: 'Keep the selected run pinned in Operate.'
+            }),
+            secondary: _compactOperatorActions([
+                context.reviewableOutputs
+                    ? _operatorAction('open_early_artifacts', 'Open Early Artifacts', {
+                        jobId: context.jobId,
+                        tone: 'warning',
+                        detail: 'Open Review using the current selected run and artifact route state.'
+                    })
+                    : null,
+                context.heroArtifact
+                    ? _operatorAction('open_latest_artifact', 'Open Latest Artifact', {
+                        jobId: context.jobId,
+                        artifactPath: _artifactRouteKey(context.heroArtifact),
+                        tone: 'info',
+                        detail: 'Open the highest-ranked indexed artifact for the selected run.'
+                    })
+                    : null
+            ])
+        };
+    }
+
+    if (job.state === 'partial' || job.state === 'failed' || job.state === 'canceled') {
+        return {
+            title: context.reviewableOutputs ? 'Retained outputs are ready for triage' : 'Return to Build after triage',
+            detail: context.reviewableOutputs
+                ? 'Open the retained outputs before rerunning failed inputs or rebuilding the next dispatch.'
+                : 'No reviewable outputs were retained. Return to Build after confirming the latest run context.',
+            tone: context.reviewableOutputs ? 'warning' : 'blocked',
+            primary: context.reviewableOutputs
+                ? _operatorAction('review_retained_outputs', 'Review Retained Outputs', {
+                    jobId: context.jobId,
+                    tone: 'warning',
+                    detail: 'Open Review for the retained outputs of the selected run.'
+                })
+                : _operatorAction('return_to_build', 'Return to Build', {
+                    tone: 'info',
+                    detail: 'Return to the build surface to prepare the next dispatch.'
+                }),
+            secondary: _compactOperatorActions([
+                _operatorAction('return_to_build', 'Return to Build', {
+                    tone: 'info',
+                    detail: 'Return to the build surface to prepare the next dispatch.'
+                }),
+                context.reviewableOutputs && context.heroArtifact
+                    ? _operatorAction('open_latest_artifact', 'Open Latest Artifact', {
+                        jobId: context.jobId,
+                        artifactPath: _artifactRouteKey(context.heroArtifact),
+                        tone: 'warning',
+                        detail: 'Open the highest-ranked retained artifact without changing the current route.'
+                    })
+                    : null
+            ])
+        };
+    }
+
+    if (job.state === 'offline') {
+        return {
+            title: context.reviewableOutputs ? 'Cached outputs remain reviewable' : 'Restore backend connectivity',
+            detail: context.reviewableOutputs
+                ? 'Live status is stale until connectivity returns, but retained artifacts stay available for operator review.'
+                : 'Live status is stale until connectivity returns. Retry the portal status check before trusting this run state.',
+            tone: 'warning',
+            primary: context.reviewableOutputs
+                ? _operatorAction('review_retained_outputs', 'Review Retained Outputs', {
+                    jobId: context.jobId,
+                    tone: 'warning',
+                    detail: 'Review retained outputs while backend connectivity recovers.'
+                })
+                : _operatorAction('retry_status_check', 'Retry Status Check', {
+                    jobId: context.jobId,
+                    tone: 'warning',
+                    detail: 'Retry bootstrap and backend status checks for the selected run.'
+                }),
+            secondary: _compactOperatorActions([
+                _operatorAction('retry_status_check', 'Retry Status Check', {
+                    jobId: context.jobId,
+                    tone: 'warning',
+                    detail: 'Retry bootstrap and backend status checks for the selected run.'
+                }),
+                _operatorAction('return_to_build', 'Return to Build', {
+                    tone: 'info',
+                    detail: 'Return to the build surface while connectivity recovers.'
+                })
+            ])
+        };
+    }
+
+    return {
+        title: context.reviewableOutputs ? 'Review context is ready' : 'Awaiting indexed outputs',
+        detail: context.reviewableOutputs
+            ? 'Open Review, pop the latest indexed artifact, or toggle compare without expanding the current route contract.'
+            : 'This run is selected, but no indexed outputs are available yet. Stay with the selected job context until they arrive.',
+        tone: context.reviewableOutputs ? 'ready' : 'info',
+        primary: context.reviewableOutputs
+            ? _operatorAction('open_review', 'Open Review', {
+                jobId: context.jobId,
+                tone: 'ready',
+                detail: 'Open Review using the selected run and current route-backed compare preference.'
+            })
+            : _operatorAction('stay_in_operate', 'Stay in Operate', {
+                jobId: context.jobId,
+                tone: 'info',
+                detail: 'Keep the selected run pinned in Operate until outputs arrive.'
+            }),
+        secondary: _compactOperatorActions([
+            context.heroArtifact
+                ? _operatorAction('open_latest_artifact', 'Open Latest Artifact', {
+                    jobId: context.jobId,
+                    artifactPath: _artifactRouteKey(context.heroArtifact),
+                    tone: 'ready',
+                    detail: 'Open the highest-ranked indexed artifact for the selected run.'
+                })
+                : null,
+            context.compareCandidate
+                ? _operatorAction('toggle_compare', 'Toggle Compare', {
+                    jobId: context.jobId,
+                    tone: context.compareEnabled ? 'ready' : 'info',
+                    detail: 'Toggle compare using the current artifact route and compare=1 contract.'
+                })
+                : null
+        ])
+    };
+}
+
+function _renderOperatorActionButton(button, action) {
+    if (!button) return;
+    if (!action) {
+        button.classList.add('hidden');
+        button.disabled = true;
+        button.textContent = '';
+        delete button.dataset.actionKey;
+        delete button.dataset.jobId;
+        delete button.dataset.artifactPath;
+        delete button.dataset.tone;
+        delete button.dataset.actionLabel;
+        button.removeAttribute('title');
+        return;
+    }
+    button.textContent = action.label;
+    button.disabled = Boolean(action.disabled);
+    button.dataset.actionKey = action.key;
+    button.dataset.jobId = action.jobId || '';
+    button.dataset.artifactPath = action.artifactPath || '';
+    button.dataset.tone = action.tone || 'info';
+    button.dataset.actionLabel = action.label;
+    if (action.detail) {
+        button.title = action.detail;
+    } else {
+        button.removeAttribute('title');
+    }
+    button.classList.remove('hidden');
+}
+
+function _renderContextualActionRow(container, primaryButton, secondaryButton, primaryAction, secondaryAction = null) {
+    if (!container) return;
+    const hasActions = Boolean(primaryAction || secondaryAction);
+    container.classList.toggle('hidden', !hasActions);
+    _renderOperatorActionButton(primaryButton, primaryAction);
+    _renderOperatorActionButton(secondaryButton, secondaryAction);
+}
+
+function renderOperatorActionRail() {
+    if (!els.consoleActionRail) return;
+    const visible = ['overview', 'build', 'operate', 'review'].includes(state.currentView);
+    els.consoleActionRail.classList.toggle('hidden', !visible);
+    if (!visible) return;
+
+    const snapshot = _operatorActionRailSnapshot();
+    els.consoleActionRail.dataset.tone = snapshot.tone || 'info';
+    if (els.consoleActionRailTitle) els.consoleActionRailTitle.textContent = snapshot.title;
+    if (els.consoleActionRailDetail) els.consoleActionRailDetail.textContent = snapshot.detail;
+    if (els.consoleActionRailHint) {
+        els.consoleActionRailHint.innerHTML = _operatorActionHintHtml();
+    }
+    if (els.consoleActionRailActions) {
+        const hasActions = Boolean(snapshot.primary || (Array.isArray(snapshot.secondary) && snapshot.secondary.length > 0));
+        els.consoleActionRailActions.classList.toggle('hidden', !hasActions);
+    }
+    _renderOperatorActionButton(els.consoleActionPrimaryBtn, snapshot.primary);
+    _renderOperatorActionButton(els.consoleActionSecondaryBtn1, snapshot.secondary?.[0] || null);
+    _renderOperatorActionButton(els.consoleActionSecondaryBtn2, snapshot.secondary?.[1] || null);
+}
+
+function renderSelectedJobRecoveryActions(job) {
+    const snapshot = _operatorActionRailSnapshot(job);
+    _renderContextualActionRow(
+        els.selectedJobRecoveryActions,
+        els.selectedJobRecoveryPrimaryBtn,
+        els.selectedJobRecoverySecondaryBtn,
+        snapshot.primary || null,
+        snapshot.secondary?.[0] || null
+    );
+}
+
+function renderReviewStatusActions(job, artifact) {
+    const snapshot = _operatorActionRailSnapshot(job);
+    _renderContextualActionRow(
+        els.reviewStatusActions,
+        els.reviewStatusPrimaryBtn,
+        els.reviewStatusSecondaryBtn,
+        snapshot.primary || null,
+        snapshot.secondary?.[0] || null
+    );
+}
+
+function _openReviewSurfaceForJob(job, surface = 'job_inspector') {
+    const normalizedJobId = _normalizeSelectedJobId(job?.id);
+    if (!normalizedJobId || !job) {
+        createToast('Select a run first, then open its review surface.', 'info');
+        return false;
+    }
+    void emitPortalEvent('run_details_opened', {
+        surface,
+        metadata: {
+            job_id: normalizedJobId,
+            pipeline: String(job.pipeline || '')
+        }
+    });
+    navigateConsoleView('review', { jobId: normalizedJobId });
+    return true;
+}
+
+function _openArtifactForSelection(job, artifact, surface = 'artifact_review') {
+    if (!job || !artifact) {
+        createToast('No artifact is available for this selection.', 'info');
+        return false;
+    }
+    const url = sanitizeManagedAssetUrl(buildArtifactUrl(job, artifact));
+    if (!url) {
+        createToast('No artifact URL is available for this selection.', 'error');
+        return false;
+    }
+    void emitPortalEvent('artifact_opened', {
+        surface,
+        metadata: {
+            job_id: String(job.id || ''),
+            media_kind: String(artifact.media_kind || 'file'),
+            pipeline: String(job.pipeline || '')
+        }
+    });
+    window.open(url, '_blank', 'noopener,noreferrer');
+    return true;
+}
+
+function _toggleCompareSurface(job, surface = 'artifact_review') {
+    if (!job) return false;
+    const key = _normalizeSelectedJobId(job.id);
+    const selectedArtifact = _selectedArtifactForJob(job);
+    const compareCandidate = findCompareArtifact(
+        selectedArtifact,
+        rankArtifactsForDisplay(Array.isArray(job.artifacts) ? job.artifacts : [])
+    );
+    if (!key || !compareCandidate) {
+        createToast('No paired comparison is available for this artifact.', 'info');
+        return false;
+    }
+    _rememberComparePreference(key, !Boolean(state.artifactUi.compareByJob[key]));
+    void emitPortalEvent('artifact_compared', {
+        surface,
+        metadata: {
+            enabled: Boolean(state.artifactUi.compareByJob[key]),
+            job_id: key,
+            pipeline: String(job.pipeline || '')
+        }
+    });
+    renderReviewSurfaces();
+    return true;
+}
+
+function _retryPortalStatus(job = null) {
+    void loadPortalBootstrap();
+    void checkBackend(true);
+    if (job) {
+        void refreshJobStatus(job);
+    }
+    return true;
+}
+
+function handleOperatorActionClick(event) {
+    const button = event.target.closest('button[data-action-key]');
+    if (!button || button.disabled) return;
+    const actionKey = String(button.dataset.actionKey || '').trim();
+    if (!actionKey) return;
+    const job = _findJobById(button.dataset.jobId || state.selectedJobId || _preferredSelectedJobId());
+    const context = _operatorActionContext(job);
+    switch (actionKey) {
+        case 'open_build':
+            navigateConsoleView('build');
+            setBuildStep(1, { silent: true });
+            if (els.pipelineSelect) els.pipelineSelect.focus();
+            break;
+        case 'resume_draft':
+            navigateConsoleView('build');
+            syncBuildStepUi();
+            {
+                const activeStep = document.querySelector('.build-step-tab.is-active');
+                if (activeStep && typeof activeStep.focus === 'function') activeStep.focus();
+            }
+            break;
+        case 'return_to_build':
+            navigateConsoleView('build');
+            break;
+        case 'stay_in_operate':
+            if (!job) {
+                createToast('No active run is available right now.', 'info');
+                return;
+            }
+            navigateConsoleView('operate', { jobId: context.jobId });
+            break;
+        case 'open_review':
+        case 'review_retained_outputs':
+        case 'open_early_artifacts':
+            if (state.currentView === 'review' && context.jobId) {
+                navigateConsoleView('review', {
+                    jobId: context.jobId,
+                    artifactPath: _artifactRouteKey(context.selectedArtifact),
+                    compareEnabled: context.compareEnabled
+                });
+            } else {
+                _openReviewSurfaceForJob(job, 'action_rail');
+            }
+            break;
+        case 'open_latest_artifact':
+            _openArtifactForSelection(job, context.heroArtifact || context.selectedArtifact, 'action_rail');
+            break;
+        case 'toggle_compare':
+            _toggleCompareSurface(job, 'action_rail');
+            break;
+        case 'retry_status_check':
+            _retryPortalStatus(job);
+            break;
+        case 'restore_access':
+            window.location.assign('/login');
+            break;
+        default:
+            break;
+    }
 }
 
 function _dispatchReadinessSnapshot(payload = null) {
@@ -1591,10 +2127,16 @@ function renderBuildStepPulse(payload = null) {
 }
 
 function renderConsoleContextRibbon() {
-    if (!els.consoleContextRibbon) return;
+    if (!els.consoleContextRibbon) {
+        renderOperatorActionRail();
+        return;
+    }
     const ribbonVisible = ['overview', 'build', 'operate', 'review'].includes(state.currentView);
     els.consoleContextRibbon.classList.toggle('hidden', !ribbonVisible);
-    if (!ribbonVisible) return;
+    if (!ribbonVisible) {
+        renderOperatorActionRail();
+        return;
+    }
 
     if (state.currentView === 'operate' || state.currentView === 'review') {
         const selected = state.jobs.find((job) => job.id === state.selectedJobId) || null;
@@ -1633,6 +2175,7 @@ function renderConsoleContextRibbon() {
             meta: selected ? compareCopy.ribbonMeta : 'Deep-linkable review context stays aligned with the URL.',
             tone: selected && compareEnabled ? 'ready' : 'info'
         });
+        renderOperatorActionRail();
         return;
     }
 
@@ -1689,6 +2232,7 @@ function renderConsoleContextRibbon() {
             : `${String(state.pipeline || 'lux-depth-v3')} • ${state.backendOk ? 'live backend connected' : 'dispatch paused until the backend recovers'}.`,
         tone: 'info'
     });
+    renderOperatorActionRail();
 }
 
 function applyConsoleViewLayout() {
@@ -1735,6 +2279,8 @@ function navigateConsoleView(viewName, options = {}) {
         _rememberSelectedJob(explicitJobId);
         if (hasArtifactOption) {
             _rememberArtifactSelection(explicitJobId, options.artifactPath);
+        } else if (state.currentView === 'review') {
+            _rememberArtifactSelection(explicitJobId, '');
         }
         if (hasCompareOption) {
             _rememberComparePreference(explicitJobId, options.compareEnabled);
@@ -1744,6 +2290,9 @@ function navigateConsoleView(viewName, options = {}) {
         if (preferredJobId) {
             state.selectedJobId = preferredJobId;
             _rememberSelectedJob(preferredJobId);
+            if (state.currentView === 'review' && !hasArtifactOption) {
+                _rememberArtifactSelection(preferredJobId, '');
+            }
         }
     } else if (state.selectedJobId) {
         _rememberSelectedJob(state.selectedJobId);
@@ -2114,6 +2663,7 @@ function artifactLabel(artifact) {
 }
 
 function _artifactRouteKey(artifact) {
+    if (!artifact || typeof artifact !== 'object') return '';
     return _normalizeArtifactRoutePath(artifactLabel(artifact));
 }
 
@@ -3241,6 +3791,7 @@ function renderSelectedJobInspector() {
         if (els.selectedJobRecoveryDetail) {
             els.selectedJobRecoveryDetail.textContent = 'The latest warning, artifact freshness, and recovery action will repopulate here when queue hydration finishes.';
         }
+        renderSelectedJobRecoveryActions(null);
         if (els.openRunDetailsBtn) els.openRunDetailsBtn.disabled = true;
         renderConsoleContextRibbon();
         return;
@@ -3263,6 +3814,7 @@ function renderSelectedJobInspector() {
         if (els.selectedJobRecoveryDetail) {
             els.selectedJobRecoveryDetail.textContent = 'Use Queue to inspect a recent run or open Build to create the next governed dispatch.';
         }
+        renderSelectedJobRecoveryActions(null);
         if (els.selectedJobTransportAlert) {
             els.selectedJobTransportAlert.classList.add('hidden');
             els.selectedJobTransportAlert.textContent = '';
@@ -3336,6 +3888,7 @@ function renderSelectedJobInspector() {
     const recovery = _selectedJobRecoverySnapshot(selected);
     if (els.selectedJobRecoveryTitle) els.selectedJobRecoveryTitle.textContent = recovery.title;
     if (els.selectedJobRecoveryDetail) els.selectedJobRecoveryDetail.textContent = recovery.detail;
+    renderSelectedJobRecoveryActions(selected);
     if (els.selectedJobTransportAlert) {
         if (visibleAlert) {
             els.selectedJobTransportAlert.textContent = String(visibleAlert.detail || '');
@@ -3758,6 +4311,10 @@ function _syncBootstrapUi() {
     }
     _syncBootstrapGuardedControls();
     _syncOverviewBuildLoadingState();
+    renderOperatorActionRail();
+    const selectedJob = _findJobById(state.selectedJobId);
+    renderSelectedJobRecoveryActions(selectedJob);
+    renderReviewStatusActions(selectedJob);
 }
 
 function _applyPortalBootstrap(rawBootstrap, options = {}) {
@@ -4381,12 +4938,14 @@ function _renderReviewStatusBanner(job, artifact) {
         els.reviewStatusTitle.textContent = snapshot.title;
         els.reviewStatusDetail.textContent = snapshot.detail;
         if (els.reviewStatusAction) els.reviewStatusAction.textContent = snapshot.action;
+        renderReviewStatusActions(job, artifact);
         return;
     }
     els.reviewStatusTitle.textContent = snapshot.title;
     els.reviewStatusDetail.textContent = snapshot.detail;
     if (els.reviewStatusAction) els.reviewStatusAction.textContent = snapshot.action;
     els.reviewStatusBanner.classList.remove('hidden');
+    renderReviewStatusActions(job, artifact);
 }
 
 function _renderArtifactProvenance(job, artifact) {
@@ -5811,7 +6370,7 @@ function _latestReviewableJob() {
         const summary = normalizeRunSummary(job.run_summary);
         const artifactCount = Array.isArray(job.artifacts) ? job.artifacts.length : 0;
         return artifactCount > 0
-            || Boolean(summary.reviewable_outputs)
+            || Boolean(summary?.reviewable_outputs)
             || job.state === 'succeeded'
             || job.state === 'partial';
     });
@@ -8792,19 +9351,8 @@ if (els.inspectorTimelineTab) els.inspectorTimelineTab.addEventListener('click',
 if (els.inspectorLogsTab) els.inspectorLogsTab.addEventListener('click', () => setInspectorTab('logs'));
 if (els.openRunDetailsBtn) {
     els.openRunDetailsBtn.addEventListener('click', () => {
-        if (!state.selectedJobId) {
-            createToast('Select a run first, then open its review surface.', 'info');
-            return;
-        }
         const selectedJob = state.jobs.find((item) => item.id === state.selectedJobId);
-        void emitPortalEvent('run_details_opened', {
-            surface: 'job_inspector',
-            metadata: {
-                job_id: String(state.selectedJobId || ''),
-                pipeline: String(selectedJob?.pipeline || '')
-            }
-        });
-        navigateConsoleView('review', { jobId: state.selectedJobId });
+        _openReviewSurfaceForJob(selectedJob, 'job_inspector');
     });
 }
 
@@ -8831,38 +9379,14 @@ if (els.artifactThumbnailRail) {
 if (els.artifactCompareBtn) {
     els.artifactCompareBtn.addEventListener('click', () => {
         const selectedJob = state.jobs.find((item) => item.id === state.selectedJobId);
-        if (!selectedJob) return;
-        const key = String(selectedJob.id || '');
-        _rememberComparePreference(key, !Boolean(state.artifactUi.compareByJob[key]));
-        void emitPortalEvent('artifact_compared', {
-            surface: 'artifact_review',
-            metadata: {
-                enabled: Boolean(state.artifactUi.compareByJob[key]),
-                job_id: key,
-                pipeline: String(selectedJob.pipeline || '')
-            }
-        });
-        renderReviewSurfaces();
+        _toggleCompareSurface(selectedJob, 'artifact_review');
     });
 }
 
 if (els.openArtifactBtn) {
     els.openArtifactBtn.addEventListener('click', () => {
-        const url = sanitizeManagedAssetUrl(els.openArtifactBtn.dataset.url);
-        if (!url) {
-            createToast('No artifact URL is available for this selection.', 'error');
-            return;
-        }
         const selectedJob = state.jobs.find((item) => item.id === state.selectedJobId);
-        void emitPortalEvent('artifact_opened', {
-            surface: 'artifact_review',
-            metadata: {
-                job_id: String(selectedJob?.id || ''),
-                media_kind: String(_selectedArtifactForJob(selectedJob)?.media_kind || 'file'),
-                pipeline: String(selectedJob?.pipeline || '')
-            }
-        });
-        window.open(url, '_blank', 'noopener,noreferrer');
+        _openArtifactForSelection(selectedJob, _selectedArtifactForJob(selectedJob), 'artifact_review');
     });
 }
 
@@ -8937,6 +9461,15 @@ if (els.refreshHealthBtn) {
         }
         navigateConsoleView('review', { jobId });
     });
+}
+if (els.consoleActionRailActions) {
+    els.consoleActionRailActions.addEventListener('click', handleOperatorActionClick);
+}
+if (els.selectedJobRecoveryActions) {
+    els.selectedJobRecoveryActions.addEventListener('click', handleOperatorActionClick);
+}
+if (els.reviewStatusActions) {
+    els.reviewStatusActions.addEventListener('click', handleOperatorActionClick);
 }
 if (els.jobList) els.jobList.addEventListener('click', handleJobListClick);
 if (els.jobList) els.jobList.addEventListener('keydown', handleJobListKeydown);

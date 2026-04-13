@@ -869,9 +869,11 @@ def test_portal_artifact_gallery_renders_visual_review_controls() -> None:
     body = _extract_js_function_body(content, "renderArtifactPanel")
     reset_body = _extract_js_function_body(content, "_resetArtifactActionButtons")
     sanitize_body = _extract_js_function_body(content, "sanitizeManagedAssetUrl")
+    open_artifact_body = _extract_js_function_body(content, "_openArtifactForSelection")
     rank_body = _extract_js_function_body(content, "rankArtifactsForDisplay")
     compare_body = _extract_js_function_body(content, "findCompareArtifact")
     normalize_body = _extract_js_function_body(content, "normalizeArtifactItems")
+    route_key_body = _extract_js_function_body(content, "_artifactRouteKey")
 
     assert 'id="artifactPreviewStage"' in content
     assert 'id="artifactThumbnailRail"' in content
@@ -893,6 +895,7 @@ def test_portal_artifact_gallery_renders_visual_review_controls() -> None:
     assert "artifactDisplayPriority(right)" in rank_body
     assert "artifactCompareGroup(candidate) === primaryGroup" in compare_body
     assert "display_hint: _normalizeArtifactDisplayHint(item.display_hint)" in normalize_body
+    assert "if (!artifact || typeof artifact !== 'object') return '';" in route_key_body
     assert "_resetArtifactActionButtons();" in body
     assert "renderConsoleContextRibbon();" in body
     assert "_syncConsoleRoute(true);" in body
@@ -901,7 +904,7 @@ def test_portal_artifact_gallery_renders_visual_review_controls() -> None:
     assert "delete els.copyArtifactPathBtn.dataset.path;" in reset_body
     assert "parsed.origin !== window.location.origin" in sanitize_body
     assert "parsed.pathname.startsWith('/v1/jobs/')" in sanitize_body
-    assert "sanitizeManagedAssetUrl(els.openArtifactBtn.dataset.url)" in content
+    assert "sanitizeManagedAssetUrl(buildArtifactUrl(job, artifact))" in open_artifact_body
     assert "sanitizeManagedAssetUrl(els.downloadArtifactBtn.dataset.url)" in content
 
 
@@ -1655,6 +1658,50 @@ def test_portal_runtime_briefing_and_recovery_surfaces_stay_additive_and_selecto
     assert "els.reviewStatusAction.textContent = snapshot.action;" in content
     assert "els.selectedJobRecoveryTitle.textContent = recovery.title;" in inspector_body
     assert "els.selectedJobRecoveryDetail.textContent = recovery.detail;" in inspector_body
+
+
+def test_portal_contextual_action_rail_reuses_existing_route_and_recovery_contracts() -> None:
+    content = _portal_bundle_content()
+    rail_snapshot_body = _extract_js_function_body(content, "_operatorActionRailSnapshot")
+    recovery_snapshot_body = _extract_js_function_body(content, "_operatorRecoveryActionSnapshot")
+    rail_render_body = _extract_js_function_body(content, "renderOperatorActionRail")
+    inspector_actions_body = _extract_js_function_body(content, "renderSelectedJobRecoveryActions")
+    review_actions_body = _extract_js_function_body(content, "renderReviewStatusActions")
+    handler_body = _extract_js_function_body(content, "handleOperatorActionClick")
+
+    assert 'data-ui="console-action-rail"' in content
+    assert 'data-ui="console-action-shortcuts"' in content
+    assert 'data-ui="console-action-primary"' in content
+    assert 'data-ui="console-action-secondary-1"' in content
+    assert 'data-ui="console-action-secondary-2"' in content
+    assert 'data-ui="selected-job-recovery-actions"' in content
+    assert 'data-ui="selected-job-recovery-primary"' in content
+    assert 'data-ui="selected-job-recovery-secondary"' in content
+    assert 'data-ui="review-status-actions"' in content
+    assert 'data-ui="review-status-primary"' in content
+    assert 'data-ui="review-status-secondary"' in content
+    assert "Open Review" in rail_snapshot_body
+    assert "Open Latest Artifact" in rail_snapshot_body
+    assert "Toggle Compare" in rail_snapshot_body
+    assert "Stay in Operate" in rail_snapshot_body
+    assert "Open Early Artifacts" in rail_snapshot_body
+    assert "Review Retained Outputs" in rail_snapshot_body
+    assert "Return to Build" in rail_snapshot_body
+    assert "Restore Access" in recovery_snapshot_body
+    assert "Retry Status Check" in recovery_snapshot_body
+    assert "els.consoleActionRailHint.innerHTML = _operatorActionHintHtml();" in rail_render_body
+    assert "const snapshot = _operatorActionRailSnapshot(job);" in inspector_actions_body
+    assert "const snapshot = _operatorActionRailSnapshot(job);" in review_actions_body
+    assert "_openReviewSurfaceForJob(job, 'action_rail');" in handler_body
+    assert "_openArtifactForSelection(job, context.heroArtifact || context.selectedArtifact, 'action_rail');" in handler_body
+    assert "_toggleCompareSurface(job, 'action_rail');" in handler_body
+    assert "_retryPortalStatus(job);" in handler_body
+    assert "window.location.assign('/login');" in handler_body
+    assert "_rememberArtifactSelection(explicitJobId, '');" in content
+    assert "_rememberArtifactSelection(preferredJobId, '');" in content
+    assert "url.searchParams.set('action'" not in content
+    assert "url.searchParams.set('mode'" not in content
+    assert "url.searchParams.set('shortcut'" not in content
 
 
 def test_portal_submit_blocks_preview_unavailable_and_debug_bundle_without_acknowledgement() -> None:

@@ -332,6 +332,21 @@ Contract notes:
                     <p id="contextRibbonCompareMeta" class="console-context-meta">No paired comparison is available for the current artifact.</p>
                 </div>
             </div>
+            <section id="consoleActionRail" class="console-action-rail mt-4 hidden" data-ui="console-action-rail" data-tone="info" aria-live="polite">
+                <div class="console-action-rail-copy">
+                    <p class="console-action-rail-kicker">Action Rail</p>
+                    <p id="consoleActionRailTitle" class="console-action-rail-title">Keep the next operator move pinned</p>
+                    <p id="consoleActionRailDetail" class="console-action-rail-detail">Contextual review, artifact, compare, and recovery actions will update here from the current run state.</p>
+                    <p id="consoleActionRailHint" class="console-action-rail-hint" data-ui="console-action-shortcuts">
+                        Keyboard: <span class="kbd">1</span> overview, <span class="kbd">2</span> build, <span class="kbd">3</span> operate, <span class="kbd">4</span> review, <span class="kbd">?</span> shortcuts.
+                    </p>
+                </div>
+                <div id="consoleActionRailActions" class="console-action-rail-actions">
+                    <button id="consoleActionPrimaryBtn" type="button" class="operator-action-btn operator-action-btn-primary hidden" data-ui="console-action-primary"></button>
+                    <button id="consoleActionSecondaryBtn1" type="button" class="operator-action-btn operator-action-btn-secondary hidden" data-ui="console-action-secondary-1"></button>
+                    <button id="consoleActionSecondaryBtn2" type="button" class="operator-action-btn operator-action-btn-secondary hidden" data-ui="console-action-secondary-2"></button>
+                </div>
+            </section>
         </section>
 
         <!-- ============================================ -->
@@ -1317,6 +1332,10 @@ Contract notes:
                             <p id="selectedJobRecoveryDetail" class="mt-2 text-[12px] leading-6 text-slate-600 dark:text-slate-300">
                                 Use the selected run state, warning context, and freshness above to decide whether to recover or open review.
                             </p>
+                            <div id="selectedJobRecoveryActions" class="contextual-action-row mt-3 hidden" data-ui="selected-job-recovery-actions">
+                                <button id="selectedJobRecoveryPrimaryBtn" type="button" class="operator-action-btn operator-action-btn-primary hidden" data-ui="selected-job-recovery-primary"></button>
+                                <button id="selectedJobRecoverySecondaryBtn" type="button" class="operator-action-btn operator-action-btn-secondary hidden" data-ui="selected-job-recovery-secondary"></button>
+                            </div>
                         </div>
                     </div>
 
@@ -1455,6 +1474,10 @@ Contract notes:
                             <p id="reviewStatusTitle" class="review-status-title">Awaiting completed run</p>
                             <p id="reviewStatusDetail" class="review-status-detail">Select a job to review related warnings, completion state, and output readiness.</p>
                             <p id="reviewStatusAction" class="review-status-action">Next action: use the selected run state, warning context, and freshness above to decide whether to recover or open review.</p>
+                            <div id="reviewStatusActions" class="review-status-actions hidden" data-ui="review-status-actions">
+                                <button id="reviewStatusPrimaryBtn" type="button" class="operator-action-btn operator-action-btn-primary hidden" data-ui="review-status-primary"></button>
+                                <button id="reviewStatusSecondaryBtn" type="button" class="operator-action-btn operator-action-btn-secondary hidden" data-ui="review-status-secondary"></button>
+                            </div>
                         </div>
                         <div id="reviewProvenanceGrid" class="review-provenance-grid hidden" data-ui="review-provenance-grid">
                             <div class="review-provenance-item">
