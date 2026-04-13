@@ -144,6 +144,49 @@ def test_portal_browser_help_text_describes_api_key_default(capsys: pytest.Captu
     assert "default: unset; uses TP_API_KEY when set" in help_output
 
 
+def test_portal_browser_state_probe_tracks_contextual_action_controls():
+    module = _load_module(PORTAL_BROWSER_SCRIPT_PATH, "tests_validate_portal_browser_smoke_action_probe")
+
+    expression = module._state_probe_expression()
+
+    assert "consoleActionPrimaryBtn" in expression
+    assert "consoleActionSecondaryBtn1" in expression
+    assert "consoleActionSecondaryBtn2" in expression
+    assert "selectedJobRecoveryPrimaryBtn" in expression
+    assert "selectedJobRecoverySecondaryBtn" in expression
+    assert "reviewStatusPrimaryBtn" in expression
+    assert "reviewStatusSecondaryBtn" in expression
+    assert "actionPrimaryKey" in expression
+    assert "actionSecondary2Key" in expression
+    assert "selectedRecoveryPrimaryKey" in expression
+    assert "reviewStatusPrimaryKey" in expression
+
+
+def test_portal_browser_can_simulate_bootstrap_degraded_recovery_actions():
+    module = _load_module(PORTAL_BROWSER_SCRIPT_PATH, "tests_validate_portal_browser_smoke_degraded_expr")
+
+    expression = module._simulate_bootstrap_degraded_expression(reason="auth_failure", http_status=401)
+
+    assert "_applyPortalBootstrap" in expression
+    assert "status: 'degraded'" in expression
+    assert '"reason": "auth_failure"' in expression
+    assert '"http_status": 401' in expression
+    assert "renderSelectedJobInspector();" in expression
+    assert "renderArtifactPanel();" in expression
+    assert "renderConsoleContextRibbon();" in expression
+
+
+def test_portal_browser_can_inject_compare_ready_review_state():
+    module = _load_module(PORTAL_BROWSER_SCRIPT_PATH, "tests_validate_portal_browser_smoke_compare_expr")
+
+    expression = module._inject_compare_ready_review_expression("job_demo")
+
+    assert "synthetic/review-primary.png" in expression
+    assert "synthetic/review-compare.png" in expression
+    assert "portal-smoke-compare" in expression
+    assert "renderReviewSurfaces();" in expression
+
+
 def test_portal_browser_preview_preflight_classifies_auth_failures(monkeypatch: pytest.MonkeyPatch):
     module = _load_module(PORTAL_BROWSER_SCRIPT_PATH, "tests_validate_portal_browser_smoke_preflight_auth")
 

@@ -658,6 +658,25 @@ def _state_probe_expression() -> str:
     const el = document.getElementById(id);
     return el ? String(el.value || '') : '';
   };
+  const buttonMeta = (id) => {
+    const el = document.getElementById(id);
+    if (!el) {
+      return { visible: false, label: '', key: '', tone: '' };
+    }
+    return {
+      visible: !el.classList.contains('hidden') && !el.disabled,
+      label: (el.textContent || '').trim(),
+      key: String(el.dataset.actionKey || ''),
+      tone: String(el.dataset.tone || '')
+    };
+  };
+  const consoleActionPrimary = buttonMeta('consoleActionPrimaryBtn');
+  const consoleActionSecondary1 = buttonMeta('consoleActionSecondaryBtn1');
+  const consoleActionSecondary2 = buttonMeta('consoleActionSecondaryBtn2');
+  const selectedRecoveryPrimary = buttonMeta('selectedJobRecoveryPrimaryBtn');
+  const selectedRecoverySecondary = buttonMeta('selectedJobRecoverySecondaryBtn');
+  const reviewStatusPrimary = buttonMeta('reviewStatusPrimaryBtn');
+  const reviewStatusSecondary = buttonMeta('reviewStatusSecondaryBtn');
   return {
     title: document.title,
     readyState: document.readyState,
@@ -686,6 +705,24 @@ def _state_probe_expression() -> str:
     contextRibbonFreshness: text('contextRibbonFreshness'),
     contextRibbonArtifact: text('contextRibbonArtifact'),
     contextRibbonCompare: text('contextRibbonCompare'),
+    actionRailVisible: (() => {
+      const el = document.getElementById('consoleActionRail');
+      return !!(el && !el.classList.contains('hidden'));
+    })(),
+    actionRailTitle: text('consoleActionRailTitle'),
+    actionRailDetail: text('consoleActionRailDetail'),
+    actionPrimaryVisible: consoleActionPrimary.visible,
+    actionPrimaryLabel: consoleActionPrimary.label,
+    actionPrimaryKey: consoleActionPrimary.key,
+    actionPrimaryTone: consoleActionPrimary.tone,
+    actionSecondary1Visible: consoleActionSecondary1.visible,
+    actionSecondary1Label: consoleActionSecondary1.label,
+    actionSecondary1Key: consoleActionSecondary1.key,
+    actionSecondary1Tone: consoleActionSecondary1.tone,
+    actionSecondary2Visible: consoleActionSecondary2.visible,
+    actionSecondary2Label: consoleActionSecondary2.label,
+    actionSecondary2Key: consoleActionSecondary2.key,
+    actionSecondary2Tone: consoleActionSecondary2.tone,
     reviewStatusTitle: text('reviewStatusTitle'),
     reviewStatusDetail: text('reviewStatusDetail'),
     reviewStatusTone: (() => {
@@ -696,6 +733,18 @@ def _state_probe_expression() -> str:
       const el = document.getElementById('reviewStatusBanner');
       return !!(el && !el.classList.contains('hidden'));
     })(),
+    reviewStatusPrimaryVisible: reviewStatusPrimary.visible,
+    reviewStatusPrimaryLabel: reviewStatusPrimary.label,
+    reviewStatusPrimaryKey: reviewStatusPrimary.key,
+    reviewStatusSecondaryVisible: reviewStatusSecondary.visible,
+    reviewStatusSecondaryLabel: reviewStatusSecondary.label,
+    reviewStatusSecondaryKey: reviewStatusSecondary.key,
+    selectedRecoveryPrimaryVisible: selectedRecoveryPrimary.visible,
+    selectedRecoveryPrimaryLabel: selectedRecoveryPrimary.label,
+    selectedRecoveryPrimaryKey: selectedRecoveryPrimary.key,
+    selectedRecoverySecondaryVisible: selectedRecoverySecondary.visible,
+    selectedRecoverySecondaryLabel: selectedRecoverySecondary.label,
+    selectedRecoverySecondaryKey: selectedRecoverySecondary.key,
     reviewProvenanceArtifactRole: text('reviewProvenanceArtifactRole'),
     reviewProvenanceRunState: text('reviewProvenanceRunState'),
     reviewProvenancePath: text('reviewProvenancePath'),
@@ -1128,6 +1177,71 @@ def _click_expression(selector: str) -> str:
   if (!el) throw new Error('missing element for selector ' + {encoded});
   el.click();
   return true;
+}})()
+"""
+
+
+def _simulate_bootstrap_degraded_expression(*, reason: str, http_status: int) -> str:
+    payload = json.dumps({"reason": reason, "http_status": http_status})
+    return f"""
+(() => {{
+  const cfg = {payload};
+  _applyPortalBootstrap(portalInternals.defaultPortalBootstrapPayload(), {{
+    status: 'degraded',
+    reason: cfg.reason,
+    httpStatus: cfg.http_status
+  }});
+  renderSelectedJobInspector();
+  renderArtifactPanel();
+  renderConsoleContextRibbon();
+  return ({_state_probe_expression()});
+}})()
+"""
+
+
+def _inject_compare_ready_review_expression(job_id: str) -> str:
+    payload = json.dumps({"job_id": job_id})
+    return f"""
+(() => {{
+  const cfg = {payload};
+  const job = (typeof state !== 'undefined' && Array.isArray(state.jobs))
+    ? state.jobs.find((item) => String(item && item.id || '') === String(cfg.job_id || ''))
+    : null;
+  if (!job) {{
+    throw new Error(`missing job ${{cfg.job_id}}`);
+  }}
+  upsertArtifact(job, {{
+    path: 'synthetic/review-primary.png',
+    relative_path: 'synthetic/review-primary.png',
+    artifact_type: 'image',
+    media_kind: 'image',
+    previewable: true,
+    content_type: 'image/png',
+    size_bytes: 2048,
+    display_hint: {{
+      label: 'Synthetic Primary',
+      priority: 1000,
+      compare_group: 'portal-smoke-compare'
+    }}
+  }});
+  upsertArtifact(job, {{
+    path: 'synthetic/review-compare.png',
+    relative_path: 'synthetic/review-compare.png',
+    artifact_type: 'image',
+    media_kind: 'image',
+    previewable: true,
+    content_type: 'image/png',
+    size_bytes: 1984,
+    display_hint: {{
+      label: 'Synthetic Compare',
+      priority: 990,
+      compare_group: 'portal-smoke-compare'
+    }}
+  }});
+  state.artifactUi.selectedByJob[String(cfg.job_id)] = 'synthetic/review-primary.png';
+  state.artifactUi.compareByJob[String(cfg.job_id)] = false;
+  renderReviewSurfaces();
+  return ({_state_probe_expression()});
 }})()
 """
 
@@ -1819,9 +1933,21 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             and str(terminal_state.get("contextRibbonJob", "")).strip() == submitted_job_id,
             f"Operate view should expose the compact context ribbon for the selected job: {terminal_state}",
         )
+        _expect(
+            bool(terminal_state.get("actionRailVisible")),
+            f"Operate view should surface the contextual action rail: {terminal_state}",
+        )
+        _expect(
+            str(terminal_state.get("actionPrimaryKey", "")).strip() == "open_review",
+            f"Completed runs should promote review entry as the primary action: {terminal_state}",
+        )
+        _expect(
+            str(terminal_state.get("selectedRecoveryPrimaryKey", "")).strip() == "open_review",
+            f"Selected-job recovery controls should reuse the review-entry action: {terminal_state}",
+        )
 
-        print("portal-browser-smoke: opening review view", flush=True)
-        connection.evaluate(_navigate_to_console_view_expression("review", submitted_job_id))
+        print("portal-browser-smoke: opening review from the contextual action rail", flush=True)
+        connection.evaluate(_click_expression("#consoleActionPrimaryBtn"))
         run_state = _poll(
             connection,
             _state_probe_expression(),
@@ -1833,6 +1959,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
                 and bool(value.get("reviewSurfaceVisible"))
                 and bool(value.get("reviewStatusVisible"))
                 and str(value.get("reviewProvenancePath", "")).strip() != ""
+                and "artifact=" in str(value.get("locationSearch", ""))
             ),
             timeout_seconds=args.timeout_seconds,
             description="review view to become active",
@@ -1869,8 +1996,62 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             f"Review ribbon should stay aligned with the selected artifact context: {run_state}",
         )
 
-        selected_artifact_path = str(run_state.get("reviewProvenancePath", "")).strip()
-        _expect(selected_artifact_path, f"Review deep-link validation requires a selected artifact path: {run_state}")
+        print("portal-browser-smoke: synthesizing compare-ready review state", flush=True)
+        compare_ready_state = connection.evaluate(_inject_compare_ready_review_expression(submitted_job_id))
+        _expect(isinstance(compare_ready_state, dict), f"Unexpected compare-ready portal state: {compare_ready_state!r}")
+        compare_ready_state = _poll(
+            connection,
+            _state_probe_expression(),
+            predicate=lambda value: (
+                isinstance(value, dict)
+                and str(value.get("currentView", "")) == "review"
+                and str(value.get("selectedJobId", "")).strip() == submitted_job_id
+                and str(value.get("reviewProvenancePath", "")).strip() == "synthetic/review-primary.png"
+                and (
+                    str(value.get("actionSecondary2Key", "")).strip() == "toggle_compare"
+                    or str(value.get("actionSecondary1Key", "")).strip() == "toggle_compare"
+                    or str(value.get("reviewStatusSecondaryKey", "")).strip() == "toggle_compare"
+                )
+            ),
+            timeout_seconds=args.timeout_seconds,
+            description="synthetic compare-capable review state",
+        )
+        selected_artifact_path = str(compare_ready_state.get("reviewProvenancePath", "")).strip()
+        _expect(
+            selected_artifact_path == "synthetic/review-primary.png",
+            f"Compare-ready review state should promote the injected primary artifact: {compare_ready_state}",
+        )
+
+        compare_toggle_selector = ""
+        if str(compare_ready_state.get("actionSecondary2Key", "")).strip() == "toggle_compare":
+            compare_toggle_selector = "#consoleActionSecondaryBtn2"
+        elif str(compare_ready_state.get("actionSecondary1Key", "")).strip() == "toggle_compare":
+            compare_toggle_selector = "#consoleActionSecondaryBtn1"
+        elif str(compare_ready_state.get("reviewStatusSecondaryKey", "")).strip() == "toggle_compare":
+            compare_toggle_selector = "#reviewStatusSecondaryBtn"
+        _expect(
+            bool(compare_toggle_selector),
+            f"Ready review state should surface a compare toggle in the new action controls: {compare_ready_state}",
+        )
+        print("portal-browser-smoke: toggling compare from the new action controls", flush=True)
+        connection.evaluate(_click_expression(compare_toggle_selector))
+        compare_state = _poll(
+            connection,
+            _state_probe_expression(),
+            predicate=lambda value: (
+                isinstance(value, dict)
+                and str(value.get("currentView", "")) == "review"
+                and str(value.get("selectedJobId", "")).strip() == submitted_job_id
+                and bool(value.get("reviewCompareEnabled"))
+                and "compare=1" in str(value.get("locationSearch", ""))
+            ),
+            timeout_seconds=args.timeout_seconds,
+            description="compare toggle action to enable compare mode",
+        )
+        _expect(
+            str(compare_state.get("contextRibbonCompare", "")).strip().lower() == "compare on",
+            f"Action-rail compare toggles should preserve the compare route contract: {compare_state}",
+        )
 
         print("portal-browser-smoke: restoring review from an artifact deep link", flush=True)
         connection.evaluate(_navigate_to_console_view_expression("build"))
@@ -1958,6 +2139,42 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         _expect(
             str(normalized_review_state.get("contextRibbonCompare", "")).strip().lower() != "compare on",
             f"Invalid compare deep links should fall back to a valid single-view review state: {normalized_review_state}",
+        )
+
+        print("portal-browser-smoke: simulating degraded auth recovery controls", flush=True)
+        degraded_state = connection.evaluate(
+            _simulate_bootstrap_degraded_expression(reason="auth_failure", http_status=401)
+        )
+        _expect(isinstance(degraded_state, dict), f"Unexpected degraded portal state: {degraded_state!r}")
+        _expect(
+            str(degraded_state.get("actionPrimaryKey", "")).strip() == "restore_access",
+            f"Degraded auth state should promote Restore Access in the action rail: {degraded_state}",
+        )
+        _expect(
+            str(degraded_state.get("actionSecondary1Key", "")).strip() == "retry_status_check",
+            f"Degraded auth state should surface Retry Status Check in the action rail: {degraded_state}",
+        )
+        _expect(
+            str(degraded_state.get("selectedRecoveryPrimaryKey", "")).strip() == "restore_access"
+            and str(degraded_state.get("reviewStatusPrimaryKey", "")).strip() == "restore_access",
+            f"Inspector and review recovery controls should stay aligned with degraded auth recovery: {degraded_state}",
+        )
+        connection.evaluate(_click_expression("#consoleActionSecondaryBtn1"))
+        recovered_state = _poll(
+            connection,
+            _state_probe_expression(),
+            predicate=lambda value: (
+                isinstance(value, dict)
+                and str(value.get("bootstrapStatus", "")).strip().lower() == "ready"
+                and str(value.get("currentView", "")).strip() == "review"
+                and str(value.get("selectedJobId", "")).strip() == submitted_job_id
+            ),
+            timeout_seconds=args.timeout_seconds,
+            description="retry status check to recover degraded bootstrap state",
+        )
+        _expect(
+            str(recovered_state.get("actionPrimaryKey", "")).strip() != "restore_access",
+            f"Retry Status Check should restore the contextual action rail once bootstrap recovers: {recovered_state}",
         )
 
         print("portal-browser-smoke: round-tripping through build and back to operate", flush=True)
