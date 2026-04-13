@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import json
 import platform
 import sys
 from pathlib import Path
@@ -12,7 +11,7 @@ from typing import Any
 import numpy as np
 from PIL import Image
 
-from ...ingest.canonical_json import dump_json
+from ...ingest.canonical_json import dump_json, dumps_json
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -85,7 +84,7 @@ def _emit_check_failure(reason: str, diagnostics: dict[str, Any]) -> int:
         "reason": reason,
         **diagnostics,
     }
-    print(json.dumps(payload, sort_keys=True), file=sys.stderr)
+    print(dumps_json(payload, sort_keys=True), file=sys.stderr)
     return 1
 
 
