@@ -436,7 +436,7 @@ class EfficientSAMBackend:
             logger.error(f"Failed to load EfficientSAM backend: {e}")
             raise RuntimeError(f"EfficientSAM backend loading failed: {e}") from e
 
-    def segment(self, image: np.ndarray) -> Dict[str, np.ndarray]:
+    def segment(self, image: np.ndarray) -> Dict[str, Tuple[np.ndarray, float]]:
         """Run material segmentation on an image.
 
         Args:
@@ -763,7 +763,7 @@ class EfficientSAMBackend:
 
                 # Initialize material masks with tracking for confidence scores
                 h, w = image.shape[:2]
-                material_data = {
+                material_data: Dict[str, Dict[str, Any]] = {
                     name: {"mask": np.zeros((h, w), dtype=np.float32), "scores": [], "areas": []} for name in material_prompts
                 }
 
@@ -817,7 +817,7 @@ class EfficientSAMBackend:
                         )
 
                 # Compute aggregate confidence per material (area-weighted average)
-                material_masks = {}
+                material_masks: Dict[str, Tuple[np.ndarray, float]] = {}
                 for name, data in material_data.items():
                     mask = data["mask"]
                     scores = data["scores"]

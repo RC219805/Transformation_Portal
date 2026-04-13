@@ -64,10 +64,9 @@ def render_run_card_output_relative_path(path_value: Any, output_root: Any) -> O
     if not isinstance(path_value, str) or not path_value.strip():
         return None
     try:
-        relative_path = relative_to_path_alias(path_value, output_root)
+        return PurePosixPath(relative_to_path_alias(path_value, output_root)).as_posix()
     except ValueError:
-        relative_path = PurePosixPath(normalize_lexical_path(path_value).name)
-    return relative_path.as_posix()
+        return PurePosixPath(normalize_lexical_path(path_value).name).as_posix()
 
 
 __all__ = [

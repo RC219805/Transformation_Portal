@@ -6053,6 +6053,10 @@ class EnhanceOrchestrator:
             backend_selection["logical_backend"] = self._backend_metadata.resolved_backend
             backend_selection["resolved_engine"] = backend_selection_resolved
 
+        artifact_summary_payload: dict[str, Any] = (
+            {"artifact_tree": artifact_tree} if run_card_version == "v2" else {"artifact_merkle_root": artifact_merkle_root}
+        )
+
         run_card = {
             "run_card_version": run_card_version,
             "batch_id": batch_id,
@@ -6078,11 +6082,7 @@ class EnhanceOrchestrator:
             "success_count": sum(1 for r in results if r.get("status") == "ok"),
             "error_count": sum(1 for r in results if r.get("status") == "error"),
             "artifact_index": artifact_index,
-            **(
-                {"artifact_tree": artifact_tree}
-                if run_card_version == "v2"
-                else {"artifact_merkle_root": artifact_merkle_root}
-            ),
+            **artifact_summary_payload,
         }
 
         def _json_default(obj: Any) -> Any:
