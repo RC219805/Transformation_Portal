@@ -3440,7 +3440,7 @@ class EnhanceOrchestrator:
         materials_v3_result: Optional[dict] = None,
         materials_v3_runtime_s: float = 0.0,
         backend_selection_metadata: Optional[BackendSelectionMetadata] = None,
-    ) -> None:
+    ) -> Optional[str]:
         """Write combined manifest with metadata.
 
         Args:
@@ -3762,6 +3762,7 @@ class EnhanceOrchestrator:
             backend_selection=(backend_selection_metadata or self._active_backend_metadata or self._backend_metadata),
         )
         manifest.write(manifest_path)
+        return input_sha
 
     def enhance_image(
         self,
@@ -3983,7 +3984,7 @@ class EnhanceOrchestrator:
                 )
 
         # --- MANIFEST WRITING ---
-        self._write_manifest(
+        input_sha = self._write_manifest(
             manifest_path=manifest_path,
             image_input=image_input,
             depth_metadata=depth_metadata,
