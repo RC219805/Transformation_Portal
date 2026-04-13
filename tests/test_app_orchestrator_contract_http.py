@@ -1135,6 +1135,52 @@ def test_partial_run_summary_prefers_newest_batch_manifest_when_run_card_missing
     assert job.state == "partial"
 
 
+def test_partial_run_summary_ignores_summaryless_run_card_payload(tmp_path: Path) -> None:
+    output_dir = tmp_path / "out"
+    manifests_dir = output_dir / "manifests"
+    manifests_dir.mkdir(parents=True, exist_ok=True)
+    (output_dir / "run_card_2026-04-07_001500.json").write_text(
+        json.dumps(
+            {
+                "batch_id": "2026-04-07_001500",
+            }
+        ),
+        encoding="utf-8",
+    )
+    (manifests_dir / "batch_2026-04-07_001500.json").write_text(
+        json.dumps(
+            {
+                "batch_id": "2026-04-07_001500",
+                "results": [{"status": "ok"}] * 4 + [{"status": "error"}],
+                "stats": {"total_images": 5},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    job = orchestrator_app.Job(
+        id="job_partial_review_summaryless_run_card",
+        created_at=orchestrator_app._now(),
+        state="failed",
+        exit_code=1,
+        request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(output_dir)}},
+        error={
+            "code": "RUNNER_EXIT_NONZERO",
+            "message": "runner exited with code 1",
+            "details": {"exit_code": 1},
+        },
+    )
+
+    orchestrator_app._index_job_artifacts(job)
+    summary = orchestrator_app._refresh_job_run_summary(job)
+
+    assert summary["source"] == "batch_manifest"
+    assert summary["batch_id"] == "2026-04-07_001500"
+    assert summary["success_count"] == 4
+    assert summary["error_count"] == 1
+    assert job.state == "partial"
+
+
 def test_failed_run_summary_prefers_newest_all_error_run_card_when_output_dir_reused(tmp_path: Path) -> None:
     output_dir = tmp_path / "out"
     manifests_dir = output_dir / "manifests"

@@ -3964,11 +3964,20 @@ def _load_bounded_run_card_payload(path: Optional[Path]) -> Optional[Dict[str, A
 
     batch_id = str(payload.get("batch_id") or "").strip()
     artifact_index = payload.get("artifact_index")
-    if not batch_id or not isinstance(artifact_index, list) or not artifact_index:
+    if not batch_id:
         return None
     try:
         infer_run_card_version(payload)
     except ValueError:
+        return None
+    if artifact_index is None:
+        total_images = _coerce_nonnegative_int(payload.get("total_images"))
+        success_count = _coerce_nonnegative_int(payload.get("success_count"))
+        error_count = _coerce_nonnegative_int(payload.get("error_count"))
+        if total_images is None and (success_count is None or error_count is None):
+            return None
+        return payload
+    if not isinstance(artifact_index, list) or not artifact_index:
         return None
     for artifact in artifact_index:
         if not isinstance(artifact, Mapping):
@@ -4212,6 +4221,7 @@ def _build_scoped_job_artifacts_from_run_metadata(
     job: Job,
     metadata: JobRunMetadata,
 ) -> Optional[Tuple[List[Dict[str, Any]], Dict[str, Path], bool]]:
+    artifact_index = None
     if metadata.run_card_path is not None and metadata.run_card_payload is not None:
         artifact_index = metadata.run_card_payload.get("artifact_index")
         if isinstance(artifact_index, list):
@@ -4239,7 +4249,7 @@ def _build_scoped_job_artifacts_from_run_metadata(
 
     if metadata.batch_manifest_path is not None:
         candidate_paths = [metadata.batch_manifest_path]
-        if metadata.run_card_path is not None:
+        if metadata.run_card_path is not None and isinstance(artifact_index, list) and artifact_index:
             candidate_paths.insert(0, metadata.run_card_path)
         return _build_scoped_job_artifacts(
             job=job,
