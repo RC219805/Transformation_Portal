@@ -27,13 +27,65 @@ function firstHeaderValue(value) {
     .trim();
 }
 
+function normalizeProto(value) {
+  const normalized = firstHeaderValue(value).replace(/:$/, "").trim().toLowerCase();
+  return normalized === "http" || normalized === "https" ? normalized : "";
+}
+
+function parseHost(value) {
+  const normalized = firstHeaderValue(value).toLowerCase();
+  if (!normalized) return null;
+
+  try {
+    const url = new URL(`http://${normalized}`);
+    return {
+      host: url.host.toLowerCase(),
+      hostname: url.hostname.toLowerCase(),
+      port: url.port || ""
+    };
+  } catch {
+    return null;
+  }
+}
+
+function isLoopbackHostname(hostname) {
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1" || hostname === "[::1]";
+}
+
+function hostsAreEquivalent(candidateValue, fallbackValue) {
+  const candidate = parseHost(candidateValue);
+  const fallback = parseHost(fallbackValue);
+  if (!candidate || !fallback) return false;
+  if (candidate.host === fallback.host) return true;
+  return (
+    candidate.port === fallback.port
+    && isLoopbackHostname(candidate.hostname)
+    && isLoopbackHostname(fallback.hostname)
+  );
+}
+
+function trustedHostValue(headerValue, fallbackValue) {
+  const candidate = parseHost(headerValue);
+  return candidate && hostsAreEquivalent(headerValue, fallbackValue) ? candidate.host : fallbackValue;
+}
+
+function trustedProtoValue(headerValue, fallbackValue) {
+  const candidate = normalizeProto(headerValue);
+  const fallback = normalizeProto(fallbackValue);
+  return candidate && candidate === fallback ? candidate : fallback;
+}
+
 export function buildRequestUrl(request, pathname) {
   const url = new URL(pathname, request.url);
-  const host = firstHeaderValue(request.headers.get("x-forwarded-host"))
-    || firstHeaderValue(request.headers.get("host"))
-    || request.nextUrl.host;
-  const proto = firstHeaderValue(request.headers.get("x-forwarded-proto"))
-    || String(request.nextUrl.protocol || "").replace(/:$/, "");
+  const requestUrl = new URL(request.url);
+  const fallbackHost = request.nextUrl.host || requestUrl.host;
+  const fallbackProto = request.nextUrl.protocol || requestUrl.protocol || "";
+  const host = trustedHostValue(
+    firstHeaderValue(request.headers.get("x-forwarded-host"))
+      || firstHeaderValue(request.headers.get("host")),
+    fallbackHost
+  );
+  const proto = trustedProtoValue(request.headers.get("x-forwarded-proto"), fallbackProto);
 
   if (host) {
     url.host = host;

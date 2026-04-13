@@ -312,3 +312,21 @@ test("validateOriginAndReferrer honors the forwarded local host when Next normal
 
   assert.equal(validateOriginAndReferrer(request), true);
 });
+
+test("validateOriginAndReferrer ignores untrusted host overrides when deriving the expected origin", async () => {
+  const { validateOriginAndReferrer } = await import(`../lib/request-security.js?case=${Date.now()}`);
+  const request = {
+    method: "POST",
+    url: "https://portal.example.com/login",
+    nextUrl: { origin: "https://portal.example.com", pathname: "/login", protocol: "https:", host: "portal.example.com" },
+    headers: new Headers({
+      host: "evil.example.com",
+      origin: "https://portal.example.com",
+      referer: "https://portal.example.com/login",
+      "x-forwarded-host": "evil.example.com",
+      "x-forwarded-proto": "http",
+    })
+  };
+
+  assert.equal(validateOriginAndReferrer(request), true);
+});

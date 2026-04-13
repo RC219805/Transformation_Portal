@@ -71,6 +71,7 @@ function resolveEntryState({ accessEmail, errorCode, bypass = false }) {
 function renderLoginPage({ csrfToken, accessEmail, errorCode, bypass = false }) {
   const errorMessage = errorCode ? resolveLoginMessage(errorCode) : "";
   const entryState = resolveEntryState({ accessEmail, errorCode, bypass });
+  const hasAccessContext = Boolean(bypass || accessEmail);
   const escapedAccessEmail = accessEmail ? escapeHtml(accessEmail) : "";
   const accessSequenceDetail = bypass
     ? "Local troubleshooting bypass is active for this front door session."
@@ -190,11 +191,11 @@ function renderLoginPage({ csrfToken, accessEmail, errorCode, bypass = false }) 
             <details class="login-secondary-details" data-ui="login-sequence">
               <summary>
                 <span>Access details</span>
-                <span class="login-secondary-details__meta">${accessEmail ? "Verified context" : "Managed entry flow"}</span>
+                <span class="login-secondary-details__meta">${bypass ? "Bypass context" : hasAccessContext ? "Verified context" : "Managed entry flow"}</span>
               </summary>
               <div class="login-secondary-details__content">
                 <div class="login-sequence">
-                  <article class="login-sequence-step${accessEmail ? " login-sequence-step--ready" : ""}">
+                  <article class="login-sequence-step${hasAccessContext ? " login-sequence-step--ready" : ""}">
                     <p class="login-sequence-step-kicker">Step 1</p>
                     <p class="login-sequence-step-title">Verified access</p>
                     <p class="login-sequence-step-detail">${accessSequenceDetail}</p>

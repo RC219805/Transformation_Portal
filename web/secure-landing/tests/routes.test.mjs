@@ -395,6 +395,8 @@ test("login GET serves a minimal branded sign-in shell and boots an anonymous se
     assert.match(html, /data-access-state="verified"/);
     assert.match(html, /Local development bypass active/);
     assert.match(html, /Credential handoff ready/);
+    assert.match(html, /Bypass context/);
+    assert.match(html, /login-sequence-step login-sequence-step--ready/);
     assert.doesNotMatch(html, /Authorized operators only\./);
     assert.doesNotMatch(html, /Need access\?/);
     assert.doesNotMatch(html, /Secure operator access to governed orchestration\./);
@@ -954,6 +956,52 @@ test("development local bypass login still works when the browser omits origin a
 
     assert.equal(response.status, 303);
     assert.equal(response.headers.get("location"), "http://127.0.0.1:3000/portal");
+  } finally {
+    env.cleanup();
+  }
+});
+
+test("login POST ignores untrusted host overrides when building redirect targets", async () => {
+  const passwordHash = await argon2.hash("correct horse battery staple");
+  const env = withTempEnvironment({
+    NODE_ENV: "development",
+    TP_ALLOW_LOCAL_ACCESS_BYPASS: "1",
+    usersFileEntries: [
+      {
+        username: "admin",
+        password_hash: passwordHash,
+        access_email: "admin@example.com",
+        role: "admin"
+      }
+    ]
+  });
+
+  try {
+    const sessions = await importFresh("../lib/sessions.js");
+    const { POST } = await importFresh("../app/login/route.js");
+
+    const anonymousSession = sessions.createAnonymousSession();
+    const request = buildRequest("https://portal.example.com/login", {
+      method: "POST",
+      headers: new Headers({
+        origin: "https://portal.example.com",
+        host: "evil.example.com",
+        "x-forwarded-host": "evil.example.com",
+        "x-forwarded-proto": "http",
+        "content-type": "application/x-www-form-urlencoded",
+        cookie: `tp_session=${anonymousSession.id}`
+      }),
+      body: new URLSearchParams({
+        username: "admin",
+        password: "correct horse battery staple",
+        csrf_token: anonymousSession.csrfToken
+      })
+    });
+
+    const response = await POST(request);
+
+    assert.equal(response.status, 303);
+    assert.equal(response.headers.get("location"), "https://portal.example.com/portal");
   } finally {
     env.cleanup();
   }

@@ -1,4 +1,4 @@
-import { getConfig } from "./config.js";
+import { isLocalAccessBypassEnabled } from "./config.js";
 import { buildRequestUrl } from "./http.js";
 
 const UNSAFE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
@@ -29,5 +29,5 @@ export function validateOriginAndReferrer(request) {
     return originFromReferrer(referrer) === expectedOrigin;
   }
 
-  return Boolean(getConfig().allowLocalAccessBypass);
+  return isLocalAccessBypassEnabled();
 }
