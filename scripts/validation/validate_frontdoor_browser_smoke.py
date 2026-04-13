@@ -474,7 +474,16 @@ def _frontdoor_accessibility_probe_expression() -> str:
       const video = document.querySelector('.hero-video, .homepage-video');
       if (!video) return true;
       const style = window.getComputedStyle(video);
-      return style.display === 'none' || style.animationName === 'none' || style.animationDuration === '0s';
+      if (style.display === 'none') return true;
+      const hasSource = Array.from(video.querySelectorAll('source'))
+        .some((source) => Boolean(source.getAttribute('src')));
+      const hasPlayableMedia = Boolean(video.currentSrc) || hasSource;
+      return (
+        video.paused
+        || video.ended
+        || !hasPlayableMedia
+        || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA
+      );
     })()
   };
 })()

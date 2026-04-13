@@ -514,9 +514,18 @@ export function renderHomepage() {
                 <p class="entry-card__detail">Verification report, provenance artifacts, rights posture, and operator review stay in one reviewable handoff.</p>
               </div>
               <div class="entry-card__meta">
-                <p><strong>Public proof</strong> Inspect the report before access is requested.</p>
-                <p><strong>Managed entry</strong> Access verification stays separate from operator credentials.</p>
-                <p><strong>Operator console</strong> Build, operate, and review continue inside the governed shell.</p>
+                <div class="entry-card__meta-item">
+                  <p class="entry-card__meta-label">Public proof</p>
+                  <p class="entry-card__meta-value">Inspect the report before access is requested.</p>
+                </div>
+                <div class="entry-card__meta-item">
+                  <p class="entry-card__meta-label">Managed entry</p>
+                  <p class="entry-card__meta-value">Access verification stays separate from operator credentials.</p>
+                </div>
+                <div class="entry-card__meta-item">
+                  <p class="entry-card__meta-label">Operator console</p>
+                  <p class="entry-card__meta-value">Build, operate, and review continue inside the governed shell.</p>
+                </div>
               </div>
             </article>
           </div>

@@ -1,4 +1,5 @@
-/* Shared UI primitives used by both the managed frontdoor and portal console. */
+/* Canonical shared UI token source used by both the managed frontdoor and portal console. */
+/* build-portal-bundle.mjs copies this file into the shipped frontdoor and portal asset targets. */
 :root {
   color-scheme: light dark;
 

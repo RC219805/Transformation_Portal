@@ -990,31 +990,47 @@ def _accessibility_probe_expression() -> str:
     };
     return Math.max(...detailsNodes.map(depthFor));
   })();
-  const focusVisibleWithStickyShells = (() => {
-    const target =
-      document.getElementById('pipelineSelect')
-      || document.getElementById('presetSelect')
-      || document.getElementById('buildStepTab1')
-      || document.querySelector('[data-ui="view-link"]')
-      || document.getElementById('themeBtn');
-    if (!visible(target)) return false;
-    const absoluteTop = target.getBoundingClientRect().top + window.scrollY;
-    const root = document.documentElement;
-    const previousScrollBehavior = root.style.scrollBehavior;
-    root.style.scrollBehavior = 'auto';
-    window.scrollTo(0, Math.max(0, absoluteTop - 220));
-    root.style.scrollBehavior = previousScrollBehavior;
-    target.focus();
-    const blockers = Array.from(document.querySelectorAll('.portal-topbar, [data-ui="console-context-shell"]'))
+  const focusTarget = () =>
+    document.getElementById('pipelineSelect')
+    || document.getElementById('presetSelect')
+    || document.getElementById('buildStepTab1')
+    || document.querySelector('[data-ui="view-link"]')
+    || document.getElementById('themeBtn');
+  const stickyBlockers = () =>
+    Array.from(document.querySelectorAll('.portal-topbar, [data-ui="console-context-shell"]'))
       .filter((el) => {
         if (!visible(el)) return false;
         const position = window.getComputedStyle(el).position;
         return position === 'sticky' || position === 'fixed';
       });
-    const blockerBottom = blockers.reduce((max, el) => Math.max(max, el.getBoundingClientRect().bottom), 0);
-    const targetRect = target.getBoundingClientRect();
-    return targetRect.top >= blockerBottom - 2 && targetRect.bottom <= window.innerHeight + 2;
+  const measureStickyBlockerBottom = () =>
+    stickyBlockers().reduce((max, el) => Math.max(max, el.getBoundingClientRect().bottom), 0);
+  const focusVisibleWithStickyShells = (() => {
+    const target = focusTarget();
+    if (!visible(target)) return false;
+    const absoluteTop = target.getBoundingClientRect().top + window.scrollY;
+    const root = document.documentElement;
+    const previousScrollBehavior = root.style.scrollBehavior;
+    const previousScrollX = window.scrollX;
+    const previousScrollY = window.scrollY;
+    const clearance = Math.ceil(measureStickyBlockerBottom() + 16);
+    root.style.scrollBehavior = 'auto';
+    try {
+      window.scrollTo(previousScrollX, Math.max(0, absoluteTop - clearance));
+      try {
+        target.focus({ preventScroll: true });
+      } catch {
+        target.focus();
+      }
+      const blockerBottom = measureStickyBlockerBottom();
+      const targetRect = target.getBoundingClientRect();
+      return targetRect.top >= blockerBottom - 2 && targetRect.bottom <= window.innerHeight + 2;
+    } finally {
+      window.scrollTo(previousScrollX, previousScrollY);
+      root.style.scrollBehavior = previousScrollBehavior;
+    }
   })();
+  const focusTargetNode = focusTarget();
   const discoverableDisclosures = Array.from(document.querySelectorAll('details > summary'))
     .filter((summary) => visible(summary) && String(summary.textContent || '').trim().length > 0)
     .length;
@@ -1027,40 +1043,10 @@ def _accessibility_probe_expression() -> str:
     shortcutsTargetMin: minTarget('#shortcutsBtn'),
     workspaceLinkTargetMin: minTarget('[data-ui="view-link"]'),
     buildStepTargetMin: minTarget('#buildStepTab1'),
-    focusTargetId: (() => {
-      const target =
-        document.getElementById('pipelineSelect')
-        || document.getElementById('presetSelect')
-        || document.getElementById('buildStepTab1')
-        || document.querySelector('[data-ui="view-link"]')
-        || document.getElementById('themeBtn');
-      return target ? String(target.id || target.getAttribute('data-ui') || target.tagName || '') : '';
-    })(),
-    focusTargetTop: (() => {
-      const target =
-        document.getElementById('pipelineSelect')
-        || document.getElementById('presetSelect')
-        || document.getElementById('buildStepTab1')
-        || document.querySelector('[data-ui="view-link"]')
-        || document.getElementById('themeBtn');
-      return target ? Number(target.getBoundingClientRect().top || 0) : 0;
-    })(),
-    focusTargetBottom: (() => {
-      const target =
-        document.getElementById('pipelineSelect')
-        || document.getElementById('presetSelect')
-        || document.getElementById('buildStepTab1')
-        || document.querySelector('[data-ui="view-link"]')
-        || document.getElementById('themeBtn');
-      return target ? Number(target.getBoundingClientRect().bottom || 0) : 0;
-    })(),
-    stickyBlockerBottom: Array.from(document.querySelectorAll('.portal-topbar, [data-ui="console-context-shell"]'))
-      .filter((el) => {
-        if (!visible(el)) return false;
-        const position = window.getComputedStyle(el).position;
-        return position === 'sticky' || position === 'fixed';
-      })
-      .reduce((max, el) => Math.max(max, el.getBoundingClientRect().bottom), 0),
+    focusTargetId: focusTargetNode ? String(focusTargetNode.id || focusTargetNode.getAttribute('data-ui') || focusTargetNode.tagName || '') : '',
+    focusTargetTop: focusTargetNode ? Number(focusTargetNode.getBoundingClientRect().top || 0) : 0,
+    focusTargetBottom: focusTargetNode ? Number(focusTargetNode.getBoundingClientRect().bottom || 0) : 0,
+    stickyBlockerBottom: measureStickyBlockerBottom(),
     focusVisibleWithStickyShells,
     maxDisclosureDepth,
     discoverableDisclosures,
