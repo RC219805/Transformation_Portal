@@ -17,16 +17,16 @@ annotated-types==0.7.0
     # via
     #   -c all.txt
     #   pydantic
-anyio==4.12.1
+anyio==4.13.0
     # via
     #   -c all.txt
     #   starlette
-attrs==25.4.0
+attrs==26.1.0
     # via
     #   -c all.txt
     #   jsonschema
     #   referencing
-click==8.3.1
+click==8.3.2
     # via
     #   -c all.txt
     #   typer
@@ -67,7 +67,7 @@ mdurl==0.1.2
     # via
     #   -c all.txt
     #   markdown-it-py
-numpy==2.4.3
+numpy==2.4.4
     # via
     #   -c all.txt
     #   -r base.in
@@ -102,7 +102,7 @@ referencing==0.37.0
     #   -c all.txt
     #   jsonschema
     #   jsonschema-specifications
-rich==14.3.3
+rich==15.0.0
     # via
     #   -c all.txt
     #   typer
