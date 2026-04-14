@@ -45,8 +45,8 @@ except ImportError as e:
     ) from e
 
 from transformation_portal.cli_support import (
+    emit_dependency_group,
     list_recipe_summaries,
-    probe_dependency_versions,
     probe_pipeline_features,
     validate_recipe_file,
 )
@@ -104,22 +104,6 @@ analyze_app = typer.Typer(
     help="Codebase and workflow analysis tools",
     no_args_is_help=True,
 )
-
-
-def _emit_dependency_group(title: str, dependency_specs: tuple[tuple[str, str], ...], unavailable_prefix: str) -> None:
-    """Render a dependency status group."""
-
-    typer.echo(f"\n{title}:")
-    for status in probe_dependency_versions(dependency_specs):
-        if status.available:
-            typer.echo(f"  ✅ {status.display_name}: {status.version}")
-            continue
-
-        line = f"  {unavailable_prefix} {status.display_name}: not installed"
-        if status.reason:
-            line = f"{line} ({status.reason})"
-        typer.echo(line)
-
 
 # ============================================================================
 # RENDER SUBCOMMANDS
@@ -563,7 +547,7 @@ def info():
             line = f"{line}: {status.reason}"
         typer.echo(line)
 
-    _emit_dependency_group(
+    emit_dependency_group(
         "Core Dependencies",
         (
             ("NumPy", "numpy"),
@@ -573,8 +557,9 @@ def info():
             ("Typer", "typer"),
         ),
         unavailable_prefix="❌",
+        emit=typer.echo,
     )
-    _emit_dependency_group(
+    emit_dependency_group(
         "Optional Dependencies",
         (
             ("16-bit TIFF support", "tifffile"),
@@ -583,6 +568,7 @@ def info():
             ("ML models", "transformers"),
         ),
         unavailable_prefix="⚠️ ",
+        emit=typer.echo,
     )
 
 

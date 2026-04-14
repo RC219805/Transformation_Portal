@@ -36,6 +36,7 @@ import glob
 import json
 import logging
 import os
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
@@ -469,7 +470,8 @@ class UnifiedPipeline:
                 file type; "image" and "video" modes are reserved for future use.
             dry_run: If True, preview processing plan without executing.
             parallel: If True, process files in parallel with isolated worker pipelines.
-            max_workers: Optional worker override for parallel execution.
+            max_workers: Optional explicit worker count for parallel execution,
+                bounded by the input count and detected CPU count.
 
         Returns:
             BatchResult with all processing results.
@@ -535,17 +537,24 @@ class UnifiedPipeline:
     ) -> BatchResult:
         """Process a batch in parallel with isolated worker pipeline instances."""
 
-        worker_count = min(4, len(input_files), os.cpu_count() or 1)
-        if max_workers is not None:
-            worker_count = max(1, min(worker_count, max_workers))
+        cpu_count = os.cpu_count() or 1
+        if max_workers is None:
+            worker_count = min(4, len(input_files), cpu_count)
+        else:
+            worker_count = max(1, min(max_workers, len(input_files), cpu_count))
 
         log.info(f"  Parallel workers: {worker_count}")
 
         rag_indexing_enabled = self._rag_indexing_enabled()
+        should_disable_rag_indexing = rag_indexing_enabled
         batch_result = BatchResult(dry_run=False)
+        worker_state = threading.local()
 
         def _worker(input_path: Path) -> ProcessingResult:
-            worker_pipeline = self._create_worker_pipeline(disable_rag_indexing=rag_indexing_enabled)
+            worker_pipeline = getattr(worker_state, "pipeline", None)
+            if worker_pipeline is None:
+                worker_pipeline = self._create_worker_pipeline(disable_rag_indexing=should_disable_rag_indexing)
+                worker_state.pipeline = worker_pipeline
             return worker_pipeline.process_single(input_path, output_dir=output_dir)
 
         with ThreadPoolExecutor(max_workers=worker_count) as executor:

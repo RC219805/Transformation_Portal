@@ -67,12 +67,20 @@ stages:
 """.strip(),
     )
     _write_recipe(recipes_dir / "ignored.yaml", "description: not a recipe\n")
+    _write_recipe(
+        recipes_dir / "invalid_shape.yaml",
+        """
+name: Almost Recipe
+stages: color_grading
+""".strip(),
+    )
 
     result = runner.invoke(app, ["list-recipes", "--dir", str(recipes_dir)])
 
     assert result.exit_code == 0
     assert "Explicit Recipe" in result.stdout
     assert "ignored.yaml" not in result.stdout
+    assert "Almost Recipe" not in result.stdout
 
 
 def test_list_recipes_without_candidates_exits_cleanly(

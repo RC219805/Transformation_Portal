@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from importlib import metadata
 from pathlib import Path
-from typing import Any, Iterable, Optional
+from typing import Any, Callable, Iterable, Optional
 
 from transformation_portal.config_loader import get_recipe_info, load_recipe, validate_recipe
 
@@ -132,6 +132,26 @@ def probe_dependency_versions(
     return statuses
 
 
+def emit_dependency_group(
+    title: str,
+    dependency_specs: Iterable[tuple[str, str]],
+    unavailable_prefix: str,
+    emit: Callable[[str], None],
+) -> None:
+    """Render a dependency status group via the provided output function."""
+
+    emit(f"\n{title}:")
+    for status in probe_dependency_versions(dependency_specs):
+        if status.available:
+            emit(f"  ✅ {status.display_name}: {status.version}")
+            continue
+
+        line = f"  {unavailable_prefix} {status.display_name}: not installed"
+        if status.reason:
+            line = f"{line} ({status.reason})"
+        emit(line)
+
+
 def probe_pipeline_features() -> list[FeatureStatus]:
     """Best-effort probe for optional pipeline feature availability."""
 
@@ -171,4 +191,16 @@ def _discover_recipe_candidates(root_dir: Path, recursive: bool) -> list[Path]:
 def _looks_like_recipe(payload: Any) -> bool:
     """Return ``True`` when the parsed YAML resembles a UnifiedPipeline recipe."""
 
-    return isinstance(payload, dict) and "name" in payload and "stages" in payload
+    if not isinstance(payload, dict):
+        return False
+
+    name = payload.get("name")
+    stages = payload.get("stages")
+
+    return (
+        isinstance(name, str)
+        and bool(name.strip())
+        and isinstance(stages, list)
+        and bool(stages)
+        and all(isinstance(stage, str) and bool(stage.strip()) for stage in stages)
+    )
