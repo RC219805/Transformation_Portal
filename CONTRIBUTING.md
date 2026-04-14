@@ -611,6 +611,70 @@ git add requirements/*.in requirements/*.txt
 git commit -m "deps: add new-package for feature XYZ"
 ```
 
+### Platform-Specific ML Lockfile Generation
+
+**IMPORTANT:** ML lockfiles contain platform-specific packages (e.g., PyTorch wheels for different OS/architectures). These lockfiles **must be regenerated on their authoritative host platform** to avoid cross-platform contamination.
+
+#### Trust Model
+
+| Target Platform | Lockfile | Authoritative Host | Status |
+|-----------------|----------|-------------------|--------|
+| Linux x86_64 | `ml-core-linux.txt` | Native Linux x86_64 | **Active** |
+| macOS Apple Silicon | `ml-core-darwin-arm64.txt` | Native Darwin arm64 | **Active** |
+| macOS Intel | `ml-core-darwin-x86_64.txt` | *(none)* | **Frozen** |
+
+**Never generate Linux locks from macOS or vice versa** — pip-compile resolves host-specific wheels that will fail on the target platform.
+
+#### When to Regenerate ML Lockfiles
+
+Regenerate when:
+- Adding/updating packages in `ml-core-darwin-arm64.in`, `ml-core-linux.in`, or shared ML `.in` files
+- Updating `base.txt` (ML locks constrain against it)
+- Security patches require ML package updates
+
+#### Regeneration Workflow
+
+**For Linux x86_64 ML lock** (on native Linux x86_64 host):
+```bash
+cd requirements
+make compile-ml-linux-x86_64   # Compile from native Linux
+make check-ml-linux-x86_64     # Verify lock is current
+```
+
+**For macOS Apple Silicon ML lock** (on native Darwin arm64 host):
+```bash
+cd requirements
+make compile-ml-darwin-arm64   # Compile from native M1/M2/M3 Mac
+make check-ml-darwin-arm64     # Verify lock is current
+```
+
+**For macOS Intel ML lock**:
+```bash
+# FROZEN - do not regenerate without Architect approval
+make compile-ml-darwin-x86_64  # Will fail closed
+```
+
+#### Automated CI Validation
+
+CI automatically validates:
+- **No Darwin markers in Linux locks** (rejects `platform_system == "Darwin"`)
+- **No Linux markers in Darwin locks** (rejects `platform_system == "Linux"`)
+- **Lock ownership authority** (prevents off-lane modifications)
+- **Lock divergence** (target-owned locks must not collapse to identical graphs)
+
+See `scripts/validation/check_requirements_lock_contract.py` for enforcement details.
+
+#### Common Issues
+
+**Error: "Darwin arm64 ML lock generation is authoritative only on native Darwin arm64"**
+→ You're trying to compile macOS locks from Linux. Run on a Mac.
+
+**Error: "Linux x86_64 ML lock generation is authoritative only on native Linux x86_64"**
+→ You're trying to compile Linux locks from macOS. Run on Linux.
+
+**Error: "ml-core-darwin-x86_64.txt is frozen"**
+→ The Intel Mac lockfile is frozen pending lane decision. Do not regenerate.
+
 ### Banned Packages
 
 The following packages are **banned** and must not be added:
