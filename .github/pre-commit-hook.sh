@@ -1,15 +1,52 @@
 #!/bin/bash
-# Pre-commit hook for quality control
-# Install: cp .github/pre-commit-hook.sh .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
+# Legacy pre-commit hook for quality control
+#
+# DEPRECATED: This file is retained for compatibility with workflows that may
+# reference it directly. The canonical approach is to use the pre-commit
+# framework via `.pre-commit-config.yaml`.
+#
+# Preferred installation method:
+#   make install-hooks
+#   # or
+#   pre-commit install -f
+#
+# For manual execution of the unified quality gate:
+#   ./scripts/pre_commit_hook.sh
+#
+# Direct manual installation (not recommended):
+#   cp .github/pre-commit-hook.sh .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
 
 set -eo pipefail
 
-echo "🔍 Running pre-commit quality checks..."
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Determine repository root from script location
+if [[ "$SCRIPT_DIR" == */.git/hooks ]]; then
+    REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+elif [[ "$SCRIPT_DIR" == */.github ]]; then
+    REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+else
+    REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+fi
+
+# Delegate to the unified quality gate if it exists
+UNIFIED_GATE="$REPO_ROOT/scripts/pre_commit_hook.sh"
+if [[ -x "$UNIFIED_GATE" ]]; then
+    echo "🔍 Delegating to unified pre-commit quality gate..."
+    exec "$UNIFIED_GATE" "$@"
+fi
+
+# Fallback: run inline checks if the unified gate is missing
+echo "🔍 Running pre-commit quality checks (legacy fallback)..."
+
+cd "$REPO_ROOT"
 
 if [ -x ".venv/bin/python" ]; then
     PYTHON_BIN=".venv/bin/python"
-else
+elif command -v python3 >/dev/null 2>&1; then
     PYTHON_BIN="python3"
+else
+    PYTHON_BIN="python"
 fi
 
 staged_files=()
@@ -94,7 +131,12 @@ if [ "${#staged_py[@]}" -gt 0 ]; then
     echo "Auto-fixing trailing whitespace..."
     for file in "${staged_py[@]}"; do
         if [ -f "$file" ]; then
-            sed -i '' 's/[[:space:]]*$//' "$file" 2>/dev/null || sed -i 's/[[:space:]]*$//' "$file"
+            # Portable sed: try GNU-style first, fall back to BSD-style
+            if sed --version >/dev/null 2>&1; then
+                sed -i 's/[[:space:]]*$//' "$file"
+            else
+                sed -i '' 's/[[:space:]]*$//' "$file"
+            fi
             git add "$file"
         fi
     done
