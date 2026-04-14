@@ -10,22 +10,22 @@
 
 The Transformation Portal operator console should be modernized through bounded, low-risk tranches rather than a framework rewrite. This RFC preserves the current trust boundaries, keeps the FastAPI origin private behind the managed frontdoor, treats the native web platform as the default implementation path, and requires deterministic feature flags plus explicit validation gates for all material runtime and UX changes.
 
-This RFC authorizes incremental modernization work. It does **not** approve a React or Next.js rewrite of the operator console, a new identity model, or any change that weakens the current browser-to-origin security boundary.
+This RFC proposes an incremental modernization path for review and approval. It does **not** itself approve a React or Next.js rewrite of the operator console, a new identity model, or any change that weakens the current browser-to-origin security boundary.
 
 ## Decision
 
-The following decisions are adopted:
+The following proposed direction is submitted for approval:
 
 1. **FastAPI remains private behind the managed frontdoor.** Direct public exposure of the origin is out of scope for this RFC.
 2. **The managed frontdoor remains the authoritative browser boundary.** Public homepage, login, proxying, route enforcement, and same-origin browser behavior continue to terminate there.
 3. **Native web primitives remain the default implementation path.** Vanilla HTML, CSS, and JavaScript are preferred unless a targeted dependency is justified by a clear operational benefit.
 4. **All material UX, runtime, and observability changes must ship behind deterministic feature flags.** Assignment must remain stable for a given viewer or operator over the supported lifetime of the assigned cohort key.
 5. **Rollout proceeds by bounded tranches with explicit entry and exit criteria.** A tranche does not close merely because telemetry looks acceptable after deployment.
-6. **This RFC is an implementation direction under `ADR-050`, not a competing architecture proposal.** Any future React or Next.js migration of the operator console requires a separate, evidence-based decision.
+6. **This RFC is a non-binding interim implementation direction that remains compatible with proposed `ADR-050` pending its acceptance, revision, or rejection; it does not prejudge that ADR's outcome.** Any future React or Next.js migration of the operator console requires a separate, evidence-based decision.
 
 ## Normative Interpretation
 
-The following sections are normative and define binding requirements for implementation and approval:
+The following sections are normative and define the binding requirements that would apply if this RFC is accepted:
 
 - `Decision`
 - `Decision Drivers`
@@ -550,7 +550,7 @@ Browser validation is not required for telemetry-only or backend-correlation cha
 
 ### Explicit Future Decision Gate
 
-Any React or Next.js migration of the operator console remains gated by `ADR-050` and must be re-opened as a separate evidence-based decision. This RFC does not pre-approve that migration.
+Any React or Next.js migration of the operator console remains subject to `ADR-050` or a successor architecture decision and must be approved through a separate, evidence-based decision. This RFC does not pre-approve that migration.
 
 ### Telemetry and Privacy Gate
 
