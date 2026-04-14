@@ -48,6 +48,12 @@ def _read_records(path: Path, schema: str) -> List[Dict[str, Any]]:
                     file=sys.stderr,
                 )
                 continue
+            if not isinstance(payload, dict):
+                print(
+                    f"portal modernization evidence: skipped non-object json line {line_number} in {path}",
+                    file=sys.stderr,
+                )
+                continue
             if payload.get("schema") != schema:
                 continue
             records.append(payload)

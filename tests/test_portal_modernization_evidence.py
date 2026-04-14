@@ -25,7 +25,7 @@ def _run_cli(*args: str) -> subprocess.CompletedProcess[str]:
     )
 
 
-def _write_jsonl(path: Path, records: list[dict[str, object]]) -> None:
+def _write_jsonl(path: Path, records: list[object]) -> None:
     path.write_text("\n".join(json.dumps(record) for record in records) + "\n", encoding="utf-8")
 
 
@@ -187,6 +187,62 @@ def test_portal_modernization_evidence_json_marks_sse_threshold_insufficient_wit
     assert payload["milestones"]["m1_measurement_foundation"]["status"] == "pass"
     assert payload["metrics"]["sse_reconnect_rate_per_operator_hour"]["status"] == "insufficient_data"
     assert payload["milestones"]["m5_artifact_review"]["status"] == "insufficient_data"
+
+
+def test_portal_modernization_evidence_skips_non_object_json_lines(tmp_path: Path) -> None:
+    rum_path = tmp_path / "portal-rum.jsonl"
+    _write_jsonl(
+        rum_path,
+        [
+            {
+                "schema": "tp.orchestrator.portal_rum.v1",
+                "event_type": "core_web_vital",
+                "metric": "lcp",
+                "value": 2200.0,
+            },
+            {
+                "schema": "tp.orchestrator.portal_rum.v1",
+                "event_type": "core_web_vital",
+                "metric": "inp",
+                "value": 150.0,
+            },
+            {
+                "schema": "tp.orchestrator.portal_rum.v1",
+                "event_type": "core_web_vital",
+                "metric": "cls",
+                "value": 0.04,
+            },
+            {
+                "schema": "tp.orchestrator.portal_rum.v1",
+                "event_type": "bootstrap_ready",
+                "value": 180.0,
+            },
+            {
+                "schema": "tp.orchestrator.portal_rum.v1",
+                "event_type": "first_view_interactive",
+                "value": 240.0,
+            },
+            {
+                "schema": "tp.orchestrator.portal_rum.v1",
+                "event_type": "portal_shell_rendered",
+                "value": 95.0,
+            },
+            {
+                "schema": "tp.orchestrator.portal_rum.v1",
+                "event_type": "queue_request",
+                "metric": "submit",
+                "value": 70.0,
+            },
+            ["not", "an", "object"],
+        ],
+    )
+
+    result = _run_cli("--rum-log", str(rum_path), "--format", "json")
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["milestones"]["m1_measurement_foundation"]["status"] == "pass"
+    assert "skipped non-object json line" in result.stderr
 
 
 def test_portal_modernization_evidence_marks_m5_fail_when_viewer_success_rate_misses_target(tmp_path: Path) -> None:
