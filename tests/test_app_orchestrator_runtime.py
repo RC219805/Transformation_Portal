@@ -28,6 +28,7 @@ orchestrator_app = importlib.import_module("app")
 PORTAL_HTML_PATH = Path(__file__).resolve().parents[1] / "portal.html"
 PORTAL_ASSET_ROOT = PORTAL_HTML_PATH.parent / "public" / "portal-assets"
 PORTAL_FRONTDOOR_ROOT = PORTAL_HTML_PATH.parent / "web" / "secure-landing"
+PORTAL_INTERNAL_STATE_SOURCE_PATH = PORTAL_FRONTDOOR_ROOT / "portal-src" / "internal" / "state.js"
 PORTAL_TEMPLATE_SOURCE_PATH = PORTAL_FRONTDOOR_ROOT / "portal-src" / "portal.template.js"
 PORTAL_REVIEW_SURFACE_SOURCE_PATH = PORTAL_FRONTDOOR_ROOT / "portal-src" / "review-surface-deferred.js"
 FRONTDOOR_BRAND_ROOT = PORTAL_HTML_PATH.parent / "web" / "secure-landing" / "public" / "brand"
@@ -119,6 +120,11 @@ def _portal_review_bundle_content() -> str:
 @lru_cache(maxsize=1)
 def _portal_review_source_content() -> str:
     return PORTAL_REVIEW_SURFACE_SOURCE_PATH.read_text(encoding="utf-8")
+
+
+@lru_cache(maxsize=1)
+def _portal_internal_state_source_content() -> str:
+    return PORTAL_INTERNAL_STATE_SOURCE_PATH.read_text(encoding="utf-8")
 
 
 @lru_cache(maxsize=1)
@@ -1164,10 +1170,8 @@ def test_portal_review_surface_exposes_warning_banner_and_provenance_contract() 
     assert "_renderArtifactProvenance(selected, null);" in render_body
     assert "_renderReviewStatusBanner(null, null);" in render_body
     assert "_renderArtifactProvenance(null, null);" in render_body
-    assert 'job.state === "partial"' in status_body
-    assert 'job.state === "failed"' in status_body
-    assert 'job.state === "canceled"' in status_body
-    assert 'job.state === "offline"' in status_body
+    for job_state in ("partial", "failed", "canceled", "offline"):
+        assert re.search(rf"job\.state === [\"']{job_state}[\"']", status_body)
     assert "job.reconnectBlocked" in status_body
     assert "Outputs ready for review" in status_body
     assert "Run canceled after partial output capture" in status_body
@@ -1251,15 +1255,30 @@ def test_portal_review_surface_supports_compare_summary_and_keyboard_selection()
     assert 'id="reviewCompareTitle"' in content
     assert 'id="reviewCompareDetail"' in content
     assert 'data-ui="review-compare-summary"' in content
-    assert "els.artifactThumbnailRail.setAttribute('role', 'listbox');" in render_body
-    assert "els.artifactThumbnailRail.setAttribute('aria-label', 'Artifact thumbnails');" in render_body
-    assert "button.setAttribute('role', 'option');" in render_body
-    assert "button.setAttribute('aria-selected', active ? 'true' : 'false');" in render_body
+    assert re.search(
+        r"els\.artifactThumbnailRail\.setAttribute\([\"']role[\"'],\s*[\"']listbox[\"']\);",
+        render_body,
+    )
+    assert re.search(
+        r"els\.artifactThumbnailRail\.setAttribute\([\"']aria-label[\"'],\s*[\"']Artifact thumbnails[\"']\);",
+        render_body,
+    )
+    assert re.search(r"button\.setAttribute\([\"']role[\"'],\s*[\"']option[\"']\);", render_body)
+    assert re.search(
+        r"button\.setAttribute\([\"']aria-selected[\"'],\s*active \? [\"']true[\"'] : [\"']false[\"']\);",
+        render_body,
+    )
     assert "button.tabIndex = active ? 0 : -1;" in render_body
     assert "_renderReviewCompareSummary(selectedArtifact, compareCandidate, compareEnabled);" in render_body
-    assert "els.artifactCompareBtn.setAttribute('aria-pressed', compareEnabled ? 'true' : 'false');" in render_body
-    assert "els.artifactCompareBtn.removeAttribute('aria-controls');" in render_body
-    assert "els.artifactCompareStage.setAttribute('aria-hidden', compareEnabled ? 'false' : 'true');" in render_body
+    assert re.search(
+        r"els\.artifactCompareBtn\.setAttribute\([\"']aria-pressed[\"'],\s*compareEnabled \? [\"']true[\"'] : [\"']false[\"']\);",
+        render_body,
+    )
+    assert re.search(r"els\.artifactCompareBtn\.removeAttribute\([\"']aria-controls[\"']\);", render_body)
+    assert re.search(
+        r"els\.artifactCompareStage\.setAttribute\([\"']aria-hidden[\"'],\s*compareEnabled \? [\"']false[\"'] : [\"']true[\"']\);",
+        render_body,
+    )
     assert "const compareCopy = _compareSurfaceCopy(primaryArtifact, compareArtifact, compareEnabled);" in compare_summary_body
     assert "No compare pair" in compare_copy_body
     assert "No paired comparison is available for the current artifact." in compare_copy_body
@@ -1376,7 +1395,7 @@ def test_portal_operate_surfaces_use_jobs_hydration_skeletons_before_empty_state
     )
     assert (
         "_toggleSurfaceSkeleton(els.artifactsShell, els.artifactShellContent, els.artifactSkeletonState, jobsLoading);"
-        in artifact_body
+        in review_body
     )
     assert "_renderDeferredReviewSurfaceFallback(jobsLoading);" in artifact_body
     assert "_setSurfaceEmptyState(" in review_body
@@ -1505,10 +1524,11 @@ def test_portal_console_routes_reuse_last_selected_job_across_operate_and_review
 
 def test_portal_console_context_ribbon_tracks_selected_job_and_review_state() -> None:
     content = _portal_bundle_content()
+    review_content = _portal_review_source_content()
     ribbon_body = _extract_js_function_body(content, "renderConsoleContextRibbon")
     apply_view_body = _extract_js_function_body(content, "applyConsoleViewLayout")
     inspector_body = _extract_js_function_body(content, "renderSelectedJobInspector")
-    artifact_body = _extract_js_function_body(content, "renderArtifactPanel")
+    artifact_body = _extract_js_function_body(review_content, "renderArtifactPanel")
     operate_branch_idx = ribbon_body.index("if (state.currentView === 'operate' || state.currentView === 'review') {")
     operate_return_idx = ribbon_body.index("        return;", operate_branch_idx)
     selected_idx = ribbon_body.index("const selected = state.jobs.find((job) => job.id === state.selectedJobId) || null;")
@@ -1803,13 +1823,14 @@ def test_portal_init_establishes_interactive_shell_before_bootstrap_settles() ->
 
 def test_portal_bootstrap_online_followup_state_is_tracked_until_auth_ready() -> None:
     content = _portal_bundle_content()
+    state_source = _portal_internal_state_source_content()
 
     assert "bootstrap: portalInternals.createPortalBootstrapState(Date.now())," in content
-    assert 'lastHealthEndpointPath: ""' in content
-    assert "pendingOnlineFollowup: false" in content
-    assert "onlineFollowupComplete: false" in content
-    assert "deadlineAt: 0" in content
-    assert 'lastOutcome: ""' in content
+    assert 'lastHealthEndpointPath: ""' in state_source
+    assert "pendingOnlineFollowup: false" in state_source
+    assert "onlineFollowupComplete: false" in state_source
+    assert "deadlineAt: 0" in state_source
+    assert 'lastOutcome: ""' in state_source
 
 
 def test_portal_bootstrap_retry_lifecycle_tracks_active_state_and_teardown() -> None:
@@ -1874,6 +1895,7 @@ def test_portal_reconstruction_runtime_summary_and_effective_config_surfaces_are
 
 def test_portal_preview_metadata_worker_modes_and_export_contract_are_wired() -> None:
     content = _portal_bundle_content()
+    state_source = _portal_internal_state_source_content()
     update_body = _extract_js_function_body(content, "updateUIFromState")
     bind_body = _extract_js_function_body(content, "bindInputs")
     metadata_body = _extract_js_function_body(content, "fetchConfigMetadata")
@@ -1881,8 +1903,8 @@ def test_portal_preview_metadata_worker_modes_and_export_contract_are_wired() ->
     reconcile_body = _extract_js_function_body(content, "_reconcilePreviewRepairedPaths")
     setter_body = _extract_js_function_body(content, "_setBuildSurfacePathFieldValue")
 
-    assert 'maxWorkersMode: "auto",' in content
-    assert 'maxGpuWorkersMode: "auto",' in content
+    assert 'maxWorkersMode: "auto",' in state_source
+    assert 'maxGpuWorkersMode: "auto",' in state_source
     assert 'id="maxWorkersMode"' in content
     assert 'id="maxGpuWorkersMode"' in content
     assert "function fetchConfigMetadata" in content
@@ -1941,15 +1963,15 @@ def test_portal_runtime_briefing_and_recovery_surfaces_stay_additive_and_selecto
         "action: 'Next action: open Build to prepare the next run or restore backend connectivity to recover recent history.'"
         in queue_empty_body
     )
-    assert (
-        "action: 'Next action: inspect the selected run in Operate or wait for indexed outputs before reopening review.'"
-        in artifact_empty_body
+    assert re.search(
+        r"action:\s*[\"\']Next action: inspect the selected run in Operate or wait for indexed outputs before reopening review\.[\"\']",
+        artifact_empty_body,
     )
-    assert (
-        "action: 'Next action: use the selected run state, warning context, and freshness above to decide whether to recover or open review.'"
-        in review_status_body
+    assert re.search(
+        r"action:\s*[\"\']Next action: use the selected run state, warning context, and freshness above to decide whether to recover or open review\.[\"\']",
+        review_status_body,
     )
-    assert "els.reviewStatusAction.textContent = snapshot.action;" in content
+    assert "els.reviewStatusAction.textContent = snapshot.action;" in review_content
     assert "els.selectedJobRecoveryTitle.textContent = recovery.title;" in inspector_body
     assert "els.selectedJobRecoveryDetail.textContent = recovery.detail;" in inspector_body
 
@@ -2483,11 +2505,11 @@ def test_argv_rejects_invalid_log_level() -> None:
 
 
 def test_portal_segmentation_defaults_align_with_cli_defaults() -> None:
-    content = _portal_bundle_content()
-    assert "enable: false," in content
-    assert 'backend: "stub",' in content
-    assert 'sam2ModelSize: "base",' in content
-    assert "strict: false" in content
+    state_source = _portal_internal_state_source_content()
+    assert "enable: false," in state_source
+    assert 'backend: "stub",' in state_source
+    assert 'sam2ModelSize: "base",' in state_source
+    assert "strict: false" in state_source
 
 
 def test_portal_surfaces_pre_run_diagnostics_and_expected_outputs() -> None:
@@ -2539,12 +2561,13 @@ def test_portal_operator_briefing_and_build_pulse_surfaces_are_present() -> None
 
 def test_portal_exposes_run_card_quick_actions() -> None:
     content = _portal_bundle_content()
+    review_content = _portal_review_source_content()
 
     assert 'id="runCardActions"' in content
     assert 'id="viewRunCardBtn"' in content
     assert 'id="copyRunCardPathBtn"' in content
     assert 'id="copyRunCardFingerprintBtn"' in content
-    assert "els.viewRunCardBtn.dataset.url = runCardUrl;" in content
+    assert "els.viewRunCardBtn.dataset.url = runCardUrl;" in review_content
     assert "sanitizeManagedAssetUrl(els.viewRunCardBtn.dataset.url)" in content
     assert "window.open(runCardUrl, '_blank', 'noopener,noreferrer');" in content
 
