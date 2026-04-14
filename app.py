@@ -32,6 +32,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.responses import Response, StreamingResponse
 
+from transformation_portal.determinism.trace import get_or_create_trace_context
 from transformation_portal.lux_depth_v3.run_card_contract import infer_run_card_version
 
 # ----------------------------
@@ -113,21 +114,41 @@ def _stable_rollout_bucket(key: str) -> int:
     return int(digest[:8], 16) % 100
 
 
-def _portal_artifact_viewer_modal_enabled(actor: Optional[Mapping[str, Any]] = None) -> bool:
-    rollout_percent = _env_rollout_percent("TP_PORTAL_ARTIFACT_VIEWER_MODAL_ROLLOUT_PERCENT", 0)
-    if rollout_percent <= 0:
-        return False
+def _portal_rollout_cohort_key(
+    actor: Optional[Mapping[str, Any]] = None,
+    *,
+    default: str = "direct-debug",
+) -> str:
     actor_mapping = actor if isinstance(actor, Mapping) else {}
-    cohort_key = (
+    return (
         str(
             actor_mapping.get("username")
             or actor_mapping.get("accessEmail")
             or actor_mapping.get("role")
-            or os.getenv("TP_PORTAL_DIRECT_DEBUG_COHORT_KEY", "direct-debug")
+            or os.getenv("TP_PORTAL_DIRECT_DEBUG_COHORT_KEY", default)
         )
         .strip()
         .lower()
     )
+
+
+def _portal_artifact_viewer_modal_enabled(actor: Optional[Mapping[str, Any]] = None) -> bool:
+    rollout_percent = _env_rollout_percent("TP_PORTAL_ARTIFACT_VIEWER_MODAL_ROLLOUT_PERCENT", 0)
+    if rollout_percent <= 0:
+        return False
+    cohort_key = _portal_rollout_cohort_key(actor)
+    if not cohort_key:
+        return False
+    return _stable_rollout_bucket(cohort_key) < rollout_percent
+
+
+def _portal_rum_enabled(actor: Optional[Mapping[str, Any]] = None) -> bool:
+    if not _env_bool("TP_PORTAL_RUM_ENABLED", False):
+        return False
+    rollout_percent = _env_rollout_percent("TP_PORTAL_RUM_ROLLOUT_PERCENT", 0)
+    if rollout_percent <= 0:
+        return False
+    cohort_key = _portal_rollout_cohort_key(actor)
     if not cohort_key:
         return False
     return _stable_rollout_bucket(cohort_key) < rollout_percent
@@ -987,6 +1008,25 @@ PORTAL_ALLOWED_EVENT_FIELDS = {
     "segmentation_backend",
     "strict_segmentation",
 }
+PORTAL_ALLOWED_RUM_EVENT_TYPES = {
+    "portal_shell_rendered",
+    "bootstrap_ready",
+    "first_view_interactive",
+    "core_web_vital",
+    "queue_request",
+    "sse_reconnect",
+}
+PORTAL_ALLOWED_RUM_ROUTES = {"/portal"}
+PORTAL_ALLOWED_RUM_VIEWS = {"overview", "build", "operate", "review"}
+PORTAL_ALLOWED_RUM_UNITS = {"ms", "score", "count"}
+PORTAL_ALLOWED_RUM_METRICS = {
+    "bootstrap_ready": {"duration"},
+    "core_web_vital": {"cls", "inp", "lcp"},
+    "first_view_interactive": {"duration"},
+    "portal_shell_rendered": {"duration"},
+    "queue_request": {"cancel", "submit"},
+    "sse_reconnect": set(),
+}
 PATH_SCOPE_INPUT = "input"
 PATH_SCOPE_OUTPUT = "output"
 PATH_SCOPE_ANY = "path"
@@ -1088,6 +1128,13 @@ try:
 except (OSError, RuntimeError, ValueError):
     LOGGER.warning("TP_PORTAL_EVENT_LOG_PATH ignored invalid path: %s", _portal_event_log_path_raw)
     PORTAL_EVENT_LOG_PATH = None
+
+_portal_rum_log_path_raw = os.getenv("TP_PORTAL_RUM_LOG_PATH", "").strip()
+try:
+    PORTAL_RUM_LOG_PATH = _normalize_root_path(_portal_rum_log_path_raw) if _portal_rum_log_path_raw else None
+except (OSError, RuntimeError, ValueError):
+    LOGGER.warning("TP_PORTAL_RUM_LOG_PATH ignored invalid path: %s", _portal_rum_log_path_raw)
+    PORTAL_RUM_LOG_PATH = None
 
 
 class JobPreflightError(RuntimeError):
@@ -3455,6 +3502,37 @@ def _portal_sanitize_metadata(metadata: Any) -> Dict[str, Any]:
     return sanitized
 
 
+def _portal_actor_from_request(request: Request) -> Dict[str, str]:
+    actor: Dict[str, str] = {}
+    username = str(request.headers.get("x-tp-actor") or "").strip().lower()
+    access_email = str(request.headers.get("x-tp-actor-email") or "").strip().lower()
+    role = str(request.headers.get("x-tp-actor-role") or "").strip().lower()
+    if username:
+        actor["username"] = username
+    if access_email:
+        actor["accessEmail"] = access_email
+    if role:
+        actor["role"] = role
+    return actor
+
+
+def _portal_rum_auth_mode(request: Request) -> str:
+    return "managed" if _portal_actor_from_request(request) else _auth_mode()
+
+
+def _portal_request_trace_context(request: Request):
+    existing = getattr(request.state, "trace_context", None)
+    if existing is not None:
+        return existing
+    header_value = str(request.headers.get("traceparent") or "").strip()
+    try:
+        trace_context = get_or_create_trace_context(header_value or None)
+    except ValueError:
+        trace_context = get_or_create_trace_context(None)
+    request.state.trace_context = trace_context
+    return trace_context
+
+
 def _record_portal_event(payload: Dict[str, Any]) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
     event_type = str(payload.get("event_type") or "").strip().lower()
     if event_type not in PORTAL_ALLOWED_EVENT_TYPES:
@@ -3509,6 +3587,56 @@ def _persist_portal_event_record(record: Dict[str, Any], log_path: Optional[Path
         )
 
 
+def _record_portal_rum(payload: Dict[str, Any], request: Request) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    event_type = str(payload.get("event_type") or "").strip().lower()
+    if event_type not in PORTAL_ALLOWED_RUM_EVENT_TYPES:
+        return None, "invalid_event_type"
+
+    route = str(payload.get("route") or "").strip()
+    if route not in PORTAL_ALLOWED_RUM_ROUTES:
+        return None, "invalid_route"
+
+    view = str(payload.get("view") or "").strip().lower()
+    if view not in PORTAL_ALLOWED_RUM_VIEWS:
+        return None, "invalid_view"
+
+    unit = str(payload.get("unit") or "").strip().lower()
+    if unit not in PORTAL_ALLOWED_RUM_UNITS:
+        return None, "invalid_unit"
+
+    value = payload.get("value")
+    if not isinstance(value, (int, float)) or isinstance(value, bool) or not math.isfinite(float(value)) or float(value) < 0:
+        return None, "invalid_value"
+
+    metric = str(payload.get("metric") or "").strip().lower()
+    allowed_metrics = PORTAL_ALLOWED_RUM_METRICS.get(event_type, set())
+    if allowed_metrics:
+        if metric not in allowed_metrics:
+            return None, "invalid_metric"
+    elif metric and not _portal_is_token(metric):
+        return None, "invalid_metric"
+
+    actor = _portal_actor_from_request(request)
+    cohort_key = _portal_rollout_cohort_key(actor)
+    trace_context = _portal_request_trace_context(request)
+    record = {
+        "schema": "tp.orchestrator.portal_rum.v1",
+        "timestamp": int(time.time()),
+        "event_type": event_type,
+        "route": route,
+        "view": view,
+        "metric": metric,
+        "value": round(float(value), 4),
+        "unit": unit,
+        "metadata": _portal_sanitize_metadata(payload.get("metadata")),
+        "trace_id": trace_context.trace_id,
+        "cohort_bucket": _stable_rollout_bucket(cohort_key),
+        "auth_mode": _portal_rum_auth_mode(request),
+    }
+    LOGGER.info("portal_rum %s", json.dumps(record, sort_keys=True))
+    return record, None
+
+
 def _is_mutating_job_endpoint(method: str, path: str) -> bool:
     if method != "POST":
         return False
@@ -3533,6 +3661,7 @@ def _is_protected_api_key_endpoint(path: str) -> bool:
         "/v1/config-metadata",
         "/v1/config-preview",
         "/v1/portal/events",
+        "/v1/portal/rum",
     }
 
 
@@ -5854,42 +5983,59 @@ async def security_layer(
     request: Request,
     call_next: Callable[[Request], Any],
 ) -> Response:
+    should_echo_traceparent = request.url.path == "/portal/bootstrap" or request.url.path.startswith("/v1/")
+    if should_echo_traceparent:
+        _portal_request_trace_context(request)
+
     maybe_error = _enforce_content_length_limit(request)
     if maybe_error is not None:
+        if should_echo_traceparent:
+            maybe_error.headers.setdefault("traceparent", request.state.trace_context.traceparent)
         return maybe_error
 
     _install_stream_body_limit(request)
 
     if _is_protected_api_key_endpoint(request.url.path) and _job_api_key_enforced():
         if not API_KEY_SECRET:
-            return _error_response(
+            response = _error_response(
                 503,
                 code="AUTH_CONFIGURATION_ERROR",
                 message=("protected endpoint authentication is" " enforced but TP_API_KEY is not" " configured"),
                 details={"path": request.url.path, "env": "TP_API_KEY"},
             )
+            if should_echo_traceparent:
+                response.headers.setdefault("traceparent", request.state.trace_context.traceparent)
+            return response
         if not _has_valid_api_key(request):
-            return _error_response(
+            response = _error_response(
                 401,
                 code="UNAUTHORIZED",
                 message="invalid or missing API key",
                 details={"path": request.url.path},
             )
+            if should_echo_traceparent:
+                response.headers.setdefault("traceparent", request.state.trace_context.traceparent)
+            return response
 
     client_ip = _extract_client_ip(request)
     if _is_rate_limited(client_ip, _now()):
-        return _error_response(
+        response = _error_response(
             429,
             code="RATE_LIMITED",
             message="rate limit exceeded",
             details={"client_ip": client_ip},
         )
+        if should_echo_traceparent:
+            response.headers.setdefault("traceparent", request.state.trace_context.traceparent)
+        return response
 
     response = await call_next(request)
     for name, value in SECURITY_HEADERS.items():
         response.headers.setdefault(name, value)
     if request.url.path.startswith("/v1/"):
         response.headers.setdefault("Cache-Control", "no-store")
+    if should_echo_traceparent:
+        response.headers.setdefault("traceparent", request.state.trace_context.traceparent)
     return response
 
 
@@ -5981,6 +6127,7 @@ async def portal_bootstrap() -> JSONResponse:
                 "apiKeyInput": True,
                 "directDebug": True,
                 "artifactViewerModal": _portal_artifact_viewer_modal_enabled(None),
+                "rumTelemetry": _portal_rum_enabled(None),
             },
         },
         headers={"Cache-Control": "no-store"},
@@ -6159,6 +6306,40 @@ async def portal_events(payload: Dict[str, Any]) -> JSONResponse:
     return JSONResponse(
         _api_envelope(
             "tp.orchestrator.portal_event.v1",
+            success=True,
+            data={"accepted": True, "event": record},
+            error=None,
+        )
+    )
+
+
+@app.post("/v1/portal/rum")
+async def portal_rum(request: Request, payload: Dict[str, Any]) -> JSONResponse:
+    if not _portal_rum_enabled(_portal_actor_from_request(request)):
+        return JSONResponse(
+            _api_envelope(
+                "tp.orchestrator.portal_rum_ingest.v1",
+                success=True,
+                data={"accepted": False, "disabled": True},
+                error=None,
+            )
+        )
+
+    record, reason = _record_portal_rum(payload, request)
+    if reason is not None:
+        return _error_response(
+            400,
+            code="INVALID_ARGUMENT",
+            message="invalid portal rum payload",
+            details={"field": "payload", "reason": reason},
+        )
+    assert record is not None
+    if PORTAL_RUM_LOG_PATH is not None:
+        await asyncio.to_thread(_persist_portal_event_record, record, PORTAL_RUM_LOG_PATH)
+
+    return JSONResponse(
+        _api_envelope(
+            "tp.orchestrator.portal_rum_ingest.v1",
             success=True,
             data={"accepted": True, "event": record},
             error=None,

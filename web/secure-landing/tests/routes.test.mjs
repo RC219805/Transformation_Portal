@@ -21,7 +21,9 @@ const ENV_KEYS = [
   "TP_CF_ACCESS_TEAM_DOMAIN",
   "TP_CF_ACCESS_AUD",
   "TP_ALLOW_LOCAL_ACCESS_BYPASS",
-  "TP_PORTAL_ARTIFACT_VIEWER_MODAL_ROLLOUT_PERCENT"
+  "TP_PORTAL_ARTIFACT_VIEWER_MODAL_ROLLOUT_PERCENT",
+  "TP_PORTAL_RUM_ENABLED",
+  "TP_PORTAL_RUM_ROLLOUT_PERCENT"
 ];
 
 const TEST_CF_ACCESS_TEAM_DOMAIN = "https://tp-frontdoor-tests.cloudflareaccess.com";
@@ -105,6 +107,18 @@ function withTempEnvironment(overrides = {}) {
       overrides.TP_PORTAL_ARTIFACT_VIEWER_MODAL_ROLLOUT_PERCENT;
   } else {
     delete process.env.TP_PORTAL_ARTIFACT_VIEWER_MODAL_ROLLOUT_PERCENT;
+  }
+
+  if (typeof overrides.TP_PORTAL_RUM_ENABLED === "string") {
+    process.env.TP_PORTAL_RUM_ENABLED = overrides.TP_PORTAL_RUM_ENABLED;
+  } else {
+    delete process.env.TP_PORTAL_RUM_ENABLED;
+  }
+
+  if (typeof overrides.TP_PORTAL_RUM_ROLLOUT_PERCENT === "string") {
+    process.env.TP_PORTAL_RUM_ROLLOUT_PERCENT = overrides.TP_PORTAL_RUM_ROLLOUT_PERCENT;
+  } else {
+    delete process.env.TP_PORTAL_RUM_ROLLOUT_PERCENT;
   }
 
   resetDbCache();
@@ -1313,6 +1327,7 @@ test("managed bootstrap returns actor metadata and CSRF for authenticated sessio
       assert.equal(body.features.apiKeyInput, false);
       assert.equal(body.features.directDebug, false);
       assert.equal(body.features.artifactViewerModal, false);
+      assert.equal(body.features.rumTelemetry, false);
       assert.equal(body.csrfToken, authenticatedSession.csrfToken);
     } finally {
       restoreFetch();
@@ -1352,6 +1367,89 @@ test("managed bootstrap enables the artifact viewer modal for rollout cohorts", 
 
     assert.equal(response.status, 200);
     assert.equal(body.features.artifactViewerModal, true);
+  } finally {
+    env.cleanup();
+  }
+});
+
+test("managed bootstrap enables rum telemetry for rollout cohorts", async () => {
+  const env = withTempEnvironment({
+    TP_PORTAL_RUM_ENABLED: "1",
+    TP_PORTAL_RUM_ROLLOUT_PERCENT: "100"
+  });
+
+  try {
+    const sessions = await importFresh("../lib/sessions.js");
+    const { GET } = await importFresh("../app/portal/bootstrap/route.js");
+    const authenticatedSession = sessions.rotateAuthenticatedSession(
+      sessions.createAnonymousSession(),
+      {
+        username: "admin",
+        accessEmail: "admin@example.com",
+        role: "admin"
+      }
+    );
+
+    const request = buildRequest("https://portal.example.com/portal/bootstrap", {
+      method: "GET",
+      headers: new Headers({
+        cookie: `__Host-tp_session=${authenticatedSession.id}`,
+        "Cf-Access-Jwt-Assertion": createAccessJwt()
+      })
+    });
+
+    const response = await GET(request);
+    const body = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(body.features.rumTelemetry, true);
+  } finally {
+    env.cleanup();
+  }
+});
+
+test("managed bootstrap echoes traceparent and includes trace id in audit payloads", async () => {
+  const env = withTempEnvironment();
+  const traceparent = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01";
+
+  try {
+    const sessions = await importFresh("../lib/sessions.js");
+    const { GET } = await importFresh("../app/portal/bootstrap/route.js");
+    const restoreFetch = withMockedAccessCerts();
+
+    try {
+      const authenticatedSession = sessions.rotateAuthenticatedSession(
+        sessions.createAnonymousSession(),
+        {
+          username: "admin",
+          accessEmail: "admin@example.com",
+          role: "admin"
+        }
+      );
+
+      await withCapturedAuditEvents(async (events) => {
+        const request = buildRequest("https://portal.example.com/portal/bootstrap", {
+          method: "GET",
+          headers: new Headers({
+            cookie: `__Host-tp_session=${authenticatedSession.id}`,
+            traceparent,
+            "Cf-Access-Jwt-Assertion": createAccessJwt()
+          })
+        });
+
+        const response = await GET(request);
+        const body = await response.json();
+
+        assert.equal(response.status, 200);
+        assert.equal(response.headers.get("traceparent"), traceparent);
+        assert.equal(body.features.rumTelemetry, false);
+        assert.equal(events.length, 1);
+        assert.equal(events[0].event, "portal_bootstrap");
+        assert.equal(events[0].traceId, "4bf92f3577b34da6a3ce929d0e0e4736");
+      });
+    } finally {
+      restoreFetch();
+    }
   } finally {
     env.cleanup();
   }
@@ -2378,10 +2476,84 @@ test("v1 normalizes upstream auth responses into managed config failures", async
   }
 });
 
+test("v1 forwards browser traceparent upstream and includes trace id in queue-action audits", async () => {
+  const env = withTempEnvironment({
+    TP_BACKEND_API_KEY: "backend-secret"
+  });
+  const traceparent = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01";
+
+  try {
+    const sessions = await importFresh("../lib/sessions.js");
+    const route = await importFresh("../app/v1/[...path]/route.js");
+
+    const authenticatedSession = sessions.rotateAuthenticatedSession(
+      sessions.createAnonymousSession(),
+      {
+        username: "admin",
+        accessEmail: "admin@example.com",
+        role: "admin"
+      }
+    );
+
+    const restoreFetch = withMockedAccessCerts(async (url, init) => {
+      assert.equal(String(url), "http://127.0.0.1:8000/v1/jobs");
+      assert.equal(init.method, "POST");
+      assert.equal(init.headers.get("traceparent"), traceparent);
+      return Response.json(
+        {
+          ok: true
+        },
+        {
+          status: 200,
+          headers: {
+            traceparent
+          }
+        }
+      );
+    });
+
+    try {
+      await withCapturedAuditEvents(async (events) => {
+        const request = buildRequest("https://portal.example.com/v1/jobs", {
+          method: "POST",
+          headers: new Headers({
+            cookie: `__Host-tp_session=${authenticatedSession.id}`,
+            traceparent,
+            origin: "https://portal.example.com",
+            referer: "https://portal.example.com/portal?view=build",
+            "x-csrf-token": authenticatedSession.csrfToken,
+            "content-type": "application/json",
+            "Cf-Access-Jwt-Assertion": createAccessJwt()
+          }),
+          body: JSON.stringify({ pipeline: "lux-depth-v3" })
+        });
+
+        const response = await route.POST(request, {
+          params: { path: ["jobs"] }
+        });
+        const body = await response.json();
+
+        assert.equal(response.status, 200);
+        assert.equal(response.headers.get("traceparent"), traceparent);
+        assert.deepEqual(body, { ok: true });
+        assert.equal(events.length, 1);
+        assert.equal(events[0].event, "job_submit");
+        assert.equal(events[0].traceId, "4bf92f3577b34da6a3ce929d0e0e4736");
+      });
+    } finally {
+      restoreFetch();
+    }
+  } finally {
+    env.cleanup();
+  }
+});
+
 test("v1 SSE proxy preserves event-stream framing while injecting backend auth server-side", async () => {
   const env = withTempEnvironment({
     TP_BACKEND_API_KEY: "backend-secret"
   });
+  const requestTraceparent = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01";
+  const upstreamTraceparent = "00-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-bbbbbbbbbbbbbbbb-01";
 
   try {
     const sessions = await importFresh("../lib/sessions.js");
@@ -2408,6 +2580,7 @@ test("v1 SSE proxy preserves event-stream framing while injecting backend auth s
       assert.equal(init.headers.get("Authorization"), "Bearer backend-secret");
       assert.equal(init.headers.get("Forwarded"), 'for="203.0.113.10";host="portal.example.com";proto="https"');
       assert.equal(init.headers.get("x-api-key"), "backend-secret");
+      assert.equal(init.headers.get("traceparent"), requestTraceparent);
       assert.equal(init.headers.get("Accept-Encoding"), "identity");
       assert.equal(init.headers.has("cookie"), false);
       assert.equal(init.headers.has("x-csrf-token"), false);
@@ -2420,7 +2593,8 @@ test("v1 SSE proxy preserves event-stream framing while injecting backend auth s
         status: 200,
         headers: {
           "content-type": "text/event-stream; charset=utf-8",
-          "cache-control": "private"
+          "cache-control": "private",
+          traceparent: upstreamTraceparent
         }
       });
     });
@@ -2432,6 +2606,7 @@ test("v1 SSE proxy preserves event-stream framing while injecting backend auth s
           "cf-connecting-ip": "203.0.113.10",
           cookie: `__Host-tp_session=${authenticatedSession.id}`,
           accept: "text/event-stream",
+          traceparent: requestTraceparent,
           "Cf-Access-Jwt-Assertion": createAccessJwt()
         })
       });
@@ -2443,6 +2618,7 @@ test("v1 SSE proxy preserves event-stream framing while injecting backend auth s
       assert.equal(response.status, 200);
       assert.match(response.headers.get("content-type") || "", /text\/event-stream/);
       assert.equal(response.headers.get("cache-control"), "no-store, no-transform");
+      assert.equal(response.headers.get("traceparent"), upstreamTraceparent);
       assert.equal(await response.text(), upstreamEvents);
     } finally {
       restoreFetch();

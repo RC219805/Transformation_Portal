@@ -118,6 +118,7 @@ def test_portal_bootstrap_reports_direct_debug_mode(client: TestClient) -> None:
     assert body["features"]["apiKeyInput"] is True
     assert body["features"]["directDebug"] is True
     assert body["features"]["artifactViewerModal"] is False
+    assert body["features"]["rumTelemetry"] is False
 
 
 def test_portal_bootstrap_exposes_artifact_viewer_rollout_flag_when_enabled(
@@ -131,6 +132,36 @@ def test_portal_bootstrap_exposes_artifact_viewer_rollout_flag_when_enabled(
 
     assert response.status_code == 200
     assert response.json()["features"]["artifactViewerModal"] is True
+
+
+def test_portal_bootstrap_exposes_rum_rollout_flag_when_enabled(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("TP_PORTAL_RUM_ENABLED", "1")
+    monkeypatch.setenv("TP_PORTAL_RUM_ROLLOUT_PERCENT", "100")
+    monkeypatch.setenv("TP_PORTAL_DIRECT_DEBUG_COHORT_KEY", "contract-smoke")
+
+    response = client.get("/portal/bootstrap")
+
+    assert response.status_code == 200
+    assert response.json()["features"]["rumTelemetry"] is True
+
+
+def test_portal_bootstrap_and_v1_echo_traceparent_header(client: TestClient) -> None:
+    traceparent = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
+
+    bootstrap_response = client.get("/portal/bootstrap", headers={"traceparent": traceparent})
+    metadata_response = client.get(
+        "/v1/config-metadata",
+        headers={"traceparent": traceparent},
+        params={"pipeline": "lux-depth-v3"},
+    )
+
+    assert bootstrap_response.status_code == 200
+    assert bootstrap_response.headers["traceparent"] == traceparent
+    assert metadata_response.status_code == 200
+    assert metadata_response.headers["traceparent"] == traceparent
 
 
 def test_root_ui_response_is_not_cached(client: TestClient) -> None:
@@ -893,6 +924,135 @@ def test_portal_events_contract_skips_thread_offload_when_log_sink_is_unset(
     assert body["success"] is True
 
 
+def test_portal_rum_contract_noops_cleanly_when_disabled(
+    client: TestClient,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    rum_log_path = tmp_path / "portal-rum-disabled.jsonl"
+    monkeypatch.setattr(orchestrator_app, "PORTAL_RUM_LOG_PATH", rum_log_path)
+    traceparent = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
+
+    response = client.post(
+        "/v1/portal/rum",
+        headers={"traceparent": traceparent},
+        json={
+            "event_type": "not-a-real-event",
+            "route": "/not-portal",
+            "view": "invalid",
+            "value": "boom",
+            "unit": "bad",
+        },
+    )
+    body = response.json()
+
+    assert response.status_code == 200
+    assert response.headers["traceparent"] == traceparent
+    assert body["schema"] == "tp.orchestrator.portal_rum_ingest.v1"
+    assert body["success"] is True
+    assert body["error"] is None
+    assert body["data"] == {"accepted": False, "disabled": True}
+    assert rum_log_path.exists() is False
+
+
+def test_portal_rum_contract_sanitizes_metadata_and_writes_optional_log(
+    client: TestClient,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    rum_log_path = tmp_path / "portal-rum.jsonl"
+    monkeypatch.setenv("TP_PORTAL_RUM_ENABLED", "1")
+    monkeypatch.setenv("TP_PORTAL_RUM_ROLLOUT_PERCENT", "100")
+    monkeypatch.setattr(orchestrator_app, "PORTAL_RUM_LOG_PATH", rum_log_path)
+    traceparent = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
+
+    response = client.post(
+        "/v1/portal/rum",
+        headers={
+            "traceparent": traceparent,
+            "x-tp-actor": "admin",
+            "x-tp-actor-email": "admin@example.com",
+            "x-tp-actor-role": "admin",
+        },
+        json={
+            "event_type": "queue_request",
+            "route": "/portal",
+            "view": "build",
+            "metric": "submit",
+            "value": 183.42,
+            "unit": "ms",
+            "metadata": {
+                "transport": "fetch",
+                "job_id": "job_1234abcd",
+                "attempt": 2,
+                "email": "admin@example.com",
+                "path": "/private/tmp/should-not-pass",
+            },
+        },
+    )
+    body = response.json()
+
+    assert response.status_code == 200
+    assert response.headers["traceparent"] == traceparent
+    assert body["schema"] == "tp.orchestrator.portal_rum_ingest.v1"
+    assert body["success"] is True
+    assert body["error"] is None
+    event = body["data"]["event"]
+    assert body["data"]["accepted"] is True
+    assert event["event_type"] == "queue_request"
+    assert event["route"] == "/portal"
+    assert event["view"] == "build"
+    assert event["metric"] == "submit"
+    assert event["value"] == 183.42
+    assert event["unit"] == "ms"
+    assert event["metadata"] == {"attempt": 2, "job_id": "job_1234abcd", "transport": "fetch"}
+    assert event["trace_id"] == "4bf92f3577b34da6a3ce929d0e0e4736"
+    assert event["cohort_bucket"] == orchestrator_app._stable_rollout_bucket("admin")
+    assert event["auth_mode"] == "managed"
+    assert "username" not in event
+    assert "accessEmail" not in event
+    persisted = json.loads(rum_log_path.read_text(encoding="utf-8").strip())
+    assert persisted == event
+    assert "admin@example.com" not in rum_log_path.read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize(
+    ("payload_overrides", "reason"),
+    [
+        ({"event_type": "not-a-real-event"}, "invalid_event_type"),
+        ({"route": "/ready"}, "invalid_route"),
+        ({"view": "invalid"}, "invalid_view"),
+        ({"unit": "seconds"}, "invalid_unit"),
+        ({"value": -1}, "invalid_value"),
+        ({"metric": "restart"}, "invalid_metric"),
+    ],
+)
+def test_portal_rum_invalid_payload_returns_sanitized_reason(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    payload_overrides: Dict[str, Any],
+    reason: str,
+) -> None:
+    monkeypatch.setenv("TP_PORTAL_RUM_ENABLED", "1")
+    monkeypatch.setenv("TP_PORTAL_RUM_ROLLOUT_PERCENT", "100")
+    payload = {
+        "event_type": "queue_request",
+        "route": "/portal",
+        "view": "build",
+        "metric": "submit",
+        "value": 183.42,
+        "unit": "ms",
+    }
+    payload.update(payload_overrides)
+
+    response = client.post("/v1/portal/rum", json=payload)
+    body = response.json()
+
+    assert response.status_code == 400
+    assert body["error"]["message"] == "invalid portal rum payload"
+    assert body["error"]["details"] == {"field": "payload", "reason": reason}
+
+
 def test_readiness_contract_reports_pipeline_status_matrix(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -1531,6 +1691,21 @@ def test_config_preview_and_portal_event_routes_enforce_api_key(client: TestClie
     assert telemetry_unauthorized.status_code == 401
     assert telemetry_unauthorized.json()["error"]["code"] == "UNAUTHORIZED"
 
+    rum_unauthorized = client.post(
+        "/v1/portal/rum",
+        headers={"x-api-key": "wrong"},
+        json={
+            "event_type": "queue_request",
+            "route": "/portal",
+            "view": "build",
+            "metric": "submit",
+            "value": 183.42,
+            "unit": "ms",
+        },
+    )
+    assert rum_unauthorized.status_code == 401
+    assert rum_unauthorized.json()["error"]["code"] == "UNAUTHORIZED"
+
 
 def test_slash_redirect_variants_of_protected_preview_routes_enforce_api_key_before_redirect(
     client: TestClient,
@@ -1578,6 +1753,22 @@ def test_slash_redirect_variants_of_protected_preview_routes_enforce_api_key_bef
     )
     assert telemetry_unauthorized.status_code == 401
     assert telemetry_unauthorized.json()["error"]["code"] == "UNAUTHORIZED"
+
+    rum_unauthorized = client.post(
+        "/v1/portal/rum/",
+        headers={"x-api-key": "wrong"},
+        follow_redirects=False,
+        json={
+            "event_type": "queue_request",
+            "route": "/portal",
+            "view": "build",
+            "metric": "submit",
+            "value": 183.42,
+            "unit": "ms",
+        },
+    )
+    assert rum_unauthorized.status_code == 401
+    assert rum_unauthorized.json()["error"]["code"] == "UNAUTHORIZED"
 
 
 def test_v1_routes_fail_closed_when_auth_enforced_without_secret(client: TestClient) -> None:

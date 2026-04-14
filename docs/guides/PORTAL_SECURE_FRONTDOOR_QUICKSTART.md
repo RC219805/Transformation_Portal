@@ -63,6 +63,24 @@ export TP_API_KEY="replace-with-strong-backend-token"
 export TP_BACKEND_API_KEY="$TP_API_KEY"
 ```
 
+## Optional RUM Pilot Knobs
+
+M1 measurement is additive, default-off, and protected by both a hard enable flag
+and a deterministic rollout percentage.
+
+```bash
+export TP_PORTAL_RUM_ENABLED=0
+export TP_PORTAL_RUM_ROLLOUT_PERCENT=0
+export TP_PORTAL_RUM_LOG_PATH="/absolute/path/to/portal-rum.jsonl"
+```
+
+Notes:
+- `TP_PORTAL_RUM_ENABLED=0` keeps `/v1/portal/rum` in success/no-op mode and keeps `features.rumTelemetry=false` on both bootstrap surfaces.
+- `TP_PORTAL_RUM_ROLLOUT_PERCENT=0` keeps collection disabled even when the hard flag is on.
+- `TP_PORTAL_RUM_LOG_PATH` is optional. When set, FastAPI appends PII-free JSONL records for the pilot summary CLI.
+- Direct-debug rollout stability reuses `TP_PORTAL_DIRECT_DEBUG_COHORT_KEY`.
+- Managed rollout stability uses the authenticated actor identity already present on the front door; raw usernames and emails are not stored in the RUM sink.
+
 ## Local Development
 
 Start the FastAPI origin first:
@@ -145,6 +163,10 @@ The operator UI now supports two modes:
 
 FastAPI now exposes `GET /portal/bootstrap` for standalone `direct_debug` startup. The front door exposes its own `GET /portal/bootstrap` for managed mode.
 
+Managed bootstrap and managed `/v1/*` responses now echo `traceparent`. The
+front door forwards a browser-supplied `traceparent` upstream unchanged, and
+FastAPI mints one when the browser does not supply a valid value.
+
 ## Cloudflare Production Notes
 
 - Put the front door behind Cloudflare Tunnel + Access.
@@ -202,6 +224,22 @@ nvm use 22
 cd ../..
 make test-frontdoor-contract
 ```
+
+Portal contract checks:
+
+```bash
+make test-portal-contract
+```
+
+When `TP_PORTAL_RUM_LOG_PATH` is configured and the pilot has collected samples,
+summarize the JSONL sink with:
+
+```bash
+python tools/portal_rum_summary.py --input /absolute/path/to/portal-rum.jsonl
+```
+
+The summary groups by auth mode, route, view, and cohort bucket, then prints p75
+LCP/INP/CLS, bootstrap timings, queue request timings, and SSE reconnect counts.
 
 Manual shared-deployment posture gate:
 

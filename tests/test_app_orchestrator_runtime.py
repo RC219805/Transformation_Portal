@@ -569,8 +569,65 @@ def test_portal_bundle_embeds_internal_modules_without_changing_public_contracts
     assert "config: portalInternals.createPortalConfigState()," in content
     assert "auth: portalInternals.createPortalAuthState()," in content
     assert "bootstrap: portalInternals.createPortalBootstrapState(Date.now())," in content
+    assert "rum: portalInternals.createPortalRumState()" in content
     assert "portalDom.assertPresent(els, [" in content
     assert "portalRenderSurfaces.register('jobQueue'" in content
+
+
+def test_portal_rum_wires_native_observers_and_keepalive_posts() -> None:
+    content = _portal_bundle_content()
+    observer_body = _extract_js_function_body(content, "_startPortalRumObservers")
+    flush_body = _extract_js_function_block(content, "_flushQueuedPortalRumSamples")
+    finalize_body = _extract_js_function_body(content, "_finalizePortalRumVitals")
+
+    assert "if (state.rum.observersStarted || typeof window.PerformanceObserver !== 'function') return;" in observer_body
+    assert "new PerformanceObserver" in observer_body
+    assert "type: 'largest-contentful-paint'" in observer_body
+    assert "type: 'layout-shift'" in observer_body
+    assert "type: 'event'" in observer_body
+    assert "durationThreshold: 16" in observer_body
+    assert "fetch(`${API_BASE}/v1/portal/rum`" in flush_body
+    assert "keepalive: keepalive || sample.keepalive" in flush_body
+    assert "traceparent: sample.traceparent" in flush_body
+    assert "eventType: 'core_web_vital'" in finalize_body
+    assert "metric: 'lcp'" in finalize_body
+    assert "metric: 'inp'" in finalize_body
+    assert "metric: 'cls'" in finalize_body
+
+
+def test_portal_rum_emits_once_per_page_load_and_keys_samples_by_route_view() -> None:
+    content = _portal_bundle_content()
+    base_payload_body = _extract_js_function_block(content, "_portalRumBasePayload")
+    record_body = _extract_js_function_block(content, "_recordPortalRumMilestone")
+    first_view_body = _extract_js_function_body(content, "_scheduleFirstViewInteractiveRum")
+
+    assert "route: '/portal'" in base_payload_body
+    assert "view: portalInternals.normalizePortalRumView(sampleOptions.view || state.currentView)" in base_payload_body
+    assert "if (state.rum.emittedMilestones[eventType]) return;" in record_body
+    assert "state.rum.emittedMilestones[eventType] = true;" in record_body
+    assert "_queuePortalRumSample({" in record_body
+    assert "metric: 'duration'" in record_body
+    assert "window.requestAnimationFrame(emit);" in first_view_body
+    assert "window.setTimeout(emit, 0);" in first_view_body
+    assert "_recordPortalRumMilestone('first_view_interactive', _portalRumNow()," in first_view_body
+    assert "_recordPortalRumMilestone('portal_shell_rendered', _portalRumNow()," in content
+    assert "_recordPortalRumMilestone('bootstrap_ready', _portalRumNow()," in content
+    assert "_recordPortalRumMilestone('first_view_interactive', _portalRumNow()," in content
+
+
+def test_portal_rum_tracks_queue_actions_and_sse_reconnects() -> None:
+    content = _portal_bundle_content()
+    submit_body = _extract_js_function_body(content, "submitJob")
+    cancel_body = _extract_js_function_body(content, "cancelJob")
+    fetch_sse_body = _extract_js_function_body(content, "_startAuthorizedFetchSse")
+    native_sse_body = _extract_js_function_body(content, "startJobEventStream")
+
+    assert "eventType: 'queue_request'" in submit_body
+    assert "metric: 'submit'" in submit_body
+    assert "eventType: 'queue_request'" in cancel_body
+    assert "metric: 'cancel'" in cancel_body
+    assert "eventType: 'sse_reconnect'" in fetch_sse_body
+    assert "eventType: 'sse_reconnect'" in native_sse_body
 
 
 def test_portal_fetch_sse_reconnect_schedules_on_unexpected_disconnect_only() -> None:
@@ -684,6 +741,7 @@ def test_portal_bootstrap_loader_uses_abortable_timeout_and_state_contract() -> 
     assert "apiKeyInput: false" in default_body
     assert "directDebug: false" in default_body
     assert "artifactViewerModal: false" in default_body
+    assert "rumTelemetry: false" in default_body
     assert "const BOOTSTRAP_TIMEOUT_MS = 3500;" in content
     assert "const BOOTSTRAP_RETRY_BASE_DELAY_MS = 1000;" in content
     assert "const BOOTSTRAP_RETRY_MAX_DELAY_MS = 12000;" in content
@@ -716,8 +774,10 @@ def test_portal_bootstrap_loader_uses_abortable_timeout_and_state_contract() -> 
     assert "const retryScheduled = failure.retryable && _scheduleBootstrapRetry(failure.reason, 0);" in body
     assert "_finalizeBootstrapRetry('terminal_invalid_json', { reason: 'invalid_json' });" in body
     assert "_finalizeBootstrapRetry('succeeded', {" in body
-    assert "_applyPortalBootstrap(payload, { status: 'ready' });" in body
+    assert "_applyPortalBootstrap(payload, { status: 'ready', traceparent: bootstrapTraceparent });" in body
     assert "artifactViewerModal: Boolean(bootstrap.features?.artifactViewerModal)" in content
+    assert "rumTelemetry: Boolean(bootstrap.features?.rumTelemetry)" in content
+    assert "res.headers.get('traceparent')" in body
     assert "previousHealthEndpointPath !== nextHealthEndpointPath" in body
     assert "_queueBootstrapOnlineFollowup();" in body
     assert "_flushBootstrapOnlineFollowup();" in body
@@ -808,7 +868,8 @@ def test_portal_managed_mode_uses_csrf_instead_of_browser_backend_secrets() -> N
     auth_headers_block = _extract_js_function_block(content, "_buildAuthHeaders")
 
     assert "if (_isManagedAuthMode()) return '';" in current_token_body
-    assert "function _buildAuthHeaders(base = {}, method = 'GET') {" in auth_headers_block
+    assert "function _buildAuthHeaders(base = {}, method = 'GET', options = null) {" in auth_headers_block
+    assert "headers.traceparent = traceparent;" in auth_headers_block
     assert "if (_isManagedAuthMode()) {" in auth_headers_block
     assert "headers['X-CSRF-Token'] = state.auth.csrfToken;" in auth_headers_block
     assert "headers['Authorization'] = `Bearer ${token}`;" in auth_headers_block
@@ -836,7 +897,7 @@ def test_portal_auth_helpers_fail_closed_until_bootstrap_ready() -> None:
     assert "if (!_isBootstrapReady()) {" in load_body
     assert "_clearStoredApiKeyState(false);" in load_body
     assert "if (!_isBootstrapReady()) return '';" in current_token_body
-    assert "function _buildAuthHeaders(base = {}, method = 'GET') {" in content
+    assert "function _buildAuthHeaders(base = {}, method = 'GET', options = null) {" in content
     assert "if (!_isBootstrapReady()) {" in content
     assert "return headers;" in content
 
@@ -3181,6 +3242,7 @@ def test_protected_api_key_route_detection() -> None:
     assert orchestrator_app._is_protected_api_key_endpoint("/v1/config-metadata") is True
     assert orchestrator_app._is_protected_api_key_endpoint("/v1/config-preview") is True
     assert orchestrator_app._is_protected_api_key_endpoint("/v1/portal/events") is True
+    assert orchestrator_app._is_protected_api_key_endpoint("/v1/portal/rum") is True
     assert orchestrator_app._is_protected_api_key_endpoint("/ready") is False
 
 

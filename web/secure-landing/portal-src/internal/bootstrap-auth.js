@@ -6,7 +6,8 @@ export function defaultPortalBootstrapPayload() {
     features: {
       apiKeyInput: false,
       directDebug: false,
-      artifactViewerModal: false
+      artifactViewerModal: false,
+      rumTelemetry: false
     }
   };
 }
