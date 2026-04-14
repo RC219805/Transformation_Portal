@@ -13,6 +13,7 @@ These tests verify:
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 import pytest
@@ -191,6 +192,25 @@ class TestMakeOutputKey:
         key2 = make_output_key(input_path, input_root)
 
         assert key1 == key2
+
+    def test_symlinked_input_root_preserves_relative_structure(self, tmp_path, caplog):
+        """Symlinked input roots should not collapse to flat naming."""
+        from transformation_portal.lux_depth_v3.artifact_manager import make_output_key
+
+        actual_root = tmp_path / "actual_inputs"
+        image_path = actual_root / "scene1" / "image.jpg"
+        image_path.parent.mkdir(parents=True)
+        image_path.touch()
+
+        alias_root = tmp_path / "alias_inputs"
+        alias_root.symlink_to(actual_root, target_is_directory=True)
+        alias_image = alias_root / "scene1" / "image.jpg"
+
+        with caplog.at_level(logging.WARNING):
+            key = make_output_key(alias_image, alias_root)
+
+        assert str(key).startswith("scene1/")
+        assert "using flat naming" not in caplog.text
 
 
 class TestBuildArtifactIndex:

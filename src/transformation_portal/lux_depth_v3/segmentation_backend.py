@@ -102,12 +102,71 @@ except ImportError:
 try:
     from transformation_portal.spatial_ai.segmentation.contracts import SegmentationInput as SpatialSegmentationInput
     from transformation_portal.spatial_ai.segmentation.sam2_backend import SAM2Backend as SpatialSAM2Backend
+    from transformation_portal.spatial_ai.segmentation.tiling.config import GlobalPassConfig, SegmentationTilingConfig
 
     SPATIAL_SAM2_AVAILABLE = True
 except ImportError:
     SPATIAL_SAM2_AVAILABLE = False
+    GlobalPassConfig = None  # type: ignore
     SpatialSAM2Backend = None  # type: ignore
     SpatialSegmentationInput = None  # type: ignore
+    SegmentationTilingConfig = None  # type: ignore
+
+
+SAM2_AUTO_TILING_MAX_AREA_PX = 8_000_000
+SAM2_AUTO_TILING_MAX_DIM_PX = 4096
+
+
+def _build_sam2_generator_kwargs(
+    *,
+    points_per_side: int,
+    points_per_batch: int,
+    pred_iou_thresh: float,
+    stability_score_thresh: float,
+    crop_n_layers: int,
+) -> Dict[str, Any]:
+    return {
+        "points_per_side": int(points_per_side),
+        "points_per_batch": int(points_per_batch),
+        "pred_iou_thresh": float(pred_iou_thresh),
+        "stability_score_thresh": float(stability_score_thresh),
+        "crop_n_layers": int(crop_n_layers),
+    }
+
+
+def _build_sam2_tiling_config(
+    *,
+    enabled: bool,
+    tile_size_px: int,
+    overlap_px: int,
+    global_pass_longest_side: int,
+    max_concurrency: int,
+) -> Any:
+    if SegmentationTilingConfig is None:
+        return None
+    return SegmentationTilingConfig(
+        enabled=bool(enabled),
+        tile_size_px=int(tile_size_px),
+        overlap_px=int(overlap_px),
+        global_pass=GlobalPassConfig(longest_side=int(global_pass_longest_side)),
+        max_concurrency=int(max_concurrency),
+    )
+
+
+def _serialize_sam2_tiling_config(tiling: Any) -> Optional[Dict[str, Any]]:
+    if tiling is None:
+        return None
+    return {
+        "enabled": bool(getattr(tiling, "enabled", False)),
+        "policy": getattr(tiling, "policy", None),
+        "tile_size_px": getattr(tiling, "tile_size_px", None),
+        "overlap_px": getattr(tiling, "overlap_px", None),
+        "global_pass": {
+            "enabled": bool(getattr(getattr(tiling, "global_pass", None), "enabled", False)),
+            "longest_side": getattr(getattr(tiling, "global_pass", None), "longest_side", None),
+        },
+        "max_concurrency": getattr(tiling, "max_concurrency", None),
+    }
 
 
 # =============================================================================
@@ -377,14 +436,16 @@ class EfficientSAMBackend:
             logger.error(f"Failed to load EfficientSAM backend: {e}")
             raise RuntimeError(f"EfficientSAM backend loading failed: {e}") from e
 
-    def segment(self, image: np.ndarray) -> Dict[str, np.ndarray]:
+    def segment(self, image: np.ndarray) -> Dict[str, Tuple[np.ndarray, float]]:
         """Run material segmentation on an image.
 
         Args:
             image: Input RGB image (H, W, 3), uint8 [0-255]
 
         Returns:
-            Dict mapping material names to binary masks (H, W), float32 [0.0-1.0]
+            Dict mapping material names to ``(mask, confidence)`` tuples:
+            - mask: Binary mask (H, W), float32 [0.0-1.0]
+            - confidence: Material confidence score [0.0-1.0]
             V2: Real EfficientSAM + CLIP classification (if dependencies available)
             V1: Heuristic-based segmentation (fallback)
 
@@ -704,7 +765,7 @@ class EfficientSAMBackend:
 
                 # Initialize material masks with tracking for confidence scores
                 h, w = image.shape[:2]
-                material_data = {
+                material_data: Dict[str, Dict[str, Any]] = {
                     name: {"mask": np.zeros((h, w), dtype=np.float32), "scores": [], "areas": []} for name in material_prompts
                 }
 
@@ -758,7 +819,7 @@ class EfficientSAMBackend:
                         )
 
                 # Compute aggregate confidence per material (area-weighted average)
-                material_masks = {}
+                material_masks: Dict[str, Tuple[np.ndarray, float]] = {}
                 for name, data in material_data.items():
                     mask = data["mask"]
                     scores = data["scores"]
@@ -961,6 +1022,16 @@ class SAM2SegmentationBackend(EfficientSAMBackend):
         checkpoint_path: Optional[str] = None,
         enable_material_classification: bool = False,
         material_confidence_threshold: float = 0.3,
+        tiling_enabled: bool = False,
+        tile_size_px: int = 1536,
+        overlap_px: int = 256,
+        global_pass_longest_side: int = 1280,
+        max_concurrency: int = 1,
+        points_per_side: int = 32,
+        points_per_batch: int = 64,
+        pred_iou_thresh: float = 0.88,
+        stability_score_thresh: float = 0.85,
+        crop_n_layers: int = 1,
         sky_top_region_fraction: float = 0.5,
         sky_gradient_threshold: float = 0.05,
         sky_brightness_threshold: float = 0.4,
@@ -974,6 +1045,21 @@ class SAM2SegmentationBackend(EfficientSAMBackend):
         self._checkpoint_path = checkpoint_path
         self._enable_material_classification = enable_material_classification
         self._material_confidence_threshold = material_confidence_threshold
+        self._generator_kwargs = _build_sam2_generator_kwargs(
+            points_per_side=points_per_side,
+            points_per_batch=points_per_batch,
+            pred_iou_thresh=pred_iou_thresh,
+            stability_score_thresh=stability_score_thresh,
+            crop_n_layers=crop_n_layers,
+        )
+        self._configured_tiling = _build_sam2_tiling_config(
+            enabled=tiling_enabled,
+            tile_size_px=tile_size_px,
+            overlap_px=overlap_px,
+            global_pass_longest_side=global_pass_longest_side,
+            max_concurrency=max_concurrency,
+        )
+        self._last_runtime_metadata: Optional[Dict[str, Any]] = None
         self._sam2_backend: Any = None
 
     @property
@@ -1026,6 +1112,58 @@ class SAM2SegmentationBackend(EfficientSAMBackend):
             merged_conf = (prev_conf * prev_area + float(np.clip(confidence, 0.0, 1.0)) * area) / total_area
         accumulator[material] = (merged_mask, merged_conf, total_area)
 
+    def _resolve_effective_tiling(self, image: np.ndarray) -> tuple[Any, bool]:
+        """Return the effective SAM2 tiling config and whether it was auto-enabled."""
+        configured_tiling = self._configured_tiling
+        if configured_tiling is None:
+            return None, False
+        if bool(getattr(configured_tiling, "enabled", False)):
+            return configured_tiling, False
+
+        height, width = image.shape[:2]
+        if (height * width) <= SAM2_AUTO_TILING_MAX_AREA_PX and max(height, width) <= SAM2_AUTO_TILING_MAX_DIM_PX:
+            return configured_tiling, False
+
+        return (
+            _build_sam2_tiling_config(
+                enabled=True,
+                tile_size_px=int(getattr(configured_tiling, "tile_size_px", 1536)),
+                overlap_px=int(getattr(configured_tiling, "overlap_px", 256)),
+                global_pass_longest_side=int(getattr(getattr(configured_tiling, "global_pass", None), "longest_side", 1280)),
+                max_concurrency=int(getattr(configured_tiling, "max_concurrency", 1)),
+            ),
+            True,
+        )
+
+    def _record_runtime_metadata(self, image: np.ndarray, *, effective_tiling: Any, auto_enabled: bool) -> None:
+        """Capture the effective SAM2 execution surface for manifests and run cards."""
+        height, width = image.shape[:2]
+        self._last_runtime_metadata = {
+            "sam2_runtime": {
+                "model_size": self._model_size,
+                "device": self._device,
+                "checkpoint_path": self._checkpoint_path,
+                "generator_kwargs": dict(self._generator_kwargs),
+                "tiling": {
+                    "configured": _serialize_sam2_tiling_config(self._configured_tiling),
+                    "effective": _serialize_sam2_tiling_config(effective_tiling),
+                    "auto_enabled": bool(auto_enabled),
+                    "decision": "auto_large_image" if auto_enabled else "configured_or_disabled",
+                    "image_shape": [int(height), int(width), int(image.shape[2])],
+                    "image_area_px": int(height * width),
+                },
+            }
+        }
+
+    def get_runtime_metadata(self) -> Optional[Dict[str, Any]]:
+        metadata: Dict[str, Any] = {}
+        parent_metadata = super().get_runtime_metadata()
+        if isinstance(parent_metadata, dict):
+            metadata.update(parent_metadata)
+        if isinstance(self._last_runtime_metadata, dict):
+            metadata.update(self._last_runtime_metadata)
+        return metadata or None
+
     def load(self, device: str = "auto", weights_path: Optional[Path] = None) -> None:
         """Load SAM2 backend from spatial_ai module."""
         if self._model_loaded:
@@ -1053,14 +1191,25 @@ class SAM2SegmentationBackend(EfficientSAMBackend):
             checkpoint_override = str(self._checkpoint_path)
 
         try:
+            sam2_kwargs = {
+                "model_size": cast(Literal["base", "large"], self._model_size),
+                "device": cast(Literal["auto", "cuda", "cpu", "mps"], resolved_device),
+                "checkpoint_path": checkpoint_override,
+                "generator_kwargs": dict(self._generator_kwargs),
+                "enable_material_classification": self._enable_material_classification,
+                "material_confidence_threshold": self._material_confidence_threshold,
+                "tiling": self._configured_tiling,
+            }
             # Cast to Literal types after validation above
-            self._sam2_backend = SpatialSAM2Backend(
-                model_size=cast(Literal["base", "large"], self._model_size),
-                device=cast(Literal["auto", "cuda", "cpu", "mps"], resolved_device),
-                checkpoint_path=checkpoint_override,
-                enable_material_classification=self._enable_material_classification,
-                material_confidence_threshold=self._material_confidence_threshold,
-            )
+            try:
+                self._sam2_backend = SpatialSAM2Backend(**sam2_kwargs)
+            except TypeError as exc:
+                if "generator_kwargs" not in str(exc) and "tiling" not in str(exc):
+                    raise
+                legacy_kwargs = dict(sam2_kwargs)
+                legacy_kwargs.pop("generator_kwargs", None)
+                legacy_kwargs.pop("tiling", None)
+                self._sam2_backend = SpatialSAM2Backend(**legacy_kwargs)
         except Exception as exc:
             raise RuntimeError(f"SAM2 backend loading failed: {exc}") from exc
 
@@ -1083,6 +1232,9 @@ class SAM2SegmentationBackend(EfficientSAMBackend):
         image_linear = image.astype(np.float32) / 255.0
 
         try:
+            effective_tiling, auto_enabled = self._resolve_effective_tiling(image)
+            if effective_tiling is not None:
+                self._sam2_backend.tiling = effective_tiling
             seg_input = SpatialSegmentationInput(
                 image=image_linear,
                 gamma=1.0,
@@ -1091,6 +1243,11 @@ class SAM2SegmentationBackend(EfficientSAMBackend):
             seg_result = self._sam2_backend.segment(seg_input)
         except Exception as exc:
             raise RuntimeError(f"SAM2 inference failed: {exc}") from exc
+        self._record_runtime_metadata(
+            image,
+            effective_tiling=effective_tiling,
+            auto_enabled=auto_enabled,
+        )
 
         if seg_result.masks.shape[0] == 0:
             logger.debug("SAM2 produced no masks; falling back to heuristic material segmentation")
@@ -1176,6 +1333,16 @@ def _get_backend_instance(
     strict: bool = False,
     sam2_model_size: str = "base",
     sam2_checkpoint_path: Optional[str] = None,
+    sam2_tiling_enabled: bool = False,
+    sam2_tile_size_px: int = 1536,
+    sam2_overlap_px: int = 256,
+    sam2_global_pass_longest_side: int = 1280,
+    sam2_max_concurrency: int = 1,
+    sam2_points_per_side: int = 32,
+    sam2_points_per_batch: int = 64,
+    sam2_pred_iou_thresh: float = 0.88,
+    sam2_stability_score_thresh: float = 0.85,
+    sam2_crop_n_layers: int = 1,
     sky_top_region_fraction: float = 0.5,
     sky_gradient_threshold: float = 0.05,
     sky_brightness_threshold: float = 0.4,
@@ -1230,6 +1397,16 @@ def _get_backend_instance(
         sam2_backend: SegmentationBackend = SAM2SegmentationBackend(
             model_size=sam2_model_size,
             checkpoint_path=sam2_checkpoint_path,
+            tiling_enabled=sam2_tiling_enabled,
+            tile_size_px=sam2_tile_size_px,
+            overlap_px=sam2_overlap_px,
+            global_pass_longest_side=sam2_global_pass_longest_side,
+            max_concurrency=sam2_max_concurrency,
+            points_per_side=sam2_points_per_side,
+            points_per_batch=sam2_points_per_batch,
+            pred_iou_thresh=sam2_pred_iou_thresh,
+            stability_score_thresh=sam2_stability_score_thresh,
+            crop_n_layers=sam2_crop_n_layers,
             sky_top_region_fraction=sky_top_region_fraction,
             sky_gradient_threshold=sky_gradient_threshold,
             sky_brightness_threshold=sky_brightness_threshold,
@@ -1296,6 +1473,16 @@ def segment_materials(
     strict_backend = getattr(config, "strict_backend", False)
     sam2_model_size = str(getattr(config, "sam2_model_size", "base")).lower()
     sam2_checkpoint_path = getattr(config, "sam2_checkpoint_path", None)
+    sam2_tiling_enabled = bool(getattr(config, "sam2_tiling_enabled", False))
+    sam2_tile_size_px = int(getattr(config, "sam2_tile_size_px", 1536))
+    sam2_overlap_px = int(getattr(config, "sam2_overlap_px", 256))
+    sam2_global_pass_longest_side = int(getattr(config, "sam2_global_pass_longest_side", 1280))
+    sam2_max_concurrency = int(getattr(config, "sam2_max_concurrency", 1))
+    sam2_points_per_side = int(getattr(config, "sam2_points_per_side", 32))
+    sam2_points_per_batch = int(getattr(config, "sam2_points_per_batch", 64))
+    sam2_pred_iou_thresh = float(getattr(config, "sam2_pred_iou_thresh", 0.88))
+    sam2_stability_score_thresh = float(getattr(config, "sam2_stability_score_thresh", 0.85))
+    sam2_crop_n_layers = int(getattr(config, "sam2_crop_n_layers", 1))
     sky_top_region_fraction = float(getattr(config, "sky_top_region_fraction", 0.5))
     sky_gradient_threshold = float(getattr(config, "sky_gradient_threshold", 0.05))
     sky_brightness_threshold = float(getattr(config, "sky_brightness_threshold", 0.4))
@@ -1311,6 +1498,16 @@ def segment_materials(
             strict=strict_backend,
             sam2_model_size=sam2_model_size,
             sam2_checkpoint_path=sam2_checkpoint_path,
+            sam2_tiling_enabled=sam2_tiling_enabled,
+            sam2_tile_size_px=sam2_tile_size_px,
+            sam2_overlap_px=sam2_overlap_px,
+            sam2_global_pass_longest_side=sam2_global_pass_longest_side,
+            sam2_max_concurrency=sam2_max_concurrency,
+            sam2_points_per_side=sam2_points_per_side,
+            sam2_points_per_batch=sam2_points_per_batch,
+            sam2_pred_iou_thresh=sam2_pred_iou_thresh,
+            sam2_stability_score_thresh=sam2_stability_score_thresh,
+            sam2_crop_n_layers=sam2_crop_n_layers,
             sky_top_region_fraction=sky_top_region_fraction,
             sky_gradient_threshold=sky_gradient_threshold,
             sky_brightness_threshold=sky_brightness_threshold,

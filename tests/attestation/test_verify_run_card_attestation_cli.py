@@ -15,6 +15,7 @@ import pytest
 from transformation_portal.attestation.dsse import DSSE_IN_TOTO_JSON_PAYLOAD_TYPE, pre_auth_encode
 from transformation_portal.attestation.run_card_detached import build_run_card_detached_attestation_payload
 from transformation_portal.attestation.run_card_intoto import build_run_card_dsse_envelope, canonical_run_card_statement_bytes
+from transformation_portal.lux_depth_v3.artifact_manager import compute_artifact_merkle_root
 from transformation_portal.lux_depth_v3.artifact_tree import build_artifact_tree
 
 pytestmark = pytest.mark.unit
@@ -82,6 +83,7 @@ def _write_run_card_v2(tmp_path: Path) -> Path:
     }
     canonical_json = json.dumps(fingerprint_fields, sort_keys=True, separators=(",", ":"))
     payload = {
+        "run_card_version": "v2",
         "batch_id": "2026-04-10_120000",
         "start_time": "2026-04-10T12:00:00Z",
         "end_time": "2026-04-10T12:05:00Z",
@@ -130,6 +132,16 @@ def _write_run_card_v2(tmp_path: Path) -> Path:
         "artifact_tree": build_artifact_tree(artifact_index, include_proofs=True),
     }
     run_card_path = tmp_path / "run_card_2026-04-10_120000.json"
+    run_card_path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+    return run_card_path
+
+
+def _write_run_card_v1(tmp_path: Path) -> Path:
+    run_card_path = _write_run_card_v2(tmp_path)
+    payload = json.loads(run_card_path.read_text(encoding="utf-8"))
+    payload["run_card_version"] = "v1"
+    payload.pop("artifact_tree", None)
+    payload["artifact_merkle_root"] = compute_artifact_merkle_root(payload["artifact_index"])
     run_card_path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
     return run_card_path
 
@@ -207,8 +219,46 @@ def _build_inputs(tmp_path: Path) -> tuple[Path, Path, Path, Path]:
     return run_card_path, native_path, dsse_path, bundle_path
 
 
+def _build_inputs_v1(tmp_path: Path) -> tuple[Path, Path, Path, Path]:
+    run_card_path = _write_run_card_v1(tmp_path)
+    run_card_payload = json.loads(run_card_path.read_text(encoding="utf-8"))
+    run_card_bytes = run_card_path.read_bytes()
+    native_attestation = build_run_card_detached_attestation_payload(
+        run_card_payload,
+        run_card_bytes=run_card_bytes,
+        signature={"algorithm": "openpgp-clearsign", "key_id": "test", "signature": "deadbeef"},
+    )
+    dsse_statement_bytes = canonical_run_card_statement_bytes(
+        run_card_path=run_card_path,
+        run_card_payload=run_card_payload,
+        run_card_bytes=run_card_bytes,
+    )
+    dsse_attestation = build_run_card_dsse_envelope(
+        run_card_path=run_card_path,
+        run_card_payload=run_card_payload,
+        run_card_bytes=run_card_bytes,
+        key_id="test",
+        signature_bytes=pre_auth_encode(DSSE_IN_TOTO_JSON_PAYLOAD_TYPE, dsse_statement_bytes),
+    )
+    native_path = run_card_path.with_suffix(".attestation.native.json")
+    dsse_path = run_card_path.with_suffix(".attestation.dsse.json")
+    bundle_path = run_card_path.with_suffix(".attestation.dsse.sigstore.bundle.json")
+    native_path.write_text(json.dumps(native_attestation), encoding="utf-8")
+    dsse_path.write_text(json.dumps(dsse_attestation), encoding="utf-8")
+    bundle_path.write_text(json.dumps({"verificationMaterial": {"tlogEntries": [{"logIndex": 1}]}}), encoding="utf-8")
+    return run_card_path, native_path, dsse_path, bundle_path
+
+
 def test_verify_cli_succeeds_for_matching_run_card_attestations(tmp_path: Path) -> None:
     run_card_path, _, _, _ = _build_inputs(tmp_path)
+
+    result = _run_tool("--run-card", str(run_card_path))
+
+    assert result.returncode == 0, result.stderr
+
+
+def test_verify_cli_succeeds_for_matching_v1_run_card_attestations(tmp_path: Path) -> None:
+    run_card_path, _, _, _ = _build_inputs_v1(tmp_path)
 
     result = _run_tool("--run-card", str(run_card_path))
 

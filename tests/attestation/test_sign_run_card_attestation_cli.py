@@ -11,6 +11,7 @@ from pathlib import Path
 
 import pytest
 
+from transformation_portal.lux_depth_v3.artifact_manager import compute_artifact_merkle_root
 from transformation_portal.lux_depth_v3.artifact_tree import build_artifact_tree
 
 pytestmark = pytest.mark.unit
@@ -78,6 +79,7 @@ def _write_run_card_v2(tmp_path: Path) -> Path:
     }
     canonical_json = json.dumps(fingerprint_fields, sort_keys=True, separators=(",", ":"))
     payload = {
+        "run_card_version": "v2",
         "batch_id": "2026-04-10_120000",
         "start_time": "2026-04-10T12:00:00Z",
         "end_time": "2026-04-10T12:05:00Z",
@@ -126,6 +128,16 @@ def _write_run_card_v2(tmp_path: Path) -> Path:
         "artifact_tree": build_artifact_tree(artifact_index, include_proofs=True),
     }
     run_card_path = tmp_path / "run_card_2026-04-10_120000.json"
+    run_card_path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+    return run_card_path
+
+
+def _write_run_card_v1(tmp_path: Path) -> Path:
+    run_card_path = _write_run_card_v2(tmp_path)
+    payload = json.loads(run_card_path.read_text(encoding="utf-8"))
+    payload["run_card_version"] = "v1"
+    payload.pop("artifact_tree", None)
+    payload["artifact_merkle_root"] = compute_artifact_merkle_root(payload["artifact_index"])
     run_card_path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
     return run_card_path
 
@@ -218,6 +230,26 @@ def test_sign_cli_writes_native_and_dsse_sidecars_with_fake_gpg(tmp_path: Path) 
     assert result.returncode == 0, result.stderr
     assert native_path.exists()
     assert dsse_path.exists()
+
+
+def test_sign_cli_supports_v1_run_cards_with_fake_gpg(tmp_path: Path) -> None:
+    run_card_path = _write_run_card_v1(tmp_path)
+    fake_path = _write_fake_gpg(tmp_path)
+    native_path = run_card_path.with_suffix(".attestation.native.json")
+    dsse_path = run_card_path.with_suffix(".attestation.dsse.json")
+
+    result = _run_tool(
+        "--run-card",
+        str(run_card_path),
+        "--gpg",
+        "--key-id",
+        "test-key",
+        path_prepend=fake_path,
+    )
+
+    assert result.returncode == 0, result.stderr
+    native_payload = json.loads(native_path.read_text(encoding="utf-8"))
+    assert native_payload["subject"]["artifact_commitment"]["kind"] == "artifact_commitment_v1"
 
     native_attestation = json.loads(native_path.read_text(encoding="utf-8"))
     assert native_attestation["schema"] == "tp.run_card.attestation.detached.v1"

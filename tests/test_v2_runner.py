@@ -588,6 +588,31 @@ class TestPathValidation:
         assert result["status"] == "success"
 
     @patch("transformation_portal.lux_depth_v3.v2_runner.subprocess.run")
+    def test_output_dir_symlink_alias_preserved_in_command(self, mock_subprocess, tmp_path):
+        """Symlink aliases such as /tmp should be preserved in subprocess args."""
+        mock_subprocess.return_value = Mock(returncode=0, stdout="", stderr="")
+
+        runner = V2Runner()
+        runner.script_path = Path("/fake/enhance_image.py")
+
+        actual_output = tmp_path / "actual_output"
+        actual_output.mkdir()
+        alias_output = tmp_path / "alias_output"
+        alias_output.symlink_to(actual_output, target_is_directory=True)
+
+        with patch.object(Path, "exists", return_value=True):
+            result = runner.run(
+                input_path=tmp_path / "input.jpg",
+                depth_dir=None,
+                output_dir=alias_output,
+            )
+
+        cmd = mock_subprocess.call_args[0][0]
+        output_index = cmd.index("--output-dir")
+        assert cmd[output_index + 1] == str(alias_output)
+        assert result["status"] == "success"
+
+    @patch("transformation_portal.lux_depth_v3.v2_runner.subprocess.run")
     def test_masks_file_validated(self, mock_subprocess, tmp_path):
         """Test that masks_file path is validated and included in command."""
         mock_subprocess.return_value = Mock(returncode=0, stdout="", stderr="")

@@ -100,6 +100,13 @@ def test_healthz_returns_minimal_health_response(client: TestClient) -> None:
     assert response.headers["Pragma"] == "no-cache"
 
 
+def test_healthz_rejects_untrusted_host_header(client: TestClient) -> None:
+    response = client.get("/healthz", headers={"host": "evil.example.com"})
+
+    assert response.status_code == 400
+    assert "Invalid host header" in response.text
+
+
 def test_portal_bootstrap_reports_direct_debug_mode(client: TestClient) -> None:
     response = client.get("/portal/bootstrap")
     assert response.status_code == 200
@@ -1114,6 +1121,52 @@ def test_partial_run_summary_prefers_newest_batch_manifest_when_run_card_missing
 
     job = orchestrator_app.Job(
         id="job_partial_review_manifest_fallback",
+        created_at=orchestrator_app._now(),
+        state="failed",
+        exit_code=1,
+        request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(output_dir)}},
+        error={
+            "code": "RUNNER_EXIT_NONZERO",
+            "message": "runner exited with code 1",
+            "details": {"exit_code": 1},
+        },
+    )
+
+    orchestrator_app._index_job_artifacts(job)
+    summary = orchestrator_app._refresh_job_run_summary(job)
+
+    assert summary["source"] == "batch_manifest"
+    assert summary["batch_id"] == "2026-04-07_001500"
+    assert summary["success_count"] == 4
+    assert summary["error_count"] == 1
+    assert job.state == "partial"
+
+
+def test_partial_run_summary_ignores_summaryless_run_card_payload(tmp_path: Path) -> None:
+    output_dir = tmp_path / "out"
+    manifests_dir = output_dir / "manifests"
+    manifests_dir.mkdir(parents=True, exist_ok=True)
+    (output_dir / "run_card_2026-04-07_001500.json").write_text(
+        json.dumps(
+            {
+                "batch_id": "2026-04-07_001500",
+            }
+        ),
+        encoding="utf-8",
+    )
+    (manifests_dir / "batch_2026-04-07_001500.json").write_text(
+        json.dumps(
+            {
+                "batch_id": "2026-04-07_001500",
+                "results": [{"status": "ok"}] * 4 + [{"status": "error"}],
+                "stats": {"total_images": 5},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    job = orchestrator_app.Job(
+        id="job_partial_review_summaryless_run_card",
         created_at=orchestrator_app._now(),
         state="failed",
         exit_code=1,

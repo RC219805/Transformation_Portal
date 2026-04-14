@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+import pytest
+
 from tp.crypto.ct_merkle import (
     ct_inclusion_proof,
     ct_leaf_hash,
     ct_merkle_root,
     verify_ct_inclusion_proof,
 )
+
+pytestmark = pytest.mark.unit
 
 
 def test_ct_merkle_root_empty_tree_uses_sha256_empty() -> None:

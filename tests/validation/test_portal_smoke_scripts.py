@@ -472,8 +472,10 @@ def test_frontdoor_browser_waits_for_managed_portal_bootstrap_before_passing():
     assert '[data-ui="login-sequence"]' in content
     assert '[data-ui="portal-access-state"]' in content
     assert ".hero-video, .homepage-video" in content
-    assert "form.requestSubmit" in content
-    assert "form.submit();" in content
+    assert "def _populate_login_expression" in content
+    assert "def _click_expression" in content
+    assert "connection.evaluate(_populate_login_expression(username, password))" in content
+    assert "connection.evaluate(_click_expression('[data-ui=\"login-submit\"]'))" in content
     assert "/healthz" in content
     assert "--spawn-local-frontdoor" in content
     assert "--spawn-local-backend" in content
