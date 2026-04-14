@@ -48,7 +48,7 @@ scikit-image>=0.21.0,<1
 # Configuration / diagnostics / color
 PyYAML>=6.0,<7
 colour-science>=0.4.2,<1
-psutil>=5.9.0,<7
+psutil>=5.9.0,<8
 memory-profiler>=0.61.0,<1
 
 # RAG / embedding support
