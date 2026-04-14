@@ -46,7 +46,9 @@ if [ -x ".venv/bin/python" ]; then
 elif command -v python3 >/dev/null 2>&1; then
     PYTHON_BIN="python3"
 else
-    PYTHON_BIN="python"
+    echo "❌ Python 3.11+ is required for legacy pre-commit fallback checks." >&2
+    echo "   Create the project virtual environment or ensure 'python3' is available on PATH." >&2
+    exit 1
 fi
 
 staged_files=()

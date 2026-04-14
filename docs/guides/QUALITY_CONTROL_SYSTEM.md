@@ -34,7 +34,7 @@ Automated checks before committing:
 ./scripts/pre_commit_hook.sh
 ```
 
-### 2. Codebase Health Monitor (`.codebase_health_monitor.py`)
+### 2. Codebase Health Monitor
 
 Tracks quality metrics over time:
 
@@ -47,7 +47,7 @@ Tracks quality metrics over time:
 
 **Usage:**
 ```bash
-python3 .codebase_health_monitor.py
+python3 scripts/utilities/codebase_health_monitor.py
 ```
 
 ## Current Status
@@ -182,8 +182,8 @@ Deductions:
 
 ## Tools Added
 
-1. `.pre-commit-quality-check.py` - Pre-commit validation
-2. `.codebase_health_monitor.py` - Health tracking
+1. `scripts/utilities/pre-commit-quality-check.py` - Pre-commit validation
+2. `scripts/utilities/codebase_health_monitor.py` - Health tracking
 3. `.codebase_health.json` - Historical data (auto-generated)
 
 ---
