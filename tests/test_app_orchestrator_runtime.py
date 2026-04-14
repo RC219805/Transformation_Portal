@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 import hashlib
 import importlib
 import json
@@ -3244,6 +3245,28 @@ def test_protected_api_key_route_detection() -> None:
     assert orchestrator_app._is_protected_api_key_endpoint("/v1/portal/events") is True
     assert orchestrator_app._is_protected_api_key_endpoint("/v1/portal/rum") is True
     assert orchestrator_app._is_protected_api_key_endpoint("/ready") is False
+
+
+def test_portal_event_log_persistence_keeps_jsonl_parseable_under_concurrent_appends(tmp_path: Path) -> None:
+    log_path = tmp_path / "portal-rum.jsonl"
+    records = [
+        {
+            "schema": "tp.orchestrator.portal_rum.v1",
+            "sequence": index,
+            "event_type": "queue_request",
+        }
+        for index in range(32)
+    ]
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+        futures = [executor.submit(orchestrator_app._persist_portal_event_record, record, log_path) for record in records]
+        for future in futures:
+            future.result()
+
+    persisted_lines = log_path.read_text(encoding="utf-8").strip().splitlines()
+    assert len(persisted_lines) == len(records)
+    parsed_records = [json.loads(line) for line in persisted_lines]
+    assert {item["sequence"] for item in parsed_records} == {record["sequence"] for record in records}
 
 
 def test_index_job_artifacts_populates_job_payload(tmp_path: Path) -> None:

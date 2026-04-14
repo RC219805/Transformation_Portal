@@ -1016,6 +1016,32 @@ def test_portal_rum_contract_sanitizes_metadata_and_writes_optional_log(
     assert "admin@example.com" not in rum_log_path.read_text(encoding="utf-8")
 
 
+def test_portal_rum_contract_avoids_high_volume_info_logs(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    monkeypatch.setenv("TP_PORTAL_RUM_ENABLED", "1")
+    monkeypatch.setenv("TP_PORTAL_RUM_ROLLOUT_PERCENT", "100")
+
+    with caplog.at_level(logging.INFO):
+        response = client.post(
+            "/v1/portal/rum",
+            headers={"x-tp-actor": "admin"},
+            json={
+                "event_type": "queue_request",
+                "route": "/portal",
+                "view": "build",
+                "metric": "submit",
+                "value": 183.42,
+                "unit": "ms",
+            },
+        )
+
+    assert response.status_code == 200
+    assert "portal_rum" not in caplog.text
+
+
 @pytest.mark.parametrize(
     ("payload_overrides", "reason"),
     [

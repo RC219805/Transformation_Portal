@@ -102,3 +102,24 @@ def test_portal_rum_summary_handles_empty_logs(tmp_path: Path) -> None:
 
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == "portal rum summary: no records"
+
+
+def test_portal_rum_summary_skips_invalid_json_lines(tmp_path: Path) -> None:
+    rum_path = tmp_path / "portal-rum.jsonl"
+    rum_path.write_text(
+        "\n".join(
+            [
+                '{"schema":"tp.orchestrator.portal_rum.v1","auth_mode":"managed","route":"/portal","view":"build","cohort_bucket":12,"event_type":"bootstrap_ready","value":150}',
+                '{"schema":"tp.orchestrator.portal_rum.v1","broken":',
+                '{"schema":"tp.orchestrator.portal_event.v1","event_type":"config_exported"}',
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = _run_cli("--input", str(rum_path))
+
+    assert result.returncode == 0, result.stderr
+    assert "auth_mode=managed route=/portal view=build cohort=12 samples=1" in result.stdout
+    assert "portal rum summary: skipped invalid json line 2" in result.stderr

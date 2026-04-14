@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import sys
 from collections import defaultdict
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Tuple
@@ -37,7 +38,14 @@ def _read_records(path: Path) -> List[Dict[str, Any]]:
             line = raw_line.strip()
             if not line:
                 continue
-            payload = json.loads(line)
+            try:
+                payload = json.loads(line)
+            except json.JSONDecodeError as exc:
+                print(
+                    f"portal rum summary: skipped invalid json line {line_number}: {exc.msg}",
+                    file=sys.stderr,
+                )
+                continue
             if payload.get("schema") != RUM_SCHEMA:
                 continue
             records.append(payload)

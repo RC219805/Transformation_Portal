@@ -12,6 +12,7 @@ import re
 import shlex
 import sys
 import tempfile
+import threading
 import time
 import uuid
 from bisect import bisect_left
@@ -40,6 +41,7 @@ from transformation_portal.lux_depth_v3.run_card_contract import infer_run_card_
 # ----------------------------
 
 LOGGER = logging.getLogger(__name__)
+_PORTAL_EVENT_LOG_WRITE_LOCK = threading.Lock()
 
 
 @dataclass(frozen=True)
@@ -3575,10 +3577,20 @@ def _record_portal_event(payload: Dict[str, Any]) -> Tuple[Optional[Dict[str, An
 def _persist_portal_event_record(record: Dict[str, Any], log_path: Optional[Path]) -> None:
     if log_path is None:
         return
+    encoded_record = (json.dumps(record, sort_keys=True) + "\n").encode("utf-8")
     try:
         log_path.parent.mkdir(parents=True, exist_ok=True)
-        with log_path.open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps(record, sort_keys=True) + "\n")
+        with _PORTAL_EVENT_LOG_WRITE_LOCK:
+            fd = os.open(log_path, os.O_APPEND | os.O_CREAT | os.O_WRONLY, 0o600)
+            try:
+                bytes_written = 0
+                while bytes_written < len(encoded_record):
+                    chunk_size = os.write(fd, encoded_record[bytes_written:])
+                    if chunk_size <= 0:
+                        raise OSError("short write while appending portal telemetry")
+                    bytes_written += chunk_size
+            finally:
+                os.close(fd)
     except OSError:
         LOGGER.warning(
             "failed to persist portal event telemetry to %s",
@@ -3633,7 +3645,8 @@ def _record_portal_rum(payload: Dict[str, Any], request: Request) -> Tuple[Optio
         "cohort_bucket": _stable_rollout_bucket(cohort_key),
         "auth_mode": _portal_rum_auth_mode(request),
     }
-    LOGGER.info("portal_rum %s", json.dumps(record, sort_keys=True))
+    if LOGGER.isEnabledFor(logging.DEBUG):
+        LOGGER.debug("portal_rum %s", json.dumps(record, sort_keys=True))
     return record, None
 
 
