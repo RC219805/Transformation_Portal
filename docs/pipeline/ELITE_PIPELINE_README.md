@@ -71,7 +71,7 @@ The pipeline auto-detects room types from filenames:
 
 ### Requirements
 
-- Python 3.10+
+- Python 3.11+
 - 16GB RAM minimum (32GB recommended for 4x upscaling)
 - Apple Silicon (M1/M2/M3/M4) or NVIDIA GPU recommended
 - Required packages: `tifffile`, `numpy`, `opencv-python`, `pillow`, `torch`

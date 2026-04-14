@@ -7,9 +7,10 @@ Comprehensive quality control system implemented to prevent CI/CD failures and i
 
 ### ✅ Core Quality Control Files
 - `.github/workflows/quality-gate.yml` - Automated CI quality checks
-- `.github/pre-commit-hook.sh` - Local pre-commit validation
-- `.pre-commit-quality-check.py` - Comprehensive quality analysis tool
-- `.codebase_health_monitor.py` - Real-time code health monitoring
+- `.pre-commit-config.yaml` - Pre-commit framework configuration (canonical)
+- `scripts/pre_commit_hook.sh` - Unified pre-commit quality gate wrapper
+- `scripts/utilities/pre-commit-quality-check.py` - Comprehensive quality analysis tool
+- `.github/pre-commit-hook.sh` - Legacy pre-commit hook (delegates to unified gate)
 
 ### ✅ Documentation (Properly Organized)
 **Root (4 files - compliant):**
@@ -42,8 +43,11 @@ Comprehensive quality control system implemented to prevent CI/CD failures and i
 ## Quick Verification
 
 ```bash
-# Run quality check
-python3 .pre-commit-quality-check.py
+# Run quality check via unified wrapper
+./scripts/pre_commit_hook.sh
+
+# Or run all pre-commit hooks
+make pre-commit
 
 # Check markdown count
 find . -maxdepth 1 -name "*.md" -type f | wc -l  # Should be ≤10
@@ -55,12 +59,14 @@ pytest tests/ -v
 ## Installation for Team
 
 ```bash
-# Install pre-commit hook
-cp .github/pre-commit-hook.sh .git/hooks/pre-commit
-chmod +x .git/hooks/pre-commit
+# Install pre-commit hook (recommended)
+make install-hooks
+
+# Or manually install via pre-commit framework
+pre-commit install -f
 
 # Verify setup
-python3 .pre-commit-quality-check.py
+./scripts/pre_commit_hook.sh --all-files
 ```
 
 ## What This Prevents
