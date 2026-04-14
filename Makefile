@@ -295,7 +295,7 @@ validate-orchestrator-http:
 
 validate-portal-browser:
 	@echo "Running live portal browser smoke validation..."
-	@TP_API_KEY="$${TP_API_KEY:-contract-secret}" "$(PY)" scripts/validation/validate_portal_browser_smoke.py --spawn-local-backend --api-key "$${TP_API_KEY:-contract-secret}"
+	@TP_API_KEY="$${TP_API_KEY:-contract-secret}" TP_PORTAL_ARTIFACT_VIEWER_MODAL_ROLLOUT_PERCENT="$${TP_PORTAL_ARTIFACT_VIEWER_MODAL_ROLLOUT_PERCENT:-100}" "$(PY)" scripts/validation/validate_portal_browser_smoke.py --spawn-local-backend --api-key "$${TP_API_KEY:-contract-secret}"
 
 validate-frontdoor-browser:
 	@echo "Running live managed frontdoor browser smoke validation..."

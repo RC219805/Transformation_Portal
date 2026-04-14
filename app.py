@@ -135,7 +135,15 @@ def _portal_rollout_cohort_key(
 
 
 def _portal_artifact_viewer_modal_enabled(actor: Optional[Mapping[str, Any]] = None) -> bool:
-    rollout_percent = _env_rollout_percent("TP_PORTAL_ARTIFACT_VIEWER_MODAL_ROLLOUT_PERCENT", 0)
+    return _portal_rollout_enabled("TP_PORTAL_ARTIFACT_VIEWER_MODAL_ROLLOUT_PERCENT", actor)
+
+
+def _portal_review_surface_deferred_enabled(actor: Optional[Mapping[str, Any]] = None) -> bool:
+    return _portal_rollout_enabled("TP_PORTAL_REVIEW_SURFACE_DEFER_ROLLOUT_PERCENT", actor)
+
+
+def _portal_rollout_enabled(env_name: str, actor: Optional[Mapping[str, Any]] = None) -> bool:
+    rollout_percent = _env_rollout_percent(env_name, 0)
     if rollout_percent <= 0:
         return False
     cohort_key = _portal_rollout_cohort_key(actor)
@@ -147,13 +155,7 @@ def _portal_artifact_viewer_modal_enabled(actor: Optional[Mapping[str, Any]] = N
 def _portal_rum_enabled(actor: Optional[Mapping[str, Any]] = None) -> bool:
     if not _env_bool("TP_PORTAL_RUM_ENABLED", False):
         return False
-    rollout_percent = _env_rollout_percent("TP_PORTAL_RUM_ROLLOUT_PERCENT", 0)
-    if rollout_percent <= 0:
-        return False
-    cohort_key = _portal_rollout_cohort_key(actor)
-    if not cohort_key:
-        return False
-    return _stable_rollout_bucket(cohort_key) < rollout_percent
+    return _portal_rollout_enabled("TP_PORTAL_RUM_ROLLOUT_PERCENT", actor)
 
 
 REPO_ROOT = Path(__file__).resolve().parent
@@ -170,6 +172,8 @@ PORTAL_ASSET_FINGERPRINT_LENGTH = 12
 PORTAL_CSS_TEMPLATE_PATH = PORTAL_ASSETS_DIR / "portal.css"
 PORTAL_DIRECT_FINGERPRINT_ASSET_NAMES = (
     "portal.js",
+    "portal-review.js",
+    "portal-review.css",
     "shared-ui-tokens.css",
     "fonts/portal-sans.woff2",
     "fonts/portal-mono.woff2",
@@ -184,6 +188,8 @@ PORTAL_CSS_TEMPLATE_TOKENS = {
 PORTAL_HTML_TEMPLATE_TOKENS = {
     "__PORTAL_CSS_URL__": "portal.css",
     "__PORTAL_JS_URL__": "portal.js",
+    "__PORTAL_REVIEW_JS_URL__": "portal-review.js",
+    "__PORTAL_REVIEW_CSS_URL__": "portal-review.css",
     "__PORTAL_BRAND_LIGHT_URL__": "brand/dna-symbol-light.svg",
     "__PORTAL_BRAND_DARK_URL__": "brand/dna-symbol-dark.svg",
 }
@@ -315,7 +321,13 @@ def _portal_html_signature() -> Tuple[object, ...]:
         ("portal.css", css_asset.fingerprint),
         *(
             (asset_name, _get_portal_direct_asset_fingerprint(asset_name))
-            for asset_name in ("portal.js", "brand/dna-symbol-dark.svg", "brand/dna-symbol-light.svg")
+            for asset_name in (
+                "portal.js",
+                "portal-review.js",
+                "portal-review.css",
+                "brand/dna-symbol-dark.svg",
+                "brand/dna-symbol-light.svg",
+            )
         ),
     )
 
@@ -6140,6 +6152,7 @@ async def portal_bootstrap() -> JSONResponse:
                 "apiKeyInput": True,
                 "directDebug": True,
                 "artifactViewerModal": _portal_artifact_viewer_modal_enabled(None),
+                "reviewSurfaceDeferred": _portal_review_surface_deferred_enabled(None),
                 "rumTelemetry": _portal_rum_enabled(None),
             },
         },

@@ -61,6 +61,7 @@ const SSE_STALL_CHECK_INTERVAL_MS = 10000;
 const SSE_STALL_THRESHOLD_MS = 45000;
 const CONFIG_PREVIEW_DEBOUNCE_MS = 250;
 const TRANSIENT_DRAFT_PERSIST_DEBOUNCE_MS = 200;
+const DEFERRED_REVIEW_SURFACE_RETRY_WINDOW_MS = 30000;
 const DISPATCH_BACKEND_OFFLINE_MESSAGE = 'Backend is offline. Dispatch is disabled until connectivity is restored.';
 const CONFIG_PREVIEW_SUPPORTED_PIPELINES = new Set([
     'lux-depth-v3',
@@ -85,6 +86,11 @@ let lastHealthCheckAt = 0;
 let configPreviewTimerId = null;
 let transientDraftPersistTimerId = null;
 let transientDraftPersistIdleId = null;
+let deferredReviewSurfaceApi = null;
+let deferredReviewSurfaceLoadPromise = null;
+let deferredReviewSurfaceCssLoaded = false;
+let deferredReviewSurfaceLoadFailedAt = 0;
+let deferredReviewSurfaceLoadLastToastAt = 0;
 
 /* __PORTAL_INTERNALS__ */
 
@@ -513,6 +519,7 @@ const els = {
     artifactViewerOpenRawBtn: _domId('artifactViewerOpenRawBtn'),
     artifactViewerCopyPathBtn: _domId('artifactViewerCopyPathBtn'),
     artifactViewerCopyFingerprintBtn: _domId('artifactViewerCopyFingerprintBtn'),
+    artifactViewerStatus: _domId('artifactViewerStatus'),
     closeArtifactViewerBtn: _domId('closeArtifactViewerBtn'),
 
     healthIndicator: _domId('healthIndicator'),
@@ -1597,17 +1604,7 @@ function _openReviewSurfaceForJob(job, surface = 'job_inspector') {
     return true;
 }
 
-function _openArtifactForSelection(job, artifact, surface = 'artifact_review') {
-    if (!job || !artifact) {
-        createToast('No artifact is available for this selection.', 'info');
-        return false;
-    }
-    if (_artifactViewerEnabled()) {
-        const openedInViewer = _openArtifactViewer(job, artifact);
-        if (openedInViewer) {
-            return true;
-        }
-    }
+function _openManagedArtifactWindow(job, artifact, surface = 'artifact_review') {
     const url = sanitizeManagedAssetUrl(buildArtifactUrl(job, artifact));
     if (!url) {
         createToast('No artifact URL is available for this selection.', 'error');
@@ -1623,6 +1620,20 @@ function _openArtifactForSelection(job, artifact, surface = 'artifact_review') {
     });
     window.open(url, '_blank', 'noopener,noreferrer');
     return true;
+}
+
+function _openArtifactForSelection(job, artifact, surface = 'artifact_review') {
+    if (!job || !artifact) {
+        createToast('No artifact is available for this selection.', 'info');
+        return false;
+    }
+    if (_artifactViewerEnabled()) {
+        const openedInViewer = _openArtifactViewer(job, artifact, document.activeElement, surface);
+        if (openedInViewer) {
+            return true;
+        }
+    }
+    return _openManagedArtifactWindow(job, artifact, surface);
 }
 
 function _toggleCompareSurface(job, surface = 'artifact_review') {
@@ -2495,6 +2506,7 @@ function navigateConsoleView(viewName, options = {}) {
     } else if (state.selectedJobId) {
         _rememberSelectedJob(state.selectedJobId);
     }
+    _primeDeferredReviewSurface('route');
     applyConsoleViewLayout();
     _syncConsoleRoute(replace);
     renderJobQueue();
@@ -2535,6 +2547,7 @@ function applyConsoleRouteFromLocation(replace = false) {
     } else if (state.selectedJobId) {
         _rememberSelectedJob(state.selectedJobId);
     }
+    _primeDeferredReviewSurface('route');
     applyConsoleViewLayout();
     _syncConsoleRoute(replace);
 }
@@ -4156,6 +4169,7 @@ function _defaultPortalBootstrap() {
             apiKeyInput: false,
             directDebug: false,
             artifactViewerModal: false,
+            reviewSurfaceDeferred: false,
             rumTelemetry: false
         }
     };
@@ -4551,6 +4565,7 @@ function _applyPortalBootstrap(rawBootstrap, options = {}) {
             apiKeyInput: mode === 'direct_debug' && bootstrap.features?.apiKeyInput !== false,
             directDebug: mode === 'direct_debug' && bootstrap.features?.directDebug !== false,
             artifactViewerModal: Boolean(bootstrap.features?.artifactViewerModal),
+            reviewSurfaceDeferred: Boolean(bootstrap.features?.reviewSurfaceDeferred),
             rumTelemetry: Boolean(bootstrap.features?.rumTelemetry)
         }
     };
@@ -4975,41 +4990,6 @@ function upsertArtifact(job, artifact) {
     _reconcileJobTimeline(job);
 }
 
-function getRunCardArtifact(job) {
-    if (!job || !Array.isArray(job.artifacts)) return null;
-    return job.artifacts.find((artifact) => {
-        const displayRole = String(artifactDisplayHint(artifact)?.role || '').trim().toLowerCase();
-        const type = String(artifact.artifact_type || '').toLowerCase();
-        const relPath = String(artifact.relative_path || artifact.path || '').toLowerCase();
-        return displayRole === 'run_card' || type === 'run_card' || relPath.includes('run_card');
-    }) || null;
-}
-
-function updateRunCardActions(job) {
-    if (!els.runCardActions) return;
-    const runCard = getRunCardArtifact(job);
-    if (!runCard) {
-        els.runCardActions.classList.add('hidden');
-        els.runCardActions.classList.remove('flex');
-        return;
-    }
-    const runCardPath = String(runCard.relative_path || runCard.path || '');
-    const runCardUrl = buildArtifactUrl(job, runCard);
-    const runCardSha = String(runCard.sha256 || '');
-    if (els.viewRunCardBtn) {
-        els.viewRunCardBtn.dataset.url = runCardUrl;
-    }
-    if (els.copyRunCardPathBtn) els.copyRunCardPathBtn.dataset.path = runCardPath;
-    if (els.copyRunCardFingerprintBtn) {
-        els.copyRunCardFingerprintBtn.dataset.fingerprint = runCardSha;
-        els.copyRunCardFingerprintBtn.disabled = !runCardSha;
-        els.copyRunCardFingerprintBtn.classList.toggle('opacity-50', !runCardSha);
-        els.copyRunCardFingerprintBtn.classList.toggle('cursor-not-allowed', !runCardSha);
-    }
-    els.runCardActions.classList.remove('hidden');
-    els.runCardActions.classList.add('flex');
-}
-
 function _selectedArtifactForJob(job) {
     if (!job || !Array.isArray(job.artifacts) || job.artifacts.length === 0) return null;
     const normalizedJobId = _normalizeSelectedJobId(job.id);
@@ -5026,29 +5006,6 @@ function _selectedArtifactForJob(job) {
     return hero;
 }
 
-function _renderArtifactMetadataCard(job, artifact) {
-    if (!els.artifactMetadataCard) return;
-    els.artifactMetadataCard.innerHTML = '';
-
-    const title = document.createElement('p');
-    title.className = 'text-[12px] font-semibold text-slate-800 dark:text-slate-100';
-    title.textContent = artifact
-        ? artifactLabel(artifact)
-        : 'Select a completed run to bring the primary review artifact into focus here.';
-    els.artifactMetadataCard.appendChild(title);
-
-    const detail = document.createElement('p');
-    detail.className = 'mt-2 text-[12px] leading-6 text-slate-600 dark:text-slate-300';
-    if (!job) {
-        detail.textContent = 'Preview, provenance, and next review actions will appear here after you choose a reviewable job.';
-    } else if (!artifact) {
-        detail.textContent = 'This run has not indexed a reviewable artifact yet. Stay with the inspector for progress, transport, and freshness context.';
-    } else {
-        detail.textContent = `${artifactDisplayLabel(artifact)} • ${artifactContentType(artifact) || 'binary'} • ${formatBytes(artifact.size_bytes)}.`;
-    }
-    els.artifactMetadataCard.appendChild(detail);
-}
-
 function _latestVisibleTransportWarning(job) {
     const warnings = Array.isArray(job?.transportWarnings) ? job.transportWarnings : [];
     for (let index = warnings.length - 1; index >= 0; index -= 1) {
@@ -5056,201 +5013,6 @@ function _latestVisibleTransportWarning(job) {
         if (warning && warning.tone !== 'info') return warning;
     }
     return null;
-}
-
-function _reviewStatusSnapshot(job, artifact) {
-    if (!job) {
-        return {
-            visible: false,
-            tone: 'info',
-            title: 'Awaiting completed run',
-            detail: 'Select a job to review related warnings, completion state, and output readiness.',
-            action: 'Next action: use the selected run state, warning context, and freshness above to decide whether to recover or open review.'
-        };
-    }
-
-    const artifactCount = Array.isArray(job.artifacts) ? job.artifacts.length : 0;
-    const summary = normalizeRunSummary(job.run_summary);
-    const readableError = getReadableError(job.error);
-    const outcomeSummary = jobOutcomeSummary(job);
-    const freshestActivityAt = Number(job.lastEventAt || job.updatedAt || job.finishedAt || job.createdAt || 0);
-    const freshnessLabel = formatRelativeTime(freshestActivityAt);
-    const visibleWarning = _latestVisibleTransportWarning(job);
-    const reviewableOutputs = Boolean(summary?.reviewable_outputs) || artifactCount > 0;
-
-    if (job.state === 'partial') {
-        return {
-            visible: true,
-            tone: 'warning',
-            title: 'Run partially completed',
-            detail: outcomeSummary
-                ? `${outcomeSummary}. Updated ${freshnessLabel}.`
-                : 'Some inputs failed, but outputs remain reviewable.',
-            action: 'Next action: open review for the retained outputs before rerunning failed inputs.'
-        };
-    }
-
-    if (job.state === 'failed') {
-        return {
-            visible: true,
-            tone: reviewableOutputs ? 'warning' : 'error',
-            title: reviewableOutputs ? 'Run failed after indexing reviewable outputs' : 'Run failed before outputs were ready',
-            detail: readableError
-                || (reviewableOutputs
-                    ? `${artifactCount} artifact${artifactCount === 1 ? '' : 's'} remain available for review. Updated ${freshnessLabel}.`
-                    : 'No reviewable outputs were indexed before the failure was reported.'),
-            action: reviewableOutputs
-                ? 'Next action: open review for the retained outputs, then decide whether this run needs a retry.'
-                : 'Next action: inspect the latest warning and failure context in Operate before retrying the run.'
-        };
-    }
-
-    if (job.state === 'canceled') {
-        return {
-            visible: true,
-            tone: reviewableOutputs ? 'warning' : 'error',
-            title: reviewableOutputs ? 'Run canceled after partial output capture' : 'Run canceled before review outputs were ready',
-            detail: reviewableOutputs
-                ? `${artifactCount} artifact${artifactCount === 1 ? '' : 's'} remain available for review despite cancellation. Updated ${freshnessLabel}.`
-                : 'Execution was canceled before reviewable outputs were indexed.',
-            action: reviewableOutputs
-                ? 'Next action: review the retained outputs before deciding whether to rerun the canceled work.'
-                : 'Next action: reopen Build or restore the run context before dispatching again.'
-        };
-    }
-
-    if (job.state === 'offline') {
-        return {
-            visible: true,
-            tone: 'warning',
-            title: reviewableOutputs ? 'Run is offline with reviewable outputs' : 'Run is offline',
-            detail: reviewableOutputs
-                ? `${artifactCount} artifact${artifactCount === 1 ? '' : 's'} remain available, but live backend status is stale until connectivity is restored.`
-                : 'Live backend status is stale until connectivity is restored.',
-            action: reviewableOutputs
-                ? 'Next action: review the cached outputs while backend connectivity recovers.'
-                : 'Next action: restore backend connectivity before depending on this run state.'
-        };
-    }
-
-    if (job.reconnectBlocked) {
-        return {
-            visible: true,
-            tone: 'warning',
-            title: 'Transport warning recorded',
-            detail: 'Authentication must be restored before live event transport can reconnect.',
-            action: 'Next action: restore authentication so live transport and freshness can recover.'
-        };
-    }
-
-    if (visibleWarning) {
-        return {
-            visible: true,
-            tone: visibleWarning.tone === 'error' ? 'error' : 'warning',
-            title: 'Transport warning recorded',
-            detail: String(visibleWarning.detail || 'Live transport reported an operator-visible warning.'),
-            action: 'Next action: inspect the latest transport warning in Operate before continuing into review.'
-        };
-    }
-
-    if (job.state === 'running' || job.state === 'queued') {
-        return {
-            visible: true,
-            tone: 'info',
-            title: 'Run still in progress',
-            detail: artifactCount > 0
-                ? `${artifactCount} artifact${artifactCount === 1 ? '' : 's'} already indexed. Updated ${freshnessLabel}.`
-                : 'Artifacts and provenance will populate here as outputs arrive.',
-            action: artifactCount > 0
-                ? 'Next action: keep review open only if you need the early artifacts; Operate remains the primary live surface.'
-                : 'Next action: stay in Operate until indexed outputs or a blocking warning arrives.'
-        };
-    }
-
-    return {
-        visible: true,
-        tone: 'ready',
-        title: artifact ? 'Outputs ready for review' : 'Run ready for review',
-        detail: outcomeSummary
-            ? `${outcomeSummary}. Updated ${freshnessLabel}.`
-            : `${artifactCount} artifact${artifactCount === 1 ? '' : 's'} indexed and ready for operator review.`,
-        action: 'Next action: use the selected run state, warning context, and freshness above to decide whether to recover or open review.'
-    };
-}
-
-function _renderReviewStatusBanner(job, artifact) {
-    if (!els.reviewStatusBanner || !els.reviewStatusTitle || !els.reviewStatusDetail) return;
-    const snapshot = _reviewStatusSnapshot(job, artifact);
-    els.reviewStatusBanner.dataset.tone = snapshot.tone;
-    if (!snapshot.visible) {
-        els.reviewStatusBanner.classList.add('hidden');
-        els.reviewStatusTitle.textContent = snapshot.title;
-        els.reviewStatusDetail.textContent = snapshot.detail;
-        if (els.reviewStatusAction) els.reviewStatusAction.textContent = snapshot.action;
-        renderReviewStatusActions(job, artifact);
-        return;
-    }
-    els.reviewStatusTitle.textContent = snapshot.title;
-    els.reviewStatusDetail.textContent = snapshot.detail;
-    if (els.reviewStatusAction) els.reviewStatusAction.textContent = snapshot.action;
-    els.reviewStatusBanner.classList.remove('hidden');
-    renderReviewStatusActions(job, artifact);
-}
-
-function _renderArtifactProvenance(job, artifact) {
-    if (!els.reviewProvenanceGrid) return;
-
-    if (!job) {
-        els.reviewProvenanceGrid.classList.add('hidden');
-        if (els.reviewProvenanceArtifactRole) els.reviewProvenanceArtifactRole.textContent = 'Awaiting indexed output';
-        if (els.reviewProvenanceRunState) els.reviewProvenanceRunState.textContent = 'No job selected';
-        if (els.reviewProvenancePath) {
-            els.reviewProvenancePath.textContent = 'Preview, metadata, and actions will appear here when outputs are indexed.';
-            els.reviewProvenancePath.removeAttribute('title');
-        }
-        if (els.reviewProvenanceFingerprint) els.reviewProvenanceFingerprint.textContent = 'Not reported';
-        if (els.reviewProvenanceFreshness) els.reviewProvenanceFreshness.textContent = 'No live telemetry';
-        if (els.reviewProvenanceSource) els.reviewProvenanceSource.textContent = 'Not reported';
-        if (els.reviewProvenanceBatch) els.reviewProvenanceBatch.textContent = 'Not reported';
-        return;
-    }
-
-    const summary = normalizeRunSummary(job.run_summary);
-    const artifactDescriptor = artifact
-        ? `${artifactDisplayLabel(artifact)} • ${artifactContentType(artifact) || 'binary'} • ${formatBytes(artifact.size_bytes)}`
-        : 'Awaiting indexed artifact';
-    const relativePath = artifact ? artifactLabel(artifact) : 'Artifacts will appear here when the selected run indexes outputs.';
-    const freshnessLabel = _jobFreshnessLabel(job);
-    const runStateLabel = `${titleCaseToken(job.state, 'Unknown')} • ${titleCaseToken(job.pipeline, 'Unknown')}`;
-    const sourceLabel = summary?.source || titleCaseToken(job.pipeline, 'Not reported');
-    const batchLabel = summary?.batch_id || 'Not reported';
-
-    if (els.reviewProvenanceArtifactRole) els.reviewProvenanceArtifactRole.textContent = artifactDescriptor;
-    if (els.reviewProvenanceRunState) els.reviewProvenanceRunState.textContent = runStateLabel;
-    if (els.reviewProvenancePath) {
-        els.reviewProvenancePath.textContent = relativePath;
-        els.reviewProvenancePath.title = relativePath;
-    }
-    if (els.reviewProvenanceFingerprint) els.reviewProvenanceFingerprint.textContent = _artifactFingerprintLabel(artifact);
-    if (els.reviewProvenanceFreshness) els.reviewProvenanceFreshness.textContent = freshnessLabel;
-    if (els.reviewProvenanceSource) els.reviewProvenanceSource.textContent = sourceLabel;
-    if (els.reviewProvenanceBatch) els.reviewProvenanceBatch.textContent = batchLabel;
-    els.reviewProvenanceGrid.classList.remove('hidden');
-}
-
-function _renderReviewCompareSummary(primaryArtifact, compareArtifact, compareEnabled) {
-    if (!els.reviewCompareSummary || !els.reviewCompareTitle || !els.reviewCompareDetail) return;
-    const compareCopy = _compareSurfaceCopy(primaryArtifact, compareArtifact, compareEnabled);
-    if (!primaryArtifact || !compareArtifact) {
-        els.reviewCompareSummary.classList.add('hidden');
-        els.reviewCompareTitle.textContent = compareCopy.summaryTitle;
-        els.reviewCompareDetail.textContent = compareCopy.summaryDetail;
-        return;
-    }
-
-    els.reviewCompareTitle.textContent = compareCopy.summaryTitle;
-    els.reviewCompareDetail.textContent = compareCopy.summaryDetail;
-    els.reviewCompareSummary.classList.remove('hidden');
 }
 
 function _resetArtifactActionButtons() {
@@ -5273,6 +5035,190 @@ function _resetArtifactActionButtons() {
     }
 }
 
+function _reviewSurfaceDeferredEnabled() {
+    return Boolean(_isBootstrapReady() && state.auth?.features?.reviewSurfaceDeferred);
+}
+
+function _reviewSurfaceAssetUrl(datasetKey) {
+    const body = document.body;
+    return body ? String(body.dataset?.[datasetKey] || '').trim() : '';
+}
+
+function _ensureDeferredReviewSurfaceCss() {
+    if (deferredReviewSurfaceCssLoaded) return true;
+    const href = _reviewSurfaceAssetUrl('reviewSurfaceCssUrl');
+    if (!href) return false;
+    const existing = document.querySelector('link[data-ui="portal-review-surface-css"]');
+    if (existing) {
+        deferredReviewSurfaceCssLoaded = true;
+        return true;
+    }
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = href;
+    link.dataset.ui = 'portal-review-surface-css';
+    document.head.appendChild(link);
+    deferredReviewSurfaceCssLoaded = true;
+    return true;
+}
+
+function _createDeferredReviewSurfaceHost() {
+    return {
+        state,
+        els,
+        clamp,
+        normalizeRunSummary,
+        titleCaseToken,
+        formatRelativeTime,
+        getReadableError,
+        createToast,
+        emitPortalEvent,
+        _isJobsHydrationPending,
+        _toggleSurfaceSkeleton,
+        _resetArtifactActionButtons,
+        _setSurfaceEmptyState,
+        renderConsoleContextRibbon,
+        renderReviewStatusActions,
+        _syncConsoleRoute,
+        _findJobById,
+        _selectedArtifactForJob,
+        rankArtifactsForDisplay,
+        findCompareArtifact,
+        buildArtifactUrl,
+        sanitizeManagedAssetUrl,
+        artifactIsPreviewable,
+        artifactLabel,
+        artifactDisplayHint,
+        artifactDisplayLabel,
+        artifactContentType,
+        artifactFingerprint,
+        artifactNameParts,
+        formatBytes,
+        _buildAuthHeaders,
+        _artifactFingerprintLabel,
+        _artifactRouteKey,
+        _artifactViewerEnabled,
+        _normalizeSelectedJobId,
+        _normalizeArtifactRoutePath,
+        _rememberArtifactSelection,
+        _rememberOverlayTrigger,
+        _restoreOverlayFocus,
+        renderReviewSurfaces,
+        _compareSurfaceCopy,
+        _jobFreshnessLabel,
+        _jobHasReviewableOutputs,
+        _latestVisibleTransportWarning,
+    };
+}
+
+function _deferredReviewSurfaceLoadRetryBlocked(now = Date.now()) {
+    return deferredReviewSurfaceLoadFailedAt > 0 && (now - deferredReviewSurfaceLoadFailedAt) < DEFERRED_REVIEW_SURFACE_RETRY_WINDOW_MS;
+}
+
+function _clearDeferredReviewSurfaceLoadFailure() {
+    deferredReviewSurfaceLoadFailedAt = 0;
+    deferredReviewSurfaceLoadLastToastAt = 0;
+}
+
+function _noteDeferredReviewSurfaceLoadFailure() {
+    const now = Date.now();
+    deferredReviewSurfaceLoadFailedAt = now;
+    if ((now - deferredReviewSurfaceLoadLastToastAt) < DEFERRED_REVIEW_SURFACE_RETRY_WINDOW_MS) return;
+    deferredReviewSurfaceLoadLastToastAt = now;
+    createToast('Review surfaces failed to load. Reload the portal and retry the review action.', 'error');
+}
+
+async function _loadDeferredReviewSurface() {
+    if (deferredReviewSurfaceApi) return deferredReviewSurfaceApi;
+    if (deferredReviewSurfaceLoadPromise) return deferredReviewSurfaceLoadPromise;
+    if (_deferredReviewSurfaceLoadRetryBlocked()) return null;
+    const moduleUrl = _reviewSurfaceAssetUrl('reviewSurfaceJsUrl');
+    if (!moduleUrl) return null;
+    _ensureDeferredReviewSurfaceCss();
+    deferredReviewSurfaceLoadPromise = import(moduleUrl)
+        .then((module) => {
+            if (!module || typeof module.createDeferredReviewSurfaceApi !== 'function') {
+                throw new Error('Deferred review surface module missing createDeferredReviewSurfaceApi');
+            }
+            _clearDeferredReviewSurfaceLoadFailure();
+            deferredReviewSurfaceApi = module.createDeferredReviewSurfaceApi(_createDeferredReviewSurfaceHost());
+            return deferredReviewSurfaceApi;
+        })
+        .catch((error) => {
+            console.error('Failed to load deferred review surface', error);
+            _noteDeferredReviewSurfaceLoadFailure();
+            deferredReviewSurfaceApi = null;
+            return null;
+        })
+        .finally(() => {
+            deferredReviewSurfaceLoadPromise = null;
+        });
+    return deferredReviewSurfaceLoadPromise;
+}
+
+function _selectedOperateArtifactContext() {
+    if (state.currentView !== 'operate') return false;
+    const selectedJob = _findJobById(state.selectedJobId);
+    return Boolean(selectedJob && Array.isArray(selectedJob.artifacts) && selectedJob.artifacts.length > 0);
+}
+
+function _shouldLoadDeferredReviewSurface(reason = '') {
+    if (!_isBootstrapReady()) return false;
+    if (!_reviewSurfaceDeferredEnabled()) return true;
+    if (state.portalUi?.artifactViewer?.open) return true;
+    if (state.currentView === 'review') return true;
+    if (_selectedOperateArtifactContext()) return true;
+    return String(reason || '').trim() === 'force';
+}
+
+function _primeDeferredReviewSurface(reason = '') {
+    if (!_shouldLoadDeferredReviewSurface(reason) || _deferredReviewSurfaceLoadRetryBlocked()) return;
+    void _loadDeferredReviewSurface().then((api) => {
+        if (!api) return;
+        api.renderArtifactPanel();
+        api.renderArtifactViewer();
+    });
+}
+
+function _renderDeferredReviewSurfaceFallback(jobsLoading = false) {
+    _toggleSurfaceSkeleton(els.artifactsShell, els.artifactShellContent, els.artifactSkeletonState, jobsLoading);
+    if (jobsLoading) {
+        _resetArtifactActionButtons();
+        if (els.artifactMeta) els.artifactMeta.textContent = 'Hydrating artifacts';
+        renderConsoleContextRibbon();
+        return;
+    }
+    const reviewSurfaceLoadBlocked = _deferredReviewSurfaceLoadRetryBlocked();
+    if (els.artifactMeta) {
+        if (reviewSurfaceLoadBlocked) {
+            els.artifactMeta.textContent = 'Review surface unavailable';
+        } else {
+            els.artifactMeta.textContent = _shouldLoadDeferredReviewSurface() ? 'Loading review surface' : 'Review surface deferred';
+        }
+    }
+    if (els.artifactThumbnailRail) {
+        els.artifactThumbnailRail.setAttribute('role', 'listbox');
+        els.artifactThumbnailRail.setAttribute('aria-label', 'Artifact thumbnails');
+        els.artifactThumbnailRail.innerHTML = '';
+    }
+    if (els.emptyArtifactState) els.emptyArtifactState.style.display = 'block';
+    if (reviewSurfaceLoadBlocked) {
+        _setSurfaceEmptyState(els.emptyArtifactState, els.emptyArtifactTitle, els.emptyArtifactDetail, {
+            tone: 'warning',
+            title: 'Review surface unavailable',
+            detail: 'Reload the portal to retry loading the review surface assets for this artifact context.',
+        });
+        if (els.emptyArtifactAction) {
+            els.emptyArtifactAction.textContent = 'Next action: reload the portal before reopening review.';
+        }
+    }
+    if (els.reviewStatusBanner) els.reviewStatusBanner.classList.add('hidden');
+    if (els.reviewProvenanceGrid) els.reviewProvenanceGrid.classList.add('hidden');
+    if (els.reviewCompareSummary) els.reviewCompareSummary.classList.add('hidden');
+    _resetArtifactActionButtons();
+    renderConsoleContextRibbon();
+}
+
 function renderReviewSurfaces(payload = null) {
     const currentPayload = payload || generatePayload();
     renderArtifactPanel();
@@ -5284,258 +5230,12 @@ function renderReviewSurfaces(payload = null) {
 
 function renderArtifactPanel() {
     const jobsLoading = _isJobsHydrationPending();
-    _toggleSurfaceSkeleton(els.artifactsShell, els.artifactShellContent, els.artifactSkeletonState, jobsLoading);
-    if (jobsLoading) {
-        _resetArtifactActionButtons();
-        _renderReviewStatusBanner(null, null);
-        _renderArtifactProvenance(null, null);
-        _renderReviewCompareSummary(null, null, false);
-        if (els.artifactMeta) els.artifactMeta.textContent = 'Hydrating artifacts';
-        renderConsoleContextRibbon();
+    if (deferredReviewSurfaceApi) {
+        deferredReviewSurfaceApi.renderArtifactPanel();
         return;
     }
-
-    if (!els.artifactMeta || !els.artifactThumbnailRail) return;
-    els.artifactThumbnailRail.setAttribute('role', 'listbox');
-    els.artifactThumbnailRail.setAttribute('aria-label', 'Artifact thumbnails');
-    const selected = state.jobs.find((item) => item.id === state.selectedJobId);
-    const artifacts = Array.isArray(selected?.artifacts) ? rankArtifactsForDisplay(selected.artifacts) : [];
-
-    if (!selected) {
-        _resetArtifactActionButtons();
-        const emptyCopy = _artifactEmptyStateCopy(null);
-        _setSurfaceEmptyState(
-            els.emptyArtifactState,
-            els.emptyArtifactTitle,
-            els.emptyArtifactDetail,
-            emptyCopy
-        );
-        if (els.emptyArtifactAction) els.emptyArtifactAction.textContent = emptyCopy.action || '';
-        els.artifactMeta.textContent = 'No job selected';
-        els.artifactThumbnailRail.innerHTML = '';
-        if (els.artifactSelectionTitle) els.artifactSelectionTitle.textContent = 'No artifact selected';
-        if (els.artifactSelectionMeta) els.artifactSelectionMeta.textContent = 'Preview, provenance, and actions will appear here after you choose a reviewable run.';
-        if (els.artifactCompareBtn) {
-            els.artifactCompareBtn.classList.add('hidden');
-            els.artifactCompareBtn.setAttribute('aria-pressed', 'false');
-            els.artifactCompareBtn.removeAttribute('aria-controls');
-        }
-        if (els.artifactPreviewSoloImage) {
-            els.artifactPreviewSoloImage.classList.add('hidden');
-            els.artifactPreviewSoloImage.removeAttribute('src');
-        }
-        if (els.artifactPreviewImage) {
-            els.artifactPreviewImage.classList.add('hidden');
-            els.artifactPreviewImage.removeAttribute('src');
-        }
-        if (els.artifactCompareImage) {
-            els.artifactCompareImage.classList.add('hidden');
-            els.artifactCompareImage.removeAttribute('src');
-        }
-        if (els.artifactCompareStage) {
-            els.artifactCompareStage.classList.add('hidden');
-            els.artifactCompareStage.setAttribute('aria-hidden', 'true');
-        }
-        _renderArtifactMetadataCard(null, null);
-        _renderReviewStatusBanner(null, null);
-        _renderArtifactProvenance(null, null);
-        _renderReviewCompareSummary(null, null, false);
-        updateRunCardActions(null);
-        if (els.emptyArtifactState) els.emptyArtifactState.style.display = 'block';
-        renderConsoleContextRibbon();
-        _syncConsoleRoute(true);
-        return;
-    }
-
-    const errorText = getReadableError(selected.error);
-    els.artifactMeta.textContent = `${artifacts.length} artifacts${errorText ? ` • ${errorText}` : ''}`;
-
-    if (artifacts.length === 0) {
-        _resetArtifactActionButtons();
-        const emptyCopy = _artifactEmptyStateCopy(selected);
-        _setSurfaceEmptyState(
-            els.emptyArtifactState,
-            els.emptyArtifactTitle,
-            els.emptyArtifactDetail,
-            emptyCopy
-        );
-        if (els.emptyArtifactAction) els.emptyArtifactAction.textContent = emptyCopy.action || '';
-        els.artifactThumbnailRail.innerHTML = '';
-        if (els.artifactSelectionTitle) els.artifactSelectionTitle.textContent = 'No artifact selected';
-        if (els.artifactSelectionMeta) els.artifactSelectionMeta.textContent = 'Review surfaces will populate here when the selected run indexes outputs.';
-        if (els.artifactCompareBtn) {
-            els.artifactCompareBtn.classList.add('hidden');
-            els.artifactCompareBtn.setAttribute('aria-pressed', 'false');
-            els.artifactCompareBtn.removeAttribute('aria-controls');
-        }
-        if (els.artifactPreviewSoloImage) {
-            els.artifactPreviewSoloImage.classList.add('hidden');
-            els.artifactPreviewSoloImage.removeAttribute('src');
-        }
-        if (els.artifactPreviewImage) {
-            els.artifactPreviewImage.classList.add('hidden');
-            els.artifactPreviewImage.removeAttribute('src');
-        }
-        if (els.artifactCompareImage) {
-            els.artifactCompareImage.classList.add('hidden');
-            els.artifactCompareImage.removeAttribute('src');
-        }
-        if (els.artifactCompareStage) {
-            els.artifactCompareStage.classList.add('hidden');
-            els.artifactCompareStage.setAttribute('aria-hidden', 'true');
-        }
-        _renderArtifactMetadataCard(selected, null);
-        _renderReviewStatusBanner(selected, null);
-        _renderArtifactProvenance(selected, null);
-        _renderReviewCompareSummary(null, null, false);
-        updateRunCardActions(selected);
-        if (els.emptyArtifactState) els.emptyArtifactState.style.display = 'block';
-        renderConsoleContextRibbon();
-        _syncConsoleRoute(true);
-        return;
-    }
-
-    if (els.emptyArtifactState) els.emptyArtifactState.style.display = 'none';
-    const selectedArtifact = _selectedArtifactForJob(selected);
-    const compareCandidate = findCompareArtifact(selectedArtifact, artifacts);
-    const compareEnabled = Boolean(compareCandidate) && Boolean(state.artifactUi.compareByJob[String(selected.id || '')]);
-
-    if (els.artifactCompareBtn) {
-        if (compareCandidate) {
-            els.artifactCompareBtn.classList.remove('hidden');
-            els.artifactCompareBtn.textContent = compareEnabled ? 'Single View' : 'Compare';
-            els.artifactCompareBtn.setAttribute('aria-pressed', compareEnabled ? 'true' : 'false');
-            els.artifactCompareBtn.setAttribute('aria-controls', 'artifactCompareStage');
-        } else {
-            els.artifactCompareBtn.classList.add('hidden');
-            els.artifactCompareBtn.setAttribute('aria-pressed', 'false');
-            els.artifactCompareBtn.removeAttribute('aria-controls');
-        }
-    }
-
-    if (els.artifactSelectionTitle) {
-        els.artifactSelectionTitle.textContent = selectedArtifact ? artifactLabel(selectedArtifact) : 'No artifact selected';
-    }
-    if (els.artifactSelectionMeta) {
-        els.artifactSelectionMeta.textContent = selectedArtifact
-            ? `${artifactDisplayLabel(selectedArtifact)} • ${artifactContentType(selectedArtifact) || 'binary'} • ${formatBytes(selectedArtifact.size_bytes)}`
-            : 'Preview, metadata, and actions will appear here when outputs are indexed.';
-    }
-    _renderReviewStatusBanner(selected, selectedArtifact);
-    _renderArtifactProvenance(selected, selectedArtifact);
-    _renderReviewCompareSummary(selectedArtifact, compareCandidate, compareEnabled);
-
-    if (els.openArtifactBtn) {
-        const openUrl = selectedArtifact ? buildArtifactUrl(selected, selectedArtifact) : '';
-        els.openArtifactBtn.textContent = _artifactViewerEnabled() ? 'Inspect' : 'Open';
-        els.openArtifactBtn.disabled = !openUrl;
-        els.openArtifactBtn.dataset.url = openUrl;
-    }
-    if (els.downloadArtifactBtn) {
-        const downloadUrl = selectedArtifact ? buildArtifactUrl(selected, selectedArtifact) : '';
-        els.downloadArtifactBtn.disabled = !downloadUrl;
-        els.downloadArtifactBtn.dataset.url = downloadUrl;
-        els.downloadArtifactBtn.dataset.filename = selectedArtifact ? artifactNameParts(selectedArtifact).fileName : '';
-    }
-    if (els.copyArtifactPathBtn) {
-        els.copyArtifactPathBtn.disabled = !selectedArtifact;
-        els.copyArtifactPathBtn.dataset.path = selectedArtifact ? artifactLabel(selectedArtifact) : '';
-    }
-    if (els.copyArtifactFingerprintBtn) {
-        const fingerprint = selectedArtifact ? artifactFingerprint(selectedArtifact) : '';
-        els.copyArtifactFingerprintBtn.disabled = !fingerprint;
-        els.copyArtifactFingerprintBtn.dataset.fingerprint = fingerprint;
-    }
-
-    if (els.artifactCompareStage) {
-        els.artifactCompareStage.classList.toggle('hidden', !compareEnabled);
-        els.artifactCompareStage.setAttribute('aria-hidden', compareEnabled ? 'false' : 'true');
-    }
-    if (els.artifactPreviewSoloImage) els.artifactPreviewSoloImage.classList.toggle('hidden', compareEnabled || !artifactIsPreviewable(selectedArtifact));
-    if (els.artifactMetadataCard) els.artifactMetadataCard.classList.toggle('hidden', artifactIsPreviewable(selectedArtifact));
-    if (compareEnabled && selectedArtifact && compareCandidate) {
-        if (els.artifactPreviewImage) {
-            els.artifactPreviewImage.src = buildArtifactUrl(selected, selectedArtifact);
-            els.artifactPreviewImage.classList.remove('hidden');
-        }
-        if (els.artifactPreviewPrimaryCaption) els.artifactPreviewPrimaryCaption.textContent = artifactLabel(selectedArtifact);
-        if (els.artifactCompareImage) {
-            els.artifactCompareImage.src = buildArtifactUrl(selected, compareCandidate);
-            els.artifactCompareImage.classList.remove('hidden');
-        }
-        if (els.artifactCompareCaption) els.artifactCompareCaption.textContent = artifactLabel(compareCandidate);
-    } else if (artifactIsPreviewable(selectedArtifact)) {
-        if (els.artifactPreviewSoloImage) {
-            els.artifactPreviewSoloImage.src = buildArtifactUrl(selected, selectedArtifact);
-            els.artifactPreviewSoloImage.classList.remove('hidden');
-        }
-        if (els.artifactPreviewImage) {
-            els.artifactPreviewImage.classList.add('hidden');
-            els.artifactPreviewImage.removeAttribute('src');
-        }
-        if (els.artifactCompareImage) {
-            els.artifactCompareImage.classList.add('hidden');
-            els.artifactCompareImage.removeAttribute('src');
-        }
-    } else {
-        if (els.artifactPreviewSoloImage) {
-            els.artifactPreviewSoloImage.classList.add('hidden');
-            els.artifactPreviewSoloImage.removeAttribute('src');
-        }
-        if (els.artifactPreviewImage) {
-            els.artifactPreviewImage.classList.add('hidden');
-            els.artifactPreviewImage.removeAttribute('src');
-        }
-        if (els.artifactCompareImage) {
-            els.artifactCompareImage.classList.add('hidden');
-            els.artifactCompareImage.removeAttribute('src');
-        }
-        _renderArtifactMetadataCard(selected, selectedArtifact);
-    }
-
-    const fragment = document.createDocumentFragment();
-    artifacts.forEach((artifact) => {
-        const button = document.createElement('button');
-        const active = selectedArtifact && artifact.path === selectedArtifact.path;
-        button.type = 'button';
-        button.dataset.artifactPath = _artifactRouteKey(artifact);
-        button.setAttribute('role', 'option');
-        button.setAttribute('aria-selected', active ? 'true' : 'false');
-        button.tabIndex = active ? 0 : -1;
-        button.className = active
-            ? 'rounded-2xl border border-cyan-300 dark:border-cyan-900/60 bg-cyan-50/90 dark:bg-cyan-900/20 p-3 text-left shadow-sm transition-colors'
-            : 'rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/50 p-3 text-left hover:bg-white/90 dark:hover:bg-slate-800/80 transition-colors';
-
-        if (artifactIsPreviewable(artifact)) {
-            const thumb = document.createElement('img');
-            thumb.alt = artifactLabel(artifact);
-            thumb.src = buildArtifactUrl(selected, artifact);
-            thumb.className = 'h-24 w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-900/60 object-cover';
-            button.appendChild(thumb);
-        } else {
-            const placeholder = document.createElement('div');
-            placeholder.className = 'flex h-24 items-center justify-center rounded-xl border border-dashed border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/70 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400';
-            placeholder.textContent = artifactDisplayLabel(artifact);
-            button.appendChild(placeholder);
-        }
-
-        const title = document.createElement('p');
-        title.className = 'mt-3 text-[11px] font-semibold text-slate-800 dark:text-slate-100 truncate';
-        title.textContent = artifactNameParts(artifact).fileName;
-        button.appendChild(title);
-
-        const meta = document.createElement('p');
-        meta.className = 'mt-1 text-[10px] font-mono text-slate-500 dark:text-slate-400 truncate';
-        meta.textContent = `${artifactDisplayLabel(artifact)} • ${formatBytes(artifact.size_bytes)}`;
-        button.appendChild(meta);
-
-        fragment.appendChild(button);
-    });
-    els.artifactThumbnailRail.innerHTML = '';
-    els.artifactThumbnailRail.appendChild(fragment);
-    updateRunCardActions(selected);
-    renderConsoleContextRibbon();
-    _syncConsoleRoute(true);
+    _primeDeferredReviewSurface('render');
+    _renderDeferredReviewSurfaceFallback(jobsLoading);
 }
 
 function selectJob(jobId) {
@@ -5566,6 +5266,7 @@ function selectJob(jobId) {
             }
         });
     }
+    _primeDeferredReviewSurface('route');
     scheduleRenderJobQueue(false);
 }
 
@@ -8619,39 +8320,6 @@ function _queueEmptyStateCopy() {
     };
 }
 
-function _artifactEmptyStateCopy(job) {
-    if (!job) {
-        return {
-            tone: 'neutral',
-            title: 'Select a completed run',
-            detail: 'Choose a reviewable job to load preview, provenance, and compare context here.',
-            action: 'Next action: inspect the selected run in Operate or wait for indexed outputs before reopening review.'
-        };
-    }
-    if (job.state === 'running' || job.state === 'queued') {
-        return {
-            tone: 'info',
-            title: 'Outputs are still arriving',
-            detail: 'This run has not indexed reviewable artifacts yet. Stay on the inspector for live progress and freshness updates.',
-            action: 'Next action: keep the run in Operate until indexed outputs appear or a blocking warning arrives.'
-        };
-    }
-    if (job.state === 'failed' || job.state === 'canceled') {
-        return {
-            tone: 'warning',
-            title: 'No reviewable outputs indexed',
-            detail: 'This run ended before artifacts were available. Inspect the run status and transport warnings above for recovery context.',
-            action: 'Next action: inspect the selected run in Operate or decide whether the failed run should be retried.'
-        };
-    }
-    return {
-        tone: 'neutral',
-        title: 'No indexed artifacts yet',
-        detail: 'Artifacts will appear here when the selected run finishes indexing its review outputs.',
-        action: 'Next action: inspect the selected run in Operate or wait for indexed outputs before reopening review.'
-    };
-}
-
 // ============================================================================
 // 9. JOB RENDERING
 // ============================================================================
@@ -10172,171 +9840,81 @@ function _isTypingTarget(target) {
 }
 
 function _artifactViewerContext() {
-    const viewerState = state.portalUi?.artifactViewer || {};
-    const requestedJobId = _normalizeSelectedJobId(viewerState.jobId || state.selectedJobId);
-    const job = requestedJobId ? _findJobById(requestedJobId) : null;
-    const artifacts = Array.isArray(job?.artifacts) ? rankArtifactsForDisplay(job.artifacts) : [];
-    if (!job || artifacts.length === 0) {
-        return {
-            job,
-            artifacts,
-            artifact: null,
-            index: -1,
-            url: '',
-            inlinePreview: false,
-            zoomPercent: 100
-        };
+    if (deferredReviewSurfaceApi && typeof deferredReviewSurfaceApi._artifactViewerContext === 'function') {
+        return deferredReviewSurfaceApi._artifactViewerContext();
     }
-    const requestedPath = _normalizeArtifactRoutePath(viewerState.artifactPath || '');
-    const artifact = artifacts.find((candidate) => _artifactRouteKey(candidate) === requestedPath)
-        || _selectedArtifactForJob(job)
-        || artifacts[0]
-        || null;
-    const index = artifact ? artifacts.findIndex((candidate) => candidate.path === artifact.path) : -1;
-    const url = artifact ? sanitizeManagedAssetUrl(buildArtifactUrl(job, artifact)) : '';
     return {
-        job,
-        artifacts,
-        artifact,
-        index,
-        url,
-        inlinePreview: Boolean(artifact && artifactIsPreviewable(artifact) && url),
-        zoomPercent: clamp(Number(viewerState.zoomPercent || 100), 50, 250)
+        job: null,
+        artifacts: [],
+        artifact: null,
+        index: -1,
+        url: '',
+        inlinePreview: false,
+        zoomPercent: 100
     };
 }
 
 function _setArtifactViewerZoom(nextZoom) {
-    state.portalUi.artifactViewer.zoomPercent = clamp(Number(nextZoom || 100), 50, 250);
-    renderArtifactViewer();
+    if (deferredReviewSurfaceApi) {
+        deferredReviewSurfaceApi._setArtifactViewerZoom(nextZoom);
+        return;
+    }
+    _primeDeferredReviewSurface('viewer');
 }
 
 function _navigateArtifactViewerSelection(direction) {
-    const context = _artifactViewerContext();
-    if (!context.job || !context.artifact) return false;
-    const nextIndex = context.index + Number(direction || 0);
-    if (nextIndex < 0 || nextIndex >= context.artifacts.length) return false;
-    const nextArtifact = context.artifacts[nextIndex];
-    const nextPath = _artifactRouteKey(nextArtifact);
-    state.portalUi.artifactViewer.jobId = _normalizeSelectedJobId(context.job.id);
-    state.portalUi.artifactViewer.artifactPath = nextPath;
-    state.portalUi.artifactViewer.zoomPercent = 100;
-    _rememberArtifactSelection(context.job.id, nextPath);
-    renderReviewSurfaces();
-    return true;
+    if (deferredReviewSurfaceApi) {
+        return deferredReviewSurfaceApi._navigateArtifactViewerSelection(direction);
+    }
+    _primeDeferredReviewSurface('viewer');
+    return false;
 }
 
 function renderArtifactViewer() {
+    if (deferredReviewSurfaceApi) {
+        deferredReviewSurfaceApi.renderArtifactViewer();
+        return;
+    }
     if (!els.artifactViewerModal || !els.artifactViewerPanel) return;
-    const shouldShow = Boolean(state.portalUi?.artifactViewer?.open) && _artifactViewerEnabled();
+    const shouldShow = false;
     els.artifactViewerModal.classList.toggle('hidden', !shouldShow);
     els.artifactViewerModal.classList.toggle('flex', shouldShow);
     els.artifactViewerModal.setAttribute('aria-hidden', shouldShow ? 'false' : 'true');
     els.artifactViewerModal.dataset.overlayOpen = shouldShow ? 'true' : 'false';
-    if (!shouldShow) {
-        if (!_artifactViewerEnabled()) {
-            state.portalUi.artifactViewer.open = false;
-        }
-        if (els.artifactViewerImage) {
-            els.artifactViewerImage.classList.add('hidden');
-            els.artifactViewerImage.removeAttribute('src');
-            els.artifactViewerImage.style.transform = 'scale(1)';
-        }
-        if (els.artifactViewerFallback) els.artifactViewerFallback.classList.add('hidden');
-        return;
+    if (els.artifactViewerStatus) {
+        els.artifactViewerStatus.textContent = 'Artifact viewer is closed.';
     }
-
-    const context = _artifactViewerContext();
-    if (!context.job || !context.artifact) {
-        state.portalUi.artifactViewer.open = false;
-        renderArtifactViewer();
-        return;
-    }
-
-    const { artifact, index, artifacts, inlinePreview, job, url, zoomPercent } = context;
-    const relPath = artifactLabel(artifact);
-    const fingerprint = artifactFingerprint(artifact);
-    if (els.artifactViewerTitle) els.artifactViewerTitle.textContent = artifactNameParts(artifact).fileName;
-    if (els.artifactViewerMeta) {
-        els.artifactViewerMeta.textContent =
-            `${artifactDisplayLabel(artifact)} • ${artifactContentType(artifact) || 'binary'} • ${formatBytes(artifact.size_bytes)}`;
-    }
-    if (els.artifactViewerPath) els.artifactViewerPath.textContent = relPath;
-    if (els.artifactViewerFingerprint) els.artifactViewerFingerprint.textContent = _artifactFingerprintLabel(artifact);
-    if (els.artifactViewerZoomValue) {
-        els.artifactViewerZoomValue.textContent = inlinePreview ? `${zoomPercent}% zoom` : 'Inline preview unavailable';
-    }
-    if (els.artifactViewerPrevBtn) els.artifactViewerPrevBtn.disabled = index <= 0;
-    if (els.artifactViewerNextBtn) els.artifactViewerNextBtn.disabled = index >= (artifacts.length - 1);
-    if (els.artifactViewerZoomOutBtn) els.artifactViewerZoomOutBtn.disabled = !inlinePreview;
-    if (els.artifactViewerZoomInBtn) els.artifactViewerZoomInBtn.disabled = !inlinePreview;
-    if (els.artifactViewerResetZoomBtn) els.artifactViewerResetZoomBtn.disabled = !inlinePreview;
-    if (els.artifactViewerOpenRawBtn) {
-        els.artifactViewerOpenRawBtn.disabled = !url;
-        els.artifactViewerOpenRawBtn.dataset.url = url;
-    }
-    if (els.artifactViewerCopyPathBtn) {
-        els.artifactViewerCopyPathBtn.disabled = !relPath;
-        els.artifactViewerCopyPathBtn.dataset.path = relPath;
-    }
-    if (els.artifactViewerCopyFingerprintBtn) {
-        els.artifactViewerCopyFingerprintBtn.disabled = !fingerprint;
-        els.artifactViewerCopyFingerprintBtn.dataset.fingerprint = fingerprint;
-    }
-
-    if (inlinePreview && els.artifactViewerImage) {
-        els.artifactViewerImage.src = url;
-        els.artifactViewerImage.classList.remove('hidden');
-        els.artifactViewerImage.style.transform = `scale(${zoomPercent / 100})`;
-        if (els.artifactViewerFallback) els.artifactViewerFallback.classList.add('hidden');
-        return;
-    }
-
-    if (els.artifactViewerImage) {
-        els.artifactViewerImage.classList.add('hidden');
-        els.artifactViewerImage.removeAttribute('src');
-        els.artifactViewerImage.style.transform = 'scale(1)';
-    }
-    if (els.artifactViewerFallback) {
-        els.artifactViewerFallback.classList.remove('hidden');
-    }
-    if (els.artifactViewerFallbackTitle) {
-        els.artifactViewerFallbackTitle.textContent = url ? 'Inline preview unavailable' : 'Artifact URL unavailable';
-    }
-    if (els.artifactViewerFallbackDetail) {
-        els.artifactViewerFallbackDetail.textContent = url
-            ? 'This artifact stays reviewable through retained metadata, integrity fingerprints, and the managed raw asset link.'
-            : 'The browser cannot resolve a managed asset URL for this artifact, so review stays pinned to the retained metadata above.';
+    if (Boolean(state.portalUi?.artifactViewer?.open)) {
+        _primeDeferredReviewSurface('viewer');
     }
 }
 
 function _closeArtifactViewer(restoreFocus = true) {
+    if (deferredReviewSurfaceApi) {
+        deferredReviewSurfaceApi._closeArtifactViewer(restoreFocus);
+        return;
+    }
     state.portalUi.artifactViewer.open = false;
     renderArtifactViewer();
-    if (restoreFocus) {
-        _restoreOverlayFocus();
-    }
+    if (restoreFocus) _restoreOverlayFocus();
 }
 
-function _openArtifactViewer(job, artifact, trigger = document.activeElement) {
+function _openArtifactViewer(job, artifact, trigger = document.activeElement, surface = 'artifact_review') {
     if (!_artifactViewerEnabled() || !els.artifactViewerModal) return false;
     if (!job || !artifact) {
         createToast('No artifact is available for this selection.', 'info');
         return false;
     }
-    state.portalUi.artifactViewer.open = true;
-    state.portalUi.artifactViewer.jobId = _normalizeSelectedJobId(job.id);
-    state.portalUi.artifactViewer.artifactPath = _artifactRouteKey(artifact);
-    state.portalUi.artifactViewer.zoomPercent = 100;
-    _rememberOverlayTrigger(trigger);
-    renderArtifactViewer();
-    if (els.closeArtifactViewerBtn) els.closeArtifactViewerBtn.focus();
-    void emitPortalEvent('artifact_viewer_opened', {
-        surface: 'artifact_viewer_modal',
-        metadata: {
-            job_id: String(job.id || ''),
-            media_kind: String(artifact.media_kind || 'file'),
-            pipeline: String(job.pipeline || '')
+    if (deferredReviewSurfaceApi) {
+        return deferredReviewSurfaceApi._openArtifactViewer(job, artifact, trigger);
+    }
+    _primeDeferredReviewSurface('viewer');
+    void _loadDeferredReviewSurface().then((api) => {
+        if (api) {
+            api._openArtifactViewer(job, artifact, trigger);
+            return;
         }
+        _openManagedArtifactWindow(job, artifact, surface);
     });
     return true;
 }
@@ -10684,6 +10262,7 @@ async function init() {
     renderJobQueue();
     startHealthPolling();
     await bootstrapPromise;
+    _primeDeferredReviewSurface('bootstrap');
     _restoreTransientPortalDraft();
     updateUIFromState();
     _persistTransientPortalDraft();

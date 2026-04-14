@@ -6,6 +6,7 @@ import path from "node:path";
 import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 
 import argon2 from "argon2";
+import { transformSync } from "esbuild";
 import { NextRequest, NextResponse } from "next/server.js";
 
 import { getDb, resetDbCache } from "../lib/db.js";
@@ -22,6 +23,7 @@ const ENV_KEYS = [
   "TP_CF_ACCESS_AUD",
   "TP_ALLOW_LOCAL_ACCESS_BYPASS",
   "TP_PORTAL_ARTIFACT_VIEWER_MODAL_ROLLOUT_PERCENT",
+  "TP_PORTAL_REVIEW_SURFACE_DEFER_ROLLOUT_PERCENT",
   "TP_PORTAL_RUM_ENABLED",
   "TP_PORTAL_RUM_ROLLOUT_PERCENT"
 ];
@@ -107,6 +109,13 @@ function withTempEnvironment(overrides = {}) {
       overrides.TP_PORTAL_ARTIFACT_VIEWER_MODAL_ROLLOUT_PERCENT;
   } else {
     delete process.env.TP_PORTAL_ARTIFACT_VIEWER_MODAL_ROLLOUT_PERCENT;
+  }
+
+  if (typeof overrides.TP_PORTAL_REVIEW_SURFACE_DEFER_ROLLOUT_PERCENT === "string") {
+    process.env.TP_PORTAL_REVIEW_SURFACE_DEFER_ROLLOUT_PERCENT =
+      overrides.TP_PORTAL_REVIEW_SURFACE_DEFER_ROLLOUT_PERCENT;
+  } else {
+    delete process.env.TP_PORTAL_REVIEW_SURFACE_DEFER_ROLLOUT_PERCENT;
   }
 
   if (typeof overrides.TP_PORTAL_RUM_ENABLED === "string") {
@@ -1327,6 +1336,7 @@ test("managed bootstrap returns actor metadata and CSRF for authenticated sessio
       assert.equal(body.features.apiKeyInput, false);
       assert.equal(body.features.directDebug, false);
       assert.equal(body.features.artifactViewerModal, false);
+      assert.equal(body.features.reviewSurfaceDeferred, false);
       assert.equal(body.features.rumTelemetry, false);
       assert.equal(body.csrfToken, authenticatedSession.csrfToken);
     } finally {
@@ -1367,6 +1377,41 @@ test("managed bootstrap enables the artifact viewer modal for rollout cohorts", 
 
     assert.equal(response.status, 200);
     assert.equal(body.features.artifactViewerModal, true);
+  } finally {
+    env.cleanup();
+  }
+});
+
+test("managed bootstrap enables review surface deferral for rollout cohorts", async () => {
+  const env = withTempEnvironment({
+    TP_PORTAL_REVIEW_SURFACE_DEFER_ROLLOUT_PERCENT: "100"
+  });
+
+  try {
+    const sessions = await importFresh("../lib/sessions.js");
+    const { GET } = await importFresh("../app/portal/bootstrap/route.js");
+    const authenticatedSession = sessions.rotateAuthenticatedSession(
+      sessions.createAnonymousSession(),
+      {
+        username: "admin",
+        accessEmail: "admin@example.com",
+        role: "admin"
+      }
+    );
+
+    const request = buildRequest("https://portal.example.com/portal/bootstrap", {
+      method: "GET",
+      headers: new Headers({
+        cookie: `__Host-tp_session=${authenticatedSession.id}`,
+        "Cf-Access-Jwt-Assertion": createAccessJwt()
+      })
+    });
+
+    const response = await GET(request);
+    const body = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(body.features.reviewSurfaceDeferred, true);
   } finally {
     env.cleanup();
   }
@@ -2156,6 +2201,8 @@ test("shared portal asset manifest pins the managed asset proxy allowlist", asyn
     "portal.css",
     "shared-ui-tokens.css",
     "portal.js",
+    "portal-review.js",
+    "portal-review.css",
     "fonts/portal-sans.woff2",
     "fonts/portal-mono.woff2",
     "brand/dna-symbol-dark.svg",
@@ -2170,13 +2217,32 @@ test("shared UI tokens stay synced to the canonical source", () => {
   const portalTokenPath = path.join(repoRoot, "public", "portal-assets", "shared-ui-tokens.css");
   const buildScriptPath = path.join(process.cwd(), "scripts", "build-portal-bundle.mjs");
   const canonicalTokens = readFileSync(canonicalTokenPath, "utf-8");
+  const normalizedCanonicalTokens = `${transformSync(canonicalTokens, {
+    loader: "css",
+    legalComments: "none",
+    minify: true
+  }).code.trim()}\n`;
+  const frontdoorTokens = readFileSync(frontdoorTokenPath, "utf-8");
+  const portalTokens = readFileSync(portalTokenPath, "utf-8");
   const buildScript = readFileSync(buildScriptPath, "utf-8");
 
-  assert.equal(readFileSync(frontdoorTokenPath, "utf-8"), canonicalTokens);
-  assert.equal(readFileSync(portalTokenPath, "utf-8"), canonicalTokens);
+  assert.match(canonicalTokens, /Canonical shared UI tokens/);
+  assert.equal(frontdoorTokens, normalizedCanonicalTokens);
+  assert.equal(portalTokens, normalizedCanonicalTokens);
+  assert.notEqual(frontdoorTokens, canonicalTokens);
+  assert.notEqual(portalTokens, canonicalTokens);
   assert.match(buildScript, /const SHARED_TOKEN_SOURCE_PATH = path\.resolve\(REPO_ROOT, "web", "shared", "shared-ui-tokens\.css"\);/);
-  assert.match(buildScript, /copyIfChanged\(SHARED_TOKEN_SOURCE_PATH,\s*PORTAL_SHARED_TOKEN_TARGET\)/);
-  assert.match(buildScript, /copyIfChanged\(SHARED_TOKEN_SOURCE_PATH,\s*FRONTDOOR_SHARED_TOKEN_TARGET\)/);
+  assert.match(buildScript, /async function writeMinifiedCssCopy\(sourcePath,\s*targetPath\)/);
+  assert.match(buildScript, /loader: "css"/);
+  assert.match(buildScript, /minify: true/);
+  assert.match(buildScript, /Object\.prototype\.hasOwnProperty\.call\(options,\s*"minifyIdentifiers"\)/);
+  assert.match(buildScript, /Object\.prototype\.hasOwnProperty\.call\(options,\s*"minifySyntax"\)/);
+  assert.match(buildScript, /Object\.prototype\.hasOwnProperty\.call\(options,\s*"minifyWhitespace"\)/);
+  assert.doesNotMatch(buildScript, /minifyIdentifiers:\s*Boolean\(options\.minifyIdentifiers\)/);
+  assert.doesNotMatch(buildScript, /minifySyntax:\s*Boolean\(options\.minifySyntax\)/);
+  assert.doesNotMatch(buildScript, /minifyWhitespace:\s*Boolean\(options\.minifyWhitespace\)/);
+  assert.match(buildScript, /writeMinifiedCssCopy\(SHARED_TOKEN_SOURCE_PATH,\s*PORTAL_SHARED_TOKEN_TARGET\)/);
+  assert.match(buildScript, /writeMinifiedCssCopy\(SHARED_TOKEN_SOURCE_PATH,\s*FRONTDOOR_SHARED_TOKEN_TARGET\)/);
 });
 
 test("v1 POST rejects requests missing valid same-origin CSRF protections", async () => {

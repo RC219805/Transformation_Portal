@@ -612,6 +612,18 @@ def test_portal_browser_smoke_probes_review_compare_contract():
     assert "reviewCompareDetail" in content
     assert "reviewCompareVisible" in content
     assert "reviewCompareEnabled" in content
+    assert "artifactViewerVisible" in content
+    assert "artifactViewerPath" in content
+    assert "artifactViewerFingerprint" in content
+    assert "artifactViewerZoomValue" in content
+    assert "artifactViewerStatus" in content
+    assert "artifactViewerFallbackVisible" in content
+    assert "artifactViewerFallbackTitle" in content
+    assert "_key_expression" in content
+    assert "_inject_viewer_fallback_review_expression" in content
+    assert "artifact viewer keyboard next navigation" in content
+    assert "artifact viewer keyboard zoom reset" in content
+    assert "artifact viewer fallback state for non-previewable artifacts" in content
     assert '_navigate_to_console_view_expression("review", submitted_job_id, "missing/stale-artifact.png", True)' in content
 
 

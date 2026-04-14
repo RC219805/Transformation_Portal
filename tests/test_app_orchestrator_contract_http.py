@@ -8,6 +8,7 @@ import asyncio
 import importlib
 import json
 import logging
+import re
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
@@ -118,6 +119,7 @@ def test_portal_bootstrap_reports_direct_debug_mode(client: TestClient) -> None:
     assert body["features"]["apiKeyInput"] is True
     assert body["features"]["directDebug"] is True
     assert body["features"]["artifactViewerModal"] is False
+    assert body["features"]["reviewSurfaceDeferred"] is False
     assert body["features"]["rumTelemetry"] is False
 
 
@@ -132,6 +134,19 @@ def test_portal_bootstrap_exposes_artifact_viewer_rollout_flag_when_enabled(
 
     assert response.status_code == 200
     assert response.json()["features"]["artifactViewerModal"] is True
+
+
+def test_portal_bootstrap_exposes_review_surface_defer_rollout_flag_when_enabled(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("TP_PORTAL_REVIEW_SURFACE_DEFER_ROLLOUT_PERCENT", "100")
+    monkeypatch.setenv("TP_PORTAL_DIRECT_DEBUG_COHORT_KEY", "contract-smoke")
+
+    response = client.get("/portal/bootstrap")
+
+    assert response.status_code == 200
+    assert response.json()["features"]["reviewSurfaceDeferred"] is True
 
 
 def test_portal_bootstrap_exposes_rum_rollout_flag_when_enabled(
@@ -227,12 +242,12 @@ def test_portal_asset_endpoint_serves_css_and_js(client: TestClient) -> None:
     assert shared_tokens_response.status_code == 200
     assert shared_tokens_response.headers["Cache-Control"] == orchestrator_app.PORTAL_IMMUTABLE_ASSET_CACHE_CONTROL
     assert shared_tokens_response.headers["content-type"] == orchestrator_app.PORTAL_ASSET_MEDIA_TYPES["shared-ui-tokens.css"]
-    assert "--ux-target-min-size: 44px;" in shared_tokens_response.text
+    assert re.search(r"--ux-target-min-size:\s*44px;", shared_tokens_response.text)
 
     assert js_response.status_code == 200
     assert js_response.headers["Cache-Control"] == orchestrator_app.PORTAL_IMMUTABLE_ASSET_CACHE_CONTROL
     assert js_response.headers["content-type"] == orchestrator_app.PORTAL_ASSET_MEDIA_TYPES["portal.js"]
-    assert "const BOOTSTRAP_TIMEOUT_MS = 3500;" in js_response.text
+    assert "BOOTSTRAP_TIMEOUT_MS=3500" in js_response.text
 
 
 def test_portal_asset_endpoint_serves_repo_local_fonts(client: TestClient) -> None:

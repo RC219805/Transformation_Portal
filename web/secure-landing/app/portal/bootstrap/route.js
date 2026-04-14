@@ -32,31 +32,35 @@ function stableRolloutBucket(key) {
   return Number.parseInt(digest.slice(0, 8), 16) % 100;
 }
 
-function resolveArtifactViewerModal(session, env = process.env) {
-  const rolloutPercent = parseRolloutPercent(env.TP_PORTAL_ARTIFACT_VIEWER_MODAL_ROLLOUT_PERCENT);
+function resolveRolloutCohortKey(session) {
+  return String(session?.username || session?.accessEmail || session?.role || "").trim().toLowerCase();
+}
+
+function resolvePortalRollout(session, envKey, env = process.env) {
+  const rolloutPercent = parseRolloutPercent(env[envKey]);
   if (rolloutPercent <= 0) {
     return false;
   }
-  const cohortKey = String(session?.username || session?.accessEmail || session?.role || "").trim().toLowerCase();
+  const cohortKey = resolveRolloutCohortKey(session);
   if (!cohortKey) {
     return false;
   }
   return stableRolloutBucket(cohortKey) < rolloutPercent;
 }
 
+function resolveArtifactViewerModal(session, env = process.env) {
+  return resolvePortalRollout(session, "TP_PORTAL_ARTIFACT_VIEWER_MODAL_ROLLOUT_PERCENT", env);
+}
+
+function resolveReviewSurfaceDeferred(session, env = process.env) {
+  return resolvePortalRollout(session, "TP_PORTAL_REVIEW_SURFACE_DEFER_ROLLOUT_PERCENT", env);
+}
+
 function resolveRumTelemetry(session, env = process.env) {
   if (String(env.TP_PORTAL_RUM_ENABLED || "").trim().toLowerCase() !== "1") {
     return false;
   }
-  const rolloutPercent = parseRolloutPercent(env.TP_PORTAL_RUM_ROLLOUT_PERCENT);
-  if (rolloutPercent <= 0) {
-    return false;
-  }
-  const cohortKey = String(session?.username || session?.accessEmail || session?.role || "").trim().toLowerCase();
-  if (!cohortKey) {
-    return false;
-  }
-  return stableRolloutBucket(cohortKey) < rolloutPercent;
+  return resolvePortalRollout(session, "TP_PORTAL_RUM_ROLLOUT_PERCENT", env);
 }
 
 function withTraceparent(response, traceparent) {
@@ -123,6 +127,7 @@ export async function GET(request) {
           apiKeyInput: false,
           directDebug: false,
           artifactViewerModal: resolveArtifactViewerModal(session),
+          reviewSurfaceDeferred: resolveReviewSurfaceDeferred(session),
           rumTelemetry: resolveRumTelemetry(session)
         }
       },
