@@ -909,7 +909,10 @@ def test_portal_artifact_gallery_renders_visual_review_controls() -> None:
     assert "parsed.origin !== window.location.origin" in sanitize_body
     assert "parsed.pathname.startsWith('/v1/jobs/')" in sanitize_body
     assert "_artifactViewerEnabled()" in open_artifact_body
-    assert "_openArtifactViewer(job, artifact);" in open_artifact_body
+    assert "const openedInViewer = _openArtifactViewer(job, artifact);" in open_artifact_body
+    assert "if (openedInViewer) {" in open_artifact_body
+    assert "return true;" in open_artifact_body
+    assert "const url = sanitizeManagedAssetUrl(buildArtifactUrl(job, artifact));" in open_artifact_body
     assert "sanitizeManagedAssetUrl(els.downloadArtifactBtn.dataset.url)" in content
 
 

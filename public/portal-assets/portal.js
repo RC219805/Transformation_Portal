@@ -1839,7 +1839,10 @@ function _openArtifactForSelection(job, artifact, surface = 'artifact_review') {
         return false;
     }
     if (_artifactViewerEnabled()) {
-        return _openArtifactViewer(job, artifact);
+        const openedInViewer = _openArtifactViewer(job, artifact);
+        if (openedInViewer) {
+            return true;
+        }
     }
     const url = sanitizeManagedAssetUrl(buildArtifactUrl(job, artifact));
     if (!url) {
