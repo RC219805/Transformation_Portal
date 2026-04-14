@@ -1091,6 +1091,7 @@ def test_portal_artifact_gallery_renders_visual_review_controls() -> None:
     assert "artifactDisplayPriority" in content
     assert "artifactDisplayLabel" in content
     assert "function _artifactRouteKey(artifact) {" in content
+    assert "function _openManagedArtifactWindow(job, artifact, surface = 'artifact_review') {" in content
     assert "buildArtifactUrl(selected, selectedArtifact)" in review_body
     assert "artifactIsPreviewable(selectedArtifact)" in review_body
     assert "artifactDisplayLabel(selectedArtifact)" in review_body
@@ -1110,10 +1111,10 @@ def test_portal_artifact_gallery_renders_visual_review_controls() -> None:
     assert "parsed.origin !== window.location.origin" in sanitize_body
     assert "parsed.pathname.startsWith('/v1/jobs/')" in sanitize_body
     assert "_artifactViewerEnabled()" in open_artifact_body
-    assert "const openedInViewer = _openArtifactViewer(job, artifact);" in open_artifact_body
+    assert "const openedInViewer = _openArtifactViewer(job, artifact, document.activeElement, surface);" in open_artifact_body
     assert "if (openedInViewer) {" in open_artifact_body
     assert "return true;" in open_artifact_body
-    assert "const url = sanitizeManagedAssetUrl(buildArtifactUrl(job, artifact));" in open_artifact_body
+    assert "return _openManagedArtifactWindow(job, artifact, surface);" in open_artifact_body
     assert "sanitizeManagedAssetUrl(els.downloadArtifactBtn.dataset.url)" in content
 
 
@@ -1214,6 +1215,7 @@ def test_portal_artifact_viewer_modal_is_feature_flagged_and_keyboard_complete()
     assert "return Boolean(state.auth?.features?.artifactViewerModal);" in content
     assert "if (els.artifactViewerModal && !els.artifactViewerModal.classList.contains('hidden'))" in active_overlay_body
     assert "void _loadDeferredReviewSurface().then((api) => {" in _extract_js_function_body(content, "_openArtifactViewer")
+    assert "_openManagedArtifactWindow(job, artifact, surface);" in _extract_js_function_body(content, "_openArtifactViewer")
     assert "state.portalUi.artifactViewer.open = true;" in open_body
     assert "_rememberOverlayTrigger(trigger);" in open_body
     assert "els.closeArtifactViewerBtn.focus();" in open_body

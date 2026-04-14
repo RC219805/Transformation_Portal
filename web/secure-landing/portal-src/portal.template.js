@@ -1604,17 +1604,7 @@ function _openReviewSurfaceForJob(job, surface = 'job_inspector') {
     return true;
 }
 
-function _openArtifactForSelection(job, artifact, surface = 'artifact_review') {
-    if (!job || !artifact) {
-        createToast('No artifact is available for this selection.', 'info');
-        return false;
-    }
-    if (_artifactViewerEnabled()) {
-        const openedInViewer = _openArtifactViewer(job, artifact);
-        if (openedInViewer) {
-            return true;
-        }
-    }
+function _openManagedArtifactWindow(job, artifact, surface = 'artifact_review') {
     const url = sanitizeManagedAssetUrl(buildArtifactUrl(job, artifact));
     if (!url) {
         createToast('No artifact URL is available for this selection.', 'error');
@@ -1630,6 +1620,20 @@ function _openArtifactForSelection(job, artifact, surface = 'artifact_review') {
     });
     window.open(url, '_blank', 'noopener,noreferrer');
     return true;
+}
+
+function _openArtifactForSelection(job, artifact, surface = 'artifact_review') {
+    if (!job || !artifact) {
+        createToast('No artifact is available for this selection.', 'info');
+        return false;
+    }
+    if (_artifactViewerEnabled()) {
+        const openedInViewer = _openArtifactViewer(job, artifact, document.activeElement, surface);
+        if (openedInViewer) {
+            return true;
+        }
+    }
+    return _openManagedArtifactWindow(job, artifact, surface);
 }
 
 function _toggleCompareSurface(job, surface = 'artifact_review') {
@@ -9895,7 +9899,7 @@ function _closeArtifactViewer(restoreFocus = true) {
     if (restoreFocus) _restoreOverlayFocus();
 }
 
-function _openArtifactViewer(job, artifact, trigger = document.activeElement) {
+function _openArtifactViewer(job, artifact, trigger = document.activeElement, surface = 'artifact_review') {
     if (!_artifactViewerEnabled() || !els.artifactViewerModal) return false;
     if (!job || !artifact) {
         createToast('No artifact is available for this selection.', 'info');
@@ -9908,7 +9912,9 @@ function _openArtifactViewer(job, artifact, trigger = document.activeElement) {
     void _loadDeferredReviewSurface().then((api) => {
         if (api) {
             api._openArtifactViewer(job, artifact, trigger);
+            return;
         }
+        _openManagedArtifactWindow(job, artifact, surface);
     });
     return true;
 }

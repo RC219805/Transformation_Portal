@@ -49,7 +49,7 @@ function stripStandaloneLineComments(content) {
 }
 
 async function bundleText(entryPoint, options = {}) {
-  const bundleResult = await build({
+  const buildOptions = {
     absWorkingDir: REPO_ROOT,
     bundle: true,
     entryPoints: [entryPoint],
@@ -57,13 +57,20 @@ async function bundleText(entryPoint, options = {}) {
     globalName: options.globalName,
     legalComments: "none",
     minify: Boolean(options.minify),
-    minifyIdentifiers: Boolean(options.minifyIdentifiers),
-    minifySyntax: Boolean(options.minifySyntax),
-    minifyWhitespace: Boolean(options.minifyWhitespace),
     platform: "browser",
     target: ["es2022"],
     write: false
-  });
+  };
+  if (Object.prototype.hasOwnProperty.call(options, "minifyIdentifiers")) {
+    buildOptions.minifyIdentifiers = Boolean(options.minifyIdentifiers);
+  }
+  if (Object.prototype.hasOwnProperty.call(options, "minifySyntax")) {
+    buildOptions.minifySyntax = Boolean(options.minifySyntax);
+  }
+  if (Object.prototype.hasOwnProperty.call(options, "minifyWhitespace")) {
+    buildOptions.minifyWhitespace = Boolean(options.minifyWhitespace);
+  }
+  const bundleResult = await build(buildOptions);
   const outputText = bundleResult.outputFiles?.[0]?.text;
   if (!outputText) {
     throw new Error(`esbuild did not emit a bundle for ${path.relative(REPO_ROOT, entryPoint)}`);

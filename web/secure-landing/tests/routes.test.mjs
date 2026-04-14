@@ -2235,6 +2235,12 @@ test("shared UI tokens stay synced to the canonical source", () => {
   assert.match(buildScript, /async function writeMinifiedCssCopy\(sourcePath,\s*targetPath\)/);
   assert.match(buildScript, /loader: "css"/);
   assert.match(buildScript, /minify: true/);
+  assert.match(buildScript, /Object\.prototype\.hasOwnProperty\.call\(options,\s*"minifyIdentifiers"\)/);
+  assert.match(buildScript, /Object\.prototype\.hasOwnProperty\.call\(options,\s*"minifySyntax"\)/);
+  assert.match(buildScript, /Object\.prototype\.hasOwnProperty\.call\(options,\s*"minifyWhitespace"\)/);
+  assert.doesNotMatch(buildScript, /minifyIdentifiers:\s*Boolean\(options\.minifyIdentifiers\)/);
+  assert.doesNotMatch(buildScript, /minifySyntax:\s*Boolean\(options\.minifySyntax\)/);
+  assert.doesNotMatch(buildScript, /minifyWhitespace:\s*Boolean\(options\.minifyWhitespace\)/);
   assert.match(buildScript, /writeMinifiedCssCopy\(SHARED_TOKEN_SOURCE_PATH,\s*PORTAL_SHARED_TOKEN_TARGET\)/);
   assert.match(buildScript, /writeMinifiedCssCopy\(SHARED_TOKEN_SOURCE_PATH,\s*FRONTDOOR_SHARED_TOKEN_TARGET\)/);
 });
