@@ -20,6 +20,7 @@ Test Categories:
 
 from __future__ import annotations
 
+import copy
 import importlib
 import json
 import logging
@@ -818,6 +819,124 @@ class TestBatchProcessing:
 
         assert batch_result.successful_count >= 1
         assert batch_result.failed_count >= 1
+
+    def test_batch_processing_parallel_preserves_order_and_recipe_state(
+        self,
+        pipeline_module,
+        minimal_recipe,
+        sample_input_directory,
+        sample_input_image,
+        tmp_path: Path,
+    ):
+        """Test parallel batch processing keeps deterministic ordering and leaves recipe unchanged."""
+        output_dir = tmp_path / "parallel_outputs"
+
+        pipeline = pipeline_module.UnifiedPipeline(minimal_recipe)
+        original_recipe = copy.deepcopy(pipeline.recipe)
+
+        batch_result = pipeline.process_batch(
+            str(sample_input_directory / "*.png"),
+            output_dir,
+            parallel=True,
+        )
+
+        assert batch_result.successful_count == 3
+        assert [result.input_path.name for result in batch_result.results] == [
+            "image_00.png",
+            "image_01.png",
+            "image_02.png",
+        ]
+        assert pipeline.recipe == original_recipe
+        assert "_output_dir" not in pipeline.recipe
+
+        single_result = pipeline.process_single(sample_input_image)
+        assert single_result.success is True
+
+    def test_batch_processing_parallel_serializes_rag_documents(
+        self,
+        pipeline_module,
+        sample_input_directory,
+        tmp_path: Path,
+    ):
+        """Test parallel batch processing writes one intact RAG document per line."""
+        rag_index_path = tmp_path / "rag-index.jsonl"
+        recipe = {
+            "name": "Quality Batch",
+            "stages": ["color_grading"],
+            "color_grading": {"enabled": True},
+            "quality_feedback": {
+                "enabled": True,
+                "rag_indexing_enabled": True,
+                "rag_index_path": str(rag_index_path),
+            },
+            "output": {"format": "png"},
+        }
+
+        pipeline = pipeline_module.UnifiedPipeline(recipe)
+        batch_result = pipeline.process_batch(
+            str(sample_input_directory / "*.png"),
+            tmp_path / "quality_outputs",
+            parallel=True,
+        )
+
+        assert batch_result.successful_count == 3
+        lines = rag_index_path.read_text(encoding="utf-8").splitlines()
+        assert len(lines) == 3
+        assert all(json.loads(line)["image_id"] == "test" for line in lines)
+
+    def test_batch_processing_parallel_reuses_worker_pipeline_and_honors_max_workers(
+        self,
+        pipeline_module,
+        minimal_recipe,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        """Test parallel batch processing caches one worker pipeline per thread."""
+        input_dir = tmp_path / "parallel_inputs"
+        input_dir.mkdir()
+        for index in range(6):
+            Image.new("RGB", (32, 24), color=(40 + index, 90, 120)).save(input_dir / f"image_{index:02d}.png")
+
+        observed: dict[str, int] = {}
+
+        class RecordingExecutor:
+            def __init__(self, max_workers: int):
+                observed["max_workers"] = max_workers
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+            def map(self, func, iterable):
+                for item in iterable:
+                    yield func(item)
+
+        monkeypatch.setattr(pipeline_module, "ThreadPoolExecutor", RecordingExecutor)
+        monkeypatch.setattr(pipeline_module.os, "cpu_count", lambda: 8)
+
+        pipeline = pipeline_module.UnifiedPipeline(minimal_recipe)
+        create_calls = 0
+        original_create_worker_pipeline = pipeline._create_worker_pipeline
+
+        def _counting_create_worker_pipeline(*args, **kwargs):
+            nonlocal create_calls
+            create_calls += 1
+            return original_create_worker_pipeline(*args, **kwargs)
+
+        monkeypatch.setattr(pipeline, "_create_worker_pipeline", _counting_create_worker_pipeline)
+
+        batch_result = pipeline.process_batch(
+            str(input_dir / "*.png"),
+            tmp_path / "parallel_outputs",
+            parallel=True,
+            max_workers=5,
+        )
+
+        assert batch_result.successful_count == 6
+        assert observed["max_workers"] == 5
+        assert create_calls == 1
 
 
 # =============================================================================

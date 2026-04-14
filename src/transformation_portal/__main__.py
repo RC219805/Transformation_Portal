@@ -3,14 +3,14 @@
 """
 Transformation Portal - Main CLI Entry Point
 
-This module provides the primary command-line interface for the Transformation Portal,
-enabling unified access to all pipeline and processing capabilities.
+This module provides the primary command-line interface for the Transformation
+Portal, enabling unified access to all pipeline and processing capabilities.
 
 Usage:
     python -m transformation_portal --help
-    python -m transformation_portal process -i "inputs/*.jpg" -r config/recipes/signature_estate.yaml -o output/
+    python -m transformation_portal process -i "inputs/*.jpg" -r path/to/recipe.yaml -o output/
     python -m transformation_portal list-recipes
-    python -m transformation_portal validate-recipe config/recipes/signature_estate.yaml
+    python -m transformation_portal validate-recipe path/to/recipe.yaml
 
 The CLI supports:
     - Recipe-driven batch processing
@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from typing import Optional
 
 try:
     import typer
@@ -34,8 +35,13 @@ except ImportError as e:
         "  pip install -e '.[dev]'"
     ) from e
 
+from transformation_portal.cli_support import (
+    emit_dependency_group,
+    list_recipe_summaries,
+    probe_pipeline_features,
+    validate_recipe_file,
+)
 
-# Create the main application
 app = typer.Typer(
     name="transformation-portal",
     help="Professional image and video processing toolkit for luxury real estate rendering",
@@ -56,15 +62,15 @@ def process(
 ):
     """Run unified enhancement pipeline.
 
-    Process images through the unified pipeline using a YAML recipe configuration.
-    Supports batch processing with dry-run preview and quality feedback.
+    Process images through the unified pipeline using a YAML recipe
+    configuration. Supports batch processing with dry-run preview, quality
+    feedback, and bounded parallel execution.
 
     Example:
-        transformation-portal process -i "renders/*.exr" -r config/recipes/signature_estate.yaml -o output/
+        transformation-portal process -i "renders/*.exr" -r path/to/recipe.yaml -o output/
     """
     import logging
 
-    # Configure logging
     log_levels = {
         "debug": logging.DEBUG,
         "info": logging.INFO,
@@ -83,6 +89,7 @@ def process(
     typer.echo(f"   Output: {output}")
     typer.echo(f"   Mode: {mode}")
     typer.echo(f"   Dry run: {dry_run}")
+    typer.echo(f"   Parallel: {parallel}")
     typer.echo()
 
     if not recipe.exists():
@@ -93,7 +100,13 @@ def process(
         from transformation_portal.pipeline_unified import UnifiedPipeline
 
         pipeline = UnifiedPipeline.from_recipe(recipe)
-        result = pipeline.process_batch(input_glob, output, mode=mode, dry_run=dry_run)
+        result = pipeline.process_batch(
+            input_glob,
+            output,
+            mode=mode,
+            dry_run=dry_run,
+            parallel=parallel,
+        )
 
         if not dry_run:
             typer.echo()
@@ -112,53 +125,48 @@ def process(
 
 @app.command("list-recipes")
 def list_recipes(
-    recipes_dir: Path = typer.Option(Path("config/recipes"), "--dir", "-d", help="Recipes directory path"),
+    recipes_dir: Optional[Path] = typer.Option(
+        None,
+        "--dir",
+        "-d",
+        help="Recipe directory path (defaults to config/recipes, then config/ recursion)",
+    ),
 ):
     """List all available recipe presets.
 
-    Scans the recipes directory and displays available pipeline recipes
-    with their descriptions and configurations.
+    Scans the preferred recipe locations and displays available UnifiedPipeline
+    recipes with their descriptions and configurations.
 
     Example:
         transformation-portal list-recipes
-        transformation-portal list-recipes -d custom/recipes/
+        transformation-portal list-recipes -d path/to/recipes/
     """
     typer.echo("📋 Available Pipeline Recipes\n")
 
-    if not recipes_dir.exists():
-        typer.echo(f"⚠️  Recipes directory not found: {recipes_dir}", err=True)
-        typer.echo("   Create recipes in config/recipes/ directory")
-        raise typer.Exit(code=1)
-
     try:
-        from transformation_portal.config_loader import list_recipes as get_recipes
-
-        recipes = get_recipes(recipes_dir)
+        recipes = list_recipe_summaries(recipes_dir)
 
         if not recipes:
-            typer.echo("No recipes found in directory")
+            if recipes_dir is not None:
+                typer.echo(f"No recipe presets found in {recipes_dir}")
+            else:
+                typer.echo("No recipe presets found under config/recipes or config/")
             raise typer.Exit(code=0)
 
         for recipe in recipes:
-            if "error" in recipe:
-                typer.echo(f"  ❌ {recipe['path']}: {recipe['error']}")
-            else:
-                name = recipe.get("name", "Unknown")
-                description = recipe.get("description", "No description")
-                stages = recipe.get("stages", [])
-                output_format = recipe.get("output_format", "tiff")
-
-                typer.echo(f"  📄 {name}")
-                typer.echo(f"     {description}")
-                typer.echo(f"     Stages: {', '.join(stages)}")
-                typer.echo(f"     Output: {output_format}")
-                typer.echo(f"     Path: {recipe['path']}")
-                typer.echo()
+            typer.echo(f"  📄 {recipe.get('name', 'Unknown')}")
+            typer.echo(f"     {recipe.get('description', 'No description')}")
+            typer.echo(f"     Stages: {', '.join(recipe.get('stages', []))}")
+            typer.echo(f"     Output: {recipe.get('output_format', 'tiff')}")
+            typer.echo(f"     Path: {recipe['path']}")
+            typer.echo()
 
         typer.echo(f"Total: {len(recipes)} recipes found")
 
-    except ImportError as e:
-        typer.echo(f"❌ Error: {e}", err=True)
+    except typer.Exit:
+        raise
+    except Exception as e:
+        typer.echo(f"❌ Error loading recipe presets: {e}", err=True)
         raise typer.Exit(code=1)
 
 
@@ -169,11 +177,11 @@ def validate_recipe(
 ):
     """Validate recipe configuration.
 
-    Validates a recipe YAML file against the schema and reports any errors
-    or warnings.
+    Validates a recipe YAML file against the schema and reports any errors or
+    warnings.
 
     Example:
-        transformation-portal validate-recipe config/recipes/signature_estate.yaml
+        transformation-portal validate-recipe path/to/recipe.yaml
         transformation-portal validate-recipe custom_recipe.yaml -v
     """
     typer.echo(f"🔍 Validating recipe: {recipe}\n")
@@ -183,17 +191,10 @@ def validate_recipe(
         raise typer.Exit(code=1)
 
     try:
-        from transformation_portal.config_loader import get_recipe_info, load_recipe
-        from transformation_portal.config_loader import validate_recipe as validate
-
-        # Load the recipe
-        loaded = load_recipe(recipe, expand_env=False, resolve_paths=False)
-
-        # Validate
-        is_valid, errors = validate(loaded)
+        validation_result = validate_recipe_file(recipe)
 
         if verbose:
-            info = get_recipe_info(loaded)
+            info = validation_result.info
             typer.echo("Recipe Information:")
             typer.echo(f"  Name: {info.get('name', 'Unknown')}")
             typer.echo(f"  Description: {info.get('description', 'None')}")
@@ -205,17 +206,16 @@ def validate_recipe(
             typer.echo(f"  Output Format: {info.get('output_format', 'unknown')}")
             typer.echo()
 
-        if is_valid:
+        if validation_result.is_valid:
             typer.echo("✅ Recipe is valid!")
         else:
             typer.echo("❌ Recipe validation failed:")
-            for error in errors:
+            for error in validation_result.errors:
                 typer.echo(f"   - {error}")
             raise typer.Exit(code=1)
 
-    except ImportError as e:
-        typer.echo(f"❌ Error: {e}", err=True)
-        raise typer.Exit(code=1)
+    except typer.Exit:
+        raise
     except Exception as e:
         typer.echo(f"❌ Error validating recipe: {e}", err=True)
         raise typer.Exit(code=1)
@@ -236,53 +236,38 @@ def version():
 def info():
     """Show system and dependency information."""
     typer.echo("Transformation Portal - System Information\n")
-
-    # Python version
     typer.echo(f"Python: {sys.version.split()[0]}")
 
-    # Check pipeline availability
-    try:
-        from transformation_portal.pipeline_unified import HAS_4K_PIPELINE, HAS_QUALITY_BRIDGE
+    typer.echo("\nPipeline Features:")
+    for status in probe_pipeline_features():
+        line = f"  {'✅' if status.available else '⚠️ '} {status.display_name}"
+        if status.reason:
+            line = f"{line}: {status.reason}"
+        typer.echo(line)
 
-        typer.echo("\nPipeline Features:")
-        typer.echo(f"  {'✅' if HAS_QUALITY_BRIDGE else '⚠️ '} RAG Quality Feedback")
-        typer.echo(f"  {'✅' if HAS_4K_PIPELINE else '⚠️ '} 4K Rendering Pipeline")
-    except ImportError:
-        typer.echo("\n⚠️  Pipeline modules not available")
-
-    # Check key dependencies
-    dependencies = [
-        ("numpy", "NumPy"),
-        ("PIL", "Pillow"),
-        ("torch", "PyTorch"),
-        ("yaml", "PyYAML"),
-        ("typer", "Typer"),
-    ]
-
-    typer.echo("\nCore Dependencies:")
-    for module_name, display_name in dependencies:
-        try:
-            module = __import__(module_name)
-            version = getattr(module, "__version__", "unknown")
-            typer.echo(f"  ✅ {display_name}: {version}")
-        except ImportError:
-            typer.echo(f"  ❌ {display_name}: not installed")
-
-    # Optional dependencies
-    optional_deps = [
-        ("tifffile", "16-bit TIFF support"),
-        ("scipy", "Advanced image processing"),
-        ("lpips", "LPIPS perceptual metrics"),
-        ("transformers", "ML models"),
-    ]
-
-    typer.echo("\nOptional Dependencies:")
-    for module_name, feature in optional_deps:
-        try:
-            __import__(module_name)
-            typer.echo(f"  ✅ {feature}")
-        except ImportError:
-            typer.echo(f"  ⚠️  {feature}: not installed")
+    emit_dependency_group(
+        "Core Dependencies",
+        (
+            ("NumPy", "numpy"),
+            ("Pillow", "Pillow"),
+            ("PyTorch", "torch"),
+            ("PyYAML", "PyYAML"),
+            ("Typer", "typer"),
+        ),
+        unavailable_prefix="❌",
+        emit=typer.echo,
+    )
+    emit_dependency_group(
+        "Optional Dependencies",
+        (
+            ("16-bit TIFF support", "tifffile"),
+            ("Advanced image processing", "scipy"),
+            ("LPIPS perceptual metrics", "lpips"),
+            ("ML models", "transformers"),
+        ),
+        unavailable_prefix="⚠️ ",
+        emit=typer.echo,
+    )
 
 
 def main():

@@ -8,6 +8,9 @@ Coverage Target: 60% of CLI module
 
 from __future__ import annotations
 
+import sys
+import types
+
 import pytest
 from typer.testing import CliRunner
 
@@ -148,7 +151,7 @@ class TestInfoCommand:
 
         assert result.exit_code == 0
         assert "Python:" in result.stdout
-        assert "Dependencies:" in result.stdout
+        assert "Core Dependencies:" in result.stdout
 
 
 class TestRenderCommands:
@@ -380,7 +383,50 @@ class TestPipelineCommands:
             ["list-recipes", "--dir", "/nonexistent/recipes"],
         )
 
-        assert result.exit_code == 1
+        assert result.exit_code == 0
+        assert "No recipe presets found" in result.stdout
+
+    def test_pipeline_process_parallel_forwards_flag(self, runner, temp_workspace, monkeypatch):
+        """Test pipeline process forwards the parallel flag to UnifiedPipeline."""
+        from transformation_portal.cli import pipeline_app
+
+        captured: dict[str, object] = {}
+        stub_module = types.ModuleType("transformation_portal.pipeline_unified")
+
+        class StubPipeline:
+            @classmethod
+            def from_recipe(cls, recipe_path):
+                captured["recipe"] = str(recipe_path)
+                return cls()
+
+            def process_batch(self, input_glob, output_dir, **kwargs):
+                captured["input_glob"] = input_glob
+                captured["output_dir"] = str(output_dir)
+                captured["kwargs"] = kwargs
+                return types.SimpleNamespace(successful_count=1, failed_count=0, total_time=0.01)
+
+        stub_module.UnifiedPipeline = StubPipeline
+        monkeypatch.setitem(sys.modules, "transformation_portal.pipeline_unified", stub_module)
+
+        recipe_path = temp_workspace["root"] / "recipe.yaml"
+        recipe_path.write_text("name: Test Recipe\nstages:\n  - color_grading\n")
+
+        result = runner.invoke(
+            pipeline_app,
+            [
+                "process",
+                "--input",
+                "*.jpg",
+                "--output",
+                str(temp_workspace["output_dir"]),
+                "--recipe",
+                str(recipe_path),
+                "--parallel",
+            ],
+        )
+
+        assert result.exit_code == 0
+        assert captured["kwargs"]["parallel"] is True
 
     def test_pipeline_validate_recipe_missing_file(self, runner):
         """Test pipeline validate-recipe with nonexistent file."""
@@ -430,6 +476,8 @@ description: No name or stages
         )
 
         assert result.exit_code == 1
+        assert "Recipe validation failed" in result.stdout
+        assert "Error validating recipe" not in result.stdout
 
     def test_pipeline_validate_recipe_verbose(self, runner, temp_workspace):
         """Test pipeline validate-recipe with verbose flag."""
