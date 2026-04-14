@@ -1997,6 +1997,69 @@ details[open] .disclosure-chevron {
     color: var(--shell-muted);
 }
 
+.artifact-viewer-panel {
+    max-height: min(92vh, 980px);
+    overflow: hidden;
+}
+
+.artifact-viewer-stage {
+    display: flex;
+    min-height: 24rem;
+    align-items: center;
+    justify-content: center;
+    overflow: auto;
+    border-radius: 1.25rem;
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    background:
+        radial-gradient(circle at top, rgba(34, 211, 238, 0.14), transparent 48%),
+        rgba(2, 6, 23, 0.94);
+    padding: 1rem;
+}
+
+.dark .artifact-viewer-stage {
+    border-color: rgba(71, 85, 105, 0.55);
+}
+
+.artifact-viewer-image {
+    display: block;
+    max-width: none;
+    max-height: 72vh;
+    width: auto;
+    border-radius: 1rem;
+    box-shadow: 0 18px 42px rgba(15, 23, 42, 0.32);
+    transform-origin: center center;
+    transition: transform 0.16s ease;
+}
+
+.artifact-viewer-fallback {
+    width: min(100%, 38rem);
+    border-radius: 1rem;
+    border: 1px dashed rgba(148, 163, 184, 0.3);
+    background: rgba(15, 23, 42, 0.52);
+    padding: 1.5rem;
+    text-align: left;
+    color: rgba(226, 232, 240, 0.94);
+}
+
+.artifact-viewer-fallback-title {
+    font-size: 0.875rem;
+    font-weight: 700;
+    color: #f8fafc;
+}
+
+.artifact-viewer-fallback-detail {
+    margin-top: 0.75rem;
+    font-size: 0.8125rem;
+    line-height: 1.7;
+    color: rgba(226, 232, 240, 0.78);
+}
+
+.artifact-viewer-meta-grid {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .job-chip {
     display: inline-flex;
     align-items: center;
@@ -2737,6 +2800,10 @@ textarea,
     }
 
     .runtime-briefing-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .artifact-viewer-meta-grid {
         grid-template-columns: 1fr;
     }
 

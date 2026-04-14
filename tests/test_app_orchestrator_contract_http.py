@@ -117,6 +117,20 @@ def test_portal_bootstrap_reports_direct_debug_mode(client: TestClient) -> None:
     assert body["actor"] is None
     assert body["features"]["apiKeyInput"] is True
     assert body["features"]["directDebug"] is True
+    assert body["features"]["artifactViewerModal"] is False
+
+
+def test_portal_bootstrap_exposes_artifact_viewer_rollout_flag_when_enabled(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("TP_PORTAL_ARTIFACT_VIEWER_MODAL_ROLLOUT_PERCENT", "100")
+    monkeypatch.setenv("TP_PORTAL_DIRECT_DEBUG_COHORT_KEY", "contract-smoke")
+
+    response = client.get("/portal/bootstrap")
+
+    assert response.status_code == 200
+    assert response.json()["features"]["artifactViewerModal"] is True
 
 
 def test_root_ui_response_is_not_cached(client: TestClient) -> None:
