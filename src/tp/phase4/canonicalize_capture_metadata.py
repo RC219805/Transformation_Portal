@@ -622,19 +622,47 @@ def extract_capture_metadata_records(
     extractor_name: str = "extract_capture_metadata.py",
     extractor_version: str = "phase4c-v1",
     exif_runner: Callable[[list[Path], list[str]], dict[str, dict[str, Any]]] | None = None,
+    progress_callback: Callable[[int, int, str], None] | None = None,
 ) -> list[dict[str, Any]]:
-    """Extract deterministic capture metadata records for files under input_root."""
+    """Extract deterministic capture metadata records for files under input_root.
+
+    Args:
+        input_root: Root directory to discover image files from.
+        config: Canonicalization configuration dictionary.
+        strict: If True, fail on any extraction warnings.
+        schema_path: Path to the metadata JSON schema for validation.
+        extractor_name: Name to embed in extractor metadata.
+        extractor_version: Version to embed in extractor metadata.
+        exif_runner: Optional custom ExifTool runner function.
+        progress_callback: Optional callback for progress reporting.
+            Called with (current, total, message) during processing.
+
+    Returns:
+        List of validated capture metadata record dictionaries.
+    """
     path_policy = config.get("path_normalization")
     if not isinstance(path_policy, dict):
         raise ConfigValidationError("path_normalization policy must be an object")
+
+    if progress_callback:
+        progress_callback(0, 0, "Discovering capture files...")
+
     discovered = _discover_capture_files(input_root, path_policy=path_policy)
     file_paths = [path for _, path in discovered]
+    total_files = len(discovered)
+
+    if progress_callback:
+        progress_callback(0, total_files, f"Found {total_files} capture files, extracting EXIF metadata...")
+
     runner = exif_runner or _run_exiftool
     raw_by_path = runner(file_paths, list(config["tag_whitelist"]))
     fingerprint = compute_config_fingerprint_sha256(config)
 
+    if progress_callback:
+        progress_callback(0, total_files, "Building metadata records...")
+
     records: list[dict[str, Any]] = []
-    for relative_path, file_path in discovered:
+    for index, (relative_path, file_path) in enumerate(discovered):
         raw_tags = raw_by_path.get(str(file_path.resolve()), {})
         record = _build_metadata_object(
             relative_path=relative_path,
@@ -650,7 +678,17 @@ def extract_capture_metadata_records(
             raise StrictWarningsError(f"strict mode failed for {relative_path}: {joined}")
         records.append(record)
 
+        if progress_callback:
+            progress_callback(index + 1, total_files, f"Processed {relative_path}")
+
+    if progress_callback:
+        progress_callback(total_files, total_files, "Validating records against schema...")
+
     _validate_records(records, schema_path=schema_path)
+
+    if progress_callback:
+        progress_callback(total_files, total_files, f"Extraction complete: {total_files} records")
+
     return records
 
 
