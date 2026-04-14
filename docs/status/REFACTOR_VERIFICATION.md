@@ -173,7 +173,7 @@ exclude = ["tests*", "data*", "docs*", "scripts"]
 2. **Check CI Workflow:**
    - Lint job should pass (no "No module named" errors)
    - Test job should pass
-   - All matrix combinations (Python 3.10, 3.11, 3.12) should pass
+   - All matrix combinations (Python 3.11, 3.12) should pass
 
 3. **Verify Specific Checks:**
    - Flake8 completes without errors

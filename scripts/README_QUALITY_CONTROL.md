@@ -228,7 +228,7 @@ make validate-ci
 **What it validates:**
 - YAML syntax
 - Required workflow fields (`name`, `on`, `jobs`)
-- Python version matrix (3.10, 3.11, 3.12)
+- Python version matrix (3.11, 3.12)
 - Job dependencies (`needs` clause)
 - Checkout action versions
 - Flake8 configuration consistency
@@ -338,7 +338,7 @@ pylint $(git diff --name-only origin/main...HEAD | grep '\.py$')
 ```
 
 **Test Matrix:**
-- Python versions: 3.10, 3.11, 3.12
+- Python versions: 3.11, 3.12
 - Devices: CPU, GPU
 - Tasks: lint, test
 
@@ -377,7 +377,7 @@ flake8 path/to/file.py --select=E9,F63,F7,F82
 ./scripts/local_ci_check.sh
 
 # Check Python version
-python --version  # Should be 3.10, 3.11, or 3.12
+python --version  # Should be 3.11 or 3.12
 
 # Run tests with same flags as CI
 pytest -v tests/ --maxfail=5
@@ -435,8 +435,8 @@ The system fails only on: 1 (fatal), 2 (error), 32 (usage error)
 
 ### Python Version Support
 
-- **Minimum**: Python 3.10
-- **Tested**: 3.10, 3.11, 3.12
+- **Minimum**: Python 3.11
+- **Tested**: 3.11, 3.12
 - **Recommended**: 3.12 (latest)
 
 ## Best Practices
