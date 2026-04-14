@@ -210,7 +210,7 @@ jobs:
           rm -f "${archive}"
 
           # Run gitleaks scan on repository
-          "${RUNNER_TEMP}/gitleaks-bin/gitleaks" detect --source . --verbose --no-git --exit-code 1 || {
+          "${RUNNER_TEMP}/gitleaks-bin/gitleaks" detect --config .gitleaks.toml --source . --verbose --no-git --exit-code 1 || {
             echo "⚠️  Secrets detected - review gitleaks output above"
             exit 1
           }

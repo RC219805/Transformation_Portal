@@ -47,7 +47,7 @@ Quick reference for common workflows and commands in this repo.
 - `make check-quality` dry-run quality auto-fix checks (`scripts/auto_fix_quality.py --dry-run`).
 - `make check-environment` run pre-flight environment validation through the resolved repo interpreter.
 - `make check-worktree` check if git worktree is clean after builds (`scripts/validation/check_worktree_clean.sh`).
-- `make validate-ci` validate GitHub Actions configs plus dependency-update and Dependabot contracts.
+- `make validate-ci` validate GitHub Actions configs plus gitleaks, dependency-update, and Dependabot workflow contracts.
 - `make check-json-serialization` fail when raw `json.dump`/`json.dumps` usage is detected outside approved modules.
 - `make check-yaml-governance` fail when raw `yaml.safe_load` usage appears outside the shared preset loader or explicitly exempt non-preset loaders.
 - `make check-piptools-cache` fail if `requirements/.pip-tools-cache` is tracked in git.
