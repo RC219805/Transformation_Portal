@@ -862,6 +862,8 @@ def test_portal_transient_draft_restore_is_scoped_to_the_current_owner_and_exclu
     clear_body = _extract_js_function_body(content, "_clearTransientPortalDraft")
     read_body = _extract_js_function_body(content, "_readTransientPortalDraft")
     persist_body = _extract_js_function_body(content, "_persistTransientPortalDraft")
+    schedule_body = _extract_js_function_body(content, "_scheduleTransientPortalDraftPersist")
+    flush_body = _extract_js_function_body(content, "_flushPendingTransientPortalDraftPersist")
     restore_body = _extract_js_function_body(content, "_restoreTransientPortalDraft")
 
     assert "const url = new URL(window.location.href);" in route_body
@@ -878,6 +880,11 @@ def test_portal_transient_draft_restore_is_scoped_to_the_current_owner_and_exclu
     assert "ownerKey" in persist_body
     assert "savedAt: Date.now()" in persist_body
     assert "buildStep: resolveBuildStep(state.portalUi.buildStep)" in persist_body
+    assert "window.setTimeout(scheduleCommit, TRANSIENT_DRAFT_PERSIST_DEBOUNCE_MS);" in schedule_body
+    assert "window.requestIdleCallback" in schedule_body
+    assert "_persistTransientPortalDraft();" in schedule_body
+    assert "_cancelScheduledTransientPortalDraftPersist();" in flush_body
+    assert "return _persistTransientPortalDraft();" in flush_body
     assert "API_KEY_STORAGE_KEY" not in persist_body
     assert "csrfToken" not in persist_body
     assert "state.jobs" not in persist_body
@@ -896,8 +903,11 @@ def test_portal_transient_draft_restores_before_preview_and_readiness_hydration(
 
     assert "_restoreTransientPortalDraft();" in body
     assert "_persistTransientPortalDraft();" in body
-    assert "_persistTransientPortalDraft();" in bind_body
+    assert "_scheduleTransientPortalDraftPersist();" in bind_body
+    assert "_scheduleTransientPortalDraftPersist({ immediate: true });" in bind_body
     assert "_persistTransientPortalDraft();" in set_build_step_body
+    assert "window.addEventListener('pagehide', _flushPendingTransientPortalDraftPersist);" in content
+    assert "window.addEventListener('beforeunload', _flushPendingTransientPortalDraftPersist);" in content
 
     restore_index = body.index("_restoreTransientPortalDraft();")
     update_index = body.index("updateUIFromState();", restore_index)

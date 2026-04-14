@@ -1573,7 +1573,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             f"Sticky portal chrome obscured focused controls: {build_accessibility}",
         )
 
-        draft_input_dir = f"{archive_root}-session-draft"
+        draft_input_dir = str(archive_root)
         draft_output_dir = f"{output_dir}-session-draft"
         print("portal-browser-smoke: verifying transient build draft restore after reload", flush=True)
         draft_state = _poll(

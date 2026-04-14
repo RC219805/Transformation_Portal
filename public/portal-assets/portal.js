@@ -60,6 +60,7 @@ const SSE_RECONNECT_JITTER_MS = 250;
 const SSE_STALL_CHECK_INTERVAL_MS = 10000;
 const SSE_STALL_THRESHOLD_MS = 45000;
 const CONFIG_PREVIEW_DEBOUNCE_MS = 250;
+const TRANSIENT_DRAFT_PERSIST_DEBOUNCE_MS = 200;
 const DISPATCH_BACKEND_OFFLINE_MESSAGE = 'Backend is offline. Dispatch is disabled until connectivity is restored.';
 const CONFIG_PREVIEW_SUPPORTED_PIPELINES = new Set([
     'lux-depth-v3',
@@ -82,6 +83,8 @@ let sseWatchdogIntervalId = null;
 let healthCheckInFlight = false;
 let lastHealthCheckAt = 0;
 let configPreviewTimerId = null;
+let transientDraftPersistTimerId = null;
+let transientDraftPersistIdleId = null;
 
 var __PortalInternal = (() => {
   var __defProp = Object.defineProperty;
@@ -1502,6 +1505,47 @@ function _persistTransientPortalDraft() {
     }
 }
 
+function _cancelScheduledTransientPortalDraftPersist() {
+    if (transientDraftPersistTimerId !== null) {
+        window.clearTimeout(transientDraftPersistTimerId);
+        transientDraftPersistTimerId = null;
+    }
+    if (transientDraftPersistIdleId !== null && typeof window.cancelIdleCallback === 'function') {
+        window.cancelIdleCallback(transientDraftPersistIdleId);
+    }
+    transientDraftPersistIdleId = null;
+}
+
+function _flushPendingTransientPortalDraftPersist() {
+    _cancelScheduledTransientPortalDraftPersist();
+    return _persistTransientPortalDraft();
+}
+
+function _scheduleTransientPortalDraftPersist(options) {
+    const settings = options && typeof options === 'object' ? options : {};
+    if (settings.immediate) return _flushPendingTransientPortalDraftPersist();
+    _cancelScheduledTransientPortalDraftPersist();
+
+    const commitSnapshot = () => {
+        transientDraftPersistTimerId = null;
+        transientDraftPersistIdleId = null;
+        _persistTransientPortalDraft();
+    };
+    const scheduleCommit = () => {
+        transientDraftPersistTimerId = null;
+        if (typeof window.requestIdleCallback === 'function') {
+            transientDraftPersistIdleId = window.requestIdleCallback(() => {
+                commitSnapshot();
+            }, { timeout: TRANSIENT_DRAFT_PERSIST_DEBOUNCE_MS });
+            return;
+        }
+        commitSnapshot();
+    };
+
+    transientDraftPersistTimerId = window.setTimeout(scheduleCommit, TRANSIENT_DRAFT_PERSIST_DEBOUNCE_MS);
+    return true;
+}
+
 function _restoreTransientPortalDraft() {
     const snapshot = _readTransientPortalDraft();
     if (!snapshot) return false;
@@ -2072,6 +2116,7 @@ function handleOperatorActionClick(event) {
             _retryPortalStatus(job);
             break;
         case 'restore_access':
+            _flushPendingTransientPortalDraftPersist();
             window.location.assign(_managedLoginUrlForCurrentRoute());
             break;
         default:
@@ -4987,6 +5032,7 @@ async function loadPortalBootstrap(options = null) {
             _finalizeBootstrapRetry('terminal_auth_redirect', { reason: failure.reason, httpStatus: res.status });
             _applyPortalBootstrap(fallback, { status: 'unavailable', reason: failure.reason, httpStatus: res.status });
             createToast(failure.toastMessage, 'error');
+            _flushPendingTransientPortalDraftPersist();
             window.location.assign(_managedLoginUrlForCurrentRoute());
             return;
         }
@@ -8522,7 +8568,7 @@ function bindInputs() {
         el.addEventListener('input', (e) => {
             if (category) state.config[category][key] = e.target.value;
             else state.config[key] = e.target.value;
-            _persistTransientPortalDraft();
+            _scheduleTransientPortalDraftPersist();
             renderCLI();
             if (trackedTelemetryField(category, key)) {
                 scheduleConfigPreview();
@@ -8530,7 +8576,7 @@ function bindInputs() {
         });
         el.addEventListener('change', (e) => {
             const field = trackedTelemetryField(category, key);
-            _persistTransientPortalDraft();
+            _scheduleTransientPortalDraftPersist({ immediate: true });
             if (field) {
                 void emitPortalEvent('field_commit', {
                     surface: telemetrySurfaceFor(category),
@@ -10676,7 +10722,9 @@ portalRenderSurfaces.register('jobQueue', {
     }
 });
 
+window.addEventListener('beforeunload', _flushPendingTransientPortalDraftPersist);
 window.addEventListener('beforeunload', cleanupActiveJobHandles);
+window.addEventListener('pagehide', _flushPendingTransientPortalDraftPersist);
 window.addEventListener('pagehide', cleanupActiveJobHandles);
 window.addEventListener('pageshow', () => {
     reconcileBuildSurfaceFromDom();
