@@ -20,7 +20,8 @@ const ENV_KEYS = [
   "TP_FRONTDOOR_SESSION_SCALING_MODE",
   "TP_CF_ACCESS_TEAM_DOMAIN",
   "TP_CF_ACCESS_AUD",
-  "TP_ALLOW_LOCAL_ACCESS_BYPASS"
+  "TP_ALLOW_LOCAL_ACCESS_BYPASS",
+  "TP_PORTAL_ARTIFACT_VIEWER_MODAL_ROLLOUT_PERCENT"
 ];
 
 const TEST_CF_ACCESS_TEAM_DOMAIN = "https://tp-frontdoor-tests.cloudflareaccess.com";
@@ -97,6 +98,13 @@ function withTempEnvironment(overrides = {}) {
     process.env.TP_ALLOW_LOCAL_ACCESS_BYPASS = overrides.TP_ALLOW_LOCAL_ACCESS_BYPASS;
   } else {
     delete process.env.TP_ALLOW_LOCAL_ACCESS_BYPASS;
+  }
+
+  if (typeof overrides.TP_PORTAL_ARTIFACT_VIEWER_MODAL_ROLLOUT_PERCENT === "string") {
+    process.env.TP_PORTAL_ARTIFACT_VIEWER_MODAL_ROLLOUT_PERCENT =
+      overrides.TP_PORTAL_ARTIFACT_VIEWER_MODAL_ROLLOUT_PERCENT;
+  } else {
+    delete process.env.TP_PORTAL_ARTIFACT_VIEWER_MODAL_ROLLOUT_PERCENT;
   }
 
   resetDbCache();
@@ -1098,10 +1106,46 @@ test("managed bootstrap returns actor metadata and CSRF for authenticated sessio
       assert.equal(body.actor.accessEmail, "admin@example.com");
       assert.equal(body.features.apiKeyInput, false);
       assert.equal(body.features.directDebug, false);
+      assert.equal(body.features.artifactViewerModal, false);
       assert.equal(body.csrfToken, authenticatedSession.csrfToken);
     } finally {
       restoreFetch();
     }
+  } finally {
+    env.cleanup();
+  }
+});
+
+test("managed bootstrap enables the artifact viewer modal for rollout cohorts", async () => {
+  const env = withTempEnvironment({
+    TP_PORTAL_ARTIFACT_VIEWER_MODAL_ROLLOUT_PERCENT: "100"
+  });
+
+  try {
+    const sessions = await importFresh("../lib/sessions.js");
+    const { GET } = await importFresh("../app/portal/bootstrap/route.js");
+    const authenticatedSession = sessions.rotateAuthenticatedSession(
+      sessions.createAnonymousSession(),
+      {
+        username: "admin",
+        accessEmail: "admin@example.com",
+        role: "admin"
+      }
+    );
+
+    const request = buildRequest("https://portal.example.com/portal/bootstrap", {
+      method: "GET",
+      headers: new Headers({
+        cookie: `__Host-tp_session=${authenticatedSession.id}`,
+        "Cf-Access-Jwt-Assertion": createAccessJwt()
+      })
+    });
+
+    const response = await GET(request);
+    const body = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(body.features.artifactViewerModal, true);
   } finally {
     env.cleanup();
   }

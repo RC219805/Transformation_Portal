@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import { NextResponse } from "next/server.js";
 
 import { revokeSessionOnAccessFailure, resolveAuthenticatedAccessSession } from "../../../lib/access.js";
@@ -10,6 +12,35 @@ import {
 import { clearSessionCookie } from "../../../lib/sessions.js";
 
 export const runtime = "nodejs";
+
+function parseRolloutPercent(rawValue) {
+  const parsed = Number.parseInt(String(rawValue || "").trim(), 10);
+  if (!Number.isFinite(parsed)) {
+    return 0;
+  }
+  return Math.max(0, Math.min(100, parsed));
+}
+
+function stableRolloutBucket(key) {
+  const normalized = String(key || "").trim().toLowerCase();
+  if (!normalized) {
+    return 100;
+  }
+  const digest = createHash("sha256").update(normalized).digest("hex");
+  return Number.parseInt(digest.slice(0, 8), 16) % 100;
+}
+
+function resolveArtifactViewerModal(session, env = process.env) {
+  const rolloutPercent = parseRolloutPercent(env.TP_PORTAL_ARTIFACT_VIEWER_MODAL_ROLLOUT_PERCENT);
+  if (rolloutPercent <= 0) {
+    return false;
+  }
+  const cohortKey = String(session?.username || session?.accessEmail || session?.role || "").trim().toLowerCase();
+  if (!cohortKey) {
+    return false;
+  }
+  return stableRolloutBucket(cohortKey) < rolloutPercent;
+}
 
 export async function GET(request) {
   const authState = await resolveAuthenticatedAccessSession(request, { touch: true });
@@ -59,7 +90,8 @@ export async function GET(request) {
         },
         features: {
           apiKeyInput: false,
-          directDebug: false
+          directDebug: false,
+          artifactViewerModal: resolveArtifactViewerModal(session)
         }
       },
       {

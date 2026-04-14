@@ -1,6 +1,6 @@
 # Portal Operator Console Modernization RFC
 
-**Status:** Proposed
+**Status:** Approved
 **Date:** 2026-04-14
 **Owner:** Transformation Portal Architect
 **Reviewers:** Frontdoor / Platform, Portal Frontend, Backend / Origin, Security / Privacy, QA / Validation

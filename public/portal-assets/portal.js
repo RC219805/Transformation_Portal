@@ -155,7 +155,8 @@ var __PortalInternal = (() => {
       actor: null,
       features: {
         apiKeyInput: false,
-        directDebug: false
+        directDebug: false,
+        artifactViewerModal: false
       }
     };
   }
@@ -404,6 +405,12 @@ var __PortalInternal = (() => {
     return {
       debugBundleAcknowledged: false,
       effectiveConfigOpen: false,
+      artifactViewer: {
+        open: false,
+        jobId: "",
+        artifactPath: "",
+        zoomPercent: 100
+      },
       debugBundleGuardrailSeen: false,
       buildStep: 1,
       lastOverlayTrigger: null,
@@ -429,7 +436,8 @@ var __PortalInternal = (() => {
       actor: null,
       features: {
         apiKeyInput: false,
-        directDebug: false
+        directDebug: false,
+        artifactViewerModal: false
       }
     };
   }
@@ -842,6 +850,7 @@ const els = {
     reviewProvenanceArtifactRole: _domId('reviewProvenanceArtifactRole'),
     reviewProvenanceRunState: _domId('reviewProvenanceRunState'),
     reviewProvenancePath: _domId('reviewProvenancePath'),
+    reviewProvenanceFingerprint: _domId('reviewProvenanceFingerprint'),
     reviewProvenanceFreshness: _domId('reviewProvenanceFreshness'),
     reviewProvenanceSource: _domId('reviewProvenanceSource'),
     reviewProvenanceBatch: _domId('reviewProvenanceBatch'),
@@ -851,6 +860,7 @@ const els = {
     openArtifactBtn: _domId('openArtifactBtn'),
     downloadArtifactBtn: _domId('downloadArtifactBtn'),
     copyArtifactPathBtn: _domId('copyArtifactPathBtn'),
+    copyArtifactFingerprintBtn: _domId('copyArtifactFingerprintBtn'),
     artifactThumbnailRail: _domId('artifactThumbnailRail'),
     runCardActions: _domId('runCardActions'),
     viewRunCardBtn: _domId('viewRunCardBtn'),
@@ -881,6 +891,27 @@ const els = {
     effectiveEstimateLabel: _domId('effectiveEstimateLabel'),
     effectiveReadinessSummary: _domId('effectiveReadinessSummary'),
     effectiveArgvPreview: _domId('effectiveArgvPreview'),
+    artifactViewerModal: _domId('artifactViewerModal'),
+    artifactViewerPanel: _domId('artifactViewerPanel'),
+    artifactViewerTitle: _domId('artifactViewerTitle'),
+    artifactViewerMeta: _domId('artifactViewerMeta'),
+    artifactViewerStage: _domId('artifactViewerStage'),
+    artifactViewerImage: _domId('artifactViewerImage'),
+    artifactViewerFallback: _domId('artifactViewerFallback'),
+    artifactViewerFallbackTitle: _domId('artifactViewerFallbackTitle'),
+    artifactViewerFallbackDetail: _domId('artifactViewerFallbackDetail'),
+    artifactViewerPath: _domId('artifactViewerPath'),
+    artifactViewerFingerprint: _domId('artifactViewerFingerprint'),
+    artifactViewerZoomValue: _domId('artifactViewerZoomValue'),
+    artifactViewerPrevBtn: _domId('artifactViewerPrevBtn'),
+    artifactViewerNextBtn: _domId('artifactViewerNextBtn'),
+    artifactViewerZoomOutBtn: _domId('artifactViewerZoomOutBtn'),
+    artifactViewerZoomInBtn: _domId('artifactViewerZoomInBtn'),
+    artifactViewerResetZoomBtn: _domId('artifactViewerResetZoomBtn'),
+    artifactViewerOpenRawBtn: _domId('artifactViewerOpenRawBtn'),
+    artifactViewerCopyPathBtn: _domId('artifactViewerCopyPathBtn'),
+    artifactViewerCopyFingerprintBtn: _domId('artifactViewerCopyFingerprintBtn'),
+    closeArtifactViewerBtn: _domId('closeArtifactViewerBtn'),
 
     healthIndicator: _domId('healthIndicator'),
     healthText: _domId('healthText'),
@@ -1806,6 +1837,9 @@ function _openArtifactForSelection(job, artifact, surface = 'artifact_review') {
     if (!job || !artifact) {
         createToast('No artifact is available for this selection.', 'info');
         return false;
+    }
+    if (_artifactViewerEnabled()) {
+        return _openArtifactViewer(job, artifact);
     }
     const url = sanitizeManagedAssetUrl(buildArtifactUrl(job, artifact));
     if (!url) {
@@ -3132,6 +3166,18 @@ function buildArtifactUrl(job, artifact) {
     });
 }
 
+function artifactFingerprint(artifact) {
+    return String(artifact?.sha256 || '').trim();
+}
+
+function _artifactFingerprintLabel(artifact) {
+    return artifactFingerprint(artifact) || 'Not reported';
+}
+
+function _artifactViewerEnabled() {
+    return Boolean(state.auth?.features?.artifactViewerModal);
+}
+
 function artifactHeroScore(artifact) {
     if (!artifact || typeof artifact !== 'object') return -1;
     const info = artifactNameParts(artifact);
@@ -4338,7 +4384,8 @@ function _defaultPortalBootstrap() {
         actor: null,
         features: {
             apiKeyInput: false,
-            directDebug: false
+            directDebug: false,
+            artifactViewerModal: false
         }
     };
 }
@@ -4711,6 +4758,7 @@ function _syncBootstrapUi() {
     const selectedJob = _findJobById(state.selectedJobId);
     renderSelectedJobRecoveryActions(selectedJob);
     renderReviewStatusActions(selectedJob);
+    renderArtifactViewer();
 }
 
 function _applyPortalBootstrap(rawBootstrap, options = {}) {
@@ -4730,7 +4778,8 @@ function _applyPortalBootstrap(rawBootstrap, options = {}) {
         actor: mode === 'managed' && bootstrap.actor && typeof bootstrap.actor === 'object' ? bootstrap.actor : null,
         features: {
             apiKeyInput: mode === 'direct_debug' && bootstrap.features?.apiKeyInput !== false,
-            directDebug: mode === 'direct_debug' && bootstrap.features?.directDebug !== false
+            directDebug: mode === 'direct_debug' && bootstrap.features?.directDebug !== false,
+            artifactViewerModal: Boolean(bootstrap.features?.artifactViewerModal)
         }
     };
     _setBootstrapStatus(nextStatus, options.reason || '', options.httpStatus || 0);
@@ -5355,6 +5404,7 @@ function _renderArtifactProvenance(job, artifact) {
             els.reviewProvenancePath.textContent = 'Preview, metadata, and actions will appear here when outputs are indexed.';
             els.reviewProvenancePath.removeAttribute('title');
         }
+        if (els.reviewProvenanceFingerprint) els.reviewProvenanceFingerprint.textContent = 'Not reported';
         if (els.reviewProvenanceFreshness) els.reviewProvenanceFreshness.textContent = 'No live telemetry';
         if (els.reviewProvenanceSource) els.reviewProvenanceSource.textContent = 'Not reported';
         if (els.reviewProvenanceBatch) els.reviewProvenanceBatch.textContent = 'Not reported';
@@ -5377,6 +5427,7 @@ function _renderArtifactProvenance(job, artifact) {
         els.reviewProvenancePath.textContent = relativePath;
         els.reviewProvenancePath.title = relativePath;
     }
+    if (els.reviewProvenanceFingerprint) els.reviewProvenanceFingerprint.textContent = _artifactFingerprintLabel(artifact);
     if (els.reviewProvenanceFreshness) els.reviewProvenanceFreshness.textContent = freshnessLabel;
     if (els.reviewProvenanceSource) els.reviewProvenanceSource.textContent = sourceLabel;
     if (els.reviewProvenanceBatch) els.reviewProvenanceBatch.textContent = batchLabel;
@@ -5412,11 +5463,16 @@ function _resetArtifactActionButtons() {
         els.copyArtifactPathBtn.disabled = true;
         delete els.copyArtifactPathBtn.dataset.path;
     }
+    if (els.copyArtifactFingerprintBtn) {
+        els.copyArtifactFingerprintBtn.disabled = true;
+        delete els.copyArtifactFingerprintBtn.dataset.fingerprint;
+    }
 }
 
 function renderReviewSurfaces(payload = null) {
     const currentPayload = payload || generatePayload();
     renderArtifactPanel();
+    renderArtifactViewer();
     renderSelectedJobInspector();
     renderReconstructionRuntimeSummary(currentPayload);
     renderMissionControl(payload);
@@ -5567,6 +5623,7 @@ function renderArtifactPanel() {
 
     if (els.openArtifactBtn) {
         const openUrl = selectedArtifact ? buildArtifactUrl(selected, selectedArtifact) : '';
+        els.openArtifactBtn.textContent = _artifactViewerEnabled() ? 'Inspect' : 'Open';
         els.openArtifactBtn.disabled = !openUrl;
         els.openArtifactBtn.dataset.url = openUrl;
     }
@@ -5579,6 +5636,11 @@ function renderArtifactPanel() {
     if (els.copyArtifactPathBtn) {
         els.copyArtifactPathBtn.disabled = !selectedArtifact;
         els.copyArtifactPathBtn.dataset.path = selectedArtifact ? artifactLabel(selectedArtifact) : '';
+    }
+    if (els.copyArtifactFingerprintBtn) {
+        const fingerprint = selectedArtifact ? artifactFingerprint(selectedArtifact) : '';
+        els.copyArtifactFingerprintBtn.disabled = !fingerprint;
+        els.copyArtifactFingerprintBtn.dataset.fingerprint = fingerprint;
     }
 
     if (els.artifactCompareStage) {
@@ -9815,6 +9877,17 @@ if (els.copyArtifactPathBtn) {
     });
 }
 
+if (els.copyArtifactFingerprintBtn) {
+    els.copyArtifactFingerprintBtn.addEventListener('click', async () => {
+        const fingerprint = String(els.copyArtifactFingerprintBtn.dataset.fingerprint || '').trim();
+        if (!fingerprint) {
+            createToast('No artifact fingerprint is available for this selection.', 'error');
+            return;
+        }
+        await copyToClipboard(fingerprint);
+    });
+}
+
 if (els.viewRunCardBtn) els.viewRunCardBtn.addEventListener('click', async () => {
     const runCardUrl = sanitizeManagedAssetUrl(els.viewRunCardBtn.dataset.url);
     if (!runCardUrl) {
@@ -9971,6 +10044,9 @@ function _overlayFocusableElements(root) {
 }
 
 function _activeOverlayPanel() {
+    if (els.artifactViewerModal && !els.artifactViewerModal.classList.contains('hidden')) {
+        return els.artifactViewerPanel;
+    }
     if (els.shortcutsModal && !els.shortcutsModal.classList.contains('hidden')) {
         return els.shortcutsPanel;
     }
@@ -10010,6 +10086,176 @@ function _isTypingTarget(target) {
     if (tagName !== 'input') return false;
     const inputType = String(target.getAttribute('type') || 'text').trim().toLowerCase();
     return !['button', 'checkbox', 'color', 'file', 'hidden', 'radio', 'range', 'reset', 'submit'].includes(inputType);
+}
+
+function _artifactViewerContext() {
+    const viewerState = state.portalUi?.artifactViewer || {};
+    const requestedJobId = _normalizeSelectedJobId(viewerState.jobId || state.selectedJobId);
+    const job = requestedJobId ? _findJobById(requestedJobId) : null;
+    const artifacts = Array.isArray(job?.artifacts) ? rankArtifactsForDisplay(job.artifacts) : [];
+    if (!job || artifacts.length === 0) {
+        return {
+            job,
+            artifacts,
+            artifact: null,
+            index: -1,
+            url: '',
+            inlinePreview: false,
+            zoomPercent: 100
+        };
+    }
+    const requestedPath = _normalizeArtifactRoutePath(viewerState.artifactPath || '');
+    const artifact = artifacts.find((candidate) => _artifactRouteKey(candidate) === requestedPath)
+        || _selectedArtifactForJob(job)
+        || artifacts[0]
+        || null;
+    const index = artifact ? artifacts.findIndex((candidate) => candidate.path === artifact.path) : -1;
+    const url = artifact ? sanitizeManagedAssetUrl(buildArtifactUrl(job, artifact)) : '';
+    return {
+        job,
+        artifacts,
+        artifact,
+        index,
+        url,
+        inlinePreview: Boolean(artifact && artifactIsPreviewable(artifact) && url),
+        zoomPercent: clamp(Number(viewerState.zoomPercent || 100), 50, 250)
+    };
+}
+
+function _setArtifactViewerZoom(nextZoom) {
+    state.portalUi.artifactViewer.zoomPercent = clamp(Number(nextZoom || 100), 50, 250);
+    renderArtifactViewer();
+}
+
+function _navigateArtifactViewerSelection(direction) {
+    const context = _artifactViewerContext();
+    if (!context.job || !context.artifact) return false;
+    const nextIndex = context.index + Number(direction || 0);
+    if (nextIndex < 0 || nextIndex >= context.artifacts.length) return false;
+    const nextArtifact = context.artifacts[nextIndex];
+    const nextPath = _artifactRouteKey(nextArtifact);
+    state.portalUi.artifactViewer.jobId = _normalizeSelectedJobId(context.job.id);
+    state.portalUi.artifactViewer.artifactPath = nextPath;
+    state.portalUi.artifactViewer.zoomPercent = 100;
+    _rememberArtifactSelection(context.job.id, nextPath);
+    renderReviewSurfaces();
+    return true;
+}
+
+function renderArtifactViewer() {
+    if (!els.artifactViewerModal || !els.artifactViewerPanel) return;
+    const shouldShow = Boolean(state.portalUi?.artifactViewer?.open) && _artifactViewerEnabled();
+    els.artifactViewerModal.classList.toggle('hidden', !shouldShow);
+    els.artifactViewerModal.classList.toggle('flex', shouldShow);
+    els.artifactViewerModal.setAttribute('aria-hidden', shouldShow ? 'false' : 'true');
+    els.artifactViewerModal.dataset.overlayOpen = shouldShow ? 'true' : 'false';
+    if (!shouldShow) {
+        if (!_artifactViewerEnabled()) {
+            state.portalUi.artifactViewer.open = false;
+        }
+        if (els.artifactViewerImage) {
+            els.artifactViewerImage.classList.add('hidden');
+            els.artifactViewerImage.removeAttribute('src');
+            els.artifactViewerImage.style.transform = 'scale(1)';
+        }
+        if (els.artifactViewerFallback) els.artifactViewerFallback.classList.add('hidden');
+        return;
+    }
+
+    const context = _artifactViewerContext();
+    if (!context.job || !context.artifact) {
+        state.portalUi.artifactViewer.open = false;
+        renderArtifactViewer();
+        return;
+    }
+
+    const { artifact, index, artifacts, inlinePreview, job, url, zoomPercent } = context;
+    const relPath = artifactLabel(artifact);
+    const fingerprint = artifactFingerprint(artifact);
+    if (els.artifactViewerTitle) els.artifactViewerTitle.textContent = artifactNameParts(artifact).fileName;
+    if (els.artifactViewerMeta) {
+        els.artifactViewerMeta.textContent =
+            `${artifactDisplayLabel(artifact)} • ${artifactContentType(artifact) || 'binary'} • ${formatBytes(artifact.size_bytes)}`;
+    }
+    if (els.artifactViewerPath) els.artifactViewerPath.textContent = relPath;
+    if (els.artifactViewerFingerprint) els.artifactViewerFingerprint.textContent = _artifactFingerprintLabel(artifact);
+    if (els.artifactViewerZoomValue) {
+        els.artifactViewerZoomValue.textContent = inlinePreview ? `${zoomPercent}% zoom` : 'Inline preview unavailable';
+    }
+    if (els.artifactViewerPrevBtn) els.artifactViewerPrevBtn.disabled = index <= 0;
+    if (els.artifactViewerNextBtn) els.artifactViewerNextBtn.disabled = index >= (artifacts.length - 1);
+    if (els.artifactViewerZoomOutBtn) els.artifactViewerZoomOutBtn.disabled = !inlinePreview;
+    if (els.artifactViewerZoomInBtn) els.artifactViewerZoomInBtn.disabled = !inlinePreview;
+    if (els.artifactViewerResetZoomBtn) els.artifactViewerResetZoomBtn.disabled = !inlinePreview;
+    if (els.artifactViewerOpenRawBtn) {
+        els.artifactViewerOpenRawBtn.disabled = !url;
+        els.artifactViewerOpenRawBtn.dataset.url = url;
+    }
+    if (els.artifactViewerCopyPathBtn) {
+        els.artifactViewerCopyPathBtn.disabled = !relPath;
+        els.artifactViewerCopyPathBtn.dataset.path = relPath;
+    }
+    if (els.artifactViewerCopyFingerprintBtn) {
+        els.artifactViewerCopyFingerprintBtn.disabled = !fingerprint;
+        els.artifactViewerCopyFingerprintBtn.dataset.fingerprint = fingerprint;
+    }
+
+    if (inlinePreview && els.artifactViewerImage) {
+        els.artifactViewerImage.src = url;
+        els.artifactViewerImage.classList.remove('hidden');
+        els.artifactViewerImage.style.transform = `scale(${zoomPercent / 100})`;
+        if (els.artifactViewerFallback) els.artifactViewerFallback.classList.add('hidden');
+        return;
+    }
+
+    if (els.artifactViewerImage) {
+        els.artifactViewerImage.classList.add('hidden');
+        els.artifactViewerImage.removeAttribute('src');
+        els.artifactViewerImage.style.transform = 'scale(1)';
+    }
+    if (els.artifactViewerFallback) {
+        els.artifactViewerFallback.classList.remove('hidden');
+    }
+    if (els.artifactViewerFallbackTitle) {
+        els.artifactViewerFallbackTitle.textContent = url ? 'Inline preview unavailable' : 'Artifact URL unavailable';
+    }
+    if (els.artifactViewerFallbackDetail) {
+        els.artifactViewerFallbackDetail.textContent = url
+            ? 'This artifact stays reviewable through retained metadata, integrity fingerprints, and the managed raw asset link.'
+            : 'The browser cannot resolve a managed asset URL for this artifact, so review stays pinned to the retained metadata above.';
+    }
+}
+
+function _closeArtifactViewer(restoreFocus = true) {
+    state.portalUi.artifactViewer.open = false;
+    renderArtifactViewer();
+    if (restoreFocus) {
+        _restoreOverlayFocus();
+    }
+}
+
+function _openArtifactViewer(job, artifact, trigger = document.activeElement) {
+    if (!_artifactViewerEnabled() || !els.artifactViewerModal) return false;
+    if (!job || !artifact) {
+        createToast('No artifact is available for this selection.', 'info');
+        return false;
+    }
+    state.portalUi.artifactViewer.open = true;
+    state.portalUi.artifactViewer.jobId = _normalizeSelectedJobId(job.id);
+    state.portalUi.artifactViewer.artifactPath = _artifactRouteKey(artifact);
+    state.portalUi.artifactViewer.zoomPercent = 100;
+    _rememberOverlayTrigger(trigger);
+    renderArtifactViewer();
+    if (els.closeArtifactViewerBtn) els.closeArtifactViewerBtn.focus();
+    void emitPortalEvent('artifact_viewer_opened', {
+        surface: 'artifact_viewer_modal',
+        metadata: {
+            job_id: String(job.id || ''),
+            media_kind: String(artifact.media_kind || 'file'),
+            pipeline: String(job.pipeline || '')
+        }
+    });
+    return true;
 }
 
 const toggleModal = (show, trigger = document.activeElement) => {
@@ -10081,6 +10327,69 @@ if (els.effectiveConfigDrawer) {
         if (e.target === els.effectiveConfigDrawer) toggleEffectiveConfigDrawer(false);
     });
 }
+if (els.closeArtifactViewerBtn) {
+    els.closeArtifactViewerBtn.addEventListener('click', () => _closeArtifactViewer());
+}
+if (els.artifactViewerModal) {
+    els.artifactViewerModal.addEventListener('click', (event) => {
+        if (event.target === els.artifactViewerModal) _closeArtifactViewer();
+    });
+}
+if (els.artifactViewerPrevBtn) {
+    els.artifactViewerPrevBtn.addEventListener('click', () => {
+        _navigateArtifactViewerSelection(-1);
+    });
+}
+if (els.artifactViewerNextBtn) {
+    els.artifactViewerNextBtn.addEventListener('click', () => {
+        _navigateArtifactViewerSelection(1);
+    });
+}
+if (els.artifactViewerZoomOutBtn) {
+    els.artifactViewerZoomOutBtn.addEventListener('click', () => {
+        _setArtifactViewerZoom((state.portalUi?.artifactViewer?.zoomPercent || 100) - 25);
+    });
+}
+if (els.artifactViewerZoomInBtn) {
+    els.artifactViewerZoomInBtn.addEventListener('click', () => {
+        _setArtifactViewerZoom((state.portalUi?.artifactViewer?.zoomPercent || 100) + 25);
+    });
+}
+if (els.artifactViewerResetZoomBtn) {
+    els.artifactViewerResetZoomBtn.addEventListener('click', () => {
+        _setArtifactViewerZoom(100);
+    });
+}
+if (els.artifactViewerOpenRawBtn) {
+    els.artifactViewerOpenRawBtn.addEventListener('click', () => {
+        const url = sanitizeManagedAssetUrl(els.artifactViewerOpenRawBtn.dataset.url);
+        if (!url) {
+            createToast('No artifact URL is available for this selection.', 'error');
+            return;
+        }
+        window.open(url, '_blank', 'noopener,noreferrer');
+    });
+}
+if (els.artifactViewerCopyPathBtn) {
+    els.artifactViewerCopyPathBtn.addEventListener('click', async () => {
+        const path = String(els.artifactViewerCopyPathBtn.dataset.path || '').trim();
+        if (!path) {
+            createToast('No artifact path is available for this selection.', 'error');
+            return;
+        }
+        await copyToClipboard(path);
+    });
+}
+if (els.artifactViewerCopyFingerprintBtn) {
+    els.artifactViewerCopyFingerprintBtn.addEventListener('click', async () => {
+        const fingerprint = String(els.artifactViewerCopyFingerprintBtn.dataset.fingerprint || '').trim();
+        if (!fingerprint) {
+            createToast('No artifact fingerprint is available for this selection.', 'error');
+            return;
+        }
+        await copyToClipboard(fingerprint);
+    });
+}
 
 document.addEventListener('keydown', (e) => {
     if (_trapOverlayFocus(e)) {
@@ -10088,6 +10397,11 @@ document.addEventListener('keydown', (e) => {
     }
     const key = String(e.key || '');
     const isPlainShortcut = !e.ctrlKey && !e.metaKey && !e.altKey && !_isTypingTarget(e.target);
+    if (e.key === "Escape" && els.artifactViewerModal && !els.artifactViewerModal.classList.contains("hidden")) {
+        e.preventDefault();
+        _closeArtifactViewer();
+        return;
+    }
     if (e.key === "Escape" && els.effectiveConfigDrawer && !els.effectiveConfigDrawer.classList.contains("hidden")) {
         e.preventDefault();
         toggleEffectiveConfigDrawer(false);
@@ -10115,6 +10429,33 @@ document.addEventListener('keydown', (e) => {
         e.preventDefault();
         navigateConsoleView(nextView);
         return;
+    }
+    if (isPlainShortcut && els.artifactViewerModal && !els.artifactViewerModal.classList.contains('hidden')) {
+        if (key === 'ArrowLeft') {
+            e.preventDefault();
+            _navigateArtifactViewerSelection(-1);
+            return;
+        }
+        if (key === 'ArrowRight') {
+            e.preventDefault();
+            _navigateArtifactViewerSelection(1);
+            return;
+        }
+        if (key === '+' || key === '=') {
+            e.preventDefault();
+            _setArtifactViewerZoom((state.portalUi?.artifactViewer?.zoomPercent || 100) + 25);
+            return;
+        }
+        if (key === '-') {
+            e.preventDefault();
+            _setArtifactViewerZoom((state.portalUi?.artifactViewer?.zoomPercent || 100) - 25);
+            return;
+        }
+        if (key === '0') {
+            e.preventDefault();
+            _setArtifactViewerZoom(100);
+            return;
+        }
     }
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
         e.preventDefault();

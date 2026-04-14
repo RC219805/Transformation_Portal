@@ -682,6 +682,7 @@ def test_portal_bootstrap_loader_uses_abortable_timeout_and_state_contract() -> 
     assert "authMode: 'managed_unavailable'" in default_body
     assert "apiKeyInput: false" in default_body
     assert "directDebug: false" in default_body
+    assert "artifactViewerModal: false" in default_body
     assert "const BOOTSTRAP_TIMEOUT_MS = 3500;" in content
     assert "const BOOTSTRAP_RETRY_BASE_DELAY_MS = 1000;" in content
     assert "const BOOTSTRAP_RETRY_MAX_DELAY_MS = 12000;" in content
@@ -712,6 +713,7 @@ def test_portal_bootstrap_loader_uses_abortable_timeout_and_state_contract() -> 
     assert "_finalizeBootstrapRetry('terminal_invalid_json', { reason: 'invalid_json' });" in body
     assert "_finalizeBootstrapRetry('succeeded', {" in body
     assert "_applyPortalBootstrap(payload, { status: 'ready' });" in body
+    assert "artifactViewerModal: Boolean(bootstrap.features?.artifactViewerModal)" in content
     assert "previousHealthEndpointPath !== nextHealthEndpointPath" in body
     assert "_queueBootstrapOnlineFollowup();" in body
     assert "_flushBootstrapOnlineFollowup();" in body
@@ -881,6 +883,7 @@ def test_portal_artifact_gallery_renders_visual_review_controls() -> None:
     assert 'id="openArtifactBtn"' in content
     assert 'id="downloadArtifactBtn"' in content
     assert 'id="copyArtifactPathBtn"' in content
+    assert 'id="copyArtifactFingerprintBtn"' in content
     assert "artifactHeroScore" in content
     assert "findCompareArtifact" in content
     assert "artifactDisplayHint" in content
@@ -902,9 +905,11 @@ def test_portal_artifact_gallery_renders_visual_review_controls() -> None:
     assert "delete els.openArtifactBtn.dataset.url;" in reset_body
     assert "delete els.downloadArtifactBtn.dataset.filename;" in reset_body
     assert "delete els.copyArtifactPathBtn.dataset.path;" in reset_body
+    assert "delete els.copyArtifactFingerprintBtn.dataset.fingerprint;" in reset_body
     assert "parsed.origin !== window.location.origin" in sanitize_body
     assert "parsed.pathname.startsWith('/v1/jobs/')" in sanitize_body
-    assert "sanitizeManagedAssetUrl(buildArtifactUrl(job, artifact))" in open_artifact_body
+    assert "_artifactViewerEnabled()" in open_artifact_body
+    assert "_openArtifactViewer(job, artifact);" in open_artifact_body
     assert "sanitizeManagedAssetUrl(els.downloadArtifactBtn.dataset.url)" in content
 
 
@@ -922,6 +927,7 @@ def test_portal_review_surface_exposes_warning_banner_and_provenance_contract() 
     assert 'id="reviewProvenanceArtifactRole"' in content
     assert 'id="reviewProvenanceRunState"' in content
     assert 'id="reviewProvenancePath"' in content
+    assert 'id="reviewProvenanceFingerprint"' in content
     assert 'id="reviewProvenanceFreshness"' in content
     assert 'id="reviewProvenanceSource"' in content
     assert 'id="reviewProvenanceBatch"' in content
@@ -945,9 +951,59 @@ def test_portal_review_surface_exposes_warning_banner_and_provenance_contract() 
     assert "els.reviewStatusBanner.dataset.tone = snapshot.tone;" in banner_body
     assert "artifactDisplayLabel(artifact)" in provenance_body
     assert "artifactLabel(artifact)" in provenance_body
+    assert "_artifactFingerprintLabel(artifact)" in provenance_body
     assert "titleCaseToken(job.state, 'Unknown')" in provenance_body
     assert "summary?.batch_id" in provenance_body
     assert "summary?.source" in provenance_body
+
+
+def test_portal_artifact_viewer_modal_is_feature_flagged_and_keyboard_complete() -> None:
+    content = _portal_bundle_content()
+    active_overlay_body = _extract_js_function_body(content, "_activeOverlayPanel")
+    render_body = _extract_js_function_body(content, "renderArtifactViewer")
+    open_body = _extract_js_function_body(content, "_openArtifactViewer")
+    navigate_body = _extract_js_function_body(content, "_navigateArtifactViewerSelection")
+    close_body = _extract_js_function_body(content, "_closeArtifactViewer")
+
+    assert 'id="artifactViewerModal"' in content
+    assert 'id="artifactViewerPanel"' in content
+    assert 'id="artifactViewerTitle"' in content
+    assert 'id="artifactViewerImage"' in content
+    assert 'id="artifactViewerFallback"' in content
+    assert 'id="artifactViewerPrevBtn"' in content
+    assert 'id="artifactViewerNextBtn"' in content
+    assert 'id="artifactViewerZoomOutBtn"' in content
+    assert 'id="artifactViewerZoomInBtn"' in content
+    assert 'id="artifactViewerResetZoomBtn"' in content
+    assert 'id="artifactViewerOpenRawBtn"' in content
+    assert 'id="artifactViewerCopyPathBtn"' in content
+    assert 'id="artifactViewerCopyFingerprintBtn"' in content
+    assert "return Boolean(state.auth?.features?.artifactViewerModal);" in content
+    assert "if (els.artifactViewerModal && !els.artifactViewerModal.classList.contains('hidden'))" in active_overlay_body
+    assert "state.portalUi.artifactViewer.open = true;" in open_body
+    assert "_rememberOverlayTrigger(trigger);" in open_body
+    assert "els.closeArtifactViewerBtn.focus();" in open_body
+    assert "artifact_viewer_opened" in open_body
+    assert "state.portalUi.artifactViewer.open = false;" in close_body
+    assert "_restoreOverlayFocus();" in close_body
+    assert "els.artifactViewerModal.classList.toggle('hidden', !shouldShow);" in render_body
+    assert "els.artifactViewerImage.style.transform = `scale(${zoomPercent / 100})`;" in render_body
+    assert (
+        "els.artifactViewerFallbackTitle.textContent = url ? 'Inline preview unavailable' : 'Artifact URL unavailable';"
+        in render_body
+    )
+    assert "els.artifactViewerCopyFingerprintBtn.dataset.fingerprint = fingerprint;" in render_body
+    assert "_rememberArtifactSelection(context.job.id, nextPath);" in navigate_body
+    assert "renderReviewSurfaces();" in navigate_body
+    assert (
+        'if (e.key === "Escape" && els.artifactViewerModal && !els.artifactViewerModal.classList.contains("hidden"))'
+        in content
+    )
+    assert "if (key === 'ArrowLeft')" in content
+    assert "if (key === 'ArrowRight')" in content
+    assert "if (key === '+' || key === '=')" in content
+    assert "if (key === '-')" in content
+    assert "if (key === '0')" in content
 
 
 def test_portal_review_surface_supports_compare_summary_and_keyboard_selection() -> None:

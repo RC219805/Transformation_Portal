@@ -101,6 +101,38 @@ def _env_float(name: str, default: float, minimum: float = 0.0) -> float:
     return max(minimum, parsed)
 
 
+def _env_rollout_percent(name: str, default: int = 0) -> int:
+    return min(100, _env_int(name, default, minimum=0))
+
+
+def _stable_rollout_bucket(key: str) -> int:
+    normalized = str(key or "").strip().lower()
+    if not normalized:
+        return 100
+    digest = hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+    return int(digest[:8], 16) % 100
+
+
+def _portal_artifact_viewer_modal_enabled(actor: Optional[Mapping[str, Any]] = None) -> bool:
+    rollout_percent = _env_rollout_percent("TP_PORTAL_ARTIFACT_VIEWER_MODAL_ROLLOUT_PERCENT", 0)
+    if rollout_percent <= 0:
+        return False
+    actor_mapping = actor if isinstance(actor, Mapping) else {}
+    cohort_key = (
+        str(
+            actor_mapping.get("username")
+            or actor_mapping.get("accessEmail")
+            or actor_mapping.get("role")
+            or os.getenv("TP_PORTAL_DIRECT_DEBUG_COHORT_KEY", "direct-debug")
+        )
+        .strip()
+        .lower()
+    )
+    if not cohort_key:
+        return False
+    return _stable_rollout_bucket(cohort_key) < rollout_percent
+
+
 REPO_ROOT = Path(__file__).resolve().parent
 PORTAL_HTML = REPO_ROOT / "portal.html"
 PORTAL_ASSETS_DIR = REPO_ROOT / "public" / "portal-assets"
@@ -5948,6 +5980,7 @@ async def portal_bootstrap() -> JSONResponse:
             "features": {
                 "apiKeyInput": True,
                 "directDebug": True,
+                "artifactViewerModal": _portal_artifact_viewer_modal_enabled(None),
             },
         },
         headers={"Cache-Control": "no-store"},

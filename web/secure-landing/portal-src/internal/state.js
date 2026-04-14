@@ -99,6 +99,12 @@ export function createPortalUiState() {
   return {
     debugBundleAcknowledged: false,
     effectiveConfigOpen: false,
+    artifactViewer: {
+      open: false,
+      jobId: "",
+      artifactPath: "",
+      zoomPercent: 100
+    },
     debugBundleGuardrailSeen: false,
     buildStep: 1,
     lastOverlayTrigger: null,
@@ -126,7 +132,8 @@ export function createPortalAuthState() {
     actor: null,
     features: {
       apiKeyInput: false,
-      directDebug: false
+      directDebug: false,
+      artifactViewerModal: false
     }
   };
 }
