@@ -2,61 +2,75 @@
 
 ## Status
 
-**Proposed** — Pending evidence gathering and team discussion.
+**Proposed** - Pending evidence gathering and team discussion.
 
 ## Context
 
 The operator console (`portal.html`, `portal.js`, `portal.css`) is currently a FastAPI-served HTML/JS application that provides the full operator workflow surface for the Transformation Portal. It supports:
 
-- Multi-view navigation (`?view=overview|build|operate|review`)
-- Real-time job updates via SSE
-- Managed authentication mode (via frontdoor proxy)
-- Direct-debug mode (browser-side API key)
-- Full keyboard accessibility
-- Reduced-motion support
+- multi-view navigation (`?view=overview|build|operate|review`)
+- real-time job updates via SSE
+- managed authentication mode via the frontdoor proxy
+- direct-debug mode
+- keyboard accessibility
+- reduced-motion support
 
 The managed frontdoor (`web/secure-landing/`) is a separate Next.js application that handles:
 
-- Public homepage
-- Authentication/login
-- Portal proxy in managed mode
+- the public homepage
+- authentication and login
+- the managed portal proxy
 
-This ADR addresses whether the operator console should be migrated into the React/Next.js stack as part of the managed frontdoor, or whether it should remain as a FastAPI-served HTML/JS application.
+This ADR remains the only decision gate for whether the operator console should migrate into the React/Next.js stack. The portal modernization RFC does not answer this ADR.
 
-## Evidence Required
+## Evidence Inventory
 
-Before making a decision, the following evidence should be gathered:
+Current repo-backed sources:
 
-### 1. Delivery Velocity Metrics
+- `docs/architecture/PORTAL_OPERATOR_CONSOLE_MODERNIZATION_RFC.md`
+- `docs/architecture/PORTAL_OPERATOR_CONSOLE_MODERNIZATION_EVIDENCE.md`
+- `tools/portal_modernization_evidence.py`
+- `scripts/validation/validate_portal_browser_smoke.py`
+- `tests/test_app_orchestrator_runtime.py`
 
-- [ ] Average PR merge time for portal-related changes vs. frontdoor changes
-- [ ] Lines of code changed per feature in each surface
-- [ ] Number of iterations required for typical portal changes
+### 1. Delivery Velocity
 
-### 2. Quality Metrics
+| Evidence Item | State | Notes |
+| --- | --- | --- |
+| Average PR merge time for portal-related changes vs frontdoor changes | Still missing | Requires repository history analysis or external reporting |
+| Lines of code changed per feature in each surface | Still missing | Requires historical sampling |
+| Number of iterations required for typical portal changes | Still missing | Requires PR review-history analysis |
 
-- [ ] Bug count per KLOC in `portal.js` vs. frontdoor code
-- [ ] Test coverage comparison (portal contract tests vs. frontdoor tests)
-- [ ] Regression frequency in each surface
+### 2. Quality
+
+| Evidence Item | State | Notes |
+| --- | --- | --- |
+| Browser contract and runtime coverage for the current portal | Repo-backed now | Current portal validation is strong, but it is not a rewrite comparison by itself |
+| Bug count per KLOC in portal vs frontdoor code | Still missing | Requires issue or incident tagging by surface |
+| Test coverage comparison between portal and frontdoor surfaces | Still missing | Requires explicit comparative measurement |
+| Regression frequency in each surface | Still missing | Requires incident or bug history by surface |
 
 ### 3. Developer Experience
 
-- [ ] Developer friction survey results (if available)
-- [ ] Onboarding time for new contributors to each surface
-- [ ] IDE/tooling support comparison
+| Evidence Item | State | Notes |
+| --- | --- | --- |
+| Current repo structure and workflow split are documented | Repo-backed now | The split boundary is clear, but this is not enough to justify migration |
+| Developer friction survey results | Still missing | Needs human input |
+| Onboarding time for new contributors to each surface | Still missing | Needs observed contributor data |
+| IDE/tooling support comparison | Still missing | Needs an explicit comparison write-up |
 
 ### 4. Migration Requirements
 
-| Current Capability | Next.js Equivalent | Complexity | Notes |
-|-------------------|-------------------|------------|-------|
-| `portal.html` static serve | `app/portal/page.js` | Low | Route handler required |
-| `/portal/assets/*` | `public/` or Next.js static imports | Low | Path mapping needed |
-| Query param routing `?view=` | Client state or dynamic routes | Medium | URL contract preservation |
-| `portal.js` state management | React state + context/reducer | High | Significant refactor |
-| SSE via EventSource | Same API or React Query | Medium | Connection management |
-| Direct-debug bootstrap | API route + middleware | Medium | Auth flow adaptation |
-| Managed auth proxy | Already exists in frontdoor | Low | Integration needed |
-| Browser smoke tests | Playwright/Cypress adaptation | Medium | Test rewrite needed |
+| Current Capability | Next.js Equivalent | Complexity | State |
+| --- | --- | --- | --- |
+| `portal.html` static serve | `app/portal/page.js` | Low | Still hypothetical |
+| `/portal/assets/*` | `public/` or static imports | Low | Still hypothetical |
+| Query param routing `?view=` | client state or dynamic routes | Medium | Still hypothetical |
+| `portal.js` state management | React state plus reducer or context | High | Still hypothetical |
+| SSE via `EventSource` | same API or React data layer | Medium | Still hypothetical |
+| Direct-debug bootstrap | API route plus middleware | Medium | Still hypothetical |
+| Managed auth proxy | already exists in frontdoor | Low | Partial reuse available |
+| Browser smoke tests | Playwright adaptation | Medium | Still hypothetical |
 
 ## Decision
 
@@ -64,98 +78,76 @@ Before making a decision, the following evidence should be gathered:
 
 Options:
 
-1. **Proceed with migration** — Move operator console into Next.js
-2. **Defer migration** — Continue with Phase 5 modularization and revisit in 6 months
-3. **Reject migration** — Commit to FastAPI/HTML architecture long-term
+1. Proceed with migration.
+2. Defer migration and continue with the native-web portal.
+3. Reject migration and commit to the FastAPI/HTML architecture long term.
 
 ## Consequences
 
 ### If Migrating
 
-**Benefits:**
-- Unified codebase for all browser surfaces
-- Modern React tooling and ecosystem
-- Better component reusability
-- Stronger type safety with TypeScript (optional)
+**Benefits**
 
-**Costs:**
-- 3-6 month migration timeline (estimated)
-- Two UIs to maintain during transition
-- Test coverage gap during migration
-- Risk of regression in tested behavior
+- unified browser stack
+- React and Next.js tooling
+- stronger component reuse opportunities
 
-**Migration Phases (if approved):**
+**Costs**
 
-1. **Phase M1: Minimal Viable Portal** (4-6 weeks)
-   - Basic route structure in Next.js
-   - Static page rendering
-   - Managed auth integration
-
-2. **Phase M2: Feature Parity** (6-8 weeks)
-   - All four views implemented
-   - State management ported
-   - SSE/real-time support
-
-3. **Phase M3: Deprecation** (2-4 weeks)
-   - Test coverage validation
-   - FastAPI route deprecation
-   - Documentation update
+- migration delivery risk
+- dual-surface maintenance during transition
+- test rewrite and parity work
+- regression risk against a stable validated portal
 
 ### If Not Migrating
 
-**Benefits:**
-- No migration risk
-- Continued focus on operator workflow improvements
-- Simpler architecture with clear separation
+**Benefits**
 
-**Costs:**
-- Continued maintenance of two codebases
-- Different patterns between surfaces
-- Potential missed ecosystem benefits
+- no migration risk
+- continued focus on operator workflow improvements
+- simpler incremental change model
 
-**Continued Improvement Path:**
-- Complete Phase 5 modularization
-- Phase 6 workflow acceleration
-- Phase 7 shared token layer
-- Revisit migration decision in 6 months
+**Costs**
 
-## Go/No-Go Criteria
+- continued maintenance of two browser codebases
+- different implementation patterns across surfaces
+- potential missed ecosystem benefits
 
-### Go if:
+## Go / No-Go Criteria
 
-- [ ] Portal changes taking >2x longer than similar complexity elsewhere
-- [ ] Bug rate significantly higher than frontdoor (>2x per KLOC)
-- [ ] Team has React expertise available for migration
-- [ ] Clear 3-month window in roadmap for migration work
-- [ ] Test coverage gap can be closed within timeline
+### Go if
 
-### No-Go if:
+- portal changes are materially slower than comparable frontdoor work
+- portal defect rates are materially worse than comparable frontdoor work
+- the team has clear React and Next.js migration ownership
+- roadmap capacity exists for parity and migration hardening
+- rewrite test coverage can reach current portal parity
 
-- [ ] Current portal meeting delivery needs adequately
-- [ ] Migration would block higher-priority work
-- [ ] Test coverage gap cannot be closed in timeline
-- [ ] No clear ownership of migrated surface
-- [ ] Team prefers current architecture
+### No-Go if
+
+- current portal delivery remains adequate
+- migration would block higher-priority operator work
+- test parity cannot be reached in the migration window
+- ownership of the migrated surface is unclear
 
 ## Acceptance Criteria for Migration
 
-If migration is approved, the following must be met before deprecating the FastAPI-served portal:
+If migration is approved, the following must be true before deprecating the FastAPI-served portal:
 
-- [ ] All existing browser smoke tests pass on new surface
-- [ ] Direct-debug mode works identically
-- [ ] Managed auth mode works identically
-- [ ] All four views fully functional
-- [ ] Query param routing contract preserved
-- [ ] No regression in keyboard accessibility
-- [ ] No regression in reduced-motion support
-- [ ] CI coverage equivalent or better
-- [ ] Performance parity (page load, interaction latency)
-- [ ] Documentation updated
+- all existing browser smoke tests pass on the new surface
+- direct-debug mode works identically
+- managed auth mode works identically
+- all four views remain fully functional
+- the query-parameter routing contract is preserved
+- keyboard accessibility and reduced-motion behavior do not regress
+- CI coverage is equivalent or better
+- page load and interaction latency remain at parity or better
+- documentation is updated
 
 ## References
 
-- Phase 5 plan: Portal Shell Modularization
-- `portal.html`, `portal.js`, `portal.css` — current implementation
-- `web/secure-landing/` — managed frontdoor
-- Browser smoke tests: `scripts/validation/validate_portal_browser_smoke.py`
-- Contract tests: `tests/test_app_orchestrator_runtime.py`
+- `docs/architecture/PORTAL_OPERATOR_CONSOLE_MODERNIZATION_RFC.md`
+- `docs/architecture/PORTAL_OPERATOR_CONSOLE_MODERNIZATION_EVIDENCE.md`
+- `web/secure-landing/`
+- `scripts/validation/validate_portal_browser_smoke.py`
+- `tests/test_app_orchestrator_runtime.py`

@@ -72,14 +72,17 @@ and a deterministic rollout percentage.
 export TP_PORTAL_RUM_ENABLED=0
 export TP_PORTAL_RUM_ROLLOUT_PERCENT=0
 export TP_PORTAL_RUM_LOG_PATH="/absolute/path/to/portal-rum.jsonl"
+export TP_PORTAL_EVENT_LOG_PATH="/absolute/path/to/portal-events.jsonl"
 ```
 
 Notes:
 - `TP_PORTAL_RUM_ENABLED=0` keeps `/v1/portal/rum` in success/no-op mode and keeps `features.rumTelemetry=false` on both bootstrap surfaces.
 - `TP_PORTAL_RUM_ROLLOUT_PERCENT=0` keeps collection disabled even when the hard flag is on.
 - `TP_PORTAL_RUM_LOG_PATH` is optional. When set, FastAPI appends PII-free JSONL records for the pilot summary CLI.
+- `TP_PORTAL_EVENT_LOG_PATH` is optional. When set, FastAPI appends PII-free portal event JSONL for viewer, review, and stream telemetry evidence.
 - Direct-debug rollout stability reuses `TP_PORTAL_DIRECT_DEBUG_COHORT_KEY`.
 - Managed rollout stability uses the authenticated actor identity already present on the front door; raw usernames and emails are not stored in the RUM sink.
+- Rollout expansion remains blocked until `docs/compliance/PORTAL_TELEMETRY_PRIVACY_SIGNOFF.md` has explicit Security / Privacy approval.
 
 ## Optional Review Surface Pilot Knobs
 
@@ -256,6 +259,15 @@ python tools/portal_rum_summary.py --input /absolute/path/to/portal-rum.jsonl
 
 The summary groups by auth mode, route, view, and cohort bucket, then prints p75
 LCP/INP/CLS, bootstrap timings, queue request timings, and SSE reconnect counts.
+
+For the RFC evidence package, summarize RUM plus optional viewer-event evidence with:
+
+```bash
+python tools/portal_modernization_evidence.py \
+  --rum-log /absolute/path/to/portal-rum.jsonl \
+  --event-log /absolute/path/to/portal-events.jsonl \
+  --operator-hours 8
+```
 
 Manual shared-deployment posture gate:
 

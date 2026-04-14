@@ -970,6 +970,8 @@ PORTAL_ALLOWED_EVENT_TYPES = {
     "job_submitted",
     "job_selected",
     "artifact_opened",
+    "artifact_viewer_opened",
+    "artifact_viewer_fallback",
     "artifact_compared",
     "run_details_opened",
     "cancel_requested",

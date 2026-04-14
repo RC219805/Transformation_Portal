@@ -854,6 +854,44 @@ def test_portal_events_allow_operator_console_review_and_stream_events(client: T
     assert event["metadata"] == {"attempt": 2, "job_id": "job_1234abcd", "transport": "fetch"}
 
 
+@pytest.mark.parametrize("event_type", ["artifact_viewer_opened", "artifact_viewer_fallback"])
+def test_portal_events_accept_artifact_viewer_review_events(
+    client: TestClient,
+    event_type: str,
+) -> None:
+    response = client.post(
+        "/v1/portal/events",
+        json={
+            "event_type": event_type,
+            "pipeline": "lux-depth-v3",
+            "surface": "artifact_review",
+            "metadata": {
+                "job_id": "job_1234abcd",
+                "media_kind": "image",
+                "artifact_fingerprint": "abcdef1234",
+                "viewer_mode": "modal",
+                "fallback_reason": "inline_preview_unavailable",
+                "email": "admin@example.com",
+                "raw_path": "/private/tmp/should-not-pass",
+            },
+        },
+    )
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["success"] is True
+    event = body["data"]["event"]
+    assert event["event_type"] == event_type
+    assert event["surface"] == "artifact_review"
+    assert event["metadata"] == {
+        "artifact_fingerprint": "abcdef1234",
+        "fallback_reason": "inline_preview_unavailable",
+        "job_id": "job_1234abcd",
+        "media_kind": "image",
+        "viewer_mode": "modal",
+    }
+
+
 def test_portal_events_contract_ignores_log_sink_write_failures(
     client: TestClient,
     tmp_path: Path,

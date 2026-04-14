@@ -49,6 +49,41 @@ export function createDeferredReviewSurfaceApi(host) {
   let artifactViewerPreviewPath = "";
   let artifactViewerPreviewSource = "";
   let artifactViewerPreviewRequestId = 0;
+  let artifactViewerFallbackEventKey = "";
+
+  function _artifactViewerEventMetadata(job, artifact, extra = {}) {
+    const metadata = {
+      job_id: _normalizeSelectedJobId(job?.id),
+      pipeline: String(job?.pipeline || ""),
+      media_kind: String(artifact?.media_kind || "file"),
+      artifact_fingerprint: artifactFingerprint(artifact).toLowerCase(),
+      viewer_mode: "modal",
+    };
+    Object.entries(extra).forEach(([key, value]) => {
+      if (value === undefined || value === null || value === "") return;
+      metadata[key] = value;
+    });
+    return metadata;
+  }
+
+  function _emitArtifactViewerFallback(context, fallbackReason) {
+    if (!context?.job || !context?.artifact || !fallbackReason) return;
+    const fallbackKey = [
+      _normalizeSelectedJobId(context.job.id),
+      _artifactRouteKey(context.artifact),
+      fallbackReason,
+    ]
+      .filter(Boolean)
+      .join(":");
+    if (fallbackKey && fallbackKey === artifactViewerFallbackEventKey) return;
+    artifactViewerFallbackEventKey = fallbackKey;
+    void emitPortalEvent("artifact_viewer_fallback", {
+      surface: "artifact_review",
+      metadata: _artifactViewerEventMetadata(context.job, context.artifact, {
+        fallback_reason: fallbackReason,
+      }),
+    });
+  }
 
   function _revokeArtifactViewerObjectUrl() {
     if (!artifactViewerObjectUrl) return;
@@ -63,7 +98,9 @@ export function createDeferredReviewSurfaceApi(host) {
     _revokeArtifactViewerObjectUrl();
   }
 
-  function _showArtifactViewerFallback(url, artifactName) {
+  function _showArtifactViewerFallback(context, artifactName) {
+    const url = context?.url || "";
+    const fallbackReason = url ? "inline_preview_unavailable" : "asset_url_unavailable";
     if (els.artifactViewerImage) {
       els.artifactViewerImage.classList.add("hidden");
       els.artifactViewerImage.removeAttribute("src");
@@ -85,6 +122,7 @@ export function createDeferredReviewSurfaceApi(host) {
         ? `${artifactName} is open with metadata fallback because an inline preview is unavailable.`
         : `${artifactName} is open with metadata fallback because the managed asset URL is unavailable.`
     );
+    _emitArtifactViewerFallback(context, fallbackReason);
   }
 
   function _renderArtifactViewerInlineImage(src, zoomPercent) {
@@ -98,7 +136,7 @@ export function createDeferredReviewSurfaceApi(host) {
   async function _loadArtifactViewerInlinePreview(context, artifactName) {
     const artifactPath = _artifactRouteKey(context.artifact);
     if (!context.url || !artifactPath) {
-      _showArtifactViewerFallback(context.url, artifactName);
+      _showArtifactViewerFallback(context, artifactName);
       return;
     }
     if (artifactViewerObjectUrl && artifactViewerPreviewPath === artifactPath && artifactViewerPreviewSource === context.url) {
@@ -139,7 +177,7 @@ export function createDeferredReviewSurfaceApi(host) {
       _setArtifactViewerStatus(`${artifactName} preview open at ${context.zoomPercent}% zoom.`);
     } catch {
       if (requestId !== artifactViewerPreviewRequestId) return;
-      _showArtifactViewerFallback(context.url, artifactName);
+      _showArtifactViewerFallback(context, artifactName);
     }
   }
 
@@ -809,7 +847,7 @@ export function createDeferredReviewSurfaceApi(host) {
           const activeContext = _artifactViewerContext();
           if (!activeContext.artifact) return;
           if (_artifactRouteKey(activeContext.artifact) !== artifactPath) return;
-          _showArtifactViewerFallback(url, artifactName);
+          _showArtifactViewerFallback(activeContext, artifactName);
         };
       }
       if (state.auth?.mode !== "direct_debug") {
@@ -829,7 +867,7 @@ export function createDeferredReviewSurfaceApi(host) {
     }
 
     _clearArtifactViewerPreviewCache();
-    _showArtifactViewerFallback(url, artifactName);
+    _showArtifactViewerFallback(context, artifactName);
     void job;
   }
 
@@ -851,16 +889,13 @@ export function createDeferredReviewSurfaceApi(host) {
     state.portalUi.artifactViewer.jobId = _normalizeSelectedJobId(job.id);
     state.portalUi.artifactViewer.artifactPath = _artifactRouteKey(artifact);
     state.portalUi.artifactViewer.zoomPercent = 100;
+    artifactViewerFallbackEventKey = "";
     _rememberOverlayTrigger(trigger);
     renderArtifactViewer();
     if (els.closeArtifactViewerBtn) els.closeArtifactViewerBtn.focus();
     void emitPortalEvent("artifact_viewer_opened", {
-      surface: "artifact_viewer_modal",
-      metadata: {
-        job_id: String(job.id || ""),
-        media_kind: String(artifact.media_kind || "file"),
-        pipeline: String(job.pipeline || "")
-      }
+      surface: "artifact_review",
+      metadata: _artifactViewerEventMetadata(job, artifact),
     });
     return true;
   }
