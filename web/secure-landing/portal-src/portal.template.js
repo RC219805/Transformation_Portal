@@ -123,7 +123,8 @@ const state = {
     presetsByPipeline: {},
     auth: portalInternals.createPortalAuthState(),
     bootstrap: portalInternals.createPortalBootstrapState(Date.now()),
-    lastDiagnostics: portalInternals.createPortalLastDiagnosticsState()
+    lastDiagnostics: portalInternals.createPortalLastDiagnosticsState(),
+    rum: portalInternals.createPortalRumState()
 };
 
 // ============================================================================
@@ -4154,7 +4155,8 @@ function _defaultPortalBootstrap() {
         features: {
             apiKeyInput: false,
             directDebug: false,
-            artifactViewerModal: false
+            artifactViewerModal: false,
+            rumTelemetry: false
         }
     };
 }
@@ -4548,15 +4550,29 @@ function _applyPortalBootstrap(rawBootstrap, options = {}) {
         features: {
             apiKeyInput: mode === 'direct_debug' && bootstrap.features?.apiKeyInput !== false,
             directDebug: mode === 'direct_debug' && bootstrap.features?.directDebug !== false,
-            artifactViewerModal: Boolean(bootstrap.features?.artifactViewerModal)
+            artifactViewerModal: Boolean(bootstrap.features?.artifactViewerModal),
+            rumTelemetry: Boolean(bootstrap.features?.rumTelemetry)
         }
     };
+    const bootstrapTraceparent = portalInternals.normalizePortalRumTraceparent(
+        options.traceparent,
+        state.rum.pageTraceparent
+    );
+    state.rum.pageTraceparent = bootstrapTraceparent;
+    state.rum.bootstrapTraceparent = bootstrapTraceparent;
+    state.rum.enabled = Boolean(state.auth.features.rumTelemetry);
     _setBootstrapStatus(nextStatus, options.reason || '', options.httpStatus || 0);
     if (_isBootstrapReady() && isManagedMode) {
         _clearStoredApiKeyState(true);
     }
+    if (!_rumTelemetryEnabled()) {
+        state.rum.queuedSamples = [];
+    }
     _loadApiKeyIntoInputs();
     _syncBootstrapUi();
+    if (_rumTelemetryEnabled()) {
+        void _flushQueuedPortalRumSamples();
+    }
 }
 
 function _normalizeFetchFailureReason(error, timeoutReason = 'request_timeout') {
@@ -4601,7 +4617,10 @@ async function loadPortalBootstrap(options = null) {
         const res = await fetchWithTimeout(
             `${API_BASE}/portal/bootstrap`,
             {
-                headers: { 'Accept': 'application/json' },
+                headers: {
+                    'Accept': 'application/json',
+                    traceparent: state.rum.pageTraceparent
+                },
                 cache: 'no-store'
             },
             BOOTSTRAP_TIMEOUT_MS,
@@ -4632,6 +4651,10 @@ async function loadPortalBootstrap(options = null) {
             window.location.assign(_managedLoginUrlForCurrentRoute());
             return;
         }
+        const bootstrapTraceparent = portalInternals.normalizePortalRumTraceparent(
+            res.headers.get('traceparent'),
+            state.rum.pageTraceparent
+        );
         if (!res.ok) {
             const failure = _bootstrapFailureDetails(
                 payloadParsed && payload && typeof payload === 'object' ? payload.reason : `http_${res.status}`,
@@ -4662,7 +4685,11 @@ async function loadPortalBootstrap(options = null) {
             });
         }
         const previousHealthEndpointPath = String(state.bootstrap.lastHealthEndpointPath || '');
-        _applyPortalBootstrap(payload, { status: 'ready' });
+        _applyPortalBootstrap(payload, { status: 'ready', traceparent: bootstrapTraceparent });
+        _recordPortalRumMilestone('bootstrap_ready', _portalRumNow(), {
+            traceparent: bootstrapTraceparent
+        });
+        _scheduleFirstViewInteractiveRum();
         const nextHealthEndpointPath = _healthEndpointPath();
         if (state.backendOk && previousHealthEndpointPath && previousHealthEndpointPath !== nextHealthEndpointPath) {
             _queueBootstrapOnlineFollowup();
@@ -4751,9 +4778,16 @@ function _currentApiToken() {
     );
 }
 
-function _buildAuthHeaders(base = {}, method = 'GET') {
+function _buildAuthHeaders(base = {}, method = 'GET', options = null) {
     const headers = { ...base };
     const normalizedMethod = String(method || 'GET').toUpperCase();
+    const authOptions = options && typeof options === 'object' ? options : null;
+    const traceparent = authOptions && typeof authOptions.traceparent === 'string'
+        ? authOptions.traceparent.trim()
+        : '';
+    if (traceparent) {
+        headers.traceparent = traceparent;
+    }
     if (!_isBootstrapReady()) {
         return headers;
     }
@@ -5811,6 +5845,201 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = HEALTH_CHECK_TIME
         if (lifecycle && typeof lifecycle.onFinally === 'function') {
             lifecycle.onFinally(controller, timeoutId);
         }
+    }
+}
+
+function _portalRumNow() {
+    if (window.performance && typeof window.performance.now === 'function') {
+        return window.performance.now();
+    }
+    return Date.now();
+}
+
+function _portalRumTraceparent(fallback = '') {
+    return portalInternals.normalizePortalRumTraceparent(
+        state.rum.bootstrapTraceparent || state.rum.pageTraceparent,
+        fallback
+    );
+}
+
+function _rumTelemetryEnabled() {
+    return Boolean(_isBootstrapReady() && state.auth?.features?.rumTelemetry);
+}
+
+function _portalRumBasePayload(sample = {}) {
+    const sampleOptions = sample && typeof sample === 'object' ? sample : {};
+    return {
+        event_type: String(sampleOptions.eventType || '').trim().toLowerCase(),
+        route: '/portal',
+        view: portalInternals.normalizePortalRumView(sampleOptions.view || state.currentView),
+        value: Number(sampleOptions.value),
+        unit: String(sampleOptions.unit || '').trim().toLowerCase(),
+        metric: String(sampleOptions.metric || '').trim().toLowerCase(),
+        metadata: sampleOptions.metadata && typeof sampleOptions.metadata === 'object' ? sampleOptions.metadata : {},
+        traceparent: portalInternals.normalizePortalRumTraceparent(
+            sampleOptions.traceparent,
+            _portalRumTraceparent()
+        ),
+        keepalive: Boolean(sampleOptions.keepalive)
+    };
+}
+
+function _queuePortalRumSample(sample = {}) {
+    if (_isBootstrapReady() && !state.auth?.features?.rumTelemetry) return;
+    const payload = _portalRumBasePayload(sample);
+    if (!payload.event_type || !Number.isFinite(payload.value) || !payload.unit) return;
+    state.rum.queuedSamples.push(payload);
+    if (_rumTelemetryEnabled()) {
+        void _flushQueuedPortalRumSamples();
+    }
+}
+
+async function _flushQueuedPortalRumSamples(options = {}) {
+    if (!_rumTelemetryEnabled()) {
+        state.rum.queuedSamples = [];
+        return;
+    }
+    if (state.rum.queuedSamples.length === 0) {
+        return;
+    }
+    const flushOptions = options && typeof options === 'object' ? options : {};
+    const keepalive = Boolean(flushOptions.keepalive);
+    const queued = state.rum.queuedSamples.splice(0, state.rum.queuedSamples.length);
+    for (const sample of queued) {
+        try {
+            const headers = _buildAuthHeaders({ 'Content-Type': 'application/json' }, 'POST', {
+                traceparent: sample.traceparent
+            });
+            await fetch(`${API_BASE}/v1/portal/rum`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({
+                    event_type: sample.event_type,
+                    route: sample.route,
+                    view: sample.view,
+                    value: sample.value,
+                    unit: sample.unit,
+                    metric: sample.metric,
+                    metadata: sample.metadata
+                }),
+                keepalive: keepalive || sample.keepalive
+            });
+        } catch {
+            // best-effort telemetry only
+        }
+    }
+}
+
+function _recordPortalRumMilestone(eventType, value, options = {}) {
+    if (state.rum.emittedMilestones[eventType]) return;
+    state.rum.emittedMilestones[eventType] = true;
+    _queuePortalRumSample({
+        eventType,
+        value,
+        unit: 'ms',
+        metric: 'duration',
+        traceparent: options.traceparent || _portalRumTraceparent(),
+        view: options.view,
+        metadata: options.metadata
+    });
+}
+
+function _scheduleFirstViewInteractiveRum() {
+    if (state.rum.firstInteractiveScheduled || state.rum.emittedMilestones.first_view_interactive) {
+        return;
+    }
+    state.rum.firstInteractiveScheduled = true;
+    const emit = () => {
+        state.rum.firstInteractiveScheduled = false;
+        _recordPortalRumMilestone('first_view_interactive', _portalRumNow(), {
+            traceparent: _portalRumTraceparent()
+        });
+    };
+    if (window.requestAnimationFrame) {
+        window.requestAnimationFrame(emit);
+        return;
+    }
+    window.setTimeout(emit, 0);
+}
+
+function _finalizePortalRumVitals() {
+    if (state.rum.vitals.finalized) return;
+    state.rum.vitals.finalized = true;
+    if (Number.isFinite(state.rum.vitals.lcpMs)) {
+        _queuePortalRumSample({
+            eventType: 'core_web_vital',
+            metric: 'lcp',
+            value: state.rum.vitals.lcpMs,
+            unit: 'ms',
+            traceparent: _portalRumTraceparent(),
+            keepalive: true
+        });
+    }
+    if (Number.isFinite(state.rum.vitals.inpMs)) {
+        _queuePortalRumSample({
+            eventType: 'core_web_vital',
+            metric: 'inp',
+            value: state.rum.vitals.inpMs,
+            unit: 'ms',
+            traceparent: _portalRumTraceparent(),
+            keepalive: true
+        });
+    }
+    _queuePortalRumSample({
+        eventType: 'core_web_vital',
+        metric: 'cls',
+        value: state.rum.vitals.clsScore,
+        unit: 'score',
+        traceparent: _portalRumTraceparent(),
+        keepalive: true
+    });
+}
+
+function _flushPortalRumOnPagehide() {
+    _finalizePortalRumVitals();
+    if (_rumTelemetryEnabled()) {
+        void _flushQueuedPortalRumSamples({ keepalive: true });
+    }
+}
+
+function _startPortalRumObservers() {
+    if (state.rum.observersStarted || typeof window.PerformanceObserver !== 'function') return;
+    state.rum.observersStarted = true;
+    const supportedTypes = Array.isArray(window.PerformanceObserver.supportedEntryTypes)
+        ? new Set(window.PerformanceObserver.supportedEntryTypes)
+        : new Set();
+    if (supportedTypes.has('largest-contentful-paint')) {
+        const observer = new PerformanceObserver((list) => {
+            const entries = list.getEntries();
+            const latest = entries[entries.length - 1];
+            if (latest) {
+                state.rum.vitals.lcpMs = latest.startTime;
+            }
+        });
+        observer.observe({ type: 'largest-contentful-paint', buffered: true });
+        window.addEventListener('pagehide', () => observer.disconnect(), { once: true });
+    }
+    if (supportedTypes.has('layout-shift')) {
+        const observer = new PerformanceObserver((list) => {
+            list.getEntries().forEach((entry) => {
+                if (!entry.hadRecentInput) {
+                    state.rum.vitals.clsScore = Number((state.rum.vitals.clsScore + entry.value).toFixed(4));
+                }
+            });
+        });
+        observer.observe({ type: 'layout-shift', buffered: true });
+        window.addEventListener('pagehide', () => observer.disconnect(), { once: true });
+    }
+    if (supportedTypes.has('event')) {
+        const observer = new PerformanceObserver((list) => {
+            list.getEntries().forEach((entry) => {
+                if (Number(entry.interactionId) > 0) {
+                    state.rum.vitals.inpMs = Math.max(Number(state.rum.vitals.inpMs) || 0, entry.duration || 0);
+                }
+            });
+        });
+        observer.observe({ type: 'event', buffered: true, durationThreshold: 16 });
+        window.addEventListener('pagehide', () => observer.disconnect(), { once: true });
     }
 }
 
@@ -8892,6 +9121,16 @@ async function _startAuthorizedFetchSse(job, eventsUrl) {
                     transport: 'fetch'
                 }
             });
+            _queuePortalRumSample({
+                eventType: 'sse_reconnect',
+                value: 1,
+                unit: 'count',
+                metadata: {
+                    attempt: reconnectAttempt,
+                    job_id: String(job.id || ''),
+                    transport: 'fetch'
+                }
+            });
         }
         scheduleRenderJobQueue();
 
@@ -9000,6 +9239,16 @@ function startJobEventStream(job, eventsUrl) {
         if (reconnectAttempt > 0) {
             void emitPortalEvent('stream_reconnected', {
                 surface: 'stream_transport',
+                metadata: {
+                    attempt: reconnectAttempt,
+                    job_id: String(job.id || ''),
+                    transport: 'native'
+                }
+            });
+            _queuePortalRumSample({
+                eventType: 'sse_reconnect',
+                value: 1,
+                unit: 'count',
                 metadata: {
                     attempt: reconnectAttempt,
                     job_id: String(job.id || ''),
@@ -9131,8 +9380,35 @@ async function cancelJob(id) {
     appendJobLog(job, `[WARN] Cancelled by user.`);
     logToPane(id, `[WARN] Cancelled by user.`);
 
-    const headers = _buildAuthHeaders({}, 'POST');
-    fetch(`${API_BASE}/v1/jobs/${id}/cancel`, { method: 'POST', headers }).catch(() => {});
+    const requestTraceparent = portalInternals.createChildTraceparent(_portalRumTraceparent());
+    const requestStartedAt = _portalRumNow();
+    const headers = _buildAuthHeaders({}, 'POST', { traceparent: requestTraceparent });
+    fetch(`${API_BASE}/v1/jobs/${id}/cancel`, { method: 'POST', headers })
+        .then((response) => {
+            _queuePortalRumSample({
+                eventType: 'queue_request',
+                metric: 'cancel',
+                value: _portalRumNow() - requestStartedAt,
+                unit: 'ms',
+                traceparent: requestTraceparent,
+                metadata: {
+                    outcome: response.ok ? 'ok' : 'error',
+                    status: response.status
+                }
+            });
+        })
+        .catch(() => {
+            _queuePortalRumSample({
+                eventType: 'queue_request',
+                metric: 'cancel',
+                value: _portalRumNow() - requestStartedAt,
+                unit: 'ms',
+                traceparent: requestTraceparent,
+                metadata: {
+                    outcome: 'error'
+                }
+            });
+        });
 
     scheduleRenderJobQueue();
     if (state.selectedJobId === id && els.logStatusIndicator) els.logStatusIndicator.classList.add('hidden');
@@ -9265,13 +9541,30 @@ async function submitJob() {
     appendJobLog(job, initLine);
     logToPane(job.id, initLine);
 
+    const requestTraceparent = portalInternals.createChildTraceparent(_portalRumTraceparent());
+    const requestStartedAt = _portalRumNow();
+    let queueRumRecorded = false;
     try {
-        const headers = _buildAuthHeaders({ 'Content-Type': 'application/json' }, 'POST');
+        const headers = _buildAuthHeaders({ 'Content-Type': 'application/json' }, 'POST', {
+            traceparent: requestTraceparent
+        });
         const res = await fetch(`${API_BASE}/v1/jobs`, {
             method: 'POST',
             headers,
             body: JSON.stringify(payload)
         });
+        _queuePortalRumSample({
+            eventType: 'queue_request',
+            metric: 'submit',
+            value: _portalRumNow() - requestStartedAt,
+            unit: 'ms',
+            traceparent: requestTraceparent,
+            metadata: {
+                outcome: res.ok ? 'ok' : 'error',
+                status: res.status
+            }
+        });
+        queueRumRecorded = true;
         if (!res.ok) {
             const parsedError = await extractApiError(res);
             if (parsedError.error) job.error = parsedError.error;
@@ -9294,6 +9587,18 @@ async function submitJob() {
 
         startJobEventStream(job, data.data.events_url);
     } catch (err) {
+        if (!queueRumRecorded) {
+            _queuePortalRumSample({
+                eventType: 'queue_request',
+                metric: 'submit',
+                value: _portalRumNow() - requestStartedAt,
+                unit: 'ms',
+                traceparent: requestTraceparent,
+                metadata: {
+                    outcome: 'error'
+                }
+            });
+        }
         const errorMessage = err instanceof Error ? err.message : String(err);
         job.state = 'failed';
         job.finishedAt = Date.now();
@@ -10251,6 +10556,7 @@ document.addEventListener('keydown', (e) => {
 
 document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
+        _finalizePortalRumVitals();
         _resetAmbientTargets();
         stopHealthPolling();
         return;
@@ -10320,8 +10626,10 @@ portalRenderSurfaces.register('jobQueue', {
 
 window.addEventListener('beforeunload', _flushPendingTransientPortalDraftPersist);
 window.addEventListener('beforeunload', cleanupActiveJobHandles);
+window.addEventListener('beforeunload', _flushPortalRumOnPagehide);
 window.addEventListener('pagehide', _flushPendingTransientPortalDraftPersist);
 window.addEventListener('pagehide', cleanupActiveJobHandles);
+window.addEventListener('pagehide', _flushPortalRumOnPagehide);
 window.addEventListener('pageshow', () => {
     reconcileBuildSurfaceFromDom();
 });
@@ -10339,6 +10647,7 @@ async function init() {
     const savedThemePreference = _normalizeThemePreference(localStorage.getItem(THEME_STORAGE_KEY)) || 'system';
     applyThemePreference(savedThemePreference, { persist: false, themeQuery });
     setupAmbientMotion();
+    _startPortalRumObservers();
 
     themeQuery.addEventListener('change', () => {
         if (state.themePreference === 'system') {
@@ -10358,10 +10667,16 @@ async function init() {
     if (window.requestAnimationFrame) {
         window.requestAnimationFrame(() => {
             reconcileBuildSurfaceFromDom();
+            _recordPortalRumMilestone('portal_shell_rendered', _portalRumNow(), {
+                traceparent: state.rum.pageTraceparent
+            });
         });
     } else {
         window.setTimeout(() => {
             reconcileBuildSurfaceFromDom();
+            _recordPortalRumMilestone('portal_shell_rendered', _portalRumNow(), {
+                traceparent: state.rum.pageTraceparent
+            });
         }, 0);
     }
     setupSectionRail();

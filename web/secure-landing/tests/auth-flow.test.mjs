@@ -218,6 +218,7 @@ test("login throttling trips after repeated failures in the same window", async 
 
 test("buildUpstreamHeaders strips browser auth and injects backend auth", async () => {
   const { buildUpstreamHeaders } = await import(`../lib/proxy.js?case=${Date.now()}`);
+  const traceparent = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01";
   const headers = buildUpstreamHeaders(
     new Headers({
       Authorization: "Bearer browser-token",
@@ -238,7 +239,8 @@ test("buildUpstreamHeaders strips browser auth and injects backend auth", async 
         clientIp: "203.0.113.5",
         host: "portal.example.com",
         proto: "https"
-      }
+      },
+      traceparent
     }
   );
 
@@ -251,6 +253,33 @@ test("buildUpstreamHeaders strips browser auth and injects backend auth", async 
   assert.equal(headers.get("x-forwarded-proto"), "https");
   assert.equal(headers.get("x-real-ip"), "203.0.113.5");
   assert.equal(headers.get("x-tp-actor"), "admin");
+  assert.equal(headers.get("traceparent"), traceparent);
+});
+
+test("trace helpers normalize valid traceparent values and mint stable children", async () => {
+  const {
+    generateTraceparent,
+    normalizeTraceparent,
+    resolveRequestTraceparent,
+    traceIdFromTraceparent
+  } = await import(`../lib/trace.js?case=${Date.now()}`);
+  const requestTraceparent = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01";
+  const normalized = normalizeTraceparent(`  ${requestTraceparent.toUpperCase()}  `);
+  const generated = generateTraceparent({ parentTraceparent: requestTraceparent });
+  const minted = resolveRequestTraceparent(new Request("https://portal.example.com/portal"));
+  const resolved = resolveRequestTraceparent(
+    new Request("https://portal.example.com/portal", {
+      headers: new Headers({ traceparent: requestTraceparent })
+    })
+  );
+
+  assert.equal(normalized, requestTraceparent);
+  assert.equal(traceIdFromTraceparent(requestTraceparent), "4bf92f3577b34da6a3ce929d0e0e4736");
+  assert.equal(traceIdFromTraceparent(generated), "4bf92f3577b34da6a3ce929d0e0e4736");
+  assert.match(minted, /^00-[0-9a-f]{32}-[0-9a-f]{16}-01$/);
+  assert.equal(resolved, requestTraceparent);
+  assert.match(generated, /^00-4bf92f3577b34da6a3ce929d0e0e4736-[0-9a-f]{16}-01$/);
+  assert.equal(normalizeTraceparent("00-00000000000000000000000000000000-00f067aa0ba902b7-01"), "");
 });
 
 test("getDb creates the session database parent directory automatically", async () => {

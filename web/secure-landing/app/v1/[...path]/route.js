@@ -15,10 +15,11 @@ import {
 import { buildUpstreamHeaders, buildUpstreamUrl, copyUpstreamResponseHeaders, isSsePath } from "../../../lib/proxy.js";
 import { isUnsafeMethod, validateOriginAndReferrer } from "../../../lib/request-security.js";
 import { clearSessionCookie, getRemoteAddress, validateCsrfToken } from "../../../lib/sessions.js";
+import { normalizeTraceparent, resolveRequestTraceparent, traceIdFromTraceparent } from "../../../lib/trace.js";
 
 export const runtime = "nodejs";
 
-function errorEnvelope(status, code, message, details = {}) {
+function errorEnvelope(status, code, message, details = {}, traceparent = "") {
   return applySecurityHeaders(
     NextResponse.json(
       {
@@ -34,7 +35,8 @@ function errorEnvelope(status, code, message, details = {}) {
       {
         status,
         headers: {
-          "Cache-Control": "no-store"
+          "Cache-Control": "no-store",
+          ...(traceparent ? { traceparent } : {})
         }
       }
     )
@@ -47,10 +49,11 @@ function classifyAuditEvent(method, pathname) {
   return null;
 }
 
-async function streamSse(upstream, session) {
+async function streamSse(upstream, session, traceparent) {
   const headers = copyUpstreamResponseHeaders(upstream.headers);
   headers.set("Content-Type", upstream.headers.get("content-type") || "text/event-stream");
   headers.set("Cache-Control", "no-store, no-transform");
+  headers.set("traceparent", normalizeTraceparent(upstream.headers.get("traceparent")) || traceparent);
 
   const { readable, writable } = new TransformStream();
   const reader = upstream.body?.getReader();
@@ -109,6 +112,8 @@ async function handleProxy(request, { params }) {
   const pathSegments = Array.isArray(resolvedParams?.path) ? resolvedParams.path : [];
   const pathname = `/v1/${pathSegments.join("/")}`;
   const sseRequest = isSsePath(pathname);
+  const requestTraceparent = resolveRequestTraceparent(request);
+  const traceId = traceIdFromTraceparent(requestTraceparent);
   const authState = await resolveAuthenticatedAccessSession(request, { touch: !sseRequest });
 
   if (!authState.ok) {
@@ -122,7 +127,8 @@ async function handleProxy(request, { params }) {
       path: pathname,
       remoteAddr: getRemoteAddress(request),
       reason,
-      status: authState.status
+      status: authState.status,
+      extra: traceId ? { traceId } : {}
     });
     const code = reason === MANAGED_FAILURE_REASON.CONFIG_FAILURE
       ? "AUTH_CONFIGURATION_ERROR"
@@ -141,7 +147,8 @@ async function handleProxy(request, { params }) {
       authState.status,
       code,
       message,
-      buildManagedV1ErrorDetails(pathname, reason)
+      buildManagedV1ErrorDetails(pathname, reason),
+      requestTraceparent
     );
     if (authState.revokeSession) {
       clearSessionCookie(response);
@@ -154,18 +161,20 @@ async function handleProxy(request, { params }) {
     if (!validateOriginAndReferrer(request)) {
       audit("csrf_failure", {
         path: pathname,
-        username: session.username
+        username: session.username,
+        traceId
       });
-      return errorEnvelope(403, "INVALID_CSRF", "origin validation failed", { path: pathname });
+      return errorEnvelope(403, "INVALID_CSRF", "origin validation failed", { path: pathname }, requestTraceparent);
     }
 
     const csrfToken = request.headers.get("x-csrf-token") || "";
     if (!validateCsrfToken(session, csrfToken)) {
       audit("csrf_failure", {
         path: pathname,
-        username: session.username
+        username: session.username,
+        traceId
       });
-      return errorEnvelope(403, "INVALID_CSRF", "csrf token validation failed", { path: pathname });
+      return errorEnvelope(403, "INVALID_CSRF", "csrf token validation failed", { path: pathname }, requestTraceparent);
     }
   }
 
@@ -173,7 +182,7 @@ async function handleProxy(request, { params }) {
   if (!config.backendApiKey) {
     auditManagedSurfaceFailure("v1_proxy", {
       actor: session,
-      extra: { env: "TP_BACKEND_API_KEY" },
+      extra: { env: "TP_BACKEND_API_KEY", ...(traceId ? { traceId } : {}) },
       path: pathname,
       reason: MANAGED_FAILURE_REASON.CONFIG_FAILURE,
       status: 503
@@ -184,7 +193,8 @@ async function handleProxy(request, { params }) {
       "TP_BACKEND_API_KEY is not configured",
       buildManagedV1ErrorDetails(pathname, MANAGED_FAILURE_REASON.CONFIG_FAILURE, {
         env: "TP_BACKEND_API_KEY"
-      })
+      }),
+      requestTraceparent
     );
   }
 
@@ -192,6 +202,7 @@ async function handleProxy(request, { params }) {
     backendApiKey: config.backendApiKey,
     actor: session,
     preferIdentityEncoding: sseRequest,
+    traceparent: requestTraceparent,
     forwarding: {
       clientIp: String(request.headers.get("cf-connecting-ip") || "").trim() || null,
       host: request.headers.get("host") || request.nextUrl.host,
@@ -222,13 +233,15 @@ async function handleProxy(request, { params }) {
       message: error instanceof Error ? error.message : String(error),
       path: pathname,
       reason: MANAGED_FAILURE_REASON.UPSTREAM_UNAVAILABLE,
-      status: 502
+      status: 502,
+      extra: traceId ? { traceId } : {}
     });
     return errorEnvelope(
       502,
       "UPSTREAM_UNAVAILABLE",
       getManagedFailureMessage("v1_proxy", MANAGED_FAILURE_REASON.UPSTREAM_UNAVAILABLE),
-      buildManagedV1ErrorDetails(pathname, MANAGED_FAILURE_REASON.UPSTREAM_UNAVAILABLE)
+      buildManagedV1ErrorDetails(pathname, MANAGED_FAILURE_REASON.UPSTREAM_UNAVAILABLE),
+      requestTraceparent
     );
   }
 
@@ -244,7 +257,8 @@ async function handleProxy(request, { params }) {
       path: pathname,
       reason: upstreamFailureReason,
       status,
-      upstreamStatus: upstream.status
+      upstreamStatus: upstream.status,
+      extra: traceId ? { traceId } : {}
     });
     return errorEnvelope(
       status,
@@ -252,12 +266,13 @@ async function handleProxy(request, { params }) {
       getManagedFailureMessage("v1_proxy", upstreamFailureReason),
       buildManagedV1ErrorDetails(pathname, upstreamFailureReason, {
         upstreamStatus: upstream.status
-      })
+      }),
+      requestTraceparent
     );
   }
 
   if (sseRequest) {
-    return applySecurityHeaders(await streamSse(upstream, session));
+    return applySecurityHeaders(await streamSse(upstream, session, requestTraceparent));
   }
 
   const auditEvent = classifyAuditEvent(request.method, pathname);
@@ -265,12 +280,14 @@ async function handleProxy(request, { params }) {
     audit(auditEvent, {
       username: session.username,
       accessEmail: session.accessEmail,
-      path: pathname
+      path: pathname,
+      traceId
     });
   }
 
   const responseHeaders = copyUpstreamResponseHeaders(upstream.headers);
   responseHeaders.set("Cache-Control", "no-store");
+  responseHeaders.set("traceparent", normalizeTraceparent(upstream.headers.get("traceparent")) || requestTraceparent);
 
   return applySecurityHeaders(
     new Response(upstream.body, {

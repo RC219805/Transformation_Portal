@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { NextResponse } from "next/server.js";
 
 import { revokeSessionOnAccessFailure, resolveAuthenticatedAccessSession } from "../../../lib/access.js";
+import { audit } from "../../../lib/audit.js";
 import { applySecurityHeaders } from "../../../lib/http.js";
 import {
   auditManagedSurfaceFailure,
@@ -10,6 +11,7 @@ import {
   classifyManagedAccessFailure
 } from "../../../lib/managed-failure.js";
 import { clearSessionCookie } from "../../../lib/sessions.js";
+import { resolveRequestTraceparent, traceIdFromTraceparent } from "../../../lib/trace.js";
 
 export const runtime = "nodejs";
 
@@ -42,7 +44,29 @@ function resolveArtifactViewerModal(session, env = process.env) {
   return stableRolloutBucket(cohortKey) < rolloutPercent;
 }
 
+function resolveRumTelemetry(session, env = process.env) {
+  if (String(env.TP_PORTAL_RUM_ENABLED || "").trim().toLowerCase() !== "1") {
+    return false;
+  }
+  const rolloutPercent = parseRolloutPercent(env.TP_PORTAL_RUM_ROLLOUT_PERCENT);
+  if (rolloutPercent <= 0) {
+    return false;
+  }
+  const cohortKey = String(session?.username || session?.accessEmail || session?.role || "").trim().toLowerCase();
+  if (!cohortKey) {
+    return false;
+  }
+  return stableRolloutBucket(cohortKey) < rolloutPercent;
+}
+
+function withTraceparent(response, traceparent) {
+  response.headers.set("traceparent", traceparent);
+  return response;
+}
+
 export async function GET(request) {
+  const requestTraceparent = resolveRequestTraceparent(request);
+  const traceId = traceIdFromTraceparent(requestTraceparent);
   const authState = await resolveAuthenticatedAccessSession(request, { touch: true });
   if (!authState.ok) {
     const reason = classifyManagedAccessFailure(authState.errorCode);
@@ -51,13 +75,14 @@ export async function GET(request) {
       errorCode: authState.errorCode,
       path: "/portal/bootstrap",
       reason,
-      status: authState.status
+      status: authState.status,
+      extra: traceId ? { traceId } : {}
     });
     if (authState.revokeSession) {
       revokeSessionOnAccessFailure(authState.session, authState.errorCode);
     }
 
-    const response = applySecurityHeaders(
+    const response = withTraceparent(applySecurityHeaders(
       NextResponse.json(
         buildManagedBootstrapFailure({
           reason,
@@ -70,15 +95,21 @@ export async function GET(request) {
           }
         }
       )
-    );
+    ), requestTraceparent);
     if (authState.revokeSession) {
       clearSessionCookie(response);
     }
     return response;
   }
   const { session } = authState;
+  audit("portal_bootstrap", {
+    username: session.username,
+    accessEmail: session.accessEmail,
+    path: "/portal/bootstrap",
+    traceId
+  });
 
-  return applySecurityHeaders(
+  return withTraceparent(applySecurityHeaders(
     NextResponse.json(
       {
         authMode: "managed",
@@ -91,7 +122,8 @@ export async function GET(request) {
         features: {
           apiKeyInput: false,
           directDebug: false,
-          artifactViewerModal: resolveArtifactViewerModal(session)
+          artifactViewerModal: resolveArtifactViewerModal(session),
+          rumTelemetry: resolveRumTelemetry(session)
         }
       },
       {
@@ -100,5 +132,5 @@ export async function GET(request) {
         }
       }
     )
-  );
+  ), requestTraceparent);
 }
