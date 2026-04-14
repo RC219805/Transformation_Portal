@@ -81,6 +81,22 @@ Notes:
 - Direct-debug rollout stability reuses `TP_PORTAL_DIRECT_DEBUG_COHORT_KEY`.
 - Managed rollout stability uses the authenticated actor identity already present on the front door; raw usernames and emails are not stored in the RUM sink.
 
+## Optional Review Surface Pilot Knobs
+
+The review-surface split and in-portal viewer stay additive and default-off.
+Both rollouts use the same deterministic cohort hashing path as the RUM pilot.
+
+```bash
+export TP_PORTAL_ARTIFACT_VIEWER_MODAL_ROLLOUT_PERCENT=0
+export TP_PORTAL_REVIEW_SURFACE_DEFER_ROLLOUT_PERCENT=0
+```
+
+Notes:
+- `TP_PORTAL_ARTIFACT_VIEWER_MODAL_ROLLOUT_PERCENT=0` keeps `features.artifactViewerModal=false` on both bootstrap surfaces and leaves review actions on the raw-link path.
+- `TP_PORTAL_REVIEW_SURFACE_DEFER_ROLLOUT_PERCENT=0` keeps `features.reviewSurfaceDeferred=false`, so the split review asset is prefetched after bootstrap instead of deferred to review/operate entry.
+- Roll back either pilot by setting the corresponding percentage back to `0` and redeploying the managed front door and/or backend origin that serves `/portal/bootstrap`.
+- Cohort expansion should move in bounded steps and record the operator owner, rollout date, rollback owner, and target percentage in the deployment notes for the change.
+
 ## Local Development
 
 Start the FastAPI origin first:

@@ -22,6 +22,7 @@ const ENV_KEYS = [
   "TP_CF_ACCESS_AUD",
   "TP_ALLOW_LOCAL_ACCESS_BYPASS",
   "TP_PORTAL_ARTIFACT_VIEWER_MODAL_ROLLOUT_PERCENT",
+  "TP_PORTAL_REVIEW_SURFACE_DEFER_ROLLOUT_PERCENT",
   "TP_PORTAL_RUM_ENABLED",
   "TP_PORTAL_RUM_ROLLOUT_PERCENT"
 ];
@@ -107,6 +108,13 @@ function withTempEnvironment(overrides = {}) {
       overrides.TP_PORTAL_ARTIFACT_VIEWER_MODAL_ROLLOUT_PERCENT;
   } else {
     delete process.env.TP_PORTAL_ARTIFACT_VIEWER_MODAL_ROLLOUT_PERCENT;
+  }
+
+  if (typeof overrides.TP_PORTAL_REVIEW_SURFACE_DEFER_ROLLOUT_PERCENT === "string") {
+    process.env.TP_PORTAL_REVIEW_SURFACE_DEFER_ROLLOUT_PERCENT =
+      overrides.TP_PORTAL_REVIEW_SURFACE_DEFER_ROLLOUT_PERCENT;
+  } else {
+    delete process.env.TP_PORTAL_REVIEW_SURFACE_DEFER_ROLLOUT_PERCENT;
   }
 
   if (typeof overrides.TP_PORTAL_RUM_ENABLED === "string") {
@@ -1327,6 +1335,7 @@ test("managed bootstrap returns actor metadata and CSRF for authenticated sessio
       assert.equal(body.features.apiKeyInput, false);
       assert.equal(body.features.directDebug, false);
       assert.equal(body.features.artifactViewerModal, false);
+      assert.equal(body.features.reviewSurfaceDeferred, false);
       assert.equal(body.features.rumTelemetry, false);
       assert.equal(body.csrfToken, authenticatedSession.csrfToken);
     } finally {
@@ -1367,6 +1376,41 @@ test("managed bootstrap enables the artifact viewer modal for rollout cohorts", 
 
     assert.equal(response.status, 200);
     assert.equal(body.features.artifactViewerModal, true);
+  } finally {
+    env.cleanup();
+  }
+});
+
+test("managed bootstrap enables review surface deferral for rollout cohorts", async () => {
+  const env = withTempEnvironment({
+    TP_PORTAL_REVIEW_SURFACE_DEFER_ROLLOUT_PERCENT: "100"
+  });
+
+  try {
+    const sessions = await importFresh("../lib/sessions.js");
+    const { GET } = await importFresh("../app/portal/bootstrap/route.js");
+    const authenticatedSession = sessions.rotateAuthenticatedSession(
+      sessions.createAnonymousSession(),
+      {
+        username: "admin",
+        accessEmail: "admin@example.com",
+        role: "admin"
+      }
+    );
+
+    const request = buildRequest("https://portal.example.com/portal/bootstrap", {
+      method: "GET",
+      headers: new Headers({
+        cookie: `__Host-tp_session=${authenticatedSession.id}`,
+        "Cf-Access-Jwt-Assertion": createAccessJwt()
+      })
+    });
+
+    const response = await GET(request);
+    const body = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(body.features.reviewSurfaceDeferred, true);
   } finally {
     env.cleanup();
   }
@@ -2156,6 +2200,8 @@ test("shared portal asset manifest pins the managed asset proxy allowlist", asyn
     "portal.css",
     "shared-ui-tokens.css",
     "portal.js",
+    "portal-review.js",
+    "portal-review.css",
     "fonts/portal-sans.woff2",
     "fonts/portal-mono.woff2",
     "brand/dna-symbol-dark.svg",

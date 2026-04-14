@@ -27,6 +27,9 @@ pytestmark = pytest.mark.unit
 orchestrator_app = importlib.import_module("app")
 PORTAL_HTML_PATH = Path(__file__).resolve().parents[1] / "portal.html"
 PORTAL_ASSET_ROOT = PORTAL_HTML_PATH.parent / "public" / "portal-assets"
+PORTAL_FRONTDOOR_ROOT = PORTAL_HTML_PATH.parent / "web" / "secure-landing"
+PORTAL_TEMPLATE_SOURCE_PATH = PORTAL_FRONTDOOR_ROOT / "portal-src" / "portal.template.js"
+PORTAL_REVIEW_SURFACE_SOURCE_PATH = PORTAL_FRONTDOOR_ROOT / "portal-src" / "review-surface-deferred.js"
 FRONTDOOR_BRAND_ROOT = PORTAL_HTML_PATH.parent / "web" / "secure-landing" / "public" / "brand"
 
 
@@ -92,11 +95,12 @@ def _portal_css_content() -> str:
 
 @lru_cache(maxsize=1)
 def _portal_js_content() -> str:
-    html = _portal_html_content()
-    match = re.search(r'<script src="(/portal/assets/[^"]+)"[^>]*></script>', html)
-    if match is None:
-        raise AssertionError("portal script asset not found")
-    return _portal_asset_path(match.group(1)).read_text(encoding="utf-8")
+    return PORTAL_TEMPLATE_SOURCE_PATH.read_text(encoding="utf-8")
+
+
+@lru_cache(maxsize=1)
+def _portal_review_bundle_content() -> str:
+    return PORTAL_REVIEW_SURFACE_SOURCE_PATH.read_text(encoding="utf-8")
 
 
 @lru_cache(maxsize=1)
@@ -441,6 +445,8 @@ def test_portal_html_externalizes_direct_debug_assets_without_third_party_hosts(
 
     assert f'href="{bundle.urls["portal.css"]}"' in html_content
     assert f'src="{bundle.urls["portal.js"]}"' in html_content
+    assert f'data-review-surface-js-url="{bundle.urls["portal-review.js"]}"' in html_content
+    assert f'data-review-surface-css-url="{bundle.urls["portal-review.css"]}"' in html_content
     assert bundle.urls["shared-ui-tokens.css"] in css_content
     assert "<style>" not in html_content
     assert "<script>" not in html_content
@@ -457,6 +463,8 @@ def test_portal_asset_manifest_is_explicit_and_repo_local() -> None:
         "portal.css": orchestrator_app.PORTAL_ASSETS_DIR / "portal.css",
         "shared-ui-tokens.css": orchestrator_app.PORTAL_ASSETS_DIR / "shared-ui-tokens.css",
         "portal.js": orchestrator_app.PORTAL_ASSETS_DIR / "portal.js",
+        "portal-review.js": orchestrator_app.PORTAL_ASSETS_DIR / "portal-review.js",
+        "portal-review.css": orchestrator_app.PORTAL_ASSETS_DIR / "portal-review.css",
         "fonts/portal-sans.woff2": orchestrator_app.PORTAL_ASSETS_DIR / "fonts" / "portal-sans.woff2",
         "fonts/portal-mono.woff2": orchestrator_app.PORTAL_ASSETS_DIR / "fonts" / "portal-mono.woff2",
         "brand/dna-symbol-dark.svg": orchestrator_app.PORTAL_ASSETS_DIR / "brand" / "dna-symbol-dark.svg",
@@ -466,6 +474,8 @@ def test_portal_asset_manifest_is_explicit_and_repo_local() -> None:
         "portal.css": "text/css; charset=utf-8",
         "shared-ui-tokens.css": "text/css; charset=utf-8",
         "portal.js": "text/javascript; charset=utf-8",
+        "portal-review.js": "text/javascript; charset=utf-8",
+        "portal-review.css": "text/css; charset=utf-8",
         "fonts/portal-sans.woff2": "font/woff2",
         "fonts/portal-mono.woff2": "font/woff2",
         "brand/dna-symbol-dark.svg": "image/svg+xml",
@@ -742,6 +752,7 @@ def test_portal_bootstrap_loader_uses_abortable_timeout_and_state_contract() -> 
     assert "apiKeyInput: false" in default_body
     assert "directDebug: false" in default_body
     assert "artifactViewerModal: false" in default_body
+    assert "reviewSurfaceDeferred: false" in default_body
     assert "rumTelemetry: false" in default_body
     assert "const BOOTSTRAP_TIMEOUT_MS = 3500;" in content
     assert "const BOOTSTRAP_RETRY_BASE_DELAY_MS = 1000;" in content
@@ -997,7 +1008,8 @@ def test_portal_managed_unavailable_mode_blocks_dispatch_and_api_key_recovery_pr
 
 def test_portal_artifact_gallery_renders_visual_review_controls() -> None:
     content = _portal_bundle_content()
-    body = _extract_js_function_body(content, "renderArtifactPanel")
+    review_content = _portal_review_bundle_content()
+    review_body = _extract_js_function_body(review_content, "renderArtifactPanel")
     reset_body = _extract_js_function_body(content, "_resetArtifactActionButtons")
     sanitize_body = _extract_js_function_body(content, "sanitizeManagedAssetUrl")
     open_artifact_body = _extract_js_function_body(content, "_openArtifactForSelection")
@@ -1019,11 +1031,11 @@ def test_portal_artifact_gallery_renders_visual_review_controls() -> None:
     assert "artifactDisplayPriority" in content
     assert "artifactDisplayLabel" in content
     assert "function _artifactRouteKey(artifact) {" in content
-    assert "buildArtifactUrl(selected, selectedArtifact)" in body
-    assert "artifactIsPreviewable(selectedArtifact)" in body
-    assert "artifactDisplayLabel(selectedArtifact)" in body
-    assert "artifactDisplayLabel(artifact)" in body
-    assert "button.dataset.artifactPath = _artifactRouteKey(artifact);" in body
+    assert "buildArtifactUrl(selected, selectedArtifact)" in review_body
+    assert "artifactIsPreviewable(selectedArtifact)" in review_body
+    assert "artifactDisplayLabel(selectedArtifact)" in review_body
+    assert "artifactDisplayLabel(artifact)" in review_body
+    assert "button.dataset.artifactPath = _artifactRouteKey(artifact);" in review_body
     assert "artifactDisplayPriority(right)" in rank_body
     assert "artifactCompareGroup(candidate) === primaryGroup" in compare_body
     assert "display_hint: _normalizeArtifactDisplayHint(item.display_hint)" in normalize_body
@@ -1047,10 +1059,11 @@ def test_portal_artifact_gallery_renders_visual_review_controls() -> None:
 
 def test_portal_review_surface_exposes_warning_banner_and_provenance_contract() -> None:
     content = _portal_bundle_content()
-    render_body = _extract_js_function_body(content, "renderArtifactPanel")
-    status_body = _extract_js_function_body(content, "_reviewStatusSnapshot")
-    banner_body = _extract_js_function_body(content, "_renderReviewStatusBanner")
-    provenance_body = _extract_js_function_body(content, "_renderArtifactProvenance")
+    review_content = _portal_review_bundle_content()
+    render_body = _extract_js_function_body(review_content, "renderArtifactPanel")
+    status_body = _extract_js_function_body(review_content, "_reviewStatusSnapshot")
+    banner_body = _extract_js_function_body(review_content, "_renderReviewStatusBanner")
+    provenance_body = _extract_js_function_body(review_content, "_renderArtifactProvenance")
 
     assert 'id="reviewStatusBanner"' in content
     assert 'id="reviewStatusTitle"' in content
@@ -1079,7 +1092,7 @@ def test_portal_review_surface_exposes_warning_banner_and_provenance_contract() 
     assert "Outputs ready for review" in status_body
     assert "Run canceled after partial output capture" in status_body
     assert "Run is offline with reviewable outputs" in status_body
-    assert "formatRelativeTime" in status_body
+    assert "_jobFreshnessLabel(job)" in status_body
     assert "els.reviewStatusBanner.dataset.tone = snapshot.tone;" in banner_body
     assert "artifactDisplayLabel(artifact)" in provenance_body
     assert "artifactLabel(artifact)" in provenance_body
@@ -1091,11 +1104,13 @@ def test_portal_review_surface_exposes_warning_banner_and_provenance_contract() 
 
 def test_portal_artifact_viewer_modal_is_feature_flagged_and_keyboard_complete() -> None:
     content = _portal_bundle_content()
+    review_content = _portal_review_bundle_content()
     active_overlay_body = _extract_js_function_body(content, "_activeOverlayPanel")
-    render_body = _extract_js_function_body(content, "renderArtifactViewer")
-    open_body = _extract_js_function_body(content, "_openArtifactViewer")
-    navigate_body = _extract_js_function_body(content, "_navigateArtifactViewerSelection")
-    close_body = _extract_js_function_body(content, "_closeArtifactViewer")
+    render_body = _extract_js_function_body(review_content, "renderArtifactViewer")
+    preview_load_body = _extract_js_function_body(review_content, "_loadArtifactViewerInlinePreview")
+    open_body = _extract_js_function_body(review_content, "_openArtifactViewer")
+    navigate_body = _extract_js_function_body(review_content, "_navigateArtifactViewerSelection")
+    close_body = _extract_js_function_body(review_content, "_closeArtifactViewer")
 
     assert 'id="artifactViewerModal"' in content
     assert 'id="artifactViewerPanel"' in content
@@ -1110,21 +1125,26 @@ def test_portal_artifact_viewer_modal_is_feature_flagged_and_keyboard_complete()
     assert 'id="artifactViewerOpenRawBtn"' in content
     assert 'id="artifactViewerCopyPathBtn"' in content
     assert 'id="artifactViewerCopyFingerprintBtn"' in content
+    assert 'id="artifactViewerStatus"' in content
+    assert 'aria-describedby="artifactViewerMeta artifactViewerStatus"' in content
     assert "return Boolean(state.auth?.features?.artifactViewerModal);" in content
     assert "if (els.artifactViewerModal && !els.artifactViewerModal.classList.contains('hidden'))" in active_overlay_body
+    assert "void _loadDeferredReviewSurface().then((api) => {" in _extract_js_function_body(content, "_openArtifactViewer")
     assert "state.portalUi.artifactViewer.open = true;" in open_body
     assert "_rememberOverlayTrigger(trigger);" in open_body
     assert "els.closeArtifactViewerBtn.focus();" in open_body
     assert "artifact_viewer_opened" in open_body
     assert "state.portalUi.artifactViewer.open = false;" in close_body
     assert "_restoreOverlayFocus();" in close_body
-    assert "els.artifactViewerModal.classList.toggle('hidden', !shouldShow);" in render_body
+    assert 'els.artifactViewerModal.classList.toggle("hidden", !shouldShow);' in render_body
     assert "els.artifactViewerImage.style.transform = `scale(${zoomPercent / 100})`;" in render_body
+    assert "_showArtifactViewerFallback(url, artifactName);" in render_body
     assert (
-        "els.artifactViewerFallbackTitle.textContent = url ? 'Inline preview unavailable' : 'Artifact URL unavailable';"
-        in render_body
+        'headers: _buildAuthHeaders({ Accept: artifactContentType(context.artifact) || "*/*" }, "GET"),' in preview_load_body
     )
+    assert "URL.createObjectURL(await response.blob())" in preview_load_body
     assert "els.artifactViewerCopyFingerprintBtn.dataset.fingerprint = fingerprint;" in render_body
+    assert "_setArtifactViewerStatus(" in render_body
     assert "_rememberArtifactSelection(context.job.id, nextPath);" in navigate_body
     assert "renderReviewSurfaces();" in navigate_body
     assert (
@@ -1140,8 +1160,9 @@ def test_portal_artifact_viewer_modal_is_feature_flagged_and_keyboard_complete()
 
 def test_portal_review_surface_supports_compare_summary_and_keyboard_selection() -> None:
     content = _portal_bundle_content()
-    render_body = _extract_js_function_body(content, "renderArtifactPanel")
-    compare_summary_body = _extract_js_function_body(content, "_renderReviewCompareSummary")
+    review_content = _portal_review_bundle_content()
+    render_body = _extract_js_function_body(review_content, "renderArtifactPanel")
+    compare_summary_body = _extract_js_function_body(review_content, "_renderReviewCompareSummary")
     compare_copy_body = _extract_js_function_body(content, "_compareSurfaceCopy")
     focus_body = _extract_js_function_body(content, "_focusArtifactRailButton")
     keydown_body = _extract_js_function_body(content, "handleArtifactRailKeydown")
@@ -1233,13 +1254,15 @@ def test_portal_selected_job_inspector_uses_timeline_tabs_and_log_secondary_view
 
 def test_portal_operate_surfaces_use_jobs_hydration_skeletons_before_empty_state() -> None:
     content = _portal_bundle_content()
+    review_content = _portal_review_bundle_content()
     helper_body = _extract_js_function_body(content, "_isJobsHydrationPending")
     queue_empty_body = _extract_js_function_body(content, "_queueEmptyStateCopy")
-    artifact_empty_body = _extract_js_function_body(content, "_artifactEmptyStateCopy")
+    artifact_empty_body = _extract_js_function_body(review_content, "_artifactEmptyStateCopy")
     toggle_body = _extract_js_function_body(content, "_toggleSurfaceSkeleton")
     queue_body = _extract_js_function_body(content, "renderJobQueue")
     inspector_body = _extract_js_function_body(content, "renderSelectedJobInspector")
     artifact_body = _extract_js_function_body(content, "renderArtifactPanel")
+    review_body = _extract_js_function_body(review_content, "renderArtifactPanel")
     recover_body = _extract_js_function_body(content, "recoverJobs")
     flush_body = _extract_js_function_body(content, "_flushBootstrapOnlineFollowup")
     backend_body = _extract_js_function_body(content, "checkBackend")
@@ -1275,7 +1298,8 @@ def test_portal_operate_surfaces_use_jobs_hydration_skeletons_before_empty_state
         "_toggleSurfaceSkeleton(els.artifactsShell, els.artifactShellContent, els.artifactSkeletonState, jobsLoading);"
         in artifact_body
     )
-    assert "_setSurfaceEmptyState(" in artifact_body
+    assert "_renderDeferredReviewSurfaceFallback(jobsLoading);" in artifact_body
+    assert "_setSurfaceEmptyState(" in review_body
     assert "state.jobsLoadStatus = 'loading';" in recover_body
     assert "state.jobsLoadStatus = 'ready';" in recover_body
     assert "state.jobsLoadStatus = 'loading';" in flush_body
@@ -1816,10 +1840,11 @@ def test_portal_preview_metadata_worker_modes_and_export_contract_are_wired() ->
 
 def test_portal_runtime_briefing_and_recovery_surfaces_stay_additive_and_selector_stable() -> None:
     content = _portal_bundle_content()
+    review_content = _portal_review_bundle_content()
     mission_body = _extract_js_function_body(content, "renderMissionControl")
-    review_status_body = _extract_js_function_body(content, "_reviewStatusSnapshot")
+    review_status_body = _extract_js_function_body(review_content, "_reviewStatusSnapshot")
     queue_empty_body = _extract_js_function_body(content, "_queueEmptyStateCopy")
-    artifact_empty_body = _extract_js_function_body(content, "_artifactEmptyStateCopy")
+    artifact_empty_body = _extract_js_function_body(review_content, "_artifactEmptyStateCopy")
     inspector_body = _extract_js_function_body(content, "renderSelectedJobInspector")
 
     assert 'id="overviewRuntimeBriefing"' in content

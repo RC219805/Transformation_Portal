@@ -227,6 +227,7 @@ def _spawn_local_backend(api_key: str, *, timeout_seconds: float) -> LocalRuntim
     base_url = f"http://127.0.0.1:{port}"
     env = os.environ.copy()
     env["PYTHONUNBUFFERED"] = "1"
+    env["TP_RATE_LIMIT_PER_MINUTE"] = "0"
     if api_key:
         env["TP_API_KEY"] = api_key
     else:
@@ -628,7 +629,14 @@ def _poll(
     deadline = time.monotonic() + timeout_seconds
     last_value: Any = None
     while time.monotonic() < deadline:
-        last_value = connection.evaluate(expression)
+        try:
+            last_value = connection.evaluate(expression)
+        except SmokeFailure as exc:
+            message = str(exc)
+            if "Inspected target navigated or closed" in message:
+                time.sleep(interval_seconds)
+                continue
+            raise
         if predicate(last_value):
             return last_value
         time.sleep(interval_seconds)
@@ -761,6 +769,21 @@ def _state_probe_expression() -> str:
       const el = document.getElementById('artifactCompareBtn');
       return !!(el && String(el.getAttribute('aria-pressed') || '') === 'true');
     })(),
+    artifactViewerVisible: (() => {
+      const el = document.getElementById('artifactViewerModal');
+      return !!(el && !el.classList.contains('hidden'));
+    })(),
+    artifactViewerTitle: text('artifactViewerTitle'),
+    artifactViewerPath: text('artifactViewerPath'),
+    artifactViewerFingerprint: text('artifactViewerFingerprint'),
+    artifactViewerZoomValue: text('artifactViewerZoomValue'),
+    artifactViewerStatus: text('artifactViewerStatus'),
+    artifactViewerFallbackVisible: (() => {
+      const el = document.getElementById('artifactViewerFallback');
+      return !!(el && !el.classList.contains('hidden'));
+    })(),
+    artifactViewerFallbackTitle: text('artifactViewerFallbackTitle'),
+    artifactViewerFallbackDetail: text('artifactViewerFallbackDetail'),
     summaryReconstructionState: text('summaryReconstructionState'),
     summaryRuntimeWorkers: text('summaryRuntimeWorkers'),
     summaryPreviewState: text('summaryPreviewState'),
@@ -1139,19 +1162,39 @@ def _set_pipeline_form_expression(
     rememberApiKey.checked = false;
     dispatch(rememberApiKey, 'change');
   }}
+  try {{
+    sessionStorage.removeItem('tp_portal_transient_draft');
+  }} catch {{}}
   setValue('apiKeyInput', cfg.api_key);
+  try {{
+    localStorage.removeItem('tp_api_key');
+    if (cfg.api_key) {{
+      sessionStorage.setItem('tp_api_key', cfg.api_key);
+    }} else {{
+      sessionStorage.removeItem('tp_api_key');
+    }}
+  }} catch {{}}
+  if (typeof _persistApiKeyFromInputs === 'function') {{
+    _persistApiKeyFromInputs();
+  }}
   setValue('pipelineSelect', cfg.pipeline);
   setValue('inputDir', cfg.input_dir);
   setValue('outputDir', cfg.output_dir);
   setValue('archiveIndexPath', cfg.archive_index);
   setValue('rightsManifestPath', cfg.manifest_jsonl);
   if (cfg.build_step) {{
-    if (typeof setBuildStep === 'function') {{
+    const buildStepButton = document.querySelector(`[data-build-step-target="${{cfg.build_step}}"]`);
+    if (buildStepButton) {{
+      buildStepButton.click();
+    }} else if (typeof setBuildStep === 'function') {{
       setBuildStep(cfg.build_step, {{ silent: true }});
-    }} else {{
-      const buildStepButton = document.querySelector(`[data-build-step-target="${{cfg.build_step}}"]`);
-      if (buildStepButton) buildStepButton.click();
     }}
+  }}
+  if (typeof reconcileBuildSurfaceFromDom === 'function') {{
+    reconcileBuildSurfaceFromDom();
+  }}
+  if (typeof scheduleConfigPreview === 'function') {{
+    scheduleConfigPreview(true);
   }}
   return {{
     currentView: document.body ? String(document.body.dataset.consoleView || '') : '',
@@ -1292,6 +1335,20 @@ def _click_expression(selector: str) -> str:
 """
 
 
+def _key_expression(key: str) -> str:
+    return f"""
+(() => {{
+  const event = new KeyboardEvent('keydown', {{
+    key: {json.dumps(key)},
+    bubbles: true,
+    cancelable: true
+  }});
+  document.dispatchEvent(event);
+  return ({_state_probe_expression()});
+}})()
+"""
+
+
 def _simulate_bootstrap_degraded_expression(*, reason: str, http_status: int) -> str:
     payload = json.dumps({"reason": reason, "http_status": http_status})
     return f"""
@@ -1329,6 +1386,7 @@ def _inject_compare_ready_review_expression(job_id: str) -> str:
     previewable: true,
     content_type: 'image/png',
     size_bytes: 2048,
+    sha256: '1111111111111111111111111111111111111111111111111111111111111111',
     display_hint: {{
       label: 'Synthetic Primary',
       priority: 1000,
@@ -1343,6 +1401,7 @@ def _inject_compare_ready_review_expression(job_id: str) -> str:
     previewable: true,
     content_type: 'image/png',
     size_bytes: 1984,
+    sha256: '2222222222222222222222222222222222222222222222222222222222222222',
     display_hint: {{
       label: 'Synthetic Compare',
       priority: 990,
@@ -1350,6 +1409,39 @@ def _inject_compare_ready_review_expression(job_id: str) -> str:
     }}
   }});
   state.artifactUi.selectedByJob[String(cfg.job_id)] = 'synthetic/review-primary.png';
+  state.artifactUi.compareByJob[String(cfg.job_id)] = false;
+  renderReviewSurfaces();
+  return ({_state_probe_expression()});
+}})()
+"""
+
+
+def _inject_viewer_fallback_review_expression(job_id: str) -> str:
+    payload = json.dumps({"job_id": job_id})
+    return f"""
+(() => {{
+  const cfg = {payload};
+  const job = (typeof state !== 'undefined' && Array.isArray(state.jobs))
+    ? state.jobs.find((item) => String(item && item.id || '') === String(cfg.job_id || ''))
+    : null;
+  if (!job) {{
+    throw new Error(`missing job ${{cfg.job_id}}`);
+  }}
+  upsertArtifact(job, {{
+    path: 'synthetic/review-report.json',
+    relative_path: 'synthetic/review-report.json',
+    artifact_type: 'report',
+    media_kind: 'json',
+    previewable: false,
+    content_type: 'application/json',
+    size_bytes: 1024,
+    sha256: '3333333333333333333333333333333333333333333333333333333333333333',
+    display_hint: {{
+      label: 'Synthetic Report',
+      priority: 970
+    }}
+  }});
+  state.artifactUi.selectedByJob[String(cfg.job_id)] = 'synthetic/review-report.json';
   state.artifactUi.compareByJob[String(cfg.job_id)] = false;
   renderReviewSurfaces();
   return ({_state_probe_expression()});
@@ -2263,6 +2355,155 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             f"Action-rail compare toggles should preserve the compare route contract: {compare_state}",
         )
 
+        print("portal-browser-smoke: opening the artifact viewer from review", flush=True)
+        connection.evaluate(_click_expression("#openArtifactBtn"))
+        viewer_state = _poll(
+            connection,
+            _state_probe_expression(),
+            predicate=lambda value: (
+                isinstance(value, dict)
+                and bool(value.get("artifactViewerVisible"))
+                and str(value.get("artifactViewerPath", "")).strip() == "synthetic/review-primary.png"
+            ),
+            timeout_seconds=args.timeout_seconds,
+            description="artifact viewer to open for the selected review artifact",
+        )
+        _expect(
+            bool(str(viewer_state.get("artifactViewerFingerprint", "")).strip()),
+            f"Artifact viewer should expose the selected artifact fingerprint: {viewer_state}",
+        )
+        _expect(
+            "zoom" in str(viewer_state.get("artifactViewerZoomValue", "")).lower(),
+            f"Artifact viewer should expose the current zoom state: {viewer_state}",
+        )
+
+        print("portal-browser-smoke: navigating viewer artifacts with keyboard shortcuts", flush=True)
+        connection.evaluate(_key_expression("ArrowRight"))
+        viewer_next_state = _poll(
+            connection,
+            _state_probe_expression(),
+            predicate=lambda value: (
+                isinstance(value, dict)
+                and bool(value.get("artifactViewerVisible"))
+                and str(value.get("artifactViewerPath", "")).strip() == "synthetic/review-compare.png"
+            ),
+            timeout_seconds=args.timeout_seconds,
+            description="artifact viewer keyboard next navigation",
+        )
+        _expect(
+            "review-compare.png" in str(viewer_next_state.get("artifactViewerTitle", "")).lower(),
+            f"Artifact viewer keyboard next should move to the paired artifact: {viewer_next_state}",
+        )
+
+        connection.evaluate(_key_expression("ArrowLeft"))
+        viewer_prev_state = _poll(
+            connection,
+            _state_probe_expression(),
+            predicate=lambda value: (
+                isinstance(value, dict)
+                and bool(value.get("artifactViewerVisible"))
+                and str(value.get("artifactViewerPath", "")).strip() == "synthetic/review-primary.png"
+            ),
+            timeout_seconds=args.timeout_seconds,
+            description="artifact viewer keyboard previous navigation",
+        )
+        _expect(
+            "review-primary.png" in str(viewer_prev_state.get("artifactViewerTitle", "")).lower(),
+            f"Artifact viewer keyboard previous should restore the primary artifact: {viewer_prev_state}",
+        )
+
+        print("portal-browser-smoke: adjusting viewer zoom with keyboard shortcuts", flush=True)
+        connection.evaluate(_key_expression("+"))
+        viewer_zoomed_state = _poll(
+            connection,
+            _state_probe_expression(),
+            predicate=lambda value: (
+                isinstance(value, dict)
+                and bool(value.get("artifactViewerVisible"))
+                and str(value.get("artifactViewerZoomValue", "")).strip() == "125% zoom"
+            ),
+            timeout_seconds=args.timeout_seconds,
+            description="artifact viewer keyboard zoom in",
+        )
+        _expect(
+            "125% zoom" == str(viewer_zoomed_state.get("artifactViewerZoomValue", "")).strip(),
+            f"Artifact viewer keyboard zoom-in should update the viewer state: {viewer_zoomed_state}",
+        )
+
+        connection.evaluate(_key_expression("0"))
+        viewer_reset_state = _poll(
+            connection,
+            _state_probe_expression(),
+            predicate=lambda value: (
+                isinstance(value, dict)
+                and bool(value.get("artifactViewerVisible"))
+                and str(value.get("artifactViewerZoomValue", "")).strip() == "100% zoom"
+            ),
+            timeout_seconds=args.timeout_seconds,
+            description="artifact viewer keyboard zoom reset",
+        )
+        _expect(
+            str(viewer_reset_state.get("artifactViewerStatus", "")).strip(),
+            f"Artifact viewer should expose a live status message while open: {viewer_reset_state}",
+        )
+
+        print("portal-browser-smoke: closing the artifact viewer with Escape", flush=True)
+        connection.evaluate(_key_expression("Escape"))
+        _poll(
+            connection,
+            _state_probe_expression(),
+            predicate=lambda value: isinstance(value, dict) and not bool(value.get("artifactViewerVisible")),
+            timeout_seconds=args.timeout_seconds,
+            description="artifact viewer to close",
+        )
+
+        print("portal-browser-smoke: exercising artifact viewer degraded fallback", flush=True)
+        fallback_review_state = connection.evaluate(_inject_viewer_fallback_review_expression(submitted_job_id))
+        _expect(isinstance(fallback_review_state, dict), f"Unexpected viewer fallback state: {fallback_review_state!r}")
+        fallback_review_state = _poll(
+            connection,
+            _state_probe_expression(),
+            predicate=lambda value: (
+                isinstance(value, dict)
+                and str(value.get("reviewProvenancePath", "")).strip() == "synthetic/review-report.json"
+            ),
+            timeout_seconds=args.timeout_seconds,
+            description="non-previewable review artifact to stage viewer fallback",
+        )
+        connection.evaluate(_click_expression("#openArtifactBtn"))
+        fallback_viewer_state = _poll(
+            connection,
+            _state_probe_expression(),
+            predicate=lambda value: (
+                isinstance(value, dict)
+                and bool(value.get("artifactViewerVisible"))
+                and bool(value.get("artifactViewerFallbackVisible"))
+                and str(value.get("artifactViewerFallbackTitle", "")).strip() == "Inline preview unavailable"
+            ),
+            timeout_seconds=args.timeout_seconds,
+            description="artifact viewer fallback state for non-previewable artifacts",
+        )
+        _expect(
+            "metadata fallback" in str(fallback_viewer_state.get("artifactViewerStatus", "")).lower(),
+            f"Artifact viewer fallback should announce the degraded status through the live region: {fallback_viewer_state}",
+        )
+        _expect(
+            str(fallback_viewer_state.get("artifactViewerPath", "")).strip() == "synthetic/review-report.json",
+            f"Artifact viewer fallback should still expose the selected relative path: {fallback_viewer_state}",
+        )
+        _expect(
+            bool(str(fallback_viewer_state.get("artifactViewerFingerprint", "")).strip()),
+            f"Artifact viewer fallback should still expose the selected fingerprint: {fallback_viewer_state}",
+        )
+        connection.evaluate(_key_expression("Escape"))
+        _poll(
+            connection,
+            _state_probe_expression(),
+            predicate=lambda value: isinstance(value, dict) and not bool(value.get("artifactViewerVisible")),
+            timeout_seconds=args.timeout_seconds,
+            description="artifact viewer fallback to close",
+        )
+
         print("portal-browser-smoke: restoring review from an artifact deep link", flush=True)
         connection.evaluate(_navigate_to_console_view_expression("build"))
         _poll(
@@ -2427,6 +2668,13 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         print(f"artifacts: {terminal_state.get('selectedJobArtifactCount')}")
         print(f"health: {terminal_state.get('healthText')}")
         return 0
+    except SmokeFailure as exc:
+        if runtime_handle is not None:
+            log_path = getattr(runtime_handle, "log_path", None)
+            log_tail = _tail_text(log_path, max_chars=2400, max_bytes=8192) if isinstance(log_path, Path) else ""
+            if log_tail:
+                raise SmokeFailure(f"{exc}\nbackend-log-tail:\n{log_tail}", kind=exc.kind) from exc
+        raise
     finally:
         if connection is not None:
             connection.close()

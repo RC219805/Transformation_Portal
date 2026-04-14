@@ -134,6 +134,7 @@ export function createPortalAuthState() {
       apiKeyInput: false,
       directDebug: false,
       artifactViewerModal: false,
+      reviewSurfaceDeferred: false,
       rumTelemetry: false
     }
   };

@@ -9,6 +9,14 @@
       "max_bytes": 100000,
       "max_gzip_bytes": 18000
     },
+    "portal-review.js": {
+      "max_bytes": 50000,
+      "max_gzip_bytes": 9000
+    },
+    "portal-review.css": {
+      "max_bytes": 7000,
+      "max_gzip_bytes": 1600
+    },
     "shared-ui-tokens.css": {
       "max_bytes": 2048,
       "max_gzip_bytes": 768
