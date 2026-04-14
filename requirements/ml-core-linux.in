@@ -41,7 +41,7 @@ scikit-image>=0.21.0,<1
 # Configuration / diagnostics / color
 PyYAML>=6.0,<7               # Config parser: stable API
 colour-science>=0.4.2,<1     # Color math library: stable API
-psutil>=5.9.0,<7             # System utilities: OS compatibility layer
+psutil>=5.9.0,<8             # System utilities: OS compatibility layer
 memory-profiler>=0.61.0,<1   # Dev/profiling tool
 
 # RAG / embedding support
