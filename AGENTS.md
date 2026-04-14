@@ -129,6 +129,7 @@ Quick reference for common workflows and commands in this repo.
 - `./scripts/diagnostics/full_chain_determinism_trial.sh` run Phase 4C/4D/4E determinism checks (`--input-root` or `--capture-metadata`).
 - `./scripts/setup/auto-organize-install.sh` install repository file-organization guardrails and pre-commit hook.
 - `./scripts/setup/pre-commit-check.sh` run root-file placement validation manually (also used by the hook).
+- `./scripts/pre_commit_hook.sh` unified pre-commit quality gate wrapper; delegates to `scripts/utilities/pre-commit-quality-check.py` (`--all-files`, `--quick-tests` available).
 - `./scripts/runbooks/merge_phase2_runbook.sh` temporary guarded merge runbook for the APEX Phase 2 branch; it checks tree cleanliness, syncs branches, runs fast-lane validation, and prompts before merge/push.
 
 ## ComfyUI workflows (`workflows/`)
