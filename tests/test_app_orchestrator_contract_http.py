@@ -8,6 +8,7 @@ import asyncio
 import importlib
 import json
 import logging
+import re
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
@@ -241,7 +242,7 @@ def test_portal_asset_endpoint_serves_css_and_js(client: TestClient) -> None:
     assert shared_tokens_response.status_code == 200
     assert shared_tokens_response.headers["Cache-Control"] == orchestrator_app.PORTAL_IMMUTABLE_ASSET_CACHE_CONTROL
     assert shared_tokens_response.headers["content-type"] == orchestrator_app.PORTAL_ASSET_MEDIA_TYPES["shared-ui-tokens.css"]
-    assert "--ux-target-min-size:44px;" in shared_tokens_response.text
+    assert re.search(r"--ux-target-min-size:\s*44px;", shared_tokens_response.text)
 
     assert js_response.status_code == 200
     assert js_response.headers["Cache-Control"] == orchestrator_app.PORTAL_IMMUTABLE_ASSET_CACHE_CONTROL

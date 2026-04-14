@@ -31,9 +31,17 @@ function writeIfChanged(targetPath, content) {
   return true;
 }
 
-function copyIfChanged(sourcePath, targetPath) {
+async function minifyCssText(content) {
+  return (await transform(content, {
+    loader: "css",
+    legalComments: "none",
+    minify: true
+  })).code.trim() + "\n";
+}
+
+async function writeMinifiedCssCopy(sourcePath, targetPath) {
   const sourceContent = readFileSync(sourcePath, "utf-8");
-  return writeIfChanged(targetPath, sourceContent);
+  return writeIfChanged(targetPath, await minifyCssText(sourceContent));
 }
 
 function stripStandaloneLineComments(content) {
@@ -92,8 +100,8 @@ const compactPortalBundle = (await transform(nextPortalBundle, {
 })).code.trim();
 const portalChanged = writeIfChanged(PORTAL_ASSET_PATH, `${compactPortalBundle}\n`);
 const reviewSurfaceChanged = writeIfChanged(PORTAL_REVIEW_SURFACE_ASSET_PATH, deferredReviewSurfaceBundle.trim());
-const portalTokenChanged = copyIfChanged(SHARED_TOKEN_SOURCE_PATH, PORTAL_SHARED_TOKEN_TARGET);
-const frontdoorTokenChanged = copyIfChanged(SHARED_TOKEN_SOURCE_PATH, FRONTDOOR_SHARED_TOKEN_TARGET);
+const portalTokenChanged = await writeMinifiedCssCopy(SHARED_TOKEN_SOURCE_PATH, PORTAL_SHARED_TOKEN_TARGET);
+const frontdoorTokenChanged = await writeMinifiedCssCopy(SHARED_TOKEN_SOURCE_PATH, FRONTDOOR_SHARED_TOKEN_TARGET);
 
 const portalStats = statSync(PORTAL_ASSET_PATH);
 const reviewSurfaceStats = statSync(PORTAL_REVIEW_SURFACE_ASSET_PATH);

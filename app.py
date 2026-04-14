@@ -155,13 +155,7 @@ def _portal_rollout_enabled(env_name: str, actor: Optional[Mapping[str, Any]] = 
 def _portal_rum_enabled(actor: Optional[Mapping[str, Any]] = None) -> bool:
     if not _env_bool("TP_PORTAL_RUM_ENABLED", False):
         return False
-    rollout_percent = _env_rollout_percent("TP_PORTAL_RUM_ROLLOUT_PERCENT", 0)
-    if rollout_percent <= 0:
-        return False
-    cohort_key = _portal_rollout_cohort_key(actor)
-    if not cohort_key:
-        return False
-    return _stable_rollout_bucket(cohort_key) < rollout_percent
+    return _portal_rollout_enabled("TP_PORTAL_RUM_ROLLOUT_PERCENT", actor)
 
 
 REPO_ROOT = Path(__file__).resolve().parent

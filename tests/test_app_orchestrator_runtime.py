@@ -95,16 +95,39 @@ def _portal_css_content() -> str:
 
 @lru_cache(maxsize=1)
 def _portal_js_content() -> str:
+    html = _portal_html_content()
+    match = re.search(r'<script src="(/portal/assets/[^"]+)" defer></script>', html)
+    if match is None:
+        raise AssertionError("portal script tag not found")
+    return _portal_asset_path(match.group(1)).read_text(encoding="utf-8")
+
+
+@lru_cache(maxsize=1)
+def _portal_js_source_content() -> str:
     return PORTAL_TEMPLATE_SOURCE_PATH.read_text(encoding="utf-8")
 
 
 @lru_cache(maxsize=1)
 def _portal_review_bundle_content() -> str:
+    html = _portal_html_content()
+    match = re.search(r'data-review-surface-js-url="(/portal/assets/[^"]+)"', html)
+    if match is None:
+        raise AssertionError("portal review surface asset url not found")
+    return _portal_asset_path(match.group(1)).read_text(encoding="utf-8")
+
+
+@lru_cache(maxsize=1)
+def _portal_review_source_content() -> str:
     return PORTAL_REVIEW_SURFACE_SOURCE_PATH.read_text(encoding="utf-8")
 
 
 @lru_cache(maxsize=1)
 def _portal_bundle_content() -> str:
+    return "\n".join((_portal_html_content(), _portal_css_content(), _portal_js_source_content()))
+
+
+@lru_cache(maxsize=1)
+def _portal_runtime_bundle_content() -> str:
     return "\n".join((_portal_html_content(), _portal_css_content(), _portal_js_content()))
 
 
@@ -430,7 +453,7 @@ def test_portal_phase1_accessibility_tokens_align_focus_and_target_size() -> Non
     shared_tokens = orchestrator_app.PORTAL_ASSET_PATHS["shared-ui-tokens.css"].read_text(encoding="utf-8")
 
     assert "--ux-focus-ring:" in css_content
-    assert "--ux-target-min-size: 44px;" in shared_tokens
+    assert re.search(r"--ux-target-min-size:\s*44px;", shared_tokens)
     assert "font-size: var(--ux-body-size);" in css_content
     assert css_content.count("--shell-border: var(--ux-panel-border);") >= 2
     assert "--shell-border: rgba(148, 163, 184, 0.22);" not in css_content
@@ -455,6 +478,37 @@ def test_portal_html_externalizes_direct_debug_assets_without_third_party_hosts(
     assert "https://fonts.gstatic.com" not in html_content
     assert "tailwind.config" not in css_content
     assert "Phase 1 local utility snapshot replacing Tailwind CDN for portal.html" in css_content
+
+
+def test_portal_runtime_helpers_read_served_js_assets_from_rendered_html() -> None:
+    bundle = orchestrator_app._get_portal_asset_bundle()
+    served_portal_js = _portal_js_content()
+    served_review_js = _portal_review_bundle_content()
+    runtime_content = _portal_runtime_bundle_content()
+
+    assert served_portal_js == _portal_asset_path(bundle.urls["portal.js"]).read_text(encoding="utf-8")
+    assert served_review_js == _portal_asset_path(bundle.urls["portal-review.js"]).read_text(encoding="utf-8")
+    assert served_portal_js != _portal_js_source_content()
+    assert "Review surfaces failed to load. Reload the portal and retry the review action." in runtime_content
+    assert "deferredReviewSurfaceLoadFailedAt" in runtime_content
+    assert "DEFERRED_REVIEW_SURFACE_RETRY_WINDOW_MS" in runtime_content
+    assert "createDeferredReviewSurfaceApi" in served_review_js
+    assert "Inline preview unavailable" in served_review_js
+
+
+def test_portal_rum_rollout_reuses_shared_rollout_helper(monkeypatch: pytest.MonkeyPatch) -> None:
+    actor = {"username": "portal-admin"}
+    captured: list[tuple[str, dict[str, str]]] = []
+
+    monkeypatch.setattr(orchestrator_app, "_env_bool", lambda name, default=False: name == "TP_PORTAL_RUM_ENABLED")
+    monkeypatch.setattr(
+        orchestrator_app,
+        "_portal_rollout_enabled",
+        lambda env_name, actor=None: captured.append((env_name, actor)) or True,
+    )
+
+    assert orchestrator_app._portal_rum_enabled(actor) is True
+    assert captured == [("TP_PORTAL_RUM_ROLLOUT_PERCENT", actor)]
 
 
 def test_portal_asset_manifest_is_explicit_and_repo_local() -> None:
@@ -1008,7 +1062,7 @@ def test_portal_managed_unavailable_mode_blocks_dispatch_and_api_key_recovery_pr
 
 def test_portal_artifact_gallery_renders_visual_review_controls() -> None:
     content = _portal_bundle_content()
-    review_content = _portal_review_bundle_content()
+    review_content = _portal_review_source_content()
     review_body = _extract_js_function_body(review_content, "renderArtifactPanel")
     reset_body = _extract_js_function_body(content, "_resetArtifactActionButtons")
     sanitize_body = _extract_js_function_body(content, "sanitizeManagedAssetUrl")
@@ -1057,9 +1111,35 @@ def test_portal_artifact_gallery_renders_visual_review_controls() -> None:
     assert "sanitizeManagedAssetUrl(els.downloadArtifactBtn.dataset.url)" in content
 
 
+def test_portal_deferred_review_surface_failures_back_off_until_retry_window_expires() -> None:
+    content = _portal_bundle_content()
+    load_body = _extract_js_function_body(content, "_loadDeferredReviewSurface")
+    note_body = _extract_js_function_body(content, "_noteDeferredReviewSurfaceLoadFailure")
+    clear_body = _extract_js_function_body(content, "_clearDeferredReviewSurfaceLoadFailure")
+    prime_body = _extract_js_function_body(content, "_primeDeferredReviewSurface")
+    fallback_body = _extract_js_function_body(content, "_renderDeferredReviewSurfaceFallback")
+
+    assert "const DEFERRED_REVIEW_SURFACE_RETRY_WINDOW_MS = 30000;" in content
+    assert "let deferredReviewSurfaceLoadFailedAt = 0;" in content
+    assert "let deferredReviewSurfaceLoadLastToastAt = 0;" in content
+    assert "if (_deferredReviewSurfaceLoadRetryBlocked()) return null;" in load_body
+    assert "_clearDeferredReviewSurfaceLoadFailure();" in load_body
+    assert "_noteDeferredReviewSurfaceLoadFailure();" in load_body
+    assert "deferredReviewSurfaceLoadFailedAt = now;" in note_body
+    assert "deferredReviewSurfaceLoadLastToastAt = now;" in note_body
+    assert (
+        "createToast('Review surfaces failed to load. Reload the portal and retry the review action.', 'error');" in note_body
+    )
+    assert "deferredReviewSurfaceLoadFailedAt = 0;" in clear_body
+    assert "deferredReviewSurfaceLoadLastToastAt = 0;" in clear_body
+    assert "if (!_shouldLoadDeferredReviewSurface(reason) || _deferredReviewSurfaceLoadRetryBlocked()) return;" in prime_body
+    assert "els.artifactMeta.textContent = 'Review surface unavailable';" in fallback_body
+    assert "Reload the portal to retry loading the review surface assets for this artifact context." in fallback_body
+
+
 def test_portal_review_surface_exposes_warning_banner_and_provenance_contract() -> None:
     content = _portal_bundle_content()
-    review_content = _portal_review_bundle_content()
+    review_content = _portal_review_source_content()
     render_body = _extract_js_function_body(review_content, "renderArtifactPanel")
     status_body = _extract_js_function_body(review_content, "_reviewStatusSnapshot")
     banner_body = _extract_js_function_body(review_content, "_renderReviewStatusBanner")
@@ -1084,10 +1164,10 @@ def test_portal_review_surface_exposes_warning_banner_and_provenance_contract() 
     assert "_renderArtifactProvenance(selected, null);" in render_body
     assert "_renderReviewStatusBanner(null, null);" in render_body
     assert "_renderArtifactProvenance(null, null);" in render_body
-    assert "job.state === 'partial'" in status_body
-    assert "job.state === 'failed'" in status_body
-    assert "job.state === 'canceled'" in status_body
-    assert "job.state === 'offline'" in status_body
+    assert 'job.state === "partial"' in status_body
+    assert 'job.state === "failed"' in status_body
+    assert 'job.state === "canceled"' in status_body
+    assert 'job.state === "offline"' in status_body
     assert "job.reconnectBlocked" in status_body
     assert "Outputs ready for review" in status_body
     assert "Run canceled after partial output capture" in status_body
@@ -1097,14 +1177,14 @@ def test_portal_review_surface_exposes_warning_banner_and_provenance_contract() 
     assert "artifactDisplayLabel(artifact)" in provenance_body
     assert "artifactLabel(artifact)" in provenance_body
     assert "_artifactFingerprintLabel(artifact)" in provenance_body
-    assert "titleCaseToken(job.state, 'Unknown')" in provenance_body
+    assert 'titleCaseToken(job.state, "Unknown")' in provenance_body
     assert "summary?.batch_id" in provenance_body
     assert "summary?.source" in provenance_body
 
 
 def test_portal_artifact_viewer_modal_is_feature_flagged_and_keyboard_complete() -> None:
     content = _portal_bundle_content()
-    review_content = _portal_review_bundle_content()
+    review_content = _portal_review_source_content()
     active_overlay_body = _extract_js_function_body(content, "_activeOverlayPanel")
     render_body = _extract_js_function_body(review_content, "renderArtifactViewer")
     preview_load_body = _extract_js_function_body(review_content, "_loadArtifactViewerInlinePreview")
@@ -1160,7 +1240,7 @@ def test_portal_artifact_viewer_modal_is_feature_flagged_and_keyboard_complete()
 
 def test_portal_review_surface_supports_compare_summary_and_keyboard_selection() -> None:
     content = _portal_bundle_content()
-    review_content = _portal_review_bundle_content()
+    review_content = _portal_review_source_content()
     render_body = _extract_js_function_body(review_content, "renderArtifactPanel")
     compare_summary_body = _extract_js_function_body(review_content, "_renderReviewCompareSummary")
     compare_copy_body = _extract_js_function_body(content, "_compareSurfaceCopy")
@@ -1254,7 +1334,7 @@ def test_portal_selected_job_inspector_uses_timeline_tabs_and_log_secondary_view
 
 def test_portal_operate_surfaces_use_jobs_hydration_skeletons_before_empty_state() -> None:
     content = _portal_bundle_content()
-    review_content = _portal_review_bundle_content()
+    review_content = _portal_review_source_content()
     helper_body = _extract_js_function_body(content, "_isJobsHydrationPending")
     queue_empty_body = _extract_js_function_body(content, "_queueEmptyStateCopy")
     artifact_empty_body = _extract_js_function_body(review_content, "_artifactEmptyStateCopy")
@@ -1840,7 +1920,7 @@ def test_portal_preview_metadata_worker_modes_and_export_contract_are_wired() ->
 
 def test_portal_runtime_briefing_and_recovery_surfaces_stay_additive_and_selector_stable() -> None:
     content = _portal_bundle_content()
-    review_content = _portal_review_bundle_content()
+    review_content = _portal_review_source_content()
     mission_body = _extract_js_function_body(content, "renderMissionControl")
     review_status_body = _extract_js_function_body(review_content, "_reviewStatusSnapshot")
     queue_empty_body = _extract_js_function_body(content, "_queueEmptyStateCopy")

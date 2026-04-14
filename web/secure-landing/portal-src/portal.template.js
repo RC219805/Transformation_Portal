@@ -61,6 +61,7 @@ const SSE_STALL_CHECK_INTERVAL_MS = 10000;
 const SSE_STALL_THRESHOLD_MS = 45000;
 const CONFIG_PREVIEW_DEBOUNCE_MS = 250;
 const TRANSIENT_DRAFT_PERSIST_DEBOUNCE_MS = 200;
+const DEFERRED_REVIEW_SURFACE_RETRY_WINDOW_MS = 30000;
 const DISPATCH_BACKEND_OFFLINE_MESSAGE = 'Backend is offline. Dispatch is disabled until connectivity is restored.';
 const CONFIG_PREVIEW_SUPPORTED_PIPELINES = new Set([
     'lux-depth-v3',
@@ -88,6 +89,8 @@ let transientDraftPersistIdleId = null;
 let deferredReviewSurfaceApi = null;
 let deferredReviewSurfaceLoadPromise = null;
 let deferredReviewSurfaceCssLoaded = false;
+let deferredReviewSurfaceLoadFailedAt = 0;
+let deferredReviewSurfaceLoadLastToastAt = 0;
 
 /* __PORTAL_INTERNALS__ */
 
@@ -5104,9 +5107,27 @@ function _createDeferredReviewSurfaceHost() {
     };
 }
 
+function _deferredReviewSurfaceLoadRetryBlocked(now = Date.now()) {
+    return deferredReviewSurfaceLoadFailedAt > 0 && (now - deferredReviewSurfaceLoadFailedAt) < DEFERRED_REVIEW_SURFACE_RETRY_WINDOW_MS;
+}
+
+function _clearDeferredReviewSurfaceLoadFailure() {
+    deferredReviewSurfaceLoadFailedAt = 0;
+    deferredReviewSurfaceLoadLastToastAt = 0;
+}
+
+function _noteDeferredReviewSurfaceLoadFailure() {
+    const now = Date.now();
+    deferredReviewSurfaceLoadFailedAt = now;
+    if ((now - deferredReviewSurfaceLoadLastToastAt) < DEFERRED_REVIEW_SURFACE_RETRY_WINDOW_MS) return;
+    deferredReviewSurfaceLoadLastToastAt = now;
+    createToast('Review surfaces failed to load. Reload the portal and retry the review action.', 'error');
+}
+
 async function _loadDeferredReviewSurface() {
     if (deferredReviewSurfaceApi) return deferredReviewSurfaceApi;
     if (deferredReviewSurfaceLoadPromise) return deferredReviewSurfaceLoadPromise;
+    if (_deferredReviewSurfaceLoadRetryBlocked()) return null;
     const moduleUrl = _reviewSurfaceAssetUrl('reviewSurfaceJsUrl');
     if (!moduleUrl) return null;
     _ensureDeferredReviewSurfaceCss();
@@ -5115,12 +5136,13 @@ async function _loadDeferredReviewSurface() {
             if (!module || typeof module.createDeferredReviewSurfaceApi !== 'function') {
                 throw new Error('Deferred review surface module missing createDeferredReviewSurfaceApi');
             }
+            _clearDeferredReviewSurfaceLoadFailure();
             deferredReviewSurfaceApi = module.createDeferredReviewSurfaceApi(_createDeferredReviewSurfaceHost());
             return deferredReviewSurfaceApi;
         })
         .catch((error) => {
             console.error('Failed to load deferred review surface', error);
-            createToast('Review surfaces failed to load. Reload the portal and retry the review action.', 'error');
+            _noteDeferredReviewSurfaceLoadFailure();
             deferredReviewSurfaceApi = null;
             return null;
         })
@@ -5146,7 +5168,7 @@ function _shouldLoadDeferredReviewSurface(reason = '') {
 }
 
 function _primeDeferredReviewSurface(reason = '') {
-    if (!_shouldLoadDeferredReviewSurface(reason)) return;
+    if (!_shouldLoadDeferredReviewSurface(reason) || _deferredReviewSurfaceLoadRetryBlocked()) return;
     void _loadDeferredReviewSurface().then((api) => {
         if (!api) return;
         api.renderArtifactPanel();
@@ -5162,8 +5184,13 @@ function _renderDeferredReviewSurfaceFallback(jobsLoading = false) {
         renderConsoleContextRibbon();
         return;
     }
+    const reviewSurfaceLoadBlocked = _deferredReviewSurfaceLoadRetryBlocked();
     if (els.artifactMeta) {
-        els.artifactMeta.textContent = _shouldLoadDeferredReviewSurface() ? 'Loading review surface' : 'Review surface deferred';
+        if (reviewSurfaceLoadBlocked) {
+            els.artifactMeta.textContent = 'Review surface unavailable';
+        } else {
+            els.artifactMeta.textContent = _shouldLoadDeferredReviewSurface() ? 'Loading review surface' : 'Review surface deferred';
+        }
     }
     if (els.artifactThumbnailRail) {
         els.artifactThumbnailRail.setAttribute('role', 'listbox');
@@ -5171,6 +5198,16 @@ function _renderDeferredReviewSurfaceFallback(jobsLoading = false) {
         els.artifactThumbnailRail.innerHTML = '';
     }
     if (els.emptyArtifactState) els.emptyArtifactState.style.display = 'block';
+    if (reviewSurfaceLoadBlocked) {
+        _setSurfaceEmptyState(els.emptyArtifactState, els.emptyArtifactTitle, els.emptyArtifactDetail, {
+            tone: 'warning',
+            title: 'Review surface unavailable',
+            detail: 'Reload the portal to retry loading the review surface assets for this artifact context.',
+        });
+        if (els.emptyArtifactAction) {
+            els.emptyArtifactAction.textContent = 'Next action: reload the portal before reopening review.';
+        }
+    }
     if (els.reviewStatusBanner) els.reviewStatusBanner.classList.add('hidden');
     if (els.reviewProvenanceGrid) els.reviewProvenanceGrid.classList.add('hidden');
     if (els.reviewCompareSummary) els.reviewCompareSummary.classList.add('hidden');

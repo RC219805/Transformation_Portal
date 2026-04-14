@@ -6,6 +6,7 @@ import path from "node:path";
 import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 
 import argon2 from "argon2";
+import { transformSync } from "esbuild";
 import { NextRequest, NextResponse } from "next/server.js";
 
 import { getDb, resetDbCache } from "../lib/db.js";
@@ -2216,13 +2217,26 @@ test("shared UI tokens stay synced to the canonical source", () => {
   const portalTokenPath = path.join(repoRoot, "public", "portal-assets", "shared-ui-tokens.css");
   const buildScriptPath = path.join(process.cwd(), "scripts", "build-portal-bundle.mjs");
   const canonicalTokens = readFileSync(canonicalTokenPath, "utf-8");
+  const normalizedCanonicalTokens = `${transformSync(canonicalTokens, {
+    loader: "css",
+    legalComments: "none",
+    minify: true
+  }).code.trim()}\n`;
+  const frontdoorTokens = readFileSync(frontdoorTokenPath, "utf-8");
+  const portalTokens = readFileSync(portalTokenPath, "utf-8");
   const buildScript = readFileSync(buildScriptPath, "utf-8");
 
-  assert.equal(readFileSync(frontdoorTokenPath, "utf-8"), canonicalTokens);
-  assert.equal(readFileSync(portalTokenPath, "utf-8"), canonicalTokens);
+  assert.match(canonicalTokens, /Canonical shared UI tokens/);
+  assert.equal(frontdoorTokens, normalizedCanonicalTokens);
+  assert.equal(portalTokens, normalizedCanonicalTokens);
+  assert.notEqual(frontdoorTokens, canonicalTokens);
+  assert.notEqual(portalTokens, canonicalTokens);
   assert.match(buildScript, /const SHARED_TOKEN_SOURCE_PATH = path\.resolve\(REPO_ROOT, "web", "shared", "shared-ui-tokens\.css"\);/);
-  assert.match(buildScript, /copyIfChanged\(SHARED_TOKEN_SOURCE_PATH,\s*PORTAL_SHARED_TOKEN_TARGET\)/);
-  assert.match(buildScript, /copyIfChanged\(SHARED_TOKEN_SOURCE_PATH,\s*FRONTDOOR_SHARED_TOKEN_TARGET\)/);
+  assert.match(buildScript, /async function writeMinifiedCssCopy\(sourcePath,\s*targetPath\)/);
+  assert.match(buildScript, /loader: "css"/);
+  assert.match(buildScript, /minify: true/);
+  assert.match(buildScript, /writeMinifiedCssCopy\(SHARED_TOKEN_SOURCE_PATH,\s*PORTAL_SHARED_TOKEN_TARGET\)/);
+  assert.match(buildScript, /writeMinifiedCssCopy\(SHARED_TOKEN_SOURCE_PATH,\s*FRONTDOOR_SHARED_TOKEN_TARGET\)/);
 });
 
 test("v1 POST rejects requests missing valid same-origin CSRF protections", async () => {
