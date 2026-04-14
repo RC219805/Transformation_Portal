@@ -100,6 +100,13 @@ def test_healthz_returns_minimal_health_response(client: TestClient) -> None:
     assert response.headers["Pragma"] == "no-cache"
 
 
+def test_healthz_rejects_untrusted_host_header(client: TestClient) -> None:
+    response = client.get("/healthz", headers={"host": "evil.example.com"})
+
+    assert response.status_code == 400
+    assert "Invalid host header" in response.text
+
+
 def test_portal_bootstrap_reports_direct_debug_mode(client: TestClient) -> None:
     response = client.get("/portal/bootstrap")
     assert response.status_code == 200

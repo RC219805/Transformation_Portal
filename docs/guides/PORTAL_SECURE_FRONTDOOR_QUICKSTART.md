@@ -1,5 +1,9 @@
 # Portal Secure Front Door Quickstart
 
+See [Portal Edge Hardening Implementation Standard](../architecture/PORTAL_EDGE_HARDENING_IMPLEMENTATION_STANDARD.md)
+for the repo-owned cache, header, auth-boundary, and validation baseline that
+governs this quickstart.
+
 ## Topology
 
 The secure front door is a separate Node app in `web/secure-landing/`.
