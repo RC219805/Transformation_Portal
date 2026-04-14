@@ -7,6 +7,10 @@ const SESSION_ABSOLUTE_TIMEOUT_MS = 24 * 60 * 60 * 1000;
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 const LOGIN_ATTEMPT_LIMIT = 5;
 
+export function isLocalAccessBypassEnabled(env = process.env) {
+  return (env.NODE_ENV || "development") === "development" && env.TP_ALLOW_LOCAL_ACCESS_BYPASS === "1";
+}
+
 export function normalizeUsername(value) {
   return String(value || "").trim().toLowerCase();
 }
@@ -71,8 +75,7 @@ function parseUsersFile(filePath) {
 export function getConfig() {
   const nodeEnv = process.env.NODE_ENV || "development";
   const isProduction = nodeEnv === "production";
-  const allowLocalAccessBypass =
-    nodeEnv === "development" && process.env.TP_ALLOW_LOCAL_ACCESS_BYPASS === "1";
+  const allowLocalAccessBypass = isLocalAccessBypassEnabled();
   const usersFilePath = String(process.env.TP_FRONTDOOR_USERS_FILE || "").trim();
   const users = usersFilePath
     ? parseUsersFile(usersFilePath)
