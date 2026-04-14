@@ -11,6 +11,6 @@ id = "generic-api-key"
 [[rules.allowlists]]
 description = "Ignore the generated portal auth failure branch false positive"
 condition = "AND"
-regexTarget = "secret"
-regexes = ['''^(uth_failure"\|\|normalizedReason==="a|normalizedReason===)$''']
+regexTarget = "line"
+regexes = ['''return normalizedReason==="auth_failure"\|\|normalizedReason==="auth"\|\|normalizedStatus===401\|\|normalizedStatus===403\?\{reason:"auth_failure"''']
 paths = ['''(^|/)public/portal-assets/portal\.js$''']

@@ -26,8 +26,8 @@ id = "{gitleaks_contract.EXPECTED_RULE_ID}"
 [[rules.allowlists]]
 description = "Ignore the generated portal auth failure branch false positive"
 condition = "AND"
-regexTarget = "secret"
-regexes = ['''{gitleaks_contract.EXPECTED_SECRET_REGEX}''']
+regexTarget = "{gitleaks_contract.EXPECTED_REGEX_TARGET}"
+regexes = ['''{gitleaks_contract.EXPECTED_MATCH_REGEX}''']
 paths = ['''{gitleaks_contract.EXPECTED_PATH_REGEX}''']
 """
 
@@ -108,10 +108,10 @@ def test_broad_rule_path_allowlist_is_reported() -> None:
     assert "generic-api-key allowlist must be scoped only to public/portal-assets/portal.js" in errors
 
 
-def test_wrong_secret_regex_is_reported() -> None:
+def test_wrong_regex_target_is_reported() -> None:
     config_text = valid_config_text().replace(
-        f"regexes = ['''{gitleaks_contract.EXPECTED_SECRET_REGEX}''']",
-        "regexes = ['''auth_failure''']",
+        f'regexTarget = "{gitleaks_contract.EXPECTED_REGEX_TARGET}"',
+        'regexTarget = "secret"',
         1,
     )
     errors = gitleaks_contract.validate_gitleaks_contract(
@@ -119,4 +119,18 @@ def test_wrong_secret_regex_is_reported() -> None:
         ci_workflow_text=valid_ci_workflow_text(),
         firewall_workflow_text=valid_firewall_workflow_text(),
     )
-    assert "generic-api-key allowlist must match only the generated auth failure false positive" in errors
+    assert "generic-api-key allowlist must target the portal source line" in errors
+
+
+def test_wrong_match_regex_is_reported() -> None:
+    config_text = valid_config_text().replace(
+        f"regexes = ['''{gitleaks_contract.EXPECTED_MATCH_REGEX}''']",
+        "regexes = ['''normalizedReason===auth_failure''']",
+        1,
+    )
+    errors = gitleaks_contract.validate_gitleaks_contract(
+        config_text=config_text,
+        ci_workflow_text=valid_ci_workflow_text(),
+        firewall_workflow_text=valid_firewall_workflow_text(),
+    )
+    assert "generic-api-key allowlist must match only the generated auth failure false-positive branch" in errors

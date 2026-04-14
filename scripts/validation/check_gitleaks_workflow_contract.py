@@ -14,7 +14,8 @@ FIREWALL_WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "ci-quality-firew
 
 EXPECTED_RULE_ID = "generic-api-key"
 EXPECTED_PATH_REGEX = r"(^|/)public/portal-assets/portal\.js$"
-EXPECTED_SECRET_REGEX = r'^(uth_failure"\|\|normalizedReason==="a|normalizedReason===)$'
+EXPECTED_REGEX_TARGET = "line"
+EXPECTED_MATCH_REGEX = r'return normalizedReason==="auth_failure"\|\|normalizedReason==="auth"\|\|normalizedStatus===401\|\|normalizedStatus===403\?\{reason:"auth_failure"'
 EXPECTED_CI_SNIPPET = "GITLEAKS_CONFIG: .gitleaks.toml"
 EXPECTED_FIREWALL_SNIPPET = "detect --config .gitleaks.toml --source . --verbose --no-git --exit-code 1"
 
@@ -80,16 +81,16 @@ def _validate_config(config: dict[str, object]) -> list[str]:
     if allowlist.get("condition") != "AND":
         errors.append("generic-api-key allowlist must require AND semantics")
 
-    if allowlist.get("regexTarget") != "secret":
-        errors.append("generic-api-key allowlist must target the extracted secret")
+    if allowlist.get("regexTarget") != EXPECTED_REGEX_TARGET:
+        errors.append("generic-api-key allowlist must target the portal source line")
 
     path_patterns = allowlist.get("paths", [])
     if path_patterns != [EXPECTED_PATH_REGEX]:
         errors.append("generic-api-key allowlist must be scoped only to public/portal-assets/portal.js")
 
-    secret_patterns = allowlist.get("regexes", [])
-    if secret_patterns != [EXPECTED_SECRET_REGEX]:
-        errors.append("generic-api-key allowlist must match only the generated auth failure false positive")
+    match_patterns = allowlist.get("regexes", [])
+    if match_patterns != [EXPECTED_MATCH_REGEX]:
+        errors.append("generic-api-key allowlist must match only the generated auth failure false-positive branch")
 
     return errors
 
