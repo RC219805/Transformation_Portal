@@ -12,13 +12,13 @@ annotated-doc==0.0.4
     #   typer
 annotated-types==0.7.0
     # via pydantic
-anyio==4.12.1
+anyio==4.13.0
     # via
     #   httpx
     #   starlette
 astroid==4.0.4
     # via pylint
-attrs==25.4.0
+attrs==26.1.0
     # via
     #   jsonschema
     #   referencing
@@ -30,7 +30,7 @@ bandit==1.9.4
     # via -r ci.in
 black==26.3.1
     # via -r dev.in
-build==1.4.2
+build==1.4.3
     # via -r ci.in
 cachetools==7.0.5
     # via tox
@@ -41,16 +41,16 @@ certifi==2026.2.25
     #   requests
 cffi==2.0.0
     # via cryptography
-charset-normalizer==3.4.4
+charset-normalizer==3.4.7
     # via requests
-click==8.3.1
+click==8.3.2
     # via
     #   black
     #   typer
     #   uvicorn
 colorama==0.4.6
     # via tox
-coverage[toml]==7.13.4
+coverage[toml]==7.13.5
     # via pytest-cov
 cryptography==46.0.7
     # via
@@ -66,7 +66,7 @@ execnet==2.1.2
     # via pytest-xdist
 fastapi==0.135.3
     # via -r base.in
-filelock==3.25.0
+filelock==3.25.2
     # via
     #   python-discovery
     #   tox
@@ -81,7 +81,7 @@ httpcore==1.0.9
     # via httpx
 httpx==0.28.1
     # via -r dev.in
-hypothesis==6.151.12
+hypothesis==6.151.13
     # via -r dev.in
 id==1.6.1
     # via twine
@@ -92,17 +92,17 @@ idna==3.11
     #   requests
 imagecodecs==2026.3.6
     # via -r base.in
-importlib-metadata==8.7.1
+importlib-metadata==9.0.0
     # via keyring
 iniconfig==2.3.0
     # via pytest
-isort==7.0.0
+isort==8.0.1
     # via
     #   -r dev.in
     #   pylint
 jaraco-classes==3.4.0
     # via keyring
-jaraco-context==6.1.0
+jaraco-context==6.1.2
     # via keyring
 jaraco-functools==4.4.0
     # via keyring
@@ -122,7 +122,7 @@ keyring==25.7.0
     # via twine
 libcst==1.8.6
     # via -r dev.in
-librt==0.8.1
+librt==0.9.0
     # via mypy
 markdown-it-py==4.0.0
     # via rich
@@ -132,19 +132,19 @@ mccabe==0.7.0
     #   pylint
 mdurl==0.1.2
     # via markdown-it-py
-more-itertools==10.8.0
+more-itertools==11.0.2
     # via
     #   jaraco-classes
     #   jaraco-functools
-mypy==1.19.1
+mypy==1.20.1
     # via -r dev.in
 mypy-extensions==1.1.0
     # via
     #   black
     #   mypy
-nh3==0.3.3
+nh3==0.3.4
     # via readme-renderer
-numpy==2.4.3
+numpy==2.4.4
     # via
     #   -r base.in
     #   imagecodecs
@@ -245,7 +245,7 @@ referencing==0.37.0
     # via
     #   jsonschema
     #   jsonschema-specifications
-requests==2.33.0
+requests==2.33.1
     # via
     #   requests-toolbelt
     #   twine
@@ -253,7 +253,7 @@ requests-toolbelt==1.0.0
     # via twine
 rfc3986==2.0.0
     # via twine
-rich==14.3.3
+rich==15.0.0
     # via
     #   bandit
     #   twine
@@ -288,7 +288,7 @@ tomli-w==1.2.0
     # via tox
 tomlkit==0.14.0
     # via pylint
-tox==4.52.0
+tox==4.52.1
     # via -r ci.in
 tqdm==4.67.3
     # via -r base.in
@@ -296,7 +296,7 @@ twine==6.2.0
     # via -r ci.in
 typer==0.24.1
     # via -r base.in
-types-pyyaml==6.0.12.20250915
+types-pyyaml==6.0.12.20260408
     # via -r dev.in
 typing-extensions==4.15.0
     # via
@@ -320,7 +320,7 @@ urllib3==2.6.3
     #   twine
 uvicorn==0.42.0
     # via -r base.in
-virtualenv==21.1.0
+virtualenv==21.2.1
     # via tox
 zipp==3.23.0
     # via importlib-metadata

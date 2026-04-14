@@ -102,7 +102,9 @@ jobs:
         run: |
           set -euo pipefail
 
-          mkdir -p audit-reports
+          audit_reports_dir="${{ runner.temp }}/dependency-update-audit-reports"
+          rm -rf "${audit_reports_dir}"
+          mkdir -p "${audit_reports_dir}"
           audit_targets=(
             requirements/all.txt
             requirements/base.txt
@@ -115,7 +117,7 @@ jobs:
 
           # CVE-2026-4539 (pygments): No fix available yet - temporary exception
           for requirement_file in "${audit_targets[@]}"; do
-            report_path="audit-reports/$(basename "${requirement_file%.txt}").json"
+            report_path="${audit_reports_dir}/$(basename "${requirement_file%.txt}").json"
             echo "Auditing ${requirement_file} -> ${report_path}"
             pip-audit \
               --ignore-vuln CVE-2026-4539 \
@@ -128,7 +130,7 @@ jobs:
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f  # v7
         with:
           name: pip-audit-report
-          path: audit-reports/
+          path: ${{ runner.temp }}/dependency-update-audit-reports/
           if-no-files-found: warn
           retention-days: 30
 

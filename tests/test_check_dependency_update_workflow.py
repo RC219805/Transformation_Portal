@@ -21,6 +21,10 @@ def valid_workflow_text() -> str:
     required_install_snippets = "\n".join(
         f"        {snippet}" for snippet in workflow_contract.REQUIRED_INSTALL_TOOLCHAIN_SNIPPETS
     )
+    required_audit_report_snippets = "\n".join(
+        f"        {snippet}" for snippet in workflow_contract.REQUIRED_AUDIT_REPORT_SNIPPETS[:-1]
+    )
+    required_upload_path_snippet = workflow_contract.REQUIRED_AUDIT_REPORT_SNIPPETS[-1]
     return f"""
     - name: Install lock generation tools
       run: |
@@ -30,6 +34,7 @@ def valid_workflow_text() -> str:
 {required_workflow_snippets}
     - name: Check for vulnerabilities
       run: |
+{required_audit_report_snippets}
         audit_targets=(
           {required_targets}
         )
@@ -39,13 +44,17 @@ def valid_workflow_text() -> str:
           {required_pr_refs}
           {required_pr_snippets}
           Confirm target-owned ML lock contracts
+    - name: Upload pip-audit report
+      with:
+        {required_upload_path_snippet}
     """
 
 
 def remove_from_pr_body(text: str, needle: str) -> str:
     before_body, body = text.split("        body: |\n", maxsplit=1)
-    body_without_ref = body.replace(f"          {needle}\n", "", 1)
-    return f"{before_body}        body: |\n{body_without_ref}"
+    body_content, after_body = body.split("    - name: Upload pip-audit report\n", maxsplit=1)
+    body_without_ref = body_content.replace(f"          {needle}\n", "", 1)
+    return f"{before_body}        body: |\n{body_without_ref}    - name: Upload pip-audit report\n{after_body}"
 
 
 def remove_from_audit_targets(text: str, needle: str) -> str:
@@ -63,8 +72,9 @@ def remove_audit_targets_block(text: str) -> str:
 
 def add_to_pr_body(text: str, line: str) -> str:
     before_body, body = text.split("        body: |\n", maxsplit=1)
-    body_with_ref = body + f"          {line}\n"
-    return f"{before_body}        body: |\n{body_with_ref}"
+    body_content, after_body = body.split("    - name: Upload pip-audit report\n", maxsplit=1)
+    body_with_ref = body_content + f"          {line}\n"
+    return f"{before_body}        body: |\n{body_with_ref}    - name: Upload pip-audit report\n{after_body}"
 
 
 def remove_workflow_snippet(text: str, snippet: str) -> str:
@@ -109,10 +119,37 @@ def test_missing_required_install_toolchain_snippet_is_reported() -> None:
     )
 
 
+def test_missing_required_audit_report_temp_dir_snippet_is_reported() -> None:
+    broken = remove_workflow_snippet(
+        valid_workflow_text(), 'audit_reports_dir="${{ runner.temp }}/dependency-update-audit-reports"'
+    )
+    errors = workflow_contract.validate_dependency_update_workflow(broken)
+    assert (
+        "dependency-update workflow must include audit-report snippet "
+        "'audit_reports_dir=\"${{ runner.temp }}/dependency-update-audit-reports\"'"
+    ) in errors
+
+
+def test_missing_required_audit_report_upload_path_is_reported() -> None:
+    broken = remove_workflow_snippet(valid_workflow_text(), "path: ${{ runner.temp }}/dependency-update-audit-reports/")
+    errors = workflow_contract.validate_dependency_update_workflow(broken)
+    assert (
+        "dependency-update workflow must include audit-report snippet "
+        "'path: ${{ runner.temp }}/dependency-update-audit-reports/'"
+    ) in errors
+
+
 def test_forbidden_target_agnostic_update_command_is_reported() -> None:
     broken = valid_workflow_text() + "\n        make update LOCK_PYTHON_VERSION=3.11\n"
     errors = workflow_contract.validate_dependency_update_workflow(broken)
     assert "dependency-update workflow must not include snippet 'make update LOCK_PYTHON_VERSION=3.11'" in errors
+
+
+def test_repo_local_audit_reports_usage_is_reported() -> None:
+    broken = valid_workflow_text() + "\n        mkdir -p audit-reports\n        path: audit-reports/\n"
+    errors = workflow_contract.validate_dependency_update_workflow(broken)
+    assert "dependency-update workflow must not include snippet 'mkdir -p audit-reports'" in errors
+    assert "dependency-update workflow must not include snippet 'path: audit-reports/'" in errors
 
 
 def test_missing_audit_targets_block_is_reported_independently_of_pr_body_references() -> None:
