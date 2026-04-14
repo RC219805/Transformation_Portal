@@ -20,6 +20,7 @@ Test Categories:
 
 from __future__ import annotations
 
+import copy
 import importlib
 import json
 import logging
@@ -818,6 +819,70 @@ class TestBatchProcessing:
 
         assert batch_result.successful_count >= 1
         assert batch_result.failed_count >= 1
+
+    def test_batch_processing_parallel_preserves_order_and_recipe_state(
+        self,
+        pipeline_module,
+        minimal_recipe,
+        sample_input_directory,
+        sample_input_image,
+        tmp_path: Path,
+    ):
+        """Test parallel batch processing keeps deterministic ordering and leaves recipe unchanged."""
+        output_dir = tmp_path / "parallel_outputs"
+
+        pipeline = pipeline_module.UnifiedPipeline(minimal_recipe)
+        original_recipe = copy.deepcopy(pipeline.recipe)
+
+        batch_result = pipeline.process_batch(
+            str(sample_input_directory / "*.png"),
+            output_dir,
+            parallel=True,
+        )
+
+        assert batch_result.successful_count == 3
+        assert [result.input_path.name for result in batch_result.results] == [
+            "image_00.png",
+            "image_01.png",
+            "image_02.png",
+        ]
+        assert pipeline.recipe == original_recipe
+        assert "_output_dir" not in pipeline.recipe
+
+        single_result = pipeline.process_single(sample_input_image)
+        assert single_result.success is True
+
+    def test_batch_processing_parallel_serializes_rag_documents(
+        self,
+        pipeline_module,
+        sample_input_directory,
+        tmp_path: Path,
+    ):
+        """Test parallel batch processing writes one intact RAG document per line."""
+        rag_index_path = tmp_path / "rag-index.jsonl"
+        recipe = {
+            "name": "Quality Batch",
+            "stages": ["color_grading"],
+            "color_grading": {"enabled": True},
+            "quality_feedback": {
+                "enabled": True,
+                "rag_indexing_enabled": True,
+                "rag_index_path": str(rag_index_path),
+            },
+            "output": {"format": "png"},
+        }
+
+        pipeline = pipeline_module.UnifiedPipeline(recipe)
+        batch_result = pipeline.process_batch(
+            str(sample_input_directory / "*.png"),
+            tmp_path / "quality_outputs",
+            parallel=True,
+        )
+
+        assert batch_result.successful_count == 3
+        lines = rag_index_path.read_text(encoding="utf-8").splitlines()
+        assert len(lines) == 3
+        assert all(json.loads(line)["image_id"] == "test" for line in lines)
 
 
 # =============================================================================

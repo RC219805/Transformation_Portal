@@ -44,6 +44,13 @@ except ImportError as e:
         "  pip install -e '.[dev]'"
     ) from e
 
+from transformation_portal.cli_support import (
+    list_recipe_summaries,
+    probe_dependency_versions,
+    probe_pipeline_features,
+    validate_recipe_file,
+)
+
 
 def check_module_availability(module_path: str, module_name: str) -> bool:
     """Check if a module is available for import.
@@ -97,6 +104,21 @@ analyze_app = typer.Typer(
     help="Codebase and workflow analysis tools",
     no_args_is_help=True,
 )
+
+
+def _emit_dependency_group(title: str, dependency_specs: tuple[tuple[str, str], ...], unavailable_prefix: str) -> None:
+    """Render a dependency status group."""
+
+    typer.echo(f"\n{title}:")
+    for status in probe_dependency_versions(dependency_specs):
+        if status.available:
+            typer.echo(f"  ✅ {status.display_name}: {status.version}")
+            continue
+
+        line = f"  {unavailable_prefix} {status.display_name}: not installed"
+        if status.reason:
+            line = f"{line} ({status.reason})"
+        typer.echo(line)
 
 
 # ============================================================================
@@ -363,6 +385,7 @@ def process_command(
     output_dir: Path = typer.Option(..., "--output", "-o", help="Output directory"),
     recipe: Path = typer.Option(..., "--recipe", "-r", help="Recipe YAML file path"),
     dry_run: bool = typer.Option(False, "--dry-run", "-n", help="Preview processing plan without executing"),
+    parallel: bool = typer.Option(False, "--parallel", "-p", help="Enable parallel processing"),
 ):
     """Run unified enhancement pipeline with recipe.
 
@@ -370,13 +393,14 @@ def process_command(
     Supports batch processing with dry-run preview.
 
     Example:
-        transform-process pipeline process -i "renders/*.exr" -o outputs/ -r config/recipes/signature_estate.yaml
+        transform-process pipeline process -i "renders/*.exr" -o outputs/ -r path/to/recipe.yaml
     """
     typer.echo("🚀 Running Unified Pipeline...")
     typer.echo(f"   Recipe: {recipe}")
     typer.echo(f"   Input: {input_glob}")
     typer.echo(f"   Output: {output_dir}")
     typer.echo(f"   Dry run: {dry_run}")
+    typer.echo(f"   Parallel: {parallel}")
 
     if not recipe.exists():
         typer.echo(f"❌ Error: Recipe file not found: {recipe}", err=True)
@@ -386,7 +410,12 @@ def process_command(
         from transformation_portal.pipeline_unified import UnifiedPipeline
 
         pipeline = UnifiedPipeline.from_recipe(recipe)
-        result = pipeline.process_batch(input_glob, output_dir, dry_run=dry_run)
+        result = pipeline.process_batch(
+            input_glob,
+            output_dir,
+            dry_run=dry_run,
+            parallel=parallel,
+        )
 
         if not dry_run:
             typer.echo(f"\n✅ Processed {result.successful_count} images successfully")
@@ -403,7 +432,12 @@ def process_command(
 
 @pipeline_app.command("list-recipes")
 def pipeline_list_recipes(
-    recipes_dir: Path = typer.Option(Path("config/recipes"), "--dir", "-d", help="Recipes directory path"),
+    recipes_dir: Optional[Path] = typer.Option(
+        None,
+        "--dir",
+        "-d",
+        help="Recipe directory path (defaults to config/recipes, then config/ recursion)",
+    ),
 ):
     """List all available recipe presets.
 
@@ -412,42 +446,34 @@ def pipeline_list_recipes(
 
     Example:
         transform-process pipeline list-recipes
-        transform-process pipeline list-recipes -d custom/recipes/
+        transform-process pipeline list-recipes -d path/to/recipes/
     """
     typer.echo("📋 Available Pipeline Recipes\n")
 
-    if not recipes_dir.exists():
-        typer.echo(f"⚠️  Recipes directory not found: {recipes_dir}", err=True)
-        typer.echo("   Create recipes in config/recipes/ directory")
-        raise typer.Exit(code=1)
-
     try:
-        from transformation_portal.config_loader import list_recipes
-
-        recipes = list_recipes(recipes_dir)
+        recipes = list_recipe_summaries(recipes_dir)
 
         if not recipes:
-            typer.echo("No recipes found in directory")
+            if recipes_dir is not None:
+                typer.echo(f"No recipe presets found in {recipes_dir}")
+            else:
+                typer.echo("No recipe presets found under config/recipes or config/")
             raise typer.Exit(code=0)
 
         for recipe in recipes:
-            if "error" in recipe:
-                typer.echo(f"  ❌ {recipe['path']}: {recipe['error']}")
-            else:
-                name = recipe.get("name", "Unknown")
-                description = recipe.get("description", "No description")
-                stages = recipe.get("stages", [])
-                output_format = recipe.get("output_format", "tiff")
+            typer.echo(f"  📄 {recipe.get('name', 'Unknown')}")
+            typer.echo(f"     {recipe.get('description', 'No description')}")
+            typer.echo(f"     Stages: {', '.join(recipe.get('stages', []))}")
+            typer.echo(f"     Output: {recipe.get('output_format', 'tiff')}")
+            typer.echo(f"     Path: {recipe['path']}")
+            typer.echo()
 
-                typer.echo(f"  📄 {name}")
-                typer.echo(f"     {description}")
-                typer.echo(f"     Stages: {', '.join(stages)}")
-                typer.echo(f"     Output: {output_format}")
-                typer.echo(f"     Path: {recipe['path']}")
-                typer.echo()
+        typer.echo(f"Total: {len(recipes)} recipes found")
 
-    except ImportError as e:
-        typer.echo(f"❌ Error: {e}", err=True)
+    except typer.Exit:
+        raise
+    except Exception as e:
+        typer.echo(f"❌ Error loading recipe presets: {e}", err=True)
         raise typer.Exit(code=1)
 
 
@@ -461,7 +487,7 @@ def pipeline_validate_recipe(
     Validates a recipe YAML file against the schema and reports any errors.
 
     Example:
-        transform-process pipeline validate-recipe config/recipes/signature_estate.yaml
+        transform-process pipeline validate-recipe path/to/recipe.yaml
         transform-process pipeline validate-recipe custom_recipe.yaml -v
     """
     typer.echo(f"🔍 Validating recipe: {recipe_path}\n")
@@ -471,16 +497,10 @@ def pipeline_validate_recipe(
         raise typer.Exit(code=1)
 
     try:
-        from transformation_portal.config_loader import get_recipe_info, load_recipe, validate_recipe
-
-        # Load the recipe
-        recipe = load_recipe(recipe_path, expand_env=False, resolve_paths=False)
-
-        # Validate
-        is_valid, errors = validate_recipe(recipe)
+        validation_result = validate_recipe_file(recipe_path)
 
         if verbose:
-            info = get_recipe_info(recipe)
+            info = validation_result.info
             typer.echo("Recipe Information:")
             typer.echo(f"  Name: {info.get('name', 'Unknown')}")
             typer.echo(f"  Description: {info.get('description', 'None')}")
@@ -488,20 +508,20 @@ def pipeline_validate_recipe(
             typer.echo(f"  Has Depth: {info.get('has_depth', False)}")
             typer.echo(f"  Has Material Response: {info.get('has_material_response', False)}")
             typer.echo(f"  Has Color Grading: {info.get('has_color_grading', False)}")
+            typer.echo(f"  Has Quality Feedback: {info.get('has_quality_feedback', False)}")
             typer.echo(f"  Output Format: {info.get('output_format', 'unknown')}")
             typer.echo()
 
-        if is_valid:
+        if validation_result.is_valid:
             typer.echo("✅ Recipe is valid!")
         else:
             typer.echo("❌ Recipe validation failed:")
-            for error in errors:
+            for error in validation_result.errors:
                 typer.echo(f"   - {error}")
             raise typer.Exit(code=1)
 
-    except ImportError as e:
-        typer.echo(f"❌ Error: {e}", err=True)
-        raise typer.Exit(code=1)
+    except typer.Exit:
+        raise
     except Exception as e:
         typer.echo(f"❌ Error validating recipe: {e}", err=True)
         raise typer.Exit(code=1)
@@ -534,41 +554,36 @@ def info():
     """Show system and dependency information."""
     typer.echo("Transformation Portal - System Information\n")
 
-    # Python version
     typer.echo(f"Python: {sys.version.split()[0]}")
 
-    # Check key dependencies
-    dependencies = [
-        ("numpy", "NumPy"),
-        ("PIL", "Pillow"),
-        ("torch", "PyTorch"),
-        ("diffusers", "Diffusers"),
-        ("typer", "Typer"),
-    ]
+    typer.echo("\nPipeline Features:")
+    for status in probe_pipeline_features():
+        line = f"  {'✅' if status.available else '⚠️ '} {status.display_name}"
+        if status.reason:
+            line = f"{line}: {status.reason}"
+        typer.echo(line)
 
-    typer.echo("\nDependencies:")
-    for module_name, display_name in dependencies:
-        try:
-            module = __import__(module_name)
-            version = getattr(module, "__version__", "unknown")
-            typer.echo(f"  ✅ {display_name}: {version}")
-        except ImportError:
-            typer.echo(f"  ❌ {display_name}: not installed")
-
-    # Optional dependencies
-    optional_deps = [
-        ("tifffile", "TIFF support"),
-        ("transformers", "ML models"),
-        ("cv2", "OpenCV"),
-    ]
-
-    typer.echo("\nOptional Dependencies:")
-    for module_name, feature in optional_deps:
-        try:
-            __import__(module_name)
-            typer.echo(f"  ✅ {feature}")
-        except ImportError:
-            typer.echo(f"  ⚠️  {feature}: not installed")
+    _emit_dependency_group(
+        "Core Dependencies",
+        (
+            ("NumPy", "numpy"),
+            ("Pillow", "Pillow"),
+            ("PyTorch", "torch"),
+            ("PyYAML", "PyYAML"),
+            ("Typer", "typer"),
+        ),
+        unavailable_prefix="❌",
+    )
+    _emit_dependency_group(
+        "Optional Dependencies",
+        (
+            ("16-bit TIFF support", "tifffile"),
+            ("Advanced image processing", "scipy"),
+            ("LPIPS perceptual metrics", "lpips"),
+            ("ML models", "transformers"),
+        ),
+        unavailable_prefix="⚠️ ",
+    )
 
 
 def main():

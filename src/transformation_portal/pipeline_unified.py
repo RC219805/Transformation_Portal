@@ -31,10 +31,13 @@ Example:
 
 from __future__ import annotations
 
+import copy
 import glob
 import json
 import logging
+import os
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Union
@@ -366,11 +369,16 @@ class UnifiedPipeline:
             pass
         return "cpu"
 
-    def process_single(self, input_path: Union[str, Path]) -> ProcessingResult:
+    def process_single(
+        self,
+        input_path: Union[str, Path],
+        output_dir: Optional[Union[str, Path]] = None,
+    ) -> ProcessingResult:
         """Process a single image through the pipeline.
 
         Args:
             input_path: Path to the input image.
+            output_dir: Optional output directory override.
 
         Returns:
             ProcessingResult with processing details.
@@ -428,7 +436,7 @@ class UnifiedPipeline:
                     log.warning(f"  ⚠ {stage.display_name} failed: {e}")
 
             # Generate output
-            output_path = self._generate_output(image, input_path)
+            output_path = self._generate_output(image, input_path, output_dir=output_dir)
             result.output_path = output_path
             result.success = True
 
@@ -449,6 +457,8 @@ class UnifiedPipeline:
         output_dir: Union[str, Path],
         mode: str = "auto",
         dry_run: bool = False,
+        parallel: bool = False,
+        max_workers: Optional[int] = None,
     ) -> BatchResult:
         """Process multiple images matching a glob pattern.
 
@@ -458,6 +468,8 @@ class UnifiedPipeline:
             mode: Processing mode ("auto", "image", "video"). Currently "auto" detects
                 file type; "image" and "video" modes are reserved for future use.
             dry_run: If True, preview processing plan without executing.
+            parallel: If True, process files in parallel with isolated worker pipelines.
+            max_workers: Optional worker override for parallel execution.
 
         Returns:
             BatchResult with all processing results.
@@ -484,23 +496,25 @@ class UnifiedPipeline:
         log.info(f"  Output: {output_dir}")
         log.info(f"  Mode: {mode}")
         log.info(f"  Dry run: {dry_run}")
+        log.info(f"  Parallel: {parallel}")
 
         if dry_run:
             return self._dry_run_batch(input_files, output_dir)
 
-        # Create output directory
         output_dir.mkdir(parents=True, exist_ok=True)
-
-        # Store original output config and override
-        original_output_dir = self.recipe.get("_output_dir")
-        self.recipe["_output_dir"] = str(output_dir)
 
         batch_result = BatchResult(dry_run=dry_run)
 
-        try:
+        if parallel:
+            batch_result = self._process_batch_parallel(
+                input_files,
+                output_dir,
+                max_workers=max_workers,
+            )
+        else:
             for i, input_path in enumerate(input_files, 1):
                 log.info(f"\n[{i}/{len(input_files)}] {input_path.name}")
-                result = self.process_single(input_path)
+                result = self.process_single(input_path, output_dir=output_dir)
                 batch_result.results.append(result)
 
                 if result.success:
@@ -508,15 +522,79 @@ class UnifiedPipeline:
                 else:
                     batch_result.failed_count += 1
 
-        finally:
-            # Restore original output config
-            if original_output_dir:
-                self.recipe["_output_dir"] = original_output_dir
-
         batch_result.total_time = time.time() - batch_start
 
         log.info(batch_result.summary())
         return batch_result
+
+    def _process_batch_parallel(
+        self,
+        input_files: List[Path],
+        output_dir: Path,
+        max_workers: Optional[int] = None,
+    ) -> BatchResult:
+        """Process a batch in parallel with isolated worker pipeline instances."""
+
+        worker_count = min(4, len(input_files), os.cpu_count() or 1)
+        if max_workers is not None:
+            worker_count = max(1, min(worker_count, max_workers))
+
+        log.info(f"  Parallel workers: {worker_count}")
+
+        rag_indexing_enabled = self._rag_indexing_enabled()
+        batch_result = BatchResult(dry_run=False)
+
+        def _worker(input_path: Path) -> ProcessingResult:
+            worker_pipeline = self._create_worker_pipeline(disable_rag_indexing=rag_indexing_enabled)
+            return worker_pipeline.process_single(input_path, output_dir=output_dir)
+
+        with ThreadPoolExecutor(max_workers=worker_count) as executor:
+            for input_path, result in zip(input_files, executor.map(_worker, input_files)):
+                log.info(f"\n[done] {input_path.name}")
+                batch_result.results.append(result)
+
+                if result.success:
+                    batch_result.successful_count += 1
+                else:
+                    batch_result.failed_count += 1
+
+                if rag_indexing_enabled and result.rag_document:
+                    self._append_rag_document(result.rag_document)
+
+        return batch_result
+
+    def _create_worker_pipeline(self, disable_rag_indexing: bool = False) -> "UnifiedPipeline":
+        """Create an isolated pipeline instance for a batch worker."""
+
+        worker_recipe = copy.deepcopy(self.recipe)
+        worker_recipe.pop("_output_dir", None)
+        if disable_rag_indexing:
+            quality_config = worker_recipe.setdefault("quality_feedback", {})
+            quality_config["rag_indexing_enabled"] = False
+        return type(self)(worker_recipe)
+
+    def _rag_indexing_enabled(self) -> bool:
+        """Return True when the current recipe config enables RAG indexing."""
+
+        quality_config = self.recipe.get("quality_feedback", {})
+        return bool(
+            quality_config.get("enabled", True)
+            and quality_config.get("rag_indexing_enabled", False)
+            and quality_config.get("rag_index_path")
+        )
+
+    def _append_rag_document(self, document: Dict[str, Any]) -> None:
+        """Append a RAG document to the configured JSONL index."""
+
+        rag_index_path = self.recipe.get("quality_feedback", {}).get("rag_index_path")
+        if not rag_index_path:
+            return
+
+        output_path = Path(rag_index_path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(output_path, "a", encoding="utf-8") as handle:
+            handle.write(json.dumps(document) + "\n")
+        log.debug(f"Indexed quality document to RAG: {document.get('image_id', 'unknown')}")
 
     def _dry_run_batch(self, input_files: List[Path], output_dir: Path) -> BatchResult:
         """Generate dry-run preview of batch processing.
@@ -934,12 +1012,18 @@ class UnifiedPipeline:
 
         return canvas
 
-    def _generate_output(self, image: Image.Image, input_path: Path) -> Path:
+    def _generate_output(
+        self,
+        image: Image.Image,
+        input_path: Path,
+        output_dir: Optional[Union[str, Path]] = None,
+    ) -> Path:
         """Generate output file.
 
         Args:
             image: Processed image.
             input_path: Original input path.
+            output_dir: Optional output directory override.
 
         Returns:
             Path to output file.
@@ -949,11 +1033,14 @@ class UnifiedPipeline:
         quality = output_config.get("quality", 95)
 
         # Determine output directory
-        output_dir = self.recipe.get("_output_dir")
-        if output_dir:
+        if output_dir is not None:
             output_dir = Path(output_dir)
         else:
-            output_dir = input_path.parent / "processed"
+            configured_output_dir = self.recipe.get("_output_dir")
+            if configured_output_dir:
+                output_dir = Path(configured_output_dir)
+            else:
+                output_dir = input_path.parent / "processed"
         output_dir.mkdir(parents=True, exist_ok=True)
 
         # Generate output filename
