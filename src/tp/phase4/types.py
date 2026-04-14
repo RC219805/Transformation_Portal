@@ -33,17 +33,22 @@ class ExtractorInfo(TypedDict):
 class CaptureMetadataRecord(TypedDict, total=False):
     """A single capture metadata record from Phase 4C extraction.
 
-    Required fields are always present; optional fields may be None.
+    Note: This TypedDict uses total=False for type checking flexibility.
+    At runtime, the actual JSON schema enforces which fields are required.
+    Refer to schemas/phase4/metadata.schema.json for the authoritative contract.
+
+    The fields marked as 'Required' below are enforced by the schema validator,
+    while fields marked 'Optional' may be absent or null.
     """
 
-    # Required fields
+    # Required fields (enforced by schema validator)
     metadata_contract_version: str
     relative_path: str
     file_sha256: str
     extractor: ExtractorInfo
     extraction_warnings: List[str]
 
-    # Optional capture fields (may be None)
+    # Optional capture fields (may be absent or None)
     capture_datetime_utc: Optional[str]
     camera_make: Optional[str]
     camera_model: Optional[str]

@@ -136,9 +136,11 @@ class TestExceptionCatching:
 
     def test_catch_runtime_error(self) -> None:
         """ExtractionError can be caught as RuntimeError."""
+        caught = False
         try:
             raise Phase4ExtractionError("extraction failed")
         except RuntimeError:
-            pass  # Should be caught
-        except Exception:
+            caught = True
+
+        if not caught:
             pytest.fail("Phase4ExtractionError was not caught by RuntimeError")

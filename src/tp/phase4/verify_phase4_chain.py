@@ -275,8 +275,11 @@ def verify_phase4_chain_payloads(
         Phase4ProvenanceEntryHashMismatchError: If provenance hash mismatches.
         Phase4MerkleMismatchError: If Merkle verification fails.
     """
+    # Use 5 major stages for progress: validation, alignment check, record verification, merkle check, complete
+    total_stages = 5
+
     if progress_callback:
-        progress_callback(0, 0, "Validating input payloads...")
+        progress_callback(0, total_stages, "Validating input payloads...")
 
     if not isinstance(capture_payload, list):
         raise Phase4SchemaValidationError("capture metadata payload must be a JSON array")
@@ -292,13 +295,16 @@ def verify_phase4_chain_payloads(
     _validate_payload(provenance_manifest_payload, provenance_manifest_schema, label="provenance_manifest")
     _validate_payload(provenance_merkle_payload, provenance_merkle_schema, label="provenance_merkle")
 
+    if progress_callback:
+        progress_callback(1, total_stages, "Checking contract versions...")
+
     _require_capture_contract_version(capture_payload)
     metadata_manifest_entries = _require_metadata_manifest_contract_version(metadata_manifest_payload)
     provenance_manifest_entries = _require_provenance_manifest_contract_version(provenance_manifest_payload)
     _require_provenance_merkle_contract_version(provenance_merkle_payload)
 
     if progress_callback:
-        progress_callback(0, 0, "Checking path uniqueness and ordering...")
+        progress_callback(2, total_stages, "Checking path uniqueness and ordering...")
 
     _require_unique_relative_paths(capture_payload, label="capture metadata")
     _require_unique_relative_paths(metadata_manifest_entries, label="metadata manifest")
@@ -336,7 +342,7 @@ def verify_phase4_chain_payloads(
 
     total_records = len(capture_by_path)
     if progress_callback:
-        progress_callback(0, total_records, f"Verifying {total_records} records...")
+        progress_callback(3, total_stages, f"Verifying {total_records} records...")
 
     recomputed_metadata_hashes: list[str] = []
     recomputed_provenance_entry_hashes: list[str] = []
@@ -424,11 +430,8 @@ def verify_phase4_chain_payloads(
         recomputed_metadata_hashes.append(recomputed_metadata_sha256)
         recomputed_provenance_entry_hashes.append(recomputed_provenance_entry_sha256)
 
-        if progress_callback:
-            progress_callback(index + 1, total_records, f"Verified {relative_path}")
-
     if progress_callback:
-        progress_callback(total_records, total_records, "Verifying Merkle root...")
+        progress_callback(4, total_stages, "Verifying Merkle root...")
 
     leaf_hashes = [bytes.fromhex(digest_hex) for digest_hex in recomputed_provenance_entry_hashes]
     recomputed_provenance_merkle_root = merkle_root_sha256(leaf_hashes)
@@ -450,7 +453,7 @@ def verify_phase4_chain_payloads(
         )
 
     if progress_callback:
-        progress_callback(total_records, total_records, "Verification complete")
+        progress_callback(5, total_stages, "Verification complete")
 
     metadata_sha256_summary_sha256 = _sha256_bytes("".join(recomputed_metadata_hashes).encode("ascii"))
     provenance_entry_sha256_summary_sha256 = _sha256_bytes("".join(recomputed_provenance_entry_hashes).encode("ascii"))

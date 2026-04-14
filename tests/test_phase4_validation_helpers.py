@@ -50,6 +50,14 @@ class TestSHA256HexValidation:
         assert is_valid_sha256_hex(12345) is False
         assert is_valid_sha256_hex([]) is False
 
+    def test_invalid_sha256_empty_string(self) -> None:
+        """Empty string should fail."""
+        assert is_valid_sha256_hex("") is False
+
+    def test_invalid_sha256_whitespace(self) -> None:
+        """String with only whitespace should fail."""
+        assert is_valid_sha256_hex(" " * 64) is False
+
     def test_ensure_sha256_hex_valid(self) -> None:
         """ensure_sha256_hex should return valid hash."""
         valid_hash = "a" * 64
