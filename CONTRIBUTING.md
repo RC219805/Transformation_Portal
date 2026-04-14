@@ -650,6 +650,7 @@ make check-ml-darwin-arm64     # Verify lock is current
 
 **For macOS Intel ML lock**:
 ```bash
+cd requirements
 # FROZEN - do not regenerate without Architect approval
 make compile-ml-darwin-x86_64  # Will fail closed
 ```
@@ -672,7 +673,7 @@ See `scripts/validation/check_requirements_lock_contract.py` for enforcement det
 **Error: "Linux x86_64 ML lock generation is authoritative only on native Linux x86_64"**
 → You're trying to compile Linux locks from macOS. Run on Linux.
 
-**Error: "ml-core-darwin-x86_64.txt is frozen"**
+**Error: "ERROR: ml-core-darwin-x86_64.txt is frozen pending an authoritative Darwin x86_64 lane decision."**
 → The Intel Mac lockfile is frozen pending lane decision. Do not regenerate.
 
 ### Banned Packages
