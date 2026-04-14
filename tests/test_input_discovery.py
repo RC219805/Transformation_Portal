@@ -69,6 +69,25 @@ class TestInputDiscovery:
         assert len(images) == 1
         assert images[0].name == "source.jpg"
 
+    def test_exclude_output_dir_with_symlink_alias(self, tmp_path):
+        """Alias-equivalent output roots should still be excluded cleanly."""
+        actual_root = tmp_path / "actual_input"
+        actual_root.mkdir()
+        (actual_root / "source.jpg").touch()
+
+        actual_output = actual_root / "output"
+        actual_output.mkdir()
+        (actual_output / "result.jpg").touch()
+
+        alias_root = tmp_path / "alias_input"
+        alias_root.symlink_to(actual_root, target_is_directory=True)
+
+        config = DiscoveryConfig(strict_mode=False)
+        images = discover_images(alias_root, config, output_dir=alias_root / "output")
+
+        assert len(images) == 1
+        assert images[0].name == "source.jpg"
+
     def test_exclude_hidden_files(self, tmp_path):
         """Verify .DS_Store and .cache/ are excluded."""
         # Create test files

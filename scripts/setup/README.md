@@ -52,6 +52,36 @@ lux-depth-v3 --input-dir ./input --output-dir ./output --da3-python ~/venvs/da3/
 - Git repository
 - Bash shell (Linux, macOS, or Windows with WSL/Git Bash)
 
+### `install_depth_pro_runtime.sh`
+
+Bootstraps the repo-local Depth Pro subprocess runtime used by the
+auto-discovered `./.venv-depth-pro/bin/python` contract and by explicit
+`--depth-pro-python` overrides.
+
+**Usage:**
+```bash
+./scripts/setup/install_depth_pro_runtime.sh --skip-verify
+mkdir -p checkpoints
+curl -L https://ml-site.cdn-apple.com/models/depth-pro/depth_pro.pt -o checkpoints/depth_pro.pt
+./scripts/setup/install_depth_pro_runtime.sh
+```
+
+**What it does:**
+- Resolves a Python 3.11+ bootstrap interpreter (preferring the repo `.venv` when available)
+- Creates the isolated Depth Pro venv at `./.venv-depth-pro`
+- Installs the repo-owned pinned Depth Pro surface (`torch==2.7.1`, `torchvision==0.22.1`, `numpy==1.26.4`) plus the Apple `ml-depth-pro` package from a pinned git ref
+- Captures a runtime package snapshot at `.runtime/depth-pro-pip-freeze.txt`
+- Runs `pip check`
+- Runs the Depth Pro worker readiness check used by the subprocess adapter
+
+**Stable contract:**
+```bash
+lux-depth-v3 --input-dir ./input --output-dir ./output --depth-pro-python ./.venv-depth-pro/bin/python
+```
+
+Use `--verify-device cpu` when you only need a CPU-safe contract. The default
+`--verify-device auto` validates `mps` on Apple Silicon and `cpu` elsewhere.
+
 ### `install_raw_runtime.sh`
 
 Bootstraps the repo-local RAW subprocess runtime used by the

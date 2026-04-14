@@ -381,6 +381,9 @@ test("login GET serves a minimal branded sign-in shell and boots an anonymous se
     assert.match(html, /id="main-content"/);
     assert.match(html, /Transformation Portal operator console/);
     assert.match(html, /data-ui="login-title"/);
+    assert.match(html, /data-ui="login-entry-state"/);
+    assert.match(html, /data-ui="login-access-status"/);
+    assert.match(html, /data-ui="login-credential-status"/);
     assert.match(html, /data-ui="login-sequence"/);
     assert.match(html, /data-ui="login-form"/);
     assert.match(html, /form method="post" action="\/login"/);
@@ -389,6 +392,11 @@ test("login GET serves a minimal branded sign-in shell and boots an anonymous se
     assert.match(html, /data-ui="login-helper"/);
     assert.match(html, /data-ui="login-submit"[^>]*>Sign in</);
     assert.match(html, /(?:data-ui="login-secondary-link"[^>]*href="\/"|href="\/"[^>]*data-ui="login-secondary-link")/);
+    assert.match(html, /data-access-state="verified"/);
+    assert.match(html, /Local development bypass active/);
+    assert.match(html, /Credential handoff ready/);
+    assert.match(html, /Bypass context/);
+    assert.match(html, /login-sequence-step login-sequence-step--ready/);
     assert.doesNotMatch(html, /Authorized operators only\./);
     assert.doesNotMatch(html, /Need access\?/);
     assert.doesNotMatch(html, /Secure operator access to governed orchestration\./);
@@ -396,6 +404,38 @@ test("login GET serves a minimal branded sign-in shell and boots an anonymous se
     assert.doesNotMatch(html, /TP_CF_ACCESS_TEAM_DOMAIN/);
     assert.ok(sessionCookie.value);
     assert.equal(sessions.getSessionById(sessionCookie.value, { touch: false })?.authenticated, false);
+  } finally {
+    env.cleanup();
+  }
+});
+
+test("login GET escapes verified access context exactly once in the recovery card", async () => {
+  const env = withTempEnvironment();
+
+  try {
+    const { GET } = await importFresh("../app/login/route.js");
+    const restoreFetch = withMockedAccessCerts();
+
+    try {
+      const accessEmail = "admin+ops&support@example.com";
+      const request = buildRequest("https://portal.example.com/login", {
+        headers: new Headers({
+          "Cf-Access-Jwt-Assertion": createAccessJwt({ email: accessEmail }),
+          "cf-access-authenticated-user-email": accessEmail
+        })
+      });
+
+      const response = await GET(request);
+      const html = await response.text();
+
+      assert.equal(response.status, 200);
+      assert.match(html, /data-access-state="verified"/);
+      assert.match(html, /data-ui="login-recovery-card"/);
+      assert.match(html, /Managed access has already been verified for admin\+ops&amp;support@example\.com\./);
+      assert.doesNotMatch(html, /admin\+ops&amp;amp;support@example\.com/);
+    } finally {
+      restoreFetch();
+    }
   } finally {
     env.cleanup();
   }
@@ -429,6 +469,7 @@ test("homepage GET serves the public DNA landing page instead of redirecting", a
     assert.match(html, /\/brand\/dna-lockup-dark\.svg/);
     assert.match(html, /data-ui="homepage-hero-lockup"/);
     assert.match(html, /data-ui="homepage-hero-title"/);
+    assert.match(html, /data-ui="homepage-entry-rail"/);
     assert.match(html, /(?:data-ui="homepage-learn-link"[^>]*href="#workflow"|href="#workflow"[^>]*data-ui="homepage-learn-link")/);
     assert.match(html, /(?:data-ui="homepage-primary-cta"[^>]*href="\/login"|href="\/login"[^>]*data-ui="homepage-primary-cta")/);
     assert.match(html, /(?:data-ui="homepage-secondary-cta"[^>]*href="#proof-report"|href="#proof-report"[^>]*data-ui="homepage-secondary-cta")/);
@@ -877,6 +918,95 @@ test("development local bypass still allows login without Cloudflare Access", as
   }
 });
 
+test("development local bypass login still works when the browser omits origin and referrer", async () => {
+  const passwordHash = await argon2.hash("correct horse battery staple");
+  const env = withTempEnvironment({
+    NODE_ENV: "development",
+    TP_ALLOW_LOCAL_ACCESS_BYPASS: "1",
+    usersFileEntries: [
+      {
+        username: "admin",
+        password_hash: passwordHash,
+        access_email: "admin@example.com",
+        role: "admin"
+      }
+    ]
+  });
+
+  try {
+    const sessions = await importFresh("../lib/sessions.js");
+    const { POST } = await importFresh("../app/login/route.js");
+
+    const anonymousSession = sessions.createAnonymousSession();
+    const request = buildRequest("http://127.0.0.1:3000/login", {
+      method: "POST",
+      headers: new Headers({
+        host: "127.0.0.1:3000",
+        "content-type": "application/x-www-form-urlencoded",
+        cookie: `tp_session=${anonymousSession.id}`
+      }),
+      body: new URLSearchParams({
+        username: "admin",
+        password: "correct horse battery staple",
+        csrf_token: anonymousSession.csrfToken
+      })
+    });
+
+    const response = await POST(request);
+
+    assert.equal(response.status, 303);
+    assert.equal(response.headers.get("location"), "http://127.0.0.1:3000/portal");
+  } finally {
+    env.cleanup();
+  }
+});
+
+test("login POST ignores untrusted host overrides when building redirect targets", async () => {
+  const passwordHash = await argon2.hash("correct horse battery staple");
+  const env = withTempEnvironment({
+    NODE_ENV: "development",
+    TP_ALLOW_LOCAL_ACCESS_BYPASS: "1",
+    usersFileEntries: [
+      {
+        username: "admin",
+        password_hash: passwordHash,
+        access_email: "admin@example.com",
+        role: "admin"
+      }
+    ]
+  });
+
+  try {
+    const sessions = await importFresh("../lib/sessions.js");
+    const { POST } = await importFresh("../app/login/route.js");
+
+    const anonymousSession = sessions.createAnonymousSession();
+    const request = buildRequest("https://portal.example.com/login", {
+      method: "POST",
+      headers: new Headers({
+        origin: "https://portal.example.com",
+        host: "evil.example.com",
+        "x-forwarded-host": "evil.example.com",
+        "x-forwarded-proto": "http",
+        "content-type": "application/x-www-form-urlencoded",
+        cookie: `tp_session=${anonymousSession.id}`
+      }),
+      body: new URLSearchParams({
+        username: "admin",
+        password: "correct horse battery staple",
+        csrf_token: anonymousSession.csrfToken
+      })
+    });
+
+    const response = await POST(request);
+
+    assert.equal(response.status, 303);
+    assert.equal(response.headers.get("location"), "https://portal.example.com/portal");
+  } finally {
+    env.cleanup();
+  }
+});
+
 test("logout POST invalidates the authenticated session and clears the cookie", async () => {
   const env = withTempEnvironment();
 
@@ -1138,9 +1268,65 @@ test("portal returns 503 with no-store when the FastAPI UI origin is unavailable
 
       assert.equal(response.status, 503);
       assert.equal(response.headers.get("cache-control"), "no-store");
-      assert.equal(await response.text(), "Portal upstream unavailable");
+      assert.match(response.headers.get("content-security-policy") || "", /default-src 'self'/);
+      const html = await response.text();
+      assert.match(html, /data-ui="managed-recovery-shell"/);
+      assert.match(html, /data-reason="upstream_unavailable"/);
+      assert.match(html, /Portal upstream unavailable/);
+      assert.match(html, /Return to login/);
     } finally {
       restoreFetch();
+    }
+  } finally {
+    env.cleanup();
+  }
+});
+
+test("portal renders waiting recovery posture for Access outages", async () => {
+  const outageTeamDomain = "https://tp-frontdoor-outage.cloudflareaccess.com";
+  const env = withTempEnvironment({
+    TP_CF_ACCESS_TEAM_DOMAIN: outageTeamDomain
+  });
+
+  try {
+    const sessions = await importFresh("../lib/sessions.js");
+    const { GET } = await importFresh("../app/portal/route.js");
+    const originalFetch = global.fetch;
+    global.fetch = async (url, init) => {
+      assert.equal(String(url), `${outageTeamDomain}/cdn-cgi/access/certs`);
+      assert.ok(init.signal);
+      throw Object.assign(new Error("timed out"), { name: "AbortError" });
+    };
+
+    try {
+      const authenticatedSession = sessions.rotateAuthenticatedSession(
+        sessions.createAnonymousSession(),
+        {
+          username: "admin",
+          accessEmail: "admin@example.com",
+          role: "admin"
+        }
+      );
+
+      const request = buildRequest("https://portal.example.com/portal", {
+        method: "GET",
+        headers: new Headers({
+          cookie: `__Host-tp_session=${authenticatedSession.id}`,
+          "Cf-Access-Jwt-Assertion": createAccessJwt({ iss: outageTeamDomain })
+        })
+      });
+
+      const response = await GET(request);
+      const html = await response.text();
+
+      assert.equal(response.status, 503);
+      assert.match(html, /data-ui="managed-recovery-shell"/);
+      assert.match(html, /data-reason="access_outage"/);
+      assert.match(html, /class="[^"]*\blogin-status-card\b[^"]*"/);
+      assert.match(html, /data-state="waiting"/);
+      assert.match(html, /Retry when Access recovers/);
+    } finally {
+      global.fetch = originalFetch;
     }
   } finally {
     env.cleanup();
@@ -1176,7 +1362,12 @@ test("portal returns configuration guidance when managed access config is incomp
 
       assert.equal(response.status, 503);
       assert.equal(response.headers.get("cache-control"), "no-store");
-      assert.equal(await response.text(), "Managed front door configuration unavailable");
+      assert.match(response.headers.get("content-security-policy") || "", /default-src 'self'/);
+      const html = await response.text();
+      assert.match(html, /data-ui="managed-recovery-shell"/);
+      assert.match(html, /data-reason="config_failure"/);
+      assert.match(html, /Managed front door configuration unavailable/);
+      assert.match(html, /Managed boundary stays fail-closed/);
       assert.equal(events.length, 1);
       assert.equal(events[0].surface, "portal");
       assert.equal(events[0].reason, "config_failure");
@@ -1607,12 +1798,29 @@ test("shared portal asset manifest pins the managed asset proxy allowlist", asyn
 
   assert.deepEqual(PORTAL_ASSET_PATHS, [
     "portal.css",
+    "shared-ui-tokens.css",
     "portal.js",
     "fonts/portal-sans.woff2",
     "fonts/portal-mono.woff2",
     "brand/dna-symbol-dark.svg",
     "brand/dna-symbol-light.svg"
   ]);
+});
+
+test("shared UI tokens stay synced to the canonical source", () => {
+  const repoRoot = path.resolve(process.cwd(), "..", "..");
+  const canonicalTokenPath = path.join(repoRoot, "web", "shared", "shared-ui-tokens.css");
+  const frontdoorTokenPath = path.join(process.cwd(), "public", "shared-ui-tokens.css");
+  const portalTokenPath = path.join(repoRoot, "public", "portal-assets", "shared-ui-tokens.css");
+  const buildScriptPath = path.join(process.cwd(), "scripts", "build-portal-bundle.mjs");
+  const canonicalTokens = readFileSync(canonicalTokenPath, "utf-8");
+  const buildScript = readFileSync(buildScriptPath, "utf-8");
+
+  assert.equal(readFileSync(frontdoorTokenPath, "utf-8"), canonicalTokens);
+  assert.equal(readFileSync(portalTokenPath, "utf-8"), canonicalTokens);
+  assert.match(buildScript, /const SHARED_TOKEN_SOURCE_PATH = path\.resolve\(REPO_ROOT, "web", "shared", "shared-ui-tokens\.css"\);/);
+  assert.match(buildScript, /copyIfChanged\(SHARED_TOKEN_SOURCE_PATH,\s*PORTAL_SHARED_TOKEN_TARGET\)/);
+  assert.match(buildScript, /copyIfChanged\(SHARED_TOKEN_SOURCE_PATH,\s*FRONTDOOR_SHARED_TOKEN_TARGET\)/);
 });
 
 test("v1 POST rejects requests missing valid same-origin CSRF protections", async () => {

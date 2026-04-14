@@ -28,7 +28,13 @@ from pathlib import Path
 from typing import Any
 
 # Import V2 enhancement implementation
-from transformation_portal.lux_depth_v3.v2_enhance import V2EnhancementError, enhance_image, find_depth_map
+from transformation_portal.lux_depth_v3.v2_enhance import (
+    V2EnhancementError,
+    enhance_image,
+    find_depth_map,
+    infer_v2_output_bit_depth,
+    resolve_v2_emitted_artifact_path,
+)
 from transformation_portal.lux_depth_v3.v2_presets import V2EnhancementConfig
 
 logger = logging.getLogger("lux_depth_v2_enhance")
@@ -291,8 +297,14 @@ def run_v2_enhancement(
     depth_dir = validate_depth_dir(depth_dir)
     output_dir = validate_output_dir(output_dir)
 
-    # Use only filename to avoid leaking directory structure into output paths
-    output_path = safe_join_under(output_dir, input_path.name)
+    # Build emitted artifact path from canonical identity rather than source suffix.
+    lookup_key = resolve_asset_key(asset_key, input_path.stem)
+    candidate_bit_depth = infer_v2_output_bit_depth(input_path, allow_8bit_output=allow_8bit)
+    output_path = resolve_v2_emitted_artifact_path(
+        safe_join_under(output_dir, lookup_key),
+        bit_depth=candidate_bit_depth,
+        identity=lookup_key,
+    )
 
     # Prevent no-op/self-copy edge case
     if input_path == output_path:
@@ -310,7 +322,6 @@ def run_v2_enhancement(
     # Find depth map if depth_dir provided
     # Use canonical asset key for depth lookup to align with orchestrator naming
     # Validate asset_key to prevent path traversal (important for direct CLI invocation)
-    lookup_key = resolve_asset_key(asset_key, input_path.stem)
     depth_map_path = None
     if depth_dir:
         depth_map_path = find_depth_map(depth_dir, lookup_key)
@@ -337,7 +348,7 @@ def run_v2_enhancement(
     report["upscaler"] = upscaler
 
     # Add identity metadata for provenance/debugging
-    report["asset_key"] = asset_key if asset_key else input_path.stem
+    report["asset_key"] = lookup_key
     report["input_stem"] = input_path.stem
 
     # Enrich depth block with lookup_key (computed at this layer)

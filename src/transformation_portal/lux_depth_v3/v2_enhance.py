@@ -65,6 +65,66 @@ _KNOWN_IMAGE_EXTENSIONS = (
     ".exr",
 )
 
+_RAW_SOURCE_EXTENSIONS = {
+    ".3fr",
+    ".arw",
+    ".cr2",
+    ".cr3",
+    ".crw",
+    ".dng",
+    ".iiq",
+    ".nef",
+    ".nrw",
+    ".orf",
+    ".pef",
+    ".raf",
+    ".rw2",
+    ".sr2",
+    ".srf",
+    ".srw",
+}
+
+
+def emitted_v2_suffix_for_bit_depth(bit_depth: int) -> str:
+    """Return the canonical emitted suffix for a V2 artifact."""
+    return ".tif" if int(bit_depth) >= 16 else ".png"
+
+
+def resolve_v2_emitted_artifact_path(
+    output_path: Path,
+    *,
+    bit_depth: int,
+    identity: str | None = None,
+) -> Path:
+    """Normalize a V2 emitted artifact path to the canonical basename and suffix."""
+    candidate_path = Path(output_path)
+    normalized_identity = canonical_asset_stem(identity) if identity else canonical_asset_stem(candidate_path.stem)
+    if not normalized_identity:
+        normalized_identity = "artifact"
+    emitted_name = f"{normalized_identity}_materials_v3_enhanced{emitted_v2_suffix_for_bit_depth(bit_depth)}"
+    return candidate_path.with_name(emitted_name)
+
+
+def infer_v2_output_bit_depth(input_path: Path, *, allow_8bit_output: bool = False) -> int:
+    """Infer the likely emitted V2 bit depth before enhancement runs."""
+    if allow_8bit_output:
+        return 8
+
+    input_path = Path(input_path)
+    if input_path.suffix.lower() in _RAW_SOURCE_EXTENSIONS:
+        return 16
+
+    try:
+        with Image.open(input_path) as pil_image:
+            return 16 if detect_input_bit_depth(pil_image) == 16 else 8
+    except Exception as exc:  # pragma: no cover - best-effort inference fallback
+        logger.debug("Could not inspect input bit depth for %s: %s", input_path, exc)
+
+    if input_path.suffix.lower() in {".tif", ".tiff"}:
+        return 16
+
+    return 8
+
 
 def _coerce_to_stem_preserving_dots(input_path_or_stem: str) -> str:
     """Treat value as a stem by default; only strip extensions for path-like inputs."""
@@ -283,16 +343,16 @@ def load_image_preserve_bit_depth(input_path: Path, allow_8bit_output: bool = Fa
             # Fall through to PIL loading
 
     # Standard PIL loading for 8-bit or fallback
-    with Image.open(input_path) as pil_image:
+    with Image.open(input_path) as opened_image:
         # Handle EXIF orientation
-        pil_image = ImageOps.exif_transpose(pil_image)
+        oriented_image: Image.Image = ImageOps.exif_transpose(opened_image)
 
         # After applying exif_transpose, normalize EXIF to avoid double-rotation:
         # - pixels have been rotated already
         # - EXIF Orientation must not request additional rotation in viewers
         exif_data: Optional[bytes] = None
         try:
-            exif_obj = pil_image.getexif()
+            exif_obj = oriented_image.getexif()
             if exif_obj:
                 # Pillow typically normalizes orientation to 1 after transpose
                 exif_data = exif_obj.tobytes()
@@ -303,14 +363,14 @@ def load_image_preserve_bit_depth(input_path: Path, allow_8bit_output: bool = Fa
         metadata["exif"] = exif_data
 
         # Handle palette mode
-        if pil_image.mode == "P":
-            pil_image = pil_image.convert("RGB")
+        if oriented_image.mode == "P":
+            oriented_image = oriented_image.convert("RGB")
 
         # Handle LA mode
-        if pil_image.mode == "LA":
-            pil_image = pil_image.convert("RGBA")
+        if oriented_image.mode == "LA":
+            oriented_image = oriented_image.convert("RGBA")
 
-        image_array = np.array(pil_image)
+        image_array = np.array(oriented_image)
 
     # Track actual loaded bits
     actual_bits = detected_input_bits
@@ -341,26 +401,27 @@ def load_depth_map(depth_path: Path) -> np.ndarray:
         V2EnhancementError: If depth map cannot be loaded
     """
     try:
-        depth_image = Image.open(depth_path)
+        with Image.open(depth_path) as opened_depth_image:
+            depth_image: Image.Image = opened_depth_image
 
-        # Handle 16-bit depth maps explicitly to preserve precision
-        if depth_image.mode in ("I;16", "I;16B", "I;16L", "I;16N"):
-            # Convert to uint16 array and normalize via fixed scale
-            depth_map = np.array(depth_image, dtype=np.uint16).astype(np.float32) / 65535.0
-        else:
-            # Convert to grayscale if needed
-            if depth_image.mode != "L" and depth_image.mode != "I" and depth_image.mode != "F":
-                depth_image = depth_image.convert("L")
+            # Handle 16-bit depth maps explicitly to preserve precision
+            if depth_image.mode in ("I;16", "I;16B", "I;16L", "I;16N"):
+                # Convert to uint16 array and normalize via fixed scale
+                depth_map = np.array(depth_image, dtype=np.uint16).astype(np.float32) / 65535.0
+            else:
+                # Convert to grayscale if needed
+                if depth_image.mode not in ("L", "I", "F"):
+                    depth_image = depth_image.convert("L")
 
-            depth_map = np.array(depth_image, dtype=np.float32)
+                depth_map = np.array(depth_image, dtype=np.float32)
 
-            # Normalize to [0, 1] - handle all-zeros case
-            depth_max = depth_map.max()
-            if depth_max > 1.0:
-                depth_map = depth_map / depth_max
-            elif depth_max == 0.0:
-                # All-zeros depth map: return as-is (will be handled gracefully by enhancement)
-                logger.warning(f"Depth map {depth_path} is all zeros - depth effects will be skipped")
+                # Normalize to [0, 1] - handle all-zeros case
+                depth_max = depth_map.max()
+                if depth_max > 1.0:
+                    depth_map = depth_map / depth_max
+                elif depth_max == 0.0:
+                    # All-zeros depth map: return as-is (will be handled gracefully by enhancement)
+                    logger.warning(f"Depth map {depth_path} is all zeros - depth effects will be skipped")
 
         return depth_map
 
@@ -471,11 +532,11 @@ def enhance_image(
         # 16-bit input MUST produce 16-bit output unless explicitly allowed
         # Decide target dtype up front to ensure consistency throughout pipeline
         if input_bits == 16 and allow_8bit_output:
-            target_dtype = np.uint8
+            target_dtype: np.dtype[Any] = np.dtype(np.uint8)
             target_bits = 8
             logger.warning("Quality Firewall BYPASSED: 16-bit → 8-bit downgrade allowed " "by --allow-8bit flag")
         else:
-            target_dtype = image.dtype
+            target_dtype = np.dtype(image.dtype)
             target_bits = input_bits
             if input_bits == 16:
                 logger.info("Quality Firewall ACTIVE: 16-bit input detected - " "will preserve 16-bit output")
@@ -542,17 +603,20 @@ def enhance_image(
         # Ensure output dtype matches target (handle potential mismatches)
         if enhanced_image.dtype != target_dtype:
             logger.debug(f"Converting enhanced image from {enhanced_image.dtype} to {target_dtype}")
-            if target_dtype == np.uint8 and enhanced_image.dtype == np.uint16:
+            if target_dtype == np.dtype(np.uint8) and enhanced_image.dtype == np.uint16:
                 # 16-bit → 8-bit conversion with proper normalization
                 enhanced_image = (enhanced_image.astype(np.float32) / 65535.0 * 255.0).astype(np.uint8)
-            elif target_dtype == np.uint16 and enhanced_image.dtype == np.uint8:
+            elif target_dtype == np.dtype(np.uint16) and enhanced_image.dtype == np.uint8:
                 # 8-bit → 16-bit conversion (unusual but handle it)
                 enhanced_image = (enhanced_image.astype(np.float32) / 255.0 * 65535.0).astype(np.uint16)
             else:
                 raise V2EnhancementError(f"Unsupported dtype conversion: {enhanced_image.dtype} → {target_dtype}")
 
         # Ensure output directory exists
-        output_path = Path(output_path)
+        output_path = resolve_v2_emitted_artifact_path(
+            output_path,
+            bit_depth=target_bits,
+        )
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Save enhanced image with metadata preservation and correct bit-depth

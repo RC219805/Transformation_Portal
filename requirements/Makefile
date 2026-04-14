@@ -345,7 +345,17 @@ check-generic: require-pip-compile
 	$(PIP_COMPILE) security.in -o security.txt >/dev/null; \
 	$(PIP_COMPILE) -c all.txt tools-archive.in -o tools-archive.txt >/dev/null; \
 	normalize_req() { \
-		awk 'BEGIN{start=0} { if (!start) { if ($$0 ~ /^#/ || $$0 ~ /^[[:space:]]*$$/) next; start=1 } print }' "$$1"; \
+		: "The lock contract separately enforces the Linux-only keyring chain, so host-side diffs ignore those packages and pip-compile provenance comments."; \
+		file_name="$$(basename "$$1")"; \
+		awk '!/^[[:space:]]*#/ && !/^[[:space:]]*$$/ { print }' "$$1" | \
+		while IFS= read -r line; do \
+			case "$$file_name:$$line" in \
+				all.txt:jeepney==*|all.txt:secretstorage==*|ci.txt:cffi==*|ci.txt:cryptography==*|ci.txt:jeepney==*|ci.txt:pycparser==*|ci.txt:secretstorage==*) \
+					continue; \
+					;; \
+			esac; \
+			printf '%s\n' "$$line"; \
+		done; \
 	}; \
 	for f in all.txt base.txt dev.txt ci.txt security.txt tools-archive.txt; do \
 		if ! diff -u <(normalize_req "$$tmp_dir/$$f") <(normalize_req "$$repo_dir/$$f") >/dev/null; then \

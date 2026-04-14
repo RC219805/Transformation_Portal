@@ -17,7 +17,12 @@ from PIL import Image
 
 pytestmark = [pytest.mark.unit]
 
-from transformation_portal.lux_depth_v3.v2_enhance import V2EnhancementError, enhance_image, load_image_preserve_bit_depth
+from transformation_portal.lux_depth_v3.v2_enhance import (
+    V2EnhancementError,
+    enhance_image,
+    load_image_preserve_bit_depth,
+    resolve_v2_emitted_artifact_path,
+)
 from transformation_portal.stage_graph.stage import StageStatus
 
 
@@ -194,10 +199,12 @@ class TestRealProcessing:
 
             # Run enhancement
             result = enhance_image(temp_8bit_tiff, output_path, allow_8bit_output=False)
+            emitted_output = resolve_v2_emitted_artifact_path(output_path, bit_depth=8)
 
             # Verify success
             assert result["status"] == "success"
-            assert output_path.exists()
+            assert Path(result["output"]) == emitted_output
+            assert emitted_output.exists()
             assert result["bit_depth"]["input_bits_per_sample"] == 8
             assert result["bit_depth"]["output_bits_per_sample"] == 8
 

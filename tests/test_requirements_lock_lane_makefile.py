@@ -37,6 +37,21 @@ def test_generic_targets_do_not_reference_target_owned_ml_locks() -> None:
         assert "ml-core-linux.txt" not in body
 
 
+def test_check_generic_normalizes_linux_keyring_chain_packages() -> None:
+    body = _target_body("check-generic")
+
+    for snippet in (
+        "all.txt:jeepney==*",
+        "all.txt:secretstorage==*",
+        "ci.txt:cffi==*",
+        "ci.txt:cryptography==*",
+        "ci.txt:jeepney==*",
+        "ci.txt:pycparser==*",
+        "ci.txt:secretstorage==*",
+    ):
+        assert snippet in body
+
+
 def test_compile_ml_layers_refuses_broad_target_owned_regeneration() -> None:
     body = _target_body("compile-ml-layers")
 

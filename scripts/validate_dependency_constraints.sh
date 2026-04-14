@@ -14,6 +14,10 @@
 
 set -eo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+PYTHON_BIN="$("${REPO_ROOT}/scripts/setup/resolve_python_311.sh")"
+
 # Colors for output
 RED='\033[0;31m'
 YELLOW='\033[1;33m'
@@ -47,7 +51,7 @@ load_banned_packages() {
     parsed_registry="$(mktemp)"
     parse_error="$(mktemp)"
 
-    if ! BANNED_REGISTRY="$BANNED_REGISTRY" python3 << 'PY' >"$parsed_registry" 2>"$parse_error"
+    if ! BANNED_REGISTRY="$BANNED_REGISTRY" "${PYTHON_BIN}" << 'PY' >"$parsed_registry" 2>"$parse_error"
 import json
 import os
 from pathlib import Path
@@ -168,24 +172,90 @@ is_target_owned_ml_input() {
     return 1
 }
 
-target_owned_ml_stale_fix() {
+normalize_host_arch() {
+    local arch="$1"
+    case "$arch" in
+        "aarch64")
+            echo "arm64"
+            ;;
+        "amd64")
+            echo "x86_64"
+            ;;
+        *)
+            echo "$arch"
+            ;;
+    esac
+}
+
+current_host_system() {
+    uname -s 2>/dev/null || echo ""
+}
+
+current_host_arch() {
+    local arch
+    arch="$(uname -m 2>/dev/null || echo "")"
+    normalize_host_arch "$arch"
+}
+
+validate_target_owned_ml_freshness() {
     local basename="$1"
+    local txt_file="$2"
+    local host_os=""
+    local host_arch=""
+    local check_target=""
+    local compile_fix=""
+    local check_output=""
+
     case "$basename" in
-        "ml-core-darwin-arm64.in")
-            echo "Run 'cd requirements && make compile-ml-darwin-arm64' on native Darwin arm64."
+        "ml-core-darwin-x86_64.in")
+            if [[ $VERBOSE -eq 1 ]]; then
+                echo "INFO: $basename is frozen and excluded from freshness regeneration checks."
+            fi
             return 0
+            ;;
+        "ml-core-darwin-arm64.in")
+            host_os="$(current_host_system)"
+            host_arch="$(current_host_arch)"
+            if [[ "$host_os" != "Darwin" || "$host_arch" != "arm64" ]]; then
+                return 0
+            fi
+            check_target="check-ml-darwin-arm64"
+            compile_fix="Run 'cd requirements && make compile-ml-darwin-arm64' on native Darwin arm64."
             ;;
         "ml-core-linux.in")
-            echo "Run 'cd requirements && make compile-ml-linux-x86_64' on native Linux x86_64."
-            return 0
+            host_os="$(current_host_system)"
+            host_arch="$(current_host_arch)"
+            if [[ "$host_os" != "Linux" || "$host_arch" != "x86_64" ]]; then
+                return 0
+            fi
+            check_target="check-ml-linux-x86_64"
+            compile_fix="Run 'cd requirements && make compile-ml-linux-x86_64' on native Linux x86_64."
             ;;
-        "ml-core-darwin-x86_64.in")
-            echo "Darwin x86_64 is frozen; do not regenerate until an authoritative lane is defined."
+        *)
             return 0
             ;;
     esac
-    echo "Run the authoritative lane-specific compile command for this target-owned ML lock."
-    return 0
+
+    if [[ $VERBOSE -eq 1 ]]; then
+        if check_output=$(make -C requirements "$check_target" LOCK_PYTHON_VERSION=3.11 2>&1); then
+            return 0
+        fi
+    else
+        if make -C requirements "$check_target" LOCK_PYTHON_VERSION=3.11 >/dev/null 2>&1; then
+            return 0
+        fi
+    fi
+
+    echo -e "${YELLOW}⚠️  $basename: Target-owned ML lock freshness check failed${NC}"
+    echo -e "   ${BOLD}WARNING:${NC} $(basename "$txt_file") could not be validated by $check_target on this authoritative lane"
+    if [[ $VERBOSE -eq 1 && -n "$check_output" ]]; then
+        echo -e "   ${BOLD}Details:${NC}"
+        while IFS= read -r output_line; do
+            echo "     $output_line"
+        done <<< "$check_output"
+    fi
+    echo -e "   ${BOLD}Fix:${NC} $compile_fix\n"
+    return 1
 }
 
 # Function: Extract version from constraint
@@ -201,7 +271,7 @@ version_gte() {
     local v2="$2"
 
     # Use Python for accurate semantic version comparison
-    python3 << EOF
+    "${PYTHON_BIN}" << EOF
 from packaging.version import Version
 import sys
 try:
@@ -338,12 +408,9 @@ validate_in_file() {
     if [[ -f "$txt_file" ]]; then
         if [[ "$txt_file" -ot "$in_file" ]]; then
             if is_target_owned_ml_input "$basename"; then
-                local stale_fix
-                stale_fix=$(target_owned_ml_stale_fix "$basename")
-                echo -e "${YELLOW}⚠️  $basename: Compiled .txt file is stale${NC}"
-                echo -e "   ${BOLD}WARNING:${NC} $(basename "$txt_file") is older than $basename"
-                echo -e "   ${BOLD}Fix:${NC} $stale_fix\n"
-                file_warnings=$((file_warnings + 1))
+                if ! validate_target_owned_ml_freshness "$basename" "$txt_file"; then
+                    file_warnings=$((file_warnings + 1))
+                fi
             else
                 echo -e "${YELLOW}⚠️  $basename: Compiled .txt file is stale${NC}"
                 echo -e "   ${BOLD}WARNING:${NC} $(basename "$txt_file") is older than $basename"
@@ -412,7 +479,7 @@ validate_pyproject_security_minimums() {
             fi
         fi
     done < <(
-        python3 << 'PY'
+        "${PYTHON_BIN}" << 'PY'
 import re
 import tomllib
 from pathlib import Path

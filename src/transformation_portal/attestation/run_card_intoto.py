@@ -10,8 +10,9 @@ from typing import Any
 
 from transformation_portal.ingest.canonical_json import canonicalize_json
 
+from ..lux_depth_v3.run_card_contract import get_run_card_schema_uri_for_payload, infer_run_card_version
 from .dsse import DSSE_IN_TOTO_JSON_PAYLOAD_TYPE, build_dsse_envelope, decode_dsse_payload, validate_dsse_envelope_surface
-from .run_card_detached import RUN_CARD_V2_SCHEMA_URI, compute_run_card_sha256, validate_run_card_v2_surface
+from .run_card_detached import build_run_card_commitment, compute_run_card_sha256, validate_run_card_attestable_surface
 
 IN_TOTO_STATEMENT_TYPE = "https://in-toto.io/Statement/v1"
 RUN_CARD_PREDICATE_TYPE = (
@@ -45,7 +46,7 @@ def build_run_card_subjects(
     run_card_bytes: bytes,
 ) -> list[dict[str, Any]]:
     """Build the in-toto subject list for the run card and committed artifacts."""
-    validate_run_card_v2_surface(run_card_payload)
+    validate_run_card_attestable_surface(run_card_payload)
     subjects = [_subject_digest(run_card_path.name, compute_run_card_sha256(run_card_bytes))]
     artifact_index = run_card_payload.get("artifact_index")
     if not isinstance(artifact_index, Sequence):
@@ -69,18 +70,13 @@ def build_run_card_predicate(
     release_assessment: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build the compact Lux run-card predicate payload."""
-    validate_run_card_v2_surface(run_card_payload)
-    artifact_tree = run_card_payload["artifact_tree"]
+    validate_run_card_attestable_surface(run_card_payload)
     predicate: dict[str, Any] = {
-        "run_card_schema": RUN_CARD_V2_SCHEMA_URI,
+        "run_card_version": infer_run_card_version(run_card_payload),
+        "run_card_schema": get_run_card_schema_uri_for_payload(run_card_payload),
         "run_card_sha256": compute_run_card_sha256(run_card_bytes),
         "batch_id": run_card_payload["batch_id"],
-        "artifact_tree": {
-            "algorithm": artifact_tree["algorithm"],
-            "leaf_format": artifact_tree["leaf_format"],
-            "leaf_count": artifact_tree["leaf_count"],
-            "root_sha256": artifact_tree["root_sha256"],
-        },
+        "artifact_commitment": build_run_card_commitment(run_card_payload),
         "backend_selection": {
             key: value
             for key, value in dict(run_card_payload.get("backend_selection", {})).items()
@@ -203,10 +199,11 @@ def validate_run_card_statement_binding(
         raise ValueError("Statement predicate must be an object")
     expected_predicate = expected_statement["predicate"]
     for field in (
+        "run_card_version",
         "run_card_schema",
         "run_card_sha256",
         "batch_id",
-        "artifact_tree",
+        "artifact_commitment",
         "backend_selection",
         "config_fingerprint_sha256",
         "git_revision",

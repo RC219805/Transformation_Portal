@@ -22,14 +22,28 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "artifact_tree_root_sha256",
         "batch_id",
+        "artifact_commitment",
+        "config_fingerprint_sha256",
+        "git_revision",
+        "run_card_version",
         "run_card_schema",
         "run_card_sha256"
       ],
       "properties": {
         "run_card_schema": {
-          "const": "https://rc219805.github.io/Transformation_Portal/docs/schemas/run_card/run_card.v2.schema.json"
+          "type": "string",
+          "enum": [
+            "https://rc219805.github.io/Transformation_Portal/docs/schemas/run_card/run_card.v1.schema.json",
+            "https://rc219805.github.io/Transformation_Portal/docs/schemas/run_card/run_card.v2.schema.json"
+          ]
+        },
+        "run_card_version": {
+          "type": "string",
+          "enum": [
+            "v1",
+            "v2"
+          ]
         },
         "batch_id": {
           "type": "string",
@@ -39,11 +53,99 @@
           "type": "string",
           "pattern": "^[a-f0-9]{64}$"
         },
-        "artifact_tree_root_sha256": {
+        "config_fingerprint_sha256": {
           "type": "string",
           "pattern": "^[a-f0-9]{64}$"
+        },
+        "git_revision": {
+          "type": "object"
+        },
+        "artifact_commitment": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "leaf_count",
+            "sha256"
+          ],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "artifact_commitment_v1",
+                "artifact_tree_v2"
+              ]
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "leaf_count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "algorithm": {
+              "type": "string",
+              "minLength": 1
+            },
+            "leaf_format": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "kind": {
+                    "const": "artifact_tree_v2"
+                  }
+                }
+              },
+              "then": {
+                "required": [
+                  "algorithm",
+                  "leaf_format"
+                ]
+              }
+            }
+          ]
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "run_card_version": {
+                "const": "v1"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "run_card_schema": {
+                "const": "https://rc219805.github.io/Transformation_Portal/docs/schemas/run_card/run_card.v1.schema.json"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "run_card_version": {
+                "const": "v2"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "run_card_schema": {
+                "const": "https://rc219805.github.io/Transformation_Portal/docs/schemas/run_card/run_card.v2.schema.json"
+              }
+            }
+          }
+        }
+      ]
     },
     "signature": {
       "type": "object",

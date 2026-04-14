@@ -326,7 +326,9 @@ def main(
         "--depth-pro-python",
         help=(
             "Optional Python executable for an isolated Depth Pro environment. "
-            "Use this to keep depth_pro out of the main Transformation Portal venv."
+            "Use this to keep depth_pro out of the main Transformation Portal venv or to override "
+            "the auto-discovered repo-local runtime at ./.venv-depth-pro/bin/python "
+            "(bootstrap with ./scripts/setup/install_depth_pro_runtime.sh)."
         ),
     ),
     da3_python: Optional[str] = typer.Option(
@@ -390,6 +392,56 @@ def main(
         None,
         "--sam2-checkpoint-path",
         help=("Optional path to SAM2 checkpoint (.pt) when " "--segmentation-backend sam2"),
+    ),
+    sam2_tiling_enabled: bool = typer.Option(
+        False,
+        "--sam2-tiling-enabled",
+        help="Enable deterministic SAM2 tiling for large-image segmentation.",
+    ),
+    sam2_tile_size_px: int = typer.Option(
+        1536,
+        "--sam2-tile-size-px",
+        help="Tile size in pixels when SAM2 tiling is enabled.",
+    ),
+    sam2_overlap_px: int = typer.Option(
+        256,
+        "--sam2-overlap-px",
+        help="Tile overlap in pixels when SAM2 tiling is enabled.",
+    ),
+    sam2_global_pass_longest_side: int = typer.Option(
+        1280,
+        "--sam2-global-pass-longest-side",
+        help="Longest side for the SAM2 global seed pass when tiling is enabled.",
+    ),
+    sam2_max_concurrency: int = typer.Option(
+        1,
+        "--sam2-max-concurrency",
+        help="Maximum SAM2 tile concurrency for deterministic segmentation.",
+    ),
+    sam2_points_per_side: int = typer.Option(
+        32,
+        "--sam2-points-per-side",
+        help="SAM2 automatic mask generator points_per_side.",
+    ),
+    sam2_points_per_batch: int = typer.Option(
+        64,
+        "--sam2-points-per-batch",
+        help="SAM2 automatic mask generator points_per_batch.",
+    ),
+    sam2_pred_iou_thresh: float = typer.Option(
+        0.88,
+        "--sam2-pred-iou-thresh",
+        help="SAM2 automatic mask generator predicted IoU threshold.",
+    ),
+    sam2_stability_score_thresh: float = typer.Option(
+        0.85,
+        "--sam2-stability-score-thresh",
+        help="SAM2 automatic mask generator stability score threshold.",
+    ),
+    sam2_crop_n_layers: int = typer.Option(
+        1,
+        "--sam2-crop-n-layers",
+        help="SAM2 automatic mask generator crop_n_layers.",
     ),
     strict_segmentation: bool = typer.Option(
         False,
@@ -870,6 +922,16 @@ def main(
         material_segmentation_backend=segmentation_backend.lower(),
         sam2_model_size=sam2_model_size.lower(),
         sam2_checkpoint_path=(str(sam2_checkpoint_path) if sam2_checkpoint_path else None),
+        sam2_tiling_enabled=sam2_tiling_enabled,
+        sam2_tile_size_px=sam2_tile_size_px,
+        sam2_overlap_px=sam2_overlap_px,
+        sam2_global_pass_longest_side=sam2_global_pass_longest_side,
+        sam2_max_concurrency=sam2_max_concurrency,
+        sam2_points_per_side=sam2_points_per_side,
+        sam2_points_per_batch=sam2_points_per_batch,
+        sam2_pred_iou_thresh=sam2_pred_iou_thresh,
+        sam2_stability_score_thresh=sam2_stability_score_thresh,
+        sam2_crop_n_layers=sam2_crop_n_layers,
         strict_backend=strict_segmentation,
         emit_master16=enable_emit_master16,
         emit_upscaled16=enable_emit_upscaled16,

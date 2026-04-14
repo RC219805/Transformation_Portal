@@ -521,6 +521,61 @@ def test_startup_selection_fallback_is_persisted_in_attempt_history(tmp_path):
     assert backend_selection["attempts"][0]["status"] == "failed"
 
 
+def test_startup_selection_fallback_preserves_depth_pro_mps_unavailable_diagnostic(tmp_path):
+    """Selection-time Depth Pro device failures should remain visible in fallback metadata."""
+    import json
+
+    from PIL import Image
+
+    from transformation_portal.lux_depth_v3.input_manager import ImageInput
+
+    test_image = tmp_path / "startup_mps_fallback.png"
+    Image.new("RGB", (64, 64), color="white").save(test_image)
+
+    config = EnhanceConfig(
+        depth_backend="depth_pro",
+        depth_device="mps",
+        enable_v2=False,
+        non_commercial_ok=True,
+        accept_apple_depth_pro_research_license=True,
+    )
+
+    depth_pro_backend = Mock()
+    depth_pro_backend.name = "depth_pro"
+    depth_pro_backend.license_type = Mock(value="research_only")
+    depth_pro_backend.ensure_available.side_effect = ImportError(
+        '{"device":"mps","mps_available":false,"reason":"PyTorch MPS backend is not available in this runtime."}'
+    )
+
+    da3_backend = Mock()
+    da3_backend.name = "da3"
+    da3_backend.license_type = Mock(value="commercial")
+    da3_backend.ensure_available.return_value = None
+    da3_backend.compute.return_value = _make_depth_result()
+
+    registry = Mock()
+    registry.get_backend.side_effect = lambda backend_id, _config: {
+        "depth_pro": depth_pro_backend,
+        "da3": da3_backend,
+    }[backend_id]
+
+    with patch("transformation_portal.lux_depth_v3.orchestrator.DepthBackendRegistry", return_value=registry):
+        orchestrator = EnhanceOrchestrator(config, tmp_path)
+        orchestrator.postprocessor = Mock(process=lambda result: result)
+        result = orchestrator.enhance_image(ImageInput(path=test_image))
+
+    assert result["status"] == "ok"
+    assert result["backend"] == "da3"
+    assert [attempt["backend"] for attempt in result["attempts"]] == ["depth_pro", "da3"]
+    assert '"mps_available":false' in result["attempts"][0]["error_message"]
+
+    manifest = json.loads(Path(result["manifest"]).read_text())
+    backend_selection = manifest["backend_selection"]
+    assert backend_selection["resolved_backend"] == "da3"
+    assert backend_selection["resolution_status"] == "fallback"
+    assert '"mps_available":false' in backend_selection["resolution_reason"]
+
+
 def test_depth_metadata_uses_resolved_backend_not_config_default(tmp_path, mock_da3_available):
     """REGRESSION TEST for ADR-023: depth.model must use resolved backend, not config default.
 

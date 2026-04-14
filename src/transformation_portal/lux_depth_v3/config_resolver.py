@@ -353,6 +353,16 @@ def build_materials_fingerprint_payload(config: EnhanceConfig) -> Dict[str, Any]
         "sky_brightness_threshold": float(config.sky_brightness_threshold),
         "sam2_model_size": str(config.sam2_model_size),
         "sam2_checkpoint_path": config.sam2_checkpoint_path,
+        "sam2_tiling_enabled": bool(config.sam2_tiling_enabled),
+        "sam2_tile_size_px": int(config.sam2_tile_size_px),
+        "sam2_overlap_px": int(config.sam2_overlap_px),
+        "sam2_global_pass_longest_side": int(config.sam2_global_pass_longest_side),
+        "sam2_max_concurrency": int(config.sam2_max_concurrency),
+        "sam2_points_per_side": int(config.sam2_points_per_side),
+        "sam2_points_per_batch": int(config.sam2_points_per_batch),
+        "sam2_pred_iou_thresh": float(config.sam2_pred_iou_thresh),
+        "sam2_stability_score_thresh": float(config.sam2_stability_score_thresh),
+        "sam2_crop_n_layers": int(config.sam2_crop_n_layers),
     }
 
 

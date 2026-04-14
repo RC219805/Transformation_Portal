@@ -29,7 +29,7 @@ PHASE6_SMOKE_TESTS := \
 .PHONY: help test-fast test-novideo test-full test-integration test-structure test-utils test-orchestrator-contract test-orchestrator-http-contract test-portal-contract test-frontdoor-contract seed-frontdoor-user run-frontdoor-local validate-orchestrator-http validate-portal-browser validate-frontdoor-browser validate-frontdoor-deployment-gate audit-pipeline-readiness coverage-fast-scope venv repair-core-venv setup clean \
         lint lint-parity ci ci-full pre-commit install-hooks quality-check fix-quality validate-ci organize-docs check-json-serialization check-piptools-cache \
         check-yaml-governance check-stale-docs lock lock-prod lock-ci lock-dev install-core install-ml install-ml-core install-ml-raw install-ml-sam2 install-ml-coreml docs docs-clean \
-        check check-test-markers check-ci-sync check-environment validate-full validate-quick clean-frontdoor clean-all check-worktree \
+        check check-test-markers check-ci-sync check-environment check-portal-asset-budgets validate-full validate-quick clean-frontdoor clean-all check-worktree \
         compile-ml-darwin-arm64 update-ml-darwin-arm64 check-ml-darwin-arm64 \
         compile-ml-linux-x86_64 update-ml-linux-x86_64 check-ml-linux-x86_64 \
         compile-ml-darwin-x86_64 update-ml-darwin-x86_64 check-ml-darwin-x86_64
@@ -95,6 +95,7 @@ help:
 	@echo "  check-stale-docs   Detect changed-file references to deleted docs root paths"
 	@echo "  check-test-markers Audit test marker coverage (ADR-044)"
 	@echo "  check-ci-sync      Verify CI dependency files are in sync (no drift)"
+	@echo "  check-portal-asset-budgets  Validate raw/gzipped portal asset size budgets"
 	@echo "  fix-quality        Auto-fix common quality issues"
 	@echo "  validate-ci        Validate GitHub Actions workflow configs"
 	@echo "  organize-docs      Organize markdown files to docs/ subdirectories"
@@ -266,8 +267,13 @@ test-portal-contract:
 
 test-frontdoor-contract:
 	@echo "Running managed frontdoor contract checks..."
+	@./scripts/setup/ensure_node_version.sh
 	@cd web/secure-landing && npm test
 	@cd web/secure-landing && npm run build
+
+check-portal-asset-budgets:
+	@echo "Validating portal asset size budgets..."
+	@"$(PY)" ./scripts/validation/check_portal_asset_budgets.py
 
 seed-frontdoor-user:
 	@echo "Seeding canonical local managed frontdoor credential fixture..."
@@ -351,7 +357,7 @@ lint-parity:
 	@echo "Running CI-aligned lint parity..."
 	@./scripts/setup/run_lint_tool.sh parity
 
-ci: lint check-json-serialization check-yaml-governance check-piptools-cache check-requirements-lock-contract check-ci-sync test-fast test-orchestrator-contract test-frontdoor-contract
+ci: lint check-json-serialization check-yaml-governance check-piptools-cache check-requirements-lock-contract check-ci-sync check-portal-asset-budgets test-fast test-orchestrator-contract test-frontdoor-contract
 	@echo "✅ Local CI checks completed successfully."
 
 # Comprehensive CI simulation

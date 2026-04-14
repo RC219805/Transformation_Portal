@@ -144,6 +144,65 @@ def test_portal_browser_help_text_describes_api_key_default(capsys: pytest.Captu
     assert "default: unset; uses TP_API_KEY when set" in help_output
 
 
+def test_portal_browser_state_probe_tracks_contextual_action_controls():
+    module = _load_module(PORTAL_BROWSER_SCRIPT_PATH, "tests_validate_portal_browser_smoke_action_probe")
+
+    expression = module._state_probe_expression()
+
+    assert "consoleActionPrimaryBtn" in expression
+    assert "consoleActionSecondaryBtn1" in expression
+    assert "consoleActionSecondaryBtn2" in expression
+    assert "selectedJobRecoveryPrimaryBtn" in expression
+    assert "selectedJobRecoverySecondaryBtn" in expression
+    assert "reviewStatusPrimaryBtn" in expression
+    assert "reviewStatusSecondaryBtn" in expression
+    assert "actionPrimaryKey" in expression
+    assert "actionSecondary2Key" in expression
+    assert "selectedRecoveryPrimaryKey" in expression
+    assert "reviewStatusPrimaryKey" in expression
+
+
+def test_portal_browser_accessibility_probe_tracks_target_size_and_disclosure_contracts():
+    module = _load_module(PORTAL_BROWSER_SCRIPT_PATH, "tests_validate_portal_browser_smoke_accessibility_probe")
+
+    expression = module._accessibility_probe_expression()
+
+    assert "#themeBtn" in expression
+    assert "#shortcutsBtn" in expression
+    assert '[data-ui="view-link"]' in expression
+    assert "#buildStepTab1" in expression
+    assert "focusVisibleWithStickyShells" in expression
+    assert "maxDisclosureDepth" in expression
+    assert "discoverableDisclosures" in expression
+    assert "prefers-reduced-motion" in expression
+    assert "decorativeMotionStatic" in expression
+
+
+def test_portal_browser_can_simulate_bootstrap_degraded_recovery_actions():
+    module = _load_module(PORTAL_BROWSER_SCRIPT_PATH, "tests_validate_portal_browser_smoke_degraded_expr")
+
+    expression = module._simulate_bootstrap_degraded_expression(reason="auth_failure", http_status=401)
+
+    assert "_applyPortalBootstrap" in expression
+    assert "status: 'degraded'" in expression
+    assert '"reason": "auth_failure"' in expression
+    assert '"http_status": 401' in expression
+    assert "renderSelectedJobInspector();" in expression
+    assert "renderArtifactPanel();" in expression
+    assert "renderConsoleContextRibbon();" in expression
+
+
+def test_portal_browser_can_inject_compare_ready_review_state():
+    module = _load_module(PORTAL_BROWSER_SCRIPT_PATH, "tests_validate_portal_browser_smoke_compare_expr")
+
+    expression = module._inject_compare_ready_review_expression("job_demo")
+
+    assert "synthetic/review-primary.png" in expression
+    assert "synthetic/review-compare.png" in expression
+    assert "portal-smoke-compare" in expression
+    assert "renderReviewSurfaces();" in expression
+
+
 def test_portal_browser_preview_preflight_classifies_auth_failures(monkeypatch: pytest.MonkeyPatch):
     module = _load_module(PORTAL_BROWSER_SCRIPT_PATH, "tests_validate_portal_browser_smoke_preflight_auth")
 
@@ -260,7 +319,8 @@ def test_orchestrator_http_smoke_covers_readiness_and_fail_closed_archive_prereq
     assert "GET /v1/readiness" in content
     assert '"archive-gate-b"' in content
     assert '"archive-gate-c"' in content
-    assert "rights_manifest_required" in content
+    assert '"details") or {}).get("field") == "manifest_jsonl"' in content
+    assert '"details") or {}).get("reason") == "required"' in content
     assert "manifest-build" in content
     assert "rights-apply" in content
     assert "bag-build" in content
@@ -395,21 +455,79 @@ def test_frontdoor_browser_waits_for_managed_portal_bootstrap_before_passing():
     content = FRONTDOOR_BROWSER_SCRIPT_PATH.read_text(encoding="utf-8")
 
     assert 'and str(value.get("readyState", "")) == "complete"' in content
+    assert content.count('and str(value.get("readyState", "")) == "complete"') >= 3
     assert 'and str(value.get("authModeBadge", "")).lower() == "managed"' in content
     assert "homepageHeroReady" in content
+    assert "homepageEntryRailReady" in content
     assert "homepageLearnLinkReady" in content
     assert "homepagePrimaryCtaHref" in content
+    assert "loginEntryStateReady" in content
     assert "loginSequenceReady" in content
+    assert "portalAccessStateReady" in content
     assert '[data-ui="homepage-hero-title"]' in content
+    assert '[data-ui="homepage-entry-rail"]' in content
     assert '[data-ui="homepage-learn-link"]' in content
     assert '[data-ui="login-form"]' in content
+    assert '[data-ui="login-entry-state"]' in content
     assert '[data-ui="login-sequence"]' in content
+    assert '[data-ui="portal-access-state"]' in content
     assert ".hero-video, .homepage-video" in content
-    assert "form.requestSubmit" in content
-    assert "form.submit();" in content
+    assert "def _populate_login_expression" in content
+    assert "def _click_expression" in content
+    assert "connection.evaluate(_populate_login_expression(username, password))" in content
+    assert "connection.evaluate(_click_expression('[data-ui=\"login-submit\"]'))" in content
     assert "/healthz" in content
     assert "--spawn-local-frontdoor" in content
     assert "--spawn-local-backend" in content
+
+
+def test_frontdoor_browser_accessibility_probe_tracks_target_size_and_reduced_motion():
+    module = _load_module(FRONTDOOR_BROWSER_SCRIPT_PATH, "tests_validate_frontdoor_browser_smoke_accessibility_probe")
+
+    expression = module._frontdoor_accessibility_probe_expression()
+
+    assert "readyState: document.readyState" in expression
+    assert '[data-ui="homepage-primary-cta"]' in expression
+    assert '[data-ui="homepage-secondary-cta"]' in expression
+    assert '[data-ui="homepage-learn-link"]' in expression
+    assert '[data-ui="login-submit"]' in expression
+    assert '[data-ui="login-secondary-link"]' in expression
+    assert "maxDisclosureDepth" in expression
+    assert "focusVisibleWithStickyHeader" in expression
+    assert "prefers-reduced-motion" in expression
+    assert "decorativeMotionStatic" in expression
+
+
+def test_frontdoor_browser_accessibility_snapshot_is_page_scoped():
+    module = _load_module(FRONTDOOR_BROWSER_SCRIPT_PATH, "tests_validate_frontdoor_browser_smoke_accessibility_scope")
+
+    snapshot = {
+        "pathname": "/login",
+        "readyState": "complete",
+        "homepagePrimaryMinTarget": True,
+        "homepageSecondaryMinTarget": True,
+        "homepageLearnMinTarget": True,
+        "focusVisibleWithStickyHeader": True,
+        "loginSubmitMinTarget": False,
+        "loginSecondaryMinTarget": True,
+        "maxDisclosureDepth": 1,
+        "reducedMotion": False,
+        "decorativeMotionStatic": True,
+    }
+
+    homepage_snapshot = module._frontdoor_accessibility_snapshot(snapshot, page="homepage")
+    login_snapshot = module._frontdoor_accessibility_snapshot(snapshot, page="login")
+
+    assert homepage_snapshot["pathname"] == "/login"
+    assert homepage_snapshot["readyState"] == "complete"
+    assert homepage_snapshot["homepagePrimaryMinTarget"] is True
+    assert "loginSubmitMinTarget" not in homepage_snapshot
+
+    assert login_snapshot["pathname"] == "/login"
+    assert login_snapshot["readyState"] == "complete"
+    assert login_snapshot["loginSubmitMinTarget"] is False
+    assert login_snapshot["decorativeMotionStatic"] is True
+    assert "homepagePrimaryMinTarget" not in login_snapshot
 
 
 def test_portal_browser_smoke_tracks_archive_readiness_fields_and_canonical_commands():

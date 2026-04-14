@@ -21,7 +21,7 @@ Quick reference for common workflows and commands in this repo.
 - `make test-orchestrator-contract` run the full portal/orchestrator contract suite (`tests/test_app_orchestrator_runtime.py`, `tests/test_app_orchestrator_contract_http.py`, `tests/validation/test_portal_smoke_scripts.py`).
 - `make test-orchestrator-http-contract` run HTTP-only orchestrator contract tests (`tests/test_app_orchestrator_contract_http.py`).
 - `make test-portal-contract` run portal runtime/browser contract tests (`tests/test_app_orchestrator_runtime.py`, `tests/validation/test_portal_smoke_scripts.py`).
-- `make test-frontdoor-contract` run managed frontdoor Node contract/build checks (`cd web/secure-landing && npm test && npm run build`).
+- `make test-frontdoor-contract` run managed frontdoor Node 22 contract/build checks (`./scripts/setup/ensure_node_version.sh && cd web/secure-landing && npm test && npm run build`).
 - `make seed-frontdoor-user` write the canonical local managed-frontdoor credential fixture to `/tmp/tp-frontdoor-users.json` using `smoke-admin` / `correct horse battery staple` unless you override the env vars.
 - `make run-frontdoor-local` start the canonical local managed frontdoor on `http://localhost:3000` after verifying backend readiness, auth env, and no silent fallback to `:3001`; it auto-seeds the canonical local user fixture when no explicit frontdoor user source is configured.
 - `make validate-orchestrator-http` run the live orchestrator HTTP smoke against a running backend.
@@ -55,6 +55,7 @@ Quick reference for common workflows and commands in this repo.
 - `make check` verify the generic layered requirements surface under `requirements/`.
 - `make check-test-markers` audit test marker coverage (ADR-044) - reports unmarked test functions.
 - `make check-ci-sync` verify CI dependency files are in sync (no drift between `requirements-ci.txt` and `requirements/ci.in`).
+- `make check-portal-asset-budgets` validate raw and gzipped portal asset size budgets against the checked-in budget contract.
 - `make organize-docs` move markdown files into `docs/` (repo hygiene).
 - `make check-docs` dry-run docs organization.
 - `make check-stale-docs` detect changed-file references to deleted or moved docs root paths.
@@ -88,6 +89,7 @@ Quick reference for common workflows and commands in this repo.
 - `./.venv/bin/python scripts/validation/check_local_environment.py --check node` check only Node.js version (22.x required).
 - `./.venv/bin/python scripts/validation/check_local_environment.py --check dependency-health` run `pip check` for the active interpreter.
 - `./scripts/setup/ensure_node_version.sh` Node version enforcement wrapper with version manager detection.
+- `cd web/secure-landing && npm run build:portal` bundle the modularized portal sources back into the shipped `public/portal-assets/portal.js` asset and sync shared UI token primitives.
 - `./scripts/validation/run_full_validation_suite.sh` all-in-one validation orchestrator.
 - `./scripts/validation/run_full_validation_suite.sh --quick` skip browser smokes for faster iteration.
 - `./scripts/validation/run_full_validation_suite.sh --skip-frontdoor` Python-only validation.
@@ -118,6 +120,7 @@ Quick reference for common workflows and commands in this repo.
 - `./scripts/pipelines/run_sealed_eval_72h.sh --archive-index <path> --archive-root <path>` run sealed pre/post fixity verification around an optional eval command and emit an audit package.
 - `./scripts/pipelines/hdr_production_pipeline.sh` interactive HDR video mastering workflow that pairs source footage with a 3D LUT and writes web deliverables.
 - `./scripts/setup/install_da3_runtime.sh` install the repo-local DA3 subprocess runtime (validated `.runtime/Depth-Anything-3` ref + auto-discovered `./.venv-da3/bin/python` contract + `.runtime/da3-pip-freeze.txt` snapshot).
+- `./scripts/setup/install_depth_pro_runtime.sh` install the repo-local Depth Pro subprocess runtime (pinned `torch==2.7.1` / `torchvision==0.22.1` / `numpy==1.26.4` + pinned Apple `ml-depth-pro` ref + auto-discovered `./.venv-depth-pro/bin/python` contract + `.runtime/depth-pro-pip-freeze.txt` snapshot).
 - `./scripts/setup/install_raw_runtime.sh` install the repo-local RAW subprocess runtime (auto-discovered `./.venv-raw/bin/python` contract + `.runtime/raw-pip-freeze.txt` snapshot).
 - `./scripts/setup/run_frontdoor_local.sh` start the local managed frontdoor only when the backend is ready, auth env is set, and `localhost:3000` is free.
 - `./scripts/test_v2_integration.sh` validate end-to-end lux-depth-v3 + V2 stage integration (`--verbose`, `--clean` available).

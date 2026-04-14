@@ -8,10 +8,14 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 from transformation_portal.attestation.run_card_detached import build_run_card_detached_attestation_payload
 from transformation_portal.attestation.run_card_intoto import build_run_card_dsse_envelope, canonical_run_card_statement_bytes
 from transformation_portal.lux_depth_v3.artifact_tree import build_artifact_tree
 from transformation_portal.lux_depth_v3.validators.release_assessment import assess_run_card_release
+
+pytestmark = pytest.mark.unit
 
 
 def _write_run_card_v2(tmp_path: Path) -> Path:

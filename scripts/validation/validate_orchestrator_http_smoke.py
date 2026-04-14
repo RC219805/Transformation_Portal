@@ -418,8 +418,16 @@ def main(argv: list[str] | None = None) -> int:
         )
         _expect_status(blocked_status, 400, "POST /v1/jobs blocked archive-gate-b", blocked_body)
         _expect(
-            ((blocked_body.get("error") or {}).get("details") or {}).get("reason") == "rights_manifest_required",
-            f"archive-gate-b did not fail closed with rights_manifest_required: {blocked_body}",
+            ((blocked_body.get("error") or {}).get("code") == "INVALID_ARGUMENT"),
+            f"archive-gate-b did not return INVALID_ARGUMENT: {blocked_body}",
+        )
+        _expect(
+            ((blocked_body.get("error") or {}).get("details") or {}).get("field") == "manifest_jsonl",
+            f"archive-gate-b did not fail closed on manifest_jsonl: {blocked_body}",
+        )
+        _expect(
+            ((blocked_body.get("error") or {}).get("details") or {}).get("reason") == "required",
+            f"archive-gate-b did not fail closed with required manifest_jsonl validation: {blocked_body}",
         )
 
         gate_a_payload = {

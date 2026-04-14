@@ -400,9 +400,11 @@ def _frontdoor_state_probe_expression() -> str:
     readyState: document.readyState,
     pathname: window.location.pathname,
     homepageHeroReady: !!document.querySelector('[data-ui="homepage-hero-title"]'),
+    homepageEntryRailReady: !!document.querySelector('[data-ui="homepage-entry-rail"]'),
     homepageLearnLinkReady: !!document.querySelector('[data-ui="homepage-learn-link"]'),
     homepagePrimaryCtaHref: attr('[data-ui="homepage-primary-cta"]', 'href'),
     loginTitleReady: !!document.querySelector('[data-ui="login-title"]'),
+    loginEntryStateReady: !!document.querySelector('[data-ui="login-entry-state"]'),
     loginSequenceReady: !!document.querySelector('[data-ui="login-sequence"]'),
     brandAssetPresent: !!document.querySelector('.brand-asset'),
     hasHeroVideo: !!document.querySelector('.hero-video, .homepage-video'),
@@ -412,10 +414,109 @@ def _frontdoor_state_probe_expression() -> str:
     passwordPresent: !!document.querySelector('input[name="password"]'),
     authModeBadge: text('#authModeBadge'),
     currentView: document.body ? String(document.body.dataset.consoleView || '') : '',
-    apiKeySectionHidden: hidden('apiKeySection')
+    apiKeySectionHidden: hidden('apiKeySection'),
+    portalAccessStateReady: !!document.querySelector('[data-ui="portal-access-state"]')
   };
 })()
 """
+
+
+def _frontdoor_accessibility_probe_expression() -> str:
+    return r"""
+(() => {
+  const visible = (el) => {
+    if (!el) return false;
+    const style = window.getComputedStyle(el);
+    const rect = el.getBoundingClientRect();
+    return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0;
+  };
+  const minTarget = (selector) => {
+    const el = document.querySelector(selector);
+    if (!visible(el)) return false;
+    const rect = el.getBoundingClientRect();
+    return rect.width >= 44 && rect.height >= 44;
+  };
+  const maxDisclosureDepth = (() => {
+    const detailsNodes = Array.from(document.querySelectorAll('details'));
+    if (!detailsNodes.length) return 0;
+    const depthFor = (node) => {
+      let depth = 1;
+      let current = node.parentElement;
+      while (current) {
+        if (current.tagName === 'DETAILS') depth += 1;
+        current = current.parentElement;
+      }
+      return depth;
+    };
+    return Math.max(...detailsNodes.map(depthFor));
+  })();
+  const focusVisibleWithStickyHeader = (() => {
+    const header = document.querySelector('.site-header');
+    const target = document.querySelector('[data-ui="homepage-primary-cta"]');
+    if (!header || !visible(target)) return false;
+    target.scrollIntoView({ block: 'center' });
+    target.focus();
+    const headerRect = header.getBoundingClientRect();
+    const targetRect = target.getBoundingClientRect();
+    return targetRect.top >= headerRect.bottom - 2 && targetRect.bottom <= window.innerHeight + 2;
+  })();
+  return {
+    pathname: window.location.pathname,
+    readyState: document.readyState,
+    homepagePrimaryMinTarget: minTarget('[data-ui="homepage-primary-cta"]'),
+    homepageSecondaryMinTarget: minTarget('[data-ui="homepage-secondary-cta"]'),
+    homepageLearnMinTarget: minTarget('[data-ui="homepage-learn-link"]'),
+    loginSubmitMinTarget: minTarget('[data-ui="login-submit"]'),
+    loginSecondaryMinTarget: minTarget('[data-ui="login-secondary-link"]'),
+    focusVisibleWithStickyHeader,
+    maxDisclosureDepth,
+    reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+    decorativeMotionStatic: (() => {
+      const video = document.querySelector('.hero-video, .homepage-video');
+      if (!video) return true;
+      const style = window.getComputedStyle(video);
+      if (style.display === 'none') return true;
+      const hasSource = Array.from(video.querySelectorAll('source'))
+        .some((source) => Boolean(source.getAttribute('src')));
+      const hasPlayableMedia = Boolean(video.currentSrc) || hasSource;
+      return (
+        video.paused
+        || video.ended
+        || !hasPlayableMedia
+        || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA
+      );
+    })()
+  };
+})()
+"""
+
+
+def _frontdoor_accessibility_snapshot(result: object, *, page: str) -> dict[str, object]:
+    payload = result if isinstance(result, dict) else {}
+    scoped_keys = {
+        "homepage": (
+            "pathname",
+            "readyState",
+            "homepagePrimaryMinTarget",
+            "homepageSecondaryMinTarget",
+            "homepageLearnMinTarget",
+            "focusVisibleWithStickyHeader",
+            "maxDisclosureDepth",
+        ),
+        "login": (
+            "pathname",
+            "readyState",
+            "loginSubmitMinTarget",
+            "loginSecondaryMinTarget",
+            "maxDisclosureDepth",
+            "reducedMotion",
+            "decorativeMotionStatic",
+        ),
+    }
+    keys = scoped_keys.get(page)
+    if keys is None:
+        raise ValueError(f"Unsupported frontdoor accessibility page scope: {page}")
+    return {key: payload.get(key) for key in keys}
 
 
 def _navigate_expression(pathname: str) -> str:
@@ -431,15 +532,14 @@ def _navigate_expression(pathname: str) -> str:
 """
 
 
-def _submit_login_expression(username: str, password: str) -> str:
+def _populate_login_expression(username: str, password: str) -> str:
     payload = json.dumps({"username": username, "password": password})
     return f"""
 (() => {{
   const cfg = {payload};
-  const form = document.querySelector('form[action="/login"]');
   const usernameInput = document.querySelector('input[name="username"]');
   const passwordInput = document.querySelector('input[name="password"]');
-  if (!form || !usernameInput || !passwordInput) {{
+  if (!usernameInput || !passwordInput) {{
     throw new Error('login form is unavailable');
   }}
   usernameInput.value = cfg.username;
@@ -448,12 +548,19 @@ def _submit_login_expression(username: str, password: str) -> str:
   passwordInput.value = cfg.password;
   passwordInput.dispatchEvent(new Event('input', {{ bubbles: true }}));
   passwordInput.dispatchEvent(new Event('change', {{ bubbles: true }}));
-  if (typeof form.requestSubmit === 'function') {{
-    form.requestSubmit();
-  }} else {{
-    form.submit();
-  }}
-  return 'submitted';
+  return 'prepared';
+}})()
+"""
+
+
+def _click_expression(selector: str) -> str:
+    encoded = json.dumps(selector)
+    return f"""
+(() => {{
+  const el = document.querySelector({encoded});
+  if (!el) throw new Error('missing element for selector ' + {encoded});
+  el.click();
+  return true;
 }})()
 """
 
@@ -555,6 +662,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
                 isinstance(value, dict)
                 and value.get("readyState") == "complete"
                 and bool(value.get("homepageHeroReady"))
+                and bool(value.get("homepageEntryRailReady"))
                 and bool(value.get("homepageLearnLinkReady"))
                 and str(value.get("homepagePrimaryCtaHref", "")) == "/login"
             ),
@@ -563,6 +671,24 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         )
         _expect(str(homepage_state.get("pathname", "")) == "/", f"Front-door homepage did not load at root: {homepage_state}")
         _expect(bool(homepage_state.get("hasHeroVideo")), f"Homepage video canvas was not rendered: {homepage_state}")
+        homepage_accessibility = _frontdoor_accessibility_snapshot(
+            connection.evaluate(_frontdoor_accessibility_probe_expression()),
+            page="homepage",
+        )
+        _expect(
+            bool(homepage_accessibility.get("homepagePrimaryMinTarget"))
+            and bool(homepage_accessibility.get("homepageSecondaryMinTarget"))
+            and bool(homepage_accessibility.get("homepageLearnMinTarget")),
+            f"Homepage interactive targets fell below the 44px contract: {homepage_accessibility}",
+        )
+        _expect(
+            bool(homepage_accessibility.get("focusVisibleWithStickyHeader")),
+            f"Homepage sticky header obscured focused actions: {homepage_accessibility}",
+        )
+        _expect(
+            int(homepage_accessibility.get("maxDisclosureDepth", 0)) <= 1,
+            f"Homepage disclosure depth exceeded the single-level contract: {homepage_accessibility}",
+        )
 
         print("frontdoor-browser-smoke: opening login", flush=True)
         connection.evaluate(_navigate_expression("/login"))
@@ -571,8 +697,10 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             _frontdoor_state_probe_expression(),
             predicate=lambda value: (
                 isinstance(value, dict)
+                and str(value.get("readyState", "")) == "complete"
                 and str(value.get("pathname", "")) == "/login"
                 and bool(value.get("loginTitleReady"))
+                and bool(value.get("loginEntryStateReady"))
                 and bool(value.get("loginSequenceReady"))
                 and bool(value.get("brandAssetPresent"))
                 and bool(value.get("loginFormPresent"))
@@ -583,9 +711,51 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             description="front-door login to render",
         )
         _expect(bool(login_state.get("hasHeroVideo")), f"Login page lost hero video shell: {login_state}")
+        login_accessibility = _frontdoor_accessibility_snapshot(
+            connection.evaluate(_frontdoor_accessibility_probe_expression()),
+            page="login",
+        )
+        _expect(
+            bool(login_accessibility.get("loginSubmitMinTarget")) and bool(login_accessibility.get("loginSecondaryMinTarget")),
+            f"Login interactive targets fell below the 44px contract: {login_accessibility}",
+        )
+        _expect(
+            int(login_accessibility.get("maxDisclosureDepth", 0)) <= 1,
+            f"Login disclosure depth exceeded the single-level contract: {login_accessibility}",
+        )
+
+        print("frontdoor-browser-smoke: checking reduced motion", flush=True)
+        connection.call(
+            "Emulation.setEmulatedMedia",
+            {"features": [{"name": "prefers-reduced-motion", "value": "reduce"}]},
+        )
+        reduced_motion_state = _poll(
+            connection,
+            _frontdoor_accessibility_probe_expression(),
+            predicate=lambda value: (
+                isinstance(value, dict)
+                and str(value.get("readyState", "")) == "complete"
+                and str(value.get("pathname", "")) == "/login"
+                and bool(value.get("reducedMotion"))
+                and bool(value.get("decorativeMotionStatic"))
+                and bool(value.get("loginSubmitMinTarget"))
+            ),
+            timeout_seconds=args.timeout_seconds,
+            description="front-door reduced-motion login shell",
+        )
+        reduced_motion_state = _frontdoor_accessibility_snapshot(reduced_motion_state, page="login")
+        _expect(
+            bool(reduced_motion_state.get("decorativeMotionStatic")),
+            f"Reduced-motion mode left decorative front-door motion active: {reduced_motion_state}",
+        )
+        connection.call(
+            "Emulation.setEmulatedMedia",
+            {"features": [{"name": "prefers-reduced-motion", "value": "no-preference"}]},
+        )
 
         print("frontdoor-browser-smoke: submitting operator login", flush=True)
-        connection.evaluate(_submit_login_expression(username, password))
+        connection.evaluate(_populate_login_expression(username, password))
+        connection.evaluate(_click_expression('[data-ui="login-submit"]'))
         portal_state = _poll(
             connection,
             _frontdoor_state_probe_expression(),
@@ -595,6 +765,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
                 and str(value.get("pathname", "")) == "/portal"
                 and str(value.get("currentView", "")) == "overview"
                 and bool(value.get("apiKeySectionHidden"))
+                and bool(value.get("portalAccessStateReady"))
                 and str(value.get("authModeBadge", "")).lower() == "managed"
             ),
             timeout_seconds=args.timeout_seconds,

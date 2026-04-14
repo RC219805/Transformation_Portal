@@ -100,6 +100,13 @@ def test_healthz_returns_minimal_health_response(client: TestClient) -> None:
     assert response.headers["Pragma"] == "no-cache"
 
 
+def test_healthz_rejects_untrusted_host_header(client: TestClient) -> None:
+    response = client.get("/healthz", headers={"host": "evil.example.com"})
+
+    assert response.status_code == 400
+    assert "Invalid host header" in response.text
+
+
 def test_portal_bootstrap_reports_direct_debug_mode(client: TestClient) -> None:
     response = client.get("/portal/bootstrap")
     assert response.status_code == 200
@@ -159,6 +166,7 @@ def test_root_ui_response_is_not_cached(client: TestClient) -> None:
 def test_portal_asset_endpoint_serves_css_and_js(client: TestClient) -> None:
     bundle = orchestrator_app._get_portal_asset_bundle()
     css_response = client.get(bundle.urls["portal.css"])
+    shared_tokens_response = client.get(bundle.urls["shared-ui-tokens.css"])
     js_response = client.get(bundle.urls["portal.js"])
 
     assert css_response.status_code == 200
@@ -166,9 +174,15 @@ def test_portal_asset_endpoint_serves_css_and_js(client: TestClient) -> None:
     assert css_response.headers["content-type"] == orchestrator_app.PORTAL_ASSET_MEDIA_TYPES["portal.css"]
     assert "@font-face" in css_response.text
     assert "Portal Sans" in css_response.text
+    assert bundle.urls["shared-ui-tokens.css"] in css_response.text
     assert bundle.urls["fonts/portal-sans.woff2"] in css_response.text
     assert bundle.urls["fonts/portal-mono.woff2"] in css_response.text
     assert "https://fonts.googleapis.com" not in css_response.text
+
+    assert shared_tokens_response.status_code == 200
+    assert shared_tokens_response.headers["Cache-Control"] == orchestrator_app.PORTAL_IMMUTABLE_ASSET_CACHE_CONTROL
+    assert shared_tokens_response.headers["content-type"] == orchestrator_app.PORTAL_ASSET_MEDIA_TYPES["shared-ui-tokens.css"]
+    assert "--ux-target-min-size: 44px;" in shared_tokens_response.text
 
     assert js_response.status_code == 200
     assert js_response.headers["Cache-Control"] == orchestrator_app.PORTAL_IMMUTABLE_ASSET_CACHE_CONTROL
@@ -299,6 +313,9 @@ def test_config_metadata_contract_for_lux_depth_pipeline(client: TestClient) -> 
     assert body["data"]["fields"]["reconstruction_tier"]["default"] == "apex_research"
     assert body["data"]["fields"]["reconstruction_iterations"]["recommended"]["balanced"] == 1000
     assert body["data"]["fields"]["raw_wb_mode"]["kind"] == "locked"
+    assert body["data"]["backend_catalog"]["da3"]["policy_posture"]["code"] == "governed_default"
+    assert body["data"]["backend_catalog"]["depth_pro"]["required_acknowledgments"][0]["field"] == "non_commercial_ok"
+    assert body["data"]["backend_catalog"]["sam2"]["checkpoint_expectation"]["field"] == "sam2_checkpoint_path"
     assert body["data"]["debug_bundle_policy"]["acknowledgement_required"] is True
 
 
@@ -1104,6 +1121,52 @@ def test_partial_run_summary_prefers_newest_batch_manifest_when_run_card_missing
 
     job = orchestrator_app.Job(
         id="job_partial_review_manifest_fallback",
+        created_at=orchestrator_app._now(),
+        state="failed",
+        exit_code=1,
+        request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(output_dir)}},
+        error={
+            "code": "RUNNER_EXIT_NONZERO",
+            "message": "runner exited with code 1",
+            "details": {"exit_code": 1},
+        },
+    )
+
+    orchestrator_app._index_job_artifacts(job)
+    summary = orchestrator_app._refresh_job_run_summary(job)
+
+    assert summary["source"] == "batch_manifest"
+    assert summary["batch_id"] == "2026-04-07_001500"
+    assert summary["success_count"] == 4
+    assert summary["error_count"] == 1
+    assert job.state == "partial"
+
+
+def test_partial_run_summary_ignores_summaryless_run_card_payload(tmp_path: Path) -> None:
+    output_dir = tmp_path / "out"
+    manifests_dir = output_dir / "manifests"
+    manifests_dir.mkdir(parents=True, exist_ok=True)
+    (output_dir / "run_card_2026-04-07_001500.json").write_text(
+        json.dumps(
+            {
+                "batch_id": "2026-04-07_001500",
+            }
+        ),
+        encoding="utf-8",
+    )
+    (manifests_dir / "batch_2026-04-07_001500.json").write_text(
+        json.dumps(
+            {
+                "batch_id": "2026-04-07_001500",
+                "results": [{"status": "ok"}] * 4 + [{"status": "error"}],
+                "stats": {"total_images": 5},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    job = orchestrator_app.Job(
+        id="job_partial_review_summaryless_run_card",
         created_at=orchestrator_app._now(),
         state="failed",
         exit_code=1,

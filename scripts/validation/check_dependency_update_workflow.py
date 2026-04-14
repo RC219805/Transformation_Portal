@@ -13,6 +13,8 @@ Contracts enforced:
    authoritative contexts.
 4. The Create Pull Request body must mention the required lockfile / ML
    contract references and must not mention superseded references.
+5. Dependency-update audit reports must be written outside the git checkout
+   and uploaded from that temp location only.
 """
 
 from __future__ import annotations
@@ -64,6 +66,20 @@ REQUIRED_WORKFLOW_SNIPPETS = (
     "requirements/ml-core-darwin-x86_64.txt",
 )
 
+REQUIRED_INSTALL_TOOLCHAIN_SNIPPETS = (
+    'python -m pip install --upgrade "pip<26"',
+    'python -m pip install "pip-tools==7.5.2"',
+    "python -m pip install -r requirements/security.txt",
+)
+
+REQUIRED_AUDIT_REPORT_SNIPPETS = (
+    'audit_reports_dir="${{ runner.temp }}/dependency-update-audit-reports"',
+    'rm -rf "${audit_reports_dir}"',
+    'mkdir -p "${audit_reports_dir}"',
+    'report_path="${audit_reports_dir}/$(basename "${requirement_file%.txt}").json"',
+    "path: ${{ runner.temp }}/dependency-update-audit-reports/",
+)
+
 FORBIDDEN_WORKFLOW_SNIPPETS = (
     "make update LOCK_PYTHON_VERSION=3.11",
     "make check LOCK_PYTHON_VERSION=3.11",
@@ -72,6 +88,9 @@ FORBIDDEN_WORKFLOW_SNIPPETS = (
     "make update-ml-darwin-x86_64",
     "make check-ml-darwin-x86_64",
     "make compile-ml-layers",
+    "mkdir -p audit-reports",
+    'report_path="audit-reports/$(basename "${requirement_file%.txt}").json"',
+    "path: audit-reports/",
 )
 
 FORBIDDEN_PR_BODY_REFERENCES = (
@@ -149,6 +168,14 @@ def validate_dependency_update_workflow(text: str) -> list[str]:
     for snippet in REQUIRED_WORKFLOW_SNIPPETS:
         if snippet not in text:
             errors.append(f"dependency-update workflow must include snippet {snippet!r}")
+
+    for snippet in REQUIRED_INSTALL_TOOLCHAIN_SNIPPETS:
+        if snippet not in text:
+            errors.append(f"dependency-update workflow must include install-tool snippet {snippet!r}")
+
+    for snippet in REQUIRED_AUDIT_REPORT_SNIPPETS:
+        if snippet not in text:
+            errors.append(f"dependency-update workflow must include audit-report snippet {snippet!r}")
 
     for snippet in FORBIDDEN_WORKFLOW_SNIPPETS:
         if snippet in text:
