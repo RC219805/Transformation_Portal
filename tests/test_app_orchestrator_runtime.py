@@ -1040,9 +1040,9 @@ def test_portal_artifact_gallery_renders_visual_review_controls() -> None:
     assert "artifactCompareGroup(candidate) === primaryGroup" in compare_body
     assert "display_hint: _normalizeArtifactDisplayHint(item.display_hint)" in normalize_body
     assert "if (!artifact || typeof artifact !== 'object') return '';" in route_key_body
-    assert "_resetArtifactActionButtons();" in body
-    assert "renderConsoleContextRibbon();" in body
-    assert "_syncConsoleRoute(true);" in body
+    assert "_resetArtifactActionButtons();" in review_body
+    assert "renderConsoleContextRibbon();" in review_body
+    assert "_syncConsoleRoute(true);" in review_body
     assert "delete els.openArtifactBtn.dataset.url;" in reset_body
     assert "delete els.downloadArtifactBtn.dataset.filename;" in reset_body
     assert "delete els.copyArtifactPathBtn.dataset.path;" in reset_body
