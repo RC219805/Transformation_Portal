@@ -363,6 +363,57 @@ test("login POST rotates the session and redirects authenticated users to /porta
   }
 });
 
+test("login POST redirects authenticated users to a validated returnTo route", async () => {
+  const passwordHash = await argon2.hash("correct horse battery staple");
+  const env = withTempEnvironment({
+    usersFileEntries: [
+      {
+        username: "admin",
+        password_hash: passwordHash,
+        access_email: "admin@example.com",
+        role: "admin"
+      }
+    ]
+  });
+
+  try {
+    const sessions = await importFresh("../lib/sessions.js");
+    const { POST } = await importFresh("../app/login/route.js");
+    const restoreFetch = withMockedAccessCerts();
+
+    try {
+      const anonymousSession = sessions.createAnonymousSession();
+      const form = new URLSearchParams({
+        username: "admin",
+        password: "correct horse battery staple",
+        csrf_token: anonymousSession.csrfToken,
+        returnTo: "/portal?view=build"
+      });
+
+      const request = buildRequest("https://portal.example.com/login", {
+        method: "POST",
+        headers: new Headers({
+          origin: "https://portal.example.com",
+          "content-type": "application/x-www-form-urlencoded",
+          cookie: `__Host-tp_session=${anonymousSession.id}`,
+          "Cf-Access-Jwt-Assertion": createAccessJwt(),
+          "cf-access-authenticated-user-email": "admin@example.com"
+        }),
+        body: form
+      });
+
+      const response = await POST(request);
+
+      assert.equal(response.status, 303);
+      assert.equal(response.headers.get("location"), "https://portal.example.com/portal?view=build");
+    } finally {
+      restoreFetch();
+    }
+  } finally {
+    env.cleanup();
+  }
+});
+
 test("login GET serves a minimal branded sign-in shell and boots an anonymous session", async () => {
   const env = withTempEnvironment({
     NODE_ENV: "development",
@@ -412,6 +463,64 @@ test("login GET serves a minimal branded sign-in shell and boots an anonymous se
     assert.doesNotMatch(html, /TP_CF_ACCESS_TEAM_DOMAIN/);
     assert.ok(sessionCookie.value);
     assert.equal(sessions.getSessionById(sessionCookie.value, { touch: false })?.authenticated, false);
+  } finally {
+    env.cleanup();
+  }
+});
+
+test("login GET preserves a validated returnTo in the rendered form", async () => {
+  const env = withTempEnvironment({
+    NODE_ENV: "development",
+    TP_ALLOW_LOCAL_ACCESS_BYPASS: "1"
+  });
+
+  try {
+    const { GET } = await importFresh("../app/login/route.js");
+    const request = buildRequest("http://localhost:3000/login?returnTo=%2Fportal%3Fview%3Dbuild");
+
+    const response = await GET(request);
+    const html = await response.text();
+
+    assert.equal(response.status, 200);
+    assert.match(html, /name="returnTo" value="\/portal\?view=build"/);
+  } finally {
+    env.cleanup();
+  }
+});
+
+test("login GET redirects authenticated sessions to a validated returnTo route", async () => {
+  const env = withTempEnvironment();
+
+  try {
+    const sessions = await importFresh("../lib/sessions.js");
+    const { GET } = await importFresh("../app/login/route.js");
+    const restoreFetch = withMockedAccessCerts();
+
+    try {
+      const authenticatedSession = sessions.rotateAuthenticatedSession(
+        sessions.createAnonymousSession(),
+        {
+          username: "admin",
+          accessEmail: "admin@example.com",
+          role: "admin"
+        }
+      );
+
+      const request = buildRequest("https://portal.example.com/login?returnTo=%2Fportal%3Fview%3Dreview", {
+        method: "GET",
+        headers: new Headers({
+          cookie: `__Host-tp_session=${authenticatedSession.id}`,
+          "Cf-Access-Jwt-Assertion": createAccessJwt()
+        })
+      });
+
+      const response = await GET(request);
+
+      assert.equal(response.status, 302);
+      assert.equal(response.headers.get("location"), "https://portal.example.com/portal?view=review");
+    } finally {
+      restoreFetch();
+    }
   } finally {
     env.cleanup();
   }
@@ -646,6 +755,58 @@ test("login POST keeps failures generic when Access email does not match the con
       assert.equal(response.status, 303);
       assert.equal(response.headers.get("location"), "https://portal.example.com/login?error=invalid");
       assert.equal(sessions.getSessionById(anonymousSession.id, { touch: false })?.authenticated, false);
+    } finally {
+      restoreFetch();
+    }
+  } finally {
+    env.cleanup();
+  }
+});
+
+test("login POST preserves a validated returnTo when sign-in fails", async () => {
+  const passwordHash = await argon2.hash("correct horse battery staple");
+  const env = withTempEnvironment({
+    usersFileEntries: [
+      {
+        username: "admin",
+        password_hash: passwordHash,
+        access_email: "admin@example.com",
+        role: "admin"
+      }
+    ]
+  });
+
+  try {
+    const sessions = await importFresh("../lib/sessions.js");
+    const { POST } = await importFresh("../app/login/route.js");
+    const restoreFetch = withMockedAccessCerts();
+
+    try {
+      const anonymousSession = sessions.createAnonymousSession();
+      const request = buildRequest("https://portal.example.com/login", {
+        method: "POST",
+        headers: new Headers({
+          origin: "https://portal.example.com",
+          "content-type": "application/x-www-form-urlencoded",
+          cookie: `__Host-tp_session=${anonymousSession.id}`,
+          "Cf-Access-Jwt-Assertion": createAccessJwt(),
+          "cf-access-authenticated-user-email": "admin@example.com"
+        }),
+        body: new URLSearchParams({
+          username: "admin",
+          password: "wrong password",
+          csrf_token: anonymousSession.csrfToken,
+          returnTo: "/portal?view=review"
+        })
+      });
+
+      const response = await POST(request);
+
+      assert.equal(response.status, 303);
+      assert.equal(
+        response.headers.get("location"),
+        "https://portal.example.com/login?error=invalid&returnTo=%2Fportal%3Fview%3Dreview"
+      );
     } finally {
       restoreFetch();
     }
@@ -1002,14 +1163,59 @@ test("login POST ignores untrusted host overrides when building redirect targets
       body: new URLSearchParams({
         username: "admin",
         password: "correct horse battery staple",
-        csrf_token: anonymousSession.csrfToken
+        csrf_token: anonymousSession.csrfToken,
+        returnTo: "/portal?view=build"
       })
     });
 
     const response = await POST(request);
 
     assert.equal(response.status, 303);
-    assert.equal(response.headers.get("location"), "https://portal.example.com/portal");
+    assert.equal(response.headers.get("location"), "https://portal.example.com/portal?view=build");
+  } finally {
+    env.cleanup();
+  }
+});
+
+test("login POST rejects invalid returnTo values and falls back to /portal", async () => {
+  const passwordHash = await argon2.hash("correct horse battery staple");
+  const env = withTempEnvironment({
+    NODE_ENV: "development",
+    TP_ALLOW_LOCAL_ACCESS_BYPASS: "1",
+    usersFileEntries: [
+      {
+        username: "admin",
+        password_hash: passwordHash,
+        access_email: "admin@example.com",
+        role: "admin"
+      }
+    ]
+  });
+
+  try {
+    const sessions = await importFresh("../lib/sessions.js");
+    const { POST } = await importFresh("../app/login/route.js");
+
+    const anonymousSession = sessions.createAnonymousSession();
+    const request = buildRequest("http://127.0.0.1:3000/login", {
+      method: "POST",
+      headers: new Headers({
+        host: "127.0.0.1:3000",
+        "content-type": "application/x-www-form-urlencoded",
+        cookie: `tp_session=${anonymousSession.id}`
+      }),
+      body: new URLSearchParams({
+        username: "admin",
+        password: "correct horse battery staple",
+        csrf_token: anonymousSession.csrfToken,
+        returnTo: "https://evil.example.com/portal"
+      })
+    });
+
+    const response = await POST(request);
+
+    assert.equal(response.status, 303);
+    assert.equal(response.headers.get("location"), "http://127.0.0.1:3000/portal");
   } finally {
     env.cleanup();
   }
@@ -1300,7 +1506,7 @@ test("portal returns 503 with no-store when the FastAPI UI origin is unavailable
     });
 
     try {
-      const request = buildRequest("https://portal.example.com/portal", {
+      const request = buildRequest("https://portal.example.com/portal?view=build", {
         method: "GET",
         headers: new Headers({
           cookie: `__Host-tp_session=${authenticatedSession.id}`,
@@ -1317,7 +1523,7 @@ test("portal returns 503 with no-store when the FastAPI UI origin is unavailable
       assert.match(html, /data-ui="managed-recovery-shell"/);
       assert.match(html, /data-reason="upstream_unavailable"/);
       assert.match(html, /Portal upstream unavailable/);
-      assert.match(html, /Return to login/);
+      assert.match(html, /href="\/login\?returnTo=%2Fportal%3Fview%3Dbuild"/);
     } finally {
       restoreFetch();
     }
@@ -1369,6 +1575,7 @@ test("portal renders waiting recovery posture for Access outages", async () => {
       assert.match(html, /class="[^"]*\blogin-status-card\b[^"]*"/);
       assert.match(html, /data-state="waiting"/);
       assert.match(html, /Retry when Access recovers/);
+      assert.match(html, /href="\/login\?returnTo=%2Fportal"/);
     } finally {
       global.fetch = originalFetch;
     }
@@ -1412,6 +1619,7 @@ test("portal returns configuration guidance when managed access config is incomp
       assert.match(html, /data-reason="config_failure"/);
       assert.match(html, /Managed front door configuration unavailable/);
       assert.match(html, /Managed boundary stays fail-closed/);
+      assert.match(html, /href="\/login\?returnTo=%2Fportal"/);
       assert.equal(events.length, 1);
       assert.equal(events[0].surface, "portal");
       assert.equal(events[0].reason, "config_failure");
@@ -1422,7 +1630,7 @@ test("portal returns configuration guidance when managed access config is incomp
   }
 });
 
-test("portal redirects to login and clears the session when Access verification is missing", async () => {
+test("portal redirects to login with route context and clears the session when Access verification is missing", async () => {
   const env = withTempEnvironment();
 
   try {
@@ -1437,17 +1645,23 @@ test("portal redirects to login and clears the session when Access verification 
       }
     );
 
-    const request = buildRequest("https://portal.example.com/portal", {
-      method: "GET",
-      headers: new Headers({
-        cookie: `__Host-tp_session=${authenticatedSession.id}`
-      })
-    });
+    const request = buildRequest(
+      "https://portal.example.com/portal?view=review&job=job_demo&artifact=synthetic%2Freview-primary.png&compare=1",
+      {
+        method: "GET",
+        headers: new Headers({
+          cookie: `__Host-tp_session=${authenticatedSession.id}`
+        })
+      }
+    );
 
     const response = await GET(request);
 
     assert.equal(response.status, 302);
-    assert.equal(response.headers.get("location"), "https://portal.example.com/login");
+    assert.equal(
+      response.headers.get("location"),
+      "https://portal.example.com/login?returnTo=%2Fportal%3Fview%3Dreview%26job%3Djob_demo%26artifact%3Dsynthetic%252Freview-primary.png%26compare%3D1"
+    );
     assert.match(response.headers.get("set-cookie") || "", /__Host-tp_session=/);
     assert.equal(sessions.getSessionById(authenticatedSession.id, { touch: false }), null);
   } finally {

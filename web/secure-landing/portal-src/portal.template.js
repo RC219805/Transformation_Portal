@@ -35,6 +35,8 @@
 const API_BASE = '';
 const STORAGE_KEY = 'tp_orchestrator_profiles_final';
 const API_KEY_STORAGE_KEY = 'tp_api_key';
+const TRANSIENT_DRAFT_STORAGE_KEY = 'tp_portal_transient_draft';
+const TRANSIENT_DRAFT_SCHEMA = 'tp.portal.transient_draft.v1';
 const THEME_STORAGE_KEY = 'tp_theme';
 const THEME_STORAGE_VERSION_KEY = 'tp_theme_version';
 const THEME_STORAGE_VERSION = '2';
@@ -58,6 +60,7 @@ const SSE_RECONNECT_JITTER_MS = 250;
 const SSE_STALL_CHECK_INTERVAL_MS = 10000;
 const SSE_STALL_THRESHOLD_MS = 45000;
 const CONFIG_PREVIEW_DEBOUNCE_MS = 250;
+const TRANSIENT_DRAFT_PERSIST_DEBOUNCE_MS = 200;
 const DISPATCH_BACKEND_OFFLINE_MESSAGE = 'Backend is offline. Dispatch is disabled until connectivity is restored.';
 const CONFIG_PREVIEW_SUPPORTED_PIPELINES = new Set([
     'lux-depth-v3',
@@ -80,6 +83,8 @@ let sseWatchdogIntervalId = null;
 let healthCheckInFlight = false;
 let lastHealthCheckAt = 0;
 let configPreviewTimerId = null;
+let transientDraftPersistTimerId = null;
+let transientDraftPersistIdleId = null;
 
 /* __PORTAL_INTERNALS__ */
 
@@ -989,6 +994,168 @@ function _syncConsoleRoute(replace = false) {
     window.history[method]({ view: state.currentView, jobId: state.selectedJobId || '' }, '', nextHref);
 }
 
+function _managedReturnToPath() {
+    const url = new URL(window.location.href);
+    if (url.pathname !== '/portal') return '/portal';
+    return `${url.pathname}${url.search}`;
+}
+
+function _managedLoginUrlForCurrentRoute() {
+    return `/login?returnTo=${encodeURIComponent(_managedReturnToPath())}`;
+}
+
+function _copyTransientDraftConfig(config = state.config) {
+    return JSON.parse(JSON.stringify(config && typeof config === 'object' ? config : portalInternals.createPortalConfigState()));
+}
+
+function _managedDraftOwnerKey() {
+    const actor = state.auth && state.auth.actor && typeof state.auth.actor === 'object' ? state.auth.actor : null;
+    const accessEmail = String(actor?.accessEmail || '').trim().toLowerCase();
+    if (accessEmail) return `managed:${accessEmail}`;
+    const username = String(actor?.username || '').trim().toLowerCase();
+    const role = String(actor?.role || '').trim().toLowerCase();
+    if (!username && !role) return '';
+    return `managed:${[username, role].filter(Boolean).join(':')}`;
+}
+
+function _transientDraftOwnerKey() {
+    if (!_isBootstrapReady()) return '';
+    if (_isManagedAuthMode()) return _managedDraftOwnerKey();
+    return 'direct_debug';
+}
+
+function _clearTransientPortalDraft() {
+    try {
+        sessionStorage.removeItem(TRANSIENT_DRAFT_STORAGE_KEY);
+    } catch {
+        // Ignore storage access failures during teardown or quota exhaustion.
+    }
+}
+
+function _readTransientPortalDraft() {
+    let raw = '';
+    try {
+        raw = sessionStorage.getItem(TRANSIENT_DRAFT_STORAGE_KEY) || '';
+    } catch {
+        return null;
+    }
+    if (!raw) return null;
+
+    let parsed = null;
+    try {
+        parsed = JSON.parse(raw);
+    } catch {
+        _clearTransientPortalDraft();
+        return null;
+    }
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        _clearTransientPortalDraft();
+        return null;
+    }
+
+    const schema = String(parsed.schema || '').trim();
+    const ownerKey = String(parsed.ownerKey || '').trim();
+    const savedAt = Number(parsed.savedAt || 0);
+    const pipeline = String(parsed.pipeline || '').trim();
+    const config = parsed.config;
+    if (
+        schema !== TRANSIENT_DRAFT_SCHEMA
+        || !ownerKey
+        || !Number.isFinite(savedAt)
+        || savedAt <= 0
+        || !pipeline
+        || !config
+        || typeof config !== 'object'
+        || Array.isArray(config)
+    ) {
+        _clearTransientPortalDraft();
+        return null;
+    }
+
+    return {
+        schema,
+        ownerKey,
+        savedAt,
+        pipeline,
+        config: _copyTransientDraftConfig(config),
+        buildStep: resolveBuildStep(parsed.buildStep)
+    };
+}
+
+function _persistTransientPortalDraft() {
+    const ownerKey = _transientDraftOwnerKey();
+    if (!ownerKey) return false;
+    const snapshot = {
+        schema: TRANSIENT_DRAFT_SCHEMA,
+        pipeline: String(state.pipeline || '').trim() || 'lux-depth-v3',
+        config: _copyTransientDraftConfig(),
+        buildStep: resolveBuildStep(state.portalUi.buildStep),
+        savedAt: Date.now(),
+        ownerKey
+    };
+    try {
+        sessionStorage.setItem(TRANSIENT_DRAFT_STORAGE_KEY, JSON.stringify(snapshot));
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+function _cancelScheduledTransientPortalDraftPersist() {
+    if (transientDraftPersistTimerId !== null) {
+        window.clearTimeout(transientDraftPersistTimerId);
+        transientDraftPersistTimerId = null;
+    }
+    if (transientDraftPersistIdleId !== null && typeof window.cancelIdleCallback === 'function') {
+        window.cancelIdleCallback(transientDraftPersistIdleId);
+    }
+    transientDraftPersistIdleId = null;
+}
+
+function _flushPendingTransientPortalDraftPersist() {
+    _cancelScheduledTransientPortalDraftPersist();
+    return _persistTransientPortalDraft();
+}
+
+function _scheduleTransientPortalDraftPersist(options) {
+    const settings = options && typeof options === 'object' ? options : {};
+    if (settings.immediate) return _flushPendingTransientPortalDraftPersist();
+    _cancelScheduledTransientPortalDraftPersist();
+
+    const commitSnapshot = () => {
+        transientDraftPersistTimerId = null;
+        transientDraftPersistIdleId = null;
+        _persistTransientPortalDraft();
+    };
+    const scheduleCommit = () => {
+        transientDraftPersistTimerId = null;
+        if (typeof window.requestIdleCallback === 'function') {
+            transientDraftPersistIdleId = window.requestIdleCallback(() => {
+                commitSnapshot();
+            }, { timeout: TRANSIENT_DRAFT_PERSIST_DEBOUNCE_MS });
+            return;
+        }
+        commitSnapshot();
+    };
+
+    transientDraftPersistTimerId = window.setTimeout(scheduleCommit, TRANSIENT_DRAFT_PERSIST_DEBOUNCE_MS);
+    return true;
+}
+
+function _restoreTransientPortalDraft() {
+    const snapshot = _readTransientPortalDraft();
+    if (!snapshot) return false;
+    const ownerKey = _transientDraftOwnerKey();
+    if (!ownerKey || snapshot.ownerKey !== ownerKey) {
+        _clearTransientPortalDraft();
+        return false;
+    }
+    state.pipeline = snapshot.pipeline;
+    state.config = _copyTransientDraftConfig(snapshot.config);
+    state.portalUi.buildStep = resolveBuildStep(snapshot.buildStep);
+    return true;
+}
+
 function _jobFreshnessLabel(job) {
     if (!job) return 'No live telemetry';
     const lastActivityAt = Number(job.lastEventAt || job.updatedAt || job.finishedAt || job.createdAt || 0);
@@ -1545,7 +1712,8 @@ function handleOperatorActionClick(event) {
             _retryPortalStatus(job);
             break;
         case 'restore_access':
-            window.location.assign('/login');
+            _flushPendingTransientPortalDraftPersist();
+            window.location.assign(_managedLoginUrlForCurrentRoute());
             break;
         default:
             break;
@@ -2525,12 +2693,14 @@ function syncBuildStepUi() {
     renderBuildStepPulse(generatePayload());
 }
 
-function setBuildStep(nextStep, options = {}) {
+function setBuildStep(nextStep, options) {
+    const settings = options && typeof options === 'object' ? options : {};
     const previous = resolveBuildStep(state.portalUi.buildStep);
     const resolved = resolveBuildStep(nextStep);
     state.portalUi.buildStep = resolved;
     syncBuildStepUi();
-    if (!options.silent && resolved > previous) {
+    _persistTransientPortalDraft();
+    if (!settings.silent && resolved > previous) {
         void emitPortalEvent('step_completed', {
             surface: 'build_stepper',
             metadata: { step: previous, next_step: resolved }
@@ -4458,7 +4628,8 @@ async function loadPortalBootstrap(options = null) {
             _finalizeBootstrapRetry('terminal_auth_redirect', { reason: failure.reason, httpStatus: res.status });
             _applyPortalBootstrap(fallback, { status: 'unavailable', reason: failure.reason, httpStatus: res.status });
             createToast(failure.toastMessage, 'error');
-            window.location.assign('/login');
+            _flushPendingTransientPortalDraftPersist();
+            window.location.assign(_managedLoginUrlForCurrentRoute());
             return;
         }
         if (!res.ok) {
@@ -7968,11 +8139,13 @@ function bindInputs() {
             else state[key] = e.target.value;
             if (key === 'pipeline') {
                 updateUIFromState();
+                _persistTransientPortalDraft();
                 void fetchPresetsForPipeline(state.pipeline, true);
                 void fetchReadiness(true);
                 void fetchConfigMetadata(state.pipeline, true);
             }
             else {
+                _persistTransientPortalDraft();
                 const field = trackedTelemetryField(category, key);
                 if (field) {
                     void emitPortalEvent('field_commit', {
@@ -7991,6 +8164,7 @@ function bindInputs() {
         el.addEventListener('input', (e) => {
             if (category) state.config[category][key] = e.target.value;
             else state.config[key] = e.target.value;
+            _scheduleTransientPortalDraftPersist();
             renderCLI();
             if (trackedTelemetryField(category, key)) {
                 scheduleConfigPreview();
@@ -7998,6 +8172,7 @@ function bindInputs() {
         });
         el.addEventListener('change', (e) => {
             const field = trackedTelemetryField(category, key);
+            _scheduleTransientPortalDraftPersist({ immediate: true });
             if (field) {
                 void emitPortalEvent('field_commit', {
                     surface: telemetrySurfaceFor(category),
@@ -8043,6 +8218,7 @@ function bindInputs() {
                 state.portalUi.debugBundleGuardrailSeen = false;
                 if (els.debugBundleAcknowledge) els.debugBundleAcknowledge.checked = false;
             }
+            _persistTransientPortalDraft();
             renderCLI();
             scheduleConfigPreview();
         });
@@ -8055,6 +8231,7 @@ function bindInputs() {
             state.config.preset = nextPreset;
             applyPresetRecommendedArgs(nextPreset);
             updateUIFromState();
+            _persistTransientPortalDraft();
         });
     }
     safeBindInput(els.inputDir, null, 'inputDir');
@@ -9216,6 +9393,7 @@ if (els.profileSelect) els.profileSelect.addEventListener('change', (e) => {
         state.pipeline = profiles[name].pipeline;
         state.config = JSON.parse(JSON.stringify(profiles[name].config));
         updateUIFromState();
+        _persistTransientPortalDraft();
         void fetchPresetsForPipeline(state.pipeline, true);
         createToast(`Profile ${name} loaded.`);
     }
@@ -9390,6 +9568,7 @@ if (els.fileInput) els.fileInput.addEventListener('change', async (e) => {
         state.portalUi.debugBundleAcknowledged = false;
         state.portalUi.debugBundleGuardrailSeen = false;
         updateUIFromState();
+        _persistTransientPortalDraft();
         void fetchPresetsForPipeline(state.pipeline, true);
         void fetchConfigMetadata(state.pipeline, true);
         createToast("Configuration imported.", "success");
@@ -10139,7 +10318,9 @@ portalRenderSurfaces.register('jobQueue', {
     }
 });
 
+window.addEventListener('beforeunload', _flushPendingTransientPortalDraftPersist);
 window.addEventListener('beforeunload', cleanupActiveJobHandles);
+window.addEventListener('pagehide', _flushPendingTransientPortalDraftPersist);
 window.addEventListener('pagehide', cleanupActiveJobHandles);
 window.addEventListener('pageshow', () => {
     reconcileBuildSurfaceFromDom();
@@ -10186,11 +10367,14 @@ async function init() {
     setupSectionRail();
     _syncBootstrapUi();
     renderJobQueue();
-    void checkBackend(true);
-    void fetchConfigMetadata(state.pipeline, true);
     startHealthPolling();
     await bootstrapPromise;
+    _restoreTransientPortalDraft();
+    updateUIFromState();
+    _persistTransientPortalDraft();
     portalRenderSurfaces.render('jobQueue', state);
+    void checkBackend(true);
+    void fetchConfigMetadata(state.pipeline, true);
 }
 
 document.addEventListener('DOMContentLoaded', () => {

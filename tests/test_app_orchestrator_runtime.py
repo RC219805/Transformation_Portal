@@ -671,6 +671,7 @@ def test_portal_resumes_blocked_streams_after_api_key_update() -> None:
 def test_portal_bootstrap_loader_uses_abortable_timeout_and_state_contract() -> None:
     content = _portal_bundle_content()
     default_body = _extract_js_function_body(content, "_defaultPortalBootstrap")
+    login_url_body = _extract_js_function_body(content, "_managedLoginUrlForCurrentRoute")
     body = _extract_js_function_body(content, "loadPortalBootstrap")
     failure_details_body = _extract_js_function_body(content, "_bootstrapFailureDetails")
     followup_body = _extract_js_function_body(content, "_flushBootstrapOnlineFollowup")
@@ -688,8 +689,11 @@ def test_portal_bootstrap_loader_uses_abortable_timeout_and_state_contract() -> 
     assert "const BOOTSTRAP_RETRY_MAX_DELAY_MS = 12000;" in content
     assert "const BOOTSTRAP_RETRY_MAX_ATTEMPTS = 4;" in content
     assert "const BOOTSTRAP_RETRY_MAX_WINDOW_MS = 60000;" in content
+    assert "const TRANSIENT_DRAFT_STORAGE_KEY = 'tp_portal_transient_draft';" in content
+    assert "const TRANSIENT_DRAFT_SCHEMA = 'tp.portal.transient_draft.v1';" in content
     assert "const BOOTSTRAP_RETRIABLE_HTTP_STATUSES = new Set([500, 502, 503, 504]);" in content
     assert "fetchWithTimeout(" in body
+    assert "return `/login?returnTo=${encodeURIComponent(_managedReturnToPath())}`;" in login_url_body
     assert "`${API_BASE}/portal/bootstrap`" in body
     assert "BOOTSTRAP_TIMEOUT_MS" in body
     assert "const bootstrapOptions = options && typeof options === 'object' ? options : null;" in body
@@ -706,7 +710,7 @@ def test_portal_bootstrap_loader_uses_abortable_timeout_and_state_contract() -> 
     assert "let payloadParsed = false;" in body
     assert "const failure = _bootstrapFailureDetails(" in body
     assert "_finalizeBootstrapRetry('terminal_auth_redirect', { reason: failure.reason, httpStatus: res.status });" in body
-    assert "window.location.assign('/login');" in body
+    assert "window.location.assign(_managedLoginUrlForCurrentRoute());" in body
     assert "const status = failure.retryable ? 'degraded' : 'unavailable';" in body
     assert "const retryScheduled = failure.retryable && _scheduleBootstrapRetry(failure.reason, res.status);" in body
     assert "const retryScheduled = failure.retryable && _scheduleBootstrapRetry(failure.reason, 0);" in body
@@ -848,6 +852,69 @@ def test_portal_health_checks_route_to_front_door_in_managed_mode() -> None:
     assert "fetchWithTimeout(`${API_BASE}${healthEndpointPath}`" in check_body
     assert "_queueBootstrapOnlineFollowup();" in check_body
     assert "_flushBootstrapOnlineFollowup(force);" in check_body
+
+
+def test_portal_transient_draft_restore_is_scoped_to_the_current_owner_and_excludes_auth_state() -> None:
+    content = _portal_bundle_content()
+    route_body = _extract_js_function_body(content, "_managedReturnToPath")
+    owner_body = _extract_js_function_body(content, "_transientDraftOwnerKey")
+    managed_owner_body = _extract_js_function_body(content, "_managedDraftOwnerKey")
+    clear_body = _extract_js_function_body(content, "_clearTransientPortalDraft")
+    read_body = _extract_js_function_body(content, "_readTransientPortalDraft")
+    persist_body = _extract_js_function_body(content, "_persistTransientPortalDraft")
+    schedule_body = _extract_js_function_body(content, "_scheduleTransientPortalDraftPersist")
+    flush_body = _extract_js_function_body(content, "_flushPendingTransientPortalDraftPersist")
+    restore_body = _extract_js_function_body(content, "_restoreTransientPortalDraft")
+
+    assert "const url = new URL(window.location.href);" in route_body
+    assert "return `${url.pathname}${url.search}`;" in route_body
+    assert "if (_isManagedAuthMode()) return _managedDraftOwnerKey();" in owner_body
+    assert "return 'direct_debug';" in owner_body
+    assert "managed:" in managed_owner_body
+    assert "sessionStorage.removeItem(TRANSIENT_DRAFT_STORAGE_KEY);" in clear_body
+    assert "sessionStorage.getItem(TRANSIENT_DRAFT_STORAGE_KEY)" in read_body
+    assert "schema !== TRANSIENT_DRAFT_SCHEMA" in read_body
+    assert "config: _copyTransientDraftConfig(config)" in read_body
+    assert "sessionStorage.setItem(TRANSIENT_DRAFT_STORAGE_KEY, JSON.stringify(snapshot));" in persist_body
+    assert "schema: TRANSIENT_DRAFT_SCHEMA" in persist_body
+    assert "ownerKey" in persist_body
+    assert "savedAt: Date.now()" in persist_body
+    assert "buildStep: resolveBuildStep(state.portalUi.buildStep)" in persist_body
+    assert "window.setTimeout(scheduleCommit, TRANSIENT_DRAFT_PERSIST_DEBOUNCE_MS);" in schedule_body
+    assert "window.requestIdleCallback" in schedule_body
+    assert "_persistTransientPortalDraft();" in schedule_body
+    assert "_cancelScheduledTransientPortalDraftPersist();" in flush_body
+    assert "return _persistTransientPortalDraft();" in flush_body
+    assert "API_KEY_STORAGE_KEY" not in persist_body
+    assert "csrfToken" not in persist_body
+    assert "state.jobs" not in persist_body
+    assert "snapshot.ownerKey !== ownerKey" in restore_body
+    assert "_clearTransientPortalDraft();" in restore_body
+    assert "state.pipeline = snapshot.pipeline;" in restore_body
+    assert "state.config = _copyTransientDraftConfig(snapshot.config);" in restore_body
+    assert "state.portalUi.buildStep = resolveBuildStep(snapshot.buildStep);" in restore_body
+
+
+def test_portal_transient_draft_restores_before_preview_and_readiness_hydration() -> None:
+    content = _portal_bundle_content()
+    body = _extract_js_function_body(content, "init")
+    bind_body = _extract_js_function_body(content, "bindInputs")
+    set_build_step_body = _extract_js_function_body(content, "setBuildStep")
+
+    assert "_restoreTransientPortalDraft();" in body
+    assert "_persistTransientPortalDraft();" in body
+    assert "_scheduleTransientPortalDraftPersist();" in bind_body
+    assert "_scheduleTransientPortalDraftPersist({ immediate: true });" in bind_body
+    assert "_persistTransientPortalDraft();" in set_build_step_body
+    assert "window.addEventListener('pagehide', _flushPendingTransientPortalDraftPersist);" in content
+    assert "window.addEventListener('beforeunload', _flushPendingTransientPortalDraftPersist);" in content
+
+    restore_index = body.index("_restoreTransientPortalDraft();")
+    update_index = body.index("updateUIFromState();", restore_index)
+    check_index = body.index("void checkBackend(true);")
+    metadata_index = body.index("void fetchConfigMetadata(state.pipeline, true);")
+
+    assert restore_index < update_index < check_index < metadata_index
 
 
 def test_portal_managed_unavailable_mode_blocks_dispatch_and_api_key_recovery_prompts() -> None:
@@ -1319,7 +1386,8 @@ def test_portal_build_stepper_and_quick_actions_drive_task_first_navigation() ->
     assert "panel.setAttribute('data-step-active', active ? 'true' : 'false');" in stepper_body
     assert "panel.setAttribute('data-step-hidden', active ? 'false' : 'true');" in stepper_body
     assert "panel.classList.toggle('hidden', !active);" not in stepper_body
-    assert "function setBuildStep(nextStep, options = {}) {" in content
+    assert "function setBuildStep(nextStep, options) {" in content
+    assert "const settings = options && typeof options === 'object' ? options : {};" in content
     assert "emitPortalEvent('step_completed'" in content
     assert "state.pipeline !== 'lux-depth-v3' && state.portalUi.buildStep < 2" in update_body
     assert "setupBuildStepper();" in init_body
@@ -1755,7 +1823,7 @@ def test_portal_contextual_action_rail_reuses_existing_route_and_recovery_contra
     assert "_openArtifactForSelection(job, context.heroArtifact || context.selectedArtifact, 'action_rail');" in handler_body
     assert "_toggleCompareSurface(job, 'action_rail');" in handler_body
     assert "_retryPortalStatus(job);" in handler_body
-    assert "window.location.assign('/login');" in handler_body
+    assert "window.location.assign(_managedLoginUrlForCurrentRoute());" in handler_body
     assert "_rememberArtifactSelection(explicitJobId, '');" in content
     assert "_rememberArtifactSelection(preferredJobId, '');" in content
     assert "url.searchParams.set('action'" not in content

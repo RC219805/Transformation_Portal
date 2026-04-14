@@ -4,8 +4,8 @@ import { resolveAccessContext, resolveAuthenticatedAccessSession, revokeSessionO
 import { escapeHtml, FRONTDOOR_ASSETS, renderBrandAsset } from "../../lib/brand.js";
 import { audit } from "../../lib/audit.js";
 import { applySecurityHeaders, buildRequestUrl, FRONTDOOR_CSP } from "../../lib/http.js";
+import { applyPortalReturnTo, resolvePortalReturnTo, validatePortalReturnTo } from "../../lib/return-to.js";
 import {
-  clearSessionCookie,
   createAnonymousSession,
   destroySession,
   getRemoteAddress,
@@ -68,7 +68,7 @@ function resolveEntryState({ accessEmail, errorCode, bypass = false }) {
   };
 }
 
-function renderLoginPage({ csrfToken, accessEmail, errorCode, bypass = false }) {
+function renderLoginPage({ csrfToken, accessEmail, errorCode, bypass = false, returnTo = "" }) {
   const errorMessage = errorCode ? resolveLoginMessage(errorCode) : "";
   const entryState = resolveEntryState({ accessEmail, errorCode, bypass });
   const hasAccessContext = Boolean(bypass || accessEmail);
@@ -215,6 +215,7 @@ function renderLoginPage({ csrfToken, accessEmail, errorCode, bypass = false }) 
             </details>
             <form method="post" action="/login" autocomplete="on" data-ui="login-form">
               <input type="hidden" name="csrf_token" value="${escapeHtml(csrfToken)}" />
+              ${returnTo ? `<input type="hidden" name="returnTo" value="${escapeHtml(returnTo)}" />` : ""}
               <label data-ui="login-username-field">
                 Username
                 <input type="text" name="username" autocomplete="username" required />
@@ -239,9 +240,10 @@ function renderLoginPage({ csrfToken, accessEmail, errorCode, bypass = false }) 
 </html>`;
 }
 
-function redirectToLogin(request, errorCode, session) {
+function redirectToLogin(request, errorCode, session, returnTo = "") {
   const url = buildRequestUrl(request, "/login");
   if (errorCode) url.searchParams.set("error", errorCode);
+  applyPortalReturnTo(url, returnTo);
   const response = applySecurityHeaders(NextResponse.redirect(url, 303));
   if (session?.id) {
     setSessionCookie(response, session.id);
@@ -250,12 +252,15 @@ function redirectToLogin(request, errorCode, session) {
 }
 
 export async function GET(request) {
+  const requestedReturnTo = validatePortalReturnTo(request.nextUrl.searchParams.get("returnTo"));
   const currentSession = getSessionFromRequest(request, { touch: false });
   let session = currentSession;
   if (currentSession?.authenticated) {
     const authState = await resolveAuthenticatedAccessSession(request, { touch: false });
     if (authState.ok) {
-      return applySecurityHeaders(NextResponse.redirect(buildRequestUrl(request, "/portal"), 302));
+      return applySecurityHeaders(
+        NextResponse.redirect(buildRequestUrl(request, resolvePortalReturnTo(requestedReturnTo)), 302)
+      );
     }
     if (authState.revokeSession) {
       revokeSessionOnAccessFailure(currentSession, authState.errorCode);
@@ -271,7 +276,8 @@ export async function GET(request) {
     csrfToken: session.csrfToken,
     accessEmail: accessContext.accessEmail,
     errorCode: request.nextUrl.searchParams.get("error"),
-    bypass: accessContext.bypass
+    bypass: accessContext.bypass,
+    returnTo: requestedReturnTo || ""
   });
   const response = new NextResponse(html, {
     status: 200,
@@ -299,23 +305,24 @@ export async function POST(request) {
   }
 
   const formData = await request.formData();
+  const requestedReturnTo = validatePortalReturnTo(formData.get("returnTo"));
   const csrfToken = String(formData.get("csrf_token") || "");
   if (!validateCsrfToken(session, csrfToken)) {
     audit("csrf_failure", {
       path: "/login",
       remoteAddr: getRemoteAddress(request)
     });
-    return redirectToLogin(request, "csrf", session);
+    return redirectToLogin(request, "csrf", session, requestedReturnTo);
   }
 
   const config = getConfig();
   if (!config.users.length) {
-    return redirectToLogin(request, "configuration", session);
+    return redirectToLogin(request, "configuration", session, requestedReturnTo);
   }
 
   const accessContext = await resolveAccessContext(request);
   if (accessContext.errorCode === "configuration") {
-    return redirectToLogin(request, "configuration", session);
+    return redirectToLogin(request, "configuration", session, requestedReturnTo);
   }
   if (!accessContext.accessEmail && !accessContext.bypass) {
     audit("access_validation_failure", {
@@ -324,7 +331,7 @@ export async function POST(request) {
       assertedEmail: accessContext.assertedEmail,
       errorCode: accessContext.errorCode
     });
-    return redirectToLogin(request, "access", session);
+    return redirectToLogin(request, "access", session, requestedReturnTo);
   }
 
   const username = String(formData.get("username") || "").trim();
@@ -338,7 +345,7 @@ export async function POST(request) {
       accessEmail: accessContext.accessEmail,
       remoteAddr
     });
-    return redirectToLogin(request, "throttled", session);
+    return redirectToLogin(request, "throttled", session, requestedReturnTo);
   }
 
   const user = await verifyUserCredentials({
@@ -360,7 +367,7 @@ export async function POST(request) {
       remoteAddr,
       bypass: accessContext.bypass
     });
-    return redirectToLogin(request, "invalid", session);
+    return redirectToLogin(request, "invalid", session, requestedReturnTo);
   }
 
   const authenticatedSession = rotateAuthenticatedSession(session, user);
@@ -376,7 +383,9 @@ export async function POST(request) {
     bypass: accessContext.bypass
   });
 
-  const response = applySecurityHeaders(NextResponse.redirect(buildRequestUrl(request, "/portal"), 303));
+  const response = applySecurityHeaders(
+    NextResponse.redirect(buildRequestUrl(request, resolvePortalReturnTo(requestedReturnTo)), 303)
+  );
   setSessionCookie(response, authenticatedSession.id);
   return response;
 }

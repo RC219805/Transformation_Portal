@@ -1110,6 +1110,7 @@ def _set_pipeline_form_expression(
     output_dir: str,
     archive_index: str = "",
     manifest_jsonl: str = "",
+    build_step: str = "",
 ) -> str:
     payload = json.dumps(
         {
@@ -1119,6 +1120,7 @@ def _set_pipeline_form_expression(
             "output_dir": output_dir,
             "archive_index": archive_index,
             "manifest_jsonl": manifest_jsonl,
+            "build_step": build_step,
         }
     )
     return f"""
@@ -1143,8 +1145,19 @@ def _set_pipeline_form_expression(
   setValue('outputDir', cfg.output_dir);
   setValue('archiveIndexPath', cfg.archive_index);
   setValue('rightsManifestPath', cfg.manifest_jsonl);
+  if (cfg.build_step) {{
+    if (typeof setBuildStep === 'function') {{
+      setBuildStep(cfg.build_step, {{ silent: true }});
+    }} else {{
+      const buildStepButton = document.querySelector(`[data-build-step-target="${{cfg.build_step}}"]`);
+      if (buildStepButton) buildStepButton.click();
+    }}
+  }}
   return {{
+    currentView: document.body ? String(document.body.dataset.consoleView || '') : '',
     pipeline: document.getElementById('pipelineSelect').value,
+    inputDir: document.getElementById('inputDir').value,
+    outputDir: document.getElementById('outputDir').value,
     archiveFieldsVisible: !document.getElementById('fieldsArchiveGate').classList.contains('hidden'),
     luxFieldsVisible: !document.getElementById('fieldsLuxDepth').classList.contains('hidden'),
     flagsShellVisible: !document.getElementById('flags-shell').classList.contains('hidden'),
@@ -1560,6 +1573,54 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             f"Sticky portal chrome obscured focused controls: {build_accessibility}",
         )
 
+        draft_input_dir = str(archive_root)
+        draft_output_dir = f"{output_dir}-session-draft"
+        print("portal-browser-smoke: verifying transient build draft restore after reload", flush=True)
+        draft_state = _poll(
+            connection,
+            _set_pipeline_form_expression(
+                api_key="",
+                pipeline="lux-depth-v3",
+                input_dir=draft_input_dir,
+                output_dir=draft_output_dir,
+                build_step="3",
+            ),
+            predicate=lambda value: (
+                isinstance(value, dict)
+                and str(value.get("currentView", "")) == "build"
+                and str(value.get("pipeline", "")) == "lux-depth-v3"
+                and str(value.get("inputDir", "")) == draft_input_dir
+                and str(value.get("outputDir", "")) == draft_output_dir
+                and str(value.get("activeBuildStep", "")) == "3"
+            ),
+            timeout_seconds=args.timeout_seconds,
+            description="transient draft state to persist before reload",
+        )
+        _expect(
+            str(draft_state.get("activeBuildStep", "")) == "3",
+            f"Transient draft setup did not advance the builder to step 3: {draft_state}",
+        )
+        connection.call("Page.reload", {"ignoreCache": True})
+        restored_draft_state = _poll(
+            connection,
+            _state_probe_expression(),
+            predicate=lambda value: (
+                isinstance(value, dict)
+                and str(value.get("readyState", "")) == "complete"
+                and str(value.get("currentView", "")) == "build"
+                and str(value.get("pipeline", "")) == "lux-depth-v3"
+                and str(value.get("inputDir", "")) == draft_input_dir
+                and str(value.get("outputDir", "")) == draft_output_dir
+                and str(value.get("activeBuildStep", "")) == "3"
+            ),
+            timeout_seconds=args.timeout_seconds,
+            description="transient draft state to restore after reload",
+        )
+        _expect(
+            "view=build" in str(restored_draft_state.get("locationSearch", "")),
+            f"Transient draft reload should preserve the build route context: {restored_draft_state}",
+        )
+
         print("portal-browser-smoke: checking reduced motion", flush=True)
         connection.call(
             "Emulation.setEmulatedMedia",
@@ -1593,6 +1654,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
                 pipeline="lux-depth-v3",
                 input_dir=str(archive_root),
                 output_dir=str(output_dir),
+                build_step="1",
             )
         )
         _expect(isinstance(lux_state, dict), f"Unexpected lux portal state: {lux_state!r}")
