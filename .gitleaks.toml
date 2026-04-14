@@ -1,0 +1,16 @@
+title = "Transformation Portal gitleaks config"
+
+[extend]
+useDefault = true
+
+# Keep this compatible with the manual firewall scan, which currently runs
+# gitleaks v8.21.x and does not support global allowlist targetRules.
+[[rules]]
+id = "generic-api-key"
+
+[[rules.allowlists]]
+description = "Ignore the generated portal auth failure branch false positive"
+condition = "AND"
+regexTarget = "secret"
+regexes = ['''^(uth_failure"\|\|normalizedReason==="a|normalizedReason===)$''']
+paths = ['''(^|/)public/portal-assets/portal\.js$''']
