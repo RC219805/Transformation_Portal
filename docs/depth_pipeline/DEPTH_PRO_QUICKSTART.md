@@ -7,14 +7,17 @@ This guide helps you get started with Apple's Depth Pro for metric depth estimat
 ### 1. Create a Dedicated Depth Pro Environment
 
 ```bash
-python3 -m venv .venv-depth-pro
-./.venv-depth-pro/bin/python -m pip install --upgrade pip
-./.venv-depth-pro/bin/python -m pip install depth-pro
+./scripts/setup/install_depth_pro_runtime.sh --skip-verify
 ```
 
 Keep `depth-pro` out of the main Transformation Portal environment. Depth Pro
 currently requires `numpy<2`, while the primary repository environment is pinned
-around NumPy 2.x for OpenCV, imagecodecs, and related tooling.
+around NumPy 2.x for OpenCV, imagecodecs, and related tooling. The repo-owned
+setup script pins the validated Depth Pro runtime surface:
+- `torch==2.7.1`
+- `torchvision==0.22.1`
+- `numpy==1.26.4`
+- `depth_pro` from Apple `ml-depth-pro` git ref `9efe5c1def37a26c5367a71df664b18e1306c708`
 
 ### 2. Download Checkpoint (1.9 GB)
 
@@ -31,13 +34,15 @@ curl -L https://ml-site.cdn-apple.com/models/depth-pro/depth_pro.pt \
 
 ### 3. Validate Checkpoint (Recommended)
 
-Run the validation script to ensure your checkpoint is correct:
+Run the pinned runtime verification, then the slower end-to-end inference smoke:
 
 ```bash
+./scripts/setup/install_depth_pro_runtime.sh
 ./.venv-depth-pro/bin/python scripts/validate_depth_pro_checkpoint.py
 ```
 
-This will:
+The setup script verifies the pinned runtime and requested device (`mps` on
+Apple Silicon, `cpu` elsewhere). The checkpoint validator then confirms:
 - ✓ Verify file exists and has correct size (~1.9 GB)
 - ✓ Verify SHA-256 hash matches expected value
 - ✓ Check depth-pro package is installed
@@ -279,7 +284,7 @@ ImportError: depth_pro package not installed.
 
 **Solution:**
 ```bash
-./.venv-depth-pro/bin/python -m pip install depth-pro
+./scripts/setup/install_depth_pro_runtime.sh --skip-verify
 ```
 
 Then point the main pipeline at that environment:

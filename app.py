@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import hmac
 import json
 import logging
+import math
 import mimetypes
 import os
 import re
@@ -15,6 +17,7 @@ import uuid
 from bisect import bisect_left
 from collections import deque
 from dataclasses import dataclass, field
+from functools import lru_cache
 from importlib.util import find_spec
 from pathlib import Path, PurePosixPath
 from typing import Any, AsyncGenerator, Callable, Deque, Dict, List, Mapping, Optional, Tuple
@@ -29,6 +32,8 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.responses import Response, StreamingResponse
 
+from transformation_portal.lux_depth_v3.run_card_contract import infer_run_card_version
+
 # ----------------------------
 # In-memory job store (MVP)
 # ----------------------------
@@ -40,6 +45,23 @@ LOGGER = logging.getLogger(__name__)
 class PortalAssetSpec:
     path: Path
     media_type: str
+
+
+@dataclass(frozen=True)
+class PortalAssetBundle:
+    html: str
+    html_bytes: bytes
+    css: str
+    css_bytes: bytes
+    fingerprints: Dict[str, str]
+    urls: Dict[str, str]
+
+
+@dataclass(frozen=True)
+class PortalRenderedTextAsset:
+    text: str
+    content_bytes: bytes
+    fingerprint: str
 
 
 def _env_csv(name: str, default: List[str]) -> List[str]:
@@ -87,6 +109,29 @@ PORTAL_ASSET_MANIFEST_PATH = REPO_ROOT / "config" / "portal_asset_manifest.json"
 PORTAL_VIDEO_ASSET_NAME = "dna-portal-video-2.mp4"
 PORTAL_VIDEO_PATH = REPO_ROOT / "public" / "video" / PORTAL_VIDEO_ASSET_NAME
 PORTAL_ASSET_CACHE_CONTROL = "no-store"
+PORTAL_IMMUTABLE_ASSET_CACHE_CONTROL = "public, max-age=31536000, immutable"
+PORTAL_ASSET_FINGERPRINT_PARAM = "v"
+PORTAL_ASSET_FINGERPRINT_LENGTH = 12
+PORTAL_CSS_TEMPLATE_PATH = PORTAL_ASSETS_DIR / "portal.css"
+PORTAL_DIRECT_FINGERPRINT_ASSET_NAMES = (
+    "portal.js",
+    "shared-ui-tokens.css",
+    "fonts/portal-sans.woff2",
+    "fonts/portal-mono.woff2",
+    "brand/dna-symbol-dark.svg",
+    "brand/dna-symbol-light.svg",
+)
+PORTAL_CSS_TEMPLATE_TOKENS = {
+    "__PORTAL_SHARED_TOKENS_URL__": "shared-ui-tokens.css",
+    "__PORTAL_FONT_SANS_URL__": "fonts/portal-sans.woff2",
+    "__PORTAL_FONT_MONO_URL__": "fonts/portal-mono.woff2",
+}
+PORTAL_HTML_TEMPLATE_TOKENS = {
+    "__PORTAL_CSS_URL__": "portal.css",
+    "__PORTAL_JS_URL__": "portal.js",
+    "__PORTAL_BRAND_LIGHT_URL__": "brand/dna-symbol-light.svg",
+    "__PORTAL_BRAND_DARK_URL__": "brand/dna-symbol-dark.svg",
+}
 
 
 def _load_portal_asset_manifest() -> Dict[str, PortalAssetSpec]:
@@ -125,6 +170,142 @@ def _load_portal_asset_manifest() -> Dict[str, PortalAssetSpec]:
 PORTAL_ASSET_MANIFEST = _load_portal_asset_manifest()
 PORTAL_ASSET_PATHS = {name: asset.path for name, asset in PORTAL_ASSET_MANIFEST.items()}
 PORTAL_ASSET_MEDIA_TYPES = {name: asset.media_type for name, asset in PORTAL_ASSET_MANIFEST.items()}
+
+
+def _portal_asset_signature(path: Path) -> Tuple[str, int, int]:
+    stat_result = path.stat()
+    return str(path), stat_result.st_mtime_ns, stat_result.st_size
+
+
+def _fingerprint_bytes(payload: bytes) -> str:
+    return hashlib.sha256(payload).hexdigest()[:PORTAL_ASSET_FINGERPRINT_LENGTH]
+
+
+def _portal_asset_route_path(asset_name: str) -> str:
+    encoded_parts = [quote(part, safe="") for part in asset_name.split("/")]
+    return "/portal/assets/" + "/".join(encoded_parts)
+
+
+def _portal_asset_versioned_url(asset_name: str, fingerprint: str) -> str:
+    return f"{_portal_asset_route_path(asset_name)}?{PORTAL_ASSET_FINGERPRINT_PARAM}={fingerprint}"
+
+
+def _render_portal_template(template_text: str, replacements: Mapping[str, str], *, template_name: str) -> str:
+    rendered = template_text
+    for token, value in replacements.items():
+        if token not in rendered:
+            raise RuntimeError(f"{template_name} is missing required token {token}")
+        rendered = rendered.replace(token, value)
+
+    unresolved = sorted(set(re.findall(r"__PORTAL_[A-Z0-9_]+__", rendered)))
+    if unresolved:
+        raise RuntimeError(f"{template_name} has unresolved tokens: {', '.join(unresolved)}")
+    return rendered
+
+
+def _portal_direct_asset_signature(asset_name: str) -> Tuple[str, int, int]:
+    return _portal_asset_signature(PORTAL_ASSET_PATHS[asset_name])
+
+
+@lru_cache(maxsize=16)
+def _build_portal_direct_asset_fingerprint(asset_name: str, _: Tuple[str, int, int]) -> str:
+    return _fingerprint_bytes(PORTAL_ASSET_PATHS[asset_name].read_bytes())
+
+
+def _get_portal_direct_asset_fingerprint(asset_name: str) -> str:
+    return _build_portal_direct_asset_fingerprint(asset_name, _portal_direct_asset_signature(asset_name))
+
+
+def _portal_css_signature() -> Tuple[object, ...]:
+    return (
+        _portal_asset_signature(PORTAL_CSS_TEMPLATE_PATH),
+        *(
+            (asset_name, _get_portal_direct_asset_fingerprint(asset_name))
+            for asset_name in ("shared-ui-tokens.css", "fonts/portal-sans.woff2", "fonts/portal-mono.woff2")
+        ),
+    )
+
+
+@lru_cache(maxsize=4)
+def _build_portal_css_asset(_: Tuple[object, ...]) -> PortalRenderedTextAsset:
+    direct_asset_fingerprints = {
+        asset_name: _get_portal_direct_asset_fingerprint(asset_name)
+        for asset_name in dict.fromkeys(PORTAL_CSS_TEMPLATE_TOKENS.values())
+    }
+    css_template = PORTAL_CSS_TEMPLATE_PATH.read_text(encoding="utf-8")
+    css_render = _render_portal_template(
+        css_template,
+        {
+            token: _portal_asset_versioned_url(asset_name, direct_asset_fingerprints[asset_name])
+            for token, asset_name in PORTAL_CSS_TEMPLATE_TOKENS.items()
+        },
+        template_name="portal.css",
+    )
+    css_bytes = css_render.encode("utf-8")
+    return PortalRenderedTextAsset(
+        text=css_render,
+        content_bytes=css_bytes,
+        fingerprint=_fingerprint_bytes(css_bytes),
+    )
+
+
+def _get_portal_css_asset() -> PortalRenderedTextAsset:
+    return _build_portal_css_asset(_portal_css_signature())
+
+
+def _portal_html_signature() -> Tuple[object, ...]:
+    css_asset = _get_portal_css_asset()
+    return (
+        _portal_asset_signature(PORTAL_HTML),
+        ("portal.css", css_asset.fingerprint),
+        *(
+            (asset_name, _get_portal_direct_asset_fingerprint(asset_name))
+            for asset_name in ("portal.js", "brand/dna-symbol-dark.svg", "brand/dna-symbol-light.svg")
+        ),
+    )
+
+
+@lru_cache(maxsize=4)
+def _build_portal_asset_bundle(_: Tuple[object, ...]) -> PortalAssetBundle:
+    css_asset = _get_portal_css_asset()
+    fingerprints = {
+        asset_name: _get_portal_direct_asset_fingerprint(asset_name) for asset_name in PORTAL_DIRECT_FINGERPRINT_ASSET_NAMES
+    }
+    fingerprints["portal.css"] = css_asset.fingerprint
+    urls = {
+        asset_name: _portal_asset_versioned_url(asset_name, fingerprint) for asset_name, fingerprint in fingerprints.items()
+    }
+    html_template = PORTAL_HTML.read_text(encoding="utf-8")
+    html_render = _render_portal_template(
+        html_template,
+        {token: urls[asset_name] for token, asset_name in PORTAL_HTML_TEMPLATE_TOKENS.items()},
+        template_name="portal.html",
+    )
+    html_bytes = html_render.encode("utf-8")
+    return PortalAssetBundle(
+        html=html_render,
+        html_bytes=html_bytes,
+        css=css_asset.text,
+        css_bytes=css_asset.content_bytes,
+        fingerprints=fingerprints,
+        urls=urls,
+    )
+
+
+def _get_portal_asset_bundle() -> PortalAssetBundle:
+    return _build_portal_asset_bundle(_portal_html_signature())
+
+
+def _requested_portal_asset_fingerprint(request: Request) -> str:
+    return str(request.query_params.get(PORTAL_ASSET_FINGERPRINT_PARAM, "")).strip()
+
+
+def _portal_asset_cache_control(current_fingerprint: str, requested_fingerprint: str) -> str:
+    if requested_fingerprint and hmac.compare_digest(requested_fingerprint, current_fingerprint):
+        return PORTAL_IMMUTABLE_ASSET_CACHE_CONTROL
+    return PORTAL_ASSET_CACHE_CONTROL
+
+
 ARCHIVE_GOVERNANCE_SCRIPT = REPO_ROOT / "tools" / "archive_governance.py"
 LUX_DEPTH_MODULE = "transformation_portal.lux_depth_v3"
 APP_VERSION = "0.3.0"
@@ -480,6 +661,8 @@ PRESET_CATALOG: Dict[str, List[Dict[str, Any]]] = {
                 "emit_upscaled16": True,
                 "emit_report": True,
                 "emit_run_card": True,
+                "run_card_version": "v1",
+                "run_card_include_proofs": False,
                 "emit_marketing": False,
                 "enable_v2": False,
                 "enable_reconstruction": False,
@@ -504,6 +687,8 @@ PRESET_CATALOG: Dict[str, List[Dict[str, Any]]] = {
                 "emit_upscaled16": False,
                 "emit_report": True,
                 "emit_run_card": True,
+                "run_card_version": "v1",
+                "run_card_include_proofs": False,
                 "emit_marketing": False,
                 "enable_v2": False,
                 "enable_reconstruction": False,
@@ -528,6 +713,8 @@ PRESET_CATALOG: Dict[str, List[Dict[str, Any]]] = {
                 "emit_upscaled16": True,
                 "emit_report": True,
                 "emit_run_card": True,
+                "run_card_version": "v2",
+                "run_card_include_proofs": False,
                 "emit_marketing": False,
                 "enable_v2": True,
                 "v2_preset": "default",
@@ -598,6 +785,15 @@ class Job:
         self.logs_tail.append(line)
         if len(self.logs_tail) > limit:
             self.logs_tail = self.logs_tail[-limit:]
+
+
+@dataclass(frozen=True)
+class JobRunMetadata:
+    output_dir: Path
+    run_card_path: Optional[Path] = None
+    run_card_payload: Optional[Dict[str, Any]] = None
+    batch_manifest_path: Optional[Path] = None
+    batch_manifest_payload: Optional[Dict[str, Any]] = None
 
 
 JOBS: Dict[str, Job] = {}
@@ -743,6 +939,19 @@ PORTAL_ALLOWED_EVENT_FIELDS = {
     "raw_ingest_mode",
     "reconstruction_iterations",
     "reconstruction_tier",
+    "sam2_crop_n_layers",
+    "sam2_global_pass_longest_side",
+    "sam2_max_concurrency",
+    "sam2_model_size",
+    "sam2_overlap_px",
+    "sam2_points_per_batch",
+    "sam2_points_per_side",
+    "sam2_pred_iou_thresh",
+    "sam2_stability_score_thresh",
+    "sam2_tile_size_px",
+    "sam2_tiling_enabled",
+    "run_card_include_proofs",
+    "run_card_version",
     "segmentation_backend",
     "strict_segmentation",
 }
@@ -782,6 +991,16 @@ LUX_PORTAL_DEFAULT_ARGS: Dict[str, Any] = {
     "enable_segmentation": False,
     "segmentation_backend": "stub",
     "sam2_model_size": "base",
+    "sam2_tiling_enabled": False,
+    "sam2_tile_size_px": 1536,
+    "sam2_overlap_px": 256,
+    "sam2_global_pass_longest_side": 1280,
+    "sam2_max_concurrency": 1,
+    "sam2_points_per_side": 32,
+    "sam2_points_per_batch": 64,
+    "sam2_pred_iou_thresh": 0.88,
+    "sam2_stability_score_thresh": 0.85,
+    "sam2_crop_n_layers": 1,
     "strict_segmentation": False,
     "materials_v3": True,
     "pbr": True,
@@ -794,6 +1013,8 @@ LUX_PORTAL_DEFAULT_ARGS: Dict[str, Any] = {
     "emit_marketing": False,
     "emit_report": True,
     "emit_run_card": True,
+    "run_card_version": "v1",
+    "run_card_include_proofs": False,
     "non_commercial_ok": False,
     "accept_apple_depth_pro_research_license": False,
     "accept_research_tools_license": False,
@@ -1817,6 +2038,66 @@ def _normalize_optional_positive_int(
     return parsed
 
 
+def _normalize_optional_non_negative_int(
+    value: Any,
+    field: str,
+    errors: List[Dict[str, Any]],
+) -> Optional[int]:
+    if value is None or (isinstance(value, str) and not value.strip()):
+        return None
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        errors.append(
+            _portal_issue(
+                field,
+                f"invalid_{field}",
+                f"{field} must be an integer greater than or equal to 0.",
+            )
+        )
+        return None
+    if parsed < 0:
+        errors.append(
+            _portal_issue(
+                field,
+                f"invalid_{field}",
+                f"{field} must be greater than or equal to 0.",
+            )
+        )
+        return None
+    return parsed
+
+
+def _normalize_optional_probability(
+    value: Any,
+    field: str,
+    errors: List[Dict[str, Any]],
+) -> Optional[float]:
+    if value is None or (isinstance(value, str) and not value.strip()):
+        return None
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        errors.append(
+            _portal_issue(
+                field,
+                f"invalid_{field}",
+                f"{field} must be a number in the range [0, 1].",
+            )
+        )
+        return None
+    if not math.isfinite(parsed) or parsed < 0.0 or parsed > 1.0:
+        errors.append(
+            _portal_issue(
+                field,
+                f"invalid_{field}",
+                f"{field} must be in the range [0, 1].",
+            )
+        )
+        return None
+    return parsed
+
+
 def _normalize_portal_path_arg(
     value: Any,
     field: str,
@@ -1993,6 +2274,126 @@ def _lux_config_metadata() -> Dict[str, Any]:
             "runtime": ["low", "medium", "high"],
             "gpu_pressure": ["low", "medium", "high"],
             "research_risk": ["none", "research_only", "experimental"],
+        },
+        "backend_catalog": {
+            "da3": {
+                "label": "DA3",
+                "kind": "depth_backend",
+                "operator_summary": ("Default managed depth backend for standard Lux runs."),
+                "policy_posture": {
+                    "code": "governed_default",
+                    "label": "Governed default",
+                    "detail": (
+                        "Treat the managed preset and backend-owned release" " policy as the operator source of truth."
+                    ),
+                },
+                "required_acknowledgments": [],
+                "checkpoint_expectation": {
+                    "required": False,
+                    "field": None,
+                    "detail": (
+                        "Prefers the repo-local canary runtime when it is"
+                        " available, but base readiness is evaluated"
+                        " separately."
+                    ),
+                },
+                "model_provider_label": "Depth Anything",
+                "model_display_label": "Depth Anything v3",
+            },
+            "depth_pro": {
+                "label": "Depth Pro",
+                "kind": "depth_backend",
+                "operator_summary": (
+                    "Metric depth backend reserved for research-oriented runs" " and higher-cost validation."
+                ),
+                "policy_posture": {
+                    "code": "research_only",
+                    "label": "Research only",
+                    "detail": (
+                        "This backend stays behind explicit" " non-commercial and Apple research-license" " acknowledgments."
+                    ),
+                },
+                "required_acknowledgments": [
+                    {
+                        "field": "non_commercial_ok",
+                        "label": "Non-commercial acknowledgment",
+                    },
+                    {
+                        "field": "accept_apple_depth_pro_research_license",
+                        "label": "Apple Depth Pro research license",
+                    },
+                ],
+                "checkpoint_expectation": {
+                    "required": True,
+                    "field": None,
+                    "detail": ("Requires a local Depth Pro checkpoint in the active" " runtime before execution."),
+                },
+                "model_provider_label": "Apple",
+                "model_display_label": "Depth Pro",
+            },
+            "efficientsam": {
+                "label": "EfficientSAM",
+                "kind": "segmentation_backend",
+                "operator_summary": (
+                    "Lighter segmentation backend for managed runs that need" " masks without the heaviest research posture."
+                ),
+                "policy_posture": {
+                    "code": "managed_optional",
+                    "label": "Managed optional",
+                    "detail": (
+                        "Suitable for standard segmentation coverage when the" " run contract does not require the SAM2 path."
+                    ),
+                },
+                "required_acknowledgments": [],
+                "checkpoint_expectation": {
+                    "required": False,
+                    "field": None,
+                    "detail": "No explicit checkpoint path is required.",
+                },
+                "model_provider_label": "EfficientSAM",
+                "model_display_label": "EfficientSAM",
+            },
+            "sam2": {
+                "label": "SAM2",
+                "kind": "segmentation_backend",
+                "operator_summary": ("Highest-fidelity segmentation path for runs that need" " stronger scene coverage."),
+                "policy_posture": {
+                    "code": "experimental_segmentation",
+                    "label": "Experimental",
+                    "detail": (
+                        "Use when the run benefits from deeper segmentation"
+                        " coverage and the higher runtime cost is acceptable."
+                    ),
+                },
+                "required_acknowledgments": [],
+                "checkpoint_expectation": {
+                    "required": False,
+                    "field": "sam2_checkpoint_path",
+                    "detail": (
+                        "A local checkpoint path is optional. Supply one only" " when the runtime requires a pinned SAM2 file."
+                    ),
+                },
+                "model_provider_label": "Meta",
+                "model_display_label": "SAM2 Hiera",
+            },
+            "stub": {
+                "label": "Stub",
+                "kind": "segmentation_backend",
+                "operator_summary": ("Deterministic no-model fallback used for contract checks" " and low-risk iteration."),
+                "policy_posture": {
+                    "code": "deterministic_fallback",
+                    "label": "Deterministic fallback",
+                    "detail": ("Keeps segmentation semantics explicit without adding" " a model dependency."),
+                },
+                "required_acknowledgments": [],
+                "checkpoint_expectation": {
+                    "required": False,
+                    "field": None,
+                    "detail": "No checkpoint is used.",
+                },
+                "model_provider_label": "Built-in",
+                "model_display_label": "Portal stub",
+            },
         },
         "debug_bundle_policy": {
             "acknowledgement_required": True,
@@ -2344,6 +2745,45 @@ def _build_lux_config_preview(
     )
     if sam2_checkpoint_path:
         normalized_args["sam2_checkpoint_path"] = sam2_checkpoint_path
+    normalized_args["sam2_tiling_enabled"] = _as_bool(
+        _pick(args, "sam2_tiling_enabled", "sam2TilingEnabled", default=defaults["sam2_tiling_enabled"]),
+        default=bool(defaults["sam2_tiling_enabled"]),
+    )
+    for field_name in (
+        "sam2_tile_size_px",
+        "sam2_global_pass_longest_side",
+        "sam2_max_concurrency",
+        "sam2_points_per_side",
+        "sam2_points_per_batch",
+    ):
+        value = _normalize_optional_positive_int(
+            _pick(args, field_name, default=defaults[field_name]),
+            field_name,
+            errors,
+        )
+        normalized_args[field_name] = int(defaults[field_name]) if value is None else value
+    for field_name in ("sam2_overlap_px", "sam2_crop_n_layers"):
+        value = _normalize_optional_non_negative_int(
+            _pick(args, field_name, default=defaults[field_name]),
+            field_name,
+            errors,
+        )
+        normalized_args[field_name] = int(defaults[field_name]) if value is None else value
+    for field_name in ("sam2_pred_iou_thresh", "sam2_stability_score_thresh"):
+        value = _normalize_optional_probability(
+            _pick(args, field_name, default=defaults[field_name]),
+            field_name,
+            errors,
+        )
+        normalized_args[field_name] = float(defaults[field_name]) if value is None else value
+    if normalized_args["sam2_overlap_px"] >= normalized_args["sam2_tile_size_px"]:
+        errors.append(
+            _portal_issue(
+                "sam2_overlap_px",
+                "invalid_sam2_overlap_px",
+                "sam2_overlap_px must be smaller than sam2_tile_size_px.",
+            )
+        )
     normalized_args["strict_segmentation"] = _as_bool(
         _pick(args, "strict_segmentation", "strictSegmentation", default=defaults["strict_segmentation"]),
         default=bool(defaults["strict_segmentation"]),
@@ -2374,6 +2814,22 @@ def _build_lux_config_preview(
         normalized_args[field_name] = _as_bool(
             _pick(args, field_name, default=defaults[field_name]), default=bool(defaults[field_name])
         )
+    normalized_args["run_card_version"] = (
+        str(_pick(args, "run_card_version", "runCardVersion", default=defaults["run_card_version"]) or "v1").strip().lower()
+        or "v1"
+    )
+    if normalized_args["run_card_version"] not in {"v1", "v2"}:
+        errors.append(_portal_issue("run_card_version", "invalid_value", "Run card version must be v1 or v2."))
+        normalized_args["run_card_version"] = str(defaults["run_card_version"])
+    normalized_args["run_card_include_proofs"] = _as_bool(
+        _pick(
+            args,
+            "run_card_include_proofs",
+            "runCardIncludeProofs",
+            default=defaults["run_card_include_proofs"],
+        ),
+        default=bool(defaults["run_card_include_proofs"]),
+    )
 
     normalized_args["v2_preset"] = str(
         _pick(args, "v2_preset", "v2Preset", default=defaults["v2_preset"]) or defaults["v2_preset"]
@@ -3499,6 +3955,43 @@ def _load_bounded_json_object(path: Path, *, max_bytes: int = JOB_RUN_SUMMARY_MA
     return payload if isinstance(payload, dict) else None
 
 
+def _load_bounded_run_card_payload(path: Optional[Path]) -> Optional[Dict[str, Any]]:
+    if path is None:
+        return None
+    payload = _load_bounded_json_object(path)
+    if payload is None:
+        return None
+
+    batch_id = str(payload.get("batch_id") or "").strip()
+    artifact_index = payload.get("artifact_index")
+    if not batch_id:
+        return None
+    try:
+        infer_run_card_version(payload)
+    except ValueError:
+        return None
+    if artifact_index is None:
+        total_images = _coerce_nonnegative_int(payload.get("total_images"))
+        success_count = _coerce_nonnegative_int(payload.get("success_count"))
+        error_count = _coerce_nonnegative_int(payload.get("error_count"))
+        if total_images is None and (success_count is None or error_count is None):
+            return None
+        return payload
+    if not isinstance(artifact_index, list) or not artifact_index:
+        return None
+    for artifact in artifact_index:
+        if not isinstance(artifact, Mapping):
+            return None
+        candidate_path = artifact.get("relative_path") or artifact.get("path")
+        if not isinstance(candidate_path, str) or not candidate_path.strip():
+            return None
+        try:
+            _normalize_artifact_relative_path(candidate_path)
+        except ArtifactPathValidationError:
+            return None
+    return payload
+
+
 def _summarize_run_card_payload(payload: Mapping[str, Any]) -> Dict[str, Any]:
     summary: Dict[str, Any] = {"source": "run_card"}
 
@@ -3578,13 +4071,193 @@ def _artifact_recency_key(relative_path: str, artifact_path: Path) -> Tuple[str,
     return (batch_hint, modified_time, relative_path)
 
 
-def _find_job_artifact_path(job: Job, predicate: Callable[[str], bool]) -> Optional[Path]:
-    lookup = job.artifact_lookup or _hydrate_artifact_lookup_from_items(job)
-    candidates = [(relative_path, lookup[relative_path]) for relative_path in lookup if predicate(relative_path)]
-    if not candidates:
+def _find_newest_artifact_path(output_dir: Path, candidates: List[Path]) -> Optional[Path]:
+    normalized_candidates: List[Tuple[str, Path]] = []
+    for candidate in candidates:
+        try:
+            resolved = Path(os.path.realpath(candidate))
+        except OSError:
+            continue
+        if not resolved.exists() or not resolved.is_file():
+            continue
+        try:
+            relative_path = str(resolved.relative_to(output_dir))
+        except ValueError:
+            continue
+        normalized_candidates.append((relative_path, resolved))
+    if not normalized_candidates:
         return None
-    _, artifact_path = max(candidates, key=lambda item: _artifact_recency_key(item[0], item[1]))
+    _, artifact_path = max(
+        normalized_candidates,
+        key=lambda item: _artifact_recency_key(item[0], item[1]),
+    )
     return artifact_path
+
+
+def _resolve_artifact_path_within_output_dir(
+    output_dir: Path,
+    relative_path: str,
+) -> Optional[Tuple[str, Path]]:
+    try:
+        normalized_relative_path = _normalize_artifact_relative_path(relative_path)
+    except ArtifactPathValidationError:
+        return None
+    resolved_candidate = Path(
+        os.path.realpath(
+            output_dir / Path(*PurePosixPath(normalized_relative_path).parts),
+        )
+    )
+    try:
+        canonical_relative_path = str(resolved_candidate.relative_to(output_dir))
+    except ValueError:
+        return None
+    if not resolved_candidate.exists() or not resolved_candidate.is_file():
+        return None
+    return canonical_relative_path, resolved_candidate
+
+
+def _resolve_job_run_metadata(job: Job) -> Optional[JobRunMetadata]:
+    output_dir = _job_output_dir(job)
+    if output_dir is None:
+        return None
+    output_dir = Path(os.path.realpath(output_dir.expanduser()))
+    if not output_dir.exists() or not output_dir.is_dir():
+        return None
+
+    batch_manifest_dir = output_dir / "manifests"
+    run_card_candidates: List[Tuple[int, Tuple[str, float, str], Path, Dict[str, Any], Optional[Path]]] = []
+    for candidate in output_dir.glob("run_card_*.json"):
+        try:
+            resolved_candidate = Path(os.path.realpath(candidate))
+            relative_path = str(resolved_candidate.relative_to(output_dir))
+        except (OSError, ValueError):
+            continue
+        run_card_payload = _load_bounded_run_card_payload(resolved_candidate)
+        if run_card_payload is None:
+            continue
+        batch_id = str(run_card_payload.get("batch_id") or "").strip()
+        matching_manifest_path: Optional[Path] = None
+        if batch_id:
+            manifest_candidate = batch_manifest_dir / f"batch_{batch_id}.json"
+            if manifest_candidate.exists() and manifest_candidate.is_file():
+                matching_manifest_path = Path(os.path.realpath(manifest_candidate))
+        run_card_candidates.append(
+            (
+                1 if matching_manifest_path is not None else 0,
+                _artifact_recency_key(relative_path, resolved_candidate),
+                resolved_candidate,
+                run_card_payload,
+                matching_manifest_path,
+            )
+        )
+
+    run_card_path: Optional[Path] = None
+    run_card_payload: Optional[Dict[str, Any]] = None
+    batch_manifest_path: Optional[Path] = None
+    batch_manifest_payload: Optional[Dict[str, Any]] = None
+    if run_card_candidates:
+        _, _, run_card_path, run_card_payload, batch_manifest_path = max(
+            run_card_candidates,
+            key=lambda item: (item[0], item[1]),
+        )
+        if batch_manifest_path is not None:
+            batch_manifest_payload = _load_bounded_json_object(batch_manifest_path)
+    elif batch_manifest_dir.exists() and batch_manifest_dir.is_dir():
+        batch_manifest_path = _find_newest_artifact_path(
+            output_dir,
+            list(batch_manifest_dir.glob("batch_*.json")),
+        )
+        if batch_manifest_path is not None:
+            batch_manifest_payload = _load_bounded_json_object(batch_manifest_path)
+
+    return JobRunMetadata(
+        output_dir=output_dir,
+        run_card_path=run_card_path,
+        run_card_payload=run_card_payload,
+        batch_manifest_path=batch_manifest_path,
+        batch_manifest_payload=batch_manifest_payload,
+    )
+
+
+def _build_scoped_job_artifacts(
+    *,
+    job: Job,
+    output_dir: Path,
+    candidate_paths: List[Path],
+) -> Tuple[List[Dict[str, Any]], Dict[str, Path], bool]:
+    artifact_lookup: Dict[str, Path] = {}
+    for candidate_path in candidate_paths:
+        try:
+            resolved_path = Path(os.path.realpath(candidate_path))
+        except OSError:
+            continue
+        if not resolved_path.exists() or not resolved_path.is_file():
+            continue
+        try:
+            relative_path = str(resolved_path.relative_to(output_dir))
+        except ValueError:
+            continue
+        artifact_lookup[relative_path] = resolved_path
+
+    ordered_candidates = sorted(
+        artifact_lookup.items(),
+        key=lambda item: (item[0].casefold(), item[0]),
+    )
+    truncated = len(ordered_candidates) > MAX_INDEXED_ARTIFACTS
+    selected_candidates = ordered_candidates[:MAX_INDEXED_ARTIFACTS]
+
+    items = [
+        _serialize_indexed_artifact(
+            job_id=job.id,
+            relative_path=relative_path,
+            path=path,
+        )
+        for relative_path, path in selected_candidates
+    ]
+    return items, artifact_lookup, truncated
+
+
+def _build_scoped_job_artifacts_from_run_metadata(
+    job: Job,
+    metadata: JobRunMetadata,
+) -> Optional[Tuple[List[Dict[str, Any]], Dict[str, Path], bool]]:
+    artifact_index = None
+    if metadata.run_card_path is not None and metadata.run_card_payload is not None:
+        artifact_index = metadata.run_card_payload.get("artifact_index")
+        if isinstance(artifact_index, list):
+            candidate_paths: List[Path] = [metadata.run_card_path]
+            for artifact_entry in artifact_index:
+                if not isinstance(artifact_entry, dict):
+                    continue
+                artifact_relative_path = artifact_entry.get("relative_path") or artifact_entry.get("path")
+                if not isinstance(artifact_relative_path, str) or not artifact_relative_path.strip():
+                    continue
+                resolved = _resolve_artifact_path_within_output_dir(
+                    metadata.output_dir,
+                    artifact_relative_path,
+                )
+                if resolved is None:
+                    continue
+                _, resolved_path = resolved
+                candidate_paths.append(resolved_path)
+            if len(candidate_paths) > 1:
+                return _build_scoped_job_artifacts(
+                    job=job,
+                    output_dir=metadata.output_dir,
+                    candidate_paths=candidate_paths,
+                )
+
+    if metadata.batch_manifest_path is not None:
+        candidate_paths = [metadata.batch_manifest_path]
+        if metadata.run_card_path is not None and isinstance(artifact_index, list) and artifact_index:
+            candidate_paths.insert(0, metadata.run_card_path)
+        return _build_scoped_job_artifacts(
+            job=job,
+            output_dir=metadata.output_dir,
+            candidate_paths=candidate_paths,
+        )
+
+    return None
 
 
 def _refresh_job_run_summary(job: Job) -> Dict[str, Any]:
@@ -3592,28 +4265,13 @@ def _refresh_job_run_summary(job: Job) -> Dict[str, Any]:
         return {}
 
     existing_summary = dict(job.run_summary) if isinstance(job.run_summary, dict) and job.run_summary else {}
-    run_card_path = _find_job_artifact_path(
-        job,
-        lambda relative_path: PurePosixPath(relative_path).name.startswith("run_card")
-        and relative_path.lower().endswith(".json"),
-    )
+    metadata = _resolve_job_run_metadata(job)
     summary: Dict[str, Any] = {}
-    if run_card_path is not None:
-        payload = _load_bounded_json_object(run_card_path)
-        if payload is not None:
-            summary = _summarize_run_card_payload(payload)
+    if metadata is not None and metadata.run_card_payload is not None:
+        summary = _summarize_run_card_payload(metadata.run_card_payload)
 
-    if not summary:
-        batch_manifest_path = _find_job_artifact_path(
-            job,
-            lambda relative_path: PurePosixPath(relative_path).parent.as_posix() == "manifests"
-            and PurePosixPath(relative_path).name.startswith("batch_")
-            and relative_path.lower().endswith(".json"),
-        )
-        if batch_manifest_path is not None:
-            payload = _load_bounded_json_object(batch_manifest_path)
-            if payload is not None:
-                summary = _summarize_batch_manifest_payload(payload)
+    if not summary and metadata is not None and metadata.batch_manifest_payload is not None:
+        summary = _summarize_batch_manifest_payload(metadata.batch_manifest_payload)
 
     if not summary and existing_summary:
         summary = existing_summary
@@ -3758,6 +4416,20 @@ def _index_job_artifacts(job: Job) -> List[Dict[str, Any]]:
         return []
 
     output_dir = Path(os.path.realpath(output_dir.expanduser()))
+    metadata = _resolve_job_run_metadata(job)
+    if metadata is not None:
+        scoped_artifacts = _build_scoped_job_artifacts_from_run_metadata(job, metadata)
+        if scoped_artifacts is not None:
+            items, artifact_lookup, truncated = scoped_artifacts
+            job.artifacts = {
+                "output_dir": str(output_dir),
+                "items": items,
+                "indexed_count": len(items),
+                "truncated": truncated,
+            }
+            job.artifact_lookup = artifact_lookup
+            return items
+
     selected: List[tuple[tuple[str, str], str, Path]] = []
     selected_keys: List[tuple[str, str]] = []
     artifact_lookup: Dict[str, Path] = {}
@@ -4533,6 +5205,29 @@ def _argv_from_request(
             "sam2_checkpoint_path",
             "sam2CheckpointPath",
         )
+        sam2_tiling_enabled = _pick(
+            args,
+            "sam2_tiling_enabled",
+            "sam2TilingEnabled",
+            default=False,
+        )
+        sam2_tile_size_px_raw = _pick(args, "sam2_tile_size_px", "sam2TileSizePx")
+        sam2_overlap_px_raw = _pick(args, "sam2_overlap_px", "sam2OverlapPx")
+        sam2_global_pass_longest_side_raw = _pick(
+            args,
+            "sam2_global_pass_longest_side",
+            "sam2GlobalPassLongestSide",
+        )
+        sam2_max_concurrency_raw = _pick(args, "sam2_max_concurrency", "sam2MaxConcurrency")
+        sam2_points_per_side_raw = _pick(args, "sam2_points_per_side", "sam2PointsPerSide")
+        sam2_points_per_batch_raw = _pick(args, "sam2_points_per_batch", "sam2PointsPerBatch")
+        sam2_pred_iou_thresh_raw = _pick(args, "sam2_pred_iou_thresh", "sam2PredIouThresh")
+        sam2_stability_score_thresh_raw = _pick(
+            args,
+            "sam2_stability_score_thresh",
+            "sam2StabilityScoreThresh",
+        )
+        sam2_crop_n_layers_raw = _pick(args, "sam2_crop_n_layers", "sam2CropNLayers")
         enable_segmentation = _pick(
             args,
             "enable_segmentation",
@@ -4653,6 +5348,34 @@ def _argv_from_request(
                 raise _PortalValidationReasonError(f"Invalid {field_name}")
             return parsed
 
+        def _parse_optional_non_negative_int(
+            value: Any,
+            field_name: str,
+        ) -> Optional[int]:
+            if value is None or (isinstance(value, str) and not value.strip()):
+                return None
+            try:
+                parsed = int(value)
+            except (TypeError, ValueError):
+                raise _PortalValidationReasonError(f"Invalid {field_name}") from None
+            if parsed < 0:
+                raise _PortalValidationReasonError(f"Invalid {field_name}")
+            return parsed
+
+        def _parse_optional_probability(
+            value: Any,
+            field_name: str,
+        ) -> Optional[float]:
+            if value is None or (isinstance(value, str) and not value.strip()):
+                return None
+            try:
+                parsed = float(value)
+            except (TypeError, ValueError):
+                raise _PortalValidationReasonError(f"Invalid {field_name}") from None
+            if not math.isfinite(parsed) or parsed < 0.0 or parsed > 1.0:
+                raise _PortalValidationReasonError(f"Invalid {field_name}")
+            return parsed
+
         reconstruction_iterations = _parse_optional_positive_int(
             reconstruction_iterations_raw,
             "reconstruction_iterations",
@@ -4665,6 +5388,23 @@ def _argv_from_request(
             max_gpu_workers_raw,
             "max_gpu_workers",
         )
+        sam2_tile_size_px = _parse_optional_positive_int(sam2_tile_size_px_raw, "sam2_tile_size_px")
+        sam2_overlap_px = _parse_optional_non_negative_int(sam2_overlap_px_raw, "sam2_overlap_px")
+        sam2_global_pass_longest_side = _parse_optional_positive_int(
+            sam2_global_pass_longest_side_raw,
+            "sam2_global_pass_longest_side",
+        )
+        sam2_max_concurrency = _parse_optional_positive_int(sam2_max_concurrency_raw, "sam2_max_concurrency")
+        sam2_points_per_side = _parse_optional_positive_int(sam2_points_per_side_raw, "sam2_points_per_side")
+        sam2_points_per_batch = _parse_optional_positive_int(sam2_points_per_batch_raw, "sam2_points_per_batch")
+        sam2_pred_iou_thresh = _parse_optional_probability(sam2_pred_iou_thresh_raw, "sam2_pred_iou_thresh")
+        sam2_stability_score_thresh = _parse_optional_probability(
+            sam2_stability_score_thresh_raw,
+            "sam2_stability_score_thresh",
+        )
+        sam2_crop_n_layers = _parse_optional_non_negative_int(sam2_crop_n_layers_raw, "sam2_crop_n_layers")
+        if sam2_tile_size_px is not None and sam2_overlap_px is not None and sam2_overlap_px >= sam2_tile_size_px:
+            raise _PortalValidationReasonError("Invalid sam2_overlap_px")
 
         sam2_checkpoint_path = ""
         if sam2_checkpoint_path_raw is not None and str(sam2_checkpoint_path_raw).strip():
@@ -4720,6 +5460,26 @@ def _argv_from_request(
             argv.extend(["--sam2-model-size", sam2_model_size])
         if segmentation_backend == "sam2" and sam2_checkpoint_path:
             argv.extend(["--sam2-checkpoint-path", sam2_checkpoint_path])
+        if segmentation_backend == "sam2" and _as_bool(sam2_tiling_enabled, default=False):
+            argv.append("--sam2-tiling-enabled")
+        if segmentation_backend == "sam2" and sam2_tile_size_px is not None:
+            argv.extend(["--sam2-tile-size-px", str(sam2_tile_size_px)])
+        if segmentation_backend == "sam2" and sam2_overlap_px is not None:
+            argv.extend(["--sam2-overlap-px", str(sam2_overlap_px)])
+        if segmentation_backend == "sam2" and sam2_global_pass_longest_side is not None:
+            argv.extend(["--sam2-global-pass-longest-side", str(sam2_global_pass_longest_side)])
+        if segmentation_backend == "sam2" and sam2_max_concurrency is not None:
+            argv.extend(["--sam2-max-concurrency", str(sam2_max_concurrency)])
+        if segmentation_backend == "sam2" and sam2_points_per_side is not None:
+            argv.extend(["--sam2-points-per-side", str(sam2_points_per_side)])
+        if segmentation_backend == "sam2" and sam2_points_per_batch is not None:
+            argv.extend(["--sam2-points-per-batch", str(sam2_points_per_batch)])
+        if segmentation_backend == "sam2" and sam2_pred_iou_thresh is not None:
+            argv.extend(["--sam2-pred-iou-thresh", str(sam2_pred_iou_thresh)])
+        if segmentation_backend == "sam2" and sam2_stability_score_thresh is not None:
+            argv.extend(["--sam2-stability-score-thresh", str(sam2_stability_score_thresh)])
+        if segmentation_backend == "sam2" and sam2_crop_n_layers is not None:
+            argv.extend(["--sam2-crop-n-layers", str(sam2_crop_n_layers)])
         if _as_bool(strict_segmentation, default=False):
             argv.append("--strict-segmentation")
 
@@ -4771,6 +5531,27 @@ def _argv_from_request(
                         "emit_run_card",
                         "emitRunCard",
                         default=True,
+                    )
+                ),
+                "--run-card-version",
+                str(
+                    _pick(
+                        args,
+                        "run_card_version",
+                        "runCardVersion",
+                        default="v1",
+                    )
+                    or "v1"
+                )
+                .strip()
+                .lower(),
+                "--run-card-include-proofs",
+                onoff(
+                    _pick(
+                        args,
+                        "run_card_include_proofs",
+                        "runCardIncludeProofs",
+                        default=False,
                     )
                 ),
             ]
@@ -5088,26 +5869,46 @@ async def serve_ui() -> Response:
             status_code=500,
             detail="portal.html is missing",
         )
-    return FileResponse(
-        str(PORTAL_HTML),
+    bundle = _get_portal_asset_bundle()
+    return Response(
+        content=bundle.html_bytes,
         headers={
             "Cache-Control": "no-store",
             "Pragma": "no-cache",
+            "Content-Type": "text/html; charset=utf-8",
         },
     )
 
 
 @app.get("/portal/assets/{asset_path:path}")
-async def serve_portal_asset(asset_path: str) -> Response:
+async def serve_portal_asset(asset_path: str, request: Request) -> Response:
     try:
         resolved_asset = _resolve_portal_asset(asset_path)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail="portal asset not found") from exc
 
+    requested_fingerprint = _requested_portal_asset_fingerprint(request)
+    if asset_path == "portal.css":
+        css_asset = _get_portal_css_asset()
+        cache_control = _portal_asset_cache_control(css_asset.fingerprint, requested_fingerprint)
+        return Response(
+            content=css_asset.content_bytes,
+            headers={
+                "Cache-Control": cache_control,
+                "Content-Type": resolved_asset.media_type,
+                "ETag": f'"{css_asset.fingerprint}"',
+            },
+        )
+
+    direct_fingerprint = _get_portal_direct_asset_fingerprint(asset_path)
+    cache_control = _portal_asset_cache_control(direct_fingerprint, requested_fingerprint)
     return FileResponse(
         str(resolved_asset.path),
         media_type=resolved_asset.media_type,
-        headers={"Cache-Control": PORTAL_ASSET_CACHE_CONTROL},
+        headers={
+            "Cache-Control": cache_control,
+            "ETag": f'"{direct_fingerprint}"',
+        },
     )
 
 

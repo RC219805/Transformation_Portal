@@ -1,5 +1,9 @@
 # Portal Secure Front Door Quickstart
 
+See [Portal Edge Hardening Implementation Standard](../architecture/PORTAL_EDGE_HARDENING_IMPLEMENTATION_STANDARD.md)
+for the repo-owned cache, header, auth-boundary, and validation baseline that
+governs this quickstart.
+
 ## Topology
 
 The secure front door is a separate Node app in `web/secure-landing/`.
@@ -67,9 +71,16 @@ Start the FastAPI origin first:
 python -m uvicorn app:app --host 127.0.0.1 --port 8000 --reload
 ```
 
+Seed the canonical reusable local login fixture if you want a stable localhost sign-in:
+
+```bash
+make seed-frontdoor-user
+```
+
 Start the front door in a second shell:
 
 ```bash
+make seed-frontdoor-user
 make run-frontdoor-local
 ```
 
@@ -79,8 +90,15 @@ The canonical launcher:
 - exports the known-good local managed env (`NODE_ENV=development`, `TP_ALLOW_LOCAL_ACCESS_BYPASS=1`)
 - pins the supported SQLite session posture with `TP_FRONTDOOR_SESSION_SCALING_MODE=single_instance`
 - reuses `TP_API_KEY` as `TP_BACKEND_API_KEY` when needed
+- auto-seeds `/tmp/tp-frontdoor-users.json` with `smoke-admin` / `correct horse battery staple` when no explicit `TP_FRONTDOOR_USERS_FILE` or `TP_FRONTDOOR_USERS_JSON` is configured
 - verifies FastAPI readiness first
 - refuses to start if `localhost:3000` is already occupied instead of letting Next.js drift to `:3001`
+
+The canonical local credential bootstrap:
+- `make seed-frontdoor-user` writes a single-user JSON fixture to `TP_FRONTDOOR_USERS_FILE` when you override it, or to `/tmp/tp-frontdoor-users.json` by default
+- `TP_FRONTDOOR_USERS_FILE`, `TP_FRONTDOOR_USERNAME`, and `TP_FRONTDOOR_PASSWORD` override the built-in local bootstrap defaults; they are not required for the canonical local path
+- it defaults `access_email` to `<username>@local.invalid` and `role` to `admin`
+- it overwrites stale local fixture content instead of relying on fragile inline `node -e` snippets
 
 Route ownership:
 - `GET /` serves the public Dynamic Neural Access homepage, even for authenticated operators.
@@ -93,9 +111,17 @@ Route ownership:
 - `GET /healthz` now returns structured readiness checks under `checks.backend`, `checks.access_config`, `checks.user_source`, `checks.session_store`, and `checks.session_scaling`; required production failures return `503`.
 
 Static front-door assets:
-- `/brand/dna-mark-dark.svg` for dark/video-backed front-door surfaces
-- `/brand/dna-mark-light.svg` for light surfaces
+- `/brand/dna-symbol-dark.svg` and `/brand/dna-symbol-light.svg` for compact brand marks on dark and light front-door surfaces
+- `/brand/dna-lockup-dark.svg` and `/brand/dna-lockup-light.svg` for explicit full-logo lockups on homepage hero and login shells
 - `/video/dna-loop.mp4` as the canonical branded loop for homepage and login
+
+Managed portal-served brand assets:
+- `/portal/assets/brand/dna-symbol-dark.svg`
+- `/portal/assets/brand/dna-symbol-light.svg`
+
+Brand contract notes:
+- Front-door assets use explicit `symbol` and `lockup` variants instead of the older generic `dna-mark-*` naming.
+- Portal-served assets are limited to mirrored `symbol` variants in this tranche and must remain allowlisted through `config/portal_asset_manifest.json`.
 
 ## Portal Modes
 
@@ -140,49 +166,137 @@ originRequest:
 - Keep app-side JWT verification enabled even when Tunnel origin enforcement is active.
 - Do not route normal browser traffic directly to FastAPI.
 - If the front door is hosted on Vercel, Cloudflare must still front the user-facing hostname, the app must continue to verify the Access JWT, and deployment or preview URLs must be protected with equivalent controls such as Vercel Deployment Protection.
+- Vercel deployment or preview-URL protection is distinct from production-domain coverage. Configure the appropriate Vercel Deployment Protection scope for the environment you are validating; protecting only preview URLs is not sufficient for a production-domain rollout.
+- Treat this posture as a predeploy requirement before any internet-reachable staging or production environment, not as a post-launch hardening task.
 - The v1 session store remains SQLite-backed and currently supports only `TP_FRONTDOOR_SESSION_SCALING_MODE=single_instance`.
 - If your deployment target requires `multi_instance` or `ephemeral_runtime`, treat that as a blocked requirement until a dedicated external session store is introduced; the front door now fails `/healthz` under those modes on purpose.
 
 ## Validation
 
+Validation prerequisites for every local managed frontdoor run:
+
+- Switch the frontdoor shell to Node `22.x` first. `web/secure-landing` ships
+  `.nvmrc` with `22`, and install/test/build/start all fail fast outside that
+  runtime.
+- If the shell previously used another Node major, rebuild the native modules
+  under Node `22.x` before running frontdoor checks:
+
+```bash
+cd web/secure-landing
+nvm use 22
+npm rebuild better-sqlite3 argon2
+```
+
+- Run local browser smoke against `http://localhost`, not `http://127.0.0.1`,
+  because the browser-smoke harness defaults to `http://localhost:3000` and
+  same-origin CSRF validation requires the exact origin to match, so
+  `127.0.0.1` and `localhost` are different origins.
+- Treat Node `25.x` failures as unsupported-runtime/tooling failures unless the
+  same command also fails under Node `22.x`.
+
 Front door checks:
 
 ```bash
+cd web/secure-landing
+nvm use 22
+cd ../..
 make test-frontdoor-contract
 ```
 
-Browser smoke against a running managed front door:
+Manual shared-deployment posture gate:
 
 ```bash
-TP_FRONTDOOR_BASE_URL="http://localhost:3000" \
-TP_FRONTDOOR_USERNAME="<username>" \
-TP_FRONTDOOR_PASSWORD="<password>" \
+TP_FRONTDOOR_GATE_ENVIRONMENT="staging" \
+TP_FRONTDOOR_GATE_FRONTDOOR_URL="https://portal.example.com" \
+TP_FRONTDOOR_GATE_CF_ACCESS_TEAM_DOMAIN="https://your-team.cloudflareaccess.com" \
+TP_FRONTDOOR_GATE_VERCEL_DEPLOYMENT_URL="https://portal-preview.vercel.app" \
+TP_FRONTDOOR_GATE_CONFIRM_FASTAPI_NON_PUBLIC=1 \
+make validate-frontdoor-deployment-gate
+```
+
+Notes:
+- This gate is a manual predeploy control. It does not reconfigure Cloudflare or Vercel for you.
+- The gate validates edge posture at rollout time. It does not replace app-side Cloudflare Access JWT verification.
+- If FastAPI has a public URL, set `TP_FRONTDOOR_GATE_FASTAPI_PUBLIC_URL` instead of `TP_FRONTDOOR_GATE_CONFIRM_FASTAPI_NON_PUBLIC=1`.
+- The gate fails closed for ambiguous frontdoor or Vercel responses; only clearly protected responses pass.
+
+Browser smoke with isolated local backend + managed front door:
+
+```bash
+cd web/secure-landing
+nvm use 22
+cd ../..
 make validate-frontdoor-browser
 ```
+
+That target launches isolated local backend and managed front-door runtimes and
+auto-seeds the canonical smoke credentials for the managed front-door runtime it
+creates. No manual username/password exports are required for the standard local
+path.
 
 Equivalent direct commands remain available if you want to run the underlying
 checks manually:
 
 ```bash
 cd web/secure-landing
+nvm use 22
 npm test
-npm run build
-npm run start
+TP_NEXT_DIST_DIR=.next-build-verify npm run build
+```
 
-TP_FRONTDOOR_BASE_URL="http://localhost:3000" \
-TP_FRONTDOOR_USERNAME="<username>" \
-TP_FRONTDOOR_PASSWORD="<password>" \
+If you want to launch the standalone build locally without Cloudflare Access,
+do that in a separate shell after the backend is ready and the local credential
+fixture exists:
+
+```bash
+make seed-frontdoor-user
+cd web/secure-landing
+NODE_ENV=development \
+TP_ALLOW_LOCAL_ACCESS_BYPASS=1 \
+TP_FASTAPI_ORIGIN=http://127.0.0.1:8000 \
+TP_BACKEND_API_KEY="${TP_BACKEND_API_KEY:-$TP_API_KEY}" \
+TP_FRONTDOOR_USERS_FILE=/tmp/tp-frontdoor-users.json \
+TP_FRONTDOOR_SESSION_DB=/tmp/transformation-portal-frontdoor-sessions-standalone.db \
+TP_FRONTDOOR_SESSION_SCALING_MODE=single_instance \
+TP_NEXT_DIST_DIR=.next-build-verify \
+npm run start
+```
+
+For local standalone runs, keep `NODE_ENV=development` and
+`TP_ALLOW_LOCAL_ACCESS_BYPASS=1`; otherwise the front door treats Cloudflare
+Access as required and `/healthz` fails closed until `TP_CF_ACCESS_TEAM_DOMAIN`
+and `TP_CF_ACCESS_AUD` are configured.
+
+If you want standalone validation with the production auth posture instead of
+the local bypass, keep `NODE_ENV=production`, supply
+`TP_CF_ACCESS_TEAM_DOMAIN` + `TP_CF_ACCESS_AUD`, and run it behind HTTPS (or an
+equivalent trusted edge) so the secure-cookie flow remains valid.
+
+If you want browser smoke against an already running managed front door, run it
+from the repo root and point it at that instance instead of
+`--spawn-local-frontdoor`:
+
+```bash
+TP_FRONTDOOR_BASE_URL="https://portal.example.com" \
+TP_FRONTDOOR_USERNAME="replace-with-operator-username" \
+TP_FRONTDOOR_PASSWORD="replace-with-operator-password" \
 python scripts/validation/validate_frontdoor_browser_smoke.py
 ```
 
-For local managed smoke validation, use `http://localhost:3000` rather than
-`http://127.0.0.1:3000`; the development front door normalizes same-origin CSRF
-checks to `localhost`.
+If you point the browser smoke at an already running or non-local managed
+front-door instead of `--spawn-local-frontdoor`, continue to pass
+`TP_FRONTDOOR_USERNAME` and `TP_FRONTDOOR_PASSWORD` explicitly.
 
-For release validation, prefer running the browser smoke against `npm run start`
-after a successful `npm run build`, not only against `next dev`. The start
-wrapper launches the standalone build output and preserves the production-like
-cookie posture. Local HTTP login validation still needs
+For local managed smoke validation, use `http://localhost:3000` rather than
+`http://127.0.0.1:3000`; the browser smoke defaults to that origin and the
+front door's same-origin CSRF validation requires an exact origin match, so
+`127.0.0.1:3000` and `localhost:3000` are different origins.
+
+For release validation, prefer running the browser smoke against
+`TP_NEXT_DIST_DIR=.next-build-verify npm run start` after building with the
+same `TP_NEXT_DIST_DIR=.next-build-verify` value, not only against `next dev`.
+The start wrapper launches the standalone build output and preserves the
+production-like cookie posture. Local HTTP login validation still needs
 HTTPS (or equivalent) if you want to exercise the full auth flow outside `next dev`.
 
 FastAPI contract gate:
@@ -190,6 +304,11 @@ FastAPI contract gate:
 ```bash
 make test-orchestrator-contract
 ```
+
+Manual GitHub predeploy workflow:
+- Use `.github/workflows/frontdoor-deployment-gate.yml` via `workflow_dispatch` for shared staging or production rollouts.
+- Bind `staging` runs to `frontdoor-staging` and `production` runs to `frontdoor-production`.
+- Configure GitHub environment reviewers so deployment approval happens before the live gate executes.
 
 Direct-debug portal browser smoke:
 

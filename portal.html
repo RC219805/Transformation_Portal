@@ -4,8 +4,32 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Transformation Portal — Orchestrator</title>
-    <link rel="stylesheet" href="/portal/assets/portal.css" />
+    <link rel="stylesheet" href="__PORTAL_CSS_URL__" />
 </head>
+<!--
+============================================================================
+TRANSFORMATION PORTAL — OPERATOR CONSOLE
+============================================================================
+
+This file contains the HTML structure for the portal operator console.
+It is organized into the following sections:
+
+  1. HEADER           - Top bar with branding, health status, actions
+  2. OVERVIEW VIEW    - Dashboard with status, recent jobs, next action
+  3. BUILD VIEW       - Pipeline configuration and dispatch stepper
+  4. OPERATE VIEW     - Job queue, inspector, logs, artifacts
+  5. REVIEW VIEW      - Artifact preview and comparison
+  6. OVERLAYS         - Shortcuts, effective config drawers
+  7. SCRIPTS          - Portal JavaScript import
+
+Contract notes:
+  - data-ui attributes used by browser smoke tests
+  - ?view= query param routes: overview, build, operate, review
+  - job=, artifact=, compare=1 additive params
+  - /portal/assets/* served by FastAPI
+
+============================================================================
+-->
 <body data-console-view="overview" data-bootstrap-status="pending" class="shell-bg text-slate-900 dark:text-slate-100 antialiased selection:bg-cyan-500/25 transition-colors duration-300">
 
     <a href="#main-content" class="skip-link rounded-lg px-4 py-2 text-sm font-medium text-white bg-indigo-600 shadow-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
@@ -14,23 +38,27 @@
 
     <div aria-hidden="true" class="shell-noise"></div>
 
-    <!-- Header -->
-    <header class="sticky top-0 z-40 border-b border-white/55 dark:border-slate-800 bg-white/86 dark:bg-slate-950/78 backdrop-blur-xl transition-colors duration-300">
-        <div class="mx-auto max-w-7xl px-6 py-4 flex items-center justify-between gap-4">
+    <!-- ============================================ -->
+    <!-- 1. HEADER                                   -->
+    <!-- ============================================ -->
+    <header class="portal-topbar sticky top-0 z-40 border-b backdrop-blur-xl transition-colors duration-300" data-ui="portal-topbar">
+        <div class="portal-topbar__inner mx-auto max-w-7xl px-6 py-4 flex items-center justify-between gap-4">
             <div class="flex items-center gap-4 min-w-0">
-                <div class="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/70 bg-white text-sm font-black tracking-[0.24em] text-cyan-800 shadow-soft dark:border-slate-700 dark:bg-slate-900 dark:text-cyan-200">
-                    <svg class="h-6 w-6" viewBox="0 0 256 256" role="img" aria-label="Transformation Portal brand mark" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <defs>
-                            <linearGradient id="portal-brand-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                                <stop offset="0%" stop-color="#56CCF2" />
-                                <stop offset="100%" stop-color="#2AC7FF" />
-                            </linearGradient>
-                        </defs>
-                        <path d="M128 28c-24.3 0-44 19.7-44 44v8H92c-12.2 0-22 9.8-22 22v46c0 9.3 6 17.6 14.9 20.6l16.1 5.4V196c0 21.5 17.5 39 39 39h8c21.5 0 39-17.5 39-39v-22.9l16.1-5.4c8.9-3 14.9-11.3 14.9-20.6V102c0-12.2-9.8-22-22-22h-8v-8c0-24.3-19.7-44-44-44h-8Z" />
-                        <path d="M104 56h48M104 212h48" />
-                        <path d="M128 112c-18 0-32 14-32 32 0 12.2 7 24.1 18.1 29.6 3.1 1.5 6.7 1.4 9.6-0.5 1.8-1.2 3.2-2.8 4.2-4.7a36 36 0 0 1-6.9-20.4c0-11.3 5.7-21.3 14.2-26.9 2.7-1.7 6.2-1.7 8.9 0 8.5 5.6 14.2 15.6 14.2 26.9a36 36 0 0 1-6.9 20.4c1 1.9 2.4 3.5 4.2 4.7 2.9 1.9 6.5 2 9.6 0.5 11.1-5.5 18.1-17.4 18.1-29.6 0-18-14-32-32-32h-19.2Z" />
-                        <path d="M128 88s12-10.3 12-24c0-13-12-20-12-20s-12 7-12 20c0 13.7 12 24 12 24Z" />
-                    </svg>
+                <div class="portal-brand-mark flex h-12 w-12 items-center justify-center rounded-2xl text-sm font-black tracking-[0.24em] shadow-soft">
+                    <img
+                        class="portal-brand-asset portal-brand-asset--light"
+                        src="__PORTAL_BRAND_LIGHT_URL__"
+                        alt=""
+                        decoding="async"
+                        aria-hidden="true"
+                    />
+                    <img
+                        class="portal-brand-asset portal-brand-asset--dark"
+                        src="__PORTAL_BRAND_DARK_URL__"
+                        alt=""
+                        decoding="async"
+                        aria-hidden="true"
+                    />
                 </div>
                 <div class="flex min-w-0 flex-col">
                     <p class="section-kicker">Operator Console</p>
@@ -43,9 +71,9 @@
                 </div>
             </div>
 
-            <div class="flex items-center gap-3">
+            <div class="portal-topbar__actions flex items-center gap-3" data-ui="portal-topbar-actions">
                 <button id="shortcutsBtn" type="button" class="rounded-full border border-slate-200 dark:border-slate-700 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 hover:text-slate-900 hover:border-slate-300 dark:text-slate-400 dark:hover:text-white dark:hover:border-slate-600 transition-colors focus:outline-none focus:ring-2 focus:ring-cyan-500">
-                    Shortcuts
+                    Shortcuts <span class="kbd">?</span>
                 </button>
                 <button id="themeBtn" type="button" class="rounded-full px-4 py-2 text-xs font-semibold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors focus:outline-none focus:ring-2 focus:ring-cyan-500" aria-label="Theme preference: system. Click to switch to dark.">
                     Theme: System
@@ -55,8 +83,11 @@
     </header>
 
     <main id="main-content" tabindex="-1" class="mx-auto max-w-7xl px-6 py-8 outline-none">
-        <section id="overview-shell" data-ui="overview-grid" class="mb-6 grid grid-cols-1 lg:grid-cols-12 gap-4">
-            <div id="mission-shell" class="overview-primary lg:col-span-7 rounded-[1.75rem] shell-panel-strong p-6" data-ui="overview-summary">
+        <!-- ============================================ -->
+        <!-- 2. OVERVIEW VIEW                            -->
+        <!-- ============================================ -->
+        <section id="overview-shell" data-ui="overview-grid" class="portal-overview-shell mb-6 grid grid-cols-1 lg:grid-cols-12 gap-4">
+            <div id="mission-shell" class="workspace-shell workspace-shell--overview overview-primary lg:col-span-7 rounded-[1.75rem] shell-panel-strong p-6" data-ui="overview-summary">
                 <div id="missionShellSkeletonState" class="hidden space-y-5" aria-hidden="true" data-ui="overview-skeleton">
                     <div class="surface-skeleton-row">
                         <div class="flex-1 space-y-3">
@@ -102,7 +133,7 @@
                             Start a new run, resume the current draft, or jump straight into the latest live or reviewable work.
                         </p>
                     </div>
-                    <div class="overview-actions" data-ui="overview-actions">
+                    <div class="overview-actions" data-ui="overview-actions-cluster">
                         <button id="heroRunBtn" type="button" class="hero-action hero-action-primary focus:outline-none focus:ring-2 focus:ring-cyan-500" data-ui="overview-new-run">
                             New Run
                         </button>
@@ -144,7 +175,7 @@
                 </div>
             </div>
 
-            <div id="intelligence-shell" class="overview-secondary lg:col-span-5 rounded-[1.75rem] shell-panel p-6 shadow-soft dark:shadow-soft-dark" data-ui="overview-side">
+            <div id="intelligence-shell" class="workspace-shell workspace-shell--overview overview-secondary lg:col-span-5 rounded-[1.75rem] shell-panel p-6 shadow-soft dark:shadow-soft-dark" data-ui="overview-side">
                 <div id="intelligenceShellSkeletonState" class="hidden space-y-4" aria-hidden="true" data-ui="overview-draft-skeleton">
                     <div class="surface-skeleton-row">
                         <div class="flex-1 space-y-3">
@@ -212,70 +243,120 @@
                         <p id="heroWarningCount" class="mt-2 text-sm font-bold text-slate-900 dark:text-white">0</p>
                     </div>
                 </div>
+                <details id="overviewRuntimeClarityShell" class="quiet-disclosure mt-6">
+                    <summary class="quiet-disclosure__summary">
+                        <div>
+                            <p class="section-kicker">Runtime summary</p>
+                            <p class="quiet-disclosure__title">Open runtime posture and checkpoint detail</p>
+                        </div>
+                        <span class="micro-status">Backend-owned policy</span>
+                    </summary>
+                    <div class="quiet-disclosure__body">
+                        <p class="text-[12px] leading-6 text-slate-500 dark:text-slate-400">
+                            Selected backends, runtime posture, checkpoint expectations, and license acknowledgments stay available while the draft changes.
+                        </p>
+                        <div id="overviewRuntimeBriefing" class="runtime-briefing-grid mt-4" data-ui="runtime-clarity-grid"></div>
+                    </div>
+                </details>
                 </div>
             </div>
         </section>
 
-        <nav aria-label="Workspace sections" class="workspace-rail mb-6 rounded-[1.5rem] px-3 py-3" data-ui="view-switcher">
+        <nav aria-label="Workspace sections" class="portal-workspace-rail workspace-rail mb-6 rounded-[1.5rem] px-3 py-3" data-ui="view-switcher">
             <div class="workspace-rail-copy">
                 <p class="section-kicker">Workspace</p>
                 <p class="workspace-rail-text">
                     Overview, build, live operation, and review in one quiet shell.
                 </p>
+                <p class="workspace-shortcut-hint" data-ui="workspace-shortcut-hint">
+                    Keyboard: <span class="kbd">1</span> overview, <span class="kbd">2</span> build, <span class="kbd">3</span> operate, <span class="kbd">4</span> review, <span class="kbd">?</span> shortcuts.
+                </p>
             </div>
             <div class="workspace-rail-links" role="tablist" aria-label="Console views">
-                <a class="workspace-link is-active" data-view-link="overview" data-ui="view-link" href="?view=overview" role="tab" aria-selected="true">
-                    <span class="workspace-link-label">Overview</span>
+                <a class="workspace-link is-active" data-view-link="overview" data-ui="view-link" href="?view=overview" role="tab" aria-selected="true" aria-keyshortcuts="1">
+                    <span class="workspace-link-heading">
+                        <span class="workspace-link-label">Overview</span>
+                        <span class="workspace-link-shortcut" aria-hidden="true">1</span>
+                    </span>
                     <span class="workspace-link-meta">Status, recent jobs, and next action.</span>
                 </a>
-                <a class="workspace-link" data-view-link="build" data-ui="view-link" href="?view=build" role="tab" aria-selected="false">
-                    <span class="workspace-link-label">Build</span>
+                <a class="workspace-link" data-view-link="build" data-ui="view-link" href="?view=build" role="tab" aria-selected="false" aria-keyshortcuts="2">
+                    <span class="workspace-link-heading">
+                        <span class="workspace-link-label">Build</span>
+                        <span class="workspace-link-shortcut" aria-hidden="true">2</span>
+                    </span>
                     <span class="workspace-link-meta">Preview-backed dispatch flow.</span>
                 </a>
-                <a class="workspace-link" data-view-link="operate" data-ui="view-link" href="?view=operate" role="tab" aria-selected="false">
-                    <span class="workspace-link-label">Operate</span>
+                <a class="workspace-link" data-view-link="operate" data-ui="view-link" href="?view=operate" role="tab" aria-selected="false" aria-keyshortcuts="3">
+                    <span class="workspace-link-heading">
+                        <span class="workspace-link-label">Operate</span>
+                        <span class="workspace-link-shortcut" aria-hidden="true">3</span>
+                    </span>
                     <span class="workspace-link-meta">Queue, inspector, artifacts, and logs.</span>
                 </a>
-                <a class="workspace-link" data-view-link="review" data-ui="view-link" href="?view=review" role="tab" aria-selected="false">
-                    <span class="workspace-link-label">Review</span>
+                <a class="workspace-link" data-view-link="review" data-ui="view-link" href="?view=review" role="tab" aria-selected="false" aria-keyshortcuts="4">
+                    <span class="workspace-link-heading">
+                        <span class="workspace-link-label">Review</span>
+                        <span class="workspace-link-shortcut" aria-hidden="true">4</span>
+                    </span>
                     <span class="workspace-link-meta">Artifact preview, provenance, and actions.</span>
                 </a>
             </div>
         </nav>
 
-        <section id="console-context-shell" class="mb-6 rounded-[1.5rem] shell-panel px-6 py-5 shadow-soft dark:shadow-soft-dark">
-            <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+        <section id="console-context-shell" class="workspace-shell portal-context-shell mb-6 rounded-[1.5rem] shell-panel px-6 py-5 shadow-soft dark:shadow-soft-dark" data-ui="console-context-shell">
+            <div class="portal-context-head flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
                 <div>
                     <p class="section-kicker">Current View</p>
                     <h2 id="consoleViewTitle" class="mt-2 text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">Overview</h2>
                     <p id="consoleViewSummary" class="mt-2 max-w-3xl text-[14px] leading-7 text-slate-600 dark:text-slate-300">Status, recent jobs, and the clearest next operator action.</p>
                 </div>
-                <p id="consoleViewMeta" class="text-[11px] font-mono text-slate-500 dark:text-slate-400">View routing stays client-side to preserve the live orchestrator contract.</p>
+                <p id="consoleViewMeta" class="portal-context-meta text-[11px] font-mono text-slate-500 dark:text-slate-400">View routing stays client-side to preserve the live orchestrator contract.</p>
             </div>
-            <div id="consoleContextRibbon" class="console-context-ribbon mt-4 hidden" data-ui="console-context-ribbon" aria-live="polite">
-                <div class="console-context-card">
-                    <p class="console-context-label">Selected Job</p>
-                    <p id="contextRibbonJob" class="console-context-value">No job selected</p>
-                    <p id="contextRibbonJobMeta" class="console-context-meta">Choose a run in operate or review to pin context here.</p>
+            <div class="console-context-strip mt-4" data-ui="console-context-strip">
+                <div id="consoleContextRibbon" class="console-context-ribbon portal-context-ribbon hidden" data-ui="console-context-ribbon" aria-live="polite">
+                    <div id="contextRibbonCard1" class="console-context-card" data-tone="info">
+                        <p id="contextRibbonCard1Label" class="console-context-label">Job</p>
+                        <p id="contextRibbonJob" class="console-context-value">No job selected</p>
+                        <p id="contextRibbonJobMeta" class="console-context-meta">Choose a run in operate or review to pin context here.</p>
+                    </div>
+                    <div id="contextRibbonCard2" class="console-context-card" data-tone="info">
+                        <p id="contextRibbonCard2Label" class="console-context-label">State</p>
+                        <p id="contextRibbonState" class="console-context-value">Idle</p>
+                        <p id="contextRibbonFreshness" class="console-context-meta">No live telemetry</p>
+                    </div>
+                    <div id="contextRibbonCard3" class="console-context-card" data-tone="info">
+                        <p id="contextRibbonCard3Label" class="console-context-label">Artifact</p>
+                        <p id="contextRibbonArtifact" class="console-context-value">Awaiting selection</p>
+                        <p id="contextRibbonArtifactMeta" class="console-context-meta">Review context will show the active artifact path here.</p>
+                    </div>
+                    <div id="contextRibbonCard4" class="console-context-card" data-tone="info">
+                        <p id="contextRibbonCard4Label" class="console-context-label">Compare</p>
+                        <p id="contextRibbonCompare" class="console-context-value">No compare pair</p>
+                        <p id="contextRibbonCompareMeta" class="console-context-meta">No paired comparison is available for the current artifact.</p>
+                    </div>
                 </div>
-                <div class="console-context-card">
-                    <p class="console-context-label">Run State</p>
-                    <p id="contextRibbonState" class="console-context-value">Idle</p>
-                    <p id="contextRibbonFreshness" class="console-context-meta">No live telemetry</p>
-                </div>
-                <div class="console-context-card">
-                    <p class="console-context-label">Selected Artifact</p>
-                    <p id="contextRibbonArtifact" class="console-context-value">Awaiting selection</p>
-                    <p id="contextRibbonArtifactMeta" class="console-context-meta">Review context will show the active artifact path here.</p>
-                </div>
-                <div class="console-context-card">
-                    <p class="console-context-label">Compare Mode</p>
-                    <p id="contextRibbonCompare" class="console-context-value">Single view</p>
-                    <p id="contextRibbonCompareMeta" class="console-context-meta">Deep-linkable review context stays aligned with the URL.</p>
-                </div>
+                <section id="consoleActionRail" class="console-action-rail hidden" data-ui="console-action-rail" data-tone="info" aria-live="polite">
+                    <div class="console-action-rail-copy">
+                        <p class="console-action-rail-kicker">Action rail</p>
+                        <p id="consoleActionRailTitle" class="console-action-rail-title">Keep the next operator move pinned</p>
+                        <p id="consoleActionRailDetail" class="console-action-rail-detail">Contextual review, artifact, compare, and recovery actions update here from the current run state.</p>
+                        <p id="consoleActionRailHint" class="console-action-rail-hint" data-ui="console-action-shortcuts">
+                            Keyboard: <span class="kbd">1</span> overview, <span class="kbd">2</span> build, <span class="kbd">3</span> operate, <span class="kbd">4</span> review, <span class="kbd">?</span> shortcuts.
+                        </p>
+                    </div>
+                    <div id="consoleActionRailActions" class="console-action-rail-actions">
+                        <button id="consoleActionPrimaryBtn" type="button" class="operator-action-btn operator-action-btn-primary hidden" data-ui="console-action-primary"></button>
+                        <button id="consoleActionSecondaryBtn1" type="button" class="operator-action-btn operator-action-btn-secondary hidden" data-ui="console-action-secondary-1"></button>
+                        <button id="consoleActionSecondaryBtn2" type="button" class="operator-action-btn operator-action-btn-secondary hidden" data-ui="console-action-secondary-2"></button>
+                    </div>
+                </section>
             </div>
         </section>
 
+        <!-- ============================================ -->
+        <!-- 3. BUILD VIEW                               -->
+        <!-- ============================================ -->
         <div id="console-grid" class="grid grid-cols-1 lg:grid-cols-12 gap-8 hidden">
 
             <!-- Left Column: Configuration -->
@@ -350,6 +431,30 @@
                             <input type="password" id="apiKeyInput" class="flex-1 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors" placeholder="Bearer token for /v1/jobs endpoints" autocomplete="off" spellcheck="false" disabled />
                         </div>
                     </div>
+                    <div id="portalAccessState" class="portal-access-state mt-4" data-ui="portal-access-state" data-tone="info" data-bootstrap-status="pending">
+                        <div class="portal-access-state__head">
+                            <div>
+                                <p class="portal-access-state__kicker">Access posture</p>
+                                <p id="bootstrapRecoveryHint" class="portal-access-state__detail">Bootstrap is still being confirmed. Privileged actions remain disabled until portal authentication is resolved.</p>
+                            </div>
+                            <span id="bootstrapStatusBadge" class="signal-badge portal-access-state__badge" data-tone="info">Confirming access</span>
+                        </div>
+                    </div>
+                    <details id="buildRuntimeClarityShell" class="quiet-disclosure mt-5">
+                        <summary class="quiet-disclosure__summary">
+                            <div>
+                                <p class="section-kicker">Execution briefing</p>
+                                <p class="quiet-disclosure__title">Open runtime and license posture detail</p>
+                            </div>
+                            <span class="micro-status">Decision support</span>
+                        </summary>
+                        <div class="quiet-disclosure__body">
+                            <p class="text-[12px] leading-6 text-slate-500 dark:text-slate-400">
+                                The selected depth path, segmentation mode, checkpoint expectation, and license posture stay pinned here while you move through Steps 2-4.
+                            </p>
+                            <div id="buildRuntimeBriefing" class="runtime-briefing-grid runtime-briefing-grid--compact mt-4" data-ui="build-runtime-clarity"></div>
+                        </div>
+                    </details>
                     </div>
                 </div>
 
@@ -401,6 +506,28 @@
                             </button>
                         </div>
                     </div>
+                    <div id="buildPulseGrid" class="build-pulse-grid mt-5" data-ui="build-step-pulse">
+                        <div id="buildPulseDraftCard" class="build-pulse-card" data-tone="info">
+                            <p class="build-pulse-label">Draft</p>
+                            <p id="buildPulseDraft" class="build-pulse-value">premium</p>
+                            <p id="buildPulseDraftMeta" class="build-pulse-meta">lux-depth-v3 draft is staged for preview-backed dispatch.</p>
+                        </div>
+                        <div id="buildPulseStepCard" class="build-pulse-card" data-tone="info">
+                            <p class="build-pulse-label">Current Focus</p>
+                            <p id="buildPulseStep" class="build-pulse-value">1 of 4 · Configure</p>
+                            <p id="buildPulseStepMeta" class="build-pulse-meta">Pipeline and preset posture.</p>
+                        </div>
+                        <div id="buildPulsePreviewCard" class="build-pulse-card" data-tone="info">
+                            <p class="build-pulse-label">Preview</p>
+                            <p id="buildPulsePreview" class="build-pulse-value">Refreshing</p>
+                            <p id="buildPulsePreviewMeta" class="build-pulse-meta">Preview-backed validation will summarize the draft here.</p>
+                        </div>
+                        <div id="buildPulseDispatchCard" class="build-pulse-card" data-tone="info">
+                            <p class="build-pulse-label">Dispatch</p>
+                            <p id="buildPulseDispatch" class="build-pulse-value">Review dispatch posture</p>
+                            <p id="buildPulseDispatchMeta" class="build-pulse-meta">The next operator action stays pinned here while the draft changes.</p>
+                        </div>
+                    </div>
                     <div id="buildStepTabs" class="build-step-tabs mt-5" role="tablist" aria-label="Build steps">
                         <button id="buildStepTab1" type="button" class="build-step-tab is-active" data-build-step-target="1" role="tab" aria-selected="true" data-ui="build-step-tab">
                             <span class="build-step-index">1</span>
@@ -419,33 +546,19 @@
                         <button id="buildStepTab3" type="button" class="build-step-tab" data-build-step-target="3" role="tab" aria-selected="false" data-ui="build-step-tab">
                             <span class="build-step-index">3</span>
                             <span class="build-step-copy">
-                                <span class="build-step-label">Options</span>
-                                <span class="build-step-meta">Advanced controls and readiness signals.</span>
+                                <span class="build-step-label">Outputs</span>
+                                <span class="build-step-meta">Deliverables, posture, and readiness.</span>
                             </span>
                         </button>
                         <button id="buildStepTab4" type="button" class="build-step-tab" data-build-step-target="4" role="tab" aria-selected="false" data-ui="build-step-tab">
                             <span class="build-step-index">4</span>
                             <span class="build-step-copy">
                                 <span class="build-step-label">Dispatch</span>
-                                <span class="build-step-meta">CLI parity, warnings, and launch.</span>
+                                <span class="build-step-meta">Primary review, launch, and parity tools.</span>
                             </span>
                         </button>
                     </div>
                     </div>
-                </section>
-
-                <section id="governance-shell" data-build-step-panel="3" data-ambient-zone="governance" data-ambient-focus-x="28" data-ambient-focus-y="42" data-ambient-shift-x="-14" data-ambient-shift-y="4" data-ambient-stage-scale="1.028" data-ambient-stage-rotate="-0.2" data-ambient-color-a="#14b8a6" data-ambient-color-b="#f59e0b" data-ambient-color-c="#fde68a" data-ambient-focus-color="#fdba74" class="workspace-shell deferred-shell governance-banner rounded-[1.75rem] p-6 shadow-soft dark:shadow-soft-dark build-step-panel" data-shell-size="compact" data-ui="build-governance">
-                    <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                        <div class="max-w-2xl">
-                            <p class="section-kicker">Governance Brief</p>
-                            <h2 id="governanceBannerTitle" class="mt-2 text-xl font-extrabold tracking-tight text-slate-900 dark:text-white">Run posture is clear.</h2>
-                            <p id="governanceBannerBody" class="mt-2 text-sm leading-7 text-slate-600 dark:text-slate-300">
-                                The current configuration is valid for dispatch. Any license acknowledgments or runtime caveats will surface here before execution.
-                            </p>
-                        </div>
-                        <div class="signal-badge">Live contract checks</div>
-                    </div>
-                    <div id="governanceChecklist" class="mt-5 grid grid-cols-1 gap-3"></div>
                 </section>
 
                 <!-- Parameters -->
@@ -554,10 +667,10 @@
                         <div class="flex items-start justify-between gap-3">
                             <div>
                                 <p class="section-kicker">Step 3</p>
-                                <h3 class="mt-2 text-base font-extrabold tracking-tight text-slate-900 dark:text-white">Shape outputs and review advanced posture</h3>
-                                <p class="mt-2 text-[12px] leading-6 text-slate-500 dark:text-slate-400">Keep deliverables and primary output posture readable first, then open advanced, governance, or reconstruction controls only when the current run contract needs them.</p>
+                                <h3 class="mt-2 text-base font-extrabold tracking-tight text-slate-900 dark:text-white">Shape deliverables and confirm output posture</h3>
+                                <p class="mt-2 text-[12px] leading-6 text-slate-500 dark:text-slate-400">Keep deliverables, primary output posture, and immediate readiness readable first, then open advanced, governance, or reconstruction controls only when the current run contract needs them.</p>
                             </div>
-                            <span class="micro-status">Outputs first, research controls second</span>
+                            <span class="micro-status">Deliverables first, research controls second</span>
                         </div>
                         <div>
                             <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="depthBackend">Depth Backend</label>
@@ -630,7 +743,8 @@
 
                 <!-- Pipeline Flags -->
                 <fieldset id="flags-shell" data-build-step-panel="3" data-ambient-zone="flags" data-ambient-focus-x="36" data-ambient-focus-y="66" data-ambient-shift-x="-6" data-ambient-shift-y="14" data-ambient-stage-scale="1.045" data-ambient-stage-rotate="0.3" data-ambient-color-a="#10b981" data-ambient-color-b="#f59e0b" data-ambient-color-c="#38bdf8" data-ambient-focus-color="#fef08a" class="workspace-shell deferred-shell rounded-[1.75rem] shell-panel p-6 shadow-soft dark:shadow-soft-dark transition-colors duration-300 build-step-panel" data-shell-size="tall" data-ui="build-step-panel">
-                    <legend class="block text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-4">Core Flags & Emit Artifacts</legend>
+                    <legend class="block text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-4">Primary Output Posture</legend>
+                    <p class="step-primary-note">Shape the deliverables first. Diagnostics, acknowledgments, and runtime detail stay below as secondary controls unless the preview or contract pulls them forward.</p>
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
 
                         <!-- Toggle Wrapper Template -->
@@ -686,60 +800,6 @@
 
                     <div class="mt-6 flex items-start justify-between gap-3">
                         <div>
-                            <p class="section-kicker">Advanced & Research Controls</p>
-                            <p class="mt-2 text-[12px] leading-6 text-slate-500 dark:text-slate-400">Diagnostics, acknowledgments, and reconstruction/runtime posture remain secondary until the draft or preview flags them.</p>
-                        </div>
-                        <span class="micro-status">Secondary controls stay contextual</span>
-                    </div>
-
-                    <details id="advancedFlagsDetails" class="disclosure-panel mt-6">
-                        <summary class="disclosure-summary">
-                            <div>
-                                <p class="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Advanced Flags</p>
-                                <p class="mt-1 text-[12px] text-slate-500 dark:text-slate-400">Diagnostics, fallback, and runtime strictness controls.</p>
-                            </div>
-                            <div class="disclosure-summary-meta">
-                                <span id="advancedFlagsSummary" class="disclosure-summary-badge">Optional</span>
-                                <span class="disclosure-chevron text-slate-400">▾</span>
-                            </div>
-                        </summary>
-                        <div class="mt-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-                            <label class="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
-                                <input type="checkbox" id="saveFloatDepth" class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 dark:bg-slate-900" />
-                                <span class="text-[11px] font-mono select-none truncate text-slate-600 dark:text-slate-300">save_float_depth</span>
-                            </label>
-                            <label class="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
-                                <input type="checkbox" id="forceDepth" class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 dark:bg-slate-900" />
-                                <span class="text-[11px] font-mono select-none truncate text-slate-600 dark:text-slate-300">force_depth</span>
-                            </label>
-                            <label class="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
-                                <input type="checkbox" id="strictInputs" class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 dark:bg-slate-900" />
-                                <span class="flex items-center gap-2 min-w-0">
-                                    <span class="text-[11px] font-mono select-none truncate text-slate-600 dark:text-slate-300">strict_inputs</span>
-                                    <span class="shrink-0 rounded border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-amber-700 dark:text-amber-400">Debug</span>
-                                </span>
-                            </label>
-                            <label class="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
-                                <input type="checkbox" id="verifyImages" class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 dark:bg-slate-900" />
-                                <span class="text-[11px] font-mono select-none truncate text-slate-600 dark:text-slate-300">verify_images</span>
-                            </label>
-                            <label class="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
-                                <input type="checkbox" id="allowSemanticFallback" class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 dark:bg-slate-900" />
-                                <span class="text-[11px] font-mono select-none truncate text-slate-600 dark:text-slate-300">allow_semantic_fallback</span>
-                            </label>
-                            <label class="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
-                                <input type="checkbox" id="verboseFlag" class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 dark:bg-slate-900" />
-                                <span class="text-[11px] font-mono select-none truncate text-slate-600 dark:text-slate-300">verbose</span>
-                            </label>
-                            <label class="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
-                                <input type="checkbox" id="quietFlag" class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 dark:bg-slate-900" />
-                                <span class="text-[11px] font-mono select-none truncate text-slate-600 dark:text-slate-300">quiet</span>
-                            </label>
-                        </div>
-                    </details>
-
-                    <div class="mt-6 flex items-start justify-between gap-3">
-                        <div>
                             <p class="section-kicker">Expected Deliverables</p>
                             <p class="mt-2 text-[12px] leading-6 text-slate-500 dark:text-slate-400">Keep the primary output set readable before opening deeper runtime or research-only controls.</p>
                         </div>
@@ -768,66 +828,25 @@
                             <input type="checkbox" id="emitRunCard" checked class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 dark:bg-slate-900" />
                             <span class="text-[11px] font-mono select-none truncate text-slate-600 dark:text-slate-300">run_card</span>
                         </label>
+                        <label class="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                            <input type="checkbox" id="emitRunCardIncludeProofs" class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 dark:bg-slate-900" />
+                            <span class="text-[11px] font-mono select-none truncate text-slate-600 dark:text-slate-300">run_card_proofs</span>
+                        </label>
                     </div>
 
-                    <!-- Licenses -->
-                    <details id="governanceDetails" class="disclosure-panel mt-6">
-                        <summary class="disclosure-summary">
+                    <section class="mt-6 space-y-4" data-ui="build-posture-band">
+                        <div class="flex items-start justify-between gap-3">
                             <div>
-                                <p class="text-[11px] font-bold uppercase tracking-widest text-amber-600 dark:text-amber-500">Compliance & Research Acknowledgments</p>
-                                <p id="governanceDetailsHint" class="mt-1 text-[12px] text-slate-500 dark:text-slate-400">Only shown when the current preset or backend requires explicit acknowledgments.</p>
+                                <p class="section-kicker">Current Run Posture</p>
+                                <p class="mt-2 text-[12px] leading-6 text-slate-500 dark:text-slate-400">Keep runtime posture, preview status, and research risk visible before opening deeper runtime or research-only controls.</p>
                             </div>
-                            <div class="disclosure-summary-meta">
-                                <span id="governanceDetailsSummary" class="disclosure-summary-badge">Conditional</span>
-                                <span class="disclosure-chevron text-slate-400">▾</span>
-                            </div>
-                        </summary>
-                        <div class="mt-4 p-4 rounded-xl border border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-900/10 transition-colors space-y-3">
-                            <label id="licenseNonCommercialField" class="flex items-start gap-3 cursor-pointer group">
-                                <input type="checkbox" id="licenseNonCommercial" class="w-4 h-4 mt-0.5 rounded text-amber-600 focus:ring-amber-500 border-amber-300 dark:border-amber-700 dark:bg-slate-900" />
-                                <span class="text-[12px] leading-tight select-none text-slate-700 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-white transition-colors">I acknowledge this run is strictly for <strong>Non-Commercial</strong> purposes.</span>
-                            </label>
-                            <label id="licenseAppleField" class="flex items-start gap-3 cursor-pointer group">
-                                <input type="checkbox" id="licenseApple" class="w-4 h-4 mt-0.5 rounded text-amber-600 focus:ring-amber-500 border-amber-300 dark:border-amber-700 dark:bg-slate-900" />
-                                <span class="text-[12px] leading-tight select-none text-slate-700 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-white transition-colors">I accept the <strong>Apple Depth Pro Research License</strong> terms.</span>
-                            </label>
-                            <label id="licenseResearchToolsField" class="flex items-start gap-3 cursor-pointer group">
-                                <input type="checkbox" id="licenseResearchTools" class="w-4 h-4 mt-0.5 rounded text-amber-600 focus:ring-amber-500 border-amber-300 dark:border-amber-700 dark:bg-slate-900" />
-                                <span class="text-[12px] leading-tight select-none text-slate-700 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-white transition-colors">I accept the <strong>Research Tools License</strong> terms required for scene reconstruction.</span>
-                            </label>
+                            <span class="micro-status">Primary run posture</span>
                         </div>
-                    </details>
-
-                    <details id="reconstructionDetails" class="disclosure-panel mt-6">
-                        <summary class="disclosure-summary">
-                            <div>
-                                <p class="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Reconstruction & Runtime</p>
-                                <p id="reconstructionDetailsHint" class="mt-1 text-[12px] text-slate-500 dark:text-slate-400">Runtime tuning stays available here. Reconstruction-only settings appear after you enable the feature.</p>
-                            </div>
-                            <div class="disclosure-summary-meta">
-                                <span id="reconstructionDetailsSummary" class="disclosure-summary-badge">Runtime baseline</span>
-                                <span class="disclosure-chevron text-slate-400">▾</span>
-                            </div>
-                        </summary>
-                        <div class="mt-4 space-y-4">
-                        <div class="grid grid-cols-1 gap-4">
-                            <label class="flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 px-4 py-3.5 cursor-pointer group transition-colors">
-                                <span class="flex items-center gap-2 text-[12px] font-medium select-none text-slate-700 dark:text-slate-300">
-                                    <span>Enable Reconstruction</span>
-                                    <span class="shrink-0 rounded border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-amber-700 dark:text-amber-400">Experimental</span>
-                                </span>
-                                <div class="relative inline-flex items-center">
-                                    <input type="checkbox" id="enableReconstruction" role="switch" class="sr-only peer" />
-                                    <div class="w-9 h-5 rounded-full transition-colors duration-200 ease-in-out peer-focus-visible:ring-2 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-indigo-500 bg-slate-300 dark:bg-slate-600 peer-checked:bg-indigo-600"></div>
-                                    <div class="absolute left-[2px] top-[2px] bg-white w-4 h-4 rounded-full transition-transform duration-200 ease-in-out peer-checked:translate-x-4 shadow-sm"></div>
-                                </div>
-                            </label>
-                        </div>
-                        <div id="reconstructionRuntimeSummary" class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/60 px-4 py-4">
+                        <div id="reconstructionRuntimeSummary" class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/60 px-4 py-4" data-ui="reconstruction-runtime-summary">
                             <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                                 <div>
-                                    <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Effective Reconstruction & Runtime</p>
-                                    <p id="reconstructionSummaryHint" class="mt-2 text-[12px] leading-6 text-slate-600 dark:text-slate-300">Applies to the next run. Reconstruction-specific values are preserved when the feature is off.</p>
+                                    <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Current Run Posture</p>
+                                    <p id="reconstructionSummaryHint" class="mt-2 text-[12px] leading-6 text-slate-600 dark:text-slate-300">Primary output posture updates here before you open contextual runtime or research controls.</p>
                                 </div>
                                 <button id="openEffectiveConfigBtn" type="button" class="rounded-full border border-slate-300 dark:border-slate-700 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-600 dark:text-slate-300 transition-colors hover:border-cyan-300 hover:text-cyan-700 dark:hover:border-cyan-700 dark:hover:text-cyan-300">
                                     View Effective Config
@@ -873,6 +892,115 @@
                                     <p id="estimateSummaryLabel" class="mt-2 text-[12px] font-semibold leading-6 text-slate-900 dark:text-white">Low runtime · Low GPU pressure · None posture</p>
                                 </div>
                             </div>
+                        </div>
+                    </section>
+
+                    <div class="mt-6 flex items-start justify-between gap-3">
+                        <div>
+                            <p class="section-kicker">Secondary Controls & Policy Detail</p>
+                            <p class="mt-2 text-[12px] leading-6 text-slate-500 dark:text-slate-400">Open diagnostics, acknowledgments, and deeper runtime tuning only when the posture band or preview calls for intervention.</p>
+                        </div>
+                        <span class="micro-status">Contextual controls only</span>
+                    </div>
+
+                    <details id="advancedFlagsDetails" class="disclosure-panel disclosure-panel-secondary mt-6">
+                        <summary class="disclosure-summary">
+                            <div>
+                                <p class="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Advanced Flags</p>
+                                <p class="mt-1 text-[12px] text-slate-500 dark:text-slate-400">Secondary diagnostics, fallback, and runtime strictness controls.</p>
+                            </div>
+                            <div class="disclosure-summary-meta">
+                                <span id="advancedFlagsSummary" class="disclosure-summary-badge">Secondary</span>
+                                <span class="disclosure-chevron text-slate-400">▾</span>
+                            </div>
+                        </summary>
+                        <div class="mt-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+                            <label class="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                                <input type="checkbox" id="saveFloatDepth" class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 dark:bg-slate-900" />
+                                <span class="text-[11px] font-mono select-none truncate text-slate-600 dark:text-slate-300">save_float_depth</span>
+                            </label>
+                            <label class="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                                <input type="checkbox" id="forceDepth" class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 dark:bg-slate-900" />
+                                <span class="text-[11px] font-mono select-none truncate text-slate-600 dark:text-slate-300">force_depth</span>
+                            </label>
+                            <label class="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                                <input type="checkbox" id="strictInputs" class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 dark:bg-slate-900" />
+                                <span class="flex items-center gap-2 min-w-0">
+                                    <span class="text-[11px] font-mono select-none truncate text-slate-600 dark:text-slate-300">strict_inputs</span>
+                                    <span class="shrink-0 rounded border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-amber-700 dark:text-amber-400">Debug</span>
+                                </span>
+                            </label>
+                            <label class="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                                <input type="checkbox" id="verifyImages" class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 dark:bg-slate-900" />
+                                <span class="text-[11px] font-mono select-none truncate text-slate-600 dark:text-slate-300">verify_images</span>
+                            </label>
+                            <label class="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                                <input type="checkbox" id="allowSemanticFallback" class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 dark:bg-slate-900" />
+                                <span class="text-[11px] font-mono select-none truncate text-slate-600 dark:text-slate-300">allow_semantic_fallback</span>
+                            </label>
+                            <label class="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                                <input type="checkbox" id="verboseFlag" class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 dark:bg-slate-900" />
+                                <span class="text-[11px] font-mono select-none truncate text-slate-600 dark:text-slate-300">verbose</span>
+                            </label>
+                            <label class="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                                <input type="checkbox" id="quietFlag" class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 dark:bg-slate-900" />
+                                <span class="text-[11px] font-mono select-none truncate text-slate-600 dark:text-slate-300">quiet</span>
+                            </label>
+                        </div>
+                    </details>
+
+                    <!-- Licenses -->
+                    <details id="governanceDetails" class="disclosure-panel disclosure-panel-secondary mt-6">
+                        <summary class="disclosure-summary">
+                            <div>
+                                <p class="text-[11px] font-bold uppercase tracking-widest text-amber-600 dark:text-amber-500">Compliance & Research Acknowledgments</p>
+                                <p id="governanceDetailsHint" class="mt-1 text-[12px] text-slate-500 dark:text-slate-400">Open only when the current preset or backend requires explicit acknowledgments.</p>
+                            </div>
+                            <div class="disclosure-summary-meta">
+                                <span id="governanceDetailsSummary" class="disclosure-summary-badge">Contextual</span>
+                                <span class="disclosure-chevron text-slate-400">▾</span>
+                            </div>
+                        </summary>
+                        <div class="mt-4 p-4 rounded-xl border border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-900/10 transition-colors space-y-3">
+                            <label id="licenseNonCommercialField" class="flex items-start gap-3 cursor-pointer group">
+                                <input type="checkbox" id="licenseNonCommercial" class="w-4 h-4 mt-0.5 rounded text-amber-600 focus:ring-amber-500 border-amber-300 dark:border-amber-700 dark:bg-slate-900" />
+                                <span class="text-[12px] leading-tight select-none text-slate-700 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-white transition-colors">I acknowledge this run is strictly for <strong>Non-Commercial</strong> purposes.</span>
+                            </label>
+                            <label id="licenseAppleField" class="flex items-start gap-3 cursor-pointer group">
+                                <input type="checkbox" id="licenseApple" class="w-4 h-4 mt-0.5 rounded text-amber-600 focus:ring-amber-500 border-amber-300 dark:border-amber-700 dark:bg-slate-900" />
+                                <span class="text-[12px] leading-tight select-none text-slate-700 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-white transition-colors">I accept the <strong>Apple Depth Pro Research License</strong> terms.</span>
+                            </label>
+                            <label id="licenseResearchToolsField" class="flex items-start gap-3 cursor-pointer group">
+                                <input type="checkbox" id="licenseResearchTools" class="w-4 h-4 mt-0.5 rounded text-amber-600 focus:ring-amber-500 border-amber-300 dark:border-amber-700 dark:bg-slate-900" />
+                                <span class="text-[12px] leading-tight select-none text-slate-700 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-white transition-colors">I accept the <strong>Research Tools License</strong> terms required for scene reconstruction.</span>
+                            </label>
+                        </div>
+                    </details>
+
+                    <details id="reconstructionDetails" class="disclosure-panel disclosure-panel-secondary mt-6">
+                        <summary class="disclosure-summary">
+                            <div>
+                                <p class="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Reconstruction & Runtime</p>
+                                <p id="reconstructionDetailsHint" class="mt-1 text-[12px] text-slate-500 dark:text-slate-400">Open only when the posture band or preview calls for deeper runtime tuning.</p>
+                            </div>
+                            <div class="disclosure-summary-meta">
+                                <span id="reconstructionDetailsSummary" class="disclosure-summary-badge">Contextual</span>
+                                <span class="disclosure-chevron text-slate-400">▾</span>
+                            </div>
+                        </summary>
+                        <div class="mt-4 space-y-4">
+                        <div class="grid grid-cols-1 gap-4">
+                            <label class="flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 px-4 py-3.5 cursor-pointer group transition-colors">
+                                <span class="flex items-center gap-2 text-[12px] font-medium select-none text-slate-700 dark:text-slate-300">
+                                    <span>Enable Reconstruction</span>
+                                    <span class="shrink-0 rounded border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-amber-700 dark:text-amber-400">Experimental</span>
+                                </span>
+                                <div class="relative inline-flex items-center">
+                                    <input type="checkbox" id="enableReconstruction" role="switch" class="sr-only peer" />
+                                    <div class="w-9 h-5 rounded-full transition-colors duration-200 ease-in-out peer-focus-visible:ring-2 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-indigo-500 bg-slate-300 dark:bg-slate-600 peer-checked:bg-indigo-600"></div>
+                                    <div class="absolute left-[2px] top-[2px] bg-white w-4 h-4 rounded-full transition-transform duration-200 ease-in-out peer-checked:translate-x-4 shadow-sm"></div>
+                                </div>
+                            </label>
                         </div>
                         <div id="reconstructionConfigFields" class="space-y-4">
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1011,6 +1139,23 @@
                     </details>
                 </fieldset>
 
+                <section id="governance-shell" data-build-step-panel="3" data-ambient-zone="governance" data-ambient-focus-x="28" data-ambient-focus-y="42" data-ambient-shift-x="-14" data-ambient-shift-y="4" data-ambient-stage-scale="1.028" data-ambient-stage-rotate="-0.2" data-ambient-color-a="#14b8a6" data-ambient-color-b="#f59e0b" data-ambient-color-c="#fde68a" data-ambient-focus-color="#fdba74" class="workspace-shell deferred-shell governance-banner rounded-[1.75rem] p-6 shadow-soft dark:shadow-soft-dark build-step-panel" data-shell-size="compact" data-ui="build-governance">
+                    <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                        <div class="max-w-2xl">
+                            <p class="section-kicker">Governance Brief</p>
+                            <h2 id="governanceBannerTitle" class="mt-2 text-xl font-extrabold tracking-tight text-slate-900 dark:text-white">Run posture is clear.</h2>
+                            <p id="governanceBannerBody" class="mt-2 text-sm leading-7 text-slate-600 dark:text-slate-300">
+                                The current configuration is valid for dispatch. Any license acknowledgments or runtime caveats will surface here before execution.
+                            </p>
+                            <p id="governancePostureHint" class="step-primary-note mt-3" data-ui="governance-posture-hint">
+                                Step 4 stays aligned to this checklist, so blocked governance items clear here before launch becomes trustworthy.
+                            </p>
+                        </div>
+                        <div class="signal-badge">Live contract checks</div>
+                    </div>
+                    <div id="governanceChecklist" class="mt-5 grid grid-cols-1 gap-3"></div>
+                </section>
+
                 <!-- CLI Preview & Actions -->
                 <div id="cli-shell" data-build-step-panel="4" data-ambient-zone="dispatch" data-ambient-focus-x="42" data-ambient-focus-y="82" data-ambient-shift-x="-4" data-ambient-shift-y="18" data-ambient-stage-scale="1.05" data-ambient-stage-rotate="0.35" data-ambient-color-a="#06b6d4" data-ambient-color-b="#f97316" data-ambient-color-c="#14b8a6" data-ambient-focus-color="#fdba74" class="workspace-shell deferred-shell rounded-[1.75rem] shell-panel p-6 shadow-soft dark:shadow-soft-dark transition-colors duration-300 build-step-panel" data-shell-size="compact" data-ui="build-step-panel">
                     <div class="flex items-start justify-between gap-3">
@@ -1022,24 +1167,38 @@
                         <span class="micro-status">Dispatch review</span>
                     </div>
 
-                    <section class="mt-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/70 p-4" data-ui="next-best-action">
-                        <div class="flex items-start justify-between gap-3">
-                            <div class="min-w-0">
-                                <h4 class="text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Next Operator Action</h4>
-                                <p id="nextBestActionLabel" class="mt-2 text-[13px] font-semibold leading-6 text-slate-900 dark:text-white">Review dispatch posture</p>
-                                <p id="nextBestActionDetail" class="mt-2 text-[12px] leading-6 text-slate-600 dark:text-slate-300">Preview guidance will summarize the clearest next step for this draft.</p>
+                    <div class="step-four-primary-lane mt-4" data-ui="dispatch-primary-lane">
+                        <section class="step-four-primary-card rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/70 p-4" data-ui="next-best-action">
+                            <div class="flex items-start justify-between gap-3">
+                                <div class="min-w-0">
+                                    <h4 class="text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Next Operator Action</h4>
+                                    <p id="nextBestActionLabel" class="mt-2 text-[13px] font-semibold leading-6 text-slate-900 dark:text-white">Review dispatch posture</p>
+                                    <p id="nextBestActionDetail" class="mt-2 text-[12px] leading-6 text-slate-600 dark:text-slate-300">Preview guidance will summarize the clearest next step for this draft.</p>
+                                </div>
+                                <span id="nextBestActionTone" class="signal-badge next-action-badge" data-tone="info">Info</span>
                             </div>
-                            <span id="nextBestActionTone" class="signal-badge next-action-badge" data-tone="info">Info</span>
-                        </div>
-                    </section>
+                        </section>
+                        <section class="step-four-dispatch-shell rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/70 p-4" data-ui="dispatch-launch">
+                            <div>
+                                <h4 class="text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Dispatch</h4>
+                                <p id="dispatchReadinessReason" class="dispatch-readiness-reason mt-2 text-[12px] leading-6 text-slate-600 dark:text-slate-300" data-tone="info" aria-live="polite" aria-atomic="true">Preview-backed validation will explain when dispatch is ready.</p>
+                            </div>
+                            <button id="runJobBtn" type="button" class="mt-4 w-full rounded-2xl px-6 py-4 text-[14px] font-extrabold uppercase tracking-[0.14em] text-white shadow-glow transition-all focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed bg-gradient-to-r from-teal-700 via-cyan-600 to-sky-600 hover:from-teal-600 hover:via-cyan-500 hover:to-sky-500 dark:focus:ring-offset-slate-900" disabled data-ui="dispatch-cta" aria-describedby="dispatchReadinessReason">
+                                Execute Job
+                            </button>
+                            <p class="dispatch-shortcut-hint mt-3" data-ui="dispatch-shortcut-hint">
+                                Once dispatch unlocks, use <span class="kbd">Ctrl/⌘ + Enter</span> to execute without leaving the keyboard.
+                            </p>
+                        </section>
+                    </div>
 
                     <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <section class="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/70 p-4">
+                        <section class="step-four-primary-card rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/70 p-4">
                             <h4 class="text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Pre-Run Checks</h4>
                             <ul id="preRunWarnings" class="mt-2 space-y-1 text-[12px] text-amber-700 dark:text-amber-300"></ul>
                             <p id="preRunWarningsEmpty" class="mt-2 text-[12px] text-emerald-700 dark:text-emerald-300">No pre-run warnings.</p>
                         </section>
-                        <section class="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/70 p-4">
+                        <section class="step-four-primary-card rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/70 p-4">
                             <div class="flex items-center justify-between gap-2">
                                 <h4 class="text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Expected Outputs</h4>
                                 <span class="inline-flex items-center gap-2 text-[10px] font-mono text-slate-500 dark:text-slate-400">
@@ -1049,12 +1208,6 @@
                             </div>
                             <ul id="expectedOutputsList" class="mt-2 space-y-1 text-[12px] text-slate-700 dark:text-slate-300"></ul>
                         </section>
-                    </div>
-
-                    <div class="mt-6 border-t border-slate-200 dark:border-slate-800 pt-6">
-                            <button id="runJobBtn" type="button" class="w-full rounded-2xl px-6 py-4 text-[14px] font-extrabold uppercase tracking-[0.14em] text-white shadow-glow transition-all focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed bg-gradient-to-r from-teal-700 via-cyan-600 to-sky-600 hover:from-teal-600 hover:via-cyan-500 hover:to-sky-500 dark:focus:ring-offset-slate-900" disabled data-ui="dispatch-cta">
-                                Execute Job
-                            </button>
                     </div>
 
                     <details id="dispatchToolsDetails" class="disclosure-panel mt-6" data-ui="dispatch-tools">
@@ -1181,6 +1334,17 @@
                                 Choose a job from the queue or dispatch a new run to inspect progress, artifacts, and live stream state.
                             </p>
                         </div>
+                        <div class="panel-subtle rounded-2xl p-4" data-ui="selected-job-recovery">
+                            <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Next Recovery Action</p>
+                            <p id="selectedJobRecoveryTitle" class="mt-2 text-[12px] font-semibold text-slate-800 dark:text-slate-100">Select a run or dispatch one</p>
+                            <p id="selectedJobRecoveryDetail" class="mt-2 text-[12px] leading-6 text-slate-600 dark:text-slate-300">
+                                Use the selected run state, warning context, and freshness above to decide whether to recover or open review.
+                            </p>
+                            <div id="selectedJobRecoveryActions" class="contextual-action-row mt-3 hidden" data-ui="selected-job-recovery-actions">
+                                <button id="selectedJobRecoveryPrimaryBtn" type="button" class="operator-action-btn operator-action-btn-primary hidden" data-ui="selected-job-recovery-primary"></button>
+                                <button id="selectedJobRecoverySecondaryBtn" type="button" class="operator-action-btn operator-action-btn-secondary hidden" data-ui="selected-job-recovery-secondary"></button>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="mt-5 flex flex-wrap items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-4">
@@ -1207,7 +1371,9 @@
                     </div>
                 </div>
 
-                <!-- Job Queue -->
+                <!-- ============================================ -->
+                <!-- 4. OPERATE VIEW (Job Queue)                 -->
+                <!-- ============================================ -->
                 <div id="queue-shell" data-ambient-zone="queue" data-ambient-focus-x="82" data-ambient-focus-y="46" data-ambient-shift-x="20" data-ambient-shift-y="6" data-ambient-stage-scale="1.036" data-ambient-stage-rotate="0.28" data-ambient-color-a="#14b8a6" data-ambient-color-b="#84cc16" data-ambient-color-c="#38bdf8" data-ambient-focus-color="#bbf7d0" class="workspace-shell deferred-shell rounded-[1.75rem] shell-panel p-6 shadow-soft dark:shadow-soft-dark transition-colors duration-300 flex flex-col max-h-[350px]" data-shell-size="compact" data-ui="queue-panel">
                     <div class="flex items-center justify-between mb-4 pb-4 border-b border-slate-200 dark:border-slate-800">
                         <div>
@@ -1245,13 +1411,18 @@
                             </div>
                         </div>
                         <ul id="jobList" class="space-y-3" aria-live="polite" data-ui="queue-list"></ul>
-                        <div id="emptyQueueState" class="h-full flex flex-col items-center justify-center text-center py-8">
-                            <p class="text-[13px] font-medium text-slate-500 dark:text-slate-400">No active jobs.</p>
+                        <div id="emptyQueueState" class="surface-empty-state h-full flex flex-col items-center justify-center text-center py-8" data-ui="queue-empty-state" data-tone="neutral">
+                            <p class="surface-empty-kicker">Queue</p>
+                            <p id="emptyQueueTitle" class="surface-empty-title">No runs yet</p>
+                            <p id="emptyQueueDetail" class="surface-empty-detail">Dispatch a run from Build or restore backend connectivity to recover recent operator activity.</p>
+                            <p id="emptyQueueAction" class="surface-empty-action">Next action: open Build to prepare the next run or restore backend connectivity to recover recent history.</p>
                         </div>
                     </div>
                 </div>
 
-                <!-- Artifacts -->
+                <!-- ============================================ -->
+                <!-- 5. REVIEW VIEW (Artifacts)                  -->
+                <!-- ============================================ -->
                 <div id="artifacts-shell" data-ambient-zone="artifacts" data-ambient-focus-x="76" data-ambient-focus-y="64" data-ambient-shift-x="14" data-ambient-shift-y="12" data-ambient-stage-scale="1.03" data-ambient-stage-rotate="-0.2" data-ambient-color-a="#0ea5e9" data-ambient-color-b="#f59e0b" data-ambient-color-c="#14b8a6" data-ambient-focus-color="#fde68a" class="workspace-shell deferred-shell rounded-[1.75rem] shell-panel p-6 shadow-soft dark:shadow-soft-dark transition-colors duration-300" data-shell-size="compact" data-ui="review-surface">
                     <div class="flex items-center justify-between mb-4 pb-3 border-b border-slate-200 dark:border-slate-800">
                         <h2 class="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Artifacts</h2>
@@ -1298,7 +1469,7 @@
                         </div>
                         <img id="artifactPreviewSoloImage" alt="Artifact preview" class="hidden w-full rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-900/60 object-contain max-h-[320px]" />
                         <div id="artifactMetadataCard" class="rounded-2xl border border-dashed border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/70 p-5 text-[12px] leading-6 text-slate-600 dark:text-slate-300">
-                            Select a completed job to review the highest-value output here.
+                            Select a completed run to bring the primary review artifact, provenance context, and next actions into focus here.
                         </div>
                     </div>
                     <div id="artifactMetadataBar" class="mt-4 flex flex-col gap-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/50 p-4">
@@ -1310,6 +1481,11 @@
                             <p class="review-status-kicker">Run Status</p>
                             <p id="reviewStatusTitle" class="review-status-title">Awaiting completed run</p>
                             <p id="reviewStatusDetail" class="review-status-detail">Select a job to review related warnings, completion state, and output readiness.</p>
+                            <p id="reviewStatusAction" class="review-status-action">Next action: use the selected run state, warning context, and freshness above to decide whether to recover or open review.</p>
+                            <div id="reviewStatusActions" class="review-status-actions hidden" data-ui="review-status-actions">
+                                <button id="reviewStatusPrimaryBtn" type="button" class="operator-action-btn operator-action-btn-primary hidden" data-ui="review-status-primary"></button>
+                                <button id="reviewStatusSecondaryBtn" type="button" class="operator-action-btn operator-action-btn-secondary hidden" data-ui="review-status-secondary"></button>
+                            </div>
                         </div>
                         <div id="reviewProvenanceGrid" class="review-provenance-grid hidden" data-ui="review-provenance-grid">
                             <div class="review-provenance-item">
@@ -1338,8 +1514,8 @@
                             </div>
                         </div>
                         <div id="reviewCompareSummary" class="review-compare-summary hidden" data-ui="review-compare-summary" aria-live="polite">
-                            <p id="reviewCompareTitle" class="review-compare-title">Compare pair available</p>
-                            <p id="reviewCompareDetail" class="review-compare-detail">Enable compare mode to inspect paired outputs side by side.</p>
+                            <p id="reviewCompareTitle" class="review-compare-title">No compare pair</p>
+                            <p id="reviewCompareDetail" class="review-compare-detail">No paired comparison is available for the current artifact.</p>
                         </div>
                         <div class="flex flex-wrap items-center gap-2">
                             <button id="openArtifactBtn" type="button" class="rounded-lg border border-slate-300 dark:border-slate-700 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled>Open</button>
@@ -1360,8 +1536,11 @@
                     </div>
                     <div class="mt-4 max-h-[220px] overflow-y-auto custom-scrollbar pr-1">
                         <div id="artifactThumbnailRail" class="grid grid-cols-2 gap-3 lg:grid-cols-3"></div>
-                        <div id="emptyArtifactState" class="py-4 text-center">
-                            <p class="text-[12px] text-slate-500 dark:text-slate-400">No artifacts indexed.</p>
+                        <div id="emptyArtifactState" class="surface-empty-state surface-empty-state--compact flex flex-col items-center justify-center py-4 text-center" data-ui="artifact-empty-state" data-tone="neutral">
+                            <p class="surface-empty-kicker">Review</p>
+                            <p id="emptyArtifactTitle" class="surface-empty-title">No indexed artifacts</p>
+                            <p id="emptyArtifactDetail" class="surface-empty-detail">Choose a completed run or wait for outputs to index so review surfaces can populate.</p>
+                            <p id="emptyArtifactAction" class="surface-empty-action">Next action: inspect the selected run in Operate or wait for indexed outputs before reopening review.</p>
                         </div>
                     </div>
                     </div>
@@ -1387,6 +1566,10 @@
         </div>
     </main>
 
+    <!-- ============================================ -->
+    <!-- 6. OVERLAYS                                 -->
+    <!-- ============================================ -->
+
     <!-- Shortcuts Modal -->
     <div id="shortcutsModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 dark:bg-black/60 transition-opacity" aria-hidden="true" data-ui="modal-shell">
         <div class="w-full max-w-sm rounded-xl bg-white shadow-2xl border border-slate-200 dark:bg-slate-900 dark:border-slate-800 transform scale-95 opacity-0 transition-all duration-200" id="shortcutsPanel" role="dialog" aria-modal="true" aria-labelledby="shortcutsTitle">
@@ -1397,6 +1580,8 @@
                 </button>
             </div>
             <div class="p-5 text-sm text-slate-700 dark:text-slate-300 space-y-4">
+                <div class="flex justify-between items-center"><span class="text-slate-600 dark:text-slate-400">Open Shortcuts</span> <kbd class="kbd text-[11px]">?</kbd></div>
+                <div class="flex justify-between items-center"><span class="text-slate-600 dark:text-slate-400">Jump to Overview / Build / Operate / Review</span> <kbd class="kbd text-[11px]">1 / 2 / 3 / 4</kbd></div>
                 <div class="flex justify-between items-center"><span class="text-slate-600 dark:text-slate-400">Run Job</span> <kbd class="kbd text-[11px]">Ctrl/⌘ + Enter</kbd></div>
                 <div class="flex justify-between items-center"><span class="text-slate-600 dark:text-slate-400">Copy Command</span> <kbd class="kbd text-[11px]">Ctrl/⌘ + Shift + C</kbd></div>
                 <div class="flex justify-between items-center"><span class="text-slate-600 dark:text-slate-400">Cycle Theme</span> <kbd class="kbd text-[11px]">Ctrl/⌘ + J</kbd></div>
@@ -1450,6 +1635,6 @@
 
     <!-- Toast Container -->
     <div id="toastContainer" class="fixed bottom-6 right-6 z-50 flex flex-col gap-3 w-full max-w-sm pointer-events-none" aria-live="polite"></div>
-    <script src="/portal/assets/portal.js" defer></script>
+    <script src="__PORTAL_JS_URL__" defer></script>
 </body>
 </html>

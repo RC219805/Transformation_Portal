@@ -3,7 +3,7 @@ import { NextResponse } from "next/server.js";
 import { resolveAccessContext, resolveAuthenticatedAccessSession, revokeSessionOnAccessFailure } from "../../lib/access.js";
 import { escapeHtml, FRONTDOOR_ASSETS, renderBrandAsset } from "../../lib/brand.js";
 import { audit } from "../../lib/audit.js";
-import { applySecurityHeaders, FRONTDOOR_CSP } from "../../lib/http.js";
+import { applySecurityHeaders, buildRequestUrl, FRONTDOOR_CSP } from "../../lib/http.js";
 import {
   clearSessionCookie,
   createAnonymousSession,
@@ -23,16 +23,94 @@ import { verifyUserCredentials } from "../../lib/users.js";
 export const runtime = "nodejs";
 
 function resolveLoginMessage(code) {
-  if (code === "access") return "Access verification is required before sign-in can continue.";
-  if (code === "csrf") return "Your session could not be verified. Refresh and try again.";
-  if (code === "throttled") return "Too many login attempts. Wait a few minutes and try again.";
-  if (code === "configuration") return "Operator access is temporarily unavailable.";
+  if (code === "access") return "Access verification is required before sign-in can continue. Refresh your Access session and try again.";
+  if (code === "csrf") return "Your session could not be verified. Refresh the page and submit the form again.";
+  if (code === "throttled") return "Too many sign-in attempts. Wait a few minutes before trying again.";
+  if (code === "configuration") return "Operator access is temporarily unavailable. Contact an administrator if this persists.";
   return "Invalid username or password.";
 }
 
-function renderLoginPage({ csrfToken, accessEmail, errorCode }) {
+function resolveRecoveryGuidance(code) {
+  if (code === "access") return "Re-open the verified access path, then return here after Access identity is restored.";
+  if (code === "csrf") return "Refresh the page to mint a clean session, then retry the operator credential handoff.";
+  if (code === "throttled") return "Wait for the throttle window to clear before attempting the operator credential handoff again.";
+  if (code === "configuration") return "Managed entry is fail-closed until the front door configuration is restored.";
+  return "Re-enter operator credentials after verifying the managed access context above.";
+}
+
+function resolveEntryState({ accessEmail, errorCode, bypass = false }) {
+  const hasVerifiedAccess = Boolean(accessEmail) || Boolean(bypass);
+  const hasRecoveryIssue = Boolean(errorCode);
+  const accessLabel = bypass
+    ? "Local development bypass active"
+    : hasVerifiedAccess
+      ? "Verified access ready"
+      : "Managed access required";
+  const accessDetail = bypass
+    ? "Managed access is bypassed for local troubleshooting. Credential handoff is available."
+    : hasVerifiedAccess
+      ? `Verified for <strong>${escapeHtml(accessEmail)}</strong>.`
+      : "Managed access verification opens the next step.";
+  const credentialLabel = hasRecoveryIssue ? "Recovery required" : hasVerifiedAccess ? "Credential handoff ready" : "Waiting on verified access";
+  const credentialDetail = hasRecoveryIssue
+    ? escapeHtml(resolveRecoveryGuidance(errorCode))
+    : hasVerifiedAccess
+      ? "Continue with operator credentials."
+      : "Credential handoff stays closed until access is verified.";
+  return {
+    accessState: hasVerifiedAccess ? "verified" : "required",
+    credentialState: hasRecoveryIssue ? "blocked" : hasVerifiedAccess ? "ready" : "waiting",
+    accessLabel,
+    accessDetail,
+    credentialLabel,
+    credentialDetail,
+    recoveryState: hasRecoveryIssue ? String(errorCode || "").trim().toLowerCase() || "invalid" : "clear",
+  };
+}
+
+function renderLoginPage({ csrfToken, accessEmail, errorCode, bypass = false }) {
   const errorMessage = errorCode ? resolveLoginMessage(errorCode) : "";
-  const accessText = accessEmail ? `Access identity verified for <strong>${escapeHtml(accessEmail)}</strong>.` : "";
+  const entryState = resolveEntryState({ accessEmail, errorCode, bypass });
+  const hasAccessContext = Boolean(bypass || accessEmail);
+  const escapedAccessEmail = accessEmail ? escapeHtml(accessEmail) : "";
+  const accessSequenceDetail = bypass
+    ? "Local troubleshooting bypass is active for this front door session."
+    : accessEmail
+    ? `Managed access already verified for <strong>${escapedAccessEmail}</strong>.`
+    : "Managed access is verified before operator credentials are accepted.";
+  const accessText = bypass
+    ? "Local troubleshooting bypass is active. Operator credentials can continue without verified managed access."
+    : accessEmail
+    ? `Access identity verified for <strong>${escapedAccessEmail}</strong>. Credential entry is now available.`
+    : "";
+  const recoveryCard = errorMessage
+    ? {
+      title: "Recovery path",
+      detail: resolveRecoveryGuidance(errorCode)
+    }
+    : bypass
+      ? {
+        title: "Bypass context",
+        detail: "Local development bypass is active for this session. Successful sign-in rotates the browser into the governed portal session."
+      }
+      : accessEmail
+      ? {
+        title: "Verified access context",
+        detail: `Managed access has already been verified for ${accessEmail}. Successful sign-in rotates this browser into the governed portal session.`
+      }
+      : null;
+  const nextStepTitle = errorMessage
+    ? "Recovery is required before sign-in can continue."
+    : bypass || accessEmail
+      ? "Credential handoff is ready."
+      : "Managed access must complete first.";
+  const nextStepDetail = errorMessage
+    ? resolveRecoveryGuidance(errorCode)
+    : bypass
+      ? "Use your operator username and password to continue into the governed console."
+      : accessEmail
+      ? "Use your operator username and password to continue into the governed console."
+      : "Return after managed access verification opens operator credential entry.";
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -60,11 +138,20 @@ function renderLoginPage({ csrfToken, accessEmail, errorCode }) {
         <source src="${FRONTDOOR_ASSETS.loopVideo}" type="video/mp4" />
       </video>
       <div class="login-vignette" aria-hidden="true"></div>
-      <section id="main-content" class="content" tabindex="-1">
-        <div class="login-stage">
+      <section
+        id="main-content"
+        class="content"
+        tabindex="-1"
+        data-ui="login-shell"
+        data-access-state="${escapeHtml(entryState.accessState)}"
+        data-credential-state="${escapeHtml(entryState.credentialState)}"
+        data-recovery-state="${escapeHtml(entryState.recoveryState)}"
+      >
+        <div class="login-stage" data-ui="login-stage">
           <a class="brand-lockup brand-lockup--stacked" href="/" aria-label="Dynamic Neural Access home">
             <span class="brand-asset-frame brand-asset-frame--login">
               ${renderBrandAsset({
+                kind: "lockup",
                 variant: "dark",
                 alt: "Dynamic Neural Access",
                 className: "brand-asset"
@@ -72,21 +159,77 @@ function renderLoginPage({ csrfToken, accessEmail, errorCode }) {
             </span>
             <span class="brand-subtitle">Transformation Portal operator console</span>
           </a>
-          <div class="card card--login">
-            <h1 class="sr-only">Dynamic Neural Access operator sign in</h1>
-            ${errorMessage ? `<div class="banner" role="alert">${escapeHtml(errorMessage)}</div>` : ""}
-            ${accessText ? `<p class="card-meta">${accessText}</p>` : ""}
-            <form method="post" action="/login" autocomplete="on">
+          <div class="card card--login" data-ui="login-card">
+            <p class="eyebrow" data-ui="login-eyebrow">Managed operator access</p>
+            <h1 data-ui="login-title">Continue to the operator console.</h1>
+            <p class="lede" data-ui="login-lede">
+              Confirm the managed access state, then complete operator credential handoff into the governed console.
+            </p>
+            <div class="login-entry-state" data-ui="login-entry-state">
+              <article class="login-status-card" data-ui="login-access-status" data-state="${escapeHtml(entryState.accessState)}">
+                <p class="login-status-card-kicker">Verified access</p>
+                <p class="login-status-card-title">${entryState.accessLabel}</p>
+                <p class="login-status-card-detail">${entryState.accessDetail}</p>
+              </article>
+              <article class="login-status-card" data-ui="login-credential-status" data-state="${escapeHtml(entryState.credentialState)}">
+                <p class="login-status-card-kicker">Credential handoff</p>
+                <p class="login-status-card-title">${entryState.credentialLabel}</p>
+                <p class="login-status-card-detail">${entryState.credentialDetail}</p>
+              </article>
+            </div>
+            <div class="login-next-step" data-state="${escapeHtml(entryState.credentialState)}">
+              <p class="login-next-step-kicker">Next step</p>
+              <p class="login-next-step-title">${escapeHtml(nextStepTitle)}</p>
+              <p class="login-next-step-detail">${escapeHtml(nextStepDetail)}</p>
+            </div>
+            ${errorMessage ? `<div class="login-status-stack" data-ui="login-status-stack">
+              ${errorMessage ? `<div class="banner" data-ui="login-error-banner" role="alert">
+                <p class="banner-title">Sign-in needs attention</p>
+                <p class="banner-detail">${escapeHtml(errorMessage)}</p>
+              </div>` : ""}
+            </div>` : ""}
+            <details class="login-secondary-details" data-ui="login-sequence">
+              <summary>
+                <span>Access details</span>
+                <span class="login-secondary-details__meta">${bypass ? "Bypass context" : hasAccessContext ? "Verified context" : "Managed entry flow"}</span>
+              </summary>
+              <div class="login-secondary-details__content">
+                <div class="login-sequence">
+                  <article class="login-sequence-step${hasAccessContext ? " login-sequence-step--ready" : ""}">
+                    <p class="login-sequence-step-kicker">Step 1</p>
+                    <p class="login-sequence-step-title">Verified access</p>
+                    <p class="login-sequence-step-detail">${accessSequenceDetail}</p>
+                  </article>
+                  <article class="login-sequence-step login-sequence-step--active">
+                    <p class="login-sequence-step-kicker">Step 2</p>
+                    <p class="login-sequence-step-title">Operator credentials</p>
+                    <p class="login-sequence-step-detail">Use your portal username and password to rotate into the governed build, operate, and review session.</p>
+                  </article>
+                </div>
+                ${accessText ? `<p class="card-meta card-meta--verified" data-ui="login-access-context">${accessText}</p>` : ""}
+                ${recoveryCard ? `<div class="login-recovery-card" data-ui="login-recovery-card" data-state="${escapeHtml(entryState.recoveryState)}">
+                  <p class="login-recovery-card-title">${escapeHtml(recoveryCard.title)}</p>
+                  <p class="login-recovery-card-detail">${escapeHtml(recoveryCard.detail)}</p>
+                </div>` : ""}
+              </div>
+            </details>
+            <form method="post" action="/login" autocomplete="on" data-ui="login-form">
               <input type="hidden" name="csrf_token" value="${escapeHtml(csrfToken)}" />
-              <label>
+              <label data-ui="login-username-field">
                 Username
                 <input type="text" name="username" autocomplete="username" required />
               </label>
-              <label>
+              <label data-ui="login-password-field">
                 Password
                 <input type="password" name="password" autocomplete="current-password" required />
               </label>
-              <button type="submit">Sign in</button>
+              <p class="login-helper" data-ui="login-helper">
+                Use your operator credentials. Successful sign-in rotates the session before portal handoff.
+              </p>
+              <div class="login-actions" data-ui="login-actions">
+                <button type="submit" data-ui="login-submit">Sign in</button>
+                <a class="login-secondary-link" href="/" data-ui="login-secondary-link">Review public proof surface</a>
+              </div>
             </form>
           </div>
         </div>
@@ -97,7 +240,7 @@ function renderLoginPage({ csrfToken, accessEmail, errorCode }) {
 }
 
 function redirectToLogin(request, errorCode, session) {
-  const url = new URL("/login", request.url);
+  const url = buildRequestUrl(request, "/login");
   if (errorCode) url.searchParams.set("error", errorCode);
   const response = applySecurityHeaders(NextResponse.redirect(url, 303));
   if (session?.id) {
@@ -112,7 +255,7 @@ export async function GET(request) {
   if (currentSession?.authenticated) {
     const authState = await resolveAuthenticatedAccessSession(request, { touch: false });
     if (authState.ok) {
-      return applySecurityHeaders(NextResponse.redirect(new URL("/portal", request.url), 302));
+      return applySecurityHeaders(NextResponse.redirect(buildRequestUrl(request, "/portal"), 302));
     }
     if (authState.revokeSession) {
       revokeSessionOnAccessFailure(currentSession, authState.errorCode);
@@ -127,7 +270,8 @@ export async function GET(request) {
   const html = renderLoginPage({
     csrfToken: session.csrfToken,
     accessEmail: accessContext.accessEmail,
-    errorCode: request.nextUrl.searchParams.get("error")
+    errorCode: request.nextUrl.searchParams.get("error"),
+    bypass: accessContext.bypass
   });
   const response = new NextResponse(html, {
     status: 200,
@@ -232,7 +376,7 @@ export async function POST(request) {
     bypass: accessContext.bypass
   });
 
-  const response = applySecurityHeaders(NextResponse.redirect(new URL("/portal", request.url), 303));
+  const response = applySecurityHeaders(NextResponse.redirect(buildRequestUrl(request, "/portal"), 303));
   setSessionCookie(response, authenticatedSession.id);
   return response;
 }

@@ -4,6 +4,10 @@
       "repo_path": "public/portal-assets/portal.css",
       "media_type": "text/css; charset=utf-8"
     },
+    "shared-ui-tokens.css": {
+      "repo_path": "public/portal-assets/shared-ui-tokens.css",
+      "media_type": "text/css; charset=utf-8"
+    },
     "portal.js": {
       "repo_path": "public/portal-assets/portal.js",
       "media_type": "text/javascript; charset=utf-8"
@@ -15,6 +19,14 @@
     "fonts/portal-mono.woff2": {
       "repo_path": "public/portal-assets/fonts/portal-mono.woff2",
       "media_type": "font/woff2"
+    },
+    "brand/dna-symbol-dark.svg": {
+      "repo_path": "public/portal-assets/brand/dna-symbol-dark.svg",
+      "media_type": "image/svg+xml"
+    },
+    "brand/dna-symbol-light.svg": {
+      "repo_path": "public/portal-assets/brand/dna-symbol-light.svg",
+      "media_type": "image/svg+xml"
     }
   }
 }

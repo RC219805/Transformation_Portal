@@ -42,12 +42,28 @@ import tempfile
 import time
 import urllib.parse
 import urllib.request
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Iterable, Optional
 
 
 class SmokeFailure(RuntimeError):
     """Raised when the browser smoke validation fails."""
+
+    def __init__(self, message: str, *, kind: str = "generic") -> None:
+        super().__init__(message)
+        self.kind = kind
+
+
+DEFAULT_ORCHESTRATOR_BASE_URL = "http://127.0.0.1:8000"
+
+
+@dataclass
+class LocalRuntimeHandle:
+    process: subprocess.Popen[str]
+    base_url: str
+    log_path: Path
+    temp_paths: tuple[Path, ...] = ()
 
 
 def _repo_root() -> Path:
@@ -120,6 +136,143 @@ def _base_url(value: str) -> str:
     return trimmed.rstrip("/")
 
 
+def _tail_text(path: Path, *, max_chars: int = 1200, max_bytes: int = 4096) -> str:
+    if max_chars <= 0 or max_bytes <= 0:
+        return ""
+    try:
+        with path.open("rb") as handle:
+            handle.seek(0, os.SEEK_END)
+            byte_count = handle.tell()
+            if byte_count <= 0:
+                return ""
+            window = min(byte_count, max_bytes)
+            handle.seek(-window, os.SEEK_END)
+            content = handle.read(window).decode("utf-8", errors="replace")
+    except OSError:
+        return ""
+    content = content.strip()
+    if len(content) <= max_chars:
+        return content
+    return content[-max_chars:]
+
+
+def _terminate_runtime(handle: LocalRuntimeHandle) -> None:
+    process = handle.process
+    if process.poll() is None:
+        try:
+            process.terminate()
+            process.wait(timeout=5)
+        except Exception:
+            try:
+                process.kill()
+                process.wait(timeout=5)
+            except Exception:
+                pass
+
+    for temp_path in handle.temp_paths:
+        if temp_path.is_dir():
+            shutil.rmtree(temp_path, ignore_errors=True)
+        else:
+            try:
+                temp_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+
+
+def _wait_for_backend_ready(
+    base_url: str,
+    *,
+    timeout_seconds: float,
+    process: Optional[subprocess.Popen[str]] = None,
+    log_path: Optional[Path] = None,
+) -> None:
+    deadline = time.monotonic() + timeout_seconds
+    last_error: Optional[str] = None
+    while time.monotonic() < deadline:
+        if process is not None and process.poll() is not None:
+            break
+        try:
+            status, body = _request_json(base_url, "/ready")
+            if status == 200 and body.get("ok") is True:
+                return
+            last_error = f"status={status} body={body}"
+        except SmokeFailure as exc:
+            last_error = str(exc)
+        time.sleep(0.25)
+
+    if process is not None and process.poll() is not None:
+        exit_code = process.returncode
+        log_tail = _tail_text(log_path) if log_path is not None else ""
+        detail = f"local backend exited before readiness (code {exit_code})"
+        if log_tail:
+            detail = f"{detail}. Recent log output:\n{log_tail}"
+        raise SmokeFailure(detail, kind="runtime")
+
+    detail = last_error or "timed out waiting for /ready"
+    raise SmokeFailure(
+        f"Local backend did not become ready at {base_url}/ready within {timeout_seconds:.1f}s ({detail}).",
+        kind="runtime",
+    )
+
+
+def _spawn_local_backend(api_key: str, *, timeout_seconds: float) -> LocalRuntimeHandle:
+    runtime_root = Path(
+        tempfile.mkdtemp(
+            prefix="tp-portal-browser-backend-",
+            dir="/tmp" if os.name != "nt" and Path("/tmp").exists() else None,
+        )
+    )
+    log_path = runtime_root / "uvicorn.log"
+    port = _find_free_port()
+    base_url = f"http://127.0.0.1:{port}"
+    env = os.environ.copy()
+    env["PYTHONUNBUFFERED"] = "1"
+    if api_key:
+        env["TP_API_KEY"] = api_key
+    else:
+        env.pop("TP_API_KEY", None)
+
+    log_handle = log_path.open("w", encoding="utf-8")
+    try:
+        process = subprocess.Popen(
+            [
+                sys.executable,
+                "-m",
+                "uvicorn",
+                "app:app",
+                "--host",
+                "127.0.0.1",
+                "--port",
+                str(port),
+            ],
+            cwd=str(_repo_root()),
+            env=env,
+            stdout=log_handle,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+    finally:
+        log_handle.close()
+
+    handle = LocalRuntimeHandle(
+        process=process,
+        base_url=base_url,
+        log_path=log_path,
+        temp_paths=(runtime_root,),
+    )
+    try:
+        _wait_for_backend_ready(
+            base_url,
+            timeout_seconds=timeout_seconds,
+            process=process,
+            log_path=log_path,
+        )
+    except Exception:
+        _terminate_runtime(handle)
+        raise
+    return handle
+
+
 def _http_get_json(url: str, timeout: float = 10.0) -> Any:
     with urllib.request.urlopen(url, timeout=timeout) as response:
         return json.loads(response.read().decode("utf-8"))
@@ -155,12 +308,12 @@ def _request_json(
         raw_body = exc.read().decode("utf-8")
     except (TimeoutError, urllib.error.URLError) as exc:
         reason = getattr(exc, "reason", exc)
-        raise SmokeFailure(f"{method} {path} request failed: {reason}") from exc
+        raise SmokeFailure(f"{method} {path} request failed: {reason}", kind="transport") from exc
 
     try:
         body = json.loads(raw_body)
     except json.JSONDecodeError as exc:
-        raise SmokeFailure(f"{method} {path} returned non-JSON response: {raw_body[:400]!r}") from exc
+        raise SmokeFailure(f"{method} {path} returned non-JSON response: {raw_body[:400]!r}", kind="contract") from exc
     return status, body
 
 
@@ -203,7 +356,8 @@ def _preflight_lux_config_preview(
         )
     except SmokeFailure as exc:
         raise SmokeFailure(
-            "Preview preflight failed: /v1/config-preview could not be reached. Check backend preview/readiness before running the browser smoke."
+            "Preview preflight failed: /v1/config-preview could not be reached. Check backend preview/readiness before running the browser smoke.",
+            kind="environment",
         ) from exc
 
     error_payload = body.get("error") if isinstance(body, dict) else {}
@@ -214,28 +368,39 @@ def _preflight_lux_config_preview(
 
     if status in {401, 403}:
         raise SmokeFailure(
-            "Preview preflight failed: /v1/config-preview rejected the API key. Ensure TP_API_KEY matches the running backend before validate-portal-browser."
+            "Preview preflight failed: /v1/config-preview rejected the API key. Ensure TP_API_KEY matches the running backend before validate-portal-browser.",
+            kind="environment",
         )
     if status == 400:
         detail = error_reason or "invalid_request"
-        raise SmokeFailure(f"Preview preflight failed: /v1/config-preview rejected the Lux payload or contract ({detail}).")
+        raise SmokeFailure(
+            f"Preview preflight failed: /v1/config-preview rejected the Lux payload or contract ({detail}).",
+            kind="contract",
+        )
     if status >= 500:
         raise SmokeFailure(
-            "Preview preflight failed: /v1/config-preview is unavailable. Check backend preview/readiness before dispatch validation."
+            "Preview preflight failed: /v1/config-preview is unavailable. Check backend preview/readiness before dispatch validation.",
+            kind="environment",
         )
     if status != 200:
-        raise SmokeFailure(f"Preview preflight failed: /v1/config-preview returned unexpected status {status}.")
+        raise SmokeFailure(
+            f"Preview preflight failed: /v1/config-preview returned unexpected status {status}.",
+            kind="environment",
+        )
 
     data = body.get("data") if isinstance(body, dict) else None
     if not isinstance(data, dict):
-        raise SmokeFailure("Preview preflight failed: /v1/config-preview returned an invalid JSON envelope.")
+        raise SmokeFailure(
+            "Preview preflight failed: /v1/config-preview returned an invalid JSON envelope.",
+            kind="contract",
+        )
 
     field_errors = data.get("field_errors") or []
     if field_errors:
         first_error = field_errors[0] if isinstance(field_errors[0], dict) else {}
         field = str(first_error.get("field") or "payload").strip()
         message = str(first_error.get("message") or "Preview validation blocked the Lux payload.").strip()
-        raise SmokeFailure(f"Preview preflight failed: {field}: {message}")
+        raise SmokeFailure(f"Preview preflight failed: {field}: {message}", kind="contract")
 
     return data
 
@@ -493,6 +658,25 @@ def _state_probe_expression() -> str:
     const el = document.getElementById(id);
     return el ? String(el.value || '') : '';
   };
+  const buttonMeta = (id) => {
+    const el = document.getElementById(id);
+    if (!el) {
+      return { visible: false, label: '', key: '', tone: '' };
+    }
+    return {
+      visible: !el.classList.contains('hidden') && !el.disabled,
+      label: (el.textContent || '').trim(),
+      key: String(el.dataset.actionKey || ''),
+      tone: String(el.dataset.tone || '')
+    };
+  };
+  const consoleActionPrimary = buttonMeta('consoleActionPrimaryBtn');
+  const consoleActionSecondary1 = buttonMeta('consoleActionSecondaryBtn1');
+  const consoleActionSecondary2 = buttonMeta('consoleActionSecondaryBtn2');
+  const selectedRecoveryPrimary = buttonMeta('selectedJobRecoveryPrimaryBtn');
+  const selectedRecoverySecondary = buttonMeta('selectedJobRecoverySecondaryBtn');
+  const reviewStatusPrimary = buttonMeta('reviewStatusPrimaryBtn');
+  const reviewStatusSecondary = buttonMeta('reviewStatusSecondaryBtn');
   return {
     title: document.title,
     readyState: document.readyState,
@@ -521,6 +705,24 @@ def _state_probe_expression() -> str:
     contextRibbonFreshness: text('contextRibbonFreshness'),
     contextRibbonArtifact: text('contextRibbonArtifact'),
     contextRibbonCompare: text('contextRibbonCompare'),
+    actionRailVisible: (() => {
+      const el = document.getElementById('consoleActionRail');
+      return !!(el && !el.classList.contains('hidden'));
+    })(),
+    actionRailTitle: text('consoleActionRailTitle'),
+    actionRailDetail: text('consoleActionRailDetail'),
+    actionPrimaryVisible: consoleActionPrimary.visible,
+    actionPrimaryLabel: consoleActionPrimary.label,
+    actionPrimaryKey: consoleActionPrimary.key,
+    actionPrimaryTone: consoleActionPrimary.tone,
+    actionSecondary1Visible: consoleActionSecondary1.visible,
+    actionSecondary1Label: consoleActionSecondary1.label,
+    actionSecondary1Key: consoleActionSecondary1.key,
+    actionSecondary1Tone: consoleActionSecondary1.tone,
+    actionSecondary2Visible: consoleActionSecondary2.visible,
+    actionSecondary2Label: consoleActionSecondary2.label,
+    actionSecondary2Key: consoleActionSecondary2.key,
+    actionSecondary2Tone: consoleActionSecondary2.tone,
     reviewStatusTitle: text('reviewStatusTitle'),
     reviewStatusDetail: text('reviewStatusDetail'),
     reviewStatusTone: (() => {
@@ -531,6 +733,18 @@ def _state_probe_expression() -> str:
       const el = document.getElementById('reviewStatusBanner');
       return !!(el && !el.classList.contains('hidden'));
     })(),
+    reviewStatusPrimaryVisible: reviewStatusPrimary.visible,
+    reviewStatusPrimaryLabel: reviewStatusPrimary.label,
+    reviewStatusPrimaryKey: reviewStatusPrimary.key,
+    reviewStatusSecondaryVisible: reviewStatusSecondary.visible,
+    reviewStatusSecondaryLabel: reviewStatusSecondary.label,
+    reviewStatusSecondaryKey: reviewStatusSecondary.key,
+    selectedRecoveryPrimaryVisible: selectedRecoveryPrimary.visible,
+    selectedRecoveryPrimaryLabel: selectedRecoveryPrimary.label,
+    selectedRecoveryPrimaryKey: selectedRecoveryPrimary.key,
+    selectedRecoverySecondaryVisible: selectedRecoverySecondary.visible,
+    selectedRecoverySecondaryLabel: selectedRecoverySecondary.label,
+    selectedRecoverySecondaryKey: selectedRecoverySecondary.key,
     reviewProvenanceArtifactRole: text('reviewProvenanceArtifactRole'),
     reviewProvenanceRunState: text('reviewProvenanceRunState'),
     reviewProvenancePath: text('reviewProvenancePath'),
@@ -550,6 +764,20 @@ def _state_probe_expression() -> str:
     summaryReconstructionState: text('summaryReconstructionState'),
     summaryRuntimeWorkers: text('summaryRuntimeWorkers'),
     summaryPreviewState: text('summaryPreviewState'),
+    postureBandVisible: (() => {
+      const el = document.querySelector('[data-ui="build-posture-band"]');
+      return !!(el && !el.classList.contains('hidden'));
+    })(),
+    summaryBandOutsideReconstruction: (() => {
+      const summary = document.getElementById('reconstructionRuntimeSummary');
+      const disclosure = document.getElementById('reconstructionDetails');
+      return !!(summary && disclosure && !disclosure.contains(summary));
+    })(),
+    dispatchPrimaryLaneVisible: (() => {
+      const el = document.querySelector('[data-ui="dispatch-primary-lane"]');
+      return !!(el && !el.classList.contains('hidden'));
+    })(),
+    dispatchReadinessReason: text('dispatchReadinessReason'),
     rawPreviewStatus: (() => {
       const preview = typeof state !== 'undefined' && state.preview && typeof state.preview === 'object'
         ? state.preview
@@ -728,6 +956,104 @@ def _state_probe_expression() -> str:
       const el = document.getElementById('v2PresetField');
       return !!(el && !el.classList.contains('hidden'));
     })()
+  };
+})()
+"""
+
+
+def _accessibility_probe_expression() -> str:
+    return r"""
+(() => {
+  const visible = (el) => {
+    if (!el) return false;
+    const style = window.getComputedStyle(el);
+    const rect = el.getBoundingClientRect();
+    return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0;
+  };
+  const minTarget = (selector) => {
+    const el = document.querySelector(selector);
+    if (!visible(el)) return false;
+    const rect = el.getBoundingClientRect();
+    return rect.width >= 44 && rect.height >= 44;
+  };
+  const maxDisclosureDepth = (() => {
+    const detailsNodes = Array.from(document.querySelectorAll('details'));
+    if (!detailsNodes.length) return 0;
+    const depthFor = (node) => {
+      let depth = 1;
+      let current = node.parentElement;
+      while (current) {
+        if (current.tagName === 'DETAILS') depth += 1;
+        current = current.parentElement;
+      }
+      return depth;
+    };
+    return Math.max(...detailsNodes.map(depthFor));
+  })();
+  const focusTarget = () =>
+    document.getElementById('pipelineSelect')
+    || document.getElementById('presetSelect')
+    || document.getElementById('buildStepTab1')
+    || document.querySelector('[data-ui="view-link"]')
+    || document.getElementById('themeBtn');
+  const stickyBlockers = () =>
+    Array.from(document.querySelectorAll('.portal-topbar, [data-ui="console-context-shell"]'))
+      .filter((el) => {
+        if (!visible(el)) return false;
+        const position = window.getComputedStyle(el).position;
+        return position === 'sticky' || position === 'fixed';
+      });
+  const measureStickyBlockerBottom = () =>
+    stickyBlockers().reduce((max, el) => Math.max(max, el.getBoundingClientRect().bottom), 0);
+  const focusVisibleWithStickyShells = (() => {
+    const target = focusTarget();
+    if (!visible(target)) return false;
+    const absoluteTop = target.getBoundingClientRect().top + window.scrollY;
+    const root = document.documentElement;
+    const previousScrollBehavior = root.style.scrollBehavior;
+    const previousScrollX = window.scrollX;
+    const previousScrollY = window.scrollY;
+    const clearance = Math.ceil(measureStickyBlockerBottom() + 16);
+    root.style.scrollBehavior = 'auto';
+    try {
+      window.scrollTo(previousScrollX, Math.max(0, absoluteTop - clearance));
+      try {
+        target.focus({ preventScroll: true });
+      } catch {
+        target.focus();
+      }
+      const blockerBottom = measureStickyBlockerBottom();
+      const targetRect = target.getBoundingClientRect();
+      return targetRect.top >= blockerBottom - 2 && targetRect.bottom <= window.innerHeight + 2;
+    } finally {
+      window.scrollTo(previousScrollX, previousScrollY);
+      root.style.scrollBehavior = previousScrollBehavior;
+    }
+  })();
+  const focusTargetNode = focusTarget();
+  const discoverableDisclosures = Array.from(document.querySelectorAll('details > summary'))
+    .filter((summary) => visible(summary) && String(summary.textContent || '').trim().length > 0)
+    .length;
+  const shellNoise = document.querySelector('.shell-noise');
+  const visiblePulseAnimation = Array.from(document.querySelectorAll('.animate-pulse'))
+    .some((el) => visible(el) && window.getComputedStyle(el).animationName !== 'none' && window.getComputedStyle(el).animationDuration !== '0s');
+  return {
+    currentView: document.body ? String(document.body.dataset.consoleView || '') : '',
+    themeTargetMin: minTarget('#themeBtn'),
+    shortcutsTargetMin: minTarget('#shortcutsBtn'),
+    workspaceLinkTargetMin: minTarget('[data-ui="view-link"]'),
+    buildStepTargetMin: minTarget('#buildStepTab1'),
+    focusTargetId: focusTargetNode ? String(focusTargetNode.id || focusTargetNode.getAttribute('data-ui') || focusTargetNode.tagName || '') : '',
+    focusTargetTop: focusTargetNode ? Number(focusTargetNode.getBoundingClientRect().top || 0) : 0,
+    focusTargetBottom: focusTargetNode ? Number(focusTargetNode.getBoundingClientRect().bottom || 0) : 0,
+    stickyBlockerBottom: measureStickyBlockerBottom(),
+    focusVisibleWithStickyShells,
+    maxDisclosureDepth,
+    discoverableDisclosures,
+    reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+    decorativeMotionStatic:
+      (!shellNoise || window.getComputedStyle(shellNoise).display === 'none')
+      && !visiblePulseAnimation
   };
 })()
 """
@@ -953,17 +1279,93 @@ def _click_expression(selector: str) -> str:
 """
 
 
+def _simulate_bootstrap_degraded_expression(*, reason: str, http_status: int) -> str:
+    payload = json.dumps({"reason": reason, "http_status": http_status})
+    return f"""
+(() => {{
+  const cfg = {payload};
+  _applyPortalBootstrap(portalInternals.defaultPortalBootstrapPayload(), {{
+    status: 'degraded',
+    reason: cfg.reason,
+    httpStatus: cfg.http_status
+  }});
+  renderSelectedJobInspector();
+  renderArtifactPanel();
+  renderConsoleContextRibbon();
+  return ({_state_probe_expression()});
+}})()
+"""
+
+
+def _inject_compare_ready_review_expression(job_id: str) -> str:
+    payload = json.dumps({"job_id": job_id})
+    return f"""
+(() => {{
+  const cfg = {payload};
+  const job = (typeof state !== 'undefined' && Array.isArray(state.jobs))
+    ? state.jobs.find((item) => String(item && item.id || '') === String(cfg.job_id || ''))
+    : null;
+  if (!job) {{
+    throw new Error(`missing job ${{cfg.job_id}}`);
+  }}
+  upsertArtifact(job, {{
+    path: 'synthetic/review-primary.png',
+    relative_path: 'synthetic/review-primary.png',
+    artifact_type: 'image',
+    media_kind: 'image',
+    previewable: true,
+    content_type: 'image/png',
+    size_bytes: 2048,
+    display_hint: {{
+      label: 'Synthetic Primary',
+      priority: 1000,
+      compare_group: 'portal-smoke-compare'
+    }}
+  }});
+  upsertArtifact(job, {{
+    path: 'synthetic/review-compare.png',
+    relative_path: 'synthetic/review-compare.png',
+    artifact_type: 'image',
+    media_kind: 'image',
+    previewable: true,
+    content_type: 'image/png',
+    size_bytes: 1984,
+    display_hint: {{
+      label: 'Synthetic Compare',
+      priority: 990,
+      compare_group: 'portal-smoke-compare'
+    }}
+  }});
+  state.artifactUi.selectedByJob[String(cfg.job_id)] = 'synthetic/review-primary.png';
+  state.artifactUi.compareByJob[String(cfg.job_id)] = false;
+  renderReviewSurfaces();
+  return ({_state_probe_expression()});
+}})()
+"""
+
+
 def _parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--base-url",
-        default=os.getenv("TP_ORCHESTRATOR_BASE_URL", "http://127.0.0.1:8000"),
+        default=os.getenv("TP_ORCHESTRATOR_BASE_URL", DEFAULT_ORCHESTRATOR_BASE_URL),
         help="Portal/backend base URL (default: %(default)s)",
     )
     parser.add_argument(
         "--api-key",
         default=os.getenv("TP_API_KEY", "").strip(),
         help="API key for protected job endpoints (default: unset; uses TP_API_KEY when set)",
+    )
+    parser.add_argument(
+        "--spawn-local-backend",
+        action="store_true",
+        help="Launch an isolated local backend on a free port and validate against it",
+    )
+    parser.add_argument(
+        "--backend-startup-timeout-seconds",
+        type=float,
+        default=30.0,
+        help="Wait budget for an auto-launched local backend to become ready (default: %(default)s)",
     )
     parser.add_argument(
         "--chrome-binary",
@@ -1012,40 +1414,50 @@ def _parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
 
 def main(argv: Optional[Iterable[str]] = None) -> int:
     args = _parse_args(argv)
-    base_url = str(args.base_url).strip().rstrip("/")
-    if not base_url:
-        raise SmokeFailure("Base URL cannot be empty")
-
-    archive_root = Path(args.archive_root).resolve()
-    _expect(archive_root.is_dir(), f"Archive root fixture does not exist: {archive_root}")
-    archive_index = Path(args.archive_index).resolve()
-    _expect(archive_index.is_file(), f"Archive index fixture does not exist: {archive_index}")
-
-    output_dir, output_dir_is_temp = _resolve_output_dir(args.output_dir)
-    if output_dir_is_temp and not args.keep_output and output_dir.exists():
-        shutil.rmtree(output_dir, ignore_errors=True)
-    output_dir.mkdir(parents=True, exist_ok=True)
-    profile_dir = _default_profile_dir()
-    port = int(args.debugging_port or _find_free_port())
-    chrome_binary = _resolve_chrome_binary(args.chrome_binary)
-    _expect(Path(chrome_binary).exists(), f"Chrome binary does not exist: {chrome_binary}")
-    cleanup_output_dir = _should_cleanup_output_dir(
-        keep_output=bool(args.keep_output),
-        output_dir_is_temp=output_dir_is_temp,
-    )
-
-    print("portal-browser-smoke: preflighting lux config preview", flush=True)
-    _preflight_lux_config_preview(
-        base_url,
-        args.api_key,
-        archive_root=archive_root,
-        output_dir=output_dir,
-    )
-
+    runtime_handle: Optional[LocalRuntimeHandle] = None
     chrome_process: Optional[subprocess.Popen[str]] = None
     connection: Optional[DevToolsConnection] = None
+    profile_dir: Optional[Path] = None
+    output_dir: Optional[Path] = None
+    cleanup_output_dir = False
 
     try:
+        base_url = _base_url(str(args.base_url))
+        if args.spawn_local_backend:
+            print("portal-browser-smoke: launching isolated local backend", flush=True)
+            runtime_handle = _spawn_local_backend(
+                args.api_key,
+                timeout_seconds=args.backend_startup_timeout_seconds,
+            )
+            base_url = runtime_handle.base_url
+            print(f"portal-browser-smoke: isolated backend ready at {base_url}", flush=True)
+
+        archive_root = Path(args.archive_root).resolve()
+        _expect(archive_root.is_dir(), f"Archive root fixture does not exist: {archive_root}")
+        archive_index = Path(args.archive_index).resolve()
+        _expect(archive_index.is_file(), f"Archive index fixture does not exist: {archive_index}")
+
+        output_dir, output_dir_is_temp = _resolve_output_dir(args.output_dir)
+        if output_dir_is_temp and not args.keep_output and output_dir.exists():
+            shutil.rmtree(output_dir, ignore_errors=True)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        profile_dir = _default_profile_dir()
+        port = int(args.debugging_port or _find_free_port())
+        chrome_binary = _resolve_chrome_binary(args.chrome_binary)
+        _expect(Path(chrome_binary).exists(), f"Chrome binary does not exist: {chrome_binary}")
+        cleanup_output_dir = _should_cleanup_output_dir(
+            keep_output=bool(args.keep_output),
+            output_dir_is_temp=output_dir_is_temp,
+        )
+
+        print("portal-browser-smoke: preflighting lux config preview", flush=True)
+        _preflight_lux_config_preview(
+            base_url,
+            args.api_key,
+            archive_root=archive_root,
+            output_dir=output_dir,
+        )
+
         print("portal-browser-smoke: launching chrome", flush=True)
         command = [
             chrome_binary,
@@ -1105,6 +1517,21 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             f"Portal did not default to lux-depth-v3: {online_state}",
         )
         _expect(bool(online_state.get("overviewViewVisible")), f"Overview shell did not remain visible: {online_state}")
+        overview_accessibility = connection.evaluate(_accessibility_probe_expression())
+        _expect(
+            bool(overview_accessibility.get("themeTargetMin"))
+            and bool(overview_accessibility.get("shortcutsTargetMin"))
+            and bool(overview_accessibility.get("workspaceLinkTargetMin")),
+            f"Portal overview controls fell below the 44px contract: {overview_accessibility}",
+        )
+        _expect(
+            int(overview_accessibility.get("maxDisclosureDepth", 0)) <= 1,
+            f"Portal disclosure depth exceeded the single-level contract: {overview_accessibility}",
+        )
+        _expect(
+            int(overview_accessibility.get("discoverableDisclosures", 0)) >= 1,
+            f"Portal disclosures were no longer discoverable: {overview_accessibility}",
+        )
 
         print("portal-browser-smoke: opening build view", flush=True)
         connection.evaluate(_navigate_to_console_view_expression("build"))
@@ -1122,6 +1549,41 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         _expect(
             not bool(build_state.get("operateViewVisible")),
             f"Build view should suppress operate shell: {build_state}",
+        )
+        build_accessibility = connection.evaluate(_accessibility_probe_expression())
+        _expect(
+            bool(build_accessibility.get("buildStepTargetMin")),
+            f"Build step tabs fell below the 44px contract: {build_accessibility}",
+        )
+        _expect(
+            bool(build_accessibility.get("focusVisibleWithStickyShells")),
+            f"Sticky portal chrome obscured focused controls: {build_accessibility}",
+        )
+
+        print("portal-browser-smoke: checking reduced motion", flush=True)
+        connection.call(
+            "Emulation.setEmulatedMedia",
+            {"features": [{"name": "prefers-reduced-motion", "value": "reduce"}]},
+        )
+        reduced_motion_state = _poll(
+            connection,
+            _accessibility_probe_expression(),
+            predicate=lambda value: (
+                isinstance(value, dict)
+                and bool(value.get("reducedMotion"))
+                and bool(value.get("decorativeMotionStatic"))
+                and bool(value.get("buildStepTargetMin"))
+            ),
+            timeout_seconds=args.timeout_seconds,
+            description="portal reduced-motion shell",
+        )
+        _expect(
+            bool(reduced_motion_state.get("decorativeMotionStatic")),
+            f"Reduced-motion mode left decorative portal motion active: {reduced_motion_state}",
+        )
+        connection.call(
+            "Emulation.setEmulatedMedia",
+            {"features": [{"name": "prefers-reduced-motion", "value": "no-preference"}]},
         )
 
         print("portal-browser-smoke: confirming lux-depth-v3 build defaults", flush=True)
@@ -1182,12 +1644,28 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             f"Default reconstruction summary should report Off: {lux_state}",
         )
         _expect(
+            bool(str(lux_state.get("summaryReconstructionState", "")).strip())
+            and bool(str(lux_state.get("summaryRuntimeWorkers", "")).strip())
+            and bool(str(lux_state.get("summaryPreviewState", "")).strip()),
+            f"Step 3 posture summary should stay visible: {lux_state}",
+        )
+        _expect(
+            bool(str(lux_state.get("heroReadinessLabel", "")).strip())
+            and bool(str(lux_state.get("cliFirstLine", "")).strip()),
+            f"Step 4 dispatch surface should stay visible: {lux_state}",
+        )
+        _expect(
             "Auto" in str(lux_state.get("summaryRuntimeWorkers", "")),
             f"Runtime worker summary should default to Auto: {lux_state}",
         )
         _expect(
             bool(str(lux_state.get("summaryPreviewState", "")).strip()),
             f"Preview status summary should be populated: {lux_state}",
+        )
+        _expect(
+            bool(str(lux_state.get("heroReadinessLabel", "")).strip())
+            and bool(str(lux_state.get("summaryPreviewState", "")).strip()),
+            f"Dispatch lane state should stay visible while preview readiness settles: {lux_state}",
         )
         _expect(
             not bool(lux_state.get("v2PresetVisible")),
@@ -1213,6 +1691,10 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         _expect(
             not bool(lux_ready_state.get("runJobDisabled")),
             f"Lux pipeline should become dispatchable once preview-backed validation settles: {lux_ready_state}",
+        )
+        _expect(
+            "clear for dispatch" in str(lux_ready_state.get("dispatchReadinessReason", "")).strip().lower(),
+            f"Dispatch lane should report a clear ready reason once Lux validation settles: {lux_ready_state}",
         )
 
         lux_context_state = _poll(
@@ -1276,6 +1758,24 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             f"Advanced disclosure should auto-open once advanced controls need operator attention: {lux_context_state}",
         )
 
+        debug_bundle_reason_state = _poll(
+            connection,
+            _state_probe_expression(),
+            predicate=lambda value: (
+                isinstance(value, dict)
+                and bool(value.get("runJobDisabled"))
+                and "preview" in str(value.get("heroReadinessLabel", "")).strip().lower()
+                and bool(value.get("debugBundleGuardrailVisible"))
+                and bool(value.get("governanceDetailsOpen"))
+            ),
+            timeout_seconds=args.timeout_seconds,
+            description="dispatch surface to report a blocked preview/governance state",
+        )
+        _expect(
+            bool(debug_bundle_reason_state.get("runJobDisabled")),
+            f"Dispatch should remain disabled while preview/governance blockers are active: {debug_bundle_reason_state}",
+        )
+
         print("portal-browser-smoke: opening secondary dispatch tools", flush=True)
         connection.evaluate(_click_expression("#dispatchToolsDetails > summary"))
         dispatch_tools_state = _poll(
@@ -1291,7 +1791,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         )
         connection.evaluate(_click_expression("#dispatchToolsDetails > summary"))
 
-        print("portal-browser-smoke: opening effective config drawer", flush=True)
+        print("portal-browser-smoke: opening effective config drawer from the posture band", flush=True)
         connection.evaluate(_click_expression("#openEffectiveConfigBtn"))
         effective_config_state = _poll(
             connection,
@@ -1581,9 +2081,21 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             and str(terminal_state.get("contextRibbonJob", "")).strip() == submitted_job_id,
             f"Operate view should expose the compact context ribbon for the selected job: {terminal_state}",
         )
+        _expect(
+            bool(terminal_state.get("actionRailVisible")),
+            f"Operate view should surface the contextual action rail: {terminal_state}",
+        )
+        _expect(
+            str(terminal_state.get("actionPrimaryKey", "")).strip() == "open_review",
+            f"Completed runs should promote review entry as the primary action: {terminal_state}",
+        )
+        _expect(
+            str(terminal_state.get("selectedRecoveryPrimaryKey", "")).strip() == "open_review",
+            f"Selected-job recovery controls should reuse the review-entry action: {terminal_state}",
+        )
 
-        print("portal-browser-smoke: opening review view", flush=True)
-        connection.evaluate(_navigate_to_console_view_expression("review", submitted_job_id))
+        print("portal-browser-smoke: opening review from the contextual action rail", flush=True)
+        connection.evaluate(_click_expression("#consoleActionPrimaryBtn"))
         run_state = _poll(
             connection,
             _state_probe_expression(),
@@ -1595,6 +2107,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
                 and bool(value.get("reviewSurfaceVisible"))
                 and bool(value.get("reviewStatusVisible"))
                 and str(value.get("reviewProvenancePath", "")).strip() != ""
+                and "artifact=" in str(value.get("locationSearch", ""))
             ),
             timeout_seconds=args.timeout_seconds,
             description="review view to become active",
@@ -1631,8 +2144,62 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             f"Review ribbon should stay aligned with the selected artifact context: {run_state}",
         )
 
-        selected_artifact_path = str(run_state.get("reviewProvenancePath", "")).strip()
-        _expect(selected_artifact_path, f"Review deep-link validation requires a selected artifact path: {run_state}")
+        print("portal-browser-smoke: synthesizing compare-ready review state", flush=True)
+        compare_ready_state = connection.evaluate(_inject_compare_ready_review_expression(submitted_job_id))
+        _expect(isinstance(compare_ready_state, dict), f"Unexpected compare-ready portal state: {compare_ready_state!r}")
+        compare_ready_state = _poll(
+            connection,
+            _state_probe_expression(),
+            predicate=lambda value: (
+                isinstance(value, dict)
+                and str(value.get("currentView", "")) == "review"
+                and str(value.get("selectedJobId", "")).strip() == submitted_job_id
+                and str(value.get("reviewProvenancePath", "")).strip() == "synthetic/review-primary.png"
+                and (
+                    str(value.get("actionSecondary2Key", "")).strip() == "toggle_compare"
+                    or str(value.get("actionSecondary1Key", "")).strip() == "toggle_compare"
+                    or str(value.get("reviewStatusSecondaryKey", "")).strip() == "toggle_compare"
+                )
+            ),
+            timeout_seconds=args.timeout_seconds,
+            description="synthetic compare-capable review state",
+        )
+        selected_artifact_path = str(compare_ready_state.get("reviewProvenancePath", "")).strip()
+        _expect(
+            selected_artifact_path == "synthetic/review-primary.png",
+            f"Compare-ready review state should promote the injected primary artifact: {compare_ready_state}",
+        )
+
+        compare_toggle_selector = ""
+        if str(compare_ready_state.get("actionSecondary2Key", "")).strip() == "toggle_compare":
+            compare_toggle_selector = "#consoleActionSecondaryBtn2"
+        elif str(compare_ready_state.get("actionSecondary1Key", "")).strip() == "toggle_compare":
+            compare_toggle_selector = "#consoleActionSecondaryBtn1"
+        elif str(compare_ready_state.get("reviewStatusSecondaryKey", "")).strip() == "toggle_compare":
+            compare_toggle_selector = "#reviewStatusSecondaryBtn"
+        _expect(
+            bool(compare_toggle_selector),
+            f"Ready review state should surface a compare toggle in the new action controls: {compare_ready_state}",
+        )
+        print("portal-browser-smoke: toggling compare from the new action controls", flush=True)
+        connection.evaluate(_click_expression(compare_toggle_selector))
+        compare_state = _poll(
+            connection,
+            _state_probe_expression(),
+            predicate=lambda value: (
+                isinstance(value, dict)
+                and str(value.get("currentView", "")) == "review"
+                and str(value.get("selectedJobId", "")).strip() == submitted_job_id
+                and bool(value.get("reviewCompareEnabled"))
+                and "compare=1" in str(value.get("locationSearch", ""))
+            ),
+            timeout_seconds=args.timeout_seconds,
+            description="compare toggle action to enable compare mode",
+        )
+        _expect(
+            str(compare_state.get("contextRibbonCompare", "")).strip().lower() == "compare on",
+            f"Action-rail compare toggles should preserve the compare route contract: {compare_state}",
+        )
 
         print("portal-browser-smoke: restoring review from an artifact deep link", flush=True)
         connection.evaluate(_navigate_to_console_view_expression("build"))
@@ -1722,6 +2289,40 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             f"Invalid compare deep links should fall back to a valid single-view review state: {normalized_review_state}",
         )
 
+        print("portal-browser-smoke: simulating degraded auth recovery controls", flush=True)
+        degraded_state = connection.evaluate(_simulate_bootstrap_degraded_expression(reason="auth_failure", http_status=401))
+        _expect(isinstance(degraded_state, dict), f"Unexpected degraded portal state: {degraded_state!r}")
+        _expect(
+            str(degraded_state.get("actionPrimaryKey", "")).strip() == "restore_access",
+            f"Degraded auth state should promote Restore Access in the action rail: {degraded_state}",
+        )
+        _expect(
+            str(degraded_state.get("actionSecondary1Key", "")).strip() == "retry_status_check",
+            f"Degraded auth state should surface Retry Status Check in the action rail: {degraded_state}",
+        )
+        _expect(
+            str(degraded_state.get("selectedRecoveryPrimaryKey", "")).strip() == "restore_access"
+            and str(degraded_state.get("reviewStatusPrimaryKey", "")).strip() == "restore_access",
+            f"Inspector and review recovery controls should stay aligned with degraded auth recovery: {degraded_state}",
+        )
+        connection.evaluate(_click_expression("#consoleActionSecondaryBtn1"))
+        recovered_state = _poll(
+            connection,
+            _state_probe_expression(),
+            predicate=lambda value: (
+                isinstance(value, dict)
+                and str(value.get("bootstrapStatus", "")).strip().lower() == "ready"
+                and str(value.get("currentView", "")).strip() == "review"
+                and str(value.get("selectedJobId", "")).strip() == submitted_job_id
+            ),
+            timeout_seconds=args.timeout_seconds,
+            description="retry status check to recover degraded bootstrap state",
+        )
+        _expect(
+            str(recovered_state.get("actionPrimaryKey", "")).strip() != "restore_access",
+            f"Retry Status Check should restore the contextual action rail once bootstrap recovers: {recovered_state}",
+        )
+
         print("portal-browser-smoke: round-tripping through build and back to operate", flush=True)
         connection.evaluate(_navigate_to_console_view_expression("build"))
         _poll(
@@ -1776,9 +2377,11 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
                     chrome_process.kill()
                 except Exception:
                     pass
-        if not args.keep_profile:
+        if runtime_handle is not None:
+            _terminate_runtime(runtime_handle)
+        if profile_dir is not None and not args.keep_profile:
             shutil.rmtree(profile_dir, ignore_errors=True)
-        if cleanup_output_dir:
+        if cleanup_output_dir and output_dir is not None:
             shutil.rmtree(output_dir, ignore_errors=True)
 
 

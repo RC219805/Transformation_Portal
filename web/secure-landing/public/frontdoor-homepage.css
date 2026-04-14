@@ -1,22 +1,30 @@
+@import url("/shared-ui-tokens.css");
+
 body.frontdoor-homepage {
   --ux-focus-ring: rgba(103, 232, 249, 0.96);
   --ux-focus-shadow: rgba(34, 211, 238, 0.24);
   --ux-panel-border: rgba(148, 163, 184, 0.24);
   --ux-panel-border-strong: rgba(103, 232, 249, 0.28);
-  --ux-target-min-size: 44px;
-  --ux-label-size: 0.8125rem;
-  --ux-body-size: 1rem;
+  --continuity-panel: rgba(12, 18, 34, 0.76);
+  --continuity-panel-strong: rgba(7, 12, 26, 0.94);
+  --continuity-panel-soft: rgba(15, 23, 42, 0.7);
+  --continuity-border: rgba(148, 163, 184, 0.24);
+  --continuity-border-strong: rgba(103, 232, 249, 0.28);
+  --continuity-accent: #22d3ee;
+  --continuity-accent-strong: #2563eb;
+  --continuity-shadow: 0 24px 60px rgba(2, 6, 23, 0.26);
+  --continuity-shadow-strong: 0 18px 40px rgba(37, 99, 235, 0.22);
   --fd-bg: #020617;
-  --fd-panel: rgba(12, 18, 34, 0.76);
-  --fd-panel-strong: rgba(7, 12, 26, 0.94);
-  --fd-panel-soft: rgba(15, 23, 42, 0.68);
-  --fd-border: var(--ux-panel-border);
-  --fd-border-strong: var(--ux-panel-border-strong);
+  --fd-panel: var(--continuity-panel);
+  --fd-panel-strong: var(--continuity-panel-strong);
+  --fd-panel-soft: var(--continuity-panel-soft);
+  --fd-border: var(--continuity-border);
+  --fd-border-strong: var(--continuity-border-strong);
   --fd-text: #e2e8f0;
   --fd-text-strong: #f8fafc;
   --fd-text-soft: #b7c4d6;
-  --fd-accent: #22d3ee;
-  --fd-accent-strong: #2563eb;
+  --fd-accent: var(--continuity-accent);
+  --fd-accent-strong: var(--continuity-accent-strong);
   --fd-success: #34d399;
   margin: 0;
   min-height: 100vh;
@@ -139,8 +147,9 @@ body.frontdoor-homepage .site-header {
   top: 0;
   z-index: 40;
   backdrop-filter: blur(18px);
-  background: rgba(2, 6, 23, 0.74);
+  background: rgba(2, 6, 23, 0.78);
   border-bottom: 1px solid var(--fd-border);
+  box-shadow: 0 18px 36px rgba(2, 6, 23, 0.14);
 }
 
 body.frontdoor-homepage .site-header__inner,
@@ -172,7 +181,7 @@ body.frontdoor-homepage .brand-lockup__mark {
   justify-content: center;
   width: 3.4rem;
   height: 3.4rem;
-  padding: 0.5rem;
+  padding: 0.35rem;
   border-radius: 1rem;
   border: 1px solid var(--fd-border);
   background: rgba(15, 23, 42, 0.62);
@@ -180,6 +189,12 @@ body.frontdoor-homepage .brand-lockup__mark {
 }
 
 body.frontdoor-homepage .brand-asset {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+body.frontdoor-homepage .brand-asset--symbol {
   width: 100%;
   height: 100%;
   object-fit: contain;
@@ -299,6 +314,22 @@ body.frontdoor-homepage .homepage-section {
 body.frontdoor-homepage .hero-section {
   display: grid;
   gap: 2.5rem;
+  align-content: start;
+}
+
+body.frontdoor-homepage .hero-copy {
+  padding-top: 0.35rem;
+}
+
+body.frontdoor-homepage .hero-lockup {
+  width: min(100%, 28rem);
+  margin-bottom: 1.1rem;
+}
+
+body.frontdoor-homepage .hero-lockup__asset {
+  display: block;
+  width: 100%;
+  height: auto;
 }
 
 body.frontdoor-homepage .section-kicker {
@@ -346,10 +377,66 @@ body.frontdoor-homepage .hero-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 0.9rem;
+  align-items: center;
 }
 
 body.frontdoor-homepage .hero-actions {
   margin-top: 2rem;
+}
+
+body.frontdoor-homepage .hero-route-grid {
+  display: grid;
+  gap: 0.9rem;
+  margin-top: 1.35rem;
+  grid-template-columns: repeat(auto-fit, minmax(13.5rem, 1fr));
+}
+
+body.frontdoor-homepage .hero-route-card {
+  display: flex;
+  min-height: 100%;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding: 1rem 1.05rem;
+  border-radius: 1.35rem;
+  border: 1px solid var(--fd-border);
+  background: rgba(15, 23, 42, 0.62);
+  backdrop-filter: blur(18px);
+  transition:
+    transform 0.2s ease,
+    border-color 0.2s ease,
+    background-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+body.frontdoor-homepage .hero-route-card:hover,
+body.frontdoor-homepage .hero-route-card:focus-visible {
+  transform: translateY(-1px);
+  border-color: var(--fd-border-strong);
+  background: rgba(15, 23, 42, 0.78);
+  box-shadow: 0 16px 34px rgba(2, 6, 23, 0.22);
+}
+
+body.frontdoor-homepage .hero-route-kicker {
+  margin: 0;
+  color: var(--fd-accent);
+  font-size: var(--ux-label-size);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+body.frontdoor-homepage .hero-route-title {
+  margin: 0;
+  color: var(--fd-text-strong);
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+body.frontdoor-homepage .hero-route-detail {
+  margin: 0;
+  color: var(--fd-text-soft);
+  font-size: 0.94rem;
+  line-height: 1.65;
 }
 
 body.frontdoor-homepage .site-cta,
@@ -370,22 +457,98 @@ body.frontdoor-homepage .site-cta {
   min-height: max(var(--ux-target-min-size), 3rem);
   padding: 0.9rem 1.4rem;
   border-radius: 999px;
-  border: 1px solid transparent;
+  border: 1px solid rgba(255, 255, 255, 0.08);
   background: linear-gradient(90deg, var(--fd-accent), var(--fd-accent-strong));
   color: var(--fd-text-strong);
   font-weight: 700;
-  box-shadow: 0 12px 30px rgba(37, 99, 235, 0.24);
+  box-shadow: var(--continuity-shadow-strong);
+  backdrop-filter: blur(14px);
 }
 
 body.frontdoor-homepage .site-cta:hover {
   transform: translateY(-1px);
 }
 
-body.frontdoor-homepage .site-cta--secondary,
+body.frontdoor-homepage .site-cta--secondary {
+  background:
+    linear-gradient(135deg, rgba(34, 211, 238, 0.12), rgba(15, 23, 42, 0.9)),
+    rgba(15, 23, 42, 0.86);
+  border-color: var(--fd-border-strong);
+  box-shadow: 0 14px 32px rgba(6, 182, 212, 0.12);
+}
+
 body.frontdoor-homepage .site-cta--ghost {
-  background: rgba(15, 23, 42, 0.72);
+  background: rgba(15, 23, 42, 0.7);
   border-color: var(--fd-border);
   box-shadow: none;
+}
+
+body.frontdoor-homepage .hero-access-note {
+  max-width: 38rem;
+  margin: 1rem 0 0;
+  color: var(--fd-text-soft);
+  font-size: 0.96rem;
+  line-height: 1.7;
+}
+
+body.frontdoor-homepage .hero-access-note strong {
+  color: var(--fd-text-strong);
+}
+
+body.frontdoor-homepage .entry-rail {
+  display: grid;
+  gap: 0.9rem;
+  margin-top: 1.4rem;
+}
+
+body.frontdoor-homepage .entry-card {
+  display: grid;
+  gap: 0.4rem;
+  padding: 1rem 1.05rem;
+  border-radius: 1.2rem;
+  border: 1px solid var(--fd-border);
+  background: rgba(15, 23, 42, 0.64);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+body.frontdoor-homepage .entry-card[data-state="verified-access"] {
+  border-color: rgba(103, 232, 249, 0.26);
+  background:
+    linear-gradient(180deg, rgba(8, 145, 178, 0.12), rgba(15, 23, 42, 0.7)),
+    rgba(15, 23, 42, 0.74);
+}
+
+body.frontdoor-homepage .entry-card[data-state="governed-console"] {
+  border-color: rgba(45, 212, 191, 0.24);
+}
+
+body.frontdoor-homepage .entry-card__kicker {
+  margin: 0;
+  color: var(--fd-accent);
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Consolas",
+    monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+body.frontdoor-homepage .entry-card__title {
+  margin: 0;
+  color: var(--fd-text-strong);
+  font-size: 0.98rem;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+body.frontdoor-homepage .entry-card__detail {
+  margin: 0;
+  color: var(--fd-text-soft);
+  font-size: 0.9rem;
+  line-height: 1.65;
 }
 
 body.frontdoor-homepage .site-link {
@@ -464,7 +627,7 @@ body.frontdoor-homepage .bundle-preview {
   border: 1px solid var(--fd-border);
   background: var(--fd-panel);
   backdrop-filter: blur(18px);
-  box-shadow: 0 24px 60px rgba(2, 6, 23, 0.26);
+  box-shadow: var(--continuity-shadow);
 }
 
 body.frontdoor-homepage .highlight-card,
@@ -831,11 +994,12 @@ body.frontdoor-homepage .homepage-section--cta {
 }
 
 body.frontdoor-homepage .cta-panel {
-  padding: 1.6rem;
+  padding: 1.8rem;
   border-radius: 1.8rem;
   background:
     radial-gradient(circle at top right, rgba(34, 211, 238, 0.16), transparent 28%),
-    rgba(15, 23, 42, 0.8);
+    radial-gradient(circle at bottom left, rgba(37, 99, 235, 0.12), transparent 24%),
+    rgba(15, 23, 42, 0.82);
 }
 
 body.frontdoor-homepage .site-footer {
@@ -896,6 +1060,10 @@ body.frontdoor-homepage .site-footer__copy {
     align-items: start;
   }
 
+  body.frontdoor-homepage .entry-rail {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
   body.frontdoor-homepage .proof-layout {
     grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
     align-items: start;
@@ -938,6 +1106,19 @@ body.frontdoor-homepage .site-footer__copy {
     max-width: none;
   }
 
+  body.frontdoor-homepage .hero-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  body.frontdoor-homepage .hero-route-grid {
+    grid-template-columns: 1fr;
+  }
+
+  body.frontdoor-homepage .hero-actions .site-cta {
+    width: 100%;
+  }
+
   body.frontdoor-homepage .status-grid {
     grid-template-columns: 1fr;
   }
@@ -950,6 +1131,208 @@ body.frontdoor-homepage .site-footer__copy {
     flex-direction: column;
     align-items: flex-start;
   }
+}
+
+body.frontdoor-homepage {
+  --fd-border: var(--ux-border-subtle);
+  --fd-border-strong: var(--ux-border-strong);
+  --fd-text: var(--ux-text-primary);
+  --fd-text-strong: var(--ux-text-strong);
+  --fd-text-soft: var(--ux-text-muted);
+  --fd-accent: var(--ux-accent-primary);
+  --fd-accent-strong: var(--ux-accent-secondary);
+  background:
+    radial-gradient(circle at top, rgba(6, 182, 212, 0.08), transparent 32%),
+    linear-gradient(180deg, rgba(2, 6, 23, 0.98), rgba(2, 6, 23, 1));
+}
+
+body.frontdoor-homepage .homepage-video {
+  opacity: 0.08;
+  filter: saturate(0.78) brightness(0.76);
+}
+
+body.frontdoor-homepage .homepage-backdrop__grid,
+body.frontdoor-homepage .homepage-backdrop__glow {
+  display: none;
+}
+
+body.frontdoor-homepage .homepage-backdrop__overlay {
+  background: linear-gradient(180deg, rgba(2, 6, 23, 0.78), rgba(2, 6, 23, 0.96));
+}
+
+body.frontdoor-homepage .site-header {
+  backdrop-filter: blur(12px);
+  background: rgba(2, 6, 23, 0.88);
+  box-shadow: var(--ux-shadow-surface);
+}
+
+body.frontdoor-homepage .brand-lockup__mark,
+body.frontdoor-homepage .entry-card,
+body.frontdoor-homepage .highlight-card,
+body.frontdoor-homepage .feature-card,
+body.frontdoor-homepage .evidence-card,
+body.frontdoor-homepage .audience-card,
+body.frontdoor-homepage .principle-card,
+body.frontdoor-homepage .faq-item,
+body.frontdoor-homepage .workflow-card,
+body.frontdoor-homepage .proof-panel,
+body.frontdoor-homepage .cta-panel,
+body.frontdoor-homepage .guardrail-callout,
+body.frontdoor-homepage .report-panel pre,
+body.frontdoor-homepage .status-card,
+body.frontdoor-homepage .checkpoint-row,
+body.frontdoor-homepage .artifact-row {
+  border-radius: var(--ux-radius-lg);
+}
+
+body.frontdoor-homepage .brand-lockup__mark {
+  border-color: var(--fd-border);
+  background: rgba(8, 15, 29, 0.88);
+  box-shadow: none;
+}
+
+body.frontdoor-homepage .brand-lockup__kicker,
+body.frontdoor-homepage .section-kicker,
+body.frontdoor-homepage .subsection-kicker,
+body.frontdoor-homepage .status-label,
+body.frontdoor-homepage .artifact-status,
+body.frontdoor-homepage .workflow-step,
+body.frontdoor-homepage .workflow-output-label,
+body.frontdoor-homepage .card-kicker,
+body.frontdoor-homepage .entry-card__kicker {
+  letter-spacing: var(--ux-meta-tracking);
+}
+
+body.frontdoor-homepage .hero-copy h1 {
+  max-width: 13ch;
+  line-height: 1.05;
+}
+
+body.frontdoor-homepage .hero-lede {
+  max-width: 38rem;
+  margin-top: 1.2rem;
+  color: var(--fd-text);
+}
+
+body.frontdoor-homepage .hero-actions {
+  gap: 0.75rem;
+  align-items: stretch;
+}
+
+body.frontdoor-homepage .site-cta,
+body.frontdoor-homepage .site-link,
+body.frontdoor-homepage .homepage-nav-link,
+body.frontdoor-homepage .homepage-mobile-link,
+body.frontdoor-homepage .site-mobile-menu,
+body.frontdoor-homepage .hero-inline-link {
+  min-height: var(--ux-target-min-size);
+  border-radius: var(--ux-radius-md);
+}
+
+body.frontdoor-homepage .site-cta {
+  padding: 0.85rem 1.15rem;
+  border-color: rgba(255, 255, 255, 0.06);
+  background: linear-gradient(135deg, rgba(15, 118, 110, 0.96), rgba(8, 145, 178, 0.9));
+  box-shadow: var(--ux-shadow-surface);
+}
+
+body.frontdoor-homepage .site-cta--secondary,
+body.frontdoor-homepage .site-cta--ghost,
+body.frontdoor-homepage .site-link,
+body.frontdoor-homepage .hero-inline-link {
+  border: 1px solid var(--fd-border);
+  background: rgba(15, 23, 42, 0.76);
+  box-shadow: none;
+}
+
+body.frontdoor-homepage .hero-inline-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.75rem 1rem;
+  color: var(--fd-text);
+  font-weight: 600;
+}
+
+body.frontdoor-homepage .entry-rail {
+  gap: 0.75rem;
+}
+
+body.frontdoor-homepage .entry-card {
+  padding: 1rem;
+  border-color: var(--fd-border);
+  background: rgba(8, 15, 29, 0.82);
+  box-shadow: var(--ux-shadow-surface);
+}
+
+body.frontdoor-homepage .entry-card--proofband {
+  gap: 0.75rem;
+}
+
+body.frontdoor-homepage .entry-card__summary {
+  margin: 0;
+  color: var(--fd-text);
+  line-height: 1.6;
+}
+
+body.frontdoor-homepage .entry-card__meta {
+  display: grid;
+  gap: 0.55rem;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+}
+
+body.frontdoor-homepage .entry-card__meta-item {
+  display: grid;
+  gap: 0.2rem;
+}
+
+body.frontdoor-homepage .entry-card__meta-label {
+  margin: 0;
+  color: var(--fd-accent);
+  font-size: var(--ux-label-size);
+  font-family:
+    "SFMono-Regular",
+    "SF Mono",
+    "Menlo",
+    "Consolas",
+    monospace;
+  letter-spacing: var(--ux-meta-tracking);
+  text-transform: uppercase;
+}
+
+body.frontdoor-homepage .entry-card__meta-value {
+  margin: 0;
+  color: var(--fd-text-strong);
+  font-size: 0.92rem;
+  line-height: 1.55;
+}
+
+body.frontdoor-homepage .signal-pill,
+body.frontdoor-homepage .guardrail-callout,
+body.frontdoor-homepage .highlight-card,
+body.frontdoor-homepage .feature-card,
+body.frontdoor-homepage .evidence-card,
+body.frontdoor-homepage .audience-card,
+body.frontdoor-homepage .principle-card,
+body.frontdoor-homepage .faq-item,
+body.frontdoor-homepage .workflow-card,
+body.frontdoor-homepage .proof-panel,
+body.frontdoor-homepage .status-card,
+body.frontdoor-homepage .checkpoint-row,
+body.frontdoor-homepage .artifact-row,
+body.frontdoor-homepage .report-panel pre,
+body.frontdoor-homepage .cta-panel {
+  border-color: var(--fd-border);
+  background: rgba(8, 15, 29, 0.82);
+  box-shadow: var(--ux-shadow-surface);
+}
+
+body.frontdoor-homepage .cta-panel {
+  background: rgba(8, 15, 29, 0.88);
+}
+
+body.frontdoor-homepage .signal-pill {
+  padding: 0.72rem 0.9rem;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -967,5 +1350,9 @@ body.frontdoor-homepage .site-footer__copy {
   body.frontdoor-homepage .homepage-nav-link:hover,
   body.frontdoor-homepage .homepage-mobile-link:hover {
     transform: none !important;
+  }
+
+  body.frontdoor-homepage .homepage-video {
+    display: none;
   }
 }

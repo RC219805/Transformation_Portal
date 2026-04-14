@@ -37,6 +37,14 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from transformation_portal.lux_depth_v3.run_card_contract import (
+    infer_run_card_version,
+    with_inferred_run_card_version,
+)
+from transformation_portal.schemas.run_card import load_run_card_schema
+
+from .jsonschema_formats import build_jsonschema_format_checker
+
 
 class RunCardValidationError(RuntimeError):
     """Raised when run card validation fails.
@@ -60,53 +68,26 @@ class RunCardValidationError(RuntimeError):
         super().__init__(message)
 
 
-def _default_schema_path() -> Path:
-    """Return repository-local run card schema path.
+def _default_schema_path(version: str = "v1") -> Path:
+    """Return the published documentation path for a run-card schema.
 
-    The schema is located at:
-    <repo_root>/docs/schemas/run_card/run_card.v1.schema.json
-
-    This path is resolved relative to this module's location in the
-    installed package structure.
+    Runtime validation loads packaged schema resources. This helper is kept for
+    legacy imports, documentation sync tests, and CLI help text.
     """
-    return Path(__file__).resolve().parents[4] / "docs" / "schemas" / "run_card" / "run_card.v1.schema.json"
+    normalized_version = infer_run_card_version({"run_card_version": version})
+    return Path(__file__).resolve().parents[4] / "docs" / "schemas" / "run_card" / f"run_card.{normalized_version}.schema.json"
 
 
-@lru_cache(maxsize=1)
-def _load_schema(schema_path_str: str) -> Dict[str, Any]:
-    """Load run card JSON schema once per process.
-
-    Args:
-        schema_path_str: String path for hashability (LRU cache key)
-
-    Returns:
-        Parsed JSON schema dictionary
-
-    Raises:
-        FileNotFoundError: If schema file does not exist
-        json.JSONDecodeError: If schema is not valid JSON
-    """
+@lru_cache(maxsize=4)
+def _load_schema_from_path(schema_path_str: str) -> Dict[str, Any]:
+    """Load a JSON schema from an explicit path override."""
     schema_path = Path(schema_path_str)
     with open(schema_path, "r", encoding="utf-8") as schema_file:
         return json.load(schema_file)
 
 
-@lru_cache(maxsize=1)
-def _load_validator(schema_path_str: str) -> Any:
-    """Build cached Draft202012 validator for run card schema.
-
-    Uses the jsonschema library for JSON Schema Draft2020-12 validation.
-    The validator instance is cached per schema path.
-
-    Args:
-        schema_path_str: String path for hashability (LRU cache key)
-
-    Returns:
-        jsonschema.Draft202012Validator instance
-
-    Raises:
-        RuntimeError: If jsonschema is not installed or schema is invalid
-    """
+def _build_validator(schema: Dict[str, Any]) -> Any:
+    """Build a Draft 2020-12 validator with format assertions enabled."""
     try:
         import jsonschema
     except ImportError as exc:  # pragma: no cover
@@ -114,39 +95,52 @@ def _load_validator(schema_path_str: str) -> Any:
             "jsonschema dependency is required for run card schema validation",
         ) from exc
 
-    schema = _load_schema(schema_path_str)
     try:
         jsonschema.Draft202012Validator.check_schema(schema)
     except jsonschema.exceptions.SchemaError as exc:
         raise RuntimeError(
             f"Run card schema is invalid: {exc.message}",
         ) from exc
-    return jsonschema.Draft202012Validator(schema)
+    return jsonschema.Draft202012Validator(
+        schema,
+        format_checker=build_jsonschema_format_checker(),
+    )
+
+
+@lru_cache(maxsize=4)
+def _load_validator(schema_path_str: Optional[str], schema_version: Optional[str]) -> Any:
+    """Load a cached validator from either a schema path or packaged version."""
+    if schema_path_str is not None:
+        schema = _load_schema_from_path(schema_path_str)
+    else:
+        schema = load_run_card_schema(schema_version or "v1")
+    return _build_validator(schema)
 
 
 def validate_run_card_payload(
     payload: Dict[str, Any],
     schema_path: Optional[Path] = None,
+    *,
+    schema_version: Optional[str] = None,
 ) -> None:
-    """Validate run card payload against run_card.v1 schema.
+    """Validate run card payload against the appropriate run-card schema.
 
-    Validates the payload structure and types against the JSON Schema.
-    On validation failure, raises RuntimeError with formatted error messages.
+    When ``schema_path`` is omitted, validation uses packaged runtime schemas and
+    infers the version from ``run_card_version`` or legacy v1/v2 structure.
 
     Args:
         payload: Run card dictionary to validate
-        schema_path: Path to JSON schema file. Defaults to repository schema.
+        schema_path: Optional explicit JSON schema override
+        schema_version: Optional explicit schema version when no path override is provided
 
     Raises:
         RuntimeError: If validation fails, with concatenated error messages
-        FileNotFoundError: If schema file does not exist
     """
-    if schema_path is None:
-        schema_path = _default_schema_path()
-
-    validator = _load_validator(str(schema_path))
+    payload_for_validation = with_inferred_run_card_version(payload)
+    resolved_schema_version = infer_run_card_version(payload_for_validation) if schema_version is None else schema_version
+    validator = _load_validator(str(schema_path) if schema_path is not None else None, resolved_schema_version)
     errors = sorted(
-        validator.iter_errors(payload),
+        validator.iter_errors(payload_for_validation),
         key=lambda error: list(error.path),
     )
     if not errors:
@@ -235,6 +229,11 @@ def validate_run_card_backend_semantics(payload: Dict[str, Any]) -> None:
 
     requested_backend = backend_selection.get("requested") or backend_summary.get("requested_backend")
     fallback_images = backend_summary.get("fallback_images")
+    total_images = payload.get("total_images")
+    error_count = payload.get("error_count")
+    run_failed = (
+        isinstance(error_count, int) and error_count > 0 or isinstance(total_images, int) and success_count < total_images
+    )
     if (
         requested_backend == "depth_pro"
         and isinstance(fallback_images, int)
@@ -242,6 +241,8 @@ def validate_run_card_backend_semantics(payload: Dict[str, Any]) -> None:
         and fallback_images == success_count
         and primary_backend != requested_backend
     ):
+        if run_failed:
+            return
         raise RuntimeError(
             "Run card backend request fulfillment validation failed: "
             "requested backend 'depth_pro' was not honored; "
@@ -313,12 +314,12 @@ class RunCardValidator:
         Args:
             schema_path: Path to JSON schema file. Defaults to repository schema.
         """
-        self._schema_path = schema_path or _default_schema_path()
+        self._schema_path = schema_path
 
     @property
     def schema_path(self) -> Path:
         """Return the schema path used for validation."""
-        return self._schema_path
+        return self._schema_path or _default_schema_path()
 
     def validate_payload(self, payload: Dict[str, Any]) -> None:
         """Validate payload against JSON schema.

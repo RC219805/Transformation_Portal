@@ -1141,3 +1141,79 @@ class TestEnhanceBatch:
                     assert result["status"] == "error"
                     assert result["error_code"] == "APEX_DEPTH_SATURATION_HIGH"
                     assert result["error_details"] == expected_details
+
+    def test_enhance_batch_sequential_preserves_attempt_history_for_apex_gate_failures(self, batch_temp_workspace):
+        """Sequential batch errors should retain the failed attempt provenance from Stage A."""
+        import numpy as np
+
+        from transformation_portal.depth.backends.protocol import DepthResult
+
+        config = EnhanceConfig(
+            model_variant=ModelVariant.METRIC_LARGE,
+            depth_backend="da3",
+            depth_device="cpu",
+            quality_tier="apex",
+            enable_v2=False,
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+
+            with patch("transformation_portal.lux_depth_v3.orchestrator.DepthBackendRegistry") as mock_registry_class:
+                mock_backend = Mock()
+                mock_backend.ensure_available.return_value = None
+                mock_backend.name = "da3"
+                mock_backend.compute.return_value = DepthResult(
+                    depth_map=np.ones((64, 64), dtype=np.float32),
+                    original_image=np.ones((64, 64, 3), dtype=np.uint8),
+                    metadata={},
+                    depth_units="relative",
+                    backend_id="da3",
+                    device="cpu",
+                )
+
+                mock_registry = Mock()
+                mock_registry.get_backend.return_value = mock_backend
+                mock_registry_class.return_value = mock_registry
+
+                orchestrator = EnhanceOrchestrator(
+                    config=config,
+                    output_root=tmpdir_path,
+                )
+                orchestrator._use_parallel = False
+                orchestrator.postprocessor = Mock(process=lambda result: result)
+
+                expected_details = {
+                    "passed": False,
+                    "failure_codes": ["APEX_DEPTH_SATURATION_LOW"],
+                    "metrics": {"saturation_low_fraction": 0.031},
+                    "thresholds": {"saturation_low_fraction_max": 0.02},
+                    "shape_context": {
+                        "gate_evaluated_shape": [64, 64],
+                        "native_shape": [64, 64],
+                        "artifact_shape": [100, 100],
+                    },
+                }
+
+                with patch.object(
+                    orchestrator,
+                    "_enforce_apex_depth_validity_gate",
+                    side_effect=ApexStrictGateError(
+                        "APEX_DEPTH_SATURATION_LOW",
+                        "APEX depth validity gate failed: APEX_DEPTH_SATURATION_LOW",
+                        details=expected_details,
+                    ),
+                ):
+                    results = orchestrator.enhance_batch(batch_temp_workspace["input_dir"])
+
+                assert len(results) == 3
+                for result in results:
+                    assert result["status"] == "error"
+                    assert result["error_code"] == "APEX_DEPTH_SATURATION_LOW"
+                    assert result["error_details"] == expected_details
+                    assert result["selected_attempt_index"] is None
+                    assert len(result["attempts"]) == 1
+                    assert result["attempts"][0]["backend"] == "da3"
+                    assert result["attempts"][0]["failure_kind"] == "semantic"
+                    assert result["attempts"][0]["error_code"] == "APEX_DEPTH_SATURATION_LOW"
+                    assert result["attempts"][0]["error_details"] == expected_details

@@ -1,3 +1,37 @@
+// ============================================================================
+// TRANSFORMATION PORTAL — OPERATOR CONSOLE
+// ============================================================================
+//
+// This file contains the client-side logic for the portal operator console.
+// It is organized into the following sections:
+//
+//   1. CONSTANTS          - Configuration constants and magic values
+//   2. STATE              - Application state container
+//   3. DOM REFERENCES     - Element references (els)
+//   4. AMBIENT MOTION     - Background animation system
+//   5. ROUTING            - View routing (?view=overview|build|operate|review)
+//   6. BUILD STEPPER      - Multi-step build flow UI
+//   7. UTILITIES          - Format helpers, string manipulation
+//   8. ARTIFACT HELPERS   - Artifact classification and labeling
+//   9. JOB RENDERING      - Job queue and inspector rendering
+//  10. PREVIEW & CONFIG   - Config preview and validation
+//  11. API LAYER          - Fetch, SSE, health checks
+//  12. THEME              - Dark/light mode toggle
+//  13. OVERLAYS           - Shortcuts, effective config drawers
+//  14. INITIALIZATION     - Startup and event binding
+//
+// Contract notes:
+//   - ?view= query param routes: overview, build, operate, review
+//   - job=, artifact=, compare=1 additive params
+//   - data-ui attributes used by browser smoke tests
+//   - /portal/assets/* served by FastAPI
+//
+// ============================================================================
+
+// ============================================================================
+// 1. CONSTANTS
+// ============================================================================
+
 const API_BASE = '';
 const STORAGE_KEY = 'tp_orchestrator_profiles_final';
 const API_KEY_STORAGE_KEY = 'tp_api_key';
@@ -24,6 +58,7 @@ const SSE_RECONNECT_JITTER_MS = 250;
 const SSE_STALL_CHECK_INTERVAL_MS = 10000;
 const SSE_STALL_THRESHOLD_MS = 45000;
 const CONFIG_PREVIEW_DEBOUNCE_MS = 250;
+const DISPATCH_BACKEND_OFFLINE_MESSAGE = 'Backend is offline. Dispatch is disabled until connectivity is restored.';
 const CONFIG_PREVIEW_SUPPORTED_PIPELINES = new Set([
     'lux-depth-v3',
     'archive-gate-a',
@@ -37,6 +72,7 @@ const TIMELINE_PROGRESS_CHECKPOINTS = [5, 25, 50, 75, 100];
 const SAFE_JOB_STATES = new Set(['queued', 'running', 'succeeded', 'partial', 'failed', 'canceled', 'ready', 'offline']);
 const SAFE_HTTP_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
+// Module-level mutable state for scheduling
 let queueRenderScheduled = false;
 let queuedReviewSurfaceRefresh = false;
 let healthPollIntervalId = null;
@@ -45,63 +81,420 @@ let healthCheckInFlight = false;
 let lastHealthCheckAt = 0;
 let configPreviewTimerId = null;
 
+var __PortalInternal = (() => {
+  var __defProp = Object.defineProperty;
+  var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+  var __getOwnPropNames = Object.getOwnPropertyNames;
+  var __hasOwnProp = Object.prototype.hasOwnProperty;
+  var __export = (target, all) => {
+    for (var name in all)
+      __defProp(target, name, { get: all[name], enumerable: true });
+  };
+  var __copyProps = (to, from, except, desc) => {
+    if (from && typeof from === "object" || typeof from === "function") {
+      for (let key of __getOwnPropNames(from))
+        if (!__hasOwnProp.call(to, key) && key !== except)
+          __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
+    }
+    return to;
+  };
+  var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
+
+  // web/secure-landing/portal-src/internal/index.js
+  var index_exports = {};
+  __export(index_exports, {
+    buildManagedArtifactUrl: () => buildManagedArtifactUrl,
+    createDomContract: () => createDomContract,
+    createPortalAuthState: () => createPortalAuthState,
+    createPortalBootstrapState: () => createPortalBootstrapState,
+    createPortalConfigState: () => createPortalConfigState,
+    createPortalLastDiagnosticsState: () => createPortalLastDiagnosticsState,
+    createPortalMetadataState: () => createPortalMetadataState,
+    createPortalPreviewState: () => createPortalPreviewState,
+    createPortalReadinessState: () => createPortalReadinessState,
+    createPortalRouteHelpers: () => createPortalRouteHelpers,
+    createPortalUiState: () => createPortalUiState,
+    createRenderScheduler: () => createRenderScheduler,
+    createRenderSurfaceRegistry: () => createRenderSurfaceRegistry,
+    defaultPortalBootstrapPayload: () => defaultPortalBootstrapPayload,
+    finalizeManagedAssetUrl: () => finalizeManagedAssetUrl,
+    isManagedAuthMode: () => isManagedAuthMode,
+    isManagedUnavailableMode: () => isManagedUnavailableMode,
+    isNativeEventSourceHandle: () => isNativeEventSourceHandle,
+    nativeEventSourceReadyState: () => nativeEventSourceReadyState,
+    shouldEnableDomAssertions: () => shouldEnableDomAssertions
+  });
+
+  // web/secure-landing/portal-src/internal/artifact-security.js
+  function finalizeManagedAssetUrl(parsedUrl) {
+    return `${parsedUrl.pathname}${parsedUrl.search}`;
+  }
+  function buildManagedArtifactUrl({
+    job,
+    artifact,
+    apiBase,
+    artifactLabel,
+    sanitizeManagedAssetUrl
+  }) {
+    const directUrl = String(artifact?.url || "").trim();
+    if (directUrl) return sanitizeManagedAssetUrl(`${apiBase}${directUrl}`);
+    if (!job || !artifact) return "";
+    const relativePath = artifactLabel(artifact);
+    if (!relativePath) return "";
+    const encodedSegments = relativePath.split("/").map((segment) => encodeURIComponent(segment)).join("/");
+    return sanitizeManagedAssetUrl(
+      `${apiBase}/v1/jobs/${encodeURIComponent(String(job.id || ""))}/artifacts/${encodedSegments}`
+    );
+  }
+
+  // web/secure-landing/portal-src/internal/bootstrap-auth.js
+  function defaultPortalBootstrapPayload() {
+    return {
+      authMode: "managed_unavailable",
+      csrfToken: null,
+      actor: null,
+      features: {
+        apiKeyInput: false,
+        directDebug: false
+      }
+    };
+  }
+  function isManagedAuthMode(authState) {
+    return Boolean(authState && authState.mode !== "direct_debug");
+  }
+  function isManagedUnavailableMode(authState) {
+    return Boolean(authState && authState.mode === "managed_unavailable");
+  }
+
+  // web/secure-landing/portal-src/internal/dom-contract.js
+  function buildRequiredElementError(method, selector) {
+    return new Error(`Portal DOM contract missing required ${method}: ${selector}`);
+  }
+  function shouldEnableDomAssertions(windowRef) {
+    const host = String(windowRef?.location?.hostname || "").trim().toLowerCase();
+    return host === "localhost" || host === "127.0.0.1" || host.endsWith(".local");
+  }
+  function createDomContract(documentRef, { devAssertions = false } = {}) {
+    function id(elementId, { required = false } = {}) {
+      const node = documentRef.getElementById(String(elementId || ""));
+      if (!node && required && devAssertions) {
+        throw buildRequiredElementError("id", `#${elementId}`);
+      }
+      return node;
+    }
+    function query(selector, { required = false } = {}) {
+      const node = documentRef.querySelector(String(selector || ""));
+      if (!node && required && devAssertions) {
+        throw buildRequiredElementError("selector", selector);
+      }
+      return node;
+    }
+    function assertPresent(elements, requiredKeys) {
+      if (!devAssertions) return;
+      const missingKeys = [];
+      for (const key of requiredKeys) {
+        if (!elements?.[key]) {
+          missingKeys.push(String(key));
+        }
+      }
+      if (missingKeys.length) {
+        throw new Error(`Portal DOM contract missing required elements: ${missingKeys.join(", ")}`);
+      }
+    }
+    return {
+      id,
+      query,
+      assertPresent
+    };
+  }
+
+  // web/secure-landing/portal-src/internal/render-surfaces.js
+  function createRenderScheduler(windowRef) {
+    const scheduleFrame = typeof windowRef?.requestAnimationFrame === "function" ? windowRef.requestAnimationFrame.bind(windowRef) : (callback) => windowRef.setTimeout(callback, 0);
+    return {
+      schedule(callback) {
+        scheduleFrame(callback);
+      }
+    };
+  }
+  function createRenderSurfaceRegistry() {
+    const surfaces = /* @__PURE__ */ new Map();
+    function normalizeSurface(surface = {}) {
+      return {
+        init: typeof surface.init === "function" ? surface.init : () => {
+        },
+        render: typeof surface.render === "function" ? surface.render : () => {
+        }
+      };
+    }
+    return {
+      register(name, surface) {
+        if (!name) return;
+        surfaces.set(String(name), normalizeSurface(surface));
+      },
+      init(state) {
+        for (const surface of surfaces.values()) {
+          surface.init(state);
+        }
+      },
+      render(name, state) {
+        const surface = surfaces.get(String(name));
+        if (!surface) return;
+        surface.render(state);
+      }
+    };
+  }
+
+  // web/secure-landing/portal-src/internal/routing.js
+  function createPortalRouteHelpers(windowRef) {
+    function build({
+      viewName,
+      jobId = "",
+      artifactPath = "",
+      compareEnabled = null,
+      resolveView,
+      normalizeSelectedJobId,
+      normalizeArtifactRoutePath,
+      activeContext
+    }) {
+      const url = new URL(windowRef.location.href);
+      const resolvedView = resolveView(viewName);
+      const resolvedJobId = normalizeSelectedJobId(jobId);
+      url.searchParams.set("view", resolvedView);
+      if ((resolvedView === "operate" || resolvedView === "review") && resolvedJobId) {
+        const context = activeContext(resolvedJobId);
+        const resolvedArtifactPath = normalizeArtifactRoutePath(artifactPath) || context.artifactPath;
+        const resolvedCompareEnabled = compareEnabled === null ? context.compareEnabled : Boolean(compareEnabled);
+        url.searchParams.set("job", resolvedJobId);
+        if (resolvedArtifactPath) {
+          url.searchParams.set("artifact", resolvedArtifactPath);
+        } else {
+          url.searchParams.delete("artifact");
+        }
+        if (resolvedCompareEnabled) {
+          url.searchParams.set("compare", "1");
+        } else {
+          url.searchParams.delete("compare");
+        }
+      } else {
+        url.searchParams.delete("job");
+        url.searchParams.delete("artifact");
+        url.searchParams.delete("compare");
+      }
+      return url;
+    }
+    function read({
+      resolveView,
+      normalizeSelectedJobId,
+      normalizeArtifactRoutePath,
+      normalizeCompareQueryValue
+    }) {
+      const url = new URL(windowRef.location.href);
+      return {
+        view: resolveView(url.searchParams.get("view")),
+        jobId: normalizeSelectedJobId(url.searchParams.get("job")),
+        artifactPath: normalizeArtifactRoutePath(url.searchParams.get("artifact")),
+        compareEnabled: normalizeCompareQueryValue(url.searchParams.get("compare")),
+        hasArtifact: url.searchParams.has("artifact"),
+        hasCompare: url.searchParams.has("compare")
+      };
+    }
+    return {
+      build,
+      read
+    };
+  }
+
+  // web/secure-landing/portal-src/internal/state.js
+  function createPortalConfigState() {
+    return {
+      preset: "premium",
+      inputDir: "./input_images",
+      outputDir: "./output/lux_depth_v3_apex",
+      qualityTier: "premium",
+      depthBackend: "da3",
+      depthDevice: "cpu",
+      segmentation: {
+        enable: false,
+        backend: "stub",
+        sam2ModelSize: "base",
+        sam2CheckpointPath: "",
+        strict: false
+      },
+      flags: {
+        materials: true,
+        pbr: true,
+        cache: true,
+        overwrite: false,
+        enableV2: false,
+        saveFloatDepth: false,
+        forceDepth: false,
+        strictInputs: false,
+        verifyImages: false,
+        allowSemanticFallback: false,
+        verbose: false,
+        quiet: false
+      },
+      v2Preset: "default",
+      emits: {
+        master16: true,
+        upscaled16: true,
+        marketing: false,
+        report: true,
+        runCard: true,
+        runCardVersion: "v1",
+        runCardIncludeProofs: false
+      },
+      gate: { archiveIndex: "", manifestJsonl: "" },
+      licenses: { nonCommercialOk: false, acceptApple: false, acceptResearchTools: false },
+      reconstruction: {
+        enable: false,
+        groupingMode: "single",
+        camerasSidecarPath: "",
+        iterations: 1e3,
+        tier: "apex_research",
+        emitSceneDebugBundle: false
+      },
+      raw: {
+        ingestMode: "auto",
+        wbMode: "camera",
+        demosaic: "AHD"
+      },
+      runtime: {
+        maxWorkersMode: "auto",
+        maxWorkers: "",
+        maxGpuWorkersMode: "auto",
+        maxGpuWorkers: "",
+        logLevel: ""
+      }
+    };
+  }
+  function createPortalMetadataState() {
+    return {
+      pipeline: "",
+      fields: {},
+      estimate_bands: {},
+      debug_bundle_policy: {},
+      advanced_sections: [],
+      backend_catalog: {}
+    };
+  }
+  function createPortalPreviewState() {
+    return {
+      pipeline: "",
+      requestKey: "",
+      status: "idle",
+      field_errors: [],
+      field_warnings: [],
+      inactive_fields: [],
+      normalized_args: {},
+      execution_args: {},
+      submitted_args: {},
+      readiness: null,
+      estimate_summary: null,
+      debug_bundle_summary: null,
+      next_best_action: null,
+      argv_preview: "",
+      error: "",
+      error_reason: "",
+      error_status: 0
+    };
+  }
+  function createPortalUiState() {
+    return {
+      debugBundleAcknowledged: false,
+      effectiveConfigOpen: false,
+      debugBundleGuardrailSeen: false,
+      buildStep: 1,
+      lastOverlayTrigger: null,
+      lastSelectedJobId: "",
+      disclosurePrefs: {
+        advanced: null,
+        governance: null,
+        reconstruction: null,
+        dispatchTools: false
+      }
+    };
+  }
+  function createPortalReadinessState() {
+    return {
+      server: {},
+      pipelines: {}
+    };
+  }
+  function createPortalAuthState() {
+    return {
+      mode: "managed_unavailable",
+      csrfToken: "",
+      actor: null,
+      features: {
+        apiKeyInput: false,
+        directDebug: false
+      }
+    };
+  }
+  function createPortalBootstrapState(now = Date.now()) {
+    const lastTransitionAt = Number.isFinite(Number(now)) ? Number(now) : Date.now();
+    return {
+      status: "pending",
+      lastErrorReason: "",
+      lastHttpStatus: 0,
+      activeController: null,
+      activeTimeoutId: null,
+      lastTransitionAt,
+      lastHealthEndpointPath: "",
+      pendingOnlineFollowup: false,
+      onlineFollowupComplete: false,
+      retry: {
+        timer: null,
+        attempt: 0,
+        deadlineAt: 0,
+        lastDelayMs: 0,
+        lastReason: "",
+        lastHttpStatus: 0,
+        lastAttemptAt: 0,
+        lastOutcome: "",
+        lastEventAt: 0
+      }
+    };
+  }
+  function createPortalLastDiagnosticsState() {
+    return {
+      warnings: [],
+      expectedOutputs: [],
+      healthState: "good",
+      healthLabel: "good"
+    };
+  }
+
+  // web/secure-landing/portal-src/internal/stream-transport.js
+  function isNativeEventSourceHandle(handle) {
+    return Boolean(handle && typeof handle.readyState === "number" && typeof handle.addEventListener === "function");
+  }
+  function nativeEventSourceReadyState(handle) {
+    if (!isNativeEventSourceHandle(handle)) return null;
+    const readyState = Number(handle.readyState);
+    return Number.isInteger(readyState) ? readyState : null;
+  }
+  return __toCommonJS(index_exports);
+})();
+
+const portalInternals = __PortalInternal;
+const portalRoute = portalInternals.createPortalRouteHelpers(window);
+const portalDom = portalInternals.createDomContract(document, {
+    devAssertions: portalInternals.shouldEnableDomAssertions(window)
+});
+const portalRenderScheduler = portalInternals.createRenderScheduler(window);
+const portalRenderSurfaces = portalInternals.createRenderSurfaceRegistry();
+const _domId = (id, required = false) => portalDom.id(id, { required });
+
+// ============================================================================
+// 2. STATE
+// ============================================================================
+
 const state = {
     pipeline: 'lux-depth-v3',
-    config: {
-        preset: 'premium',
-        inputDir: './input_images',
-        outputDir: './output/lux_depth_v3_apex',
-        qualityTier: 'premium',
-        depthBackend: 'da3',
-        depthDevice: 'cpu',
-        segmentation: {
-            enable: false,
-            backend: 'stub',
-            sam2ModelSize: 'base',
-            sam2CheckpointPath: '',
-            strict: false
-        },
-        flags: {
-            materials: true,
-            pbr: true,
-            cache: true,
-            overwrite: false,
-            enableV2: false,
-            saveFloatDepth: false,
-            forceDepth: false,
-            strictInputs: false,
-            verifyImages: false,
-            allowSemanticFallback: false,
-            verbose: false,
-            quiet: false
-        },
-        v2Preset: 'default',
-        emits: {
-            master16: true, upscaled16: true, marketing: false, report: true, runCard: true
-        },
-        gate: { archiveIndex: '', manifestJsonl: '' },
-        licenses: { nonCommercialOk: false, acceptApple: false, acceptResearchTools: false },
-        reconstruction: {
-            enable: false,
-            groupingMode: 'single',
-            camerasSidecarPath: '',
-            iterations: 1000,
-            tier: 'apex_research',
-            emitSceneDebugBundle: false
-        },
-        raw: {
-            ingestMode: 'auto',
-            wbMode: 'camera',
-            demosaic: 'AHD'
-        },
-        runtime: {
-            maxWorkersMode: 'auto',
-            maxWorkers: '',
-            maxGpuWorkersMode: 'auto',
-            maxGpuWorkers: '',
-            logLevel: ''
-        }
-    },
+    config: portalInternals.createPortalConfigState(),
     jobs: [],
     jobsLoadStatus: 'pending',
     selectedJobId: null,
@@ -112,404 +505,404 @@ const state = {
         compareByJob: {}
     },
     backendOk: false,
-    metadata: {
-        pipeline: '',
-        fields: {},
-        estimate_bands: {},
-        debug_bundle_policy: {},
-        advanced_sections: []
-    },
-    preview: {
-        pipeline: '',
-        requestKey: '',
-        status: 'idle',
-        field_errors: [],
-        field_warnings: [],
-        inactive_fields: [],
-        normalized_args: {},
-        execution_args: {},
-        submitted_args: {},
-        readiness: null,
-        estimate_summary: null,
-        debug_bundle_summary: null,
-        next_best_action: null,
-        argv_preview: '',
-        error: '',
-        error_reason: '',
-        error_status: 0
-    },
-    portalUi: {
-        debugBundleAcknowledged: false,
-        effectiveConfigOpen: false,
-        debugBundleGuardrailSeen: false,
-        buildStep: 1,
-        lastOverlayTrigger: null,
-        lastSelectedJobId: '',
-        disclosurePrefs: {
-            advanced: null,
-            governance: null,
-            reconstruction: null,
-            dispatchTools: false,
-        }
-    },
-    readiness: {
-        server: {},
-        pipelines: {}
-    },
+    metadata: portalInternals.createPortalMetadataState(),
+    preview: portalInternals.createPortalPreviewState(),
+    portalUi: portalInternals.createPortalUiState(),
+    readiness: portalInternals.createPortalReadinessState(),
     themePreference: 'system',
     theme: 'light',
     presetsByPipeline: {},
-    auth: {
-        mode: 'managed_unavailable',
-        csrfToken: '',
-        actor: null,
-        features: {
-            apiKeyInput: false,
-            directDebug: false
-        }
-    },
-    bootstrap: {
-        status: 'pending',
-        lastErrorReason: '',
-        lastHttpStatus: 0,
-        activeController: null,
-        activeTimeoutId: null,
-        lastTransitionAt: Date.now(),
-        lastHealthEndpointPath: '',
-        pendingOnlineFollowup: false,
-        onlineFollowupComplete: false,
-        retry: {
-            timer: null,
-            attempt: 0,
-            deadlineAt: 0,
-            lastDelayMs: 0,
-            lastReason: '',
-            lastHttpStatus: 0,
-            lastAttemptAt: 0,
-            lastOutcome: '',
-            lastEventAt: 0
-        }
-    },
-    lastDiagnostics: {
-        warnings: [],
-        expectedOutputs: [],
-        healthState: 'good',
-        healthLabel: 'good'
-    }
+    auth: portalInternals.createPortalAuthState(),
+    bootstrap: portalInternals.createPortalBootstrapState(Date.now()),
+    lastDiagnostics: portalInternals.createPortalLastDiagnosticsState()
 };
 
+// ============================================================================
+// 3. DOM REFERENCES
+// ============================================================================
+
 const els = {
-    overviewShell: document.getElementById('overview-shell'),
-    missionShell: document.getElementById('mission-shell'),
-    missionShellContent: document.getElementById('missionShellContent'),
-    missionShellSkeletonState: document.getElementById('missionShellSkeletonState'),
-    intelligenceShell: document.getElementById('intelligence-shell'),
-    intelligenceShellContent: document.getElementById('intelligenceShellContent'),
-    intelligenceShellSkeletonState: document.getElementById('intelligenceShellSkeletonState'),
-    consoleGrid: document.getElementById('console-grid'),
-    consoleContextShell: document.getElementById('console-context-shell'),
-    consoleViewTitle: document.getElementById('consoleViewTitle'),
-    consoleViewSummary: document.getElementById('consoleViewSummary'),
-    consoleViewMeta: document.getElementById('consoleViewMeta'),
-    consoleContextRibbon: document.getElementById('consoleContextRibbon'),
-    contextRibbonJob: document.getElementById('contextRibbonJob'),
-    contextRibbonJobMeta: document.getElementById('contextRibbonJobMeta'),
-    contextRibbonState: document.getElementById('contextRibbonState'),
-    contextRibbonFreshness: document.getElementById('contextRibbonFreshness'),
-    contextRibbonArtifact: document.getElementById('contextRibbonArtifact'),
-    contextRibbonArtifactMeta: document.getElementById('contextRibbonArtifactMeta'),
-    contextRibbonCompare: document.getElementById('contextRibbonCompare'),
-    contextRibbonCompareMeta: document.getElementById('contextRibbonCompareMeta'),
-    heroRunBtn: document.getElementById('heroRunBtn'),
-    resumeDraftBtn: document.getElementById('resumeDraftBtn'),
-    heroExportBtn: document.getElementById('heroExportBtn'),
-    refreshHealthBtn: document.getElementById('refreshHealthBtn'),
-    heroPipelineValue: document.getElementById('heroPipelineValue'),
-    heroPresetValue: document.getElementById('heroPresetValue'),
-    heroModeValue: document.getElementById('heroModeValue'),
-    heroQueueValue: document.getElementById('heroQueueValue'),
-    capabilityChips: document.getElementById('capabilityChips'),
-    presetHeadline: document.getElementById('presetHeadline'),
-    presetStabilityBadge: document.getElementById('presetStabilityBadge'),
-    backendModeBadge: document.getElementById('backendModeBadge'),
-    presetDescription: document.getElementById('presetDescription'),
-    presetBuilderHint: document.getElementById('presetBuilderHint'),
-    presetBuilderShell: document.getElementById('presetBuilderShell'),
-    flagsShell: document.getElementById('flags-shell'),
-    heroInputDir: document.getElementById('heroInputDir'),
-    heroOutputDir: document.getElementById('heroOutputDir'),
-    heroReadinessLabel: document.getElementById('heroReadinessLabel'),
-    heroWarningCount: document.getElementById('heroWarningCount'),
-    governanceBannerTitle: document.getElementById('governanceBannerTitle'),
-    governanceBannerBody: document.getElementById('governanceBannerBody'),
-    governanceChecklist: document.getElementById('governanceChecklist'),
-    buildStepTitle: document.getElementById('buildStepTitle'),
-    buildStepSummary: document.getElementById('buildStepSummary'),
-    buildStepTabs: document.getElementById('buildStepTabs'),
-    buildStepBackBtn: document.getElementById('buildStepBackBtn'),
-    buildStepNextBtn: document.getElementById('buildStepNextBtn'),
-    buildStepTab1: document.getElementById('buildStepTab1'),
-    buildStepTab2: document.getElementById('buildStepTab2'),
-    buildStepTab3: document.getElementById('buildStepTab3'),
-    buildStepTab4: document.getElementById('buildStepTab4'),
+    overviewShell: _domId('overview-shell'),
+    overviewRuntimeClarityShell: _domId('overviewRuntimeClarityShell'),
+    overviewRuntimeBriefing: _domId('overviewRuntimeBriefing'),
+    missionShell: _domId('mission-shell'),
+    missionShellContent: _domId('missionShellContent'),
+    missionShellSkeletonState: _domId('missionShellSkeletonState'),
+    intelligenceShell: _domId('intelligence-shell'),
+    intelligenceShellContent: _domId('intelligenceShellContent'),
+    intelligenceShellSkeletonState: _domId('intelligenceShellSkeletonState'),
+    consoleGrid: _domId('console-grid'),
+    consoleContextShell: _domId('console-context-shell'),
+    consoleViewTitle: _domId('consoleViewTitle'),
+    consoleViewSummary: _domId('consoleViewSummary'),
+    consoleViewMeta: _domId('consoleViewMeta'),
+    consoleContextRibbon: _domId('consoleContextRibbon'),
+    consoleActionRail: _domId('consoleActionRail'),
+    consoleActionRailTitle: _domId('consoleActionRailTitle'),
+    consoleActionRailDetail: _domId('consoleActionRailDetail'),
+    consoleActionRailHint: _domId('consoleActionRailHint'),
+    consoleActionRailActions: _domId('consoleActionRailActions'),
+    consoleActionPrimaryBtn: _domId('consoleActionPrimaryBtn'),
+    consoleActionSecondaryBtn1: _domId('consoleActionSecondaryBtn1'),
+    consoleActionSecondaryBtn2: _domId('consoleActionSecondaryBtn2'),
+    contextRibbonCard1: _domId('contextRibbonCard1'),
+    contextRibbonCard1Label: _domId('contextRibbonCard1Label'),
+    contextRibbonJob: _domId('contextRibbonJob'),
+    contextRibbonJobMeta: _domId('contextRibbonJobMeta'),
+    contextRibbonCard2: _domId('contextRibbonCard2'),
+    contextRibbonCard2Label: _domId('contextRibbonCard2Label'),
+    contextRibbonState: _domId('contextRibbonState'),
+    contextRibbonFreshness: _domId('contextRibbonFreshness'),
+    contextRibbonCard3: _domId('contextRibbonCard3'),
+    contextRibbonCard3Label: _domId('contextRibbonCard3Label'),
+    contextRibbonArtifact: _domId('contextRibbonArtifact'),
+    contextRibbonArtifactMeta: _domId('contextRibbonArtifactMeta'),
+    contextRibbonCard4: _domId('contextRibbonCard4'),
+    contextRibbonCard4Label: _domId('contextRibbonCard4Label'),
+    contextRibbonCompare: _domId('contextRibbonCompare'),
+    contextRibbonCompareMeta: _domId('contextRibbonCompareMeta'),
+    heroRunBtn: _domId('heroRunBtn'),
+    resumeDraftBtn: _domId('resumeDraftBtn'),
+    heroExportBtn: _domId('heroExportBtn'),
+    refreshHealthBtn: _domId('refreshHealthBtn'),
+    heroPipelineValue: _domId('heroPipelineValue'),
+    heroPresetValue: _domId('heroPresetValue'),
+    heroModeValue: _domId('heroModeValue'),
+    heroQueueValue: _domId('heroQueueValue'),
+    capabilityChips: _domId('capabilityChips'),
+    presetHeadline: _domId('presetHeadline'),
+    presetStabilityBadge: _domId('presetStabilityBadge'),
+    backendModeBadge: _domId('backendModeBadge'),
+    presetDescription: _domId('presetDescription'),
+    presetBuilderHint: _domId('presetBuilderHint'),
+    presetBuilderShell: _domId('presetBuilderShell'),
+    flagsShell: _domId('flags-shell'),
+    heroInputDir: _domId('heroInputDir'),
+    heroOutputDir: _domId('heroOutputDir'),
+    heroReadinessLabel: _domId('heroReadinessLabel'),
+    heroWarningCount: _domId('heroWarningCount'),
+    governanceBannerTitle: _domId('governanceBannerTitle'),
+    governanceBannerBody: _domId('governanceBannerBody'),
+    governanceChecklist: _domId('governanceChecklist'),
+    buildStepTitle: _domId('buildStepTitle'),
+    buildStepSummary: _domId('buildStepSummary'),
+    buildStepTabs: _domId('buildStepTabs'),
+    buildStepBackBtn: _domId('buildStepBackBtn'),
+    buildStepNextBtn: _domId('buildStepNextBtn'),
+    buildStepTab1: _domId('buildStepTab1'),
+    buildStepTab2: _domId('buildStepTab2'),
+    buildStepTab3: _domId('buildStepTab3'),
+    buildStepTab4: _domId('buildStepTab4'),
+    buildPulseDraftCard: _domId('buildPulseDraftCard'),
+    buildPulseDraft: _domId('buildPulseDraft'),
+    buildPulseDraftMeta: _domId('buildPulseDraftMeta'),
+    buildPulseStepCard: _domId('buildPulseStepCard'),
+    buildPulseStep: _domId('buildPulseStep'),
+    buildPulseStepMeta: _domId('buildPulseStepMeta'),
+    buildPulsePreviewCard: _domId('buildPulsePreviewCard'),
+    buildPulsePreview: _domId('buildPulsePreview'),
+    buildPulsePreviewMeta: _domId('buildPulsePreviewMeta'),
+    buildPulseDispatchCard: _domId('buildPulseDispatchCard'),
+    buildPulseDispatch: _domId('buildPulseDispatch'),
+    buildPulseDispatchMeta: _domId('buildPulseDispatchMeta'),
 
-    pipelineSelect: document.getElementById('pipelineSelect'),
-    presetSelect: document.getElementById('presetSelect'),
-    profileSelect: document.getElementById('profileSelect'),
-    saveProfileBtn: document.getElementById('saveProfileBtn'),
-    apiKeySection: document.getElementById('apiKeySection'),
-    apiKeyInput: document.getElementById('apiKeyInput'),
-    authModeBadge: document.getElementById('authModeBadge'),
-    apiKeyManagedHint: document.getElementById('apiKeyManagedHint'),
+    pipelineSelect: _domId('pipelineSelect'),
+    presetSelect: _domId('presetSelect'),
+    profileSelect: _domId('profileSelect'),
+    saveProfileBtn: _domId('saveProfileBtn'),
+    apiKeySection: _domId('apiKeySection'),
+    apiKeyInput: _domId('apiKeyInput'),
+    authModeBadge: _domId('authModeBadge'),
+    apiKeyManagedHint: _domId('apiKeyManagedHint'),
+    portalAccessState: _domId('portalAccessState'),
+    bootstrapStatusBadge: _domId('bootstrapStatusBadge'),
+    bootstrapRecoveryHint: _domId('bootstrapRecoveryHint'),
+    governancePostureHint: _domId('governancePostureHint'),
 
-    inputDir: document.getElementById('inputDir'),
-    outputDir: document.getElementById('outputDir'),
-    inputDirStatus: document.getElementById('inputDirStatus'),
-    outputDirStatus: document.getElementById('outputDirStatus'),
-    archiveCanonicalCommand: document.getElementById('archiveCanonicalCommand'),
-    archiveCanonicalCommandHint: document.getElementById('archiveCanonicalCommandHint'),
-    archiveIndexField: document.getElementById('archiveIndexField'),
-    archiveIndexPath: document.getElementById('archiveIndexPath'),
-    archiveIndexStatus: document.getElementById('archiveIndexStatus'),
-    rightsManifestField: document.getElementById('rightsManifestField'),
-    rightsManifestPath: document.getElementById('rightsManifestPath'),
-    rightsManifestStatus: document.getElementById('rightsManifestStatus'),
-    qualityTier: document.getElementById('qualityTier'),
-    depthBackend: document.getElementById('depthBackend'),
-    depthDevice: document.getElementById('depthDevice'),
-    segmentationBackendField: document.getElementById('segmentationBackendField'),
-    sam2ModelSizeField: document.getElementById('sam2ModelSizeField'),
-    strictSegmentationField: document.getElementById('strictSegmentationField'),
-    sam2CheckpointField: document.getElementById('sam2CheckpointField'),
-    segmentationApplicabilityHint: document.getElementById('segmentationApplicabilityHint'),
+    inputDir: _domId('inputDir'),
+    outputDir: _domId('outputDir'),
+    inputDirStatus: _domId('inputDirStatus'),
+    outputDirStatus: _domId('outputDirStatus'),
+    archiveCanonicalCommand: _domId('archiveCanonicalCommand'),
+    archiveCanonicalCommandHint: _domId('archiveCanonicalCommandHint'),
+    archiveIndexField: _domId('archiveIndexField'),
+    archiveIndexPath: _domId('archiveIndexPath'),
+    archiveIndexStatus: _domId('archiveIndexStatus'),
+    rightsManifestField: _domId('rightsManifestField'),
+    rightsManifestPath: _domId('rightsManifestPath'),
+    rightsManifestStatus: _domId('rightsManifestStatus'),
+    qualityTier: _domId('qualityTier'),
+    depthBackend: _domId('depthBackend'),
+    depthDevice: _domId('depthDevice'),
+    segmentationBackendField: _domId('segmentationBackendField'),
+    sam2ModelSizeField: _domId('sam2ModelSizeField'),
+    strictSegmentationField: _domId('strictSegmentationField'),
+    sam2CheckpointField: _domId('sam2CheckpointField'),
+    segmentationApplicabilityHint: _domId('segmentationApplicabilityHint'),
     segmentation: {
-        enable: document.getElementById('enableSegmentation'),
-        backend: document.getElementById('segmentationBackend'),
-        sam2ModelSize: document.getElementById('sam2ModelSize'),
-        sam2CheckpointPath: document.getElementById('sam2CheckpointPath'),
-        strict: document.getElementById('strictSegmentation')
+        enable: _domId('enableSegmentation'),
+        backend: _domId('segmentationBackend'),
+        sam2ModelSize: _domId('sam2ModelSize'),
+        sam2CheckpointPath: _domId('sam2CheckpointPath'),
+        strict: _domId('strictSegmentation')
     },
 
     flags: {
-        materials: document.getElementById('flagMaterials'),
-        pbr: document.getElementById('flagPBR'),
-        cache: document.getElementById('flagCache'),
-        overwrite: document.getElementById('flagOverwrite'),
-        enableV2: document.getElementById('flagEnableV2'),
-        saveFloatDepth: document.getElementById('saveFloatDepth'),
-        forceDepth: document.getElementById('forceDepth'),
-        strictInputs: document.getElementById('strictInputs'),
-        verifyImages: document.getElementById('verifyImages'),
-        allowSemanticFallback: document.getElementById('allowSemanticFallback'),
-        verbose: document.getElementById('verboseFlag'),
-        quiet: document.getElementById('quietFlag')
+        materials: _domId('flagMaterials'),
+        pbr: _domId('flagPBR'),
+        cache: _domId('flagCache'),
+        overwrite: _domId('flagOverwrite'),
+        enableV2: _domId('flagEnableV2'),
+        saveFloatDepth: _domId('saveFloatDepth'),
+        forceDepth: _domId('forceDepth'),
+        strictInputs: _domId('strictInputs'),
+        verifyImages: _domId('verifyImages'),
+        allowSemanticFallback: _domId('allowSemanticFallback'),
+        verbose: _domId('verboseFlag'),
+        quiet: _domId('quietFlag')
     },
-    v2Preset: document.getElementById('v2Preset'),
-    v2PresetField: document.getElementById('v2PresetField'),
+    v2Preset: _domId('v2Preset'),
+    v2PresetField: _domId('v2PresetField'),
 
     emits: {
-        master16: document.getElementById('emitMaster16'),
-        upscaled16: document.getElementById('emitUpscaled16'),
-        marketing: document.getElementById('emitMarketing'),
-        report: document.getElementById('emitReport'),
-        runCard: document.getElementById('emitRunCard')
+        master16: _domId('emitMaster16'),
+        upscaled16: _domId('emitUpscaled16'),
+        marketing: _domId('emitMarketing'),
+        report: _domId('emitReport'),
+        runCard: _domId('emitRunCard'),
+        runCardIncludeProofs: _domId('emitRunCardIncludeProofs')
     },
 
     licenses: {
-        nonCommercialOk: document.getElementById('licenseNonCommercial'),
-        acceptApple: document.getElementById('licenseApple'),
-        acceptResearchTools: document.getElementById('licenseResearchTools')
+        nonCommercialOk: _domId('licenseNonCommercial'),
+        acceptApple: _domId('licenseApple'),
+        acceptResearchTools: _domId('licenseResearchTools')
     },
-    licenseNonCommercialField: document.getElementById('licenseNonCommercialField'),
-    licenseAppleField: document.getElementById('licenseAppleField'),
-    licenseResearchToolsField: document.getElementById('licenseResearchToolsField'),
-    governanceDetailsHint: document.getElementById('governanceDetailsHint'),
+    licenseNonCommercialField: _domId('licenseNonCommercialField'),
+    licenseAppleField: _domId('licenseAppleField'),
+    licenseResearchToolsField: _domId('licenseResearchToolsField'),
+    governanceDetailsHint: _domId('governanceDetailsHint'),
     reconstruction: {
-        enable: document.getElementById('enableReconstruction'),
-        groupingMode: document.getElementById('groupingMode'),
-        camerasSidecarPath: document.getElementById('camerasSidecarPath'),
-        iterations: document.getElementById('reconstructionIterations'),
-        tier: document.getElementById('reconstructionTier'),
-        emitSceneDebugBundle: document.getElementById('emitSceneDebugBundle'),
-        groupingModeStatus: document.getElementById('groupingModeStatus'),
-        iterationsStatus: document.getElementById('reconstructionIterationsStatus'),
-        camerasSidecarStatus: document.getElementById('camerasSidecarStatus'),
-        tierStatus: document.getElementById('reconstructionTierStatus')
+        enable: _domId('enableReconstruction'),
+        groupingMode: _domId('groupingMode'),
+        camerasSidecarPath: _domId('camerasSidecarPath'),
+        iterations: _domId('reconstructionIterations'),
+        tier: _domId('reconstructionTier'),
+        emitSceneDebugBundle: _domId('emitSceneDebugBundle'),
+        groupingModeStatus: _domId('groupingModeStatus'),
+        iterationsStatus: _domId('reconstructionIterationsStatus'),
+        camerasSidecarStatus: _domId('camerasSidecarStatus'),
+        tierStatus: _domId('reconstructionTierStatus')
     },
-    reconstructionConfigFields: document.getElementById('reconstructionConfigFields'),
-    runtimeTuningFields: document.getElementById('runtimeTuningFields'),
-    reconstructionDetailsHint: document.getElementById('reconstructionDetailsHint'),
-    reconstructionSummaryHint: document.getElementById('reconstructionSummaryHint'),
-    openEffectiveConfigBtn: document.getElementById('openEffectiveConfigBtn'),
-    effectiveConfigBtn: document.getElementById('effectiveConfigBtn'),
-    summaryReconstructionState: document.getElementById('summaryReconstructionState'),
-    summaryRuntimeWorkers: document.getElementById('summaryRuntimeWorkers'),
-    summaryRawIngest: document.getElementById('summaryRawIngest'),
-    summaryDebugBundle: document.getElementById('summaryDebugBundle'),
-    summaryPreviewState: document.getElementById('summaryPreviewState'),
-    estimateRuntimeBand: document.getElementById('estimateRuntimeBand'),
-    estimateGpuBand: document.getElementById('estimateGpuBand'),
-    estimateResearchRisk: document.getElementById('estimateResearchRisk'),
-    estimateSummaryLabel: document.getElementById('estimateSummaryLabel'),
-    debugBundleGuardrail: document.getElementById('debugBundleGuardrail'),
-    debugBundleDestination: document.getElementById('debugBundleDestination'),
-    debugBundleSensitivity: document.getElementById('debugBundleSensitivity'),
-    debugBundleAcknowledge: document.getElementById('debugBundleAcknowledge'),
-    debugBundleAcknowledgeHint: document.getElementById('debugBundleAcknowledgeHint'),
+    reconstructionConfigFields: _domId('reconstructionConfigFields'),
+    runtimeTuningFields: _domId('runtimeTuningFields'),
+    reconstructionDetailsHint: _domId('reconstructionDetailsHint'),
+    reconstructionSummaryHint: _domId('reconstructionSummaryHint'),
+    openEffectiveConfigBtn: _domId('openEffectiveConfigBtn'),
+    effectiveConfigBtn: _domId('effectiveConfigBtn'),
+    summaryReconstructionState: _domId('summaryReconstructionState'),
+    summaryRuntimeWorkers: _domId('summaryRuntimeWorkers'),
+    summaryRawIngest: _domId('summaryRawIngest'),
+    summaryDebugBundle: _domId('summaryDebugBundle'),
+    summaryPreviewState: _domId('summaryPreviewState'),
+    estimateRuntimeBand: _domId('estimateRuntimeBand'),
+    estimateGpuBand: _domId('estimateGpuBand'),
+    estimateResearchRisk: _domId('estimateResearchRisk'),
+    estimateSummaryLabel: _domId('estimateSummaryLabel'),
+    debugBundleGuardrail: _domId('debugBundleGuardrail'),
+    debugBundleDestination: _domId('debugBundleDestination'),
+    debugBundleSensitivity: _domId('debugBundleSensitivity'),
+    debugBundleAcknowledge: _domId('debugBundleAcknowledge'),
+    debugBundleAcknowledgeHint: _domId('debugBundleAcknowledgeHint'),
     raw: {
-        ingestMode: document.getElementById('rawIngestMode'),
-        wbMode: document.getElementById('rawWbMode'),
-        demosaic: document.getElementById('rawDemosaic'),
-        wbModeBadge: document.getElementById('rawWbModeBadge'),
-        wbModeHint: document.getElementById('rawWbModeHint'),
-        demosaicBadge: document.getElementById('rawDemosaicBadge'),
-        demosaicHint: document.getElementById('rawDemosaicHint'),
-        ingestModeStatus: document.getElementById('rawIngestModeStatus')
+        ingestMode: _domId('rawIngestMode'),
+        wbMode: _domId('rawWbMode'),
+        demosaic: _domId('rawDemosaic'),
+        wbModeBadge: _domId('rawWbModeBadge'),
+        wbModeHint: _domId('rawWbModeHint'),
+        demosaicBadge: _domId('rawDemosaicBadge'),
+        demosaicHint: _domId('rawDemosaicHint'),
+        ingestModeStatus: _domId('rawIngestModeStatus')
     },
     runtime: {
-        maxWorkersMode: document.getElementById('maxWorkersMode'),
-        maxWorkers: document.getElementById('maxWorkers'),
-        maxWorkersValueField: document.getElementById('maxWorkersValueField'),
-        maxWorkersStatus: document.getElementById('maxWorkersStatus'),
-        maxGpuWorkersMode: document.getElementById('maxGpuWorkersMode'),
-        maxGpuWorkers: document.getElementById('maxGpuWorkers'),
-        maxGpuWorkersValueField: document.getElementById('maxGpuWorkersValueField'),
-        maxGpuWorkersStatus: document.getElementById('maxGpuWorkersStatus'),
-        logLevel: document.getElementById('logLevel'),
-        logLevelStatus: document.getElementById('logLevelStatus')
+        maxWorkersMode: _domId('maxWorkersMode'),
+        maxWorkers: _domId('maxWorkers'),
+        maxWorkersValueField: _domId('maxWorkersValueField'),
+        maxWorkersStatus: _domId('maxWorkersStatus'),
+        maxGpuWorkersMode: _domId('maxGpuWorkersMode'),
+        maxGpuWorkers: _domId('maxGpuWorkers'),
+        maxGpuWorkersValueField: _domId('maxGpuWorkersValueField'),
+        maxGpuWorkersStatus: _domId('maxGpuWorkersStatus'),
+        logLevel: _domId('logLevel'),
+        logLevelStatus: _domId('logLevelStatus')
     },
 
-    fieldsLuxDepth: document.getElementById('fieldsLuxDepth'),
-    fieldsArchiveGate: document.getElementById('fieldsArchiveGate'),
-    advancedFlagsDetails: document.getElementById('advancedFlagsDetails'),
-    governanceDetails: document.getElementById('governanceDetails'),
-    reconstructionDetails: document.getElementById('reconstructionDetails'),
+    fieldsLuxDepth: _domId('fieldsLuxDepth'),
+    fieldsArchiveGate: _domId('fieldsArchiveGate'),
+    advancedFlagsDetails: _domId('advancedFlagsDetails'),
+    governanceDetails: _domId('governanceDetails'),
+    reconstructionDetails: _domId('reconstructionDetails'),
 
-    cliPreview: document.getElementById('cliPreview'),
-    copyCliBtn: document.getElementById('copyCliBtn'),
-    importBtn: document.getElementById('importBtn'),
-    exportBtn: document.getElementById('exportBtn'),
-    fileInput: document.getElementById('fileInput'),
-    runJobBtn: document.getElementById('runJobBtn'),
-    dispatchToolsDetails: document.getElementById('dispatchToolsDetails'),
-    preRunWarnings: document.getElementById('preRunWarnings'),
-    preRunWarningsEmpty: document.getElementById('preRunWarningsEmpty'),
-    expectedOutputsList: document.getElementById('expectedOutputsList'),
-    datasetHealthIndicator: document.getElementById('datasetHealthIndicator'),
-    datasetHealthText: document.getElementById('datasetHealthText'),
-    nextBestActionLabel: document.getElementById('nextBestActionLabel'),
-    nextBestActionDetail: document.getElementById('nextBestActionDetail'),
-    nextBestActionTone: document.getElementById('nextBestActionTone'),
+    cliPreview: _domId('cliPreview'),
+    copyCliBtn: _domId('copyCliBtn'),
+    importBtn: _domId('importBtn'),
+    exportBtn: _domId('exportBtn'),
+    fileInput: _domId('fileInput'),
+    runJobBtn: _domId('runJobBtn'),
+    dispatchReadinessReason: _domId('dispatchReadinessReason'),
+    dispatchToolsDetails: _domId('dispatchToolsDetails'),
+    preRunWarnings: _domId('preRunWarnings'),
+    preRunWarningsEmpty: _domId('preRunWarningsEmpty'),
+    expectedOutputsList: _domId('expectedOutputsList'),
+    datasetHealthIndicator: _domId('datasetHealthIndicator'),
+    datasetHealthText: _domId('datasetHealthText'),
+    nextBestActionLabel: _domId('nextBestActionLabel'),
+    nextBestActionDetail: _domId('nextBestActionDetail'),
+    nextBestActionTone: _domId('nextBestActionTone'),
 
-    buildShell: document.getElementById('build-shell'),
-    profileShell: document.getElementById('profile-shell'),
-    profileShellContent: document.getElementById('profileShellContent'),
-    profileShellSkeletonState: document.getElementById('profileShellSkeletonState'),
-    buildStepperShell: document.getElementById('buildStepperShell'),
-    buildStepperShellContent: document.getElementById('buildStepperShellContent'),
-    buildStepperSkeletonState: document.getElementById('buildStepperSkeletonState'),
-    governanceShell: document.getElementById('governance-shell'),
-    parametersShell: document.getElementById('parameters-shell'),
-    parametersShellContent: document.getElementById('parametersShellContent'),
-    parametersShellSkeletonState: document.getElementById('parametersShellSkeletonState'),
-    jobsShell: document.getElementById('jobs-shell'),
-    selectedJobShell: document.getElementById('selected-job-shell'),
-    selectedJobShellContent: document.getElementById('selectedJobShellContent'),
-    selectedJobSkeletonState: document.getElementById('selectedJobSkeletonState'),
-    queueShell: document.getElementById('queue-shell'),
-    queueSkeletonState: document.getElementById('queueSkeletonState'),
-    jobList: document.getElementById('jobList'),
-    emptyQueueState: document.getElementById('emptyQueueState'),
-    queueCount: document.getElementById('queueCount'),
-    selectedJobStateBadge: document.getElementById('selectedJobStateBadge'),
-    selectedJobIdLabel: document.getElementById('selectedJobIdLabel'),
-    selectedJobPipelineLabel: document.getElementById('selectedJobPipelineLabel'),
-    selectedJobArtifactCount: document.getElementById('selectedJobArtifactCount'),
-    selectedJobStreamStatus: document.getElementById('selectedJobStreamStatus'),
-    selectedJobProgressText: document.getElementById('selectedJobProgressText'),
-    selectedJobProgressBar: document.getElementById('selectedJobProgressBar'),
-    selectedJobMetaLine: document.getElementById('selectedJobMetaLine'),
-    selectedJobFreshness: document.getElementById('selectedJobFreshness'),
-    selectedJobSummary: document.getElementById('selectedJobSummary'),
-    selectedJobTransportAlert: document.getElementById('selectedJobTransportAlert'),
-    openRunDetailsBtn: document.getElementById('openRunDetailsBtn'),
-    inspectorOverviewTab: document.getElementById('inspectorOverviewTab'),
-    inspectorTimelineTab: document.getElementById('inspectorTimelineTab'),
-    inspectorLogsTab: document.getElementById('inspectorLogsTab'),
-    selectedJobOverviewPanel: document.getElementById('selectedJobOverviewPanel'),
-    selectedJobTimelinePanel: document.getElementById('selectedJobTimelinePanel'),
-    selectedJobLogsPanel: document.getElementById('selectedJobLogsPanel'),
-    selectedJobTimelineList: document.getElementById('selectedJobTimelineList'),
-    selectedJobTimelineEmpty: document.getElementById('selectedJobTimelineEmpty'),
-    selectedJobLogPreview: document.getElementById('selectedJobLogPreview'),
-    artifactsShell: document.getElementById('artifacts-shell'),
-    artifactShellContent: document.getElementById('artifactShellContent'),
-    artifactSkeletonState: document.getElementById('artifactSkeletonState'),
-    artifactMeta: document.getElementById('artifactMeta'),
-    emptyArtifactState: document.getElementById('emptyArtifactState'),
-    artifactCompareBtn: document.getElementById('artifactCompareBtn'),
-    artifactPreviewStage: document.getElementById('artifactPreviewStage'),
-    artifactCompareStage: document.getElementById('artifactCompareStage'),
-    artifactPreviewImage: document.getElementById('artifactPreviewImage'),
-    artifactPreviewSoloImage: document.getElementById('artifactPreviewSoloImage'),
-    artifactCompareImage: document.getElementById('artifactCompareImage'),
-    artifactPreviewPrimaryCaption: document.getElementById('artifactPreviewPrimaryCaption'),
-    artifactCompareCaption: document.getElementById('artifactCompareCaption'),
-    artifactMetadataCard: document.getElementById('artifactMetadataCard'),
-    artifactMetadataBar: document.getElementById('artifactMetadataBar'),
-    artifactSelectionTitle: document.getElementById('artifactSelectionTitle'),
-    artifactSelectionMeta: document.getElementById('artifactSelectionMeta'),
-    reviewStatusBanner: document.getElementById('reviewStatusBanner'),
-    reviewStatusTitle: document.getElementById('reviewStatusTitle'),
-    reviewStatusDetail: document.getElementById('reviewStatusDetail'),
-    reviewProvenanceGrid: document.getElementById('reviewProvenanceGrid'),
-    reviewProvenanceArtifactRole: document.getElementById('reviewProvenanceArtifactRole'),
-    reviewProvenanceRunState: document.getElementById('reviewProvenanceRunState'),
-    reviewProvenancePath: document.getElementById('reviewProvenancePath'),
-    reviewProvenanceFreshness: document.getElementById('reviewProvenanceFreshness'),
-    reviewProvenanceSource: document.getElementById('reviewProvenanceSource'),
-    reviewProvenanceBatch: document.getElementById('reviewProvenanceBatch'),
-    reviewCompareSummary: document.getElementById('reviewCompareSummary'),
-    reviewCompareTitle: document.getElementById('reviewCompareTitle'),
-    reviewCompareDetail: document.getElementById('reviewCompareDetail'),
-    openArtifactBtn: document.getElementById('openArtifactBtn'),
-    downloadArtifactBtn: document.getElementById('downloadArtifactBtn'),
-    copyArtifactPathBtn: document.getElementById('copyArtifactPathBtn'),
-    artifactThumbnailRail: document.getElementById('artifactThumbnailRail'),
-    runCardActions: document.getElementById('runCardActions'),
-    viewRunCardBtn: document.getElementById('viewRunCardBtn'),
-    copyRunCardPathBtn: document.getElementById('copyRunCardPathBtn'),
-    copyRunCardFingerprintBtn: document.getElementById('copyRunCardFingerprintBtn'),
-    logsShell: document.getElementById('logs-shell'),
-    logPane: document.getElementById('logPane'),
-    logMetaLabel: document.getElementById('logMetaLabel'),
-    logStatusIndicator: document.getElementById('logStatusIndicator'),
-    clearLogsBtn: document.getElementById('clearLogsBtn'),
-    queueStatusSummary: document.getElementById('queueStatusSummary'),
+    buildShell: _domId('build-shell'),
+    profileShell: _domId('profile-shell'),
+    profileShellContent: _domId('profileShellContent'),
+    profileShellSkeletonState: _domId('profileShellSkeletonState'),
+    buildRuntimeClarityShell: _domId('buildRuntimeClarityShell'),
+    buildRuntimeBriefing: _domId('buildRuntimeBriefing'),
+    buildStepperShell: _domId('buildStepperShell'),
+    buildStepperShellContent: _domId('buildStepperShellContent'),
+    buildStepperSkeletonState: _domId('buildStepperSkeletonState'),
+    governanceShell: _domId('governance-shell'),
+    parametersShell: _domId('parameters-shell'),
+    parametersShellContent: _domId('parametersShellContent'),
+    parametersShellSkeletonState: _domId('parametersShellSkeletonState'),
+    jobsShell: _domId('jobs-shell'),
+    selectedJobShell: _domId('selected-job-shell'),
+    selectedJobShellContent: _domId('selectedJobShellContent'),
+    selectedJobSkeletonState: _domId('selectedJobSkeletonState'),
+    queueShell: _domId('queue-shell'),
+    queueSkeletonState: _domId('queueSkeletonState'),
+    jobList: _domId('jobList'),
+    emptyQueueState: _domId('emptyQueueState'),
+    emptyQueueTitle: _domId('emptyQueueTitle'),
+    emptyQueueDetail: _domId('emptyQueueDetail'),
+    emptyQueueAction: _domId('emptyQueueAction'),
+    queueCount: _domId('queueCount'),
+    selectedJobStateBadge: _domId('selectedJobStateBadge'),
+    selectedJobIdLabel: _domId('selectedJobIdLabel'),
+    selectedJobPipelineLabel: _domId('selectedJobPipelineLabel'),
+    selectedJobArtifactCount: _domId('selectedJobArtifactCount'),
+    selectedJobStreamStatus: _domId('selectedJobStreamStatus'),
+    selectedJobProgressText: _domId('selectedJobProgressText'),
+    selectedJobProgressBar: _domId('selectedJobProgressBar'),
+    selectedJobMetaLine: _domId('selectedJobMetaLine'),
+    selectedJobFreshness: _domId('selectedJobFreshness'),
+    selectedJobSummary: _domId('selectedJobSummary'),
+    selectedJobRecoveryTitle: _domId('selectedJobRecoveryTitle'),
+    selectedJobRecoveryDetail: _domId('selectedJobRecoveryDetail'),
+    selectedJobRecoveryActions: _domId('selectedJobRecoveryActions'),
+    selectedJobRecoveryPrimaryBtn: _domId('selectedJobRecoveryPrimaryBtn'),
+    selectedJobRecoverySecondaryBtn: _domId('selectedJobRecoverySecondaryBtn'),
+    selectedJobTransportAlert: _domId('selectedJobTransportAlert'),
+    openRunDetailsBtn: _domId('openRunDetailsBtn'),
+    inspectorOverviewTab: _domId('inspectorOverviewTab'),
+    inspectorTimelineTab: _domId('inspectorTimelineTab'),
+    inspectorLogsTab: _domId('inspectorLogsTab'),
+    selectedJobOverviewPanel: _domId('selectedJobOverviewPanel'),
+    selectedJobTimelinePanel: _domId('selectedJobTimelinePanel'),
+    selectedJobLogsPanel: _domId('selectedJobLogsPanel'),
+    selectedJobTimelineList: _domId('selectedJobTimelineList'),
+    selectedJobTimelineEmpty: _domId('selectedJobTimelineEmpty'),
+    selectedJobLogPreview: _domId('selectedJobLogPreview'),
+    artifactsShell: _domId('artifacts-shell'),
+    artifactShellContent: _domId('artifactShellContent'),
+    artifactSkeletonState: _domId('artifactSkeletonState'),
+    artifactMeta: _domId('artifactMeta'),
+    emptyArtifactState: _domId('emptyArtifactState'),
+    emptyArtifactTitle: _domId('emptyArtifactTitle'),
+    emptyArtifactDetail: _domId('emptyArtifactDetail'),
+    emptyArtifactAction: _domId('emptyArtifactAction'),
+    artifactCompareBtn: _domId('artifactCompareBtn'),
+    artifactPreviewStage: _domId('artifactPreviewStage'),
+    artifactCompareStage: _domId('artifactCompareStage'),
+    artifactPreviewImage: _domId('artifactPreviewImage'),
+    artifactPreviewSoloImage: _domId('artifactPreviewSoloImage'),
+    artifactCompareImage: _domId('artifactCompareImage'),
+    artifactPreviewPrimaryCaption: _domId('artifactPreviewPrimaryCaption'),
+    artifactCompareCaption: _domId('artifactCompareCaption'),
+    artifactMetadataCard: _domId('artifactMetadataCard'),
+    artifactMetadataBar: _domId('artifactMetadataBar'),
+    artifactSelectionTitle: _domId('artifactSelectionTitle'),
+    artifactSelectionMeta: _domId('artifactSelectionMeta'),
+    reviewStatusBanner: _domId('reviewStatusBanner'),
+    reviewStatusTitle: _domId('reviewStatusTitle'),
+    reviewStatusDetail: _domId('reviewStatusDetail'),
+    reviewStatusAction: _domId('reviewStatusAction'),
+    reviewStatusActions: _domId('reviewStatusActions'),
+    reviewStatusPrimaryBtn: _domId('reviewStatusPrimaryBtn'),
+    reviewStatusSecondaryBtn: _domId('reviewStatusSecondaryBtn'),
+    reviewProvenanceGrid: _domId('reviewProvenanceGrid'),
+    reviewProvenanceArtifactRole: _domId('reviewProvenanceArtifactRole'),
+    reviewProvenanceRunState: _domId('reviewProvenanceRunState'),
+    reviewProvenancePath: _domId('reviewProvenancePath'),
+    reviewProvenanceFreshness: _domId('reviewProvenanceFreshness'),
+    reviewProvenanceSource: _domId('reviewProvenanceSource'),
+    reviewProvenanceBatch: _domId('reviewProvenanceBatch'),
+    reviewCompareSummary: _domId('reviewCompareSummary'),
+    reviewCompareTitle: _domId('reviewCompareTitle'),
+    reviewCompareDetail: _domId('reviewCompareDetail'),
+    openArtifactBtn: _domId('openArtifactBtn'),
+    downloadArtifactBtn: _domId('downloadArtifactBtn'),
+    copyArtifactPathBtn: _domId('copyArtifactPathBtn'),
+    artifactThumbnailRail: _domId('artifactThumbnailRail'),
+    runCardActions: _domId('runCardActions'),
+    viewRunCardBtn: _domId('viewRunCardBtn'),
+    copyRunCardPathBtn: _domId('copyRunCardPathBtn'),
+    copyRunCardFingerprintBtn: _domId('copyRunCardFingerprintBtn'),
+    logsShell: _domId('logs-shell'),
+    logPane: _domId('logPane'),
+    logMetaLabel: _domId('logMetaLabel'),
+    logStatusIndicator: _domId('logStatusIndicator'),
+    clearLogsBtn: _domId('clearLogsBtn'),
+    queueStatusSummary: _domId('queueStatusSummary'),
 
-    themeBtn: document.getElementById('themeBtn'),
-    shortcutsBtn: document.getElementById('shortcutsBtn'),
-    shortcutsModal: document.getElementById('shortcutsModal'),
-    shortcutsPanel: document.getElementById('shortcutsPanel'),
-    closeShortcutsBtn: document.getElementById('closeShortcutsBtn'),
-    advancedFlagsSummary: document.getElementById('advancedFlagsSummary'),
-    governanceDetailsSummary: document.getElementById('governanceDetailsSummary'),
-    reconstructionDetailsSummary: document.getElementById('reconstructionDetailsSummary'),
-    dispatchToolsSummary: document.getElementById('dispatchToolsSummary'),
-    effectiveConfigDrawer: document.getElementById('effectiveConfigDrawer'),
-    closeEffectiveConfigBtn: document.getElementById('closeEffectiveConfigBtn'),
-    effectiveConfigMeta: document.getElementById('effectiveConfigMeta'),
-    requestedConfigJson: document.getElementById('requestedConfigJson'),
-    effectiveConfigJson: document.getElementById('effectiveConfigJson'),
-    inactiveConfigJson: document.getElementById('inactiveConfigJson'),
-    effectiveEstimateLabel: document.getElementById('effectiveEstimateLabel'),
-    effectiveReadinessSummary: document.getElementById('effectiveReadinessSummary'),
-    effectiveArgvPreview: document.getElementById('effectiveArgvPreview'),
+    themeBtn: _domId('themeBtn'),
+    shortcutsBtn: _domId('shortcutsBtn'),
+    shortcutsModal: _domId('shortcutsModal'),
+    shortcutsPanel: _domId('shortcutsPanel'),
+    closeShortcutsBtn: _domId('closeShortcutsBtn'),
+    advancedFlagsSummary: _domId('advancedFlagsSummary'),
+    governanceDetailsSummary: _domId('governanceDetailsSummary'),
+    reconstructionDetailsSummary: _domId('reconstructionDetailsSummary'),
+    dispatchToolsSummary: _domId('dispatchToolsSummary'),
+    effectiveConfigDrawer: _domId('effectiveConfigDrawer'),
+    closeEffectiveConfigBtn: _domId('closeEffectiveConfigBtn'),
+    effectiveConfigMeta: _domId('effectiveConfigMeta'),
+    requestedConfigJson: _domId('requestedConfigJson'),
+    effectiveConfigJson: _domId('effectiveConfigJson'),
+    inactiveConfigJson: _domId('inactiveConfigJson'),
+    effectiveEstimateLabel: _domId('effectiveEstimateLabel'),
+    effectiveReadinessSummary: _domId('effectiveReadinessSummary'),
+    effectiveArgvPreview: _domId('effectiveArgvPreview'),
 
-    healthIndicator: document.getElementById('healthIndicator'),
-    healthText: document.getElementById('healthText'),
-    toastContainer: document.getElementById('toastContainer')
+    healthIndicator: _domId('healthIndicator'),
+    healthText: _domId('healthText'),
+    toastContainer: _domId('toastContainer')
 };
+
+portalDom.assertPresent(els, [
+    'overviewShell',
+    'consoleGrid',
+    'pipelineSelect',
+    'presetSelect',
+    'portalAccessState',
+    'bootstrapStatusBadge',
+    'jobList',
+    'artifactPreviewStage',
+    'artifactThumbnailRail',
+    'toastContainer'
+]);
+
+// ============================================================================
+// 4. AMBIENT MOTION
+// ============================================================================
 
 const ambientMotion = {
     rafId: null,
@@ -826,6 +1219,10 @@ function setupAmbientMotion() {
     _writeAmbientVariables();
 }
 
+// ============================================================================
+// 5. ROUTING
+// ============================================================================
+
 const CONSOLE_VIEW_META = {
     overview: {
         title: 'Overview',
@@ -848,6 +1245,13 @@ const CONSOLE_VIEW_META = {
         meta: 'Completed runs become reviewable products, not just finished jobs.'
     }
 };
+
+const WORKSPACE_VIEW_SHORTCUTS = Object.freeze({
+    '1': 'overview',
+    '2': 'build',
+    '3': 'operate',
+    '4': 'review'
+});
 
 function resolveConsoleView(value) {
     const candidate = String(value || '').trim().toLowerCase();
@@ -937,31 +1341,16 @@ function setActiveWorkspaceLink(viewName) {
 }
 
 function _routeUrlForView(viewName, jobId = '', artifactPath = '', compareEnabled = null) {
-    const url = new URL(window.location.href);
-    const resolvedView = resolveConsoleView(viewName);
-    const resolvedJobId = _normalizeSelectedJobId(jobId);
-    url.searchParams.set('view', resolvedView);
-    if ((resolvedView === 'operate' || resolvedView === 'review') && resolvedJobId) {
-        const activeContext = _activeRouteContext(resolvedJobId);
-        const resolvedArtifactPath = _normalizeArtifactRoutePath(artifactPath) || activeContext.artifactPath;
-        const resolvedCompareEnabled = compareEnabled === null ? activeContext.compareEnabled : Boolean(compareEnabled);
-        url.searchParams.set('job', resolvedJobId);
-        if (resolvedArtifactPath) {
-            url.searchParams.set('artifact', resolvedArtifactPath);
-        } else {
-            url.searchParams.delete('artifact');
-        }
-        if (resolvedCompareEnabled) {
-            url.searchParams.set('compare', '1');
-        } else {
-            url.searchParams.delete('compare');
-        }
-    } else {
-        url.searchParams.delete('job');
-        url.searchParams.delete('artifact');
-        url.searchParams.delete('compare');
-    }
-    return url;
+    return portalRoute.build({
+        viewName,
+        jobId,
+        artifactPath,
+        compareEnabled,
+        resolveView: resolveConsoleView,
+        normalizeSelectedJobId: _normalizeSelectedJobId,
+        normalizeArtifactRoutePath: _normalizeArtifactRoutePath,
+        activeContext: _activeRouteContext
+    });
 }
 
 function _syncConsoleRoute(replace = false) {
@@ -971,6 +1360,650 @@ function _syncConsoleRoute(replace = false) {
     if (nextHref === currentHref) return;
     const method = replace ? 'replaceState' : 'pushState';
     window.history[method]({ view: state.currentView, jobId: state.selectedJobId || '' }, '', nextHref);
+}
+
+function _jobFreshnessLabel(job) {
+    if (!job) return 'No live telemetry';
+    const lastActivityAt = Number(job.lastEventAt || job.updatedAt || job.finishedAt || job.createdAt || 0);
+    return `Updated ${formatRelativeTime(lastActivityAt)}`;
+}
+
+function _compareSurfaceCopy(selectedArtifact, compareArtifact, compareEnabled) {
+    if (!selectedArtifact || !compareArtifact) {
+        return {
+            ribbonValue: 'No compare pair',
+            ribbonMeta: 'No paired comparison is available for the current artifact.',
+            summaryTitle: 'No compare pair',
+            summaryDetail: 'No paired comparison is available for the current artifact.',
+        };
+    }
+
+    const primaryLabel = artifactLabel(selectedArtifact);
+    const compareLabel = artifactLabel(compareArtifact);
+    if (compareEnabled) {
+        return {
+            ribbonValue: 'Compare on',
+            ribbonMeta: 'Paired comparison is pinned in the URL-backed review context.',
+            summaryTitle: 'Comparing paired outputs',
+            summaryDetail: `${primaryLabel} is pinned against ${compareLabel} in this review context.`,
+        };
+    }
+
+    return {
+        ribbonValue: 'Pair available',
+        ribbonMeta: 'Paired comparison is available for the current artifact selection.',
+        summaryTitle: 'Paired comparison available',
+        summaryDetail: `${compareLabel} is available as a side-by-side comparison for ${primaryLabel}.`,
+    };
+}
+
+function _findJobById(jobId) {
+    const normalizedJobId = _normalizeSelectedJobId(jobId);
+    if (!normalizedJobId) return null;
+    return state.jobs.find((job) => _normalizeSelectedJobId(job?.id) === normalizedJobId) || null;
+}
+
+function _jobHasReviewableOutputs(job) {
+    if (!job) return false;
+    const summary = normalizeRunSummary(job.run_summary);
+    const artifactCount = Array.isArray(job.artifacts) ? job.artifacts.length : 0;
+    return artifactCount > 0 || Boolean(summary?.reviewable_outputs);
+}
+
+function _operatorAction(key, label, options = {}) {
+    const normalizedKey = String(key || '').trim();
+    const normalizedLabel = String(label || '').trim();
+    if (!normalizedKey || !normalizedLabel) return null;
+    return {
+        key: normalizedKey,
+        label: normalizedLabel,
+        tone: String(options.tone || 'info'),
+        jobId: _normalizeSelectedJobId(options.jobId || ''),
+        artifactPath: _normalizeArtifactRoutePath(options.artifactPath || ''),
+        detail: String(options.detail || '').trim(),
+        disabled: Boolean(options.disabled)
+    };
+}
+
+function _compactOperatorActions(actions, maxCount = 2) {
+    const seen = new Set();
+    const compact = [];
+    (Array.isArray(actions) ? actions : []).forEach((action) => {
+        if (!action || !action.key || seen.has(action.key)) return;
+        seen.add(action.key);
+        compact.push(action);
+    });
+    return compact.slice(0, maxCount);
+}
+
+function _operatorActionContext(job) {
+    const normalizedJobId = _normalizeSelectedJobId(job?.id);
+    const artifacts = Array.isArray(job?.artifacts) ? rankArtifactsForDisplay(job.artifacts) : [];
+    const selectedArtifact = job ? _selectedArtifactForJob(job) : null;
+    const heroArtifact = artifacts[0] || selectedArtifact || null;
+    const activeArtifact = selectedArtifact || heroArtifact;
+    const compareCandidate = job ? findCompareArtifact(activeArtifact, artifacts) : null;
+    const compareEnabled = Boolean(
+        normalizedJobId
+        && compareCandidate
+        && state.artifactUi.compareByJob[normalizedJobId]
+    );
+    return {
+        job,
+        jobId: normalizedJobId,
+        artifacts,
+        artifactCount: artifacts.length,
+        selectedArtifact: activeArtifact,
+        heroArtifact,
+        compareCandidate,
+        compareEnabled,
+        reviewableOutputs: _jobHasReviewableOutputs(job)
+    };
+}
+
+function _preferredOperatorActionJob() {
+    const preferredJobId = _preferredSelectedJobId();
+    return _findJobById(preferredJobId) || _latestActiveJob() || _latestReviewableJob() || null;
+}
+
+function _operatorActionHintHtml() {
+    const base = [
+        '<span class="kbd">1</span> overview',
+        '<span class="kbd">2</span> build',
+        '<span class="kbd">3</span> operate',
+        '<span class="kbd">4</span> review',
+        '<span class="kbd">?</span> shortcuts'
+    ];
+    if (state.currentView === 'build') {
+        base.push('<span class="kbd">Ctrl/⌘ + Enter</span> dispatch');
+        base.push('<span class="kbd">Ctrl/⌘ + Shift + C</span> copy CLI');
+    }
+    return `Keyboard: ${base.join(', ')}.`;
+}
+
+function _operatorRecoveryActionSnapshot(context) {
+    const job = context.job;
+    const bootstrapStatus = String(state.bootstrap?.status || 'pending').trim().toLowerCase();
+    const reconnectBlocked = Boolean(job?.reconnectBlocked);
+    const hasBootstrapFailure = bootstrapStatus === 'degraded' || bootstrapStatus === 'unavailable';
+    if (!reconnectBlocked && !hasBootstrapFailure) return null;
+
+    const failure = reconnectBlocked
+        ? _bootstrapFailureDetails('auth_failure', 401)
+        : _bootstrapFailureDetails(state.bootstrap.lastErrorReason, state.bootstrap.lastHttpStatus);
+    const tone = failure.retryable ? 'warning' : 'blocked';
+
+    if (failure.reason === 'auth_failure' || reconnectBlocked) {
+        return {
+            title: 'Restore access before live actions continue',
+            detail: failure.actionMessage,
+            tone,
+            primary: _operatorAction('restore_access', 'Restore Access', {
+                jobId: context.jobId,
+                tone,
+                detail: failure.actionMessage
+            }),
+            secondary: _compactOperatorActions([
+                _operatorAction('retry_status_check', 'Retry Status Check', {
+                    jobId: context.jobId,
+                    tone: 'info',
+                    detail: 'Retry bootstrap and backend status checks without expanding the route contract.'
+                })
+            ])
+        };
+    }
+
+    return {
+        title: failure.reason === 'access_outage' ? 'Managed access is degraded' : 'Portal recovery is required',
+        detail: failure.actionMessage,
+        tone,
+        primary: _operatorAction('retry_status_check', 'Retry Status Check', {
+            jobId: context.jobId,
+            tone,
+            detail: failure.actionMessage
+        }),
+        secondary: _compactOperatorActions([
+            context.reviewableOutputs
+                ? _operatorAction('review_retained_outputs', 'Review Retained Outputs', {
+                    jobId: context.jobId,
+                    tone: 'warning',
+                    detail: 'Open retained outputs while live status is recovering.'
+                })
+                : _operatorAction('return_to_build', 'Return to Build', {
+                    tone: 'info',
+                    detail: 'Return to the build surface while access recovery completes.'
+                })
+        ])
+    };
+}
+
+function _operatorActionRailSnapshot(jobOverride = undefined) {
+    const job = arguments.length > 0 ? jobOverride : _preferredOperatorActionJob();
+    const context = _operatorActionContext(job);
+    const recoverySnapshot = _operatorRecoveryActionSnapshot(context);
+    if (recoverySnapshot) return recoverySnapshot;
+
+    if (!job) {
+        return {
+            title: state.backendOk ? 'Prepare the next governed dispatch' : 'Restore backend connectivity',
+            detail: state.backendOk
+                ? 'Open Build to continue the active draft. The last selected run will stay actionable when one exists.'
+                : 'Connectivity must recover before preview-backed dispatch and live review can continue.',
+            tone: state.backendOk ? 'info' : 'warning',
+            primary: _operatorAction('open_build', 'Open Build', {
+                tone: 'info',
+                detail: 'Open Build without changing any route or API contract.'
+            }),
+            secondary: _compactOperatorActions([
+                _operatorAction('resume_draft', 'Resume Draft', {
+                    tone: 'info',
+                    detail: 'Resume the current draft and keep the active step focused.'
+                }),
+                !state.backendOk
+                    ? _operatorAction('retry_status_check', 'Retry Status Check', {
+                        tone: 'warning',
+                        detail: 'Retry bootstrap and backend checks while the portal is offline.'
+                    })
+                    : null
+            ])
+        };
+    }
+
+    if (job.state === 'running' || job.state === 'queued') {
+        return {
+            title: context.artifactCount > 0 ? 'Live run already has early outputs' : 'Stay with the live run',
+            detail: context.artifactCount > 0
+                ? 'Operate stays primary while early artifacts index. Review remains one click away when you need the retained outputs.'
+                : 'Use Operate to watch progress, warnings, and transport freshness until the first artifacts arrive.',
+            tone: _jobSurfaceTone(job),
+            primary: _operatorAction('stay_in_operate', 'Stay in Operate', {
+                jobId: context.jobId,
+                tone: _jobSurfaceTone(job),
+                detail: 'Keep the selected run pinned in Operate.'
+            }),
+            secondary: _compactOperatorActions([
+                context.reviewableOutputs
+                    ? _operatorAction('open_early_artifacts', 'Open Early Artifacts', {
+                        jobId: context.jobId,
+                        tone: 'warning',
+                        detail: 'Open Review using the current selected run and artifact route state.'
+                    })
+                    : null,
+                context.heroArtifact
+                    ? _operatorAction('open_latest_artifact', 'Open Latest Artifact', {
+                        jobId: context.jobId,
+                        artifactPath: _artifactRouteKey(context.heroArtifact),
+                        tone: 'info',
+                        detail: 'Open the highest-ranked indexed artifact for the selected run.'
+                    })
+                    : null
+            ])
+        };
+    }
+
+    if (job.state === 'partial' || job.state === 'failed' || job.state === 'canceled') {
+        return {
+            title: context.reviewableOutputs ? 'Retained outputs are ready for triage' : 'Return to Build after triage',
+            detail: context.reviewableOutputs
+                ? 'Open the retained outputs before rerunning failed inputs or rebuilding the next dispatch.'
+                : 'No reviewable outputs were retained. Return to Build after confirming the latest run context.',
+            tone: context.reviewableOutputs ? 'warning' : 'blocked',
+            primary: context.reviewableOutputs
+                ? _operatorAction('review_retained_outputs', 'Review Retained Outputs', {
+                    jobId: context.jobId,
+                    tone: 'warning',
+                    detail: 'Open Review for the retained outputs of the selected run.'
+                })
+                : _operatorAction('return_to_build', 'Return to Build', {
+                    tone: 'info',
+                    detail: 'Return to the build surface to prepare the next dispatch.'
+                }),
+            secondary: _compactOperatorActions([
+                _operatorAction('return_to_build', 'Return to Build', {
+                    tone: 'info',
+                    detail: 'Return to the build surface to prepare the next dispatch.'
+                }),
+                context.reviewableOutputs && context.heroArtifact
+                    ? _operatorAction('open_latest_artifact', 'Open Latest Artifact', {
+                        jobId: context.jobId,
+                        artifactPath: _artifactRouteKey(context.heroArtifact),
+                        tone: 'warning',
+                        detail: 'Open the highest-ranked retained artifact without changing the current route.'
+                    })
+                    : null
+            ])
+        };
+    }
+
+    if (job.state === 'offline') {
+        return {
+            title: context.reviewableOutputs ? 'Cached outputs remain reviewable' : 'Restore backend connectivity',
+            detail: context.reviewableOutputs
+                ? 'Live status is stale until connectivity returns, but retained artifacts stay available for operator review.'
+                : 'Live status is stale until connectivity returns. Retry the portal status check before trusting this run state.',
+            tone: 'warning',
+            primary: context.reviewableOutputs
+                ? _operatorAction('review_retained_outputs', 'Review Retained Outputs', {
+                    jobId: context.jobId,
+                    tone: 'warning',
+                    detail: 'Review retained outputs while backend connectivity recovers.'
+                })
+                : _operatorAction('retry_status_check', 'Retry Status Check', {
+                    jobId: context.jobId,
+                    tone: 'warning',
+                    detail: 'Retry bootstrap and backend status checks for the selected run.'
+                }),
+            secondary: _compactOperatorActions([
+                _operatorAction('retry_status_check', 'Retry Status Check', {
+                    jobId: context.jobId,
+                    tone: 'warning',
+                    detail: 'Retry bootstrap and backend status checks for the selected run.'
+                }),
+                _operatorAction('return_to_build', 'Return to Build', {
+                    tone: 'info',
+                    detail: 'Return to the build surface while connectivity recovers.'
+                })
+            ])
+        };
+    }
+
+    return {
+        title: context.reviewableOutputs ? 'Review context is ready' : 'Awaiting indexed outputs',
+        detail: context.reviewableOutputs
+            ? 'Open Review, pop the latest indexed artifact, or toggle compare without expanding the current route contract.'
+            : 'This run is selected, but no indexed outputs are available yet. Stay with the selected job context until they arrive.',
+        tone: context.reviewableOutputs ? 'ready' : 'info',
+        primary: context.reviewableOutputs
+            ? _operatorAction('open_review', 'Open Review', {
+                jobId: context.jobId,
+                tone: 'ready',
+                detail: 'Open Review using the selected run and current route-backed compare preference.'
+            })
+            : _operatorAction('stay_in_operate', 'Stay in Operate', {
+                jobId: context.jobId,
+                tone: 'info',
+                detail: 'Keep the selected run pinned in Operate until outputs arrive.'
+            }),
+        secondary: _compactOperatorActions([
+            context.heroArtifact
+                ? _operatorAction('open_latest_artifact', 'Open Latest Artifact', {
+                    jobId: context.jobId,
+                    artifactPath: _artifactRouteKey(context.heroArtifact),
+                    tone: 'ready',
+                    detail: 'Open the highest-ranked indexed artifact for the selected run.'
+                })
+                : null,
+            context.compareCandidate
+                ? _operatorAction('toggle_compare', 'Toggle Compare', {
+                    jobId: context.jobId,
+                    tone: context.compareEnabled ? 'ready' : 'info',
+                    detail: 'Toggle compare using the current artifact route and compare=1 contract.'
+                })
+                : null
+        ])
+    };
+}
+
+function _renderOperatorActionButton(button, action) {
+    if (!button) return;
+    if (!action) {
+        button.classList.add('hidden');
+        button.disabled = true;
+        button.textContent = '';
+        delete button.dataset.actionKey;
+        delete button.dataset.jobId;
+        delete button.dataset.artifactPath;
+        delete button.dataset.tone;
+        delete button.dataset.actionLabel;
+        button.removeAttribute('title');
+        return;
+    }
+    button.textContent = action.label;
+    button.disabled = Boolean(action.disabled);
+    button.dataset.actionKey = action.key;
+    button.dataset.jobId = action.jobId || '';
+    button.dataset.artifactPath = action.artifactPath || '';
+    button.dataset.tone = action.tone || 'info';
+    button.dataset.actionLabel = action.label;
+    if (action.detail) {
+        button.title = action.detail;
+    } else {
+        button.removeAttribute('title');
+    }
+    button.classList.remove('hidden');
+}
+
+function _renderContextualActionRow(container, primaryButton, secondaryButton, primaryAction, secondaryAction = null) {
+    if (!container) return;
+    const hasActions = Boolean(primaryAction || secondaryAction);
+    container.classList.toggle('hidden', !hasActions);
+    _renderOperatorActionButton(primaryButton, primaryAction);
+    _renderOperatorActionButton(secondaryButton, secondaryAction);
+}
+
+function renderOperatorActionRail() {
+    if (!els.consoleActionRail) return;
+    const visible = ['overview', 'build', 'operate', 'review'].includes(state.currentView);
+    els.consoleActionRail.classList.toggle('hidden', !visible);
+    if (!visible) return;
+
+    const snapshot = _operatorActionRailSnapshot();
+    els.consoleActionRail.dataset.tone = snapshot.tone || 'info';
+    if (els.consoleActionRailTitle) els.consoleActionRailTitle.textContent = snapshot.title;
+    if (els.consoleActionRailDetail) els.consoleActionRailDetail.textContent = snapshot.detail;
+    if (els.consoleActionRailHint) {
+        els.consoleActionRailHint.innerHTML = _operatorActionHintHtml();
+    }
+    if (els.consoleActionRailActions) {
+        const hasActions = Boolean(snapshot.primary || (Array.isArray(snapshot.secondary) && snapshot.secondary.length > 0));
+        els.consoleActionRailActions.classList.toggle('hidden', !hasActions);
+    }
+    _renderOperatorActionButton(els.consoleActionPrimaryBtn, snapshot.primary);
+    _renderOperatorActionButton(els.consoleActionSecondaryBtn1, snapshot.secondary?.[0] || null);
+    _renderOperatorActionButton(els.consoleActionSecondaryBtn2, snapshot.secondary?.[1] || null);
+}
+
+function renderSelectedJobRecoveryActions(job) {
+    const snapshot = _operatorActionRailSnapshot(job);
+    _renderContextualActionRow(
+        els.selectedJobRecoveryActions,
+        els.selectedJobRecoveryPrimaryBtn,
+        els.selectedJobRecoverySecondaryBtn,
+        snapshot.primary || null,
+        snapshot.secondary?.[0] || null
+    );
+}
+
+function renderReviewStatusActions(job, artifact) {
+    const snapshot = _operatorActionRailSnapshot(job);
+    _renderContextualActionRow(
+        els.reviewStatusActions,
+        els.reviewStatusPrimaryBtn,
+        els.reviewStatusSecondaryBtn,
+        snapshot.primary || null,
+        snapshot.secondary?.[0] || null
+    );
+}
+
+function _openReviewSurfaceForJob(job, surface = 'job_inspector') {
+    const normalizedJobId = _normalizeSelectedJobId(job?.id);
+    if (!normalizedJobId || !job) {
+        createToast('Select a run first, then open its review surface.', 'info');
+        return false;
+    }
+    void emitPortalEvent('run_details_opened', {
+        surface,
+        metadata: {
+            job_id: normalizedJobId,
+            pipeline: String(job.pipeline || '')
+        }
+    });
+    navigateConsoleView('review', { jobId: normalizedJobId });
+    return true;
+}
+
+function _openArtifactForSelection(job, artifact, surface = 'artifact_review') {
+    if (!job || !artifact) {
+        createToast('No artifact is available for this selection.', 'info');
+        return false;
+    }
+    const url = sanitizeManagedAssetUrl(buildArtifactUrl(job, artifact));
+    if (!url) {
+        createToast('No artifact URL is available for this selection.', 'error');
+        return false;
+    }
+    void emitPortalEvent('artifact_opened', {
+        surface,
+        metadata: {
+            job_id: String(job.id || ''),
+            media_kind: String(artifact.media_kind || 'file'),
+            pipeline: String(job.pipeline || '')
+        }
+    });
+    window.open(url, '_blank', 'noopener,noreferrer');
+    return true;
+}
+
+function _toggleCompareSurface(job, surface = 'artifact_review') {
+    if (!job) return false;
+    const key = _normalizeSelectedJobId(job.id);
+    const selectedArtifact = _selectedArtifactForJob(job);
+    const compareCandidate = findCompareArtifact(
+        selectedArtifact,
+        rankArtifactsForDisplay(Array.isArray(job.artifacts) ? job.artifacts : [])
+    );
+    if (!key || !compareCandidate) {
+        createToast('No paired comparison is available for this artifact.', 'info');
+        return false;
+    }
+    _rememberComparePreference(key, !Boolean(state.artifactUi.compareByJob[key]));
+    void emitPortalEvent('artifact_compared', {
+        surface,
+        metadata: {
+            enabled: Boolean(state.artifactUi.compareByJob[key]),
+            job_id: key,
+            pipeline: String(job.pipeline || '')
+        }
+    });
+    renderReviewSurfaces();
+    return true;
+}
+
+function _retryPortalStatus(job = null) {
+    void loadPortalBootstrap();
+    void checkBackend(true);
+    if (job) {
+        void refreshJobStatus(job);
+    }
+    return true;
+}
+
+function handleOperatorActionClick(event) {
+    const button = event.target.closest('button[data-action-key]');
+    if (!button || button.disabled) return;
+    const actionKey = String(button.dataset.actionKey || '').trim();
+    if (!actionKey) return;
+    const job = _findJobById(button.dataset.jobId || state.selectedJobId || _preferredSelectedJobId());
+    const context = _operatorActionContext(job);
+    switch (actionKey) {
+        case 'open_build':
+            navigateConsoleView('build');
+            setBuildStep(1, { silent: true });
+            if (els.pipelineSelect) els.pipelineSelect.focus();
+            break;
+        case 'resume_draft':
+            navigateConsoleView('build');
+            syncBuildStepUi();
+            {
+                const activeStep = document.querySelector('.build-step-tab.is-active');
+                if (activeStep && typeof activeStep.focus === 'function') activeStep.focus();
+            }
+            break;
+        case 'return_to_build':
+            navigateConsoleView('build');
+            break;
+        case 'stay_in_operate':
+            if (!job) {
+                createToast('No active run is available right now.', 'info');
+                return;
+            }
+            navigateConsoleView('operate', { jobId: context.jobId });
+            break;
+        case 'open_review':
+        case 'review_retained_outputs':
+        case 'open_early_artifacts':
+            if (state.currentView === 'review' && context.jobId) {
+                navigateConsoleView('review', {
+                    jobId: context.jobId,
+                    artifactPath: _artifactRouteKey(context.selectedArtifact),
+                    compareEnabled: context.compareEnabled
+                });
+            } else {
+                _openReviewSurfaceForJob(job, 'action_rail');
+            }
+            break;
+        case 'open_latest_artifact':
+            _openArtifactForSelection(job, context.heroArtifact || context.selectedArtifact, 'action_rail');
+            break;
+        case 'toggle_compare':
+            _toggleCompareSurface(job, 'action_rail');
+            break;
+        case 'retry_status_check':
+            _retryPortalStatus(job);
+            break;
+        case 'restore_access':
+            window.location.assign('/login');
+            break;
+        default:
+            break;
+    }
+}
+
+function _dispatchReadinessSnapshot(payload = null) {
+    const currentPayload = payload || generatePayload();
+    const readinessStatus = currentPipelineDispatchStatus(currentPayload);
+
+    if (!_portalPrivilegesReady()) {
+        return {
+            canRun: false,
+            tone: 'blocked',
+            detail: !_isBootstrapReady()
+                ? 'Portal bootstrap is still being confirmed before privileged actions can run.'
+                : 'Managed portal access is unavailable, so dispatch remains disabled.',
+        };
+    }
+
+    if (!state.backendOk) {
+        return {
+            canRun: false,
+            tone: 'blocked',
+            detail: DISPATCH_BACKEND_OFFLINE_MESSAGE,
+        };
+    }
+
+    if (currentPayload.pipeline === 'lux-depth-v3') {
+        const preview = _currentPreviewForPayload(currentPayload);
+        if (!preview || preview.status === 'loading') {
+            return {
+                canRun: false,
+                tone: 'info',
+                detail: 'Preview-backed validation is refreshing. Dispatch unlocks when the current draft settles.',
+            };
+        }
+        if (preview.status === 'error') {
+            const previewFailure = _previewFailureDetails(preview);
+            return {
+                canRun: false,
+                tone: 'blocked',
+                detail: String(previewFailure.luxBlockedMessage || 'Preview-backed validation needs attention before dispatch.')
+                    .replace(/^(BLOCKED|WARNING):\s*/i, ''),
+            };
+        }
+        if (Array.isArray(preview.field_errors) && preview.field_errors.length > 0) {
+            const firstError = preview.field_errors[0];
+            const conflictError = preview.field_errors.find(
+                (item) => String(item?.code || '').trim() === 'conflicting_log_verbosity_flags'
+            );
+            return {
+                canRun: false,
+                tone: 'blocked',
+                detail: conflictError
+                    ? 'verbose and quiet are mutually exclusive; disable one flag before dispatch.'
+                    : String(firstError?.message || 'Preview validation blocked dispatch.'),
+            };
+        }
+        if (_effectiveDebugBundleEnabled(preview, currentPayload) && !state.portalUi.debugBundleAcknowledged) {
+            return {
+                canRun: false,
+                tone: 'blocked',
+                detail: 'Debug bundle acknowledgement is required before dispatch.',
+            };
+        }
+    }
+
+    if (!readinessStatus) {
+        return {
+            canRun: false,
+            tone: 'info',
+            detail: 'Execution readiness is still loading. Dispatch unlocks when readiness finishes.',
+        };
+    }
+    if (readinessStatus !== 'ready') {
+        const firstIssue = currentPipelineReadinessIssues(currentPayload)[0];
+        return {
+            canRun: false,
+            tone: String(firstIssue?.severity || '').trim().toLowerCase() === 'blocked' ? 'blocked' : 'warning',
+            detail: String(firstIssue?.message || 'Pipeline prerequisites still need operator attention before dispatch.'),
+        };
+    }
+
+    return {
+        canRun: true,
+        tone: 'ready',
+        detail: currentPayload.pipeline === 'lux-depth-v3'
+            ? 'Preview-backed validation, readiness, and acknowledgments are clear for dispatch.'
+            : 'Readiness checks are clear for the selected archive stage.',
+    };
 }
 
 function updateConsoleViewContext() {
@@ -992,57 +2025,610 @@ function updateConsoleViewContext() {
         : `Transformation Portal — ${viewMeta.title}`;
 }
 
+function _summaryTone(value) {
+    const tone = String(value || '').trim().toLowerCase();
+    return ['ready', 'warning', 'blocked', 'info'].includes(tone) ? tone : 'info';
+}
+
+function _setSummaryCard(card, labelElement, valueElement, metaElement, summary) {
+    if (!valueElement || !metaElement) return;
+    const nextSummary = summary && typeof summary === 'object' ? summary : {};
+    if (labelElement) labelElement.textContent = String(nextSummary.label || '');
+    valueElement.textContent = String(nextSummary.value || '');
+    metaElement.textContent = String(nextSummary.meta || '');
+    if (card) {
+        card.dataset.tone = _summaryTone(nextSummary.tone);
+    }
+}
+
+function _jobSurfaceTone(job) {
+    const stateLabel = String(job?.state || '').trim().toLowerCase();
+    if (['succeeded', 'ready', 'partial'].includes(stateLabel)) return 'ready';
+    if (['failed', 'canceled', 'offline'].includes(stateLabel)) return 'blocked';
+    return 'info';
+}
+
+function _previewSurfaceSummary(payload = null) {
+    const currentPayload = payload || generatePayload();
+    const preview = _currentPreviewForPayload(currentPayload);
+    if (!state.backendOk) {
+        return {
+            value: 'Backend offline',
+            meta: 'Preview-backed validation resumes when the orchestrator backend becomes reachable again.',
+            tone: 'blocked'
+        };
+    }
+    if (!preview) {
+        return {
+            value: 'Refreshing',
+            meta: 'Preview-backed validation is hydrating the current draft.',
+            tone: 'info'
+        };
+    }
+    if (preview.status === 'loading') {
+        return {
+            value: 'Refreshing',
+            meta: 'Preview-backed validation is recalculating the active draft.',
+            tone: 'info'
+        };
+    }
+    if (preview.status === 'error') {
+        const details = _previewFailureDetails(preview);
+        const message = currentPayload.pipeline === 'lux-depth-v3'
+            ? String(details.luxBlockedMessage || '').replace(/^BLOCKED:\s*/i, '')
+            : String(details.archiveWarningMessage || '').replace(/^WARNING:\s*/i, '');
+        return {
+            value: details.summaryLabel,
+            meta: message || 'Preview-backed validation needs operator attention.',
+            tone: currentPayload.pipeline === 'lux-depth-v3' ? 'blocked' : 'warning'
+        };
+    }
+    if (preview.status === 'ready') {
+        const errors = Array.isArray(preview.field_errors) ? preview.field_errors.length : 0;
+        const warnings = Array.isArray(preview.field_warnings) ? preview.field_warnings.length : 0;
+        if (errors > 0) {
+            return {
+                value: 'Preview invalid',
+                meta: `${errors} blocking issue${errors === 1 ? '' : 's'} need resolution before dispatch.`,
+                tone: 'blocked'
+            };
+        }
+        if (warnings > 0) {
+            return {
+                value: 'Preview ready with warnings',
+                meta: `${warnings} warning${warnings === 1 ? '' : 's'} remain visible before dispatch.`,
+                tone: 'warning'
+            };
+        }
+        return {
+            value: 'Preview ready',
+            meta: 'Preview-backed validation and normalized arguments are aligned with the current draft.',
+            tone: 'ready'
+        };
+    }
+    if (preview.status === 'offline' || preview.status === 'local_fallback') {
+        return {
+            value: 'Local fallback',
+            meta: 'Local rendering is standing in while preview-backed validation is unavailable.',
+            tone: 'warning'
+        };
+    }
+    return {
+        value: _formatPreviewStateLabel(currentPayload),
+        meta: 'Preview-backed validation will summarize the active draft here.',
+        tone: 'info'
+    };
+}
+
+function _metadataBackendEntry(name) {
+    const catalog = state.metadata?.backend_catalog;
+    const key = String(name || '').trim().toLowerCase();
+    if (!key || !catalog || typeof catalog !== 'object') return null;
+    const entry = catalog[key];
+    return entry && typeof entry === 'object' ? entry : null;
+}
+
+function _runtimeBriefingPolicyTone(entry) {
+    const code = String(entry?.policy_posture?.code || '').trim().toLowerCase();
+    if (code === 'governed_default') return 'ready';
+    if (code === 'managed_optional' || code === 'deterministic_fallback') return 'info';
+    if (code === 'research_only' || code === 'experimental_segmentation') return 'warning';
+    return 'info';
+}
+
+function _runtimeBriefingArgs(payload = null) {
+    const currentPayload = payload || generatePayload();
+    const preview = _currentPreviewForPayload(currentPayload);
+    const normalizedArgs = preview?.normalized_args && typeof preview.normalized_args === 'object'
+        ? preview.normalized_args
+        : null;
+    return {
+        payload: currentPayload,
+        preview,
+        args: normalizedArgs ? { ...(currentPayload.args || {}), ...normalizedArgs } : (currentPayload.args || {})
+    };
+}
+
+function _runtimeAcknowledgmentSnapshot(entry, args = {}) {
+    const required = Array.isArray(entry?.required_acknowledgments) ? entry.required_acknowledgments : [];
+    const pending = [];
+    const completed = [];
+    required.forEach((item) => {
+        const field = String(item?.field || '').trim();
+        if (!field) return;
+        const label = String(item?.label || titleCaseToken(field, field)).trim();
+        if (parseBoolLike(args[field], false)) {
+            completed.push(label);
+            return;
+        }
+        pending.push(label);
+    });
+    return { pending, completed };
+}
+
+function _runtimeBriefingCardSummary(summary = {}) {
+    return {
+        label: String(summary.label || 'Runtime summary'),
+        value: String(summary.value || 'Unavailable'),
+        detail: String(summary.detail || ''),
+        meta: String(summary.meta || ''),
+        tone: String(summary.tone || 'info')
+    };
+}
+
+function _runtimeDepthBackendSummary(args = {}) {
+    const backendName = _resolveDepthBackend(args.depth_backend || state.config.depthBackend || 'da3');
+    const entry = _metadataBackendEntry(backendName);
+    const acknowledgments = _runtimeAcknowledgmentSnapshot(entry, args);
+    const meta = [
+        entry?.model_provider_label,
+        entry?.model_display_label,
+        acknowledgments.pending.length > 0
+            ? `Pending: ${acknowledgments.pending.join(', ')}`
+            : entry?.policy_posture?.label
+    ].filter(Boolean).join(' • ');
+    return _runtimeBriefingCardSummary({
+        label: 'Depth backend',
+        value: entry?.label || titleCaseToken(backendName, 'Unknown'),
+        detail: entry?.operator_summary || 'Backend-owned metadata is unavailable, so keep using readiness and preview as the source of truth.',
+        meta: meta || 'Backend-owned policy',
+        tone: acknowledgments.pending.length > 0 ? 'blocked' : _runtimeBriefingPolicyTone(entry)
+    });
+}
+
+function _runtimeSegmentationBackendSummary(args = {}) {
+    const segmentationEnabled = parseBoolLike(args.enable_segmentation, false);
+    if (!segmentationEnabled) {
+        return _runtimeBriefingCardSummary({
+            label: 'Segmentation backend',
+            value: 'Segmentation off',
+            detail: 'This draft stays on the deterministic path until segmentation is enabled.',
+            meta: 'Enable segmentation to choose EfficientSAM or SAM2.',
+            tone: 'info'
+        });
+    }
+
+    const backendName = _resolveSegmentationBackend(args.segmentation_backend || state.config.segmentation?.backend || 'stub');
+    const entry = _metadataBackendEntry(backendName);
+    const modelSize = backendName === 'sam2'
+        ? _resolveSam2ModelSize(args.sam2_model_size || state.config.segmentation?.sam2ModelSize || 'base')
+        : '';
+    const meta = [
+        entry?.model_provider_label,
+        entry?.model_display_label,
+        modelSize ? `Model ${_titleizeEstimateToken(modelSize)}` : '',
+        parseBoolLike(args.strict_segmentation, false) ? 'Strict masks on' : 'Strict masks off'
+    ].filter(Boolean).join(' • ');
+    return _runtimeBriefingCardSummary({
+        label: 'Segmentation backend',
+        value: entry?.label || titleCaseToken(backendName, 'Unknown'),
+        detail: entry?.operator_summary || 'Segmentation metadata is unavailable, so keep the configured backend visible in the draft.',
+        meta: meta || 'Backend-owned policy',
+        tone: _runtimeBriefingPolicyTone(entry)
+    });
+}
+
+function _runtimeStateSummary(payload = null) {
+    const { preview } = _runtimeBriefingArgs(payload);
+    const readiness = currentPipelineReadiness(payload);
+    const issues = currentPipelineReadinessIssues(payload);
+    const dispatchStatus = titleCaseToken(currentPipelineDispatchStatus(payload) || readiness?.status || 'unknown', 'Unknown');
+
+    if (!state.backendOk) {
+        return _runtimeBriefingCardSummary({
+            label: 'Canary/runtime state',
+            value: 'Backend offline',
+            detail: 'Live readiness, canary posture, and recent-run recovery resume when backend connectivity returns.',
+            meta: 'Preview-backed dispatch remains paused while the orchestrator backend is offline.',
+            tone: 'blocked'
+        });
+    }
+
+    if (preview?.status === 'loading' && !readiness) {
+        return _runtimeBriefingCardSummary({
+            label: 'Canary/runtime state',
+            value: 'Refreshing',
+            detail: 'Preview-backed readiness is recalculating the active draft.',
+            meta: 'Canary posture appears here when backend readiness returns.',
+            tone: 'info'
+        });
+    }
+
+    if (!readiness || typeof readiness !== 'object') {
+        return _runtimeBriefingCardSummary({
+            label: 'Canary/runtime state',
+            value: 'Readiness loading',
+            detail: 'Base readiness and canary posture are still hydrating from the backend.',
+            meta: 'Dispatch state becomes authoritative when readiness finishes.',
+            tone: 'info'
+        });
+    }
+
+    const canaryLabel = `Canary ${titleCaseToken(readiness.canary_status || 'unknown', 'Unknown')}`;
+    const firstIssue = issues[0];
+    if (firstIssue) {
+        return _runtimeBriefingCardSummary({
+            label: 'Canary/runtime state',
+            value: `${dispatchStatus} • ${canaryLabel}`,
+            detail: String(firstIssue.message || 'Pipeline readiness reported an operator-facing prerequisite.'),
+            meta: 'Resolve the current readiness issue before dispatching this draft.',
+            tone: String(firstIssue.severity || '').trim().toLowerCase() === 'blocked' ? 'blocked' : 'warning'
+        });
+    }
+
+    const notes = Array.isArray(readiness.notes)
+        ? readiness.notes.map((item) => String(item || '').trim()).filter(Boolean)
+        : [];
+    return _runtimeBriefingCardSummary({
+        label: 'Canary/runtime state',
+        value: canaryLabel,
+        detail: notes[notes.length - 1] || notes[0] || 'Base readiness and canary posture are aligned with the current draft.',
+        meta: `Dispatch ${dispatchStatus}`,
+        tone: readiness.canary_status === 'ready'
+            ? 'ready'
+            : readiness.canary_status === 'degraded' || readiness.canary_status === 'unavailable'
+                ? 'warning'
+                : 'info'
+    });
+}
+
+function _runtimeCheckpointExpectationSummary(args = {}) {
+    const depthEntry = _metadataBackendEntry(_resolveDepthBackend(args.depth_backend || state.config.depthBackend || 'da3'));
+    const entries = [{ entry: depthEntry }];
+    if (parseBoolLike(args.enable_segmentation, false)) {
+        entries.push({
+            entry: _metadataBackendEntry(
+                _resolveSegmentationBackend(args.segmentation_backend || state.config.segmentation?.backend || 'stub')
+            )
+        });
+    }
+
+    const statements = [];
+    const details = [];
+    let hasRequiredFieldMissing = false;
+    let hasRuntimeManagedRequirement = false;
+    let hasOptionalPath = false;
+    let hasOptionalUnset = false;
+    let hasNoPathRequirement = false;
+
+    entries.forEach(({ entry }) => {
+        if (!entry) return;
+        const expectation = entry.checkpoint_expectation && typeof entry.checkpoint_expectation === 'object'
+            ? entry.checkpoint_expectation
+            : null;
+        if (!expectation) return;
+        const entryLabel = String(entry.label || 'Backend').trim();
+        const field = String(expectation.field || '').trim();
+        const providedValue = field ? String(args[field] || '').trim() : '';
+
+        if (expectation.required && field && !providedValue) {
+            hasRequiredFieldMissing = true;
+            statements.push(`${entryLabel}: required checkpoint path missing.`);
+        } else if (expectation.required && field && providedValue) {
+            statements.push(`${entryLabel}: required checkpoint path supplied.`);
+        } else if (expectation.required) {
+            hasRuntimeManagedRequirement = true;
+            statements.push(`${entryLabel}: runtime-managed checkpoint required.`);
+        } else if (field && providedValue) {
+            hasOptionalPath = true;
+            statements.push(`${entryLabel}: optional checkpoint path supplied.`);
+        } else if (field) {
+            hasOptionalUnset = true;
+            statements.push(`${entryLabel}: optional checkpoint path not set.`);
+        } else {
+            hasNoPathRequirement = true;
+            statements.push(`${entryLabel}: no explicit checkpoint path required.`);
+        }
+
+        const detail = String(expectation.detail || '').trim();
+        if (detail) details.push(detail);
+    });
+
+    let value = 'No explicit path required';
+    let tone = 'ready';
+    if (hasRequiredFieldMissing) {
+        value = 'Checkpoint path missing';
+        tone = 'blocked';
+    } else if (hasRuntimeManagedRequirement) {
+        value = 'Runtime checkpoint required';
+        tone = 'warning';
+    } else if (hasOptionalPath) {
+        value = 'Checkpoint path supplied';
+        tone = 'ready';
+    } else if (hasOptionalUnset) {
+        value = 'Checkpoint path optional';
+        tone = 'info';
+    } else if (hasNoPathRequirement) {
+        value = 'No explicit path required';
+        tone = 'ready';
+    }
+
+    return _runtimeBriefingCardSummary({
+        label: 'Checkpoint expectation',
+        value,
+        detail: statements.join(' ') || 'Checkpoint expectations load from backend metadata.',
+        meta: details.join(' ') || 'Backend-owned runtime expectation',
+        tone
+    });
+}
+
+function _runtimeLicensePostureSummary(args = {}) {
+    const selectedEntries = [
+        _metadataBackendEntry(_resolveDepthBackend(args.depth_backend || state.config.depthBackend || 'da3'))
+    ];
+    if (parseBoolLike(args.enable_segmentation, false)) {
+        selectedEntries.push(
+            _metadataBackendEntry(
+                _resolveSegmentationBackend(args.segmentation_backend || state.config.segmentation?.backend || 'stub')
+            )
+        );
+    }
+
+    const postures = [];
+    const pending = new Set();
+    const completed = new Set();
+    const details = [];
+    let tone = 'ready';
+
+    selectedEntries.filter(Boolean).forEach((entry) => {
+        const acknowledgments = _runtimeAcknowledgmentSnapshot(entry, args);
+        const postureLabel = String(entry?.policy_posture?.label || entry?.label || 'Policy').trim();
+        postures.push(`${String(entry?.label || 'Backend').trim()}: ${postureLabel}`);
+        acknowledgments.pending.forEach((label) => pending.add(label));
+        acknowledgments.completed.forEach((label) => completed.add(label));
+        const detail = String(entry?.policy_posture?.detail || entry?.operator_summary || '').trim();
+        if (detail) details.push(detail);
+        if (acknowledgments.pending.length > 0) {
+            tone = 'blocked';
+        } else if (tone !== 'blocked') {
+            const entryTone = _runtimeBriefingPolicyTone(entry);
+            tone = entryTone === 'ready' ? tone : entryTone;
+        }
+    });
+
+    const meta = [];
+    if (pending.size > 0) {
+        meta.push(`Pending: ${Array.from(pending).join(', ')}`);
+    } else if (completed.size > 0) {
+        meta.push(`Acknowledged: ${Array.from(completed).join(', ')}`);
+    } else {
+        meta.push('No backend acknowledgments are currently required.');
+    }
+    if (parseBoolLike(args.enable_reconstruction, false)) {
+        meta.push('Scene reconstruction governance stays in the primary governance panel.');
+    }
+
+    return _runtimeBriefingCardSummary({
+        label: 'License posture',
+        value: pending.size > 0 ? 'Acknowledgment required' : (postures.join(' • ') || 'Backend-owned policy'),
+        detail: details.join(' ') || 'Backend-owned policy remains the operator source of truth for selected backends.',
+        meta: meta.join(' • '),
+        tone
+    });
+}
+
+function _renderRuntimeBriefingCard(summary = {}) {
+    const card = document.createElement('article');
+    card.className = 'runtime-briefing-card';
+    card.dataset.tone = String(summary.tone || 'info');
+
+    const label = document.createElement('p');
+    label.className = 'runtime-briefing-label';
+    label.textContent = String(summary.label || 'Runtime summary');
+
+    const value = document.createElement('p');
+    value.className = 'runtime-briefing-value';
+    value.textContent = String(summary.value || 'Unavailable');
+
+    const detail = document.createElement('p');
+    detail.className = 'runtime-briefing-detail';
+    detail.textContent = String(summary.detail || '');
+
+    const meta = document.createElement('p');
+    meta.className = 'runtime-briefing-meta';
+    meta.textContent = String(summary.meta || '');
+
+    card.appendChild(label);
+    card.appendChild(value);
+    if (detail.textContent) card.appendChild(detail);
+    if (meta.textContent) card.appendChild(meta);
+    return card;
+}
+
+function renderRuntimeBriefing(payload = null) {
+    const currentPayload = payload || generatePayload();
+    const shells = [els.overviewRuntimeClarityShell, els.buildRuntimeClarityShell].filter(Boolean);
+    const containers = [els.overviewRuntimeBriefing, els.buildRuntimeBriefing].filter(Boolean);
+    const isLuxPipeline = String(currentPayload.pipeline || '').trim() === 'lux-depth-v3';
+
+    shells.forEach((shell) => {
+        shell.classList.toggle('hidden', !isLuxPipeline);
+    });
+    if (!isLuxPipeline) {
+        containers.forEach((container) => {
+            container.innerHTML = '';
+        });
+        return;
+    }
+
+    const { args } = _runtimeBriefingArgs(currentPayload);
+    const summaries = [
+        _runtimeDepthBackendSummary(args),
+        _runtimeSegmentationBackendSummary(args),
+        _runtimeStateSummary(currentPayload),
+        _runtimeCheckpointExpectationSummary(args),
+        _runtimeLicensePostureSummary(args)
+    ];
+
+    containers.forEach((container) => {
+        container.innerHTML = '';
+        const fragment = document.createDocumentFragment();
+        summaries.forEach((summary) => {
+            fragment.appendChild(_renderRuntimeBriefingCard(summary));
+        });
+        container.appendChild(fragment);
+    });
+}
+
+function renderBuildStepPulse(payload = null) {
+    const currentPayload = payload || generatePayload();
+    const activeStep = resolveBuildStep(state.portalUi.buildStep);
+    const stepContent = _currentBuildStepContent();
+    const activeStepContent = stepContent[activeStep - 1] || BUILD_STEP_CONTENT.lux[activeStep - 1];
+    const nextAction = _effectiveNextBestAction(currentPayload);
+    const previewSummary = _previewSurfaceSummary(currentPayload);
+    const draftValue = state.pipeline === 'lux-depth-v3'
+        ? String(currentPayload?.args?.preset || state.config.preset || 'custom')
+        : canonicalArchiveCommand(state.pipeline) || 'archive';
+    const draftMeta = state.pipeline === 'lux-depth-v3'
+        ? `${String(state.pipeline || 'lux-depth-v3')} • ${titleCaseToken(currentPayload?.args?.quality_tier || state.config.qualityTier || 'premium', 'Premium')} posture`
+        : `${String(state.pipeline || 'archive')} • deterministic archive stage`;
+
+    _setSummaryCard(els.buildPulseDraftCard, null, els.buildPulseDraft, els.buildPulseDraftMeta, {
+        value: draftValue,
+        meta: draftMeta,
+        tone: state.backendOk ? 'ready' : 'info'
+    });
+    _setSummaryCard(els.buildPulseStepCard, null, els.buildPulseStep, els.buildPulseStepMeta, {
+        value: `${activeStep} of 4 · ${String(activeStepContent?.label || 'Focus')}`,
+        meta: String(activeStepContent?.summary || activeStepContent?.meta || 'Build focus is pinned here.'),
+        tone: 'info'
+    });
+    _setSummaryCard(els.buildPulsePreviewCard, null, els.buildPulsePreview, els.buildPulsePreviewMeta, previewSummary);
+    _setSummaryCard(els.buildPulseDispatchCard, null, els.buildPulseDispatch, els.buildPulseDispatchMeta, {
+        value: String(nextAction?.label || 'Review dispatch posture'),
+        meta: String(nextAction?.detail || 'The next operator action stays pinned here while the draft changes.'),
+        tone: String(nextAction?.tone || 'info')
+    });
+}
+
 function renderConsoleContextRibbon() {
-    if (!els.consoleContextRibbon) return;
-    const ribbonVisible = state.currentView === 'operate' || state.currentView === 'review';
+    if (!els.consoleContextRibbon) {
+        renderOperatorActionRail();
+        return;
+    }
+    const ribbonVisible = ['overview', 'build', 'operate', 'review'].includes(state.currentView);
     els.consoleContextRibbon.classList.toggle('hidden', !ribbonVisible);
-    if (!ribbonVisible) return;
+    if (!ribbonVisible) {
+        renderOperatorActionRail();
+        return;
+    }
 
-    const selected = state.jobs.find((job) => job.id === state.selectedJobId) || null;
-    const artifacts = Array.isArray(selected?.artifacts) ? rankArtifactsForDisplay(selected.artifacts) : [];
-    const selectedArtifact = selected ? _selectedArtifactForJob(selected) : null;
-    const compareCandidate = selected ? findCompareArtifact(selectedArtifact, artifacts) : null;
-    const compareEnabled = Boolean(selected && compareCandidate && state.artifactUi.compareByJob[String(selected.id || '')]);
-    const lastActivityAt = Number(selected?.lastEventAt || selected?.updatedAt || selected?.createdAt || 0);
-    const freshnessLabel = selected ? `Updated ${formatRelativeTime(lastActivityAt)}` : 'No live telemetry';
-    const artifactCount = artifacts.length;
+    if (state.currentView === 'operate' || state.currentView === 'review') {
+        const selected = state.jobs.find((job) => job.id === state.selectedJobId) || null;
+        const artifacts = Array.isArray(selected?.artifacts) ? rankArtifactsForDisplay(selected.artifacts) : [];
+        const selectedArtifact = selected ? _selectedArtifactForJob(selected) : null;
+        const compareCandidate = selected ? findCompareArtifact(selectedArtifact, artifacts) : null;
+        const compareEnabled = Boolean(selected && compareCandidate && state.artifactUi.compareByJob[String(selected.id || '')]);
+        const artifactCount = artifacts.length;
+        const compareCopy = _compareSurfaceCopy(selectedArtifact, compareCandidate, compareEnabled);
 
-    if (els.contextRibbonJob) {
-        els.contextRibbonJob.textContent = selected ? String(selected.id || 'unknown') : 'No job selected';
+        _setSummaryCard(els.contextRibbonCard1, els.contextRibbonCard1Label, els.contextRibbonJob, els.contextRibbonJobMeta, {
+            label: 'Job',
+            value: selected ? String(selected.id || 'unknown') : 'No job selected',
+            meta: selected
+                ? `${String(selected.pipeline || 'unknown')} • ${artifactCount} artifact${artifactCount === 1 ? '' : 's'} indexed`
+                : 'Choose a run in operate or review to pin context here.',
+            tone: selected ? _jobSurfaceTone(selected) : 'info'
+        });
+        _setSummaryCard(els.contextRibbonCard2, els.contextRibbonCard2Label, els.contextRibbonState, els.contextRibbonFreshness, {
+            label: 'State',
+            value: selected ? titleCaseToken(selected.state, 'Unknown') : 'Idle',
+            meta: _jobFreshnessLabel(selected),
+            tone: selected ? _jobSurfaceTone(selected) : 'info'
+        });
+        _setSummaryCard(els.contextRibbonCard3, els.contextRibbonCard3Label, els.contextRibbonArtifact, els.contextRibbonArtifactMeta, {
+            label: 'Artifact',
+            value: selectedArtifact ? artifactLabel(selectedArtifact) : 'Awaiting selection',
+            meta: selectedArtifact
+                ? `${artifactDisplayLabel(selectedArtifact)}${compareCandidate ? ' • paired comparison available' : ' • single artifact context'}`
+                : 'Review context will show the active artifact path here.',
+            tone: selectedArtifact ? 'ready' : 'info'
+        });
+        _setSummaryCard(els.contextRibbonCard4, els.contextRibbonCard4Label, els.contextRibbonCompare, els.contextRibbonCompareMeta, {
+            label: 'Compare',
+            value: selected ? compareCopy.ribbonValue : 'No compare pair',
+            meta: selected ? compareCopy.ribbonMeta : 'Deep-linkable review context stays aligned with the URL.',
+            tone: selected && compareEnabled ? 'ready' : 'info'
+        });
+        renderOperatorActionRail();
+        return;
     }
-    if (els.contextRibbonJobMeta) {
-        els.contextRibbonJobMeta.textContent = selected
-            ? `${String(selected.pipeline || 'unknown')} • ${artifactCount} artifact${artifactCount === 1 ? '' : 's'} indexed`
-            : 'Choose a run in operate or review to pin context here.';
-    }
-    if (els.contextRibbonState) {
-        els.contextRibbonState.textContent = selected ? titleCaseToken(selected.state, 'Unknown') : 'Idle';
-    }
-    if (els.contextRibbonFreshness) {
-        els.contextRibbonFreshness.textContent = freshnessLabel;
-    }
-    if (els.contextRibbonArtifact) {
-        els.contextRibbonArtifact.textContent = selectedArtifact ? artifactLabel(selectedArtifact) : 'Awaiting selection';
-    }
-    if (els.contextRibbonArtifactMeta) {
-        els.contextRibbonArtifactMeta.textContent = selectedArtifact
-            ? `${artifactDisplayLabel(selectedArtifact)}${compareCandidate ? ' • compare pair available' : ''}`
-            : 'Review context will show the active artifact path here.';
-    }
-    if (els.contextRibbonCompare) {
-        els.contextRibbonCompare.textContent = compareEnabled
-            ? 'Compare on'
-            : compareCandidate
-                ? 'Single view'
-                : 'No compare pair';
-    }
-    if (els.contextRibbonCompareMeta) {
-        els.contextRibbonCompareMeta.textContent = compareEnabled
-            ? 'URL-backed review context includes compare=1 for this selection.'
-            : compareCandidate
-                ? 'Toggle compare to inspect the paired artifact side by side.'
-                : 'Deep-linkable review context stays aligned with the URL.';
-    }
+
+    const currentPayload = generatePayload();
+    const activeJob = _latestActiveJob();
+    const reviewJob = _latestReviewableJob();
+    const activeJobTone = activeJob ? _jobSurfaceTone(activeJob) : (state.backendOk ? 'info' : 'blocked');
+    const reviewJobTone = reviewJob ? _jobSurfaceTone(reviewJob) : 'info';
+    const nextAction = _effectiveNextBestAction(currentPayload);
+    const stepContent = _currentBuildStepContent();
+    const activeStep = resolveBuildStep(state.portalUi.buildStep);
+    const activeStepContent = stepContent[activeStep - 1] || BUILD_STEP_CONTENT.lux[activeStep - 1];
+    const draftValue = state.pipeline === 'lux-depth-v3'
+        ? String(currentPayload?.args?.preset || state.config.preset || 'custom')
+        : canonicalArchiveCommand(state.pipeline) || 'archive';
+
+    _setSummaryCard(els.contextRibbonCard1, els.contextRibbonCard1Label, els.contextRibbonJob, els.contextRibbonJobMeta, {
+        label: 'Live lane',
+        value: activeJob
+            ? `${titleCaseToken(activeJob.state, 'Unknown')} • ${Math.max(0, Math.min(100, Number(activeJob.progress) || 0))}%`
+            : state.backendOk
+                ? 'No live run'
+                : 'Backend offline',
+        meta: activeJob
+            ? `${String(activeJob.pipeline || 'unknown')} • ${_jobFreshnessLabel(activeJob)}`
+            : state.backendOk
+                ? 'Dispatch from Build to watch live progress here.'
+                : 'Restore the orchestrator connection to unlock preview-backed dispatch.',
+        tone: activeJobTone
+    });
+    _setSummaryCard(els.contextRibbonCard2, els.contextRibbonCard2Label, els.contextRibbonState, els.contextRibbonFreshness, {
+        label: 'Review lane',
+        value: reviewJob
+            ? (jobOutcomeSummary(reviewJob) || 'Review available')
+            : 'No review target',
+        meta: reviewJob
+            ? `${Array.isArray(reviewJob.artifacts) ? reviewJob.artifacts.length : 0} artifact${Array.isArray(reviewJob.artifacts) && reviewJob.artifacts.length === 1 ? '' : 's'} indexed • open Review to inspect the latest output.`
+            : 'Completed or partial outputs will appear here when the current draft finishes.',
+        tone: reviewJobTone
+    });
+    _setSummaryCard(els.contextRibbonCard3, els.contextRibbonCard3Label, els.contextRibbonArtifact, els.contextRibbonArtifactMeta, {
+        label: 'Dispatch lane',
+        value: String(nextAction?.label || 'Review dispatch posture'),
+        meta: String(nextAction?.detail || 'Preview guidance will summarize the clearest next step for this draft.'),
+        tone: String(nextAction?.tone || 'info')
+    });
+    _setSummaryCard(els.contextRibbonCard4, els.contextRibbonCard4Label, els.contextRibbonCompare, els.contextRibbonCompareMeta, {
+        label: state.currentView === 'build' ? 'Current focus' : 'Draft',
+        value: state.currentView === 'build'
+            ? `${activeStep} of 4 · ${String(activeStepContent?.label || 'Focus')}`
+            : draftValue,
+        meta: state.currentView === 'build'
+            ? String(activeStepContent?.summary || activeStepContent?.meta || 'Build focus is pinned here.')
+            : `${String(state.pipeline || 'lux-depth-v3')} • ${state.backendOk ? 'live backend connected' : 'dispatch paused until the backend recovers'}.`,
+        tone: 'info'
+    });
+    renderOperatorActionRail();
 }
 
 function applyConsoleViewLayout() {
@@ -1089,6 +2675,8 @@ function navigateConsoleView(viewName, options = {}) {
         _rememberSelectedJob(explicitJobId);
         if (hasArtifactOption) {
             _rememberArtifactSelection(explicitJobId, options.artifactPath);
+        } else if (state.currentView === 'review') {
+            _rememberArtifactSelection(explicitJobId, '');
         }
         if (hasCompareOption) {
             _rememberComparePreference(explicitJobId, options.compareEnabled);
@@ -1098,6 +2686,9 @@ function navigateConsoleView(viewName, options = {}) {
         if (preferredJobId) {
             state.selectedJobId = preferredJobId;
             _rememberSelectedJob(preferredJobId);
+            if (state.currentView === 'review' && !hasArtifactOption) {
+                _rememberArtifactSelection(preferredJobId, '');
+            }
         }
     } else if (state.selectedJobId) {
         _rememberSelectedJob(state.selectedJobId);
@@ -1108,13 +2699,18 @@ function navigateConsoleView(viewName, options = {}) {
 }
 
 function applyConsoleRouteFromLocation(replace = false) {
-    const url = new URL(window.location.href);
-    state.currentView = resolveConsoleView(url.searchParams.get('view'));
-    const routeJobId = _normalizeSelectedJobId(url.searchParams.get('job'));
-    const routeArtifactPath = _normalizeArtifactRoutePath(url.searchParams.get('artifact'));
-    const routeCompareEnabled = _normalizeCompareQueryValue(url.searchParams.get('compare'));
-    const routeHasArtifact = url.searchParams.has('artifact');
-    const routeHasCompare = url.searchParams.has('compare');
+    const routeState = portalRoute.read({
+        resolveView: resolveConsoleView,
+        normalizeSelectedJobId: _normalizeSelectedJobId,
+        normalizeArtifactRoutePath: _normalizeArtifactRoutePath,
+        normalizeCompareQueryValue: _normalizeCompareQueryValue
+    });
+    state.currentView = routeState.view;
+    const routeJobId = routeState.jobId;
+    const routeArtifactPath = routeState.artifactPath;
+    const routeCompareEnabled = routeState.compareEnabled;
+    const routeHasArtifact = routeState.hasArtifact;
+    const routeHasCompare = routeState.hasCompare;
     if (routeJobId) {
         state.selectedJobId = routeJobId;
         _rememberSelectedJob(routeJobId);
@@ -1168,6 +2764,10 @@ function setupSectionRail() {
     setActiveWorkspaceLink(state.currentView);
 }
 
+// ============================================================================
+// 6. BUILD STEPPER
+// ============================================================================
+
 const BUILD_STEP_CONTENT = Object.freeze({
     lux: [
         {
@@ -1183,16 +2783,16 @@ const BUILD_STEP_CONTENT = Object.freeze({
             summary: 'Supply input and output roots before opening anything advanced.'
         },
         {
-            label: 'Options',
-            meta: 'Contextual controls and readiness.',
-            title: '3. Adjust contextual options',
-            summary: 'Only refine backend, outputs, governance, and runtime controls when the run needs them.'
+            label: 'Outputs',
+            meta: 'Deliverables, posture, and readiness.',
+            title: '3. Shape deliverables and confirm output posture',
+            summary: 'Keep deliverables, the posture band, and immediate readiness readable before opening contextual controls.'
         },
         {
             label: 'Dispatch',
-            meta: 'Warnings, CLI, and launch.',
+            meta: 'Primary review, launch, and parity tools.',
             title: '4. Review and dispatch',
-            summary: 'Use preview-backed warnings, effective argv, and readiness to launch with confidence.'
+            summary: 'Use the primary dispatch lane first, then open evidence and CLI parity only when needed.'
         }
     ],
     archive: [
@@ -1288,6 +2888,8 @@ function syncBuildStepUi() {
         els.buildStepNextBtn.disabled = activeStep >= 4;
         els.buildStepNextBtn.textContent = activeStep >= 4 ? 'Dispatch Ready' : 'Next';
     }
+
+    renderBuildStepPulse(generatePayload());
 }
 
 function setBuildStep(nextStep, options = {}) {
@@ -1341,6 +2943,10 @@ function setupBuildStepper() {
 
     syncBuildStepUi();
 }
+
+// ============================================================================
+// 7. UTILITIES
+// ============================================================================
 
 function truncateMiddle(value, maxLength = 44) {
     const text = String(value || '').trim();
@@ -1432,6 +3038,10 @@ function formatTimelineTimestamp(timestamp) {
     return new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
+// ============================================================================
+// 8. ARTIFACT HELPERS
+// ============================================================================
+
 function artifactMediaKind(artifact) {
     return String(artifact?.media_kind || artifact?.artifact_type || 'file').trim().toLowerCase();
 }
@@ -1449,6 +3059,7 @@ function artifactLabel(artifact) {
 }
 
 function _artifactRouteKey(artifact) {
+    if (!artifact || typeof artifact !== 'object') return '';
     return _normalizeArtifactRoutePath(artifactLabel(artifact));
 }
 
@@ -1505,20 +3116,20 @@ function sanitizeManagedAssetUrl(rawUrl) {
         if (!['http:', 'https:'].includes(parsed.protocol)) return '';
         if (parsed.origin !== window.location.origin) return '';
         if (!parsed.pathname.startsWith('/v1/jobs/')) return '';
-        return `${parsed.pathname}${parsed.search}`;
+        return portalInternals.finalizeManagedAssetUrl(parsed);
     } catch (_err) {
         return '';
     }
 }
 
 function buildArtifactUrl(job, artifact) {
-    const directUrl = String(artifact?.url || '').trim();
-    if (directUrl) return sanitizeManagedAssetUrl(`${API_BASE}${directUrl}`);
-    if (!job || !artifact) return '';
-    const relativePath = artifactLabel(artifact);
-    if (!relativePath) return '';
-    const encodedSegments = relativePath.split('/').map((segment) => encodeURIComponent(segment)).join('/');
-    return sanitizeManagedAssetUrl(`${API_BASE}/v1/jobs/${encodeURIComponent(String(job.id || ''))}/artifacts/${encodedSegments}`);
+    return portalInternals.buildManagedArtifactUrl({
+        job,
+        artifact,
+        apiBase: API_BASE,
+        artifactLabel,
+        sanitizeManagedAssetUrl
+    });
 }
 
 function artifactHeroScore(artifact) {
@@ -1893,6 +3504,9 @@ function renderCapabilityChips(payload) {
     if (parseBoolLike(args.pbr, false)) chips.push('PBR generation');
     if (parseBoolLike(args.enable_reconstruction, false)) chips.push('Scene reconstruction');
     if (parseBoolLike(args.emit_run_card, false)) chips.push('Run card emission');
+    if (parseBoolLike(args.emit_run_card, false) && parseBoolLike(args.run_card_include_proofs, false)) {
+        chips.push('Run card proofs');
+    }
 
     els.capabilityChips.innerHTML = '';
     chips.forEach((chip) => {
@@ -1963,15 +3577,15 @@ function syncBuildSurfaceApplicability(payload = null) {
     );
     if (els.governanceDetailsHint) {
         if (!governanceVisible) {
-            els.governanceDetailsHint.textContent = 'Only shown when the current preset or backend requires explicit acknowledgments.';
+            els.governanceDetailsHint.textContent = 'Open only when the current preset or backend requires explicit acknowledgments.';
         } else if (appleRequired && researchToolsRequired) {
-            els.governanceDetailsHint.textContent = 'This run needs both Depth Pro and reconstruction acknowledgments before dispatch.';
+            els.governanceDetailsHint.textContent = 'Needs attention before dispatch: both Depth Pro and reconstruction acknowledgments are required.';
         } else if (appleRequired) {
-            els.governanceDetailsHint.textContent = 'This run needs Depth Pro research acknowledgments before dispatch.';
+            els.governanceDetailsHint.textContent = 'Needs attention before dispatch: Depth Pro research acknowledgments are required.';
         } else if (researchToolsRequired) {
-            els.governanceDetailsHint.textContent = 'This run needs reconstruction acknowledgments before dispatch.';
+            els.governanceDetailsHint.textContent = 'Needs attention before dispatch: reconstruction acknowledgments are required.';
         } else {
-            els.governanceDetailsHint.textContent = 'This research preset needs a non-commercial acknowledgment before dispatch.';
+            els.governanceDetailsHint.textContent = 'Needs attention before dispatch: this research preset requires a non-commercial acknowledgment.';
         }
     }
 
@@ -1979,23 +3593,31 @@ function syncBuildSurfaceApplicability(payload = null) {
     _setContextVisibility(els.runtimeTuningFields, isLuxPipeline);
     if (els.reconstructionDetailsHint) {
         els.reconstructionDetailsHint.textContent = reconstructionEnabled
-            ? 'Scene reconstruction is active. Grouping, sidecar, tier, and debug controls are now available.'
-            : 'Runtime tuning stays available here. Reconstruction-only settings stay preserved and inactive until you enable the feature.';
+            ? 'Contextual reconstruction controls are active. Grouping, sidecar, tier, and debug settings are now available.'
+            : 'Open only when the posture band or preview calls for deeper runtime tuning.';
     }
 }
 
-function _setDisclosureSummaryBadge(element, text) {
+function _setDisclosureSummaryBadge(element, text, tone = 'info') {
     if (!element) return;
     element.textContent = String(text || '').trim() || 'Optional';
+    element.dataset.tone = String(tone || 'info').trim().toLowerCase() || 'info';
 }
 
 function syncDisclosurePanels(payload = null) {
-    const args = payload?.args || generatePayload().args || {};
+    const currentPayload = payload || generatePayload();
+    const args = currentPayload.args || {};
     const preset = currentPresetDescriptor();
     const advancedSections = Array.isArray(preset.advanced_sections) ? preset.advanced_sections : [];
     const researchPreset = _presetRequiresResearchAcknowledgments(preset, args);
     const reconstructionEnabled = parseBoolLike(args.enable_reconstruction, false);
     const depthBackend = String(args.depth_backend || '').trim().toLowerCase();
+    const nonCommercialRequired = researchPreset || depthBackend === 'depth_pro' || reconstructionEnabled;
+    const appleRequired = depthBackend === 'depth_pro';
+    const researchToolsRequired = reconstructionEnabled;
+    const nonCommercialChecked = parseBoolLike(args.non_commercial_ok, false);
+    const appleChecked = parseBoolLike(args.accept_apple_depth_pro_research_license, false);
+    const researchToolsChecked = parseBoolLike(args.accept_research_tools_license, false);
     const previewFieldGroups = {
         advanced: [
             'save_float_depth',
@@ -2056,7 +3678,15 @@ function syncDisclosurePanels(payload = null) {
         || String(args.max_workers || '').trim() !== ''
         || String(args.max_gpu_workers || '').trim() !== ''
         || String(args.log_level || '').trim() !== '';
-    const hasPreviewIssueForGroup = (groupName) => previewFieldGroups[groupName].some((fieldName) => Boolean(_previewIssueForField(fieldName, payload)));
+    const hasPreviewIssueForGroup = (groupName) => previewFieldGroups[groupName].some((fieldName) => Boolean(_previewIssueForField(fieldName, currentPayload)));
+    const currentPreview = _currentPreviewForPayload(currentPayload);
+    const advancedNeedsAttention = hasPreviewIssueForGroup('advanced');
+    const governanceNeedsAttention = hasPreviewIssueForGroup('governance')
+        || (nonCommercialRequired && !nonCommercialChecked)
+        || (appleRequired && !appleChecked)
+        || (researchToolsRequired && !researchToolsChecked);
+    const reconstructionNeedsAttention = hasPreviewIssueForGroup('reconstruction')
+        || (_effectiveDebugBundleEnabled(currentPreview, currentPayload) && !state.portalUi.debugBundleAcknowledged);
     const disclosurePrefs = state.portalUi.disclosurePrefs || {};
     const autoOpenState = {
         advanced: advancedActive || advancedSections.includes('advanced') || hasPreviewIssueForGroup('advanced'),
@@ -2080,28 +3710,20 @@ function syncDisclosurePanels(payload = null) {
     syncPanel('reconstruction', els.reconstructionDetails);
     syncPanel('dispatchTools', els.dispatchToolsDetails);
 
-    const currentPreview = _currentPreviewForPayload(payload || generatePayload());
     _setDisclosureSummaryBadge(
         els.advancedFlagsSummary,
-        hasPreviewIssueForGroup('advanced') ? 'Needs review' : advancedActive ? 'Active' : 'Optional'
+        advancedNeedsAttention ? 'Needs attention' : advancedActive ? 'Contextual' : 'Secondary',
+        advancedNeedsAttention ? 'attention' : 'contextual'
     );
     _setDisclosureSummaryBadge(
         els.governanceDetailsSummary,
-        hasPreviewIssueForGroup('governance') || researchPreset || depthBackend === 'depth_pro'
-            ? 'Required'
-            : governanceActive
-                ? 'Active'
-                : 'Conditional'
+        governanceNeedsAttention ? 'Needs attention' : governanceActive ? 'Contextual' : 'Contextual',
+        governanceNeedsAttention ? 'attention' : 'contextual'
     );
     _setDisclosureSummaryBadge(
         els.reconstructionDetailsSummary,
-        hasPreviewIssueForGroup('reconstruction')
-            ? 'Needs review'
-            : reconstructionEnabled
-                ? 'Enabled'
-                : reconstructionActive
-                    ? 'Configured'
-                    : 'Runtime baseline'
+        reconstructionNeedsAttention ? 'Needs attention' : reconstructionActive ? 'Contextual' : 'Contextual',
+        reconstructionNeedsAttention ? 'attention' : 'contextual'
     );
     _setDisclosureSummaryBadge(
         els.dispatchToolsSummary,
@@ -2111,7 +3733,14 @@ function syncDisclosurePanels(payload = null) {
                 ? 'Preview loading'
                 : currentPreview?.status === 'error'
                     ? 'Preview error'
-                    : 'Collapsed'
+                    : 'Collapsed',
+        els.dispatchToolsDetails?.open
+            ? 'ready'
+            : currentPreview?.status === 'error'
+                ? 'attention'
+                : currentPreview?.status === 'loading'
+                    ? 'info'
+                    : 'contextual'
     );
 }
 
@@ -2123,6 +3752,7 @@ function renderGovernanceBanner(payload) {
     const items = [];
     let title = 'Run posture is clear.';
     let body = 'The current configuration is valid for dispatch. Any license acknowledgments or runtime caveats will surface here before execution.';
+    let postureHint = 'Step 4 stays aligned to this checklist, so blocked governance items clear here before launch becomes trustworthy.';
 
     if (state.pipeline === 'lux-depth-v3') {
         if (String(args.preset || '').toLowerCase().includes('v3.1')) {
@@ -2198,13 +3828,16 @@ function renderGovernanceBanner(payload) {
     if (hasWarnings) {
         title = 'Execution is blocked.';
         body = 'Before dispatch, satisfy the blocked readiness prerequisites listed below.';
+        postureHint = 'Clear the blocked governance items in this panel before treating the Step 4 launch lane as actionable.';
     } else if (items.some((item) => item.tone === 'info')) {
         title = 'Configuration is valid with readiness caveats.';
         body = 'The run contract is coherent, but at least one prerequisite still needs operator attention before dispatch can be treated as fully ready.';
+        postureHint = 'Use this panel to resolve readiness caveats first; Step 4 will remain cautious until they settle.';
     }
 
     if (els.governanceBannerTitle) els.governanceBannerTitle.textContent = title;
     if (els.governanceBannerBody) els.governanceBannerBody.textContent = body;
+    if (els.governancePostureHint) els.governancePostureHint.textContent = postureHint;
 
     els.governanceChecklist.innerHTML = '';
     items.forEach((item) => {
@@ -2328,6 +3961,9 @@ function renderMissionControl(payload = null) {
     renderPresetIntelligence(currentPayload);
     renderGovernanceBanner(currentPayload);
     syncDisclosurePanels(currentPayload);
+    renderBuildStepPulse(currentPayload);
+    renderRuntimeBriefing(currentPayload);
+    renderConsoleContextRibbon();
     _syncOverviewBuildLoadingState(currentPayload);
 }
 
@@ -2459,6 +4095,85 @@ function renderSelectedJobTimeline(job) {
     els.selectedJobTimelineList.appendChild(fragment);
 }
 
+function _selectedJobRecoverySnapshot(job) {
+    if (!job) {
+        return {
+            title: 'Select or dispatch a run',
+            detail: 'Use Queue to inspect a recent run or open Build to create the next governed dispatch.'
+        };
+    }
+
+    const artifactCount = Array.isArray(job.artifacts) ? job.artifacts.length : 0;
+    const visibleWarning = _latestVisibleTransportWarning(job);
+
+    if (job.reconnectBlocked) {
+        return {
+            title: 'Restore authentication',
+            detail: 'Authentication must be restored before live transport can reconnect and freshness can recover.'
+        };
+    }
+
+    if (visibleWarning) {
+        return {
+            title: 'Review the latest warning',
+            detail: String(visibleWarning.detail || 'Live transport reported an operator-visible warning.')
+        };
+    }
+
+    if (job.state === 'failed' || job.state === 'canceled') {
+        return artifactCount > 0
+            ? {
+                title: 'Open review for retained outputs',
+                detail: 'Review the indexed outputs before deciding whether this run needs a retry.'
+            }
+            : {
+                title: 'Inspect failure before rerun',
+                detail: 'No reviewable outputs were indexed. Use the run state and warning context above before retrying.'
+            };
+    }
+
+    if (job.state === 'offline') {
+        return artifactCount > 0
+            ? {
+                title: 'Review cached outputs while backend recovers',
+                detail: 'Outputs remain available, but live backend state is stale until connectivity returns.'
+            }
+            : {
+                title: 'Restore backend connectivity',
+                detail: 'Backend connectivity must recover before this run state can be trusted again.'
+            };
+    }
+
+    if (job.state === 'running' || job.state === 'queued') {
+        return artifactCount > 0
+            ? {
+                title: 'Stay with the live run',
+                detail: 'Fresh artifacts are already indexing. Keep Operate open until review context stabilizes.'
+            }
+            : {
+                title: 'Wait for indexed outputs',
+                detail: 'Use the selected run state, warning context, and freshness above to decide whether to recover or open review.'
+            };
+    }
+
+    if (job.state === 'partial') {
+        return {
+            title: 'Open review for partial outputs',
+            detail: 'Review the indexed artifacts and warning context before deciding whether to rerun the failed inputs.'
+        };
+    }
+
+    return artifactCount > 0
+        ? {
+            title: 'Open review',
+            detail: 'Outputs and provenance are ready. Move to Review when you want compare and artifact actions.'
+        }
+        : {
+            title: 'Wait for indexed outputs',
+            detail: 'Use the selected run state, warning context, and freshness above to decide whether to recover or open review.'
+        };
+}
+
 function renderSelectedJobInspector() {
     const jobsLoading = _isJobsHydrationPending();
     _toggleSurfaceSkeleton(els.selectedJobShell, els.selectedJobShellContent, els.selectedJobSkeletonState, jobsLoading);
@@ -2468,6 +4183,11 @@ function renderSelectedJobInspector() {
         if (els.selectedJobMetaLine) {
             els.selectedJobMetaLine.textContent = 'Recovering recent runs, transport state, and previewable outputs.';
         }
+        if (els.selectedJobRecoveryTitle) els.selectedJobRecoveryTitle.textContent = 'Recovering selected run context';
+        if (els.selectedJobRecoveryDetail) {
+            els.selectedJobRecoveryDetail.textContent = 'The latest warning, artifact freshness, and recovery action will repopulate here when queue hydration finishes.';
+        }
+        renderSelectedJobRecoveryActions(null);
         if (els.openRunDetailsBtn) els.openRunDetailsBtn.disabled = true;
         renderConsoleContextRibbon();
         return;
@@ -2486,6 +4206,11 @@ function renderSelectedJobInspector() {
         if (els.selectedJobFreshness) els.selectedJobFreshness.textContent = 'No live telemetry';
         if (els.logMetaLabel) els.logMetaLabel.textContent = 'Select a job to stream or inspect its log output.';
         if (els.selectedJobSummary) els.selectedJobSummary.textContent = 'Choose a job from the queue or dispatch a new run to inspect progress, artifacts, and live stream state.';
+        if (els.selectedJobRecoveryTitle) els.selectedJobRecoveryTitle.textContent = 'Select or dispatch a run';
+        if (els.selectedJobRecoveryDetail) {
+            els.selectedJobRecoveryDetail.textContent = 'Use Queue to inspect a recent run or open Build to create the next governed dispatch.';
+        }
+        renderSelectedJobRecoveryActions(null);
         if (els.selectedJobTransportAlert) {
             els.selectedJobTransportAlert.classList.add('hidden');
             els.selectedJobTransportAlert.textContent = '';
@@ -2518,8 +4243,6 @@ function renderSelectedJobInspector() {
                         : _jobHasActiveStream(selected)
                             ? 'SSE stream active'
                             : (selected.state === 'running' || selected.state === 'queued' ? 'Waiting for stream' : 'Closed');
-    const lastActivityAt = Number(selected.lastEventAt || selected.updatedAt || selected.createdAt || 0);
-    const activityLabel = formatRelativeTime(lastActivityAt);
     const transportLabel = formatTransportLabel(selected);
     const elapsedLabel = formatDuration(Number(selected.createdAt || 0), Number(selected.finishedAt || Date.now()));
     const latestWarning = Array.isArray(selected.transportWarnings) && selected.transportWarnings.length > 0
@@ -2541,10 +4264,10 @@ function renderSelectedJobInspector() {
         els.selectedJobProgressBar.value = Math.max(0, Math.min(100, Number(selected.progress) || 0));
     }
     if (els.selectedJobMetaLine) {
-        els.selectedJobMetaLine.textContent = `${titleCaseToken(selected.pipeline, 'Unknown')} • ${transportLabel} • ${elapsedLabel}`;
+        els.selectedJobMetaLine.textContent = `${titleCaseToken(selected.state, 'Unknown')} • ${transportLabel} • ${elapsedLabel}`;
     }
     if (els.selectedJobFreshness) {
-        els.selectedJobFreshness.textContent = `Updated ${activityLabel}`;
+        els.selectedJobFreshness.textContent = _jobFreshnessLabel(selected);
     }
     if (els.logMetaLabel) {
         els.logMetaLabel.textContent = `${String(selected.pipeline || 'unknown')} • ${transportLabel} • ${artifactCount} artifact${artifactCount === 1 ? '' : 's'}`;
@@ -2558,6 +4281,10 @@ function renderSelectedJobInspector() {
                     ? `${outcomeSummary}.`
                     : `Operators can now read ${titleCaseToken(selected.state, 'job')} state at a glance: ${artifactCount} artifact${artifactCount === 1 ? '' : 's'} indexed, ${transportLabel} transport, ${elapsedLabel}.`;
     }
+    const recovery = _selectedJobRecoverySnapshot(selected);
+    if (els.selectedJobRecoveryTitle) els.selectedJobRecoveryTitle.textContent = recovery.title;
+    if (els.selectedJobRecoveryDetail) els.selectedJobRecoveryDetail.textContent = recovery.detail;
+    renderSelectedJobRecoveryActions(selected);
     if (els.selectedJobTransportAlert) {
         if (visibleAlert) {
             els.selectedJobTransportAlert.textContent = String(visibleAlert.detail || '');
@@ -2878,36 +4605,58 @@ function _flushBootstrapOnlineFollowup(force = false) {
 }
 
 function _syncBootstrapGuardedControls() {
-    const readinessStatus = currentPipelineDispatchStatus();
-    const preview = _currentPreviewForPayload();
-    const luxPreviewBlocked = state.pipeline === 'lux-depth-v3'
-        && state.backendOk
-        && _isBootstrapReady()
-        && (
-            !preview
-            || preview.status === 'loading'
-            || preview.status === 'error'
-            || (preview.status === 'ready' && Array.isArray(preview.field_errors) && preview.field_errors.length > 0)
-        );
-    const debugBundleBlocked = state.pipeline === 'lux-depth-v3'
-        && _effectiveDebugBundleEnabled(preview)
-        && !state.portalUi.debugBundleAcknowledged;
-    const canRunJobs = _portalPrivilegesReady()
-        && state.backendOk
-        && readinessStatus === 'ready'
-        && !luxPreviewBlocked
-        && !debugBundleBlocked;
+    const readiness = _dispatchReadinessSnapshot();
     if (els.runJobBtn && els.runJobBtn.textContent !== 'Dispatching...') {
-        els.runJobBtn.disabled = !canRunJobs;
+        els.runJobBtn.disabled = !readiness.canRun;
+    }
+    if (els.dispatchReadinessReason) {
+        els.dispatchReadinessReason.textContent = readiness.detail;
+        els.dispatchReadinessReason.dataset.tone = readiness.tone;
     }
 }
 
 function _isManagedAuthMode() {
-    return state.auth && state.auth.mode !== 'direct_debug';
+    return portalInternals.isManagedAuthMode(state.auth);
 }
 
 function _isManagedUnavailableMode() {
-    return state.auth && state.auth.mode === 'managed_unavailable';
+    return portalInternals.isManagedUnavailableMode(state.auth);
+}
+
+function _bootstrapSurfaceSummary() {
+    const bootstrapStatus = String(state.bootstrap.status || 'pending').trim().toLowerCase();
+    if (bootstrapStatus === 'ready') {
+        if (_isManagedAuthMode()) {
+            return {
+                tone: 'ready',
+                badge: 'Managed access',
+                detail: 'Managed access is verified. Backend credentials stay server-side and browser-side API key entry remains hidden.',
+                apiHint: 'Managed mode is active. Backend credentials stay server-side and are never stored in the browser.'
+            };
+        }
+        return {
+            tone: 'warning',
+            badge: 'Direct debug',
+            detail: 'Direct debug is active. Browser-side API key entry is available only for local troubleshooting.',
+            apiHint: 'Direct debug is active. Browser-side API key entry is available only for local troubleshooting.'
+        };
+    }
+    if (bootstrapStatus === 'degraded' || bootstrapStatus === 'unavailable') {
+        const failure = _bootstrapFailureDetails(state.bootstrap.lastErrorReason, state.bootstrap.lastHttpStatus);
+        const tone = failure.retryable ? 'warning' : 'blocked';
+        return {
+            tone,
+            badge: failure.retryable ? 'Recovery pending' : 'Recovery required',
+            detail: failure.actionMessage,
+            apiHint: failure.actionMessage
+        };
+    }
+    return {
+        tone: 'info',
+        badge: 'Confirming access',
+        detail: 'Bootstrap is still being confirmed. Privileged actions remain disabled until portal authentication is resolved.',
+        apiHint: 'Bootstrap is still being confirmed. Privileged actions remain disabled until portal authentication is resolved.'
+    };
 }
 
 function _clearStoredApiKeyState(clearPersisted = true) {
@@ -2922,20 +4671,35 @@ function _syncBootstrapUi() {
     const bootstrapReady = _isBootstrapReady();
     const showApiKeyInput = bootstrapReady && state.auth.features.apiKeyInput;
     const badgeLabel = bootstrapReady ? state.auth.mode : 'unknown';
+    const summary = _bootstrapSurfaceSummary();
     if (els.apiKeySection) {
         els.apiKeySection.classList.toggle('hidden', !showApiKeyInput);
     }
     if (els.authModeBadge) {
         els.authModeBadge.textContent = badgeLabel;
     }
+    if (document.body) {
+        document.body.dataset.bootstrapReason = String(state.bootstrap.lastErrorReason || '');
+        document.body.dataset.authMode = String(state.auth.mode || 'managed_unavailable');
+    }
+    if (els.portalAccessState) {
+        els.portalAccessState.dataset.tone = summary.tone;
+        els.portalAccessState.dataset.bootstrapStatus = String(state.bootstrap.status || 'pending');
+        els.portalAccessState.dataset.bootstrapReason = String(state.bootstrap.lastErrorReason || '');
+    }
+    if (els.bootstrapStatusBadge) {
+        els.bootstrapStatusBadge.dataset.tone = summary.tone;
+        els.bootstrapStatusBadge.textContent = summary.badge;
+    }
+    if (els.bootstrapRecoveryHint) {
+        els.bootstrapRecoveryHint.textContent = summary.detail;
+    }
     if (els.apiKeyManagedHint) {
         if (bootstrapReady && !_isManagedAuthMode()) {
             els.apiKeyManagedHint.classList.add('hidden');
         } else {
             els.apiKeyManagedHint.classList.remove('hidden');
-            els.apiKeyManagedHint.textContent = bootstrapReady
-                ? 'Managed mode is active. Backend credentials stay server-side and are never stored in the browser.'
-                : 'Bootstrap is still being confirmed. Privileged actions remain disabled until portal authentication is resolved.';
+            els.apiKeyManagedHint.textContent = summary.apiHint;
         }
     }
     if (els.apiKeyInput) {
@@ -2943,6 +4707,10 @@ function _syncBootstrapUi() {
     }
     _syncBootstrapGuardedControls();
     _syncOverviewBuildLoadingState();
+    renderOperatorActionRail();
+    const selectedJob = _findJobById(state.selectedJobId);
+    renderSelectedJobRecoveryActions(selectedJob);
+    renderReviewStatusActions(selectedJob);
 }
 
 function _applyPortalBootstrap(rawBootstrap, options = {}) {
@@ -2996,7 +4764,7 @@ function _normalizeFetchFailureReason(error, timeoutReason = 'request_timeout') 
 }
 
 async function loadPortalBootstrap(options = null) {
-    const fallback = _defaultPortalBootstrap();
+    const fallback = portalInternals.defaultPortalBootstrapPayload();
     const bootstrapOptions = options && typeof options === 'object' ? options : null;
     const retryAttempt = Number.isInteger(bootstrapOptions && bootstrapOptions.attempt)
         && bootstrapOptions.attempt > 0
@@ -3413,15 +5181,15 @@ function _renderArtifactMetadataCard(job, artifact) {
     title.className = 'text-[12px] font-semibold text-slate-800 dark:text-slate-100';
     title.textContent = artifact
         ? artifactLabel(artifact)
-        : 'Select a completed job to review the highest-value output here.';
+        : 'Select a completed run to bring the primary review artifact into focus here.';
     els.artifactMetadataCard.appendChild(title);
 
     const detail = document.createElement('p');
     detail.className = 'mt-2 text-[12px] leading-6 text-slate-600 dark:text-slate-300';
     if (!job) {
-        detail.textContent = 'No job selected.';
+        detail.textContent = 'Preview, provenance, and next review actions will appear here after you choose a reviewable job.';
     } else if (!artifact) {
-        detail.textContent = 'Artifacts will appear here when the selected run indexes outputs.';
+        detail.textContent = 'This run has not indexed a reviewable artifact yet. Stay with the inspector for progress, transport, and freshness context.';
     } else {
         detail.textContent = `${artifactDisplayLabel(artifact)} • ${artifactContentType(artifact) || 'binary'} • ${formatBytes(artifact.size_bytes)}.`;
     }
@@ -3443,7 +5211,8 @@ function _reviewStatusSnapshot(job, artifact) {
             visible: false,
             tone: 'info',
             title: 'Awaiting completed run',
-            detail: 'Select a job to review related warnings, completion state, and output readiness.'
+            detail: 'Select a job to review related warnings, completion state, and output readiness.',
+            action: 'Next action: use the selected run state, warning context, and freshness above to decide whether to recover or open review.'
         };
     }
 
@@ -3463,7 +5232,8 @@ function _reviewStatusSnapshot(job, artifact) {
             title: 'Run partially completed',
             detail: outcomeSummary
                 ? `${outcomeSummary}. Updated ${freshnessLabel}.`
-                : 'Some inputs failed, but outputs remain reviewable.'
+                : 'Some inputs failed, but outputs remain reviewable.',
+            action: 'Next action: open review for the retained outputs before rerunning failed inputs.'
         };
     }
 
@@ -3475,7 +5245,10 @@ function _reviewStatusSnapshot(job, artifact) {
             detail: readableError
                 || (reviewableOutputs
                     ? `${artifactCount} artifact${artifactCount === 1 ? '' : 's'} remain available for review. Updated ${freshnessLabel}.`
-                    : 'No reviewable outputs were indexed before the failure was reported.')
+                    : 'No reviewable outputs were indexed before the failure was reported.'),
+            action: reviewableOutputs
+                ? 'Next action: open review for the retained outputs, then decide whether this run needs a retry.'
+                : 'Next action: inspect the latest warning and failure context in Operate before retrying the run.'
         };
     }
 
@@ -3486,7 +5259,10 @@ function _reviewStatusSnapshot(job, artifact) {
             title: reviewableOutputs ? 'Run canceled after partial output capture' : 'Run canceled before review outputs were ready',
             detail: reviewableOutputs
                 ? `${artifactCount} artifact${artifactCount === 1 ? '' : 's'} remain available for review despite cancellation. Updated ${freshnessLabel}.`
-                : 'Execution was canceled before reviewable outputs were indexed.'
+                : 'Execution was canceled before reviewable outputs were indexed.',
+            action: reviewableOutputs
+                ? 'Next action: review the retained outputs before deciding whether to rerun the canceled work.'
+                : 'Next action: reopen Build or restore the run context before dispatching again.'
         };
     }
 
@@ -3497,7 +5273,10 @@ function _reviewStatusSnapshot(job, artifact) {
             title: reviewableOutputs ? 'Run is offline with reviewable outputs' : 'Run is offline',
             detail: reviewableOutputs
                 ? `${artifactCount} artifact${artifactCount === 1 ? '' : 's'} remain available, but live backend status is stale until connectivity is restored.`
-                : 'Live backend status is stale until connectivity is restored.'
+                : 'Live backend status is stale until connectivity is restored.',
+            action: reviewableOutputs
+                ? 'Next action: review the cached outputs while backend connectivity recovers.'
+                : 'Next action: restore backend connectivity before depending on this run state.'
         };
     }
 
@@ -3506,7 +5285,8 @@ function _reviewStatusSnapshot(job, artifact) {
             visible: true,
             tone: 'warning',
             title: 'Transport warning recorded',
-            detail: 'Authentication must be restored before live event transport can reconnect.'
+            detail: 'Authentication must be restored before live event transport can reconnect.',
+            action: 'Next action: restore authentication so live transport and freshness can recover.'
         };
     }
 
@@ -3515,7 +5295,8 @@ function _reviewStatusSnapshot(job, artifact) {
             visible: true,
             tone: visibleWarning.tone === 'error' ? 'error' : 'warning',
             title: 'Transport warning recorded',
-            detail: String(visibleWarning.detail || 'Live transport reported an operator-visible warning.')
+            detail: String(visibleWarning.detail || 'Live transport reported an operator-visible warning.'),
+            action: 'Next action: inspect the latest transport warning in Operate before continuing into review.'
         };
     }
 
@@ -3526,7 +5307,10 @@ function _reviewStatusSnapshot(job, artifact) {
             title: 'Run still in progress',
             detail: artifactCount > 0
                 ? `${artifactCount} artifact${artifactCount === 1 ? '' : 's'} already indexed. Updated ${freshnessLabel}.`
-                : 'Artifacts and provenance will populate here as outputs arrive.'
+                : 'Artifacts and provenance will populate here as outputs arrive.',
+            action: artifactCount > 0
+                ? 'Next action: keep review open only if you need the early artifacts; Operate remains the primary live surface.'
+                : 'Next action: stay in Operate until indexed outputs or a blocking warning arrives.'
         };
     }
 
@@ -3536,7 +5320,8 @@ function _reviewStatusSnapshot(job, artifact) {
         title: artifact ? 'Outputs ready for review' : 'Run ready for review',
         detail: outcomeSummary
             ? `${outcomeSummary}. Updated ${freshnessLabel}.`
-            : `${artifactCount} artifact${artifactCount === 1 ? '' : 's'} indexed and ready for operator review.`
+            : `${artifactCount} artifact${artifactCount === 1 ? '' : 's'} indexed and ready for operator review.`,
+        action: 'Next action: use the selected run state, warning context, and freshness above to decide whether to recover or open review.'
     };
 }
 
@@ -3548,11 +5333,15 @@ function _renderReviewStatusBanner(job, artifact) {
         els.reviewStatusBanner.classList.add('hidden');
         els.reviewStatusTitle.textContent = snapshot.title;
         els.reviewStatusDetail.textContent = snapshot.detail;
+        if (els.reviewStatusAction) els.reviewStatusAction.textContent = snapshot.action;
+        renderReviewStatusActions(job, artifact);
         return;
     }
     els.reviewStatusTitle.textContent = snapshot.title;
     els.reviewStatusDetail.textContent = snapshot.detail;
+    if (els.reviewStatusAction) els.reviewStatusAction.textContent = snapshot.action;
     els.reviewStatusBanner.classList.remove('hidden');
+    renderReviewStatusActions(job, artifact);
 }
 
 function _renderArtifactProvenance(job, artifact) {
@@ -3577,7 +5366,7 @@ function _renderArtifactProvenance(job, artifact) {
         ? `${artifactDisplayLabel(artifact)} • ${artifactContentType(artifact) || 'binary'} • ${formatBytes(artifact.size_bytes)}`
         : 'Awaiting indexed artifact';
     const relativePath = artifact ? artifactLabel(artifact) : 'Artifacts will appear here when the selected run indexes outputs.';
-    const freshnessLabel = `Updated ${formatRelativeTime(Number(job.lastEventAt || job.updatedAt || job.finishedAt || job.createdAt || 0))}`;
+    const freshnessLabel = _jobFreshnessLabel(job);
     const runStateLabel = `${titleCaseToken(job.state, 'Unknown')} • ${titleCaseToken(job.pipeline, 'Unknown')}`;
     const sourceLabel = summary?.source || titleCaseToken(job.pipeline, 'Not reported');
     const batchLabel = summary?.batch_id || 'Not reported';
@@ -3596,19 +5385,16 @@ function _renderArtifactProvenance(job, artifact) {
 
 function _renderReviewCompareSummary(primaryArtifact, compareArtifact, compareEnabled) {
     if (!els.reviewCompareSummary || !els.reviewCompareTitle || !els.reviewCompareDetail) return;
+    const compareCopy = _compareSurfaceCopy(primaryArtifact, compareArtifact, compareEnabled);
     if (!primaryArtifact || !compareArtifact) {
         els.reviewCompareSummary.classList.add('hidden');
-        els.reviewCompareTitle.textContent = 'Compare pair available';
-        els.reviewCompareDetail.textContent = 'Enable compare mode to inspect paired outputs side by side.';
+        els.reviewCompareTitle.textContent = compareCopy.summaryTitle;
+        els.reviewCompareDetail.textContent = compareCopy.summaryDetail;
         return;
     }
 
-    const primaryLabel = artifactLabel(primaryArtifact);
-    const compareLabel = artifactLabel(compareArtifact);
-    els.reviewCompareTitle.textContent = compareEnabled ? 'Comparing paired outputs' : 'Compare pair available';
-    els.reviewCompareDetail.textContent = compareEnabled
-        ? `${primaryLabel} is shown against ${compareLabel}.`
-        : `${compareLabel} is available as a side-by-side comparison for ${primaryLabel}.`;
+    els.reviewCompareTitle.textContent = compareCopy.summaryTitle;
+    els.reviewCompareDetail.textContent = compareCopy.summaryDetail;
     els.reviewCompareSummary.classList.remove('hidden');
 }
 
@@ -3657,10 +5443,18 @@ function renderArtifactPanel() {
 
     if (!selected) {
         _resetArtifactActionButtons();
+        const emptyCopy = _artifactEmptyStateCopy(null);
+        _setSurfaceEmptyState(
+            els.emptyArtifactState,
+            els.emptyArtifactTitle,
+            els.emptyArtifactDetail,
+            emptyCopy
+        );
+        if (els.emptyArtifactAction) els.emptyArtifactAction.textContent = emptyCopy.action || '';
         els.artifactMeta.textContent = 'No job selected';
         els.artifactThumbnailRail.innerHTML = '';
         if (els.artifactSelectionTitle) els.artifactSelectionTitle.textContent = 'No artifact selected';
-        if (els.artifactSelectionMeta) els.artifactSelectionMeta.textContent = 'Preview, metadata, and actions will appear here when outputs are indexed.';
+        if (els.artifactSelectionMeta) els.artifactSelectionMeta.textContent = 'Preview, provenance, and actions will appear here after you choose a reviewable run.';
         if (els.artifactCompareBtn) {
             els.artifactCompareBtn.classList.add('hidden');
             els.artifactCompareBtn.setAttribute('aria-pressed', 'false');
@@ -3698,9 +5492,17 @@ function renderArtifactPanel() {
 
     if (artifacts.length === 0) {
         _resetArtifactActionButtons();
+        const emptyCopy = _artifactEmptyStateCopy(selected);
+        _setSurfaceEmptyState(
+            els.emptyArtifactState,
+            els.emptyArtifactTitle,
+            els.emptyArtifactDetail,
+            emptyCopy
+        );
+        if (els.emptyArtifactAction) els.emptyArtifactAction.textContent = emptyCopy.action || '';
         els.artifactThumbnailRail.innerHTML = '';
         if (els.artifactSelectionTitle) els.artifactSelectionTitle.textContent = 'No artifact selected';
-        if (els.artifactSelectionMeta) els.artifactSelectionMeta.textContent = 'Artifacts will appear here when the selected run indexes outputs.';
+        if (els.artifactSelectionMeta) els.artifactSelectionMeta.textContent = 'Review surfaces will populate here when the selected run indexes outputs.';
         if (els.artifactCompareBtn) {
             els.artifactCompareBtn.classList.add('hidden');
             els.artifactCompareBtn.setAttribute('aria-pressed', 'false');
@@ -3965,13 +5767,11 @@ function _ensureJobStreamState(job) {
 }
 
 function _isNativeEventSourceHandle(handle) {
-    return Boolean(handle && typeof handle.readyState === 'number' && typeof handle.addEventListener === 'function');
+    return portalInternals.isNativeEventSourceHandle(handle);
 }
 
 function _nativeEventSourceReadyState(handle) {
-    if (!_isNativeEventSourceHandle(handle)) return null;
-    const readyState = Number(handle.readyState);
-    return Number.isInteger(readyState) ? readyState : null;
+    return portalInternals.nativeEventSourceReadyState(handle);
 }
 
 function _jobHasActiveStream(job) {
@@ -4134,7 +5934,7 @@ function scheduleRenderJobQueue(includeReviewSurfaces = true) {
     queuedReviewSurfaceRefresh = queuedReviewSurfaceRefresh || includeReviewSurfaces;
     if (queueRenderScheduled) return;
     queueRenderScheduled = true;
-    requestAnimationFrame(() => {
+    portalRenderScheduler.schedule(() => {
         queueRenderScheduled = false;
         const shouldRenderReviewSurfaces = queuedReviewSurfaceRefresh;
         queuedReviewSurfaceRefresh = false;
@@ -4242,6 +6042,11 @@ function _resolveGroupingMode(value) {
     const normalized = String(value || '').trim().toLowerCase();
     if (LUX_GROUPING_MODES.has(normalized)) return normalized;
     return 'single';
+}
+
+function _resolveRunCardVersion(value) {
+    const normalized = String(value || '').trim().toLowerCase();
+    return normalized === 'v2' ? 'v2' : 'v1';
 }
 
 function _parsePositiveIntOrNull(value) {
@@ -4961,7 +6766,7 @@ function _latestReviewableJob() {
         const summary = normalizeRunSummary(job.run_summary);
         const artifactCount = Array.isArray(job.artifacts) ? job.artifacts.length : 0;
         return artifactCount > 0
-            || Boolean(summary.reviewable_outputs)
+            || Boolean(summary?.reviewable_outputs)
             || job.state === 'succeeded'
             || job.state === 'partial';
     });
@@ -5023,7 +6828,8 @@ async function fetchConfigMetadata(pipelineName = state.pipeline, silent = false
             fields: {},
             estimate_bands: {},
             debug_bundle_policy: {},
-            advanced_sections: []
+            advanced_sections: [],
+            backend_catalog: {},
         };
         renderReviewSurfaces();
         return;
@@ -5045,7 +6851,8 @@ async function fetchConfigMetadata(pipelineName = state.pipeline, silent = false
             fields: data.fields && typeof data.fields === 'object' ? data.fields : {},
             estimate_bands: data.estimate_bands && typeof data.estimate_bands === 'object' ? data.estimate_bands : {},
             debug_bundle_policy: data.debug_bundle_policy && typeof data.debug_bundle_policy === 'object' ? data.debug_bundle_policy : {},
-            advanced_sections: Array.isArray(data.advanced_sections) ? data.advanced_sections.map((item) => String(item || '')) : []
+            advanced_sections: Array.isArray(data.advanced_sections) ? data.advanced_sections.map((item) => String(item || '')) : [],
+            backend_catalog: data.backend_catalog && typeof data.backend_catalog === 'object' ? data.backend_catalog : {},
         };
         applyLuxMetadataToControls();
         renderReviewSurfaces();
@@ -5268,13 +7075,13 @@ function renderReconstructionRuntimeSummary(payload = null) {
     }
     if (els.reconstructionSummaryHint) {
         if (previewStatus === 'ready') {
-            els.reconstructionSummaryHint.textContent = 'Applies to the next run. Preview-backed validation and normalization are live.';
+            els.reconstructionSummaryHint.textContent = 'Preview-backed validation, normalization, and runtime estimates reflect the next dispatch.';
         } else if (previewStatus === 'error') {
-            els.reconstructionSummaryHint.textContent = 'Preview-backed validation is unavailable right now, so dispatch stays paused until it recovers.';
+            els.reconstructionSummaryHint.textContent = 'Preview-backed validation is unavailable right now, so posture is shown from the current draft while dispatch stays paused.';
         } else if (!state.backendOk) {
-            els.reconstructionSummaryHint.textContent = 'Applies to the next run. Backend preview is unavailable while the orchestrator is offline.';
+            els.reconstructionSummaryHint.textContent = 'Backend preview is unavailable while the orchestrator is offline, so posture is shown from the current local draft.';
         } else {
-            els.reconstructionSummaryHint.textContent = 'Applies to the next run. Reconstruction-specific values are preserved when the feature is off.';
+            els.reconstructionSummaryHint.textContent = 'Primary run posture updates here before you open contextual runtime or research controls.';
         }
     }
 
@@ -5555,6 +7362,10 @@ function buildCanonicalLuxDepthArgs(config) {
     const emitRunCard = els.emits.runCard
         ? Boolean(els.emits.runCard.checked)
         : parseBoolLike(config.emits?.runCard, true);
+    const emitRunCardIncludeProofs = els.emits.runCardIncludeProofs
+        ? Boolean(els.emits.runCardIncludeProofs.checked)
+        : parseBoolLike(config.emits?.runCardIncludeProofs, false);
+    const runCardVersion = _resolveRunCardVersion(config.emits?.runCardVersion);
 
     const nonCommercialOk = els.licenses.nonCommercialOk
         ? Boolean(els.licenses.nonCommercialOk.checked)
@@ -5643,6 +7454,8 @@ function buildCanonicalLuxDepthArgs(config) {
         emit_marketing: emitMarketing,
         emit_report: emitReport,
         emit_run_card: emitRunCard,
+        run_card_version: runCardVersion,
+        run_card_include_proofs: emitRunCardIncludeProofs,
         non_commercial_ok: nonCommercialOk,
         accept_apple_depth_pro_research_license: acceptApple,
         accept_research_tools_license: acceptResearchTools,
@@ -5734,6 +7547,12 @@ function applyPresetRecommendedArgs(presetName) {
     if (Object.prototype.hasOwnProperty.call(recommended, 'emit_marketing')) c.emits.marketing = parseBoolLike(recommended.emit_marketing, c.emits.marketing);
     if (Object.prototype.hasOwnProperty.call(recommended, 'emit_report')) c.emits.report = parseBoolLike(recommended.emit_report, c.emits.report);
     if (Object.prototype.hasOwnProperty.call(recommended, 'emit_run_card')) c.emits.runCard = parseBoolLike(recommended.emit_run_card, c.emits.runCard);
+    if (Object.prototype.hasOwnProperty.call(recommended, 'run_card_version')) {
+        c.emits.runCardVersion = _resolveRunCardVersion(recommended.run_card_version);
+    }
+    if (Object.prototype.hasOwnProperty.call(recommended, 'run_card_include_proofs')) {
+        c.emits.runCardIncludeProofs = parseBoolLike(recommended.run_card_include_proofs, c.emits.runCardIncludeProofs);
+    }
 
     c.licenses = c.licenses || {};
     if (Object.prototype.hasOwnProperty.call(recommended, 'non_commercial_ok')) c.licenses.nonCommercialOk = parseBoolLike(recommended.non_commercial_ok, c.licenses.nonCommercialOk);
@@ -5919,6 +7738,8 @@ function updateUIFromState() {
     c.emits.marketing = parseBoolLike(c.emits.marketing, false);
     c.emits.report = parseBoolLike(c.emits.report, true);
     c.emits.runCard = parseBoolLike(c.emits.runCard, true);
+    c.emits.runCardVersion = _resolveRunCardVersion(c.emits.runCardVersion);
+    c.emits.runCardIncludeProofs = parseBoolLike(c.emits.runCardIncludeProofs, false);
     c.gate = c.gate || {};
     c.gate.archiveIndex = _textOrFallback(c.gate.archiveIndex, '');
     c.gate.manifestJsonl = _textOrFallback(c.gate.manifestJsonl, '');
@@ -6004,6 +7825,7 @@ function updateUIFromState() {
     safeSyncCheck(els.emits.marketing, c.emits.marketing);
     safeSyncCheck(els.emits.report, c.emits.report);
     safeSyncCheck(els.emits.runCard, c.emits.runCard);
+    safeSyncCheck(els.emits.runCardIncludeProofs, c.emits.runCardIncludeProofs);
 
     safeSyncCheck(els.licenses.nonCommercialOk, c.licenses.nonCommercialOk);
     safeSyncCheck(els.licenses.acceptApple, c.licenses.acceptApple);
@@ -6313,6 +8135,7 @@ function renderPreRunDiagnostics(payload) {
     if (els.datasetHealthText) {
         els.datasetHealthText.textContent = `Dataset health: ${healthLabel}`;
     }
+    _syncBootstrapGuardedControls();
     renderNextBestAction(payload, _currentPreviewForPayload(payload) || _effectivePreviewSnapshot(payload));
 
     state.lastDiagnostics = {
@@ -6364,6 +8187,8 @@ function renderCLI() {
         cliLines.push(`  --emit-marketing ${onoff(payload.args.emit_marketing)}`);
         cliLines.push(`  --emit-report ${onoff(payload.args.emit_report)}`);
         cliLines.push(`  --emit-run-card ${onoff(payload.args.emit_run_card)}`);
+        cliLines.push(`  --run-card-version ${q(payload.args.run_card_version || 'v1')}`);
+        cliLines.push(`  --run-card-include-proofs ${onoff(payload.args.run_card_include_proofs)}`);
         cliLines.push(`  --enable-v2 ${onoff(payload.args.enable_v2)}`);
 
         if (parseBoolLike(payload.args.enable_v2, false) && payload.args.v2_preset) {
@@ -6615,6 +8440,7 @@ function bindInputs() {
     safeBindCheck(els.emits.marketing, 'emits', 'marketing');
     safeBindCheck(els.emits.report, 'emits', 'report');
     safeBindCheck(els.emits.runCard, 'emits', 'runCard');
+    safeBindCheck(els.emits.runCardIncludeProofs, 'emits', 'runCardIncludeProofs');
 
     safeBindCheck(els.licenses.nonCommercialOk, 'licenses', 'nonCommercialOk');
     safeBindCheck(els.licenses.acceptApple, 'licenses', 'acceptApple');
@@ -6694,6 +8520,75 @@ function refreshProfileDropdown() {
     });
 }
 
+function _setSurfaceEmptyState(container, titleEl, detailEl, copy) {
+    if (!container) return;
+    container.dataset.tone = String(copy?.tone || 'neutral');
+    if (titleEl) titleEl.textContent = String(copy?.title || '');
+    if (detailEl) detailEl.textContent = String(copy?.detail || '');
+}
+
+function _queueEmptyStateCopy() {
+    if (state.jobsLoadStatus === 'offline' || (!state.backendOk && state.jobs.length === 0)) {
+        return {
+            tone: 'warning',
+            title: 'Queue unavailable',
+            detail: 'Backend connectivity is offline. Restore the managed backend to recover recent runs and live transport state.',
+            action: 'Next action: restore backend connectivity so recent runs and live transport can recover.'
+        };
+    }
+    if (state.jobsLoadStatus === 'error') {
+        return {
+            tone: 'error',
+            title: 'Queue recovery needs attention',
+            detail: 'Recent jobs could not be recovered. Refresh the workspace after backend health returns to continue.',
+            action: 'Next action: confirm backend health, then refresh the workspace to rehydrate recent runs.'
+        };
+    }
+    return {
+        tone: 'neutral',
+        title: 'No runs yet',
+        detail: 'Dispatch a run from Build or wait for recovery to repopulate recent operator activity.',
+        action: 'Next action: open Build to prepare the next run or restore backend connectivity to recover recent history.'
+    };
+}
+
+function _artifactEmptyStateCopy(job) {
+    if (!job) {
+        return {
+            tone: 'neutral',
+            title: 'Select a completed run',
+            detail: 'Choose a reviewable job to load preview, provenance, and compare context here.',
+            action: 'Next action: inspect the selected run in Operate or wait for indexed outputs before reopening review.'
+        };
+    }
+    if (job.state === 'running' || job.state === 'queued') {
+        return {
+            tone: 'info',
+            title: 'Outputs are still arriving',
+            detail: 'This run has not indexed reviewable artifacts yet. Stay on the inspector for live progress and freshness updates.',
+            action: 'Next action: keep the run in Operate until indexed outputs appear or a blocking warning arrives.'
+        };
+    }
+    if (job.state === 'failed' || job.state === 'canceled') {
+        return {
+            tone: 'warning',
+            title: 'No reviewable outputs indexed',
+            detail: 'This run ended before artifacts were available. Inspect the run status and transport warnings above for recovery context.',
+            action: 'Next action: inspect the selected run in Operate or decide whether the failed run should be retried.'
+        };
+    }
+    return {
+        tone: 'neutral',
+        title: 'No indexed artifacts yet',
+        detail: 'Artifacts will appear here when the selected run finishes indexing its review outputs.',
+        action: 'Next action: inspect the selected run in Operate or wait for indexed outputs before reopening review.'
+    };
+}
+
+// ============================================================================
+// 9. JOB RENDERING
+// ============================================================================
+
 function renderJobQueue(includeReviewSurfaces = true) {
     if (!els.jobList) return;
     els.jobList.setAttribute('role', 'listbox');
@@ -6716,8 +8611,17 @@ function renderJobQueue(includeReviewSurfaces = true) {
         return;
     }
     if (state.jobs.length === 0) {
+        const emptyCopy = _queueEmptyStateCopy();
+        _setSurfaceEmptyState(els.emptyQueueState, els.emptyQueueTitle, els.emptyQueueDetail, emptyCopy);
+        if (els.emptyQueueAction) els.emptyQueueAction.textContent = emptyCopy.action || '';
         if (els.emptyQueueState) els.emptyQueueState.style.display = 'flex';
-        if (els.queueStatusSummary) els.queueStatusSummary.textContent = 'Newest jobs stay pinned to the top.';
+        if (els.queueStatusSummary) {
+            els.queueStatusSummary.textContent = state.jobsLoadStatus === 'ready'
+                ? 'Dispatch a run to populate live queue and inspector context.'
+                : state.jobsLoadStatus === 'offline'
+                    ? 'Queue is paused while backend connectivity is offline.'
+                    : 'Queue recovery needs operator attention before live history can refresh.';
+        }
         els.jobList.innerHTML = '';
         if (includeReviewSurfaces) renderReviewSurfaces();
         return;
@@ -6913,6 +8817,10 @@ function logToPane(jobId, line) {
         }
     }
 }
+
+// ============================================================================
+// 10. API LAYER
+// ============================================================================
 
 async function checkBackend(force = false) {
     const now = Date.now();
@@ -7460,7 +9368,7 @@ async function submitJob() {
     }
 
     if (!state.backendOk) {
-        createToast('Backend is offline. Dispatch is disabled until connectivity is restored.', 'error');
+        createToast(DISPATCH_BACKEND_OFFLINE_MESSAGE, 'error');
         return;
     }
     if (!readinessStatus) {
@@ -7754,6 +9662,11 @@ if (els.fileInput) els.fileInput.addEventListener('change', async (e) => {
             c.emits.marketing = parseBoolLike(data.args.emit_marketing, c.emits.marketing);
             c.emits.report = parseBoolLike(data.args.emit_report, c.emits.report);
             c.emits.runCard = parseBoolLike(data.args.emit_run_card, c.emits.runCard);
+            c.emits.runCardVersion = _resolveRunCardVersion(data.args.run_card_version || c.emits.runCardVersion);
+            c.emits.runCardIncludeProofs = parseBoolLike(
+                data.args.run_card_include_proofs,
+                c.emits.runCardIncludeProofs
+            );
 
             c.gate = c.gate || {};
             c.gate.archiveIndex = _textOrFallback(
@@ -7834,19 +9747,8 @@ if (els.inspectorTimelineTab) els.inspectorTimelineTab.addEventListener('click',
 if (els.inspectorLogsTab) els.inspectorLogsTab.addEventListener('click', () => setInspectorTab('logs'));
 if (els.openRunDetailsBtn) {
     els.openRunDetailsBtn.addEventListener('click', () => {
-        if (!state.selectedJobId) {
-            createToast('Select a run first, then open its review surface.', 'info');
-            return;
-        }
         const selectedJob = state.jobs.find((item) => item.id === state.selectedJobId);
-        void emitPortalEvent('run_details_opened', {
-            surface: 'job_inspector',
-            metadata: {
-                job_id: String(state.selectedJobId || ''),
-                pipeline: String(selectedJob?.pipeline || '')
-            }
-        });
-        navigateConsoleView('review', { jobId: state.selectedJobId });
+        _openReviewSurfaceForJob(selectedJob, 'job_inspector');
     });
 }
 
@@ -7873,38 +9775,14 @@ if (els.artifactThumbnailRail) {
 if (els.artifactCompareBtn) {
     els.artifactCompareBtn.addEventListener('click', () => {
         const selectedJob = state.jobs.find((item) => item.id === state.selectedJobId);
-        if (!selectedJob) return;
-        const key = String(selectedJob.id || '');
-        _rememberComparePreference(key, !Boolean(state.artifactUi.compareByJob[key]));
-        void emitPortalEvent('artifact_compared', {
-            surface: 'artifact_review',
-            metadata: {
-                enabled: Boolean(state.artifactUi.compareByJob[key]),
-                job_id: key,
-                pipeline: String(selectedJob.pipeline || '')
-            }
-        });
-        renderReviewSurfaces();
+        _toggleCompareSurface(selectedJob, 'artifact_review');
     });
 }
 
 if (els.openArtifactBtn) {
     els.openArtifactBtn.addEventListener('click', () => {
-        const url = sanitizeManagedAssetUrl(els.openArtifactBtn.dataset.url);
-        if (!url) {
-            createToast('No artifact URL is available for this selection.', 'error');
-            return;
-        }
         const selectedJob = state.jobs.find((item) => item.id === state.selectedJobId);
-        void emitPortalEvent('artifact_opened', {
-            surface: 'artifact_review',
-            metadata: {
-                job_id: String(selectedJob?.id || ''),
-                media_kind: String(_selectedArtifactForJob(selectedJob)?.media_kind || 'file'),
-                pipeline: String(selectedJob?.pipeline || '')
-            }
-        });
-        window.open(url, '_blank', 'noopener,noreferrer');
+        _openArtifactForSelection(selectedJob, _selectedArtifactForJob(selectedJob), 'artifact_review');
     });
 }
 
@@ -7980,8 +9858,21 @@ if (els.refreshHealthBtn) {
         navigateConsoleView('review', { jobId });
     });
 }
+if (els.consoleActionRailActions) {
+    els.consoleActionRailActions.addEventListener('click', handleOperatorActionClick);
+}
+if (els.selectedJobRecoveryActions) {
+    els.selectedJobRecoveryActions.addEventListener('click', handleOperatorActionClick);
+}
+if (els.reviewStatusActions) {
+    els.reviewStatusActions.addEventListener('click', handleOperatorActionClick);
+}
 if (els.jobList) els.jobList.addEventListener('click', handleJobListClick);
 if (els.jobList) els.jobList.addEventListener('keydown', handleJobListKeydown);
+
+// ============================================================================
+// 11. THEME
+// ============================================================================
 
 function _normalizeThemePreference(value) {
     const normalized = String(value || '').trim().toLowerCase();
@@ -8051,6 +9942,10 @@ if (els.themeBtn) els.themeBtn.addEventListener('click', () => {
     applyThemePreference(_nextThemePreference(state.themePreference));
 });
 
+// ============================================================================
+// 12. OVERLAYS & PANELS
+// ============================================================================
+
 function _rememberOverlayTrigger(trigger = document.activeElement) {
     state.portalUi.lastOverlayTrigger = trigger && typeof trigger.focus === 'function' ? trigger : null;
 }
@@ -8105,6 +10000,16 @@ function _trapOverlayFocus(event) {
         return true;
     }
     return false;
+}
+
+function _isTypingTarget(target) {
+    if (!(target instanceof HTMLElement)) return false;
+    const tagName = String(target.tagName || '').toLowerCase();
+    if (target.isContentEditable || target.closest('[contenteditable="true"]')) return true;
+    if (tagName === 'textarea' || tagName === 'select') return true;
+    if (tagName !== 'input') return false;
+    const inputType = String(target.getAttribute('type') || 'text').trim().toLowerCase();
+    return !['button', 'checkbox', 'color', 'file', 'hidden', 'radio', 'range', 'reset', 'submit'].includes(inputType);
 }
 
 const toggleModal = (show, trigger = document.activeElement) => {
@@ -8181,6 +10086,8 @@ document.addEventListener('keydown', (e) => {
     if (_trapOverlayFocus(e)) {
         return;
     }
+    const key = String(e.key || '');
+    const isPlainShortcut = !e.ctrlKey && !e.metaKey && !e.altKey && !_isTypingTarget(e.target);
     if (e.key === "Escape" && els.effectiveConfigDrawer && !els.effectiveConfigDrawer.classList.contains("hidden")) {
         e.preventDefault();
         toggleEffectiveConfigDrawer(false);
@@ -8189,6 +10096,24 @@ document.addEventListener('keydown', (e) => {
     if (e.key === "Escape" && els.shortcutsModal && !els.shortcutsModal.classList.contains("hidden")) {
         e.preventDefault();
         toggleModal(false);
+        return;
+    }
+    if (isPlainShortcut && (key === '?' || (key === '/' && e.shiftKey))) {
+        if (els.shortcutsModal && els.shortcutsModal.classList.contains('hidden')) {
+            e.preventDefault();
+            toggleModal(true);
+        }
+        return;
+    }
+    if (isPlainShortcut && Object.prototype.hasOwnProperty.call(WORKSPACE_VIEW_SHORTCUTS, key)) {
+        const nextView = WORKSPACE_VIEW_SHORTCUTS[key];
+        if (nextView === 'review' && !state.selectedJobId) {
+            e.preventDefault();
+            createToast('Select a run first, then open its review surface.', 'info');
+            return;
+        }
+        e.preventDefault();
+        navigateConsoleView(nextView);
         return;
     }
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
@@ -8261,6 +10186,19 @@ function setupDisclosurePanels() {
     registerDisclosurePanel('dispatchTools', els.dispatchToolsDetails);
 }
 
+// ============================================================================
+// 13. INITIALIZATION
+// ============================================================================
+
+portalRenderSurfaces.register('jobQueue', {
+    init(currentState) {
+        if (!currentState || !currentState.jobs) return;
+    },
+    render() {
+        renderJobQueue();
+    }
+});
+
 window.addEventListener('beforeunload', cleanupActiveJobHandles);
 window.addEventListener('pagehide', cleanupActiveJobHandles);
 window.addEventListener('pageshow', () => {
@@ -8271,7 +10209,7 @@ window.addEventListener('focus', () => {
 });
 window.addEventListener('popstate', () => {
     applyConsoleRouteFromLocation(true);
-    renderJobQueue();
+    portalRenderSurfaces.render('jobQueue', state);
 });
 
 async function init() {
@@ -8295,6 +10233,7 @@ async function init() {
     setupBuildStepper();
     bindInputs();
     setupDisclosurePanels();
+    portalRenderSurfaces.init(state);
     if (window.requestAnimationFrame) {
         window.requestAnimationFrame(() => {
             reconcileBuildSurfaceFromDom();
@@ -8311,7 +10250,7 @@ async function init() {
     void fetchConfigMetadata(state.pipeline, true);
     startHealthPolling();
     await bootstrapPromise;
-    renderJobQueue();
+    portalRenderSurfaces.render('jobQueue', state);
 }
 
 document.addEventListener('DOMContentLoaded', () => {

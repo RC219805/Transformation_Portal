@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server.js";
 
-import { applySecurityHeaders } from "../../lib/http.js";
+import { applySecurityHeaders, buildRequestUrl } from "../../lib/http.js";
 import {
   clearSessionCookie,
   destroySession,
@@ -16,7 +16,7 @@ export async function POST(request) {
   const session = getSessionFromRequest(request, { touch: false });
   if (!validateOriginAndReferrer(request)) {
     audit("csrf_failure", { path: "/logout" });
-    const response = applySecurityHeaders(NextResponse.redirect(new URL("/login?error=csrf", request.url), 303));
+    const response = applySecurityHeaders(NextResponse.redirect(buildRequestUrl(request, "/login?error=csrf"), 303));
     clearSessionCookie(response);
     return response;
   }
@@ -24,7 +24,7 @@ export async function POST(request) {
   const csrfToken = request.headers.get("x-csrf-token") || "";
   if (session && !validateCsrfToken(session, csrfToken)) {
     audit("csrf_failure", { path: "/logout", username: session.username });
-    const response = applySecurityHeaders(NextResponse.redirect(new URL("/login?error=csrf", request.url), 303));
+    const response = applySecurityHeaders(NextResponse.redirect(buildRequestUrl(request, "/login?error=csrf"), 303));
     clearSessionCookie(response);
     return response;
   }
@@ -33,7 +33,7 @@ export async function POST(request) {
     destroySession(session.id, "logout");
   }
 
-  const response = applySecurityHeaders(NextResponse.redirect(new URL("/login", request.url), 303));
+  const response = applySecurityHeaders(NextResponse.redirect(buildRequestUrl(request, "/login"), 303));
   clearSessionCookie(response);
   return response;
 }

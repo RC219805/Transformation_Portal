@@ -24,10 +24,11 @@ def test_decode_contract_camera_native_linear_forwards_params(monkeypatch):
     captured = {}
     expected = np.ones((2, 2, 3), dtype=np.float32)
 
-    def _fake_ingest(path, *, wb_mode, demosaic):  # noqa: ANN001
+    def _fake_ingest(path, *, wb_mode, demosaic, raw_python_executable):  # noqa: ANN001
         captured["path"] = path
         captured["wb_mode"] = wb_mode
         captured["demosaic"] = demosaic
+        captured["raw_python_executable"] = raw_python_executable
         return expected, {"contract": "camera_native_linear"}
 
     monkeypatch.setattr(
@@ -35,7 +36,12 @@ def test_decode_contract_camera_native_linear_forwards_params(monkeypatch):
         _fake_ingest,
     )
 
-    opts = IngestOptions(contract="camera_native_linear", wb_mode="auto", demosaic="AHD")
+    opts = IngestOptions(
+        contract="camera_native_linear",
+        wb_mode="auto",
+        demosaic="AHD",
+        raw_python_executable="./.venv-raw/bin/python",
+    )
     out = decode_contract("example.CR3", opts)
 
     assert out.dtype == np.float32
@@ -43,15 +49,17 @@ def test_decode_contract_camera_native_linear_forwards_params(monkeypatch):
     assert np.allclose(out, expected)
     assert captured["wb_mode"] == "auto"
     assert captured["demosaic"] == "AHD"
+    assert captured["raw_python_executable"] == "./.venv-raw/bin/python"
 
 
 def test_decode_contract_accepts_path_like_input(monkeypatch):
     captured = {}
 
-    def _fake_ingest(path, *, wb_mode, demosaic):  # noqa: ANN001
+    def _fake_ingest(path, *, wb_mode, demosaic, raw_python_executable):  # noqa: ANN001
         captured["path"] = path
         captured["wb_mode"] = wb_mode
         captured["demosaic"] = demosaic
+        captured["raw_python_executable"] = raw_python_executable
         return np.ones((1, 1, 3), dtype=np.float32), {"contract": "camera_native_linear"}
 
     monkeypatch.setattr(
@@ -66,22 +74,27 @@ def test_decode_contract_accepts_path_like_input(monkeypatch):
     assert captured["path"] == Path("example.CR3")
     assert captured["wb_mode"] == "camera"
     assert captured["demosaic"] == "AHD"
+    assert captured["raw_python_executable"] is None
 
 
 def test_decode_contract_legacy_linear_srgb_returns_linear_rgb(monkeypatch):
     expected = np.full((4, 4, 3), 0.25, dtype=np.float32)
 
     class _FakeDecoder:
-        def __init__(self, gamma, strict_ingest):  # noqa: ANN001
+        def __init__(self, gamma, strict_ingest, raw_python_executable):  # noqa: ANN001
             assert gamma == 1.0
             assert strict_ingest is True
+            assert raw_python_executable == "./.venv-raw/bin/python"
 
         def decode(self, input_path):  # noqa: ANN001
             assert input_path == "legacy_input.tiff"
             return types.SimpleNamespace(linear_rgb=expected)
 
     monkeypatch.setattr("transformation_portal.spatial_ai.ingest.linear_decoder.LinearDecoder", _FakeDecoder)
-    opts = IngestOptions(contract="legacy_linear_srgb")
+    opts = IngestOptions(
+        contract="legacy_linear_srgb",
+        raw_python_executable="./.venv-raw/bin/python",
+    )
     out = decode_contract("legacy_input.tiff", opts)
 
     assert out.dtype == np.float32

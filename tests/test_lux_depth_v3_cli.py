@@ -233,6 +233,127 @@ class TestCLIValidation:
         assert "raw-ingest-mode" in result.stdout.lower()
         assert "auto|force_rawpy|force_preview" in result.stdout
 
+    def test_raw_inputs_fail_fast_when_rawpy_unavailable(self, monkeypatch, tmp_path):
+        """RAW batches should fail before dispatch when canonical RAW support is unavailable."""
+        input_dir = tmp_path / "input"
+        input_dir.mkdir()
+        (input_dir / "scene_01.DNG").write_bytes(b"raw-payload")
+
+        class FakeOrchestrator:
+            def __init__(self, *_args, **_kwargs):
+                raise AssertionError("orchestrator should not be constructed when RAW preflight fails")
+
+        monkeypatch.setattr("transformation_portal.lux_depth_v3.__main__.EnhanceOrchestrator", FakeOrchestrator)
+        monkeypatch.setattr(
+            "transformation_portal.lux_depth_v3.__main__._canonical_raw_ingest_status",
+            lambda *_args: (False, "rawpy is not installed"),
+        )
+
+        result = runner.invoke(
+            app,
+            [
+                "--input-dir",
+                str(input_dir),
+                "--output-dir",
+                str(tmp_path / "output"),
+            ],
+        )
+
+        assert result.exit_code == 1
+        assert "raw inputs detected but canonical raw ingest is unavailable" in result.stdout.lower()
+        assert 'pip install -e ".[raw]"' in result.stdout
+
+    def test_non_raw_inputs_do_not_trigger_rawpy_preflight(self, monkeypatch, tmp_path):
+        """Non-RAW batches should not be blocked by the optional RAW dependency."""
+        input_dir = tmp_path / "input"
+        input_dir.mkdir()
+        (input_dir / "scene_01.png").write_bytes(b"png-payload")
+
+        class FakeOrchestrator:
+            def __init__(self, *_args, **_kwargs):
+                pass
+
+            def enhance_batch(self, *_args, **_kwargs):
+                return [{"status": "ok"}]
+
+        monkeypatch.setattr("transformation_portal.lux_depth_v3.__main__.EnhanceOrchestrator", FakeOrchestrator)
+        monkeypatch.setattr(
+            "transformation_portal.lux_depth_v3.__main__._canonical_raw_ingest_status",
+            lambda *_args: (False, "rawpy is not installed"),
+        )
+
+        result = runner.invoke(
+            app,
+            [
+                "--input-dir",
+                str(input_dir),
+                "--output-dir",
+                str(tmp_path / "output"),
+            ],
+        )
+
+        assert result.exit_code == 0
+        assert "raw inputs detected" not in result.stdout.lower()
+
+    def test_force_preview_requires_preview_escape_env_for_raw_inputs(self, monkeypatch, tmp_path):
+        """force_preview should still require the explicit preview escape hatch."""
+        input_dir = tmp_path / "input"
+        input_dir.mkdir()
+        (input_dir / "scene_01.DNG").write_bytes(b"raw-payload")
+
+        class FakeOrchestrator:
+            def __init__(self, *_args, **_kwargs):
+                raise AssertionError("orchestrator should not be constructed when preview escape is missing")
+
+        monkeypatch.setattr("transformation_portal.lux_depth_v3.__main__.EnhanceOrchestrator", FakeOrchestrator)
+        monkeypatch.delenv("TP_ALLOW_RAW_PREVIEW", raising=False)
+
+        result = runner.invoke(
+            app,
+            [
+                "--input-dir",
+                str(input_dir),
+                "--output-dir",
+                str(tmp_path / "output"),
+                "--raw-ingest-mode",
+                "force_preview",
+            ],
+        )
+
+        assert result.exit_code == 1
+        assert "tp_allow_raw_preview=1" in result.stdout.lower()
+
+    def test_raw_inputs_report_runtime_unavailability_without_claiming_rawpy_missing(self, monkeypatch, tmp_path):
+        """RAW preflight should distinguish missing rawpy from other import/runtime failures."""
+        input_dir = tmp_path / "input"
+        input_dir.mkdir()
+        (input_dir / "scene_01.DNG").write_bytes(b"raw-payload")
+
+        class FakeOrchestrator:
+            def __init__(self, *_args, **_kwargs):
+                raise AssertionError("orchestrator should not be constructed when RAW preflight fails")
+
+        monkeypatch.setattr("transformation_portal.lux_depth_v3.__main__.EnhanceOrchestrator", FakeOrchestrator)
+        monkeypatch.setattr(
+            "transformation_portal.lux_depth_v3.__main__._canonical_raw_ingest_status",
+            lambda *_args: (False, "rawpy is unavailable in this environment"),
+        )
+
+        result = runner.invoke(
+            app,
+            [
+                "--input-dir",
+                str(input_dir),
+                "--output-dir",
+                str(tmp_path / "output"),
+            ],
+        )
+
+        assert result.exit_code == 1
+        assert "rawpy is unavailable in this environment" in result.stdout.lower()
+        assert "not installed" not in result.stdout.lower()
+        assert "inspect the import/runtime error in the logs" in result.stdout.lower()
+
     def test_apex_materials_v3_requires_segmentation_enabled(self, tmp_path):
         """APEX strict gate should require explicit segmentation when Materials V3 is on."""
         input_dir = tmp_path / "input"
@@ -659,6 +780,44 @@ class TestCLIConfiguration:
         assert captured_config is not None
         assert captured_config.v2_preset is None
 
+    def test_run_card_include_proofs_flag_sets_config(self, tmp_path):
+        """--run-card-include-proofs should wire through to EnhanceConfig."""
+        from unittest.mock import MagicMock, patch
+
+        input_dir = tmp_path / "input"
+        input_dir.mkdir()
+        (input_dir / "test.jpg").touch()
+
+        captured_config = None
+
+        def mock_orch_init(config, output_root):
+            nonlocal captured_config
+            captured_config = config
+            mock_orch = MagicMock()
+            mock_orch.enhance_batch.return_value = {"total": 0, "succeeded": 0}
+            return mock_orch
+
+        with patch(
+            "transformation_portal.lux_depth_v3.__main__.EnhanceOrchestrator",
+            side_effect=mock_orch_init,
+        ):
+            runner.invoke(
+                app,
+                [
+                    "--input-dir",
+                    str(input_dir),
+                    "--output-dir",
+                    str(tmp_path / "output"),
+                    "--run-card-version",
+                    "v2",
+                    "--run-card-include-proofs",
+                    "on",
+                ],
+            )
+
+        assert captured_config is not None
+        assert captured_config.run_card_include_proofs is True
+
     def test_depth_pro_python_flag_sets_config(self, tmp_path):
         """--depth-pro-python should be forwarded into EnhanceConfig."""
         from unittest.mock import MagicMock, patch
@@ -730,6 +889,79 @@ class TestCLIConfiguration:
 
         assert captured_config is not None
         assert captured_config.da3_python_executable == "./.venv-da3/bin/python"
+
+    def test_raw_python_flag_sets_config(self, tmp_path):
+        """--raw-python should be forwarded into EnhanceConfig."""
+        from unittest.mock import MagicMock, patch
+
+        input_dir = tmp_path / "input"
+        input_dir.mkdir()
+        (input_dir / "test.jpg").touch()
+
+        captured_config = None
+
+        def mock_orch_init(config, output_root):
+            nonlocal captured_config
+            captured_config = config
+            mock_orch = MagicMock()
+            mock_orch.enhance_batch.return_value = {"total": 0, "succeeded": 0}
+            return mock_orch
+
+        with patch(
+            "transformation_portal.lux_depth_v3.__main__.EnhanceOrchestrator",
+            side_effect=mock_orch_init,
+        ):
+            _result = runner.invoke(
+                app,
+                [
+                    "--input-dir",
+                    str(input_dir),
+                    "--output-dir",
+                    str(tmp_path / "output"),
+                    "--raw-python",
+                    "./.venv-raw/bin/python",
+                ],
+            )
+
+        assert captured_config is not None
+        assert captured_config.raw_python_executable == "./.venv-raw/bin/python"
+
+    def test_raw_preflight_uses_dedicated_raw_runtime(self, monkeypatch, tmp_path):
+        """RAW preflight should validate the dedicated RAW runtime when configured."""
+        input_dir = tmp_path / "input"
+        input_dir.mkdir()
+        (input_dir / "scene_01.DNG").write_bytes(b"raw-payload")
+
+        captured: dict[str, str | None] = {"raw_python": None}
+
+        class FakeOrchestrator:
+            def __init__(self, *_args, **_kwargs):
+                pass
+
+            def enhance_batch(self, *_args, **_kwargs):
+                return [{"status": "ok"}]
+
+        def fake_status(raw_python_executable=None):
+            captured["raw_python"] = raw_python_executable
+            return True, None
+
+        monkeypatch.setattr("transformation_portal.lux_depth_v3.__main__.EnhanceOrchestrator", FakeOrchestrator)
+        monkeypatch.setattr("transformation_portal.lux_depth_v3.__main__._canonical_raw_ingest_status", fake_status)
+
+        result = runner.invoke(
+            app,
+            [
+                "--input-dir",
+                str(input_dir),
+                "--output-dir",
+                str(tmp_path / "output"),
+                "--raw-python",
+                "./.venv-raw/bin/python",
+            ],
+        )
+
+        assert result.exit_code == 0
+        assert captured["raw_python"] == "./.venv-raw/bin/python"
 
     def test_save_float_depth_defaults_false(self, tmp_path):
         """save_float_depth should default to False when flag is omitted."""

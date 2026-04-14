@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 import argparse
+import platform
 import sys
 from pathlib import Path
+from typing import Any
 
-import numpy as np
-from PIL import Image
-
-from ...ingest.canonical_json import dump_json
+from ...ingest.canonical_json import dump_json, dumps_json
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -51,18 +50,91 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _check_availability(checkpoint: Path) -> int:
-    """Validate imports and checkpoint presence for subprocess mode."""
-    import depth_pro  # noqa: F401
+def _torch_diagnostics(device: str) -> dict[str, Any]:
+    """Collect structured device diagnostics for readiness checks."""
+    diagnostics: dict[str, Any] = {
+        "device": device,
+        "machine": platform.machine(),
+        "platform": platform.platform(),
+    }
+    macos_version = platform.mac_ver()[0]
+    if macos_version:
+        diagnostics["macos_version"] = macos_version
 
-    from ...stage_graph.stages.depth_pro import DepthProStage
+    try:
+        import torch
+    except ImportError as exc:
+        diagnostics["torch_import_error"] = str(exc)
+        return diagnostics
 
+    def _safe_bool_call(callback: Any) -> bool:
+        if not callable(callback):
+            return False
+        try:
+            return bool(callback())
+        except Exception:
+            return False
+
+    torch_backends = getattr(torch, "backends", None)
+    mps_backend = getattr(torch_backends, "mps", None)
+    torch_cuda = getattr(torch, "cuda", None)
+
+    diagnostics["torch_version"] = getattr(torch, "__version__", "unknown")
+    diagnostics["mps_built"] = _safe_bool_call(getattr(mps_backend, "is_built", None))
+    diagnostics["mps_available"] = _safe_bool_call(getattr(mps_backend, "is_available", None))
+    diagnostics["cuda_available"] = _safe_bool_call(getattr(torch_cuda, "is_available", None))
+    return diagnostics
+
+
+def _emit_check_failure(reason: str, diagnostics: dict[str, Any]) -> int:
+    """Emit a structured readiness failure for subprocess availability checks."""
+    payload = {
+        "status": "unavailable",
+        "reason": reason,
+        **diagnostics,
+    }
+    print(dumps_json(payload, sort_keys=True), file=sys.stderr)
+    return 1
+
+
+def _check_device_availability(device: str) -> int:
+    """Validate that the requested device is actually usable."""
+    normalized_device = str(device or "cpu").strip().lower() or "cpu"
+    diagnostics = _torch_diagnostics(normalized_device)
+
+    if normalized_device == "cpu":
+        return 0
+
+    if "torch_import_error" in diagnostics:
+        return _emit_check_failure("PyTorch import failed for device readiness check.", diagnostics)
+
+    if normalized_device == "mps":
+        if not diagnostics.get("mps_built"):
+            return _emit_check_failure("PyTorch was not built with MPS support.", diagnostics)
+        if not diagnostics.get("mps_available"):
+            return _emit_check_failure("PyTorch MPS backend is not available in this runtime.", diagnostics)
+        return 0
+
+    if normalized_device == "cuda":
+        if not diagnostics.get("cuda_available"):
+            return _emit_check_failure("PyTorch CUDA backend is not available in this runtime.", diagnostics)
+        return 0
+
+    return _emit_check_failure(f"Unsupported depth device: {normalized_device}", diagnostics)
+
+
+def _check_availability(checkpoint: Path, device: str) -> int:
+    """Validate imports, checkpoint presence, and requested device readiness."""
     if not checkpoint.exists():
         print(f"Checkpoint not found: {checkpoint}", file=sys.stderr)
         return 1
 
+    import depth_pro  # noqa: F401
+
+    from ...stage_graph.stages.depth_pro import DepthProStage
+
     _ = DepthProStage
-    return 0
+    return _check_device_availability(device)
 
 
 def _run_inference(
@@ -73,6 +145,9 @@ def _run_inference(
     device: str,
 ) -> int:
     """Run Depth Pro inference and persist structured outputs."""
+    import numpy as np
+    from PIL import Image
+
     from ...stage_graph.stage import StageContext, StageStatus
     from ...stage_graph.stages.depth_pro import DepthProStage
 
@@ -138,7 +213,7 @@ def main(argv: list[str] | None = None) -> int:
 
     checkpoint = args.checkpoint.expanduser()
     if args.check:
-        return _check_availability(checkpoint)
+        return _check_availability(checkpoint, str(args.device))
 
     if args.input_image is None or args.output_depth is None or args.output_json is None:
         parser.error("--input-image, --output-depth, and --output-json are required unless --check is used.")

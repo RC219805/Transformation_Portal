@@ -31,7 +31,7 @@ All source code TODOs in `src/` have been cleaned up. The remaining test TODOs a
 - Dependabot PR `#1275` was closed and replaced by curated issue `#1277` and PR `#1278`.
 - The merged validated set is FastAPI `0.135.1`, Starlette `1.0.0`, Uvicorn `0.42.0`.
 - Invalid cross-platform ML lock regeneration was explicitly removed from that change set.
-- Separate follow-up is now tracked in issue `#1279` ("Fix trust model for platform-specific ML lock generation").
+- Separate follow-up is now tracked in issue `#1421` ("Make target-owned ML lock generation fail closed by authoritative lane").
 
 ### Priority Summary
 

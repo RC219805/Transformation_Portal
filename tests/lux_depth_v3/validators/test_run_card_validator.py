@@ -112,6 +112,7 @@ def _minimal_valid_payload() -> Dict[str, Any]:
         "v2_device": "cpu",
         "v2_upscaler_backend": "realesrgan",
         "depth_pro_python_executable": None,
+        "raw_python_executable": None,
         "da3_python_executable": None,
     }
     canonical_json = json.dumps(
@@ -136,6 +137,7 @@ def _minimal_valid_payload() -> Dict[str, Any]:
                 "strict_segmentation",
                 "apex_strict_mode",
                 "depth_pro_python_executable",
+                "raw_python_executable",
                 "da3_python_executable",
             )
         },
@@ -292,14 +294,12 @@ class TestBackendSemanticsValidation:
                 "primary_backend": "da3",
                 "fallback_images": 2,
             },
+            "total_images": 3,
             "success_count": 2,
+            "error_count": 1,
         }
 
-        with pytest.raises(
-            RuntimeError,
-            match="requested backend 'depth_pro' was not honored",
-        ):
-            validate_run_card_backend_semantics(payload)
+        validate_run_card_backend_semantics(payload)
 
 
 class TestWrapperSemanticsValidation:

@@ -7,6 +7,7 @@ import json
 import sys
 import urllib.error
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -88,6 +89,50 @@ def test_portal_browser_parse_args_defaults_api_key_to_empty_when_env_is_unset(
     assert args.api_key == ""
 
 
+def test_portal_browser_parse_args_supports_local_backend_spawn_flag():
+    module = _load_module(PORTAL_BROWSER_SCRIPT_PATH, "tests_validate_portal_browser_smoke_spawn_backend")
+
+    args = module._parse_args(["--spawn-local-backend", "--backend-startup-timeout-seconds", "12.5"])
+
+    assert args.spawn_local_backend is True
+    assert args.backend_startup_timeout_seconds == 12.5
+
+
+def test_portal_browser_tail_text_reads_only_a_bounded_suffix(tmp_path: Path):
+    module = _load_module(PORTAL_BROWSER_SCRIPT_PATH, "tests_validate_portal_browser_smoke_tail")
+    log_path = tmp_path / "portal.log"
+    log_path.write_text(("0123456789" * 1024) + "tail-marker", encoding="utf-8")
+
+    tail = module._tail_text(log_path, max_chars=24, max_bytes=96)
+
+    assert tail.endswith("tail-marker")
+    assert len(tail) <= 24
+
+
+def test_portal_browser_main_terminates_spawned_backend_on_setup_failure(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+    module = _load_module(PORTAL_BROWSER_SCRIPT_PATH, "tests_validate_portal_browser_smoke_runtime_cleanup")
+    runtime_handle = SimpleNamespace(base_url="http://127.0.0.1:8123")
+    terminated: list[object] = []
+    archive_index = tmp_path / "archive_index.csv.gz"
+    archive_index.write_text("fixture", encoding="utf-8")
+
+    monkeypatch.setattr(module, "_spawn_local_backend", lambda *_args, **_kwargs: runtime_handle)
+    monkeypatch.setattr(module, "_terminate_runtime", lambda handle: terminated.append(handle))
+
+    with pytest.raises(module.SmokeFailure, match="Archive root fixture does not exist"):
+        module.main(
+            [
+                "--spawn-local-backend",
+                "--archive-root",
+                str(tmp_path / "missing-archive-root"),
+                "--archive-index",
+                str(archive_index),
+            ]
+        )
+
+    assert terminated == [runtime_handle]
+
+
 def test_portal_browser_help_text_describes_api_key_default(capsys: pytest.CaptureFixture[str]):
     module = _load_module(PORTAL_BROWSER_SCRIPT_PATH, "tests_validate_portal_browser_smoke_help")
 
@@ -97,6 +142,65 @@ def test_portal_browser_help_text_describes_api_key_default(capsys: pytest.Captu
     help_output = " ".join(capsys.readouterr().out.split())
     assert "API key for protected job endpoints" in help_output
     assert "default: unset; uses TP_API_KEY when set" in help_output
+
+
+def test_portal_browser_state_probe_tracks_contextual_action_controls():
+    module = _load_module(PORTAL_BROWSER_SCRIPT_PATH, "tests_validate_portal_browser_smoke_action_probe")
+
+    expression = module._state_probe_expression()
+
+    assert "consoleActionPrimaryBtn" in expression
+    assert "consoleActionSecondaryBtn1" in expression
+    assert "consoleActionSecondaryBtn2" in expression
+    assert "selectedJobRecoveryPrimaryBtn" in expression
+    assert "selectedJobRecoverySecondaryBtn" in expression
+    assert "reviewStatusPrimaryBtn" in expression
+    assert "reviewStatusSecondaryBtn" in expression
+    assert "actionPrimaryKey" in expression
+    assert "actionSecondary2Key" in expression
+    assert "selectedRecoveryPrimaryKey" in expression
+    assert "reviewStatusPrimaryKey" in expression
+
+
+def test_portal_browser_accessibility_probe_tracks_target_size_and_disclosure_contracts():
+    module = _load_module(PORTAL_BROWSER_SCRIPT_PATH, "tests_validate_portal_browser_smoke_accessibility_probe")
+
+    expression = module._accessibility_probe_expression()
+
+    assert "#themeBtn" in expression
+    assert "#shortcutsBtn" in expression
+    assert '[data-ui="view-link"]' in expression
+    assert "#buildStepTab1" in expression
+    assert "focusVisibleWithStickyShells" in expression
+    assert "maxDisclosureDepth" in expression
+    assert "discoverableDisclosures" in expression
+    assert "prefers-reduced-motion" in expression
+    assert "decorativeMotionStatic" in expression
+
+
+def test_portal_browser_can_simulate_bootstrap_degraded_recovery_actions():
+    module = _load_module(PORTAL_BROWSER_SCRIPT_PATH, "tests_validate_portal_browser_smoke_degraded_expr")
+
+    expression = module._simulate_bootstrap_degraded_expression(reason="auth_failure", http_status=401)
+
+    assert "_applyPortalBootstrap" in expression
+    assert "status: 'degraded'" in expression
+    assert '"reason": "auth_failure"' in expression
+    assert '"http_status": 401' in expression
+    assert "renderSelectedJobInspector();" in expression
+    assert "renderArtifactPanel();" in expression
+    assert "renderConsoleContextRibbon();" in expression
+
+
+def test_portal_browser_can_inject_compare_ready_review_state():
+    module = _load_module(PORTAL_BROWSER_SCRIPT_PATH, "tests_validate_portal_browser_smoke_compare_expr")
+
+    expression = module._inject_compare_ready_review_expression("job_demo")
+
+    assert "synthetic/review-primary.png" in expression
+    assert "synthetic/review-compare.png" in expression
+    assert "portal-smoke-compare" in expression
+    assert "renderReviewSurfaces();" in expression
 
 
 def test_portal_browser_preview_preflight_classifies_auth_failures(monkeypatch: pytest.MonkeyPatch):
@@ -215,7 +319,8 @@ def test_orchestrator_http_smoke_covers_readiness_and_fail_closed_archive_prereq
     assert "GET /v1/readiness" in content
     assert '"archive-gate-b"' in content
     assert '"archive-gate-c"' in content
-    assert "rights_manifest_required" in content
+    assert '"details") or {}).get("field") == "manifest_jsonl"' in content
+    assert '"details") or {}).get("reason") == "required"' in content
     assert "manifest-build" in content
     assert "rights-apply" in content
     assert "bag-build" in content
@@ -249,15 +354,180 @@ def test_frontdoor_browser_parse_args_does_not_probe_chrome_for_explicit_overrid
     assert args.password == "secret"
 
 
+def test_frontdoor_browser_parse_args_supports_isolated_runtime_flags():
+    module = _load_module(FRONTDOOR_BROWSER_SCRIPT_PATH, "tests_validate_frontdoor_browser_smoke_spawn_flags")
+
+    args = module._parse_args(
+        [
+            "--spawn-local-frontdoor",
+            "--spawn-local-backend",
+            "--backend-base-url",
+            "http://127.0.0.1:9000",
+            "--backend-api-key",
+            "backend-secret",
+        ]
+    )
+
+    assert args.spawn_local_frontdoor is True
+    assert args.spawn_local_backend is True
+    assert args.backend_base_url == "http://127.0.0.1:9000"
+    assert args.backend_api_key == "backend-secret"
+
+
+def test_frontdoor_browser_spawned_local_frontdoor_defaults_credentials(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.delenv("TP_FRONTDOOR_USERNAME", raising=False)
+    monkeypatch.delenv("TP_FRONTDOOR_PASSWORD", raising=False)
+    module = _load_module(FRONTDOOR_BROWSER_SCRIPT_PATH, "tests_validate_frontdoor_browser_smoke_defaults")
+
+    args = module._parse_args(["--spawn-local-frontdoor"])
+
+    assert module._resolve_username(args) == module.DEFAULT_FRONTDOOR_USERNAME
+    assert module._resolve_password(args) == module.DEFAULT_FRONTDOOR_PASSWORD
+    assert module._resolve_access_email(module.DEFAULT_FRONTDOOR_USERNAME) == "smoke-admin@local.invalid"
+
+
+def test_frontdoor_browser_tail_text_reads_only_a_bounded_suffix(tmp_path: Path):
+    module = _load_module(FRONTDOOR_BROWSER_SCRIPT_PATH, "tests_validate_frontdoor_browser_smoke_tail")
+    log_path = tmp_path / "frontdoor.log"
+    log_path.write_text(("abcdefghij" * 1024) + "tail-marker", encoding="utf-8")
+
+    tail = module._tail_text(log_path, max_chars=24, max_bytes=96)
+
+    assert tail.endswith("tail-marker")
+    assert len(tail) <= 24
+
+
+def test_frontdoor_browser_main_terminates_spawned_runtimes_on_setup_failure(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+    module = _load_module(FRONTDOOR_BROWSER_SCRIPT_PATH, "tests_validate_frontdoor_browser_smoke_runtime_cleanup")
+    backend_runtime = SimpleNamespace(base_url="http://127.0.0.1:8124")
+    frontdoor_runtime = SimpleNamespace(base_url="http://localhost:3010")
+    terminated: list[object] = []
+    frontdoor_launches: list[dict[str, object]] = []
+
+    monkeypatch.setattr(module, "_spawn_local_backend", lambda *_args, **_kwargs: backend_runtime)
+    monkeypatch.setattr(
+        module,
+        "_spawn_local_frontdoor",
+        lambda **kwargs: frontdoor_launches.append(kwargs) or frontdoor_runtime,
+    )
+    monkeypatch.setattr(module, "_terminate_runtime", lambda handle: terminated.append(handle))
+    monkeypatch.setattr(module, "_resolve_chrome_binary", lambda _raw: str(tmp_path / "missing-chrome"))
+
+    with pytest.raises(module.SmokeFailure, match="Chrome binary does not exist"):
+        module.main(
+            [
+                "--spawn-local-backend",
+                "--spawn-local-frontdoor",
+                "--backend-api-key",
+                "contract-secret",
+                "--debugging-port",
+                "9222",
+            ]
+        )
+
+    assert frontdoor_launches == [
+        {
+            "username": module.DEFAULT_FRONTDOOR_USERNAME,
+            "password": module.DEFAULT_FRONTDOOR_PASSWORD,
+            "access_email": "smoke-admin@local.invalid",
+            "backend_base_url": backend_runtime.base_url,
+            "backend_api_key": "contract-secret",
+            "timeout_seconds": 45.0,
+        }
+    ]
+    assert terminated == [frontdoor_runtime, backend_runtime]
+
+
+def test_frontdoor_browser_requires_explicit_credentials_for_non_spawned_frontdoor(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.delenv("TP_FRONTDOOR_USERNAME", raising=False)
+    monkeypatch.delenv("TP_FRONTDOOR_PASSWORD", raising=False)
+    module = _load_module(FRONTDOOR_BROWSER_SCRIPT_PATH, "tests_validate_frontdoor_browser_smoke_missing_creds")
+
+    with pytest.raises(module.SmokeFailure, match="Front-door username and password are required"):
+        module.main([])
+
+
 def test_frontdoor_browser_waits_for_managed_portal_bootstrap_before_passing():
     content = FRONTDOOR_BROWSER_SCRIPT_PATH.read_text(encoding="utf-8")
 
     assert 'and str(value.get("readyState", "")) == "complete"' in content
+    assert content.count('and str(value.get("readyState", "")) == "complete"') >= 3
     assert 'and str(value.get("authModeBadge", "")).lower() == "managed"' in content
-    assert "Make premium media verifiable before it ships." in content
+    assert "homepageHeroReady" in content
+    assert "homepageEntryRailReady" in content
+    assert "homepageLearnLinkReady" in content
+    assert "homepagePrimaryCtaHref" in content
+    assert "loginEntryStateReady" in content
+    assert "loginSequenceReady" in content
+    assert "portalAccessStateReady" in content
+    assert '[data-ui="homepage-hero-title"]' in content
+    assert '[data-ui="homepage-entry-rail"]' in content
+    assert '[data-ui="homepage-learn-link"]' in content
+    assert '[data-ui="login-form"]' in content
+    assert '[data-ui="login-entry-state"]' in content
+    assert '[data-ui="login-sequence"]' in content
+    assert '[data-ui="portal-access-state"]' in content
     assert ".hero-video, .homepage-video" in content
-    assert "form.requestSubmit" in content
-    assert "form.submit();" in content
+    assert "def _populate_login_expression" in content
+    assert "def _click_expression" in content
+    assert "connection.evaluate(_populate_login_expression(username, password))" in content
+    assert "connection.evaluate(_click_expression('[data-ui=\"login-submit\"]'))" in content
+    assert "/healthz" in content
+    assert "--spawn-local-frontdoor" in content
+    assert "--spawn-local-backend" in content
+
+
+def test_frontdoor_browser_accessibility_probe_tracks_target_size_and_reduced_motion():
+    module = _load_module(FRONTDOOR_BROWSER_SCRIPT_PATH, "tests_validate_frontdoor_browser_smoke_accessibility_probe")
+
+    expression = module._frontdoor_accessibility_probe_expression()
+
+    assert "readyState: document.readyState" in expression
+    assert '[data-ui="homepage-primary-cta"]' in expression
+    assert '[data-ui="homepage-secondary-cta"]' in expression
+    assert '[data-ui="homepage-learn-link"]' in expression
+    assert '[data-ui="login-submit"]' in expression
+    assert '[data-ui="login-secondary-link"]' in expression
+    assert "maxDisclosureDepth" in expression
+    assert "focusVisibleWithStickyHeader" in expression
+    assert "prefers-reduced-motion" in expression
+    assert "decorativeMotionStatic" in expression
+
+
+def test_frontdoor_browser_accessibility_snapshot_is_page_scoped():
+    module = _load_module(FRONTDOOR_BROWSER_SCRIPT_PATH, "tests_validate_frontdoor_browser_smoke_accessibility_scope")
+
+    snapshot = {
+        "pathname": "/login",
+        "readyState": "complete",
+        "homepagePrimaryMinTarget": True,
+        "homepageSecondaryMinTarget": True,
+        "homepageLearnMinTarget": True,
+        "focusVisibleWithStickyHeader": True,
+        "loginSubmitMinTarget": False,
+        "loginSecondaryMinTarget": True,
+        "maxDisclosureDepth": 1,
+        "reducedMotion": False,
+        "decorativeMotionStatic": True,
+    }
+
+    homepage_snapshot = module._frontdoor_accessibility_snapshot(snapshot, page="homepage")
+    login_snapshot = module._frontdoor_accessibility_snapshot(snapshot, page="login")
+
+    assert homepage_snapshot["pathname"] == "/login"
+    assert homepage_snapshot["readyState"] == "complete"
+    assert homepage_snapshot["homepagePrimaryMinTarget"] is True
+    assert "loginSubmitMinTarget" not in homepage_snapshot
+
+    assert login_snapshot["pathname"] == "/login"
+    assert login_snapshot["readyState"] == "complete"
+    assert login_snapshot["loginSubmitMinTarget"] is False
+    assert login_snapshot["decorativeMotionStatic"] is True
+    assert "homepagePrimaryMinTarget" not in login_snapshot
 
 
 def test_portal_browser_smoke_tracks_archive_readiness_fields_and_canonical_commands():
@@ -284,6 +554,10 @@ def test_portal_browser_smoke_tracks_archive_readiness_fields_and_canonical_comm
     assert "contextRibbonJob" in content
     assert "contextRibbonArtifact" in content
     assert "contextRibbonCompare" in content
+    assert "postureBandVisible" in content
+    assert "summaryBandOutsideReconstruction" in content
+    assert "dispatchPrimaryLaneVisible" in content
+    assert "dispatchReadinessReason" in content
     assert "/tmp/gate-a-smoke-portal" in content
     assert "archive-gate-b" in content
     assert "archive-gate-c" in content
@@ -331,6 +605,8 @@ def test_portal_browser_smoke_tracks_reconstruction_runtime_summary_and_guardrai
     assert "summaryReconstructionState" in content
     assert "summaryRuntimeWorkers" in content
     assert "summaryPreviewState" in content
+    assert "postureBandVisible" in content
+    assert "summaryBandOutsideReconstruction" in content
     assert "rawPreviewStatus" in content
     assert "previewRequestKey" in content
     assert "currentPreviewRequestKey" in content
@@ -338,6 +614,7 @@ def test_portal_browser_smoke_tracks_reconstruction_runtime_summary_and_guardrai
     assert "debugBundleGuardrailVisible" in content
     assert "effectiveConfigDrawerVisible" in content
     assert "emit_scene_debug_bundle" in content
+    assert "dispatch surface to report a blocked preview/governance state" in content
     assert "#openEffectiveConfigBtn" in content
     assert "#closeEffectiveConfigBtn" in content
 

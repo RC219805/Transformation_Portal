@@ -6,22 +6,29 @@ import { fileURLToPath } from "node:url";
 const SCRIPT_PATH = fileURLToPath(import.meta.url);
 const FRONTDOOR_ROOT = path.resolve(path.dirname(SCRIPT_PATH), "..");
 
-function standaloneCandidates(frontdoorRoot = FRONTDOOR_ROOT) {
+function resolveDistDir(frontdoorRoot = FRONTDOOR_ROOT, env = process.env) {
+  const requestedDistDir = String(env?.TP_NEXT_DIST_DIR || "").trim();
+  return path.resolve(frontdoorRoot, requestedDistDir || ".next");
+}
+
+function standaloneCandidates(frontdoorRoot = FRONTDOOR_ROOT, env = process.env) {
+  const distDir = resolveDistDir(frontdoorRoot, env);
   return [
-    path.join(frontdoorRoot, ".next", "standalone", "server.js"),
-    path.join(frontdoorRoot, ".next", "standalone", "web", "secure-landing", "server.js")
+    path.join(distDir, "standalone", "server.js"),
+    path.join(distDir, "standalone", "web", "secure-landing", "server.js")
   ];
 }
 
-export function resolveStandaloneServerPath(frontdoorRoot = FRONTDOOR_ROOT) {
-  for (const candidate of standaloneCandidates(frontdoorRoot)) {
+export function resolveStandaloneServerPath(frontdoorRoot = FRONTDOOR_ROOT, { env = process.env } = {}) {
+  for (const candidate of standaloneCandidates(frontdoorRoot, env)) {
     if (existsSync(candidate)) {
       return candidate;
     }
   }
 
+  const standaloneRoot = path.join(resolveDistDir(frontdoorRoot, env), "standalone");
   throw new Error(
-    `Managed frontdoor standalone build was not found under ${path.join(frontdoorRoot, ".next", "standalone")}. Run npm run build under Node 22, then retry.`
+    `Managed frontdoor standalone build was not found under ${standaloneRoot}. Run npm run build under Node 22, then retry.`
   );
 }
 

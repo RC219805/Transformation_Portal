@@ -1,7 +1,7 @@
-"""Configuration module for lux_depth_v3 pipeline.
+"""Lux Depth V3 configuration types and runtime defaults.
 
-STUB IMPLEMENTATION - Critical types to enable package imports.
-Full implementation pending.
+This module defines the typed configuration surface used by the CLI, portal
+preview layer, orchestrator, and reproducibility metadata.
 """
 
 from __future__ import annotations
@@ -226,6 +226,9 @@ class EnhanceConfig:
     # dedicated Depth Pro environment
     depth_pro_python_executable: Optional[str] = None
     # Optional Python executable for a
+    # dedicated RAW ingest environment
+    raw_python_executable: Optional[str] = None
+    # Optional Python executable for a
     # dedicated DA3 / depth-anything-3 environment
     da3_python_executable: Optional[str] = None
     # Timeout for DA3 subprocess calls
@@ -372,6 +375,17 @@ class EnhanceConfig:
     sam2_model_size: str = "base"
     # Optional SAM2 checkpoint override path
     sam2_checkpoint_path: Optional[str] = None
+    # Explicit SAM2 tiling controls for large-image segmentation
+    sam2_tiling_enabled: bool = False
+    sam2_tile_size_px: int = 1536
+    sam2_overlap_px: int = 256
+    sam2_global_pass_longest_side: int = 1280
+    sam2_max_concurrency: int = 1
+    sam2_points_per_side: int = 32
+    sam2_points_per_batch: int = 64
+    sam2_pred_iou_thresh: float = 0.88
+    sam2_stability_score_thresh: float = 0.85
+    sam2_crop_n_layers: int = 1
 
     # Emit flags (deliverables)
     emit_master16: bool = False  # Emit master 16-bit output
@@ -379,6 +393,8 @@ class EnhanceConfig:
     emit_marketing: bool = False  # Emit marketing-ready output
     emit_report: bool = True  # Emit processing report
     emit_run_card: bool = True  # Emit run card for reproducibility
+    run_card_version: str = "v1"  # v1 legacy commitment or v2 transparency tree
+    run_card_include_proofs: bool = False  # Opt-in per-artifact inclusion proofs for v2 run cards
 
     # Phase B1: optional scene-level reconstruction (off by default)
     enable_reconstruction: bool = False

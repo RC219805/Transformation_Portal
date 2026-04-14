@@ -5,10 +5,12 @@
   "type": "module",
   "scripts": {
     "preinstall": "node ./scripts/check-node-version.mjs",
-    "dev": "node ./scripts/guard-runtime.mjs && next dev",
-    "build": "node ./scripts/guard-runtime.mjs && next build",
+    "build:portal": "node ./scripts/guard-runtime.mjs && node ./scripts/build-portal-bundle.mjs",
+    "dev": "npm run build:portal && node ./scripts/guard-runtime.mjs && next dev",
+    "build": "npm run build:portal && node ./scripts/guard-runtime.mjs && next build",
     "start": "node ./scripts/guard-runtime.mjs && node ./scripts/start-standalone.mjs",
-    "test": "node ./scripts/guard-runtime.mjs && node --experimental-specifier-resolution=node --test tests/*.test.mjs"
+    "seed-frontdoor-user": "node ./scripts/guard-runtime.mjs && node ./scripts/seed-frontdoor-user.mjs",
+    "test": "npm run build:portal && node ./scripts/guard-runtime.mjs && node --experimental-specifier-resolution=node --test tests/*.test.mjs"
   },
   "engines": {
     "node": ">=22 <23"
@@ -17,8 +19,11 @@
   "dependencies": {
     "argon2": "^0.44.0",
     "better-sqlite3": "^12.0.0",
-    "next": "16.2.2",
+    "next": "16.2.3",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.0"
   }
 }

@@ -71,6 +71,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 REQUIREMENTS_DIR="${REPO_ROOT}/requirements"
+PYTHON_RESOLVER="${REPO_ROOT}/scripts/setup/resolve_python_311.sh"
+PYTHON_BIN=""
 
 # Colors for output
 RED='\033[0;31m'
@@ -168,14 +170,15 @@ check_prerequisites() {
     # Note: Bash version check is handled by auto-exec at script start.
     # If we reach here, bash 4.3+ is guaranteed.
 
-    # Check Python is available
-    if ! command -v python3 &> /dev/null; then
-        log_error "Python 3 is required but not found."
+    if [[ ! -x "${PYTHON_RESOLVER}" ]]; then
+        log_error "Python resolver missing: ${PYTHON_RESOLVER}"
         exit 1
     fi
 
+    PYTHON_BIN="$("${PYTHON_RESOLVER}")"
+
     # Check pip is available
-    if ! python3 -m pip --version &> /dev/null; then
+    if ! "${PYTHON_BIN}" -m pip --version &> /dev/null; then
         log_error "pip is required but not found."
         exit 1
     fi
@@ -199,7 +202,7 @@ check_lockfile() {
 # Build pip command as array for safe quoting
 build_pip_cmd() {
     local -n cmd_array=$1
-    cmd_array=(python3 -m pip install)
+    cmd_array=("${PYTHON_BIN}" -m pip install)
 
     # Add verbose flag if enabled
     if [[ "${VERBOSE}" == "true" ]]; then
@@ -224,12 +227,12 @@ normalize_arch() {
 }
 
 python_platform_os() {
-    python3 -c 'import platform; print(platform.system())'
+    "${PYTHON_BIN}" -c 'import platform; print(platform.system())'
 }
 
 python_platform_arch() {
     local arch
-    arch="$(python3 -c 'import platform; print(platform.machine())')"
+    arch="$("${PYTHON_BIN}" -c 'import platform; print(platform.machine())')"
     normalize_arch "${arch}"
 }
 
@@ -392,17 +395,23 @@ install_profile() {
             else
                 # Create secure temporary file for error logging
                 local error_log
+                local cleanup_trap
                 error_log="$(mktemp)"
-                trap 'rm -f "${error_log}"' RETURN
+                cleanup_trap="$(printf 'rm -f %q' "${error_log}")"
+                trap "${cleanup_trap}" RETURN
 
                 # Try standard install first
                 log_info "Attempting standard SAM2 install..."
                 log_verbose "Using PyTorch index: ${PYTORCH_INDEX}"
                 if "${pip_cmd[@]}" --extra-index-url "${PYTORCH_INDEX}" sam2==1.1.0 2>"${error_log}"; then
+                    rm -f "${error_log}"
+                    trap - RETURN
                     log_info "SAM2 installed successfully via standard path."
                 else
                     log_warn "Standard install failed. Error log:"
                     cat "${error_log}" >&2
+                    rm -f "${error_log}"
+                    trap - RETURN
                     log_warn "Retrying with --no-build-isolation (torch must be pre-installed)..."
                     if "${pip_cmd[@]}" --extra-index-url "${PYTORCH_INDEX}" --no-build-isolation sam2==1.1.0; then
                         log_info "SAM2 installed successfully with --no-build-isolation."
@@ -482,6 +491,8 @@ main() {
         log_info "Verbose mode enabled"
     fi
 
+    log_verbose "Using bootstrap/runtime interpreter: ${PYTHON_BIN}"
+
     # Parse and install profiles
     IFS=',' read -ra PROFILES <<< "${PROFILE}"
 
@@ -499,7 +510,7 @@ main() {
 
     log_info "ML stack installation complete!"
     if [[ "${DRY_RUN}" != "true" ]]; then
-        log_info "Verify with: python3 -c 'import torch; print(torch.__version__)'"
+        log_info "Verify with: ${PYTHON_BIN} -c 'import torch; print(torch.__version__)'"
     fi
 }
 

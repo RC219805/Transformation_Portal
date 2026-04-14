@@ -1,0 +1,664 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rc219805.github.io/Transformation_Portal/docs/schemas/run_card/run_card.v2.schema.json",
+  "title": "Run Card v2",
+  "description": "Deterministic run card contract for lux_depth_v3 batch execution metadata with transparency-grade artifact commitments.",
+  "type": "object",
+  "required": [
+    "artifact_index",
+    "artifact_tree",
+    "backend_selection",
+    "backend_summary",
+    "batch_id",
+    "config_fingerprint",
+    "end_time",
+    "environment",
+    "error_count",
+    "git_revision",
+    "outliers",
+    "run_card_version",
+    "runtime_stats",
+    "start_time",
+    "success_count",
+    "total_images"
+  ],
+  "properties": {
+    "run_card_version": {
+      "type": "string",
+      "const": "v2"
+    },
+    "batch_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "start_time": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "end_time": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "config_fingerprint": {
+      "type": "object",
+      "required": [
+        "apex_strict_mode",
+        "backend_requested",
+        "backend_resolved",
+        "canonical_json",
+        "device_requested",
+        "device_resolved",
+        "depth_device",
+        "depth_quantization",
+        "hash_algorithm",
+        "model_variant",
+        "preset",
+        "preset_requested",
+        "preset_resolved",
+        "quality_tier",
+        "sha256",
+        "strict_inputs",
+        "strict_segmentation",
+        "v2_device",
+        "v2_preset",
+        "v2_upscaler_backend"
+      ],
+      "properties": {
+        "model_variant": {
+          "type": "string",
+          "minLength": 1
+        },
+        "depth_quantization": {
+          "type": "string",
+          "minLength": 1
+        },
+        "depth_device": {
+          "type": "string",
+          "minLength": 1
+        },
+        "preset": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "preset_requested": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "preset_resolved": {
+          "type": "string",
+          "minLength": 1
+        },
+        "backend_requested": {
+          "type": "string",
+          "minLength": 1
+        },
+        "backend_resolved": {
+          "type": "string",
+          "minLength": 1
+        },
+        "device_requested": {
+          "type": "string",
+          "minLength": 1
+        },
+        "device_resolved": {
+          "type": "string",
+          "minLength": 1
+        },
+        "quality_tier": {
+          "type": "string",
+          "minLength": 1
+        },
+        "raw_ingest_profile": {
+          "type": "string",
+          "minLength": 1
+        },
+        "raw_ingest_settings_hash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "strict_inputs": {
+          "type": "boolean"
+        },
+        "strict_segmentation": {
+          "type": "boolean"
+        },
+        "apex_strict_mode": {
+          "type": "boolean"
+        },
+        "v2_preset": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "v2_device": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "v2_upscaler_backend": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "depth_pro_python_executable": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "raw_python_executable": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "da3_python_executable": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "hash_algorithm": {
+          "type": "string",
+          "const": "sha256"
+        },
+        "canonical_json": {
+          "type": "string",
+          "minLength": 2
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "additionalProperties": false
+    },
+    "backend_selection": {
+      "type": "object",
+      "required": [
+        "device",
+        "model_id",
+        "requested",
+        "resolved"
+      ],
+      "properties": {
+        "requested": {
+          "type": "string",
+          "minLength": 1
+        },
+        "resolved": {
+          "type": "string",
+          "minLength": 1
+        },
+        "device": {
+          "type": "string",
+          "minLength": 1
+        },
+        "model_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "model_artifact_filename": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "model_artifact_sha256": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "logical_backend": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "resolved_engine": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "backend_summary": {
+      "type": "object",
+      "required": [
+        "fallback_images",
+        "final_backends_used",
+        "semantic_fallback_images",
+        "operational_fallback_images",
+        "primary_backend",
+        "requested_backend"
+      ],
+      "properties": {
+        "requested_backend": {
+          "type": "string",
+          "minLength": 1
+        },
+        "primary_backend": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "final_backends_used": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "fallback_images": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "semantic_fallback_images": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "operational_fallback_images": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "environment": {
+      "type": "object",
+      "required": [
+        "machine",
+        "platform",
+        "python_version"
+      ],
+      "properties": {
+        "python_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "platform": {
+          "type": "string",
+          "minLength": 1
+        },
+        "machine": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": true
+    },
+    "git_revision": {
+      "type": "object",
+      "required": [
+        "v2",
+        "v3"
+      ],
+      "properties": {
+        "v2": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "v3": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "runtime_stats": {
+      "type": "object",
+      "required": [
+        "count",
+        "max",
+        "mean",
+        "median",
+        "min",
+        "total"
+      ],
+      "properties": {
+        "count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "total": {
+          "type": "number",
+          "minimum": 0
+        },
+        "mean": {
+          "type": "number",
+          "minimum": 0
+        },
+        "min": {
+          "type": "number",
+          "minimum": 0
+        },
+        "max": {
+          "type": "number",
+          "minimum": 0
+        },
+        "median": {
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": true
+    },
+    "outliers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "image",
+          "metadata"
+        ],
+        "properties": {
+          "image": {
+            "type": "string",
+            "minLength": 1
+          },
+          "metadata": {
+            "type": "object",
+            "required": [
+              "is_outlier",
+              "median_runtime_s",
+              "ratio_to_median",
+              "runtime_s",
+              "threshold_multiplier"
+            ],
+            "properties": {
+              "is_outlier": {
+                "type": "boolean"
+              },
+              "runtime_s": {
+                "type": "number",
+                "minimum": 0
+              },
+              "median_runtime_s": {
+                "type": "number",
+                "minimum": 0
+              },
+              "ratio_to_median": {
+                "type": "number",
+                "minimum": 0
+              },
+              "threshold_multiplier": {
+                "type": "number",
+                "minimum": 0
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "total_images": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "success_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "error_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "inputs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "properties": {
+          "path": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "size_bytes": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "effective_config": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "result_summary": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "image",
+          "status"
+        ],
+        "properties": {
+          "image": {
+            "type": "string",
+            "minLength": 1
+          },
+          "status": {
+            "type": "string",
+            "minLength": 1
+          },
+          "backend": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "runtime_s": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "manifest_path": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
+          },
+          "error_code": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "error_message": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "artifact_index": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "artifact_type",
+          "path",
+          "relative_path",
+          "sha256",
+          "size_bytes"
+        ],
+        "properties": {
+          "artifact_type": {
+            "type": "string",
+            "minLength": 1
+          },
+          "path": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
+          },
+          "relative_path": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
+          },
+          "size_bytes": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "artifact_tree": {
+      "type": "object",
+      "required": [
+        "algorithm",
+        "artifacts",
+        "leaf_count",
+        "leaf_format",
+        "root_sha256"
+      ],
+      "properties": {
+        "algorithm": {
+          "const": "ct-sha256-v1"
+        },
+        "leaf_format": {
+          "const": "tp.run_card.artifact_leaf.v1"
+        },
+        "leaf_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "root_sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "artifacts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "artifact_type",
+              "leaf_sha256",
+              "relative_path",
+              "sha256",
+              "size_bytes"
+            ],
+            "properties": {
+              "artifact_type": {
+                "type": "string",
+                "minLength": 1
+              },
+              "relative_path": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
+              },
+              "size_bytes": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "sha256": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "leaf_sha256": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "proofs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "leaf_index",
+              "leaf_sha256",
+              "path",
+              "relative_path"
+            ],
+            "properties": {
+              "relative_path": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
+              },
+              "leaf_index": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "leaf_sha256": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "path": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "hash",
+                    "position"
+                  ],
+                  "properties": {
+                    "position": {
+                      "enum": [
+                        "left",
+                        "right"
+                      ]
+                    },
+                    "hash": {
+                      "type": "string",
+                      "pattern": "^[a-f0-9]{64}$"
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

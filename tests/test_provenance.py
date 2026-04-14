@@ -503,6 +503,28 @@ class TestJSONSerialization:
         assert restored.input.file_path == valid_provenance_metadata.input.file_path
         assert restored.exif == valid_provenance_metadata.exif
 
+    def test_roundtrip_serialization_preserves_warning_classification(
+        self,
+        valid_provenance_metadata: ProvenanceMetadata,
+    ):
+        """Optional warning classification metadata should survive serialization roundtrip."""
+        valid_provenance_metadata.warning_classification = {
+            "exiftool": {
+                "benign": [
+                    {
+                        "tag": "ExifTool:Warning",
+                        "message": "[minor] Possibly incorrect maker notes offsets (fix by -71244?)",
+                        "code": "EXIFTOOL_MAKERNOTE_OFFSET_WARNING",
+                        "classification": "benign",
+                    }
+                ],
+                "actionable": [],
+            }
+        }
+
+        restored = ProvenanceMetadata.from_dict(valid_provenance_metadata.to_dict())
+        assert restored.warning_classification == valid_provenance_metadata.warning_classification
+
 
 # =============================================================================
 # Test: Sidecar File Writing & Reading
@@ -651,6 +673,33 @@ class TestProvenanceCapture:
             assert provenance.exif  # Should have EXIF data
             assert provenance.toolchain["python_version"]
             assert provenance.ingest_context.config_fingerprint == config_fingerprint
+
+    def test_capture_provenance_classifies_benign_exiftool_warning_without_mutating_exif(
+        self,
+        sample_tiff_image: Path,
+        mock_exiftool_available,
+    ):
+        """Known minor maker-note warnings should be classified as benign without altering raw EXIF."""
+        warning_message = "[minor] Possibly incorrect maker notes offsets (fix by -71244?)"
+        exif_payload = {
+            "ExifTool:Warning": warning_message,
+            "EXIF:Make": "DJI",
+            "EXIF:Model": "FC9113",
+        }
+
+        with patch("transformation_portal.lux_depth_v3.provenance.extract_exif_metadata", return_value=exif_payload):
+            provenance = capture_provenance(
+                image_path=sample_tiff_image,
+                config_fingerprint="sha256:" + "f" * 64,
+                repo_root=None,
+            )
+
+        assert provenance.exif["ExifTool:Warning"] == warning_message
+        assert provenance.warning_classification is not None
+        classified = provenance.warning_classification["exiftool"]
+        assert classified["actionable"] == []
+        assert classified["benign"][0]["code"] == "EXIFTOOL_MAKERNOTE_OFFSET_WARNING"
+        assert classified["benign"][0]["message"] == warning_message
 
     def test_capture_provenance_file_not_found(self, tmp_path: Path):
         """Test provenance capture fails on non-existent file."""

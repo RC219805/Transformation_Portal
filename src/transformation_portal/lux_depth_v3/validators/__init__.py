@@ -16,6 +16,8 @@ Per ADR-043, this extraction:
 
 from __future__ import annotations
 
+from .release_assessment import assess_run_card_release
+from .run_card_integrity import verify_run_card_integrity
 from .run_card_validator import (
     RunCardValidationError,
     RunCardValidator,
@@ -28,4 +30,6 @@ __all__ = [
     "RunCardValidationError",
     "validate_run_card_payload",
     "validate_run_card_backend_semantics",
+    "verify_run_card_integrity",
+    "assess_run_card_release",
 ]

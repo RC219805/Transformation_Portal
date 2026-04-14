@@ -144,6 +144,7 @@ Troubleshooting:
 """
 
 import logging
+import os
 import sys
 from pathlib import Path
 from typing import Optional
@@ -157,8 +158,11 @@ except ImportError:
     )
     sys.exit(1)
 
+from ..core.raw_runtime import RAW_RUNTIME_ENV_VAR
 from ._backend_contract import backend_alias_warning, is_legacy_backend_alias, normalize_backend_id
 from .config import EnhanceConfig, Preset
+from .config_resolver import apply_effective_raw_runtime_config
+from .ingest_adapter import RAW_PREVIEW_ESCAPE_ENV
 from .orchestrator import EnhanceOrchestrator
 
 logger = logging.getLogger(__name__)
@@ -176,6 +180,81 @@ def _parse_bool_flag(value: str) -> bool:
         return value
     normalized = value.lower().strip()
     return normalized in ("on", "true", "yes", "1")
+
+
+def _raw_preview_escape_enabled() -> bool:
+    raw_value = os.getenv(RAW_PREVIEW_ESCAPE_ENV, "0").strip().lower()
+    return raw_value in {"1", "true", "yes", "on"}
+
+
+def _canonical_raw_ingest_status(
+    raw_python_executable: Optional[str] = None,
+) -> tuple[bool, Optional[str]]:
+    if raw_python_executable:
+        from transformation_portal.core.raw_runtime import check_raw_runtime
+
+        try:
+            check_raw_runtime(raw_python_executable, start=Path(__file__))
+        except FileNotFoundError as exc:
+            return False, str(exc)
+        except Exception:
+            logger.exception("Canonical RAW ingest is unavailable because the dedicated RAW runtime failed validation")
+            return False, "the dedicated RAW runtime is unavailable in this environment"
+        return True, None
+
+    try:
+        import rawpy  # noqa: F401
+    except ImportError:
+        return False, "rawpy is not installed"
+    except Exception:
+        logger.exception("Canonical RAW ingest is unavailable because rawpy failed to import cleanly")
+        return False, "rawpy is unavailable in this environment"
+    return True, None
+
+
+def _canonical_raw_ingest_available() -> bool:
+    available, _ = _canonical_raw_ingest_status()
+    return available
+
+
+def _preflight_raw_ingest_requirements(
+    image_files: list[Path],
+    raw_ingest_mode: str,
+    raw_python_executable: Optional[str] = None,
+) -> None:
+    from .raw_loader import is_raw_file
+
+    raw_inputs_detected = any(is_raw_file(image_path) for image_path in image_files)
+    if not raw_inputs_detected:
+        return
+
+    if raw_ingest_mode == "force_preview":
+        if _raw_preview_escape_enabled():
+            return
+        message = f"raw_ingest_mode=force_preview requires {RAW_PREVIEW_ESCAPE_ENV}=1 (debug-only escape hatch)."
+        logger.error(message)
+        print(message, file=sys.stdout)
+        raise typer.Exit(code=1)
+
+    raw_ingest_available, unavailable_reason = _canonical_raw_ingest_status(raw_python_executable)
+    if raw_ingest_available:
+        return
+
+    message = (
+        "RAW inputs detected but canonical RAW ingest is unavailable because "
+        f"{unavailable_reason or 'rawpy is unavailable in this environment'}."
+    )
+    if raw_python_executable:
+        message += (
+            " Rebuild that dedicated RAW runtime or point --raw-python / " f"{RAW_RUNTIME_ENV_VAR} at a working interpreter."
+        )
+    else:
+        message += ' Install with: pip install -e ".[raw]" or pip install rawpy'
+        if unavailable_reason != "rawpy is not installed":
+            message += " If rawpy is already installed, inspect the import/runtime error in the logs."
+    logger.error(message)
+    print(message, file=sys.stdout)
+    raise typer.Exit(code=1)
 
 
 def _configure_logging(
@@ -247,7 +326,9 @@ def main(
         "--depth-pro-python",
         help=(
             "Optional Python executable for an isolated Depth Pro environment. "
-            "Use this to keep depth_pro out of the main Transformation Portal venv."
+            "Use this to keep depth_pro out of the main Transformation Portal venv or to override "
+            "the auto-discovered repo-local runtime at ./.venv-depth-pro/bin/python "
+            "(bootstrap with ./scripts/setup/install_depth_pro_runtime.sh)."
         ),
     ),
     da3_python: Optional[str] = typer.Option(
@@ -258,6 +339,16 @@ def main(
             "Use this to keep DA3 out of the main Transformation Portal venv or to override "
             "the auto-discovered repo-local runtime at ./.venv-da3/bin/python "
             "(bootstrap with ./scripts/setup/install_da3_runtime.sh)."
+        ),
+    ),
+    raw_python: Optional[str] = typer.Option(
+        None,
+        "--raw-python",
+        help=(
+            "Optional Python executable for an isolated RAW ingest environment. "
+            "Use this to keep rawpy/LibRaw out of the main Transformation Portal venv or to override "
+            "the auto-discovered repo-local runtime at ./.venv-raw/bin/python "
+            "(bootstrap with ./scripts/setup/install_raw_runtime.sh)."
         ),
     ),
     depth_device: str = typer.Option(
@@ -301,6 +392,56 @@ def main(
         None,
         "--sam2-checkpoint-path",
         help=("Optional path to SAM2 checkpoint (.pt) when " "--segmentation-backend sam2"),
+    ),
+    sam2_tiling_enabled: bool = typer.Option(
+        False,
+        "--sam2-tiling-enabled",
+        help="Enable deterministic SAM2 tiling for large-image segmentation.",
+    ),
+    sam2_tile_size_px: int = typer.Option(
+        1536,
+        "--sam2-tile-size-px",
+        help="Tile size in pixels when SAM2 tiling is enabled.",
+    ),
+    sam2_overlap_px: int = typer.Option(
+        256,
+        "--sam2-overlap-px",
+        help="Tile overlap in pixels when SAM2 tiling is enabled.",
+    ),
+    sam2_global_pass_longest_side: int = typer.Option(
+        1280,
+        "--sam2-global-pass-longest-side",
+        help="Longest side for the SAM2 global seed pass when tiling is enabled.",
+    ),
+    sam2_max_concurrency: int = typer.Option(
+        1,
+        "--sam2-max-concurrency",
+        help="Maximum SAM2 tile concurrency for deterministic segmentation.",
+    ),
+    sam2_points_per_side: int = typer.Option(
+        32,
+        "--sam2-points-per-side",
+        help="SAM2 automatic mask generator points_per_side.",
+    ),
+    sam2_points_per_batch: int = typer.Option(
+        64,
+        "--sam2-points-per-batch",
+        help="SAM2 automatic mask generator points_per_batch.",
+    ),
+    sam2_pred_iou_thresh: float = typer.Option(
+        0.88,
+        "--sam2-pred-iou-thresh",
+        help="SAM2 automatic mask generator predicted IoU threshold.",
+    ),
+    sam2_stability_score_thresh: float = typer.Option(
+        0.85,
+        "--sam2-stability-score-thresh",
+        help="SAM2 automatic mask generator stability score threshold.",
+    ),
+    sam2_crop_n_layers: int = typer.Option(
+        1,
+        "--sam2-crop-n-layers",
+        help="SAM2 automatic mask generator crop_n_layers.",
     ),
     strict_segmentation: bool = typer.Option(
         False,
@@ -360,6 +501,16 @@ def main(
         "on",
         "--emit-run-card",
         help="Emit run card for reproducibility: on/off",
+    ),
+    run_card_version: str = typer.Option(
+        "v1",
+        "--run-card-version",
+        help="Run card format version: v1 (legacy hash-of-hashes) or v2 (transparency artifact tree).",
+    ),
+    run_card_include_proofs: str = typer.Option(
+        "off",
+        "--run-card-include-proofs",
+        help="Include per-artifact inclusion proofs in v2 run cards: on/off",
     ),
     # License and Research Acknowledgements
     non_commercial_ok: str = typer.Option(
@@ -524,6 +675,13 @@ def main(
     enable_emit_marketing = _parse_bool_flag(emit_marketing)
     enable_emit_report = _parse_bool_flag(emit_report)
     enable_emit_run_card = _parse_bool_flag(emit_run_card)
+    enable_run_card_include_proofs = _parse_bool_flag(run_card_include_proofs)
+    normalized_run_card_version = str(run_card_version or "v1").strip().lower()
+    if normalized_run_card_version not in {"v1", "v2"}:
+        error_msg = f"Invalid --run-card-version '{run_card_version}'. " "Must be one of: v1, v2"
+        logger.error(error_msg)
+        print(error_msg, file=sys.stdout)
+        raise typer.Exit(code=1)
     enable_non_commercial = _parse_bool_flag(non_commercial_ok)
     enable_apple_license = _parse_bool_flag(
         accept_apple_depth_pro_research_license,
@@ -750,6 +908,7 @@ def main(
         accept_apple_depth_pro_research_license=enable_apple_license,
         accept_research_tools_license=enable_research_tools_license,
         depth_pro_python_executable=depth_pro_python,
+        raw_python_executable=raw_python,
         da3_python_executable=da3_python,
         force_depth=force_depth or overwrite,
         enable_depth_cache=enable_cache_depth,
@@ -763,12 +922,24 @@ def main(
         material_segmentation_backend=segmentation_backend.lower(),
         sam2_model_size=sam2_model_size.lower(),
         sam2_checkpoint_path=(str(sam2_checkpoint_path) if sam2_checkpoint_path else None),
+        sam2_tiling_enabled=sam2_tiling_enabled,
+        sam2_tile_size_px=sam2_tile_size_px,
+        sam2_overlap_px=sam2_overlap_px,
+        sam2_global_pass_longest_side=sam2_global_pass_longest_side,
+        sam2_max_concurrency=sam2_max_concurrency,
+        sam2_points_per_side=sam2_points_per_side,
+        sam2_points_per_batch=sam2_points_per_batch,
+        sam2_pred_iou_thresh=sam2_pred_iou_thresh,
+        sam2_stability_score_thresh=sam2_stability_score_thresh,
+        sam2_crop_n_layers=sam2_crop_n_layers,
         strict_backend=strict_segmentation,
         emit_master16=enable_emit_master16,
         emit_upscaled16=enable_emit_upscaled16,
         emit_marketing=enable_emit_marketing,
         emit_report=enable_emit_report,
         emit_run_card=enable_emit_run_card,
+        run_card_version=normalized_run_card_version,
+        run_card_include_proofs=enable_run_card_include_proofs,
         enable_reconstruction=enable_reconstruction_bool,
         grouping_mode=grouping_mode_normalized,
         cameras_sidecar_path=(str(cameras_sidecar_path) if cameras_sidecar_path else None),
@@ -781,6 +952,7 @@ def main(
         raw_demosaic=raw_demosaic_normalized,
         allow_semantic_fallback=allow_semantic_fallback,
     )
+    apply_effective_raw_runtime_config(config)
 
     # Forward-compatible knobs: apply via setattr
     # for non-breaking config evolution.
@@ -794,12 +966,6 @@ def main(
 
     if verify_images:
         setattr(config, "verify_images", verify_images)
-
-    # Create orchestrator
-    logger.info(
-        "Initializing orchestrator with" f" output dir: {output_dir}",
-    )
-    orchestrator = EnhanceOrchestrator(config=config, output_root=output_dir)
 
     # Discover images using same hygiene filters as orchestrator
     from .input_discovery import DiscoveryConfig, discover_images
@@ -831,6 +997,17 @@ def main(
         raise typer.Exit(code=1)
 
     logger.info(f"Found {len(image_files)} images to process")
+    _preflight_raw_ingest_requirements(
+        image_files,
+        raw_ingest_mode,
+        config.raw_python_executable,
+    )
+
+    # Create orchestrator only after input discovery and RAW preflight succeed.
+    logger.info(
+        "Initializing orchestrator with" f" output dir: {output_dir}",
+    )
+    orchestrator = EnhanceOrchestrator(config=config, output_root=output_dir)
 
     # Process batch
     try:

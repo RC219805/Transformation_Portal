@@ -1,11 +1,11 @@
 # ML Core layer for macOS Apple Silicon (Darwin arm64)
-# Platform-specific lockfile for deterministic pip-compile resolution.
+# Target-owned lockfile for deterministic pip-compile resolution.
 #
 # This file is Apple Silicon-specific so the repo can keep Intel-only
 # compatibility caps isolated to the x86_64 lock while allowing the arm64
 # baseline to carry Core ML support.
 #
-# Run `make compile` in this directory to generate pinned ml-core-darwin-arm64.txt
+# Run `make compile-ml-darwin-arm64` in this directory to generate pinned ml-core-darwin-arm64.txt
 #
 # PLATFORM TARGETS:
 #   - darwin-arm64-cpu    (macOS Apple Silicon, CPU fallback)
@@ -48,7 +48,7 @@ scikit-image>=0.21.0,<1
 # Configuration / diagnostics / color
 PyYAML>=6.0,<7
 colour-science>=0.4.2,<1
-psutil>=5.9.0,<7
+psutil>=5.9.0,<8
 memory-profiler>=0.61.0,<1
 
 # RAG / embedding support

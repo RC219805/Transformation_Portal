@@ -34,6 +34,92 @@ boundary.
   `make test-frontdoor-contract`, `make test-portal-contract`,
   `make validate-frontdoor-browser`, and `make validate-portal-browser`.
 
+## Brand-System Unification Across Browser Surfaces
+
+### Scope Lock
+
+This tranche applies only to the browser surfaces at `/`, `/login`, and
+`/portal`.
+
+- No route, auth, proxy, query-param, or `/v1/*` changes.
+- Existing `data-ui` hooks and CTA destinations stay stable.
+- The authoritative art-direction reference sheet for this tranche is
+  `output/lux_depth_v3_apex/v2/DNA logo branding presentation.tif`.
+
+### Verified Review Baseline
+
+- `make test-frontdoor-contract` passed under Node `22.22.2`.
+- `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/pytest tests/test_app_orchestrator_runtime.py tests/validation/test_portal_smoke_scripts.py -q`
+  passed during this review (`175 passed`).
+- `make test-portal-contract` still needs rerun outside the current sandbox
+  when this tranche closes because the observed failure here was
+  `pytest-rerunfailures` socket binding, not product logic drift.
+- Live browser validation remains the completion gate for this tranche:
+  `make validate-frontdoor-browser` and `make validate-portal-browser`.
+
+### Asset Taxonomy and Placement Rules
+
+The browser surfaces now use an explicit brand taxonomy instead of a generic
+single-mark path:
+
+- `kind`: `symbol` | `lockup`
+- `variant`: `dark` | `light`
+
+Canonical asset names:
+
+- `dna-symbol-dark.svg`
+- `dna-symbol-light.svg`
+- `dna-lockup-dark.svg`
+- `dna-lockup-light.svg`
+
+Surface rules:
+
+- Homepage header uses `symbol`.
+- Homepage hero may show a restrained `lockup` without changing CTA order,
+  nav structure, or `data-ui` contracts.
+- Login uses `lockup` in the existing centered branded shell.
+- Portal uses mirrored theme-specific `symbol` assets only and keeps
+  “Transformation Portal” as the dominant text label.
+
+### Split-Shell Asset Contract
+
+Front-door assets live under:
+
+- `web/secure-landing/public/brand/`
+
+Mirrored portal-served symbol assets live under:
+
+- `public/portal-assets/brand/`
+
+The split-shell invariant is strict:
+
+- Each mirrored frontdoor and portal symbol SVG must remain byte-identical.
+- Any `/portal/assets/brand/*` reference must be explicitly allowlisted in
+  `config/portal_asset_manifest.json`.
+- Runtime tests must continue to verify that portal brand references are
+  manifest-backed and repo-local.
+
+### Gap Closed In This Review
+
+Before this tranche, the refined identity existed as art direction but not as a
+formal browser contract. The repo lacked:
+
+- an explicit `symbol` vs `lockup` taxonomy,
+- a portal allowlist for shared brand assets,
+- parity enforcement across the frontdoor and portal copies, and
+- a placement rule preventing a wide lockup from being treated like a square
+  header mark.
+
+This tranche closes that gap by making asset selection deterministic,
+theme-aware, and contract-tested.
+
+### Next Serious Upgrade Sequence
+
+- Modularize the portal shell without changing the FastAPI/HTML contract.
+- Harden managed browser smoke execution into a repeatable local and CI path.
+- Introduce a shared cross-surface token and motion layer after asset parity is
+  stable; keep any React/Next portal migration as a later decision gate.
+
 ## Correction Matrix
 
 | Original draft claim | Status | Repo truth | Revised direction |
@@ -176,7 +262,7 @@ Issues to address:
 
 ## Incremental Delivery Roadmap
 
-### Current Status as of April 8, 2026
+### Current Status as of April 9, 2026
 
 The repo moved past the initial re-baseline quickly on April 8, 2026. The
 strategy should therefore treat the following as already shipped rather than
@@ -194,13 +280,61 @@ still pending:
   leaving those as planned future concepts.
 - Portal disclosure auto-open behavior is already state-driven from preview
   issues, research acknowledgments, and reconstruction/runtime posture.
+- `operate` and `review` already ship a compact context ribbon for selected
+  job, freshness, artifact, and compare state rather than leaving that as a
+  future layout concept.
+- Review deep links already extend the route contract through additive
+  `artifact=<relative-path>` and `compare=1` params on top of the existing
+  `view` and `job` state.
+- Review compare surfaces already include paired-output summary behavior instead
+  of treating compare state as an implicit thumbnail-only affordance.
 - `operate` and `review` already preserve selected-job routing through
   `?view=operate|review&job=...` and reuse the last selected job across view
   changes.
+- Portal runtime contracts and browser smoke already pin the context ribbon,
+  additive review deep links, compare-summary behavior, selected-job reuse, and
+  dispatch-tool disclosure so Phase 2B does not need to introduce them as
+  net-new capabilities.
+- Step 3 now keeps an always-visible posture band for reconstruction state,
+  runtime workers, RAW ingest, debug-bundle posture, preview status, and
+  estimate summary outside the contextual runtime disclosure.
+- Step 3 disclosure badges and hint copy now frame advanced, governance, and
+  reconstruction controls as contextual or attention-needed layers instead of
+  peers to the primary posture band.
+- Step 4 now groups `Next Operator Action` with a dispatch reason and primary
+  execute CTA while keeping pre-run evidence and CLI/config parity tools
+  visibly secondary.
+- Operate/review freshness and paired-comparison copy now stay aligned across
+  the context ribbon, selected-job inspector, and review compare summary.
+- Phase 3 opened on April 9, 2026 as a bounded cross-surface continuity
+  tranche across homepage, login, and portal rather than as a new portal-only
+  feature lane.
+- Stable homepage/login `data-ui` hooks already ship in repo truth, and the
+  frontdoor route/browser validation layer now keys off those selectors rather
+  than exact marketing copy.
+- Shared CTA hierarchy, login information sequence, loading/error-state shell
+  polish, and portal mobile/material compression landed on April 9, 2026 as
+  the implementation body of Phase 3.
+- The frontdoor roadmap remains closed. This strategy document is now the
+  active implementation record for the UX tranche instead of opening a new
+  frontdoor roadmap phase.
+- The local verification baseline on April 9, 2026 is:
+  - `.venv/bin/python -m pytest -q tests/test_app_orchestrator_runtime.py tests/validation/test_portal_smoke_scripts.py`
+    passed in this workspace (`180 passed in 1.99s`);
+  - `.venv/bin/python scripts/validation/validate_portal_browser_smoke.py --spawn-local-backend --api-key contract-secret`
+    passed in this workspace;
+  - `make test-frontdoor-contract` passed after switching the frontdoor toolchain
+    to Node `22.22.2` and rebuilding native modules for that runtime;
+  - `make validate-frontdoor-browser` passed under the same Node `22.22.2`
+    environment;
+  - the default workspace runtime still resolves to Node `25.9.0`, so
+    frontdoor contract/build/browser commands must continue to switch to
+    Node `22.x` before validation.
 
-This leaves the active UX lane as a smaller portal-only Phase 2B close-out, not
-a fresh Phase 1 accessibility pass and not a broader Phase 3 cross-surface
-polish push.
+Phase 2B is now closed out. Phase 3 implementation and validation close-out
+are complete, and no open UX validation gate remains beyond rerunning the same
+contract/browser checks when homepage, login, portal, or managed frontdoor
+behavior changes.
 
 ### Phase 1: Accessibility and Token Alignment (Completed April 8, 2026)
 
@@ -218,28 +352,33 @@ Acceptance focus:
 Status:
 - Completed on April 8, 2026.
 
-### Phase 2B: Portal Hierarchy and Context Close-out (Active)
+### Phase 2B: Portal Hierarchy and Context Close-out (Completed April 8, 2026)
 
 Scope:
 - Truth-sync the UX strategy to shipped portal work so the active lane no
-  longer treats already-landed operator hints, disclosure defaults, and
-  selected-job routing as pending.
+  longer treats already-landed operator hints, disclosure defaults, selected-job
+  routing, route-backed review context, compare-summary behavior, or dispatch
+  parity tooling as pending.
 - Tighten Step 3 and Step 4 hierarchy in the portal only by making output
   posture primary and keeping advanced/research controls visibly secondary.
-- Add a compact operate/review context ribbon plus shareable URL-backed review
-  context through additive `artifact=<relative-path>` and `compare=1` query
-  params on top of the existing `view` and `job` route contract.
-- Normalize stale or invalid job/artifact/compare route state back to the
-  nearest valid client-derived selection without changing backend APIs.
+- Keep the shipped compact operate/review context ribbon and shareable URL-backed
+  review context, then only refine copy, layout, and consistency where the
+  remaining close-out work still benefits from polish.
+- Preserve the existing stale-route normalization behavior that reconciles
+  invalid job/artifact/compare state back to the nearest valid client-derived
+  selection without changing backend APIs.
 
 Acceptance focus:
 - Preserve `?view=` routing and existing build-step semantics.
-- Preserve additive `job=` deep links while extending the route contract only
-  through optional `artifact=` and `compare=1` params.
+- Preserve additive `job=` deep links plus the existing optional `artifact=`
+  and `compare=1` review params without expanding the route contract further.
 - Preserve shortcut, drawer, and CLI-parity flows.
 - Keep direct-debug and managed mode behavior aligned with existing contracts.
 
-### Phase 3: Cross-surface Visual Continuity (Deferred)
+Status:
+- Completed on April 8, 2026.
+
+### Phase 3: Cross-surface Visual Continuity (Completed April 9, 2026)
 
 Scope:
 - Harmonize CTA emphasis, empty/loading/error states, and premium polish across
@@ -247,14 +386,28 @@ Scope:
 - Evolve the existing portal shells toward a more deliberate bento-like visual
   rhythm without replacing the current structural model.
 - Improve mobile compression and spacing consistency across all three surfaces.
+- Keep the implementation in the current CSS sources of truth:
+  `frontdoor-homepage.css`, `login.css`, and the later custom override section
+  of `portal.css`, without introducing a shared CSS asset or new runtime
+  dependency.
+- Keep the frontdoor roadmap closed and record this tranche here rather than
+  opening a separate roadmap lane.
 
 Acceptance focus:
 - Managed auth and proxy boundaries stay unchanged.
+- No route, auth, proxy, or `/v1/*` semantic changes are introduced.
+- Homepage/login contract tests and browser smoke must stay keyed to durable
+  selector hooks rather than exact copy.
 - Decorative motion remains optional and reduced-motion safe.
 - Frontdoor and portal browser smokes both remain required.
+- Frontdoor contract verification still runs only in a Node `22.x`
+  environment.
 
 Status:
-- Deferred until the portal-only Phase 2B close-out is complete.
+- Implementation and validation close-out completed on April 9, 2026. Portal
+  contract/runtime coverage, live portal browser smoke, frontdoor
+  contract/build verification, and live managed frontdoor browser smoke are
+  green when frontdoor commands run under Node `22.22.2`.
 
 ### Phase 4: Power-user Enhancements (Deferred)
 
@@ -270,8 +423,8 @@ Acceptance focus:
   disclosure model.
 
 Status:
-- Deferred until Phase 2B and any later Phase 3 work both prove that navigation
-  friction remains high.
+- Deferred until later UX evidence proves that navigation friction remains high
+  after the completed hierarchy work and any future Phase 3 polish.
 
 ## React/Next Migration Decision Gate
 
@@ -314,25 +467,36 @@ The revised strategy is complete only if all of the following remain true:
 - Every recommendation is mapped to a real current surface: homepage, login, or
   portal.
 - Near-term work preserves managed-auth, proxy, and route contracts.
+- The completed Phase 2B close-out is recorded as truth-sync plus hierarchy
+  polish rather than as a fresh feature tranche for already-shipped portal
+  capabilities.
 - Future-state items are clearly labeled as gated rather than implied defaults.
 - Desktop, mobile, keyboard-only, reduced-motion, and managed-login flows are
   explicitly covered.
+- Portal contract validation and live portal browser smoke are recorded as
+  complete rather than pending.
+- Managed frontdoor contract/build and live browser validation are recorded as
+  green when run under Node `22.x`, while unsupported runtimes remain
+  explicitly unsupported rather than treated as product regressions.
 
-Recommended validation commands for any implementation derived from this
-strategy:
+Portal truth-sync evidence already green as of April 9, 2026:
 
 ```bash
 make test-portal-contract
 make validate-portal-browser
 ```
 
-Run the frontdoor contract/browser checks only when homepage or login surfaces
-change in the same tranche:
+Managed frontdoor truth-sync evidence is also green as of April 9, 2026 when
+run under Node `22.22.2`:
 
 ```bash
 make test-frontdoor-contract
 make validate-frontdoor-browser
 ```
+
+`make test-frontdoor-contract` and `make validate-frontdoor-browser` remain
+Node `22.x` only because the frontdoor package explicitly rejects unsupported
+runtimes and its native modules must be built against that ABI.
 
 Run `make test-orchestrator-contract` as well only if a UX change alters
 `/v1/*`, bootstrap behavior, or upstream portal semantics rather than pure
@@ -351,25 +515,43 @@ portal presentation and state handling.
   and a secondary CLI/config disclosure
 - State-driven disclosure defaults for advanced, governance, reconstruction,
   and dispatch-tool groupings
+- An always-visible Step 3 posture band for runtime posture, preview status,
+  research risk, and estimate summary outside the reconstruction disclosure
+- Contextual Step 3 badge/hint copy that marks secondary controls as
+  contextual or attention-needed instead of primary
+- A compact operate/review context ribbon for selected job, freshness,
+  artifact, and compare state
+- A Step 4 primary dispatch lane that pairs `Next Operator Action` with a live
+  dispatch reason and execute CTA while keeping evidence and parity tools
+  secondary
+- Consistent freshness and paired-comparison copy across the ribbon,
+  selected-job inspector, and review compare summary
+- Shareable additive `artifact=` and `compare=1` deep links for review context
+  with stale-route normalization back to valid client state
+- Compare-summary review behavior for paired outputs
 - Selected-job route persistence across `operate` and `review`
 - Keyboard support for build tabs, job list navigation, overlays, and existing
   shortcuts
 - Managed login protections including CSRF, throttling, and session rotation
 - Cross-surface token alignment and 44px target coverage for the managed
   browser surfaces
+- Stable homepage/login `data-ui` hooks for route tests and browser smoke
+- Homepage CTA routing that clearly separates learn, verify, and operator
+  access flows
+- Managed login sequencing that distinguishes verified access context from
+  operator credential entry and recovery copy
+- Portal queue/review empty-state polish plus narrow-width shell compression
+  across topbar, context ribbon, queue, inspector, and artifact review shells
 - Portal loading polish, backend-driven operator hints, review provenance, and
   review-compare accessibility improvements shipped on April 8, 2026
+- Portal contract and browser coverage for the context ribbon, additive review
+  deep links, compare-summary behavior, selected-job reuse, and dispatch-tool
+  disclosure
 
 ### Proposed
 
-- Finish the remaining portal-only Phase 2B hierarchy cleanup
-- A compact operate/review context ribbon for selected job, freshness,
-  artifact, and compare state
-- Shareable additive `artifact=` and `compare=1` deep links for review context
-  with stale-route normalization back to valid client state
-- Clearer Step 3 grouping between primary output posture and secondary
-  advanced/research controls
-- Cross-surface polish only after the portal close-out lands
+- Routine rerun of portal/frontdoor contract and browser validation whenever
+  homepage, login, portal, or managed frontdoor behavior changes
 - Optional command-palette evaluation only after earlier IA improvements land
 
 ## Source Notes and Assumptions
