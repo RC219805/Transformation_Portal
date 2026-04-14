@@ -80,7 +80,7 @@ opencv-python==4.13.0.92
     # via
     #   -c all.txt
     #   -r base.in
-pillow==12.1.1
+pillow==12.2.0
     # via
     #   -c all.txt
     #   -r base.in
