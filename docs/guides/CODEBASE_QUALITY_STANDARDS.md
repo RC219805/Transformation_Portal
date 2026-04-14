@@ -1,8 +1,3 @@
-> ⚠️ **DEPRECATED**
->
-> This document has been superseded by [CODE_QUALITY_STANDARDS.md](CODE_QUALITY_STANDARDS.md).
-> Please use that document instead. This file will be removed on 2026-03-06.
-
 # Codebase Quality Standards
 
 ## Overview
@@ -84,19 +79,27 @@ def process_image(
 ## Automated Quality Gates
 
 ### Pre-Commit Checks
-Location: `.github/pre-commit-hook.sh`
+The repository uses the pre-commit framework (`.pre-commit-config.yaml`) as the
+canonical hook system. Installation:
 
-Automatically runs:
+```bash
+make install-hooks
+# or
+pre-commit install -f
+```
+
+For manual execution of the unified quality gate:
+```bash
+./scripts/pre_commit_hook.sh
+```
+
+The unified quality gate automatically runs:
 1. **Undefined name detection** (F821)
 2. **Trailing whitespace removal**
 3. **Markdown file count check**
 4. **Import validation**
-
-Install:
-```bash
-cp .github/pre-commit-hook.sh .git/hooks/pre-commit
-chmod +x .git/hooks/pre-commit
-```
+5. **Root file placement checks**
+6. **Black/isort formatting (CI parity)**
 
 ### CI/CD Workflow Quality Gate
 Location: `.github/workflows/quality-gate.yml`

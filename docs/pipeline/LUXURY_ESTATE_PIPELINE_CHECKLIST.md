@@ -3,7 +3,7 @@
 ## ✅ Pre-Flight Checklist
 
 ### 1. System Requirements
-- [ ] Python 3.10+ installed
+- [ ] Python 3.11+ installed
 - [ ] macOS (for CoreML/MPS) or Linux/Windows (CPU/CUDA)
 - [ ] 16GB+ RAM (32GB recommended for full pipeline)
 - [ ] 50GB+ free disk space for models and outputs

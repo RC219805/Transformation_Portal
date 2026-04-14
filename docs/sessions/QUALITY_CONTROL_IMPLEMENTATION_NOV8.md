@@ -32,8 +32,13 @@ Establish robust quality control safeguards to prevent recurring CI/CD failures 
 
 **Impact**: Prevents 90% of common issues from reaching main branch
 
-### 2. Pre-Commit Hook (`.github/pre-commit-hook.sh`)
+### 2. Pre-Commit Hook System
 **Purpose**: Local quality checks before git commit
+
+> **Note (Updated)**: The repository now uses the pre-commit framework as the
+> canonical hook system. The legacy `.github/pre-commit-hook.sh` delegates to
+> `scripts/pre_commit_hook.sh` which invokes the unified quality gate at
+> `scripts/utilities/pre-commit-quality-check.py`.
 
 **Checks**:
 - Undefined names (F821)
@@ -41,14 +46,16 @@ Establish robust quality control safeguards to prevent recurring CI/CD failures 
 - Markdown file count
 - Missing imports
 - Import scope issues
+- Root file placement
 
-**Installation**:
+**Installation (Current)**:
 ```bash
-cp .github/pre-commit-hook.sh .git/hooks/pre-commit
-chmod +x .git/hooks/pre-commit
+make install-hooks
+# or
+pre-commit install -f
 ```
 
-### 3. Pre-Commit Quality Check Script (`.pre-commit-quality-check.py`)
+### 3. Pre-Commit Quality Check Script (`scripts/utilities/pre-commit-quality-check.py`)
 **Purpose**: Comprehensive quality analysis
 
 **Features**:
@@ -60,7 +67,9 @@ chmod +x .git/hooks/pre-commit
 
 **Usage**:
 ```bash
-python3 .pre-commit-quality-check.py
+./scripts/pre_commit_hook.sh
+# or
+python3 scripts/utilities/pre-commit-quality-check.py
 ```
 
 ### 4. Documentation Reorganization
@@ -117,7 +126,7 @@ python3 .pre-commit-quality-check.py
 1. **Pre-commit hooks** prevent bad commits
 2. **CI auto-fixes** handle minor issues automatically
 3. **Quality standards doc** guides developers
-4. **Regular audits** via `.pre-commit-quality-check.py`
+4. **Regular audits** via `./scripts/pre_commit_hook.sh`
 
 ### Reactive Measures
 1. **Flake8 critical errors** block CI
@@ -129,8 +138,11 @@ python3 .pre-commit-quality-check.py
 
 ### Before Committing
 ```bash
-# 1. Run quality check
-python3 .pre-commit-quality-check.py
+# 1. Run quality check (preferred)
+./scripts/pre_commit_hook.sh
+
+# Or run all pre-commit hooks
+make pre-commit
 
 # 2. Auto-fix trailing whitespace
 autopep8 --in-place --select=W291,W293 *.py
