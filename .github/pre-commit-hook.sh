@@ -133,7 +133,7 @@ if [ "${#staged_py[@]}" -gt 0 ]; then
     echo "Auto-fixing trailing whitespace..."
     for file in "${staged_py[@]}"; do
         if [ -f "$file" ]; then
-            # Portable sed: try GNU-style first, fall back to BSD-style
+            # Portable sed: detect GNU vs BSD and use appropriate -i syntax
             if sed --version >/dev/null 2>&1; then
                 sed -i 's/[[:space:]]*$//' "$file"
             else
