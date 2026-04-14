@@ -10,7 +10,7 @@ Coverage:
 1. Homepage loads and renders the public DNA hero.
 2. Login loads with the operator form and front-door video shell.
 3. Username/password authentication succeeds.
-4. Managed portal entry lands on `/portal` with browser-side API key input hidden.
+4. Managed portal entry honors a validated `/portal?view=build` returnTo and keeps browser-side API key input hidden.
 
 Run via:
     python scripts/validation/validate_frontdoor_browser_smoke.py
@@ -399,6 +399,7 @@ def _frontdoor_state_probe_expression() -> str:
     title: document.title,
     readyState: document.readyState,
     pathname: window.location.pathname,
+    locationSearch: window.location.search,
     homepageHeroReady: !!document.querySelector('[data-ui="homepage-hero-title"]'),
     homepageEntryRailReady: !!document.querySelector('[data-ui="homepage-entry-rail"]'),
     homepageLearnLinkReady: !!document.querySelector('[data-ui="homepage-learn-link"]'),
@@ -523,11 +524,9 @@ def _navigate_expression(pathname: str) -> str:
     encoded = json.dumps(pathname)
     return f"""
 (() => {{
-  const url = new URL(window.location.href);
-  url.pathname = {encoded};
-  url.search = '';
+  const url = new URL({encoded}, window.location.origin);
   window.location.assign(url.toString());
-  return url.toString();
+  return `${{url.pathname}}${{url.search}}`;
 }})()
 """
 
@@ -691,7 +690,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         )
 
         print("frontdoor-browser-smoke: opening login", flush=True)
-        connection.evaluate(_navigate_expression("/login"))
+        connection.evaluate(_navigate_expression("/login?returnTo=%2Fportal%3Fview%3Dbuild"))
         login_state = _poll(
             connection,
             _frontdoor_state_probe_expression(),
@@ -699,6 +698,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
                 isinstance(value, dict)
                 and str(value.get("readyState", "")) == "complete"
                 and str(value.get("pathname", "")) == "/login"
+                and "returnTo=%2Fportal%3Fview%3Dbuild" in str(value.get("locationSearch", ""))
                 and bool(value.get("loginTitleReady"))
                 and bool(value.get("loginEntryStateReady"))
                 and bool(value.get("loginSequenceReady"))
@@ -763,7 +763,8 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
                 isinstance(value, dict)
                 and str(value.get("readyState", "")) == "complete"
                 and str(value.get("pathname", "")) == "/portal"
-                and str(value.get("currentView", "")) == "overview"
+                and str(value.get("currentView", "")) == "build"
+                and "view=build" in str(value.get("locationSearch", ""))
                 and bool(value.get("apiKeySectionHidden"))
                 and bool(value.get("portalAccessStateReady"))
                 and str(value.get("authModeBadge", "")).lower() == "managed"
