@@ -35,6 +35,8 @@
 const API_BASE = '';
 const STORAGE_KEY = 'tp_orchestrator_profiles_final';
 const API_KEY_STORAGE_KEY = 'tp_api_key';
+const TRANSIENT_DRAFT_STORAGE_KEY = 'tp_portal_transient_draft';
+const TRANSIENT_DRAFT_SCHEMA = 'tp.portal.transient_draft.v1';
 const THEME_STORAGE_KEY = 'tp_theme';
 const THEME_STORAGE_VERSION_KEY = 'tp_theme_version';
 const THEME_STORAGE_VERSION = '2';
@@ -58,6 +60,8 @@ const SSE_RECONNECT_JITTER_MS = 250;
 const SSE_STALL_CHECK_INTERVAL_MS = 10000;
 const SSE_STALL_THRESHOLD_MS = 45000;
 const CONFIG_PREVIEW_DEBOUNCE_MS = 250;
+const TRANSIENT_DRAFT_PERSIST_DEBOUNCE_MS = 200;
+const DEFERRED_REVIEW_SURFACE_RETRY_WINDOW_MS = 30000;
 const DISPATCH_BACKEND_OFFLINE_MESSAGE = 'Backend is offline. Dispatch is disabled until connectivity is restored.';
 const CONFIG_PREVIEW_SUPPORTED_PIPELINES = new Set([
     'lux-depth-v3',
@@ -65,6 +69,7 @@ const CONFIG_PREVIEW_SUPPORTED_PIPELINES = new Set([
     'archive-gate-b',
     'archive-gate-c'
 ]);
+const STAGED_UPLOAD_SUPPORTED_PIPELINES = new Set(['lux-depth-v3', 'archive-gate-a']);
 const EVENT_SOURCE_READY_STATE_CONNECTING = 0;
 const EVENT_SOURCE_READY_STATE_OPEN = 1;
 const EVENT_SOURCE_READY_STATE_CLOSED = 2;
@@ -80,6 +85,13 @@ let sseWatchdogIntervalId = null;
 let healthCheckInFlight = false;
 let lastHealthCheckAt = 0;
 let configPreviewTimerId = null;
+let transientDraftPersistTimerId = null;
+let transientDraftPersistIdleId = null;
+let deferredReviewSurfaceApi = null;
+let deferredReviewSurfaceLoadPromise = null;
+let deferredReviewSurfaceCssLoaded = false;
+let deferredReviewSurfaceLoadFailedAt = 0;
+let deferredReviewSurfaceLoadLastToastAt = 0;
 
 /* __PORTAL_INTERNALS__ */
 
@@ -118,7 +130,8 @@ const state = {
     presetsByPipeline: {},
     auth: portalInternals.createPortalAuthState(),
     bootstrap: portalInternals.createPortalBootstrapState(Date.now()),
-    lastDiagnostics: portalInternals.createPortalLastDiagnosticsState()
+    lastDiagnostics: portalInternals.createPortalLastDiagnosticsState(),
+    rum: portalInternals.createPortalRumState()
 };
 
 // ============================================================================
@@ -226,6 +239,17 @@ const els = {
     inputDir: _domId('inputDir'),
     outputDir: _domId('outputDir'),
     inputDirStatus: _domId('inputDirStatus'),
+    stagedUploadShell: _domId('stagedUploadShell'),
+    stagedUploadStatus: _domId('stagedUploadStatus'),
+    stagedUploadDropzone: _domId('stagedUploadDropzone'),
+    stagedUploadPickFilesBtn: _domId('stagedUploadPickFilesBtn'),
+    stagedUploadPickFolderBtn: _domId('stagedUploadPickFolderBtn'),
+    stagedUploadFilesInput: _domId('stagedUploadFilesInput'),
+    stagedUploadFolderInput: _domId('stagedUploadFolderInput'),
+    stagedUploadProgressBar: _domId('stagedUploadProgressBar'),
+    stagedUploadProgressLabel: _domId('stagedUploadProgressLabel'),
+    stagedUploadSummary: _domId('stagedUploadSummary'),
+    stagedUploadError: _domId('stagedUploadError'),
     outputDirStatus: _domId('outputDirStatus'),
     archiveCanonicalCommand: _domId('archiveCanonicalCommand'),
     archiveCanonicalCommandHint: _domId('archiveCanonicalCommandHint'),
@@ -446,6 +470,7 @@ const els = {
     reviewProvenanceArtifactRole: _domId('reviewProvenanceArtifactRole'),
     reviewProvenanceRunState: _domId('reviewProvenanceRunState'),
     reviewProvenancePath: _domId('reviewProvenancePath'),
+    reviewProvenanceFingerprint: _domId('reviewProvenanceFingerprint'),
     reviewProvenanceFreshness: _domId('reviewProvenanceFreshness'),
     reviewProvenanceSource: _domId('reviewProvenanceSource'),
     reviewProvenanceBatch: _domId('reviewProvenanceBatch'),
@@ -455,6 +480,7 @@ const els = {
     openArtifactBtn: _domId('openArtifactBtn'),
     downloadArtifactBtn: _domId('downloadArtifactBtn'),
     copyArtifactPathBtn: _domId('copyArtifactPathBtn'),
+    copyArtifactFingerprintBtn: _domId('copyArtifactFingerprintBtn'),
     artifactThumbnailRail: _domId('artifactThumbnailRail'),
     runCardActions: _domId('runCardActions'),
     viewRunCardBtn: _domId('viewRunCardBtn'),
@@ -485,6 +511,28 @@ const els = {
     effectiveEstimateLabel: _domId('effectiveEstimateLabel'),
     effectiveReadinessSummary: _domId('effectiveReadinessSummary'),
     effectiveArgvPreview: _domId('effectiveArgvPreview'),
+    artifactViewerModal: _domId('artifactViewerModal'),
+    artifactViewerPanel: _domId('artifactViewerPanel'),
+    artifactViewerTitle: _domId('artifactViewerTitle'),
+    artifactViewerMeta: _domId('artifactViewerMeta'),
+    artifactViewerStage: _domId('artifactViewerStage'),
+    artifactViewerImage: _domId('artifactViewerImage'),
+    artifactViewerFallback: _domId('artifactViewerFallback'),
+    artifactViewerFallbackTitle: _domId('artifactViewerFallbackTitle'),
+    artifactViewerFallbackDetail: _domId('artifactViewerFallbackDetail'),
+    artifactViewerPath: _domId('artifactViewerPath'),
+    artifactViewerFingerprint: _domId('artifactViewerFingerprint'),
+    artifactViewerZoomValue: _domId('artifactViewerZoomValue'),
+    artifactViewerPrevBtn: _domId('artifactViewerPrevBtn'),
+    artifactViewerNextBtn: _domId('artifactViewerNextBtn'),
+    artifactViewerZoomOutBtn: _domId('artifactViewerZoomOutBtn'),
+    artifactViewerZoomInBtn: _domId('artifactViewerZoomInBtn'),
+    artifactViewerResetZoomBtn: _domId('artifactViewerResetZoomBtn'),
+    artifactViewerOpenRawBtn: _domId('artifactViewerOpenRawBtn'),
+    artifactViewerCopyPathBtn: _domId('artifactViewerCopyPathBtn'),
+    artifactViewerCopyFingerprintBtn: _domId('artifactViewerCopyFingerprintBtn'),
+    artifactViewerStatus: _domId('artifactViewerStatus'),
+    closeArtifactViewerBtn: _domId('closeArtifactViewerBtn'),
 
     healthIndicator: _domId('healthIndicator'),
     healthText: _domId('healthText'),
@@ -966,6 +1014,168 @@ function _syncConsoleRoute(replace = false) {
     window.history[method]({ view: state.currentView, jobId: state.selectedJobId || '' }, '', nextHref);
 }
 
+function _managedReturnToPath() {
+    const url = new URL(window.location.href);
+    if (url.pathname !== '/portal') return '/portal';
+    return `${url.pathname}${url.search}`;
+}
+
+function _managedLoginUrlForCurrentRoute() {
+    return `/login?returnTo=${encodeURIComponent(_managedReturnToPath())}`;
+}
+
+function _copyTransientDraftConfig(config = state.config) {
+    return JSON.parse(JSON.stringify(config && typeof config === 'object' ? config : portalInternals.createPortalConfigState()));
+}
+
+function _managedDraftOwnerKey() {
+    const actor = state.auth && state.auth.actor && typeof state.auth.actor === 'object' ? state.auth.actor : null;
+    const accessEmail = String(actor?.accessEmail || '').trim().toLowerCase();
+    if (accessEmail) return `managed:${accessEmail}`;
+    const username = String(actor?.username || '').trim().toLowerCase();
+    const role = String(actor?.role || '').trim().toLowerCase();
+    if (!username && !role) return '';
+    return `managed:${[username, role].filter(Boolean).join(':')}`;
+}
+
+function _transientDraftOwnerKey() {
+    if (!_isBootstrapReady()) return '';
+    if (_isManagedAuthMode()) return _managedDraftOwnerKey();
+    return 'direct_debug';
+}
+
+function _clearTransientPortalDraft() {
+    try {
+        sessionStorage.removeItem(TRANSIENT_DRAFT_STORAGE_KEY);
+    } catch {
+        // Ignore storage access failures during teardown or quota exhaustion.
+    }
+}
+
+function _readTransientPortalDraft() {
+    let raw = '';
+    try {
+        raw = sessionStorage.getItem(TRANSIENT_DRAFT_STORAGE_KEY) || '';
+    } catch {
+        return null;
+    }
+    if (!raw) return null;
+
+    let parsed = null;
+    try {
+        parsed = JSON.parse(raw);
+    } catch {
+        _clearTransientPortalDraft();
+        return null;
+    }
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        _clearTransientPortalDraft();
+        return null;
+    }
+
+    const schema = String(parsed.schema || '').trim();
+    const ownerKey = String(parsed.ownerKey || '').trim();
+    const savedAt = Number(parsed.savedAt || 0);
+    const pipeline = String(parsed.pipeline || '').trim();
+    const config = parsed.config;
+    if (
+        schema !== TRANSIENT_DRAFT_SCHEMA
+        || !ownerKey
+        || !Number.isFinite(savedAt)
+        || savedAt <= 0
+        || !pipeline
+        || !config
+        || typeof config !== 'object'
+        || Array.isArray(config)
+    ) {
+        _clearTransientPortalDraft();
+        return null;
+    }
+
+    return {
+        schema,
+        ownerKey,
+        savedAt,
+        pipeline,
+        config: _copyTransientDraftConfig(config),
+        buildStep: resolveBuildStep(parsed.buildStep)
+    };
+}
+
+function _persistTransientPortalDraft() {
+    const ownerKey = _transientDraftOwnerKey();
+    if (!ownerKey) return false;
+    const snapshot = {
+        schema: TRANSIENT_DRAFT_SCHEMA,
+        pipeline: String(state.pipeline || '').trim() || 'lux-depth-v3',
+        config: _copyTransientDraftConfig(),
+        buildStep: resolveBuildStep(state.portalUi.buildStep),
+        savedAt: Date.now(),
+        ownerKey
+    };
+    try {
+        sessionStorage.setItem(TRANSIENT_DRAFT_STORAGE_KEY, JSON.stringify(snapshot));
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+function _cancelScheduledTransientPortalDraftPersist() {
+    if (transientDraftPersistTimerId !== null) {
+        window.clearTimeout(transientDraftPersistTimerId);
+        transientDraftPersistTimerId = null;
+    }
+    if (transientDraftPersistIdleId !== null && typeof window.cancelIdleCallback === 'function') {
+        window.cancelIdleCallback(transientDraftPersistIdleId);
+    }
+    transientDraftPersistIdleId = null;
+}
+
+function _flushPendingTransientPortalDraftPersist() {
+    _cancelScheduledTransientPortalDraftPersist();
+    return _persistTransientPortalDraft();
+}
+
+function _scheduleTransientPortalDraftPersist(options) {
+    const settings = options && typeof options === 'object' ? options : {};
+    if (settings.immediate) return _flushPendingTransientPortalDraftPersist();
+    _cancelScheduledTransientPortalDraftPersist();
+
+    const commitSnapshot = () => {
+        transientDraftPersistTimerId = null;
+        transientDraftPersistIdleId = null;
+        _persistTransientPortalDraft();
+    };
+    const scheduleCommit = () => {
+        transientDraftPersistTimerId = null;
+        if (typeof window.requestIdleCallback === 'function') {
+            transientDraftPersistIdleId = window.requestIdleCallback(() => {
+                commitSnapshot();
+            }, { timeout: TRANSIENT_DRAFT_PERSIST_DEBOUNCE_MS });
+            return;
+        }
+        commitSnapshot();
+    };
+
+    transientDraftPersistTimerId = window.setTimeout(scheduleCommit, TRANSIENT_DRAFT_PERSIST_DEBOUNCE_MS);
+    return true;
+}
+
+function _restoreTransientPortalDraft() {
+    const snapshot = _readTransientPortalDraft();
+    if (!snapshot) return false;
+    const ownerKey = _transientDraftOwnerKey();
+    if (!ownerKey || snapshot.ownerKey !== ownerKey) {
+        _clearTransientPortalDraft();
+        return false;
+    }
+    state.pipeline = snapshot.pipeline;
+    state.config = _copyTransientDraftConfig(snapshot.config);
+    state.portalUi.buildStep = resolveBuildStep(snapshot.buildStep);
+    return true;
+}
+
 function _jobFreshnessLabel(job) {
     if (!job) return 'No live telemetry';
     const lastActivityAt = Number(job.lastEventAt || job.updatedAt || job.finishedAt || job.createdAt || 0);
@@ -1406,11 +1616,7 @@ function _openReviewSurfaceForJob(job, surface = 'job_inspector') {
     return true;
 }
 
-function _openArtifactForSelection(job, artifact, surface = 'artifact_review') {
-    if (!job || !artifact) {
-        createToast('No artifact is available for this selection.', 'info');
-        return false;
-    }
+function _openManagedArtifactWindow(job, artifact, surface = 'artifact_review') {
     const url = sanitizeManagedAssetUrl(buildArtifactUrl(job, artifact));
     if (!url) {
         createToast('No artifact URL is available for this selection.', 'error');
@@ -1426,6 +1632,20 @@ function _openArtifactForSelection(job, artifact, surface = 'artifact_review') {
     });
     window.open(url, '_blank', 'noopener,noreferrer');
     return true;
+}
+
+function _openArtifactForSelection(job, artifact, surface = 'artifact_review') {
+    if (!job || !artifact) {
+        createToast('No artifact is available for this selection.', 'info');
+        return false;
+    }
+    if (_artifactViewerEnabled()) {
+        const openedInViewer = _openArtifactViewer(job, artifact, document.activeElement, surface);
+        if (openedInViewer) {
+            return true;
+        }
+    }
+    return _openManagedArtifactWindow(job, artifact, surface);
 }
 
 function _toggleCompareSurface(job, surface = 'artifact_review') {
@@ -1516,7 +1736,8 @@ function handleOperatorActionClick(event) {
             _retryPortalStatus(job);
             break;
         case 'restore_access':
-            window.location.assign('/login');
+            _flushPendingTransientPortalDraftPersist();
+            window.location.assign(_managedLoginUrlForCurrentRoute());
             break;
         default:
             break;
@@ -2297,6 +2518,7 @@ function navigateConsoleView(viewName, options = {}) {
     } else if (state.selectedJobId) {
         _rememberSelectedJob(state.selectedJobId);
     }
+    _primeDeferredReviewSurface('route');
     applyConsoleViewLayout();
     _syncConsoleRoute(replace);
     renderJobQueue();
@@ -2337,6 +2559,7 @@ function applyConsoleRouteFromLocation(replace = false) {
     } else if (state.selectedJobId) {
         _rememberSelectedJob(state.selectedJobId);
     }
+    _primeDeferredReviewSurface('route');
     applyConsoleViewLayout();
     _syncConsoleRoute(replace);
 }
@@ -2496,12 +2719,14 @@ function syncBuildStepUi() {
     renderBuildStepPulse(generatePayload());
 }
 
-function setBuildStep(nextStep, options = {}) {
+function setBuildStep(nextStep, options) {
+    const settings = options && typeof options === 'object' ? options : {};
     const previous = resolveBuildStep(state.portalUi.buildStep);
     const resolved = resolveBuildStep(nextStep);
     state.portalUi.buildStep = resolved;
     syncBuildStepUi();
-    if (!options.silent && resolved > previous) {
+    _persistTransientPortalDraft();
+    if (!settings.silent && resolved > previous) {
         void emitPortalEvent('step_completed', {
             surface: 'build_stepper',
             metadata: { step: previous, next_step: resolved }
@@ -2734,6 +2959,18 @@ function buildArtifactUrl(job, artifact) {
         artifactLabel,
         sanitizeManagedAssetUrl
     });
+}
+
+function artifactFingerprint(artifact) {
+    return String(artifact?.sha256 || '').trim();
+}
+
+function _artifactFingerprintLabel(artifact) {
+    return artifactFingerprint(artifact) || 'Not reported';
+}
+
+function _artifactViewerEnabled() {
+    return Boolean(state.auth?.features?.artifactViewerModal);
 }
 
 function artifactHeroScore(artifact) {
@@ -3942,7 +4179,11 @@ function _defaultPortalBootstrap() {
         actor: null,
         features: {
             apiKeyInput: false,
-            directDebug: false
+            directDebug: false,
+            artifactViewerModal: false,
+            reviewSurfaceDeferred: false,
+            stagedUploads: false,
+            rumTelemetry: false
         }
     };
 }
@@ -4271,6 +4512,86 @@ function _clearStoredApiKeyState(clearPersisted = true) {
     if (els.apiKeyInput) els.apiKeyInput.value = '';
 }
 
+function _stagedUploadsVisibleForState() {
+    return Boolean(
+        _isBootstrapReady()
+        && state.auth?.features?.stagedUploads
+        && STAGED_UPLOAD_SUPPORTED_PIPELINES.has(String(state.pipeline || '').trim())
+    );
+}
+
+function _stagedUploadErrorMessage(payload, fallback = 'Failed to stage uploads.') {
+    const message = String(payload?.error?.message || '').trim();
+    return message || fallback;
+}
+
+function _setStagedUploadState(patch = {}) {
+    state.portalUi.stagedUpload = {
+        ...(state.portalUi.stagedUpload || {}),
+        ...(patch && typeof patch === 'object' ? patch : {})
+    };
+}
+
+function _syncStagedUploadUi() {
+    const visible = _stagedUploadsVisibleForState();
+    const uploadState = state.portalUi.stagedUpload || {};
+    const busy = Boolean(uploadState.busy);
+    const progressPercent = Math.max(0, Math.min(100, Number(uploadState.progressPercent) || 0));
+    if (els.stagedUploadShell) {
+        els.stagedUploadShell.classList.toggle('hidden', !visible);
+        els.stagedUploadShell.dataset.busy = busy ? 'true' : 'false';
+    }
+    if (els.stagedUploadStatus) {
+        if (!visible) {
+            els.stagedUploadStatus.textContent = 'Upload a file set and the staged input directory will replace the current source path.';
+        } else if (uploadState.error) {
+            els.stagedUploadStatus.textContent = 'The last staged upload attempt failed. Fix the payload and try again.';
+        } else if (busy) {
+            els.stagedUploadStatus.textContent = String(uploadState.status || 'Uploading files to the staged input directory...');
+        } else if (uploadState.summary) {
+            els.stagedUploadStatus.textContent = 'Staged uploads are ready. The input directory now points at the staged batch.';
+        } else {
+            els.stagedUploadStatus.textContent = 'Upload a file set and the staged input directory will replace the current source path.';
+        }
+    }
+    if (els.stagedUploadDropzone) {
+        els.stagedUploadDropzone.dataset.disabled = !visible || busy ? 'true' : 'false';
+        els.stagedUploadDropzone.classList.toggle('opacity-60', !visible || busy);
+        els.stagedUploadDropzone.classList.toggle('cursor-not-allowed', !visible || busy);
+        els.stagedUploadDropzone.setAttribute('aria-disabled', !visible || busy ? 'true' : 'false');
+    }
+    if (els.stagedUploadPickFilesBtn) {
+        els.stagedUploadPickFilesBtn.disabled = !visible || busy;
+    }
+    if (els.stagedUploadPickFolderBtn) {
+        els.stagedUploadPickFolderBtn.disabled = !visible || busy;
+    }
+    if (els.stagedUploadFilesInput) {
+        els.stagedUploadFilesInput.disabled = !visible || busy;
+    }
+    if (els.stagedUploadFolderInput) {
+        els.stagedUploadFolderInput.disabled = !visible || busy;
+    }
+    if (els.stagedUploadProgressBar) {
+        els.stagedUploadProgressBar.style.width = `${progressPercent}%`;
+    }
+    if (els.stagedUploadProgressLabel) {
+        if (busy) {
+            els.stagedUploadProgressLabel.textContent = `${progressPercent}% uploaded`;
+        } else if (uploadState.summary) {
+            els.stagedUploadProgressLabel.textContent = 'Upload complete.';
+        } else {
+            els.stagedUploadProgressLabel.textContent = 'No upload in progress.';
+        }
+    }
+    if (els.stagedUploadSummary) {
+        els.stagedUploadSummary.textContent = String(uploadState.summary || '');
+    }
+    if (els.stagedUploadError) {
+        els.stagedUploadError.textContent = String(uploadState.error || '');
+    }
+}
+
 function _syncBootstrapUi() {
     const bootstrapReady = _isBootstrapReady();
     const showApiKeyInput = bootstrapReady && state.auth.features.apiKeyInput;
@@ -4315,6 +4636,8 @@ function _syncBootstrapUi() {
     const selectedJob = _findJobById(state.selectedJobId);
     renderSelectedJobRecoveryActions(selectedJob);
     renderReviewStatusActions(selectedJob);
+    renderArtifactViewer();
+    _syncStagedUploadUi();
 }
 
 function _applyPortalBootstrap(rawBootstrap, options = {}) {
@@ -4334,15 +4657,32 @@ function _applyPortalBootstrap(rawBootstrap, options = {}) {
         actor: mode === 'managed' && bootstrap.actor && typeof bootstrap.actor === 'object' ? bootstrap.actor : null,
         features: {
             apiKeyInput: mode === 'direct_debug' && bootstrap.features?.apiKeyInput !== false,
-            directDebug: mode === 'direct_debug' && bootstrap.features?.directDebug !== false
+            directDebug: mode === 'direct_debug' && bootstrap.features?.directDebug !== false,
+            artifactViewerModal: Boolean(bootstrap.features?.artifactViewerModal),
+            reviewSurfaceDeferred: Boolean(bootstrap.features?.reviewSurfaceDeferred),
+            stagedUploads: Boolean(bootstrap.features?.stagedUploads),
+            rumTelemetry: Boolean(bootstrap.features?.rumTelemetry)
         }
     };
+    const bootstrapTraceparent = portalInternals.normalizePortalRumTraceparent(
+        options.traceparent,
+        state.rum.pageTraceparent
+    );
+    state.rum.pageTraceparent = bootstrapTraceparent;
+    state.rum.bootstrapTraceparent = bootstrapTraceparent;
+    state.rum.enabled = Boolean(state.auth.features.rumTelemetry);
     _setBootstrapStatus(nextStatus, options.reason || '', options.httpStatus || 0);
     if (_isBootstrapReady() && isManagedMode) {
         _clearStoredApiKeyState(true);
     }
+    if (!_rumTelemetryEnabled()) {
+        state.rum.queuedSamples = [];
+    }
     _loadApiKeyIntoInputs();
     _syncBootstrapUi();
+    if (_rumTelemetryEnabled()) {
+        void _flushQueuedPortalRumSamples();
+    }
 }
 
 function _normalizeFetchFailureReason(error, timeoutReason = 'request_timeout') {
@@ -4387,7 +4727,10 @@ async function loadPortalBootstrap(options = null) {
         const res = await fetchWithTimeout(
             `${API_BASE}/portal/bootstrap`,
             {
-                headers: { 'Accept': 'application/json' },
+                headers: {
+                    'Accept': 'application/json',
+                    traceparent: state.rum.pageTraceparent
+                },
                 cache: 'no-store'
             },
             BOOTSTRAP_TIMEOUT_MS,
@@ -4414,9 +4757,14 @@ async function loadPortalBootstrap(options = null) {
             _finalizeBootstrapRetry('terminal_auth_redirect', { reason: failure.reason, httpStatus: res.status });
             _applyPortalBootstrap(fallback, { status: 'unavailable', reason: failure.reason, httpStatus: res.status });
             createToast(failure.toastMessage, 'error');
-            window.location.assign('/login');
+            _flushPendingTransientPortalDraftPersist();
+            window.location.assign(_managedLoginUrlForCurrentRoute());
             return;
         }
+        const bootstrapTraceparent = portalInternals.normalizePortalRumTraceparent(
+            res.headers.get('traceparent'),
+            state.rum.pageTraceparent
+        );
         if (!res.ok) {
             const failure = _bootstrapFailureDetails(
                 payloadParsed && payload && typeof payload === 'object' ? payload.reason : `http_${res.status}`,
@@ -4447,7 +4795,11 @@ async function loadPortalBootstrap(options = null) {
             });
         }
         const previousHealthEndpointPath = String(state.bootstrap.lastHealthEndpointPath || '');
-        _applyPortalBootstrap(payload, { status: 'ready' });
+        _applyPortalBootstrap(payload, { status: 'ready', traceparent: bootstrapTraceparent });
+        _recordPortalRumMilestone('bootstrap_ready', _portalRumNow(), {
+            traceparent: bootstrapTraceparent
+        });
+        _scheduleFirstViewInteractiveRum();
         const nextHealthEndpointPath = _healthEndpointPath();
         if (state.backendOk && previousHealthEndpointPath && previousHealthEndpointPath !== nextHealthEndpointPath) {
             _queueBootstrapOnlineFollowup();
@@ -4536,9 +4888,16 @@ function _currentApiToken() {
     );
 }
 
-function _buildAuthHeaders(base = {}, method = 'GET') {
+function _buildAuthHeaders(base = {}, method = 'GET', options = null) {
     const headers = { ...base };
     const normalizedMethod = String(method || 'GET').toUpperCase();
+    const authOptions = options && typeof options === 'object' ? options : null;
+    const traceparent = authOptions && typeof authOptions.traceparent === 'string'
+        ? authOptions.traceparent.trim()
+        : '';
+    if (traceparent) {
+        headers.traceparent = traceparent;
+    }
     if (!_isBootstrapReady()) {
         return headers;
     }
@@ -4554,6 +4913,183 @@ function _buildAuthHeaders(base = {}, method = 'GET') {
         headers['x-api-key'] = token;
     }
     return headers;
+}
+
+function _normalizeStagedUploadRelativePath(file) {
+    if (!file || typeof file !== 'object') return '';
+    const rawRelativePath = typeof file.webkitRelativePath === 'string' && file.webkitRelativePath.trim()
+        ? file.webkitRelativePath
+        : String(file.name || '');
+    return rawRelativePath.replace(/\\/g, '/').replace(/^\/+/, '').trim();
+}
+
+function _collectStagedUploadSelection(fileList) {
+    const entries = [];
+    let totalBytes = 0;
+    Array.from(fileList || []).forEach((file) => {
+        const relativePath = _normalizeStagedUploadRelativePath(file);
+        if (!relativePath) return;
+        const sizeBytes = Number(file && typeof file === 'object' ? file.size : 0) || 0;
+        totalBytes += Math.max(0, sizeBytes);
+        entries.push({
+            file,
+            relativePath,
+            sizeBytes,
+            name: String(file?.name || ''),
+        });
+    });
+    return { entries, totalBytes };
+}
+
+function _applyStagedUploadResult(result) {
+    const inputDir = String(result?.input_dir || '').trim();
+    const summary = result?.summary && typeof result.summary === 'object' ? result.summary : {};
+    const fileCount = Math.max(0, Number(summary.file_count) || 0);
+    const totalBytes = Math.max(0, Number(summary.total_bytes) || 0);
+    if (!inputDir) {
+        throw new Error('staged upload response did not include input_dir');
+    }
+
+    _setStagedUploadState({
+        busy: false,
+        progressPercent: 100,
+        status: 'ready',
+        summary: `Staged ${fileCount} file${fileCount === 1 ? '' : 's'} (${formatBytes(totalBytes)}). Input directory updated.`,
+        error: '',
+        lastBatchId: String(result?.batch_id || ''),
+        fileCount,
+        totalBytes,
+    });
+
+    state.config.inputDir = inputDir;
+    if (els.inputDir) {
+        els.inputDir.value = inputDir;
+        els.inputDir.dispatchEvent(new Event('input', { bubbles: true }));
+        els.inputDir.dispatchEvent(new Event('change', { bubbles: true }));
+    } else {
+        renderCLI();
+        scheduleConfigPreview(true);
+    }
+    renderFieldPreviewStatuses();
+    _syncStagedUploadUi();
+    createToast('Upload staged. Input directory updated.', 'success');
+}
+
+function _submitStagedUploadSelection(fileList) {
+    if (_blockManagedUnavailableAction('stage uploads')) return;
+    if (!_stagedUploadsVisibleForState()) return;
+
+    const selection = _collectStagedUploadSelection(fileList);
+    if (selection.entries.length === 0) {
+        _setStagedUploadState({
+            busy: false,
+            progressPercent: 0,
+            status: 'idle',
+            summary: '',
+            error: 'Select at least one file before staging uploads.'
+        });
+        _syncStagedUploadUi();
+        createToast('Select at least one file before staging uploads.', 'info');
+        return;
+    }
+
+    _setStagedUploadState({
+        busy: true,
+        progressPercent: 0,
+        status: `Uploading ${selection.entries.length} file${selection.entries.length === 1 ? '' : 's'} to staged storage...`,
+        summary: '',
+        error: '',
+        fileCount: selection.entries.length,
+        totalBytes: selection.totalBytes,
+    });
+    _syncStagedUploadUi();
+
+    const formData = new FormData();
+    selection.entries.forEach(({ file, relativePath }) => {
+        formData.append('files', file, relativePath);
+    });
+    formData.append(
+        'client_manifest',
+        JSON.stringify({
+            schema: 'tp.portal.upload_manifest.v1',
+            files: selection.entries.map((entry) => ({
+                relative_path: entry.relativePath,
+                size_bytes: entry.sizeBytes,
+                name: entry.name,
+            })),
+        })
+    );
+
+    const requestTraceparent = portalInternals.createChildTraceparent(_portalRumTraceparent());
+    const headers = _buildAuthHeaders({}, 'POST', { traceparent: requestTraceparent });
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `${API_BASE}/v1/uploads/staging`);
+    xhr.responseType = 'json';
+    Object.entries(headers).forEach(([key, value]) => {
+        if (typeof value === 'string' && value) {
+            xhr.setRequestHeader(key, value);
+        }
+    });
+
+    xhr.upload.onprogress = (event) => {
+        if (!event.lengthComputable) return;
+        const progressPercent = Math.max(0, Math.min(100, Math.round((event.loaded / event.total) * 100)));
+        _setStagedUploadState({
+            progressPercent,
+            status: `Uploading ${selection.entries.length} file${selection.entries.length === 1 ? '' : 's'} to staged storage...`,
+        });
+        _syncStagedUploadUi();
+    };
+
+    xhr.onerror = () => {
+        _setStagedUploadState({
+            busy: false,
+            progressPercent: 0,
+            status: 'idle',
+            error: 'Network failure interrupted the staged upload.'
+        });
+        _syncStagedUploadUi();
+        createToast('Network failure interrupted the staged upload.', 'error');
+    };
+
+    xhr.onabort = () => {
+        _setStagedUploadState({
+            busy: false,
+            progressPercent: 0,
+            status: 'idle',
+            error: 'Staged upload canceled before completion.'
+        });
+        _syncStagedUploadUi();
+        createToast('Staged upload canceled before completion.', 'error');
+    };
+
+    xhr.onload = () => {
+        const payload = xhr.response && typeof xhr.response === 'object'
+            ? xhr.response
+            : (() => {
+                try {
+                    return JSON.parse(xhr.responseText || '{}');
+                } catch (_err) {
+                    return {};
+                }
+            })();
+        if (xhr.status >= 200 && xhr.status < 300 && payload?.success && payload.data) {
+            _applyStagedUploadResult(payload.data);
+            return;
+        }
+
+        const errorMessage = _stagedUploadErrorMessage(payload);
+        _setStagedUploadState({
+            busy: false,
+            progressPercent: 0,
+            status: 'idle',
+            error: errorMessage,
+        });
+        _syncStagedUploadUi();
+        createToast(errorMessage, 'error');
+    };
+
+    xhr.send(formData);
 }
 
 function resumeBlockedJobStreamsAfterAuthUpdate() {
@@ -4726,41 +5262,6 @@ function upsertArtifact(job, artifact) {
     _reconcileJobTimeline(job);
 }
 
-function getRunCardArtifact(job) {
-    if (!job || !Array.isArray(job.artifacts)) return null;
-    return job.artifacts.find((artifact) => {
-        const displayRole = String(artifactDisplayHint(artifact)?.role || '').trim().toLowerCase();
-        const type = String(artifact.artifact_type || '').toLowerCase();
-        const relPath = String(artifact.relative_path || artifact.path || '').toLowerCase();
-        return displayRole === 'run_card' || type === 'run_card' || relPath.includes('run_card');
-    }) || null;
-}
-
-function updateRunCardActions(job) {
-    if (!els.runCardActions) return;
-    const runCard = getRunCardArtifact(job);
-    if (!runCard) {
-        els.runCardActions.classList.add('hidden');
-        els.runCardActions.classList.remove('flex');
-        return;
-    }
-    const runCardPath = String(runCard.relative_path || runCard.path || '');
-    const runCardUrl = buildArtifactUrl(job, runCard);
-    const runCardSha = String(runCard.sha256 || '');
-    if (els.viewRunCardBtn) {
-        els.viewRunCardBtn.dataset.url = runCardUrl;
-    }
-    if (els.copyRunCardPathBtn) els.copyRunCardPathBtn.dataset.path = runCardPath;
-    if (els.copyRunCardFingerprintBtn) {
-        els.copyRunCardFingerprintBtn.dataset.fingerprint = runCardSha;
-        els.copyRunCardFingerprintBtn.disabled = !runCardSha;
-        els.copyRunCardFingerprintBtn.classList.toggle('opacity-50', !runCardSha);
-        els.copyRunCardFingerprintBtn.classList.toggle('cursor-not-allowed', !runCardSha);
-    }
-    els.runCardActions.classList.remove('hidden');
-    els.runCardActions.classList.add('flex');
-}
-
 function _selectedArtifactForJob(job) {
     if (!job || !Array.isArray(job.artifacts) || job.artifacts.length === 0) return null;
     const normalizedJobId = _normalizeSelectedJobId(job.id);
@@ -4777,29 +5278,6 @@ function _selectedArtifactForJob(job) {
     return hero;
 }
 
-function _renderArtifactMetadataCard(job, artifact) {
-    if (!els.artifactMetadataCard) return;
-    els.artifactMetadataCard.innerHTML = '';
-
-    const title = document.createElement('p');
-    title.className = 'text-[12px] font-semibold text-slate-800 dark:text-slate-100';
-    title.textContent = artifact
-        ? artifactLabel(artifact)
-        : 'Select a completed run to bring the primary review artifact into focus here.';
-    els.artifactMetadataCard.appendChild(title);
-
-    const detail = document.createElement('p');
-    detail.className = 'mt-2 text-[12px] leading-6 text-slate-600 dark:text-slate-300';
-    if (!job) {
-        detail.textContent = 'Preview, provenance, and next review actions will appear here after you choose a reviewable job.';
-    } else if (!artifact) {
-        detail.textContent = 'This run has not indexed a reviewable artifact yet. Stay with the inspector for progress, transport, and freshness context.';
-    } else {
-        detail.textContent = `${artifactDisplayLabel(artifact)} • ${artifactContentType(artifact) || 'binary'} • ${formatBytes(artifact.size_bytes)}.`;
-    }
-    els.artifactMetadataCard.appendChild(detail);
-}
-
 function _latestVisibleTransportWarning(job) {
     const warnings = Array.isArray(job?.transportWarnings) ? job.transportWarnings : [];
     for (let index = warnings.length - 1; index >= 0; index -= 1) {
@@ -4807,199 +5285,6 @@ function _latestVisibleTransportWarning(job) {
         if (warning && warning.tone !== 'info') return warning;
     }
     return null;
-}
-
-function _reviewStatusSnapshot(job, artifact) {
-    if (!job) {
-        return {
-            visible: false,
-            tone: 'info',
-            title: 'Awaiting completed run',
-            detail: 'Select a job to review related warnings, completion state, and output readiness.',
-            action: 'Next action: use the selected run state, warning context, and freshness above to decide whether to recover or open review.'
-        };
-    }
-
-    const artifactCount = Array.isArray(job.artifacts) ? job.artifacts.length : 0;
-    const summary = normalizeRunSummary(job.run_summary);
-    const readableError = getReadableError(job.error);
-    const outcomeSummary = jobOutcomeSummary(job);
-    const freshestActivityAt = Number(job.lastEventAt || job.updatedAt || job.finishedAt || job.createdAt || 0);
-    const freshnessLabel = formatRelativeTime(freshestActivityAt);
-    const visibleWarning = _latestVisibleTransportWarning(job);
-    const reviewableOutputs = Boolean(summary?.reviewable_outputs) || artifactCount > 0;
-
-    if (job.state === 'partial') {
-        return {
-            visible: true,
-            tone: 'warning',
-            title: 'Run partially completed',
-            detail: outcomeSummary
-                ? `${outcomeSummary}. Updated ${freshnessLabel}.`
-                : 'Some inputs failed, but outputs remain reviewable.',
-            action: 'Next action: open review for the retained outputs before rerunning failed inputs.'
-        };
-    }
-
-    if (job.state === 'failed') {
-        return {
-            visible: true,
-            tone: reviewableOutputs ? 'warning' : 'error',
-            title: reviewableOutputs ? 'Run failed after indexing reviewable outputs' : 'Run failed before outputs were ready',
-            detail: readableError
-                || (reviewableOutputs
-                    ? `${artifactCount} artifact${artifactCount === 1 ? '' : 's'} remain available for review. Updated ${freshnessLabel}.`
-                    : 'No reviewable outputs were indexed before the failure was reported.'),
-            action: reviewableOutputs
-                ? 'Next action: open review for the retained outputs, then decide whether this run needs a retry.'
-                : 'Next action: inspect the latest warning and failure context in Operate before retrying the run.'
-        };
-    }
-
-    if (job.state === 'canceled') {
-        return {
-            visible: true,
-            tone: reviewableOutputs ? 'warning' : 'error',
-            title: reviewableOutputs ? 'Run canceled after partial output capture' : 'Run canceled before review outputs were ready',
-            detail: reviewableOutputs
-                ? `${artifactCount} artifact${artifactCount === 1 ? '' : 's'} remain available for review despite cancellation. Updated ${freshnessLabel}.`
-                : 'Execution was canceled before reviewable outputs were indexed.',
-            action: reviewableOutputs
-                ? 'Next action: review the retained outputs before deciding whether to rerun the canceled work.'
-                : 'Next action: reopen Build or restore the run context before dispatching again.'
-        };
-    }
-
-    if (job.state === 'offline') {
-        return {
-            visible: true,
-            tone: 'warning',
-            title: reviewableOutputs ? 'Run is offline with reviewable outputs' : 'Run is offline',
-            detail: reviewableOutputs
-                ? `${artifactCount} artifact${artifactCount === 1 ? '' : 's'} remain available, but live backend status is stale until connectivity is restored.`
-                : 'Live backend status is stale until connectivity is restored.',
-            action: reviewableOutputs
-                ? 'Next action: review the cached outputs while backend connectivity recovers.'
-                : 'Next action: restore backend connectivity before depending on this run state.'
-        };
-    }
-
-    if (job.reconnectBlocked) {
-        return {
-            visible: true,
-            tone: 'warning',
-            title: 'Transport warning recorded',
-            detail: 'Authentication must be restored before live event transport can reconnect.',
-            action: 'Next action: restore authentication so live transport and freshness can recover.'
-        };
-    }
-
-    if (visibleWarning) {
-        return {
-            visible: true,
-            tone: visibleWarning.tone === 'error' ? 'error' : 'warning',
-            title: 'Transport warning recorded',
-            detail: String(visibleWarning.detail || 'Live transport reported an operator-visible warning.'),
-            action: 'Next action: inspect the latest transport warning in Operate before continuing into review.'
-        };
-    }
-
-    if (job.state === 'running' || job.state === 'queued') {
-        return {
-            visible: true,
-            tone: 'info',
-            title: 'Run still in progress',
-            detail: artifactCount > 0
-                ? `${artifactCount} artifact${artifactCount === 1 ? '' : 's'} already indexed. Updated ${freshnessLabel}.`
-                : 'Artifacts and provenance will populate here as outputs arrive.',
-            action: artifactCount > 0
-                ? 'Next action: keep review open only if you need the early artifacts; Operate remains the primary live surface.'
-                : 'Next action: stay in Operate until indexed outputs or a blocking warning arrives.'
-        };
-    }
-
-    return {
-        visible: true,
-        tone: 'ready',
-        title: artifact ? 'Outputs ready for review' : 'Run ready for review',
-        detail: outcomeSummary
-            ? `${outcomeSummary}. Updated ${freshnessLabel}.`
-            : `${artifactCount} artifact${artifactCount === 1 ? '' : 's'} indexed and ready for operator review.`,
-        action: 'Next action: use the selected run state, warning context, and freshness above to decide whether to recover or open review.'
-    };
-}
-
-function _renderReviewStatusBanner(job, artifact) {
-    if (!els.reviewStatusBanner || !els.reviewStatusTitle || !els.reviewStatusDetail) return;
-    const snapshot = _reviewStatusSnapshot(job, artifact);
-    els.reviewStatusBanner.dataset.tone = snapshot.tone;
-    if (!snapshot.visible) {
-        els.reviewStatusBanner.classList.add('hidden');
-        els.reviewStatusTitle.textContent = snapshot.title;
-        els.reviewStatusDetail.textContent = snapshot.detail;
-        if (els.reviewStatusAction) els.reviewStatusAction.textContent = snapshot.action;
-        renderReviewStatusActions(job, artifact);
-        return;
-    }
-    els.reviewStatusTitle.textContent = snapshot.title;
-    els.reviewStatusDetail.textContent = snapshot.detail;
-    if (els.reviewStatusAction) els.reviewStatusAction.textContent = snapshot.action;
-    els.reviewStatusBanner.classList.remove('hidden');
-    renderReviewStatusActions(job, artifact);
-}
-
-function _renderArtifactProvenance(job, artifact) {
-    if (!els.reviewProvenanceGrid) return;
-
-    if (!job) {
-        els.reviewProvenanceGrid.classList.add('hidden');
-        if (els.reviewProvenanceArtifactRole) els.reviewProvenanceArtifactRole.textContent = 'Awaiting indexed output';
-        if (els.reviewProvenanceRunState) els.reviewProvenanceRunState.textContent = 'No job selected';
-        if (els.reviewProvenancePath) {
-            els.reviewProvenancePath.textContent = 'Preview, metadata, and actions will appear here when outputs are indexed.';
-            els.reviewProvenancePath.removeAttribute('title');
-        }
-        if (els.reviewProvenanceFreshness) els.reviewProvenanceFreshness.textContent = 'No live telemetry';
-        if (els.reviewProvenanceSource) els.reviewProvenanceSource.textContent = 'Not reported';
-        if (els.reviewProvenanceBatch) els.reviewProvenanceBatch.textContent = 'Not reported';
-        return;
-    }
-
-    const summary = normalizeRunSummary(job.run_summary);
-    const artifactDescriptor = artifact
-        ? `${artifactDisplayLabel(artifact)} • ${artifactContentType(artifact) || 'binary'} • ${formatBytes(artifact.size_bytes)}`
-        : 'Awaiting indexed artifact';
-    const relativePath = artifact ? artifactLabel(artifact) : 'Artifacts will appear here when the selected run indexes outputs.';
-    const freshnessLabel = _jobFreshnessLabel(job);
-    const runStateLabel = `${titleCaseToken(job.state, 'Unknown')} • ${titleCaseToken(job.pipeline, 'Unknown')}`;
-    const sourceLabel = summary?.source || titleCaseToken(job.pipeline, 'Not reported');
-    const batchLabel = summary?.batch_id || 'Not reported';
-
-    if (els.reviewProvenanceArtifactRole) els.reviewProvenanceArtifactRole.textContent = artifactDescriptor;
-    if (els.reviewProvenanceRunState) els.reviewProvenanceRunState.textContent = runStateLabel;
-    if (els.reviewProvenancePath) {
-        els.reviewProvenancePath.textContent = relativePath;
-        els.reviewProvenancePath.title = relativePath;
-    }
-    if (els.reviewProvenanceFreshness) els.reviewProvenanceFreshness.textContent = freshnessLabel;
-    if (els.reviewProvenanceSource) els.reviewProvenanceSource.textContent = sourceLabel;
-    if (els.reviewProvenanceBatch) els.reviewProvenanceBatch.textContent = batchLabel;
-    els.reviewProvenanceGrid.classList.remove('hidden');
-}
-
-function _renderReviewCompareSummary(primaryArtifact, compareArtifact, compareEnabled) {
-    if (!els.reviewCompareSummary || !els.reviewCompareTitle || !els.reviewCompareDetail) return;
-    const compareCopy = _compareSurfaceCopy(primaryArtifact, compareArtifact, compareEnabled);
-    if (!primaryArtifact || !compareArtifact) {
-        els.reviewCompareSummary.classList.add('hidden');
-        els.reviewCompareTitle.textContent = compareCopy.summaryTitle;
-        els.reviewCompareDetail.textContent = compareCopy.summaryDetail;
-        return;
-    }
-
-    els.reviewCompareTitle.textContent = compareCopy.summaryTitle;
-    els.reviewCompareDetail.textContent = compareCopy.summaryDetail;
-    els.reviewCompareSummary.classList.remove('hidden');
 }
 
 function _resetArtifactActionButtons() {
@@ -5016,11 +5301,200 @@ function _resetArtifactActionButtons() {
         els.copyArtifactPathBtn.disabled = true;
         delete els.copyArtifactPathBtn.dataset.path;
     }
+    if (els.copyArtifactFingerprintBtn) {
+        els.copyArtifactFingerprintBtn.disabled = true;
+        delete els.copyArtifactFingerprintBtn.dataset.fingerprint;
+    }
+}
+
+function _reviewSurfaceDeferredEnabled() {
+    return Boolean(_isBootstrapReady() && state.auth?.features?.reviewSurfaceDeferred);
+}
+
+function _reviewSurfaceAssetUrl(datasetKey) {
+    const body = document.body;
+    return body ? String(body.dataset?.[datasetKey] || '').trim() : '';
+}
+
+function _ensureDeferredReviewSurfaceCss() {
+    if (deferredReviewSurfaceCssLoaded) return true;
+    const href = _reviewSurfaceAssetUrl('reviewSurfaceCssUrl');
+    if (!href) return false;
+    const existing = document.querySelector('link[data-ui="portal-review-surface-css"]');
+    if (existing) {
+        deferredReviewSurfaceCssLoaded = true;
+        return true;
+    }
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = href;
+    link.dataset.ui = 'portal-review-surface-css';
+    document.head.appendChild(link);
+    deferredReviewSurfaceCssLoaded = true;
+    return true;
+}
+
+function _createDeferredReviewSurfaceHost() {
+    return {
+        state,
+        els,
+        clamp,
+        normalizeRunSummary,
+        titleCaseToken,
+        formatRelativeTime,
+        getReadableError,
+        createToast,
+        emitPortalEvent,
+        _isJobsHydrationPending,
+        _toggleSurfaceSkeleton,
+        _resetArtifactActionButtons,
+        _setSurfaceEmptyState,
+        renderConsoleContextRibbon,
+        renderReviewStatusActions,
+        _syncConsoleRoute,
+        _findJobById,
+        _selectedArtifactForJob,
+        rankArtifactsForDisplay,
+        findCompareArtifact,
+        buildArtifactUrl,
+        sanitizeManagedAssetUrl,
+        artifactIsPreviewable,
+        artifactLabel,
+        artifactDisplayHint,
+        artifactDisplayLabel,
+        artifactContentType,
+        artifactFingerprint,
+        artifactNameParts,
+        formatBytes,
+        _buildAuthHeaders,
+        _artifactFingerprintLabel,
+        _artifactRouteKey,
+        _artifactViewerEnabled,
+        _normalizeSelectedJobId,
+        _normalizeArtifactRoutePath,
+        _rememberArtifactSelection,
+        _rememberOverlayTrigger,
+        _restoreOverlayFocus,
+        renderReviewSurfaces,
+        _compareSurfaceCopy,
+        _jobFreshnessLabel,
+        _jobHasReviewableOutputs,
+        _latestVisibleTransportWarning,
+    };
+}
+
+function _deferredReviewSurfaceLoadRetryBlocked(now = Date.now()) {
+    return deferredReviewSurfaceLoadFailedAt > 0 && (now - deferredReviewSurfaceLoadFailedAt) < DEFERRED_REVIEW_SURFACE_RETRY_WINDOW_MS;
+}
+
+function _clearDeferredReviewSurfaceLoadFailure() {
+    deferredReviewSurfaceLoadFailedAt = 0;
+    deferredReviewSurfaceLoadLastToastAt = 0;
+}
+
+function _noteDeferredReviewSurfaceLoadFailure() {
+    const now = Date.now();
+    deferredReviewSurfaceLoadFailedAt = now;
+    if ((now - deferredReviewSurfaceLoadLastToastAt) < DEFERRED_REVIEW_SURFACE_RETRY_WINDOW_MS) return;
+    deferredReviewSurfaceLoadLastToastAt = now;
+    createToast('Review surfaces failed to load. Reload the portal and retry the review action.', 'error');
+}
+
+async function _loadDeferredReviewSurface() {
+    if (deferredReviewSurfaceApi) return deferredReviewSurfaceApi;
+    if (deferredReviewSurfaceLoadPromise) return deferredReviewSurfaceLoadPromise;
+    if (_deferredReviewSurfaceLoadRetryBlocked()) return null;
+    const moduleUrl = _reviewSurfaceAssetUrl('reviewSurfaceJsUrl');
+    if (!moduleUrl) return null;
+    _ensureDeferredReviewSurfaceCss();
+    deferredReviewSurfaceLoadPromise = import(moduleUrl)
+        .then((module) => {
+            if (!module || typeof module.createDeferredReviewSurfaceApi !== 'function') {
+                throw new Error('Deferred review surface module missing createDeferredReviewSurfaceApi');
+            }
+            _clearDeferredReviewSurfaceLoadFailure();
+            deferredReviewSurfaceApi = module.createDeferredReviewSurfaceApi(_createDeferredReviewSurfaceHost());
+            return deferredReviewSurfaceApi;
+        })
+        .catch((error) => {
+            console.error('Failed to load deferred review surface', error);
+            _noteDeferredReviewSurfaceLoadFailure();
+            deferredReviewSurfaceApi = null;
+            return null;
+        })
+        .finally(() => {
+            deferredReviewSurfaceLoadPromise = null;
+        });
+    return deferredReviewSurfaceLoadPromise;
+}
+
+function _selectedOperateArtifactContext() {
+    if (state.currentView !== 'operate') return false;
+    const selectedJob = _findJobById(state.selectedJobId);
+    return Boolean(selectedJob && Array.isArray(selectedJob.artifacts) && selectedJob.artifacts.length > 0);
+}
+
+function _shouldLoadDeferredReviewSurface(reason = '') {
+    if (!_isBootstrapReady()) return false;
+    if (!_reviewSurfaceDeferredEnabled()) return true;
+    if (state.portalUi?.artifactViewer?.open) return true;
+    if (state.currentView === 'review') return true;
+    if (_selectedOperateArtifactContext()) return true;
+    return String(reason || '').trim() === 'force';
+}
+
+function _primeDeferredReviewSurface(reason = '') {
+    if (!_shouldLoadDeferredReviewSurface(reason) || _deferredReviewSurfaceLoadRetryBlocked()) return;
+    void _loadDeferredReviewSurface().then((api) => {
+        if (!api) return;
+        api.renderArtifactPanel();
+        api.renderArtifactViewer();
+    });
+}
+
+function _renderDeferredReviewSurfaceFallback(jobsLoading = false) {
+    _toggleSurfaceSkeleton(els.artifactsShell, els.artifactShellContent, els.artifactSkeletonState, jobsLoading);
+    if (jobsLoading) {
+        _resetArtifactActionButtons();
+        if (els.artifactMeta) els.artifactMeta.textContent = 'Hydrating artifacts';
+        renderConsoleContextRibbon();
+        return;
+    }
+    const reviewSurfaceLoadBlocked = _deferredReviewSurfaceLoadRetryBlocked();
+    if (els.artifactMeta) {
+        if (reviewSurfaceLoadBlocked) {
+            els.artifactMeta.textContent = 'Review surface unavailable';
+        } else {
+            els.artifactMeta.textContent = _shouldLoadDeferredReviewSurface() ? 'Loading review surface' : 'Review surface deferred';
+        }
+    }
+    if (els.artifactThumbnailRail) {
+        els.artifactThumbnailRail.setAttribute('role', 'listbox');
+        els.artifactThumbnailRail.setAttribute('aria-label', 'Artifact thumbnails');
+        els.artifactThumbnailRail.innerHTML = '';
+    }
+    if (els.emptyArtifactState) els.emptyArtifactState.style.display = 'block';
+    if (reviewSurfaceLoadBlocked) {
+        _setSurfaceEmptyState(els.emptyArtifactState, els.emptyArtifactTitle, els.emptyArtifactDetail, {
+            tone: 'warning',
+            title: 'Review surface unavailable',
+            detail: 'Reload the portal to retry loading the review surface assets for this artifact context.',
+        });
+        if (els.emptyArtifactAction) {
+            els.emptyArtifactAction.textContent = 'Next action: reload the portal before reopening review.';
+        }
+    }
+    if (els.reviewStatusBanner) els.reviewStatusBanner.classList.add('hidden');
+    if (els.reviewProvenanceGrid) els.reviewProvenanceGrid.classList.add('hidden');
+    if (els.reviewCompareSummary) els.reviewCompareSummary.classList.add('hidden');
+    _resetArtifactActionButtons();
+    renderConsoleContextRibbon();
 }
 
 function renderReviewSurfaces(payload = null) {
     const currentPayload = payload || generatePayload();
     renderArtifactPanel();
+    renderArtifactViewer();
     renderSelectedJobInspector();
     renderReconstructionRuntimeSummary(currentPayload);
     renderMissionControl(payload);
@@ -5028,252 +5502,12 @@ function renderReviewSurfaces(payload = null) {
 
 function renderArtifactPanel() {
     const jobsLoading = _isJobsHydrationPending();
-    _toggleSurfaceSkeleton(els.artifactsShell, els.artifactShellContent, els.artifactSkeletonState, jobsLoading);
-    if (jobsLoading) {
-        _resetArtifactActionButtons();
-        _renderReviewStatusBanner(null, null);
-        _renderArtifactProvenance(null, null);
-        _renderReviewCompareSummary(null, null, false);
-        if (els.artifactMeta) els.artifactMeta.textContent = 'Hydrating artifacts';
-        renderConsoleContextRibbon();
+    if (deferredReviewSurfaceApi) {
+        deferredReviewSurfaceApi.renderArtifactPanel();
         return;
     }
-
-    if (!els.artifactMeta || !els.artifactThumbnailRail) return;
-    els.artifactThumbnailRail.setAttribute('role', 'listbox');
-    els.artifactThumbnailRail.setAttribute('aria-label', 'Artifact thumbnails');
-    const selected = state.jobs.find((item) => item.id === state.selectedJobId);
-    const artifacts = Array.isArray(selected?.artifacts) ? rankArtifactsForDisplay(selected.artifacts) : [];
-
-    if (!selected) {
-        _resetArtifactActionButtons();
-        const emptyCopy = _artifactEmptyStateCopy(null);
-        _setSurfaceEmptyState(
-            els.emptyArtifactState,
-            els.emptyArtifactTitle,
-            els.emptyArtifactDetail,
-            emptyCopy
-        );
-        if (els.emptyArtifactAction) els.emptyArtifactAction.textContent = emptyCopy.action || '';
-        els.artifactMeta.textContent = 'No job selected';
-        els.artifactThumbnailRail.innerHTML = '';
-        if (els.artifactSelectionTitle) els.artifactSelectionTitle.textContent = 'No artifact selected';
-        if (els.artifactSelectionMeta) els.artifactSelectionMeta.textContent = 'Preview, provenance, and actions will appear here after you choose a reviewable run.';
-        if (els.artifactCompareBtn) {
-            els.artifactCompareBtn.classList.add('hidden');
-            els.artifactCompareBtn.setAttribute('aria-pressed', 'false');
-            els.artifactCompareBtn.removeAttribute('aria-controls');
-        }
-        if (els.artifactPreviewSoloImage) {
-            els.artifactPreviewSoloImage.classList.add('hidden');
-            els.artifactPreviewSoloImage.removeAttribute('src');
-        }
-        if (els.artifactPreviewImage) {
-            els.artifactPreviewImage.classList.add('hidden');
-            els.artifactPreviewImage.removeAttribute('src');
-        }
-        if (els.artifactCompareImage) {
-            els.artifactCompareImage.classList.add('hidden');
-            els.artifactCompareImage.removeAttribute('src');
-        }
-        if (els.artifactCompareStage) {
-            els.artifactCompareStage.classList.add('hidden');
-            els.artifactCompareStage.setAttribute('aria-hidden', 'true');
-        }
-        _renderArtifactMetadataCard(null, null);
-        _renderReviewStatusBanner(null, null);
-        _renderArtifactProvenance(null, null);
-        _renderReviewCompareSummary(null, null, false);
-        updateRunCardActions(null);
-        if (els.emptyArtifactState) els.emptyArtifactState.style.display = 'block';
-        renderConsoleContextRibbon();
-        _syncConsoleRoute(true);
-        return;
-    }
-
-    const errorText = getReadableError(selected.error);
-    els.artifactMeta.textContent = `${artifacts.length} artifacts${errorText ? ` • ${errorText}` : ''}`;
-
-    if (artifacts.length === 0) {
-        _resetArtifactActionButtons();
-        const emptyCopy = _artifactEmptyStateCopy(selected);
-        _setSurfaceEmptyState(
-            els.emptyArtifactState,
-            els.emptyArtifactTitle,
-            els.emptyArtifactDetail,
-            emptyCopy
-        );
-        if (els.emptyArtifactAction) els.emptyArtifactAction.textContent = emptyCopy.action || '';
-        els.artifactThumbnailRail.innerHTML = '';
-        if (els.artifactSelectionTitle) els.artifactSelectionTitle.textContent = 'No artifact selected';
-        if (els.artifactSelectionMeta) els.artifactSelectionMeta.textContent = 'Review surfaces will populate here when the selected run indexes outputs.';
-        if (els.artifactCompareBtn) {
-            els.artifactCompareBtn.classList.add('hidden');
-            els.artifactCompareBtn.setAttribute('aria-pressed', 'false');
-            els.artifactCompareBtn.removeAttribute('aria-controls');
-        }
-        if (els.artifactPreviewSoloImage) {
-            els.artifactPreviewSoloImage.classList.add('hidden');
-            els.artifactPreviewSoloImage.removeAttribute('src');
-        }
-        if (els.artifactPreviewImage) {
-            els.artifactPreviewImage.classList.add('hidden');
-            els.artifactPreviewImage.removeAttribute('src');
-        }
-        if (els.artifactCompareImage) {
-            els.artifactCompareImage.classList.add('hidden');
-            els.artifactCompareImage.removeAttribute('src');
-        }
-        if (els.artifactCompareStage) {
-            els.artifactCompareStage.classList.add('hidden');
-            els.artifactCompareStage.setAttribute('aria-hidden', 'true');
-        }
-        _renderArtifactMetadataCard(selected, null);
-        _renderReviewStatusBanner(selected, null);
-        _renderArtifactProvenance(selected, null);
-        _renderReviewCompareSummary(null, null, false);
-        updateRunCardActions(selected);
-        if (els.emptyArtifactState) els.emptyArtifactState.style.display = 'block';
-        renderConsoleContextRibbon();
-        _syncConsoleRoute(true);
-        return;
-    }
-
-    if (els.emptyArtifactState) els.emptyArtifactState.style.display = 'none';
-    const selectedArtifact = _selectedArtifactForJob(selected);
-    const compareCandidate = findCompareArtifact(selectedArtifact, artifacts);
-    const compareEnabled = Boolean(compareCandidate) && Boolean(state.artifactUi.compareByJob[String(selected.id || '')]);
-
-    if (els.artifactCompareBtn) {
-        if (compareCandidate) {
-            els.artifactCompareBtn.classList.remove('hidden');
-            els.artifactCompareBtn.textContent = compareEnabled ? 'Single View' : 'Compare';
-            els.artifactCompareBtn.setAttribute('aria-pressed', compareEnabled ? 'true' : 'false');
-            els.artifactCompareBtn.setAttribute('aria-controls', 'artifactCompareStage');
-        } else {
-            els.artifactCompareBtn.classList.add('hidden');
-            els.artifactCompareBtn.setAttribute('aria-pressed', 'false');
-            els.artifactCompareBtn.removeAttribute('aria-controls');
-        }
-    }
-
-    if (els.artifactSelectionTitle) {
-        els.artifactSelectionTitle.textContent = selectedArtifact ? artifactLabel(selectedArtifact) : 'No artifact selected';
-    }
-    if (els.artifactSelectionMeta) {
-        els.artifactSelectionMeta.textContent = selectedArtifact
-            ? `${artifactDisplayLabel(selectedArtifact)} • ${artifactContentType(selectedArtifact) || 'binary'} • ${formatBytes(selectedArtifact.size_bytes)}`
-            : 'Preview, metadata, and actions will appear here when outputs are indexed.';
-    }
-    _renderReviewStatusBanner(selected, selectedArtifact);
-    _renderArtifactProvenance(selected, selectedArtifact);
-    _renderReviewCompareSummary(selectedArtifact, compareCandidate, compareEnabled);
-
-    if (els.openArtifactBtn) {
-        const openUrl = selectedArtifact ? buildArtifactUrl(selected, selectedArtifact) : '';
-        els.openArtifactBtn.disabled = !openUrl;
-        els.openArtifactBtn.dataset.url = openUrl;
-    }
-    if (els.downloadArtifactBtn) {
-        const downloadUrl = selectedArtifact ? buildArtifactUrl(selected, selectedArtifact) : '';
-        els.downloadArtifactBtn.disabled = !downloadUrl;
-        els.downloadArtifactBtn.dataset.url = downloadUrl;
-        els.downloadArtifactBtn.dataset.filename = selectedArtifact ? artifactNameParts(selectedArtifact).fileName : '';
-    }
-    if (els.copyArtifactPathBtn) {
-        els.copyArtifactPathBtn.disabled = !selectedArtifact;
-        els.copyArtifactPathBtn.dataset.path = selectedArtifact ? artifactLabel(selectedArtifact) : '';
-    }
-
-    if (els.artifactCompareStage) {
-        els.artifactCompareStage.classList.toggle('hidden', !compareEnabled);
-        els.artifactCompareStage.setAttribute('aria-hidden', compareEnabled ? 'false' : 'true');
-    }
-    if (els.artifactPreviewSoloImage) els.artifactPreviewSoloImage.classList.toggle('hidden', compareEnabled || !artifactIsPreviewable(selectedArtifact));
-    if (els.artifactMetadataCard) els.artifactMetadataCard.classList.toggle('hidden', artifactIsPreviewable(selectedArtifact));
-    if (compareEnabled && selectedArtifact && compareCandidate) {
-        if (els.artifactPreviewImage) {
-            els.artifactPreviewImage.src = buildArtifactUrl(selected, selectedArtifact);
-            els.artifactPreviewImage.classList.remove('hidden');
-        }
-        if (els.artifactPreviewPrimaryCaption) els.artifactPreviewPrimaryCaption.textContent = artifactLabel(selectedArtifact);
-        if (els.artifactCompareImage) {
-            els.artifactCompareImage.src = buildArtifactUrl(selected, compareCandidate);
-            els.artifactCompareImage.classList.remove('hidden');
-        }
-        if (els.artifactCompareCaption) els.artifactCompareCaption.textContent = artifactLabel(compareCandidate);
-    } else if (artifactIsPreviewable(selectedArtifact)) {
-        if (els.artifactPreviewSoloImage) {
-            els.artifactPreviewSoloImage.src = buildArtifactUrl(selected, selectedArtifact);
-            els.artifactPreviewSoloImage.classList.remove('hidden');
-        }
-        if (els.artifactPreviewImage) {
-            els.artifactPreviewImage.classList.add('hidden');
-            els.artifactPreviewImage.removeAttribute('src');
-        }
-        if (els.artifactCompareImage) {
-            els.artifactCompareImage.classList.add('hidden');
-            els.artifactCompareImage.removeAttribute('src');
-        }
-    } else {
-        if (els.artifactPreviewSoloImage) {
-            els.artifactPreviewSoloImage.classList.add('hidden');
-            els.artifactPreviewSoloImage.removeAttribute('src');
-        }
-        if (els.artifactPreviewImage) {
-            els.artifactPreviewImage.classList.add('hidden');
-            els.artifactPreviewImage.removeAttribute('src');
-        }
-        if (els.artifactCompareImage) {
-            els.artifactCompareImage.classList.add('hidden');
-            els.artifactCompareImage.removeAttribute('src');
-        }
-        _renderArtifactMetadataCard(selected, selectedArtifact);
-    }
-
-    const fragment = document.createDocumentFragment();
-    artifacts.forEach((artifact) => {
-        const button = document.createElement('button');
-        const active = selectedArtifact && artifact.path === selectedArtifact.path;
-        button.type = 'button';
-        button.dataset.artifactPath = _artifactRouteKey(artifact);
-        button.setAttribute('role', 'option');
-        button.setAttribute('aria-selected', active ? 'true' : 'false');
-        button.tabIndex = active ? 0 : -1;
-        button.className = active
-            ? 'rounded-2xl border border-cyan-300 dark:border-cyan-900/60 bg-cyan-50/90 dark:bg-cyan-900/20 p-3 text-left shadow-sm transition-colors'
-            : 'rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/50 p-3 text-left hover:bg-white/90 dark:hover:bg-slate-800/80 transition-colors';
-
-        if (artifactIsPreviewable(artifact)) {
-            const thumb = document.createElement('img');
-            thumb.alt = artifactLabel(artifact);
-            thumb.src = buildArtifactUrl(selected, artifact);
-            thumb.className = 'h-24 w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-900/60 object-cover';
-            button.appendChild(thumb);
-        } else {
-            const placeholder = document.createElement('div');
-            placeholder.className = 'flex h-24 items-center justify-center rounded-xl border border-dashed border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/70 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400';
-            placeholder.textContent = artifactDisplayLabel(artifact);
-            button.appendChild(placeholder);
-        }
-
-        const title = document.createElement('p');
-        title.className = 'mt-3 text-[11px] font-semibold text-slate-800 dark:text-slate-100 truncate';
-        title.textContent = artifactNameParts(artifact).fileName;
-        button.appendChild(title);
-
-        const meta = document.createElement('p');
-        meta.className = 'mt-1 text-[10px] font-mono text-slate-500 dark:text-slate-400 truncate';
-        meta.textContent = `${artifactDisplayLabel(artifact)} • ${formatBytes(artifact.size_bytes)}`;
-        button.appendChild(meta);
-
-        fragment.appendChild(button);
-    });
-    els.artifactThumbnailRail.innerHTML = '';
-    els.artifactThumbnailRail.appendChild(fragment);
-    updateRunCardActions(selected);
-    renderConsoleContextRibbon();
-    _syncConsoleRoute(true);
+    _primeDeferredReviewSurface('render');
+    _renderDeferredReviewSurfaceFallback(jobsLoading);
 }
 
 function selectJob(jobId) {
@@ -5304,6 +5538,7 @@ function selectJob(jobId) {
             }
         });
     }
+    _primeDeferredReviewSurface('route');
     scheduleRenderJobQueue(false);
 }
 
@@ -5583,6 +5818,201 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = HEALTH_CHECK_TIME
         if (lifecycle && typeof lifecycle.onFinally === 'function') {
             lifecycle.onFinally(controller, timeoutId);
         }
+    }
+}
+
+function _portalRumNow() {
+    if (window.performance && typeof window.performance.now === 'function') {
+        return window.performance.now();
+    }
+    return Date.now();
+}
+
+function _portalRumTraceparent(fallback = '') {
+    return portalInternals.normalizePortalRumTraceparent(
+        state.rum.bootstrapTraceparent || state.rum.pageTraceparent,
+        fallback
+    );
+}
+
+function _rumTelemetryEnabled() {
+    return Boolean(_isBootstrapReady() && state.auth?.features?.rumTelemetry);
+}
+
+function _portalRumBasePayload(sample = {}) {
+    const sampleOptions = sample && typeof sample === 'object' ? sample : {};
+    return {
+        event_type: String(sampleOptions.eventType || '').trim().toLowerCase(),
+        route: '/portal',
+        view: portalInternals.normalizePortalRumView(sampleOptions.view || state.currentView),
+        value: Number(sampleOptions.value),
+        unit: String(sampleOptions.unit || '').trim().toLowerCase(),
+        metric: String(sampleOptions.metric || '').trim().toLowerCase(),
+        metadata: sampleOptions.metadata && typeof sampleOptions.metadata === 'object' ? sampleOptions.metadata : {},
+        traceparent: portalInternals.normalizePortalRumTraceparent(
+            sampleOptions.traceparent,
+            _portalRumTraceparent()
+        ),
+        keepalive: Boolean(sampleOptions.keepalive)
+    };
+}
+
+function _queuePortalRumSample(sample = {}) {
+    if (_isBootstrapReady() && !state.auth?.features?.rumTelemetry) return;
+    const payload = _portalRumBasePayload(sample);
+    if (!payload.event_type || !Number.isFinite(payload.value) || !payload.unit) return;
+    state.rum.queuedSamples.push(payload);
+    if (_rumTelemetryEnabled()) {
+        void _flushQueuedPortalRumSamples();
+    }
+}
+
+async function _flushQueuedPortalRumSamples(options = {}) {
+    if (!_rumTelemetryEnabled()) {
+        state.rum.queuedSamples = [];
+        return;
+    }
+    if (state.rum.queuedSamples.length === 0) {
+        return;
+    }
+    const flushOptions = options && typeof options === 'object' ? options : {};
+    const keepalive = Boolean(flushOptions.keepalive);
+    const queued = state.rum.queuedSamples.splice(0, state.rum.queuedSamples.length);
+    for (const sample of queued) {
+        try {
+            const headers = _buildAuthHeaders({ 'Content-Type': 'application/json' }, 'POST', {
+                traceparent: sample.traceparent
+            });
+            await fetch(`${API_BASE}/v1/portal/rum`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({
+                    event_type: sample.event_type,
+                    route: sample.route,
+                    view: sample.view,
+                    value: sample.value,
+                    unit: sample.unit,
+                    metric: sample.metric,
+                    metadata: sample.metadata
+                }),
+                keepalive: keepalive || sample.keepalive
+            });
+        } catch {
+            // best-effort telemetry only
+        }
+    }
+}
+
+function _recordPortalRumMilestone(eventType, value, options = {}) {
+    if (state.rum.emittedMilestones[eventType]) return;
+    state.rum.emittedMilestones[eventType] = true;
+    _queuePortalRumSample({
+        eventType,
+        value,
+        unit: 'ms',
+        metric: 'duration',
+        traceparent: options.traceparent || _portalRumTraceparent(),
+        view: options.view,
+        metadata: options.metadata
+    });
+}
+
+function _scheduleFirstViewInteractiveRum() {
+    if (state.rum.firstInteractiveScheduled || state.rum.emittedMilestones.first_view_interactive) {
+        return;
+    }
+    state.rum.firstInteractiveScheduled = true;
+    const emit = () => {
+        state.rum.firstInteractiveScheduled = false;
+        _recordPortalRumMilestone('first_view_interactive', _portalRumNow(), {
+            traceparent: _portalRumTraceparent()
+        });
+    };
+    if (window.requestAnimationFrame) {
+        window.requestAnimationFrame(emit);
+        return;
+    }
+    window.setTimeout(emit, 0);
+}
+
+function _finalizePortalRumVitals() {
+    if (state.rum.vitals.finalized) return;
+    state.rum.vitals.finalized = true;
+    if (Number.isFinite(state.rum.vitals.lcpMs)) {
+        _queuePortalRumSample({
+            eventType: 'core_web_vital',
+            metric: 'lcp',
+            value: state.rum.vitals.lcpMs,
+            unit: 'ms',
+            traceparent: _portalRumTraceparent(),
+            keepalive: true
+        });
+    }
+    if (Number.isFinite(state.rum.vitals.inpMs)) {
+        _queuePortalRumSample({
+            eventType: 'core_web_vital',
+            metric: 'inp',
+            value: state.rum.vitals.inpMs,
+            unit: 'ms',
+            traceparent: _portalRumTraceparent(),
+            keepalive: true
+        });
+    }
+    _queuePortalRumSample({
+        eventType: 'core_web_vital',
+        metric: 'cls',
+        value: state.rum.vitals.clsScore,
+        unit: 'score',
+        traceparent: _portalRumTraceparent(),
+        keepalive: true
+    });
+}
+
+function _flushPortalRumOnPagehide() {
+    _finalizePortalRumVitals();
+    if (_rumTelemetryEnabled()) {
+        void _flushQueuedPortalRumSamples({ keepalive: true });
+    }
+}
+
+function _startPortalRumObservers() {
+    if (state.rum.observersStarted || typeof window.PerformanceObserver !== 'function') return;
+    state.rum.observersStarted = true;
+    const supportedTypes = Array.isArray(window.PerformanceObserver.supportedEntryTypes)
+        ? new Set(window.PerformanceObserver.supportedEntryTypes)
+        : new Set();
+    if (supportedTypes.has('largest-contentful-paint')) {
+        const observer = new PerformanceObserver((list) => {
+            const entries = list.getEntries();
+            const latest = entries[entries.length - 1];
+            if (latest) {
+                state.rum.vitals.lcpMs = latest.startTime;
+            }
+        });
+        observer.observe({ type: 'largest-contentful-paint', buffered: true });
+        window.addEventListener('pagehide', () => observer.disconnect(), { once: true });
+    }
+    if (supportedTypes.has('layout-shift')) {
+        const observer = new PerformanceObserver((list) => {
+            list.getEntries().forEach((entry) => {
+                if (!entry.hadRecentInput) {
+                    state.rum.vitals.clsScore = Number((state.rum.vitals.clsScore + entry.value).toFixed(4));
+                }
+            });
+        });
+        observer.observe({ type: 'layout-shift', buffered: true });
+        window.addEventListener('pagehide', () => observer.disconnect(), { once: true });
+    }
+    if (supportedTypes.has('event')) {
+        const observer = new PerformanceObserver((list) => {
+            list.getEntries().forEach((entry) => {
+                if (Number(entry.interactionId) > 0) {
+                    state.rum.vitals.inpMs = Math.max(Number(state.rum.vitals.inpMs) || 0, entry.duration || 0);
+                }
+            });
+        });
+        observer.observe({ type: 'event', buffered: true, durationThreshold: 16 });
+        window.addEventListener('pagehide', () => observer.disconnect(), { once: true });
     }
 }
 
@@ -7445,6 +7875,7 @@ function updateUIFromState() {
     syncSegmentationControlState(c);
     syncRuntimeWorkerModeControls();
     renderFieldPreviewStatuses();
+    _syncStagedUploadUi();
 
     renderCLI();
     scheduleConfigPreview(true);
@@ -7911,11 +8342,13 @@ function bindInputs() {
             else state[key] = e.target.value;
             if (key === 'pipeline') {
                 updateUIFromState();
+                _persistTransientPortalDraft();
                 void fetchPresetsForPipeline(state.pipeline, true);
                 void fetchReadiness(true);
                 void fetchConfigMetadata(state.pipeline, true);
             }
             else {
+                _persistTransientPortalDraft();
                 const field = trackedTelemetryField(category, key);
                 if (field) {
                     void emitPortalEvent('field_commit', {
@@ -7934,6 +8367,7 @@ function bindInputs() {
         el.addEventListener('input', (e) => {
             if (category) state.config[category][key] = e.target.value;
             else state.config[key] = e.target.value;
+            _scheduleTransientPortalDraftPersist();
             renderCLI();
             if (trackedTelemetryField(category, key)) {
                 scheduleConfigPreview();
@@ -7941,6 +8375,7 @@ function bindInputs() {
         });
         el.addEventListener('change', (e) => {
             const field = trackedTelemetryField(category, key);
+            _scheduleTransientPortalDraftPersist({ immediate: true });
             if (field) {
                 void emitPortalEvent('field_commit', {
                     surface: telemetrySurfaceFor(category),
@@ -7986,6 +8421,7 @@ function bindInputs() {
                 state.portalUi.debugBundleGuardrailSeen = false;
                 if (els.debugBundleAcknowledge) els.debugBundleAcknowledge.checked = false;
             }
+            _persistTransientPortalDraft();
             renderCLI();
             scheduleConfigPreview();
         });
@@ -7998,6 +8434,7 @@ function bindInputs() {
             state.config.preset = nextPreset;
             applyPresetRecommendedArgs(nextPreset);
             updateUIFromState();
+            _persistTransientPortalDraft();
         });
     }
     safeBindInput(els.inputDir, null, 'inputDir');
@@ -8153,39 +8590,6 @@ function _queueEmptyStateCopy() {
         title: 'No runs yet',
         detail: 'Dispatch a run from Build or wait for recovery to repopulate recent operator activity.',
         action: 'Next action: open Build to prepare the next run or restore backend connectivity to recover recent history.'
-    };
-}
-
-function _artifactEmptyStateCopy(job) {
-    if (!job) {
-        return {
-            tone: 'neutral',
-            title: 'Select a completed run',
-            detail: 'Choose a reviewable job to load preview, provenance, and compare context here.',
-            action: 'Next action: inspect the selected run in Operate or wait for indexed outputs before reopening review.'
-        };
-    }
-    if (job.state === 'running' || job.state === 'queued') {
-        return {
-            tone: 'info',
-            title: 'Outputs are still arriving',
-            detail: 'This run has not indexed reviewable artifacts yet. Stay on the inspector for live progress and freshness updates.',
-            action: 'Next action: keep the run in Operate until indexed outputs appear or a blocking warning arrives.'
-        };
-    }
-    if (job.state === 'failed' || job.state === 'canceled') {
-        return {
-            tone: 'warning',
-            title: 'No reviewable outputs indexed',
-            detail: 'This run ended before artifacts were available. Inspect the run status and transport warnings above for recovery context.',
-            action: 'Next action: inspect the selected run in Operate or decide whether the failed run should be retried.'
-        };
-    }
-    return {
-        tone: 'neutral',
-        title: 'No indexed artifacts yet',
-        detail: 'Artifacts will appear here when the selected run finishes indexing its review outputs.',
-        action: 'Next action: inspect the selected run in Operate or wait for indexed outputs before reopening review.'
     };
 }
 
@@ -8658,6 +9062,16 @@ async function _startAuthorizedFetchSse(job, eventsUrl) {
                     transport: 'fetch'
                 }
             });
+            _queuePortalRumSample({
+                eventType: 'sse_reconnect',
+                value: 1,
+                unit: 'count',
+                metadata: {
+                    attempt: reconnectAttempt,
+                    job_id: String(job.id || ''),
+                    transport: 'fetch'
+                }
+            });
         }
         scheduleRenderJobQueue();
 
@@ -8766,6 +9180,16 @@ function startJobEventStream(job, eventsUrl) {
         if (reconnectAttempt > 0) {
             void emitPortalEvent('stream_reconnected', {
                 surface: 'stream_transport',
+                metadata: {
+                    attempt: reconnectAttempt,
+                    job_id: String(job.id || ''),
+                    transport: 'native'
+                }
+            });
+            _queuePortalRumSample({
+                eventType: 'sse_reconnect',
+                value: 1,
+                unit: 'count',
                 metadata: {
                     attempt: reconnectAttempt,
                     job_id: String(job.id || ''),
@@ -8897,8 +9321,35 @@ async function cancelJob(id) {
     appendJobLog(job, `[WARN] Cancelled by user.`);
     logToPane(id, `[WARN] Cancelled by user.`);
 
-    const headers = _buildAuthHeaders({}, 'POST');
-    fetch(`${API_BASE}/v1/jobs/${id}/cancel`, { method: 'POST', headers }).catch(() => {});
+    const requestTraceparent = portalInternals.createChildTraceparent(_portalRumTraceparent());
+    const requestStartedAt = _portalRumNow();
+    const headers = _buildAuthHeaders({}, 'POST', { traceparent: requestTraceparent });
+    fetch(`${API_BASE}/v1/jobs/${id}/cancel`, { method: 'POST', headers })
+        .then((response) => {
+            _queuePortalRumSample({
+                eventType: 'queue_request',
+                metric: 'cancel',
+                value: _portalRumNow() - requestStartedAt,
+                unit: 'ms',
+                traceparent: requestTraceparent,
+                metadata: {
+                    outcome: response.ok ? 'ok' : 'error',
+                    status: response.status
+                }
+            });
+        })
+        .catch(() => {
+            _queuePortalRumSample({
+                eventType: 'queue_request',
+                metric: 'cancel',
+                value: _portalRumNow() - requestStartedAt,
+                unit: 'ms',
+                traceparent: requestTraceparent,
+                metadata: {
+                    outcome: 'error'
+                }
+            });
+        });
 
     scheduleRenderJobQueue();
     if (state.selectedJobId === id && els.logStatusIndicator) els.logStatusIndicator.classList.add('hidden');
@@ -9031,13 +9482,30 @@ async function submitJob() {
     appendJobLog(job, initLine);
     logToPane(job.id, initLine);
 
+    const requestTraceparent = portalInternals.createChildTraceparent(_portalRumTraceparent());
+    const requestStartedAt = _portalRumNow();
+    let queueRumRecorded = false;
     try {
-        const headers = _buildAuthHeaders({ 'Content-Type': 'application/json' }, 'POST');
+        const headers = _buildAuthHeaders({ 'Content-Type': 'application/json' }, 'POST', {
+            traceparent: requestTraceparent
+        });
         const res = await fetch(`${API_BASE}/v1/jobs`, {
             method: 'POST',
             headers,
             body: JSON.stringify(payload)
         });
+        _queuePortalRumSample({
+            eventType: 'queue_request',
+            metric: 'submit',
+            value: _portalRumNow() - requestStartedAt,
+            unit: 'ms',
+            traceparent: requestTraceparent,
+            metadata: {
+                outcome: res.ok ? 'ok' : 'error',
+                status: res.status
+            }
+        });
+        queueRumRecorded = true;
         if (!res.ok) {
             const parsedError = await extractApiError(res);
             if (parsedError.error) job.error = parsedError.error;
@@ -9060,6 +9528,18 @@ async function submitJob() {
 
         startJobEventStream(job, data.data.events_url);
     } catch (err) {
+        if (!queueRumRecorded) {
+            _queuePortalRumSample({
+                eventType: 'queue_request',
+                metric: 'submit',
+                value: _portalRumNow() - requestStartedAt,
+                unit: 'ms',
+                traceparent: requestTraceparent,
+                metadata: {
+                    outcome: 'error'
+                }
+            });
+        }
         const errorMessage = err instanceof Error ? err.message : String(err);
         job.state = 'failed';
         job.finishedAt = Date.now();
@@ -9159,6 +9639,7 @@ if (els.profileSelect) els.profileSelect.addEventListener('change', (e) => {
         state.pipeline = profiles[name].pipeline;
         state.config = JSON.parse(JSON.stringify(profiles[name].config));
         updateUIFromState();
+        _persistTransientPortalDraft();
         void fetchPresetsForPipeline(state.pipeline, true);
         createToast(`Profile ${name} loaded.`);
     }
@@ -9215,6 +9696,52 @@ if (els.heroExportBtn) {
             return;
         }
         navigateConsoleView('operate', { jobId });
+    });
+}
+
+if (els.stagedUploadPickFilesBtn && els.stagedUploadFilesInput) {
+    els.stagedUploadPickFilesBtn.addEventListener('click', () => {
+        if (_stagedUploadsVisibleForState() && !state.portalUi?.stagedUpload?.busy) {
+            els.stagedUploadFilesInput.click();
+        }
+    });
+}
+if (els.stagedUploadPickFolderBtn && els.stagedUploadFolderInput) {
+    els.stagedUploadPickFolderBtn.addEventListener('click', () => {
+        if (_stagedUploadsVisibleForState() && !state.portalUi?.stagedUpload?.busy) {
+            els.stagedUploadFolderInput.click();
+        }
+    });
+}
+if (els.stagedUploadFilesInput) {
+    els.stagedUploadFilesInput.addEventListener('change', (event) => {
+        _submitStagedUploadSelection(event.target.files);
+        event.target.value = '';
+    });
+}
+if (els.stagedUploadFolderInput) {
+    els.stagedUploadFolderInput.addEventListener('change', (event) => {
+        _submitStagedUploadSelection(event.target.files);
+        event.target.value = '';
+    });
+}
+if (els.stagedUploadDropzone) {
+    els.stagedUploadDropzone.addEventListener('dragover', (event) => {
+        if (!_stagedUploadsVisibleForState() || state.portalUi?.stagedUpload?.busy) return;
+        event.preventDefault();
+    });
+    els.stagedUploadDropzone.addEventListener('drop', (event) => {
+        if (!_stagedUploadsVisibleForState() || state.portalUi?.stagedUpload?.busy) return;
+        event.preventDefault();
+        _submitStagedUploadSelection(event.dataTransfer?.files);
+    });
+    els.stagedUploadDropzone.addEventListener('keydown', (event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        if (!_stagedUploadsVisibleForState() || state.portalUi?.stagedUpload?.busy) return;
+        event.preventDefault();
+        if (els.stagedUploadFilesInput) {
+            els.stagedUploadFilesInput.click();
+        }
     });
 }
 
@@ -9333,6 +9860,7 @@ if (els.fileInput) els.fileInput.addEventListener('change', async (e) => {
         state.portalUi.debugBundleAcknowledged = false;
         state.portalUi.debugBundleGuardrailSeen = false;
         updateUIFromState();
+        _persistTransientPortalDraft();
         void fetchPresetsForPipeline(state.pipeline, true);
         void fetchConfigMetadata(state.pipeline, true);
         createToast("Configuration imported.", "success");
@@ -9416,6 +9944,17 @@ if (els.copyArtifactPathBtn) {
             return;
         }
         await copyToClipboard(path);
+    });
+}
+
+if (els.copyArtifactFingerprintBtn) {
+    els.copyArtifactFingerprintBtn.addEventListener('click', async () => {
+        const fingerprint = String(els.copyArtifactFingerprintBtn.dataset.fingerprint || '').trim();
+        if (!fingerprint) {
+            createToast('No artifact fingerprint is available for this selection.', 'error');
+            return;
+        }
+        await copyToClipboard(fingerprint);
     });
 }
 
@@ -9575,6 +10114,9 @@ function _overlayFocusableElements(root) {
 }
 
 function _activeOverlayPanel() {
+    if (els.artifactViewerModal && !els.artifactViewerModal.classList.contains('hidden')) {
+        return els.artifactViewerPanel;
+    }
     if (els.shortcutsModal && !els.shortcutsModal.classList.contains('hidden')) {
         return els.shortcutsPanel;
     }
@@ -9614,6 +10156,86 @@ function _isTypingTarget(target) {
     if (tagName !== 'input') return false;
     const inputType = String(target.getAttribute('type') || 'text').trim().toLowerCase();
     return !['button', 'checkbox', 'color', 'file', 'hidden', 'radio', 'range', 'reset', 'submit'].includes(inputType);
+}
+
+function _artifactViewerContext() {
+    if (deferredReviewSurfaceApi && typeof deferredReviewSurfaceApi._artifactViewerContext === 'function') {
+        return deferredReviewSurfaceApi._artifactViewerContext();
+    }
+    return {
+        job: null,
+        artifacts: [],
+        artifact: null,
+        index: -1,
+        url: '',
+        inlinePreview: false,
+        zoomPercent: 100
+    };
+}
+
+function _setArtifactViewerZoom(nextZoom) {
+    if (deferredReviewSurfaceApi) {
+        deferredReviewSurfaceApi._setArtifactViewerZoom(nextZoom);
+        return;
+    }
+    _primeDeferredReviewSurface('viewer');
+}
+
+function _navigateArtifactViewerSelection(direction) {
+    if (deferredReviewSurfaceApi) {
+        return deferredReviewSurfaceApi._navigateArtifactViewerSelection(direction);
+    }
+    _primeDeferredReviewSurface('viewer');
+    return false;
+}
+
+function renderArtifactViewer() {
+    if (deferredReviewSurfaceApi) {
+        deferredReviewSurfaceApi.renderArtifactViewer();
+        return;
+    }
+    if (!els.artifactViewerModal || !els.artifactViewerPanel) return;
+    const shouldShow = false;
+    els.artifactViewerModal.classList.toggle('hidden', !shouldShow);
+    els.artifactViewerModal.classList.toggle('flex', shouldShow);
+    els.artifactViewerModal.setAttribute('aria-hidden', shouldShow ? 'false' : 'true');
+    els.artifactViewerModal.dataset.overlayOpen = shouldShow ? 'true' : 'false';
+    if (els.artifactViewerStatus) {
+        els.artifactViewerStatus.textContent = 'Artifact viewer is closed.';
+    }
+    if (Boolean(state.portalUi?.artifactViewer?.open)) {
+        _primeDeferredReviewSurface('viewer');
+    }
+}
+
+function _closeArtifactViewer(restoreFocus = true) {
+    if (deferredReviewSurfaceApi) {
+        deferredReviewSurfaceApi._closeArtifactViewer(restoreFocus);
+        return;
+    }
+    state.portalUi.artifactViewer.open = false;
+    renderArtifactViewer();
+    if (restoreFocus) _restoreOverlayFocus();
+}
+
+function _openArtifactViewer(job, artifact, trigger = document.activeElement, surface = 'artifact_review') {
+    if (!_artifactViewerEnabled() || !els.artifactViewerModal) return false;
+    if (!job || !artifact) {
+        createToast('No artifact is available for this selection.', 'info');
+        return false;
+    }
+    if (deferredReviewSurfaceApi) {
+        return deferredReviewSurfaceApi._openArtifactViewer(job, artifact, trigger);
+    }
+    _primeDeferredReviewSurface('viewer');
+    void _loadDeferredReviewSurface().then((api) => {
+        if (api) {
+            api._openArtifactViewer(job, artifact, trigger);
+            return;
+        }
+        _openManagedArtifactWindow(job, artifact, surface);
+    });
+    return true;
 }
 
 const toggleModal = (show, trigger = document.activeElement) => {
@@ -9685,6 +10307,69 @@ if (els.effectiveConfigDrawer) {
         if (e.target === els.effectiveConfigDrawer) toggleEffectiveConfigDrawer(false);
     });
 }
+if (els.closeArtifactViewerBtn) {
+    els.closeArtifactViewerBtn.addEventListener('click', () => _closeArtifactViewer());
+}
+if (els.artifactViewerModal) {
+    els.artifactViewerModal.addEventListener('click', (event) => {
+        if (event.target === els.artifactViewerModal) _closeArtifactViewer();
+    });
+}
+if (els.artifactViewerPrevBtn) {
+    els.artifactViewerPrevBtn.addEventListener('click', () => {
+        _navigateArtifactViewerSelection(-1);
+    });
+}
+if (els.artifactViewerNextBtn) {
+    els.artifactViewerNextBtn.addEventListener('click', () => {
+        _navigateArtifactViewerSelection(1);
+    });
+}
+if (els.artifactViewerZoomOutBtn) {
+    els.artifactViewerZoomOutBtn.addEventListener('click', () => {
+        _setArtifactViewerZoom((state.portalUi?.artifactViewer?.zoomPercent || 100) - 25);
+    });
+}
+if (els.artifactViewerZoomInBtn) {
+    els.artifactViewerZoomInBtn.addEventListener('click', () => {
+        _setArtifactViewerZoom((state.portalUi?.artifactViewer?.zoomPercent || 100) + 25);
+    });
+}
+if (els.artifactViewerResetZoomBtn) {
+    els.artifactViewerResetZoomBtn.addEventListener('click', () => {
+        _setArtifactViewerZoom(100);
+    });
+}
+if (els.artifactViewerOpenRawBtn) {
+    els.artifactViewerOpenRawBtn.addEventListener('click', () => {
+        const url = sanitizeManagedAssetUrl(els.artifactViewerOpenRawBtn.dataset.url);
+        if (!url) {
+            createToast('No artifact URL is available for this selection.', 'error');
+            return;
+        }
+        window.open(url, '_blank', 'noopener,noreferrer');
+    });
+}
+if (els.artifactViewerCopyPathBtn) {
+    els.artifactViewerCopyPathBtn.addEventListener('click', async () => {
+        const path = String(els.artifactViewerCopyPathBtn.dataset.path || '').trim();
+        if (!path) {
+            createToast('No artifact path is available for this selection.', 'error');
+            return;
+        }
+        await copyToClipboard(path);
+    });
+}
+if (els.artifactViewerCopyFingerprintBtn) {
+    els.artifactViewerCopyFingerprintBtn.addEventListener('click', async () => {
+        const fingerprint = String(els.artifactViewerCopyFingerprintBtn.dataset.fingerprint || '').trim();
+        if (!fingerprint) {
+            createToast('No artifact fingerprint is available for this selection.', 'error');
+            return;
+        }
+        await copyToClipboard(fingerprint);
+    });
+}
 
 document.addEventListener('keydown', (e) => {
     if (_trapOverlayFocus(e)) {
@@ -9692,6 +10377,11 @@ document.addEventListener('keydown', (e) => {
     }
     const key = String(e.key || '');
     const isPlainShortcut = !e.ctrlKey && !e.metaKey && !e.altKey && !_isTypingTarget(e.target);
+    if (e.key === "Escape" && els.artifactViewerModal && !els.artifactViewerModal.classList.contains("hidden")) {
+        e.preventDefault();
+        _closeArtifactViewer();
+        return;
+    }
     if (e.key === "Escape" && els.effectiveConfigDrawer && !els.effectiveConfigDrawer.classList.contains("hidden")) {
         e.preventDefault();
         toggleEffectiveConfigDrawer(false);
@@ -9720,6 +10410,33 @@ document.addEventListener('keydown', (e) => {
         navigateConsoleView(nextView);
         return;
     }
+    if (isPlainShortcut && els.artifactViewerModal && !els.artifactViewerModal.classList.contains('hidden')) {
+        if (key === 'ArrowLeft') {
+            e.preventDefault();
+            _navigateArtifactViewerSelection(-1);
+            return;
+        }
+        if (key === 'ArrowRight') {
+            e.preventDefault();
+            _navigateArtifactViewerSelection(1);
+            return;
+        }
+        if (key === '+' || key === '=') {
+            e.preventDefault();
+            _setArtifactViewerZoom((state.portalUi?.artifactViewer?.zoomPercent || 100) + 25);
+            return;
+        }
+        if (key === '-') {
+            e.preventDefault();
+            _setArtifactViewerZoom((state.portalUi?.artifactViewer?.zoomPercent || 100) - 25);
+            return;
+        }
+        if (key === '0') {
+            e.preventDefault();
+            _setArtifactViewerZoom(100);
+            return;
+        }
+    }
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
         e.preventDefault();
         submitJob();
@@ -9736,6 +10453,7 @@ document.addEventListener('keydown', (e) => {
 
 document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
+        _finalizePortalRumVitals();
         _resetAmbientTargets();
         stopHealthPolling();
         return;
@@ -9803,8 +10521,12 @@ portalRenderSurfaces.register('jobQueue', {
     }
 });
 
+window.addEventListener('beforeunload', _flushPendingTransientPortalDraftPersist);
 window.addEventListener('beforeunload', cleanupActiveJobHandles);
+window.addEventListener('beforeunload', _flushPortalRumOnPagehide);
+window.addEventListener('pagehide', _flushPendingTransientPortalDraftPersist);
 window.addEventListener('pagehide', cleanupActiveJobHandles);
+window.addEventListener('pagehide', _flushPortalRumOnPagehide);
 window.addEventListener('pageshow', () => {
     reconcileBuildSurfaceFromDom();
 });
@@ -9822,6 +10544,7 @@ async function init() {
     const savedThemePreference = _normalizeThemePreference(localStorage.getItem(THEME_STORAGE_KEY)) || 'system';
     applyThemePreference(savedThemePreference, { persist: false, themeQuery });
     setupAmbientMotion();
+    _startPortalRumObservers();
 
     themeQuery.addEventListener('change', () => {
         if (state.themePreference === 'system') {
@@ -9841,20 +10564,30 @@ async function init() {
     if (window.requestAnimationFrame) {
         window.requestAnimationFrame(() => {
             reconcileBuildSurfaceFromDom();
+            _recordPortalRumMilestone('portal_shell_rendered', _portalRumNow(), {
+                traceparent: state.rum.pageTraceparent
+            });
         });
     } else {
         window.setTimeout(() => {
             reconcileBuildSurfaceFromDom();
+            _recordPortalRumMilestone('portal_shell_rendered', _portalRumNow(), {
+                traceparent: state.rum.pageTraceparent
+            });
         }, 0);
     }
     setupSectionRail();
     _syncBootstrapUi();
     renderJobQueue();
-    void checkBackend(true);
-    void fetchConfigMetadata(state.pipeline, true);
     startHealthPolling();
     await bootstrapPromise;
+    _primeDeferredReviewSurface('bootstrap');
+    _restoreTransientPortalDraft();
+    updateUIFromState();
+    _persistTransientPortalDraft();
     portalRenderSurfaces.render('jobQueue', state);
+    void checkBackend(true);
+    void fetchConfigMetadata(state.pipeline, true);
 }
 
 document.addEventListener('DOMContentLoaded', () => {

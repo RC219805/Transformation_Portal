@@ -4,6 +4,7 @@ SHELL := /bin/sh
 # .venv immediately switch to the repo interpreter on subsequent lines.
 BOOTSTRAP_PY = $$(./scripts/setup/resolve_python_311.sh)
 PY = $$(./scripts/setup/resolve_python_311.sh)
+PRE_COMMIT_BIN := $(shell if [ -x .venv/bin/pre-commit ]; then printf '%s' .venv/bin/pre-commit; elif [ -x .venv/Scripts/pre-commit.exe ]; then printf '%s' .venv/Scripts/pre-commit.exe; fi)
 
 # Common subsets (fast tests avoid heavy/optional paths)
 FAST_TESTS := \
@@ -295,7 +296,7 @@ validate-orchestrator-http:
 
 validate-portal-browser:
 	@echo "Running live portal browser smoke validation..."
-	@TP_API_KEY="$${TP_API_KEY:-contract-secret}" "$(PY)" scripts/validation/validate_portal_browser_smoke.py --spawn-local-backend --api-key "$${TP_API_KEY:-contract-secret}"
+	@TP_API_KEY="$${TP_API_KEY:-contract-secret}" TP_PORTAL_ARTIFACT_VIEWER_MODAL_ROLLOUT_PERCENT="$${TP_PORTAL_ARTIFACT_VIEWER_MODAL_ROLLOUT_PERCENT:-100}" "$(PY)" scripts/validation/validate_portal_browser_smoke.py --spawn-local-backend --api-key "$${TP_API_KEY:-contract-secret}"
 
 validate-frontdoor-browser:
 	@echo "Running live managed frontdoor browser smoke validation..."
@@ -373,12 +374,14 @@ ci-quick:
 # Pre-commit checks
 pre-commit:
 	@echo "Running pre-commit checks..."
-	@pre-commit run --all-files --show-diff-on-failure
+	@test -n "$(PRE_COMMIT_BIN)" || { echo "pre-commit is not installed in .venv; run 'make install-core' first"; exit 1; }
+	@"$(PRE_COMMIT_BIN)" run --all-files --show-diff-on-failure
 
 # Install git hooks
 install-hooks:
 	@echo "Installing git pre-commit hook..."
-	@pre-commit install -f
+	@test -n "$(PRE_COMMIT_BIN)" || { echo "pre-commit is not installed in .venv; run 'make install-core' first"; exit 1; }
+	@"$(PRE_COMMIT_BIN)" install -f
 	@echo "✓ Pre-commit hook installed via pre-commit"
 
 # Quality check (all validations)
@@ -404,6 +407,8 @@ check-stale-docs:
 validate-ci:
 	@echo "Validating GitHub Actions workflows..."
 	@"$(PY)" scripts/validate_ci_config.py
+	@echo "Validating gitleaks workflow contract..."
+	@"$(PY)" scripts/validation/check_gitleaks_workflow_contract.py
 	@echo "Validating dependency-update workflow contract..."
 	@"$(PY)" scripts/validation/check_dependency_update_workflow.py
 	@echo "Validating Dependabot config contract..."

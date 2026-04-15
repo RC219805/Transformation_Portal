@@ -63,6 +63,67 @@ export TP_API_KEY="replace-with-strong-backend-token"
 export TP_BACKEND_API_KEY="$TP_API_KEY"
 ```
 
+## Optional RUM Pilot Knobs
+
+M1 measurement is additive, default-off, and protected by both a hard enable flag
+and a deterministic rollout percentage.
+
+```bash
+export TP_PORTAL_RUM_ENABLED=0
+export TP_PORTAL_RUM_ROLLOUT_PERCENT=0
+export TP_PORTAL_RUM_LOG_PATH="/absolute/path/to/portal-rum.jsonl"
+export TP_PORTAL_EVENT_LOG_PATH="/absolute/path/to/portal-events.jsonl"
+```
+
+Notes:
+- `TP_PORTAL_RUM_ENABLED=0` keeps `/v1/portal/rum` in success/no-op mode and keeps `features.rumTelemetry=false` on both bootstrap surfaces.
+- `TP_PORTAL_RUM_ROLLOUT_PERCENT=0` keeps collection disabled even when the hard flag is on.
+- `TP_PORTAL_RUM_LOG_PATH` is optional. When set, FastAPI appends PII-free JSONL records for the pilot summary CLI.
+- `TP_PORTAL_EVENT_LOG_PATH` is optional. When set, FastAPI appends PII-free portal event JSONL for viewer, review, and stream telemetry evidence.
+- Direct-debug rollout stability reuses `TP_PORTAL_DIRECT_DEBUG_COHORT_KEY`.
+- Managed rollout stability uses the authenticated actor identity already present on the front door; raw usernames and emails are not stored in the RUM sink.
+- Rollout expansion remains blocked until `docs/compliance/PORTAL_TELEMETRY_PRIVACY_SIGNOFF.md` has explicit Security / Privacy approval.
+
+## Optional Review Surface Pilot Knobs
+
+The review-surface split and in-portal viewer stay additive and default-off.
+Both rollouts use the same deterministic cohort hashing path as the RUM pilot.
+
+```bash
+export TP_PORTAL_ARTIFACT_VIEWER_MODAL_ROLLOUT_PERCENT=0
+export TP_PORTAL_REVIEW_SURFACE_DEFER_ROLLOUT_PERCENT=0
+```
+
+Notes:
+- `TP_PORTAL_ARTIFACT_VIEWER_MODAL_ROLLOUT_PERCENT=0` keeps `features.artifactViewerModal=false` on both bootstrap surfaces and leaves review actions on the raw-link path.
+- `TP_PORTAL_REVIEW_SURFACE_DEFER_ROLLOUT_PERCENT=0` keeps `features.reviewSurfaceDeferred=false`, so the split review asset is prefetched after bootstrap instead of deferred to review/operate entry.
+- Roll back either pilot by setting the corresponding percentage back to `0` and redeploying the managed front door and/or backend origin that serves `/portal/bootstrap`.
+- Cohort expansion should move in bounded steps and record the operator owner, rollout date, rollback owner, and target percentage in the deployment notes for the change.
+
+## Optional Staged Upload Pilot Knobs
+
+Staged uploads stay additive and default-off. The browser feature appears only
+when the backend enable flag is on and the rollout cohort matches.
+
+```bash
+export TP_PORTAL_UPLOAD_STAGING_ENABLED=0
+export TP_PORTAL_STAGED_UPLOADS_ROLLOUT_PERCENT=0
+export TP_PORTAL_UPLOAD_ROOT="/tmp/transformation-portal/uploads"
+export TP_PORTAL_MAX_UPLOAD_REQUEST_BYTES=1048576
+export TP_PORTAL_UPLOAD_MAX_FILES=256
+export TP_PORTAL_UPLOAD_MAX_FIELDS=32
+export TP_PORTAL_UPLOAD_MAX_PART_BYTES=1048576
+export TP_PORTAL_UPLOAD_TTL_SECONDS=86400
+export TP_PORTAL_UPLOAD_CAPTURE_METADATA_ENABLED=0
+```
+
+Notes:
+- `TP_PORTAL_UPLOAD_STAGING_ENABLED=0` keeps `features.stagedUploads=false` on both bootstrap surfaces and returns typed `404 not found` from `POST /v1/uploads/staging`.
+- `TP_PORTAL_STAGED_UPLOADS_ROLLOUT_PERCENT=0` keeps the UI hidden even when the backend route is enabled.
+- `TP_PORTAL_UPLOAD_ROOT` must stay within `TP_ALLOWED_INPUT_ROOTS`.
+- `TP_PORTAL_MAX_UPLOAD_REQUEST_BYTES` is route-specific and does not change the existing `/v1/jobs` request-size ceiling.
+- `TP_PORTAL_UPLOAD_CAPTURE_METADATA_ENABLED=0` keeps the capture metadata artifact on the empty-array path until the extraction pilot is explicitly enabled.
+
 ## Local Development
 
 Start the FastAPI origin first:
@@ -145,6 +206,10 @@ The operator UI now supports two modes:
 
 FastAPI now exposes `GET /portal/bootstrap` for standalone `direct_debug` startup. The front door exposes its own `GET /portal/bootstrap` for managed mode.
 
+Managed bootstrap and managed `/v1/*` responses now echo `traceparent`. The
+front door forwards a browser-supplied `traceparent` upstream unchanged, and
+FastAPI mints one when the browser does not supply a valid value.
+
 ## Cloudflare Production Notes
 
 - Put the front door behind Cloudflare Tunnel + Access.
@@ -201,6 +266,31 @@ cd web/secure-landing
 nvm use 22
 cd ../..
 make test-frontdoor-contract
+```
+
+Portal contract checks:
+
+```bash
+make test-portal-contract
+```
+
+When `TP_PORTAL_RUM_LOG_PATH` is configured and the pilot has collected samples,
+summarize the JSONL sink with:
+
+```bash
+python tools/portal_rum_summary.py --input /absolute/path/to/portal-rum.jsonl
+```
+
+The summary groups by auth mode, route, view, and cohort bucket, then prints p75
+LCP/INP/CLS, bootstrap timings, queue request timings, and SSE reconnect counts.
+
+For the RFC evidence package, summarize RUM plus optional viewer-event evidence with:
+
+```bash
+python tools/portal_modernization_evidence.py \
+  --rum-log /absolute/path/to/portal-rum.jsonl \
+  --event-log /absolute/path/to/portal-events.jsonl \
+  --operator-hours 8
 ```
 
 Manual shared-deployment posture gate:

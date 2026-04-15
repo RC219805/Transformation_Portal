@@ -4,6 +4,7 @@ import { resolveAuthenticatedAccessSession, revokeSessionOnAccessFailure } from 
 import { escapeHtml, FRONTDOOR_ASSETS, renderBrandAsset } from "../../lib/brand.js";
 import { applySecurityHeaders, buildRequestUrl, LOGIN_CSP } from "../../lib/http.js";
 import { copyUpstreamResponseHeaders } from "../../lib/proxy.js";
+import { applyPortalReturnTo, currentPortalReturnToFromRequest } from "../../lib/return-to.js";
 import { getConfig } from "../../lib/config.js";
 import {
   auditManagedSurfaceFailure,
@@ -42,7 +43,7 @@ function resolveManagedRecoveryContent(reason, message) {
   };
 }
 
-function renderManagedPortalRecoveryPage({ reason, message }) {
+function renderManagedPortalRecoveryPage({ reason, message, loginHref }) {
   const resolvedReason = reason || MANAGED_FAILURE_REASON.UPSTREAM_UNAVAILABLE;
   const content = resolveManagedRecoveryContent(resolvedReason, message);
   const safeReason = escapeHtml(resolvedReason);
@@ -114,7 +115,7 @@ function renderManagedPortalRecoveryPage({ reason, message }) {
               </div>
             </div>
             <div class="login-actions" data-ui="managed-recovery-actions">
-              <a class="login-secondary-link" href="/login">Return to login</a>
+              <a class="login-secondary-link" href="${escapeHtml(loginHref)}">Return to login</a>
               <a class="login-secondary-link" href="/">Review public proof surface</a>
             </div>
           </div>
@@ -126,6 +127,9 @@ function renderManagedPortalRecoveryPage({ reason, message }) {
 }
 
 export async function GET(request) {
+  const currentReturnTo = currentPortalReturnToFromRequest(request) || "/portal";
+  const loginUrl = buildRequestUrl(request, "/login");
+  applyPortalReturnTo(loginUrl, currentReturnTo);
   const authState = await resolveAuthenticatedAccessSession(request, { touch: true });
   if (!authState.ok) {
     const reason = classifyManagedAccessFailure(authState.errorCode);
@@ -143,7 +147,8 @@ export async function GET(request) {
       return applySecurityHeaders(
         new Response(renderManagedPortalRecoveryPage({
           reason,
-          message: getManagedFailureMessage("portal", reason)
+          message: getManagedFailureMessage("portal", reason),
+          loginHref: `${loginUrl.pathname}${loginUrl.search}`
         }), {
           status: 503,
           headers
@@ -156,7 +161,7 @@ export async function GET(request) {
       revokeSessionOnAccessFailure(authState.session, authState.errorCode);
     }
 
-    const response = applySecurityHeaders(NextResponse.redirect(buildRequestUrl(request, "/login"), 302));
+    const response = applySecurityHeaders(NextResponse.redirect(loginUrl, 302));
     if (authState.revokeSession) {
       clearSessionCookie(response);
     }
@@ -184,12 +189,13 @@ export async function GET(request) {
     headers.set("Cache-Control", "no-store");
     headers.set("Content-Type", "text/html; charset=utf-8");
     return applySecurityHeaders(
-      new Response(renderManagedPortalRecoveryPage({
-        reason: MANAGED_FAILURE_REASON.UPSTREAM_UNAVAILABLE,
-        message: getManagedFailureMessage("portal", MANAGED_FAILURE_REASON.UPSTREAM_UNAVAILABLE)
-      }), {
-        status: 503,
-        headers
+        new Response(renderManagedPortalRecoveryPage({
+          reason: MANAGED_FAILURE_REASON.UPSTREAM_UNAVAILABLE,
+          message: getManagedFailureMessage("portal", MANAGED_FAILURE_REASON.UPSTREAM_UNAVAILABLE),
+          loginHref: `${loginUrl.pathname}${loginUrl.search}`
+        }), {
+          status: 503,
+          headers
       }),
       { csp: LOGIN_CSP }
     );
@@ -211,7 +217,8 @@ export async function GET(request) {
       return applySecurityHeaders(
         new Response(renderManagedPortalRecoveryPage({
           reason,
-          message: getManagedFailureMessage("portal", reason)
+          message: getManagedFailureMessage("portal", reason),
+          loginHref: `${loginUrl.pathname}${loginUrl.search}`
         }), {
           status: 503,
           headers

@@ -6,10 +6,9 @@ This module has been superseded by
 Do not use.
 """
 
-import warnings
+from transformation_portal.compat import renamed_module
 
-warnings.warn(
-    "da3_integration.py is deprecated. " "Use DA3InferenceEngine from " "lux_depth_v3.inference instead.",
-    DeprecationWarning,
-    stacklevel=2,
+renamed_module(
+    __name__,
+    "transformation_portal.lux_depth_v3.inference",
 )

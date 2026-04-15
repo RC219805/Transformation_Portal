@@ -5,7 +5,10 @@ export function defaultPortalBootstrapPayload() {
     actor: null,
     features: {
       apiKeyInput: false,
-      directDebug: false
+      directDebug: false,
+      artifactViewerModal: false,
+      reviewSurfaceDeferred: false,
+      rumTelemetry: false
     }
   };
 }

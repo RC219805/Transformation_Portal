@@ -435,13 +435,10 @@ def timeout(seconds: int):
 
 
 # Deprecated alias for backwards compatibility
+from transformation_portal.compat import renamed_function
+
+
+@renamed_function("validate_filepath")
 def validate_file_path(*args, **kwargs):
     """Deprecated: Use validate_filepath instead."""
-    import warnings
-
-    warnings.warn(
-        "validate_file_path is deprecated, use validate_filepath",
-        DeprecationWarning,
-        stacklevel=2,
-    )
     return validate_filepath(*args, **kwargs)

@@ -26,6 +26,7 @@ from tp.phase4.verify_phase4_chain import (
     FAILURE_MESSAGE_MAX_LENGTH,
     build_verification_report_payload,
     default_failure_computed_block,
+    verify_phase4_chain_payloads,
 )
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -45,6 +46,10 @@ GOLDEN_PROVENANCE_MERKLE = (
 GOLDEN_VERIFICATION_REPORT = (
     PROJECT_ROOT / "tests" / "golden" / "phase4" / "expected_verification_report.tp.meta.verification_report.v1.json"
 )
+METADATA_SCHEMA_PATH = PROJECT_ROOT / "schemas" / "phase4" / "metadata.schema.json"
+METADATA_MANIFEST_SCHEMA_PATH = PROJECT_ROOT / "schemas" / "phase4" / "metadata_manifest.schema.json"
+PROVENANCE_MANIFEST_SCHEMA_PATH = PROJECT_ROOT / "schemas" / "phase4" / "provenance_manifest.schema.json"
+PROVENANCE_MERKLE_SCHEMA_PATH = PROJECT_ROOT / "schemas" / "phase4" / "provenance_merkle.schema.json"
 
 pytestmark = [pytest.mark.regression, pytest.mark.golden]
 
@@ -152,6 +157,15 @@ def _build_two_record_chain_payloads() -> tuple[list[dict[str, Any]], dict[str, 
         "provenance_merkle_root": merkle_root,
     }
     return [record_a, record_b], metadata_manifest, provenance_manifest, provenance_merkle
+
+
+def _load_phase4_schemas() -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any]]:
+    return (
+        _load_json(METADATA_SCHEMA_PATH),
+        _load_json(METADATA_MANIFEST_SCHEMA_PATH),
+        _load_json(PROVENANCE_MANIFEST_SCHEMA_PATH),
+        _load_json(PROVENANCE_MERKLE_SCHEMA_PATH),
+    )
 
 
 def test_phase4f_cli_help_works_without_pythonpath_or_site_packages() -> None:
@@ -598,3 +612,55 @@ except SystemExit as exc:
         check=False,
     )
     assert result.returncode == 0, result.stderr
+
+
+def test_phase4f_progress_callback_reports_direct_function_sequence() -> None:
+    capture_payload, metadata_manifest_payload, provenance_manifest_payload, provenance_merkle_payload = (
+        _build_two_record_chain_payloads()
+    )
+    metadata_schema, metadata_manifest_schema, provenance_manifest_schema, provenance_merkle_schema = _load_phase4_schemas()
+    progress_updates: list[tuple[int, int, str]] = []
+
+    verification = verify_phase4_chain_payloads(
+        capture_payload,
+        metadata_manifest_payload,
+        provenance_manifest_payload,
+        provenance_merkle_payload,
+        metadata_schema=metadata_schema,
+        metadata_manifest_schema=metadata_manifest_schema,
+        provenance_manifest_schema=provenance_manifest_schema,
+        provenance_merkle_schema=provenance_merkle_schema,
+        progress_callback=lambda current, total, message: progress_updates.append((current, total, message)),
+    )
+
+    assert verification["computed"]["metadata_entry_count"] == 2
+    assert verification["computed"]["provenance_leaf_count"] == 2
+    assert progress_updates == [
+        (0, 5, "Validating input payloads..."),
+        (1, 5, "Checking contract versions..."),
+        (2, 5, "Checking path uniqueness and ordering..."),
+        (3, 5, "Verifying 2 records..."),
+        (4, 5, "Verifying Merkle root..."),
+        (5, 5, "Verification complete"),
+    ]
+
+
+def test_phase4f_progress_callback_can_be_omitted_for_direct_function_calls() -> None:
+    capture_payload, metadata_manifest_payload, provenance_manifest_payload, provenance_merkle_payload = (
+        _build_two_record_chain_payloads()
+    )
+    metadata_schema, metadata_manifest_schema, provenance_manifest_schema, provenance_merkle_schema = _load_phase4_schemas()
+
+    verification = verify_phase4_chain_payloads(
+        capture_payload,
+        metadata_manifest_payload,
+        provenance_manifest_payload,
+        provenance_merkle_payload,
+        metadata_schema=metadata_schema,
+        metadata_manifest_schema=metadata_manifest_schema,
+        provenance_manifest_schema=provenance_manifest_schema,
+        provenance_merkle_schema=provenance_merkle_schema,
+    )
+
+    assert verification["computed"]["metadata_entry_count"] == 2
+    assert verification["computed"]["provenance_entry_count"] == 2

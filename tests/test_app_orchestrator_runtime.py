@@ -5,8 +5,10 @@
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 import hashlib
 import importlib
+import io
 import json
 import os
 import re
@@ -24,8 +26,13 @@ from starlette.requests import Request as StarletteRequest
 pytestmark = pytest.mark.unit
 
 orchestrator_app = importlib.import_module("app")
+upload_staging = importlib.import_module("transformation_portal.ingest.upload_staging")
 PORTAL_HTML_PATH = Path(__file__).resolve().parents[1] / "portal.html"
 PORTAL_ASSET_ROOT = PORTAL_HTML_PATH.parent / "public" / "portal-assets"
+PORTAL_FRONTDOOR_ROOT = PORTAL_HTML_PATH.parent / "web" / "secure-landing"
+PORTAL_INTERNAL_STATE_SOURCE_PATH = PORTAL_FRONTDOOR_ROOT / "portal-src" / "internal" / "state.js"
+PORTAL_TEMPLATE_SOURCE_PATH = PORTAL_FRONTDOOR_ROOT / "portal-src" / "portal.template.js"
+PORTAL_REVIEW_SURFACE_SOURCE_PATH = PORTAL_FRONTDOOR_ROOT / "portal-src" / "review-surface-deferred.js"
 FRONTDOOR_BRAND_ROOT = PORTAL_HTML_PATH.parent / "web" / "secure-landing" / "public" / "brand"
 
 
@@ -92,14 +99,43 @@ def _portal_css_content() -> str:
 @lru_cache(maxsize=1)
 def _portal_js_content() -> str:
     html = _portal_html_content()
-    match = re.search(r'<script src="(/portal/assets/[^"]+)"[^>]*></script>', html)
+    match = re.search(r'<script src="(/portal/assets/[^"]+)" defer></script>', html)
     if match is None:
-        raise AssertionError("portal script asset not found")
+        raise AssertionError("portal script tag not found")
     return _portal_asset_path(match.group(1)).read_text(encoding="utf-8")
 
 
 @lru_cache(maxsize=1)
+def _portal_js_source_content() -> str:
+    return PORTAL_TEMPLATE_SOURCE_PATH.read_text(encoding="utf-8")
+
+
+@lru_cache(maxsize=1)
+def _portal_review_bundle_content() -> str:
+    html = _portal_html_content()
+    match = re.search(r'data-review-surface-js-url="(/portal/assets/[^"]+)"', html)
+    if match is None:
+        raise AssertionError("portal review surface asset url not found")
+    return _portal_asset_path(match.group(1)).read_text(encoding="utf-8")
+
+
+@lru_cache(maxsize=1)
+def _portal_review_source_content() -> str:
+    return PORTAL_REVIEW_SURFACE_SOURCE_PATH.read_text(encoding="utf-8")
+
+
+@lru_cache(maxsize=1)
+def _portal_internal_state_source_content() -> str:
+    return PORTAL_INTERNAL_STATE_SOURCE_PATH.read_text(encoding="utf-8")
+
+
+@lru_cache(maxsize=1)
 def _portal_bundle_content() -> str:
+    return "\n".join((_portal_html_content(), _portal_css_content(), _portal_js_source_content()))
+
+
+@lru_cache(maxsize=1)
+def _portal_runtime_bundle_content() -> str:
     return "\n".join((_portal_html_content(), _portal_css_content(), _portal_js_content()))
 
 
@@ -243,6 +279,32 @@ def _build_request(
         return {"type": "http.request", "body": b"", "more_body": False}
 
     return StarletteRequest(scope, receive)
+
+
+def _build_multipart_form_body(
+    boundary: str,
+    *,
+    fields: list[tuple[str, str]] | None = None,
+    files: list[tuple[str, str, bytes, str]] | None = None,
+) -> bytes:
+    payload = bytearray()
+    for field_name, value in fields or []:
+        payload.extend(f"--{boundary}\r\n".encode("utf-8"))
+        payload.extend(f'Content-Disposition: form-data; name="{field_name}"\r\n\r\n'.encode("utf-8"))
+        payload.extend(value.encode("utf-8"))
+        payload.extend(b"\r\n")
+    for field_name, filename, content, content_type in files or []:
+        payload.extend(f"--{boundary}\r\n".encode("utf-8"))
+        payload.extend(
+            (
+                f'Content-Disposition: form-data; name="{field_name}"; filename="{filename}"\r\n'
+                f"Content-Type: {content_type}\r\n\r\n"
+            ).encode("utf-8")
+        )
+        payload.extend(content)
+        payload.extend(b"\r\n")
+    payload.extend(f"--{boundary}--\r\n".encode("utf-8"))
+    return bytes(payload)
 
 
 @pytest.fixture(autouse=True)
@@ -425,7 +487,7 @@ def test_portal_phase1_accessibility_tokens_align_focus_and_target_size() -> Non
     shared_tokens = orchestrator_app.PORTAL_ASSET_PATHS["shared-ui-tokens.css"].read_text(encoding="utf-8")
 
     assert "--ux-focus-ring:" in css_content
-    assert "--ux-target-min-size: 44px;" in shared_tokens
+    assert re.search(r"--ux-target-min-size:\s*44px;", shared_tokens)
     assert "font-size: var(--ux-body-size);" in css_content
     assert css_content.count("--shell-border: var(--ux-panel-border);") >= 2
     assert "--shell-border: rgba(148, 163, 184, 0.22);" not in css_content
@@ -440,6 +502,8 @@ def test_portal_html_externalizes_direct_debug_assets_without_third_party_hosts(
 
     assert f'href="{bundle.urls["portal.css"]}"' in html_content
     assert f'src="{bundle.urls["portal.js"]}"' in html_content
+    assert f'data-review-surface-js-url="{bundle.urls["portal-review.js"]}"' in html_content
+    assert f'data-review-surface-css-url="{bundle.urls["portal-review.css"]}"' in html_content
     assert bundle.urls["shared-ui-tokens.css"] in css_content
     assert "<style>" not in html_content
     assert "<script>" not in html_content
@@ -450,12 +514,45 @@ def test_portal_html_externalizes_direct_debug_assets_without_third_party_hosts(
     assert "Phase 1 local utility snapshot replacing Tailwind CDN for portal.html" in css_content
 
 
+def test_portal_runtime_helpers_read_served_js_assets_from_rendered_html() -> None:
+    bundle = orchestrator_app._get_portal_asset_bundle()
+    served_portal_js = _portal_js_content()
+    served_review_js = _portal_review_bundle_content()
+    runtime_content = _portal_runtime_bundle_content()
+
+    assert served_portal_js == _portal_asset_path(bundle.urls["portal.js"]).read_text(encoding="utf-8")
+    assert served_review_js == _portal_asset_path(bundle.urls["portal-review.js"]).read_text(encoding="utf-8")
+    assert served_portal_js != _portal_js_source_content()
+    assert "Review surfaces failed to load. Reload the portal and retry the review action." in runtime_content
+    assert "deferredReviewSurfaceLoadFailedAt" in runtime_content
+    assert "DEFERRED_REVIEW_SURFACE_RETRY_WINDOW_MS" in runtime_content
+    assert "createDeferredReviewSurfaceApi" in served_review_js
+    assert "Inline preview unavailable" in served_review_js
+
+
+def test_portal_rum_rollout_reuses_shared_rollout_helper(monkeypatch: pytest.MonkeyPatch) -> None:
+    actor = {"username": "portal-admin"}
+    captured: list[tuple[str, dict[str, str]]] = []
+
+    monkeypatch.setattr(orchestrator_app, "_env_bool", lambda name, default=False: name == "TP_PORTAL_RUM_ENABLED")
+    monkeypatch.setattr(
+        orchestrator_app,
+        "_portal_rollout_enabled",
+        lambda env_name, actor=None: captured.append((env_name, actor)) or True,
+    )
+
+    assert orchestrator_app._portal_rum_enabled(actor) is True
+    assert captured == [("TP_PORTAL_RUM_ROLLOUT_PERCENT", actor)]
+
+
 def test_portal_asset_manifest_is_explicit_and_repo_local() -> None:
     assert orchestrator_app.PORTAL_ASSET_MANIFEST_PATH.is_file()
     assert orchestrator_app.PORTAL_ASSET_PATHS == {
         "portal.css": orchestrator_app.PORTAL_ASSETS_DIR / "portal.css",
         "shared-ui-tokens.css": orchestrator_app.PORTAL_ASSETS_DIR / "shared-ui-tokens.css",
         "portal.js": orchestrator_app.PORTAL_ASSETS_DIR / "portal.js",
+        "portal-review.js": orchestrator_app.PORTAL_ASSETS_DIR / "portal-review.js",
+        "portal-review.css": orchestrator_app.PORTAL_ASSETS_DIR / "portal-review.css",
         "fonts/portal-sans.woff2": orchestrator_app.PORTAL_ASSETS_DIR / "fonts" / "portal-sans.woff2",
         "fonts/portal-mono.woff2": orchestrator_app.PORTAL_ASSETS_DIR / "fonts" / "portal-mono.woff2",
         "brand/dna-symbol-dark.svg": orchestrator_app.PORTAL_ASSETS_DIR / "brand" / "dna-symbol-dark.svg",
@@ -465,6 +562,8 @@ def test_portal_asset_manifest_is_explicit_and_repo_local() -> None:
         "portal.css": "text/css; charset=utf-8",
         "shared-ui-tokens.css": "text/css; charset=utf-8",
         "portal.js": "text/javascript; charset=utf-8",
+        "portal-review.js": "text/javascript; charset=utf-8",
+        "portal-review.css": "text/css; charset=utf-8",
         "fonts/portal-sans.woff2": "font/woff2",
         "fonts/portal-mono.woff2": "font/woff2",
         "brand/dna-symbol-dark.svg": "image/svg+xml",
@@ -569,8 +668,65 @@ def test_portal_bundle_embeds_internal_modules_without_changing_public_contracts
     assert "config: portalInternals.createPortalConfigState()," in content
     assert "auth: portalInternals.createPortalAuthState()," in content
     assert "bootstrap: portalInternals.createPortalBootstrapState(Date.now())," in content
+    assert "rum: portalInternals.createPortalRumState()" in content
     assert "portalDom.assertPresent(els, [" in content
     assert "portalRenderSurfaces.register('jobQueue'" in content
+
+
+def test_portal_rum_wires_native_observers_and_keepalive_posts() -> None:
+    content = _portal_bundle_content()
+    observer_body = _extract_js_function_body(content, "_startPortalRumObservers")
+    flush_body = _extract_js_function_block(content, "_flushQueuedPortalRumSamples")
+    finalize_body = _extract_js_function_body(content, "_finalizePortalRumVitals")
+
+    assert "if (state.rum.observersStarted || typeof window.PerformanceObserver !== 'function') return;" in observer_body
+    assert "new PerformanceObserver" in observer_body
+    assert "type: 'largest-contentful-paint'" in observer_body
+    assert "type: 'layout-shift'" in observer_body
+    assert "type: 'event'" in observer_body
+    assert "durationThreshold: 16" in observer_body
+    assert "fetch(`${API_BASE}/v1/portal/rum`" in flush_body
+    assert "keepalive: keepalive || sample.keepalive" in flush_body
+    assert "traceparent: sample.traceparent" in flush_body
+    assert "eventType: 'core_web_vital'" in finalize_body
+    assert "metric: 'lcp'" in finalize_body
+    assert "metric: 'inp'" in finalize_body
+    assert "metric: 'cls'" in finalize_body
+
+
+def test_portal_rum_emits_once_per_page_load_and_keys_samples_by_route_view() -> None:
+    content = _portal_bundle_content()
+    base_payload_body = _extract_js_function_block(content, "_portalRumBasePayload")
+    record_body = _extract_js_function_block(content, "_recordPortalRumMilestone")
+    first_view_body = _extract_js_function_body(content, "_scheduleFirstViewInteractiveRum")
+
+    assert "route: '/portal'" in base_payload_body
+    assert "view: portalInternals.normalizePortalRumView(sampleOptions.view || state.currentView)" in base_payload_body
+    assert "if (state.rum.emittedMilestones[eventType]) return;" in record_body
+    assert "state.rum.emittedMilestones[eventType] = true;" in record_body
+    assert "_queuePortalRumSample({" in record_body
+    assert "metric: 'duration'" in record_body
+    assert "window.requestAnimationFrame(emit);" in first_view_body
+    assert "window.setTimeout(emit, 0);" in first_view_body
+    assert "_recordPortalRumMilestone('first_view_interactive', _portalRumNow()," in first_view_body
+    assert "_recordPortalRumMilestone('portal_shell_rendered', _portalRumNow()," in content
+    assert "_recordPortalRumMilestone('bootstrap_ready', _portalRumNow()," in content
+    assert "_recordPortalRumMilestone('first_view_interactive', _portalRumNow()," in content
+
+
+def test_portal_rum_tracks_queue_actions_and_sse_reconnects() -> None:
+    content = _portal_bundle_content()
+    submit_body = _extract_js_function_body(content, "submitJob")
+    cancel_body = _extract_js_function_body(content, "cancelJob")
+    fetch_sse_body = _extract_js_function_body(content, "_startAuthorizedFetchSse")
+    native_sse_body = _extract_js_function_body(content, "startJobEventStream")
+
+    assert "eventType: 'queue_request'" in submit_body
+    assert "metric: 'submit'" in submit_body
+    assert "eventType: 'queue_request'" in cancel_body
+    assert "metric: 'cancel'" in cancel_body
+    assert "eventType: 'sse_reconnect'" in fetch_sse_body
+    assert "eventType: 'sse_reconnect'" in native_sse_body
 
 
 def test_portal_fetch_sse_reconnect_schedules_on_unexpected_disconnect_only() -> None:
@@ -671,6 +827,7 @@ def test_portal_resumes_blocked_streams_after_api_key_update() -> None:
 def test_portal_bootstrap_loader_uses_abortable_timeout_and_state_contract() -> None:
     content = _portal_bundle_content()
     default_body = _extract_js_function_body(content, "_defaultPortalBootstrap")
+    login_url_body = _extract_js_function_body(content, "_managedLoginUrlForCurrentRoute")
     body = _extract_js_function_body(content, "loadPortalBootstrap")
     failure_details_body = _extract_js_function_body(content, "_bootstrapFailureDetails")
     followup_body = _extract_js_function_body(content, "_flushBootstrapOnlineFollowup")
@@ -682,13 +839,20 @@ def test_portal_bootstrap_loader_uses_abortable_timeout_and_state_contract() -> 
     assert "authMode: 'managed_unavailable'" in default_body
     assert "apiKeyInput: false" in default_body
     assert "directDebug: false" in default_body
+    assert "artifactViewerModal: false" in default_body
+    assert "reviewSurfaceDeferred: false" in default_body
+    assert "stagedUploads: false" in default_body
+    assert "rumTelemetry: false" in default_body
     assert "const BOOTSTRAP_TIMEOUT_MS = 3500;" in content
     assert "const BOOTSTRAP_RETRY_BASE_DELAY_MS = 1000;" in content
     assert "const BOOTSTRAP_RETRY_MAX_DELAY_MS = 12000;" in content
     assert "const BOOTSTRAP_RETRY_MAX_ATTEMPTS = 4;" in content
     assert "const BOOTSTRAP_RETRY_MAX_WINDOW_MS = 60000;" in content
+    assert "const TRANSIENT_DRAFT_STORAGE_KEY = 'tp_portal_transient_draft';" in content
+    assert "const TRANSIENT_DRAFT_SCHEMA = 'tp.portal.transient_draft.v1';" in content
     assert "const BOOTSTRAP_RETRIABLE_HTTP_STATUSES = new Set([500, 502, 503, 504]);" in content
     assert "fetchWithTimeout(" in body
+    assert "return `/login?returnTo=${encodeURIComponent(_managedReturnToPath())}`;" in login_url_body
     assert "`${API_BASE}/portal/bootstrap`" in body
     assert "BOOTSTRAP_TIMEOUT_MS" in body
     assert "const bootstrapOptions = options && typeof options === 'object' ? options : null;" in body
@@ -705,13 +869,17 @@ def test_portal_bootstrap_loader_uses_abortable_timeout_and_state_contract() -> 
     assert "let payloadParsed = false;" in body
     assert "const failure = _bootstrapFailureDetails(" in body
     assert "_finalizeBootstrapRetry('terminal_auth_redirect', { reason: failure.reason, httpStatus: res.status });" in body
-    assert "window.location.assign('/login');" in body
+    assert "window.location.assign(_managedLoginUrlForCurrentRoute());" in body
     assert "const status = failure.retryable ? 'degraded' : 'unavailable';" in body
     assert "const retryScheduled = failure.retryable && _scheduleBootstrapRetry(failure.reason, res.status);" in body
     assert "const retryScheduled = failure.retryable && _scheduleBootstrapRetry(failure.reason, 0);" in body
     assert "_finalizeBootstrapRetry('terminal_invalid_json', { reason: 'invalid_json' });" in body
     assert "_finalizeBootstrapRetry('succeeded', {" in body
-    assert "_applyPortalBootstrap(payload, { status: 'ready' });" in body
+    assert "_applyPortalBootstrap(payload, { status: 'ready', traceparent: bootstrapTraceparent });" in body
+    assert "artifactViewerModal: Boolean(bootstrap.features?.artifactViewerModal)" in content
+    assert "stagedUploads: Boolean(bootstrap.features?.stagedUploads)" in content
+    assert "rumTelemetry: Boolean(bootstrap.features?.rumTelemetry)" in content
+    assert "res.headers.get('traceparent')" in body
     assert "previousHealthEndpointPath !== nextHealthEndpointPath" in body
     assert "_queueBootstrapOnlineFollowup();" in body
     assert "_flushBootstrapOnlineFollowup();" in body
@@ -747,6 +915,28 @@ def test_portal_bootstrap_loader_uses_abortable_timeout_and_state_contract() -> 
     assert "(now + delayMs) > state.bootstrap.retry.deadlineAt" in retry_body
     assert "window.setTimeout(() => {" in retry_body
     assert "void loadPortalBootstrap({ isRetryAttempt: true, attempt, retryReason: reason });" in retry_body
+
+
+def test_portal_staged_upload_ui_contract_is_present_in_markup_and_source() -> None:
+    html = _portal_html_content()
+    content = _portal_bundle_content()
+
+    assert 'id="stagedUploadShell"' in html
+    assert 'data-ui="staged-upload-shell"' in html
+    assert 'id="stagedUploadDropzone"' in html
+    assert 'data-ui="staged-upload-dropzone"' in html
+    assert 'role="button"' in html
+    assert 'aria-label="Choose files or drop files for staged upload"' in html
+    assert 'aria-describedby="stagedUploadStatus"' in html
+    assert 'id="stagedUploadFilesInput"' in html
+    assert 'id="stagedUploadFolderInput"' in html
+    assert "const STAGED_UPLOAD_SUPPORTED_PIPELINES = new Set(['lux-depth-v3', 'archive-gate-a']);" in content
+    assert "function _stagedUploadsVisibleForState() {" in content
+    assert "_buildAuthHeaders({}, 'POST', { traceparent: requestTraceparent });" in content
+    assert "xhr.open('POST', `${API_BASE}/v1/uploads/staging`);" in content
+    assert "formData.append('files', file, relativePath);" in content
+    assert "els.inputDir.dispatchEvent(new Event('input', { bubbles: true }));" in content
+    assert "els.inputDir.dispatchEvent(new Event('change', { bubbles: true }));" in content
 
 
 def test_portal_managed_mode_clears_api_keys_and_hides_secret_ui() -> None:
@@ -802,7 +992,8 @@ def test_portal_managed_mode_uses_csrf_instead_of_browser_backend_secrets() -> N
     auth_headers_block = _extract_js_function_block(content, "_buildAuthHeaders")
 
     assert "if (_isManagedAuthMode()) return '';" in current_token_body
-    assert "function _buildAuthHeaders(base = {}, method = 'GET') {" in auth_headers_block
+    assert "function _buildAuthHeaders(base = {}, method = 'GET', options = null) {" in auth_headers_block
+    assert "headers.traceparent = traceparent;" in auth_headers_block
     assert "if (_isManagedAuthMode()) {" in auth_headers_block
     assert "headers['X-CSRF-Token'] = state.auth.csrfToken;" in auth_headers_block
     assert "headers['Authorization'] = `Bearer ${token}`;" in auth_headers_block
@@ -830,7 +1021,7 @@ def test_portal_auth_helpers_fail_closed_until_bootstrap_ready() -> None:
     assert "if (!_isBootstrapReady()) {" in load_body
     assert "_clearStoredApiKeyState(false);" in load_body
     assert "if (!_isBootstrapReady()) return '';" in current_token_body
-    assert "function _buildAuthHeaders(base = {}, method = 'GET') {" in content
+    assert "function _buildAuthHeaders(base = {}, method = 'GET', options = null) {" in content
     assert "if (!_isBootstrapReady()) {" in content
     assert "return headers;" in content
 
@@ -846,6 +1037,69 @@ def test_portal_health_checks_route_to_front_door_in_managed_mode() -> None:
     assert "fetchWithTimeout(`${API_BASE}${healthEndpointPath}`" in check_body
     assert "_queueBootstrapOnlineFollowup();" in check_body
     assert "_flushBootstrapOnlineFollowup(force);" in check_body
+
+
+def test_portal_transient_draft_restore_is_scoped_to_the_current_owner_and_excludes_auth_state() -> None:
+    content = _portal_bundle_content()
+    route_body = _extract_js_function_body(content, "_managedReturnToPath")
+    owner_body = _extract_js_function_body(content, "_transientDraftOwnerKey")
+    managed_owner_body = _extract_js_function_body(content, "_managedDraftOwnerKey")
+    clear_body = _extract_js_function_body(content, "_clearTransientPortalDraft")
+    read_body = _extract_js_function_body(content, "_readTransientPortalDraft")
+    persist_body = _extract_js_function_body(content, "_persistTransientPortalDraft")
+    schedule_body = _extract_js_function_body(content, "_scheduleTransientPortalDraftPersist")
+    flush_body = _extract_js_function_body(content, "_flushPendingTransientPortalDraftPersist")
+    restore_body = _extract_js_function_body(content, "_restoreTransientPortalDraft")
+
+    assert "const url = new URL(window.location.href);" in route_body
+    assert "return `${url.pathname}${url.search}`;" in route_body
+    assert "if (_isManagedAuthMode()) return _managedDraftOwnerKey();" in owner_body
+    assert "return 'direct_debug';" in owner_body
+    assert "managed:" in managed_owner_body
+    assert "sessionStorage.removeItem(TRANSIENT_DRAFT_STORAGE_KEY);" in clear_body
+    assert "sessionStorage.getItem(TRANSIENT_DRAFT_STORAGE_KEY)" in read_body
+    assert "schema !== TRANSIENT_DRAFT_SCHEMA" in read_body
+    assert "config: _copyTransientDraftConfig(config)" in read_body
+    assert "sessionStorage.setItem(TRANSIENT_DRAFT_STORAGE_KEY, JSON.stringify(snapshot));" in persist_body
+    assert "schema: TRANSIENT_DRAFT_SCHEMA" in persist_body
+    assert "ownerKey" in persist_body
+    assert "savedAt: Date.now()" in persist_body
+    assert "buildStep: resolveBuildStep(state.portalUi.buildStep)" in persist_body
+    assert "window.setTimeout(scheduleCommit, TRANSIENT_DRAFT_PERSIST_DEBOUNCE_MS);" in schedule_body
+    assert "window.requestIdleCallback" in schedule_body
+    assert "_persistTransientPortalDraft();" in schedule_body
+    assert "_cancelScheduledTransientPortalDraftPersist();" in flush_body
+    assert "return _persistTransientPortalDraft();" in flush_body
+    assert "API_KEY_STORAGE_KEY" not in persist_body
+    assert "csrfToken" not in persist_body
+    assert "state.jobs" not in persist_body
+    assert "snapshot.ownerKey !== ownerKey" in restore_body
+    assert "_clearTransientPortalDraft();" in restore_body
+    assert "state.pipeline = snapshot.pipeline;" in restore_body
+    assert "state.config = _copyTransientDraftConfig(snapshot.config);" in restore_body
+    assert "state.portalUi.buildStep = resolveBuildStep(snapshot.buildStep);" in restore_body
+
+
+def test_portal_transient_draft_restores_before_preview_and_readiness_hydration() -> None:
+    content = _portal_bundle_content()
+    body = _extract_js_function_body(content, "init")
+    bind_body = _extract_js_function_body(content, "bindInputs")
+    set_build_step_body = _extract_js_function_body(content, "setBuildStep")
+
+    assert "_restoreTransientPortalDraft();" in body
+    assert "_persistTransientPortalDraft();" in body
+    assert "_scheduleTransientPortalDraftPersist();" in bind_body
+    assert "_scheduleTransientPortalDraftPersist({ immediate: true });" in bind_body
+    assert "_persistTransientPortalDraft();" in set_build_step_body
+    assert "window.addEventListener('pagehide', _flushPendingTransientPortalDraftPersist);" in content
+    assert "window.addEventListener('beforeunload', _flushPendingTransientPortalDraftPersist);" in content
+
+    restore_index = body.index("_restoreTransientPortalDraft();")
+    update_index = body.index("updateUIFromState();", restore_index)
+    check_index = body.index("void checkBackend(true);")
+    metadata_index = body.index("void fetchConfigMetadata(state.pipeline, true);")
+
+    assert restore_index < update_index < check_index < metadata_index
 
 
 def test_portal_managed_unavailable_mode_blocks_dispatch_and_api_key_recovery_prompts() -> None:
@@ -866,7 +1120,8 @@ def test_portal_managed_unavailable_mode_blocks_dispatch_and_api_key_recovery_pr
 
 def test_portal_artifact_gallery_renders_visual_review_controls() -> None:
     content = _portal_bundle_content()
-    body = _extract_js_function_body(content, "renderArtifactPanel")
+    review_content = _portal_review_source_content()
+    review_body = _extract_js_function_body(review_content, "renderArtifactPanel")
     reset_body = _extract_js_function_body(content, "_resetArtifactActionButtons")
     sanitize_body = _extract_js_function_body(content, "sanitizeManagedAssetUrl")
     open_artifact_body = _extract_js_function_body(content, "_openArtifactForSelection")
@@ -881,39 +1136,73 @@ def test_portal_artifact_gallery_renders_visual_review_controls() -> None:
     assert 'id="openArtifactBtn"' in content
     assert 'id="downloadArtifactBtn"' in content
     assert 'id="copyArtifactPathBtn"' in content
+    assert 'id="copyArtifactFingerprintBtn"' in content
     assert "artifactHeroScore" in content
     assert "findCompareArtifact" in content
     assert "artifactDisplayHint" in content
     assert "artifactDisplayPriority" in content
     assert "artifactDisplayLabel" in content
     assert "function _artifactRouteKey(artifact) {" in content
-    assert "buildArtifactUrl(selected, selectedArtifact)" in body
-    assert "artifactIsPreviewable(selectedArtifact)" in body
-    assert "artifactDisplayLabel(selectedArtifact)" in body
-    assert "artifactDisplayLabel(artifact)" in body
-    assert "button.dataset.artifactPath = _artifactRouteKey(artifact);" in body
+    assert "function _openManagedArtifactWindow(job, artifact, surface = 'artifact_review') {" in content
+    assert "buildArtifactUrl(selected, selectedArtifact)" in review_body
+    assert "artifactIsPreviewable(selectedArtifact)" in review_body
+    assert "artifactDisplayLabel(selectedArtifact)" in review_body
+    assert "artifactDisplayLabel(artifact)" in review_body
+    assert "button.dataset.artifactPath = _artifactRouteKey(artifact);" in review_body
     assert "artifactDisplayPriority(right)" in rank_body
     assert "artifactCompareGroup(candidate) === primaryGroup" in compare_body
     assert "display_hint: _normalizeArtifactDisplayHint(item.display_hint)" in normalize_body
     assert "if (!artifact || typeof artifact !== 'object') return '';" in route_key_body
-    assert "_resetArtifactActionButtons();" in body
-    assert "renderConsoleContextRibbon();" in body
-    assert "_syncConsoleRoute(true);" in body
+    assert "_resetArtifactActionButtons();" in review_body
+    assert "renderConsoleContextRibbon();" in review_body
+    assert "_syncConsoleRoute(true);" in review_body
     assert "delete els.openArtifactBtn.dataset.url;" in reset_body
     assert "delete els.downloadArtifactBtn.dataset.filename;" in reset_body
     assert "delete els.copyArtifactPathBtn.dataset.path;" in reset_body
+    assert "delete els.copyArtifactFingerprintBtn.dataset.fingerprint;" in reset_body
     assert "parsed.origin !== window.location.origin" in sanitize_body
     assert "parsed.pathname.startsWith('/v1/jobs/')" in sanitize_body
-    assert "sanitizeManagedAssetUrl(buildArtifactUrl(job, artifact))" in open_artifact_body
+    assert "_artifactViewerEnabled()" in open_artifact_body
+    assert "const openedInViewer = _openArtifactViewer(job, artifact, document.activeElement, surface);" in open_artifact_body
+    assert "if (openedInViewer) {" in open_artifact_body
+    assert "return true;" in open_artifact_body
+    assert "return _openManagedArtifactWindow(job, artifact, surface);" in open_artifact_body
     assert "sanitizeManagedAssetUrl(els.downloadArtifactBtn.dataset.url)" in content
+
+
+def test_portal_deferred_review_surface_failures_back_off_until_retry_window_expires() -> None:
+    content = _portal_bundle_content()
+    load_body = _extract_js_function_body(content, "_loadDeferredReviewSurface")
+    note_body = _extract_js_function_body(content, "_noteDeferredReviewSurfaceLoadFailure")
+    clear_body = _extract_js_function_body(content, "_clearDeferredReviewSurfaceLoadFailure")
+    prime_body = _extract_js_function_body(content, "_primeDeferredReviewSurface")
+    fallback_body = _extract_js_function_body(content, "_renderDeferredReviewSurfaceFallback")
+
+    assert "const DEFERRED_REVIEW_SURFACE_RETRY_WINDOW_MS = 30000;" in content
+    assert "let deferredReviewSurfaceLoadFailedAt = 0;" in content
+    assert "let deferredReviewSurfaceLoadLastToastAt = 0;" in content
+    assert "if (_deferredReviewSurfaceLoadRetryBlocked()) return null;" in load_body
+    assert "_clearDeferredReviewSurfaceLoadFailure();" in load_body
+    assert "_noteDeferredReviewSurfaceLoadFailure();" in load_body
+    assert "deferredReviewSurfaceLoadFailedAt = now;" in note_body
+    assert "deferredReviewSurfaceLoadLastToastAt = now;" in note_body
+    assert (
+        "createToast('Review surfaces failed to load. Reload the portal and retry the review action.', 'error');" in note_body
+    )
+    assert "deferredReviewSurfaceLoadFailedAt = 0;" in clear_body
+    assert "deferredReviewSurfaceLoadLastToastAt = 0;" in clear_body
+    assert "if (!_shouldLoadDeferredReviewSurface(reason) || _deferredReviewSurfaceLoadRetryBlocked()) return;" in prime_body
+    assert "els.artifactMeta.textContent = 'Review surface unavailable';" in fallback_body
+    assert "Reload the portal to retry loading the review surface assets for this artifact context." in fallback_body
 
 
 def test_portal_review_surface_exposes_warning_banner_and_provenance_contract() -> None:
     content = _portal_bundle_content()
-    render_body = _extract_js_function_body(content, "renderArtifactPanel")
-    status_body = _extract_js_function_body(content, "_reviewStatusSnapshot")
-    banner_body = _extract_js_function_body(content, "_renderReviewStatusBanner")
-    provenance_body = _extract_js_function_body(content, "_renderArtifactProvenance")
+    review_content = _portal_review_source_content()
+    render_body = _extract_js_function_body(review_content, "renderArtifactPanel")
+    status_body = _extract_js_function_body(review_content, "_reviewStatusSnapshot")
+    banner_body = _extract_js_function_body(review_content, "_renderReviewStatusBanner")
+    provenance_body = _extract_js_function_body(review_content, "_renderArtifactProvenance")
 
     assert 'id="reviewStatusBanner"' in content
     assert 'id="reviewStatusTitle"' in content
@@ -922,6 +1211,7 @@ def test_portal_review_surface_exposes_warning_banner_and_provenance_contract() 
     assert 'id="reviewProvenanceArtifactRole"' in content
     assert 'id="reviewProvenanceRunState"' in content
     assert 'id="reviewProvenancePath"' in content
+    assert 'id="reviewProvenanceFingerprint"' in content
     assert 'id="reviewProvenanceFreshness"' in content
     assert 'id="reviewProvenanceSource"' in content
     assert 'id="reviewProvenanceBatch"' in content
@@ -933,27 +1223,96 @@ def test_portal_review_surface_exposes_warning_banner_and_provenance_contract() 
     assert "_renderArtifactProvenance(selected, null);" in render_body
     assert "_renderReviewStatusBanner(null, null);" in render_body
     assert "_renderArtifactProvenance(null, null);" in render_body
-    assert "job.state === 'partial'" in status_body
-    assert "job.state === 'failed'" in status_body
-    assert "job.state === 'canceled'" in status_body
-    assert "job.state === 'offline'" in status_body
+    for job_state in ("partial", "failed", "canceled", "offline"):
+        assert re.search(rf"job\.state === [\"']{job_state}[\"']", status_body)
     assert "job.reconnectBlocked" in status_body
     assert "Outputs ready for review" in status_body
     assert "Run canceled after partial output capture" in status_body
     assert "Run is offline with reviewable outputs" in status_body
-    assert "formatRelativeTime" in status_body
+    assert "_jobFreshnessLabel(job)" in status_body
     assert "els.reviewStatusBanner.dataset.tone = snapshot.tone;" in banner_body
     assert "artifactDisplayLabel(artifact)" in provenance_body
     assert "artifactLabel(artifact)" in provenance_body
-    assert "titleCaseToken(job.state, 'Unknown')" in provenance_body
+    assert "_artifactFingerprintLabel(artifact)" in provenance_body
+    assert 'titleCaseToken(job.state, "Unknown")' in provenance_body
     assert "summary?.batch_id" in provenance_body
     assert "summary?.source" in provenance_body
 
 
+def test_portal_artifact_viewer_modal_is_feature_flagged_and_keyboard_complete() -> None:
+    content = _portal_bundle_content()
+    review_content = _portal_review_source_content()
+    active_overlay_body = _extract_js_function_body(content, "_activeOverlayPanel")
+    fallback_event_body = _extract_js_function_body(review_content, "_emitArtifactViewerFallback")
+    show_fallback_body = _extract_js_function_body(review_content, "_showArtifactViewerFallback")
+    render_body = _extract_js_function_body(review_content, "renderArtifactViewer")
+    preview_load_body = _extract_js_function_body(review_content, "_loadArtifactViewerInlinePreview")
+    open_body = _extract_js_function_body(review_content, "_openArtifactViewer")
+    navigate_body = _extract_js_function_body(review_content, "_navigateArtifactViewerSelection")
+    close_body = _extract_js_function_body(review_content, "_closeArtifactViewer")
+    viewer_metadata_body = _extract_js_function_body(review_content, "_artifactViewerEventMetadata")
+
+    assert 'id="artifactViewerModal"' in content
+    assert 'id="artifactViewerPanel"' in content
+    assert 'id="artifactViewerTitle"' in content
+    assert 'id="artifactViewerImage"' in content
+    assert 'id="artifactViewerFallback"' in content
+    assert 'id="artifactViewerPrevBtn"' in content
+    assert 'id="artifactViewerNextBtn"' in content
+    assert 'id="artifactViewerZoomOutBtn"' in content
+    assert 'id="artifactViewerZoomInBtn"' in content
+    assert 'id="artifactViewerResetZoomBtn"' in content
+    assert 'id="artifactViewerOpenRawBtn"' in content
+    assert 'id="artifactViewerCopyPathBtn"' in content
+    assert 'id="artifactViewerCopyFingerprintBtn"' in content
+    assert 'id="artifactViewerStatus"' in content
+    assert 'aria-describedby="artifactViewerMeta artifactViewerStatus"' in content
+    assert "return Boolean(state.auth?.features?.artifactViewerModal);" in content
+    assert "if (els.artifactViewerModal && !els.artifactViewerModal.classList.contains('hidden'))" in active_overlay_body
+    assert "void _loadDeferredReviewSurface().then((api) => {" in _extract_js_function_body(content, "_openArtifactViewer")
+    assert "_openManagedArtifactWindow(job, artifact, surface);" in _extract_js_function_body(content, "_openArtifactViewer")
+    assert "state.portalUi.artifactViewer.open = true;" in open_body
+    assert "_rememberOverlayTrigger(trigger);" in open_body
+    assert "els.closeArtifactViewerBtn.focus();" in open_body
+    assert "artifact_viewer_opened" in open_body
+    assert 'surface: "artifact_review"' in open_body
+    assert "_artifactViewerEventMetadata(job, artifact)" in open_body
+    assert "state.portalUi.artifactViewer.open = false;" in close_body
+    assert "_restoreOverlayFocus();" in close_body
+    assert 'viewer_mode: "modal"' in review_content
+    assert "artifact_fingerprint" in review_content
+    assert 'pipeline: String(job?.pipeline || "")' not in viewer_metadata_body
+    assert "artifact_viewer_fallback" in fallback_event_body
+    assert 'surface: "artifact_review"' in fallback_event_body
+    assert "fallback_reason: fallbackReason" in fallback_event_body
+    assert "_emitArtifactViewerFallback(context, fallbackReason);" in show_fallback_body
+    assert 'els.artifactViewerModal.classList.toggle("hidden", !shouldShow);' in render_body
+    assert "els.artifactViewerImage.style.transform = `scale(${zoomPercent / 100})`;" in render_body
+    assert "_showArtifactViewerFallback(context, artifactName);" in render_body
+    assert (
+        'headers: _buildAuthHeaders({ Accept: artifactContentType(context.artifact) || "*/*" }, "GET"),' in preview_load_body
+    )
+    assert "URL.createObjectURL(await response.blob())" in preview_load_body
+    assert "els.artifactViewerCopyFingerprintBtn.dataset.fingerprint = fingerprint;" in render_body
+    assert "_setArtifactViewerStatus(" in render_body
+    assert "_rememberArtifactSelection(context.job.id, nextPath);" in navigate_body
+    assert "renderReviewSurfaces();" in navigate_body
+    assert (
+        'if (e.key === "Escape" && els.artifactViewerModal && !els.artifactViewerModal.classList.contains("hidden"))'
+        in content
+    )
+    assert "if (key === 'ArrowLeft')" in content
+    assert "if (key === 'ArrowRight')" in content
+    assert "if (key === '+' || key === '=')" in content
+    assert "if (key === '-')" in content
+    assert "if (key === '0')" in content
+
+
 def test_portal_review_surface_supports_compare_summary_and_keyboard_selection() -> None:
     content = _portal_bundle_content()
-    render_body = _extract_js_function_body(content, "renderArtifactPanel")
-    compare_summary_body = _extract_js_function_body(content, "_renderReviewCompareSummary")
+    review_content = _portal_review_source_content()
+    render_body = _extract_js_function_body(review_content, "renderArtifactPanel")
+    compare_summary_body = _extract_js_function_body(review_content, "_renderReviewCompareSummary")
     compare_copy_body = _extract_js_function_body(content, "_compareSurfaceCopy")
     focus_body = _extract_js_function_body(content, "_focusArtifactRailButton")
     keydown_body = _extract_js_function_body(content, "handleArtifactRailKeydown")
@@ -962,15 +1321,30 @@ def test_portal_review_surface_supports_compare_summary_and_keyboard_selection()
     assert 'id="reviewCompareTitle"' in content
     assert 'id="reviewCompareDetail"' in content
     assert 'data-ui="review-compare-summary"' in content
-    assert "els.artifactThumbnailRail.setAttribute('role', 'listbox');" in render_body
-    assert "els.artifactThumbnailRail.setAttribute('aria-label', 'Artifact thumbnails');" in render_body
-    assert "button.setAttribute('role', 'option');" in render_body
-    assert "button.setAttribute('aria-selected', active ? 'true' : 'false');" in render_body
+    assert re.search(
+        r"els\.artifactThumbnailRail\.setAttribute\([\"']role[\"'],\s*[\"']listbox[\"']\);",
+        render_body,
+    )
+    assert re.search(
+        r"els\.artifactThumbnailRail\.setAttribute\([\"']aria-label[\"'],\s*[\"']Artifact thumbnails[\"']\);",
+        render_body,
+    )
+    assert re.search(r"button\.setAttribute\([\"']role[\"'],\s*[\"']option[\"']\);", render_body)
+    assert re.search(
+        r"button\.setAttribute\([\"']aria-selected[\"'],\s*active \? [\"']true[\"'] : [\"']false[\"']\);",
+        render_body,
+    )
     assert "button.tabIndex = active ? 0 : -1;" in render_body
     assert "_renderReviewCompareSummary(selectedArtifact, compareCandidate, compareEnabled);" in render_body
-    assert "els.artifactCompareBtn.setAttribute('aria-pressed', compareEnabled ? 'true' : 'false');" in render_body
-    assert "els.artifactCompareBtn.removeAttribute('aria-controls');" in render_body
-    assert "els.artifactCompareStage.setAttribute('aria-hidden', compareEnabled ? 'false' : 'true');" in render_body
+    assert re.search(
+        r"els\.artifactCompareBtn\.setAttribute\([\"']aria-pressed[\"'],\s*compareEnabled \? [\"']true[\"'] : [\"']false[\"']\);",
+        render_body,
+    )
+    assert re.search(r"els\.artifactCompareBtn\.removeAttribute\([\"']aria-controls[\"']\);", render_body)
+    assert re.search(
+        r"els\.artifactCompareStage\.setAttribute\([\"']aria-hidden[\"'],\s*compareEnabled \? [\"']false[\"'] : [\"']true[\"']\);",
+        render_body,
+    )
     assert "const compareCopy = _compareSurfaceCopy(primaryArtifact, compareArtifact, compareEnabled);" in compare_summary_body
     assert "No compare pair" in compare_copy_body
     assert "No paired comparison is available for the current artifact." in compare_copy_body
@@ -1045,13 +1419,15 @@ def test_portal_selected_job_inspector_uses_timeline_tabs_and_log_secondary_view
 
 def test_portal_operate_surfaces_use_jobs_hydration_skeletons_before_empty_state() -> None:
     content = _portal_bundle_content()
+    review_content = _portal_review_source_content()
     helper_body = _extract_js_function_body(content, "_isJobsHydrationPending")
     queue_empty_body = _extract_js_function_body(content, "_queueEmptyStateCopy")
-    artifact_empty_body = _extract_js_function_body(content, "_artifactEmptyStateCopy")
+    artifact_empty_body = _extract_js_function_body(review_content, "_artifactEmptyStateCopy")
     toggle_body = _extract_js_function_body(content, "_toggleSurfaceSkeleton")
     queue_body = _extract_js_function_body(content, "renderJobQueue")
     inspector_body = _extract_js_function_body(content, "renderSelectedJobInspector")
     artifact_body = _extract_js_function_body(content, "renderArtifactPanel")
+    review_body = _extract_js_function_body(review_content, "renderArtifactPanel")
     recover_body = _extract_js_function_body(content, "recoverJobs")
     flush_body = _extract_js_function_body(content, "_flushBootstrapOnlineFollowup")
     backend_body = _extract_js_function_body(content, "checkBackend")
@@ -1085,9 +1461,10 @@ def test_portal_operate_surfaces_use_jobs_hydration_skeletons_before_empty_state
     )
     assert (
         "_toggleSurfaceSkeleton(els.artifactsShell, els.artifactShellContent, els.artifactSkeletonState, jobsLoading);"
-        in artifact_body
+        in review_body
     )
-    assert "_setSurfaceEmptyState(" in artifact_body
+    assert "_renderDeferredReviewSurfaceFallback(jobsLoading);" in artifact_body
+    assert "_setSurfaceEmptyState(" in review_body
     assert "state.jobsLoadStatus = 'loading';" in recover_body
     assert "state.jobsLoadStatus = 'ready';" in recover_body
     assert "state.jobsLoadStatus = 'loading';" in flush_body
@@ -1213,10 +1590,11 @@ def test_portal_console_routes_reuse_last_selected_job_across_operate_and_review
 
 def test_portal_console_context_ribbon_tracks_selected_job_and_review_state() -> None:
     content = _portal_bundle_content()
+    review_content = _portal_review_source_content()
     ribbon_body = _extract_js_function_body(content, "renderConsoleContextRibbon")
     apply_view_body = _extract_js_function_body(content, "applyConsoleViewLayout")
     inspector_body = _extract_js_function_body(content, "renderSelectedJobInspector")
-    artifact_body = _extract_js_function_body(content, "renderArtifactPanel")
+    artifact_body = _extract_js_function_body(review_content, "renderArtifactPanel")
     operate_branch_idx = ribbon_body.index("if (state.currentView === 'operate' || state.currentView === 'review') {")
     operate_return_idx = ribbon_body.index("        return;", operate_branch_idx)
     selected_idx = ribbon_body.index("const selected = state.jobs.find((job) => job.id === state.selectedJobId) || null;")
@@ -1260,7 +1638,8 @@ def test_portal_build_stepper_and_quick_actions_drive_task_first_navigation() ->
     assert "panel.setAttribute('data-step-active', active ? 'true' : 'false');" in stepper_body
     assert "panel.setAttribute('data-step-hidden', active ? 'false' : 'true');" in stepper_body
     assert "panel.classList.toggle('hidden', !active);" not in stepper_body
-    assert "function setBuildStep(nextStep, options = {}) {" in content
+    assert "function setBuildStep(nextStep, options) {" in content
+    assert "const settings = options && typeof options === 'object' ? options : {};" in content
     assert "emitPortalEvent('step_completed'" in content
     assert "state.pipeline !== 'lux-depth-v3' && state.portalUi.buildStep < 2" in update_body
     assert "setupBuildStepper();" in init_body
@@ -1510,13 +1889,14 @@ def test_portal_init_establishes_interactive_shell_before_bootstrap_settles() ->
 
 def test_portal_bootstrap_online_followup_state_is_tracked_until_auth_ready() -> None:
     content = _portal_bundle_content()
+    state_source = _portal_internal_state_source_content()
 
     assert "bootstrap: portalInternals.createPortalBootstrapState(Date.now())," in content
-    assert 'lastHealthEndpointPath: ""' in content
-    assert "pendingOnlineFollowup: false" in content
-    assert "onlineFollowupComplete: false" in content
-    assert "deadlineAt: 0" in content
-    assert 'lastOutcome: ""' in content
+    assert 'lastHealthEndpointPath: ""' in state_source
+    assert "pendingOnlineFollowup: false" in state_source
+    assert "onlineFollowupComplete: false" in state_source
+    assert "deadlineAt: 0" in state_source
+    assert 'lastOutcome: ""' in state_source
 
 
 def test_portal_bootstrap_retry_lifecycle_tracks_active_state_and_teardown() -> None:
@@ -1581,6 +1961,7 @@ def test_portal_reconstruction_runtime_summary_and_effective_config_surfaces_are
 
 def test_portal_preview_metadata_worker_modes_and_export_contract_are_wired() -> None:
     content = _portal_bundle_content()
+    state_source = _portal_internal_state_source_content()
     update_body = _extract_js_function_body(content, "updateUIFromState")
     bind_body = _extract_js_function_body(content, "bindInputs")
     metadata_body = _extract_js_function_body(content, "fetchConfigMetadata")
@@ -1588,8 +1969,8 @@ def test_portal_preview_metadata_worker_modes_and_export_contract_are_wired() ->
     reconcile_body = _extract_js_function_body(content, "_reconcilePreviewRepairedPaths")
     setter_body = _extract_js_function_body(content, "_setBuildSurfacePathFieldValue")
 
-    assert 'maxWorkersMode: "auto",' in content
-    assert 'maxGpuWorkersMode: "auto",' in content
+    assert 'maxWorkersMode: "auto",' in state_source
+    assert 'maxGpuWorkersMode: "auto",' in state_source
     assert 'id="maxWorkersMode"' in content
     assert 'id="maxGpuWorkersMode"' in content
     assert "function fetchConfigMetadata" in content
@@ -1627,10 +2008,11 @@ def test_portal_preview_metadata_worker_modes_and_export_contract_are_wired() ->
 
 def test_portal_runtime_briefing_and_recovery_surfaces_stay_additive_and_selector_stable() -> None:
     content = _portal_bundle_content()
+    review_content = _portal_review_source_content()
     mission_body = _extract_js_function_body(content, "renderMissionControl")
-    review_status_body = _extract_js_function_body(content, "_reviewStatusSnapshot")
+    review_status_body = _extract_js_function_body(review_content, "_reviewStatusSnapshot")
     queue_empty_body = _extract_js_function_body(content, "_queueEmptyStateCopy")
-    artifact_empty_body = _extract_js_function_body(content, "_artifactEmptyStateCopy")
+    artifact_empty_body = _extract_js_function_body(review_content, "_artifactEmptyStateCopy")
     inspector_body = _extract_js_function_body(content, "renderSelectedJobInspector")
 
     assert 'id="overviewRuntimeBriefing"' in content
@@ -1647,15 +2029,15 @@ def test_portal_runtime_briefing_and_recovery_surfaces_stay_additive_and_selecto
         "action: 'Next action: open Build to prepare the next run or restore backend connectivity to recover recent history.'"
         in queue_empty_body
     )
-    assert (
-        "action: 'Next action: inspect the selected run in Operate or wait for indexed outputs before reopening review.'"
-        in artifact_empty_body
+    assert re.search(
+        r"action:\s*[\"\']Next action: inspect the selected run in Operate or wait for indexed outputs before reopening review\.[\"\']",
+        artifact_empty_body,
     )
-    assert (
-        "action: 'Next action: use the selected run state, warning context, and freshness above to decide whether to recover or open review.'"
-        in review_status_body
+    assert re.search(
+        r"action:\s*[\"\']Next action: use the selected run state, warning context, and freshness above to decide whether to recover or open review\.[\"\']",
+        review_status_body,
     )
-    assert "els.reviewStatusAction.textContent = snapshot.action;" in content
+    assert "els.reviewStatusAction.textContent = snapshot.action;" in review_content
     assert "els.selectedJobRecoveryTitle.textContent = recovery.title;" in inspector_body
     assert "els.selectedJobRecoveryDetail.textContent = recovery.detail;" in inspector_body
 
@@ -1696,7 +2078,7 @@ def test_portal_contextual_action_rail_reuses_existing_route_and_recovery_contra
     assert "_openArtifactForSelection(job, context.heroArtifact || context.selectedArtifact, 'action_rail');" in handler_body
     assert "_toggleCompareSurface(job, 'action_rail');" in handler_body
     assert "_retryPortalStatus(job);" in handler_body
-    assert "window.location.assign('/login');" in handler_body
+    assert "window.location.assign(_managedLoginUrlForCurrentRoute());" in handler_body
     assert "_rememberArtifactSelection(explicitJobId, '');" in content
     assert "_rememberArtifactSelection(preferredJobId, '');" in content
     assert "url.searchParams.set('action'" not in content
@@ -2189,11 +2571,11 @@ def test_argv_rejects_invalid_log_level() -> None:
 
 
 def test_portal_segmentation_defaults_align_with_cli_defaults() -> None:
-    content = _portal_bundle_content()
-    assert "enable: false," in content
-    assert 'backend: "stub",' in content
-    assert 'sam2ModelSize: "base",' in content
-    assert "strict: false" in content
+    state_source = _portal_internal_state_source_content()
+    assert "enable: false," in state_source
+    assert 'backend: "stub",' in state_source
+    assert 'sam2ModelSize: "base",' in state_source
+    assert "strict: false" in state_source
 
 
 def test_portal_surfaces_pre_run_diagnostics_and_expected_outputs() -> None:
@@ -2245,12 +2627,13 @@ def test_portal_operator_briefing_and_build_pulse_surfaces_are_present() -> None
 
 def test_portal_exposes_run_card_quick_actions() -> None:
     content = _portal_bundle_content()
+    review_content = _portal_review_source_content()
 
     assert 'id="runCardActions"' in content
     assert 'id="viewRunCardBtn"' in content
     assert 'id="copyRunCardPathBtn"' in content
     assert 'id="copyRunCardFingerprintBtn"' in content
-    assert "els.viewRunCardBtn.dataset.url = runCardUrl;" in content
+    assert "els.viewRunCardBtn.dataset.url = runCardUrl;" in review_content
     assert "sanitizeManagedAssetUrl(els.viewRunCardBtn.dataset.url)" in content
     assert "window.open(runCardUrl, '_blank', 'noopener,noreferrer');" in content
 
@@ -2918,6 +3301,22 @@ def test_content_length_limit_blocks_oversized_payloads() -> None:
     assert response.status_code == 413
 
 
+def test_request_body_limit_uses_upload_override_for_staging_path() -> None:
+    previous_max_request_bytes = orchestrator_app.MAX_REQUEST_BYTES
+    previous_max_upload_request_bytes = orchestrator_app.MAX_UPLOAD_REQUEST_BYTES
+    try:
+        orchestrator_app.MAX_REQUEST_BYTES = 256
+        orchestrator_app.MAX_UPLOAD_REQUEST_BYTES = 64
+        assert orchestrator_app._request_body_limit_bytes("/v1/jobs") == 256
+        assert orchestrator_app._request_body_limit_bytes("/v1/uploads/staging") == 64
+        assert orchestrator_app._public_http_error_message(413, "/v1/uploads/staging") == (
+            "request body too large (max 64 bytes)"
+        )
+    finally:
+        orchestrator_app.MAX_REQUEST_BYTES = previous_max_request_bytes
+        orchestrator_app.MAX_UPLOAD_REQUEST_BYTES = previous_max_upload_request_bytes
+
+
 def test_stream_body_limit_blocks_oversized_chunked_payloads() -> None:
     previous_limit = orchestrator_app.MAX_REQUEST_BYTES
     try:
@@ -2944,6 +3343,210 @@ def test_stream_body_limit_blocks_oversized_chunked_payloads() -> None:
         assert exc.value.status_code == 413
     finally:
         orchestrator_app.MAX_REQUEST_BYTES = previous_limit
+
+
+def test_stream_body_limit_uses_upload_override_for_chunked_uploads() -> None:
+    previous_max_request_bytes = orchestrator_app.MAX_REQUEST_BYTES
+    previous_max_upload_request_bytes = orchestrator_app.MAX_UPLOAD_REQUEST_BYTES
+    try:
+        orchestrator_app.MAX_REQUEST_BYTES = 64
+        orchestrator_app.MAX_UPLOAD_REQUEST_BYTES = 8
+        request = _build_request("POST", "/v1/uploads/staging", headers={"content-type": "application/octet-stream"})
+        chunks = [
+            {"type": "http.request", "body": b"12345", "more_body": True},
+            {"type": "http.request", "body": b"6789", "more_body": False},
+        ]
+
+        async def receive():
+            if chunks:
+                return chunks.pop(0)
+            return {"type": "http.request", "body": b"", "more_body": False}
+
+        setattr(request, "_receive", receive)
+        orchestrator_app._install_stream_body_limit(request)
+
+        first = asyncio.run(request._receive())  # type: ignore[attr-defined]
+        assert first["body"] == b"12345"
+
+        with pytest.raises(orchestrator_app.HTTPException) as exc:
+            asyncio.run(request._receive())  # type: ignore[attr-defined]
+        assert exc.value.status_code == 413
+        assert exc.value.detail == "request body too large (max 8 bytes)"
+    finally:
+        orchestrator_app.MAX_REQUEST_BYTES = previous_max_request_bytes
+        orchestrator_app.MAX_UPLOAD_REQUEST_BYTES = previous_max_upload_request_bytes
+
+
+def test_parse_portal_upload_multipart_streams_chunked_payloads() -> None:
+    boundary = "tp-boundary"
+    request = _build_request(
+        "POST",
+        "/v1/uploads/staging",
+        headers={"content-type": f"multipart/form-data; boundary={boundary}"},
+    )
+    body = _build_multipart_form_body(
+        boundary,
+        fields=[
+            (
+                "client_manifest",
+                json.dumps(
+                    {
+                        "schema": "tp.portal.upload_manifest.v1",
+                        "files": [{"relative_path": "nested/sample.txt", "size_bytes": 11}],
+                    }
+                ),
+            )
+        ],
+        files=[("files", "nested/sample.txt", b"hello world", "text/plain")],
+    )
+    chunks = [
+        body[:17],
+        body[17:53],
+        body[53:111],
+        body[111:167],
+        body[167:],
+    ]
+
+    async def receive():
+        if chunks:
+            chunk = chunks.pop(0)
+            return {"type": "http.request", "body": chunk, "more_body": bool(chunks)}
+        return {"type": "http.request", "body": b"", "more_body": False}
+
+    setattr(request, "_receive", receive)
+
+    payload = asyncio.run(orchestrator_app._parse_portal_upload_multipart(request))
+    try:
+        assert payload.client_manifest_raw is not None
+        assert len(payload.uploads) == 1
+        assert payload.uploads[0].filename == "nested/sample.txt"
+        assert payload.uploads[0].stream.read() == b"hello world"
+    finally:
+        payload.close()
+
+
+def test_stage_upload_batch_normalizes_paths_and_writes_deterministic_manifest(tmp_path: Path) -> None:
+    result = upload_staging.stage_upload_batch(
+        upload_root=tmp_path / "uploads",
+        uploads=[
+            upload_staging.IncomingUpload(filename="nested/sample.txt", stream=io.BytesIO(b"hello world")),
+            upload_staging.IncomingUpload(filename="nested/child/readme.md", stream=io.BytesIO(b"# hi\n")),
+        ],
+        client_manifest_paths=["nested/sample.txt", "nested/child/readme.md"],
+        capture_metadata_enabled=False,
+        now=1234.0,
+    )
+
+    assert result.file_count == 2
+    assert result.total_bytes == 16
+    assert (result.input_dir / "nested" / "sample.txt").read_text(encoding="utf-8") == "hello world"
+    baseline_manifest_payload = json.loads(result.baseline_manifest_path.read_text(encoding="utf-8"))
+    assert baseline_manifest_payload["schema"] == "tp.meta.baseline_manifest.v1"
+    assert baseline_manifest_payload["record_count"] == 2
+    assert [record["relative_path"] for record in baseline_manifest_payload["records"]] == [
+        "nested/child/readme.md",
+        "nested/sample.txt",
+    ]
+    assert baseline_manifest_payload["records"][1]["sha256"] == hashlib.sha256(b"hello world").hexdigest()
+    assert baseline_manifest_payload["records"][1]["mime_type"] == "text/plain"
+    assert baseline_manifest_payload["records"][1]["media_kind"] == "text"
+    assert "image" not in baseline_manifest_payload["records"][1]
+    assert "pdf" not in baseline_manifest_payload["records"][1]
+    assert json.loads(result.capture_metadata_path.read_text(encoding="utf-8")) == []
+
+
+def test_stage_upload_batch_manifest_is_dependency_independent_for_known_extensions(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    first = upload_staging.stage_upload_batch(
+        upload_root=tmp_path / "uploads-a",
+        uploads=[upload_staging.IncomingUpload(filename="nested/sample.png", stream=io.BytesIO(b"png-bytes"))],
+        client_manifest_paths=["nested/sample.png"],
+        capture_metadata_enabled=False,
+        now=111.0,
+    )
+
+    monkeypatch.setitem(upload_staging.__dict__, "Image", object())
+    monkeypatch.setitem(upload_staging.__dict__, "PdfReader", object())
+    second = upload_staging.stage_upload_batch(
+        upload_root=tmp_path / "uploads-b",
+        uploads=[upload_staging.IncomingUpload(filename="nested/sample.png", stream=io.BytesIO(b"png-bytes"))],
+        client_manifest_paths=["nested/sample.png"],
+        capture_metadata_enabled=False,
+        now=222.0,
+    )
+
+    assert first.baseline_manifest_path.read_bytes() == second.baseline_manifest_path.read_bytes()
+
+
+def test_cleanup_expired_batches_skips_non_managed_directories(tmp_path: Path) -> None:
+    upload_root = tmp_path / "uploads"
+    upload_root.mkdir()
+    expired_at = 100.0
+
+    unrelated_dir = upload_root / "manual_batch"
+    unrelated_dir.mkdir()
+    (unrelated_dir / "notes.txt").write_text("keep", encoding="utf-8")
+    os.utime(unrelated_dir, (expired_at, expired_at))
+
+    managed_dir = upload_root / "upload_123"
+    (managed_dir / "input").mkdir(parents=True)
+    portal_dir = managed_dir / "_portal"
+    portal_dir.mkdir()
+    (portal_dir / upload_staging.UPLOAD_RECEIPT_FILENAME).write_text("{}", encoding="utf-8")
+    os.utime(managed_dir, (expired_at, expired_at))
+
+    removed = upload_staging.cleanup_expired_batches(
+        upload_root,
+        now=10_000.0,
+        ttl_seconds=1.0,
+        retained_input_dirs=[],
+    )
+
+    assert removed == ["upload_123"]
+    assert unrelated_dir.exists()
+    assert not managed_dir.exists()
+
+
+def test_stage_upload_batch_rejects_duplicate_relative_paths_and_cleans_batch(tmp_path: Path) -> None:
+    with pytest.raises(upload_staging.UploadStagingError) as exc:
+        upload_staging.stage_upload_batch(
+            upload_root=tmp_path / "uploads",
+            uploads=[
+                upload_staging.IncomingUpload(filename="nested/sample.txt", stream=io.BytesIO(b"one")),
+                upload_staging.IncomingUpload(filename="nested/sample.txt", stream=io.BytesIO(b"two")),
+            ],
+            client_manifest_paths=["nested/sample.txt", "nested/sample.txt"],
+            capture_metadata_enabled=False,
+            now=4321.0,
+        )
+
+    assert exc.value.reason == "duplicate_relative_path"
+    upload_root = tmp_path / "uploads"
+    if upload_root.exists():
+        assert list(upload_root.iterdir()) == []
+
+
+def test_stage_upload_batch_capture_metadata_failure_falls_back_to_empty_artifact(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    def _explode(*_args, **_kwargs):  # noqa: ANN001
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(upload_staging, "extract_capture_metadata_records", _explode)
+    result = upload_staging.stage_upload_batch(
+        upload_root=tmp_path / "uploads",
+        uploads=[upload_staging.IncomingUpload(filename="sample.txt", stream=io.BytesIO(b"hello"))],
+        client_manifest_paths=["sample.txt"],
+        capture_metadata_enabled=True,
+        now=9876.0,
+    )
+
+    receipt_payload = json.loads(result.upload_receipt_path.read_text(encoding="utf-8"))
+    assert receipt_payload["summary"]["warnings"] == ["capture_metadata_extraction_failed"]
+    assert json.loads(result.capture_metadata_path.read_text(encoding="utf-8")) == []
 
 
 def test_sanitized_child_env_redacts_secret_like_values() -> None:
@@ -3054,7 +3657,30 @@ def test_protected_api_key_route_detection() -> None:
     assert orchestrator_app._is_protected_api_key_endpoint("/v1/config-metadata") is True
     assert orchestrator_app._is_protected_api_key_endpoint("/v1/config-preview") is True
     assert orchestrator_app._is_protected_api_key_endpoint("/v1/portal/events") is True
+    assert orchestrator_app._is_protected_api_key_endpoint("/v1/portal/rum") is True
     assert orchestrator_app._is_protected_api_key_endpoint("/ready") is False
+
+
+def test_portal_event_log_persistence_keeps_jsonl_parseable_under_concurrent_appends(tmp_path: Path) -> None:
+    log_path = tmp_path / "portal-rum.jsonl"
+    records = [
+        {
+            "schema": "tp.orchestrator.portal_rum.v1",
+            "sequence": index,
+            "event_type": "queue_request",
+        }
+        for index in range(32)
+    ]
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+        futures = [executor.submit(orchestrator_app._persist_portal_event_record, record, log_path) for record in records]
+        for future in futures:
+            future.result()
+
+    persisted_lines = log_path.read_text(encoding="utf-8").strip().splitlines()
+    assert len(persisted_lines) == len(records)
+    parsed_records = [json.loads(line) for line in persisted_lines]
+    assert {item["sequence"] for item in parsed_records} == {record["sequence"] for record in records}
 
 
 def test_index_job_artifacts_populates_job_payload(tmp_path: Path) -> None:

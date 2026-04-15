@@ -6,6 +6,7 @@ import path from "node:path";
 import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 
 import argon2 from "argon2";
+import { transformSync } from "esbuild";
 import { NextRequest, NextResponse } from "next/server.js";
 
 import { getDb, resetDbCache } from "../lib/db.js";
@@ -20,7 +21,13 @@ const ENV_KEYS = [
   "TP_FRONTDOOR_SESSION_SCALING_MODE",
   "TP_CF_ACCESS_TEAM_DOMAIN",
   "TP_CF_ACCESS_AUD",
-  "TP_ALLOW_LOCAL_ACCESS_BYPASS"
+  "TP_ALLOW_LOCAL_ACCESS_BYPASS",
+  "TP_PORTAL_UPLOAD_STAGING_ENABLED",
+  "TP_PORTAL_STAGED_UPLOADS_ROLLOUT_PERCENT",
+  "TP_PORTAL_ARTIFACT_VIEWER_MODAL_ROLLOUT_PERCENT",
+  "TP_PORTAL_REVIEW_SURFACE_DEFER_ROLLOUT_PERCENT",
+  "TP_PORTAL_RUM_ENABLED",
+  "TP_PORTAL_RUM_ROLLOUT_PERCENT"
 ];
 
 const TEST_CF_ACCESS_TEAM_DOMAIN = "https://tp-frontdoor-tests.cloudflareaccess.com";
@@ -97,6 +104,44 @@ function withTempEnvironment(overrides = {}) {
     process.env.TP_ALLOW_LOCAL_ACCESS_BYPASS = overrides.TP_ALLOW_LOCAL_ACCESS_BYPASS;
   } else {
     delete process.env.TP_ALLOW_LOCAL_ACCESS_BYPASS;
+  }
+
+  if (typeof overrides.TP_PORTAL_ARTIFACT_VIEWER_MODAL_ROLLOUT_PERCENT === "string") {
+    process.env.TP_PORTAL_ARTIFACT_VIEWER_MODAL_ROLLOUT_PERCENT =
+      overrides.TP_PORTAL_ARTIFACT_VIEWER_MODAL_ROLLOUT_PERCENT;
+  } else {
+    delete process.env.TP_PORTAL_ARTIFACT_VIEWER_MODAL_ROLLOUT_PERCENT;
+  }
+
+  if (typeof overrides.TP_PORTAL_REVIEW_SURFACE_DEFER_ROLLOUT_PERCENT === "string") {
+    process.env.TP_PORTAL_REVIEW_SURFACE_DEFER_ROLLOUT_PERCENT =
+      overrides.TP_PORTAL_REVIEW_SURFACE_DEFER_ROLLOUT_PERCENT;
+  } else {
+    delete process.env.TP_PORTAL_REVIEW_SURFACE_DEFER_ROLLOUT_PERCENT;
+  }
+
+  if (typeof overrides.TP_PORTAL_UPLOAD_STAGING_ENABLED === "string") {
+    process.env.TP_PORTAL_UPLOAD_STAGING_ENABLED = overrides.TP_PORTAL_UPLOAD_STAGING_ENABLED;
+  } else {
+    delete process.env.TP_PORTAL_UPLOAD_STAGING_ENABLED;
+  }
+
+  if (typeof overrides.TP_PORTAL_STAGED_UPLOADS_ROLLOUT_PERCENT === "string") {
+    process.env.TP_PORTAL_STAGED_UPLOADS_ROLLOUT_PERCENT = overrides.TP_PORTAL_STAGED_UPLOADS_ROLLOUT_PERCENT;
+  } else {
+    delete process.env.TP_PORTAL_STAGED_UPLOADS_ROLLOUT_PERCENT;
+  }
+
+  if (typeof overrides.TP_PORTAL_RUM_ENABLED === "string") {
+    process.env.TP_PORTAL_RUM_ENABLED = overrides.TP_PORTAL_RUM_ENABLED;
+  } else {
+    delete process.env.TP_PORTAL_RUM_ENABLED;
+  }
+
+  if (typeof overrides.TP_PORTAL_RUM_ROLLOUT_PERCENT === "string") {
+    process.env.TP_PORTAL_RUM_ROLLOUT_PERCENT = overrides.TP_PORTAL_RUM_ROLLOUT_PERCENT;
+  } else {
+    delete process.env.TP_PORTAL_RUM_ROLLOUT_PERCENT;
   }
 
   resetDbCache();
@@ -355,6 +400,57 @@ test("login POST rotates the session and redirects authenticated users to /porta
   }
 });
 
+test("login POST redirects authenticated users to a validated returnTo route", async () => {
+  const passwordHash = await argon2.hash("correct horse battery staple");
+  const env = withTempEnvironment({
+    usersFileEntries: [
+      {
+        username: "admin",
+        password_hash: passwordHash,
+        access_email: "admin@example.com",
+        role: "admin"
+      }
+    ]
+  });
+
+  try {
+    const sessions = await importFresh("../lib/sessions.js");
+    const { POST } = await importFresh("../app/login/route.js");
+    const restoreFetch = withMockedAccessCerts();
+
+    try {
+      const anonymousSession = sessions.createAnonymousSession();
+      const form = new URLSearchParams({
+        username: "admin",
+        password: "correct horse battery staple",
+        csrf_token: anonymousSession.csrfToken,
+        returnTo: "/portal?view=build"
+      });
+
+      const request = buildRequest("https://portal.example.com/login", {
+        method: "POST",
+        headers: new Headers({
+          origin: "https://portal.example.com",
+          "content-type": "application/x-www-form-urlencoded",
+          cookie: `__Host-tp_session=${anonymousSession.id}`,
+          "Cf-Access-Jwt-Assertion": createAccessJwt(),
+          "cf-access-authenticated-user-email": "admin@example.com"
+        }),
+        body: form
+      });
+
+      const response = await POST(request);
+
+      assert.equal(response.status, 303);
+      assert.equal(response.headers.get("location"), "https://portal.example.com/portal?view=build");
+    } finally {
+      restoreFetch();
+    }
+  } finally {
+    env.cleanup();
+  }
+});
+
 test("login GET serves a minimal branded sign-in shell and boots an anonymous session", async () => {
   const env = withTempEnvironment({
     NODE_ENV: "development",
@@ -404,6 +500,64 @@ test("login GET serves a minimal branded sign-in shell and boots an anonymous se
     assert.doesNotMatch(html, /TP_CF_ACCESS_TEAM_DOMAIN/);
     assert.ok(sessionCookie.value);
     assert.equal(sessions.getSessionById(sessionCookie.value, { touch: false })?.authenticated, false);
+  } finally {
+    env.cleanup();
+  }
+});
+
+test("login GET preserves a validated returnTo in the rendered form", async () => {
+  const env = withTempEnvironment({
+    NODE_ENV: "development",
+    TP_ALLOW_LOCAL_ACCESS_BYPASS: "1"
+  });
+
+  try {
+    const { GET } = await importFresh("../app/login/route.js");
+    const request = buildRequest("http://localhost:3000/login?returnTo=%2Fportal%3Fview%3Dbuild");
+
+    const response = await GET(request);
+    const html = await response.text();
+
+    assert.equal(response.status, 200);
+    assert.match(html, /name="returnTo" value="\/portal\?view=build"/);
+  } finally {
+    env.cleanup();
+  }
+});
+
+test("login GET redirects authenticated sessions to a validated returnTo route", async () => {
+  const env = withTempEnvironment();
+
+  try {
+    const sessions = await importFresh("../lib/sessions.js");
+    const { GET } = await importFresh("../app/login/route.js");
+    const restoreFetch = withMockedAccessCerts();
+
+    try {
+      const authenticatedSession = sessions.rotateAuthenticatedSession(
+        sessions.createAnonymousSession(),
+        {
+          username: "admin",
+          accessEmail: "admin@example.com",
+          role: "admin"
+        }
+      );
+
+      const request = buildRequest("https://portal.example.com/login?returnTo=%2Fportal%3Fview%3Dreview", {
+        method: "GET",
+        headers: new Headers({
+          cookie: `__Host-tp_session=${authenticatedSession.id}`,
+          "Cf-Access-Jwt-Assertion": createAccessJwt()
+        })
+      });
+
+      const response = await GET(request);
+
+      assert.equal(response.status, 302);
+      assert.equal(response.headers.get("location"), "https://portal.example.com/portal?view=review");
+    } finally {
+      restoreFetch();
+    }
   } finally {
     env.cleanup();
   }
@@ -638,6 +792,58 @@ test("login POST keeps failures generic when Access email does not match the con
       assert.equal(response.status, 303);
       assert.equal(response.headers.get("location"), "https://portal.example.com/login?error=invalid");
       assert.equal(sessions.getSessionById(anonymousSession.id, { touch: false })?.authenticated, false);
+    } finally {
+      restoreFetch();
+    }
+  } finally {
+    env.cleanup();
+  }
+});
+
+test("login POST preserves a validated returnTo when sign-in fails", async () => {
+  const passwordHash = await argon2.hash("correct horse battery staple");
+  const env = withTempEnvironment({
+    usersFileEntries: [
+      {
+        username: "admin",
+        password_hash: passwordHash,
+        access_email: "admin@example.com",
+        role: "admin"
+      }
+    ]
+  });
+
+  try {
+    const sessions = await importFresh("../lib/sessions.js");
+    const { POST } = await importFresh("../app/login/route.js");
+    const restoreFetch = withMockedAccessCerts();
+
+    try {
+      const anonymousSession = sessions.createAnonymousSession();
+      const request = buildRequest("https://portal.example.com/login", {
+        method: "POST",
+        headers: new Headers({
+          origin: "https://portal.example.com",
+          "content-type": "application/x-www-form-urlencoded",
+          cookie: `__Host-tp_session=${anonymousSession.id}`,
+          "Cf-Access-Jwt-Assertion": createAccessJwt(),
+          "cf-access-authenticated-user-email": "admin@example.com"
+        }),
+        body: new URLSearchParams({
+          username: "admin",
+          password: "wrong password",
+          csrf_token: anonymousSession.csrfToken,
+          returnTo: "/portal?view=review"
+        })
+      });
+
+      const response = await POST(request);
+
+      assert.equal(response.status, 303);
+      assert.equal(
+        response.headers.get("location"),
+        "https://portal.example.com/login?error=invalid&returnTo=%2Fportal%3Fview%3Dreview"
+      );
     } finally {
       restoreFetch();
     }
@@ -994,14 +1200,59 @@ test("login POST ignores untrusted host overrides when building redirect targets
       body: new URLSearchParams({
         username: "admin",
         password: "correct horse battery staple",
-        csrf_token: anonymousSession.csrfToken
+        csrf_token: anonymousSession.csrfToken,
+        returnTo: "/portal?view=build"
       })
     });
 
     const response = await POST(request);
 
     assert.equal(response.status, 303);
-    assert.equal(response.headers.get("location"), "https://portal.example.com/portal");
+    assert.equal(response.headers.get("location"), "https://portal.example.com/portal?view=build");
+  } finally {
+    env.cleanup();
+  }
+});
+
+test("login POST rejects invalid returnTo values and falls back to /portal", async () => {
+  const passwordHash = await argon2.hash("correct horse battery staple");
+  const env = withTempEnvironment({
+    NODE_ENV: "development",
+    TP_ALLOW_LOCAL_ACCESS_BYPASS: "1",
+    usersFileEntries: [
+      {
+        username: "admin",
+        password_hash: passwordHash,
+        access_email: "admin@example.com",
+        role: "admin"
+      }
+    ]
+  });
+
+  try {
+    const sessions = await importFresh("../lib/sessions.js");
+    const { POST } = await importFresh("../app/login/route.js");
+
+    const anonymousSession = sessions.createAnonymousSession();
+    const request = buildRequest("http://127.0.0.1:3000/login", {
+      method: "POST",
+      headers: new Headers({
+        host: "127.0.0.1:3000",
+        "content-type": "application/x-www-form-urlencoded",
+        cookie: `tp_session=${anonymousSession.id}`
+      }),
+      body: new URLSearchParams({
+        username: "admin",
+        password: "correct horse battery staple",
+        csrf_token: anonymousSession.csrfToken,
+        returnTo: "https://evil.example.com/portal"
+      })
+    });
+
+    const response = await POST(request);
+
+    assert.equal(response.status, 303);
+    assert.equal(response.headers.get("location"), "http://127.0.0.1:3000/portal");
   } finally {
     env.cleanup();
   }
@@ -1098,7 +1349,200 @@ test("managed bootstrap returns actor metadata and CSRF for authenticated sessio
       assert.equal(body.actor.accessEmail, "admin@example.com");
       assert.equal(body.features.apiKeyInput, false);
       assert.equal(body.features.directDebug, false);
+      assert.equal(body.features.artifactViewerModal, false);
+      assert.equal(body.features.reviewSurfaceDeferred, false);
+      assert.equal(body.features.stagedUploads, false);
+      assert.equal(body.features.rumTelemetry, false);
       assert.equal(body.csrfToken, authenticatedSession.csrfToken);
+    } finally {
+      restoreFetch();
+    }
+  } finally {
+    env.cleanup();
+  }
+});
+
+test("managed bootstrap enables the artifact viewer modal for rollout cohorts", async () => {
+  const env = withTempEnvironment({
+    TP_PORTAL_ARTIFACT_VIEWER_MODAL_ROLLOUT_PERCENT: "100"
+  });
+
+  try {
+    const sessions = await importFresh("../lib/sessions.js");
+    const { GET } = await importFresh("../app/portal/bootstrap/route.js");
+    const authenticatedSession = sessions.rotateAuthenticatedSession(
+      sessions.createAnonymousSession(),
+      {
+        username: "admin",
+        accessEmail: "admin@example.com",
+        role: "admin"
+      }
+    );
+
+    const request = buildRequest("https://portal.example.com/portal/bootstrap", {
+      method: "GET",
+      headers: new Headers({
+        cookie: `__Host-tp_session=${authenticatedSession.id}`,
+        "Cf-Access-Jwt-Assertion": createAccessJwt()
+      })
+    });
+
+    const response = await GET(request);
+    const body = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(body.features.artifactViewerModal, true);
+  } finally {
+    env.cleanup();
+  }
+});
+
+test("managed bootstrap enables review surface deferral for rollout cohorts", async () => {
+  const env = withTempEnvironment({
+    TP_PORTAL_REVIEW_SURFACE_DEFER_ROLLOUT_PERCENT: "100"
+  });
+
+  try {
+    const sessions = await importFresh("../lib/sessions.js");
+    const { GET } = await importFresh("../app/portal/bootstrap/route.js");
+    const authenticatedSession = sessions.rotateAuthenticatedSession(
+      sessions.createAnonymousSession(),
+      {
+        username: "admin",
+        accessEmail: "admin@example.com",
+        role: "admin"
+      }
+    );
+
+    const request = buildRequest("https://portal.example.com/portal/bootstrap", {
+      method: "GET",
+      headers: new Headers({
+        cookie: `__Host-tp_session=${authenticatedSession.id}`,
+        "Cf-Access-Jwt-Assertion": createAccessJwt()
+      })
+    });
+
+    const response = await GET(request);
+    const body = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(body.features.reviewSurfaceDeferred, true);
+  } finally {
+    env.cleanup();
+  }
+});
+
+test("managed bootstrap enables staged uploads for rollout cohorts", async () => {
+  const env = withTempEnvironment({
+    TP_PORTAL_UPLOAD_STAGING_ENABLED: "1",
+    TP_PORTAL_STAGED_UPLOADS_ROLLOUT_PERCENT: "100"
+  });
+
+  try {
+    const sessions = await importFresh("../lib/sessions.js");
+    const { GET } = await importFresh("../app/portal/bootstrap/route.js");
+    const authenticatedSession = sessions.rotateAuthenticatedSession(
+      sessions.createAnonymousSession(),
+      {
+        username: "admin",
+        accessEmail: "admin@example.com",
+        role: "admin"
+      }
+    );
+
+    const request = buildRequest("https://portal.example.com/portal/bootstrap", {
+      method: "GET",
+      headers: new Headers({
+        cookie: `__Host-tp_session=${authenticatedSession.id}`,
+        "Cf-Access-Jwt-Assertion": createAccessJwt()
+      })
+    });
+
+    const response = await GET(request);
+    const body = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(body.features.stagedUploads, true);
+  } finally {
+    env.cleanup();
+  }
+});
+
+test("managed bootstrap enables rum telemetry for rollout cohorts", async () => {
+  const env = withTempEnvironment({
+    TP_PORTAL_RUM_ENABLED: "1",
+    TP_PORTAL_RUM_ROLLOUT_PERCENT: "100"
+  });
+
+  try {
+    const sessions = await importFresh("../lib/sessions.js");
+    const { GET } = await importFresh("../app/portal/bootstrap/route.js");
+    const authenticatedSession = sessions.rotateAuthenticatedSession(
+      sessions.createAnonymousSession(),
+      {
+        username: "admin",
+        accessEmail: "admin@example.com",
+        role: "admin"
+      }
+    );
+
+    const request = buildRequest("https://portal.example.com/portal/bootstrap", {
+      method: "GET",
+      headers: new Headers({
+        cookie: `__Host-tp_session=${authenticatedSession.id}`,
+        "Cf-Access-Jwt-Assertion": createAccessJwt()
+      })
+    });
+
+    const response = await GET(request);
+    const body = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(body.features.rumTelemetry, true);
+  } finally {
+    env.cleanup();
+  }
+});
+
+test("managed bootstrap echoes traceparent and includes trace id in audit payloads", async () => {
+  const env = withTempEnvironment();
+  const traceparent = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01";
+
+  try {
+    const sessions = await importFresh("../lib/sessions.js");
+    const { GET } = await importFresh("../app/portal/bootstrap/route.js");
+    const restoreFetch = withMockedAccessCerts();
+
+    try {
+      const authenticatedSession = sessions.rotateAuthenticatedSession(
+        sessions.createAnonymousSession(),
+        {
+          username: "admin",
+          accessEmail: "admin@example.com",
+          role: "admin"
+        }
+      );
+
+      await withCapturedAuditEvents(async (events) => {
+        const request = buildRequest("https://portal.example.com/portal/bootstrap", {
+          method: "GET",
+          headers: new Headers({
+            cookie: `__Host-tp_session=${authenticatedSession.id}`,
+            traceparent,
+            "Cf-Access-Jwt-Assertion": createAccessJwt()
+          })
+        });
+
+        const response = await GET(request);
+        const body = await response.json();
+
+        assert.equal(response.status, 200);
+        assert.equal(response.headers.get("traceparent"), traceparent);
+        assert.equal(body.features.rumTelemetry, false);
+        assert.equal(events.length, 1);
+        assert.equal(events[0].event, "portal_bootstrap");
+        assert.equal(events[0].traceId, "4bf92f3577b34da6a3ce929d0e0e4736");
+      });
     } finally {
       restoreFetch();
     }
@@ -1256,7 +1700,7 @@ test("portal returns 503 with no-store when the FastAPI UI origin is unavailable
     });
 
     try {
-      const request = buildRequest("https://portal.example.com/portal", {
+      const request = buildRequest("https://portal.example.com/portal?view=build", {
         method: "GET",
         headers: new Headers({
           cookie: `__Host-tp_session=${authenticatedSession.id}`,
@@ -1273,7 +1717,7 @@ test("portal returns 503 with no-store when the FastAPI UI origin is unavailable
       assert.match(html, /data-ui="managed-recovery-shell"/);
       assert.match(html, /data-reason="upstream_unavailable"/);
       assert.match(html, /Portal upstream unavailable/);
-      assert.match(html, /Return to login/);
+      assert.match(html, /href="\/login\?returnTo=%2Fportal%3Fview%3Dbuild"/);
     } finally {
       restoreFetch();
     }
@@ -1325,6 +1769,7 @@ test("portal renders waiting recovery posture for Access outages", async () => {
       assert.match(html, /class="[^"]*\blogin-status-card\b[^"]*"/);
       assert.match(html, /data-state="waiting"/);
       assert.match(html, /Retry when Access recovers/);
+      assert.match(html, /href="\/login\?returnTo=%2Fportal"/);
     } finally {
       global.fetch = originalFetch;
     }
@@ -1368,6 +1813,7 @@ test("portal returns configuration guidance when managed access config is incomp
       assert.match(html, /data-reason="config_failure"/);
       assert.match(html, /Managed front door configuration unavailable/);
       assert.match(html, /Managed boundary stays fail-closed/);
+      assert.match(html, /href="\/login\?returnTo=%2Fportal"/);
       assert.equal(events.length, 1);
       assert.equal(events[0].surface, "portal");
       assert.equal(events[0].reason, "config_failure");
@@ -1378,7 +1824,7 @@ test("portal returns configuration guidance when managed access config is incomp
   }
 });
 
-test("portal redirects to login and clears the session when Access verification is missing", async () => {
+test("portal redirects to login with route context and clears the session when Access verification is missing", async () => {
   const env = withTempEnvironment();
 
   try {
@@ -1393,17 +1839,23 @@ test("portal redirects to login and clears the session when Access verification 
       }
     );
 
-    const request = buildRequest("https://portal.example.com/portal", {
-      method: "GET",
-      headers: new Headers({
-        cookie: `__Host-tp_session=${authenticatedSession.id}`
-      })
-    });
+    const request = buildRequest(
+      "https://portal.example.com/portal?view=review&job=job_demo&artifact=synthetic%2Freview-primary.png&compare=1",
+      {
+        method: "GET",
+        headers: new Headers({
+          cookie: `__Host-tp_session=${authenticatedSession.id}`
+        })
+      }
+    );
 
     const response = await GET(request);
 
     assert.equal(response.status, 302);
-    assert.equal(response.headers.get("location"), "https://portal.example.com/login");
+    assert.equal(
+      response.headers.get("location"),
+      "https://portal.example.com/login?returnTo=%2Fportal%3Fview%3Dreview%26job%3Djob_demo%26artifact%3Dsynthetic%252Freview-primary.png%26compare%3D1"
+    );
     assert.match(response.headers.get("set-cookie") || "", /__Host-tp_session=/);
     assert.equal(sessions.getSessionById(authenticatedSession.id, { touch: false }), null);
   } finally {
@@ -1800,6 +2252,8 @@ test("shared portal asset manifest pins the managed asset proxy allowlist", asyn
     "portal.css",
     "shared-ui-tokens.css",
     "portal.js",
+    "portal-review.js",
+    "portal-review.css",
     "fonts/portal-sans.woff2",
     "fonts/portal-mono.woff2",
     "brand/dna-symbol-dark.svg",
@@ -1814,13 +2268,32 @@ test("shared UI tokens stay synced to the canonical source", () => {
   const portalTokenPath = path.join(repoRoot, "public", "portal-assets", "shared-ui-tokens.css");
   const buildScriptPath = path.join(process.cwd(), "scripts", "build-portal-bundle.mjs");
   const canonicalTokens = readFileSync(canonicalTokenPath, "utf-8");
+  const normalizedCanonicalTokens = `${transformSync(canonicalTokens, {
+    loader: "css",
+    legalComments: "none",
+    minify: true
+  }).code.trim()}\n`;
+  const frontdoorTokens = readFileSync(frontdoorTokenPath, "utf-8");
+  const portalTokens = readFileSync(portalTokenPath, "utf-8");
   const buildScript = readFileSync(buildScriptPath, "utf-8");
 
-  assert.equal(readFileSync(frontdoorTokenPath, "utf-8"), canonicalTokens);
-  assert.equal(readFileSync(portalTokenPath, "utf-8"), canonicalTokens);
+  assert.match(canonicalTokens, /Canonical shared UI tokens/);
+  assert.equal(frontdoorTokens, normalizedCanonicalTokens);
+  assert.equal(portalTokens, normalizedCanonicalTokens);
+  assert.notEqual(frontdoorTokens, canonicalTokens);
+  assert.notEqual(portalTokens, canonicalTokens);
   assert.match(buildScript, /const SHARED_TOKEN_SOURCE_PATH = path\.resolve\(REPO_ROOT, "web", "shared", "shared-ui-tokens\.css"\);/);
-  assert.match(buildScript, /copyIfChanged\(SHARED_TOKEN_SOURCE_PATH,\s*PORTAL_SHARED_TOKEN_TARGET\)/);
-  assert.match(buildScript, /copyIfChanged\(SHARED_TOKEN_SOURCE_PATH,\s*FRONTDOOR_SHARED_TOKEN_TARGET\)/);
+  assert.match(buildScript, /async function writeMinifiedCssCopy\(sourcePath,\s*targetPath\)/);
+  assert.match(buildScript, /loader: "css"/);
+  assert.match(buildScript, /minify: true/);
+  assert.match(buildScript, /Object\.prototype\.hasOwnProperty\.call\(options,\s*"minifyIdentifiers"\)/);
+  assert.match(buildScript, /Object\.prototype\.hasOwnProperty\.call\(options,\s*"minifySyntax"\)/);
+  assert.match(buildScript, /Object\.prototype\.hasOwnProperty\.call\(options,\s*"minifyWhitespace"\)/);
+  assert.doesNotMatch(buildScript, /minifyIdentifiers:\s*Boolean\(options\.minifyIdentifiers\)/);
+  assert.doesNotMatch(buildScript, /minifySyntax:\s*Boolean\(options\.minifySyntax\)/);
+  assert.doesNotMatch(buildScript, /minifyWhitespace:\s*Boolean\(options\.minifyWhitespace\)/);
+  assert.match(buildScript, /writeMinifiedCssCopy\(SHARED_TOKEN_SOURCE_PATH,\s*PORTAL_SHARED_TOKEN_TARGET\)/);
+  assert.match(buildScript, /writeMinifiedCssCopy\(SHARED_TOKEN_SOURCE_PATH,\s*FRONTDOOR_SHARED_TOKEN_TARGET\)/);
 });
 
 test("v1 POST rejects requests missing valid same-origin CSRF protections", async () => {
@@ -2120,10 +2593,84 @@ test("v1 normalizes upstream auth responses into managed config failures", async
   }
 });
 
+test("v1 forwards browser traceparent upstream and includes trace id in queue-action audits", async () => {
+  const env = withTempEnvironment({
+    TP_BACKEND_API_KEY: "backend-secret"
+  });
+  const traceparent = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01";
+
+  try {
+    const sessions = await importFresh("../lib/sessions.js");
+    const route = await importFresh("../app/v1/[...path]/route.js");
+
+    const authenticatedSession = sessions.rotateAuthenticatedSession(
+      sessions.createAnonymousSession(),
+      {
+        username: "admin",
+        accessEmail: "admin@example.com",
+        role: "admin"
+      }
+    );
+
+    const restoreFetch = withMockedAccessCerts(async (url, init) => {
+      assert.equal(String(url), "http://127.0.0.1:8000/v1/jobs");
+      assert.equal(init.method, "POST");
+      assert.equal(init.headers.get("traceparent"), traceparent);
+      return Response.json(
+        {
+          ok: true
+        },
+        {
+          status: 200,
+          headers: {
+            traceparent
+          }
+        }
+      );
+    });
+
+    try {
+      await withCapturedAuditEvents(async (events) => {
+        const request = buildRequest("https://portal.example.com/v1/jobs", {
+          method: "POST",
+          headers: new Headers({
+            cookie: `__Host-tp_session=${authenticatedSession.id}`,
+            traceparent,
+            origin: "https://portal.example.com",
+            referer: "https://portal.example.com/portal?view=build",
+            "x-csrf-token": authenticatedSession.csrfToken,
+            "content-type": "application/json",
+            "Cf-Access-Jwt-Assertion": createAccessJwt()
+          }),
+          body: JSON.stringify({ pipeline: "lux-depth-v3" })
+        });
+
+        const response = await route.POST(request, {
+          params: { path: ["jobs"] }
+        });
+        const body = await response.json();
+
+        assert.equal(response.status, 200);
+        assert.equal(response.headers.get("traceparent"), traceparent);
+        assert.deepEqual(body, { ok: true });
+        assert.equal(events.length, 1);
+        assert.equal(events[0].event, "job_submit");
+        assert.equal(events[0].traceId, "4bf92f3577b34da6a3ce929d0e0e4736");
+      });
+    } finally {
+      restoreFetch();
+    }
+  } finally {
+    env.cleanup();
+  }
+});
+
 test("v1 SSE proxy preserves event-stream framing while injecting backend auth server-side", async () => {
   const env = withTempEnvironment({
     TP_BACKEND_API_KEY: "backend-secret"
   });
+  const requestTraceparent = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01";
+  const upstreamTraceparent = "00-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-bbbbbbbbbbbbbbbb-01";
 
   try {
     const sessions = await importFresh("../lib/sessions.js");
@@ -2150,6 +2697,7 @@ test("v1 SSE proxy preserves event-stream framing while injecting backend auth s
       assert.equal(init.headers.get("Authorization"), "Bearer backend-secret");
       assert.equal(init.headers.get("Forwarded"), 'for="203.0.113.10";host="portal.example.com";proto="https"');
       assert.equal(init.headers.get("x-api-key"), "backend-secret");
+      assert.equal(init.headers.get("traceparent"), requestTraceparent);
       assert.equal(init.headers.get("Accept-Encoding"), "identity");
       assert.equal(init.headers.has("cookie"), false);
       assert.equal(init.headers.has("x-csrf-token"), false);
@@ -2162,7 +2710,8 @@ test("v1 SSE proxy preserves event-stream framing while injecting backend auth s
         status: 200,
         headers: {
           "content-type": "text/event-stream; charset=utf-8",
-          "cache-control": "private"
+          "cache-control": "private",
+          traceparent: upstreamTraceparent
         }
       });
     });
@@ -2174,6 +2723,7 @@ test("v1 SSE proxy preserves event-stream framing while injecting backend auth s
           "cf-connecting-ip": "203.0.113.10",
           cookie: `__Host-tp_session=${authenticatedSession.id}`,
           accept: "text/event-stream",
+          traceparent: requestTraceparent,
           "Cf-Access-Jwt-Assertion": createAccessJwt()
         })
       });
@@ -2185,6 +2735,7 @@ test("v1 SSE proxy preserves event-stream framing while injecting backend auth s
       assert.equal(response.status, 200);
       assert.match(response.headers.get("content-type") || "", /text\/event-stream/);
       assert.equal(response.headers.get("cache-control"), "no-store, no-transform");
+      assert.equal(response.headers.get("traceparent"), upstreamTraceparent);
       assert.equal(await response.text(), upstreamEvents);
     } finally {
       restoreFetch();

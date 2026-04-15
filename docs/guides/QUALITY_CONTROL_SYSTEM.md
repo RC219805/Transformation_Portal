@@ -14,7 +14,11 @@ Implemented comprehensive quality control system to prevent recurring CI/CD fail
 
 ## System Components
 
-### 1. Pre-Commit Quality Check (`.pre-commit-quality-check.py`)
+### 1. Pre-Commit Quality Gate (`scripts/utilities/pre-commit-quality-check.py`)
+
+> **Note:** The pre-commit framework (`.pre-commit-config.yaml`) is now the canonical
+> hook installation method. Use `make install-hooks` or `pre-commit install -f`.
+> For manual execution, use `./scripts/pre_commit_hook.sh`.
 
 Automated checks before committing:
 
@@ -27,10 +31,10 @@ Automated checks before committing:
 
 **Usage:**
 ```bash
-python3 .pre-commit-quality-check.py
+./scripts/pre_commit_hook.sh
 ```
 
-### 2. Codebase Health Monitor (`.codebase_health_monitor.py`)
+### 2. Codebase Health Monitor
 
 Tracks quality metrics over time:
 
@@ -43,7 +47,7 @@ Tracks quality metrics over time:
 
 **Usage:**
 ```bash
-python3 .codebase_health_monitor.py
+python3 scripts/utilities/codebase_health_monitor.py
 ```
 
 ## Current Status
@@ -80,26 +84,24 @@ python3 .codebase_health_monitor.py
 ### Recommended Workflow
 
 ```bash
-# Before committing
-python3 .pre-commit-quality-check.py
+# Before committing (with pre-commit framework installed)
+make pre-commit
+
+# Or run the unified quality gate directly
+./scripts/pre_commit_hook.sh
 
 # If checks pass
 git add .
 git commit -m "Your message"
 
 # Periodic health check
-python3 .codebase_health_monitor.py
+python3 scripts/utilities/codebase_health_monitor.py
 ```
 
 ### GitHub Actions Integration
 
-Add to `.github/workflows/build.yml`:
-
-```yaml
-- name: Quality Pre-Check
-  run: |
-    python3 .pre-commit-quality-check.py
-```
+The repository CI automatically runs quality checks via the pre-commit framework
+and the quality gate workflow.
 
 ## Best Practices Going Forward
 
@@ -107,14 +109,14 @@ Add to `.github/workflows/build.yml`:
 
 Run quality check to catch issues early:
 ```bash
-python3 .pre-commit-quality-check.py
+./scripts/pre_commit_hook.sh
 ```
 
 ### 2. Weekly Health Monitoring
 
 Track quality trends:
 ```bash
-python3 .codebase_health_monitor.py
+python3 scripts/utilities/codebase_health_monitor.py
 ```
 
 ### 3. Import Cleanup
@@ -180,8 +182,8 @@ Deductions:
 
 ## Tools Added
 
-1. `.pre-commit-quality-check.py` - Pre-commit validation
-2. `.codebase_health_monitor.py` - Health tracking
+1. `scripts/utilities/pre-commit-quality-check.py` - Pre-commit validation
+2. `scripts/utilities/codebase_health_monitor.py` - Health tracking
 3. `.codebase_health.json` - Historical data (auto-generated)
 
 ---

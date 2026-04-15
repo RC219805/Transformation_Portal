@@ -244,10 +244,11 @@ pip install -r requirements-lint.txt pytest pytest-cov
 - [Pylint Documentation](https://pylint.pycqa.org/)
 - [Flake8 Documentation](https://flake8.pycqa.org/)
 - Repository CI/CD: `.github/workflows/build.yml`
-- Quality Gate: `.pre-commit-quality-check.py`
+- Quality Gate: `scripts/utilities/pre-commit-quality-check.py`
+- Pre-Commit Framework Config: `.pre-commit-config.yaml`
 
 ---
 
-**Last Updated**: November 9, 2025
+**Last Updated**: April 2026
 **Maintainer**: Transformation Portal Team
 **Review Cycle**: Monthly

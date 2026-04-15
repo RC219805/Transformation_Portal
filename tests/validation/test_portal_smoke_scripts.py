@@ -457,6 +457,7 @@ def test_frontdoor_browser_waits_for_managed_portal_bootstrap_before_passing():
     assert 'and str(value.get("readyState", "")) == "complete"' in content
     assert content.count('and str(value.get("readyState", "")) == "complete"') >= 3
     assert 'and str(value.get("authModeBadge", "")).lower() == "managed"' in content
+    assert "locationSearch: window.location.search" in content
     assert "homepageHeroReady" in content
     assert "homepageEntryRailReady" in content
     assert "homepageLearnLinkReady" in content
@@ -476,6 +477,10 @@ def test_frontdoor_browser_waits_for_managed_portal_bootstrap_before_passing():
     assert "def _click_expression" in content
     assert "connection.evaluate(_populate_login_expression(username, password))" in content
     assert "connection.evaluate(_click_expression('[data-ui=\"login-submit\"]'))" in content
+    assert "/login?returnTo=%2Fportal%3Fview%3Dbuild" in content
+    assert 'and "returnTo=%2Fportal%3Fview%3Dbuild" in str(value.get("locationSearch", ""))' in content
+    assert 'and str(value.get("currentView", "")) == "build"' in content
+    assert 'and "view=build" in str(value.get("locationSearch", ""))' in content
     assert "/healthz" in content
     assert "--spawn-local-frontdoor" in content
     assert "--spawn-local-backend" in content
@@ -568,6 +573,17 @@ def test_portal_browser_smoke_tracks_archive_readiness_fields_and_canonical_comm
     assert "compare=1" in content
 
 
+def test_portal_browser_smoke_restores_transient_build_draft_after_reload():
+    content = PORTAL_BROWSER_SCRIPT_PATH.read_text(encoding="utf-8")
+
+    assert "session-draft" in content
+    assert 'build_step="3"' in content
+    assert 'str(value.get("activeBuildStep", "")) == "3"' in content
+    assert 'connection.call("Page.reload", {"ignoreCache": True})' in content
+    assert "transient draft state to restore after reload" in content
+    assert 'build_step="1"' in content
+
+
 def test_portal_browser_smoke_probes_review_warning_and_provenance_contract():
     content = PORTAL_BROWSER_SCRIPT_PATH.read_text(encoding="utf-8")
 
@@ -596,6 +612,18 @@ def test_portal_browser_smoke_probes_review_compare_contract():
     assert "reviewCompareDetail" in content
     assert "reviewCompareVisible" in content
     assert "reviewCompareEnabled" in content
+    assert "artifactViewerVisible" in content
+    assert "artifactViewerPath" in content
+    assert "artifactViewerFingerprint" in content
+    assert "artifactViewerZoomValue" in content
+    assert "artifactViewerStatus" in content
+    assert "artifactViewerFallbackVisible" in content
+    assert "artifactViewerFallbackTitle" in content
+    assert "_key_expression" in content
+    assert "_inject_viewer_fallback_review_expression" in content
+    assert "artifact viewer keyboard next navigation" in content
+    assert "artifact viewer keyboard zoom reset" in content
+    assert "artifact viewer fallback state for non-previewable artifacts" in content
     assert '_navigate_to_console_view_expression("review", submitted_job_id, "missing/stale-artifact.png", True)' in content
 
 
