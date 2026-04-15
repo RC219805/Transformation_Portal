@@ -25,9 +25,10 @@ from __future__ import annotations
 
 import argparse
 import ast
+import io
 import json
 import re
-import sys
+import tokenize
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
@@ -67,7 +68,7 @@ GOVERNANCE_REF_PATTERNS = (
     re.compile(r"\(ADR-\d+\)", re.IGNORECASE),              # (ADR-044)
     re.compile(r"\(#\d+\)"),                                 # (#1234) - issue ref
     re.compile(r"\(@[\w-]+\)"),                             # (@specialist) - owner
-    re.compile(r"\([A-Za-z]+_INVENTORY\.md"),               # (TODO_INVENTORY.md §X)
+    re.compile(r"\([A-Za-z]+_INVENTORY\.md(?:\s+§[\w.-]+)?\)", re.IGNORECASE),  # (TODO_INVENTORY.md), (TODO_INVENTORY.md §3.1)
 )
 
 # Excluded patterns (false positives in security code)
@@ -86,7 +87,7 @@ EXCLUDED_PATH_PATTERNS = (
     "node_modules/",
     ".venv/",
     ".runtime/",
-    "*.egg-info/",
+    ".egg-info/",
 )
 
 
@@ -235,11 +236,30 @@ def _read_file_safe(path: Path) -> str | None:
             return None
 
 
+# Abstract/base-class patterns that should be excluded from governance requirements.
+# These are common idiomatic patterns for abstract methods and interface stubs.
+ABSTRACT_METHOD_PATTERNS = (
+    re.compile(r"subclass(?:es)?\s+(?:must|should)\s+(?:implement|override)", re.IGNORECASE),
+    re.compile(r"must\s+be\s+(?:implemented|overridden)\s+(?:by|in)\s+subclass", re.IGNORECASE),
+    re.compile(r"override\s+(?:this|in)\s+subclass", re.IGNORECASE),
+    re.compile(r"abstract\s+method", re.IGNORECASE),
+    re.compile(r"not\s+implemented\s+(?:in\s+)?(?:base|abstract)\s+class", re.IGNORECASE),
+    re.compile(r"implement\s+in\s+(?:derived|child)\s+class", re.IGNORECASE),
+)
+
+
+def _is_abstract_method_pattern(message: str) -> bool:
+    """Check if a NotImplementedError message indicates an abstract method pattern."""
+    if not message:
+        return False
+    return any(pattern.search(message) for pattern in ABSTRACT_METHOD_PATTERNS)
+
+
 class NotImplementedVisitor(ast.NodeVisitor):
     """AST visitor to find NotImplementedError raises with context."""
 
     def __init__(self) -> None:
-        self.items: list[tuple[int, int, str]] = []
+        self.items: list[tuple[int, int, str, bool]] = []  # (lineno, col, message, is_abstract)
 
     def visit_Raise(self, node: ast.Raise) -> None:
         if node.exc is None:
@@ -262,9 +282,67 @@ class NotImplementedVisitor(ast.NodeVisitor):
                     message = str(exc.args[0].value)
 
         if is_not_implemented:
-            self.items.append((node.lineno, node.col_offset, message))
+            is_abstract = _is_abstract_method_pattern(message)
+            self.items.append((node.lineno, node.col_offset, message, is_abstract))
 
         self.generic_visit(node)
+
+
+def _extract_comment_todos(source: str, path: Path) -> list[TodoItem]:
+    """Extract TODO items from Python comments using tokenize.
+
+    Uses Python's tokenize module to scan only actual comment tokens,
+    avoiding false positives from TODO patterns inside string literals/docstrings.
+    """
+    items: list[TodoItem] = []
+    lines = source.splitlines()
+
+    try:
+        tokens = tokenize.generate_tokens(io.StringIO(source).readline)
+        for tok in tokens:
+            if tok.type != tokenize.COMMENT:
+                continue
+
+            comment_text = tok.string
+            lineno = tok.start[0]
+            col_offset = tok.start[1]
+
+            if _is_excluded_content(comment_text):
+                continue
+
+            for pattern in TODO_PATTERNS:
+                match = pattern.search(comment_text)
+                if match:
+                    todo_type_str = match.group(1).upper()
+                    message = match.group(2).strip()
+
+                    # Include context for multi-line messages (next line if continuation)
+                    if lineno < len(lines):
+                        next_line = lines[lineno].strip()
+                        if next_line.startswith("#") and not any(
+                            p.search(next_line) for p in TODO_PATTERNS
+                        ):
+                            continuation = next_line.lstrip("#").strip()
+                            if continuation:
+                                message = f"{message} {continuation}"
+
+                    governance_refs = _extract_governance_refs(comment_text + " " + message)
+                    items.append(
+                        TodoItem(
+                            path=path.relative_to(PROJECT_ROOT),
+                            lineno=lineno,
+                            todo_type=TodoType(todo_type_str),
+                            message=message,
+                            has_governance_ref=bool(governance_refs),
+                            governance_refs=governance_refs,
+                            col_offset=col_offset,
+                        )
+                    )
+                    break  # Only count each comment once
+    except tokenize.TokenizeError:
+        pass  # Skip files that can't be tokenized
+
+    return items
 
 
 def _scan_python_file(path: Path) -> list[TodoItem]:
@@ -274,57 +352,26 @@ def _scan_python_file(path: Path) -> list[TodoItem]:
         return []
 
     items: list[TodoItem] = []
-    lines = source.splitlines()
 
-    # Scan for comment-based TODOs
-    for lineno, line in enumerate(lines, start=1):
-        if _is_excluded_content(line):
-            continue
+    # Scan for comment-based TODOs using tokenize (avoids false positives in strings)
+    items.extend(_extract_comment_todos(source, path))
 
-        for pattern in TODO_PATTERNS:
-            match = pattern.search(line)
-            if match:
-                todo_type_str = match.group(1).upper()
-                message = match.group(2).strip()
-
-                # Include context for multi-line messages (next line if continuation)
-                if lineno < len(lines):
-                    next_line = lines[lineno].strip()
-                    if next_line.startswith("#") and not any(
-                        p.search(next_line) for p in TODO_PATTERNS
-                    ):
-                        continuation = next_line.lstrip("#").strip()
-                        if continuation:
-                            message = f"{message} {continuation}"
-
-                governance_refs = _extract_governance_refs(line + " " + message)
-                items.append(
-                    TodoItem(
-                        path=path.relative_to(PROJECT_ROOT),
-                        lineno=lineno,
-                        todo_type=TodoType(todo_type_str),
-                        message=message,
-                        has_governance_ref=bool(governance_refs),
-                        governance_refs=governance_refs,
-                        col_offset=match.start(),
-                    )
-                )
-                break  # Only count each line once
-
-    # Scan for NotImplementedError
+    # Scan for NotImplementedError using AST
     try:
         tree = ast.parse(source, filename=str(path))
         visitor = NotImplementedVisitor()
         visitor.visit(tree)
-        for lineno, col_offset, message in visitor.items:
+        for lineno, col_offset, message, is_abstract in visitor.items:
+            # Abstract method patterns are auto-governed (not actionable TODOs)
             governance_refs = _extract_governance_refs(message)
+            has_governance = bool(governance_refs) or is_abstract
             items.append(
                 TodoItem(
                     path=path.relative_to(PROJECT_ROOT),
                     lineno=lineno,
                     todo_type=TodoType.NOT_IMPLEMENTED,
                     message=message or "(no message)",
-                    has_governance_ref=bool(governance_refs),
+                    has_governance_ref=has_governance,
                     governance_refs=governance_refs,
                     col_offset=col_offset,
                 )

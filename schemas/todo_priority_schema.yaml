@@ -1,11 +1,10 @@
 # TODO Priority Schema v1
 # ========================
-# Defines priority levels, categories, and exclusions for TODO governance.
+# Defines documented priority levels, categories, and exclusions for TODO governance.
 #
-# This schema is used by:
-# - scripts/validation/scan_todo_inventory.py
-# - TODO inventory documentation
-# - CI governance checks
+# This file is the canonical schema/documentation artifact for TODO taxonomy.
+# Update scanner or CI references here only when those tools explicitly load
+# this YAML, so comments remain aligned with actual enforcement behavior.
 
 version: 1
 
