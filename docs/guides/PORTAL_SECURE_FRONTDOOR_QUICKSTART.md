@@ -100,6 +100,30 @@ Notes:
 - Roll back either pilot by setting the corresponding percentage back to `0` and redeploying the managed front door and/or backend origin that serves `/portal/bootstrap`.
 - Cohort expansion should move in bounded steps and record the operator owner, rollout date, rollback owner, and target percentage in the deployment notes for the change.
 
+## Optional Staged Upload Pilot Knobs
+
+Staged uploads stay additive and default-off. The browser feature appears only
+when the backend enable flag is on and the rollout cohort matches.
+
+```bash
+export TP_PORTAL_UPLOAD_STAGING_ENABLED=0
+export TP_PORTAL_STAGED_UPLOADS_ROLLOUT_PERCENT=0
+export TP_PORTAL_UPLOAD_ROOT="/tmp/transformation-portal/uploads"
+export TP_PORTAL_MAX_UPLOAD_REQUEST_BYTES=1048576
+export TP_PORTAL_UPLOAD_MAX_FILES=256
+export TP_PORTAL_UPLOAD_MAX_FIELDS=32
+export TP_PORTAL_UPLOAD_MAX_PART_BYTES=1048576
+export TP_PORTAL_UPLOAD_TTL_SECONDS=86400
+export TP_PORTAL_UPLOAD_CAPTURE_METADATA_ENABLED=0
+```
+
+Notes:
+- `TP_PORTAL_UPLOAD_STAGING_ENABLED=0` keeps `features.stagedUploads=false` on both bootstrap surfaces and returns typed `404 not found` from `POST /v1/uploads/staging`.
+- `TP_PORTAL_STAGED_UPLOADS_ROLLOUT_PERCENT=0` keeps the UI hidden even when the backend route is enabled.
+- `TP_PORTAL_UPLOAD_ROOT` must stay within `TP_ALLOWED_INPUT_ROOTS`.
+- `TP_PORTAL_MAX_UPLOAD_REQUEST_BYTES` is route-specific and does not change the existing `/v1/jobs` request-size ceiling.
+- `TP_PORTAL_UPLOAD_CAPTURE_METADATA_ENABLED=0` keeps the capture metadata artifact on the empty-array path until the extraction pilot is explicitly enabled.
+
 ## Local Development
 
 Start the FastAPI origin first:
