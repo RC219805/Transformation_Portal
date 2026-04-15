@@ -2281,6 +2281,7 @@ def test_archive_gate_a_fixity_verify_submission_returns_job_envelope(
     tmp_path: Path,
 ) -> None:
     """Gate A fixity-verify command submits successfully with required hash_manifest."""
+
     async def fake_run_job(job, _argv):  # noqa: ANN001
         job.state = "succeeded"
         job.exit_code = 0
@@ -2318,6 +2319,7 @@ def test_archive_gate_b_bag_validate_submission_returns_job_envelope(
     tmp_path: Path,
 ) -> None:
     """Gate B bag-validate command submits successfully with required bag_dir."""
+
     async def fake_run_job(job, _argv):  # noqa: ANN001
         job.state = "succeeded"
         job.exit_code = 0
@@ -2355,6 +2357,7 @@ def test_archive_gate_b_dedup_plan_submission_returns_job_envelope(
     tmp_path: Path,
 ) -> None:
     """Gate B dedup-plan command submits successfully with required manifest_jsonl."""
+
     async def fake_run_job(job, _argv):  # noqa: ANN001
         job.state = "succeeded"
         job.exit_code = 0
@@ -2392,6 +2395,7 @@ def test_archive_gate_c_prov_export_submission_returns_job_envelope(
     tmp_path: Path,
 ) -> None:
     """Gate C prov-export command submits successfully with required manifest_jsonl."""
+
     async def fake_run_job(job, _argv):  # noqa: ANN001
         job.state = "succeeded"
         job.exit_code = 0
@@ -2429,6 +2433,7 @@ def test_archive_gate_c_stac_export_submission_returns_job_envelope(
     tmp_path: Path,
 ) -> None:
     """Gate C stac-export command submits successfully with required manifest_jsonl."""
+
     async def fake_run_job(job, _argv):  # noqa: ANN001
         job.state = "succeeded"
         job.exit_code = 0
@@ -2466,6 +2471,7 @@ def test_archive_gate_c_mets_export_submission_returns_job_envelope(
     tmp_path: Path,
 ) -> None:
     """Gate C mets-export command submits successfully with required manifest_jsonl."""
+
     async def fake_run_job(job, _argv):  # noqa: ANN001
         job.state = "succeeded"
         job.exit_code = 0
