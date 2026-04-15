@@ -3041,6 +3041,280 @@ def test_archive_gate_readiness_blocks_unsafe_input_dir() -> None:
     assert readiness["missing_prerequisites"][0]["field"] == "input_dir"
 
 
+# --- Archive Gate E2E Test Extensions (Phase 2) ---
+
+
+def test_archive_gate_a_fixity_verify_requires_hash_manifest(tmp_path: Path) -> None:
+    """Gate A fixity-verify command requires an existing hash_manifest file."""
+    readiness = orchestrator_app._archive_gate_readiness(
+        "archive-gate-a",
+        args={
+            "input_dir": str(tmp_path / "archive_root"),
+            "output_dir": str(tmp_path / "archive_reports"),
+            "archive_command": "fixity-verify",
+        },
+        require_dispatch_inputs=True,
+    )
+
+    assert readiness["status"] == "blocked"
+    # canonical_command is always the default for the pipeline
+    assert readiness["canonical_command"] == "fixity-scan"
+    # The actual requested command is in runner_details
+    assert "fixity-verify" in readiness["runner_details"]["command"]
+    assert any(p["reason"] == "hash_manifest_required" for p in readiness["missing_prerequisites"])
+
+
+def test_archive_gate_a_fixity_verify_ready_when_hash_manifest_exists(tmp_path: Path) -> None:
+    """Gate A fixity-verify becomes ready once hash_manifest is provided."""
+    hash_manifest = tmp_path / "hash_manifest.csv.gz"
+    hash_manifest.write_bytes(b"fixture-manifest")
+
+    readiness = orchestrator_app._archive_gate_readiness(
+        "archive-gate-a",
+        args={
+            "input_dir": str(tmp_path / "archive_root"),
+            "output_dir": str(tmp_path / "archive_reports"),
+            "archive_command": "fixity-verify",
+            "hash_manifest": str(hash_manifest),
+        },
+        require_dispatch_inputs=True,
+    )
+
+    assert readiness["status"] == "ready"
+    assert readiness["canonical_command"] == "fixity-scan"  # canonical is always the default
+    assert "fixity-verify" in readiness["runner_details"]["command"]
+    assert readiness["missing_prerequisites"] == []
+
+
+def test_archive_gate_a_rights_apply_requires_manifest_and_policy(tmp_path: Path) -> None:
+    """Gate A rights-apply command requires manifest_jsonl and policy_yaml files."""
+    readiness = orchestrator_app._archive_gate_readiness(
+        "archive-gate-a",
+        args={
+            "input_dir": str(tmp_path / "archive_root"),
+            "output_dir": str(tmp_path / "archive_reports"),
+            "archive_command": "rights-apply",
+        },
+        require_dispatch_inputs=True,
+    )
+
+    assert readiness["status"] == "blocked"
+    assert readiness["canonical_command"] == "fixity-scan"  # canonical is always the default
+    assert "rights-apply" in readiness["runner_details"]["command"]
+    prerequisites = {p["field"]: p["reason"] for p in readiness["missing_prerequisites"]}
+    assert "manifest_jsonl" in prerequisites
+    assert "policy_yaml" in prerequisites
+
+
+def test_archive_gate_a_rights_apply_ready_when_inputs_exist(tmp_path: Path) -> None:
+    """Gate A rights-apply becomes ready once all required inputs are provided."""
+    manifest_jsonl = tmp_path / "manifest.jsonl"
+    manifest_jsonl.write_text('{"id":"asset-1"}\n', encoding="utf-8")
+    policy_yaml = tmp_path / "rights_flags.yml"
+    policy_yaml.write_text(
+        "version: 1\n" "default_owner: archive-ops\n" "default_flags:\n" "  - review_required\n",
+        encoding="utf-8",
+    )
+
+    readiness = orchestrator_app._archive_gate_readiness(
+        "archive-gate-a",
+        args={
+            "input_dir": str(tmp_path / "archive_root"),
+            "output_dir": str(tmp_path / "archive_reports"),
+            "archive_command": "rights-apply",
+            "manifest_jsonl": str(manifest_jsonl),
+            "policy_yaml": str(policy_yaml),
+        },
+        require_dispatch_inputs=True,
+    )
+
+    assert readiness["status"] == "ready"
+    assert readiness["canonical_command"] == "fixity-scan"  # canonical is always the default
+    assert "rights-apply" in readiness["runner_details"]["command"]
+    assert readiness["missing_prerequisites"] == []
+
+
+def test_archive_gate_b_dedup_plan_requires_manifest_jsonl(tmp_path: Path) -> None:
+    """Gate B dedup-plan command requires manifest_jsonl file."""
+    readiness = orchestrator_app._archive_gate_readiness(
+        "archive-gate-b",
+        args={
+            "input_dir": str(tmp_path / "archive_root"),
+            "output_dir": str(tmp_path / "archive_reports"),
+            "archive_command": "dedup-plan",
+        },
+        require_dispatch_inputs=True,
+    )
+
+    assert readiness["status"] == "blocked"
+    assert readiness["canonical_command"] == "bag-build"  # canonical is always the default
+    assert "dedup-plan" in readiness["runner_details"]["command"]
+    assert any(p["field"] == "manifest_jsonl" for p in readiness["missing_prerequisites"])
+
+
+def test_archive_gate_b_dedup_plan_ready_when_manifest_exists(tmp_path: Path) -> None:
+    """Gate B dedup-plan becomes ready once manifest_jsonl is provided."""
+    manifest_jsonl = tmp_path / "manifest.jsonl"
+    manifest_jsonl.write_text('{"id":"asset-1"}\n', encoding="utf-8")
+
+    readiness = orchestrator_app._archive_gate_readiness(
+        "archive-gate-b",
+        args={
+            "input_dir": str(tmp_path / "archive_root"),
+            "output_dir": str(tmp_path / "archive_reports"),
+            "archive_command": "dedup-plan",
+            "manifest_jsonl": str(manifest_jsonl),
+        },
+        require_dispatch_inputs=True,
+    )
+
+    assert readiness["status"] == "ready"
+    assert readiness["canonical_command"] == "bag-build"  # canonical is always the default
+    assert "dedup-plan" in readiness["runner_details"]["command"]
+    assert readiness["missing_prerequisites"] == []
+
+
+def test_archive_gate_b_bag_validate_requires_bag_dir(tmp_path: Path) -> None:
+    """Gate B bag-validate command requires an existing bag_dir."""
+    readiness = orchestrator_app._archive_gate_readiness(
+        "archive-gate-b",
+        args={
+            "input_dir": str(tmp_path / "archive_root"),
+            "output_dir": str(tmp_path / "archive_reports"),
+            "archive_command": "bag-validate",
+        },
+        require_dispatch_inputs=True,
+    )
+
+    assert readiness["status"] == "blocked"
+    assert readiness["canonical_command"] == "bag-build"  # canonical is always the default
+    assert "bag-validate" in readiness["runner_details"]["command"]
+    assert any(p["field"] == "bag_dir" for p in readiness["missing_prerequisites"])
+
+
+def test_archive_gate_b_bag_validate_ready_when_bag_dir_exists(tmp_path: Path) -> None:
+    """Gate B bag-validate becomes ready once bag_dir is provided."""
+    bag_dir = tmp_path / "bag"
+    bag_dir.mkdir()
+
+    readiness = orchestrator_app._archive_gate_readiness(
+        "archive-gate-b",
+        args={
+            "input_dir": str(tmp_path / "archive_root"),
+            "output_dir": str(tmp_path / "archive_reports"),
+            "archive_command": "bag-validate",
+            "bag_dir": str(bag_dir),
+        },
+        require_dispatch_inputs=True,
+    )
+
+    assert readiness["status"] == "ready"
+    assert readiness["canonical_command"] == "bag-build"  # canonical is always the default
+    assert "bag-validate" in readiness["runner_details"]["command"]
+    assert readiness["missing_prerequisites"] == []
+
+
+def test_archive_gate_c_prov_export_requires_manifest_jsonl(tmp_path: Path) -> None:
+    """Gate C prov-export command requires manifest_jsonl file."""
+    readiness = orchestrator_app._archive_gate_readiness(
+        "archive-gate-c",
+        args={
+            "input_dir": str(tmp_path / "archive_root"),
+            "output_dir": str(tmp_path / "archive_reports"),
+            "archive_command": "prov-export",
+        },
+        require_dispatch_inputs=True,
+    )
+
+    assert readiness["status"] == "blocked"
+    assert readiness["canonical_command"] == "mets-export"  # canonical is always the default
+    assert "prov-export" in readiness["runner_details"]["command"]
+    assert any(p["field"] == "manifest_jsonl" for p in readiness["missing_prerequisites"])
+
+
+def test_archive_gate_c_prov_export_ready_when_manifest_exists(tmp_path: Path) -> None:
+    """Gate C prov-export becomes ready once manifest_jsonl is provided."""
+    manifest_jsonl = tmp_path / "manifest.jsonl"
+    manifest_jsonl.write_text('{"id":"asset-1"}\n', encoding="utf-8")
+
+    readiness = orchestrator_app._archive_gate_readiness(
+        "archive-gate-c",
+        args={
+            "input_dir": str(tmp_path / "archive_root"),
+            "output_dir": str(tmp_path / "archive_reports"),
+            "archive_command": "prov-export",
+            "manifest_jsonl": str(manifest_jsonl),
+        },
+        require_dispatch_inputs=True,
+    )
+
+    assert readiness["status"] == "ready"
+    assert readiness["canonical_command"] == "mets-export"  # canonical is always the default
+    assert "prov-export" in readiness["runner_details"]["command"]
+    assert readiness["missing_prerequisites"] == []
+
+
+def test_archive_gate_c_stac_export_requires_manifest_jsonl(tmp_path: Path) -> None:
+    """Gate C stac-export command requires manifest_jsonl file."""
+    readiness = orchestrator_app._archive_gate_readiness(
+        "archive-gate-c",
+        args={
+            "input_dir": str(tmp_path / "archive_root"),
+            "output_dir": str(tmp_path / "archive_reports"),
+            "archive_command": "stac-export",
+        },
+        require_dispatch_inputs=True,
+    )
+
+    assert readiness["status"] == "blocked"
+    assert readiness["canonical_command"] == "mets-export"  # canonical is always the default
+    assert "stac-export" in readiness["runner_details"]["command"]
+    assert any(p["field"] == "manifest_jsonl" for p in readiness["missing_prerequisites"])
+
+
+def test_archive_gate_c_stac_export_ready_when_manifest_exists(tmp_path: Path) -> None:
+    """Gate C stac-export becomes ready once manifest_jsonl is provided."""
+    manifest_jsonl = tmp_path / "manifest.jsonl"
+    manifest_jsonl.write_text('{"id":"asset-1"}\n', encoding="utf-8")
+
+    readiness = orchestrator_app._archive_gate_readiness(
+        "archive-gate-c",
+        args={
+            "input_dir": str(tmp_path / "archive_root"),
+            "output_dir": str(tmp_path / "archive_reports"),
+            "archive_command": "stac-export",
+            "manifest_jsonl": str(manifest_jsonl),
+        },
+        require_dispatch_inputs=True,
+    )
+
+    assert readiness["status"] == "ready"
+    assert readiness["canonical_command"] == "mets-export"  # canonical is always the default
+    assert "stac-export" in readiness["runner_details"]["command"]
+    assert readiness["missing_prerequisites"] == []
+
+
+def test_archive_gate_c_mets_export_ready_when_manifest_exists(tmp_path: Path) -> None:
+    """Gate C mets-export becomes ready once manifest_jsonl is provided."""
+    manifest_jsonl = tmp_path / "manifest.jsonl"
+    manifest_jsonl.write_text('{"id":"asset-1"}\n', encoding="utf-8")
+
+    readiness = orchestrator_app._archive_gate_readiness(
+        "archive-gate-c",
+        args={
+            "input_dir": str(tmp_path / "archive_root"),
+            "output_dir": str(tmp_path / "archive_reports"),
+            "archive_command": "mets-export",
+            "manifest_jsonl": str(manifest_jsonl),
+        },
+        require_dispatch_inputs=True,
+    )
+
+    assert readiness["status"] == "ready"
+    assert readiness["canonical_command"] == "mets-export"
+    assert readiness["missing_prerequisites"] == []
+
+
 def test_lux_depth_readiness_separates_base_ready_from_canary_unavailable(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

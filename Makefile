@@ -27,7 +27,7 @@ PHASE6_SMOKE_TESTS := \
 	tests/test_lux_render_pipeline_smoke.py \
 	tests/lux_depth_v3/test_orchestrator_smoke.py
 
-.PHONY: help test-fast test-novideo test-full test-integration test-structure test-utils test-orchestrator-contract test-orchestrator-http-contract test-portal-contract test-frontdoor-contract seed-frontdoor-user run-frontdoor-local validate-orchestrator-http validate-portal-browser validate-frontdoor-browser validate-frontdoor-deployment-gate audit-pipeline-readiness coverage-fast-scope venv repair-core-venv setup clean \
+.PHONY: help test-fast test-novideo test-full test-integration test-structure test-utils test-orchestrator-contract test-orchestrator-http-contract test-portal-contract test-frontdoor-contract test-archive-gate-contract seed-frontdoor-user run-frontdoor-local validate-orchestrator-http validate-portal-browser validate-frontdoor-browser validate-frontdoor-deployment-gate audit-pipeline-readiness coverage-fast-scope venv repair-core-venv setup clean \
         lint lint-parity ci ci-full pre-commit install-hooks quality-check fix-quality validate-ci organize-docs check-json-serialization check-piptools-cache \
         check-yaml-governance check-stale-docs lock lock-prod lock-ci lock-dev install-core install-ml install-ml-core install-ml-raw install-ml-sam2 install-ml-coreml docs docs-clean \
         check check-test-markers check-ci-sync check-todo-governance check-environment check-portal-asset-budgets validate-full validate-quick clean-frontdoor clean-all check-worktree \
@@ -52,6 +52,7 @@ help:
 	@echo "  test-orchestrator-http-contract  Run HTTP-only orchestrator contract tests"
 	@echo "  test-portal-contract  Run portal runtime/browser contract tests"
 	@echo "  test-frontdoor-contract  Run managed frontdoor Node contract/build checks"
+	@echo "  test-archive-gate-contract  Run archive gate readiness + HTTP contract tests (Gates A, B, C)"
 	@echo "  seed-frontdoor-user  Seed the canonical local managed-frontdoor credential fixture under /tmp"
 	@echo "  run-frontdoor-local  Start the canonical local managed frontdoor on localhost:3000"
 	@echo "  test-integration   Run integration tests (requires HF_TOKEN)"
@@ -272,6 +273,10 @@ test-frontdoor-contract:
 	@./scripts/setup/ensure_node_version.sh
 	@cd web/secure-landing && npm test
 	@cd web/secure-landing && npm run build
+
+test-archive-gate-contract:
+	@echo "Running archive gate readiness + HTTP contract tests (Gates A, B, C)..."
+	@"$(PY)" -m pytest -v -k "archive_gate" tests/test_app_orchestrator_runtime.py tests/test_app_orchestrator_contract_http.py
 
 check-portal-asset-budgets:
 	@echo "Validating portal asset size budgets..."
