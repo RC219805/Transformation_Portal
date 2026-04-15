@@ -4,28 +4,27 @@
 **Date:** 2026-04-14
 **Owner:** Transformation Portal Architect
 **Reviewers:** Frontdoor / Platform, Portal Frontend, Backend / Origin, Security / Privacy, QA / Validation
-**Related:** `docs/decisions/ADR-050-portal-react-migration.md`, `docs/architecture/DNA_UX_UI_STRATEGY_REBASELINE_2026-04-08.md`, `docs/architecture/PORTAL_EDGE_HARDENING_IMPLEMENTATION_STANDARD.md`
+**Related:** `docs/decisions/ADR-050-portal-react-migration.md`, `docs/architecture/DNA_UX_UI_STRATEGY_REBASELINE_2026-04-08.md`, `docs/architecture/PORTAL_EDGE_HARDENING_IMPLEMENTATION_STANDARD.md`, `docs/architecture/PORTAL_OPERATOR_CONSOLE_MODERNIZATION_EVIDENCE.md`, `docs/compliance/PORTAL_TELEMETRY_PRIVACY_SIGNOFF.md`
 
 ## Summary
 
-The Transformation Portal operator console should be modernized through bounded, low-risk tranches rather than a framework rewrite. This RFC preserves the current trust boundaries, keeps the FastAPI origin private behind the managed frontdoor, treats the native web platform as the default implementation path, and requires deterministic feature flags plus explicit validation gates for all material runtime and UX changes.
+This approved RFC records the portal modernization decision: continue improving the existing FastAPI-served operator console through bounded, low-risk tranches, keep the managed frontdoor as the authoritative browser boundary, and keep native web primitives as the default implementation path.
 
-This RFC proposes an incremental modernization path for review and approval. It does **not** itself approve a React or Next.js rewrite of the operator console, a new identity model, or any change that weakens the current browser-to-origin security boundary.
+This RFC does not approve a React or Next.js migration of the operator console. `ADR-050` remains the separate future decision gate for any rewrite or boundary change.
 
 ## Decision
 
-The following proposed direction is submitted for approval:
-
-1. **FastAPI remains private behind the managed frontdoor.** Direct public exposure of the origin is out of scope for this RFC.
-2. **The managed frontdoor remains the authoritative browser boundary.** Public homepage, login, proxying, route enforcement, and same-origin browser behavior continue to terminate there.
-3. **Native web primitives remain the default implementation path.** Vanilla HTML, CSS, and JavaScript are preferred unless a targeted dependency is justified by a clear operational benefit.
-4. **All material UX, runtime, and observability changes must ship behind deterministic feature flags.** Assignment must remain stable for a given viewer or operator over the supported lifetime of the assigned cohort key.
-5. **Rollout proceeds by bounded tranches with explicit entry and exit criteria.** A tranche does not close merely because telemetry looks acceptable after deployment.
-6. **This RFC is a non-binding interim implementation direction that remains compatible with proposed `ADR-050` pending its acceptance, revision, or rejection; it does not prejudge that ADR's outcome.** Any future React or Next.js migration of the operator console requires a separate, evidence-based decision.
+1. FastAPI remains private behind the managed frontdoor.
+2. The managed frontdoor remains the authoritative browser boundary for `/`, `/login`, `/portal`, `/portal/bootstrap`, and same-origin `/v1/*` proxy behavior.
+3. Native web primitives remain the default implementation path unless a targeted dependency has a clear operational benefit.
+4. Material UX, runtime, review-surface, and observability changes ship behind deterministic feature flags with stable cohort assignment.
+5. Milestones may be implemented without being formally closed; close status still requires the named sign-off and evidence gates.
+6. Route, query-parameter, cache, auth, and selector contracts remain stable unless a separate approved decision changes them.
+7. Any future React or Next.js migration remains blocked on the still-open evidence checklist in `ADR-050`.
 
 ## Normative Interpretation
 
-The following sections are normative and define the binding requirements that would apply if this RFC is accepted:
+The following sections are normative:
 
 - `Decision`
 - `Decision Drivers`
@@ -35,32 +34,59 @@ The following sections are normative and define the binding requirements that wo
 - `Feature Flag and Rollback Contract`
 - `Milestones and Rollout`
 - `Acceptance Criteria`
-- any subsection labeled `In Scope`, `Out of Scope`, `Exit Criteria`, `Close Conditions`, `Unconditional Validation`, `Conditional Browser Validation`, `Required Validation Backbone`, or `Rollback Posture`
+- `Risks and Future Decision Gates`
+- any subsection labeled `In Scope`, `Out of Scope`, `Acceptance Gate`, `Rollback Posture`, `Required Validation Backbone`, or `Status`
 
-The following content is non-normative:
+The following sections are non-normative:
 
-- `Appendix C: Reference Implementation Notes`
-- library examples, implementation patterns, and tooling suggestions unless they are explicitly restated in a normative section
+- `Implementation Status (2026-04-14)`
+- `Outstanding TODOs`
+- `Appendix C: Reference Notes`
+
+## Implementation Status (2026-04-14)
+
+### Implemented
+
+- Deterministic rollout controls exist for portal RUM, the artifact viewer modal, and deferred review-surface loading.
+- Portal RUM ingest, backend trace propagation, and the repo-owned summary path in `tools/portal_rum_summary.py` are implemented.
+- Managed `returnTo` validation and transient build-draft restore behavior are implemented and covered in repo-native validation.
+- Portal asset budget enforcement and deferred review loading are implemented.
+- The in-portal artifact viewer, keyboard controls, fingerprint copy affordance, and explicit non-preview fallback behavior are implemented.
+- M2's accepted contract is the current repo-native browser-probe accessibility coverage for `/login` and `/portal`, plus manual keyboard and reduced-motion validation. A broader automated suite is not required to keep this RFC approved.
+- M3 resilience behavior is implemented for the currently supported managed recovery path.
+
+### Partial
+
+- M1 Measurement Foundation is implemented but not formally closed pending Security / Privacy schema and retention sign-off plus measured pilot evidence.
+- M4 Performance and Rendering is implemented but not formally closed pending measured pilot evidence against the provisional CWV, queue-latency, and SSE targets.
+- M5 Artifact Review is implemented for deferred review loading, modal viewer behavior, metadata visibility, fingerprint copy, and explicit fallback states, but it is not formally closed pending measured pilot evidence.
+- M5's optional segmentation refinement is not counted as shipped in this RFC. Current shipped scope is the viewer and fallback path only.
+
+### Open Gate
+
+- Security / Privacy sign-off for the telemetry schema, retention posture, and disposal procedure remains open.
+- Repo-owned pilot evidence for M1, M4, and M5 remains open until measurements are captured and attached.
+- The ADR-050 rewrite evidence checklist remains open and is not resolved by this RFC.
 
 ## Decision Drivers
 
-- Preserve the existing security and proxy boundary.
+- Preserve the existing trust boundary and managed proxy model.
 - Improve time to first useful action for operators.
-- Increase resilience during authentication interruption and infrastructure turbulence.
-- Achieve stronger WCAG 2.2 AA-oriented behavior for dense, asynchronous workflows.
-- Establish measurable evidence before performance claims are accepted.
-- Avoid the delivery risk of a framework rewrite when targeted native-web improvements can address immediate bottlenecks.
+- Increase resilience during authentication interruption and transient transport failures.
+- Achieve WCAG 2.2 AA-oriented behavior for dense asynchronous workflows.
+- Tie performance and review claims to measured evidence instead of anecdote.
+- Avoid rewrite risk while targeted native-web improvements continue to land safely.
 
 ## Non-Goals
 
 This RFC does not approve:
 
-- a React or Next.js rewrite of the operator console in this tranche
-- a new identity model or token model
+- a React or Next.js rewrite of the operator console
+- a new identity model
 - direct browser access to backend API keys or protected origin headers
-- reopening the current route and query-parameter contract unless approved separately
+- route or query-parameter contract changes unless separately approved
 - broad product analytics or employee-performance analytics
-- broad visual redesign unrelated to the outcomes in this RFC
+- silent degraded review states
 
 ## Architecture Constraints and Repo Truth
 
@@ -80,7 +106,7 @@ Current-state boundary rules remain in force:
 - FastAPI remains the origin for the operator shell and backend APIs
 - browser-side code must not receive backend API keys in managed mode
 - the operator console view contract remains `?view=overview|build|operate|review`
-- route, cache, header, and auth behavior must remain aligned with the managed frontdoor and edge hardening standard
+- route, cache, header, auth, and selector behavior must remain aligned with the managed frontdoor and edge hardening standard
 
 Current repo-native validation remains authoritative:
 
@@ -98,10 +124,10 @@ Move portal performance and reliability work from anecdotal assessment to measur
 
 **In Scope**
 
-- lightweight Real User Monitoring for portal shell and key interaction milestones
+- lightweight RUM for portal shell and key interaction milestones
 - backend trace correlation for bootstrap and queue actions
 - SSE health, reconnect counts, and bootstrap latency visibility
-- a configuration-level kill switch for telemetry collection
+- configuration-level telemetry kill switches
 - approved schemas that minimize operator-identifying data
 
 **Out of Scope**
@@ -118,20 +144,12 @@ Frontdoor / Platform
 - Backend / Origin
 - Security / Privacy
 
-**Dependencies**
+**Acceptance Gate**
 
-- telemetry schema review
-- ingestion path agreement across managed frontdoor and origin surfaces
-- feature-flag wiring for observe-only rollout
-
-**Exit Criteria**
-
-- p75 LCP, INP, and CLS are visible by route and cohort
-- `portal_shell_rendered`, `bootstrap_ready`, and `first_view_interactive` are measurable
-- bootstrap and queue timings can be correlated across frontend and backend surfaces
-- SSE reconnect counts and bootstrap latency are queryable
+- telemetry is visible in pilot or non-production environments
 - collection can be disabled by configuration without code changes
-- approved schemas emit no plain-text usernames or email addresses
+- no plain-text usernames or email addresses are emitted in the approved schema
+- measured pilot evidence is attached before M1 is marked closed
 
 ### 2. Accessibility Hardening
 
@@ -145,13 +163,14 @@ Achieve WCAG 2.2 AA-oriented hardening for dense, keyboard-first, asynchronous o
 - target-size improvements for dense controls
 - live-region semantics for asynchronous job and toast updates
 - `prefers-reduced-motion` compliance
-- automated accessibility coverage for `/login` and `/portal`
+- repo-native browser-probe accessibility coverage for `/login` and `/portal`
+- manual keyboard-only validation for review, modal, and queue flows
 
 **Out of Scope**
 
 - broad redesign unrelated to accessibility outcomes
 - introduction of a new component framework
-- replacement of working keyboard shortcuts with a new command model
+- a broader automated accessibility suite unless separately approved as follow-on work
 
 **Primary Owner**
 Portal Frontend
@@ -160,19 +179,11 @@ Portal Frontend
 
 - QA / Validation
 
-**Dependencies**
+**Acceptance Gate**
 
-- stable selectors and accessibility roles in current portal and frontdoor views
-- managed browser validation coverage for `/login` and `/portal`
-
-**Exit Criteria**
-
-- no blocking accessibility regressions are present on `/login` or `/portal`
-- focused controls remain visible under sticky UI
-- modal interactions are keyboard-complete and restore focus correctly
-- asynchronous status updates are announced without focus theft
-- reduced-motion behavior is preserved across all touched surfaces
+- current browser-probe accessibility checks for `/login` and `/portal` stay green
 - manual keyboard-only verification passes for modal open/close, queue interaction, and review flow
+- reduced-motion behavior is preserved across touched surfaces
 
 ### 3. Session Resilience and State Preservation
 
@@ -200,18 +211,12 @@ Frontdoor / Platform
 - Portal Frontend
 - Backend / Origin
 
-**Dependencies**
-
-- managed login and portal proxy remain authoritative
-- origin and frontdoor agree on auth failure behavior and recovery contract
-
-**Exit Criteria**
+**Acceptance Gate**
 
 - forced 401 flows return operators to the same route context after re-authentication
 - supported transient drafts recover from `sessionStorage`
 - invalid `returnTo` values are rejected server-side and fail closed
 - SSE recovery preserves operator context without destructive reset
-- recovery behavior passes browser validation for supported flows
 
 ### 4. Performance and Rendering
 
@@ -220,7 +225,7 @@ Reduce time to first useful action and preserve responsiveness during large queu
 
 **In Scope**
 
-- route- or view-based code splitting where the current portal shell loads heavy, non-critical review tooling too early
+- route- or view-based code splitting where the portal shell loads heavy non-critical review tooling too early
 - native rendering optimizations such as `content-visibility`, reserved dimensions, and deferred non-critical work
 - delegated event handling for large lists
 - main-thread protection and watchdog refinement
@@ -239,18 +244,12 @@ Portal Frontend
 
 - Frontdoor / Platform
 
-**Dependencies**
-
-- baseline telemetry from Workstream 1
-- alignment with the portal edge hardening standard
-
-**Exit Criteria**
+**Acceptance Gate**
 
 - the portal shell remains within a documented bundle budget enforced in CI
-- queue interaction latency stays within a documented provisional threshold
-- large queues and long logs remain usable without sustained responsiveness collapse or uncontrolled long-task spikes
-- static assets and bootstrap endpoints exhibit the intended cache behavior
-- targeted performance scenarios pass required validation
+- queue interaction latency stays within the provisional threshold
+- large queues and long logs remain usable without sustained responsiveness collapse
+- targeted pilot evidence is attached before M4 is marked closed
 
 ### 5. Artifact Review and Operator Tooling
 
@@ -262,14 +261,14 @@ Improve operator review speed and precision without disrupting the main dispatch
 - an in-portal modal artifact viewer with keyboard support
 - integrity metadata presentation for artifacts already emitted by the backend
 - optional diagnostic-mode affordances where backend data already exists
-- optional segmentation refinement when supported by the active backend
-- explicit degraded-state handling when refinement or model assets are unavailable
+- explicit degraded-state handling for non-previewable artifacts and missing managed URLs
+- repo-owned telemetry for viewer opens and explicit fallback states
 
 **Out of Scope**
 
 - replacing the review workflow with a separate application
 - mandatory interactive segmentation dependencies for all review cases
-- silent fallback behavior that hides degraded or stubbed review states
+- claiming review-time segmentation refinement as shipped work in the current tranche
 
 **Primary Owner**
 Portal Frontend
@@ -279,23 +278,19 @@ Portal Frontend
 - Backend / Origin
 - QA / Validation
 
-**Dependencies**
+**Acceptance Gate**
 
-- integrity and artifact metadata are exposed by origin contracts
-- viewer interactions comply with accessibility and reduced-motion requirements from earlier tranches
-
-**Exit Criteria**
-
-- standard artifact review does not require opening a new browser tab for supported cases
+- standard artifact review does not require a new browser tab for supported cases
 - keyboard-only inspection is possible for open, close, next/previous, and zoom controls
 - integrity metadata is visible and copyable for supported artifacts
-- degraded segmentation or refinement states are rendered explicitly and non-fatally
+- explicit non-preview fallback states remain visible and non-fatal
+- targeted pilot evidence is attached before M5 is marked closed
 
 ## Feature Flag and Rollback Contract
 
 The following controls are required for all material tranche rollouts:
 
-- deterministic flag assignment derived from a stable, documented cohort key
+- deterministic flag assignment derived from a stable documented cohort key
 - a tranche-level kill switch or equivalent rollback control
 - documented default-off posture for pilot release where feasible
 - no user should flip between variants unpredictably across the supported life of the cohort key
@@ -307,31 +302,21 @@ For `/portal`, `/portal/bootstrap`, and other authenticated managed flows:
 
 - assignment must derive from a stable internal operator identifier
 - acceptable identifiers include a server-known operator ID, verified access identity, or another backend-controlled stable actor key
-- raw browser-generated random assignment is not acceptable for authenticated operator cohorts
+- raw browser-generated random assignment is not acceptable
 
 ### Pre-Auth Managed Surfaces
 
 For `/` and `/login` before operator authentication:
 
-- assignment must derive from a managed frontdoor-controlled anonymous session identifier or a dedicated rollout cookie
+- assignment must derive from a managed frontdoor-controlled anonymous session identifier or dedicated rollout cookie
 - the assignment key must remain stable across reloads for the supported life of that anonymous session or rollout cookie
 - IP address, user agent alone, or other unstable heuristics must not be used as the deterministic assignment key
-
-### Required Implementation Contract
-
-- if a pre-auth surface participates in a flagged rollout, the managed frontdoor must mint the anonymous session or rollout cookie before flag evaluation
-- anonymous-session or rollout-cookie assignment must not leak backend secrets or operator identifiers to the browser
-- if an experience spans pre-auth and post-auth surfaces, reassignment after login must be deterministic and documented
-- production expansion beyond pilot requires:
-  - the assignment key to be documented
-  - the kill switch to be documented
-  - the rollback owner to be documented
-  - the cohort expansion criteria to be documented
 
 ## Milestones and Rollout
 
 ### M1: Measurement Foundation
 
+**Status:** Partial - implemented but not formally closed
 **Owner:** Frontdoor / Platform
 **Depends On:** None
 
@@ -341,24 +326,22 @@ For `/` and `/login` before operator authentication:
 - backend trace correlation for bootstrap and queue actions
 - SSE reconnect and bootstrap latency visibility
 - telemetry disable switch
+- repo-owned evidence commands in `tools/portal_rum_summary.py` and `tools/portal_modernization_evidence.py`
 
-**Close Conditions**
+**Acceptance Gate**
 
-- Workstream 1 exit criteria are met
-- unconditional validation passes
-- conditional browser validation passes only if M1 changes browser-observable frontdoor or portal behavior
-- privacy and schema review is complete for pilot rollout
+- Workstream 1 acceptance gate is met
+- Security / Privacy sign-off is attached
+- measured pilot evidence is attached
 
 **Rollback Posture**
 
 - feature-flag off
 - ingestion disable by configuration
 
-**Live Browser Validation Required Before Close**
-Only if M1 changes browser-observable frontdoor or portal behavior
-
 ### M2: Accessibility Tranche
 
+**Status:** Implemented
 **Owner:** Portal Frontend
 **Depends On:** M1 baseline instrumentation available for before/after comparison
 
@@ -368,26 +351,23 @@ Only if M1 changes browser-observable frontdoor or portal behavior
 - modal focus discipline
 - live-region semantics
 - reduced-motion parity
-- automated accessibility coverage for `/login` and `/portal`
+- accepted repo-native browser-probe coverage for `/login` and `/portal`
 
-**Close Conditions**
+**Acceptance Gate**
 
-- Workstream 2 exit criteria are met
-- unconditional validation passes
-- conditional browser validation passes for each touched browser surface
+- Workstream 2 acceptance gate is met
+- `make test-frontdoor-contract`, `make test-portal-contract`, `make validate-frontdoor-browser`, and `make validate-portal-browser` remain green for touched flows
 
 **Rollback Posture**
 
 - feature-flag off for tranche-specific UI deltas where feasible
 - revert CSS or semantic changes that regress required validation
 
-**Live Browser Validation Required Before Close**
-Yes
-
 ### M3: Resilience Tranche
 
+**Status:** Implemented
 **Owner:** Frontdoor / Platform
-**Depends On:** M1, and M2 where recovery UI overlaps modal or focus behavior
+**Depends On:** M1 and M2 where recovery UI overlaps modal or focus behavior
 
 **Outputs**
 
@@ -396,22 +376,18 @@ Yes
 - redirect hardening
 - documented auth interruption recovery behavior
 
-**Close Conditions**
+**Acceptance Gate**
 
-- Workstream 3 exit criteria are met
-- unconditional validation passes
-- conditional browser validation passes for each touched browser surface
+- Workstream 3 acceptance gate is met
 
 **Rollback Posture**
 
 - feature-flag off
-- preserve prior login and portal recovery behavior until tranche close
-
-**Live Browser Validation Required Before Close**
-Yes
+- preserve prior login and portal recovery behavior until revert completes
 
 ### M4: Performance Tranche
 
+**Status:** Partial - implemented but not formally closed
 **Owner:** Portal Frontend
 **Depends On:** M1 baseline telemetry
 
@@ -423,22 +399,19 @@ Yes
 - cache and header improvements that preserve route ownership
 - watchdog timing refinement
 
-**Close Conditions**
+**Acceptance Gate**
 
-- Workstream 4 exit criteria are met
-- unconditional validation passes
-- conditional browser validation passes for each touched browser surface
+- Workstream 4 acceptance gate is met
+- measured pilot evidence is attached
 
 **Rollback Posture**
 
 - feature-flag off for view-level performance changes where feasible
 - revert to prior loading strategy if required validation or operational behavior regresses
 
-**Live Browser Validation Required Before Close**
-Yes when frontdoor or portal browser-observable behavior changes
-
 ### M5: Artifact Review Tranche
 
+**Status:** Partial - implemented but not formally closed
 **Owner:** Portal Frontend
 **Depends On:** M2 and M4
 
@@ -447,64 +420,36 @@ Yes when frontdoor or portal browser-observable behavior changes
 - modal artifact viewer
 - integrity dashboard surface
 - diagnostic affordances for existing backend metadata
-- optional segmentation refinement path
+- explicit non-preview fallback states
+- viewer open and fallback telemetry
 
-**Close Conditions**
+**Acceptance Gate**
 
-- Workstream 5 exit criteria are met
-- unconditional validation passes
-- `make validate-portal-browser` passes
-- `make validate-frontdoor-browser` passes if M5 changes frontdoor-managed review entry or proxy behavior
+- Workstream 5 acceptance gate is met
+- measured pilot evidence is attached
+- segmentation refinement remains excluded from close criteria unless separately shipped and documented
 
 **Rollback Posture**
 
-- feature-flag off for new viewer and refinement paths
-- preserve the current review path as fallback until tranche close
-
-**Live Browser Validation Required Before Close**
-Yes
+- feature-flag off for new viewer and deferred review paths
+- preserve the current review path as fallback until revert completes
 
 ## Acceptance Criteria
 
 ### Cross-Tranche Rules
 
-- a milestone closes only when its close conditions are met
+- a milestone closes only when its acceptance gate is met
 - acceptance criteria must be measurable and tied to repo-native validation where possible
 - tracked metrics after rollout do not substitute for close criteria
 - production expansion beyond pilot cohorts requires rollback instructions and feature-flag controls to be documented
-- if there is uncertainty whether a change is browser-observable, the default is to run the relevant browser validation
+- if there is uncertainty whether a change is browser-observable, run the relevant browser validation
 
 ### Required Validation Backbone
 
-#### Unconditional Validation
-
-The following checks are required before any milestone closes:
-
 - `make test-frontdoor-contract`
 - `make test-portal-contract`
-
-#### Conditional Browser Validation
-
-Run `make validate-frontdoor-browser` when a tranche changes any of:
-
-- `/`
-- `/login`
-- managed auth behavior
-- frontdoor proxy behavior
-- cache or header behavior observable through the managed frontdoor
-- feature-flagged UI on frontdoor-managed surfaces
-
-Run `make validate-portal-browser` when a tranche changes any of:
-
-- `/portal`
-- `/portal/bootstrap`
-- portal assets
-- portal routing or view-state behavior
-- portal review or artifact-inspection behavior
-- SSE-driven UI behavior
-- session recovery behavior observable in the portal
-
-Browser validation is not required for telemetry-only or backend-correlation changes that do not change browser-observable behavior.
+- `make validate-frontdoor-browser`
+- `make validate-portal-browser`
 
 ### Tranche-Specific Closure Checks
 
@@ -515,8 +460,8 @@ Browser validation is not required for telemetry-only or backend-correlation cha
 
 **Accessibility**
 
-- no blocking accessibility regressions are present on `/login` or `/portal`
-- focus, modal, and live-region behaviors pass required validation and manual keyboard review
+- current browser-probe accessibility checks stay green on `/login` and `/portal`
+- focus, modal, live-region, keyboard, and reduced-motion behaviors pass required validation
 
 **Resilience**
 
@@ -532,7 +477,21 @@ Browser validation is not required for telemetry-only or backend-correlation cha
 
 - the keyboard-only artifact review path is complete for supported cases
 - integrity metadata is visible
-- segmentation fallback states are explicit
+- explicit fallback states are visible and non-fatal
+- viewer pilot evidence includes open count, fallback count, and success rate
+
+## Outstanding TODOs
+
+Resolved during this refresh:
+
+- M2 coverage uses the current browser-probe and manual keyboard contract; a broader automated suite is not required for this RFC.
+- M5 shipped scope is the viewer and explicit fallback path; optional segmentation refinement is not treated as shipped work.
+
+Still open:
+
+- Security / Privacy must approve the telemetry schema, retention posture, and disposal procedure captured in `docs/compliance/PORTAL_TELEMETRY_PRIVACY_SIGNOFF.md`.
+- M1, M4, and M5 still need measured pilot evidence for CWV, queue latency, SSE reconnect rate, and artifact-viewer success before they can be marked closed.
+- ADR-050 still needs its separate delivery, quality, and developer-experience evidence checklist before any rewrite decision can be made.
 
 ## Risks and Future Decision Gates
 
@@ -558,17 +517,17 @@ Broad telemetry rollout must not proceed beyond pilot cohorts until Security / P
 
 ## Appendix A: Ownership Matrix
 
-| Workstream | Primary Owner | Dependent Systems | Primary Metrics | Closure Signal |
+| Workstream | Primary Owner | Dependent Systems | Primary Metrics | Close Signal |
 | --- | --- | --- | --- | --- |
-| Telemetry and Observability | Frontdoor / Platform | managed frontdoor, FastAPI origin, telemetry ingestion | p75 CWV visibility, bootstrap latency, SSE reconnect counts | Workstream 1 exit criteria met |
-| Accessibility Hardening | Portal Frontend | portal shell, login shell, browser validation | accessibility regressions, focus visibility, modal keyboard completion | Workstream 2 exit criteria met |
-| Session Resilience and State Preservation | Frontdoor / Platform | login flow, portal routing, auth proxy, browser storage | recovery success, redirect rejection, draft restore success | Workstream 3 exit criteria met |
-| Performance and Rendering | Portal Frontend | portal shell, static assets, proxy and cache behavior | shell bundle budget, interaction latency, long-task behavior | Workstream 4 exit criteria met |
-| Artifact Review and Operator Tooling | Portal Frontend | review UI, artifact metadata, optional segmentation backends | viewer success, keyboard-only review success, metadata visibility | Workstream 5 exit criteria met |
+| Telemetry and Observability | Frontdoor / Platform | managed frontdoor, FastAPI origin, telemetry ingestion | p75 CWV visibility, bootstrap latency, SSE reconnect counts | schema sign-off plus pilot evidence attached |
+| Accessibility Hardening | Portal Frontend | portal shell, login shell, browser validation | browser-probe regressions, focus visibility, modal keyboard completion | validation remains green under accepted contract |
+| Session Resilience and State Preservation | Frontdoor / Platform | login flow, portal routing, auth proxy, browser storage | recovery success, redirect rejection, draft restore success | recovery validation remains green |
+| Performance and Rendering | Portal Frontend | portal shell, static assets, proxy and cache behavior | shell bundle budget, interaction latency, long-task behavior | pilot evidence attached |
+| Artifact Review and Operator Tooling | Portal Frontend | review UI, artifact metadata | viewer success, keyboard-only review success, metadata visibility | pilot evidence attached |
 
 ## Appendix B: Initial Metric Targets
 
-These are provisional targets and should be confirmed or adjusted after M1 baseline capture.
+These are provisional targets and should be confirmed or adjusted after pilot capture.
 
 | Metric | Initial Target |
 | --- | --- |
@@ -577,18 +536,12 @@ These are provisional targets and should be confirmed or adjusted after M1 basel
 | p75 CLS | <= 0.1 |
 | Queue interaction latency | p75 <= 150ms for standard row selection and action affordances |
 | SSE reconnect rate | < 1 reconnect per operator-hour in steady-state managed usage |
-| Accessibility regressions | 0 blocking accessibility regressions on `/login` and `/portal` |
-| Artifact viewer interaction success | >= 95% successful open and basic inspect completion in pilot validation scenarios |
+| Accessibility regressions | 0 blocking browser-probe regressions on `/login` and `/portal` |
+| Artifact viewer interaction success | >= 95% successful open without fallback in pilot validation scenarios |
 
-## Appendix C: Reference Implementation Notes (Non-Normative)
+## Appendix C: Reference Notes
 
-These notes are intentionally non-binding. They describe acceptable implementation paths without converting them into hard architectural commitments.
-
-- `web-vitals`, `PerformanceObserver`, and OpenTelemetry-compatible traces are acceptable defaults for telemetry.
-- `sessionStorage` is preferred over `localStorage` for transient draft recovery tied to a single browser tab.
-- `encodeURIComponent()` is the correct primitive for encoding dynamic `returnTo` values; validation must still occur server-side.
-- `content-visibility` and reserved dimensions are preferred before introducing complex JavaScript virtualization.
-- delegated event handling is preferred for large, dynamic lists.
-- a lightweight DOM-native viewer is preferred for artifact review; `panzoom` is an acceptable default if a dependency is needed.
-- view-based dynamic imports are acceptable where the portal shell currently loads heavy review code too early.
-- Playwright tests should prefer resilient user-facing locators such as `getByRole` and `getByLabel`.
+- `tools/portal_rum_summary.py` remains the contract-stable RUM-only summary path.
+- `tools/portal_modernization_evidence.py` is the repo-owned pilot evidence path for M1, M4, and M5.
+- `docs/architecture/PORTAL_OPERATOR_CONSOLE_MODERNIZATION_EVIDENCE.md` records the evidence collection workflow and open gates.
+- `docs/compliance/PORTAL_TELEMETRY_PRIVACY_SIGNOFF.md` is the pending human approval packet for telemetry schema, retention, and disposal.
