@@ -196,11 +196,6 @@ def _extract_governance_refs(text: str) -> tuple[str, ...]:
     return tuple(refs)
 
 
-def _has_governance_ref(text: str) -> bool:
-    """Check if a TODO has proper governance tracking."""
-    return bool(_extract_governance_refs(text))
-
-
 def _iter_python_files(roots: tuple[Path, ...]) -> list[Path]:
     """Yield Python source files under the given roots."""
     files: list[Path] = []
@@ -249,9 +244,15 @@ ABSTRACT_METHOD_PATTERNS = (
 
 
 def _is_abstract_method_pattern(message: str) -> bool:
-    """Check if a NotImplementedError message indicates an abstract method pattern."""
+    """Check if a NotImplementedError message indicates an abstract method pattern.
+
+    Returns True for:
+    - Empty/no-message raises (bare `raise NotImplementedError`)
+    - Messages matching abstract method documentation patterns
+    """
+    # Bare raise NotImplementedError (no message) is an idiomatic abstract stub
     if not message:
-        return False
+        return True
     return any(pattern.search(message) for pattern in ABSTRACT_METHOD_PATTERNS)
 
 
@@ -288,13 +289,17 @@ class NotImplementedVisitor(ast.NodeVisitor):
         self.generic_visit(node)
 
 
-def _extract_comment_todos(source: str, path: Path) -> list[TodoItem]:
+def _extract_comment_todos(source: str, path: Path) -> tuple[list[TodoItem], list[str]]:
     """Extract TODO items from Python comments using tokenize.
 
     Uses Python's tokenize module to scan only actual comment tokens,
     avoiding false positives from TODO patterns inside string literals/docstrings.
+
+    Returns:
+        Tuple of (items, errors) where errors contains tokenization failure messages.
     """
     items: list[TodoItem] = []
+    errors: list[str] = []
     lines = source.splitlines()
 
     try:
@@ -339,22 +344,29 @@ def _extract_comment_todos(source: str, path: Path) -> list[TodoItem]:
                         )
                     )
                     break  # Only count each comment once
-    except tokenize.TokenizeError:
-        pass  # Skip files that can't be tokenized
+    except tokenize.TokenError as e:
+        errors.append(f"{path}: tokenize error: {e}")
 
-    return items
+    return items, errors
 
 
-def _scan_python_file(path: Path) -> list[TodoItem]:
-    """Scan a single Python file for TODO patterns."""
+def _scan_python_file(path: Path) -> tuple[list[TodoItem], list[str]]:
+    """Scan a single Python file for TODO patterns.
+
+    Returns:
+        Tuple of (items, errors) where errors contains parsing failure messages.
+    """
     source = _read_file_safe(path)
     if source is None:
-        return []
+        return [], []
 
     items: list[TodoItem] = []
+    errors: list[str] = []
 
     # Scan for comment-based TODOs using tokenize (avoids false positives in strings)
-    items.extend(_extract_comment_todos(source, path))
+    comment_items, comment_errors = _extract_comment_todos(source, path)
+    items.extend(comment_items)
+    errors.extend(comment_errors)
 
     # Scan for NotImplementedError using AST
     try:
@@ -376,10 +388,10 @@ def _scan_python_file(path: Path) -> list[TodoItem]:
                     col_offset=col_offset,
                 )
             )
-    except SyntaxError:
-        pass  # Skip files that can't be parsed
+    except SyntaxError as e:
+        errors.append(f"{path}: syntax error: {e}")
 
-    return items
+    return items, errors
 
 
 def _scan_js_ts_file(path: Path) -> list[TodoItem]:
@@ -425,8 +437,9 @@ def scan_repository() -> ScanResult:
     python_files = _iter_python_files(PYTHON_SCAN_ROOTS)
     for path in python_files:
         try:
-            items = _scan_python_file(path)
+            items, errors = _scan_python_file(path)
             result.items.extend(items)
+            result.errors.extend(errors)
             result.files_scanned += 1
         except Exception as e:
             result.errors.append(f"{path}: {e}")
@@ -574,6 +587,15 @@ def main() -> int:
         print(_format_human_readable(result, governance_mode=args.check_governance))
 
     # Exit codes and final summary
+    # Exit 2: scan errors in governance mode (fail closed)
+    if args.check_governance and result.errors:
+        if not args.json:
+            print(
+                f"❌ Governance check failed: {len(result.errors)} scan error(s) encountered (fail closed)"
+            )
+        return 2
+
+    # Exit 1: ungoverned TODOs in governance mode
     if args.check_governance and result.ungoverned_count > 0:
         if not args.json:
             print(
