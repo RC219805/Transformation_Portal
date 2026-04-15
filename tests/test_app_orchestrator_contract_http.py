@@ -45,9 +45,15 @@ def _reset_orchestrator_globals() -> None:
     previous_enforce_job_api_key = orchestrator_app.ENFORCE_JOB_API_KEY
     previous_allow_sse_query_api_key = orchestrator_app.ALLOW_SSE_QUERY_API_KEY
     previous_max_request_bytes = orchestrator_app.MAX_REQUEST_BYTES
+    previous_max_upload_request_bytes = orchestrator_app.MAX_UPLOAD_REQUEST_BYTES
     previous_max_indexed_artifacts = orchestrator_app.MAX_INDEXED_ARTIFACTS
     previous_rate_limit_per_minute = orchestrator_app.RATE_LIMIT_PER_MINUTE
     previous_max_concurrent_jobs = orchestrator_app.MAX_CONCURRENT_JOBS
+    previous_portal_upload_root = orchestrator_app.PORTAL_UPLOAD_ROOT
+    previous_portal_upload_max_files = orchestrator_app.PORTAL_UPLOAD_MAX_FILES
+    previous_portal_upload_max_fields = orchestrator_app.PORTAL_UPLOAD_MAX_FIELDS
+    previous_portal_upload_max_part_bytes = orchestrator_app.PORTAL_UPLOAD_MAX_PART_BYTES
+    previous_portal_upload_ttl_seconds = orchestrator_app.PORTAL_UPLOAD_TTL_SECONDS
     orchestrator_app.API_KEY_SECRET = "contract-secret"
     orchestrator_app.ENFORCE_JOB_API_KEY = True
     orchestrator_app.ALLOW_SSE_QUERY_API_KEY = False
@@ -61,9 +67,15 @@ def _reset_orchestrator_globals() -> None:
         orchestrator_app.ENFORCE_JOB_API_KEY = previous_enforce_job_api_key
         orchestrator_app.ALLOW_SSE_QUERY_API_KEY = previous_allow_sse_query_api_key
         orchestrator_app.MAX_REQUEST_BYTES = previous_max_request_bytes
+        orchestrator_app.MAX_UPLOAD_REQUEST_BYTES = previous_max_upload_request_bytes
         orchestrator_app.MAX_INDEXED_ARTIFACTS = previous_max_indexed_artifacts
         orchestrator_app.RATE_LIMIT_PER_MINUTE = previous_rate_limit_per_minute
         orchestrator_app.MAX_CONCURRENT_JOBS = previous_max_concurrent_jobs
+        orchestrator_app.PORTAL_UPLOAD_ROOT = previous_portal_upload_root
+        orchestrator_app.PORTAL_UPLOAD_MAX_FILES = previous_portal_upload_max_files
+        orchestrator_app.PORTAL_UPLOAD_MAX_FIELDS = previous_portal_upload_max_fields
+        orchestrator_app.PORTAL_UPLOAD_MAX_PART_BYTES = previous_portal_upload_max_part_bytes
+        orchestrator_app.PORTAL_UPLOAD_TTL_SECONDS = previous_portal_upload_ttl_seconds
         orchestrator_app.JOBS.clear()
         orchestrator_app.EVENT_SUBSCRIBERS.clear()
         orchestrator_app.RATE_LIMIT_BUCKETS.clear()
@@ -120,6 +132,7 @@ def test_portal_bootstrap_reports_direct_debug_mode(client: TestClient) -> None:
     assert body["features"]["directDebug"] is True
     assert body["features"]["artifactViewerModal"] is False
     assert body["features"]["reviewSurfaceDeferred"] is False
+    assert body["features"]["stagedUploads"] is False
     assert body["features"]["rumTelemetry"] is False
 
 
@@ -147,6 +160,20 @@ def test_portal_bootstrap_exposes_review_surface_defer_rollout_flag_when_enabled
 
     assert response.status_code == 200
     assert response.json()["features"]["reviewSurfaceDeferred"] is True
+
+
+def test_portal_bootstrap_exposes_staged_uploads_rollout_flag_when_enabled(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("TP_PORTAL_UPLOAD_STAGING_ENABLED", "1")
+    monkeypatch.setenv("TP_PORTAL_STAGED_UPLOADS_ROLLOUT_PERCENT", "100")
+    monkeypatch.setenv("TP_PORTAL_DIRECT_DEBUG_COHORT_KEY", "contract-smoke")
+
+    response = client.get("/portal/bootstrap")
+
+    assert response.status_code == 200
+    assert response.json()["features"]["stagedUploads"] is True
 
 
 def test_portal_bootstrap_exposes_rum_rollout_flag_when_enabled(
@@ -177,6 +204,211 @@ def test_portal_bootstrap_and_v1_echo_traceparent_header(client: TestClient) -> 
     assert bootstrap_response.headers["traceparent"] == traceparent
     assert metadata_response.status_code == 200
     assert metadata_response.headers["traceparent"] == traceparent
+
+
+def test_staged_upload_route_requires_api_key(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("TP_PORTAL_UPLOAD_STAGING_ENABLED", "1")
+    orchestrator_app.PORTAL_UPLOAD_ROOT = tmp_path / "uploads"
+
+    with TestClient(orchestrator_app.app) as unauthenticated_client:
+        response = unauthenticated_client.post(
+            "/v1/uploads/staging",
+            files=[("files", ("sample.txt", b"hello", "text/plain"))],
+        )
+
+    body = response.json()
+    assert response.status_code == 401
+    assert body["error"]["code"] == "UNAUTHORIZED"
+    assert body["error"]["details"]["path"] == "/v1/uploads/staging"
+
+
+def test_staged_upload_route_returns_not_found_when_disabled(client: TestClient) -> None:
+    response = client.post(
+        "/v1/uploads/staging",
+        files=[("files", ("sample.txt", b"hello", "text/plain"))],
+    )
+
+    body = response.json()
+    assert response.status_code == 404
+    assert body["error"]["code"] == "NOT_FOUND"
+    assert body["error"]["details"]["path"] == "/v1/uploads/staging"
+
+
+def test_staged_upload_route_stages_files_and_writes_artifacts(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setenv("TP_PORTAL_UPLOAD_STAGING_ENABLED", "1")
+    monkeypatch.setenv("TP_PORTAL_STAGED_UPLOADS_ROLLOUT_PERCENT", "100")
+    orchestrator_app.PORTAL_UPLOAD_ROOT = tmp_path / "uploads"
+
+    response = client.post(
+        "/v1/uploads/staging",
+        data={
+            "client_manifest": json.dumps(
+                {
+                    "schema": "tp.portal.upload_manifest.v1",
+                    "files": [
+                        {"relative_path": "nested/sample.txt", "size_bytes": 11},
+                        {"relative_path": "nested/child/readme.md", "size_bytes": 5},
+                    ],
+                }
+            )
+        },
+        files=[
+            ("files", ("nested/sample.txt", b"hello world", "text/plain")),
+            ("files", ("nested/child/readme.md", b"# hi\n", "text/markdown")),
+        ],
+    )
+
+    body = response.json()
+    assert response.status_code == 200
+    assert body["schema"] == "tp.orchestrator.upload_staging.v1"
+    assert body["success"] is True
+
+    data = body["data"]
+    input_dir = Path(data["input_dir"])
+    metadata_dir = Path(data["metadata_dir"])
+    assert input_dir.parent.parent == orchestrator_app.PORTAL_UPLOAD_ROOT
+    assert (input_dir / "nested" / "sample.txt").read_text(encoding="utf-8") == "hello world"
+    assert (input_dir / "nested" / "child" / "readme.md").read_text(encoding="utf-8") == "# hi\n"
+
+    baseline_manifest_path = Path(data["artifacts"]["baseline_manifest_path"])
+    capture_metadata_path = Path(data["artifacts"]["capture_metadata_path"])
+    upload_receipt_path = Path(data["artifacts"]["upload_receipt_path"])
+    assert baseline_manifest_path.parent == metadata_dir
+    assert capture_metadata_path.parent == metadata_dir
+    assert upload_receipt_path.parent == metadata_dir
+
+    baseline_payload = json.loads(baseline_manifest_path.read_text(encoding="utf-8"))
+    assert baseline_payload["schema"] == "tp.meta.baseline_manifest.v1"
+    assert baseline_payload["record_count"] == 2
+    assert [record["relative_path"] for record in baseline_payload["records"]] == [
+        "nested/child/readme.md",
+        "nested/sample.txt",
+    ]
+    assert json.loads(capture_metadata_path.read_text(encoding="utf-8")) == []
+
+    receipt_payload = json.loads(upload_receipt_path.read_text(encoding="utf-8"))
+    assert receipt_payload["schema"] == "tp.orchestrator.upload_staging.v1"
+    assert receipt_payload["summary"]["file_count"] == 2
+    assert receipt_payload["summary"]["total_bytes"] == 16
+
+
+def test_staged_upload_route_rejects_invalid_relative_paths(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setenv("TP_PORTAL_UPLOAD_STAGING_ENABLED", "1")
+    monkeypatch.setenv("TP_PORTAL_STAGED_UPLOADS_ROLLOUT_PERCENT", "100")
+    orchestrator_app.PORTAL_UPLOAD_ROOT = tmp_path / "uploads"
+
+    response = client.post(
+        "/v1/uploads/staging",
+        files=[("files", ("../escape.txt", b"bad", "text/plain"))],
+    )
+
+    body = response.json()
+    assert response.status_code == 400
+    assert body["error"]["code"] == "INVALID_ARGUMENT"
+    assert body["error"]["details"]["reason"] == "invalid_relative_path"
+
+
+def test_staged_upload_route_rejects_invalid_client_manifest(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setenv("TP_PORTAL_UPLOAD_STAGING_ENABLED", "1")
+    monkeypatch.setenv("TP_PORTAL_STAGED_UPLOADS_ROLLOUT_PERCENT", "100")
+    orchestrator_app.PORTAL_UPLOAD_ROOT = tmp_path / "uploads"
+
+    response = client.post(
+        "/v1/uploads/staging",
+        data={"client_manifest": json.dumps({"files": []})},
+        files=[("files", ("sample.txt", b"hello", "text/plain"))],
+    )
+
+    body = response.json()
+    assert response.status_code == 400
+    assert body["error"]["code"] == "INVALID_ARGUMENT"
+    assert body["error"]["details"]["field"] == "client_manifest"
+
+
+def test_staged_upload_route_returns_typed_413_for_oversized_parts(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setenv("TP_PORTAL_UPLOAD_STAGING_ENABLED", "1")
+    monkeypatch.setenv("TP_PORTAL_STAGED_UPLOADS_ROLLOUT_PERCENT", "100")
+    orchestrator_app.PORTAL_UPLOAD_ROOT = tmp_path / "uploads"
+    previous_part_limit = orchestrator_app.PORTAL_UPLOAD_MAX_PART_BYTES
+    try:
+        orchestrator_app.PORTAL_UPLOAD_MAX_PART_BYTES = 4
+        response = client.post(
+            "/v1/uploads/staging",
+            files=[("files", ("sample.txt", b"hello", "text/plain"))],
+        )
+    finally:
+        orchestrator_app.PORTAL_UPLOAD_MAX_PART_BYTES = previous_part_limit
+
+    body = response.json()
+    assert response.status_code == 413
+    assert body["error"]["code"] == "REQUEST_TOO_LARGE"
+    assert body["error"]["details"] == {
+        "field": "files",
+        "reason": "multipart_part_too_large",
+    }
+
+
+def test_staged_upload_route_uses_upload_specific_request_size_limit(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("TP_PORTAL_UPLOAD_STAGING_ENABLED", "1")
+    previous_max_request_bytes = orchestrator_app.MAX_REQUEST_BYTES
+    previous_max_upload_request_bytes = orchestrator_app.MAX_UPLOAD_REQUEST_BYTES
+    try:
+        orchestrator_app.MAX_REQUEST_BYTES = 1024
+        orchestrator_app.MAX_UPLOAD_REQUEST_BYTES = 64
+        response = client.post(
+            "/v1/uploads/staging",
+            content=b"x" * 128,
+            headers={"content-type": "application/octet-stream"},
+        )
+    finally:
+        orchestrator_app.MAX_REQUEST_BYTES = previous_max_request_bytes
+        orchestrator_app.MAX_UPLOAD_REQUEST_BYTES = previous_max_upload_request_bytes
+
+    body = response.json()
+    assert response.status_code == 413
+    assert body["error"]["code"] == "REQUEST_TOO_LARGE"
+    assert body["error"]["message"] == "request body too large (max 64 bytes)"
+    assert body["error"]["details"] == {
+        "path": "/v1/uploads/staging",
+        "max_request_bytes": 64,
+    }
+
+
+def test_staged_upload_route_returns_not_found_when_rollout_disabled(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("TP_PORTAL_UPLOAD_STAGING_ENABLED", "1")
+    monkeypatch.setenv("TP_PORTAL_STAGED_UPLOADS_ROLLOUT_PERCENT", "0")
+
+    response = client.post(
+        "/v1/uploads/staging",
+        files=[("files", ("sample.txt", b"hello", "text/plain"))],
+    )
+
+    body = response.json()
+    assert response.status_code == 404
+    assert body["error"]["code"] == "NOT_FOUND"
+    assert body["error"]["details"]["path"] == "/v1/uploads/staging"
 
 
 def test_root_ui_response_is_not_cached(client: TestClient) -> None:

@@ -4,6 +4,7 @@ SHELL := /bin/sh
 # .venv immediately switch to the repo interpreter on subsequent lines.
 BOOTSTRAP_PY = $$(./scripts/setup/resolve_python_311.sh)
 PY = $$(./scripts/setup/resolve_python_311.sh)
+PRE_COMMIT_BIN := $(shell if [ -x .venv/bin/pre-commit ]; then printf '%s' .venv/bin/pre-commit; elif [ -x .venv/Scripts/pre-commit.exe ]; then printf '%s' .venv/Scripts/pre-commit.exe; fi)
 
 # Common subsets (fast tests avoid heavy/optional paths)
 FAST_TESTS := \
@@ -373,12 +374,14 @@ ci-quick:
 # Pre-commit checks
 pre-commit:
 	@echo "Running pre-commit checks..."
-	@pre-commit run --all-files --show-diff-on-failure
+	@test -n "$(PRE_COMMIT_BIN)" || { echo "pre-commit is not installed in .venv; run 'make install-core' first"; exit 1; }
+	@"$(PRE_COMMIT_BIN)" run --all-files --show-diff-on-failure
 
 # Install git hooks
 install-hooks:
 	@echo "Installing git pre-commit hook..."
-	@pre-commit install -f
+	@test -n "$(PRE_COMMIT_BIN)" || { echo "pre-commit is not installed in .venv; run 'make install-core' first"; exit 1; }
+	@"$(PRE_COMMIT_BIN)" install -f
 	@echo "✓ Pre-commit hook installed via pre-commit"
 
 # Quality check (all validations)
