@@ -5,9 +5,21 @@ This package provides Merkle tree implementations for integrity verification:
 - merkle_root_sha256: Simple duplicate-last pairing (legacy/provenance use)
 - ct_* functions: RFC 9162 Certificate Transparency-style trees with
   verifiable inclusion proofs (artifact trees, evidence bundles)
+
+Type aliases for API clarity:
+- Sha256Digest: 32-byte SHA-256 digest
+- MerkleRoot: 32-byte Merkle tree root
+- AuditPath: List of sibling digests for inclusion proofs
 """
 
 from .ct_merkle import (
+    # Type aliases
+    AuditPath,
+    MerkleRoot,
+    Sha256Digest,
+    # Validation
+    validate_sha256_digest,
+    # CT-style Merkle functions
     ct_inclusion_proof,
     ct_inclusion_proof_sha256,
     ct_leaf_hash,
@@ -19,6 +31,12 @@ from .ct_merkle import (
 from .merkle import merkle_root_sha256
 
 __all__ = [
+    # Type aliases
+    "Sha256Digest",
+    "MerkleRoot",
+    "AuditPath",
+    # Validation
+    "validate_sha256_digest",
     # Legacy/provenance Merkle
     "merkle_root_sha256",
     # CT-style Merkle (RFC 9162)

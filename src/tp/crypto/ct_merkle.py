@@ -12,9 +12,29 @@ pairing so inclusion proofs are transparency-grade and path-independent.
 from __future__ import annotations
 
 import hashlib
+import hmac
 from typing import Sequence
 
+# ---------------------------------------------------------------------------
+# Type aliases for API clarity
+# ---------------------------------------------------------------------------
+Sha256Digest = bytes
+"""A 32-byte SHA-256 digest."""
+
+MerkleRoot = bytes
+"""A 32-byte Merkle tree root (SHA-256)."""
+
+AuditPath = list[bytes]
+"""Ordered list of sibling digests forming an RFC 9162 inclusion proof."""
+
 __all__ = [
+    # Type aliases
+    "Sha256Digest",
+    "MerkleRoot",
+    "AuditPath",
+    # Validation
+    "validate_sha256_digest",
+    # CT-style Merkle functions
     "ct_leaf_hash",
     "ct_node_hash",
     "ct_merkle_root",
@@ -28,6 +48,38 @@ __all__ = [
 _LEAF_PREFIX = b"\x00"
 _NODE_PREFIX = b"\x01"
 _EMPTY_HASH = hashlib.sha256(b"").digest()
+
+# Expected size of a SHA-256 digest in bytes
+_SHA256_DIGEST_SIZE = 32
+
+
+def validate_sha256_digest(value: bytes, name: str = "digest") -> Sha256Digest:
+    """Validate that value is exactly 32 bytes (SHA-256 digest size).
+
+    Args:
+        value: The bytes object to validate.
+        name: Human-readable name for error messages (e.g., "leaf_hash").
+
+    Returns:
+        The validated value (unchanged) for fluent chaining.
+
+    Raises:
+        TypeError: If value is not bytes.
+        ValueError: If value is not exactly 32 bytes.
+
+    Example:
+        >>> digest = validate_sha256_digest(hashlib.sha256(b"test").digest())
+        >>> len(digest)
+        32
+    """
+    if not isinstance(value, bytes):
+        raise TypeError(f"{name} must be bytes, got {type(value).__name__}")
+    if len(value) != _SHA256_DIGEST_SIZE:
+        raise ValueError(
+            f"{name} must be exactly {_SHA256_DIGEST_SIZE} bytes (SHA-256), "
+            f"got {len(value)} bytes"
+        )
+    return value
 
 
 def _sha256(payload: bytes) -> bytes:
@@ -189,26 +241,31 @@ def ct_inclusion_proof_sha256(leaf_hashes: Sequence[bytes], leaf_index: int) -> 
 
 def verify_ct_inclusion_proof(
     *,
-    leaf_hash: bytes,
+    leaf_hash: Sha256Digest,
     leaf_index: int,
     tree_size: int,
-    proof: Sequence[bytes],
-    expected_root: bytes,
+    proof: Sequence[Sha256Digest],
+    expected_root: MerkleRoot,
 ) -> bool:
-    """Verify an RFC 9162 inclusion proof.
+    """Verify an RFC 9162 inclusion proof using constant-time comparison.
 
     The implementation follows the audit-path reconstruction algorithm using
-    the caller-provided leaf index and tree size.
+    the caller-provided leaf index and tree size. The final root comparison
+    uses ``hmac.compare_digest`` to prevent timing side-channel attacks.
 
     Args:
-        leaf_hash: The hash of the leaf being verified.
+        leaf_hash: The 32-byte hash of the leaf being verified.
         leaf_index: Zero-based index of the leaf in the original tree.
         tree_size: Total number of leaves in the tree.
         proof: Sequence of sibling hashes (the audit path).
-        expected_root: The expected Merkle root to verify against.
+        expected_root: The expected 32-byte Merkle root to verify against.
 
     Returns:
         True if the proof is valid and reconstructs the expected root.
+
+    Security:
+        Uses constant-time comparison for the final root verification to
+        prevent timing attacks that could leak information about valid proofs.
     """
     if tree_size <= 0:
         return False
@@ -235,4 +292,5 @@ def verify_ct_inclusion_proof(
         fn //= 2
         sn //= 2
 
-    return proof_index == proof_len and digest == expected_root
+    # Use constant-time comparison to prevent timing side-channel attacks
+    return proof_index == proof_len and hmac.compare_digest(digest, expected_root)
