@@ -96,7 +96,33 @@ Transformation_Portal/
 
 ## Automated Organization
 
-The `.auto-organize.sh` script automatically organizes files based on their type and purpose.
+The `.auto-organize.sh` script is the canonical entry point for repository organization. It orchestrates modular helper scripts and validation tools.
+
+### Usage
+
+```bash
+./.auto-organize.sh [OPTIONS]
+```
+
+### Options
+
+| Option | Description |
+|--------|-------------|
+| `--dry-run` | Show what would be done without making changes |
+| `--check` | CI validation mode - exit 1 if violations found |
+| `--verbose` | Show detailed output including skipped files |
+| `--docs-only` | Only organize documentation files |
+| `--skip-root` | Skip root file placement validation |
+| `-h, --help` | Show help message |
+
+### Examples
+
+```bash
+./.auto-organize.sh --dry-run              # Preview organization changes
+./.auto-organize.sh                        # Apply organization changes
+./.auto-organize.sh --check                # CI validation mode (fail if violations)
+./.auto-organize.sh --docs-only --dry-run  # Preview documentation moves only
+```
 
 ### What Gets Organized
 
@@ -124,45 +150,51 @@ Only these files should remain in the repository root:
 - **Git**: `.gitignore`, `.gitattributes`, `.git-blame-ignore-revs`, `.pre-commit-config.yaml`
 - **Governance metadata**: `.architect_directive_status.yml`, `AGENTS.md`
 - **Runtime entrypoints**: `app.py`, `portal.html`
-- **Organization system**: `.auto-organize.sh` (policy doc now lives under `docs/governance/`)
+- **Organization system**: `.auto-organize.sh`
 
 ### Root Directory Limits
 
 The repository root should remain minimal and operational. Documentation files that are not canonical root documents must live under `docs/` in approved subdirectories.
 
-## Helper Scripts
+## Organization Steps
 
-To keep `.auto-organize.sh` focused and maintainable, the organization system is implemented as a set of modular helper scripts. In most cases you only run `.auto-organize.sh`; it delegates work to specialized helpers:
+`.auto-organize.sh` executes these validation and organization steps in sequence:
 
-- **`organize_root_files.sh`**
-  Ensures that only approved files live in the repository root. Moves stray Markdown, scripts, or data into their proper subdirectories and flags anything that doesn’t match known patterns.
+1. **Documentation Organization** (`scripts/organize_docs.sh`)
+   - Scans root-level documentation and `docs/` topology violations
+   - Classifies each file into an approved destination
+   - Supports both report-only (`--dry-run`) and mutating (`--apply`) modes
 
-- **`organize_docs.sh`**
-  Scans current root-level documentation and `docs/` topology violations, classifies each file into an approved destination, and supports both report-only (`--dry-run`) and mutating (`--apply`) modes.
+2. **Root File Placement Validation** (`scripts/setup/pre-commit-check.sh`)
+   - Ensures only approved files live in the repository root
+   - Flags violations with suggested destinations
 
-- **`organize_scripts.sh`**
-  Places scripts under `scripts/setup/`, `scripts/automation/`, or `scripts/utilities/` depending on their purpose (installation, automation, utilities). Helps keep `scripts/` discoverable and clean.
+3. **Misplaced Python Scripts Detection**
+   - Dynamically detects Python scripts in root that should be elsewhere
+   - Suggests appropriate destinations based on naming patterns
 
-- **`organize_outputs.sh`**
-  Moves generated artifacts (batch reports, logs, intermediate processing outputs) into `data/output/`, `data/cache/`, or project-specific output directories, instead of letting them accumulate in the root or random folders.
+4. **Misplaced Shell Scripts Detection**
+   - Detects shell scripts in root that should be under `scripts/`
 
-- **`organize_remaining.sh`**
-  Performs a final pass over any files that do not match other rules. This script:
-  - Flags suspicious or ambiguous locations.
-  - Suggests candidate destinations.
-  - Is intentionally conservative to avoid destructive moves.
+5. **Documentation Structure Validation** (`scripts/governance/check_docs_structure.py`)
+   - Validates that documentation follows the approved directory structure
+
+### Running in CI
+
+Use `--check` mode for CI validation:
+
+```bash
+./.auto-organize.sh --check
+```
+
+This mode:
+- Runs all validation steps in dry-run mode
+- Exits with code 1 if any violations are detected
+- Provides actionable error messages
 
 ### Execution Model
 
-`.auto-organize.sh` orchestrates these helpers in a fixed sequence, for example:
-
-1. `organize_root_files.sh`
-2. `organize_docs.sh`
-3. `organize_scripts.sh`
-4. `organize_outputs.sh`
-5. `organize_remaining.sh`
-
-You should **not normally call the helper scripts directly**. Instead, run:
+You should **not normally call helper scripts directly**. Instead, run:
 
 ```bash
 ./.auto-organize.sh --dry-run      # Inspect proposed moves
