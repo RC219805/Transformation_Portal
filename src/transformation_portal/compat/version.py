@@ -50,8 +50,16 @@ class Version:
 
     # Regex for SemVer-ish strings
     _VERSION_PATTERN = re.compile(r"^(\d+)\.(\d+)(?:\.(\d+))?(?:[.-](.+))?$")
+    raw: str
+    major: int
+    minor: int
+    patch: int
+    prerelease: str
+    _comparison_key: tuple[int, int, int, int, tuple[tuple[int, int | str], ...]]
+    _frozen: bool
 
-    __slots__ = ("raw", "major", "minor", "patch", "prerelease", "_comparison_key")
+    __slots__ = ("raw", "major", "minor", "patch", "prerelease", "_comparison_key", "_frozen")
+    _IMMUTABLE_FIELDS = frozenset(__slots__)
 
     def __init__(self, version_str: str) -> None:
         """Initialize Version from a version string.
@@ -62,9 +70,15 @@ class Version:
         Raises:
             ValueError: If version_str is not a valid version format.
         """
-        self.raw = version_str
-        self.major, self.minor, self.patch, self.prerelease = self._parse(version_str)
-        self._comparison_key = self._build_comparison_key()
+        major, minor, patch, prerelease = self._parse(version_str)
+
+        object.__setattr__(self, "raw", version_str)
+        object.__setattr__(self, "major", major)
+        object.__setattr__(self, "minor", minor)
+        object.__setattr__(self, "patch", patch)
+        object.__setattr__(self, "prerelease", prerelease)
+        object.__setattr__(self, "_comparison_key", self._build_comparison_key())
+        object.__setattr__(self, "_frozen", True)
 
     def _parse(self, v: str) -> Tuple[int, int, int, str]:
         """Parse version string into components.
@@ -114,6 +128,12 @@ class Version:
         if identifier.isdigit():
             return (0, int(identifier))
         return (1, identifier)
+
+    def __setattr__(self, name: str, value: object) -> None:
+        """Keep Version instances immutable after initialization."""
+        if getattr(self, "_frozen", False) and name in self._IMMUTABLE_FIELDS:
+            raise AttributeError("Version instances are immutable")
+        object.__setattr__(self, name, value)
 
     @property
     def is_prerelease(self) -> bool:

@@ -218,6 +218,26 @@ class TestVersionHashability:
         assert version_map[Version("2.0.0-beta")] == "beta"
         assert version_map[Version("2.0.0")] == "stable"
 
+    @pytest.mark.parametrize(
+        ("field", "value"),
+        [
+            ("raw", "9.9.9"),
+            ("major", 9),
+            ("minor", 9),
+            ("patch", 9),
+            ("prerelease", "rc.1"),
+        ],
+    )
+    def test_public_version_fields_are_immutable(self, field: str, value: object) -> None:
+        """Test Version fields cannot be mutated after construction."""
+        version = Version("2.0.0-beta")
+        version_map = {version: "beta"}
+
+        with pytest.raises(AttributeError, match="immutable"):
+            setattr(version, field, value)
+
+        assert version_map[Version("2.0.0-beta")] == "beta"
+
 
 class TestVersionRepresentation:
     """Test Version string representation."""

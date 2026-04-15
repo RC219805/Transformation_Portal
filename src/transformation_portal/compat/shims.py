@@ -21,14 +21,11 @@ from __future__ import annotations
 
 import logging
 from functools import wraps
-from typing import Any, Callable, Dict, Optional, Set, TypeVar
+from typing import Any, Callable, Dict, Optional, TypeVar
 
 logger = logging.getLogger(__name__)
 
 F = TypeVar("F", bound=Callable[..., Any])
-
-# Track warned attributes to avoid log spam
-_warned_attributes: Set[str] = set()
 
 
 class LegacyAPIShim:
