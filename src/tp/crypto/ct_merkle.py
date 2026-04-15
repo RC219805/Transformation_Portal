@@ -82,10 +82,7 @@ def validate_sha256_digest(value: bytes, name: str = "digest") -> Sha256Digest:
     if not isinstance(value, bytes):
         raise TypeError(f"{name} must be bytes, got {type(value).__name__}")
     if len(value) != _SHA256_DIGEST_SIZE:
-        raise ValueError(
-            f"{name} must be exactly {_SHA256_DIGEST_SIZE} bytes (SHA-256), "
-            f"got {len(value)} bytes"
-        )
+        raise ValueError(f"{name} must be exactly {_SHA256_DIGEST_SIZE} bytes (SHA-256), " f"got {len(value)} bytes")
     return value
 
 
@@ -171,9 +168,7 @@ def ct_merkle_root_sha256(leaf_hashes: Sequence[bytes]) -> str:
     return ct_merkle_root(leaf_hashes).hex()
 
 
-def _inclusion_proof_recursive(
-    leaves: list[bytes], start: int, end: int, leaf_index: int
-) -> list[bytes]:
+def _inclusion_proof_recursive(leaves: list[bytes], start: int, end: int, leaf_index: int) -> list[bytes]:
     """Build inclusion proof recursively using index bounds.
 
     Args:
@@ -194,14 +189,10 @@ def _inclusion_proof_recursive(
 
     if leaf_index < mid:
         # Target is in left subtree; sibling is right subtree root
-        return _inclusion_proof_recursive(leaves, start, mid, leaf_index) + [
-            _mth_recursive(leaves, mid, end)
-        ]
+        return _inclusion_proof_recursive(leaves, start, mid, leaf_index) + [_mth_recursive(leaves, mid, end)]
     else:
         # Target is in right subtree; sibling is left subtree root
-        return _inclusion_proof_recursive(leaves, mid, end, leaf_index) + [
-            _mth_recursive(leaves, start, mid)
-        ]
+        return _inclusion_proof_recursive(leaves, mid, end, leaf_index) + [_mth_recursive(leaves, start, mid)]
 
 
 def ct_inclusion_proof(leaf_hashes: Sequence[bytes], leaf_index: int) -> list[bytes]:
@@ -308,9 +299,7 @@ def verify_ct_inclusion_proof(
 # ---------------------------------------------------------------------------
 
 
-def _subproof(
-    leaves: list[bytes], m: int, start: int, end: int, complete_subtree: bool
-) -> list[bytes]:
+def _subproof(leaves: list[bytes], m: int, start: int, end: int, complete_subtree: bool) -> list[bytes]:
     """Build consistency subproof recursively.
 
     This implements the RFC 9162 SUBPROOF algorithm.
@@ -339,18 +328,12 @@ def _subproof(
     k = _largest_power_of_two_less_than(n)
 
     if m <= k:
-        return _subproof(leaves, m, start, start + k, complete_subtree) + [
-            _mth_recursive(leaves, start + k, end)
-        ]
+        return _subproof(leaves, m, start, start + k, complete_subtree) + [_mth_recursive(leaves, start + k, end)]
     else:
-        return _subproof(leaves, m - k, start + k, end, False) + [
-            _mth_recursive(leaves, start, start + k)
-        ]
+        return _subproof(leaves, m - k, start + k, end, False) + [_mth_recursive(leaves, start, start + k)]
 
 
-def ct_consistency_proof(
-    leaf_hashes: Sequence[bytes], first_tree_size: int
-) -> ConsistencyPath:
+def ct_consistency_proof(leaf_hashes: Sequence[bytes], first_tree_size: int) -> ConsistencyPath:
     """Return the RFC 9162 consistency proof between two tree sizes.
 
     The consistency proof allows a verifier to confirm that a smaller tree
@@ -377,10 +360,7 @@ def ct_consistency_proof(
     if first_tree_size < 1:
         raise ValueError("first_tree_size must be >= 1")
     if first_tree_size > second_tree_size:
-        raise ValueError(
-            f"first_tree_size ({first_tree_size}) cannot exceed "
-            f"current tree size ({second_tree_size})"
-        )
+        raise ValueError(f"first_tree_size ({first_tree_size}) cannot exceed " f"current tree size ({second_tree_size})")
 
     if first_tree_size == second_tree_size:
         return []
@@ -389,9 +369,7 @@ def ct_consistency_proof(
     return _subproof(leaves, first_tree_size, 0, second_tree_size, True)
 
 
-def ct_consistency_proof_sha256(
-    leaf_hashes: Sequence[bytes], first_tree_size: int
-) -> list[str]:
+def ct_consistency_proof_sha256(leaf_hashes: Sequence[bytes], first_tree_size: int) -> list[str]:
     """Return consistency proof sibling digests as lowercase hex.
 
     Args:
@@ -401,9 +379,7 @@ def ct_consistency_proof_sha256(
     Returns:
         List of lowercase hex strings representing the consistency proof.
     """
-    return [
-        digest.hex() for digest in ct_consistency_proof(leaf_hashes, first_tree_size)
-    ]
+    return [digest.hex() for digest in ct_consistency_proof(leaf_hashes, first_tree_size)]
 
 
 def verify_ct_consistency_proof(
