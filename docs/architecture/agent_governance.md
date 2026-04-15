@@ -6,6 +6,7 @@ This document defines the governance model for AI agents operating in the Transf
 
 This policy applies to:
 - `@transformation-portal-architect`
+- `@portal-app-steward`
 - `@transformation-portal-specialist`
 - Any future repository agents that implement, review, or propose changes
 
@@ -21,7 +22,8 @@ When guidance conflicts, the following precedence applies:
 2. Binding decision records (ADRs in `docs/architecture/`)
 3. Security and dependency policy (e.g., `docs/security/*`, banned dependency controls)
 4. Architect decisions (system authority, invariants, contracts)
-5. Specialist execution (implementation within constraints)
+5. Steward execution (managed browser boundary implementation within constraints)
+6. Specialist execution (implementation within constraints)
 
 ### Role Boundaries
 
@@ -29,14 +31,18 @@ When guidance conflicts, the following precedence applies:
 - Final authority on: security posture, dependency governance, CI/CD policy, cross-module contracts, public API/CLI stability, architectural direction.
 - Owns enforcement design: policies should be machine-checkable where feasible.
 
+**Steward**
+- Execution authority only for the managed browser boundary: `web/secure-landing/`, `portal.html`, manifest-backed portal assets, and browser-surface validation/docs work inside existing contracts.
+- Must stop and escalate when escalation criteria are met.
+
 **Specialist**
-- Execution authority only: implement and troubleshoot within governance constraints.
+- Execution authority only for backend/orchestrator, archive, ingest, machine-mode, Lux Depth, and other governed non-browser surfaces within governance constraints.
 - Must stop and escalate when escalation criteria are met.
 
 ## Stop-and-Escalate Protocol
 
 When escalation criteria are met:
-- The Specialist MUST stop implementation work and escalate.
+- The Steward or Specialist MUST stop implementation work and escalate.
 - The Architect MUST provide an explicit decision or direction before implementation proceeds.
 - Silence is not approval.
 
