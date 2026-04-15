@@ -14,33 +14,6 @@ Public API modules:
 - validation_helpers: Shared validation utilities
 """
 
-# New unified exception hierarchy (for direct use)
-from .exceptions import (
-    Phase4ConfigError,
-    Phase4Error,
-    Phase4ExtractionError,
-    Phase4InputError,
-    Phase4IntegrityError,
-    Phase4MerkleError,
-    Phase4MetadataHashError,
-    Phase4ProvenanceHashError,
-    Phase4SchemaError,
-)
-
-# Shared validation helpers
-from .validation_helpers import (
-    SHA256_HEX_RE,
-    build_path_index,
-    ensure_sha256_hex,
-    is_valid_sha256_hex,
-    require_contract_version,
-    require_sorted_relative_paths,
-    require_unique_relative_paths,
-    string_or_none,
-    validate_payload_with_schema,
-    validate_records_with_schema,
-)
-
 # Legacy imports for backward compatibility
 # Phase 4C: Capture metadata extraction
 from .canonicalize_capture_metadata import (
@@ -54,6 +27,19 @@ from .canonicalize_capture_metadata import (
     load_capture_metadata_config,
     normalize_relative_path,
     write_capture_metadata_artifact,
+)
+
+# New unified exception hierarchy (for direct use)
+from .exceptions import (
+    Phase4ConfigError,
+    Phase4Error,
+    Phase4ExtractionError,
+    Phase4InputError,
+    Phase4IntegrityError,
+    Phase4MerkleError,
+    Phase4MetadataHashError,
+    Phase4ProvenanceHashError,
+    Phase4SchemaError,
 )
 
 # Phase 4D: Metadata hashing and manifest
@@ -81,6 +67,20 @@ from .provenance_capture import (
     compute_provenance_entry_sha256,
     serialize_provenance_manifest,
     serialize_provenance_merkle,
+)
+
+# Shared validation helpers
+from .validation_helpers import (
+    SHA256_HEX_RE,
+    build_path_index,
+    ensure_sha256_hex,
+    is_valid_sha256_hex,
+    require_contract_version,
+    require_sorted_relative_paths,
+    require_unique_relative_paths,
+    string_or_none,
+    validate_payload_with_schema,
+    validate_records_with_schema,
 )
 
 # Phase 4F: Verification and reporting
