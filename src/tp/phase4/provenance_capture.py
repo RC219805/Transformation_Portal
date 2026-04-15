@@ -8,6 +8,11 @@ from typing import Any
 
 from tp.crypto.merkle import merkle_root_sha256
 
+from .exceptions import (
+    ProvenanceInputError,
+    ProvenanceMerkleSchemaValidationError,
+    ProvenanceSchemaValidationError,
+)
 from .hash_capture_metadata import (
     METADATA_CONTRACT_VERSION,
     METADATA_MANIFEST_CONTRACT_VERSION,
@@ -20,18 +25,6 @@ PROVENANCE_CONTRACT_VERSION = "tp.meta.provenance.v1"
 PROVENANCE_MERKLE_CONTRACT_VERSION = "tp.meta.provenance_merkle.v1"
 
 _SHA256_HEX_RE = re.compile(r"^[a-f0-9]{64}$")
-
-
-class ProvenanceInputError(ValueError):
-    """Raised when Phase 4E inputs violate deterministic invariants."""
-
-
-class ProvenanceSchemaValidationError(ValueError):
-    """Raised when schema validation fails for Phase 4E inputs/outputs."""
-
-
-class ProvenanceMerkleSchemaValidationError(ValueError):
-    """Raised when generated Phase 4E merkle payload fails schema validation."""
 
 
 def _build_validator(schema: dict[str, Any], *, error_cls: type[Exception], label: str) -> Any:

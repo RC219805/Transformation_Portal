@@ -30,7 +30,13 @@ Contract notes:
 
 ============================================================================
 -->
-<body data-console-view="overview" data-bootstrap-status="pending" class="shell-bg text-slate-900 dark:text-slate-100 antialiased selection:bg-cyan-500/25 transition-colors duration-300">
+<body
+    data-console-view="overview"
+    data-bootstrap-status="pending"
+    data-review-surface-js-url="__PORTAL_REVIEW_JS_URL__"
+    data-review-surface-css-url="__PORTAL_REVIEW_CSS_URL__"
+    class="shell-bg text-slate-900 dark:text-slate-100 antialiased selection:bg-cyan-500/25 transition-colors duration-300"
+>
 
     <a href="#main-content" class="skip-link rounded-lg px-4 py-2 text-sm font-medium text-white bg-indigo-600 shadow-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
         Skip to main content
@@ -653,6 +659,31 @@ Contract notes:
                                 <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="inputDir">Input Directory</label>
                                 <input type="text" id="inputDir" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors" value="./input_images" autocomplete="off" spellcheck="false" />
                                 <p id="inputDirStatus" class="field-status mt-1 text-[12px] leading-6 text-slate-500 dark:text-slate-400">Set the source folder for the next run.</p>
+                                <div id="stagedUploadShell" class="mt-3 hidden rounded-xl border border-dashed border-slate-300 dark:border-slate-700 bg-white/70 dark:bg-slate-900/60 p-4" data-ui="staged-upload-shell" aria-live="polite">
+                                    <div class="flex flex-wrap items-start justify-between gap-3">
+                                        <div>
+                                            <p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Staged Uploads</p>
+                                            <p id="stagedUploadStatus" class="mt-2 text-[12px] leading-6 text-slate-600 dark:text-slate-300">Upload a file set and the staged input directory will replace the current source path.</p>
+                                        </div>
+                                        <div class="flex flex-wrap gap-2">
+                                            <button type="button" id="stagedUploadPickFilesBtn" class="inline-flex items-center justify-center rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2 text-[12px] font-semibold text-slate-700 dark:text-slate-200 transition-colors hover:border-indigo-400 hover:text-indigo-600 dark:hover:text-indigo-300" data-ui="staged-upload-pick-files">Choose files</button>
+                                            <button type="button" id="stagedUploadPickFolderBtn" class="inline-flex items-center justify-center rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2 text-[12px] font-semibold text-slate-700 dark:text-slate-200 transition-colors hover:border-indigo-400 hover:text-indigo-600 dark:hover:text-indigo-300" data-ui="staged-upload-pick-folder">Choose folder</button>
+                                        </div>
+                                    </div>
+                                    <div id="stagedUploadDropzone" class="mt-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-950/40 px-4 py-4 text-[12px] leading-6 text-slate-600 dark:text-slate-300" data-ui="staged-upload-dropzone" tabindex="0" role="button" aria-label="Choose files or drop files for staged upload" aria-describedby="stagedUploadStatus">
+                                        Drop files here or choose a file set from disk. Relative paths are preserved for managed staging.
+                                    </div>
+                                    <div class="mt-3">
+                                        <div class="h-2 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
+                                            <div id="stagedUploadProgressBar" class="h-full w-0 rounded-full bg-indigo-500 transition-[width]" data-ui="staged-upload-progress"></div>
+                                        </div>
+                                        <p id="stagedUploadProgressLabel" class="mt-2 text-[12px] leading-6 text-slate-500 dark:text-slate-400">No upload in progress.</p>
+                                    </div>
+                                    <p id="stagedUploadSummary" class="mt-2 text-[12px] leading-6 text-slate-600 dark:text-slate-300"></p>
+                                    <p id="stagedUploadError" class="mt-1 text-[12px] leading-6 text-red-600 dark:text-red-300"></p>
+                                    <input type="file" id="stagedUploadFilesInput" class="hidden" multiple />
+                                    <input type="file" id="stagedUploadFolderInput" class="hidden" webkitdirectory directory multiple />
+                                </div>
                             </div>
                             <div>
                                 <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="outputDir">Output Directory</label>
@@ -1500,6 +1531,10 @@ Contract notes:
                                 <p class="review-provenance-label">Relative Path</p>
                                 <p id="reviewProvenancePath" class="review-provenance-value review-provenance-value-mono">Preview, metadata, and actions will appear here when outputs are indexed.</p>
                             </div>
+                            <div class="review-provenance-item review-provenance-item-wide">
+                                <p class="review-provenance-label">Integrity</p>
+                                <p id="reviewProvenanceFingerprint" class="review-provenance-value review-provenance-value-mono">Not reported</p>
+                            </div>
                             <div class="review-provenance-item">
                                 <p class="review-provenance-label">Freshness</p>
                                 <p id="reviewProvenanceFreshness" class="review-provenance-value">No live telemetry</p>
@@ -1521,6 +1556,7 @@ Contract notes:
                             <button id="openArtifactBtn" type="button" class="rounded-lg border border-slate-300 dark:border-slate-700 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled>Open</button>
                             <button id="downloadArtifactBtn" type="button" class="rounded-lg border border-slate-300 dark:border-slate-700 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled>Download</button>
                             <button id="copyArtifactPathBtn" type="button" class="rounded-lg border border-slate-300 dark:border-slate-700 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled>Copy Relative Path</button>
+                            <button id="copyArtifactFingerprintBtn" type="button" class="rounded-lg border border-slate-300 dark:border-slate-700 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled>Copy SHA-256</button>
                         </div>
                     </div>
                     <div id="runCardActions" class="hidden mb-3 items-center gap-2">
@@ -1628,6 +1664,59 @@ Contract notes:
                 <div class="panel-subtle rounded-2xl p-4">
                     <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Backend Argv Preview</p>
                     <pre id="effectiveArgvPreview" class="mt-3 command-frame min-h-[120px] rounded-2xl border border-slate-200 dark:border-slate-800 p-4 text-[11px] font-mono leading-relaxed text-slate-300 overflow-y-auto custom-scrollbar whitespace-pre-wrap break-words"></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="artifactViewerModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/72 backdrop-blur-sm p-4 dark:bg-black/80 transition-opacity" aria-hidden="true" data-ui="artifact-viewer-modal">
+        <div id="artifactViewerPanel" class="artifact-viewer-panel w-full max-w-6xl rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-800 dark:bg-slate-900" role="dialog" aria-modal="true" aria-labelledby="artifactViewerTitle" aria-describedby="artifactViewerMeta artifactViewerStatus">
+            <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div class="min-w-0">
+                    <p class="section-kicker">Artifact Viewer</p>
+                    <h2 id="artifactViewerTitle" class="mt-2 text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">Awaiting artifact selection</h2>
+                    <p id="artifactViewerMeta" class="mt-2 text-[12px] leading-6 text-slate-500 dark:text-slate-400">Open Review to inspect indexed outputs without leaving the operator console.</p>
+                    <p id="artifactViewerStatus" class="sr-only" aria-live="polite">Artifact viewer is closed.</p>
+                </div>
+                <div class="flex flex-wrap items-center gap-2">
+                    <button id="artifactViewerPrevBtn" type="button" class="rounded-lg border border-slate-300 dark:border-slate-700 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 transition-colors hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed">Previous</button>
+                    <button id="artifactViewerNextBtn" type="button" class="rounded-lg border border-slate-300 dark:border-slate-700 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 transition-colors hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed">Next</button>
+                    <button id="artifactViewerZoomOutBtn" type="button" class="rounded-lg border border-slate-300 dark:border-slate-700 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 transition-colors hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed">Zoom Out</button>
+                    <button id="artifactViewerZoomInBtn" type="button" class="rounded-lg border border-slate-300 dark:border-slate-700 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 transition-colors hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed">Zoom In</button>
+                    <button id="artifactViewerResetZoomBtn" type="button" class="rounded-lg border border-slate-300 dark:border-slate-700 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 transition-colors hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed">Reset</button>
+                    <button id="artifactViewerOpenRawBtn" type="button" class="rounded-lg border border-slate-300 dark:border-slate-700 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 transition-colors hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed">Open Raw</button>
+                    <button id="closeArtifactViewerBtn" type="button" class="rounded-full border border-slate-300 dark:border-slate-700 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-600 dark:text-slate-300 transition-colors hover:border-cyan-300 hover:text-cyan-700 dark:hover:border-cyan-700 dark:hover:text-cyan-300">Close</button>
+                </div>
+            </div>
+            <div id="artifactViewerStage" class="artifact-viewer-stage mt-5">
+                <img id="artifactViewerImage" alt="Artifact viewer preview" class="artifact-viewer-image hidden" />
+                <div id="artifactViewerFallback" class="artifact-viewer-fallback hidden">
+                    <p id="artifactViewerFallbackTitle" class="artifact-viewer-fallback-title">Inline preview unavailable</p>
+                    <p id="artifactViewerFallbackDetail" class="artifact-viewer-fallback-detail">This artifact stays reviewable through its retained metadata and the managed raw asset link.</p>
+                </div>
+            </div>
+            <div class="artifact-viewer-meta-grid mt-5">
+                <div class="panel-subtle rounded-2xl p-4">
+                    <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Relative Path</p>
+                    <p id="artifactViewerPath" class="mt-3 text-[12px] font-mono leading-6 text-slate-700 dark:text-slate-200 break-all">Not reported</p>
+                </div>
+                <div class="panel-subtle rounded-2xl p-4">
+                    <div class="flex items-start justify-between gap-3">
+                        <div>
+                            <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">SHA-256</p>
+                            <p id="artifactViewerFingerprint" class="mt-3 text-[12px] font-mono leading-6 text-slate-700 dark:text-slate-200 break-all">Not reported</p>
+                        </div>
+                        <button id="artifactViewerCopyFingerprintBtn" type="button" class="rounded-lg border border-slate-300 dark:border-slate-700 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 transition-colors hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed">Copy</button>
+                    </div>
+                </div>
+                <div class="panel-subtle rounded-2xl p-4">
+                    <div class="flex items-start justify-between gap-3">
+                        <div>
+                            <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Viewer State</p>
+                            <p id="artifactViewerZoomValue" class="mt-3 text-[12px] leading-6 text-slate-700 dark:text-slate-200">100% zoom</p>
+                        </div>
+                        <button id="artifactViewerCopyPathBtn" type="button" class="rounded-lg border border-slate-300 dark:border-slate-700 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 transition-colors hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed">Copy Path</button>
+                    </div>
                 </div>
             </div>
         </div>

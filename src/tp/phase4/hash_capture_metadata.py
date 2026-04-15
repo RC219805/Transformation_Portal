@@ -6,22 +6,15 @@ import hashlib
 import json
 from typing import Any
 
+from .exceptions import (
+    MetadataManifestInputError,
+    MetadataManifestSchemaValidationError,
+    MetadataSchemaValidationError,
+)
 from .schema_validation import build_draft202012_validator
 
 METADATA_CONTRACT_VERSION = "tp.meta.capture.v1"
 METADATA_MANIFEST_CONTRACT_VERSION = "tp.meta.capture_manifest.v1"
-
-
-class MetadataManifestInputError(ValueError):
-    """Raised when metadata input violates Phase 4D invariants."""
-
-
-class MetadataSchemaValidationError(ValueError):
-    """Raised when capture metadata fails schema validation."""
-
-
-class MetadataManifestSchemaValidationError(ValueError):
-    """Raised when generated metadata manifest fails schema validation."""
 
 
 def canonical_json_bytes(payload: Any, *, trailing_newline: bool = False) -> bytes:

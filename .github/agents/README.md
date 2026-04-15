@@ -8,13 +8,19 @@ This directory is the live custom-agent configuration surface for the Transforma
 
 - File: `transformation-portal-architect.md`
 - Role: final authority for repository-wide contracts, dependency policy, CI/CD enforcement, security posture, and architectural direction
-- Use for: ADR-bound trade-offs, public interface compatibility, workflow/packaging policy, and cross-surface governance decisions
+- Use for: ADR-bound trade-offs, public interface compatibility, workflow or packaging policy, and cross-surface governance decisions
+
+### Portal App Steward
+
+- File: `portal-app-steward.md`
+- Role: execution-focused browser-surface steward for the managed frontdoor, portal shell, manifest-backed portal assets, and browser validation contract
+- Use for: `web/secure-landing/`, `/`, `/login`, `/portal`, `/portal/bootstrap`, `/portal/assets/*`, `/portal/video/*`, `/healthz`, `portal.html`, `public/portal-assets/*`, and browser-contract docs/tests that stay within existing contracts
 
 ### Transformation Portal Specialist
 
 - File: `transformation-portal-specialist.md`
-- Role: execution-focused implementation and troubleshooting agent inside current repository governance boundaries
-- Use for: Lux Depth V3, portal/orchestrator, archive-gate, ingest, machine-mode, and targeted docs/tests/tooling work that stays within existing contracts
+- Role: execution-focused backend, Lux Depth, archive, ingest, and machine-mode implementation agent inside current repository governance boundaries
+- Use for: `app.py`, typed `/v1/*` behavior, `/ready`, Lux Depth V3, archive-gate, ingest, machine-mode, and targeted docs/tests/tooling work that stays within existing contracts
 
 ## Canonical References
 
@@ -25,6 +31,7 @@ The live profiles should stay aligned with:
 - [agent_governance.md](../../docs/architecture/agent_governance.md)
 - [CUSTOM_AGENT_GUIDE.md](../../docs/guides/CUSTOM_AGENT_GUIDE.md)
 - [transformation-portal-architect.md](./transformation-portal-architect.md)
+- [portal-app-steward.md](./portal-app-steward.md)
 - [transformation-portal-specialist.md](./transformation-portal-specialist.md)
 
 When drift appears, the profile files themselves are authoritative for role scope and escalation boundaries.
@@ -33,14 +40,22 @@ When drift appears, the profile files themselves are authoritative for role scop
 
 On GitHub.com and in supported IDEs, select the custom agent from the agents picker/dropdown rather than assuming one universal invocation syntax. If a local workflow or tool supports prompt references, keep examples consistent with the current role boundaries:
 
-- Specialist examples should stay within execution and troubleshooting scope
+- Steward examples should stay within the managed browser boundary and portal-shell scope
+- Specialist examples should stay within backend, Lux Depth, archive, ingest, and machine-mode scope
 - Architect examples should stay focused on governance, contracts, and escalation decisions
+
+Use the narrowest agent surface that matches the task:
+
+- `@portal-app-steward` for homepage, login, portal shell, bootstrap, selector, asset-manifest, and browser-validation work
+- `@transformation-portal-specialist` for backend/orchestrator, archive, ingest, machine-mode, and Lux Depth work
+- `@transformation-portal-architect` for dependency, CI/CD, security, route-contract, or ADR-bound decisions
 
 ## Support Material
 
 Living support docs:
 
 - `docs/guides/CUSTOM_AGENT_GUIDE.md`
+- `docs/reference/AGENT_QUICK_REFERENCE.md`
 - `QUICK_START_v2.md`
 - `RAG_IMPLEMENTATION_SUMMARY.md`
 

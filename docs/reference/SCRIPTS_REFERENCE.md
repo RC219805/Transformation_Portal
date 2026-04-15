@@ -565,7 +565,7 @@ python scripts/install_modules.py --extras ml,tiff
 ## Script Dependencies
 
 ### Core Dependencies
-- Python 3.10+
+- Python 3.11+
 - NumPy, Pillow, scipy
 - PyTorch 2.0+ (for ML pipelines)
 - FFmpeg 6+ (for video processing)

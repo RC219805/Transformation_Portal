@@ -6,7 +6,18 @@
 # - Pre-commit auto-formats any staged files as a safety net
 # - CI performs verification only (no fixing)
 #
-# Install: pre-commit install
+# Install:
+#   make install-hooks
+#   # or
+#   pre-commit install -f
+#
+# Manual run:
+#   make pre-commit
+#   # or
+#   pre-commit run --all-files
+#
+# For the unified quality gate without the pre-commit framework:
+#   ./scripts/pre_commit_hook.sh
 
 repos:
   # Zero-diff formatting: auto-format changed files before commit
@@ -72,6 +83,3 @@ repos:
         language: system
         files: ^tests/.*\.py$
         types: [python]
-
-# Manual run: pre-commit run --all-files
-# Install: pre-commit install

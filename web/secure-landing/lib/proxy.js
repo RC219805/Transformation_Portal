@@ -34,7 +34,7 @@ export function buildUpstreamUrl(pathname, search = "") {
 
 export function buildUpstreamHeaders(
   sourceHeaders,
-  { backendApiKey, actor, preferIdentityEncoding = false, forwarding = null }
+  { backendApiKey, actor, preferIdentityEncoding = false, forwarding = null, traceparent = "" }
 ) {
   const headers = new Headers();
 
@@ -60,6 +60,7 @@ export function buildUpstreamHeaders(
 
   headers.set("Authorization", `Bearer ${backendApiKey}`);
   headers.set("x-api-key", backendApiKey);
+  if (traceparent) headers.set("traceparent", traceparent);
 
   if (actor?.username) headers.set("x-tp-actor", actor.username);
   if (actor?.accessEmail) headers.set("x-tp-actor-email", actor.accessEmail);

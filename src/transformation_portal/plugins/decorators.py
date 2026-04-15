@@ -9,6 +9,10 @@ from packaging import version as pkg_version
 from .interface import PluginMetadata, PluginType
 from .registry import get_global_registry
 
+# Note: For standard function/class deprecation, use the compat module:
+# from transformation_portal.compat import deprecated, renamed_class
+# This module provides plugin-specific deprecation with metadata tracking.
+
 
 def plugin(
     name: str,

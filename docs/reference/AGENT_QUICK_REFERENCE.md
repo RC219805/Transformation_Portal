@@ -1,109 +1,77 @@
 # Custom Agent Quick Reference
 
-## Using the Agent
+## Use The Right Agent
 
-```
-@transformation-portal-specialist [your request]
-```
+### `@portal-app-steward`
 
-## Common Use Cases
+Use for managed browser-surface work:
 
-### 🎨 Pipeline Development
-```
-@transformation-portal-specialist Add a depth-based atmospheric haze effect
-to the ArchitecturalDepthPipeline that increases with distance
-```
+- homepage, login, and portal shell behavior
+- `/portal/bootstrap`, managed recovery, and same-origin browser flow checks
+- `web/secure-landing/`
+- `portal.html`
+- `public/portal-assets/*`
+- `config/portal_asset_manifest.json`
+- browser-smoke and selector-stability work
 
-### ⚡ Performance Optimization
-```
-@transformation-portal-specialist The batch processor uses 18GB RAM for 4K
-images. Optimize memory usage while maintaining quality
-```
+Example:
 
-### 🐛 Troubleshooting
-```
-@transformation-portal-specialist Getting "CUDA out of memory" when
-processing more than 5 images. What's the best solution?
+```text
+@portal-app-steward update the managed /portal loading shell, preserve data-ui anchors, and list the exact browser validation commands
 ```
 
-### 🎬 Video Processing
-```
-@transformation-portal-specialist Create a new video grading preset for
-beachfront properties with warm sunset tones
-```
+### `@transformation-portal-specialist`
 
-### 🧪 Testing
-```
-@transformation-portal-specialist Write comprehensive tests for the new
-zone-based tone mapping feature including edge cases
-```
+Use for backend and governed execution work:
 
-### 🎯 Material Response
-```
-@transformation-portal-specialist Implement a new material detection algorithm
-for identifying glass surfaces in architectural renders
-```
+- `app.py`
+- typed `/v1/*` behavior
+- `/ready`
+- Lux Depth V3
+- archive-gate
+- machine-mode and ingest
 
-### 🔧 FFmpeg Workflows
-```
-@transformation-portal-specialist Build an FFmpeg filter graph for HDR
-(PQ) to SDR conversion with proper tone mapping
+Example:
+
+```text
+@transformation-portal-specialist debug why /v1/jobs/{id}/events is missing the terminal done event in contract tests
 ```
 
-## Agent Expertise Areas
+### `@transformation-portal-architect`
 
-| Area | What It Knows |
-|------|---------------|
-| **Depth Pipeline** | Depth Anything V2, CoreML optimization, zone-based processing |
-| **Lux Render** | SDXL, ControlNet, Real-ESRGAN, AI enhancement workflows |
-| **Material Response** | Surface detection, physics-based enhancement, material-specific processing |
-| **Video Grading** | FFmpeg filter graphs, HDR/SDR, LUT application, tone mapping |
-| **Performance** | Profiling, caching, batch optimization, GPU/CoreML acceleration |
-| **Testing** | Pytest, hypothesis, mocking strategies, CI/CD optimization |
-| **Color Science** | ACES ODT, LUTs, color spaces, metadata preservation |
+Use for governance and approval-bound changes:
 
-## Quick Tips
+- dependency policy
+- CI/CD policy
+- security posture
+- route-contract or public-interface changes
+- ADR interpretation
 
-### ✅ DO:
-- Be specific about which pipeline or component
-- Provide error messages and context
-- Ask for complete solutions (code + tests + docs)
-- Request performance benchmarks
-- Ask follow-up questions to refine
+Example:
 
-### ❌ DON'T:
-- Ask vague questions without context
-- Omit error messages or logs
-- Skip testing requirements
-- Ignore performance considerations
+```text
+@transformation-portal-architect review this proposal to change the managed /v1 proxy contract and list the required enforcement updates
+```
 
-## Example Workflows
+## Quick Decision Guide
 
-### Adding a New Feature
-1. "Design architecture for [feature]"
-2. "Implement [component] with tests"
-3. "Profile and optimize [code]"
-4. "Review this implementation"
-5. "Document [feature] with examples"
+- Browser shell or frontdoor question: use `@portal-app-steward`
+- Backend/orchestrator, Lux Depth, archive, ingest, or machine-mode question: use `@transformation-portal-specialist`
+- Governance, dependency, security, CI/CD, or contract decision: use `@transformation-portal-architect`
 
-### Debugging an Issue
-1. "I'm getting [error]. What's the cause?"
-2. "Show diagnostic commands to investigate"
-3. "Implement the fix with proper error handling"
-4. "Add tests to prevent this in the future"
+## Prompt Tips
 
-### Optimizing Performance
-1. "Profile [pipeline] and identify bottlenecks"
-2. "Implement the top 3 optimizations"
-3. "Create benchmark tests to verify improvement"
-4. "Update performance documentation"
+- Name the active surface and file when you can.
+- Include the failing route, selector, test, or command.
+- Ask for tests and docs to move with behavioral changes.
+- Call out whether you need implementation, review, or validation guidance.
 
 ## More Information
 
 - **Full Guide**: [docs/guides/CUSTOM_AGENT_GUIDE.md](../guides/CUSTOM_AGENT_GUIDE.md)
-- **Agent README**: [.github/agents/README.md](../.github/agents/README.md)
-- **Implementation Summary**: [CUSTOM_AGENT_SUMMARY.md](../CUSTOM_AGENT_SUMMARY.md)
+- **Agent README**: [.github/agents/README.md](../../.github/agents/README.md)
+- **Quick Start**: [QUICK_START_v2.md](../../.github/agents/QUICK_START_v2.md)
 
 ---
 
-**Quick Start**: Just type `@transformation-portal-specialist` followed by what you need help with!
+**Quick Start**: choose the narrowest live agent and start the prompt with its handle.
