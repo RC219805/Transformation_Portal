@@ -6,10 +6,18 @@ import hashlib
 import json
 import re
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from tp.crypto.merkle import merkle_root_sha256
 
+from .exceptions import (
+    Phase4AlignmentError,
+    Phase4MerkleMismatchError,
+    Phase4MetadataHashMismatchError,
+    Phase4ProvenanceEntryHashMismatchError,
+    Phase4SchemaValidationError,
+    Phase4VerificationInputError,
+)
 from .hash_capture_metadata import (
     METADATA_CONTRACT_VERSION,
     METADATA_MANIFEST_CONTRACT_VERSION,
@@ -40,30 +48,6 @@ FAILURE_LABEL_MERKLE_MISMATCH = "MERKLE_MISMATCH"
 FAILURE_LABEL_REPORT_WRITE_FAILURE = "REPORT_WRITE_FAILURE"
 
 _SHA256_HEX_RE = re.compile(r"^[a-f0-9]{64}$")
-
-
-class Phase4VerificationInputError(ValueError):
-    """Raised when verifier inputs cannot be loaded or parsed."""
-
-
-class Phase4SchemaValidationError(ValueError):
-    """Raised when schema validation fails for artifacts or report payloads."""
-
-
-class Phase4AlignmentError(ValueError):
-    """Raised when deterministic alignment/order/version invariants fail."""
-
-
-class Phase4MetadataHashMismatchError(ValueError):
-    """Raised when recomputed metadata digest mismatches Phase 4D manifest."""
-
-
-class Phase4ProvenanceEntryHashMismatchError(ValueError):
-    """Raised when recomputed provenance-entry digest mismatches Phase 4E manifest."""
-
-
-class Phase4MerkleMismatchError(ValueError):
-    """Raised when recomputed provenance Merkle metadata mismatches Phase 4E artifact."""
 
 
 def _build_validator(schema: dict[str, Any], *, error_cls: type[Exception], label: str) -> Any:
@@ -248,8 +232,39 @@ def verify_phase4_chain_payloads(
     provenance_manifest_schema: dict[str, Any],
     provenance_merkle_schema: dict[str, Any],
     strict_input_order: bool = True,
+    progress_callback: Callable[[int, int, str], None] | None = None,
 ) -> dict[str, Any]:
-    """Recompute and validate the full Phase 4C/4D/4E provenance chain."""
+    """Recompute and validate the full Phase 4C/4D/4E provenance chain.
+
+    Args:
+        capture_payload: Phase 4C capture metadata records.
+        metadata_manifest_payload: Phase 4D metadata manifest.
+        provenance_manifest_payload: Phase 4E provenance manifest.
+        provenance_merkle_payload: Phase 4E Merkle root payload.
+        metadata_schema: JSON schema for capture metadata records.
+        metadata_manifest_schema: JSON schema for metadata manifest.
+        provenance_manifest_schema: JSON schema for provenance manifest.
+        provenance_merkle_schema: JSON schema for provenance Merkle payload.
+        strict_input_order: Require inputs to be sorted by relative_path.
+        progress_callback: Optional callback for progress reporting.
+            Called with (current, total, message) during verification.
+
+    Returns:
+        Dictionary with 'computed' block containing verification results.
+
+    Raises:
+        Phase4SchemaValidationError: If schema validation fails.
+        Phase4AlignmentError: If alignment/order invariants fail.
+        Phase4MetadataHashMismatchError: If metadata hash mismatches.
+        Phase4ProvenanceEntryHashMismatchError: If provenance hash mismatches.
+        Phase4MerkleMismatchError: If Merkle verification fails.
+    """
+    # Use 5 major stages for progress: validation, alignment check, record verification, merkle check, complete
+    total_stages = 5
+
+    if progress_callback:
+        progress_callback(0, total_stages, "Validating input payloads...")
+
     if not isinstance(capture_payload, list):
         raise Phase4SchemaValidationError("capture metadata payload must be a JSON array")
     if not isinstance(metadata_manifest_payload, dict):
@@ -264,10 +279,16 @@ def verify_phase4_chain_payloads(
     _validate_payload(provenance_manifest_payload, provenance_manifest_schema, label="provenance_manifest")
     _validate_payload(provenance_merkle_payload, provenance_merkle_schema, label="provenance_merkle")
 
+    if progress_callback:
+        progress_callback(1, total_stages, "Checking contract versions...")
+
     _require_capture_contract_version(capture_payload)
     metadata_manifest_entries = _require_metadata_manifest_contract_version(metadata_manifest_payload)
     provenance_manifest_entries = _require_provenance_manifest_contract_version(provenance_manifest_payload)
     _require_provenance_merkle_contract_version(provenance_merkle_payload)
+
+    if progress_callback:
+        progress_callback(2, total_stages, "Checking path uniqueness and ordering...")
 
     _require_unique_relative_paths(capture_payload, label="capture metadata")
     _require_unique_relative_paths(metadata_manifest_entries, label="metadata manifest")
@@ -303,10 +324,15 @@ def verify_phase4_chain_payloads(
             f"missing_in_capture={missing_in_capture_from_provenance_manifest}"
         )
 
+    total_records = len(capture_by_path)
+    if progress_callback:
+        progress_callback(3, total_stages, f"Verifying {total_records} records...")
+
     recomputed_metadata_hashes: list[str] = []
     recomputed_provenance_entry_hashes: list[str] = []
 
-    for relative_path in sorted(capture_by_path):
+    sorted_paths = sorted(capture_by_path)
+    for relative_path in sorted_paths:
         capture_record = capture_by_path[relative_path]
         metadata_manifest_entry = metadata_manifest_by_path[relative_path]
         provenance_manifest_entry = provenance_manifest_by_path[relative_path]
@@ -388,6 +414,9 @@ def verify_phase4_chain_payloads(
         recomputed_metadata_hashes.append(recomputed_metadata_sha256)
         recomputed_provenance_entry_hashes.append(recomputed_provenance_entry_sha256)
 
+    if progress_callback:
+        progress_callback(4, total_stages, "Verifying Merkle root...")
+
     leaf_hashes = [bytes.fromhex(digest_hex) for digest_hex in recomputed_provenance_entry_hashes]
     recomputed_provenance_merkle_root = merkle_root_sha256(leaf_hashes)
     expected_leaf_count = provenance_merkle_payload.get("leaf_count")
@@ -406,6 +435,9 @@ def verify_phase4_chain_payloads(
             "provenance_merkle_root mismatch: "
             f"recomputed={recomputed_provenance_merkle_root}, expected={expected_provenance_merkle_root}"
         )
+
+    if progress_callback:
+        progress_callback(5, total_stages, "Verification complete")
 
     metadata_sha256_summary_sha256 = _sha256_bytes("".join(recomputed_metadata_hashes).encode("ascii"))
     provenance_entry_sha256_summary_sha256 = _sha256_bytes("".join(recomputed_provenance_entry_hashes).encode("ascii"))
