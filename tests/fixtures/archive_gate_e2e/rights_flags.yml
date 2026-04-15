@@ -1,0 +1,18 @@
+# Archive Rights Policy Fixture for E2E Testing
+# This policy is used by archive-gate-a rights-apply command
+version: "1.0"
+default_status: "pending_review"
+
+rules:
+  - pattern: "*.txt"
+    status: "cleared"
+    reason: "text_file_auto_cleared"
+  - pattern: "*.bin"
+    status: "cleared"
+    reason: "binary_file_auto_cleared"
+  - pattern: "*.tif"
+    status: "requires_review"
+    reason: "image_requires_manual_review"
+  - pattern: "*.tiff"
+    status: "requires_review"
+    reason: "image_requires_manual_review"
