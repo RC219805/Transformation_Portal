@@ -7,7 +7,6 @@ marking and tracking deprecated code.
 from __future__ import annotations
 
 import warnings
-from typing import Any
 
 import pytest
 
@@ -143,9 +142,8 @@ class TestDeprecationIntrospection:
         def old_func() -> str:
             return "result"
 
-        info = get_deprecation_info(old_func)
+        info = get_deprecation_info(old_func) or {}
 
-        assert info is not None
         assert info["replacement"] == "new_func"
         assert info["removal_version"] == "2.0.0"
         assert info["reason"] == "Legacy"

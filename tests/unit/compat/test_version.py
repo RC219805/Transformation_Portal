@@ -101,44 +101,63 @@ class TestVersionComparison:
     def test_equality(self) -> None:
         """Test version equality."""
         assert Version("1.2.3") == Version("1.2.3")
-        assert not (Version("1.2.3") == Version("1.2.4"))
+        assert Version("1.2.3") != Version("1.2.4")
+        assert Version("2.0.0-beta") != Version("2.0.0")
 
     def test_not_equal(self) -> None:
         """Test version inequality."""
         assert Version("1.2.3") != Version("1.2.4")
-        assert not (Version("1.2.3") != Version("1.2.3"))
+        assert Version("1.2.3") == Version("1.2.3")
+        assert Version("2.0.0-alpha") != Version("2.0.0")
 
     def test_less_than(self) -> None:
         """Test less-than comparison."""
         assert Version("1.0.0") < Version("2.0.0")
         assert Version("1.1.0") < Version("1.2.0")
         assert Version("1.1.1") < Version("1.1.2")
-        assert not (Version("2.0.0") < Version("1.0.0"))
+        assert Version("2.0.0-beta") < Version("2.0.0")
+        assert Version("2.0.0") >= Version("1.0.0")
+
+    @pytest.mark.parametrize(
+        ("left", "right"),
+        [
+            ("2.0.0-alpha", "2.0.0-beta"),
+            ("2.0.0-alpha.1", "2.0.0-alpha.beta"),
+            ("2.0.0-alpha.1", "2.0.0-alpha.2"),
+            ("2.0.0-alpha.1", "2.0.0-alpha.1.1"),
+            ("2.0.0-1", "2.0.0-alpha"),
+            ("2.0.0-rc.1", "2.0.0"),
+        ],
+    )
+    def test_prerelease_ordering(self, left: str, right: str) -> None:
+        """Test SemVer prerelease precedence rules."""
+        assert Version(left) < Version(right)
 
     def test_less_than_or_equal(self) -> None:
         """Test less-than-or-equal comparison."""
         assert Version("1.0.0") <= Version("2.0.0")
         assert Version("1.0.0") <= Version("1.0.0")
-        assert not (Version("2.0.0") <= Version("1.0.0"))
+        assert Version("2.0.0") > Version("1.0.0")
 
     def test_greater_than(self) -> None:
         """Test greater-than comparison."""
         assert Version("2.0.0") > Version("1.0.0")
         assert Version("1.2.0") > Version("1.1.0")
         assert Version("1.1.2") > Version("1.1.1")
-        assert not (Version("1.0.0") > Version("2.0.0"))
+        assert Version("1.0.0") <= Version("2.0.0")
 
     def test_greater_than_or_equal(self) -> None:
         """Test greater-than-or-equal comparison."""
         assert Version("2.0.0") >= Version("1.0.0")
         assert Version("1.0.0") >= Version("1.0.0")
-        assert not (Version("1.0.0") >= Version("2.0.0"))
+        assert Version("1.0.0") < Version("2.0.0")
 
     def test_comparison_with_non_version_returns_not_implemented(self) -> None:
-        """Test comparison with non-Version returns NotImplemented."""
+        """Test non-Version comparisons fall back to Python comparison semantics."""
         v = Version("1.0.0")
-        assert v.__eq__("1.0.0") is NotImplemented
-        assert v.__lt__("1.0.0") is NotImplemented
+        assert (v == "1.0.0") is False
+        with pytest.raises(TypeError):
+            _ = v < "1.0.0"
 
 
 class TestVersionHashability:
@@ -157,12 +176,28 @@ class TestVersionHashability:
         # Note: hash collision is possible but unlikely for adjacent versions
         assert v1 != v2
 
+    def test_release_and_prerelease_have_distinct_hash_and_identity(self) -> None:
+        """Test prerelease tags participate in equality and hashing."""
+        release = Version("2.0.0")
+        prerelease = Version("2.0.0-beta")
+
+        assert release != prerelease
+        assert hash(release) != hash(prerelease)
+
     def test_version_in_set(self) -> None:
         """Test Version can be used in sets."""
         versions = {Version("1.0.0"), Version("2.0.0"), Version("1.0.0")}
         assert len(versions) == 2
         assert Version("1.0.0") in versions
         assert Version("3.0.0") not in versions
+
+    def test_release_and_prerelease_are_distinct_set_members(self) -> None:
+        """Test release and prerelease versions remain distinct in sets."""
+        versions = {Version("2.0.0-beta"), Version("2.0.0")}
+
+        assert len(versions) == 2
+        assert Version("2.0.0-beta") in versions
+        assert Version("2.0.0") in versions
 
     def test_version_as_dict_key(self) -> None:
         """Test Version can be used as dict key."""
@@ -172,6 +207,16 @@ class TestVersionHashability:
         }
         assert version_map[Version("1.0.0")] == "stable"
         assert version_map[Version("2.0.0-beta")] == "beta"
+
+    def test_release_and_prerelease_are_distinct_dict_keys(self) -> None:
+        """Test release and prerelease versions do not overwrite each other."""
+        version_map = {
+            Version("2.0.0-beta"): "beta",
+            Version("2.0.0"): "stable",
+        }
+
+        assert version_map[Version("2.0.0-beta")] == "beta"
+        assert version_map[Version("2.0.0")] == "stable"
 
 
 class TestVersionRepresentation:
@@ -282,6 +327,10 @@ class TestCheckVersionCompatibility:
         """Test returns False when current < required."""
         assert check_version_compatibility("1.0.0", "2.0.0") is False
 
+    def test_prerelease_does_not_satisfy_release_requirement(self) -> None:
+        """Test prerelease versions sort below their final release."""
+        assert check_version_compatibility("2.0.0-beta", "2.0.0") is False
+
     def test_invalid_version_returns_false(self) -> None:
         """Test returns False for invalid version strings."""
         assert check_version_compatibility("invalid", "1.0.0") is False
@@ -326,9 +375,17 @@ class TestVersionInRange:
         """Test max_version is exclusive by default."""
         assert version_in_range("2.0.0", min_version="1.0.0", max_version="2.0.0") is False
 
+    def test_prerelease_below_exclusive_max_release(self) -> None:
+        """Test prerelease versions remain below the final release max."""
+        assert version_in_range("2.0.0-beta", min_version="1.0.0", max_version="2.0.0") is True
+
     def test_at_max_inclusive_when_specified(self) -> None:
         """Test max_version can be inclusive."""
         assert version_in_range("2.0.0", min_version="1.0.0", max_version="2.0.0", inclusive_max=True) is True
+
+    def test_prerelease_respects_inclusive_max(self) -> None:
+        """Test prereleases remain in range with inclusive max release."""
+        assert version_in_range("2.0.0-beta", min_version="1.0.0", max_version="2.0.0", inclusive_max=True) is True
 
     def test_below_range(self) -> None:
         """Test version below range."""

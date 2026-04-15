@@ -51,7 +51,7 @@ class Version:
     # Regex for SemVer-ish strings
     _VERSION_PATTERN = re.compile(r"^(\d+)\.(\d+)(?:\.(\d+))?(?:[.-](.+))?$")
 
-    __slots__ = ("raw", "major", "minor", "patch", "prerelease", "_tuple")
+    __slots__ = ("raw", "major", "minor", "patch", "prerelease", "_comparison_key")
 
     def __init__(self, version_str: str) -> None:
         """Initialize Version from a version string.
@@ -64,8 +64,7 @@ class Version:
         """
         self.raw = version_str
         self.major, self.minor, self.patch, self.prerelease = self._parse(version_str)
-        # Cache tuple for comparison/hashing performance
-        self._tuple = (self.major, self.minor, self.patch)
+        self._comparison_key = self._build_comparison_key()
 
     def _parse(self, v: str) -> Tuple[int, int, int, str]:
         """Parse version string into components.
@@ -81,10 +80,7 @@ class Version:
         """
         match = self._VERSION_PATTERN.match(v)
         if not match:
-            raise ValueError(
-                f"Invalid version string: {v!r}. "
-                "Expected format: MAJOR.MINOR[.PATCH][-PRERELEASE]"
-            )
+            raise ValueError(f"Invalid version string: {v!r}. " "Expected format: MAJOR.MINOR[.PATCH][-PRERELEASE]")
 
         major = int(match.group(1))
         minor = int(match.group(2))
@@ -92,6 +88,32 @@ class Version:
         prerelease = match.group(4) or ""
 
         return major, minor, patch, prerelease
+
+    def _build_comparison_key(
+        self,
+    ) -> tuple[int, int, int, int, tuple[tuple[int, int | str], ...]]:
+        """Build a comparison key that follows SemVer prerelease precedence."""
+        prerelease_rank = 1
+        prerelease_key: tuple[tuple[int, int | str], ...] = ()
+
+        if self.prerelease:
+            prerelease_rank = 0
+            prerelease_key = tuple(self._encode_prerelease_identifier(identifier) for identifier in self.prerelease.split("."))
+
+        return (
+            self.major,
+            self.minor,
+            self.patch,
+            prerelease_rank,
+            prerelease_key,
+        )
+
+    @staticmethod
+    def _encode_prerelease_identifier(identifier: str) -> tuple[int, int | str]:
+        """Encode a prerelease identifier for tuple comparison."""
+        if identifier.isdigit():
+            return (0, int(identifier))
+        return (1, identifier)
 
     @property
     def is_prerelease(self) -> bool:
@@ -115,19 +137,19 @@ class Version:
 
     def __hash__(self) -> int:
         """Return hash for Version (enables use in sets/dicts)."""
-        return hash(self._tuple)
+        return hash(self._comparison_key)
 
     def __eq__(self, other: object) -> bool:
         """Check equality with another Version."""
         if not isinstance(other, Version):
             return NotImplemented
-        return self._tuple == other._tuple
+        return self._comparison_key == other._comparison_key
 
     def __lt__(self, other: object) -> bool:
         """Check if this version is less than another."""
         if not isinstance(other, Version):
             return NotImplemented
-        return self._tuple < other._tuple
+        return self._comparison_key < other._comparison_key
 
     @classmethod
     def from_tuple(cls, version_tuple: Tuple[int, int, int], prerelease: str = "") -> "Version":
@@ -233,9 +255,7 @@ def require_version(min_version: str, *, package_name: str = "Transformation Por
     from transformation_portal import __version__ as current_ver
 
     if not check_version_compatibility(current_ver, min_version):
-        raise RuntimeError(
-            f"{package_name} v{min_version}+ required. Found v{current_ver}."
-        )
+        raise RuntimeError(f"{package_name} v{min_version}+ required. Found v{current_ver}.")
 
 
 def version_in_range(

@@ -100,8 +100,7 @@ class LegacyAPIShim:
         if not hasattr(real_object, target_name):
             raise AttributeError(
                 f"'{obj_name}' (shim for {type(real_object).__name__}) "
-                f"has no attribute '{name}'"
-                + (f" (mapped to '{target_name}')" if name != target_name else "")
+                f"has no attribute '{name}'" + (f" (mapped to '{target_name}')" if name != target_name else "")
             )
 
         # Log usage of deprecated shim (optionally once per attribute)
@@ -112,8 +111,7 @@ class LegacyAPIShim:
             if warn_once:
                 warned.add(warn_key)
             logger.warning(
-                "Accessing deprecated object '%s'. Forwarding '%s' -> '%s'. "
-                "Please update code to use %s directly.",
+                "Accessing deprecated object '%s'. Forwarding '%s' -> '%s'. " "Please update code to use %s directly.",
                 obj_name,
                 name,
                 target_name,
