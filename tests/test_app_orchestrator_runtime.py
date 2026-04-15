@@ -3112,10 +3112,7 @@ def test_archive_gate_a_rights_apply_ready_when_inputs_exist(tmp_path: Path) -> 
     manifest_jsonl.write_text('{"id":"asset-1"}\n', encoding="utf-8")
     policy_yaml = tmp_path / "rights_flags.yml"
     policy_yaml.write_text(
-        "version: 1\n"
-        "default_owner: archive-ops\n"
-        "default_flags:\n"
-        "  - review_required\n",
+        "version: 1\n" "default_owner: archive-ops\n" "default_flags:\n" "  - review_required\n",
         encoding="utf-8",
     )
 
