@@ -1,5 +1,32 @@
-"""Cryptographic helpers for deterministic contract surfaces."""
+"""Cryptographic helpers for deterministic contract surfaces.
 
+This package provides Merkle tree implementations for integrity verification:
+
+- merkle_root_sha256: Simple duplicate-last pairing (legacy/provenance use)
+- ct_* functions: RFC 9162 Certificate Transparency-style trees with
+  verifiable inclusion proofs (artifact trees, evidence bundles)
+"""
+
+from .ct_merkle import (
+    ct_inclusion_proof,
+    ct_inclusion_proof_sha256,
+    ct_leaf_hash,
+    ct_merkle_root,
+    ct_merkle_root_sha256,
+    ct_node_hash,
+    verify_ct_inclusion_proof,
+)
 from .merkle import merkle_root_sha256
 
-__all__ = ["merkle_root_sha256"]
+__all__ = [
+    # Legacy/provenance Merkle
+    "merkle_root_sha256",
+    # CT-style Merkle (RFC 9162)
+    "ct_leaf_hash",
+    "ct_node_hash",
+    "ct_merkle_root",
+    "ct_merkle_root_sha256",
+    "ct_inclusion_proof",
+    "ct_inclusion_proof_sha256",
+    "verify_ct_inclusion_proof",
+]
