@@ -867,6 +867,7 @@ def test_portal_events_accept_artifact_viewer_review_events(
             "surface": "artifact_review",
             "metadata": {
                 "job_id": "job_1234abcd",
+                "pipeline": "lux-depth-v3",
                 "media_kind": "image",
                 "artifact_fingerprint": "abcdef1234",
                 "viewer_mode": "modal",

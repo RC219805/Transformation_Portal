@@ -3502,6 +3502,8 @@ def _portal_sanitize_metadata(metadata: Any) -> Dict[str, Any]:
         key_text = str(key or "").strip().lower()
         if not _portal_is_token(key_text):
             continue
+        if key_text == "pipeline":
+            continue
         if isinstance(value, bool):
             sanitized[key_text] = value
             continue

@@ -104,6 +104,10 @@ def _metric_result(
     return result
 
 
+def _visibility_result(name: str, value: Optional[float]) -> Dict[str, Any]:
+    return _metric_result(name, value)
+
+
 def _overall_status(results: Iterable[Dict[str, Any]]) -> str:
     statuses = [str(result.get("status") or INSUFFICIENT) for result in results]
     if not statuses:
@@ -175,19 +179,22 @@ def build_report(
         viewer_success_rate = max(viewer_open_count - viewer_fallback_count, 0) / viewer_open_count * 100.0
 
     m1_inputs = [
-        metric_results["lcp_p75_ms"],
-        metric_results["inp_p75_ms"],
-        metric_results["cls_p75"],
-        metric_results["bootstrap_ready_p75_ms"],
-        metric_results["first_view_interactive_p75_ms"],
-        metric_results["portal_shell_rendered_p75_ms"],
+        _visibility_result("lcp_p75_visible", lcp_p75),
+        _visibility_result("inp_p75_visible", inp_p75),
+        _visibility_result("cls_p75_visible", cls_p75),
+        _visibility_result("bootstrap_ready_p75_visible", bootstrap_ready_p75),
+        _visibility_result("first_view_interactive_p75_visible", first_view_interactive_p75),
+        _visibility_result("portal_shell_rendered_p75_visible", portal_shell_rendered_p75),
+        _visibility_result("sse_reconnect_count_visible", float(sse_reconnect_count)),
     ]
     if queue_submit_p75 is not None:
-        m1_inputs.append(metric_results["queue_submit_p75_ms"])
+        m1_inputs.append(_visibility_result("queue_submit_p75_visible", queue_submit_p75))
     elif queue_cancel_p75 is not None:
-        m1_inputs.append(metric_results["queue_cancel_p75_ms"])
+        m1_inputs.append(_visibility_result("queue_cancel_p75_visible", queue_cancel_p75))
     else:
-        m1_inputs.append(_metric_result("queue_interaction_visibility", None))
+        m1_inputs.append(_visibility_result("queue_interaction_visibility", None))
+
+    m1_status = _overall_status(m1_inputs)
 
     m4_inputs = [
         metric_results["lcp_p75_ms"],
@@ -214,8 +221,8 @@ def build_report(
         "metrics": metric_results,
         "milestones": {
             "m1_measurement_foundation": {
-                "status": _overall_status(m1_inputs),
-                "rum_visibility_confirmed": _overall_status(m1_inputs) != INSUFFICIENT,
+                "status": m1_status,
+                "rum_visibility_confirmed": m1_status != INSUFFICIENT,
             },
             "m4_performance": {
                 "status": _overall_status(m4_inputs),

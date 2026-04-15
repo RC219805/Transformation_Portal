@@ -245,6 +245,65 @@ def test_portal_modernization_evidence_skips_non_object_json_lines(tmp_path: Pat
     assert "skipped non-object json line" in result.stderr
 
 
+def test_portal_modernization_evidence_keeps_m1_visible_when_thresholds_fail(tmp_path: Path) -> None:
+    rum_path = tmp_path / "portal-rum.jsonl"
+    _write_jsonl(
+        rum_path,
+        [
+            {
+                "schema": "tp.orchestrator.portal_rum.v1",
+                "event_type": "core_web_vital",
+                "metric": "lcp",
+                "value": 4100.0,
+            },
+            {
+                "schema": "tp.orchestrator.portal_rum.v1",
+                "event_type": "core_web_vital",
+                "metric": "inp",
+                "value": 320.0,
+            },
+            {
+                "schema": "tp.orchestrator.portal_rum.v1",
+                "event_type": "core_web_vital",
+                "metric": "cls",
+                "value": 0.22,
+            },
+            {
+                "schema": "tp.orchestrator.portal_rum.v1",
+                "event_type": "bootstrap_ready",
+                "value": 180.0,
+            },
+            {
+                "schema": "tp.orchestrator.portal_rum.v1",
+                "event_type": "first_view_interactive",
+                "value": 240.0,
+            },
+            {
+                "schema": "tp.orchestrator.portal_rum.v1",
+                "event_type": "portal_shell_rendered",
+                "value": 95.0,
+            },
+            {
+                "schema": "tp.orchestrator.portal_rum.v1",
+                "event_type": "queue_request",
+                "metric": "submit",
+                "value": 225.0,
+            },
+        ],
+    )
+
+    result = _run_cli("--rum-log", str(rum_path), "--format", "json")
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["milestones"]["m1_measurement_foundation"] == {
+        "rum_visibility_confirmed": True,
+        "status": "pass",
+    }
+    assert payload["metrics"]["lcp_p75_ms"]["status"] == "fail"
+    assert payload["milestones"]["m4_performance"]["status"] == "fail"
+
+
 def test_portal_modernization_evidence_marks_m5_fail_when_viewer_success_rate_misses_target(tmp_path: Path) -> None:
     rum_path = tmp_path / "portal-rum.jsonl"
     event_path = tmp_path / "portal-events.jsonl"

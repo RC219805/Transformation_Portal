@@ -54,7 +54,6 @@ function createDeferredReviewSurfaceApi(host) {
   function _artifactViewerEventMetadata(job, artifact, extra = {}) {
     const metadata = {
       job_id: _normalizeSelectedJobId(job?.id),
-      pipeline: String(job?.pipeline || ""),
       media_kind: String(artifact?.media_kind || "file"),
       artifact_fingerprint: artifactFingerprint(artifact).toLowerCase(),
       viewer_mode: "modal"

@@ -1198,6 +1198,7 @@ def test_portal_artifact_viewer_modal_is_feature_flagged_and_keyboard_complete()
     open_body = _extract_js_function_body(review_content, "_openArtifactViewer")
     navigate_body = _extract_js_function_body(review_content, "_navigateArtifactViewerSelection")
     close_body = _extract_js_function_body(review_content, "_closeArtifactViewer")
+    viewer_metadata_body = _extract_js_function_body(review_content, "_artifactViewerEventMetadata")
 
     assert 'id="artifactViewerModal"' in content
     assert 'id="artifactViewerPanel"' in content
@@ -1228,6 +1229,7 @@ def test_portal_artifact_viewer_modal_is_feature_flagged_and_keyboard_complete()
     assert "_restoreOverlayFocus();" in close_body
     assert 'viewer_mode: "modal"' in review_content
     assert "artifact_fingerprint" in review_content
+    assert 'pipeline: String(job?.pipeline || "")' not in viewer_metadata_body
     assert "artifact_viewer_fallback" in fallback_event_body
     assert 'surface: "artifact_review"' in fallback_event_body
     assert "fallback_reason: fallbackReason" in fallback_event_body
