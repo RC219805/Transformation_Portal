@@ -162,6 +162,7 @@ select_pylint_files() {
 run_pylint() {
     local pylint_exit=0
     local blocking_exit=0
+    local pylint_pythonpath=""
 
     select_pylint_files
 
@@ -172,8 +173,10 @@ run_pylint() {
         return 0
     fi
 
+    pylint_pythonpath="${REPO_ROOT}/src${PYTHONPATH:+:${PYTHONPATH}}"
+
     set +e
-    "$PYTHON_BIN" -m pylint --jobs=1 "${PYLINT_FILES[@]}"
+    PYTHONPATH="$pylint_pythonpath" "$PYTHON_BIN" -m pylint --jobs=1 "${PYLINT_FILES[@]}"
     pylint_exit=$?
     set -e
 
