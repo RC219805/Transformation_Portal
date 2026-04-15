@@ -3189,6 +3189,28 @@ def test_archive_gate_b_bag_validate_requires_bag_dir(tmp_path: Path) -> None:
     assert any(p["field"] == "bag_dir" for p in readiness["missing_prerequisites"])
 
 
+def test_archive_gate_b_bag_validate_ready_when_bag_dir_exists(tmp_path: Path) -> None:
+    """Gate B bag-validate becomes ready once bag_dir is provided."""
+    bag_dir = tmp_path / "bag"
+    bag_dir.mkdir()
+
+    readiness = orchestrator_app._archive_gate_readiness(
+        "archive-gate-b",
+        args={
+            "input_dir": str(tmp_path / "archive_root"),
+            "output_dir": str(tmp_path / "archive_reports"),
+            "archive_command": "bag-validate",
+            "bag_dir": str(bag_dir),
+        },
+        require_dispatch_inputs=True,
+    )
+
+    assert readiness["status"] == "ready"
+    assert readiness["canonical_command"] == "bag-build"  # canonical is always the default
+    assert "bag-validate" in readiness["runner_details"]["command"]
+    assert readiness["missing_prerequisites"] == []
+
+
 def test_archive_gate_c_prov_export_requires_manifest_jsonl(tmp_path: Path) -> None:
     """Gate C prov-export command requires manifest_jsonl file."""
     readiness = orchestrator_app._archive_gate_readiness(
