@@ -34,7 +34,7 @@ Quick reference for common workflows and commands in this repo.
 - `make audit-pipeline-readiness` run the safe local four-pipeline readiness audit using checked-in archive fixtures.
 - `make coverage-fast-scope` run branch coverage for the audited `core/config` and `streaming` paths with `term-missing` output.
 - `make clean` remove Python caches and build/test artifacts.
-- `make clean-frontdoor` remove frontdoor build artifacts (.next, .next-build-verify).
+- `make clean-frontdoor` remove frontdoor build artifacts (`.next`, `.next-build-verify`, `.next-smoke-*`, `.next-codex-*`).
 - `make clean-all` remove all build artifacts (Python + Node).
 - `make lint` run flake8 + pylint (non-blocking).
 - `make lint-parity` run the GitHub lint job locally with the CI-pinned Python 3.12 lint environment.
