@@ -18,8 +18,11 @@ import uuid
 from bisect import bisect_left
 from collections import deque
 from dataclasses import dataclass, field
+from email.parser import BytesParser
+from email.policy import default as email_policy
 from functools import lru_cache
 from importlib.util import find_spec
+from io import BytesIO
 from pathlib import Path, PurePosixPath
 from typing import Any, AsyncGenerator, Callable, Deque, Dict, List, Mapping, Optional, Tuple
 from urllib.parse import quote
@@ -34,6 +37,15 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.responses import Response, StreamingResponse
 
 from transformation_portal.determinism.trace import get_or_create_trace_context
+from transformation_portal.ingest.upload_staging import (
+    DEFAULT_CAPTURE_METADATA_CONFIG_PATH,
+    DEFAULT_CAPTURE_METADATA_SCHEMA_PATH,
+    IncomingUpload,
+    UploadStagingError,
+    cleanup_expired_batches,
+    parse_client_manifest_relative_paths,
+    stage_upload_batch,
+)
 from transformation_portal.lux_depth_v3.run_card_contract import infer_run_card_version
 
 # ----------------------------
@@ -156,6 +168,12 @@ def _portal_rum_enabled(actor: Optional[Mapping[str, Any]] = None) -> bool:
     if not _env_bool("TP_PORTAL_RUM_ENABLED", False):
         return False
     return _portal_rollout_enabled("TP_PORTAL_RUM_ROLLOUT_PERCENT", actor)
+
+
+def _portal_staged_uploads_enabled(actor: Optional[Mapping[str, Any]] = None) -> bool:
+    if not _env_bool("TP_PORTAL_UPLOAD_STAGING_ENABLED", False):
+        return False
+    return _portal_rollout_enabled("TP_PORTAL_STAGED_UPLOADS_ROLLOUT_PERCENT", actor)
 
 
 REPO_ROOT = Path(__file__).resolve().parent
@@ -495,6 +513,10 @@ def _resolve_allowed_request_path(
     raise _PortalValidationReasonError("Path outside allowed roots", reason="path_outside_allowed_roots")
 
 
+def _resolved_portal_upload_root() -> Path:
+    return _resolve_allowed_request_path(str(PORTAL_UPLOAD_ROOT), ALLOWED_INPUT_ROOTS)
+
+
 LOG_TAIL_LIMIT = 2000
 STATUS_LOG_LIMIT = 250
 EVENT_QUEUE_MAXSIZE = 512
@@ -534,6 +556,10 @@ ALLOW_SSE_QUERY_API_KEY = _env_bool("TP_ALLOW_SSE_QUERY_API_KEY", False)
 TRUST_X_FORWARDED_FOR = _env_bool("TP_TRUST_X_FORWARDED_FOR", False)
 TRUSTED_PROXY_IPS = set(_env_csv("TP_TRUSTED_PROXY_IPS", []))
 MAX_REQUEST_BYTES = _env_int("TP_MAX_REQUEST_BYTES", 1024 * 1024, minimum=1024)
+MAX_UPLOAD_REQUEST_BYTES = _env_int("TP_PORTAL_MAX_UPLOAD_REQUEST_BYTES", MAX_REQUEST_BYTES, minimum=1024)
+PORTAL_UPLOAD_MAX_FILES = _env_int("TP_PORTAL_UPLOAD_MAX_FILES", 256, minimum=1)
+PORTAL_UPLOAD_MAX_FIELDS = _env_int("TP_PORTAL_UPLOAD_MAX_FIELDS", 32, minimum=1)
+PORTAL_UPLOAD_MAX_PART_BYTES = _env_int("TP_PORTAL_UPLOAD_MAX_PART_BYTES", MAX_UPLOAD_REQUEST_BYTES, minimum=1024)
 RATE_LIMIT_PER_MINUTE = _env_int("TP_RATE_LIMIT_PER_MINUTE", 60, minimum=0)
 MAX_CONCURRENT_JOBS = _env_int("TP_MAX_CONCURRENT_JOBS", 4, minimum=1)
 RATE_LIMIT_WINDOW_SECONDS = 60.0
@@ -547,6 +573,10 @@ ALLOWED_OUTPUT_ROOTS = _env_path_roots(
     DEFAULT_ALLOWED_PATH_ROOTS,
 )
 ALLOWED_PATH_ROOTS = list(dict.fromkeys([*ALLOWED_INPUT_ROOTS, *ALLOWED_OUTPUT_ROOTS]))
+PORTAL_UPLOAD_ROOT = Path(
+    os.getenv("TP_PORTAL_UPLOAD_ROOT", str(Path(tempfile.gettempdir()) / "transformation-portal" / "uploads"))
+).expanduser()
+PORTAL_UPLOAD_TTL_SECONDS = _env_int("TP_PORTAL_UPLOAD_TTL_SECONDS", 24 * 60 * 60, minimum=1)
 
 
 def _allowed_roots_for_scope(scope: str) -> List[Path]:
@@ -1765,9 +1795,118 @@ def _http_status_error_code(status_code: int) -> str:
     return HTTP_STATUS_ERROR_CODES.get(status_code, "HTTP_ERROR")
 
 
-def _public_http_error_message(status_code: int) -> str:
+def _is_upload_staging_endpoint(path: str) -> bool:
+    return (path.rstrip("/") or "/") == "/v1/uploads/staging"
+
+
+def _request_body_limit_bytes(path: str) -> int:
+    return MAX_UPLOAD_REQUEST_BYTES if _is_upload_staging_endpoint(path) else MAX_REQUEST_BYTES
+
+
+def _request_too_large_message(path: str) -> str:
+    return f"request body too large (max {_request_body_limit_bytes(path)} bytes)"
+
+
+def _parse_portal_upload_multipart(
+    *,
+    body: bytes,
+    content_type: str,
+) -> tuple[List[IncomingUpload], Optional[str]]:
+    if "multipart/form-data" not in str(content_type or "").lower():
+        raise UploadStagingError(
+            "invalid_content_type",
+            "staged uploads require multipart/form-data",
+            field="content-type",
+        )
+
+    parser_input = f"Content-Type: {content_type}\r\nMIME-Version: 1.0\r\n\r\n".encode("utf-8") + body
+    message = BytesParser(policy=email_policy).parsebytes(parser_input)
+    if not message.is_multipart():
+        raise UploadStagingError(
+            "invalid_multipart_payload",
+            "staged upload payload must be a valid multipart form submission",
+        )
+
+    uploads: List[IncomingUpload] = []
+    client_manifest: Optional[str] = None
+    field_count = 0
+    for part in message.iter_parts():
+        if part.get_content_disposition() != "form-data":
+            continue
+
+        field_name = str(part.get_param("name", header="content-disposition") or "").strip()
+        if not field_name:
+            raise UploadStagingError(
+                "invalid_multipart_payload",
+                "multipart field name is required",
+            )
+
+        payload = part.get_payload(decode=True) or b""
+        if len(payload) > PORTAL_UPLOAD_MAX_PART_BYTES:
+            raise UploadStagingError(
+                "multipart_part_too_large",
+                "multipart field exceeds the per-part size limit",
+                field=field_name,
+                status_code=413,
+            )
+
+        filename = part.get_filename()
+        if filename is not None:
+            if field_name != "files":
+                raise UploadStagingError(
+                    "unexpected_field",
+                    "unexpected multipart field in staged upload payload",
+                    field=field_name,
+                )
+            uploads.append(
+                IncomingUpload(
+                    filename=str(filename or ""),
+                    stream=BytesIO(payload),
+                    content_type=str(part.get_content_type() or ""),
+                )
+            )
+            if len(uploads) > PORTAL_UPLOAD_MAX_FILES:
+                raise UploadStagingError(
+                    "too_many_files",
+                    "too many upload files in staged upload payload",
+                    field="files",
+                )
+            continue
+
+        field_count += 1
+        if field_count > PORTAL_UPLOAD_MAX_FIELDS:
+            raise UploadStagingError(
+                "too_many_fields",
+                "too many form fields in staged upload payload",
+            )
+        if field_name != "client_manifest":
+            raise UploadStagingError(
+                "unexpected_field",
+                "unexpected multipart field in staged upload payload",
+                field=field_name,
+            )
+        if client_manifest is not None:
+            raise UploadStagingError(
+                "duplicate_client_manifest",
+                "client_manifest must be provided at most once",
+                field="client_manifest",
+            )
+        charset = part.get_content_charset("utf-8") or "utf-8"
+        try:
+            client_manifest = payload.decode(charset)
+        except (LookupError, UnicodeDecodeError) as exc:
+            raise UploadStagingError(
+                "invalid_client_manifest",
+                "client_manifest must be valid UTF-8 JSON",
+                field="client_manifest",
+            ) from exc
+
+    return uploads, client_manifest
+
+
+def _public_http_error_message(status_code: int, path: str = "") -> str:
     if status_code == 413:
-        return f"request body too large (max {MAX_REQUEST_BYTES} bytes)"
+        return _request_too_large_message(path)
     return PUBLIC_HTTP_ERROR_MESSAGES.get(status_code, "request failed")
 
 
@@ -1801,11 +1940,51 @@ def _cleanup_rate_limit_buckets(now: float) -> None:
         RATE_LIMIT_BUCKETS.pop(client_ip, None)
 
 
+def _retained_staged_input_dirs() -> set[str]:
+    retained: set[str] = set()
+    for job in JOBS.values():
+        effective_request = (
+            job.effective_request if isinstance(job.effective_request, dict) and job.effective_request else job.request
+        )
+        if not isinstance(effective_request, dict):
+            continue
+        args = effective_request.get("args")
+        if not isinstance(args, dict):
+            continue
+        input_dir = args.get("input_dir") or args.get("inputDir")
+        if not input_dir:
+            continue
+        try:
+            retained.add(str(Path(os.path.realpath(str(input_dir)))))
+        except (OSError, RuntimeError, ValueError):
+            continue
+
+    return retained
+
+
+def _cleanup_expired_upload_batches(now: float) -> None:
+    try:
+        upload_root = _resolved_portal_upload_root()
+    except _PortalValidationReasonError:
+        LOGGER.warning("Skipping staged upload cleanup because TP_PORTAL_UPLOAD_ROOT is outside allowed input roots")
+        return
+
+    removed = cleanup_expired_batches(
+        upload_root,
+        now=now,
+        ttl_seconds=PORTAL_UPLOAD_TTL_SECONDS,
+        retained_input_dirs=_retained_staged_input_dirs(),
+    )
+    if removed:
+        LOGGER.info("Removed %d expired staged upload batches", len(removed))
+
+
 async def _cleanup_loop() -> None:
     while True:
         await asyncio.sleep(CLEANUP_INTERVAL_SECONDS)
         now = _now()
         _cleanup_expired_jobs(now)
+        _cleanup_expired_upload_batches(now)
         _cleanup_rate_limit_buckets(now)
 
 
@@ -3691,6 +3870,7 @@ def _is_protected_api_key_endpoint(path: str) -> bool:
         "/v1/config-preview",
         "/v1/portal/events",
         "/v1/portal/rum",
+        "/v1/uploads/staging",
     }
 
 
@@ -3776,21 +3956,22 @@ def _enforce_content_length_limit(request: Request) -> Optional[JSONResponse]:
             content={"detail": "invalid Content-Length header"},
         )
 
-    if size > MAX_REQUEST_BYTES:
+    limit_bytes = _request_body_limit_bytes(request.url.path)
+    if size > limit_bytes:
         if _is_api_v1_path(request.url.path):
             return _error_response(
                 413,
                 code="REQUEST_TOO_LARGE",
-                message=(f"request body too large" f" (max {MAX_REQUEST_BYTES} bytes)"),
+                message=_request_too_large_message(request.url.path),
                 details={
                     "path": request.url.path,
-                    "max_request_bytes": MAX_REQUEST_BYTES,
+                    "max_request_bytes": limit_bytes,
                 },
             )
         return JSONResponse(
             status_code=413,
             content={
-                "detail": (f"request body too large" f" (max {MAX_REQUEST_BYTES} bytes)"),
+                "detail": _request_too_large_message(request.url.path),
             },
         )
     return None
@@ -3813,6 +3994,7 @@ def _install_stream_body_limit(request: Request) -> None:
     )
     if original_receive is None:
         return
+    limit_bytes = _request_body_limit_bytes(request.url.path)
 
     async def limited_receive() -> Dict[str, Any]:
         message = await original_receive()
@@ -3825,10 +4007,10 @@ def _install_stream_body_limit(request: Request) -> None:
             )
             consumed += len(body)
             request.state._tp_body_bytes_received = consumed
-            if consumed > MAX_REQUEST_BYTES:
+            if consumed > limit_bytes:
                 raise HTTPException(
                     status_code=413,
-                    detail=(f"request body too large" f" (max {MAX_REQUEST_BYTES} bytes)"),
+                    detail=_request_too_large_message(request.url.path),
                 )
         return message
 
@@ -5941,7 +6123,7 @@ async def http_exception_handler(
     status_code = exc.status_code
     headers = exc.headers
     raw_detail = exc.detail
-    message = _public_http_error_message(status_code)
+    message = _public_http_error_message(status_code, path)
     if isinstance(raw_detail, str) and raw_detail.strip():
         LOGGER.warning(
             "Sanitized HTTPException detail for %s %s (%s)",
@@ -6157,6 +6339,7 @@ async def portal_bootstrap() -> JSONResponse:
                 "directDebug": True,
                 "artifactViewerModal": _portal_artifact_viewer_modal_enabled(None),
                 "reviewSurfaceDeferred": _portal_review_surface_deferred_enabled(None),
+                "stagedUploads": _portal_staged_uploads_enabled(None),
                 "rumTelemetry": _portal_rum_enabled(None),
             },
         },
@@ -6372,6 +6555,72 @@ async def portal_rum(request: Request, payload: Dict[str, Any]) -> JSONResponse:
             "tp.orchestrator.portal_rum_ingest.v1",
             success=True,
             data={"accepted": True, "event": record},
+            error=None,
+        )
+    )
+
+
+@app.post("/v1/uploads/staging")
+async def stage_portal_uploads(request: Request) -> JSONResponse:
+    if not _portal_staged_uploads_enabled(_portal_actor_from_request(request)):
+        return _error_response(
+            404,
+            code="NOT_FOUND",
+            message="not found",
+            details={"path": request.url.path},
+        )
+
+    try:
+        upload_root = _resolved_portal_upload_root()
+    except _PortalValidationReasonError:
+        return _error_response(
+            503,
+            code="SERVICE_UNAVAILABLE",
+            message="service unavailable",
+            details={"path": request.url.path, "reason": "upload_root_invalid"},
+        )
+
+    try:
+        body = await request.body()
+        uploads, client_manifest_raw = _parse_portal_upload_multipart(
+            body=body,
+            content_type=request.headers.get("content-type", ""),
+        )
+        if not uploads:
+            return _error_response(
+                400,
+                code="INVALID_ARGUMENT",
+                message="at least one upload file is required",
+                details={"field": "files", "reason": "files_required"},
+            )
+
+        client_manifest_paths = parse_client_manifest_relative_paths(
+            client_manifest_raw,
+            expected_count=len(uploads),
+        )
+        result = await asyncio.to_thread(
+            stage_upload_batch,
+            upload_root=upload_root,
+            uploads=uploads,
+            client_manifest_paths=client_manifest_paths,
+            capture_metadata_enabled=_env_bool("TP_PORTAL_UPLOAD_CAPTURE_METADATA_ENABLED", False),
+            capture_metadata_config_path=DEFAULT_CAPTURE_METADATA_CONFIG_PATH,
+            capture_metadata_schema_path=DEFAULT_CAPTURE_METADATA_SCHEMA_PATH,
+            now=_now(),
+        )
+    except UploadStagingError as exc:
+        return _error_response(
+            exc.status_code,
+            code="INVALID_ARGUMENT",
+            message=exc.message,
+            details={"field": exc.field, "reason": exc.reason},
+        )
+
+    return JSONResponse(
+        _api_envelope(
+            "tp.orchestrator.upload_staging.v1",
+            success=True,
+            data=result.to_response_data(),
             error=None,
         )
     )

@@ -22,6 +22,8 @@ const ENV_KEYS = [
   "TP_CF_ACCESS_TEAM_DOMAIN",
   "TP_CF_ACCESS_AUD",
   "TP_ALLOW_LOCAL_ACCESS_BYPASS",
+  "TP_PORTAL_UPLOAD_STAGING_ENABLED",
+  "TP_PORTAL_STAGED_UPLOADS_ROLLOUT_PERCENT",
   "TP_PORTAL_ARTIFACT_VIEWER_MODAL_ROLLOUT_PERCENT",
   "TP_PORTAL_REVIEW_SURFACE_DEFER_ROLLOUT_PERCENT",
   "TP_PORTAL_RUM_ENABLED",
@@ -116,6 +118,18 @@ function withTempEnvironment(overrides = {}) {
       overrides.TP_PORTAL_REVIEW_SURFACE_DEFER_ROLLOUT_PERCENT;
   } else {
     delete process.env.TP_PORTAL_REVIEW_SURFACE_DEFER_ROLLOUT_PERCENT;
+  }
+
+  if (typeof overrides.TP_PORTAL_UPLOAD_STAGING_ENABLED === "string") {
+    process.env.TP_PORTAL_UPLOAD_STAGING_ENABLED = overrides.TP_PORTAL_UPLOAD_STAGING_ENABLED;
+  } else {
+    delete process.env.TP_PORTAL_UPLOAD_STAGING_ENABLED;
+  }
+
+  if (typeof overrides.TP_PORTAL_STAGED_UPLOADS_ROLLOUT_PERCENT === "string") {
+    process.env.TP_PORTAL_STAGED_UPLOADS_ROLLOUT_PERCENT = overrides.TP_PORTAL_STAGED_UPLOADS_ROLLOUT_PERCENT;
+  } else {
+    delete process.env.TP_PORTAL_STAGED_UPLOADS_ROLLOUT_PERCENT;
   }
 
   if (typeof overrides.TP_PORTAL_RUM_ENABLED === "string") {
@@ -1337,6 +1351,7 @@ test("managed bootstrap returns actor metadata and CSRF for authenticated sessio
       assert.equal(body.features.directDebug, false);
       assert.equal(body.features.artifactViewerModal, false);
       assert.equal(body.features.reviewSurfaceDeferred, false);
+      assert.equal(body.features.stagedUploads, false);
       assert.equal(body.features.rumTelemetry, false);
       assert.equal(body.csrfToken, authenticatedSession.csrfToken);
     } finally {
@@ -1412,6 +1427,42 @@ test("managed bootstrap enables review surface deferral for rollout cohorts", as
 
     assert.equal(response.status, 200);
     assert.equal(body.features.reviewSurfaceDeferred, true);
+  } finally {
+    env.cleanup();
+  }
+});
+
+test("managed bootstrap enables staged uploads for rollout cohorts", async () => {
+  const env = withTempEnvironment({
+    TP_PORTAL_UPLOAD_STAGING_ENABLED: "1",
+    TP_PORTAL_STAGED_UPLOADS_ROLLOUT_PERCENT: "100"
+  });
+
+  try {
+    const sessions = await importFresh("../lib/sessions.js");
+    const { GET } = await importFresh("../app/portal/bootstrap/route.js");
+    const authenticatedSession = sessions.rotateAuthenticatedSession(
+      sessions.createAnonymousSession(),
+      {
+        username: "admin",
+        accessEmail: "admin@example.com",
+        role: "admin"
+      }
+    );
+
+    const request = buildRequest("https://portal.example.com/portal/bootstrap", {
+      method: "GET",
+      headers: new Headers({
+        cookie: `__Host-tp_session=${authenticatedSession.id}`,
+        "Cf-Access-Jwt-Assertion": createAccessJwt()
+      })
+    });
+
+    const response = await GET(request);
+    const body = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(body.features.stagedUploads, true);
   } finally {
     env.cleanup();
   }
