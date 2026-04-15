@@ -659,6 +659,31 @@ Contract notes:
                                 <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="inputDir">Input Directory</label>
                                 <input type="text" id="inputDir" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors" value="./input_images" autocomplete="off" spellcheck="false" />
                                 <p id="inputDirStatus" class="field-status mt-1 text-[12px] leading-6 text-slate-500 dark:text-slate-400">Set the source folder for the next run.</p>
+                                <div id="stagedUploadShell" class="mt-3 hidden rounded-xl border border-dashed border-slate-300 dark:border-slate-700 bg-white/70 dark:bg-slate-900/60 p-4" data-ui="staged-upload-shell" aria-live="polite">
+                                    <div class="flex flex-wrap items-start justify-between gap-3">
+                                        <div>
+                                            <p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Staged Uploads</p>
+                                            <p id="stagedUploadStatus" class="mt-2 text-[12px] leading-6 text-slate-600 dark:text-slate-300">Upload a file set and the staged input directory will replace the current source path.</p>
+                                        </div>
+                                        <div class="flex flex-wrap gap-2">
+                                            <button type="button" id="stagedUploadPickFilesBtn" class="inline-flex items-center justify-center rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2 text-[12px] font-semibold text-slate-700 dark:text-slate-200 transition-colors hover:border-indigo-400 hover:text-indigo-600 dark:hover:text-indigo-300" data-ui="staged-upload-pick-files">Choose files</button>
+                                            <button type="button" id="stagedUploadPickFolderBtn" class="inline-flex items-center justify-center rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2 text-[12px] font-semibold text-slate-700 dark:text-slate-200 transition-colors hover:border-indigo-400 hover:text-indigo-600 dark:hover:text-indigo-300" data-ui="staged-upload-pick-folder">Choose folder</button>
+                                        </div>
+                                    </div>
+                                    <div id="stagedUploadDropzone" class="mt-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-950/40 px-4 py-4 text-[12px] leading-6 text-slate-600 dark:text-slate-300" data-ui="staged-upload-dropzone" tabindex="0" role="button" aria-label="Choose files or drop files for staged upload" aria-describedby="stagedUploadStatus">
+                                        Drop files here or choose a file set from disk. Relative paths are preserved for managed staging.
+                                    </div>
+                                    <div class="mt-3">
+                                        <div class="h-2 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
+                                            <div id="stagedUploadProgressBar" class="h-full w-0 rounded-full bg-indigo-500 transition-[width]" data-ui="staged-upload-progress"></div>
+                                        </div>
+                                        <p id="stagedUploadProgressLabel" class="mt-2 text-[12px] leading-6 text-slate-500 dark:text-slate-400">No upload in progress.</p>
+                                    </div>
+                                    <p id="stagedUploadSummary" class="mt-2 text-[12px] leading-6 text-slate-600 dark:text-slate-300"></p>
+                                    <p id="stagedUploadError" class="mt-1 text-[12px] leading-6 text-red-600 dark:text-red-300"></p>
+                                    <input type="file" id="stagedUploadFilesInput" class="hidden" multiple />
+                                    <input type="file" id="stagedUploadFolderInput" class="hidden" webkitdirectory directory multiple />
+                                </div>
                             </div>
                             <div>
                                 <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="outputDir">Output Directory</label>

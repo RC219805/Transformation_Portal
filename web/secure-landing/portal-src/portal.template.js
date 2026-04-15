@@ -69,6 +69,7 @@ const CONFIG_PREVIEW_SUPPORTED_PIPELINES = new Set([
     'archive-gate-b',
     'archive-gate-c'
 ]);
+const STAGED_UPLOAD_SUPPORTED_PIPELINES = new Set(['lux-depth-v3', 'archive-gate-a']);
 const EVENT_SOURCE_READY_STATE_CONNECTING = 0;
 const EVENT_SOURCE_READY_STATE_OPEN = 1;
 const EVENT_SOURCE_READY_STATE_CLOSED = 2;
@@ -238,6 +239,17 @@ const els = {
     inputDir: _domId('inputDir'),
     outputDir: _domId('outputDir'),
     inputDirStatus: _domId('inputDirStatus'),
+    stagedUploadShell: _domId('stagedUploadShell'),
+    stagedUploadStatus: _domId('stagedUploadStatus'),
+    stagedUploadDropzone: _domId('stagedUploadDropzone'),
+    stagedUploadPickFilesBtn: _domId('stagedUploadPickFilesBtn'),
+    stagedUploadPickFolderBtn: _domId('stagedUploadPickFolderBtn'),
+    stagedUploadFilesInput: _domId('stagedUploadFilesInput'),
+    stagedUploadFolderInput: _domId('stagedUploadFolderInput'),
+    stagedUploadProgressBar: _domId('stagedUploadProgressBar'),
+    stagedUploadProgressLabel: _domId('stagedUploadProgressLabel'),
+    stagedUploadSummary: _domId('stagedUploadSummary'),
+    stagedUploadError: _domId('stagedUploadError'),
     outputDirStatus: _domId('outputDirStatus'),
     archiveCanonicalCommand: _domId('archiveCanonicalCommand'),
     archiveCanonicalCommandHint: _domId('archiveCanonicalCommandHint'),
@@ -4170,6 +4182,7 @@ function _defaultPortalBootstrap() {
             directDebug: false,
             artifactViewerModal: false,
             reviewSurfaceDeferred: false,
+            stagedUploads: false,
             rumTelemetry: false
         }
     };
@@ -4499,6 +4512,86 @@ function _clearStoredApiKeyState(clearPersisted = true) {
     if (els.apiKeyInput) els.apiKeyInput.value = '';
 }
 
+function _stagedUploadsVisibleForState() {
+    return Boolean(
+        _isBootstrapReady()
+        && state.auth?.features?.stagedUploads
+        && STAGED_UPLOAD_SUPPORTED_PIPELINES.has(String(state.pipeline || '').trim())
+    );
+}
+
+function _stagedUploadErrorMessage(payload, fallback = 'Failed to stage uploads.') {
+    const message = String(payload?.error?.message || '').trim();
+    return message || fallback;
+}
+
+function _setStagedUploadState(patch = {}) {
+    state.portalUi.stagedUpload = {
+        ...(state.portalUi.stagedUpload || {}),
+        ...(patch && typeof patch === 'object' ? patch : {})
+    };
+}
+
+function _syncStagedUploadUi() {
+    const visible = _stagedUploadsVisibleForState();
+    const uploadState = state.portalUi.stagedUpload || {};
+    const busy = Boolean(uploadState.busy);
+    const progressPercent = Math.max(0, Math.min(100, Number(uploadState.progressPercent) || 0));
+    if (els.stagedUploadShell) {
+        els.stagedUploadShell.classList.toggle('hidden', !visible);
+        els.stagedUploadShell.dataset.busy = busy ? 'true' : 'false';
+    }
+    if (els.stagedUploadStatus) {
+        if (!visible) {
+            els.stagedUploadStatus.textContent = 'Upload a file set and the staged input directory will replace the current source path.';
+        } else if (uploadState.error) {
+            els.stagedUploadStatus.textContent = 'The last staged upload attempt failed. Fix the payload and try again.';
+        } else if (busy) {
+            els.stagedUploadStatus.textContent = String(uploadState.status || 'Uploading files to the staged input directory...');
+        } else if (uploadState.summary) {
+            els.stagedUploadStatus.textContent = 'Staged uploads are ready. The input directory now points at the staged batch.';
+        } else {
+            els.stagedUploadStatus.textContent = 'Upload a file set and the staged input directory will replace the current source path.';
+        }
+    }
+    if (els.stagedUploadDropzone) {
+        els.stagedUploadDropzone.dataset.disabled = !visible || busy ? 'true' : 'false';
+        els.stagedUploadDropzone.classList.toggle('opacity-60', !visible || busy);
+        els.stagedUploadDropzone.classList.toggle('cursor-not-allowed', !visible || busy);
+        els.stagedUploadDropzone.setAttribute('aria-disabled', !visible || busy ? 'true' : 'false');
+    }
+    if (els.stagedUploadPickFilesBtn) {
+        els.stagedUploadPickFilesBtn.disabled = !visible || busy;
+    }
+    if (els.stagedUploadPickFolderBtn) {
+        els.stagedUploadPickFolderBtn.disabled = !visible || busy;
+    }
+    if (els.stagedUploadFilesInput) {
+        els.stagedUploadFilesInput.disabled = !visible || busy;
+    }
+    if (els.stagedUploadFolderInput) {
+        els.stagedUploadFolderInput.disabled = !visible || busy;
+    }
+    if (els.stagedUploadProgressBar) {
+        els.stagedUploadProgressBar.style.width = `${progressPercent}%`;
+    }
+    if (els.stagedUploadProgressLabel) {
+        if (busy) {
+            els.stagedUploadProgressLabel.textContent = `${progressPercent}% uploaded`;
+        } else if (uploadState.summary) {
+            els.stagedUploadProgressLabel.textContent = 'Upload complete.';
+        } else {
+            els.stagedUploadProgressLabel.textContent = 'No upload in progress.';
+        }
+    }
+    if (els.stagedUploadSummary) {
+        els.stagedUploadSummary.textContent = String(uploadState.summary || '');
+    }
+    if (els.stagedUploadError) {
+        els.stagedUploadError.textContent = String(uploadState.error || '');
+    }
+}
+
 function _syncBootstrapUi() {
     const bootstrapReady = _isBootstrapReady();
     const showApiKeyInput = bootstrapReady && state.auth.features.apiKeyInput;
@@ -4544,6 +4637,7 @@ function _syncBootstrapUi() {
     renderSelectedJobRecoveryActions(selectedJob);
     renderReviewStatusActions(selectedJob);
     renderArtifactViewer();
+    _syncStagedUploadUi();
 }
 
 function _applyPortalBootstrap(rawBootstrap, options = {}) {
@@ -4566,6 +4660,7 @@ function _applyPortalBootstrap(rawBootstrap, options = {}) {
             directDebug: mode === 'direct_debug' && bootstrap.features?.directDebug !== false,
             artifactViewerModal: Boolean(bootstrap.features?.artifactViewerModal),
             reviewSurfaceDeferred: Boolean(bootstrap.features?.reviewSurfaceDeferred),
+            stagedUploads: Boolean(bootstrap.features?.stagedUploads),
             rumTelemetry: Boolean(bootstrap.features?.rumTelemetry)
         }
     };
@@ -4818,6 +4913,183 @@ function _buildAuthHeaders(base = {}, method = 'GET', options = null) {
         headers['x-api-key'] = token;
     }
     return headers;
+}
+
+function _normalizeStagedUploadRelativePath(file) {
+    if (!file || typeof file !== 'object') return '';
+    const rawRelativePath = typeof file.webkitRelativePath === 'string' && file.webkitRelativePath.trim()
+        ? file.webkitRelativePath
+        : String(file.name || '');
+    return rawRelativePath.replace(/\\/g, '/').replace(/^\/+/, '').trim();
+}
+
+function _collectStagedUploadSelection(fileList) {
+    const entries = [];
+    let totalBytes = 0;
+    Array.from(fileList || []).forEach((file) => {
+        const relativePath = _normalizeStagedUploadRelativePath(file);
+        if (!relativePath) return;
+        const sizeBytes = Number(file && typeof file === 'object' ? file.size : 0) || 0;
+        totalBytes += Math.max(0, sizeBytes);
+        entries.push({
+            file,
+            relativePath,
+            sizeBytes,
+            name: String(file?.name || ''),
+        });
+    });
+    return { entries, totalBytes };
+}
+
+function _applyStagedUploadResult(result) {
+    const inputDir = String(result?.input_dir || '').trim();
+    const summary = result?.summary && typeof result.summary === 'object' ? result.summary : {};
+    const fileCount = Math.max(0, Number(summary.file_count) || 0);
+    const totalBytes = Math.max(0, Number(summary.total_bytes) || 0);
+    if (!inputDir) {
+        throw new Error('staged upload response did not include input_dir');
+    }
+
+    _setStagedUploadState({
+        busy: false,
+        progressPercent: 100,
+        status: 'ready',
+        summary: `Staged ${fileCount} file${fileCount === 1 ? '' : 's'} (${formatBytes(totalBytes)}). Input directory updated.`,
+        error: '',
+        lastBatchId: String(result?.batch_id || ''),
+        fileCount,
+        totalBytes,
+    });
+
+    state.config.inputDir = inputDir;
+    if (els.inputDir) {
+        els.inputDir.value = inputDir;
+        els.inputDir.dispatchEvent(new Event('input', { bubbles: true }));
+        els.inputDir.dispatchEvent(new Event('change', { bubbles: true }));
+    } else {
+        renderCLI();
+        scheduleConfigPreview(true);
+    }
+    renderFieldPreviewStatuses();
+    _syncStagedUploadUi();
+    createToast('Upload staged. Input directory updated.', 'success');
+}
+
+function _submitStagedUploadSelection(fileList) {
+    if (_blockManagedUnavailableAction('stage uploads')) return;
+    if (!_stagedUploadsVisibleForState()) return;
+
+    const selection = _collectStagedUploadSelection(fileList);
+    if (selection.entries.length === 0) {
+        _setStagedUploadState({
+            busy: false,
+            progressPercent: 0,
+            status: 'idle',
+            summary: '',
+            error: 'Select at least one file before staging uploads.'
+        });
+        _syncStagedUploadUi();
+        createToast('Select at least one file before staging uploads.', 'info');
+        return;
+    }
+
+    _setStagedUploadState({
+        busy: true,
+        progressPercent: 0,
+        status: `Uploading ${selection.entries.length} file${selection.entries.length === 1 ? '' : 's'} to staged storage...`,
+        summary: '',
+        error: '',
+        fileCount: selection.entries.length,
+        totalBytes: selection.totalBytes,
+    });
+    _syncStagedUploadUi();
+
+    const formData = new FormData();
+    selection.entries.forEach(({ file, relativePath }) => {
+        formData.append('files', file, relativePath);
+    });
+    formData.append(
+        'client_manifest',
+        JSON.stringify({
+            schema: 'tp.portal.upload_manifest.v1',
+            files: selection.entries.map((entry) => ({
+                relative_path: entry.relativePath,
+                size_bytes: entry.sizeBytes,
+                name: entry.name,
+            })),
+        })
+    );
+
+    const requestTraceparent = portalInternals.createChildTraceparent(_portalRumTraceparent());
+    const headers = _buildAuthHeaders({}, 'POST', { traceparent: requestTraceparent });
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `${API_BASE}/v1/uploads/staging`);
+    xhr.responseType = 'json';
+    Object.entries(headers).forEach(([key, value]) => {
+        if (typeof value === 'string' && value) {
+            xhr.setRequestHeader(key, value);
+        }
+    });
+
+    xhr.upload.onprogress = (event) => {
+        if (!event.lengthComputable) return;
+        const progressPercent = Math.max(0, Math.min(100, Math.round((event.loaded / event.total) * 100)));
+        _setStagedUploadState({
+            progressPercent,
+            status: `Uploading ${selection.entries.length} file${selection.entries.length === 1 ? '' : 's'} to staged storage...`,
+        });
+        _syncStagedUploadUi();
+    };
+
+    xhr.onerror = () => {
+        _setStagedUploadState({
+            busy: false,
+            progressPercent: 0,
+            status: 'idle',
+            error: 'Network failure interrupted the staged upload.'
+        });
+        _syncStagedUploadUi();
+        createToast('Network failure interrupted the staged upload.', 'error');
+    };
+
+    xhr.onabort = () => {
+        _setStagedUploadState({
+            busy: false,
+            progressPercent: 0,
+            status: 'idle',
+            error: 'Staged upload canceled before completion.'
+        });
+        _syncStagedUploadUi();
+        createToast('Staged upload canceled before completion.', 'error');
+    };
+
+    xhr.onload = () => {
+        const payload = xhr.response && typeof xhr.response === 'object'
+            ? xhr.response
+            : (() => {
+                try {
+                    return JSON.parse(xhr.responseText || '{}');
+                } catch (_err) {
+                    return {};
+                }
+            })();
+        if (xhr.status >= 200 && xhr.status < 300 && payload?.success && payload.data) {
+            _applyStagedUploadResult(payload.data);
+            return;
+        }
+
+        const errorMessage = _stagedUploadErrorMessage(payload);
+        _setStagedUploadState({
+            busy: false,
+            progressPercent: 0,
+            status: 'idle',
+            error: errorMessage,
+        });
+        _syncStagedUploadUi();
+        createToast(errorMessage, 'error');
+    };
+
+    xhr.send(formData);
 }
 
 function resumeBlockedJobStreamsAfterAuthUpdate() {
@@ -7603,6 +7875,7 @@ function updateUIFromState() {
     syncSegmentationControlState(c);
     syncRuntimeWorkerModeControls();
     renderFieldPreviewStatuses();
+    _syncStagedUploadUi();
 
     renderCLI();
     scheduleConfigPreview(true);
@@ -9423,6 +9696,52 @@ if (els.heroExportBtn) {
             return;
         }
         navigateConsoleView('operate', { jobId });
+    });
+}
+
+if (els.stagedUploadPickFilesBtn && els.stagedUploadFilesInput) {
+    els.stagedUploadPickFilesBtn.addEventListener('click', () => {
+        if (_stagedUploadsVisibleForState() && !state.portalUi?.stagedUpload?.busy) {
+            els.stagedUploadFilesInput.click();
+        }
+    });
+}
+if (els.stagedUploadPickFolderBtn && els.stagedUploadFolderInput) {
+    els.stagedUploadPickFolderBtn.addEventListener('click', () => {
+        if (_stagedUploadsVisibleForState() && !state.portalUi?.stagedUpload?.busy) {
+            els.stagedUploadFolderInput.click();
+        }
+    });
+}
+if (els.stagedUploadFilesInput) {
+    els.stagedUploadFilesInput.addEventListener('change', (event) => {
+        _submitStagedUploadSelection(event.target.files);
+        event.target.value = '';
+    });
+}
+if (els.stagedUploadFolderInput) {
+    els.stagedUploadFolderInput.addEventListener('change', (event) => {
+        _submitStagedUploadSelection(event.target.files);
+        event.target.value = '';
+    });
+}
+if (els.stagedUploadDropzone) {
+    els.stagedUploadDropzone.addEventListener('dragover', (event) => {
+        if (!_stagedUploadsVisibleForState() || state.portalUi?.stagedUpload?.busy) return;
+        event.preventDefault();
+    });
+    els.stagedUploadDropzone.addEventListener('drop', (event) => {
+        if (!_stagedUploadsVisibleForState() || state.portalUi?.stagedUpload?.busy) return;
+        event.preventDefault();
+        _submitStagedUploadSelection(event.dataTransfer?.files);
+    });
+    els.stagedUploadDropzone.addEventListener('keydown', (event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        if (!_stagedUploadsVisibleForState() || state.portalUi?.stagedUpload?.busy) return;
+        event.preventDefault();
+        if (els.stagedUploadFilesInput) {
+            els.stagedUploadFilesInput.click();
+        }
     });
 }
 
