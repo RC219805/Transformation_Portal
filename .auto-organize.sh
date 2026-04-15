@@ -128,6 +128,10 @@ check_helper_script() {
     fi
 
     if [[ ! -x "$full_path" ]]; then
+        if [[ "$DRY_RUN" == "true" ]]; then
+            log_error "Helper script not executable: $script (fix permissions outside --dry-run/--check mode)"
+            return 1
+        fi
         log_warn "Helper script not executable: $script (fixing...)"
         chmod +x "$full_path"
     fi
@@ -250,10 +254,19 @@ check_root_scripts() {
 
     local misplaced=()
 
-    # Find Python files in root that should be elsewhere
+    # Use git ls-files for deterministic CI/local behavior (consistent with other validators)
     while IFS= read -r -d '' file; do
-        local basename
-        basename="$(basename "$file")"
+        # Skip files in subdirectories
+        if [[ "$file" == */* ]]; then
+            continue
+        fi
+
+        # Only process Python files
+        if [[ "$file" != *.py ]]; then
+            continue
+        fi
+
+        local basename="$file"
 
         # Skip allowed root Python files
         case "$basename" in
@@ -289,7 +302,7 @@ check_root_scripts() {
             misplaced+=("$basename → $dest")
         fi
 
-    done < <(find "$REPO_ROOT" -maxdepth 1 -name "*.py" -type f -print0 2>/dev/null)
+    done < <(git -C "$REPO_ROOT" ls-files -z)
 
     if [[ ${#misplaced[@]} -gt 0 ]]; then
         log_warn "Found Python scripts that may be misplaced in root:"
@@ -309,11 +322,21 @@ check_root_shell_scripts() {
 
     local misplaced=()
 
+    # Use git ls-files for deterministic CI/local behavior (consistent with other validators)
     while IFS= read -r -d '' file; do
-        local basename
-        basename="$(basename "$file")"
+        # Skip files in subdirectories
+        if [[ "$file" == */* ]]; then
+            continue
+        fi
 
-        # Skip allowed root shell scripts
+        # Only process shell scripts
+        if [[ "$file" != *.sh ]]; then
+            continue
+        fi
+
+        local basename="$file"
+
+        # Skip allowed root shell scripts (including hidden ones)
         case "$basename" in
             .auto-organize.sh)
                 continue
@@ -322,7 +345,7 @@ check_root_shell_scripts() {
 
         misplaced+=("$basename → scripts/")
 
-    done < <(find "$REPO_ROOT" -maxdepth 1 -name "*.sh" -type f ! -name ".*" -print0 2>/dev/null)
+    done < <(git -C "$REPO_ROOT" ls-files -z)
 
     if [[ ${#misplaced[@]} -gt 0 ]]; then
         log_warn "Found shell scripts that should be in scripts/:"
@@ -348,7 +371,16 @@ validate_docs_structure() {
     fi
 
     log_info "Running: python3 $helper --all"
-    if ! python3 "$REPO_ROOT/$helper" --all 2>/dev/null; then
+
+    # Capture both stdout and stderr; print stderr on failure for debugging
+    local output
+    local exit_code=0
+    output=$(python3 "$REPO_ROOT/$helper" --all 2>&1) || exit_code=$?
+
+    if [[ $exit_code -ne 0 ]]; then
+        if [[ -n "$output" ]]; then
+            echo "$output"
+        fi
         if [[ "$CHECK_MODE" == "true" ]]; then
             log_error "Documentation structure violations detected"
             return 1
@@ -356,6 +388,9 @@ validate_docs_structure() {
             log_warn "Documentation structure issues found"
         fi
     else
+        if [[ -n "$output" ]]; then
+            echo "$output"
+        fi
         log_success "Documentation structure validated"
     fi
 
