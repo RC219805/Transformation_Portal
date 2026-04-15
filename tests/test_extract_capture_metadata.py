@@ -15,6 +15,8 @@ from tp.phase4.canonicalize_capture_metadata import (
     ExtractionFailure,
     PathNormalizationError,
     _run_exiftool,
+    extract_capture_metadata_records,
+    load_capture_metadata_config,
     normalize_relative_path,
     write_capture_metadata_artifact,
 )
@@ -25,6 +27,7 @@ SCHEMA_PATH = PROJECT_ROOT / "schemas" / "phase4" / "metadata.schema.json"
 FIXTURE_ROOT = PROJECT_ROOT / "tests" / "fixtures" / "phase4"
 GOLDEN_OUTPUT = PROJECT_ROOT / "tests" / "golden" / "phase4" / "expected_capture_metadata.tp.meta.capture.v1.json"
 GOLDEN_CONFIG_FINGERPRINT = PROJECT_ROOT / "tests" / "golden" / "phase4" / "config_fingerprint.txt"
+CAPTURE_CONFIG_PATH = PROJECT_ROOT / "tools" / "capture_metadata_config.json"
 
 pytestmark = [pytest.mark.regression, pytest.mark.golden]
 
@@ -376,3 +379,55 @@ def test_phase4c_run_exiftool_times_out_deterministically(monkeypatch: pytest.Mo
     monkeypatch.setattr(subprocess, "run", _timeout)
     with pytest.raises(ExtractionFailure, match=f"exiftool timed out after {EXIFTOOL_TIMEOUT_SECONDS}s"):
         _run_exiftool([Path("/tmp/sample_01.dng")], ["Make"])
+
+
+def test_phase4c_progress_callback_reports_direct_function_sequence(tmp_path: Path) -> None:
+    config = load_capture_metadata_config(CAPTURE_CONFIG_PATH)
+    input_root = tmp_path / "input"
+    input_root.mkdir()
+    sample_one = input_root / "sample_01.dng"
+    sample_two = input_root / "sample_02.dng"
+    sample_one.write_bytes(b"phase4-one")
+    sample_two.write_bytes(b"phase4-two")
+
+    progress_updates: list[tuple[int, int, str]] = []
+
+    def _fake_runner(file_paths: list[Path], tag_whitelist: list[str]) -> dict[str, dict[str, object]]:
+        del tag_whitelist
+        tags = {
+            "Make": "Canon",
+            "Model": "EOS R5",
+            "LensModel": "RF24-70mm F2.8 L IS USM",
+            "GPSDateStamp": "2024:06:30",
+            "GPSTimeStamp": "12:34:56",
+            "GPSLatitude": 34.123456789,
+            "GPSLongitude": -118.987654321,
+            "FocalLength": 24.98765,
+            "FNumber": 5.6789,
+            "ExposureTime": "1/120",
+            "ExposureCompensation": "-0.3333",
+            "Orientation": 6,
+            "DateTimeOriginal": "2024:06:30 05:34:56",
+            "OffsetTimeOriginal": "-07:00",
+        }
+        return {str(path.resolve()): dict(tags) for path in file_paths}
+
+    records = extract_capture_metadata_records(
+        input_root=input_root,
+        config=config,
+        strict=False,
+        schema_path=SCHEMA_PATH,
+        exif_runner=_fake_runner,
+        progress_callback=lambda current, total, message: progress_updates.append((current, total, message)),
+    )
+
+    assert [record["relative_path"] for record in records] == ["sample_01.dng", "sample_02.dng"]
+    assert progress_updates == [
+        (0, 0, "Discovering capture files..."),
+        (0, 2, "Found 2 capture files, extracting EXIF metadata..."),
+        (0, 2, "Building metadata records..."),
+        (1, 2, "Processed sample_01.dng"),
+        (2, 2, "Processed sample_02.dng"),
+        (2, 2, "Validating records against schema..."),
+        (2, 2, "Extraction complete: 2 records"),
+    ]

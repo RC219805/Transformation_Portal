@@ -13,7 +13,11 @@ from tp.phase4.validation_helpers import (
     require_sorted_relative_paths,
     require_unique_relative_paths,
     string_or_none,
+    validate_payload_with_schema,
+    validate_records_with_schema,
 )
+
+pytestmark = pytest.mark.unit
 
 
 class TestSHA256HexValidation:
@@ -120,6 +124,13 @@ class TestRelativePathValidation:
             require_sorted_relative_paths(records, label="test", error_cls=ValueError)
         assert "sorted" in str(exc_info.value).lower()
 
+    def test_require_sorted_relative_paths_missing_path(self) -> None:
+        """Missing relative_path should fail with the provided error type."""
+        records = [{"other_field": "value"}]
+        with pytest.raises(ValueError) as exc_info:
+            require_sorted_relative_paths(records, label="test", error_cls=ValueError)
+        assert "missing relative_path" in str(exc_info.value)
+
 
 class TestPathIndex:
     """Tests for build_path_index function."""
@@ -199,3 +210,72 @@ class TestSHA256Regex:
         assert SHA256_HEX_RE.fullmatch("a" * 63) is None  # too short
         assert SHA256_HEX_RE.fullmatch("a" * 65) is None  # too long
         assert SHA256_HEX_RE.fullmatch("g" * 64) is None  # non-hex
+
+
+class CustomSchemaValidationError(ValueError):
+    """Custom error type used to validate helper wrapping behavior."""
+
+
+class TestSchemaValidationHelpers:
+    """Tests for the exported schema validation helpers."""
+
+    @staticmethod
+    def _schema() -> dict[str, object]:
+        return {
+            "type": "object",
+            "required": ["relative_path", "nested"],
+            "properties": {
+                "relative_path": {"type": "string"},
+                "nested": {
+                    "type": "object",
+                    "required": ["value"],
+                    "properties": {
+                        "value": {"type": "integer"},
+                    },
+                },
+            },
+        }
+
+    def test_validate_records_with_schema_accepts_valid_records(self) -> None:
+        """Valid records should pass schema validation."""
+        validate_records_with_schema(
+            [{"relative_path": "a/file.txt", "nested": {"value": 1}}],
+            self._schema(),
+            error_cls=CustomSchemaValidationError,
+            label="record",
+        )
+
+    def test_validate_records_with_schema_raises_custom_error_with_path(self) -> None:
+        """Invalid records should use error_cls and include the failing path."""
+        records = [{"relative_path": "a/file.txt", "nested": {"value": "bad"}}]
+        with pytest.raises(CustomSchemaValidationError) as exc_info:
+            validate_records_with_schema(
+                records,
+                self._schema(),
+                error_cls=CustomSchemaValidationError,
+                label="record",
+                record_label_fn=lambda _index, record: f"payload:{record['relative_path']}",
+            )
+        assert "payload:a/file.txt" in str(exc_info.value)
+        assert "nested.value" in str(exc_info.value)
+
+    def test_validate_payload_with_schema_accepts_valid_payload(self) -> None:
+        """Valid payloads should pass schema validation."""
+        validate_payload_with_schema(
+            {"relative_path": "a/file.txt", "nested": {"value": 1}},
+            self._schema(),
+            error_cls=CustomSchemaValidationError,
+            label="payload",
+        )
+
+    def test_validate_payload_with_schema_raises_custom_error_with_path(self) -> None:
+        """Invalid payloads should use error_cls and include the failing path."""
+        with pytest.raises(CustomSchemaValidationError) as exc_info:
+            validate_payload_with_schema(
+                {"relative_path": "a/file.txt", "nested": {"value": "bad"}},
+                self._schema(),
+                error_cls=CustomSchemaValidationError,
+                label="payload",
+            )
+        assert "payload schema validation failed" in str(exc_info.value)
+        assert "nested.value" in str(exc_info.value)

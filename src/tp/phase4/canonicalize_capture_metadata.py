@@ -13,6 +13,14 @@ from decimal import ROUND_HALF_EVEN, Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any, Callable
 
+from .exceptions import (
+    ConfigValidationError,
+    ExtractionFailure,
+    PathNormalizationError,
+    SchemaValidationError,
+    StrictWarningsError,
+)
+
 SUPPORTED_EXTENSIONS = frozenset(
     {
         ".dng",
@@ -80,26 +88,6 @@ _IMPLEMENTATION_REQUIRED_WARNING_CODES = {
     "WARN_INVALID_ORIENTATION",
 }
 EXIFTOOL_TIMEOUT_SECONDS = 120
-
-
-class ConfigValidationError(ValueError):
-    """Raised when capture metadata config is invalid."""
-
-
-class PathNormalizationError(ValueError):
-    """Raised when a relative path violates deterministic policy."""
-
-
-class ExtractionFailure(RuntimeError):
-    """Raised when metadata extraction fails."""
-
-
-class SchemaValidationError(RuntimeError):
-    """Raised when a metadata record fails schema validation."""
-
-
-class StrictWarningsError(RuntimeError):
-    """Raised when strict mode is enabled and warnings were produced."""
 
 
 def load_capture_metadata_config(config_path: Path) -> dict[str, Any]:

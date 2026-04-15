@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import pytest
 
+from tp.phase4.canonicalize_capture_metadata import ConfigValidationError as CaptureConfigValidationError
+from tp.phase4.canonicalize_capture_metadata import ExtractionFailure as CaptureExtractionFailure
+from tp.phase4.canonicalize_capture_metadata import SchemaValidationError as CaptureSchemaValidationError
 from tp.phase4.exceptions import (
     Phase4ConfigError,
     Phase4Error,
@@ -15,6 +18,14 @@ from tp.phase4.exceptions import (
     Phase4ProvenanceHashError,
     Phase4SchemaError,
 )
+from tp.phase4.hash_capture_metadata import MetadataManifestInputError as HashMetadataManifestInputError
+from tp.phase4.hash_capture_metadata import MetadataSchemaValidationError as HashMetadataSchemaValidationError
+from tp.phase4.provenance_capture import ProvenanceInputError as CaptureProvenanceInputError
+from tp.phase4.provenance_capture import ProvenanceSchemaValidationError as CaptureProvenanceSchemaValidationError
+from tp.phase4.verify_phase4_chain import Phase4AlignmentError as VerifyAlignmentError
+from tp.phase4.verify_phase4_chain import Phase4SchemaValidationError as VerifySchemaValidationError
+
+pytestmark = pytest.mark.unit
 
 
 class TestPhase4ExceptionHierarchy:
@@ -144,3 +155,49 @@ class TestExceptionCatching:
 
         if not caught:
             pytest.fail("Phase4ExtractionError was not caught by RuntimeError")
+
+
+class TestLegacyExceptionBindings:
+    """Tests that legacy module exception names bind to the unified hierarchy."""
+
+    def test_legacy_module_exceptions_inherit_from_phase4_error(self) -> None:
+        legacy_exception_types = [
+            CaptureConfigValidationError,
+            CaptureExtractionFailure,
+            CaptureSchemaValidationError,
+            HashMetadataManifestInputError,
+            HashMetadataSchemaValidationError,
+            CaptureProvenanceInputError,
+            CaptureProvenanceSchemaValidationError,
+            VerifyAlignmentError,
+            VerifySchemaValidationError,
+        ]
+
+        for exception_type in legacy_exception_types:
+            assert issubclass(exception_type, Phase4Error)
+
+    def test_legacy_module_exceptions_preserve_compatibility_bases(self) -> None:
+        assert issubclass(CaptureConfigValidationError, ValueError)
+        assert issubclass(CaptureExtractionFailure, RuntimeError)
+        assert issubclass(CaptureSchemaValidationError, RuntimeError)
+        assert issubclass(HashMetadataManifestInputError, ValueError)
+        assert issubclass(CaptureProvenanceInputError, ValueError)
+        assert issubclass(VerifyAlignmentError, ValueError)
+
+    def test_legacy_module_exceptions_can_be_caught_as_phase4_error(self) -> None:
+        legacy_exceptions = [
+            CaptureConfigValidationError("config error"),
+            CaptureExtractionFailure("extraction error"),
+            HashMetadataManifestInputError("manifest error"),
+            CaptureProvenanceInputError("provenance error"),
+            VerifyAlignmentError("alignment error"),
+            VerifySchemaValidationError("schema error"),
+        ]
+
+        for exc in legacy_exceptions:
+            try:
+                raise exc
+            except Phase4Error:
+                pass
+            else:
+                pytest.fail(f"{type(exc).__name__} was not caught by Phase4Error")

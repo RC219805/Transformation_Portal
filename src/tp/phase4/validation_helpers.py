@@ -83,9 +83,16 @@ def require_sorted_relative_paths(
         error_cls: Exception class to raise on validation failure.
 
     Raises:
-        error_cls: If records are not sorted by relative_path.
+        error_cls: If a record is missing relative_path or records are not
+            sorted by relative_path.
     """
-    relative_paths = [record["relative_path"] for record in records]
+    relative_paths: list[str] = []
+    for index, record in enumerate(records):
+        relative_path = record.get("relative_path")
+        if not isinstance(relative_path, str):
+            raise error_cls(f"{label} record[{index}] missing relative_path")
+        relative_paths.append(relative_path)
+
     if relative_paths != sorted(relative_paths):
         raise error_cls(f"{label} must be sorted by relative_path")
 

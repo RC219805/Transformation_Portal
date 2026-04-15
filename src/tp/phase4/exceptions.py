@@ -10,8 +10,8 @@ This module provides a structured exception hierarchy for Phase 4 operations:
     - Phase4ProvenanceHashError: Provenance entry hash mismatches
     - Phase4MerkleError: Merkle root/leaf count mismatches
 
-Legacy exceptions are preserved for backward compatibility but inherit
-from the new hierarchy.
+Legacy exception names remain available for backward compatibility, and the
+original Phase 4 modules bind those names to this hierarchy at runtime.
 """
 
 from __future__ import annotations
@@ -132,29 +132,74 @@ class Phase4ExtractionError(Phase4Error, RuntimeError):
 # exceptions from individual modules.
 # ============================================================================
 
+
 # From canonicalize_capture_metadata.py
-ConfigValidationError = Phase4ConfigError
-PathNormalizationError = Phase4InputError
-ExtractionFailure = Phase4ExtractionError
-SchemaValidationError = Phase4SchemaError
-StrictWarningsError = Phase4ExtractionError
+class ConfigValidationError(Phase4ConfigError):
+    """Legacy Phase 4C configuration error name."""
+
+
+class PathNormalizationError(Phase4InputError):
+    """Legacy Phase 4C path normalization error name."""
+
+
+class ExtractionFailure(Phase4ExtractionError):
+    """Legacy Phase 4C extraction error name."""
+
+
+class SchemaValidationError(Phase4Error, RuntimeError):
+    """Legacy Phase 4C schema validation error name."""
+
+
+class StrictWarningsError(Phase4ExtractionError):
+    """Legacy Phase 4C strict-warnings error name."""
+
 
 # From hash_capture_metadata.py
-MetadataManifestInputError = Phase4InputError
-MetadataSchemaValidationError = Phase4SchemaError
-MetadataManifestSchemaValidationError = Phase4SchemaError
+class MetadataManifestInputError(Phase4InputError):
+    """Legacy Phase 4D input validation error name."""
+
+
+class MetadataSchemaValidationError(Phase4SchemaError):
+    """Legacy Phase 4D metadata schema validation error name."""
+
+
+class MetadataManifestSchemaValidationError(Phase4SchemaError):
+    """Legacy Phase 4D manifest schema validation error name."""
+
 
 # From provenance_capture.py
-ProvenanceInputError = Phase4InputError
-ProvenanceSchemaValidationError = Phase4SchemaError
-ProvenanceMerkleSchemaValidationError = Phase4SchemaError
+class ProvenanceInputError(Phase4InputError):
+    """Legacy Phase 4E input validation error name."""
+
+
+class ProvenanceSchemaValidationError(Phase4SchemaError):
+    """Legacy Phase 4E schema validation error name."""
+
+
+class ProvenanceMerkleSchemaValidationError(Phase4SchemaError):
+    """Legacy Phase 4E Merkle schema validation error name."""
+
 
 # From verify_phase4_chain.py
-Phase4VerificationInputError = Phase4InputError
-Phase4AlignmentError = Phase4InputError
-Phase4MetadataHashMismatchError = Phase4MetadataHashError
-Phase4ProvenanceEntryHashMismatchError = Phase4ProvenanceHashError
-Phase4MerkleMismatchError = Phase4MerkleError
+class Phase4VerificationInputError(Phase4InputError):
+    """Legacy Phase 4F malformed-input error name."""
 
-# Note: Phase4SchemaValidationError is kept as-is in verify_phase4_chain.py
-# but maps to Phase4SchemaError in the new hierarchy
+
+class Phase4SchemaValidationError(Phase4SchemaError):
+    """Legacy Phase 4F schema validation error name."""
+
+
+class Phase4AlignmentError(Phase4InputError):
+    """Legacy Phase 4F alignment error name."""
+
+
+class Phase4MetadataHashMismatchError(Phase4MetadataHashError):
+    """Legacy Phase 4F metadata hash mismatch error name."""
+
+
+class Phase4ProvenanceEntryHashMismatchError(Phase4ProvenanceHashError):
+    """Legacy Phase 4F provenance-entry mismatch error name."""
+
+
+class Phase4MerkleMismatchError(Phase4MerkleError):
+    """Legacy Phase 4F Merkle mismatch error name."""

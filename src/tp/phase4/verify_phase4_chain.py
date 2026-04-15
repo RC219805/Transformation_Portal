@@ -10,6 +10,14 @@ from typing import Any, Callable
 
 from tp.crypto.merkle import merkle_root_sha256
 
+from .exceptions import (
+    Phase4AlignmentError,
+    Phase4MerkleMismatchError,
+    Phase4MetadataHashMismatchError,
+    Phase4ProvenanceEntryHashMismatchError,
+    Phase4SchemaValidationError,
+    Phase4VerificationInputError,
+)
 from .hash_capture_metadata import (
     METADATA_CONTRACT_VERSION,
     METADATA_MANIFEST_CONTRACT_VERSION,
@@ -40,30 +48,6 @@ FAILURE_LABEL_MERKLE_MISMATCH = "MERKLE_MISMATCH"
 FAILURE_LABEL_REPORT_WRITE_FAILURE = "REPORT_WRITE_FAILURE"
 
 _SHA256_HEX_RE = re.compile(r"^[a-f0-9]{64}$")
-
-
-class Phase4VerificationInputError(ValueError):
-    """Raised when verifier inputs cannot be loaded or parsed."""
-
-
-class Phase4SchemaValidationError(ValueError):
-    """Raised when schema validation fails for artifacts or report payloads."""
-
-
-class Phase4AlignmentError(ValueError):
-    """Raised when deterministic alignment/order/version invariants fail."""
-
-
-class Phase4MetadataHashMismatchError(ValueError):
-    """Raised when recomputed metadata digest mismatches Phase 4D manifest."""
-
-
-class Phase4ProvenanceEntryHashMismatchError(ValueError):
-    """Raised when recomputed provenance-entry digest mismatches Phase 4E manifest."""
-
-
-class Phase4MerkleMismatchError(ValueError):
-    """Raised when recomputed provenance Merkle metadata mismatches Phase 4E artifact."""
 
 
 def _build_validator(schema: dict[str, Any], *, error_cls: type[Exception], label: str) -> Any:
@@ -348,7 +332,7 @@ def verify_phase4_chain_payloads(
     recomputed_provenance_entry_hashes: list[str] = []
 
     sorted_paths = sorted(capture_by_path)
-    for index, relative_path in enumerate(sorted_paths):
+    for relative_path in sorted_paths:
         capture_record = capture_by_path[relative_path]
         metadata_manifest_entry = metadata_manifest_by_path[relative_path]
         provenance_manifest_entry = provenance_manifest_by_path[relative_path]

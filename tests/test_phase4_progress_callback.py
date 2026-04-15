@@ -7,6 +7,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
+pytestmark = pytest.mark.unit
+
 
 class TestProgressCallbackProtocol:
     """Tests for progress callback type compatibility."""

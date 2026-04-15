@@ -14,6 +14,7 @@ Contract versions:
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, Callable, List, Optional, Protocol, TypedDict
 
 # ============================================================================
@@ -210,7 +211,7 @@ class ExifToolRunner(Protocol):
 
     def __call__(
         self,
-        file_paths: list[Any],  # list[Path]
+        file_paths: list[Path],
         tag_whitelist: list[str],
     ) -> dict[str, dict[str, Any]]:
         """Execute ExifTool and return tag data by resolved file path.
