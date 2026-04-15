@@ -3111,7 +3111,13 @@ def test_archive_gate_a_rights_apply_ready_when_inputs_exist(tmp_path: Path) -> 
     manifest_jsonl = tmp_path / "manifest.jsonl"
     manifest_jsonl.write_text('{"id":"asset-1"}\n', encoding="utf-8")
     policy_yaml = tmp_path / "rights_flags.yml"
-    policy_yaml.write_text("version: '1.0'\ndefault_status: pending_review\n", encoding="utf-8")
+    policy_yaml.write_text(
+        "version: 1\n"
+        "default_owner: archive-ops\n"
+        "default_flags:\n"
+        "  - review_required\n",
+        encoding="utf-8",
+    )
 
     readiness = orchestrator_app._archive_gate_readiness(
         "archive-gate-a",
