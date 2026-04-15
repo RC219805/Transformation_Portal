@@ -2272,6 +2272,277 @@ def test_v1_jobs_archive_gate_rejects_unsafe_input_dir_with_typed_error(client: 
     assert body["error"]["details"]["field"] == "input_dir"
 
 
+# --- Archive Gate E2E HTTP Contract Test Extensions (Phase 3) ---
+
+
+def test_archive_gate_a_fixity_verify_submission_returns_job_envelope(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Gate A fixity-verify command submits successfully with required hash_manifest."""
+
+    async def fake_run_job(job, _argv):  # noqa: ANN001
+        job.state = "succeeded"
+        job.exit_code = 0
+        now = orchestrator_app._now()
+        job.done_published_at = now
+        job.finished_at = now
+
+    monkeypatch.setattr(orchestrator_app, "_run_job", fake_run_job)
+    hash_manifest = tmp_path / "hash_manifest.csv.gz"
+    hash_manifest.write_bytes(b"fixture-manifest")
+
+    response = client.post(
+        "/v1/jobs",
+        json={
+            "pipeline": "archive-gate-a",
+            "args": {
+                "input_dir": str(tmp_path / "archive_root"),
+                "output_dir": str(tmp_path / "out"),
+                "archive_command": "fixity-verify",
+                "hash_manifest": str(hash_manifest),
+            },
+        },
+    )
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["schema"] == "tp.orchestrator.job.v1"
+    assert body["success"] is True
+    assert body["data"]["id"].startswith("job_")
+
+
+def test_archive_gate_b_bag_validate_submission_returns_job_envelope(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Gate B bag-validate command submits successfully with required bag_dir."""
+
+    async def fake_run_job(job, _argv):  # noqa: ANN001
+        job.state = "succeeded"
+        job.exit_code = 0
+        now = orchestrator_app._now()
+        job.done_published_at = now
+        job.finished_at = now
+
+    monkeypatch.setattr(orchestrator_app, "_run_job", fake_run_job)
+    bag_dir = tmp_path / "bag"
+    bag_dir.mkdir(parents=True, exist_ok=True)
+
+    response = client.post(
+        "/v1/jobs",
+        json={
+            "pipeline": "archive-gate-b",
+            "args": {
+                "input_dir": str(tmp_path / "archive_root"),
+                "output_dir": str(tmp_path / "out"),
+                "archive_command": "bag-validate",
+                "bag_dir": str(bag_dir),
+            },
+        },
+    )
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["schema"] == "tp.orchestrator.job.v1"
+    assert body["success"] is True
+    assert body["data"]["id"].startswith("job_")
+
+
+def test_archive_gate_b_dedup_plan_submission_returns_job_envelope(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Gate B dedup-plan command submits successfully with required manifest_jsonl."""
+
+    async def fake_run_job(job, _argv):  # noqa: ANN001
+        job.state = "succeeded"
+        job.exit_code = 0
+        now = orchestrator_app._now()
+        job.done_published_at = now
+        job.finished_at = now
+
+    monkeypatch.setattr(orchestrator_app, "_run_job", fake_run_job)
+    manifest_jsonl = tmp_path / "manifest.jsonl"
+    manifest_jsonl.write_text('{"id":"asset-1"}\n', encoding="utf-8")
+
+    response = client.post(
+        "/v1/jobs",
+        json={
+            "pipeline": "archive-gate-b",
+            "args": {
+                "input_dir": str(tmp_path / "archive_root"),
+                "output_dir": str(tmp_path / "out"),
+                "archive_command": "dedup-plan",
+                "manifest_jsonl": str(manifest_jsonl),
+            },
+        },
+    )
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["schema"] == "tp.orchestrator.job.v1"
+    assert body["success"] is True
+    assert body["data"]["id"].startswith("job_")
+
+
+def test_archive_gate_c_prov_export_submission_returns_job_envelope(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Gate C prov-export command submits successfully with required manifest_jsonl."""
+
+    async def fake_run_job(job, _argv):  # noqa: ANN001
+        job.state = "succeeded"
+        job.exit_code = 0
+        now = orchestrator_app._now()
+        job.done_published_at = now
+        job.finished_at = now
+
+    monkeypatch.setattr(orchestrator_app, "_run_job", fake_run_job)
+    manifest_jsonl = tmp_path / "manifest.jsonl"
+    manifest_jsonl.write_text('{"id":"asset-1"}\n', encoding="utf-8")
+
+    response = client.post(
+        "/v1/jobs",
+        json={
+            "pipeline": "archive-gate-c",
+            "args": {
+                "input_dir": str(tmp_path / "archive_root"),
+                "output_dir": str(tmp_path / "out"),
+                "archive_command": "prov-export",
+                "manifest_jsonl": str(manifest_jsonl),
+            },
+        },
+    )
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["schema"] == "tp.orchestrator.job.v1"
+    assert body["success"] is True
+    assert body["data"]["id"].startswith("job_")
+
+
+def test_archive_gate_c_stac_export_submission_returns_job_envelope(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Gate C stac-export command submits successfully with required manifest_jsonl."""
+
+    async def fake_run_job(job, _argv):  # noqa: ANN001
+        job.state = "succeeded"
+        job.exit_code = 0
+        now = orchestrator_app._now()
+        job.done_published_at = now
+        job.finished_at = now
+
+    monkeypatch.setattr(orchestrator_app, "_run_job", fake_run_job)
+    manifest_jsonl = tmp_path / "manifest.jsonl"
+    manifest_jsonl.write_text('{"id":"asset-1"}\n', encoding="utf-8")
+
+    response = client.post(
+        "/v1/jobs",
+        json={
+            "pipeline": "archive-gate-c",
+            "args": {
+                "input_dir": str(tmp_path / "archive_root"),
+                "output_dir": str(tmp_path / "out"),
+                "archive_command": "stac-export",
+                "manifest_jsonl": str(manifest_jsonl),
+            },
+        },
+    )
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["schema"] == "tp.orchestrator.job.v1"
+    assert body["success"] is True
+    assert body["data"]["id"].startswith("job_")
+
+
+def test_archive_gate_c_mets_export_submission_returns_job_envelope(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Gate C mets-export command submits successfully with required manifest_jsonl."""
+
+    async def fake_run_job(job, _argv):  # noqa: ANN001
+        job.state = "succeeded"
+        job.exit_code = 0
+        now = orchestrator_app._now()
+        job.done_published_at = now
+        job.finished_at = now
+
+    monkeypatch.setattr(orchestrator_app, "_run_job", fake_run_job)
+    manifest_jsonl = tmp_path / "manifest.jsonl"
+    manifest_jsonl.write_text('{"id":"asset-1"}\n', encoding="utf-8")
+
+    response = client.post(
+        "/v1/jobs",
+        json={
+            "pipeline": "archive-gate-c",
+            "args": {
+                "input_dir": str(tmp_path / "archive_root"),
+                "output_dir": str(tmp_path / "out"),
+                "archive_command": "mets-export",
+                "manifest_jsonl": str(manifest_jsonl),
+            },
+        },
+    )
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["schema"] == "tp.orchestrator.job.v1"
+    assert body["success"] is True
+    assert body["data"]["id"].startswith("job_")
+
+
+def test_archive_gate_b_bag_validate_rejects_missing_bag_dir(client: TestClient) -> None:
+    """Gate B bag-validate fails with typed error when bag_dir is missing."""
+    response = client.post(
+        "/v1/jobs",
+        json={
+            "pipeline": "archive-gate-b",
+            "args": {
+                "input_dir": "./archive_root",
+                "output_dir": "./out",
+                "archive_command": "bag-validate",
+            },
+        },
+    )
+    body = response.json()
+
+    assert response.status_code == 400
+    assert body["error"]["code"] == "INVALID_ARGUMENT"
+    assert body["error"]["details"]["field"] == "bag_dir"
+
+
+def test_archive_gate_c_prov_export_rejects_missing_manifest(client: TestClient) -> None:
+    """Gate C prov-export fails with typed error when manifest_jsonl is missing."""
+    response = client.post(
+        "/v1/jobs",
+        json={
+            "pipeline": "archive-gate-c",
+            "args": {
+                "input_dir": "./archive_root",
+                "output_dir": "./out",
+                "archive_command": "prov-export",
+            },
+        },
+    )
+    body = response.json()
+
+    assert response.status_code == 400
+    assert body["error"]["code"] == "INVALID_ARGUMENT"
+    assert body["error"]["details"]["field"] == "manifest_jsonl"
+
+
 def test_v1_jobs_rejects_when_max_concurrent_jobs_reached(client: TestClient) -> None:
     previous_limit = orchestrator_app.MAX_CONCURRENT_JOBS
     try:
