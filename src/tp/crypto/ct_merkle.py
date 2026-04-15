@@ -86,6 +86,28 @@ def validate_sha256_digest(value: bytes, name: str = "digest") -> Sha256Digest:
     return value
 
 
+def _coerce_to_32_bytes(value: object) -> bytes | None:
+    """Coerce a value to exactly 32 bytes, returning None on failure.
+
+    Accepts bytes or bytearray and returns bytes if exactly 32 bytes long.
+    This is used internally by verifiers to fail closed with False instead
+    of raising exceptions on malformed inputs.
+
+    Args:
+        value: The value to coerce (typically bytes or bytearray).
+
+    Returns:
+        The value as bytes if valid, or None if coercion fails.
+    """
+    if isinstance(value, bytearray):
+        value = bytes(value)
+    if not isinstance(value, bytes):
+        return None
+    if len(value) != _SHA256_DIGEST_SIZE:
+        return None
+    return value
+
+
 def _sha256(payload: bytes) -> bytes:
     """Compute SHA-256 digest of the given payload."""
     return hashlib.sha256(payload).digest()
@@ -112,11 +134,11 @@ def _largest_power_of_two_less_than(n: int) -> int:
     return 1 << ((n - 1).bit_length() - 1)
 
 
-def _mth_recursive(leaves: list[bytes], start: int, end: int) -> bytes:
+def _mth_recursive(leaves: Sequence[bytes], start: int, end: int) -> bytes:
     """Recursive MTH computation using index bounds to avoid slice copies.
 
     Args:
-        leaves: The full list of leaf hashes (not copied on recursive calls).
+        leaves: The sequence of leaf hashes (supports efficient indexing).
         start: Start index (inclusive) of the current subtree.
         end: End index (exclusive) of the current subtree.
 
@@ -137,7 +159,8 @@ def ct_merkle_root(leaf_hashes: Sequence[bytes]) -> bytes:
     """Return the CT Merkle root bytes for a sequence of leaf hashes.
 
     Implements the RFC 9162 Merkle Tree Hash (MTH) construction using
-    index-based recursion to minimize memory allocations.
+    index-based recursion to minimize memory allocations. Accepts any
+    Sequence (list, tuple, etc.) without copying.
 
     Args:
         leaf_hashes: Sequence of pre-hashed leaf values (typically from ct_leaf_hash).
@@ -151,9 +174,8 @@ def ct_merkle_root(leaf_hashes: Sequence[bytes]) -> bytes:
     if count == 1:
         return leaf_hashes[0]
 
-    # Convert to list once for efficient indexing
-    leaves = list(leaf_hashes) if not isinstance(leaf_hashes, list) else leaf_hashes
-    return _mth_recursive(leaves, 0, count)
+    # Sequence already supports indexing, no copy needed
+    return _mth_recursive(leaf_hashes, 0, count)
 
 
 def ct_merkle_root_sha256(leaf_hashes: Sequence[bytes]) -> str:
@@ -168,11 +190,11 @@ def ct_merkle_root_sha256(leaf_hashes: Sequence[bytes]) -> str:
     return ct_merkle_root(leaf_hashes).hex()
 
 
-def _inclusion_proof_recursive(leaves: list[bytes], start: int, end: int, leaf_index: int) -> list[bytes]:
+def _inclusion_proof_recursive(leaves: Sequence[bytes], start: int, end: int, leaf_index: int) -> list[bytes]:
     """Build inclusion proof recursively using index bounds.
 
     Args:
-        leaves: The full list of leaf hashes.
+        leaves: The sequence of leaf hashes (supports efficient indexing).
         start: Start index (inclusive) of the current subtree.
         end: End index (exclusive) of the current subtree.
         leaf_index: Absolute index of the target leaf within the full tree.
@@ -199,7 +221,8 @@ def ct_inclusion_proof(leaf_hashes: Sequence[bytes], leaf_index: int) -> list[by
     """Return the RFC 9162 audit path for the selected leaf.
 
     The audit path consists of sibling hashes needed to recompute the
-    Merkle root from the specified leaf.
+    Merkle root from the specified leaf. Accepts any Sequence (list, tuple, etc.)
+    without copying.
 
     Args:
         leaf_hashes: Sequence of pre-hashed leaf values.
@@ -220,8 +243,8 @@ def ct_inclusion_proof(leaf_hashes: Sequence[bytes], leaf_index: int) -> list[by
     if count == 1:
         return []
 
-    leaves = list(leaf_hashes) if not isinstance(leaf_hashes, list) else leaf_hashes
-    return _inclusion_proof_recursive(leaves, 0, count, leaf_index)
+    # Sequence already supports indexing, no copy needed
+    return _inclusion_proof_recursive(leaf_hashes, 0, count, leaf_index)
 
 
 def ct_inclusion_proof_sha256(leaf_hashes: Sequence[bytes], leaf_index: int) -> list[str]:
@@ -260,38 +283,57 @@ def verify_ct_inclusion_proof(
 
     Returns:
         True if the proof is valid and reconstructs the expected root.
+        False if the proof is invalid or if any inputs are malformed
+        (wrong type, wrong length, etc.).
 
     Security:
         Uses constant-time comparison for the final root verification to
         prevent timing attacks that could leak information about valid proofs.
+        Returns False (fail closed) for any malformed inputs rather than raising.
     """
     if tree_size <= 0:
         return False
     if leaf_index < 0 or leaf_index >= tree_size:
         return False
 
+    # Validate/coerce inputs to 32-byte bytes; return False on any failure
+    digest = _coerce_to_32_bytes(leaf_hash)
+    if digest is None:
+        return False
+
+    root = _coerce_to_32_bytes(expected_root)
+    if root is None:
+        return False
+
+    # Coerce all proof elements; return False if any element is malformed
+    coerced_proof: list[bytes] = []
+    for elem in proof:
+        coerced_elem = _coerce_to_32_bytes(elem)
+        if coerced_elem is None:
+            return False
+        coerced_proof.append(coerced_elem)
+
     fn = leaf_index
     sn = tree_size - 1
-    digest = leaf_hash
     proof_index = 0
-    proof_len = len(proof)
+    proof_len = len(coerced_proof)
 
     while sn > 0:
         if fn % 2 == 1:
             if proof_index >= proof_len:
                 return False
-            digest = ct_node_hash(proof[proof_index], digest)
+            digest = ct_node_hash(coerced_proof[proof_index], digest)
             proof_index += 1
         elif fn < sn:
             if proof_index >= proof_len:
                 return False
-            digest = ct_node_hash(digest, proof[proof_index])
+            digest = ct_node_hash(digest, coerced_proof[proof_index])
             proof_index += 1
         fn //= 2
         sn //= 2
 
     # Use constant-time comparison to prevent timing side-channel attacks
-    return proof_index == proof_len and hmac.compare_digest(digest, expected_root)
+    return proof_index == proof_len and hmac.compare_digest(digest, root)
 
 
 # ---------------------------------------------------------------------------
@@ -299,13 +341,13 @@ def verify_ct_inclusion_proof(
 # ---------------------------------------------------------------------------
 
 
-def _subproof(leaves: list[bytes], m: int, start: int, end: int, complete_subtree: bool) -> list[bytes]:
+def _subproof(leaves: Sequence[bytes], m: int, start: int, end: int, complete_subtree: bool) -> list[bytes]:
     """Build consistency subproof recursively.
 
     This implements the RFC 9162 SUBPROOF algorithm.
 
     Args:
-        leaves: The full list of leaf hashes.
+        leaves: The sequence of leaf hashes (supports efficient indexing).
         m: Number of leaves in the older tree (relative to the subtree root).
         start: Start index (inclusive) of the current subtree.
         end: End index (exclusive) of the current subtree.
@@ -337,7 +379,8 @@ def ct_consistency_proof(leaf_hashes: Sequence[bytes], first_tree_size: int) -> 
     """Return the RFC 9162 consistency proof between two tree sizes.
 
     The consistency proof allows a verifier to confirm that a smaller tree
-    is a prefix of a larger tree, ensuring append-only semantics.
+    is a prefix of a larger tree, ensuring append-only semantics. Accepts any
+    Sequence (list, tuple, etc.) without copying.
 
     Args:
         leaf_hashes: Sequence of pre-hashed leaf values for the full (larger) tree.
@@ -365,8 +408,8 @@ def ct_consistency_proof(leaf_hashes: Sequence[bytes], first_tree_size: int) -> 
     if first_tree_size == second_tree_size:
         return []
 
-    leaves = list(leaf_hashes) if not isinstance(leaf_hashes, list) else leaf_hashes
-    return _subproof(leaves, first_tree_size, 0, second_tree_size, True)
+    # Sequence already supports indexing, no copy needed
+    return _subproof(leaf_hashes, first_tree_size, 0, second_tree_size, True)
 
 
 def ct_consistency_proof_sha256(leaf_hashes: Sequence[bytes], first_tree_size: int) -> list[str]:
@@ -404,20 +447,39 @@ def verify_ct_consistency_proof(
 
     Returns:
         True if the proof is valid (the smaller tree is a prefix of the larger).
+        False if the proof is invalid or if any inputs are malformed
+        (wrong type, wrong length, etc.).
 
     Security:
         Uses constant-time comparison for final root verification to
         prevent timing attacks that could leak information about valid proofs.
+        Returns False (fail closed) for any malformed inputs rather than raising.
     """
     if first_tree_size < 1 or second_tree_size < first_tree_size:
+        return False
+
+    # Validate/coerce roots to 32-byte bytes; return False on any failure
+    coerced_first_root = _coerce_to_32_bytes(first_root)
+    if coerced_first_root is None:
+        return False
+
+    coerced_second_root = _coerce_to_32_bytes(second_root)
+    if coerced_second_root is None:
         return False
 
     if first_tree_size == second_tree_size:
         if len(proof) > 0:
             return False
-        return hmac.compare_digest(first_root, second_root)
+        return hmac.compare_digest(coerced_first_root, coerced_second_root)
 
-    proof_list = list(proof)
+    # Coerce all proof elements; return False if any element is malformed
+    proof_list: list[bytes] = []
+    for elem in proof:
+        coerced_elem = _coerce_to_32_bytes(elem)
+        if coerced_elem is None:
+            return False
+        proof_list.append(coerced_elem)
+
     proof_len = len(proof_list)
 
     if proof_len == 0:
@@ -429,10 +491,10 @@ def verify_ct_consistency_proof(
     if is_power_of_two:
         # For power-of-two first_tree_size: simple iterative extension
         # The proof elements extend sr to the right at each tree level
-        sr = first_root
+        sr = coerced_first_root
         for elem in proof_list:
             sr = ct_node_hash(sr, elem)
-        return hmac.compare_digest(sr, second_root)
+        return hmac.compare_digest(sr, coerced_second_root)
 
     # Non-power-of-two case
     # proof[0] is the complete subtree hash, subsequent elements build paths
@@ -485,4 +547,4 @@ def verify_ct_consistency_proof(
         return False
 
     # Use constant-time comparison for both root checks
-    return hmac.compare_digest(fr, first_root) and hmac.compare_digest(sr, second_root)
+    return hmac.compare_digest(fr, coerced_first_root) and hmac.compare_digest(sr, coerced_second_root)

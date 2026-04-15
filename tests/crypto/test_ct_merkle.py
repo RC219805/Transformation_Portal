@@ -29,6 +29,29 @@ pytestmark = pytest.mark.unit
 # ---------------------------------------------------------------------------
 # These test vectors verify compliance with RFC 9162 Merkle Tree Hash
 # construction. The leaf data is d0, d1, d2, ... dn as per the RFC examples.
+#
+# PINNED EXPECTED VALUES: These are pre-computed reference values that would
+# catch any implementation that is consistently wrong. The computation is:
+#   leaf_hash(d) = SHA256(0x00 || d)
+#   node_hash(l, r) = SHA256(0x01 || l || r)
+#
+# Leaf data from RFC 9162 Section 2.1.3:
+#   d0 = "" (empty), d1 = 0x00, d2 = 0x01, d3 = 0x02, d4 = 0x03, d5 = 0x04, d6 = 0x05
+
+# Pre-computed leaf hashes (SHA256(0x00 || leaf_data))
+RFC_LEAF_HASH_D0 = "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"  # SHA256(0x00 || "")
+RFC_LEAF_HASH_D1 = "96a296d224f285c67bee93c30f8a309157f0daa35dc5b87e410b78630a09cfc7"  # SHA256(0x00 || 0x00)
+RFC_LEAF_HASH_D2 = "b413f47d13ee2fe6c845b2ee141af81de858df4ec549a58b7970bb96645bc8d2"  # SHA256(0x00 || 0x01)
+RFC_LEAF_HASH_D3 = "fcf0a6c700dd13e274b6fba8deea8dd9b26e4eedde3495717cac8408c9c5177f"  # SHA256(0x00 || 0x02)
+RFC_LEAF_HASH_D4 = "583c7dfb7b3055d99465544032a571e10a134b1b6f769422bbb71fd7fa167a5d"  # SHA256(0x00 || 0x03)
+RFC_LEAF_HASH_D5 = "4f35212d12f9ad2036492c95f1fe79baf4ec7bd9bef3dffa7579f2293ff546a4"  # SHA256(0x00 || 0x04)
+RFC_LEAF_HASH_D6 = "9f1afa4dc124cba73134e82ff50f17c8f7164257c79fed9a13f5943a6acb8e3d"  # SHA256(0x00 || 0x05)
+
+# Pre-computed Merkle roots for various tree sizes
+RFC_ROOT_1_LEAF = RFC_LEAF_HASH_D0  # MTH({d0}) = leaf_hash(d0)
+RFC_ROOT_2_LEAVES = "fac54203e7cc696cf0dfcb42c92a1d9dbaf70ad9e621f4bd8d98662f00e3c125"  # MTH({d0, d1})
+RFC_ROOT_3_LEAVES = "68cb24df6ba89442113931dd829cbcae8ae19a76996ce0c4b7d9d65d168d35d2"  # MTH({d0, d1, d2})
+RFC_ROOT_7_LEAVES = "f50c51ec2b7e07916f1a744c80e39f0b5d2932c2a0f411a75c9ff869013a75f9"  # MTH({d0..d6})
 
 
 class TestRfc9162GoldenVectors:
@@ -36,6 +59,9 @@ class TestRfc9162GoldenVectors:
 
     Test vectors derived from RFC 9162 Section 2.1.3 examples.
     Leaf data: d0=b"", d1=b"\\x00", d2=b"\\x01", etc.
+
+    These tests use PINNED expected hex values to ensure the implementation
+    matches the RFC specification independently (not self-referentially).
     """
 
     @pytest.fixture
@@ -44,6 +70,30 @@ class TestRfc9162GoldenVectors:
         # d0 = empty bytes, d1 = 0x00, d2 = 0x01, ..., d6 = 0x05
         leaf_data = [b"", b"\x00", b"\x01", b"\x02", b"\x03", b"\x04", b"\x05"]
         return [ct_leaf_hash(data) for data in leaf_data]
+
+    def test_leaf_hash_pinned_vectors(self) -> None:
+        """Verify leaf hashes against pinned RFC 9162 expected values."""
+        assert ct_leaf_hash(b"").hex() == RFC_LEAF_HASH_D0
+        assert ct_leaf_hash(b"\x00").hex() == RFC_LEAF_HASH_D1
+        assert ct_leaf_hash(b"\x01").hex() == RFC_LEAF_HASH_D2
+        assert ct_leaf_hash(b"\x02").hex() == RFC_LEAF_HASH_D3
+        assert ct_leaf_hash(b"\x03").hex() == RFC_LEAF_HASH_D4
+        assert ct_leaf_hash(b"\x04").hex() == RFC_LEAF_HASH_D5
+        assert ct_leaf_hash(b"\x05").hex() == RFC_LEAF_HASH_D6
+
+    def test_merkle_root_pinned_vectors(self, rfc_leaves: list[bytes]) -> None:
+        """Verify Merkle roots against pinned RFC 9162 expected values."""
+        # Single leaf: MTH({d0})
+        assert ct_merkle_root(rfc_leaves[:1]).hex() == RFC_ROOT_1_LEAF
+
+        # Two leaves: MTH({d0, d1})
+        assert ct_merkle_root(rfc_leaves[:2]).hex() == RFC_ROOT_2_LEAVES
+
+        # Three leaves: MTH({d0, d1, d2})
+        assert ct_merkle_root(rfc_leaves[:3]).hex() == RFC_ROOT_3_LEAVES
+
+        # Seven leaves: MTH({d0..d6})
+        assert ct_merkle_root(rfc_leaves[:7]).hex() == RFC_ROOT_7_LEAVES
 
     def test_leaf_hash_domain_separation(self) -> None:
         """Verify leaf hash uses 0x00 prefix (domain separation)."""
@@ -367,3 +417,155 @@ class TestTypeAliases:
         assert MerkleRoot is bytes
         assert AuditPath == list[bytes]
         assert ConsistencyPath == list[bytes]
+
+
+class TestVerifierInputValidation:
+    """Tests for verifier input validation (fail-closed behavior).
+
+    Verifiers should return False (not raise) for malformed inputs like:
+    - Wrong types (str, int, bytearray)
+    - Wrong lengths (not 32 bytes)
+    - Invalid proof elements
+    """
+
+    @pytest.fixture
+    def valid_setup(self) -> dict:
+        """Create a valid inclusion proof setup for testing."""
+        leaf_hashes = [ct_leaf_hash(value) for value in (b"a", b"b", b"c")]
+        root = ct_merkle_root(leaf_hashes)
+        proof = ct_inclusion_proof(leaf_hashes, 0)
+        return {
+            "leaf_hash": leaf_hashes[0],
+            "leaf_index": 0,
+            "tree_size": 3,
+            "proof": proof,
+            "expected_root": root,
+        }
+
+    @pytest.fixture
+    def valid_consistency_setup(self) -> dict:
+        """Create a valid consistency proof setup for testing."""
+        leaves = [ct_leaf_hash(bytes([i])) for i in range(4)]
+        first_root = ct_merkle_root(leaves[:2])
+        second_root = ct_merkle_root(leaves[:4])
+        proof = ct_consistency_proof(leaves[:4], 2)
+        return {
+            "first_tree_size": 2,
+            "second_tree_size": 4,
+            "first_root": first_root,
+            "second_root": second_root,
+            "proof": proof,
+        }
+
+    def test_inclusion_verifier_accepts_bytearray_inputs(self, valid_setup: dict) -> None:
+        """Verifier should accept bytearray and coerce to bytes."""
+        # bytearray is coerced to bytes
+        result = verify_ct_inclusion_proof(
+            leaf_hash=bytearray(valid_setup["leaf_hash"]),
+            leaf_index=valid_setup["leaf_index"],
+            tree_size=valid_setup["tree_size"],
+            proof=valid_setup["proof"],
+            expected_root=bytearray(valid_setup["expected_root"]),
+        )
+        assert result is True
+
+    def test_inclusion_verifier_rejects_wrong_type_leaf_hash(self, valid_setup: dict) -> None:
+        """Verifier returns False for non-bytes leaf_hash."""
+        result = verify_ct_inclusion_proof(
+            leaf_hash="not bytes",  # type: ignore[arg-type]
+            leaf_index=valid_setup["leaf_index"],
+            tree_size=valid_setup["tree_size"],
+            proof=valid_setup["proof"],
+            expected_root=valid_setup["expected_root"],
+        )
+        assert result is False
+
+    def test_inclusion_verifier_rejects_wrong_length_leaf_hash(self, valid_setup: dict) -> None:
+        """Verifier returns False for wrong-length leaf_hash."""
+        result = verify_ct_inclusion_proof(
+            leaf_hash=b"too short",
+            leaf_index=valid_setup["leaf_index"],
+            tree_size=valid_setup["tree_size"],
+            proof=valid_setup["proof"],
+            expected_root=valid_setup["expected_root"],
+        )
+        assert result is False
+
+    def test_inclusion_verifier_rejects_wrong_type_root(self, valid_setup: dict) -> None:
+        """Verifier returns False for non-bytes expected_root."""
+        result = verify_ct_inclusion_proof(
+            leaf_hash=valid_setup["leaf_hash"],
+            leaf_index=valid_setup["leaf_index"],
+            tree_size=valid_setup["tree_size"],
+            proof=valid_setup["proof"],
+            expected_root="not bytes",  # type: ignore[arg-type]
+        )
+        assert result is False
+
+    def test_inclusion_verifier_rejects_wrong_length_root(self, valid_setup: dict) -> None:
+        """Verifier returns False for wrong-length expected_root."""
+        result = verify_ct_inclusion_proof(
+            leaf_hash=valid_setup["leaf_hash"],
+            leaf_index=valid_setup["leaf_index"],
+            tree_size=valid_setup["tree_size"],
+            proof=valid_setup["proof"],
+            expected_root=b"x" * 64,
+        )
+        assert result is False
+
+    def test_inclusion_verifier_rejects_malformed_proof_element(self, valid_setup: dict) -> None:
+        """Verifier returns False for malformed proof elements."""
+        bad_proof = [b"short"] if valid_setup["proof"] else [b"short"]
+        result = verify_ct_inclusion_proof(
+            leaf_hash=valid_setup["leaf_hash"],
+            leaf_index=valid_setup["leaf_index"],
+            tree_size=valid_setup["tree_size"],
+            proof=bad_proof,
+            expected_root=valid_setup["expected_root"],
+        )
+        assert result is False
+
+    def test_consistency_verifier_accepts_bytearray_inputs(self, valid_consistency_setup: dict) -> None:
+        """Consistency verifier should accept bytearray and coerce to bytes."""
+        result = verify_ct_consistency_proof(
+            first_tree_size=valid_consistency_setup["first_tree_size"],
+            second_tree_size=valid_consistency_setup["second_tree_size"],
+            first_root=bytearray(valid_consistency_setup["first_root"]),
+            second_root=bytearray(valid_consistency_setup["second_root"]),
+            proof=valid_consistency_setup["proof"],
+        )
+        assert result is True
+
+    def test_consistency_verifier_rejects_wrong_type_first_root(self, valid_consistency_setup: dict) -> None:
+        """Consistency verifier returns False for non-bytes first_root."""
+        result = verify_ct_consistency_proof(
+            first_tree_size=valid_consistency_setup["first_tree_size"],
+            second_tree_size=valid_consistency_setup["second_tree_size"],
+            first_root="not bytes",  # type: ignore[arg-type]
+            second_root=valid_consistency_setup["second_root"],
+            proof=valid_consistency_setup["proof"],
+        )
+        assert result is False
+
+    def test_consistency_verifier_rejects_wrong_length_root(self, valid_consistency_setup: dict) -> None:
+        """Consistency verifier returns False for wrong-length roots."""
+        result = verify_ct_consistency_proof(
+            first_tree_size=valid_consistency_setup["first_tree_size"],
+            second_tree_size=valid_consistency_setup["second_tree_size"],
+            first_root=b"short",
+            second_root=valid_consistency_setup["second_root"],
+            proof=valid_consistency_setup["proof"],
+        )
+        assert result is False
+
+    def test_consistency_verifier_rejects_malformed_proof_element(self, valid_consistency_setup: dict) -> None:
+        """Consistency verifier returns False for malformed proof elements."""
+        bad_proof = [b"short"]
+        result = verify_ct_consistency_proof(
+            first_tree_size=valid_consistency_setup["first_tree_size"],
+            second_tree_size=valid_consistency_setup["second_tree_size"],
+            first_root=valid_consistency_setup["first_root"],
+            second_root=valid_consistency_setup["second_root"],
+            proof=bad_proof,
+        )
+        assert result is False
