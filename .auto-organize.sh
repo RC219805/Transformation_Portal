@@ -128,7 +128,8 @@ check_helper_script() {
     fi
 
     if [[ ! -x "$full_path" ]]; then
-        if [[ "$DRY_RUN" == "true" ]]; then
+        # In validation modes (--dry-run or --check), don't mutate file permissions
+        if [[ "$DRY_RUN" == "true" || "$CHECK_MODE" == "true" ]]; then
             log_error "Helper script not executable: $script (fix permissions outside --dry-run/--check mode)"
             return 1
         fi
@@ -254,7 +255,7 @@ check_root_scripts() {
 
     local misplaced=()
 
-    # Use git ls-files for deterministic CI/local behavior (consistent with other validators)
+    # Use git ls-files with -z (null-delimited) to handle filenames with spaces/special chars
     while IFS= read -r -d '' file; do
         # Skip files in subdirectories
         if [[ "$file" == */* ]]; then
@@ -322,7 +323,7 @@ check_root_shell_scripts() {
 
     local misplaced=()
 
-    # Use git ls-files for deterministic CI/local behavior (consistent with other validators)
+    # Use git ls-files with -z (null-delimited) to handle filenames with spaces/special chars
     while IFS= read -r -d '' file; do
         # Skip files in subdirectories
         if [[ "$file" == */* ]]; then
@@ -372,14 +373,23 @@ validate_docs_structure() {
 
     log_info "Running: python3 $helper --all"
 
-    # Capture both stdout and stderr; print stderr on failure for debugging
-    local output
+    # Capture stdout and stderr separately for clearer diagnostics
+    local stdout_file
+    local stderr_file
+    stdout_file=$(mktemp)
+    stderr_file=$(mktemp)
+    trap "rm -f '$stdout_file' '$stderr_file'" RETURN
+
     local exit_code=0
-    output=$(python3 "$REPO_ROOT/$helper" --all 2>&1) || exit_code=$?
+    python3 "$REPO_ROOT/$helper" --all >"$stdout_file" 2>"$stderr_file" || exit_code=$?
 
     if [[ $exit_code -ne 0 ]]; then
-        if [[ -n "$output" ]]; then
-            echo "$output"
+        if [[ -s "$stdout_file" ]]; then
+            cat "$stdout_file"
+        fi
+        if [[ -s "$stderr_file" ]]; then
+            echo "[stderr]:"
+            cat "$stderr_file"
         fi
         if [[ "$CHECK_MODE" == "true" ]]; then
             log_error "Documentation structure violations detected"
@@ -388,8 +398,8 @@ validate_docs_structure() {
             log_warn "Documentation structure issues found"
         fi
     else
-        if [[ -n "$output" ]]; then
-            echo "$output"
+        if [[ -s "$stdout_file" ]]; then
+            cat "$stdout_file"
         fi
         log_success "Documentation structure validated"
     fi
