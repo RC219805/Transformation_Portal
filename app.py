@@ -17,7 +17,8 @@ import time
 import uuid
 from bisect import bisect_left
 from collections import deque
-from dataclasses import dataclass, field
+from dataclasses import dataclass
+from dataclasses import field as dataclass_field
 from email.parser import BytesParser
 from email.policy import default as email_policy
 from functools import lru_cache
@@ -866,12 +867,12 @@ class Job:
     state: str = "queued"  # queued|running|succeeded|partial|failed|canceled
     progress: int = 0
     exit_code: Optional[int] = None
-    request: Dict[str, Any] = field(default_factory=dict)
-    effective_request: Dict[str, Any] = field(default_factory=dict)
-    logs_tail: List[str] = field(default_factory=list)
-    artifacts: Dict[str, Any] = field(default_factory=dict)
-    artifact_lookup: Dict[str, Path] = field(default_factory=dict)
-    run_summary: Dict[str, Any] = field(default_factory=dict)
+    request: Dict[str, Any] = dataclass_field(default_factory=dict)
+    effective_request: Dict[str, Any] = dataclass_field(default_factory=dict)
+    logs_tail: List[str] = dataclass_field(default_factory=list)
+    artifacts: Dict[str, Any] = dataclass_field(default_factory=dict)
+    artifact_lookup: Dict[str, Path] = dataclass_field(default_factory=dict)
+    run_summary: Dict[str, Any] = dataclass_field(default_factory=dict)
     proc: Optional[asyncio.subprocess.Process] = None
     terminate_task: Optional[asyncio.Task[None]] = None
     cancel_requested: bool = False
@@ -1720,9 +1721,9 @@ def _evaluate_pipeline_readiness(
         normalized_args, _, normalization_errors = _normalize_operator_payload_paths(pipeline, args)
 
     if pipeline == "lux-depth-v3":
-        readiness = _lux_depth_readiness(normalized_args)
+        readiness_payload = _lux_depth_readiness(normalized_args)
     else:
-        readiness = _archive_gate_readiness(
+        readiness_payload = _archive_gate_readiness(
             pipeline,
             normalized_args,
             require_dispatch_inputs=require_dispatch_inputs,
@@ -1738,9 +1739,9 @@ def _evaluate_pipeline_readiness(
             )
             for issue in normalization_errors
         ]
-        readiness["missing_prerequisites"] = synthesized + list(readiness.get("missing_prerequisites") or [])
-        readiness["status"] = "blocked"
-    return readiness
+        readiness_payload["missing_prerequisites"] = synthesized + list(readiness_payload.get("missing_prerequisites") or [])
+        readiness_payload["status"] = "blocked"
+    return readiness_payload
 
 
 def _enforce_job_readiness_preflight(
@@ -1825,15 +1826,13 @@ class _PortalMultipartPart:
     content_type: str
     charset: str
     file_stream: Any = None
-    value_bytes: bytearray = field(default_factory=bytearray)
+    value_bytes: bytearray = dataclass_field(default_factory=bytearray)
     size_bytes: int = 0
 
     def close(self) -> None:
         if self.file_stream is None:
             return
-        close = getattr(self.file_stream, "close", None)
-        if callable(close):
-            close()
+        self.file_stream.close()
 
 
 def _portal_upload_boundary_bytes(content_type: str) -> bytes:
