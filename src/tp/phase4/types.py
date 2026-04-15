@@ -16,7 +16,6 @@ from __future__ import annotations
 
 from typing import Any, Callable, List, Optional, Protocol, TypedDict
 
-
 # ============================================================================
 # Phase 4C: Capture Metadata Types
 # ============================================================================
