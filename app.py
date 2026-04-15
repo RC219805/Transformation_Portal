@@ -970,6 +970,8 @@ PORTAL_ALLOWED_EVENT_TYPES = {
     "job_submitted",
     "job_selected",
     "artifact_opened",
+    "artifact_viewer_opened",
+    "artifact_viewer_fallback",
     "artifact_compared",
     "run_details_opened",
     "cancel_requested",
@@ -3499,6 +3501,8 @@ def _portal_sanitize_metadata(metadata: Any) -> Dict[str, Any]:
     for key, value in metadata.items():
         key_text = str(key or "").strip().lower()
         if not _portal_is_token(key_text):
+            continue
+        if key_text == "pipeline":
             continue
         if isinstance(value, bool):
             sanitized[key_text] = value

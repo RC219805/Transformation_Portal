@@ -1191,11 +1191,14 @@ def test_portal_artifact_viewer_modal_is_feature_flagged_and_keyboard_complete()
     content = _portal_bundle_content()
     review_content = _portal_review_source_content()
     active_overlay_body = _extract_js_function_body(content, "_activeOverlayPanel")
+    fallback_event_body = _extract_js_function_body(review_content, "_emitArtifactViewerFallback")
+    show_fallback_body = _extract_js_function_body(review_content, "_showArtifactViewerFallback")
     render_body = _extract_js_function_body(review_content, "renderArtifactViewer")
     preview_load_body = _extract_js_function_body(review_content, "_loadArtifactViewerInlinePreview")
     open_body = _extract_js_function_body(review_content, "_openArtifactViewer")
     navigate_body = _extract_js_function_body(review_content, "_navigateArtifactViewerSelection")
     close_body = _extract_js_function_body(review_content, "_closeArtifactViewer")
+    viewer_metadata_body = _extract_js_function_body(review_content, "_artifactViewerEventMetadata")
 
     assert 'id="artifactViewerModal"' in content
     assert 'id="artifactViewerPanel"' in content
@@ -1220,11 +1223,20 @@ def test_portal_artifact_viewer_modal_is_feature_flagged_and_keyboard_complete()
     assert "_rememberOverlayTrigger(trigger);" in open_body
     assert "els.closeArtifactViewerBtn.focus();" in open_body
     assert "artifact_viewer_opened" in open_body
+    assert 'surface: "artifact_review"' in open_body
+    assert "_artifactViewerEventMetadata(job, artifact)" in open_body
     assert "state.portalUi.artifactViewer.open = false;" in close_body
     assert "_restoreOverlayFocus();" in close_body
+    assert 'viewer_mode: "modal"' in review_content
+    assert "artifact_fingerprint" in review_content
+    assert 'pipeline: String(job?.pipeline || "")' not in viewer_metadata_body
+    assert "artifact_viewer_fallback" in fallback_event_body
+    assert 'surface: "artifact_review"' in fallback_event_body
+    assert "fallback_reason: fallbackReason" in fallback_event_body
+    assert "_emitArtifactViewerFallback(context, fallbackReason);" in show_fallback_body
     assert 'els.artifactViewerModal.classList.toggle("hidden", !shouldShow);' in render_body
     assert "els.artifactViewerImage.style.transform = `scale(${zoomPercent / 100})`;" in render_body
-    assert "_showArtifactViewerFallback(url, artifactName);" in render_body
+    assert "_showArtifactViewerFallback(context, artifactName);" in render_body
     assert (
         'headers: _buildAuthHeaders({ Accept: artifactContentType(context.artifact) || "*/*" }, "GET"),' in preview_load_body
     )
