@@ -99,6 +99,16 @@ export function createPortalUiState() {
   return {
     debugBundleAcknowledged: false,
     effectiveConfigOpen: false,
+    stagedUpload: {
+      busy: false,
+      progressPercent: 0,
+      status: "idle",
+      summary: "",
+      error: "",
+      lastBatchId: "",
+      fileCount: 0,
+      totalBytes: 0
+    },
     artifactViewer: {
       open: false,
       jobId: "",
@@ -135,6 +145,7 @@ export function createPortalAuthState() {
       directDebug: false,
       artifactViewerModal: false,
       reviewSurfaceDeferred: false,
+      stagedUploads: false,
       rumTelemetry: false
     }
   };

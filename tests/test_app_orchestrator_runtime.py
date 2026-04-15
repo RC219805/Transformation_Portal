@@ -8,6 +8,7 @@ import asyncio
 import concurrent.futures
 import hashlib
 import importlib
+import io
 import json
 import os
 import re
@@ -25,6 +26,7 @@ from starlette.requests import Request as StarletteRequest
 pytestmark = pytest.mark.unit
 
 orchestrator_app = importlib.import_module("app")
+upload_staging = importlib.import_module("transformation_portal.ingest.upload_staging")
 PORTAL_HTML_PATH = Path(__file__).resolve().parents[1] / "portal.html"
 PORTAL_ASSET_ROOT = PORTAL_HTML_PATH.parent / "public" / "portal-assets"
 PORTAL_FRONTDOOR_ROOT = PORTAL_HTML_PATH.parent / "web" / "secure-landing"
@@ -277,6 +279,32 @@ def _build_request(
         return {"type": "http.request", "body": b"", "more_body": False}
 
     return StarletteRequest(scope, receive)
+
+
+def _build_multipart_form_body(
+    boundary: str,
+    *,
+    fields: list[tuple[str, str]] | None = None,
+    files: list[tuple[str, str, bytes, str]] | None = None,
+) -> bytes:
+    payload = bytearray()
+    for field_name, value in fields or []:
+        payload.extend(f"--{boundary}\r\n".encode("utf-8"))
+        payload.extend(f'Content-Disposition: form-data; name="{field_name}"\r\n\r\n'.encode("utf-8"))
+        payload.extend(value.encode("utf-8"))
+        payload.extend(b"\r\n")
+    for field_name, filename, content, content_type in files or []:
+        payload.extend(f"--{boundary}\r\n".encode("utf-8"))
+        payload.extend(
+            (
+                f'Content-Disposition: form-data; name="{field_name}"; filename="{filename}"\r\n'
+                f"Content-Type: {content_type}\r\n\r\n"
+            ).encode("utf-8")
+        )
+        payload.extend(content)
+        payload.extend(b"\r\n")
+    payload.extend(f"--{boundary}--\r\n".encode("utf-8"))
+    return bytes(payload)
 
 
 @pytest.fixture(autouse=True)
@@ -813,6 +841,7 @@ def test_portal_bootstrap_loader_uses_abortable_timeout_and_state_contract() -> 
     assert "directDebug: false" in default_body
     assert "artifactViewerModal: false" in default_body
     assert "reviewSurfaceDeferred: false" in default_body
+    assert "stagedUploads: false" in default_body
     assert "rumTelemetry: false" in default_body
     assert "const BOOTSTRAP_TIMEOUT_MS = 3500;" in content
     assert "const BOOTSTRAP_RETRY_BASE_DELAY_MS = 1000;" in content
@@ -848,6 +877,7 @@ def test_portal_bootstrap_loader_uses_abortable_timeout_and_state_contract() -> 
     assert "_finalizeBootstrapRetry('succeeded', {" in body
     assert "_applyPortalBootstrap(payload, { status: 'ready', traceparent: bootstrapTraceparent });" in body
     assert "artifactViewerModal: Boolean(bootstrap.features?.artifactViewerModal)" in content
+    assert "stagedUploads: Boolean(bootstrap.features?.stagedUploads)" in content
     assert "rumTelemetry: Boolean(bootstrap.features?.rumTelemetry)" in content
     assert "res.headers.get('traceparent')" in body
     assert "previousHealthEndpointPath !== nextHealthEndpointPath" in body
@@ -885,6 +915,28 @@ def test_portal_bootstrap_loader_uses_abortable_timeout_and_state_contract() -> 
     assert "(now + delayMs) > state.bootstrap.retry.deadlineAt" in retry_body
     assert "window.setTimeout(() => {" in retry_body
     assert "void loadPortalBootstrap({ isRetryAttempt: true, attempt, retryReason: reason });" in retry_body
+
+
+def test_portal_staged_upload_ui_contract_is_present_in_markup_and_source() -> None:
+    html = _portal_html_content()
+    content = _portal_bundle_content()
+
+    assert 'id="stagedUploadShell"' in html
+    assert 'data-ui="staged-upload-shell"' in html
+    assert 'id="stagedUploadDropzone"' in html
+    assert 'data-ui="staged-upload-dropzone"' in html
+    assert 'role="button"' in html
+    assert 'aria-label="Choose files or drop files for staged upload"' in html
+    assert 'aria-describedby="stagedUploadStatus"' in html
+    assert 'id="stagedUploadFilesInput"' in html
+    assert 'id="stagedUploadFolderInput"' in html
+    assert "const STAGED_UPLOAD_SUPPORTED_PIPELINES = new Set(['lux-depth-v3', 'archive-gate-a']);" in content
+    assert "function _stagedUploadsVisibleForState() {" in content
+    assert "_buildAuthHeaders({}, 'POST', { traceparent: requestTraceparent });" in content
+    assert "xhr.open('POST', `${API_BASE}/v1/uploads/staging`);" in content
+    assert "formData.append('files', file, relativePath);" in content
+    assert "els.inputDir.dispatchEvent(new Event('input', { bubbles: true }));" in content
+    assert "els.inputDir.dispatchEvent(new Event('change', { bubbles: true }));" in content
 
 
 def test_portal_managed_mode_clears_api_keys_and_hides_secret_ui() -> None:
@@ -3249,6 +3301,22 @@ def test_content_length_limit_blocks_oversized_payloads() -> None:
     assert response.status_code == 413
 
 
+def test_request_body_limit_uses_upload_override_for_staging_path() -> None:
+    previous_max_request_bytes = orchestrator_app.MAX_REQUEST_BYTES
+    previous_max_upload_request_bytes = orchestrator_app.MAX_UPLOAD_REQUEST_BYTES
+    try:
+        orchestrator_app.MAX_REQUEST_BYTES = 256
+        orchestrator_app.MAX_UPLOAD_REQUEST_BYTES = 64
+        assert orchestrator_app._request_body_limit_bytes("/v1/jobs") == 256
+        assert orchestrator_app._request_body_limit_bytes("/v1/uploads/staging") == 64
+        assert orchestrator_app._public_http_error_message(413, "/v1/uploads/staging") == (
+            "request body too large (max 64 bytes)"
+        )
+    finally:
+        orchestrator_app.MAX_REQUEST_BYTES = previous_max_request_bytes
+        orchestrator_app.MAX_UPLOAD_REQUEST_BYTES = previous_max_upload_request_bytes
+
+
 def test_stream_body_limit_blocks_oversized_chunked_payloads() -> None:
     previous_limit = orchestrator_app.MAX_REQUEST_BYTES
     try:
@@ -3275,6 +3343,210 @@ def test_stream_body_limit_blocks_oversized_chunked_payloads() -> None:
         assert exc.value.status_code == 413
     finally:
         orchestrator_app.MAX_REQUEST_BYTES = previous_limit
+
+
+def test_stream_body_limit_uses_upload_override_for_chunked_uploads() -> None:
+    previous_max_request_bytes = orchestrator_app.MAX_REQUEST_BYTES
+    previous_max_upload_request_bytes = orchestrator_app.MAX_UPLOAD_REQUEST_BYTES
+    try:
+        orchestrator_app.MAX_REQUEST_BYTES = 64
+        orchestrator_app.MAX_UPLOAD_REQUEST_BYTES = 8
+        request = _build_request("POST", "/v1/uploads/staging", headers={"content-type": "application/octet-stream"})
+        chunks = [
+            {"type": "http.request", "body": b"12345", "more_body": True},
+            {"type": "http.request", "body": b"6789", "more_body": False},
+        ]
+
+        async def receive():
+            if chunks:
+                return chunks.pop(0)
+            return {"type": "http.request", "body": b"", "more_body": False}
+
+        setattr(request, "_receive", receive)
+        orchestrator_app._install_stream_body_limit(request)
+
+        first = asyncio.run(request._receive())  # type: ignore[attr-defined]
+        assert first["body"] == b"12345"
+
+        with pytest.raises(orchestrator_app.HTTPException) as exc:
+            asyncio.run(request._receive())  # type: ignore[attr-defined]
+        assert exc.value.status_code == 413
+        assert exc.value.detail == "request body too large (max 8 bytes)"
+    finally:
+        orchestrator_app.MAX_REQUEST_BYTES = previous_max_request_bytes
+        orchestrator_app.MAX_UPLOAD_REQUEST_BYTES = previous_max_upload_request_bytes
+
+
+def test_parse_portal_upload_multipart_streams_chunked_payloads() -> None:
+    boundary = "tp-boundary"
+    request = _build_request(
+        "POST",
+        "/v1/uploads/staging",
+        headers={"content-type": f"multipart/form-data; boundary={boundary}"},
+    )
+    body = _build_multipart_form_body(
+        boundary,
+        fields=[
+            (
+                "client_manifest",
+                json.dumps(
+                    {
+                        "schema": "tp.portal.upload_manifest.v1",
+                        "files": [{"relative_path": "nested/sample.txt", "size_bytes": 11}],
+                    }
+                ),
+            )
+        ],
+        files=[("files", "nested/sample.txt", b"hello world", "text/plain")],
+    )
+    chunks = [
+        body[:17],
+        body[17:53],
+        body[53:111],
+        body[111:167],
+        body[167:],
+    ]
+
+    async def receive():
+        if chunks:
+            chunk = chunks.pop(0)
+            return {"type": "http.request", "body": chunk, "more_body": bool(chunks)}
+        return {"type": "http.request", "body": b"", "more_body": False}
+
+    setattr(request, "_receive", receive)
+
+    payload = asyncio.run(orchestrator_app._parse_portal_upload_multipart(request))
+    try:
+        assert payload.client_manifest_raw is not None
+        assert len(payload.uploads) == 1
+        assert payload.uploads[0].filename == "nested/sample.txt"
+        assert payload.uploads[0].stream.read() == b"hello world"
+    finally:
+        payload.close()
+
+
+def test_stage_upload_batch_normalizes_paths_and_writes_deterministic_manifest(tmp_path: Path) -> None:
+    result = upload_staging.stage_upload_batch(
+        upload_root=tmp_path / "uploads",
+        uploads=[
+            upload_staging.IncomingUpload(filename="nested/sample.txt", stream=io.BytesIO(b"hello world")),
+            upload_staging.IncomingUpload(filename="nested/child/readme.md", stream=io.BytesIO(b"# hi\n")),
+        ],
+        client_manifest_paths=["nested/sample.txt", "nested/child/readme.md"],
+        capture_metadata_enabled=False,
+        now=1234.0,
+    )
+
+    assert result.file_count == 2
+    assert result.total_bytes == 16
+    assert (result.input_dir / "nested" / "sample.txt").read_text(encoding="utf-8") == "hello world"
+    baseline_manifest_payload = json.loads(result.baseline_manifest_path.read_text(encoding="utf-8"))
+    assert baseline_manifest_payload["schema"] == "tp.meta.baseline_manifest.v1"
+    assert baseline_manifest_payload["record_count"] == 2
+    assert [record["relative_path"] for record in baseline_manifest_payload["records"]] == [
+        "nested/child/readme.md",
+        "nested/sample.txt",
+    ]
+    assert baseline_manifest_payload["records"][1]["sha256"] == hashlib.sha256(b"hello world").hexdigest()
+    assert baseline_manifest_payload["records"][1]["mime_type"] == "text/plain"
+    assert baseline_manifest_payload["records"][1]["media_kind"] == "text"
+    assert "image" not in baseline_manifest_payload["records"][1]
+    assert "pdf" not in baseline_manifest_payload["records"][1]
+    assert json.loads(result.capture_metadata_path.read_text(encoding="utf-8")) == []
+
+
+def test_stage_upload_batch_manifest_is_dependency_independent_for_known_extensions(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    first = upload_staging.stage_upload_batch(
+        upload_root=tmp_path / "uploads-a",
+        uploads=[upload_staging.IncomingUpload(filename="nested/sample.png", stream=io.BytesIO(b"png-bytes"))],
+        client_manifest_paths=["nested/sample.png"],
+        capture_metadata_enabled=False,
+        now=111.0,
+    )
+
+    monkeypatch.setitem(upload_staging.__dict__, "Image", object())
+    monkeypatch.setitem(upload_staging.__dict__, "PdfReader", object())
+    second = upload_staging.stage_upload_batch(
+        upload_root=tmp_path / "uploads-b",
+        uploads=[upload_staging.IncomingUpload(filename="nested/sample.png", stream=io.BytesIO(b"png-bytes"))],
+        client_manifest_paths=["nested/sample.png"],
+        capture_metadata_enabled=False,
+        now=222.0,
+    )
+
+    assert first.baseline_manifest_path.read_bytes() == second.baseline_manifest_path.read_bytes()
+
+
+def test_cleanup_expired_batches_skips_non_managed_directories(tmp_path: Path) -> None:
+    upload_root = tmp_path / "uploads"
+    upload_root.mkdir()
+    expired_at = 100.0
+
+    unrelated_dir = upload_root / "manual_batch"
+    unrelated_dir.mkdir()
+    (unrelated_dir / "notes.txt").write_text("keep", encoding="utf-8")
+    os.utime(unrelated_dir, (expired_at, expired_at))
+
+    managed_dir = upload_root / "upload_123"
+    (managed_dir / "input").mkdir(parents=True)
+    portal_dir = managed_dir / "_portal"
+    portal_dir.mkdir()
+    (portal_dir / upload_staging.UPLOAD_RECEIPT_FILENAME).write_text("{}", encoding="utf-8")
+    os.utime(managed_dir, (expired_at, expired_at))
+
+    removed = upload_staging.cleanup_expired_batches(
+        upload_root,
+        now=10_000.0,
+        ttl_seconds=1.0,
+        retained_input_dirs=[],
+    )
+
+    assert removed == ["upload_123"]
+    assert unrelated_dir.exists()
+    assert not managed_dir.exists()
+
+
+def test_stage_upload_batch_rejects_duplicate_relative_paths_and_cleans_batch(tmp_path: Path) -> None:
+    with pytest.raises(upload_staging.UploadStagingError) as exc:
+        upload_staging.stage_upload_batch(
+            upload_root=tmp_path / "uploads",
+            uploads=[
+                upload_staging.IncomingUpload(filename="nested/sample.txt", stream=io.BytesIO(b"one")),
+                upload_staging.IncomingUpload(filename="nested/sample.txt", stream=io.BytesIO(b"two")),
+            ],
+            client_manifest_paths=["nested/sample.txt", "nested/sample.txt"],
+            capture_metadata_enabled=False,
+            now=4321.0,
+        )
+
+    assert exc.value.reason == "duplicate_relative_path"
+    upload_root = tmp_path / "uploads"
+    if upload_root.exists():
+        assert list(upload_root.iterdir()) == []
+
+
+def test_stage_upload_batch_capture_metadata_failure_falls_back_to_empty_artifact(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    def _explode(*_args, **_kwargs):  # noqa: ANN001
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(upload_staging, "extract_capture_metadata_records", _explode)
+    result = upload_staging.stage_upload_batch(
+        upload_root=tmp_path / "uploads",
+        uploads=[upload_staging.IncomingUpload(filename="sample.txt", stream=io.BytesIO(b"hello"))],
+        client_manifest_paths=["sample.txt"],
+        capture_metadata_enabled=True,
+        now=9876.0,
+    )
+
+    receipt_payload = json.loads(result.upload_receipt_path.read_text(encoding="utf-8"))
+    assert receipt_payload["summary"]["warnings"] == ["capture_metadata_extraction_failed"]
+    assert json.loads(result.capture_metadata_path.read_text(encoding="utf-8")) == []
 
 
 def test_sanitized_child_env_redacts_secret_like_values() -> None:

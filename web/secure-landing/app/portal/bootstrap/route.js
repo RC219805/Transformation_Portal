@@ -63,6 +63,13 @@ function resolveRumTelemetry(session, env = process.env) {
   return resolvePortalRollout(session, "TP_PORTAL_RUM_ROLLOUT_PERCENT", env);
 }
 
+function resolveStagedUploads(session, env = process.env) {
+  if (String(env.TP_PORTAL_UPLOAD_STAGING_ENABLED || "").trim().toLowerCase() !== "1") {
+    return false;
+  }
+  return resolvePortalRollout(session, "TP_PORTAL_STAGED_UPLOADS_ROLLOUT_PERCENT", env);
+}
+
 function withTraceparent(response, traceparent) {
   response.headers.set("traceparent", traceparent);
   return response;
@@ -128,6 +135,7 @@ export async function GET(request) {
           directDebug: false,
           artifactViewerModal: resolveArtifactViewerModal(session),
           reviewSurfaceDeferred: resolveReviewSurfaceDeferred(session),
+          stagedUploads: resolveStagedUploads(session),
           rumTelemetry: resolveRumTelemetry(session)
         }
       },
