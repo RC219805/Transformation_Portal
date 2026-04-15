@@ -27,11 +27,15 @@ MerkleRoot = bytes
 AuditPath = list[bytes]
 """Ordered list of sibling digests forming an RFC 9162 inclusion proof."""
 
+ConsistencyPath = list[bytes]
+"""Ordered list of sibling digests forming an RFC 9162 consistency proof."""
+
 __all__ = [
     # Type aliases
     "Sha256Digest",
     "MerkleRoot",
     "AuditPath",
+    "ConsistencyPath",
     # Validation
     "validate_sha256_digest",
     # CT-style Merkle functions
@@ -42,6 +46,9 @@ __all__ = [
     "ct_inclusion_proof",
     "ct_inclusion_proof_sha256",
     "verify_ct_inclusion_proof",
+    "ct_consistency_proof",
+    "ct_consistency_proof_sha256",
+    "verify_ct_consistency_proof",
 ]
 
 # Pre-allocated domain separators for CT hashing (module-level constants)
@@ -294,3 +301,212 @@ def verify_ct_inclusion_proof(
 
     # Use constant-time comparison to prevent timing side-channel attacks
     return proof_index == proof_len and hmac.compare_digest(digest, expected_root)
+
+
+# ---------------------------------------------------------------------------
+# Consistency Proofs (RFC 9162 Section 2.1.4)
+# ---------------------------------------------------------------------------
+
+
+def _subproof(
+    leaves: list[bytes], m: int, start: int, end: int, complete_subtree: bool
+) -> list[bytes]:
+    """Build consistency subproof recursively.
+
+    This implements the RFC 9162 SUBPROOF algorithm.
+
+    Args:
+        leaves: The full list of leaf hashes.
+        m: Number of leaves in the older tree (relative to the subtree root).
+        start: Start index (inclusive) of the current subtree.
+        end: End index (exclusive) of the current subtree.
+        complete_subtree: True if this subtree is a complete subtree of the older tree.
+
+    Returns:
+        List of sibling hashes forming part of the consistency proof.
+    """
+    n = end - start
+
+    if m == n:
+        if complete_subtree:
+            return []
+        else:
+            return [_mth_recursive(leaves, start, end)]
+
+    if m == 0:
+        return [_mth_recursive(leaves, start, end)]
+
+    k = _largest_power_of_two_less_than(n)
+
+    if m <= k:
+        return _subproof(leaves, m, start, start + k, complete_subtree) + [
+            _mth_recursive(leaves, start + k, end)
+        ]
+    else:
+        return _subproof(leaves, m - k, start + k, end, False) + [
+            _mth_recursive(leaves, start, start + k)
+        ]
+
+
+def ct_consistency_proof(
+    leaf_hashes: Sequence[bytes], first_tree_size: int
+) -> ConsistencyPath:
+    """Return the RFC 9162 consistency proof between two tree sizes.
+
+    The consistency proof allows a verifier to confirm that a smaller tree
+    is a prefix of a larger tree, ensuring append-only semantics.
+
+    Args:
+        leaf_hashes: Sequence of pre-hashed leaf values for the full (larger) tree.
+        first_tree_size: Number of leaves in the older (smaller) tree.
+
+    Returns:
+        List of sibling digests forming the consistency proof.
+
+    Raises:
+        ValueError: If first_tree_size is invalid (< 1 or > len(leaf_hashes)).
+
+    Example:
+        >>> leaves = [ct_leaf_hash(b"a"), ct_leaf_hash(b"b"), ct_leaf_hash(b"c")]
+        >>> proof = ct_consistency_proof(leaves, 2)
+        >>> len(proof) >= 0
+        True
+    """
+    second_tree_size = len(leaf_hashes)
+
+    if first_tree_size < 1:
+        raise ValueError("first_tree_size must be >= 1")
+    if first_tree_size > second_tree_size:
+        raise ValueError(
+            f"first_tree_size ({first_tree_size}) cannot exceed "
+            f"current tree size ({second_tree_size})"
+        )
+
+    if first_tree_size == second_tree_size:
+        return []
+
+    leaves = list(leaf_hashes) if not isinstance(leaf_hashes, list) else leaf_hashes
+    return _subproof(leaves, first_tree_size, 0, second_tree_size, True)
+
+
+def ct_consistency_proof_sha256(
+    leaf_hashes: Sequence[bytes], first_tree_size: int
+) -> list[str]:
+    """Return consistency proof sibling digests as lowercase hex.
+
+    Args:
+        leaf_hashes: Sequence of pre-hashed leaf values for the full tree.
+        first_tree_size: Number of leaves in the older (smaller) tree.
+
+    Returns:
+        List of lowercase hex strings representing the consistency proof.
+    """
+    return [
+        digest.hex() for digest in ct_consistency_proof(leaf_hashes, first_tree_size)
+    ]
+
+
+def verify_ct_consistency_proof(
+    *,
+    first_tree_size: int,
+    second_tree_size: int,
+    first_root: MerkleRoot,
+    second_root: MerkleRoot,
+    proof: Sequence[Sha256Digest],
+) -> bool:
+    """Verify an RFC 9162 consistency proof using constant-time comparison.
+
+    This verifies that a tree with first_tree_size leaves is a prefix of
+    a tree with second_tree_size leaves, given their respective roots.
+
+    Args:
+        first_tree_size: Number of leaves in the older (smaller) tree.
+        second_tree_size: Number of leaves in the newer (larger) tree.
+        first_root: The 32-byte Merkle root of the smaller tree.
+        second_root: The 32-byte Merkle root of the larger tree.
+        proof: Sequence of sibling hashes (the consistency proof).
+
+    Returns:
+        True if the proof is valid (the smaller tree is a prefix of the larger).
+
+    Security:
+        Uses constant-time comparison for final root verification to
+        prevent timing attacks that could leak information about valid proofs.
+    """
+    if first_tree_size < 1 or second_tree_size < first_tree_size:
+        return False
+
+    if first_tree_size == second_tree_size:
+        if len(proof) > 0:
+            return False
+        return hmac.compare_digest(first_root, second_root)
+
+    proof_list = list(proof)
+    proof_len = len(proof_list)
+
+    if proof_len == 0:
+        return False
+
+    # Check if first_tree_size is a power of two
+    is_power_of_two = (first_tree_size & (first_tree_size - 1)) == 0
+
+    if is_power_of_two:
+        # For power-of-two first_tree_size: simple iterative extension
+        # The proof elements extend sr to the right at each tree level
+        sr = first_root
+        for elem in proof_list:
+            sr = ct_node_hash(sr, elem)
+        return hmac.compare_digest(sr, second_root)
+
+    # Non-power-of-two case
+    # proof[0] is the complete subtree hash, subsequent elements build paths
+    fn = first_tree_size - 1
+    sn = second_tree_size - 1
+    fr = proof_list[0]
+    sr = proof_list[0]
+    proof_index = 1
+
+    # Process while fn is odd (at right-child position in the tree)
+    while fn & 1 == 1:
+        if fn == sn:
+            # Both trees have same structure at this level, combine from left
+            if proof_index >= proof_len:
+                return False
+            fr = ct_node_hash(proof_list[proof_index], fr)
+            sr = ct_node_hash(proof_list[proof_index], sr)
+            proof_index += 1
+        else:
+            # Trees diverge: sr extends to the right first, then both combine
+            if proof_index >= proof_len:
+                return False
+            sr = ct_node_hash(sr, proof_list[proof_index])
+            proof_index += 1
+            if proof_index >= proof_len:
+                return False
+            fr = ct_node_hash(proof_list[proof_index], fr)
+            sr = ct_node_hash(proof_list[proof_index], sr)
+            proof_index += 1
+        fn >>= 1
+        sn >>= 1
+
+    # Continue building toward roots
+    while sn > 0:
+        if proof_index >= proof_len:
+            break
+        if fn & 1 == 1 or fn == sn:
+            # Both combine from left
+            fr = ct_node_hash(proof_list[proof_index], fr)
+            sr = ct_node_hash(proof_list[proof_index], sr)
+            proof_index += 1
+        elif fn < sn:
+            # Only sr extends to the right
+            sr = ct_node_hash(sr, proof_list[proof_index])
+            proof_index += 1
+        fn >>= 1
+        sn >>= 1
+
+    if proof_index != proof_len:
+        return False
+
+    # Use constant-time comparison for both root checks
+    return hmac.compare_digest(fr, first_root) and hmac.compare_digest(sr, second_root)
