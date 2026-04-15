@@ -925,6 +925,9 @@ def test_portal_staged_upload_ui_contract_is_present_in_markup_and_source() -> N
     assert 'data-ui="staged-upload-shell"' in html
     assert 'id="stagedUploadDropzone"' in html
     assert 'data-ui="staged-upload-dropzone"' in html
+    assert 'role="button"' in html
+    assert 'aria-label="Choose files or drop files for staged upload"' in html
+    assert 'aria-describedby="stagedUploadStatus"' in html
     assert 'id="stagedUploadFilesInput"' in html
     assert 'id="stagedUploadFolderInput"' in html
     assert "const STAGED_UPLOAD_SUPPORTED_PIPELINES = new Set(['lux-depth-v3', 'archive-gate-a']);" in content
@@ -3445,7 +3448,65 @@ def test_stage_upload_batch_normalizes_paths_and_writes_deterministic_manifest(t
         "nested/sample.txt",
     ]
     assert baseline_manifest_payload["records"][1]["sha256"] == hashlib.sha256(b"hello world").hexdigest()
+    assert baseline_manifest_payload["records"][1]["mime_type"] == "text/plain"
+    assert baseline_manifest_payload["records"][1]["media_kind"] == "text"
+    assert "image" not in baseline_manifest_payload["records"][1]
+    assert "pdf" not in baseline_manifest_payload["records"][1]
     assert json.loads(result.capture_metadata_path.read_text(encoding="utf-8")) == []
+
+
+def test_stage_upload_batch_manifest_is_dependency_independent_for_known_extensions(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    first = upload_staging.stage_upload_batch(
+        upload_root=tmp_path / "uploads-a",
+        uploads=[upload_staging.IncomingUpload(filename="nested/sample.png", stream=io.BytesIO(b"png-bytes"))],
+        client_manifest_paths=["nested/sample.png"],
+        capture_metadata_enabled=False,
+        now=111.0,
+    )
+
+    monkeypatch.setitem(upload_staging.__dict__, "Image", object())
+    monkeypatch.setitem(upload_staging.__dict__, "PdfReader", object())
+    second = upload_staging.stage_upload_batch(
+        upload_root=tmp_path / "uploads-b",
+        uploads=[upload_staging.IncomingUpload(filename="nested/sample.png", stream=io.BytesIO(b"png-bytes"))],
+        client_manifest_paths=["nested/sample.png"],
+        capture_metadata_enabled=False,
+        now=222.0,
+    )
+
+    assert first.baseline_manifest_path.read_bytes() == second.baseline_manifest_path.read_bytes()
+
+
+def test_cleanup_expired_batches_skips_non_managed_directories(tmp_path: Path) -> None:
+    upload_root = tmp_path / "uploads"
+    upload_root.mkdir()
+    expired_at = 100.0
+
+    unrelated_dir = upload_root / "manual_batch"
+    unrelated_dir.mkdir()
+    (unrelated_dir / "notes.txt").write_text("keep", encoding="utf-8")
+    os.utime(unrelated_dir, (expired_at, expired_at))
+
+    managed_dir = upload_root / "upload_123"
+    (managed_dir / "input").mkdir(parents=True)
+    portal_dir = managed_dir / "_portal"
+    portal_dir.mkdir()
+    (portal_dir / upload_staging.UPLOAD_RECEIPT_FILENAME).write_text("{}", encoding="utf-8")
+    os.utime(managed_dir, (expired_at, expired_at))
+
+    removed = upload_staging.cleanup_expired_batches(
+        upload_root,
+        now=10_000.0,
+        ttl_seconds=1.0,
+        retained_input_dirs=[],
+    )
+
+    assert removed == ["upload_123"]
+    assert unrelated_dir.exists()
+    assert not managed_dir.exists()
 
 
 def test_stage_upload_batch_rejects_duplicate_relative_paths_and_cleans_batch(tmp_path: Path) -> None:

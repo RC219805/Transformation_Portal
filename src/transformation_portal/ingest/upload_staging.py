@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import mimetypes
 import os
 import shutil
 import tempfile
@@ -12,17 +11,6 @@ import uuid
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any, BinaryIO, Iterable, Sequence
-
-try:
-    from PIL import Image, UnidentifiedImageError
-except Exception:  # pragma: no cover - import-safe fallback for optional runtime deps
-    Image = None  # type: ignore[assignment]
-    UnidentifiedImageError = OSError  # type: ignore[assignment]
-
-try:
-    from pypdf import PdfReader
-except Exception:  # pragma: no cover - import-safe fallback for optional runtime deps
-    PdfReader = None  # type: ignore[assignment]
 
 from tp.phase4 import (
     extract_capture_metadata_records,
@@ -93,6 +81,50 @@ _TEXT_EXTENSIONS = {
 }
 _VIDEO_EXTENSIONS = {".avi", ".m4v", ".mkv", ".mov", ".mp4", ".webm"}
 _AUDIO_EXTENSIONS = {".aac", ".flac", ".m4a", ".mp3", ".wav"}
+_STABLE_MIME_TYPES = {
+    ".aac": "audio/aac",
+    ".avi": "video/x-msvideo",
+    ".bz2": "application/x-bzip2",
+    ".csv": "text/csv",
+    ".dng": "image/x-adobe-dng",
+    ".flac": "audio/flac",
+    ".gz": "application/gzip",
+    ".heic": "image/heic",
+    ".heif": "image/heif",
+    ".jpeg": "image/jpeg",
+    ".jpg": "image/jpeg",
+    ".json": "application/json",
+    ".json.gz": "application/gzip",
+    ".jsonl": "application/x-ndjson",
+    ".jsonl.gz": "application/gzip",
+    ".m4a": "audio/mp4",
+    ".m4v": "video/x-m4v",
+    ".md": "text/markdown",
+    ".mkv": "video/x-matroska",
+    ".mov": "video/quicktime",
+    ".mp3": "audio/mpeg",
+    ".mp4": "video/mp4",
+    ".pdf": "application/pdf",
+    ".png": "image/png",
+    ".rar": "application/vnd.rar",
+    ".tar": "application/x-tar",
+    ".tar.bz2": "application/x-bzip2",
+    ".tar.gz": "application/gzip",
+    ".tar.xz": "application/x-xz",
+    ".tgz": "application/gzip",
+    ".tif": "image/tiff",
+    ".tiff": "image/tiff",
+    ".toml": "application/toml",
+    ".txt": "text/plain",
+    ".wav": "audio/wav",
+    ".webm": "video/webm",
+    ".webp": "image/webp",
+    ".xml": "application/xml",
+    ".xz": "application/x-xz",
+    ".yaml": "application/yaml",
+    ".yml": "application/yaml",
+    ".zip": "application/zip",
+}
 
 
 @dataclass(frozen=True)
@@ -262,19 +294,23 @@ def _normalized_extension(relative_path: str) -> str:
     return Path(lowered).suffix.lower()
 
 
-def _media_kind_for_path(relative_path: str, mime_type: str) -> str:
+def _stable_mime_type_for_extension(extension: str) -> str:
+    return _STABLE_MIME_TYPES.get(str(extension or "").strip().lower(), "")
+
+
+def _media_kind_for_path(relative_path: str) -> str:
     extension = _normalized_extension(relative_path)
-    if extension in _IMAGE_EXTENSIONS or mime_type.startswith("image/"):
+    if extension in _IMAGE_EXTENSIONS:
         return "image"
-    if extension in _DOCUMENT_EXTENSIONS or mime_type == "application/pdf":
+    if extension in _DOCUMENT_EXTENSIONS:
         return "document"
     if extension in _ARCHIVE_EXTENSIONS:
         return "archive"
-    if extension in _VIDEO_EXTENSIONS or mime_type.startswith("video/"):
+    if extension in _VIDEO_EXTENSIONS:
         return "video"
-    if extension in _AUDIO_EXTENSIONS or mime_type.startswith("audio/"):
+    if extension in _AUDIO_EXTENSIONS:
         return "audio"
-    if extension in _TEXT_EXTENSIONS or mime_type.startswith("text/"):
+    if extension in _TEXT_EXTENSIONS:
         return "text"
     return "file"
 
@@ -328,47 +364,10 @@ def _stream_upload_to_path(source: BinaryIO, destination: Path) -> tuple[str, in
     return hasher.hexdigest(), size_bytes
 
 
-def _image_metadata_for_path(file_path: Path) -> tuple[dict[str, Any] | None, list[str]]:
-    if Image is None:
-        return None, ["image_metadata_unavailable"]
-    try:
-        with Image.open(file_path) as image:
-            return {
-                "width": int(image.width),
-                "height": int(image.height),
-                "mode": str(image.mode or ""),
-            }, []
-    except (OSError, UnidentifiedImageError, ValueError):
-        return None, ["image_metadata_unavailable"]
-
-
-def _pdf_version_for_path(file_path: Path) -> str:
-    with file_path.open("rb") as handle:
-        header = handle.read(8)
-    if header.startswith(b"%PDF-"):
-        return header[5:].decode("ascii", errors="ignore").strip()
-    return ""
-
-
-def _pdf_metadata_for_path(file_path: Path) -> tuple[dict[str, Any] | None, list[str]]:
-    if PdfReader is None:
-        return None, ["pdf_metadata_unavailable"]
-    try:
-        with file_path.open("rb") as handle:
-            reader = PdfReader(handle, strict=False)
-            return {
-                "page_count": len(reader.pages),
-                "encrypted": bool(reader.is_encrypted),
-                "pdf_version": _pdf_version_for_path(file_path),
-            }, []
-    except Exception:
-        return None, ["pdf_metadata_unavailable"]
-
-
-def _build_baseline_record(relative_path: str, file_path: Path, sha256: str, size_bytes: int) -> dict[str, Any]:
-    mime_type = mimetypes.guess_type(file_path.name, strict=False)[0] or ""
+def _build_baseline_record(relative_path: str, _file_path: Path, sha256: str, size_bytes: int) -> dict[str, Any]:
     extension = _normalized_extension(relative_path)
-    media_kind = _media_kind_for_path(relative_path, mime_type)
+    mime_type = _stable_mime_type_for_extension(extension)
+    media_kind = _media_kind_for_path(relative_path)
     warnings: list[str] = []
     if not mime_type:
         warnings.append("mime_type_unresolved")
@@ -382,17 +381,6 @@ def _build_baseline_record(relative_path: str, file_path: Path, sha256: str, siz
         "media_kind": media_kind,
         "warnings": [],
     }
-
-    if media_kind == "image":
-        image_metadata, image_warnings = _image_metadata_for_path(file_path)
-        warnings.extend(image_warnings)
-        if image_metadata is not None:
-            record["image"] = image_metadata
-    elif extension == ".pdf":
-        pdf_metadata, pdf_warnings = _pdf_metadata_for_path(file_path)
-        warnings.extend(pdf_warnings)
-        if pdf_metadata is not None:
-            record["pdf"] = pdf_metadata
 
     record["warnings"] = _deduplicate_warnings(warnings)
     return record
@@ -601,6 +589,8 @@ def cleanup_expired_batches(
         try:
             if not batch_dir.is_dir():
                 continue
+            if not _is_managed_staged_batch_dir(batch_dir):
+                continue
             input_dir = batch_dir / "input"
             input_dir_real = str(Path(os.path.realpath(input_dir)))
             if input_dir_real in retained:
@@ -613,3 +603,15 @@ def cleanup_expired_batches(
         except OSError:
             continue
     return sorted(removed)
+
+
+def _is_managed_staged_batch_dir(batch_dir: Path) -> bool:
+    name = str(batch_dir.name or "").strip()
+    if not name.startswith("upload_"):
+        return False
+    input_dir = batch_dir / "input"
+    portal_dir = batch_dir / "_portal"
+    if not input_dir.is_dir() or not portal_dir.is_dir():
+        return False
+    receipt_path = portal_dir / UPLOAD_RECEIPT_FILENAME
+    return receipt_path.is_file()
