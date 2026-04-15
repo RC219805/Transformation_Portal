@@ -13,15 +13,11 @@ Type aliases for API clarity:
 - ConsistencyPath: List of sibling digests for consistency proofs
 """
 
-from .ct_merkle import (
-    # Type aliases
+from .ct_merkle import (  # Type aliases; Validation; CT-style Merkle functions
     AuditPath,
     ConsistencyPath,
     MerkleRoot,
     Sha256Digest,
-    # Validation
-    validate_sha256_digest,
-    # CT-style Merkle functions
     ct_consistency_proof,
     ct_consistency_proof_sha256,
     ct_inclusion_proof,
@@ -30,6 +26,7 @@ from .ct_merkle import (
     ct_merkle_root,
     ct_merkle_root_sha256,
     ct_node_hash,
+    validate_sha256_digest,
     verify_ct_consistency_proof,
     verify_ct_inclusion_proof,
 )
