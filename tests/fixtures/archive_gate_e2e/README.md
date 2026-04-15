@@ -15,7 +15,7 @@ archive_gate_e2e/
 │   └── DriveA/
 │       └── Part1/
 │           ├── alpha.txt               # Empty text file
-│           └── bravo.bin               # 2-byte binary file
+│           └── bravo.dat               # 2-byte data file
 └── golden/                             # Expected outputs for regression tests
 ```
 

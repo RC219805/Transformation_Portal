@@ -1,2 +1,2 @@
 {"id":"asset-001","relpath":"DriveA/Part1/alpha.txt","sha256":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855","size_bytes":0,"rights_status":"cleared"}
-{"id":"asset-002","relpath":"DriveA/Part1/bravo.bin","sha256":"d4735e3a265e16eee03f59718b9b5d03019c07d8b6c51f90da3a666eec13ab35","size_bytes":2,"rights_status":"cleared"}
+{"id":"asset-002","relpath":"DriveA/Part1/bravo.dat","sha256":"d4735e3a265e16eee03f59718b9b5d03019c07d8b6c51f90da3a666eec13ab35","size_bytes":2,"rights_status":"cleared"}
