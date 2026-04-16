@@ -210,6 +210,21 @@ class TestGitignore:
         for pattern in output_patterns:
             assert pattern in content, f".gitignore should include output pattern: {pattern}"
 
+    def test_gitignore_covers_frontdoor_temp_dirs(self):
+        """Test that .gitignore covers frontdoor transient build directories."""
+        gitignore = _repo_root / ".gitignore"
+        content = gitignore.read_text()
+
+        temp_dir_patterns = [
+            "web/secure-landing/.next/",
+            "web/secure-landing/.next-build-verify/",
+            "web/secure-landing/.next-smoke-*/",
+            "web/secure-landing/.next-codex-*/",
+        ]
+
+        for pattern in temp_dir_patterns:
+            assert pattern in content, f".gitignore should include frontdoor temp dir pattern: {pattern}"
+
 
 class TestNoOrphanedFiles:
     """Tests to prevent orphaned or redundant files."""
@@ -253,6 +268,22 @@ class TestNoOrphanedFiles:
             # Some may be in .gitignore, but shouldn't be tracked
             if matching:
                 print(f"Note: Found build artifacts matching {pattern}")
+
+    def test_no_nested_git_worktrees_in_root(self):
+        """Fail if a copied repo/worktree lands directly under repo root."""
+        nested_git_roots = []
+
+        for child in _repo_root.iterdir():
+            if not child.is_dir() or child.name == ".git":
+                continue
+            if (child / ".git").exists():
+                nested_git_roots.append(child.relative_to(_repo_root).as_posix())
+
+        assert not nested_git_roots, (
+            "Unexpected nested git repositories/worktrees found in repo root. "
+            "Remove copied worktrees so this checkout remains the single source of truth:\n"
+            + "\n".join(sorted(nested_git_roots))
+        )
 
     def test_no_exact_duplicate_python_modules_between_src_and_scripts(self):
         """Keep `scripts/` wrappers thin and prevent copy/paste module drift."""

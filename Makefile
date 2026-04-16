@@ -547,7 +547,7 @@ validate-quick:
 
 clean-frontdoor:
 	@echo "Cleaning frontdoor build artifacts..."
-	@rm -rf web/secure-landing/.next web/secure-landing/.next-build-verify web/secure-landing/.next-smoke-* 2>/dev/null || true
+	@rm -rf web/secure-landing/.next web/secure-landing/.next-build-verify web/secure-landing/.next-smoke-* web/secure-landing/.next-codex-* 2>/dev/null || true
 	@echo "✓ Frontdoor cleanup complete"
 	@echo "Note: node_modules preserved. Run 'rm -rf web/secure-landing/node_modules' to remove."
 
