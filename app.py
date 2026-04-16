@@ -571,9 +571,20 @@ def _ensure_safe_regular_file_path(path_value: Path, allowed_roots: List[Path]) 
 
 
 def _compute_file_sha256(path: Path, chunk_size: int = 1024 * 1024) -> str:
-    safe_path = _ensure_safe_regular_file_path(path, [*MANAGED_SAM2_TRUSTED_ROOTS, *ALLOWED_INPUT_ROOTS])
+    trusted_roots = [*MANAGED_SAM2_TRUSTED_ROOTS, *ALLOWED_INPUT_ROOTS]
     try:
-        size_bytes = safe_path.stat().st_size
+        resolved_path = _resolve_allowed_request_path(str(path), trusted_roots)
+    except _PortalValidationReasonError:
+        raise
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise _PortalValidationReasonError("Invalid path value", reason="invalid_path_value") from exc
+    trusted_entry = _trusted_allowed_entry(resolved_path, trusted_roots)
+    if trusted_entry is None:
+        raise _PortalValidationReasonError("Invalid path value", reason="invalid_path_value")
+    try:
+        if not trusted_entry.is_file():
+            raise _PortalValidationReasonError("Invalid path value", reason="invalid_path_value")
+        size_bytes = trusted_entry.stat().st_size
     except OSError as exc:
         raise _PortalValidationReasonError("Invalid path value", reason="invalid_path_value") from exc
     if size_bytes > MANAGED_SAM2_CHECKSUM_MAX_BYTES:
@@ -582,7 +593,7 @@ def _compute_file_sha256(path: Path, chunk_size: int = 1024 * 1024) -> str:
             reason="checkpoint_file_too_large",
         )
     digest = hashlib.sha256()
-    with safe_path.open("rb") as handle:
+    with trusted_entry.open("rb") as handle:
         for chunk in iter(lambda: handle.read(chunk_size), b""):
             digest.update(chunk)
     return digest.hexdigest()
