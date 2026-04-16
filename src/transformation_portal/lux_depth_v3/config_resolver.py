@@ -410,6 +410,9 @@ def build_apex_depth_gate_fingerprint_payload(config: EnhanceConfig) -> Dict[str
         "max_high_saturation_fraction": float(config.apex_depth_max_high_saturation_fraction),
         "max_low_saturation_fraction": float(config.apex_depth_max_low_saturation_fraction),
         "scaled_saturation_margin": float(config.apex_depth_scaled_saturation_margin),
+        "low_saturation_warning_band": float(
+            config.apex_depth_low_saturation_warning_band,
+        ),
         "saturation_high_value": float(config.apex_depth_saturation_high_value),
         "saturation_low_value": float(config.apex_depth_saturation_low_value),
         "min_gradient_energy": float(config.apex_depth_min_gradient_energy),

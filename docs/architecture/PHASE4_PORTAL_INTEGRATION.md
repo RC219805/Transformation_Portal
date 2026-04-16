@@ -57,7 +57,7 @@ In `_archive_gate_readiness()`:
 ```python
 if command == "phase4-verify":
     notes.append("Phase 4 chain verification requires all Phase 4C/4D/4E artifacts.")
-    
+
     # Check schema availability
     for schema_path in PHASE4_REQUIRED_SCHEMAS:
         if not schema_path.is_file():
@@ -68,7 +68,7 @@ if command == "phase4-verify":
                     message=f"Phase 4 schema missing: {schema_path.name}",
                 )
             )
-    
+
     if require_dispatch_inputs:
         # Validate required artifact paths
         for field, keys, desc in [
