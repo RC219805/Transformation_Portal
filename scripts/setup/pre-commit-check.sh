@@ -48,6 +48,7 @@ ALLOWED_ROOT_FILES=(
     ".gitattributes"
     ".gitmodules"
     ".git-blame-ignore-revs"
+    ".lgtm.yml"
     ".pre-commit-config.yaml"
     ".auto-organize.sh"
     ".architect_directive_status.yml"
