@@ -89,7 +89,7 @@ class TestDiscoverPresets:
         from transformation_portal.lux_depth_v3.config_resolver import discover_presets
 
         presets = discover_presets("unknown_pipeline")
-        assert presets == []
+        assert not presets
 
 
 class TestResolvePreset:
@@ -148,7 +148,7 @@ class TestEffectiveDa3RuntimeResolution:
 
     def test_repo_local_runtime_path_discovers_repo_root_via_markers(self, monkeypatch, tmp_path):
         """Repo-local path discovery should use repo markers instead of fixed depth."""
-        import transformation_portal.lux_depth_v3.config_resolver as config_resolver
+        from transformation_portal.lux_depth_v3 import config_resolver
 
         module_path = tmp_path / "packages" / "src" / "transformation_portal" / "lux_depth_v3" / "config_resolver.py"
         module_path.parent.mkdir(parents=True)

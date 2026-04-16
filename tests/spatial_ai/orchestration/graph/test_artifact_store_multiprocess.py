@@ -46,6 +46,20 @@ def _make_cache_key(seed: str) -> str:
     return hashlib.sha256(seed.encode()).hexdigest()
 
 
+def _make_cache_keys_with_shared_prefix(prefix: str, count: int) -> list[str]:
+    """Generate multiple valid cache keys that share the same 2-char prefix."""
+    cache_keys = []
+    counter = 0
+
+    while len(cache_keys) < count:
+        candidate = _make_cache_key(f"{prefix}_seed_{counter}")
+        if candidate.startswith(prefix):
+            cache_keys.append(candidate)
+        counter += 1
+
+    return cache_keys
+
+
 def _store_worker(
     cache_dir: Path,
     cache_key: str,
@@ -346,6 +360,46 @@ class TestArtifactStoreMultiProcess:
             assert result["success"], f"Worker {result['worker_id']} failed: {result['error']}"
 
         # Verify all artifacts exist and are correct
+        store = ArtifactStore(cache_dir=cache_dir)
+        for i, cache_key in enumerate(cache_keys):
+            assert store.exists(cache_key), f"Artifact {i} does not exist"
+            artifact = store.load(cache_key)
+            assert artifact["worker_id"] == i, f"Artifact {i} has wrong worker_id"
+            assert len(artifact["data"]) == 100, f"Artifact {i} data wrong length"
+
+    def test_concurrent_writes_different_keys_same_prefix_directory(self, cache_dir: Path):
+        """Different keys sharing one prefix directory should not lose temp files."""
+        num_workers = 4
+        result_queue = multiprocessing.Queue()
+        cache_keys = _make_cache_keys_with_shared_prefix("a4", num_workers)
+
+        assert {cache_key[:2] for cache_key in cache_keys} == {"a4"}
+
+        processes = []
+        for i, cache_key in enumerate(cache_keys):
+            process = multiprocessing.Process(
+                target=_store_worker,
+                args=(cache_dir, cache_key, i, result_queue),
+            )
+            process.start()
+            processes.append(process)
+
+        for process in processes:
+            process.join(timeout=10.0)
+            assert not process.is_alive(), f"Process {process.pid} did not complete in time"
+
+        results = []
+        for i in range(num_workers):
+            try:
+                result = result_queue.get(timeout=5.0)
+                results.append(result)
+            except queue.Empty:
+                pytest.fail(f"Expected {num_workers} results but only got {i}")
+
+        assert len(results) == num_workers, f"Expected {num_workers} results, got {len(results)}"
+        for result in results:
+            assert result["success"], f"Worker {result['worker_id']} failed: {result['error']}"
+
         store = ArtifactStore(cache_dir=cache_dir)
         for i, cache_key in enumerate(cache_keys):
             assert store.exists(cache_key), f"Artifact {i} does not exist"

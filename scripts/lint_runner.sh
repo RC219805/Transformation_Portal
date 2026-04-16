@@ -52,10 +52,40 @@ require_module() {
 
 collect_filtered_pyfiles_from_diff_range() {
     local diff_range="$1"
-    git diff --diff-filter=d --name-only "$diff_range" \
+    local diff_output=""
+
+    if ! diff_output=$(git diff --diff-filter=d --name-only "$diff_range" 2>/dev/null); then
+        return 1
+    fi
+
+    if [ -z "$diff_output" ]; then
+        return 0
+    fi
+
+    printf '%s\n' "$diff_output" \
         | grep -E '\.py$' \
         | grep -vE "$PYLINT_EXCLUDE_REGEX" \
         || true
+}
+
+collect_pylint_files_from_diff_range() {
+    local diff_range="$1"
+    local diff_candidates=""
+    local candidate=""
+
+    if ! diff_candidates=$(collect_filtered_pyfiles_from_diff_range "$diff_range"); then
+        return 1
+    fi
+
+    if [ -z "$diff_candidates" ]; then
+        return 0
+    fi
+
+    while IFS= read -r candidate; do
+        [ -n "$candidate" ] && PYLINT_FILES+=("$candidate")
+    done <<< "$diff_candidates"
+
+    return 0
 }
 
 resolve_local_diff_range() {
@@ -76,13 +106,15 @@ resolve_pr_diff_range() {
 
     case "$event_name" in
         pull_request)
-            git fetch --depth=1 origin main >/dev/null 2>&1 || true
-            diff_range="origin/main...HEAD"
+            git fetch --quiet --no-tags origin main:refs/remotes/origin/main >/dev/null 2>&1 || true
+            if git rev-parse --verify origin/main >/dev/null 2>&1 && git merge-base origin/main HEAD >/dev/null 2>&1; then
+                diff_range="origin/main...HEAD"
+            fi
             ;;
         push)
             if [ -n "$before_sha" ] && [ "$before_sha" != "0000000000000000000000000000000000000000" ]; then
-                git fetch --depth=1 origin "$before_sha" >/dev/null 2>&1 || true
-                if git cat-file -e "${before_sha}^{commit}" 2>/dev/null; then
+                git fetch --quiet --no-tags --depth=1 origin "$before_sha" >/dev/null 2>&1 || true
+                if git cat-file -e "${before_sha}^{commit}" 2>/dev/null && git cat-file -e "${current_sha}^{commit}" 2>/dev/null; then
                     diff_range="${before_sha}..${current_sha}"
                 fi
             fi
@@ -122,6 +154,7 @@ run_flake8() {
 select_pylint_files() {
     local diff_range=""
     local candidate=""
+    local diff_reliable=0
 
     PYLINT_ACTION=""
     PYLINT_FILES=()
@@ -129,13 +162,13 @@ select_pylint_files() {
     case "$MODE" in
         local|advisory)
             diff_range=$(resolve_local_diff_range)
-            if [ -n "$diff_range" ]; then
-                while IFS= read -r candidate; do
-                    [ -n "$candidate" ] && PYLINT_FILES+=("$candidate")
-                done < <(collect_filtered_pyfiles_from_diff_range "$diff_range")
+            if [ -n "$diff_range" ] && collect_pylint_files_from_diff_range "$diff_range"; then
+                diff_reliable=1
+            elif [ -n "$diff_range" ]; then
+                log "unable to diff range '$diff_range'; using fallback lint surface"
             fi
 
-            if [ "${#PYLINT_FILES[@]}" -eq 0 ]; then
+            if [ "$diff_reliable" -eq 0 ] || [ "${#PYLINT_FILES[@]}" -eq 0 ]; then
                 PYLINT_FILES=("${PYLINT_FALLBACK[@]}")
                 PYLINT_ACTION="fallback pylint"
             else
@@ -144,13 +177,18 @@ select_pylint_files() {
             ;;
         pr)
             diff_range=$(resolve_pr_diff_range)
-            if [ -n "$diff_range" ]; then
-                while IFS= read -r candidate; do
-                    [ -n "$candidate" ] && PYLINT_FILES+=("$candidate")
-                done < <(collect_filtered_pyfiles_from_diff_range "$diff_range")
+            if [ -n "$diff_range" ] && collect_pylint_files_from_diff_range "$diff_range"; then
+                diff_reliable=1
+            elif [ -n "$diff_range" ]; then
+                log "unable to diff range '$diff_range'; using fallback lint surface"
+            else
+                log "no reliable PR diff range available; using fallback lint surface"
             fi
 
-            if [ "${#PYLINT_FILES[@]}" -eq 0 ]; then
+            if [ "$diff_reliable" -eq 0 ]; then
+                PYLINT_FILES=("${PYLINT_FALLBACK[@]}")
+                PYLINT_ACTION="fallback pylint"
+            elif [ "${#PYLINT_FILES[@]}" -eq 0 ]; then
                 PYLINT_ACTION="no eligible Python files changed; skipping pylint"
             else
                 PYLINT_ACTION="running pylint"
