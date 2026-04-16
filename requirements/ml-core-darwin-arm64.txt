@@ -4,17 +4,14 @@
 #
 #    pip-compile --constraint=base.txt --extra-index-url=https://download.pytorch.org/whl/cpu --output-file=ml-core-darwin-arm64.txt ml-core-darwin-arm64.in
 #
---extra-index-url https://download.pytorch.org/whl/cpu
-
 accelerate==1.13.0
-    # via -r ml-core-darwin-arm64.in
+    # via -r requirements/ml-core-darwin-arm64.in
+annotated-doc==0.0.4
+    # via typer
 anyio==4.12.1
-    # via
-    #   -c base.txt
-    #   httpx
+    # via httpx
 attrs==25.4.0
     # via
-    #   -c base.txt
     #   cattrs
     #   coremltools
 cattrs==26.1.0
@@ -26,16 +23,18 @@ certifi==2026.2.25
     #   requests
 charset-normalizer==3.4.6
     # via requests
+click==8.3.2
+    # via typer
 colour-science==0.4.7
-    # via -r ml-core-darwin-arm64.in
+    # via -r requirements/ml-core-darwin-arm64.in
 controlnet-aux==0.0.10
-    # via -r ml-core-darwin-arm64.in
+    # via -r requirements/ml-core-darwin-arm64.in
 coremltools==9.0
-    # via -r ml-core-darwin-arm64.in
+    # via -r requirements/ml-core-darwin-arm64.in
 diffusers==0.37.1
-    # via -r ml-core-darwin-arm64.in
+    # via -r requirements/ml-core-darwin-arm64.in
 efficientsam==1.0.0
-    # via -r ml-core-darwin-arm64.in
+    # via -r requirements/ml-core-darwin-arm64.in
 einops==0.8.2
     # via controlnet-aux
 filelock==3.25.2
@@ -44,7 +43,7 @@ filelock==3.25.2
     #   diffusers
     #   huggingface-hub
     #   torch
-    #   transformers
+    #   triton
 fsspec==2026.3.0
     # via
     #   huggingface-hub
@@ -52,18 +51,18 @@ fsspec==2026.3.0
 ftfy==6.3.1
     # via open-clip-torch
 h11==0.16.0
-    # via
-    #   -c base.txt
-    #   httpcore
+    # via httpcore
 hf-xet==1.4.3
     # via huggingface-hub
 httpcore==1.0.9
     # via httpx
 httpx==0.28.1
-    # via diffusers
-huggingface-hub==0.36.2
     # via
-    #   -r ml-core-darwin-arm64.in
+    #   diffusers
+    #   huggingface-hub
+huggingface-hub==1.10.2
+    # via
+    #   -r requirements/ml-core-darwin-arm64.in
     #   accelerate
     #   controlnet-aux
     #   diffusers
@@ -74,7 +73,6 @@ huggingface-hub==0.36.2
     #   transformers
 idna==3.11
     # via
-    #   -c base.txt
     #   anyio
     #   httpx
     #   requests
@@ -87,15 +85,17 @@ importlib-metadata==9.0.0
 jinja2==3.1.6
     # via torch
 joblib==1.5.3
-    # via
-    #   -c base.txt
-    #   scikit-learn
+    # via scikit-learn
 lazy-loader==0.5
     # via scikit-image
+markdown-it-py==4.0.0
+    # via rich
 markupsafe==3.0.3
     # via jinja2
+mdurl==0.1.2
+    # via markdown-it-py
 memory-profiler==0.61.0
-    # via -r ml-core-darwin-arm64.in
+    # via -r requirements/ml-core-darwin-arm64.in
 mpmath==1.3.0
     # via sympy
 networkx==3.6.1
@@ -104,7 +104,6 @@ networkx==3.6.1
     #   torch
 numpy==2.4.3
     # via
-    #   -c base.txt
     #   accelerate
     #   colour-science
     #   controlnet-aux
@@ -121,8 +120,39 @@ numpy==2.4.3
     #   tifffile
     #   torchvision
     #   transformers
+nvidia-cublas-cu12==12.1.3.1
+    # via
+    #   nvidia-cudnn-cu12
+    #   nvidia-cusolver-cu12
+    #   torch
+nvidia-cuda-cupti-cu12==12.1.105
+    # via torch
+nvidia-cuda-nvrtc-cu12==12.1.105
+    # via torch
+nvidia-cuda-runtime-cu12==12.1.105
+    # via torch
+nvidia-cudnn-cu12==8.9.2.26
+    # via torch
+nvidia-cufft-cu12==11.0.2.54
+    # via torch
+nvidia-curand-cu12==10.3.2.106
+    # via torch
+nvidia-cusolver-cu12==11.4.5.107
+    # via torch
+nvidia-cusparse-cu12==12.1.0.106
+    # via
+    #   nvidia-cusolver-cu12
+    #   torch
+nvidia-nccl-cu12==2.19.3
+    # via torch
+nvidia-nvjitlink-cu12==12.9.86
+    # via
+    #   nvidia-cusolver-cu12
+    #   nvidia-cusparse-cu12
+nvidia-nvtx-cu12==12.1.105
+    # via torch
 open-clip-torch==3.3.0
-    # via -r ml-core-darwin-arm64.in
+    # via -r requirements/ml-core-darwin-arm64.in
 opencv-python-headless==4.13.0.92
     # via controlnet-aux
 packaging==26.0
@@ -135,26 +165,27 @@ packaging==26.0
     #   transformers
 pillow==12.2.0
     # via
-    #   -c base.txt
     #   controlnet-aux
     #   diffusers
     #   imageio
     #   scikit-image
     #   torchvision
 plyfile==1.1.3
-    # via -r ml-core-darwin-arm64.in
+    # via -r requirements/ml-core-darwin-arm64.in
 protobuf==7.34.1
     # via coremltools
 psutil==6.1.1
     # via
-    #   -r ml-core-darwin-arm64.in
+    #   -r requirements/ml-core-darwin-arm64.in
     #   accelerate
     #   memory-profiler
 pyaml==26.2.1
     # via coremltools
+pygments==2.20.0
+    # via rich
 pyyaml==6.0.3
     # via
-    #   -r ml-core-darwin-arm64.in
+    #   -r requirements/ml-core-darwin-arm64.in
     #   accelerate
     #   huggingface-hub
     #   pyaml
@@ -166,10 +197,9 @@ regex==2026.3.32
     #   open-clip-torch
     #   transformers
 requests==2.33.1
-    # via
-    #   diffusers
-    #   huggingface-hub
-    #   transformers
+    # via diffusers
+rich==15.0.0
+    # via typer
 safetensors==0.7.0
     # via
     #   accelerate
@@ -179,33 +209,28 @@ safetensors==0.7.0
     #   transformers
 scikit-image==0.26.0
     # via
-    #   -r ml-core-darwin-arm64.in
+    #   -r requirements/ml-core-darwin-arm64.in
     #   controlnet-aux
 scikit-learn==1.8.0
-    # via
-    #   -c base.txt
-    #   sentence-transformers
+    # via sentence-transformers
 scipy==1.17.1
     # via
-    #   -c base.txt
     #   controlnet-aux
     #   scikit-image
     #   scikit-learn
     #   sentence-transformers
 sentence-transformers==5.3.0
-    # via -r ml-core-darwin-arm64.in
+    # via -r requirements/ml-core-darwin-arm64.in
+shellingham==1.5.4
+    # via typer
 sympy==1.14.0
     # via
     #   coremltools
     #   torch
 threadpoolctl==3.6.0
-    # via
-    #   -c base.txt
-    #   scikit-learn
+    # via scikit-learn
 tifffile==2026.3.3
-    # via
-    #   -c base.txt
-    #   scikit-image
+    # via scikit-image
 timm==1.0.26
     # via
     #   controlnet-aux
@@ -214,7 +239,7 @@ tokenizers==0.22.2
     # via transformers
 torch==2.2.2
     # via
-    #   -r ml-core-darwin-arm64.in
+    #   -r requirements/ml-core-darwin-arm64.in
     #   accelerate
     #   controlnet-aux
     #   efficientsam
@@ -224,26 +249,30 @@ torch==2.2.2
     #   torchvision
 torchvision==0.17.2
     # via
-    #   -r ml-core-darwin-arm64.in
+    #   -r requirements/ml-core-darwin-arm64.in
     #   controlnet-aux
     #   efficientsam
     #   open-clip-torch
     #   timm
 tqdm==4.67.3
     # via
-    #   -c base.txt
     #   coremltools
     #   huggingface-hub
     #   open-clip-torch
     #   sentence-transformers
     #   transformers
-transformers==4.57.6
+transformers==5.5.4
     # via
-    #   -r ml-core-darwin-arm64.in
+    #   -r requirements/ml-core-darwin-arm64.in
     #   sentence-transformers
+triton==2.2.0
+    # via torch
+typer==0.24.1
+    # via
+    #   huggingface-hub
+    #   transformers
 typing-extensions==4.15.0
     # via
-    #   -c base.txt
     #   anyio
     #   cattrs
     #   huggingface-hub

@@ -30,7 +30,7 @@ torchvision==0.17.2  # Torch match: keep torchvision aligned with the pinned tor
 
 # Diffusion / HuggingFace ecosystem
 diffusers>=0.36.0,<1
-transformers>=4.57.0,<5
+transformers>=4.57.0,<6
 huggingface-hub>=0.19.0,<2
 accelerate>=0.20.0,<2
 
