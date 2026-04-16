@@ -130,7 +130,7 @@ pygments==2.20.0
     #   -c all.txt
     #   readme-renderer
     #   rich
-pypdf==6.10.0
+pypdf==6.10.1
     # via
     #   -c all.txt
     #   -r ci.in
@@ -185,7 +185,7 @@ tomli-w==1.2.0
     # via
     #   -c all.txt
     #   tox
-tox==4.52.1
+tox==4.53.0
     # via
     #   -c all.txt
     #   -r ci.in
