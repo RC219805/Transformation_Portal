@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+import textwrap
 from pathlib import Path
 
 import pytest
@@ -538,36 +539,36 @@ class TestModuleImports:
         where PIL has not been previously loaded by other tests or modules.
         """
         # Script to run in subprocess: imports input_manager and checks for PIL
-        check_script = """
-import sys
+        check_script = textwrap.dedent("""
+            import sys
 
-# Record PIL modules before importing input_manager
-pil_before = {k for k in sys.modules.keys() if k.startswith("PIL")}
+            # Record PIL modules before importing input_manager
+            pil_before = {k for k in sys.modules.keys() if k.startswith("PIL")}
 
-# Import the module under test
-from transformation_portal.lux_depth_v3.input_manager import (
-    ImageInput,
-    InputImageMetadata,
-    SUPPORTED_EXTENSIONS,
-)
+            # Import the module under test
+            from transformation_portal.lux_depth_v3.input_manager import (
+                ImageInput,
+                InputImageMetadata,
+                SUPPORTED_EXTENSIONS,
+            )
 
-# Record PIL modules after import
-pil_after = {k for k in sys.modules.keys() if k.startswith("PIL")}
-new_pil_modules = pil_after - pil_before
+            # Record PIL modules after import
+            pil_after = {k for k in sys.modules.keys() if k.startswith("PIL")}
+            new_pil_modules = pil_after - pil_before
 
-# Verify the module is usable
-assert ImageInput is not None, "ImageInput should be importable"
-assert InputImageMetadata is not None, "InputImageMetadata should be importable"
-assert SUPPORTED_EXTENSIONS is not None, "SUPPORTED_EXTENSIONS should be importable"
+            # Verify the module is usable
+            assert ImageInput is not None, "ImageInput should be importable"
+            assert InputImageMetadata is not None, "InputImageMetadata should be importable"
+            assert SUPPORTED_EXTENSIONS is not None, "SUPPORTED_EXTENSIONS should be importable"
 
-# Assert no new PIL modules were introduced
-if new_pil_modules:
-    print(f"FAIL: Eager PIL imports detected: {sorted(new_pil_modules)}", file=sys.stderr)
-    sys.exit(1)
+            # Assert no new PIL modules were introduced
+            if new_pil_modules:
+                print(f"FAIL: Eager PIL imports detected: {sorted(new_pil_modules)}", file=sys.stderr)
+                sys.exit(1)
 
-print("OK: No eager PIL imports detected")
-sys.exit(0)
-"""
+            print("OK: No eager PIL imports detected")
+            sys.exit(0)
+        """).strip()
         result = subprocess.run(
             [sys.executable, "-c", check_script],
             capture_output=True,
@@ -576,7 +577,9 @@ sys.exit(0)
 
         # Provide detailed failure information
         if result.returncode != 0:
-            error_msg = f"Subprocess failed with code {result.returncode}.\nstdout: {result.stdout}\nstderr: {result.stderr}"
+            error_msg = (
+                f"Subprocess failed with code {result.returncode}.\n" f"stdout: {result.stdout}\n" f"stderr: {result.stderr}"
+            )
             pytest.fail(error_msg)
 
         assert "No eager PIL imports detected" in result.stdout

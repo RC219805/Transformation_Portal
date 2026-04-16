@@ -24,11 +24,11 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, ClassVar, Dict, Optional, Tuple, Union
 
+from transformation_portal.ingest.canonical_json import dumps_json
 from transformation_portal.lux_depth_v3.path_aliasing import normalize_lexical_path
 
 # ---------------------------------------------------------------------------
@@ -357,7 +357,7 @@ class ImageInput:
         Returns:
             JSON string representation
         """
-        return json.dumps(
+        return dumps_json(
             self.to_dict(),
             sort_keys=True,
             separators=(",", ":"),
