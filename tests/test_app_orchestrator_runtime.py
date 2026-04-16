@@ -2529,6 +2529,99 @@ def test_argv_normalization_ignores_sam2_checkpoint_path_when_backend_is_not_sam
     assert "--sam2-checkpoint-path" not in argv
 
 
+def test_validate_managed_sam2_checkpoint_path_allows_repo_controlled_missing_path() -> None:
+    normalized = orchestrator_app._validate_managed_sam2_checkpoint_path("./models/sam2/sam2.1_hiera_large.pt")
+
+    assert normalized.endswith("models/sam2/sam2.1_hiera_large.pt")
+
+
+def test_argv_rejects_untrusted_sam2_checkpoint_path(tmp_path: Path) -> None:
+    input_dir = tmp_path / "input"
+    output_dir = tmp_path / "output"
+    checkpoint_path = tmp_path / "sam2-untrusted.pt"
+    input_dir.mkdir()
+    output_dir.mkdir()
+    checkpoint_path.write_bytes(b"untrusted checkpoint bytes")
+
+    payload: Dict[str, object] = {
+        "pipeline": "lux-depth-v3",
+        "args": {
+            "input_dir": str(input_dir),
+            "output_dir": str(output_dir),
+            "enable_segmentation": True,
+            "segmentation_backend": "sam2",
+            "sam2_checkpoint_path": str(checkpoint_path),
+        },
+    }
+
+    with pytest.raises(ValueError, match="SAM2 checkpoint path is not trusted"):
+        orchestrator_app._argv_from_request(payload)
+
+
+def test_ensure_safe_regular_file_path_preserves_outside_root_reason(tmp_path: Path) -> None:
+    allowed_root = tmp_path / "allowed"
+    outside_root = tmp_path / "outside"
+    checkpoint_path = outside_root / "sam2-outside.pt"
+    allowed_root.mkdir()
+    outside_root.mkdir()
+    checkpoint_path.write_bytes(b"outside")
+
+    with pytest.raises(orchestrator_app._PortalValidationReasonError) as exc_info:
+        orchestrator_app._ensure_safe_regular_file_path(checkpoint_path, [allowed_root])
+
+    assert exc_info.value.reason == "path_outside_allowed_roots"
+
+
+def test_argv_rejects_non_file_sam2_checkpoint_path(tmp_path: Path) -> None:
+    input_dir = tmp_path / "input"
+    output_dir = tmp_path / "output"
+    checkpoint_dir = tmp_path / "sam2-checkpoint-dir"
+    input_dir.mkdir()
+    output_dir.mkdir()
+    checkpoint_dir.mkdir()
+
+    payload: Dict[str, object] = {
+        "pipeline": "lux-depth-v3",
+        "args": {
+            "input_dir": str(input_dir),
+            "output_dir": str(output_dir),
+            "enable_segmentation": True,
+            "segmentation_backend": "sam2",
+            "sam2_checkpoint_path": str(checkpoint_dir),
+        },
+    }
+
+    with pytest.raises(ValueError, match="Invalid path value"):
+        orchestrator_app._argv_from_request(payload)
+
+
+def test_argv_rejects_oversized_sam2_checkpoint_path(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    input_dir = tmp_path / "input"
+    output_dir = tmp_path / "output"
+    checkpoint_path = tmp_path / "sam2-oversized.pt"
+    input_dir.mkdir()
+    output_dir.mkdir()
+    checkpoint_path.write_bytes(b"oversized")
+    monkeypatch.setattr(orchestrator_app, "MANAGED_SAM2_CHECKSUM_MAX_BYTES", 1)
+
+    payload: Dict[str, object] = {
+        "pipeline": "lux-depth-v3",
+        "args": {
+            "input_dir": str(input_dir),
+            "output_dir": str(output_dir),
+            "enable_segmentation": True,
+            "segmentation_backend": "sam2",
+            "sam2_checkpoint_path": str(checkpoint_path),
+        },
+    }
+
+    with pytest.raises(ValueError, match="checksum verification size limit"):
+        orchestrator_app._argv_from_request(payload)
+
+
 def test_argv_rejects_invalid_raw_ingest_mode() -> None:
     payload: Dict[str, object] = {
         "pipeline": "lux-depth-v3",

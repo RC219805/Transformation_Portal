@@ -17,9 +17,9 @@ CONTRACT SEPARATION:
 
 TARGET MATRIX (ADR-032):
 - Target-owned ML lockfiles:
-  - ml-core-darwin-x86_64.txt (macOS Intel conservative baseline)
-  - ml-core-darwin-arm64.txt (macOS Apple Silicon baseline)
-  - ml-core-linux.txt (Linux x86_64 baseline)
+  - ml-core-darwin-x86_64.txt (macOS Intel frozen baseline)
+  - ml-core-darwin-arm64.txt (macOS Apple Silicon secure baseline)
+  - ml-core-linux.txt (Linux x86_64 frozen historical baseline)
 - Non-core optional ML lockfiles must be absent from the checked-in repository state
 - Target-owned ML core lockfiles must not carry the wrong OS markers
 
@@ -114,6 +114,11 @@ GENERIC_LINUX_KEYRING_REQUIRED_PACKAGES = {
 # Note: [^\n]* (not [^#\n]*) intentionally matches lines that carry inline comments,
 # because ml-core-darwin-arm64.in declares coremltools with a trailing # comment.
 # The x86 guard patterns check stripped non-comment lines, so they use [^#\n]*.
+
+SUPPORTED_TORCH_PIN = "2.8.0"
+SUPPORTED_TORCHVISION_PIN = "0.23.0"
+FROZEN_DARWIN_X86_TORCH_PIN = "2.2.2"
+FROZEN_DARWIN_X86_TORCHVISION_PIN = "0.17.2"
 
 
 def read_expected_lock_python_version() -> str:
@@ -260,6 +265,11 @@ def _parse_numeric_version(version: str) -> tuple[int, ...]:
     return tuple(int(part) for part in NUMERIC_VERSION_PATTERN.findall(version))
 
 
+def _has_exact_pin(lines: list[str], package_name: str, version: str) -> bool:
+    pattern = re.compile(rf"^{re.escape(package_name)}\s*==\s*{re.escape(version)}(?:\s|$)", re.IGNORECASE)
+    return any(pattern.search(line) for line in lines)
+
+
 def _read_pinned_packages(lock_path: Path) -> dict[str, str]:
     packages: dict[str, str] = {}
     for raw_line in lock_path.read_text(encoding="utf-8").splitlines():
@@ -338,6 +348,14 @@ def validate_darwin_input_guards() -> list[str]:
             for line in darwin_x86_input.read_text(encoding="utf-8").splitlines()
             if line.strip() and not line.lstrip().startswith("#")
         ]
+        if not _has_exact_pin(non_comment_lines, "torch", FROZEN_DARWIN_X86_TORCH_PIN):
+            errors.append(
+                f"{darwin_x86_input} must keep torch=={FROZEN_DARWIN_X86_TORCH_PIN} while the macOS Intel lane remains frozen."
+            )
+        if not _has_exact_pin(non_comment_lines, "torchvision", FROZEN_DARWIN_X86_TORCHVISION_PIN):
+            errors.append(
+                f"{darwin_x86_input} must keep torchvision=={FROZEN_DARWIN_X86_TORCHVISION_PIN} aligned with the frozen macOS Intel torch baseline."
+            )
         if not any(DARWIN_X86_NUMPY_GUARD_PATTERN.search(line) for line in non_comment_lines):
             errors.append(
                 f"{darwin_x86_input} must pin numpy<2 so the macOS Intel torch 2.2.x baseline "
@@ -358,6 +376,14 @@ def validate_darwin_input_guards() -> list[str]:
         for line in darwin_arm64_input.read_text(encoding="utf-8").splitlines()
         if line.strip() and not line.lstrip().startswith("#")
     ]
+    if not _has_exact_pin(arm64_non_comment_lines, "torch", SUPPORTED_TORCH_PIN):
+        errors.append(
+            f"{darwin_arm64_input} must pin torch=={SUPPORTED_TORCH_PIN} for the supported Apple Silicon security baseline."
+        )
+    if not _has_exact_pin(arm64_non_comment_lines, "torchvision", SUPPORTED_TORCHVISION_PIN):
+        errors.append(
+            f"{darwin_arm64_input} must pin torchvision=={SUPPORTED_TORCHVISION_PIN} alongside the supported Apple Silicon torch baseline."
+        )
     if any(DARWIN_X86_NUMPY_GUARD_PATTERN.search(line) for line in arm64_non_comment_lines):
         errors.append(
             f"{darwin_arm64_input} must not inherit the Intel-only numpy<2 guard. "
@@ -372,21 +398,7 @@ def validate_darwin_input_guards() -> list[str]:
 
 
 def validate_linux_input_guards() -> list[str]:
-    """Ensure the Linux ML input preserves the supported torch/transformers envelope."""
-    linux_input = REQUIREMENTS_DIR / "ml-core-linux.in"
-    if not linux_input.is_file():
-        return []
-
-    non_comment_lines = [
-        line.strip()
-        for line in linux_input.read_text(encoding="utf-8").splitlines()
-        if line.strip() and not line.lstrip().startswith("#")
-    ]
-    if not any(LINUX_TRANSFORMERS_GUARD_PATTERN.search(line) for line in non_comment_lines):
-        return [
-            f"{linux_input} must cap transformers below 5 while the Linux torch 2.2.x baseline "
-            "remains part of the checked-in ML contract."
-        ]
+    """Linux historical lane is frozen and excluded from supported-lane input checks."""
     return []
 
 
@@ -425,6 +437,7 @@ def validate_platform_lock_runtime_compatibility() -> list[str]:
 
         packages = _read_pinned_packages(lock_path)
         torch_version = packages.get("torch")
+        torchvision_version = packages.get("torchvision")
         transformers_version = packages.get("transformers")
         numpy_version = packages.get("numpy")
 
@@ -457,6 +470,22 @@ def validate_platform_lock_runtime_compatibility() -> list[str]:
                 "CoreML support remains part of the checked-in arm64 contract."
             )
 
+        if (
+            lock_name == "ml-core-darwin-arm64.txt"
+            and torch_version is not None
+            and _parse_numeric_version(torch_version) < _parse_numeric_version(SUPPORTED_TORCH_PIN)
+        ):
+            errors.append(
+                f"{lock_path} must rotate to torch=={SUPPORTED_TORCH_PIN} for the supported Apple Silicon security baseline."
+            )
+        if (
+            lock_name == "ml-core-darwin-arm64.txt"
+            and torchvision_version is not None
+            and _parse_numeric_version(torchvision_version) < _parse_numeric_version(SUPPORTED_TORCHVISION_PIN)
+        ):
+            errors.append(
+                f"{lock_path} must rotate to torchvision=={SUPPORTED_TORCHVISION_PIN} for the supported Apple Silicon security baseline."
+            )
     return errors
 
 

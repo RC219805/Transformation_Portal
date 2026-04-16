@@ -39,9 +39,8 @@ locks:
   ml-core-linux.txt:
     target_id: linux-x86_64
     python_version: "3.11"
-    status: active
-    allowed_contexts:
-      - ubuntu-x64-linux
+    status: frozen
+    allowed_contexts: []
   ml-core-darwin-arm64.txt:
     target_id: darwin-arm64
     python_version: "3.11"

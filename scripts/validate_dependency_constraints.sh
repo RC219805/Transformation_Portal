@@ -223,13 +223,10 @@ validate_target_owned_ml_freshness() {
             compile_fix="Run 'cd requirements && make compile-ml-darwin-arm64' on native Darwin arm64."
             ;;
         "ml-core-linux.in")
-            host_os="$(current_host_system)"
-            host_arch="$(current_host_arch)"
-            if [[ "$host_os" != "Linux" || "$host_arch" != "x86_64" ]]; then
-                return 0
+            if [[ $VERBOSE -eq 1 ]]; then
+                echo "INFO: $basename is frozen and excluded from freshness regeneration checks."
             fi
-            check_target="check-ml-linux-x86_64"
-            compile_fix="Run 'cd requirements && make compile-ml-linux-x86_64' on native Linux x86_64."
+            return 0
             ;;
         *)
             return 0

@@ -103,9 +103,13 @@ Given our image/video processing nature, special attention is required for:
 
   **March 2026**:
   - **PyTorch CVE-2025-32434** - Critical RCE vulnerability via torch.load()
-    - **Mitigation**: Runtime enforcement of `weights_only=True` for all torch.load() calls
-    - **Rationale**: Preserves CAS determinism (torch==2.2.2 pin) while mitigating RCE
+    - **Supported-lane remediation**: macOS Apple Silicon ML core lock rotates to `torch==2.8.0` / `torchvision==0.23.0`
+    - **Frozen-lane posture**: Linux and macOS Intel remain unsupported/frozen historical ML lanes
+    - **Defense in depth**: Runtime enforcement of `weights_only=True` remains mandatory for all torch.load() calls
     - **Implementation**: Use `transformation_portal.core.security.torch_security.safe_load()`
+  - **Hugging Face `Trainer` advisory GHSA-69w3-r845-3855**
+    - **Disposition**: Managed inference paths do not use `transformers.Trainer`, `Seq2SeqTrainer`, `TrainingArguments`, `_load_rng_state`, or training-resume flows
+    - **Action**: Dependabot alerts are dismissed as `not_used` with repo search evidence instead of forcing a `transformers` 5.x pre-release upgrade into inference stacks
   - **Pillow>=10.3.0** - Fixed CVE-2024-28219 (buffer overflow vulnerability)
   - **cryptography==46.0.5** - Fixed GHSA subgroup attack vulnerability (SECT curves)
   - **black==26.3.1** - Fixed arbitrary file writes from unsanitized cache names
@@ -117,12 +121,14 @@ Given our image/video processing nature, special attention is required for:
 
 - **Security vs Determinism Policy**:
   - Transformation Portal prioritizes **reproducibility** over latest versions (ADR-032)
-  - Security vulnerabilities are mitigated at **runtime** when possible
+  - Supported-lane security fixes prefer **controlled baseline rotations** over opportunistic broad upgrades
   - Version upgrades only occur during **controlled baseline rotations**
   - All torch.load() calls MUST use `weights_only=True` parameter
 
 - **Known Vulnerabilities** (Mitigated):
-  - PyTorch torch==2.2.2: CVE-2025-32434 mitigated via weights_only=True enforcement
+  - Supported Apple Silicon lane runs on torch `2.8.0` / torchvision `0.23.0`
+  - Frozen macOS Intel ML lane remains unsupported and gated behind `TP_ALLOW_MACOS_INTEL_ML=1`
+  - `requirements/ml-core-linux.txt` is a frozen unsupported historical lane and must not drive supported-lane remediation
   - All model loading uses safe_load() wrapper or explicit weights_only=True
   - Pillow: Critical for image parsing vulnerabilities
   - NumPy: Monitor for numerical computation exploits
