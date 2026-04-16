@@ -159,7 +159,8 @@ class InputImageMetadata:
 
         for key, value in data.items():
             if key in known_keys:
-                # Handle tuple conversion for image_dimensions
+                # JSON serialization converts tuples to lists, so we restore
+                # tuple type for image_dimensions on deserialization
                 if key == "image_dimensions" and isinstance(value, list):
                     value = tuple(value)
                 known[key] = value
@@ -225,9 +226,9 @@ class ImageInput:
         if not isinstance(self.path, Path):
             self.path = Path(self.path)
 
-        # Validate non-empty path
-        path_str = str(self.path)
-        if not path_str or path_str.strip() in ("", "."):
+        # Validate non-empty path (reject empty, whitespace-only, or bare ".")
+        path_str = str(self.path).strip()
+        if not path_str or path_str == ".":
             raise ValueError("ImageInput path cannot be empty")
 
         # Normalize path lexically (no filesystem access)
