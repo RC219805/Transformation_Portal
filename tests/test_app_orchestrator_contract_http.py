@@ -1006,6 +1006,73 @@ def test_config_preview_rejects_untrusted_sam2_checkpoint_path(client: TestClien
     assert "sam2_checkpoint_path" not in body["data"]["normalized_args"]
 
 
+def test_config_preview_rejects_non_file_sam2_checkpoint_path(client: TestClient, tmp_path: Path) -> None:
+    input_dir = (tmp_path / "preview-input-dir").resolve()
+    output_dir = (tmp_path / "preview-output-dir").resolve()
+    checkpoint_dir = (tmp_path / "sam2-checkpoint-dir").resolve()
+    input_dir.mkdir(parents=True, exist_ok=True)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    checkpoint_dir.mkdir(parents=True, exist_ok=True)
+
+    response = client.post(
+        "/v1/config-preview",
+        json={
+            "pipeline": "lux-depth-v3",
+            "args": {
+                "input_dir": str(input_dir),
+                "output_dir": str(output_dir),
+                "enable_segmentation": True,
+                "segmentation_backend": "sam2",
+                "sam2_checkpoint_path": str(checkpoint_dir),
+            },
+        },
+    )
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["schema"] == "tp.orchestrator.config_preview.v1"
+    assert body["success"] is True
+    errors = {item["field"]: item for item in body["data"]["field_errors"]}
+    assert errors["sam2_checkpoint_path"]["code"] == "invalid_path_value"
+    assert "sam2_checkpoint_path" not in body["data"]["normalized_args"]
+
+
+def test_config_preview_rejects_oversized_sam2_checkpoint_path(
+    client: TestClient,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    input_dir = (tmp_path / "preview-input-oversized").resolve()
+    output_dir = (tmp_path / "preview-output-oversized").resolve()
+    checkpoint_path = (tmp_path / "sam2-oversized.pt").resolve()
+    input_dir.mkdir(parents=True, exist_ok=True)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    checkpoint_path.write_bytes(b"oversized")
+    monkeypatch.setattr(orchestrator_app, "MANAGED_SAM2_CHECKSUM_MAX_BYTES", 1)
+
+    response = client.post(
+        "/v1/config-preview",
+        json={
+            "pipeline": "lux-depth-v3",
+            "args": {
+                "input_dir": str(input_dir),
+                "output_dir": str(output_dir),
+                "enable_segmentation": True,
+                "segmentation_backend": "sam2",
+                "sam2_checkpoint_path": str(checkpoint_path),
+            },
+        },
+    )
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["schema"] == "tp.orchestrator.config_preview.v1"
+    assert body["success"] is True
+    errors = {item["field"]: item for item in body["data"]["field_errors"]}
+    assert errors["sam2_checkpoint_path"]["code"] == "checkpoint_file_too_large"
+    assert "sam2_checkpoint_path" not in body["data"]["normalized_args"]
+
+
 def test_config_preview_contract_sanitizes_archive_validation_errors(
     client: TestClient,
     tmp_path: Path,

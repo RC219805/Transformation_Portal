@@ -197,8 +197,8 @@ class PlatformMatrix:
             - ml_supported: True if ML stack is supported on this platform
 
         Security Context:
-            Supported Linux and Apple Silicon lanes now pin torch==2.8.0.
-            The frozen macOS Intel lane remains on torch==2.2.2 until retirement.
+            The supported Apple Silicon lane now pins torch==2.8.0.
+            Linux and macOS Intel remain frozen unsupported historical ML lanes.
             All platforms must use weights_only=True for torch.load() calls.
         """
         base_mitigation = (
@@ -220,15 +220,27 @@ class PlatformMatrix:
                 "secure": False,  # macOS Intel has no torch>=2.6.0 wheels (dropped platform support)
                 "ml_supported": allow_bypass,  # Only if explicitly bypassed
             }
-        else:
+        if self.is_apple_silicon:
             return {
                 "platform": self.canonical_target,
                 "cve_2025_32434_note": (
-                    "Supported lane uses torch==2.8.0. " "weights_only=True remains required for checkpoint defense in depth."
+                    "Supported Apple Silicon lane uses torch==2.8.0. "
+                    "weights_only=True remains required for checkpoint defense in depth."
                 ),
                 "mitigation": base_mitigation,
                 "secure": True,
                 "ml_supported": True,
+            }
+        else:
+            return {
+                "platform": self.canonical_target,
+                "cve_2025_32434_note": (
+                    "Linux ML remains a frozen unsupported historical lane. "
+                    "Use a repo-managed secure subprocess runtime instead of the checked-in ML core lock."
+                ),
+                "mitigation": base_mitigation,
+                "secure": False,
+                "ml_supported": False,
             }
 
     def assert_ml_supported(self) -> None:
@@ -245,8 +257,8 @@ class PlatformMatrix:
             raise RuntimeError(
                 f"ML stack not supported on {status['platform']}. "
                 f"{status['cve_2025_32434_note']} "
-                "Migrate to macOS Apple Silicon or Linux. "
-                "To bypass (NOT RECOMMENDED): export TP_ALLOW_MACOS_INTEL_ML=1"
+                "Migrate to macOS Apple Silicon or a repo-managed secure subprocess runtime. "
+                "To bypass macOS Intel (NOT RECOMMENDED): export TP_ALLOW_MACOS_INTEL_ML=1"
             )
 
     def warn_if_insecure_ml_platform(self) -> None:

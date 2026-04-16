@@ -2552,6 +2552,56 @@ def test_argv_rejects_untrusted_sam2_checkpoint_path(tmp_path: Path) -> None:
         orchestrator_app._argv_from_request(payload)
 
 
+def test_argv_rejects_non_file_sam2_checkpoint_path(tmp_path: Path) -> None:
+    input_dir = tmp_path / "input"
+    output_dir = tmp_path / "output"
+    checkpoint_dir = tmp_path / "sam2-checkpoint-dir"
+    input_dir.mkdir()
+    output_dir.mkdir()
+    checkpoint_dir.mkdir()
+
+    payload: Dict[str, object] = {
+        "pipeline": "lux-depth-v3",
+        "args": {
+            "input_dir": str(input_dir),
+            "output_dir": str(output_dir),
+            "enable_segmentation": True,
+            "segmentation_backend": "sam2",
+            "sam2_checkpoint_path": str(checkpoint_dir),
+        },
+    }
+
+    with pytest.raises(ValueError, match="Invalid path value"):
+        orchestrator_app._argv_from_request(payload)
+
+
+def test_argv_rejects_oversized_sam2_checkpoint_path(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    input_dir = tmp_path / "input"
+    output_dir = tmp_path / "output"
+    checkpoint_path = tmp_path / "sam2-oversized.pt"
+    input_dir.mkdir()
+    output_dir.mkdir()
+    checkpoint_path.write_bytes(b"oversized")
+    monkeypatch.setattr(orchestrator_app, "MANAGED_SAM2_CHECKSUM_MAX_BYTES", 1)
+
+    payload: Dict[str, object] = {
+        "pipeline": "lux-depth-v3",
+        "args": {
+            "input_dir": str(input_dir),
+            "output_dir": str(output_dir),
+            "enable_segmentation": True,
+            "segmentation_backend": "sam2",
+            "sam2_checkpoint_path": str(checkpoint_path),
+        },
+    }
+
+    with pytest.raises(ValueError, match="checksum verification size limit"):
+        orchestrator_app._argv_from_request(payload)
+
+
 def test_argv_rejects_invalid_raw_ingest_mode() -> None:
     payload: Dict[str, object] = {
         "pipeline": "lux-depth-v3",

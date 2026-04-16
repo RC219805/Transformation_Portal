@@ -16,9 +16,10 @@
 # - Accel is EXPLICIT via profile, never inferred from OS
 #
 # SECURITY NOTE:
-# - Supported Linux and Apple Silicon lanes now anchor on torch==2.8.0 /
+# - The supported Apple Silicon lane now anchors on torch==2.8.0 /
 #   torchvision==0.23.0.
-# - The frozen Darwin x86_64 lane remains on torch 2.2.2 until retirement.
+# - The frozen Darwin x86_64 and Linux lanes remain unsupported historical
+#   baselines until retirement.
 # - All torch.load() calls MUST use weights_only=True as defense in depth.
 # - See: src/transformation_portal/core/security/torch_security.py for safe loading.
 #
@@ -28,9 +29,9 @@
 # Supported lanes align with the repo-owned secure subprocess runtime.
 #
 # Platform-specific version notes:
-# - macOS Intel (x86_64): torch 2.2.2 (last version with x86_64 macOS wheels)
-# - macOS Apple Silicon (arm64): torch 2.8.0
-# - Linux (all arch): torch 2.8.0
+# - macOS Intel (x86_64): frozen torch 2.2.2 historical baseline
+# - macOS Apple Silicon (arm64): supported torch 2.8.0 baseline
+# - Linux (all arch): frozen torch 2.8.0 historical baseline
 #
 # NOTE: When updating torch versions, verify SAM2/CLIP compatibility.
 

@@ -34,3 +34,13 @@ def test_resolve_platform_lockfile_returns_split_darwin_name() -> None:
     assert result is None or isinstance(result, Path)
     if result is not None and "darwin" in result.name:
         assert result.name in {"ml-core-darwin-x86_64.txt", "ml-core-darwin-arm64.txt"}
+
+
+def test_linux_ml_security_posture_reports_frozen_historical_lane() -> None:
+    matrix = PlatformMatrix(PlatformOS.LINUX, PlatformISA.X86_64, PlatformAccel.CPU)
+
+    status = matrix.check_ml_security_posture()
+
+    assert status["ml_supported"] is False
+    assert status["secure"] is False
+    assert "frozen unsupported historical lane" in status["cve_2025_32434_note"]

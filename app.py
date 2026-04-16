@@ -525,9 +525,34 @@ def _path_is_within_root(resolved_path: Path, root: Path) -> bool:
     return True
 
 
+def _ensure_safe_regular_file_path(path_value: Path, allowed_roots: List[Path]) -> Path:
+    try:
+        candidate_real = Path(os.path.realpath(path_value))
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise _PortalValidationReasonError("Invalid path value", reason="invalid_path_value") from exc
+    if not any(_path_is_within_root(candidate_real, root) for root in allowed_roots):
+        raise _PortalValidationReasonError("Path outside allowed roots", reason="path_outside_allowed_roots")
+    try:
+        if not candidate_real.is_file():
+            raise _PortalValidationReasonError("Invalid path value", reason="invalid_path_value")
+    except OSError as exc:
+        raise _PortalValidationReasonError("Invalid path value", reason="invalid_path_value") from exc
+    return candidate_real
+
+
 def _compute_file_sha256(path: Path, chunk_size: int = 1024 * 1024) -> str:
+    safe_path = _ensure_safe_regular_file_path(path, [*MANAGED_SAM2_TRUSTED_ROOTS, *ALLOWED_INPUT_ROOTS])
+    try:
+        size_bytes = safe_path.stat().st_size
+    except OSError as exc:
+        raise _PortalValidationReasonError("Invalid path value", reason="invalid_path_value") from exc
+    if size_bytes > MANAGED_SAM2_CHECKSUM_MAX_BYTES:
+        raise _PortalValidationReasonError(
+            "SAM2 checkpoint path exceeds checksum verification size limit",
+            reason="checkpoint_file_too_large",
+        )
     digest = hashlib.sha256()
-    with path.open("rb") as handle:
+    with safe_path.open("rb") as handle:
         for chunk in iter(lambda: handle.read(chunk_size), b""):
             digest.update(chunk)
     return digest.hexdigest()
@@ -535,15 +560,12 @@ def _compute_file_sha256(path: Path, chunk_size: int = 1024 * 1024) -> str:
 
 def _validate_managed_sam2_checkpoint_path(path_value: str) -> str:
     resolved = _resolve_allowed_request_path(path_value, ALLOWED_INPUT_ROOTS)
-    if any(_path_is_within_root(resolved, root) for root in MANAGED_SAM2_TRUSTED_ROOTS):
-        return str(resolved)
-    if resolved.is_file():
-        try:
-            digest = _compute_file_sha256(resolved)
-        except OSError as exc:
-            raise _PortalValidationReasonError("Invalid path value", reason="invalid_path_value") from exc
-        if digest in MANAGED_SAM2_TRUSTED_SHA256:
-            return str(resolved)
+    safe_file = _ensure_safe_regular_file_path(resolved, ALLOWED_INPUT_ROOTS)
+    if any(_path_is_within_root(safe_file, root) for root in MANAGED_SAM2_TRUSTED_ROOTS):
+        return str(safe_file)
+    digest = _compute_file_sha256(safe_file)
+    if digest in MANAGED_SAM2_TRUSTED_SHA256:
+        return str(safe_file)
     raise _PortalValidationReasonError("SAM2 checkpoint path is not trusted", reason="untrusted_checkpoint_path")
 
 
@@ -612,6 +634,11 @@ MANAGED_SAM2_TRUSTED_SHA256 = frozenset(
         "d0bb7f236400a49669ffdd1be617959a8b1d1065081789d7bbff88eded3a8071",
         "7442e4e9b732a508f80e141e7c2913437a3610ee0c77381a66658c3a445df87b",
     }
+)
+MANAGED_SAM2_CHECKSUM_MAX_BYTES = _env_int(
+    "TP_MANAGED_SAM2_CHECKSUM_MAX_BYTES",
+    1024 * 1024 * 1024,
+    minimum=1024,
 )
 PORTAL_UPLOAD_ROOT = Path(
     os.getenv("TP_PORTAL_UPLOAD_ROOT", str(Path(tempfile.gettempdir()) / "transformation-portal" / "uploads"))
@@ -3268,18 +3295,32 @@ def _build_lux_config_preview(
         if segmentation_backend == "sam2":
             try:
                 _validate_managed_sam2_checkpoint_path(sam2_checkpoint_path)
-            except _PortalValidationReasonError:
-                errors.append(
-                    _portal_issue(
-                        "sam2_checkpoint_path",
-                        "untrusted_checkpoint_path",
-                        "SAM2 checkpoint overrides must use a repo-controlled or checksum-verified file.",
-                        suggestion=(
-                            "Use ./models/sam2/... or ./checkpoints/... for repo-managed checkpoints, "
-                            "or provide a file whose SHA-256 matches the governed SAM2 checkpoint manifest."
-                        ),
+            except _PortalValidationReasonError as exc:
+                reason = _portal_reason_from_exception(exc, default="invalid_path_value")
+                if reason == "untrusted_checkpoint_path":
+                    errors.append(
+                        _portal_issue(
+                            "sam2_checkpoint_path",
+                            "untrusted_checkpoint_path",
+                            "SAM2 checkpoint overrides must use a repo-controlled or checksum-verified file.",
+                            suggestion=(
+                                "Use ./models/sam2/... or ./checkpoints/... for repo-managed checkpoints, "
+                                "or provide a file whose SHA-256 matches the governed SAM2 checkpoint manifest."
+                            ),
+                        )
                     )
-                )
+                else:
+                    message = (
+                        "sam2_checkpoint_path contains an invalid path value." if reason == "invalid_path_value" else str(exc)
+                    )
+                    errors.append(
+                        _portal_issue(
+                            "sam2_checkpoint_path",
+                            reason,
+                            message,
+                            suggestion=("Choose an existing checkpoint file under the configured repository or temp roots."),
+                        )
+                    )
             else:
                 normalized_args["sam2_checkpoint_path"] = sam2_checkpoint_path
         else:

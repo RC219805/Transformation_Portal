@@ -56,7 +56,7 @@ PYTORCH_CPU_INDEX := --extra-index-url https://download.pytorch.org/whl/cpu
 	compile-ml-darwin-arm64 update-ml-darwin-arm64 check-ml-darwin-arm64 \
 	compile-ml-linux-x86_64 update-ml-linux-x86_64 check-ml-linux-x86_64 \
 	compile-ml-darwin-x86_64 update-ml-darwin-x86_64 check-ml-darwin-x86_64 \
-	require-pip-compile require-darwin-arm64-authority require-linux-x86_64-authority refuse-darwin-x86_64-authority refuse-linux-x86_64-authority \
+	require-pip-compile require-darwin-arm64-authority refuse-darwin-x86_64-authority refuse-linux-x86_64-authority \
 	ml-core.txt ml-cpu.txt ml-mps.txt ml-cuda.txt ml-raw.txt ml-coreml.txt ml-research.txt ml.txt
 
 help:
@@ -188,15 +188,6 @@ require-darwin-arm64-authority:
 	if [ "$$os" != "Darwin" ] || [ "$$arch" != "arm64" ]; then \
 		echo "ERROR: Darwin arm64 ML lock generation is authoritative only on native Darwin arm64."; \
 		echo "ERROR: Run 'make compile-ml-darwin-arm64' or related Darwin arm64 commands on an Apple Silicon macOS host."; \
-		exit 1; \
-	fi
-
-require-linux-x86_64-authority:
-	@os="$$(uname -s)"; arch="$$(uname -m)"; \
-	if [ "$$arch" = "amd64" ]; then arch="x86_64"; fi; \
-	if [ "$$os" != "Linux" ] || [ "$$arch" != "x86_64" ]; then \
-		echo "ERROR: Linux x86_64 ML lock generation is authoritative only on native Linux x86_64."; \
-		echo "ERROR: Run 'make compile-ml-linux-x86_64' or related Linux x86_64 commands on a native Linux x86_64 host."; \
 		exit 1; \
 	fi
 

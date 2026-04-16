@@ -74,7 +74,7 @@ def test_detect_transformers_torch_runtime_issue_reports_disabled_backend(monkey
 
 
 def test_detect_transformers_torch_version_issue_allows_repo_baseline(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The supported torch 2.7.x + transformers 4.57.x baseline must not be rejected."""
+    """The supported torch 2.8.x + transformers 4.57.x baseline must not be rejected."""
     monkeypatch.setattr(
         "transformation_portal.core.ml_dependency_health._installed_version",
         lambda _distribution: "2.4.3",

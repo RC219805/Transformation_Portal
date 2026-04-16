@@ -103,8 +103,8 @@ Given our image/video processing nature, special attention is required for:
 
   **March 2026**:
   - **PyTorch CVE-2025-32434** - Critical RCE vulnerability via torch.load()
-    - **Supported-lane remediation**: Linux and macOS Apple Silicon ML core locks rotate to `torch==2.8.0` / `torchvision==0.23.0`
-    - **Frozen-lane posture**: macOS Intel remains an unsupported/frozen ML lane on `torch==2.2.2`
+    - **Supported-lane remediation**: macOS Apple Silicon ML core lock rotates to `torch==2.8.0` / `torchvision==0.23.0`
+    - **Frozen-lane posture**: Linux and macOS Intel remain unsupported/frozen historical ML lanes
     - **Defense in depth**: Runtime enforcement of `weights_only=True` remains mandatory for all torch.load() calls
     - **Implementation**: Use `transformation_portal.core.security.torch_security.safe_load()`
   - **Hugging Face `Trainer` advisory GHSA-69w3-r845-3855**
