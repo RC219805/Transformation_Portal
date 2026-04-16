@@ -406,8 +406,8 @@ jobs:
 
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
         with:
-          # lint_runner.sh performs its own targeted fetch for diff-based pylint selection.
-          fetch-depth: 1
+          # Keep full history so diff-based pylint selection can resolve the PR merge-base reliably.
+          fetch-depth: 0
 
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
         with:

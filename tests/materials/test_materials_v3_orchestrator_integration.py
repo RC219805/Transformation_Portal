@@ -131,7 +131,7 @@ def test_run_materials_v3_stage_aligns_v2_handoff_artifacts_and_sets_metadata(
     preprocessed_array = np.zeros((8, 8, 3), dtype=np.float32)
     depth_map = np.ones((8, 8), dtype=np.float32)
     glass_mask = np.ones((8, 8), dtype=np.float32)
-    enhanced_image = np.linspace(0.0, 1.0, 8 * 8 * 3, dtype=np.float32).reshape(8, 8, 3)
+    enhanced_image = np.linspace(0.0, 1.0, 8 * 8 * 3, dtype=np.float32).reshape((8, 8, 3))
     output_key = Path("nested/image_01")
 
     materials_result = {
