@@ -377,8 +377,15 @@ coverage-diff:
 		echo "Error: coverage.xml not found. Run 'make coverage-report' first."; \
 		exit 1; \
 	fi
+	@echo "Fetching origin/main for comparison..."
+	@if ! git fetch origin main --quiet 2>/dev/null; then \
+		echo "Warning: Could not fetch origin/main. Using local refs if available."; \
+	fi
+	@if ! git rev-parse --verify origin/main >/dev/null 2>&1; then \
+		echo "Error: origin/main branch not available. Run 'git fetch origin main' first."; \
+		exit 1; \
+	fi
 	@echo "Comparing against origin/main..."
-	@git fetch origin main --quiet 2>/dev/null || echo "Warning: Could not fetch origin/main"
 	@"$(PY)" -m diff_cover.diff_cover_tool coverage.xml --compare-branch=origin/main --fail-under=85
 	@echo "✅ Diff coverage check passed (≥85%)"
 
@@ -394,17 +401,21 @@ coverage-package:
 		-q
 	@echo ""
 	@echo "=== Package-Level Coverage Baseline ==="
-	@"$(PY)" -m coverage report --include="src/transformation_portal/*" | head -n 5
+	@"$(PY)" -m coverage report --include="src/transformation_portal/*" --skip-covered 2>/dev/null || \
+		"$(PY)" -m coverage report --include="src/transformation_portal/*" 2>/dev/null || \
+		echo "  (no coverage data)"
 	@echo ""
-	@echo "--- Priority Packages ---"
-	@"$(PY)" -m coverage report --include="src/transformation_portal/events/*" 2>/dev/null || echo "events/:     0%"
-	@"$(PY)" -m coverage report --include="src/transformation_portal/storage/*" 2>/dev/null || echo "storage/:    0%"
-	@"$(PY)" -m coverage report --include="src/transformation_portal/runtime/*" 2>/dev/null || echo "runtime/:    0%"
-	@"$(PY)" -m coverage report --include="src/transformation_portal/lux_depth_v3/*" 2>/dev/null || echo "lux_depth_v3/: 0%"
-	@"$(PY)" -m coverage report --include="src/transformation_portal/hardening/*" 2>/dev/null || echo "hardening/:  0%"
+	@echo "--- Priority Package Coverage ---"
+	@for pkg in events storage runtime lux_depth_v3 hardening; do \
+		result=$$("$(PY)" -m coverage report --include="src/transformation_portal/$$pkg/*" 2>/dev/null | tail -1 | awk '{print $$NF}' || true); \
+		if [ -z "$$result" ] || [ "$$result" = "TOTAL" ]; then result="0%"; fi; \
+		printf "  %-20s %s\n" "$$pkg/:" "$$result"; \
+	done
 	@echo ""
-	@echo "--- app.py ---"
-	@"$(PY)" -m coverage report --include="app.py" 2>/dev/null || echo "app.py:      0%"
+	@echo "--- Root Module Coverage ---"
+	@app_result=$$("$(PY)" -m coverage report --include="app.py" 2>/dev/null | tail -1 | awk '{print $$NF}' || true); \
+	if [ -z "$$app_result" ] || [ "$$app_result" = "TOTAL" ]; then app_result="0%"; fi; \
+	printf "  %-20s %s\n" "app.py:" "$$app_result"
 	@echo ""
 	@echo "✅ Package baseline report complete. Use this as a ratchet reference."
 
