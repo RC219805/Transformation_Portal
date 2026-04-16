@@ -2844,8 +2844,8 @@ function _displayJobState(job) {
     if (rawState === 'queued') return 'queued';
     if (rawState === 'running' && artifactCount > 0) return 'indexing';
     if (rawState === 'running') return 'running';
+    // Terminal runs stay reviewable once outputs are retained, even when the active artifact is metadata-only.
     if ((rawState === 'succeeded' || rawState === 'ready') && reviewableOutputs) return 'reviewable';
-    if ((rawState === 'succeeded' || rawState === 'ready') && artifactCount > 0) return 'indexing';
     if (rawState === 'partial') return 'partial-failure';
     if (rawState === 'failed' || rawState === 'canceled') return 'failed';
     return rawState || 'idle';
@@ -2880,22 +2880,37 @@ function _syncSwitchStateLabels() {
         const label = input.closest('label');
         if (!label) return;
         const toggleWrap = input.parentElement;
+        if (!toggleWrap) return;
+        let controlsWrap = label.querySelector('[data-switch-controls-wrap="true"]');
+        if (!controlsWrap && toggleWrap.parentElement === label) {
+            controlsWrap = document.createElement('span');
+            controlsWrap.dataset.switchControlsWrap = 'true';
+            controlsWrap.className = 'ml-3 inline-flex items-center gap-3';
+            label.insertBefore(controlsWrap, toggleWrap);
+            controlsWrap.appendChild(toggleWrap);
+        } else if (!controlsWrap && toggleWrap.parentElement instanceof HTMLElement) {
+            controlsWrap = toggleWrap.parentElement;
+            controlsWrap.dataset.switchControlsWrap = 'true';
+            controlsWrap.classList.add('ml-3', 'inline-flex', 'items-center', 'gap-3');
+        }
         let stateLabel = label.querySelector('[data-switch-state-label="true"]');
         if (!stateLabel) {
             stateLabel = document.createElement('span');
             stateLabel.dataset.switchStateLabel = 'true';
-            stateLabel.className = 'mr-3 inline-flex min-w-[3rem] items-center justify-center rounded-full border px-2 py-1 text-[10px] font-bold uppercase tracking-[0.16em]';
-            if (toggleWrap && toggleWrap.parentElement === label) {
-                label.insertBefore(stateLabel, toggleWrap);
+            stateLabel.className = 'inline-flex min-w-[3rem] items-center justify-center rounded-full border px-2 py-1 text-[10px] font-bold uppercase tracking-[0.16em]';
+            if (controlsWrap) {
+                controlsWrap.insertBefore(stateLabel, controlsWrap.firstChild);
             } else {
                 label.appendChild(stateLabel);
             }
+        } else if (controlsWrap && stateLabel.parentElement !== controlsWrap) {
+            controlsWrap.insertBefore(stateLabel, controlsWrap.firstChild);
         }
         const checked = Boolean(input.checked);
         stateLabel.textContent = checked ? 'On' : 'Off';
         stateLabel.className = checked
-            ? 'mr-3 inline-flex min-w-[3rem] items-center justify-center rounded-full border border-emerald-300 bg-emerald-50 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300'
-            : 'mr-3 inline-flex min-w-[3rem] items-center justify-center rounded-full border border-slate-300 bg-slate-100 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-600 dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-300';
+            ? 'inline-flex min-w-[3rem] items-center justify-center rounded-full border border-emerald-300 bg-emerald-50 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300'
+            : 'inline-flex min-w-[3rem] items-center justify-center rounded-full border border-slate-300 bg-slate-100 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-600 dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-300';
         input.setAttribute('aria-checked', checked ? 'true' : 'false');
         const baseLabel = String(input.getAttribute('aria-label') || input.id || 'toggle').replace(/\s+\((on|off)\)$/i, '');
         input.setAttribute('aria-label', `${baseLabel} (${checked ? 'on' : 'off'})`);

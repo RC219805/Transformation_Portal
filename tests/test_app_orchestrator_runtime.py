@@ -1724,6 +1724,30 @@ def test_portal_dispatch_lane_surfaces_live_readiness_reason() -> None:
     assert "els.dispatchReadinessReason.dataset.tone = readiness.tone;" in guard_body
 
 
+def test_portal_display_job_state_keeps_terminal_retained_outputs_reviewable_without_dead_indexing_branch() -> None:
+    content = _portal_bundle_content()
+    body = _extract_js_function_body(content, "_displayJobState")
+
+    assert "const artifactCount = Array.isArray(job.artifacts) ? job.artifacts.length : 0;" in body
+    assert "const reviewableOutputs = _jobHasReviewableOutputs(job);" in body
+    assert "Terminal runs stay reviewable once outputs are retained" in body
+    assert "if ((rawState === 'succeeded' || rawState === 'ready') && reviewableOutputs) return 'reviewable';" in body
+    assert "if ((rawState === 'succeeded' || rawState === 'ready') && artifactCount > 0) return 'indexing';" not in body
+
+
+def test_portal_switch_state_badges_share_the_toggle_control_wrapper() -> None:
+    content = _portal_bundle_content()
+    body = _extract_js_function_body(content, "_syncSwitchStateLabels")
+
+    assert "let controlsWrap = label.querySelector('[data-switch-controls-wrap=\"true\"]');" in body
+    assert "controlsWrap.dataset.switchControlsWrap = 'true';" in body
+    assert "controlsWrap.className = 'ml-3 inline-flex items-center gap-3';" in body
+    assert "controlsWrap.appendChild(toggleWrap);" in body
+    assert "controlsWrap.insertBefore(stateLabel, controlsWrap.firstChild);" in body
+    assert "label.insertBefore(stateLabel, toggleWrap);" not in body
+    assert "'mr-3 inline-flex min-w-[3rem]" not in body
+
+
 def test_portal_disclosure_defaults_are_state_driven_instead_of_static() -> None:
     content = _portal_bundle_content()
     sync_body = _extract_js_function_body(content, "syncDisclosurePanels")
