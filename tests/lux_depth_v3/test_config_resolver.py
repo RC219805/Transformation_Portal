@@ -473,6 +473,24 @@ class TestBuildFingerprintPayloads:
 
         assert fingerprint_a.to_sha256() != fingerprint_b.to_sha256()
 
+    def test_apex_depth_gate_fingerprint_normalizes_negative_warning_band(self):
+        """Negative warning bands should fingerprint as the effective non-negative policy."""
+        from transformation_portal.lux_depth_v3.config import EnhanceConfig
+        from transformation_portal.lux_depth_v3.config_resolver import (
+            build_apex_depth_gate_fingerprint_payload,
+            compute_config_fingerprint,
+        )
+
+        negative_config = EnhanceConfig(apex_depth_low_saturation_warning_band=-0.01)
+        zero_config = EnhanceConfig(apex_depth_low_saturation_warning_band=0.0)
+
+        negative_payload = build_apex_depth_gate_fingerprint_payload(negative_config)
+        zero_payload = build_apex_depth_gate_fingerprint_payload(zero_config)
+
+        assert negative_payload["low_saturation_warning_band"] == pytest.approx(0.0)
+        assert negative_payload == zero_payload
+        assert compute_config_fingerprint(negative_config).to_sha256() == compute_config_fingerprint(zero_config).to_sha256()
+
     def test_depth_cache_payload_ignores_low_saturation_warning_band(self):
         """Depth cache payload should not depend on gate demotion policy."""
         from transformation_portal.lux_depth_v3.config import EnhanceConfig

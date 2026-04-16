@@ -423,6 +423,14 @@ class EnhanceConfig:
             warn=True,
             warning_context="EnhanceConfig.depth_operational_fallback_chain",
         )
+        self.apex_depth_scaled_saturation_margin = max(
+            float(self.apex_depth_scaled_saturation_margin),
+            0.0,
+        )
+        self.apex_depth_low_saturation_warning_band = max(
+            float(self.apex_depth_low_saturation_warning_band),
+            0.0,
+        )
 
     @property
     def enable_pbr(self) -> bool:

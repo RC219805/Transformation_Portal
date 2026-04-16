@@ -138,6 +138,18 @@ class TestEnhanceConfig:
         assert hasattr(config, "depth_fallback")
         assert hasattr(config, "verify_depth_writes")
 
+    def test_enhance_config_clamps_negative_apex_scaled_saturation_margin(self):
+        """Negative scaled saturation margins should normalize to the effective runtime floor."""
+        config = EnhanceConfig(apex_depth_scaled_saturation_margin=-0.25)
+
+        assert config.apex_depth_scaled_saturation_margin == 0.0
+
+    def test_enhance_config_clamps_negative_apex_low_saturation_warning_band(self):
+        """Negative warning bands should normalize to the effective runtime floor."""
+        config = EnhanceConfig(apex_depth_low_saturation_warning_band=-0.25)
+
+        assert config.apex_depth_low_saturation_warning_band == 0.0
+
         # V2 configuration
         assert hasattr(config, "v2_preset")
         assert hasattr(config, "v2_device")
