@@ -840,14 +840,16 @@ def test_apex_depth_validity_gate_allows_scaled_metric_near_low_saturation_limit
 
     assert verdict is not None
     assert verdict["passed"] is True
+    assert verdict["warnings"] == []
+    assert verdict["demoted_failure_codes"] == []
     assert verdict["thresholds"]["saturation_low_fraction_max"] == pytest.approx(0.02)
     assert verdict["thresholds"]["saturation_low_fraction_max_effective"] == pytest.approx(0.0225)
+    assert verdict["thresholds"]["saturation_low_fraction_warning_band"] == pytest.approx(0.0075)
+    assert verdict["thresholds"]["saturation_low_fraction_warning_max_effective"] == pytest.approx(0.03)
 
 
-def test_apex_depth_validity_gate_rejects_scaled_metric_beyond_low_saturation_margin(
-    tmp_path, mock_depth_backend, mock_da3_available
-):
-    """Scaled metric normalization still fails when low saturation exceeds effective margin."""
+def test_apex_depth_validity_gate_demotes_borderline_scaled_low_saturation(tmp_path, mock_depth_backend, mock_da3_available):
+    """Borderline low saturation is demoted only for percentile-scaled gates."""
     config = EnhanceConfig(
         quality_tier="apex",
         depth_device="cpu",
@@ -859,13 +861,92 @@ def test_apex_depth_validity_gate_rejects_scaled_metric_beyond_low_saturation_ma
         "finite_pct": 1.0,
         "upper_iqr": 0.2,
         "saturation_high_fraction": 0.01,
-        "saturation_low_fraction": 0.023,
+        "saturation_low_fraction": 0.0293756755038464,
+        "gradient_energy": 0.001,
+        "gate_normalization": {"scaled": True, "mode": "percentile_1_99"},
+    }
+    with patch.object(orchestrator, "_compute_depth_validity_metrics", return_value=metrics):
+        verdict = orchestrator._enforce_apex_depth_validity_gate(np.ones((8, 8), dtype=np.float32), depth_units="meters")
+
+    assert verdict is not None
+    assert verdict["passed"] is True
+    assert "APEX_DEPTH_SATURATION_LOW_BORDERLINE" in verdict["warnings"]
+    assert verdict["demoted_failure_codes"] == ["APEX_DEPTH_SATURATION_LOW"]
+    assert verdict["thresholds"]["saturation_low_fraction_max_effective"] == pytest.approx(0.0225)
+    assert verdict["thresholds"]["saturation_low_fraction_warning_max_effective"] == pytest.approx(0.03)
+
+
+def test_apex_depth_validity_gate_rejects_scaled_metric_beyond_low_saturation_warning_band(
+    tmp_path, mock_depth_backend, mock_da3_available
+):
+    """Scaled metric normalization still fails above the warning-band ceiling."""
+    config = EnhanceConfig(
+        quality_tier="apex",
+        depth_device="cpu",
+        enable_v2=False,
+    )
+    orchestrator = EnhanceOrchestrator(config, tmp_path)
+
+    metrics = {
+        "finite_pct": 1.0,
+        "upper_iqr": 0.2,
+        "saturation_high_fraction": 0.01,
+        "saturation_low_fraction": 0.031,
         "gradient_energy": 0.001,
         "gate_normalization": {"scaled": True, "mode": "percentile_1_99"},
     }
     with patch.object(orchestrator, "_compute_depth_validity_metrics", return_value=metrics):
         with pytest.raises(RuntimeError, match="APEX_DEPTH_SATURATION_LOW"):
             orchestrator._enforce_apex_depth_validity_gate(np.ones((8, 8), dtype=np.float32), depth_units="meters")
+
+
+def test_apex_depth_validity_gate_rejects_borderline_relative_low_saturation(tmp_path, mock_depth_backend, mock_da3_available):
+    """Relative-depth low saturation remains a hard failure without demotion."""
+    config = EnhanceConfig(
+        quality_tier="apex",
+        depth_device="cpu",
+        enable_v2=False,
+    )
+    orchestrator = EnhanceOrchestrator(config, tmp_path)
+
+    metrics = {
+        "finite_pct": 1.0,
+        "upper_iqr": 0.2,
+        "saturation_high_fraction": 0.01,
+        "saturation_low_fraction": 0.0293756755038464,
+        "gradient_energy": 0.001,
+        "gate_normalization": {"scaled": False, "mode": "identity_relative"},
+    }
+    with patch.object(orchestrator, "_compute_depth_validity_metrics", return_value=metrics):
+        with pytest.raises(RuntimeError, match="APEX_DEPTH_SATURATION_LOW"):
+            orchestrator._enforce_apex_depth_validity_gate(np.ones((8, 8), dtype=np.float32), depth_units="relative")
+
+
+def test_apex_depth_validity_gate_rejects_borderline_scaled_low_saturation_with_low_gradient(
+    tmp_path, mock_depth_backend, mock_da3_available
+):
+    """Low gradient blocks demotion for borderline scaled low saturation."""
+    config = EnhanceConfig(
+        quality_tier="apex",
+        depth_device="cpu",
+        enable_v2=False,
+    )
+    orchestrator = EnhanceOrchestrator(config, tmp_path)
+
+    metrics = {
+        "finite_pct": 1.0,
+        "upper_iqr": 0.2,
+        "saturation_high_fraction": 0.01,
+        "saturation_low_fraction": 0.0293756755038464,
+        "gradient_energy": 1e-4,
+        "gate_normalization": {"scaled": True, "mode": "percentile_1_99"},
+    }
+    with patch.object(orchestrator, "_compute_depth_validity_metrics", return_value=metrics):
+        with pytest.raises(RuntimeError, match="APEX_DEPTH_SATURATION_LOW") as exc_info:
+            orchestrator._enforce_apex_depth_validity_gate(np.ones((8, 8), dtype=np.float32), depth_units="meters")
+
+    assert exc_info.value.details["warnings"] == ["APEX_DEPTH_GRADIENT_LOW"]
+    assert exc_info.value.details["demoted_failure_codes"] == []
 
 
 def test_apex_depth_validity_gate_rejects_nonfinite(tmp_path, mock_depth_backend, mock_da3_available):
@@ -945,6 +1026,7 @@ def test_apex_depth_validity_gate_returns_thresholds_and_metrics_on_pass(tmp_pat
     assert "metrics" in verdict
     assert "failure_codes" in verdict
     assert verdict["failure_codes"] == []
+    assert verdict["demoted_failure_codes"] == []
 
 
 def test_apex_depth_validity_gate_gradient_epsilon_ignores_small_positive_jitter(

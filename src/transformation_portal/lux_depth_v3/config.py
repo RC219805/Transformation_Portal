@@ -314,6 +314,10 @@ class EnhanceConfig:
     # when gate normalization scales metric depth
     # via percentile_1_99.
     apex_depth_scaled_saturation_margin: float = 0.0025
+    # Warning-only grace band for isolated
+    # low-end saturation when the structural
+    # APEX depth checks otherwise pass.
+    apex_depth_low_saturation_warning_band: float = 0.0075
     apex_depth_saturation_high_value: float = 0.999
     apex_depth_saturation_low_value: float = 0.001
     apex_depth_min_gradient_energy: float = 5e-4

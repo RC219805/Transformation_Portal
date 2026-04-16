@@ -4418,9 +4418,24 @@ class EnhanceOrchestrator:
             ),
             0.0,
         )
+        low_saturation_warning_band = max(
+            float(
+                getattr(
+                    _cfg,
+                    "apex_depth_low_saturation_warning_band",
+                    0.0,
+                ),
+            ),
+            0.0,
+        )
         gate_normalization = metrics.get("gate_normalization")
         normalization_scaled = bool(
             isinstance(gate_normalization, dict) and gate_normalization.get("scaled"),
+        )
+        percentile_scaled_gate = bool(
+            isinstance(gate_normalization, dict)
+            and gate_normalization.get("scaled") is True
+            and gate_normalization.get("mode") == "percentile_1_99"
         )
         effective_high_saturation_max = thresholds["saturation_high_fraction_max"] + (
             scaled_saturation_margin if normalization_scaled else 0.0
@@ -4428,10 +4443,17 @@ class EnhanceOrchestrator:
         effective_low_saturation_max = thresholds["saturation_low_fraction_max"] + (
             scaled_saturation_margin if normalization_scaled else 0.0
         )
+        effective_low_saturation_warning_max = effective_low_saturation_max + (
+            low_saturation_warning_band if percentile_scaled_gate else 0.0
+        )
         thresholds["comparison_epsilon"] = comparison_epsilon
         thresholds["scaled_saturation_margin"] = scaled_saturation_margin if normalization_scaled else 0.0
         thresholds["saturation_high_fraction_max_effective"] = effective_high_saturation_max
         thresholds["saturation_low_fraction_max_effective"] = effective_low_saturation_max
+        thresholds["saturation_low_fraction_warning_band"] = low_saturation_warning_band if percentile_scaled_gate else 0.0
+        thresholds["saturation_low_fraction_warning_max_effective"] = (
+            effective_low_saturation_warning_max if percentile_scaled_gate else effective_low_saturation_max
+        )
 
         finite_fail = float(metrics.get("finite_pct") or 0.0) < (thresholds["finite_pct_min"] - comparison_epsilon)
         plateau_fail = (metrics.get("upper_iqr") is None) or (float(metrics["upper_iqr"]) <= thresholds["upper_iqr_min"])
@@ -4464,10 +4486,45 @@ class EnhanceOrchestrator:
         # Stable ordering for deterministic payloads across runs/processes.
         failure_codes = sorted(failure_codes)
 
+        warnings: List[str] = []
+        demoted_failure_codes: List[str] = []
+        if low_gradient:
+            warnings.append("APEX_DEPTH_GRADIENT_LOW")
+
+        low_saturation_metric = metrics.get("saturation_low_fraction")
+        low_saturation_value = float(low_saturation_metric) if isinstance(low_saturation_metric, (int, float)) else None
+        borderline_low_saturation = (
+            percentile_scaled_gate
+            and low_saturation_fail
+            and low_saturation_value is not None
+            and low_saturation_value <= (effective_low_saturation_warning_max + comparison_epsilon)
+        )
+        can_demote_low_saturation = (
+            failure_codes == ["APEX_DEPTH_SATURATION_LOW"] and borderline_low_saturation and not low_gradient
+        )
+
+        if can_demote_low_saturation:
+            demoted_failure_codes = ["APEX_DEPTH_SATURATION_LOW"]
+            warnings.append("APEX_DEPTH_SATURATION_LOW_BORDERLINE")
+            logger.warning(
+                "APEX depth validity warning: borderline low saturation demoted "
+                "to warning (value=%.10f, limit=%.10f, metrics=%s, thresholds=%s)",
+                low_saturation_value,
+                effective_low_saturation_warning_max,
+                metrics,
+                thresholds,
+            )
+            failure_codes = []
+
+        warnings = sorted(warnings)
+        demoted_failure_codes = sorted(demoted_failure_codes)
+
         if failure_codes:
             details = {
                 "passed": False,
                 "failure_codes": failure_codes,
+                "warnings": warnings,
+                "demoted_failure_codes": demoted_failure_codes,
                 "metrics": metrics,
                 "thresholds": thresholds,
                 "shape_context": shape_context,
@@ -4478,20 +4535,18 @@ class EnhanceOrchestrator:
                 details=details,
             )
 
-        warnings: List[str] = []
         if low_gradient:
-            warnings.append("APEX_DEPTH_GRADIENT_LOW")
             logger.warning(
                 "APEX depth validity" " warning: low gradient" " energy (metrics=%s," " thresholds=%s)",
                 metrics,
                 thresholds,
             )
-        warnings = sorted(warnings)
 
         return {
             "passed": True,
             "failure_codes": [],
             "warnings": warnings,
+            "demoted_failure_codes": demoted_failure_codes,
             "metrics": metrics,
             "thresholds": thresholds,
             "shape_context": shape_context,

@@ -456,6 +456,38 @@ class TestBuildFingerprintPayloads:
         assert payload["quality_tier"] == "apex"
         assert "min_finite_pct" in payload
         assert "min_gradient_energy" in payload
+        assert payload["low_saturation_warning_band"] == pytest.approx(0.0075)
+
+    def test_fingerprint_changes_when_low_saturation_warning_band_changes(self):
+        """APEX gate fingerprint should change when the warning band changes."""
+        from transformation_portal.lux_depth_v3.config import EnhanceConfig
+        from transformation_portal.lux_depth_v3.config_resolver import (
+            compute_config_fingerprint,
+        )
+
+        config_a = EnhanceConfig(apex_depth_low_saturation_warning_band=0.0075)
+        config_b = EnhanceConfig(apex_depth_low_saturation_warning_band=0.01)
+
+        fingerprint_a = compute_config_fingerprint(config_a)
+        fingerprint_b = compute_config_fingerprint(config_b)
+
+        assert fingerprint_a.to_sha256() != fingerprint_b.to_sha256()
+
+    def test_depth_cache_payload_ignores_low_saturation_warning_band(self):
+        """Depth cache payload should not depend on gate demotion policy."""
+        from transformation_portal.lux_depth_v3.config import EnhanceConfig
+        from transformation_portal.lux_depth_v3.config_resolver import (
+            build_depth_cache_payload,
+        )
+
+        payload_a = build_depth_cache_payload(
+            EnhanceConfig(apex_depth_low_saturation_warning_band=0.0075),
+        )
+        payload_b = build_depth_cache_payload(
+            EnhanceConfig(apex_depth_low_saturation_warning_band=0.01),
+        )
+
+        assert payload_a == payload_b
 
 
 class TestBuildRunCardConfigFingerprint:
