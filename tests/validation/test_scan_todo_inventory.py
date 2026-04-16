@@ -110,7 +110,9 @@ class TestTodoDetectionInPythonFiles:
         assert items[0].has_governance_ref is True
         assert "(Phase 3)" in items[0].governance_refs
 
-    def test_ungoverned_todo_detected(self, tmp_path: Path, scanner_module: ModuleType, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_ungoverned_todo_detected(
+        self, tmp_path: Path, scanner_module: ModuleType, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Ungoverned TODOs are detected and marked as ungoverned."""
         monkeypatch.setattr(scanner_module, "PROJECT_ROOT", tmp_path)
 
@@ -128,7 +130,9 @@ class TestTodoDetectionInPythonFiles:
         assert items[0].has_governance_ref is False
         assert items[0].governance_refs == ()
 
-    def test_fixme_and_hack_detected(self, tmp_path: Path, scanner_module: ModuleType, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_fixme_and_hack_detected(
+        self, tmp_path: Path, scanner_module: ModuleType, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """FIXME and HACK patterns are detected as TODOs."""
         monkeypatch.setattr(scanner_module, "PROJECT_ROOT", tmp_path)
 
@@ -172,7 +176,9 @@ class TestAbstractMethodPatterns:
         assert scanner_module._is_abstract_method_pattern("Need to add support for X") is False
         assert scanner_module._is_abstract_method_pattern("Implement feature Y") is False
 
-    def test_bare_raise_in_file_is_governed(self, tmp_path: Path, scanner_module: ModuleType, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_bare_raise_in_file_is_governed(
+        self, tmp_path: Path, scanner_module: ModuleType, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Bare raise NotImplementedError in a file is detected and auto-governed."""
         monkeypatch.setattr(scanner_module, "PROJECT_ROOT", tmp_path)
 
@@ -191,7 +197,9 @@ class TestAbstractMethodPatterns:
         assert items[0].has_governance_ref is True  # Auto-governed
         assert items[0].message == "(no message)"
 
-    def test_raise_with_message_in_file(self, tmp_path: Path, scanner_module: ModuleType, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_raise_with_message_in_file(
+        self, tmp_path: Path, scanner_module: ModuleType, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """NotImplementedError with message is detected."""
         monkeypatch.setattr(scanner_module, "PROJECT_ROOT", tmp_path)
 
@@ -235,7 +243,9 @@ class TestErrorSurfacing:
         assert len(errors) >= 1
         assert any("syntax error" in err.lower() for err in errors)
 
-    def test_tokenize_error_surfaced(self, tmp_path: Path, scanner_module: ModuleType, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_tokenize_error_surfaced(
+        self, tmp_path: Path, scanner_module: ModuleType, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Tokenize errors in Python files are surfaced as scan errors."""
         monkeypatch.setattr(scanner_module, "PROJECT_ROOT", tmp_path)
 
@@ -301,7 +311,9 @@ class TestExitCodes:
         exit_code = scanner_module.main()
         assert exit_code == 1
 
-    def test_exit_2_when_scan_errors_in_governance_mode(self, scanner_module: ModuleType, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_exit_2_when_scan_errors_in_governance_mode(
+        self, scanner_module: ModuleType, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Exit code 2 when scan errors occur in governance mode (fail closed)."""
 
         class MockArgs:
@@ -319,7 +331,9 @@ class TestExitCodes:
         exit_code = scanner_module.main()
         assert exit_code == 2
 
-    def test_exit_0_when_errors_outside_governance_mode(self, scanner_module: ModuleType, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_exit_0_when_errors_outside_governance_mode(
+        self, scanner_module: ModuleType, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Exit code 0 when scan errors occur but not in governance mode."""
 
         class MockArgs:
@@ -362,7 +376,9 @@ class TestJsTsTodoDetection:
         assert items[0].has_governance_ref is True
         assert "(Phase 2)" in items[0].governance_refs
 
-    def test_js_block_comment_todo_detected(self, tmp_path: Path, scanner_module: ModuleType, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_js_block_comment_todo_detected(
+        self, tmp_path: Path, scanner_module: ModuleType, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """TODOs in JS block comments are detected."""
         monkeypatch.setattr(scanner_module, "PROJECT_ROOT", tmp_path)
 
