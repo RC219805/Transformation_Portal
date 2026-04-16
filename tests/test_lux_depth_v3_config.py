@@ -5,13 +5,13 @@ Tests validation logic for depth_fallback and other config fields.
 
 import pytest
 
+from transformation_portal.lux_depth_v3.config import EnhanceConfig
+from transformation_portal.lux_depth_v3.security import validate_depth_fallback
+
 # Pytest markers
 pytestmark = [
     pytest.mark.unit,
 ]
-
-from transformation_portal.lux_depth_v3.config import EnhanceConfig
-from transformation_portal.lux_depth_v3.security import validate_depth_fallback
 
 
 class TestDepthFallbackValidation:
