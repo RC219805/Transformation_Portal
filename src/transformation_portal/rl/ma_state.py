@@ -1,4 +1,4 @@
-"""Multi-agent state encoding: Local + global state features.
+"""Multi-agent state features for local and global context.
 
 This module provides state encoding for the multi-agent RL optimizer,
 combining global context with node-specific local features.

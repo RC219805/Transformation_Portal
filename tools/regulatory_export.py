@@ -69,6 +69,16 @@ HASH_MANIFEST_COLUMNS = [
     "error",
 ]
 
+# Fixed public-disclosure copy. These strings are intentionally constant so the
+# export remains deterministic while making their non-secret nature explicit.
+PUBLIC_CONFIDENTIALITY_STATEMENT = (
+    "This public summary intentionally omits file-level and proprietary training corpus details. "
+    "Integrity remains cryptographically verifiable via bundle_root_sha256 and referenced digest bindings."
+)
+PUBLIC_ARTICLE_78_REFERENCE = (
+    "Confidential technical details may be disclosed to competent authorities under Article 78 controls."
+)
+
 
 def atomic_write(path: Path, data: bytes) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -1182,13 +1192,8 @@ def build_export_payload(
             "verify_evidence_bundle_manifest": 0,
             "regulatory_export": 0,
         },
-        "confidentiality_statement": (
-            "This public summary intentionally omits file-level and proprietary training corpus details. "
-            "Integrity remains cryptographically verifiable via bundle_root_sha256 and referenced digest bindings."
-        ),
-        "article_78_reference": (
-            "Confidential technical details may be disclosed to competent authorities under Article 78 controls."
-        ),
+        "confidentiality_statement": PUBLIC_CONFIDENTIALITY_STATEMENT,
+        "article_78_reference": PUBLIC_ARTICLE_78_REFERENCE,
     }
 
 

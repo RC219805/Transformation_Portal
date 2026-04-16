@@ -1445,13 +1445,15 @@ def _validate_existing_path(
         return None, None
 
     try:
-        if text.startswith("~") or "\x00" in text:
-            raise ValueError("Invalid path value")
-        candidate = Path(text)
-        if not candidate.is_absolute():
-            candidate = REPO_ROOT / candidate
-        candidate_real = os.path.realpath(candidate)
-        candidate_real = str(candidate_real)
+        candidate_real = _resolve_allowed_request_path(text, allowed_roots)
+    except _PortalValidationReasonError:
+        return None, _readiness_issue(
+            "unsafe_path",
+            severity="blocked",
+            message=f"{field} must stay within allowed roots.",
+            field=field,
+            path=text,
+        )
     except (OSError, RuntimeError, ValueError):
         return None, _readiness_issue(
             "unsafe_path",
@@ -1461,22 +1463,19 @@ def _validate_existing_path(
             path=text,
         )
 
-    for root in allowed_roots:
-        try:
-            root_real = os.path.realpath(root)
-            root_real = str(root_real)
-        except (OSError, RuntimeError, ValueError):
-            # Ignore invalid allowlist entries and continue checking the others.
-            continue
+    resolved = str(candidate_real)
+    trusted_entry = _trusted_allowed_entry(candidate_real, allowed_roots)
+    if trusted_entry is None:
+        return resolved, _readiness_issue(
+            missing_reason,
+            severity="blocked",
+            message=missing_message,
+            field=field,
+            path=resolved,
+        )
 
-        root_prefix = root_real if root_real.endswith(os.sep) else root_real + os.sep
-        if candidate_real != root_real and not candidate_real.startswith(root_prefix):
-            continue
-
-        resolved = candidate_real
-        # Keep the normalized-path and root-prefix proof adjacent to the
-        # filesystem probe so the allowlist guard stays obvious to reviewers.
-        if expected_type == "file" and not os.path.isfile(resolved):
+    try:
+        if expected_type == "file" and not trusted_entry.is_file():
             return resolved, _readiness_issue(
                 missing_reason,
                 severity="blocked",
@@ -1484,7 +1483,7 @@ def _validate_existing_path(
                 field=field,
                 path=resolved,
             )
-        if expected_type == "dir" and not os.path.isdir(resolved):
+        if expected_type == "dir" and not trusted_entry.is_dir():
             return resolved, _readiness_issue(
                 missing_reason,
                 severity="blocked",
@@ -1492,15 +1491,15 @@ def _validate_existing_path(
                 field=field,
                 path=resolved,
             )
-        return resolved, None
-
-    return None, _readiness_issue(
-        "unsafe_path",
-        severity="blocked",
-        message=f"{field} must stay within allowed roots.",
-        field=field,
-        path=text,
-    )
+    except OSError:
+        return resolved, _readiness_issue(
+            missing_reason,
+            severity="blocked",
+            message=missing_message,
+            field=field,
+            path=resolved,
+        )
+    return resolved, None
 
 
 def _lux_depth_readiness(args: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
