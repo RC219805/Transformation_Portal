@@ -70,7 +70,7 @@ httpx==0.28.1
     # via
     #   -c all.txt
     #   -r dev.in
-hypothesis==6.151.13
+hypothesis==6.152.1
     # via
     #   -c all.txt
     #   -r dev.in
