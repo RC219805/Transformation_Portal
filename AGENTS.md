@@ -34,7 +34,7 @@ Quick reference for common workflows and commands in this repo.
 - `make audit-pipeline-readiness` run the safe local four-pipeline readiness audit using checked-in archive fixtures.
 - `make coverage-fast-scope` run branch coverage for the audited `core/config` and `streaming` paths with `term-missing` output.
 - `make clean` remove Python caches and build/test artifacts.
-- `make clean-frontdoor` remove frontdoor build artifacts (.next, .next-build-verify).
+- `make clean-frontdoor` remove frontdoor build artifacts (`.next`, `.next-build-verify`, `.next-smoke-*`, `.next-codex-*`).
 - `make clean-all` remove all build artifacts (Python + Node).
 - `make lint` run flake8 + pylint (non-blocking).
 - `make lint-parity` run the GitHub lint job locally with the CI-pinned Python 3.12 lint environment.
@@ -56,6 +56,7 @@ Quick reference for common workflows and commands in this repo.
 - `make check` verify the generic layered requirements surface under `requirements/`.
 - `make check-test-markers` audit test marker coverage (ADR-044) - reports unmarked test functions.
 - `make check-ci-sync` verify CI dependency files are in sync (no drift between `requirements-ci.txt` and `requirements/ci.in`).
+- `make check-todo-governance` scan repository for TODO patterns and fail if ungoverned TODOs (missing tracking references) are found.
 - `make check-portal-asset-budgets` validate raw and gzipped portal asset size budgets against the checked-in budget contract.
 - `make organize-docs` move markdown files into `docs/` (repo hygiene).
 - `make check-docs` dry-run docs organization.

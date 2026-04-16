@@ -114,6 +114,9 @@ test_artifacts/
 extracted_context/
 docs/api/_build/
 web/secure-landing/.next/
+web/secure-landing/.next-build-verify/
+web/secure-landing/.next-smoke-*/
+web/secure-landing/.next-codex-*/
 web/secure-landing/node_modules/
 
 # Coverage artifacts
