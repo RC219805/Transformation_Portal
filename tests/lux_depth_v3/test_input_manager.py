@@ -13,7 +13,8 @@ This test suite validates the modernized ImageInput contract including:
 from __future__ import annotations
 
 import json
-import tempfile
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -532,26 +533,50 @@ class TestModuleImports:
 
         This test verifies that importing input_manager doesn't pull in PIL/Pillow
         as a side effect. PIL is only needed for probe_dimensions=True in from_path().
+
+        We run this check in a subprocess to ensure a fresh Python interpreter
+        where PIL has not been previously loaded by other tests or modules.
         """
-        import importlib
-        import sys
+        # Script to run in subprocess: imports input_manager and checks for PIL
+        check_script = """
+import sys
 
-        # Track PIL modules before import
-        pil_before = {k for k in sys.modules.keys() if k.startswith("PIL")}
+# Record PIL modules before importing input_manager
+pil_before = {k for k in sys.modules.keys() if k.startswith("PIL")}
 
-        # Force reimport (module may already be loaded)
-        import transformation_portal.lux_depth_v3.input_manager as im
+# Import the module under test
+from transformation_portal.lux_depth_v3.input_manager import (
+    ImageInput,
+    InputImageMetadata,
+    SUPPORTED_EXTENSIONS,
+)
 
-        importlib.reload(im)
+# Record PIL modules after import
+pil_after = {k for k in sys.modules.keys() if k.startswith("PIL")}
+new_pil_modules = pil_after - pil_before
 
-        # After reload, PIL should not have been newly imported
-        pil_after = {k for k in sys.modules.keys() if k.startswith("PIL")}
-        new_pil_modules = pil_after - pil_before
+# Verify the module is usable
+assert ImageInput is not None, "ImageInput should be importable"
+assert InputImageMetadata is not None, "InputImageMetadata should be importable"
+assert SUPPORTED_EXTENSIONS is not None, "SUPPORTED_EXTENSIONS should be importable"
 
-        # Verify the module is usable
-        assert im.ImageInput is not None
-        assert im.InputImageMetadata is not None
+# Assert no new PIL modules were introduced
+if new_pil_modules:
+    print(f"FAIL: Eager PIL imports detected: {sorted(new_pil_modules)}", file=sys.stderr)
+    sys.exit(1)
 
-        # Note: We can't guarantee PIL wasn't loaded by other tests/modules,
-        # so we only check that our module import itself didn't add new PIL imports.
-        # In a fresh Python interpreter, this would be an empty set.
+print("OK: No eager PIL imports detected")
+sys.exit(0)
+"""
+        result = subprocess.run(
+            [sys.executable, "-c", check_script],
+            capture_output=True,
+            text=True,
+        )
+
+        # Provide detailed failure information
+        if result.returncode != 0:
+            error_msg = f"Subprocess failed with code {result.returncode}.\nstdout: {result.stdout}\nstderr: {result.stderr}"
+            pytest.fail(error_msg)
+
+        assert "No eager PIL imports detected" in result.stdout

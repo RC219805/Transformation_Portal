@@ -29,6 +29,8 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, ClassVar, Dict, Optional, Tuple, Union
 
+from transformation_portal.lux_depth_v3.path_aliasing import normalize_lexical_path
+
 # ---------------------------------------------------------------------------
 # Exceptions
 # ---------------------------------------------------------------------------
@@ -80,21 +82,6 @@ _RAW_EXTENSIONS = frozenset(
 )
 
 SUPPORTED_EXTENSIONS = _STANDARD_EXTENSIONS | _RAW_EXTENSIONS
-
-
-# ---------------------------------------------------------------------------
-# Path normalization (inline to avoid circular import)
-# ---------------------------------------------------------------------------
-
-
-def _normalize_lexical_path(path_value: Any) -> Path:
-    """Return an absolute path without resolving symlinks.
-
-    This is inlined from path_aliasing to avoid circular imports while
-    still ensuring consistent path normalization.
-    """
-    path = Path(path_value).expanduser()
-    return Path(os.path.abspath(os.fspath(path)))
 
 
 # ---------------------------------------------------------------------------
@@ -235,7 +222,7 @@ class ImageInput:
             raise ValueError("ImageInput path cannot be empty")
 
         # Normalize path lexically (no filesystem access)
-        self.path = _normalize_lexical_path(self.path)
+        self.path = normalize_lexical_path(self.path)
 
         # Validate metadata is dict-like if provided
         if self.metadata is not None:
